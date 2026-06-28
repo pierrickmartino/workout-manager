@@ -14,8 +14,12 @@ _Avoid_: Plan, routine, cycle
 A single prescribed workout, composed of Exercise Prescriptions. One unified concept: a Session may belong to a Program (carrying a Week/Day position) or stand alone (generated on its own with no parent or position). It is a *plan*, not a record of execution. Logging and feedback work identically whether or not it belongs to a Program.
 _Avoid_: Workout, training (when referring to the plan)
 
+**Exercise**:
+A movement definition in the shared, global catalog — name, description, targeted muscles, difficulty, required equipment, variations, alternatives, precautions. One Exercise (e.g. "Barbell Back Squat") is shared across all users; AI-invented movements are stored once and enriched once for everyone. Distinct from the prescription of its sets/reps.
+_Avoid_: Movement, Exercise Prescription (when referring to the definition)
+
 **Exercise Prescription**:
-The prescription of one exercise inside a Session — the sets, repetitions, rest, tempo, and recommended load the user is told to perform. Distinct from the Exercise it references.
+The prescription of one Exercise inside a Session — the sets, repetitions, rest, tempo, and recommended load the user is told to perform. References a catalog Exercise. Distinct from the Exercise definition.
 _Avoid_: Exercise (when referring to the prescribed sets/reps)
 
 **Logged Session**:
