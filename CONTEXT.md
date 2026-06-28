@@ -47,3 +47,15 @@ _Avoid_: Assign, instantiate, clone
 **Sensitive Constraint**:
 A profile condition that demands extra caution — injury, rehabilitation, postpartum, or a flagged medical limitation. A user with any Sensitive Constraint is never served a shared/cached Generated Program; the system always generates fresh so postnatal/rehab caution can be applied.
 _Avoid_: Restriction, limitation (generic)
+
+## Feedback
+
+Two distinct concepts. Never collapse them into one "Feedback".
+
+**Generation Feedback**:
+A positive/negative verdict on a generated/adopted Program or Session — "did the AI give me a good plan?" — with an optional free-text reason. Captured at the level being judged (Program or Session) and is the trigger for regeneration.
+_Avoid_: Feedback (bare), rating
+
+**Performance Feedback**:
+The user's perceived effort/difficulty for a workout they actually did, recorded against a Logged Session or Logged Set. Part of the record; feeds future AI recommendations. Not a judgment of the plan's quality.
+_Avoid_: Feedback (bare), RPE (loosely)
