@@ -26,6 +26,18 @@ _Avoid_: Exercise (when referring to the prescribed sets/reps)
 Whether a catalog Exercise is `ai_generated` (created by the AI, unvalidated) or `curated` (reviewed and trusted). Carried on every Exercise so unvalidated content can be flagged, audited, and later merged or corrected — important given the domain's caution around injury, rehab, and postpartum cases.
 _Avoid_: Source, origin, verified flag
 
+**Variation**:
+A catalog Exercise that is the *same* movement pattern as another, scaled in difficulty or execution (knee push-up is a Variation of push-up). Modeled as a typed relationship between Exercises.
+_Avoid_: Progression, regression, scaling (as the relationship name)
+
+**Alternative**:
+A catalog Exercise that achieves a *similar* training effect or targets the same muscles as another, used when equipment is missing or the movement is contraindicated (goblet squat as an Alternative to barbell squat). Modeled as a typed relationship between Exercises — distinct from a Variation.
+_Avoid_: Substitute, replacement (as the relationship name)
+
+**Substitution**:
+The act of swapping one Exercise Prescription's Exercise for a Variation or Alternative within the user's own Session copy. Resolved lookup-first over catalog relationships (filtered by the user's equipment, constraints, and goal), falling back to AI only when no suitable link exists. Unlimited and distinct from Regeneration.
+_Avoid_: Swap, replace (as the domain term)
+
 **Logged Session**:
 A record of the user performing a Session on a specific date. One Session can have many Logged Sessions over the course of a Program.
 _Avoid_: Completed session, history entry
