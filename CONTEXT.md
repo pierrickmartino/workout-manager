@@ -46,6 +46,16 @@ _Avoid_: Completed session, history entry
 A record of one actual set the user performed — the real repetitions, load, and perceived difficulty — within a Logged Session.
 _Avoid_: Result, performance entry
 
+## Profile
+
+**Fitness Profile**:
+The user's current state, used to personalize generation — gender, age, height, weight, fitness level, training habits, default equipment, constraints, and recent-workout context. A mutable snapshot of "now"; metric history (e.g. weight over time) lives in progress records, not in versioned Profile rows. Each generation request may override the Profile's default equipment.
+_Avoid_: Account, user data, settings
+
+**Preference / Limitation**:
+A non-medical constraint that steers exercise selection ("no running", "no jumping in the apartment", "avoid overhead but not injured"). Influences generation but does **not** trigger the safety cache bypass. Distinct from a Sensitive Constraint.
+_Avoid_: Constraint (bare), restriction
+
 ## Generation & Reuse
 
 **Generated Program / Generated Session**:
