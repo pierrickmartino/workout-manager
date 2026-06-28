@@ -59,3 +59,7 @@ _Avoid_: Feedback (bare), rating
 **Performance Feedback**:
 The user's perceived effort/difficulty for a workout they actually did, recorded against a Logged Session or Logged Set. Part of the record; feeds future AI recommendations. Not a judgment of the plan's quality.
 _Avoid_: Feedback (bare), RPE (loosely)
+
+**Regeneration**:
+Replacing the non-kept Exercise Prescriptions of a single Session with fresh AI output, conditioned on the kept Prescriptions and the negative Generation Feedback reason. Operates only on a Session (never a whole Program), on the user's own copy, and is limited to once per Session in v1.
+_Avoid_: Regenerate program, retry, redo
