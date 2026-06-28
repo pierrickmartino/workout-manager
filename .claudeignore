@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+/out/
+/build/
+storybook-static/
+
+# Lock files (large, not useful for understanding code)
+package-lock.json
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+
+# Test artifacts
+test-results/
+/coverage/
+
+# Binary / non-text files
+*.docx
+*.pem
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+
+# Docker
+docker-compose.override.yml
+
+# Environment
+.env
+.env*.local
+.env.production
+
+# Git
+.git/
+
+# Codex
+.codex/
