@@ -22,6 +22,10 @@ _Avoid_: Movement, Exercise Prescription (when referring to the definition)
 The prescription of one Exercise inside a Session — the sets, repetitions, rest, tempo, and recommended load the user is told to perform. References a catalog Exercise. Distinct from the Exercise definition.
 _Avoid_: Exercise (when referring to the prescribed sets/reps)
 
+**Provenance**:
+Whether a catalog Exercise is `ai_generated` (created by the AI, unvalidated) or `curated` (reviewed and trusted). Carried on every Exercise so unvalidated content can be flagged, audited, and later merged or corrected — important given the domain's caution around injury, rehab, and postpartum cases.
+_Avoid_: Source, origin, verified flag
+
 **Logged Session**:
 A record of the user performing a Session on a specific date. One Session can have many Logged Sessions over the course of a Program.
 _Avoid_: Completed session, history entry
