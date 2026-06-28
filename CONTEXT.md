@@ -49,8 +49,16 @@ _Avoid_: Result, performance entry
 ## Profile
 
 **Fitness Profile**:
-The user's current state, used to personalize generation — gender, age, height, weight, fitness level, training habits, default equipment, constraints, and recent-workout context. A mutable snapshot of "now"; metric history (e.g. weight over time) lives in progress records, not in versioned Profile rows. Each generation request may override the Profile's default equipment.
+The user's current state, used to personalize generation — gender, age, height, weight, Fitness Level (per training type), training habits, default equipment, constraints, and recent-workout context. A mutable snapshot of "now"; metric history (e.g. weight over time) lives in progress records, not in versioned Profile rows. Each generation request may override the Profile's default equipment.
 _Avoid_: Account, user data, settings
+
+**Fitness Level**:
+A 1–10 score of the user's ability, held **per training type** — a user can be Level 8 at strength training and Level 2 at yoga. It is the level dimension of the cache key for that type, and it advances over time as logged progress accumulates.
+_Avoid_: Beginner/intermediate/advanced (as the stored value), skill, rank
+
+**Progression**:
+The deterministic, no-AI adjustment of an Exercise Prescription's recommended load on the user's own copy, computed from Logged Sets (e.g. all reps hit at low perceived effort → increase load). The primary mechanism by which recommendations adjust over time; leaves the cached artifact untouched.
+_Avoid_: Progress (the records), adaptation
 
 **Preference / Limitation**:
 A non-medical constraint that steers exercise selection ("no running", "no jumping in the apartment", "avoid overhead but not injured"). Influences generation but does **not** trigger the safety cache bypass. Distinct from a Sensitive Constraint.
