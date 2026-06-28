@@ -43,3 +43,7 @@ _Avoid_: Template, cached program (loosely)
 **Adopt**:
 The act of taking a Generated Program or Generated Session and deep-copying it into a user-owned Program or Session that the user logs against, gives feedback on, swaps exercises in, and regenerates. Mutations only ever touch the user's copy.
 _Avoid_: Assign, instantiate, clone
+
+**Sensitive Constraint**:
+A profile condition that demands extra caution — injury, rehabilitation, postpartum, or a flagged medical limitation. A user with any Sensitive Constraint is never served a shared/cached Generated Program; the system always generates fresh so postnatal/rehab caution can be applied.
+_Avoid_: Restriction, limitation (generic)
