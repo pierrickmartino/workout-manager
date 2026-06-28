@@ -1,0 +1,95 @@
+# Workout Manager
+
+An AI-assisted application for creating, following, and tracking fitness workouts. This glossary fixes the language used across the domain so that the *plan* a user is given and the *record* of what they actually did are never confused.
+
+## Plan vs. Record
+
+The single most important distinction in the domain: a **plan** is what the AI prescribes; a **record** is what the user actually performed. They are separate concepts, and the same plan can be performed many times.
+
+**Program**:
+A user-owned training plan: a fixed, fully enumerated set of Sessions spanning a user-chosen number of weeks. Every Session for every week is generated up front and occupies a specific position; the same logical workout may differ from week to week to express progression and deloads. A Program is the user's own copy (see Adopt) — mutating it never affects other users or the cache.
+_Avoid_: Plan, routine, cycle
+
+**Session**:
+A single prescribed workout, composed of Exercise Prescriptions. One unified concept: a Session may belong to a Program (carrying a Week/Day position) or stand alone (generated on its own with no parent or position). It is a *plan*, not a record of execution. Logging and feedback work identically whether or not it belongs to a Program.
+_Avoid_: Workout, training (when referring to the plan)
+
+**Exercise**:
+A movement definition in the shared, global catalog — name, description, targeted muscles, difficulty, required equipment, variations, alternatives, precautions. One Exercise (e.g. "Barbell Back Squat") is shared across all users; AI-invented movements are stored once and enriched once for everyone. Distinct from the prescription of its sets/reps.
+_Avoid_: Movement, Exercise Prescription (when referring to the definition)
+
+**Exercise Prescription**:
+The prescription of one Exercise inside a Session — the sets, repetitions, rest, tempo, and recommended load the user is told to perform. References a catalog Exercise. Distinct from the Exercise definition.
+_Avoid_: Exercise (when referring to the prescribed sets/reps)
+
+**Provenance**:
+Whether a catalog Exercise is `ai_generated` (created by the AI, unvalidated) or `curated` (reviewed and trusted). Carried on every Exercise so unvalidated content can be flagged, audited, and later merged or corrected — important given the domain's caution around injury, rehab, and postpartum cases.
+_Avoid_: Source, origin, verified flag
+
+**Variation**:
+A catalog Exercise that is the *same* movement pattern as another, scaled in difficulty or execution (knee push-up is a Variation of push-up). Modeled as a typed relationship between Exercises.
+_Avoid_: Progression, regression, scaling (as the relationship name)
+
+**Alternative**:
+A catalog Exercise that achieves a *similar* training effect or targets the same muscles as another, used when equipment is missing or the movement is contraindicated (goblet squat as an Alternative to barbell squat). Modeled as a typed relationship between Exercises — distinct from a Variation.
+_Avoid_: Substitute, replacement (as the relationship name)
+
+**Substitution**:
+The act of swapping one Exercise Prescription's Exercise for a Variation or Alternative within the user's own Session copy. Resolved lookup-first over catalog relationships (filtered by the user's equipment, constraints, and goal), falling back to AI only when no suitable link exists. Unlimited and distinct from Regeneration.
+_Avoid_: Swap, replace (as the domain term)
+
+**Logged Session**:
+A record of the user performing a Session on a specific date. One Session can have many Logged Sessions over the course of a Program.
+_Avoid_: Completed session, history entry
+
+**Logged Set**:
+A record of one actual set the user performed — the real repetitions, load, and perceived difficulty — within a Logged Session.
+_Avoid_: Result, performance entry
+
+## Profile
+
+**Fitness Profile**:
+The user's current state, used to personalize generation — gender, age, height, weight, Fitness Level (per training type), training habits, default equipment, constraints, and recent-workout context. A mutable snapshot of "now"; metric history (e.g. weight over time) lives in progress records, not in versioned Profile rows. Each generation request may override the Profile's default equipment.
+_Avoid_: Account, user data, settings
+
+**Fitness Level**:
+A 1–10 score of the user's ability, held **per training type** — a user can be Level 8 at strength training and Level 2 at yoga. It is the level dimension of the cache key for that type, and it advances over time as logged progress accumulates.
+_Avoid_: Beginner/intermediate/advanced (as the stored value), skill, rank
+
+**Progression**:
+The deterministic, no-AI adjustment of an Exercise Prescription's recommended load on the user's own copy, computed from Logged Sets (e.g. all reps hit at low perceived effort → increase load). The primary mechanism by which recommendations adjust over time; leaves the cached artifact untouched.
+_Avoid_: Progress (the records), adaptation
+
+**Preference / Limitation**:
+A non-medical constraint that steers exercise selection ("no running", "no jumping in the apartment", "avoid overhead but not injured"). Influences generation but does **not** trigger the safety cache bypass. Distinct from a Sensitive Constraint.
+_Avoid_: Constraint (bare), restriction
+
+## Generation & Reuse
+
+**Generated Program / Generated Session**:
+The immutable AI output produced for a given set of normalized parameters, stored in the cache and shareable across users. Never mutated. The source content from which a user's own Program or Session is made.
+_Avoid_: Template, cached program (loosely)
+
+**Adopt**:
+The act of taking a Generated Program or Generated Session and deep-copying it into a user-owned Program or Session that the user logs against, gives feedback on, swaps exercises in, and regenerates. Mutations only ever touch the user's copy.
+_Avoid_: Assign, instantiate, clone
+
+**Sensitive Constraint**:
+A profile condition that demands extra caution — injury, rehabilitation, postpartum, or a flagged medical limitation. A user with any Sensitive Constraint is never served a shared/cached Generated Program; the system always generates fresh so postnatal/rehab caution can be applied.
+_Avoid_: Restriction, limitation (generic)
+
+## Feedback
+
+Two distinct concepts. Never collapse them into one "Feedback".
+
+**Generation Feedback**:
+A positive/negative verdict on a generated/adopted Program or Session — "did the AI give me a good plan?" — with an optional free-text reason. Captured at the level being judged (Program or Session) and is the trigger for regeneration.
+_Avoid_: Feedback (bare), rating
+
+**Performance Feedback**:
+The user's perceived effort/difficulty for a workout they actually did, recorded against a Logged Session or Logged Set. Part of the record; feeds future AI recommendations. Not a judgment of the plan's quality.
+_Avoid_: Feedback (bare), RPE (loosely)
+
+**Regeneration**:
+Replacing the non-kept Exercise Prescriptions of a single Session with fresh AI output, conditioned on the kept Prescriptions and the negative Generation Feedback reason. Operates only on a Session (never a whole Program), on the user's own copy, and is limited to once per Session in v1.
+_Avoid_: Regenerate program, retry, redo
