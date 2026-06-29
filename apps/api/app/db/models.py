@@ -212,6 +212,28 @@ class LoggedSet(SQLModel, table=True):
     perceived_difficulty: int | None = Field(default=None)
 
 
+class MetricEntry(SQLModel, table=True):
+    """A user's body metric recorded at a point in time (Slice 12).
+
+    This is the *time series* the Fitness Profile snapshot deliberately is not: the
+    Profile's ``weight_kg`` (and similar) is a mutable "now", whereas a MetricEntry
+    is an immutable dated reading — weight, body-fat, waist, etc. — kept so progress
+    can be reviewed over time and never overwritten. ``metric`` names the quantity
+    (e.g. ``"weight"``), ``value`` is its numeric reading, ``unit`` is free-form and
+    optional (e.g. ``"kg"``), and ``recorded_on`` dates it. Reads are scoped to
+    ``clerk_user_id``; the snapshot Profile is untouched by these rows."""
+
+    __tablename__ = "metric_entry"
+
+    id: int | None = Field(default=None, primary_key=True)
+    clerk_user_id: str = Field(index=True)
+    metric: str = Field(index=True)
+    value: float
+    unit: str | None = Field(default=None)
+    recorded_on: date
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
 class GenerationFeedback(SQLModel, table=True):
     """The user's verdict on a generated/adopted Session (Slice 10).
 

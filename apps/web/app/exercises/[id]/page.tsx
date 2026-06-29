@@ -66,6 +66,12 @@ export default async function ExercisePage({
       <StringList title="Precautions" items={exercise.precautions} />
       <RelatedList title="Variations" items={exercise.variations} />
       <RelatedList title="Alternatives" items={exercise.alternatives} />
+
+      <p style={{ marginTop: "1.5rem" }}>
+        <Link href={`/exercises/${exercise.id}/progress`}>
+          View your progress on this exercise →
+        </Link>
+      </p>
     </section>
   );
 }

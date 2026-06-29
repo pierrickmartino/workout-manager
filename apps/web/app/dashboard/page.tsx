@@ -36,6 +36,9 @@ export default async function DashboardPage() {
         <Link href="/history">Training history →</Link>
       </p>
       <p>
+        <Link href="/metrics">Metric history →</Link>
+      </p>
+      <p>
         <Link href="/profile/edit">Edit profile →</Link>
       </p>
     </section>
