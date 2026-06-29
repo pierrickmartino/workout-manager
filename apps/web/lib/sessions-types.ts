@@ -36,7 +36,31 @@ export interface WorkoutSession {
   clerk_user_id: string;
   training_type: string;
   duration_minutes: number;
+  has_been_regenerated: boolean;
   prescriptions: ExercisePrescription[];
+}
+
+// A short reference to a related catalog Exercise (a Variation or Alternative),
+// as returned on an Exercise's detail.
+export interface RelatedExerciseSummary {
+  id: number;
+  name: string;
+}
+
+// The enriched detail of a single catalog Exercise, plus its typed relationships
+// split into Variations (same movement, scaled) and Alternatives (same effect).
+export interface ExerciseDetail {
+  id: number;
+  name: string;
+  description: string | null;
+  provenance: string;
+  targeted_muscles: string[];
+  required_equipment: string[];
+  instructions: string | null;
+  difficulty: number | null;
+  precautions: string[];
+  variations: RelatedExerciseSummary[];
+  alternatives: RelatedExerciseSummary[];
 }
 
 // The request the user submits to generate a standalone Session.

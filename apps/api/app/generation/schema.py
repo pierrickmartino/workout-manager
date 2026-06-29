@@ -32,6 +32,22 @@ class GeneratedSession(BaseModel):
     prescriptions: list[GeneratedExercisePrescription] = Field(default_factory=list)
 
 
+class GeneratedSubstitute(BaseModel):
+    """The AI's output for a single substitute Exercise (Slice 11 fallback).
+
+    Used only when no catalog Variation/Alternative fits the user's equipment and
+    constraints. It carries the full enriched catalog shape so the new movement
+    enters the catalog complete — stored once, as ``ai_generated``, for everyone."""
+
+    exercise_name: str
+    exercise_description: str | None = None
+    instructions: str | None = None
+    difficulty: int | None = None
+    targeted_muscles: list[str] = Field(default_factory=list)
+    required_equipment: list[str] = Field(default_factory=list)
+    precautions: list[str] = Field(default_factory=list)
+
+
 class GeneratedProgramSession(BaseModel):
     """One Session inside a Generated Program, fixed to a Week/Day position.
 

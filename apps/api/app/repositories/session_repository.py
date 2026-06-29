@@ -98,6 +98,24 @@ class SessionRepository(Protocol):
         """
         ...
 
+    def substitute_prescription(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        position: int,
+        new_exercise_id: int,
+    ) -> SessionView | None:
+        """Swap the Exercise referenced by the prescription at ``position`` for
+        ``new_exercise_id``, leaving the sets/reps/rest/tempo/load and every other
+        prescription untouched.
+
+        This is the Substitution write: it is unlimited and never sets the
+        regeneration guard (distinct from Regeneration). Returns the updated
+        Session, or ``None`` if the Session is missing/unowned or has no
+        prescription at ``position`` — it only ever mutates the owner's own copy.
+        """
+        ...
+
 
 def _draft_from(prescription: ExercisePrescription) -> PrescriptionDraft:
     return PrescriptionDraft(
@@ -235,6 +253,31 @@ class SqlSessionRepository:
         self._session.refresh(workout)
         return self._view(workout)
 
+    def substitute_prescription(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        position: int,
+        new_exercise_id: int,
+    ) -> SessionView | None:
+        workout = self._session.get(WorkoutSession, session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return None
+
+        prescription = self._session.exec(
+            select(ExercisePrescription).where(
+                ExercisePrescription.session_id == session_id,
+                ExercisePrescription.position == position,
+            )
+        ).first()
+        if prescription is None:
+            return None
+
+        prescription.exercise_id = new_exercise_id
+        self._session.add(prescription)
+        self._session.commit()
+        return self._view(workout)
+
 
 class InMemorySessionRepository:
     def __init__(self, exercises: ExerciseRepository) -> None:
@@ -312,6 +355,39 @@ class InMemorySessionRepository:
         new_drafts = _regenerated_drafts(current, keep_positions, replacements)
         self._prescriptions[session_id] = self._materialize(session_id, new_drafts)
         workout.has_been_regenerated = True
+        return self._view(workout)
+
+    def substitute_prescription(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        position: int,
+        new_exercise_id: int,
+    ) -> SessionView | None:
+        workout = self._sessions.get(session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return None
+
+        current = self._prescriptions.get(session_id, [])
+        if not any(p.position == position for p in current):
+            return None
+
+        # Rebuild the list with only the targeted prescription's Exercise swapped;
+        # everything else (sets/reps/load) and the regeneration guard are preserved.
+        self._prescriptions[session_id] = [
+            ExercisePrescription(
+                id=p.id,
+                session_id=p.session_id,
+                exercise_id=new_exercise_id if p.position == position else p.exercise_id,
+                position=p.position,
+                sets=p.sets,
+                reps=p.reps,
+                rest_seconds=p.rest_seconds,
+                tempo=p.tempo,
+                recommended_load=p.recommended_load,
+            )
+            for p in current
+        ]
         return self._view(workout)
 
 
