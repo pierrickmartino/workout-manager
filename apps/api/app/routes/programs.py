@@ -6,8 +6,9 @@ set in, a schema-constrained fully-enumerated generation, Adoption by deep copy,
 and a persisted user-owned Program out. A malformed/under-enumerated generation is
 surfaced as a ``502`` (an upstream AI failure), never silently persisted. ``GET
 /api/programs/{id}`` returns the owner's Program joined to its *next un-performed
-Session* (self-paced, no calendar), ``404`` for anyone else. All responses use the
-standard envelope."""
+Session* (self-paced, no calendar), with each upcoming Prescription's recommended
+load progressed from the user's Logged Sets (ADR-0004); ``404`` for anyone else.
+All responses use the standard envelope."""
 
 from __future__ import annotations
 
@@ -23,7 +24,7 @@ from app.generation.program_generator import (
 )
 from app.generation.cache import GenerationCache
 from app.generation.program_service import cache_request_for, generate_program
-from app.programs.progress import ProgramProgressView, program_progress
+from app.programs.progress import ProgramProgressView, progressed_program
 from app.repositories.deps import (
     get_exercise_repository,
     get_generation_cache,
@@ -165,7 +166,7 @@ def read_program(
     programs: ProgramRepository = Depends(get_program_repository),
     logged: LoggedSessionRepository = Depends(get_logged_session_repository),
 ) -> dict:
-    progress = program_progress(
+    progress = progressed_program(
         clerk_user_id, program_id, programs=programs, logged=logged
     )
     if progress is None:
