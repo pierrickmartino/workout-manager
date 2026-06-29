@@ -6,11 +6,13 @@ Routes depend on these so the concrete storage implementation can be swapped
 from __future__ import annotations
 
 import anthropic
+import redis
 from fastapi import Depends
 from sqlmodel import Session
 
 from app.config import Settings, get_settings
 from app.db.session import get_session
+from app.generation.cache import GenerationCache, RedisCacheStore
 from app.generation.generator import AnthropicSessionGenerator, SessionGenerator
 from app.generation.program_generator import (
     AnthropicProgramGenerator,
@@ -102,6 +104,13 @@ def get_program_generator(
 ) -> ProgramGenerator:
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     return AnthropicProgramGenerator(client)
+
+
+def get_generation_cache(
+    settings: Settings = Depends(get_settings),
+) -> GenerationCache:
+    client = redis.Redis.from_url(settings.redis_url)
+    return GenerationCache(RedisCacheStore(client))
 
 
 def get_generation_feedback_repository(
