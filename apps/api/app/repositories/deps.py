@@ -46,6 +46,10 @@ from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
     SqlLoggedSessionRepository,
 )
+from app.repositories.metric_entry_repository import (
+    MetricEntryRepository,
+    SqlMetricEntryRepository,
+)
 from app.repositories.profile_repository import (
     ProfileRepository,
     SqlProfileRepository,
@@ -90,6 +94,12 @@ def get_program_repository(
     session: Session = Depends(get_session),
 ) -> ProgramRepository:
     return SqlProgramRepository(session)
+
+
+def get_metric_entry_repository(
+    session: Session = Depends(get_session),
+) -> MetricEntryRepository:
+    return SqlMetricEntryRepository(session)
 
 
 def get_session_generator(
