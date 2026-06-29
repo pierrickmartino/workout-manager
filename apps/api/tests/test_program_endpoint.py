@@ -5,6 +5,8 @@ injected via dependency overrides so the tests run offline and deterministically
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi.testclient import TestClient
 
 from app.auth.dependencies import get_jwks
@@ -27,7 +29,11 @@ from app.repositories.deps import (
     get_program_repository,
 )
 from app.repositories.exercise_repository import InMemoryExerciseRepository
-from app.repositories.logged_session_repository import InMemoryLoggedSessionRepository
+from app.repositories.logged_session_repository import (
+    InMemoryLoggedSessionRepository,
+    LoggedSessionDraft,
+    LoggedSetDraft,
+)
 from app.repositories.profile_repository import (
     InMemoryProfileRepository,
     ProfileUpdate,
@@ -73,12 +79,20 @@ def _default_program() -> GeneratedProgram:
     )
 
 
-def build_client(generator=None, ctx=None, profiles=None, cache=None):
+def build_client(
+    generator=None,
+    ctx=None,
+    profiles=None,
+    cache=None,
+    exercises=None,
+    programs=None,
+    logged=None,
+):
     ctx = ctx or make_signing_context()
-    exercises = InMemoryExerciseRepository()
-    programs = InMemoryProgramRepository(exercises)
+    exercises = exercises or InMemoryExerciseRepository()
+    programs = programs or InMemoryProgramRepository(exercises)
     sessions = InMemorySessionRepository(exercises)
-    logged = InMemoryLoggedSessionRepository(sessions, exercises)
+    logged = logged or InMemoryLoggedSessionRepository(sessions, exercises)
     generator = generator or FakeProgramGenerator(result=_default_program())
     profiles = profiles or InMemoryProfileRepository()
     cache = cache or GenerationCache(InMemoryCacheStore())
@@ -153,6 +167,72 @@ def test_fetched_program_surfaces_the_next_un_performed_session():
     data = fetched.json()["data"]
     assert data["completed_count"] == 0
     assert data["next_session"]["week"] == 1
+
+
+def _kg_program() -> GeneratedProgram:
+    """A two-week program whose Back Squat carries an adjustable kg load."""
+
+    return GeneratedProgram(
+        sessions=[
+            GeneratedProgramSession(
+                week=week,
+                day=1,
+                title=f"Week {week}",
+                prescriptions=[
+                    GeneratedExercisePrescription(
+                        exercise_name="Back Squat",
+                        sets=3,
+                        reps="5",
+                        recommended_load="60 kg",
+                    )
+                ],
+            )
+            for week in (1, 2)
+        ]
+    )
+
+
+def test_fetched_program_shows_progressed_load_for_upcoming_sessions():
+    # Arrange — generate a kg-load program, then perform Week 1 strongly
+    exercises = InMemoryExerciseRepository()
+    programs = InMemoryProgramRepository(exercises)
+    sessions = InMemorySessionRepository(exercises)
+    logged = InMemoryLoggedSessionRepository(sessions, exercises)
+    client, ctx = build_client(
+        generator=FakeProgramGenerator(result=_kg_program()),
+        exercises=exercises,
+        programs=programs,
+        logged=logged,
+    )
+    headers = _auth(ctx, "user_progress")
+    created = client.post(
+        "/api/programs/generate", headers=headers, json=_body()
+    ).json()["data"]
+    week_one = created["sessions"][0]
+    logged.create(
+        "user_progress",
+        LoggedSessionDraft(
+            session_id=week_one["session_id"],
+            performed_on=date(2026, 1, 1),
+            logged_sets=[
+                LoggedSetDraft(
+                    exercise_id=week_one["prescriptions"][0]["exercise_id"],
+                    reps=5,
+                    load="60 kg",
+                    perceived_difficulty=6,
+                )
+                for _ in range(3)
+            ],
+        ),
+    )
+
+    # Act
+    fetched = client.get(f"/api/programs/{created['id']}", headers=headers)
+
+    # Assert — the upcoming Week-2 Session shows the raised recommendation
+    data = fetched.json()["data"]
+    assert data["next_session"]["week"] == 2
+    assert data["next_session"]["prescriptions"][0]["recommended_load"] == "62.5 kg"
 
 
 def test_another_user_cannot_fetch_someone_elses_program():
