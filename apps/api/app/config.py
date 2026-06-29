@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     # AI generation (ADR-0006). Required for live generation; never hardcoded.
     anthropic_api_key: str = ""
 
+    # Profile & Level folding (ADR-0004): how many strong logged sessions of a
+    # training type fold into one Fitness Level notch. Tunable so the adaptation
+    # cadence can change without a code edit.
+    strong_sessions_per_level: int = 3
+
 
 @lru_cache
 def get_settings() -> Settings:
