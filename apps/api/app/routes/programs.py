@@ -21,16 +21,20 @@ from app.generation.program_generator import (
     ProgramGenerationRequest,
     ProgramGenerator,
 )
-from app.generation.program_service import generate_program
+from app.generation.cache import GenerationCache
+from app.generation.program_service import cache_request_for, generate_program
 from app.programs.progress import ProgramProgressView, program_progress
 from app.repositories.deps import (
     get_exercise_repository,
+    get_generation_cache,
     get_logged_session_repository,
+    get_profile_repository,
     get_program_generator,
     get_program_repository,
 )
 from app.repositories.exercise_repository import ExerciseRepository
 from app.repositories.logged_session_repository import LoggedSessionRepository
+from app.repositories.profile_repository import ProfileRepository
 from app.repositories.program_repository import (
     ProgramRepository,
     ProgramSessionView,
@@ -131,11 +135,17 @@ def generate(
     generator: ProgramGenerator = Depends(get_program_generator),
     exercises: ExerciseRepository = Depends(get_exercise_repository),
     programs: ProgramRepository = Depends(get_program_repository),
+    cache: GenerationCache = Depends(get_generation_cache),
+    profiles: ProfileRepository = Depends(get_profile_repository),
 ) -> dict:
+    params = payload.to_generation_request()
+    profile = profiles.get_or_create(clerk_user_id)
     try:
         view = generate_program(
-            payload.to_generation_request(),
+            params,
             clerk_user_id,
+            cache=cache,
+            cache_request=cache_request_for(params, profile),
             generator=generator,
             exercises=exercises,
             programs=programs,

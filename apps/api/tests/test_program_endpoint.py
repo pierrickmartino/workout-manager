@@ -16,15 +16,22 @@ from app.generation.schema import (
     GeneratedProgram,
     GeneratedProgramSession,
 )
+from app.generation.cache import GenerationCache, InMemoryCacheStore
 from app.main import create_app
 from app.repositories.deps import (
     get_exercise_repository,
+    get_generation_cache,
     get_logged_session_repository,
+    get_profile_repository,
     get_program_generator,
     get_program_repository,
 )
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.logged_session_repository import InMemoryLoggedSessionRepository
+from app.repositories.profile_repository import (
+    InMemoryProfileRepository,
+    ProfileUpdate,
+)
 from app.repositories.program_repository import InMemoryProgramRepository
 from app.repositories.session_repository import InMemorySessionRepository
 from tests.conftest import ISSUER, make_signing_context
@@ -34,8 +41,10 @@ class FakeProgramGenerator:
     def __init__(self, *, result=None, error=None):
         self._result = result
         self._error = error
+        self.calls = 0
 
     def generate(self, request: ProgramGenerationRequest) -> GeneratedProgram:
+        self.calls += 1
         if self._error is not None:
             raise self._error
         return self._result
@@ -64,13 +73,15 @@ def _default_program() -> GeneratedProgram:
     )
 
 
-def build_client(generator=None, ctx=None):
+def build_client(generator=None, ctx=None, profiles=None, cache=None):
     ctx = ctx or make_signing_context()
     exercises = InMemoryExerciseRepository()
     programs = InMemoryProgramRepository(exercises)
     sessions = InMemorySessionRepository(exercises)
     logged = InMemoryLoggedSessionRepository(sessions, exercises)
     generator = generator or FakeProgramGenerator(result=_default_program())
+    profiles = profiles or InMemoryProfileRepository()
+    cache = cache or GenerationCache(InMemoryCacheStore())
     app = create_app()
     app.dependency_overrides[get_jwks] = lambda: ctx.jwks
     app.dependency_overrides[get_settings] = lambda: Settings(clerk_issuer=ISSUER)
@@ -78,6 +89,8 @@ def build_client(generator=None, ctx=None):
     app.dependency_overrides[get_program_repository] = lambda: programs
     app.dependency_overrides[get_logged_session_repository] = lambda: logged
     app.dependency_overrides[get_program_generator] = lambda: generator
+    app.dependency_overrides[get_generation_cache] = lambda: cache
+    app.dependency_overrides[get_profile_repository] = lambda: profiles
     return TestClient(app), ctx
 
 
@@ -173,6 +186,48 @@ def test_malformed_generation_returns_502():
     # Assert
     assert response.status_code == 502
     assert response.json()["success"] is False
+
+
+def test_second_equivalent_request_is_served_from_cache_over_http():
+    # Arrange — a counting generator behind two users with equivalent coarse
+    # requests; the cache and profile repo are shared across the app
+    generator = FakeProgramGenerator(result=_default_program())
+    client, ctx = build_client(generator=generator)
+
+    # Act — two equivalent generations from different users
+    first = client.post(
+        "/api/programs/generate", headers=_auth(ctx, "user_one"), json=_body()
+    )
+    second = client.post(
+        "/api/programs/generate", headers=_auth(ctx, "user_two"), json=_body()
+    )
+
+    # Assert — the second was served from cache: only one AI call, two Programs
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert generator.calls == 1
+    assert first.json()["data"]["id"] != second.json()["data"]["id"]
+
+
+def test_sensitive_user_always_regenerates_over_http():
+    # Arrange — a user flagged with a Sensitive Constraint
+    generator = FakeProgramGenerator(result=_default_program())
+    profiles = InMemoryProfileRepository()
+    profiles.update(
+        "user_sensitive", ProfileUpdate(sensitive_constraints=["injury"])
+    )
+    client, ctx = build_client(generator=generator, profiles=profiles)
+
+    # Act — the sensitive user requests the same parameters twice
+    client.post(
+        "/api/programs/generate", headers=_auth(ctx, "user_sensitive"), json=_body()
+    )
+    client.post(
+        "/api/programs/generate", headers=_auth(ctx, "user_sensitive"), json=_body()
+    )
+
+    # Assert — the cache is bypassed every time: a fresh generation each request
+    assert generator.calls == 2
 
 
 def test_generate_rejects_zero_weeks():
