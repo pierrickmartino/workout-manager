@@ -42,7 +42,12 @@ services:
       - "8000:8000"
 
   web:
-    build: ./apps/web
+    build:
+      context: ./apps/web
+      args:
+        # Public Clerk key must be baked into the client bundle at build time;
+        # the secret key stays runtime-only (see environment below).
+        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
     depends_on:
       - api
     environment:

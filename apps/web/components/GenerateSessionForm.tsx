@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 
 import { submitGenerate, type GenerateFormState } from "@/app/sessions/actions";
-import { TRAINING_TYPES } from "@/lib/sessions";
+import { TRAINING_TYPES } from "@/lib/sessions-types";
 
 const fieldStyle: React.CSSProperties = { display: "block", marginBottom: "1rem" };
 const labelStyle: React.CSSProperties = { display: "block", fontWeight: 600 };

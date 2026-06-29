@@ -7,7 +7,7 @@ import {
   SENSITIVE_CONSTRAINT_TYPES,
   TRAINING_TYPES,
   type Profile,
-} from "@/lib/profile";
+} from "@/lib/profile-types";
 
 interface ProfileFormProps {
   // Pre-fill when editing an existing profile; omit during first onboarding.

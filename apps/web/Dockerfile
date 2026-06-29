@@ -9,7 +9,11 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # Clerk publishable key is a build-time public value; the secret key is injected
-# at runtime via the environment, never baked into the image.
+# at runtime via the environment, never baked into the image. Next.js inlines
+# NEXT_PUBLIC_* vars into the client bundle and reads this one while prerendering
+# the ClerkProvider, so it must be present at build time (passed via compose).
+ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
 RUN npm run build
 
 FROM node:22-slim AS runner
