@@ -124,3 +124,111 @@ def test_get_returns_none_for_an_unknown_session(repos):
 
     # Assert
     assert session_repo.get(123456, "user_any") is None
+
+
+def test_a_new_session_has_not_been_regenerated(repos):
+    # Arrange / Act
+    session_repo, exercises = repos
+    view = session_repo.create("user_fresh", _draft_with_two_prescriptions(exercises))
+
+    # Assert — the once-per-Session guard starts open
+    assert view.has_been_regenerated is False
+
+
+def _replacement(exercises) -> PrescriptionDraft:
+    goblet = exercises.find_or_create(
+        "Goblet Squat", provenance=Provenance.AI_GENERATED, targeted_muscles=["quads"]
+    )
+    return PrescriptionDraft(
+        exercise_id=goblet.id, sets=3, reps="10", recommended_load="moderate"
+    )
+
+
+def test_regenerate_keeps_chosen_prescriptions_and_replaces_the_rest(repos):
+    # Arrange — a two-exercise Session; keep the first, drop the second
+    session_repo, exercises = repos
+    created = session_repo.create(
+        "user_regen", _draft_with_two_prescriptions(exercises)
+    )
+
+    # Act
+    view = session_repo.regenerate(
+        created.id,
+        "user_regen",
+        keep_positions=[0],
+        replacements=[_replacement(exercises)],
+    )
+
+    # Assert — kept first (original order), then replacements, re-positioned 0..n
+    assert view is not None
+    assert [p.exercise_name for p in view.prescriptions] == [
+        "Back Squat",
+        "Goblet Squat",
+    ]
+    assert [p.position for p in view.prescriptions] == [0, 1]
+    assert view.has_been_regenerated is True
+
+
+def test_regenerated_session_reads_back_with_the_new_prescriptions(repos):
+    # Arrange
+    session_repo, exercises = repos
+    created = session_repo.create(
+        "user_persist", _draft_with_two_prescriptions(exercises)
+    )
+
+    # Act
+    session_repo.regenerate(
+        created.id,
+        "user_persist",
+        keep_positions=[0],
+        replacements=[_replacement(exercises)],
+    )
+    refetched = session_repo.get(created.id, "user_persist")
+
+    # Assert — the change persisted, including the guard
+    assert [p.exercise_name for p in refetched.prescriptions] == [
+        "Back Squat",
+        "Goblet Squat",
+    ]
+    assert refetched.has_been_regenerated is True
+
+
+def test_regenerate_does_not_touch_another_users_session(repos):
+    # Arrange — regeneration only ever mutates the owner's own copy
+    session_repo, exercises = repos
+    created = session_repo.create(
+        "user_owner", _draft_with_two_prescriptions(exercises)
+    )
+
+    # Act
+    result = session_repo.regenerate(
+        created.id,
+        "user_intruder",
+        keep_positions=[0],
+        replacements=[_replacement(exercises)],
+    )
+
+    # Assert — refused, and the owner's Session is untouched
+    assert result is None
+    owner_view = session_repo.get(created.id, "user_owner")
+    assert [p.exercise_name for p in owner_view.prescriptions] == [
+        "Back Squat",
+        "Overhead Press",
+    ]
+    assert owner_view.has_been_regenerated is False
+
+
+def test_regenerate_returns_none_for_an_unknown_session(repos):
+    # Arrange
+    session_repo, exercises = repos
+
+    # Assert
+    assert (
+        session_repo.regenerate(
+            424242,
+            "user_any",
+            keep_positions=[],
+            replacements=[_replacement(exercises)],
+        )
+        is None
+    )

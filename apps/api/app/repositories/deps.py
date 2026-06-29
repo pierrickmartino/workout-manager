@@ -16,9 +16,17 @@ from app.generation.program_generator import (
     AnthropicProgramGenerator,
     ProgramGenerator,
 )
+from app.generation.regenerator import (
+    AnthropicSessionRegenerator,
+    SessionRegenerator,
+)
 from app.repositories.exercise_repository import (
     ExerciseRepository,
     SqlExerciseRepository,
+)
+from app.repositories.generation_feedback_repository import (
+    GenerationFeedbackRepository,
+    SqlGenerationFeedbackRepository,
 )
 from app.repositories.program_repository import (
     ProgramRepository,
@@ -80,3 +88,16 @@ def get_program_generator(
 ) -> ProgramGenerator:
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     return AnthropicProgramGenerator(client)
+
+
+def get_generation_feedback_repository(
+    session: Session = Depends(get_session),
+) -> GenerationFeedbackRepository:
+    return SqlGenerationFeedbackRepository(session)
+
+
+def get_session_regenerator(
+    settings: Settings = Depends(get_settings),
+) -> SessionRegenerator:
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    return AnthropicSessionRegenerator(client)

@@ -125,6 +125,11 @@ class WorkoutSession(SQLModel, table=True):
     position: int | None = Field(default=None)
     title: str | None = Field(default=None)
 
+    # Regeneration is limited to once per Session in v1 (Slice 10): the flag is
+    # set when the user keeps some prescriptions and regenerates the rest, and
+    # blocks any further regeneration of this Session.
+    has_been_regenerated: bool = Field(default=False)
+
 
 class ExercisePrescription(SQLModel, table=True):
     """The prescription of one Exercise inside a Session.
@@ -179,3 +184,23 @@ class LoggedSet(SQLModel, table=True):
     reps: int
     load: str | None = Field(default=None)
     perceived_difficulty: int | None = Field(default=None)
+
+
+class GenerationFeedback(SQLModel, table=True):
+    """The user's verdict on a generated/adopted Session (Slice 10).
+
+    A Generation Feedback is a ``positive``/``negative`` verdict with an optional
+    free-text ``reason`` — "did the AI give me a good plan?" — and is the trigger
+    for Regeneration. It is persisted in its own table, deliberately distinct from
+    Performance Feedback (the ``perceived_difficulty`` on a Logged Set): the two
+    are never collapsed. Reads are scoped to ``clerk_user_id``; a Session may carry
+    several over time, and the latest one drives whether regeneration is allowed."""
+
+    __tablename__ = "generation_feedback"
+
+    id: int | None = Field(default=None, primary_key=True)
+    clerk_user_id: str = Field(index=True)
+    session_id: int = Field(foreign_key="workout_session.id", index=True)
+    verdict: str
+    reason: str | None = Field(default=None)
+    created_at: datetime = Field(default_factory=_utcnow)
