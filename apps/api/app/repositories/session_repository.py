@@ -9,6 +9,7 @@ another. SQLModel-backed and in-memory implementations honor the same contract."
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -66,6 +67,7 @@ class SessionView:
     training_type: str
     duration_minutes: int
     prescriptions: list[PrescriptionView]
+    has_been_regenerated: bool = False
 
 
 class SessionRepository(Protocol):
@@ -78,6 +80,50 @@ class SessionRepository(Protocol):
         """Return the owner's Session by id, or ``None`` if it is missing or
         owned by another user."""
         ...
+
+    def regenerate(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        *,
+        keep_positions: Sequence[int],
+        replacements: list[PrescriptionDraft],
+    ) -> SessionView | None:
+        """Replace the owner's Session prescriptions, keeping those at
+        ``keep_positions`` (in their original order) and appending ``replacements``
+        after them, then re-number positions and mark the Session regenerated.
+
+        Returns the updated Session, or ``None`` if it is missing or owned by
+        another user — regeneration only ever mutates the owner's own copy.
+        """
+        ...
+
+
+def _draft_from(prescription: ExercisePrescription) -> PrescriptionDraft:
+    return PrescriptionDraft(
+        exercise_id=prescription.exercise_id,
+        sets=prescription.sets,
+        reps=prescription.reps,
+        rest_seconds=prescription.rest_seconds,
+        tempo=prescription.tempo,
+        recommended_load=prescription.recommended_load,
+    )
+
+
+def _regenerated_drafts(
+    current: list[ExercisePrescription],
+    keep_positions: Sequence[int],
+    replacements: list[PrescriptionDraft],
+) -> list[PrescriptionDraft]:
+    """Kept prescriptions (original order) followed by the replacements."""
+
+    keep = set(keep_positions)
+    kept = [
+        _draft_from(p)
+        for p in sorted(current, key=lambda p: p.position)
+        if p.position in keep
+    ]
+    return kept + list(replacements)
 
 
 def _prescription_view(
@@ -119,7 +165,25 @@ class SqlSessionRepository:
             training_type=workout.training_type,
             duration_minutes=workout.duration_minutes,
             prescriptions=views,
+            has_been_regenerated=workout.has_been_regenerated,
         )
+
+    def _add_prescriptions(
+        self, session_id: int, prescriptions: list[PrescriptionDraft]
+    ) -> None:
+        for position, prescription in enumerate(prescriptions):
+            self._session.add(
+                ExercisePrescription(
+                    session_id=session_id,
+                    exercise_id=prescription.exercise_id,
+                    position=position,
+                    sets=prescription.sets,
+                    reps=prescription.reps,
+                    rest_seconds=prescription.rest_seconds,
+                    tempo=prescription.tempo,
+                    recommended_load=prescription.recommended_load,
+                )
+            )
 
     def create(self, clerk_user_id: str, draft: SessionDraft) -> SessionView:
         workout = WorkoutSession(
@@ -131,19 +195,7 @@ class SqlSessionRepository:
         self._session.commit()
         self._session.refresh(workout)
 
-        for position, prescription in enumerate(draft.prescriptions):
-            self._session.add(
-                ExercisePrescription(
-                    session_id=workout.id,
-                    exercise_id=prescription.exercise_id,
-                    position=position,
-                    sets=prescription.sets,
-                    reps=prescription.reps,
-                    rest_seconds=prescription.rest_seconds,
-                    tempo=prescription.tempo,
-                    recommended_load=prescription.recommended_load,
-                )
-            )
+        self._add_prescriptions(workout.id, draft.prescriptions)
         self._session.commit()
         return self._view(workout)
 
@@ -151,6 +203,36 @@ class SqlSessionRepository:
         workout = self._session.get(WorkoutSession, session_id)
         if workout is None or workout.clerk_user_id != clerk_user_id:
             return None
+        return self._view(workout)
+
+    def regenerate(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        *,
+        keep_positions: Sequence[int],
+        replacements: list[PrescriptionDraft],
+    ) -> SessionView | None:
+        workout = self._session.get(WorkoutSession, session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return None
+
+        current = self._session.exec(
+            select(ExercisePrescription).where(
+                ExercisePrescription.session_id == session_id
+            )
+        ).all()
+        new_drafts = _regenerated_drafts(list(current), keep_positions, replacements)
+
+        for prescription in current:
+            self._session.delete(prescription)
+        self._session.commit()
+
+        self._add_prescriptions(session_id, new_drafts)
+        workout.has_been_regenerated = True
+        self._session.add(workout)
+        self._session.commit()
+        self._session.refresh(workout)
         return self._view(workout)
 
 
@@ -173,7 +255,26 @@ class InMemorySessionRepository:
             training_type=workout.training_type,
             duration_minutes=workout.duration_minutes,
             prescriptions=views,
+            has_been_regenerated=workout.has_been_regenerated,
         )
+
+    def _materialize(
+        self, session_id: int, prescriptions: list[PrescriptionDraft]
+    ) -> list[ExercisePrescription]:
+        return [
+            ExercisePrescription(
+                id=position + 1,
+                session_id=session_id,
+                exercise_id=prescription.exercise_id,
+                position=position,
+                sets=prescription.sets,
+                reps=prescription.reps,
+                rest_seconds=prescription.rest_seconds,
+                tempo=prescription.tempo,
+                recommended_load=prescription.recommended_load,
+            )
+            for position, prescription in enumerate(prescriptions)
+        ]
 
     def create(self, clerk_user_id: str, draft: SessionDraft) -> SessionView:
         workout = WorkoutSession(
@@ -184,26 +285,33 @@ class InMemorySessionRepository:
         )
         self._next_id += 1
         self._sessions[workout.id] = workout
-        self._prescriptions[workout.id] = [
-            ExercisePrescription(
-                id=position + 1,
-                session_id=workout.id,
-                exercise_id=prescription.exercise_id,
-                position=position,
-                sets=prescription.sets,
-                reps=prescription.reps,
-                rest_seconds=prescription.rest_seconds,
-                tempo=prescription.tempo,
-                recommended_load=prescription.recommended_load,
-            )
-            for position, prescription in enumerate(draft.prescriptions)
-        ]
+        self._prescriptions[workout.id] = self._materialize(
+            workout.id, draft.prescriptions
+        )
         return self._view(workout)
 
     def get(self, session_id: int, clerk_user_id: str) -> SessionView | None:
         workout = self._sessions.get(session_id)
         if workout is None or workout.clerk_user_id != clerk_user_id:
             return None
+        return self._view(workout)
+
+    def regenerate(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        *,
+        keep_positions: Sequence[int],
+        replacements: list[PrescriptionDraft],
+    ) -> SessionView | None:
+        workout = self._sessions.get(session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return None
+
+        current = self._prescriptions.get(session_id, [])
+        new_drafts = _regenerated_drafts(current, keep_positions, replacements)
+        self._prescriptions[session_id] = self._materialize(session_id, new_drafts)
+        workout.has_been_regenerated = True
         return self._view(workout)
 
 
