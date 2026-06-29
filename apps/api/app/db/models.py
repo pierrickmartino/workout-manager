@@ -80,12 +80,34 @@ class Exercise(SQLModel, table=True):
     )
 
 
+class Program(SQLModel, table=True):
+    """A user-owned, multi-week training plan (ADR-0001).
+
+    Created by Adopting a Generated Program: a deep copy the user owns and may
+    mutate without touching the immutable source. It records the full generation
+    parameter set and owns its fully-enumerated ``WorkoutSession`` rows — one per
+    (week, day) — followed as a self-paced sequence."""
+
+    __tablename__ = "program"
+
+    id: int | None = Field(default=None, primary_key=True)
+    clerk_user_id: str = Field(index=True)
+    training_type: str
+    objective: str
+    sessions_per_week: int
+    weeks: int
+    duration_minutes: int
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
 class WorkoutSession(SQLModel, table=True):
     """A single prescribed workout owned by one user.
 
-    In this slice it is always *standalone* — generated on its own with no parent
-    Program and no Week/Day position. It records the request parameters
-    (training type, duration) and owns its ordered ExercisePrescriptions."""
+    One unified concept (CONTEXT.md): a Session either stands alone (no
+    ``program_id``, no Week/Day position) or belongs to a Program, in which case
+    it carries its ``program_id``, descriptive ``week``/``day`` labels, and a
+    zero-based ``position`` fixing its place in the self-paced sequence. It
+    records the training parameters and owns its ordered ExercisePrescriptions."""
 
     __tablename__ = "workout_session"
 
@@ -94,6 +116,14 @@ class WorkoutSession(SQLModel, table=True):
     training_type: str
     duration_minutes: int
     created_at: datetime = Field(default_factory=_utcnow)
+
+    # Program linkage — all null for a standalone Session (Slices 3-4 path).
+    program_id: int | None = Field(default=None, foreign_key="program.id", index=True)
+    objective: str | None = Field(default=None)
+    week: int | None = Field(default=None)
+    day: int | None = Field(default=None)
+    position: int | None = Field(default=None)
+    title: str | None = Field(default=None)
 
 
 class ExercisePrescription(SQLModel, table=True):
