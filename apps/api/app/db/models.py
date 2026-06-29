@@ -16,7 +16,7 @@ from the Exercise definition itself."""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import Column
 from sqlalchemy.types import JSON
@@ -114,3 +114,38 @@ class ExercisePrescription(SQLModel, table=True):
     rest_seconds: int | None = Field(default=None)
     tempo: str | None = Field(default=None)
     recommended_load: str | None = Field(default=None)
+
+
+class LoggedSession(SQLModel, table=True):
+    """The record of a user performing a Session on a date.
+
+    This is the *record* side of the plan/record split: it references the
+    prescribing ``WorkoutSession`` but never mutates it, and one Session may have
+    many Logged Sessions (each a separate performance). It owns its ordered
+    ``LoggedSet`` rows. Reads are scoped to ``clerk_user_id``."""
+
+    __tablename__ = "logged_session"
+
+    id: int | None = Field(default=None, primary_key=True)
+    clerk_user_id: str = Field(index=True)
+    session_id: int = Field(foreign_key="workout_session.id", index=True)
+    performed_on: date
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class LoggedSet(SQLModel, table=True):
+    """One actual set the user performed within a Logged Session.
+
+    Records the real ``reps`` and ``load`` and the user's Performance Feedback as
+    ``perceived_difficulty`` (an RPE-style 1–10 score, optional). References the
+    catalog ``Exercise`` that was performed; ``position`` fixes display order."""
+
+    __tablename__ = "logged_set"
+
+    id: int | None = Field(default=None, primary_key=True)
+    logged_session_id: int = Field(foreign_key="logged_session.id", index=True)
+    exercise_id: int = Field(foreign_key="exercise.id", index=True)
+    position: int
+    reps: int
+    load: str | None = Field(default=None)
+    perceived_difficulty: int | None = Field(default=None)

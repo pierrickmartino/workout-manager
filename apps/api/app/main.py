@@ -7,6 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.envelope import error_envelope
+from app.routes.logs import router as logs_router
 from app.routes.profile import router as profile_router
 from app.routes.sessions import router as sessions_router
 
@@ -45,6 +46,7 @@ def create_app() -> FastAPI:
 
     app.include_router(profile_router)
     app.include_router(sessions_router)
+    app.include_router(logs_router)
     return app
 
 

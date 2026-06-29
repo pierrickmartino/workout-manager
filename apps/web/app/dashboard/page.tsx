@@ -33,6 +33,9 @@ export default async function DashboardPage() {
         <Link href="/sessions/new">Generate a workout →</Link>
       </p>
       <p>
+        <Link href="/history">Training history →</Link>
+      </p>
+      <p>
         <Link href="/profile/edit">Edit profile →</Link>
       </p>
     </section>
