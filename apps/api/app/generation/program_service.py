@@ -14,9 +14,11 @@ A ``GenerationError`` from the generator propagates before anything is persisted
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Protocol, Sequence
 
 from app.adoption.service import adopt
+from app.config import get_settings
+from app.domain.fitness_profile import advance_level
 from app.generation.cache import CacheRequest, GenerationCache
 from app.generation.program_generator import (
     ProgramGenerationRequest,
@@ -37,18 +39,38 @@ class _ProfileForCache(Protocol):
     height_cm: float | None
 
 
+class _LoggedSessionForFolding(Protocol):
+    """The Logged Session fields ``advance_level`` reads to fold in progress."""
+
+    training_type: str
+    logged_sets: Sequence[object]
+
+
 def cache_request_for(
-    params: ProgramGenerationRequest, profile: _ProfileForCache
+    params: ProgramGenerationRequest,
+    profile: _ProfileForCache,
+    logged_sessions: Sequence[_LoggedSessionForFolding] = (),
 ) -> CacheRequest:
     """Combine generation ``params`` with the user's ``profile`` into a cache key
     input: the per-training-type Fitness Level and the constraint fields come
     from the profile; the continuous values are carried but excluded from the key.
+
+    The Fitness Level is the user's baseline with sustained strong logged progress
+    *folded in* (ADR-0004), so a user who has progressed keys into — and caches at —
+    the right difficulty for their next Program. Only this coarse, folded level
+    reaches generation; the raw ``logged_sessions`` never do.
     """
+
+    levels = advance_level(
+        profile.fitness_levels,
+        logged_sessions,
+        sessions_per_notch=get_settings().strong_sessions_per_level,
+    )
 
     return CacheRequest(
         training_type=params.training_type,
         objective=params.objective,
-        fitness_level=profile.fitness_levels.get(params.training_type, 0),
+        fitness_level=levels.get(params.training_type, 0),
         sessions_per_week=params.sessions_per_week,
         weeks=params.weeks,
         duration_minutes=params.duration_minutes,

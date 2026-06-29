@@ -147,18 +147,24 @@ def generate(
     clerk_user_id: str = Depends(get_current_user),
     orchestrator: GenerationOrchestrator = Depends(get_generation_orchestrator),
     profiles: ProfileRepository = Depends(get_profile_repository),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
 ) -> dict:
     """Submit a Program generation off the request path (ADR-0005).
 
     On a cache hit the Program is Adopted inline and returned with ``200``; on a
     miss or Sensitive-Constraint bypass a job is enqueued and a ``202`` handle is
     returned for the PWA to poll. Nothing blocks on the AI here.
+
+    The cache key uses the user's Fitness Level with sustained strong logged
+    progress folded in (ADR-0004), so a user who has progressed keys into the right
+    difficulty for their next Program.
     """
 
     params = payload.to_generation_request()
     profile = profiles.get_or_create(clerk_user_id)
+    history = logged.list_for_user(clerk_user_id)
     outcome = orchestrator.submit(
-        params, clerk_user_id, cache_request_for(params, profile)
+        params, clerk_user_id, cache_request_for(params, profile, history)
     )
 
     if outcome.program is not None:  # cache hit — instant
