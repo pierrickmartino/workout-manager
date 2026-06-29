@@ -1,53 +1,17 @@
 import { auth } from "@clerk/nextjs/server";
 
+import type { GenerateSessionInput, WorkoutSession } from "./sessions-types";
+
+// Re-export the server-free constants/types so existing server-side callers can
+// keep importing them from "@/lib/sessions". Client Components must import them
+// directly from "@/lib/sessions-types" to avoid pulling this server-only module
+// (and its `server-only` dependency) into the browser bundle.
+export * from "./sessions-types";
+
 // Server-side data access for standalone Session generation. The Clerk JWT is
 // attached here and never reaches the browser; the FastAPI backend verifies it
 // via JWKS, then runs the AI generation path (ADR-0006).
 const API_URL = process.env.API_URL ?? "http://localhost:8000";
-
-// Training types a Session can be generated for. Mirrors the Fitness Level
-// dimensions used elsewhere in the app.
-export const TRAINING_TYPES = [
-  "strength",
-  "cardio",
-  "hiit",
-  "yoga",
-  "mobility",
-] as const;
-
-export type TrainingType = (typeof TRAINING_TYPES)[number];
-
-// The prescription of one Exercise within a Session — the sets/reps/etc. the
-// user is told to perform, joined to its catalog Exercise definition.
-export interface ExercisePrescription {
-  position: number;
-  sets: number;
-  reps: string;
-  rest_seconds: number | null;
-  tempo: string | null;
-  recommended_load: string | null;
-  exercise_id: number;
-  exercise_name: string;
-  exercise_description: string | null;
-  targeted_muscles: string[];
-  required_equipment: string[];
-  provenance: string;
-}
-
-export interface WorkoutSession {
-  id: number;
-  clerk_user_id: string;
-  training_type: string;
-  duration_minutes: number;
-  prescriptions: ExercisePrescription[];
-}
-
-// The request the user submits to generate a standalone Session.
-export interface GenerateSessionInput {
-  training_type: string;
-  duration_minutes: number;
-  equipment: string[];
-}
 
 interface Envelope<T> {
   success: boolean;
