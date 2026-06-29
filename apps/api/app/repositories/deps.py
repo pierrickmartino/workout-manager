@@ -16,6 +16,10 @@ from app.repositories.exercise_repository import (
     ExerciseRepository,
     SqlExerciseRepository,
 )
+from app.repositories.logged_session_repository import (
+    LoggedSessionRepository,
+    SqlLoggedSessionRepository,
+)
 from app.repositories.profile_repository import (
     ProfileRepository,
     SqlProfileRepository,
@@ -42,6 +46,12 @@ def get_session_repository(
     session: Session = Depends(get_session),
 ) -> SessionRepository:
     return SqlSessionRepository(session)
+
+
+def get_logged_session_repository(
+    session: Session = Depends(get_session),
+) -> LoggedSessionRepository:
+    return SqlLoggedSessionRepository(session)
 
 
 def get_session_generator(

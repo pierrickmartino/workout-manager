@@ -41,6 +41,9 @@ export default async function SessionPage({
       </ol>
 
       <p>
+        <Link href={`/sessions/${session.id}/log`}>Log this session →</Link>
+      </p>
+      <p>
         <Link href="/sessions/new">Generate another →</Link>
       </p>
     </section>
