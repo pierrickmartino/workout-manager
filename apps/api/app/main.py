@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from app.envelope import error_envelope
 from app.routes.profile import router as profile_router
+from app.routes.sessions import router as sessions_router
 
 HTTP_UNPROCESSABLE_ENTITY = 422
 
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(profile_router)
+    app.include_router(sessions_router)
     return app
 
 

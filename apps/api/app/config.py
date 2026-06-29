@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/workout"
     redis_url: str = "redis://localhost:6379/0"
 
+    # AI generation (ADR-0006). Required for live generation; never hardcoded.
+    anthropic_api_key: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:
