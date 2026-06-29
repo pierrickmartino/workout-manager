@@ -12,9 +12,17 @@ from sqlmodel import Session
 from app.config import Settings, get_settings
 from app.db.session import get_session
 from app.generation.generator import AnthropicSessionGenerator, SessionGenerator
+from app.generation.program_generator import (
+    AnthropicProgramGenerator,
+    ProgramGenerator,
+)
 from app.repositories.exercise_repository import (
     ExerciseRepository,
     SqlExerciseRepository,
+)
+from app.repositories.program_repository import (
+    ProgramRepository,
+    SqlProgramRepository,
 )
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
@@ -54,8 +62,21 @@ def get_logged_session_repository(
     return SqlLoggedSessionRepository(session)
 
 
+def get_program_repository(
+    session: Session = Depends(get_session),
+) -> ProgramRepository:
+    return SqlProgramRepository(session)
+
+
 def get_session_generator(
     settings: Settings = Depends(get_settings),
 ) -> SessionGenerator:
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     return AnthropicSessionGenerator(client)
+
+
+def get_program_generator(
+    settings: Settings = Depends(get_settings),
+) -> ProgramGenerator:
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    return AnthropicProgramGenerator(client)
