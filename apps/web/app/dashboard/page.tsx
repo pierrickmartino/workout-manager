@@ -1,28 +1,11 @@
-import { auth } from "@clerk/nextjs/server";
+import Link from "next/link";
+import { redirect } from "next/navigation";
 
-// Server-side so the Clerk JWT is attached to the API call without ever
-// reaching the browser. The FastAPI backend verifies it via JWKS and
-// get-or-creates the Fitness Profile, which we then render.
-const API_URL = process.env.API_URL ?? "http://localhost:8000";
+import { fetchProfile, isProfileComplete, type Profile } from "@/lib/profile";
 
-type ProfileEnvelope = {
-  success: boolean;
-  data: { id: number; clerk_user_id: string; display_name: string | null } | null;
-  error: string | null;
-};
-
-async function fetchProfile(): Promise<ProfileEnvelope> {
-  const { getToken } = await auth();
-  const token = await getToken();
-
-  const response = await fetch(`${API_URL}/api/profile`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
-
-  return (await response.json()) as ProfileEnvelope;
-}
-
+// The dashboard renders the full Fitness Profile that round-tripped through
+// Postgres on the FastAPI backend. New users (incomplete profile) are sent to
+// onboarding first.
 export default async function DashboardPage() {
   const envelope = await fetchProfile();
 
@@ -30,22 +13,64 @@ export default async function DashboardPage() {
     return (
       <section>
         <h1>Dashboard</h1>
-        <p role="alert">Could not load your profile: {envelope.error ?? "unknown error"}</p>
+        <p role="alert">
+          Could not load your profile: {envelope.error ?? "unknown error"}
+        </p>
       </section>
     );
   }
 
   const profile = envelope.data;
+  if (!isProfileComplete(profile)) {
+    redirect("/onboarding");
+  }
+
   return (
     <section>
       <h1>Your Fitness Profile</h1>
-      <p>This profile round-tripped through Postgres on the FastAPI backend.</p>
-      <dl>
-        <dt>Clerk user</dt>
-        <dd>{profile.clerk_user_id}</dd>
-        <dt>Display name</dt>
-        <dd>{profile.display_name ?? "(not set yet)"}</dd>
-      </dl>
+      <ProfileSummary profile={profile} />
+      <p>
+        <Link href="/profile/edit">Edit profile →</Link>
+      </p>
     </section>
+  );
+}
+
+function formatList(values: string[]): string {
+  return values.length > 0 ? values.join(", ") : "(none)";
+}
+
+function formatLevels(levels: Record<string, number>): string {
+  const entries = Object.entries(levels);
+  if (entries.length === 0) return "(none)";
+  return entries.map(([type, level]) => `${type}: ${level}/10`).join(", ");
+}
+
+function ProfileSummary({ profile }: { profile: Profile }) {
+  return (
+    <dl>
+      <dt>Display name</dt>
+      <dd>{profile.display_name ?? "(not set)"}</dd>
+      <dt>Gender</dt>
+      <dd>{profile.gender ?? "(not set)"}</dd>
+      <dt>Age</dt>
+      <dd>{profile.age ?? "(not set)"}</dd>
+      <dt>Height</dt>
+      <dd>{profile.height_cm !== null ? `${profile.height_cm} cm` : "(not set)"}</dd>
+      <dt>Weight</dt>
+      <dd>{profile.weight_kg !== null ? `${profile.weight_kg} kg` : "(not set)"}</dd>
+      <dt>Training habits</dt>
+      <dd>{profile.training_habits ?? "(not set)"}</dd>
+      <dt>Default equipment</dt>
+      <dd>{formatList(profile.default_equipment)}</dd>
+      <dt>Fitness levels</dt>
+      <dd>{formatLevels(profile.fitness_levels)}</dd>
+      <dt>Preferences / limitations</dt>
+      <dd>{formatList(profile.preferences)}</dd>
+      <dt>Sensitive constraints</dt>
+      <dd>{formatList(profile.sensitive_constraints)}</dd>
+      <dt>Requires extra caution (derived)</dt>
+      <dd>{profile.is_sensitive ? "Yes" : "No"}</dd>
+    </dl>
   );
 }
