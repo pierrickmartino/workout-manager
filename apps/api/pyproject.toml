@@ -37,4 +37,9 @@ testpaths = ["tests"]
 
 [tool.coverage.run]
 source = ["app"]
-omit = ["app/db/session.py", "app/alembic/*", "app/main.py"]
+omit = [
+    "app/db/session.py",
+    "app/alembic/*",
+    "app/main.py",
+    "app/generation/worker.py",
+]

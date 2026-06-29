@@ -30,6 +30,9 @@ export default async function DashboardPage() {
       <h1>Your Fitness Profile</h1>
       <ProfileSummary profile={profile} />
       <p>
+        <Link href="/programs/new">Generate a program →</Link>
+      </p>
+      <p>
         <Link href="/sessions/new">Generate a workout →</Link>
       </p>
       <p>

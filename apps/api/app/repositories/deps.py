@@ -8,11 +8,15 @@ from __future__ import annotations
 import anthropic
 import redis
 from fastapi import Depends
+from rq import Queue
 from sqlmodel import Session
 
 from app.config import Settings, get_settings
 from app.db.session import get_session
 from app.generation.cache import GenerationCache, RedisCacheStore
+from app.generation.job_queue import JobQueue, RqJobQueue
+from app.generation.orchestrator import GenerationOrchestrator
+from app.generation.worker import QUEUE_NAME
 from app.generation.generator import AnthropicSessionGenerator, SessionGenerator
 from app.generation.program_generator import (
     AnthropicProgramGenerator,
@@ -121,6 +125,24 @@ def get_generation_cache(
 ) -> GenerationCache:
     client = redis.Redis.from_url(settings.redis_url)
     return GenerationCache(RedisCacheStore(client))
+
+
+def get_job_queue(
+    settings: Settings = Depends(get_settings),
+) -> JobQueue:
+    connection = redis.Redis.from_url(settings.redis_url)
+    return RqJobQueue(Queue(QUEUE_NAME, connection=connection))
+
+
+def get_generation_orchestrator(
+    cache: GenerationCache = Depends(get_generation_cache),
+    queue: JobQueue = Depends(get_job_queue),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    programs: ProgramRepository = Depends(get_program_repository),
+) -> GenerationOrchestrator:
+    return GenerationOrchestrator(
+        cache=cache, queue=queue, exercises=exercises, programs=programs
+    )
 
 
 def get_generation_feedback_repository(

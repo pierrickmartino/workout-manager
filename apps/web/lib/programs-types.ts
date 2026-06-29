@@ -16,6 +16,29 @@ export interface ProgramSession {
   prescriptions: ExercisePrescription[];
 }
 
+// The async generation job the PWA polls (Slice 7, ADR-0005). Generation runs
+// off the request path: a cache hit returns `complete` with a `program_id`
+// inline, while a miss/bypass returns `pending` with a `job_id` to poll until the
+// adopted `program_id` appears (or `failed` with a user-safe message).
+export type ProgramJobStatus = "pending" | "complete" | "failed";
+
+export interface ProgramJob {
+  status: ProgramJobStatus;
+  job_id: string | null;
+  program_id: number | null;
+  error: string | null;
+}
+
+// The full parameter set for a multi-week Program generation request.
+export interface GenerateProgramInput {
+  training_type: string;
+  objective: string;
+  sessions_per_week: number;
+  duration_minutes: number;
+  weeks: number;
+  equipment: string[];
+}
+
 // A user-owned multi-week Program joined to its self-paced position: the next
 // un-performed Session and how many have been completed so far.
 export interface ProgramProgress {
