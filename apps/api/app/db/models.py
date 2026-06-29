@@ -79,6 +79,32 @@ class Exercise(SQLModel, table=True):
         default_factory=list, sa_column=Column(JSON, nullable=False)
     )
 
+    # Enriched detail (Slice 11): execution guidance, a 1–10 difficulty aligned
+    # with Fitness Level, and safety precautions — surfaced on the Exercise page
+    # and important given the domain's caution around injury and rehab.
+    instructions: str | None = Field(default=None)
+    difficulty: int | None = Field(default=None)
+    precautions: list[str] = Field(
+        default_factory=list, sa_column=Column(JSON, nullable=False)
+    )
+
+
+class ExerciseRelationship(SQLModel, table=True):
+    """A typed link between two catalog Exercises (CONTEXT.md, Slice 11).
+
+    ``kind`` is ``variation`` (the *same* movement scaled in difficulty) or
+    ``alternative`` (a *different* movement with a similar training effect). The
+    link is directional: it records that ``to_exercise`` is a Variation/Alternative
+    *of* ``from_exercise``. These relationships are what Substitution resolves over,
+    lookup-first, before falling back to AI generation."""
+
+    __tablename__ = "exercise_relationship"
+
+    id: int | None = Field(default=None, primary_key=True)
+    from_exercise_id: int = Field(foreign_key="exercise.id", index=True)
+    to_exercise_id: int = Field(foreign_key="exercise.id", index=True)
+    kind: str
+
 
 class Program(SQLModel, table=True):
     """A user-owned, multi-week training plan (ADR-0001).

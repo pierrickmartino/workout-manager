@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { SubstituteButton } from "@/components/SubstituteButton";
 import {
   fetchSession,
   type ExercisePrescription,
@@ -35,7 +36,10 @@ export default async function SessionPage({
       <ol>
         {session.prescriptions.map((prescription) => (
           <li key={prescription.position} style={{ marginBottom: "1rem" }}>
-            <PrescriptionCard prescription={prescription} />
+            <PrescriptionCard
+              prescription={prescription}
+              sessionId={session.id}
+            />
           </li>
         ))}
       </ol>
@@ -52,12 +56,18 @@ export default async function SessionPage({
 
 function PrescriptionCard({
   prescription,
+  sessionId,
 }: {
   prescription: ExercisePrescription;
+  sessionId: number;
 }) {
   return (
     <div>
-      <strong>{prescription.exercise_name}</strong>
+      <strong>
+        <Link href={`/exercises/${prescription.exercise_id}`}>
+          {prescription.exercise_name}
+        </Link>
+      </strong>
       {prescription.provenance === "ai_generated" ? (
         <span
           title="AI-generated, not yet reviewed"
@@ -87,6 +97,7 @@ function PrescriptionCard({
           />
         ) : null}
       </dl>
+      <SubstituteButton sessionId={sessionId} position={prescription.position} />
     </div>
   );
 }

@@ -27,6 +27,9 @@ class ExerciseRepository(Protocol):
         description: str | None = None,
         targeted_muscles: Sequence[str] = (),
         required_equipment: Sequence[str] = (),
+        instructions: str | None = None,
+        difficulty: int | None = None,
+        precautions: Sequence[str] = (),
     ) -> Exercise:
         """Return the catalog Exercise for ``name``'s normalized form, creating it
         with ``provenance`` and the given details if it does not yet exist."""
@@ -43,6 +46,9 @@ def _new_exercise(
     description: str | None,
     targeted_muscles: Sequence[str],
     required_equipment: Sequence[str],
+    instructions: str | None,
+    difficulty: int | None,
+    precautions: Sequence[str],
 ) -> Exercise:
     return Exercise(
         name=name,
@@ -51,6 +57,9 @@ def _new_exercise(
         description=description,
         targeted_muscles=list(targeted_muscles),
         required_equipment=list(required_equipment),
+        instructions=instructions,
+        difficulty=difficulty,
+        precautions=list(precautions),
     )
 
 
@@ -66,6 +75,9 @@ class SqlExerciseRepository:
         description: str | None = None,
         targeted_muscles: Sequence[str] = (),
         required_equipment: Sequence[str] = (),
+        instructions: str | None = None,
+        difficulty: int | None = None,
+        precautions: Sequence[str] = (),
     ) -> Exercise:
         key = normalize_name(name)
         existing = self._session.exec(
@@ -75,7 +87,14 @@ class SqlExerciseRepository:
             return existing
 
         exercise = _new_exercise(
-            name, provenance, description, targeted_muscles, required_equipment
+            name,
+            provenance,
+            description,
+            targeted_muscles,
+            required_equipment,
+            instructions,
+            difficulty,
+            precautions,
         )
         self._session.add(exercise)
         self._session.commit()
@@ -100,6 +119,9 @@ class InMemoryExerciseRepository:
         description: str | None = None,
         targeted_muscles: Sequence[str] = (),
         required_equipment: Sequence[str] = (),
+        instructions: str | None = None,
+        difficulty: int | None = None,
+        precautions: Sequence[str] = (),
     ) -> Exercise:
         key = normalize_name(name)
         existing = self._by_key.get(key)
@@ -107,7 +129,14 @@ class InMemoryExerciseRepository:
             return existing
 
         exercise = _new_exercise(
-            name, provenance, description, targeted_muscles, required_equipment
+            name,
+            provenance,
+            description,
+            targeted_muscles,
+            required_equipment,
+            instructions,
+            difficulty,
+            precautions,
         )
         exercise.id = self._next_id
         self._next_id += 1

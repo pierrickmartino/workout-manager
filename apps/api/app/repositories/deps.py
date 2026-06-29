@@ -20,6 +20,14 @@ from app.generation.regenerator import (
     AnthropicSessionRegenerator,
     SessionRegenerator,
 )
+from app.generation.substitute_generator import (
+    AnthropicSubstituteGenerator,
+    SubstituteGenerator,
+)
+from app.repositories.exercise_relationship_repository import (
+    ExerciseRelationshipRepository,
+    SqlExerciseRelationshipRepository,
+)
 from app.repositories.exercise_repository import (
     ExerciseRepository,
     SqlExerciseRepository,
@@ -56,6 +64,12 @@ def get_exercise_repository(
     session: Session = Depends(get_session),
 ) -> ExerciseRepository:
     return SqlExerciseRepository(session)
+
+
+def get_exercise_relationship_repository(
+    session: Session = Depends(get_session),
+) -> ExerciseRelationshipRepository:
+    return SqlExerciseRelationshipRepository(session)
 
 
 def get_session_repository(
@@ -101,3 +115,10 @@ def get_session_regenerator(
 ) -> SessionRegenerator:
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     return AnthropicSessionRegenerator(client)
+
+
+def get_substitute_generator(
+    settings: Settings = Depends(get_settings),
+) -> SubstituteGenerator:
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    return AnthropicSubstituteGenerator(client)

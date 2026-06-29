@@ -232,3 +232,67 @@ def test_regenerate_returns_none_for_an_unknown_session(repos):
         )
         is None
     )
+
+
+def test_substitute_prescription_swaps_only_the_targeted_exercise(repos):
+    # Arrange — a two-exercise Session; swap the first prescription's Exercise
+    session_repo, exercises = repos
+    created = session_repo.create(
+        "user_sub", _draft_with_two_prescriptions(exercises)
+    )
+    goblet = exercises.find_or_create(
+        "Goblet Squat", provenance=Provenance.CURATED
+    )
+
+    # Act
+    view = session_repo.substitute_prescription(
+        created.id, "user_sub", 0, goblet.id
+    )
+
+    # Assert — only position 0's Exercise changed; sets/reps and the guard kept
+    assert view is not None
+    assert [p.exercise_name for p in view.prescriptions] == [
+        "Goblet Squat",
+        "Overhead Press",
+    ]
+    assert view.prescriptions[0].sets == 5 and view.prescriptions[0].reps == "5"
+    assert view.has_been_regenerated is False
+
+
+def test_substitute_prescription_persists_and_reads_back(repos):
+    session_repo, exercises = repos
+    created = session_repo.create(
+        "user_subp", _draft_with_two_prescriptions(exercises)
+    )
+    goblet = exercises.find_or_create("Goblet Squat", provenance=Provenance.CURATED)
+
+    session_repo.substitute_prescription(created.id, "user_subp", 0, goblet.id)
+    refetched = session_repo.get(created.id, "user_subp")
+
+    assert refetched.prescriptions[0].exercise_name == "Goblet Squat"
+    assert refetched.has_been_regenerated is False
+
+
+def test_substitute_prescription_does_not_touch_another_users_session(repos):
+    session_repo, exercises = repos
+    created = session_repo.create(
+        "user_owner3", _draft_with_two_prescriptions(exercises)
+    )
+    goblet = exercises.find_or_create("Goblet Squat", provenance=Provenance.CURATED)
+
+    result = session_repo.substitute_prescription(
+        created.id, "user_intruder3", 0, goblet.id
+    )
+
+    assert result is None
+    owner_view = session_repo.get(created.id, "user_owner3")
+    assert owner_view.prescriptions[0].exercise_name == "Back Squat"
+
+
+def test_substitute_prescription_returns_none_for_an_absent_position(repos):
+    session_repo, exercises = repos
+    created = session_repo.create(
+        "user_pos", _draft_with_two_prescriptions(exercises)
+    )
+
+    assert session_repo.substitute_prescription(created.id, "user_pos", 99, 1) is None

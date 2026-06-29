@@ -1,6 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 
-import type { GenerateSessionInput, WorkoutSession } from "./sessions-types";
+import type {
+  ExerciseDetail,
+  GenerateSessionInput,
+  WorkoutSession,
+} from "./sessions-types";
 
 // Re-export the server-free constants/types so existing server-side callers can
 // keep importing them from "@/lib/sessions". Client Components must import them
@@ -44,5 +48,33 @@ export async function fetchSession(
     headers: await authHeaders(),
     cache: "no-store",
   });
+  return (await response.json()) as Envelope<WorkoutSession>;
+}
+
+export async function fetchExercise(
+  id: number,
+): Promise<Envelope<ExerciseDetail>> {
+  const response = await fetch(`${API_URL}/api/exercises/${id}`, {
+    headers: await authHeaders(),
+    cache: "no-store",
+  });
+  return (await response.json()) as Envelope<ExerciseDetail>;
+}
+
+// Substitute the Exercise prescribed at ``position`` in the user's own Session
+// copy. Lookup-first over the catalog, AI fallback only when nothing fits; it is
+// unlimited and never consumes the regeneration limit.
+export async function substitutePrescription(
+  sessionId: number,
+  position: number,
+): Promise<Envelope<WorkoutSession>> {
+  const response = await fetch(
+    `${API_URL}/api/sessions/${sessionId}/prescriptions/${position}/substitute`,
+    {
+      method: "POST",
+      headers: await authHeaders(),
+      cache: "no-store",
+    },
+  );
   return (await response.json()) as Envelope<WorkoutSession>;
 }

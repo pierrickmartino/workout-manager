@@ -29,19 +29,32 @@ from app.generation.regeneration_service import (
 )
 from app.generation.regenerator import SessionRegenerator
 from app.generation.service import generate_session
+from app.generation.substitute_generator import SubstituteGenerator
 from app.repositories.deps import (
+    get_exercise_relationship_repository,
     get_exercise_repository,
     get_generation_feedback_repository,
+    get_profile_repository,
     get_session_generator,
     get_session_regenerator,
     get_session_repository,
+    get_substitute_generator,
+)
+from app.repositories.exercise_relationship_repository import (
+    ExerciseRelationshipRepository,
 )
 from app.repositories.exercise_repository import ExerciseRepository
 from app.repositories.generation_feedback_repository import (
     GenerationFeedbackRepository,
     GenerationFeedbackView,
 )
+from app.repositories.profile_repository import ProfileRepository
 from app.repositories.session_repository import SessionRepository, SessionView
+from app.substitution.service import (
+    PrescriptionNotFound,
+    substitute_exercise,
+)
+from app.substitution.service import SessionNotFound as SubstituteSessionNotFound
 
 router = APIRouter(prefix="/api", tags=["sessions"])
 
@@ -226,5 +239,41 @@ def regenerate(
         raise HTTPException(
             status_code=HTTP_BAD_GATEWAY,
             detail="The Session could not be regenerated. Please try again.",
+        ) from exc
+    return success_envelope(_serialize(view))
+
+
+@router.post("/sessions/{session_id}/prescriptions/{position}/substitute")
+def substitute(
+    session_id: int,
+    position: int,
+    clerk_user_id: str = Depends(get_current_user),
+    relationships: ExerciseRelationshipRepository = Depends(
+        get_exercise_relationship_repository
+    ),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    sessions: SessionRepository = Depends(get_session_repository),
+    profiles: ProfileRepository = Depends(get_profile_repository),
+    generator: SubstituteGenerator = Depends(get_substitute_generator),
+) -> dict:
+    try:
+        view = substitute_exercise(
+            session_id,
+            clerk_user_id,
+            position,
+            relationships=relationships,
+            exercises=exercises,
+            sessions=sessions,
+            profiles=profiles,
+            generator=generator,
+        )
+    except (SubstituteSessionNotFound, PrescriptionNotFound) as exc:
+        raise HTTPException(
+            status_code=HTTP_NOT_FOUND, detail="Prescription not found"
+        ) from exc
+    except GenerationError as exc:
+        raise HTTPException(
+            status_code=HTTP_BAD_GATEWAY,
+            detail="No substitute could be found. Please try again.",
         ) from exc
     return success_envelope(_serialize(view))
