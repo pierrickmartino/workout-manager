@@ -1,8 +1,12 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-// The dashboard is the authenticated screen; everything else (landing,
-// Clerk's own sign-in UI) stays public.
-const isProtectedRoute = createRouteMatcher(["/dashboard(.*)"]);
+// The dashboard, onboarding, and profile editing are authenticated screens;
+// everything else (landing, Clerk's own sign-in UI) stays public.
+const isProtectedRoute = createRouteMatcher([
+  "/dashboard(.*)",
+  "/onboarding(.*)",
+  "/profile(.*)",
+]);
 
 export default clerkMiddleware(async (auth, req) => {
   if (isProtectedRoute(req)) {
