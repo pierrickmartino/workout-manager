@@ -1,16 +1,14 @@
-"""The multi-week Program path: cache → AI output → Adoption → user-owned Program.
+"""The multi-week Program generation work: AI output → store → Adoption.
 
-``generate_program`` orchestrates the full flow with the Generation Cache in
-front of generation (Slice 6, ADR-0003):
+The cache decision (hit / miss / bypass) is made by the Generation Orchestrator
+(Slice 7, ADR-0005); this module owns the two reusable pieces around it:
 
-- on a cache **hit**, the shared Generated Program is Adopted immediately — no
-  new AI call;
-- on a non-bypass **miss**, generate fresh, store the artifact under the miss's
-  key, then Adopt;
-- on a **bypass** (any Sensitive Constraint), always generate fresh and never
-  store under a shared key — caution is genuinely applied.
+- ``cache_request_for`` combines generation params with the user's Profile into
+  the coarse cache-key input (Slice 6, ADR-0003);
+- ``run_generation`` is the body the async worker runs on a miss/bypass — generate
+  fresh, store the artifact *only* when a shared key is given, then Adopt a
+  user-owned copy.
 
-Generation remains synchronous here; the async job path lands in a later slice.
 A ``GenerationError`` from the generator propagates before anything is persisted.
 """
 
@@ -19,11 +17,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from app.adoption.service import adopt
-from app.generation.cache import (
-    CacheRequest,
-    CacheStatus,
-    GenerationCache,
-)
+from app.generation.cache import CacheRequest, GenerationCache
 from app.generation.program_generator import (
     ProgramGenerationRequest,
     ProgramGenerator,
@@ -67,37 +61,28 @@ def cache_request_for(
     )
 
 
-def generate_program(
+def run_generation(
     request: ProgramGenerationRequest,
     clerk_user_id: str,
+    cache_key: str | None,
     *,
     cache: GenerationCache,
-    cache_request: CacheRequest,
     generator: ProgramGenerator,
     exercises: ExerciseRepository,
     programs: ProgramRepository,
 ) -> ProgramView:
-    """Generate-or-reuse a Program and Adopt it as a user-owned copy.
+    """Generate fresh, store (only when keyed), then Adopt — the worker's body.
 
-    Consults the Generation Cache first: a hit is Adopted without an AI call; a
-    non-bypass miss generates, stores, then Adopts; a bypass generates fresh and
-    stores nothing. Raises ``GenerationError`` (from the generator) on malformed
-    or under-enumerated output, in which case nothing is written.
+    This is the work the async job performs once the cache decision has already
+    been made by the orchestrator: ``cache_key`` is the miss's key when the result
+    may be shared, or ``None`` for a bypass that must never be stored under a
+    shared key. Raises ``GenerationError`` (from the generator) on malformed or
+    under-enumerated output, in which case nothing is written.
     """
 
-    result = cache.lookup(cache_request)
-    if result.status is CacheStatus.HIT:
-        return adopt(
-            result.artifact,
-            clerk_user_id,
-            request,
-            exercises=exercises,
-            programs=programs,
-        )
-
     generated = generator.generate(request)
-    if result.status is CacheStatus.MISS:
-        cache.store(result.key, generated)
+    if cache_key is not None:
+        cache.store(cache_key, generated)
 
     return adopt(
         generated,
@@ -108,4 +93,4 @@ def generate_program(
     )
 
 
-__all__ = ["generate_program", "cache_request_for"]
+__all__ = ["run_generation", "cache_request_for"]

@@ -44,6 +44,21 @@ services:
     ports:
       - "${API_PORT:-8000}:8000"
 
+  worker:
+    # Runs Program generation off the API request path (ADR-0005). Reuses the API
+    # image but starts an RQ worker against the same Redis that backs the cache.
+    build: ./apps/api
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/workout
+      REDIS_URL: redis://redis:6379/0
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    command: ["sh", "-c", "rq worker --url \"$REDIS_URL\" generation"]
+
   web:
     build:
       context: ./apps/web

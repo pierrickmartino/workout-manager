@@ -1,6 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 
-import type { ProgramProgress } from "./programs-types";
+import type {
+  GenerateProgramInput,
+  ProgramJob,
+  ProgramProgress,
+} from "./programs-types";
 
 // Re-export the server-free types so server-side callers can import them from
 // "@/lib/programs". Client Components must import them directly from
@@ -32,4 +36,31 @@ export async function fetchProgram(
     cache: "no-store",
   });
   return (await response.json()) as Envelope<ProgramProgress>;
+}
+
+// Submit a Program generation. Generation runs off the request path: the backend
+// returns a job handle to poll (cache miss/bypass) or, on a cache hit, the adopted
+// Program id inline — neither blocks on the long AI call.
+export async function startProgramGeneration(
+  input: GenerateProgramInput,
+): Promise<Envelope<ProgramJob>> {
+  const response = await fetch(`${API_URL}/api/programs/generate`, {
+    method: "POST",
+    headers: { ...(await authHeaders()), "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+    cache: "no-store",
+  });
+  return (await response.json()) as Envelope<ProgramJob>;
+}
+
+// Poll a generation job by its handle. The adopted `program_id` appears once the
+// worker has completed; the owner-guarded Program fetch then returns the Program.
+export async function fetchProgramJob(
+  jobId: string,
+): Promise<Envelope<ProgramJob>> {
+  const response = await fetch(`${API_URL}/api/programs/jobs/${jobId}`, {
+    headers: await authHeaders(),
+    cache: "no-store",
+  });
+  return (await response.json()) as Envelope<ProgramJob>;
 }

@@ -1,7 +1,13 @@
-"""Behavior of the Program endpoints end to end: JWKS verification, the
-generate-then-adopt path, the repositories, the self-paced progress view, and the
-response envelope wired through FastAPI. The AI generator and repositories are
-injected via dependency overrides so the tests run offline and deterministically."""
+"""Behavior of the Program endpoints end to end under async generation (Slice 7).
+
+A generate request no longer blocks on the AI: a cache **miss** returns a job
+handle (``202``) and a worker completes the generation independently, so a dropped
+mobile connection never loses the result; the PWA polls ``/programs/jobs/{id}``
+until the adopted Program id appears. A cache **hit** still returns instantly
+(``200``) with the Program id and no job. The AI generator, repositories, cache
+and queue are injected via dependency overrides so the tests run offline; the
+in-memory queue's ``work()`` stands in for the out-of-process RQ worker.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +18,10 @@ from fastapi.testclient import TestClient
 from app.auth.dependencies import get_jwks
 from app.config import Settings, get_settings
 from app.generation.generator import GenerationError
+from app.generation.job_queue import InMemoryJobQueue
+from app.generation.orchestrator import GenerationOrchestrator
 from app.generation.program_generator import ProgramGenerationRequest
+from app.generation.program_service import run_generation
 from app.generation.schema import (
     GeneratedExercisePrescription,
     GeneratedProgram,
@@ -22,10 +31,9 @@ from app.generation.cache import GenerationCache, InMemoryCacheStore
 from app.main import create_app
 from app.repositories.deps import (
     get_exercise_repository,
-    get_generation_cache,
+    get_generation_orchestrator,
     get_logged_session_repository,
     get_profile_repository,
-    get_program_generator,
     get_program_repository,
 )
 from app.repositories.exercise_repository import InMemoryExerciseRepository
@@ -79,37 +87,83 @@ def _default_program() -> GeneratedProgram:
     )
 
 
-def build_client(
-    generator=None,
-    ctx=None,
-    profiles=None,
-    cache=None,
-    exercises=None,
-    programs=None,
-    logged=None,
-):
+class _Harness:
+    """The wired app plus handles the tests drive: the queue (worker) and the
+    counting generator."""
+
+    def __init__(self, client, ctx, queue, generator, logged):
+        self.client = client
+        self.ctx = ctx
+        self.queue = queue
+        self.generator = generator
+        self.logged = logged
+
+    def auth(self, sub):
+        return {"Authorization": f"Bearer {self.ctx.mint(sub=sub)}"}
+
+    def submit(self, sub, **overrides):
+        return self.client.post(
+            "/api/programs/generate", headers=self.auth(sub), json=_body(**overrides)
+        )
+
+    def poll(self, sub, job_id):
+        return self.client.get(
+            f"/api/programs/jobs/{job_id}", headers=self.auth(sub)
+        )
+
+    def generate_program_id(self, sub, **overrides) -> int:
+        """Run a full generate, following the async path to the adopted id."""
+
+        data = self.submit(sub, **overrides).json()["data"]
+        if data["program_id"] is not None:  # cache hit — instant
+            return data["program_id"]
+        self.queue.work()  # the out-of-process worker runs
+        job = self.poll(sub, data["job_id"]).json()["data"]
+        assert job["status"] == "complete"
+        return job["program_id"]
+
+    def fetch_program(self, sub, program_id):
+        return self.client.get(
+            f"/api/programs/{program_id}", headers=self.auth(sub)
+        )
+
+
+def build_harness(generator=None, ctx=None, profiles=None, cache=None) -> _Harness:
     ctx = ctx or make_signing_context()
-    exercises = exercises or InMemoryExerciseRepository()
-    programs = programs or InMemoryProgramRepository(exercises)
+    exercises = InMemoryExerciseRepository()
+    programs = InMemoryProgramRepository(exercises)
     sessions = InMemorySessionRepository(exercises)
-    logged = logged or InMemoryLoggedSessionRepository(sessions, exercises)
+    logged = InMemoryLoggedSessionRepository(sessions, exercises)
     generator = generator or FakeProgramGenerator(result=_default_program())
     profiles = profiles or InMemoryProfileRepository()
     cache = cache or GenerationCache(InMemoryCacheStore())
+
+    def runner(request, clerk_user_id, cache_key):
+        view = run_generation(
+            request,
+            clerk_user_id,
+            cache_key,
+            cache=cache,
+            generator=generator,
+            exercises=exercises,
+            programs=programs,
+        )
+        return view.id
+
+    queue = InMemoryJobQueue(runner)
+    orchestrator = GenerationOrchestrator(
+        cache=cache, queue=queue, exercises=exercises, programs=programs
+    )
+
     app = create_app()
     app.dependency_overrides[get_jwks] = lambda: ctx.jwks
     app.dependency_overrides[get_settings] = lambda: Settings(clerk_issuer=ISSUER)
     app.dependency_overrides[get_exercise_repository] = lambda: exercises
     app.dependency_overrides[get_program_repository] = lambda: programs
     app.dependency_overrides[get_logged_session_repository] = lambda: logged
-    app.dependency_overrides[get_program_generator] = lambda: generator
-    app.dependency_overrides[get_generation_cache] = lambda: cache
     app.dependency_overrides[get_profile_repository] = lambda: profiles
-    return TestClient(app), ctx
-
-
-def _auth(ctx, sub):
-    return {"Authorization": f"Bearer {ctx.mint(sub=sub)}"}
+    app.dependency_overrides[get_generation_orchestrator] = lambda: orchestrator
+    return _Harness(TestClient(app), ctx, queue, generator, logged)
 
 
 def _body(**overrides):
@@ -126,47 +180,132 @@ def _body(**overrides):
 
 
 def test_generate_requires_authentication():
-    client, _ = build_client()
-    response = client.post("/api/programs/generate", json=_body())
+    h = build_harness()
+    response = h.client.post("/api/programs/generate", json=_body())
     assert response.status_code == 401
     assert response.json()["success"] is False
 
 
-def test_generate_returns_a_fully_enumerated_user_owned_program():
+def test_generate_rejects_zero_weeks():
+    h = build_harness()
+    response = h.submit("user_badreq", weeks=0)
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+
+
+def test_cache_miss_enqueues_a_job_that_completes_to_a_program():
     # Arrange
-    client, ctx = build_client()
+    h = build_harness()
 
-    # Act
-    response = client.post(
-        "/api/programs/generate", headers=_auth(ctx, "user_gen"), json=_body()
-    )
+    # Act — submit returns a handle immediately, without generating inline
+    submitted = h.submit("user_gen")
 
-    # Assert — every week enumerated up front, distinct per-week loads
+    # Assert — accepted (202), a pending job, no Program yet, no AI call yet
+    assert submitted.status_code == 202
+    data = submitted.json()["data"]
+    assert data["status"] == "pending"
+    assert data["job_id"]
+    assert data["program_id"] is None
+    assert h.generator.calls == 0
+
+    # Act — the worker runs independently of the original request
+    h.queue.work()
+    job = h.poll("user_gen", data["job_id"]).json()["data"]
+
+    # Assert — the result is retrievable by the handle alone, and the adopted
+    # Program is fully enumerated week to week
+    assert job["status"] == "complete"
+    program = h.fetch_program("user_gen", job["program_id"]).json()["data"]
+    assert program["weeks"] == 2
+    assert [s["week"] for s in program["sessions"]] == [1, 2]
+    loads = [s["prescriptions"][0]["recommended_load"] for s in program["sessions"]]
+    assert loads == ["60% 1RM", "65% 1RM"]
+
+
+def test_cache_hit_returns_a_program_instantly_with_no_job():
+    # Arrange — prime the cache with one full generation
+    h = build_harness()
+    first_id = h.generate_program_id("user_one")
+
+    # Act — an equivalent request from a second user
+    response = h.submit("user_two")
+
+    # Assert — served from cache: 200, the Program id inline, no job, one AI call
     assert response.status_code == 200
     data = response.json()["data"]
-    assert data["objective"] == "gain muscle mass"
-    assert data["weeks"] == 2
-    assert [s["week"] for s in data["sessions"]] == [1, 2]
-    loads = [s["prescriptions"][0]["recommended_load"] for s in data["sessions"]]
-    assert loads == ["60% 1RM", "65% 1RM"]
+    assert data["status"] == "complete"
+    assert data["job_id"] is None
+    assert data["program_id"] is not None
+    assert data["program_id"] != first_id
+    assert h.generator.calls == 1
+
+
+def test_failed_generation_surfaces_through_the_job_not_the_request():
+    # Arrange — an under-enumerated generation fails boundary validation
+    h = build_harness(
+        generator=FakeProgramGenerator(error=GenerationError("not enumerated"))
+    )
+
+    # Act — the request is still accepted; the failure lands on the job
+    submitted = h.submit("user_bad")
+    assert submitted.status_code == 202
+    job_id = submitted.json()["data"]["job_id"]
+    h.queue.work()
+    job = h.poll("user_bad", job_id).json()["data"]
+
+    # Assert — polling reports a failed job with a user-safe message
+    assert job["status"] == "failed"
+    assert job["program_id"] is None
+    assert job["error"]
+
+
+def test_unknown_job_returns_404():
+    h = build_harness()
+    response = h.poll("user_x", "job-does-not-exist")
+    assert response.status_code == 404
+    assert response.json()["success"] is False
+
+
+def test_sensitive_user_always_regenerates():
+    # Arrange — a user flagged with a Sensitive Constraint
+    profiles = InMemoryProfileRepository()
+    profiles.update("user_sensitive", ProfileUpdate(sensitive_constraints=["injury"]))
+    h = build_harness(profiles=profiles)
+
+    # Act — the sensitive user requests the same parameters twice, each to done
+    h.generate_program_id("user_sensitive")
+    h.generate_program_id("user_sensitive")
+
+    # Assert — the cache is bypassed every time: a fresh generation each request
+    assert h.generator.calls == 2
 
 
 def test_fetched_program_surfaces_the_next_un_performed_session():
     # Arrange — a fresh program: Week 1 is next
-    client, ctx = build_client()
-    headers = _auth(ctx, "user_next")
-    created = client.post(
-        "/api/programs/generate", headers=headers, json=_body()
-    ).json()["data"]
+    h = build_harness()
+    program_id = h.generate_program_id("user_next")
 
     # Act
-    fetched = client.get(f"/api/programs/{created['id']}", headers=headers)
+    fetched = h.fetch_program("user_next", program_id)
 
     # Assert
     assert fetched.status_code == 200
     data = fetched.json()["data"]
     assert data["completed_count"] == 0
     assert data["next_session"]["week"] == 1
+
+
+def test_another_user_cannot_fetch_someone_elses_program():
+    # Arrange
+    h = build_harness()
+    program_id = h.generate_program_id("user_owner")
+
+    # Act
+    response = h.fetch_program("user_intruder", program_id)
+
+    # Assert
+    assert response.status_code == 404
+    assert response.json()["success"] is False
 
 
 def _kg_program() -> GeneratedProgram:
@@ -194,22 +333,11 @@ def _kg_program() -> GeneratedProgram:
 
 def test_fetched_program_shows_progressed_load_for_upcoming_sessions():
     # Arrange — generate a kg-load program, then perform Week 1 strongly
-    exercises = InMemoryExerciseRepository()
-    programs = InMemoryProgramRepository(exercises)
-    sessions = InMemorySessionRepository(exercises)
-    logged = InMemoryLoggedSessionRepository(sessions, exercises)
-    client, ctx = build_client(
-        generator=FakeProgramGenerator(result=_kg_program()),
-        exercises=exercises,
-        programs=programs,
-        logged=logged,
-    )
-    headers = _auth(ctx, "user_progress")
-    created = client.post(
-        "/api/programs/generate", headers=headers, json=_body()
-    ).json()["data"]
-    week_one = created["sessions"][0]
-    logged.create(
+    h = build_harness(generator=FakeProgramGenerator(result=_kg_program()))
+    program_id = h.generate_program_id("user_progress")
+    created = h.fetch_program("user_progress", program_id).json()["data"]
+    week_one = created["next_session"]
+    h.logged.create(
         "user_progress",
         LoggedSessionDraft(
             session_id=week_one["session_id"],
@@ -227,100 +355,9 @@ def test_fetched_program_shows_progressed_load_for_upcoming_sessions():
     )
 
     # Act
-    fetched = client.get(f"/api/programs/{created['id']}", headers=headers)
+    fetched = h.fetch_program("user_progress", program_id)
 
     # Assert — the upcoming Week-2 Session shows the raised recommendation
     data = fetched.json()["data"]
     assert data["next_session"]["week"] == 2
     assert data["next_session"]["prescriptions"][0]["recommended_load"] == "62.5 kg"
-
-
-def test_another_user_cannot_fetch_someone_elses_program():
-    # Arrange
-    client, ctx = build_client()
-    created = client.post(
-        "/api/programs/generate", headers=_auth(ctx, "user_owner"), json=_body()
-    ).json()["data"]
-
-    # Act
-    response = client.get(
-        f"/api/programs/{created['id']}", headers=_auth(ctx, "user_intruder")
-    )
-
-    # Assert
-    assert response.status_code == 404
-    assert response.json()["success"] is False
-
-
-def test_malformed_generation_returns_502():
-    # Arrange — an under-enumerated program fails boundary validation
-    client, ctx = build_client(
-        generator=FakeProgramGenerator(error=GenerationError("not enumerated"))
-    )
-
-    # Act
-    response = client.post(
-        "/api/programs/generate", headers=_auth(ctx, "user_bad"), json=_body()
-    )
-
-    # Assert
-    assert response.status_code == 502
-    assert response.json()["success"] is False
-
-
-def test_second_equivalent_request_is_served_from_cache_over_http():
-    # Arrange — a counting generator behind two users with equivalent coarse
-    # requests; the cache and profile repo are shared across the app
-    generator = FakeProgramGenerator(result=_default_program())
-    client, ctx = build_client(generator=generator)
-
-    # Act — two equivalent generations from different users
-    first = client.post(
-        "/api/programs/generate", headers=_auth(ctx, "user_one"), json=_body()
-    )
-    second = client.post(
-        "/api/programs/generate", headers=_auth(ctx, "user_two"), json=_body()
-    )
-
-    # Assert — the second was served from cache: only one AI call, two Programs
-    assert first.status_code == 200
-    assert second.status_code == 200
-    assert generator.calls == 1
-    assert first.json()["data"]["id"] != second.json()["data"]["id"]
-
-
-def test_sensitive_user_always_regenerates_over_http():
-    # Arrange — a user flagged with a Sensitive Constraint
-    generator = FakeProgramGenerator(result=_default_program())
-    profiles = InMemoryProfileRepository()
-    profiles.update(
-        "user_sensitive", ProfileUpdate(sensitive_constraints=["injury"])
-    )
-    client, ctx = build_client(generator=generator, profiles=profiles)
-
-    # Act — the sensitive user requests the same parameters twice
-    client.post(
-        "/api/programs/generate", headers=_auth(ctx, "user_sensitive"), json=_body()
-    )
-    client.post(
-        "/api/programs/generate", headers=_auth(ctx, "user_sensitive"), json=_body()
-    )
-
-    # Assert — the cache is bypassed every time: a fresh generation each request
-    assert generator.calls == 2
-
-
-def test_generate_rejects_zero_weeks():
-    # Arrange
-    client, ctx = build_client()
-
-    # Act
-    response = client.post(
-        "/api/programs/generate",
-        headers=_auth(ctx, "user_badreq"),
-        json=_body(weeks=0),
-    )
-
-    # Assert
-    assert response.status_code == 422
-    assert response.json()["success"] is False
