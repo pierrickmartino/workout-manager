@@ -13,6 +13,7 @@ import pytest
 from app.config import Settings
 from app.generation.llm.factory import build_llm_client
 from app.generation.llm.providers.anthropic_provider import AnthropicStructuredLLM
+from app.generation.llm.providers.openai_provider import OpenAIStructuredLLM
 
 
 def test_anthropic_provider_builds_a_structured_llm():
@@ -44,6 +45,27 @@ def test_absent_keys_for_other_providers_are_tolerated():
     assert isinstance(build_llm_client(settings), AnthropicStructuredLLM)
 
 
+def test_openai_provider_builds_a_structured_llm():
+    # Arrange — only the selected provider's key is set
+    settings = Settings(ai_provider="openai", openai_api_key="sk-openai")
+
+    # Act
+    client = build_llm_client(settings)
+
+    # Assert — the OpenAI StructuredLLM is returned, resolved to its model
+    assert isinstance(client, OpenAIStructuredLLM)
+    assert client._model == "gpt-5.5"
+
+
+def test_missing_openai_key_fails_fast():
+    # Arrange — openai selected but its key is absent
+    settings = Settings(ai_provider="openai", openai_api_key="")
+
+    # Act / Assert — startup-time failure with a clear message
+    with pytest.raises(ValueError, match="OPENAI_API_KEY"):
+        build_llm_client(settings)
+
+
 def test_unknown_provider_fails_fast():
     # Arrange — a typo'd provider selector
     settings = Settings(ai_provider="claude", anthropic_api_key="sk-test")
@@ -54,9 +76,9 @@ def test_unknown_provider_fails_fast():
 
 
 def test_known_but_unwired_provider_fails_fast():
-    # Arrange — a provider documented in the ADR but not wired in this slice
-    settings = Settings(ai_provider="openai", openai_api_key="sk-openai")
+    # Arrange — a provider documented in the ADR but not wired yet (google)
+    settings = Settings(ai_provider="google", google_api_key="key-google")
 
     # Act / Assert — clear "not yet supported" error, not a silent fallback
-    with pytest.raises(NotImplementedError, match="openai"):
+    with pytest.raises(NotImplementedError, match="google"):
         build_llm_client(settings)
