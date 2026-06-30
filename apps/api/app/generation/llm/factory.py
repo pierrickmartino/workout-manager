@@ -7,17 +7,20 @@ a missing key for the *selected* provider, raises immediately with a clear
 message — a misconfigured deployment never looks healthy until someone triggers
 a generation. Keys for *unselected* providers may be absent.
 
-``anthropic`` and ``openai`` are wired; the other providers documented in
-ADR-0006 raise ``NotImplementedError`` until they are implemented."""
+``anthropic``, ``openai``, and ``google`` are wired; the other providers
+documented in ADR-0006 raise ``NotImplementedError`` until they are
+implemented."""
 
 from __future__ import annotations
 
 import anthropic
 import openai
+from google import genai
 
 from app.config import DEFAULT_MODELS, Settings
 from app.generation.llm.port import StructuredLLM
 from app.generation.llm.providers.anthropic_provider import AnthropicStructuredLLM
+from app.generation.llm.providers.google_provider import GoogleStructuredLLM
 from app.generation.llm.providers.openai_provider import OpenAIStructuredLLM
 
 # The env var holding each provider's API key, for the fail-fast key check.
@@ -62,9 +65,13 @@ def build_llm_client(settings: Settings) -> StructuredLLM:
         client = openai.OpenAI(api_key=key)
         return OpenAIStructuredLLM(client, model=settings.resolved_model())
 
+    if provider == "google":
+        client = genai.Client(api_key=key)
+        return GoogleStructuredLLM(client, model=settings.resolved_model())
+
     raise NotImplementedError(
         f"AI_PROVIDER '{provider}' is not yet supported; "
-        "wired providers: 'anthropic', 'openai'"
+        "wired providers: 'anthropic', 'openai', 'google'"
     )
 
 
