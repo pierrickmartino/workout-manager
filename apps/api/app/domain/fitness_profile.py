@@ -22,6 +22,17 @@ from typing import Mapping, Protocol, Sequence
 from app.domain.progression import LOW_EFFORT_MAX
 
 
+class Gender(str, Enum):
+    """The allowed Gender choices on the Fitness Profile.
+
+    A constrained vocabulary (stored as the raw value, like the constraint
+    types): gender is optional, but when set it must be one of these. Demographic
+    input to generation, never a safety gate."""
+
+    MALE = "M"
+    FEMALE = "F"
+
+
 class SensitiveConstraintType(str, Enum):
     """The specific constraint types that trigger the safety bypass."""
 

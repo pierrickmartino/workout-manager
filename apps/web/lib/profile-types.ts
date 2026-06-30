@@ -2,6 +2,15 @@
 // imports, so it is safe to import from both Server and Client Components. The
 // server-only data access (Clerk auth + fetch) lives in `lib/profile.ts`.
 
+// Mirrors the backend's Gender enum. Gender is optional, but when set it must
+// be one of these specific values; the label is what the dropdown shows.
+export const GENDER_OPTIONS = [
+  { value: "M", label: "Male" },
+  { value: "F", label: "Female" },
+] as const;
+
+export type Gender = (typeof GENDER_OPTIONS)[number]["value"];
+
 // Mirrors the backend's SensitiveConstraintType. Sensitive Constraints are
 // stored as these specific types; `is_sensitive` is derived from them.
 export const SENSITIVE_CONSTRAINT_TYPES = [

@@ -4,6 +4,7 @@ import { useActionState } from "react";
 
 import { submitProfile, type ProfileFormState } from "@/app/profile/actions";
 import {
+  GENDER_OPTIONS,
   SENSITIVE_CONSTRAINT_TYPES,
   TRAINING_TYPES,
   type Profile,
@@ -41,7 +42,14 @@ export function ProfileForm({ profile, submitLabel }: ProfileFormProps) {
 
       <label style={fieldStyle}>
         <span style={labelStyle}>Gender</span>
-        <input name="gender" defaultValue={profile?.gender ?? ""} />
+        <select name="gender" defaultValue={profile?.gender ?? ""}>
+          <option value="">—</option>
+          {GENDER_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
       </label>
 
       <label style={fieldStyle}>

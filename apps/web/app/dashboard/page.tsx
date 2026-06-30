@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { fetchProfile, isProfileComplete, type Profile } from "@/lib/profile";
+import {
+  GENDER_OPTIONS,
+  fetchProfile,
+  isProfileComplete,
+  type Profile,
+} from "@/lib/profile";
 
 // The dashboard renders the full Fitness Profile that round-tripped through
 // Postgres on the FastAPI backend. New users (incomplete profile) are sent to
@@ -48,6 +53,11 @@ export default async function DashboardPage() {
   );
 }
 
+function formatGender(gender: string | null): string {
+  if (gender === null) return "(not set)";
+  return GENDER_OPTIONS.find((option) => option.value === gender)?.label ?? gender;
+}
+
 function formatList(values: string[]): string {
   return values.length > 0 ? values.join(", ") : "(none)";
 }
@@ -64,7 +74,7 @@ function ProfileSummary({ profile }: { profile: Profile }) {
       <dt>Display name</dt>
       <dd>{profile.display_name ?? "(not set)"}</dd>
       <dt>Gender</dt>
-      <dd>{profile.gender ?? "(not set)"}</dd>
+      <dd>{formatGender(profile.gender)}</dd>
       <dt>Age</dt>
       <dd>{profile.age ?? "(not set)"}</dd>
       <dt>Height</dt>

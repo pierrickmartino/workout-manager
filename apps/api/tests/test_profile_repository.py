@@ -28,7 +28,7 @@ def repo(request):
 def _full_update() -> ProfileUpdate:
     return ProfileUpdate(
         display_name="Alex",
-        gender="female",
+        gender="F",
         age=34,
         height_cm=170.0,
         weight_kg=65.5,
@@ -81,7 +81,7 @@ def test_update_persists_the_full_profile(repo):
     updated = repo.update("user_full", _full_update())
 
     # Assert
-    assert updated.gender == "female"
+    assert updated.gender == "F"
     assert updated.age == 34
     assert updated.height_cm == 170.0
     assert updated.weight_kg == 65.5
