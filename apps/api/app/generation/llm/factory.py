@@ -7,9 +7,10 @@ a missing key for the *selected* provider, raises immediately with a clear
 message — a misconfigured deployment never looks healthy until someone triggers
 a generation. Keys for *unselected* providers may be absent.
 
-``anthropic``, ``openai``, and ``google`` are wired; the other providers
-documented in ADR-0006 raise ``NotImplementedError`` until they are
-implemented."""
+``anthropic``, ``openai``, ``google``, and ``openrouter`` are wired; any other
+provider documented in ADR-0006 raises ``NotImplementedError`` until it is
+implemented. ``openrouter`` reuses the OpenAI SDK pointed at OpenRouter's base
+URL (no new dependency)."""
 
 from __future__ import annotations
 
@@ -22,6 +23,10 @@ from app.generation.llm.port import StructuredLLM
 from app.generation.llm.providers.anthropic_provider import AnthropicStructuredLLM
 from app.generation.llm.providers.google_provider import GoogleStructuredLLM
 from app.generation.llm.providers.openai_provider import OpenAIStructuredLLM
+from app.generation.llm.providers.openrouter_provider import (
+    OpenRouterStructuredLLM,
+    build_openrouter_client,
+)
 
 # The env var holding each provider's API key, for the fail-fast key check.
 PROVIDER_KEY_FIELDS = {
@@ -69,9 +74,13 @@ def build_llm_client(settings: Settings) -> StructuredLLM:
         client = genai.Client(api_key=key)
         return GoogleStructuredLLM(client, model=settings.resolved_model())
 
+    if provider == "openrouter":
+        client = build_openrouter_client(key)
+        return OpenRouterStructuredLLM(client, model=settings.resolved_model())
+
     raise NotImplementedError(
         f"AI_PROVIDER '{provider}' is not yet supported; "
-        "wired providers: 'anthropic', 'openai', 'google'"
+        "wired providers: 'anthropic', 'openai', 'google', 'openrouter'"
     )
 
 

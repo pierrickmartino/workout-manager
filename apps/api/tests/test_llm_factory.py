@@ -15,6 +15,7 @@ from app.generation.llm.factory import build_llm_client
 from app.generation.llm.providers.anthropic_provider import AnthropicStructuredLLM
 from app.generation.llm.providers.google_provider import GoogleStructuredLLM
 from app.generation.llm.providers.openai_provider import OpenAIStructuredLLM
+from app.generation.llm.providers.openrouter_provider import OpenRouterStructuredLLM
 
 
 def test_anthropic_provider_builds_a_structured_llm():
@@ -88,19 +89,31 @@ def test_missing_google_key_fails_fast():
         build_llm_client(settings)
 
 
+def test_openrouter_provider_builds_a_structured_llm():
+    # Arrange — only the selected provider's key is set
+    settings = Settings(ai_provider="openrouter", openrouter_api_key="key-openrouter")
+
+    # Act
+    client = build_llm_client(settings)
+
+    # Assert — the OpenRouter StructuredLLM is returned, resolved to its model
+    assert isinstance(client, OpenRouterStructuredLLM)
+    assert client._model == "openai/gpt-oss-120b:free"
+
+
+def test_missing_openrouter_key_fails_fast():
+    # Arrange — openrouter selected but its key is absent
+    settings = Settings(ai_provider="openrouter", openrouter_api_key="")
+
+    # Act / Assert — startup-time failure with a clear message
+    with pytest.raises(ValueError, match="OPENROUTER_API_KEY"):
+        build_llm_client(settings)
+
+
 def test_unknown_provider_fails_fast():
     # Arrange — a typo'd provider selector
     settings = Settings(ai_provider="claude", anthropic_api_key="sk-test")
 
     # Act / Assert
     with pytest.raises(ValueError, match="unknown AI_PROVIDER"):
-        build_llm_client(settings)
-
-
-def test_known_but_unwired_provider_fails_fast():
-    # Arrange — a provider documented in the ADR but not wired yet (openrouter)
-    settings = Settings(ai_provider="openrouter", openrouter_api_key="key-openrouter")
-
-    # Act / Assert — clear "not yet supported" error, not a silent fallback
-    with pytest.raises(NotImplementedError, match="openrouter"):
         build_llm_client(settings)
