@@ -38,6 +38,14 @@ def test_ai_model_overrides_the_provider_default():
     assert settings.resolved_model() == "claude-sonnet-4-6"
 
 
+def test_ai_model_overrides_the_openrouter_default():
+    # Arrange — OpenRouter routes any model id; AI_MODEL pins which one
+    settings = Settings(ai_provider="openrouter", ai_model="anthropic/claude-opus-4-8")
+
+    # Act / Assert
+    assert settings.resolved_model() == "anthropic/claude-opus-4-8"
+
+
 def test_unknown_provider_resolution_raises():
     # Arrange — a typo'd provider has no default model
     settings = Settings(ai_provider="claude")
