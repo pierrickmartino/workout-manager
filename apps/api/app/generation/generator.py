@@ -1,9 +1,9 @@
-"""Session generation through Claude (ADR-0006).
+"""Standalone Session generation (ADR-0006).
 
 ``SessionGenerator`` is the port the rest of the app depends on; the concrete
-``AnthropicSessionGenerator`` calls Claude Opus 4.8 with adaptive thinking and
-streaming, constrained to the ``GeneratedSession`` JSON schema. Whatever the
-source, output crosses the boundary through ``parse_generated_session``, which
+``LlmSessionGenerator`` runs through the provider-agnostic ``StructuredLLM``
+transport, constrained to the ``GeneratedSession`` JSON schema. Whatever the
+provider, output crosses the boundary through ``parse_generated_session``, which
 validates it against the schema and raises ``GenerationError`` on anything
 malformed — so an unparseable generation is handled, never passed downstream."""
 
@@ -14,14 +14,10 @@ from typing import Protocol
 
 from pydantic import ValidationError
 
+from app.generation.llm.port import GenerationError, StructuredLLM
 from app.generation.schema import GeneratedSession
 
-GENERATION_MODEL = "claude-opus-4-8"
 MAX_TOKENS = 8000
-
-
-class GenerationError(Exception):
-    """Raised when a generation cannot be parsed/validated into the schema."""
 
 
 @dataclass(frozen=True)
@@ -74,32 +70,23 @@ def _user_prompt(request: GenerationRequest) -> str:
     )
 
 
-class AnthropicSessionGenerator:
-    """Generates Sessions via Claude, schema-constrained and streamed.
+class LlmSessionGenerator:
+    """Generates Sessions via the ``StructuredLLM`` transport (ADR-0006).
 
-    Streaming pairs with the strict output schema (ADR-0006): the model is
-    constrained to emit JSON matching ``GeneratedSession``, and the streamed text
-    is validated at the boundary before it is returned."""
+    The transport constrains output to ``GeneratedSession`` and returns the raw
+    JSON text; this generator validates it at its ``parse_*`` boundary before
+    returning, so a malformed generation raises ``GenerationError`` regardless of
+    which provider produced it."""
 
-    def __init__(self, client) -> None:
-        self._client = client
+    def __init__(self, llm: StructuredLLM) -> None:
+        self._llm = llm
 
     def generate(self, request: GenerationRequest) -> GeneratedSession:
-        try:
-            with self._client.messages.stream(
-                model=GENERATION_MODEL,
-                max_tokens=MAX_TOKENS,
-                thinking={"type": "adaptive"},
-                system=_system_prompt(),
-                messages=[{"role": "user", "content": _user_prompt(request)}],
-                output_format=GeneratedSession,
-            ) as stream:
-                message = stream.get_final_message()
-        except Exception as exc:  # network / API failure
-            raise GenerationError(f"generation request failed: {exc}") from exc
-
-        text = "".join(
-            block.text for block in message.content if block.type == "text"
+        text = self._llm.complete(
+            system=_system_prompt(),
+            user=_user_prompt(request),
+            schema=GeneratedSession,
+            max_tokens=MAX_TOKENS,
         )
         return parse_generated_session(text)
 
@@ -108,7 +95,6 @@ __all__ = [
     "GenerationError",
     "GenerationRequest",
     "SessionGenerator",
-    "AnthropicSessionGenerator",
+    "LlmSessionGenerator",
     "parse_generated_session",
-    "GENERATION_MODEL",
 ]

@@ -1,8 +1,8 @@
-"""Multi-week Program generation through Claude (ADR-0001, ADR-0006).
+"""Multi-week Program generation (ADR-0001, ADR-0006).
 
 ``ProgramGenerator`` is the port the rest of the app depends on; the concrete
-``AnthropicProgramGenerator`` calls Claude Opus 4.8 with adaptive thinking and
-streaming, constrained to the ``GeneratedProgram`` JSON schema. Output crosses
+``LlmProgramGenerator`` runs through the provider-agnostic ``StructuredLLM``
+transport, constrained to the ``GeneratedProgram`` JSON schema. Output crosses
 the boundary through ``parse_generated_program``, which validates it against the
 schema **and** the requested dimensions: a Program must be *fully enumerated*
 (one Session for every (week, day) of every requested week), so an under-built
@@ -16,9 +16,9 @@ from typing import Protocol
 from pydantic import ValidationError
 
 from app.generation.generator import GenerationError
+from app.generation.llm.port import StructuredLLM
 from app.generation.schema import GeneratedProgram
 
-GENERATION_MODEL = "claude-opus-4-8"
 MAX_TOKENS = 32000
 
 
@@ -113,28 +113,22 @@ def _user_prompt(request: ProgramGenerationRequest) -> str:
     )
 
 
-class AnthropicProgramGenerator:
-    """Generates Programs via Claude, schema-constrained and streamed (ADR-0006)."""
+class LlmProgramGenerator:
+    """Generates Programs via the ``StructuredLLM`` transport (ADR-0006).
 
-    def __init__(self, client) -> None:
-        self._client = client
+    The transport constrains output to ``GeneratedProgram``; this generator then
+    validates the raw text at its boundary, including the ADR-0001 full-enumeration
+    check, so an under-built Program raises ``GenerationError`` for any provider."""
+
+    def __init__(self, llm: StructuredLLM) -> None:
+        self._llm = llm
 
     def generate(self, request: ProgramGenerationRequest) -> GeneratedProgram:
-        try:
-            with self._client.messages.stream(
-                model=GENERATION_MODEL,
-                max_tokens=MAX_TOKENS,
-                thinking={"type": "adaptive"},
-                system=_system_prompt(),
-                messages=[{"role": "user", "content": _user_prompt(request)}],
-                output_format=GeneratedProgram,
-            ) as stream:
-                message = stream.get_final_message()
-        except Exception as exc:  # network / API failure
-            raise GenerationError(f"program generation request failed: {exc}") from exc
-
-        text = "".join(
-            block.text for block in message.content if block.type == "text"
+        text = self._llm.complete(
+            system=_system_prompt(),
+            user=_user_prompt(request),
+            schema=GeneratedProgram,
+            max_tokens=MAX_TOKENS,
         )
         return parse_generated_program(
             text, weeks=request.weeks, sessions_per_week=request.sessions_per_week
@@ -144,7 +138,6 @@ class AnthropicProgramGenerator:
 __all__ = [
     "ProgramGenerationRequest",
     "ProgramGenerator",
-    "AnthropicProgramGenerator",
+    "LlmProgramGenerator",
     "parse_generated_program",
-    "GENERATION_MODEL",
 ]

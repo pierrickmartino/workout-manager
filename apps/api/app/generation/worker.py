@@ -4,8 +4,8 @@
 executes. It runs independently of the HTTP request that enqueued it — so a slow
 or dropped mobile connection during a long multi-week generation never loses the
 result — constructing its *own* infrastructure (DB session, the Redis-backed
-Generation Cache, the Anthropic client) and returning the adopted Program id,
-which RQ stores as the job's result for the PWA to poll.
+Generation Cache, the LLM transport via the shared factory) and returning the
+adopted Program id, which RQ stores as the job's result for the PWA to poll.
 
 Run a worker with::
 
@@ -19,15 +19,15 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-import anthropic
 import redis
 from sqlmodel import Session
 
 from app.config import get_settings
 from app.db.session import get_engine
 from app.generation.cache import GenerationCache, RedisCacheStore
+from app.generation.llm import build_llm_client
 from app.generation.program_generator import (
-    AnthropicProgramGenerator,
+    LlmProgramGenerator,
     ProgramGenerationRequest,
 )
 from app.generation.program_service import run_generation
@@ -55,9 +55,7 @@ def run_generation_job(
     settings = get_settings()
     request = ProgramGenerationRequest(**request_data)
     cache = GenerationCache(RedisCacheStore(redis.Redis.from_url(settings.redis_url)))
-    generator = AnthropicProgramGenerator(
-        anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    )
+    generator = LlmProgramGenerator(build_llm_client(settings))
     with Session(get_engine()) as session:
         view = run_generation(
             request,

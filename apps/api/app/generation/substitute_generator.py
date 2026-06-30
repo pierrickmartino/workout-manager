@@ -1,10 +1,10 @@
-"""AI fallback for Substitution through Claude (ADR-0006).
+"""AI fallback for Substitution (ADR-0006).
 
 ``SubstituteGenerator`` is the port the substitution service depends on; it is
 called **only** when lookup-first resolution finds no catalog Variation/Alternative
 that fits the user's equipment and constraints. The concrete
-``AnthropicSubstituteGenerator`` calls Claude Opus 4.8 with adaptive thinking and
-streaming, constrained to the ``GeneratedSubstitute`` schema, so the invented
+``LlmSubstituteGenerator`` runs through the provider-agnostic ``StructuredLLM``
+transport, constrained to the ``GeneratedSubstitute`` schema, so the invented
 movement arrives with its full enriched detail and can enter the catalog once, as
 ``ai_generated``, for everyone. Output crosses the boundary through
 ``parse_generated_substitute`` and raises ``GenerationError`` on anything
@@ -17,7 +17,8 @@ from typing import Protocol
 
 from pydantic import ValidationError
 
-from app.generation.generator import GENERATION_MODEL, GenerationError
+from app.generation.generator import GenerationError
+from app.generation.llm.port import StructuredLLM
 from app.generation.schema import GeneratedSubstitute
 
 MAX_TOKENS = 4000
@@ -85,33 +86,29 @@ def _user_prompt(request: SubstituteRequest) -> str:
     )
 
 
-class AnthropicSubstituteGenerator:
-    """Invents a substitute Exercise via Claude, schema-constrained and streamed."""
+class LlmSubstituteGenerator:
+    """Invents a substitute Exercise via the ``StructuredLLM`` transport.
 
-    def __init__(self, client) -> None:
-        self._client = client
+    The transport constrains output to ``GeneratedSubstitute``; this generator
+    validates the raw text at its boundary, so a malformed substitute raises
+    ``GenerationError`` and never enters the catalog (ADR-0006)."""
+
+    def __init__(self, llm: StructuredLLM) -> None:
+        self._llm = llm
 
     def generate(self, request: SubstituteRequest) -> GeneratedSubstitute:
-        try:
-            with self._client.messages.stream(
-                model=GENERATION_MODEL,
-                max_tokens=MAX_TOKENS,
-                thinking={"type": "adaptive"},
-                system=_system_prompt(),
-                messages=[{"role": "user", "content": _user_prompt(request)}],
-                output_format=GeneratedSubstitute,
-            ) as stream:
-                message = stream.get_final_message()
-        except Exception as exc:  # network / API failure
-            raise GenerationError(f"substitute request failed: {exc}") from exc
-
-        text = "".join(block.text for block in message.content if block.type == "text")
+        text = self._llm.complete(
+            system=_system_prompt(),
+            user=_user_prompt(request),
+            schema=GeneratedSubstitute,
+            max_tokens=MAX_TOKENS,
+        )
         return parse_generated_substitute(text)
 
 
 __all__ = [
     "SubstituteRequest",
     "SubstituteGenerator",
-    "AnthropicSubstituteGenerator",
+    "LlmSubstituteGenerator",
     "parse_generated_substitute",
 ]

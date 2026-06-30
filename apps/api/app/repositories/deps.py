@@ -5,7 +5,6 @@ Routes depend on these so the concrete storage implementation can be swapped
 
 from __future__ import annotations
 
-import anthropic
 import redis
 from fastapi import Depends
 from rq import Queue
@@ -15,19 +14,20 @@ from app.config import Settings, get_settings
 from app.db.session import get_session
 from app.generation.cache import GenerationCache, RedisCacheStore
 from app.generation.job_queue import JobQueue, RqJobQueue
+from app.generation.llm import build_llm_client
 from app.generation.orchestrator import GenerationOrchestrator
 from app.generation.worker import QUEUE_NAME
-from app.generation.generator import AnthropicSessionGenerator, SessionGenerator
+from app.generation.generator import LlmSessionGenerator, SessionGenerator
 from app.generation.program_generator import (
-    AnthropicProgramGenerator,
+    LlmProgramGenerator,
     ProgramGenerator,
 )
 from app.generation.regenerator import (
-    AnthropicSessionRegenerator,
+    LlmSessionRegenerator,
     SessionRegenerator,
 )
 from app.generation.substitute_generator import (
-    AnthropicSubstituteGenerator,
+    LlmSubstituteGenerator,
     SubstituteGenerator,
 )
 from app.repositories.exercise_relationship_repository import (
@@ -109,15 +109,13 @@ def get_metric_entry_repository(
 def get_session_generator(
     settings: Settings = Depends(get_settings),
 ) -> SessionGenerator:
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    return AnthropicSessionGenerator(client)
+    return LlmSessionGenerator(build_llm_client(settings))
 
 
 def get_program_generator(
     settings: Settings = Depends(get_settings),
 ) -> ProgramGenerator:
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    return AnthropicProgramGenerator(client)
+    return LlmProgramGenerator(build_llm_client(settings))
 
 
 def get_generation_cache(
@@ -154,12 +152,10 @@ def get_generation_feedback_repository(
 def get_session_regenerator(
     settings: Settings = Depends(get_settings),
 ) -> SessionRegenerator:
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    return AnthropicSessionRegenerator(client)
+    return LlmSessionRegenerator(build_llm_client(settings))
 
 
 def get_substitute_generator(
     settings: Settings = Depends(get_settings),
 ) -> SubstituteGenerator:
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    return AnthropicSubstituteGenerator(client)
+    return LlmSubstituteGenerator(build_llm_client(settings))

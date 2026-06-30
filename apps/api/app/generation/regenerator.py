@@ -1,25 +1,22 @@
-"""Session Regeneration through Claude (ADR-0006).
+"""Session Regeneration (ADR-0006).
 
 ``SessionRegenerator`` is the port the regeneration service depends on; the
-concrete ``AnthropicSessionRegenerator`` calls Claude Opus 4.8 with adaptive
-thinking and streaming, constrained to the ``GeneratedSession`` JSON schema. The
-output is the set of **replacement** Exercise Prescriptions for the prescriptions
-the user chose to drop — conditioned on the kept Prescriptions and the negative
-Generation Feedback reason so progression stays coherent (CONTEXT.md). Output
-crosses the boundary through ``parse_generated_session`` (reused from the
-generator), so a malformed regeneration raises ``GenerationError`` and never
-reaches the user's copy."""
+concrete ``LlmSessionRegenerator`` runs through the provider-agnostic
+``StructuredLLM`` transport, constrained to the ``GeneratedSession`` JSON schema.
+The output is the set of **replacement** Exercise Prescriptions for the
+prescriptions the user chose to drop — conditioned on the kept Prescriptions and
+the negative Generation Feedback reason so progression stays coherent
+(CONTEXT.md). Output crosses the boundary through ``parse_generated_session``
+(reused from the generator), so a malformed regeneration raises
+``GenerationError`` and never reaches the user's copy."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from app.generation.generator import (
-    GENERATION_MODEL,
-    GenerationError,
-    parse_generated_session,
-)
+from app.generation.generator import parse_generated_session
+from app.generation.llm.port import StructuredLLM
 from app.generation.schema import GeneratedSession
 
 MAX_TOKENS = 8000
@@ -98,29 +95,22 @@ def _user_prompt(request: RegenerationRequest) -> str:
     )
 
 
-class AnthropicSessionRegenerator:
-    """Regenerates dropped prescriptions via Claude, schema-constrained and
-    streamed (ADR-0006)."""
+class LlmSessionRegenerator:
+    """Regenerates dropped prescriptions via the ``StructuredLLM`` transport.
 
-    def __init__(self, client) -> None:
-        self._client = client
+    The transport constrains output to ``GeneratedSession``; this regenerator
+    validates the raw text at the shared boundary, so a malformed regeneration
+    raises ``GenerationError`` regardless of provider (ADR-0006)."""
+
+    def __init__(self, llm: StructuredLLM) -> None:
+        self._llm = llm
 
     def regenerate(self, request: RegenerationRequest) -> GeneratedSession:
-        try:
-            with self._client.messages.stream(
-                model=GENERATION_MODEL,
-                max_tokens=MAX_TOKENS,
-                thinking={"type": "adaptive"},
-                system=_system_prompt(),
-                messages=[{"role": "user", "content": _user_prompt(request)}],
-                output_format=GeneratedSession,
-            ) as stream:
-                message = stream.get_final_message()
-        except Exception as exc:  # network / API failure
-            raise GenerationError(f"regeneration request failed: {exc}") from exc
-
-        text = "".join(
-            block.text for block in message.content if block.type == "text"
+        text = self._llm.complete(
+            system=_system_prompt(),
+            user=_user_prompt(request),
+            schema=GeneratedSession,
+            max_tokens=MAX_TOKENS,
         )
         return parse_generated_session(text)
 
@@ -129,6 +119,5 @@ __all__ = [
     "KeptPrescription",
     "RegenerationRequest",
     "SessionRegenerator",
-    "AnthropicSessionRegenerator",
-    "GENERATION_MODEL",
+    "LlmSessionRegenerator",
 ]
