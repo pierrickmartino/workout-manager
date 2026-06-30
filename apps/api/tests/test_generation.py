@@ -64,6 +64,23 @@ def test_schema_violation_raises_generation_error():
         parse_generated_session(bad)
 
 
+def test_empty_prescriptions_list_raises_generation_error():
+    # Arrange — a session with no prescriptions is malformed: it would persist an
+    # empty workout instead of failing generation.
+    empty = '{"prescriptions": []}'
+
+    # Act / Assert
+    with pytest.raises(GenerationError):
+        parse_generated_session(empty)
+
+
+def test_missing_prescriptions_field_raises_generation_error():
+    # Arrange — "{}" must not default to an empty, acceptable session.
+    # Act / Assert
+    with pytest.raises(GenerationError):
+        parse_generated_session("{}")
+
+
 def test_optional_prescription_fields_default_to_none():
     # Arrange — the model may omit rest/tempo/load
     minimal = '{"prescriptions": [{"exercise_name": "Plank", "sets": 3, "reps": "30s"}]}'

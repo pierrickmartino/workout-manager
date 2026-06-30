@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Protocol
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.db.models import Exercise
@@ -80,9 +81,7 @@ class SqlExerciseRepository:
         precautions: Sequence[str] = (),
     ) -> Exercise:
         key = normalize_name(name)
-        existing = self._session.exec(
-            select(Exercise).where(Exercise.normalized_name == key)
-        ).first()
+        existing = self._lookup(key)
         if existing is not None:
             return existing
 
@@ -97,9 +96,25 @@ class SqlExerciseRepository:
             precautions,
         )
         self._session.add(exercise)
-        self._session.commit()
+        try:
+            self._session.commit()
+        except IntegrityError:
+            # A concurrent request inserted the same normalized_name between our
+            # lookup and commit, colliding on the unique index. Roll back our
+            # losing insert and return the row the winner created — find_or_create
+            # stays idempotent under concurrency (ADR-0002 dedup).
+            self._session.rollback()
+            winner = self._lookup(key)
+            if winner is None:  # a different integrity violation; surface it
+                raise
+            return winner
         self._session.refresh(exercise)
         return exercise
+
+    def _lookup(self, normalized_name: str) -> Exercise | None:
+        return self._session.exec(
+            select(Exercise).where(Exercise.normalized_name == normalized_name)
+        ).first()
 
     def get(self, exercise_id: int) -> Exercise | None:
         return self._session.get(Exercise, exercise_id)
