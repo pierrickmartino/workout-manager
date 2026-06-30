@@ -14,11 +14,11 @@ import pytest
 
 from app.generation.generator import GenerationError
 from app.generation.regenerator import (
-    GENERATION_MODEL,
-    AnthropicSessionRegenerator,
     KeptPrescription,
+    LlmSessionRegenerator,
     RegenerationRequest,
 )
+from tests.fake_llm import FakeStructuredLLM
 
 VALID_PAYLOAD = """
 {
@@ -53,87 +53,44 @@ REQUEST = RegenerationRequest(
 )
 
 
-# --- Fake Anthropic client, mirroring the generator tests ---------------------
+# --- LlmSessionRegenerator wiring, exercised with a fake StructuredLLM port ----
 
 
-class _TextBlock:
-    type = "text"
-
-    def __init__(self, text: str) -> None:
-        self.text = text
-
-
-class _FinalMessage:
-    def __init__(self, text: str) -> None:
-        self.content = [_TextBlock(text)]
-
-
-class _StreamCtx:
-    def __init__(self, text: str) -> None:
-        self._text = text
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        return False
-
-    def get_final_message(self) -> _FinalMessage:
-        return _FinalMessage(self._text)
-
-
-class _Messages:
-    def __init__(self, *, text: str | None = None, error: Exception | None = None):
-        self._text = text
-        self._error = error
-        self.calls: list[dict] = []
-
-    def stream(self, **kwargs):
-        self.calls.append(kwargs)
-        if self._error is not None:
-            raise self._error
-        return _StreamCtx(self._text)
-
-
-class _FakeClient:
-    def __init__(self, *, text: str | None = None, error: Exception | None = None):
-        self.messages = _Messages(text=text, error=error)
-
-
-def test_regenerator_validates_streamed_replacements():
+def test_regenerator_validates_transport_replacements():
     # Arrange
-    client = _FakeClient(text=VALID_PAYLOAD)
-    regenerator = AnthropicSessionRegenerator(client)
+    llm = FakeStructuredLLM(text=VALID_PAYLOAD)
+    regenerator = LlmSessionRegenerator(llm)
 
     # Act
     generated = regenerator.regenerate(REQUEST)
 
-    # Assert — parsed replacements plus the ADR-0006 request config
+    # Assert — parsed replacements plus the schema-constrained transport request
     assert generated.prescriptions[0].exercise_name == "Goblet Squat"
-    call = client.messages.calls[0]
-    assert call["model"] == GENERATION_MODEL
-    assert call["thinking"] == {"type": "adaptive"}
-    assert call["output_format"] is not None
+    from app.generation.schema import GeneratedSession
+
+    call = llm.calls[0]
+    assert call["schema"] is GeneratedSession
+    assert call["max_tokens"] == 8000
 
 
 def test_regeneration_prompt_carries_kept_context_and_reason():
     # Arrange
-    client = _FakeClient(text=VALID_PAYLOAD)
-    regenerator = AnthropicSessionRegenerator(client)
+    llm = FakeStructuredLLM(text=VALID_PAYLOAD)
+    regenerator = LlmSessionRegenerator(llm)
 
     # Act
     regenerator.regenerate(REQUEST)
 
     # Assert — the AI is told what to keep and why to change the rest
-    prompt = client.messages.calls[0]["messages"][0]["content"]
+    prompt = llm.calls[0]["user"]
     assert "Back Squat" in prompt
     assert "my knees hurt on deep squats" in prompt
 
 
 def test_regeneration_prompt_handles_keeping_nothing():
     # Arrange — keep nothing: the AI is asked to replace the whole Session
-    client = _FakeClient(text=VALID_PAYLOAD)
-    regenerator = AnthropicSessionRegenerator(client)
+    llm = FakeStructuredLLM(text=VALID_PAYLOAD)
+    regenerator = LlmSessionRegenerator(llm)
     request = RegenerationRequest(
         training_type="strength",
         duration_minutes=45,
@@ -145,23 +102,23 @@ def test_regeneration_prompt_handles_keeping_nothing():
     regenerator.regenerate(request)
 
     # Assert — the prompt still forms, signalling a full replacement
-    prompt = client.messages.calls[0]["messages"][0]["content"]
+    prompt = llm.calls[0]["user"]
     assert "none" in prompt.lower()
 
 
 def test_regenerator_wraps_malformed_output_as_generation_error():
-    # Arrange — the model streamed back something that isn't valid JSON
-    regenerator = AnthropicSessionRegenerator(_FakeClient(text="not json"))
+    # Arrange — the transport returned something that isn't valid JSON
+    regenerator = LlmSessionRegenerator(FakeStructuredLLM(text="not json"))
 
     # Act / Assert
     with pytest.raises(GenerationError):
         regenerator.regenerate(REQUEST)
 
 
-def test_regenerator_wraps_api_failures_as_generation_error():
-    # Arrange — the API call itself blows up
-    regenerator = AnthropicSessionRegenerator(
-        _FakeClient(error=RuntimeError("connection reset"))
+def test_regenerator_propagates_transport_failures_as_generation_error():
+    # Arrange — the transport itself raised (already-wrapped network / API failure)
+    regenerator = LlmSessionRegenerator(
+        FakeStructuredLLM(error=GenerationError("connection reset"))
     )
 
     # Act / Assert

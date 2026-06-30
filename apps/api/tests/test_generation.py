@@ -10,12 +10,12 @@ from __future__ import annotations
 import pytest
 
 from app.generation.generator import (
-    GENERATION_MODEL,
-    AnthropicSessionGenerator,
     GenerationError,
     GenerationRequest,
+    LlmSessionGenerator,
     parse_generated_session,
 )
+from tests.fake_llm import FakeStructuredLLM
 
 VALID_PAYLOAD = """
 {
@@ -96,51 +96,7 @@ def test_optional_prescription_fields_default_to_none():
     assert prescription.targeted_muscles == []
 
 
-# --- AnthropicSessionGenerator wiring, exercised with a fake Anthropic client ---
-
-
-class _TextBlock:
-    type = "text"
-
-    def __init__(self, text: str) -> None:
-        self.text = text
-
-
-class _FinalMessage:
-    def __init__(self, text: str) -> None:
-        self.content = [_TextBlock(text)]
-
-
-class _StreamCtx:
-    def __init__(self, text: str) -> None:
-        self._text = text
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        return False
-
-    def get_final_message(self) -> _FinalMessage:
-        return _FinalMessage(self._text)
-
-
-class _Messages:
-    def __init__(self, *, text: str | None = None, error: Exception | None = None):
-        self._text = text
-        self._error = error
-        self.calls: list[dict] = []
-
-    def stream(self, **kwargs):
-        self.calls.append(kwargs)
-        if self._error is not None:
-            raise self._error
-        return _StreamCtx(self._text)
-
-
-class _FakeClient:
-    def __init__(self, *, text: str | None = None, error: Exception | None = None):
-        self.messages = _Messages(text=text, error=error)
+# --- LlmSessionGenerator wiring, exercised with a fake StructuredLLM port ---
 
 
 REQUEST = GenerationRequest(
@@ -148,35 +104,36 @@ REQUEST = GenerationRequest(
 )
 
 
-def test_anthropic_generator_validates_streamed_output():
+def test_generator_validates_transport_output():
     # Arrange
-    client = _FakeClient(text=VALID_PAYLOAD)
-    generator = AnthropicSessionGenerator(client)
+    llm = FakeStructuredLLM(text=VALID_PAYLOAD)
+    generator = LlmSessionGenerator(llm)
 
     # Act
     generated = generator.generate(REQUEST)
 
-    # Assert — parsed result plus the ADR-0006 request config
+    # Assert — parsed result plus the schema-constrained transport request
     assert generated.prescriptions[0].exercise_name == "Back Squat"
-    call = client.messages.calls[0]
-    assert call["model"] == GENERATION_MODEL
-    assert call["thinking"] == {"type": "adaptive"}
-    assert call["output_format"] is not None
+    from app.generation.schema import GeneratedSession
+
+    call = llm.calls[0]
+    assert call["schema"] is GeneratedSession
+    assert call["max_tokens"] == 8000
 
 
-def test_anthropic_generator_wraps_malformed_output_as_generation_error():
-    # Arrange — the model streamed back something that isn't valid JSON
-    generator = AnthropicSessionGenerator(_FakeClient(text="oops not json"))
+def test_generator_wraps_malformed_output_as_generation_error():
+    # Arrange — the transport returned something that isn't valid JSON
+    generator = LlmSessionGenerator(FakeStructuredLLM(text="oops not json"))
 
     # Act / Assert
     with pytest.raises(GenerationError):
         generator.generate(REQUEST)
 
 
-def test_anthropic_generator_wraps_api_failures_as_generation_error():
-    # Arrange — the API call itself blows up
-    generator = AnthropicSessionGenerator(
-        _FakeClient(error=RuntimeError("connection reset"))
+def test_generator_propagates_transport_failures_as_generation_error():
+    # Arrange — the transport itself raised (network / API failure already wrapped)
+    generator = LlmSessionGenerator(
+        FakeStructuredLLM(error=GenerationError("connection reset"))
     )
 
     # Act / Assert
