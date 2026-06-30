@@ -7,8 +7,9 @@ Provenance."""
 from __future__ import annotations
 
 import pytest
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
+from app.db.models import Exercise
 from app.domain.exercise import Provenance
 from app.repositories.exercise_repository import (
     InMemoryExerciseRepository,
@@ -110,3 +111,42 @@ def test_get_returns_a_previously_created_exercise_by_id(repo):
 def test_get_returns_none_for_an_unknown_id(repo):
     # Assert
     assert repo.get(9999) is None
+
+
+def test_losing_concurrent_insert_returns_the_winning_row():
+    # Arrange — two requests race to create the same new Exercise. SQLite's
+    # in-memory engine shares one DB across sessions on the thread, so we can
+    # drive both sides of the race over the same engine.
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as winner_session, Session(engine) as loser_session:
+        # The winning request commits "Clean" first.
+        winner = SqlExerciseRepository(winner_session).find_or_create(
+            "Clean", provenance=Provenance.AI_GENERATED
+        )
+
+        loser = SqlExerciseRepository(loser_session)
+        # Simulate the race: the loser's lookup ran before the winner committed,
+        # so its first lookup misses and it tries to insert a duplicate.
+        real_lookup = loser._lookup
+        calls = {"count": 0}
+
+        def racing_lookup(key: str):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                return None  # not yet visible at lookup time
+            return real_lookup(key)
+
+        loser._lookup = racing_lookup  # type: ignore[method-assign]
+
+        # Act — the loser's commit collides on the unique index; it must roll
+        # back and return the winner's row instead of raising.
+        resolved = loser.find_or_create("Clean", provenance=Provenance.AI_GENERATED)
+
+        # Assert — idempotent under concurrency: same catalog entry, no duplicate.
+        assert resolved.id == winner.id
+        assert resolved.normalized_name == "clean"
+        rows = loser_session.exec(
+            select(Exercise).where(Exercise.normalized_name == "clean")
+        ).all()
+        assert len(rows) == 1

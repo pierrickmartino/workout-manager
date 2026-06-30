@@ -27,9 +27,13 @@ class GeneratedExercisePrescription(BaseModel):
 
 
 class GeneratedSession(BaseModel):
-    """The AI's output for one standalone Session: ordered prescriptions."""
+    """The AI's output for one standalone Session: ordered prescriptions.
 
-    prescriptions: list[GeneratedExercisePrescription] = Field(default_factory=list)
+    ``prescriptions`` is required and non-empty: ``{}`` or ``{"prescriptions": []}``
+    is malformed upstream output that would otherwise persist an empty Session, so
+    it is rejected at the boundary as a schema violation."""
+
+    prescriptions: list[GeneratedExercisePrescription] = Field(min_length=1)
 
 
 class GeneratedSubstitute(BaseModel):
@@ -58,7 +62,7 @@ class GeneratedProgramSession(BaseModel):
     week: int
     day: int
     title: str | None = None
-    prescriptions: list[GeneratedExercisePrescription] = Field(default_factory=list)
+    prescriptions: list[GeneratedExercisePrescription] = Field(min_length=1)
 
 
 class GeneratedProgram(BaseModel):
@@ -68,4 +72,4 @@ class GeneratedProgram(BaseModel):
     ``GeneratedProgramSession`` exists for every (week, day) the request asked
     for. Adoption deep-copies it into a user-owned, mutable Program."""
 
-    sessions: list[GeneratedProgramSession] = Field(default_factory=list)
+    sessions: list[GeneratedProgramSession] = Field(min_length=1)
