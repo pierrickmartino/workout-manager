@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 
 import {
+  GENDER_OPTIONS,
   SENSITIVE_CONSTRAINT_TYPES,
   TRAINING_TYPES,
   saveProfile,
@@ -16,6 +17,8 @@ export interface ProfileFormState {
 const VALID_SENSITIVE = new Set<string>(
   SENSITIVE_CONSTRAINT_TYPES.map((c) => c.value),
 );
+
+const VALID_GENDERS = new Set<string>(GENDER_OPTIONS.map((g) => g.value));
 
 function text(form: FormData, name: string): string | null {
   const value = form.get(name);
@@ -53,6 +56,13 @@ function fitnessLevels(form: FormData): Record<string, number> {
   return levels;
 }
 
+// Gender is a constrained choice: keep the submitted value only if it is one of
+// the known options, otherwise treat it as unset.
+function gender(form: FormData): string | null {
+  const value = text(form, "gender");
+  return value !== null && VALID_GENDERS.has(value) ? value : null;
+}
+
 function sensitiveConstraints(form: FormData): string[] {
   return form
     .getAll("sensitive_constraints")
@@ -63,7 +73,7 @@ function sensitiveConstraints(form: FormData): string[] {
 function toProfileInput(form: FormData): ProfileInput {
   return {
     display_name: text(form, "display_name"),
-    gender: text(form, "gender"),
+    gender: gender(form),
     age: number(form, "age"),
     height_cm: number(form, "height_cm"),
     weight_kg: number(form, "weight_kg"),

@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.auth.dependencies import get_current_user
 from app.db.models import Profile
-from app.domain.fitness_profile import SensitiveConstraintType, is_sensitive
+from app.domain.fitness_profile import Gender, SensitiveConstraintType, is_sensitive
 from app.envelope import success_envelope
 from app.repositories.deps import get_profile_repository
 from app.repositories.profile_repository import ProfileRepository, ProfileUpdate
@@ -32,7 +32,7 @@ class ProfileUpdateRequest(BaseModel):
     text and intentionally not validated against a vocabulary."""
 
     display_name: str | None = None
-    gender: str | None = None
+    gender: Gender | None = None
     age: int | None = Field(default=None, ge=0, le=150)
     height_cm: float | None = Field(default=None, gt=0)
     weight_kg: float | None = Field(default=None, gt=0)
@@ -59,7 +59,7 @@ class ProfileUpdateRequest(BaseModel):
     def to_update(self) -> ProfileUpdate:
         return ProfileUpdate(
             display_name=self.display_name,
-            gender=self.gender,
+            gender=self.gender.value if self.gender is not None else None,
             age=self.age,
             height_cm=self.height_cm,
             weight_kg=self.weight_kg,

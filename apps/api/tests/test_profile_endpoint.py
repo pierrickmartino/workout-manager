@@ -27,7 +27,7 @@ def build_client(repo=None, ctx=None):
 def full_payload(**overrides):
     payload = {
         "display_name": "Alex",
-        "gender": "female",
+        "gender": "F",
         "age": 34,
         "height_cm": 170.0,
         "weight_kg": 65.5,
@@ -174,6 +174,34 @@ def test_profile_can_be_edited_later_and_changes_persist():
     assert reloaded["age"] == 35
     assert reloaded["fitness_levels"] == {"strength": 9}
     assert reloaded["is_sensitive"] is False
+
+
+def test_put_rejects_an_unknown_gender():
+    # Arrange
+    client, ctx, _ = build_client()
+    headers = {"Authorization": f"Bearer {ctx.mint(sub='user_badgender')}"}
+
+    # Act
+    response = client.put(
+        "/api/profile", headers=headers, json=full_payload(gender="female")
+    )
+
+    # Assert
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+
+
+def test_put_accepts_a_valid_gender_and_round_trips_it():
+    # Arrange
+    client, ctx, _ = build_client()
+    headers = {"Authorization": f"Bearer {ctx.mint(sub='user_gender')}"}
+
+    # Act
+    client.put("/api/profile", headers=headers, json=full_payload(gender="F"))
+    reloaded = client.get("/api/profile", headers=headers).json()["data"]
+
+    # Assert
+    assert reloaded["gender"] == "F"
 
 
 def test_put_rejects_an_unknown_sensitive_constraint_type():
