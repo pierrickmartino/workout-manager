@@ -26,6 +26,17 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    # Alembic creates ``alembic_version.version_num`` as VARCHAR(32) by default,
+    # but our descriptive revision identifiers (this one is 41 chars) exceed that
+    # and overflow the column on PostgreSQL when the revision is recorded. Widen
+    # it here — before Alembic stamps this revision — so this and every later
+    # revision can be written. SQLite ignores VARCHAR length, so guard on dialect.
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute(
+            "ALTER TABLE alembic_version "
+            "ALTER COLUMN version_num TYPE VARCHAR(255)"
+        )
+
     op.create_table(
         "generation_feedback",
         sa.Column("id", sa.Integer(), nullable=False),
