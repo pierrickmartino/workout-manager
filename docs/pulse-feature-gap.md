@@ -17,8 +17,8 @@ current Workout Manager web app (`apps/web/app`).
 Current state: a single Clerk modal sign-in + one flat profile form (`app/onboarding`).
 
 - ❌ **Welcome / splash screen** (FO1) — branding, tagline ("Train by the numbers"), `INITIALIZE` / `LOG IN`.
-- ❌ **Goal directive step** (FO2) — Build muscle / Lose fat / Get stronger / Stay consistent. Not captured today.
-- ❌ **Experience calibration step** (FO3) — Beginner / Intermediate / Advanced (distinct from the per-type 1–10 `fitness_levels`).
+- 🟡 **Favorite training-types step** (FO2) — multi-select of the domain's `TRAINING_TYPES` (strength / cardio / hiit / yoga / mobility). The chosen set becomes the keys of `fitness_levels`; the model exists and the profile-edit form already writes these, but the onboarding multi-select UX does not.
+- 🟡 **Per-type level calibration** (FO3) — a 1–10 level for each selected training type. Maps **directly** onto `fitness_levels: Record<string, number>`; `app/profile/edit` already renders `level_<type>` inputs, so only the designed stepper/scale onboarding UX is missing.
 - ❌ **Multi-step onboarding wizard** — the `01/03 → 03/03` stepper; current onboarding is one flat form.
 - ❌ **Social auth** (FO4) — "Continue with Apple / Google".
 
