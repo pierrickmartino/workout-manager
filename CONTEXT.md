@@ -86,6 +86,12 @@ _Avoid_: Assign, instantiate, clone
 A profile condition that demands extra caution — injury, rehabilitation, postpartum, or a flagged medical limitation. A user with any Sensitive Constraint is never served a shared/cached Generated Protocol; the system always generates fresh so postnatal/rehab caution can be applied.
 _Avoid_: Restriction, limitation (generic)
 
+## Readiness
+
+**Readiness**:
+A qualitative, three-state signal — **Ready**, **Caution**, or **Extra Caution** — of how cautiously the user should train right now, shown on the Home screen. It is derived from the user's constraints (a Sensitive Constraint forces Extra Caution; a Preference / Limitation or a recently hard performance yields Caution) and is deliberately **not** a computed recovery percentage: the self-paced, calendar-free plan model (ADR-0001) gives no honest basis for a "time since last workout" recovery score.
+_Avoid_: Readiness score, recovery %, 87% ready
+
 ## Feedback
 
 Two distinct concepts. Never collapse them into one "Feedback".
