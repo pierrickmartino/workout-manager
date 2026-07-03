@@ -46,7 +46,7 @@ empty `WorkoutSession` rather than failing generation.
 
 **Suggested fix:** enforce a non-empty list at the boundary, e.g.
 `Field(default_factory=list, min_length=1)` on `GeneratedSession.prescriptions`
-(and arguably on `GeneratedProgramSession`/`GeneratedProgram` for consistency),
+(and arguably on `GeneratedProtocolSession`/`GeneratedProtocol` for consistency),
 or raise `GenerationError` in `parse_generated_session`/`generate_session` when
 no prescriptions are produced.
 

@@ -6,7 +6,7 @@ The goal of the application is to allow beginner, intermediate, or advanced user
 
 The application must support two main use cases:
 
-1. Create a **complete multi-week training program**.
+1. Create a **complete multi-week training protocol**.
 2. Create a **single workout session**.
 
 The application should be designed to be modular, maintainable, and scalable.
@@ -35,9 +35,9 @@ The application should remain cautious in its fitness recommendations, especiall
 
 ---
 
-## 2. Training program creation
+## 2. Training protocol creation
 
-The user must be able to generate a multi-week training program.
+The user must be able to generate a multi-week training protocol.
 
 To do this, the application should ask for:
 
@@ -64,9 +64,9 @@ To do this, the application should ask for:
 * The average session duration
 * The available equipment
 
-Once these parameters are entered, the application will use an AI model to generate a personalized program.
+Once these parameters are entered, the application will use an AI model to generate a personalized protocol.
 
-A program is composed of multiple workout sessions.
+A protocol is composed of multiple workout sessions.
 
 Each session is composed of multiple exercises.
 
@@ -90,7 +90,7 @@ Each exercise may include information such as:
 
 ## 3. Single workout session creation
 
-The user should also be able to generate a single workout session without creating a full program.
+The user should also be able to generate a single workout session without creating a full protocol.
 
 For this, the application should ask for:
 
@@ -106,7 +106,7 @@ A session is composed of a structured group of exercises.
 
 ## 4. User feedback and regeneration
 
-After generating a program or a session, the user should be able to provide feedback:
+After generating a protocol or a session, the user should be able to provide feedback:
 
 * Positive
 * Negative
@@ -119,7 +119,7 @@ In an initial version, only one regeneration will be allowed.
 
 Before regenerating:
 
-* For a program, the user can choose to keep certain sessions.
+* For a protocol, the user can choose to keep certain sessions.
 * For a single session, the user can choose to keep certain exercises.
 
 The AI should then regenerate only the parts that are not kept.
@@ -149,7 +149,7 @@ If a user cannot perform a suggested exercise, they should be able to request a 
 
 To limit the costs related to AI model calls, the application should implement a caching system.
 
-If a generation request matches already known parameters, the application can reuse a previously generated program or session.
+If a generation request matches already known parameters, the application can reuse a previously generated protocol or session.
 
 The cache should be based on normalized parameters, for example:
 
@@ -162,7 +162,7 @@ The cache should be based on normalized parameters, for example:
 * Important constraints
 * Simplified fitness profile
 
-The system should avoid reusing an unsuitable program if the user profile contains significant differences.
+The system should avoid reusing an unsuitable protocol if the user profile contains significant differences.
 
 ---
 
@@ -205,4 +205,4 @@ Token storage:
 
 Architecture:
 * Next.js handles the user experience.
-* FastAPI handles business logic, AI, programs, sessions, feedback, and user data.
+* FastAPI handles business logic, AI, protocols, sessions, feedback, and user data.
