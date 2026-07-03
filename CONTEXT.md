@@ -10,6 +10,14 @@ The single most important distinction in the domain: a **plan** is what the AI p
 A user-owned training plan: a fixed, fully enumerated set of Sessions spanning a user-chosen number of weeks. Every Session for every week is generated up front and occupies a specific position; the same logical workout may differ from week to week to express progression and deloads. A Protocol is the user's own copy (see Adopt) — mutating it never affects other users or the cache.
 _Avoid_: Plan, routine, cycle, Program
 
+**Current Protocol**:
+The one Protocol a user is actively working through — the most recently adopted Protocol that still has an un-performed Session. It is the Protocol the Home screen surfaces the Next Session and the remaining queue from. A user may own several Protocols but has at most one Current Protocol at a time; when none exists, Home falls back to prompting a new generation.
+_Avoid_: Active plan, selected protocol, today's protocol
+
+**Next Session**:
+The next un-performed Session in a self-paced Protocol's ordered sequence — what the user is prompted to do next. There is no calendar; "next" means next in position, never a dated "today". The thing a user initiates from Home is always a Session, never a whole Protocol.
+_Avoid_: Today's session, today's protocol, scheduled session
+
 **Session**:
 A single prescribed workout, composed of Exercise Prescriptions. One unified concept: a Session may belong to a Protocol (carrying a Week/Day position) or stand alone (generated on its own with no parent or position). It is a *plan*, not a record of execution. Logging and feedback work identically whether or not it belongs to a Protocol.
 _Avoid_: Workout, training (when referring to the plan)
