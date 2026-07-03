@@ -83,6 +83,12 @@ class ProtocolRepository(Interface):
         by another user."""
         ...
 
+    def list_for_user(self, clerk_user_id: str) -> list[ProtocolView]:
+        """Return the user's Protocols ordered by adoption recency (most recent
+        first). Owner-scoped: never returns another user's Protocol. Empty when the
+        user owns none."""
+        ...
+
 
 class SqlProtocolRepository:
     def __init__(self, session: Session) -> None:
@@ -174,6 +180,14 @@ class SqlProtocolRepository:
         if protocol is None or protocol.clerk_user_id != clerk_user_id:
             return None
         return self._view(protocol)
+
+    def list_for_user(self, clerk_user_id: str) -> list[ProtocolView]:
+        protocols = self._session.exec(
+            select(Protocol)
+            .where(Protocol.clerk_user_id == clerk_user_id)
+            .order_by(Protocol.created_at.desc(), Protocol.id.desc())
+        ).all()
+        return [self._view(protocol) for protocol in protocols]
 
 
 class InMemoryProtocolRepository:
@@ -267,6 +281,15 @@ class InMemoryProtocolRepository:
         if protocol is None or protocol.clerk_user_id != clerk_user_id:
             return None
         return self._view(protocol)
+
+    def list_for_user(self, clerk_user_id: str) -> list[ProtocolView]:
+        owned = [
+            protocol
+            for protocol in self._protocols.values()
+            if protocol.clerk_user_id == clerk_user_id
+        ]
+        owned.sort(key=lambda p: (p.created_at, p.id), reverse=True)
+        return [self._view(protocol) for protocol in owned]
 
 
 __all__ = [

@@ -18,6 +18,7 @@ import { READINESS_BADGE, fetchHome } from "@/lib/home";
 import { Alert } from "@/components/pulse/alert";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
+import { SessionHero } from "@/components/pulse/session-hero";
 import { NavRow } from "@/components/pulse/nav-row";
 import { DataList } from "@/components/pulse/data-list";
 import { Card } from "@/components/ui/card";
@@ -62,6 +63,7 @@ export default async function DashboardPage() {
 
   const greeting = profile.display_name ?? "operator";
   const readiness = READINESS_BADGE[homeEnvelope.data.readiness];
+  const currentProtocol = homeEnvelope.data.current_protocol;
 
   return (
     <section className="flex flex-col gap-7">
@@ -71,47 +73,13 @@ export default async function DashboardPage() {
         action={<Badge variant={readiness.variant}>{readiness.label}</Badge>}
       />
 
-      {/* Hero: primary training actions, echoing the "TODAY'S PROTOCOL" card. */}
-      <Card className="flex flex-col gap-5 p-5">
-        <div className="flex items-center justify-between">
-          <span className="label-mono text-[11px] text-cyan">
-            TODAY&apos;S PROTOCOL // 01
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-cyan" />
-            <span className="label-mono text-[10px] text-text-secondary">
-              READY
-            </span>
-          </span>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <h2 className="font-display text-2xl font-bold text-text-primary">
-            Generate training
-          </h2>
-          <p className="label-mono text-[11px] text-text-secondary">
-            AI PROTOCOLS &middot; STANDALONE SESSIONS
-          </p>
-        </div>
-        <div className="flex flex-col gap-2.5">
-          <Link
-            href="/protocols/new"
-            className={buttonVariants({ className: "w-full" })}
-          >
-            <Zap className="h-4 w-4" />
-            Generate a protocol
-          </Link>
-          <Link
-            href="/sessions/new"
-            className={buttonVariants({
-              variant: "secondary",
-              className: "w-full",
-            })}
-          >
-            Generate a workout
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
-      </Card>
+      {/* Hero: the Current Protocol's Next Session, or the generate CTA when the
+          user has no Current Protocol (no Protocol, or every one is complete). */}
+      {currentProtocol ? (
+        <SessionHero protocol={currentProtocol} />
+      ) : (
+        <GenerateTrainingCta />
+      )}
 
       {/* Records & profile navigation. */}
       <div className="flex flex-col gap-4">
@@ -144,6 +112,46 @@ export default async function DashboardPage() {
         <ProfileSummary profile={profile} />
       </div>
     </section>
+  );
+}
+
+// The empty state shown when the user has no Current Protocol: the existing
+// generate-training CTA. The Readiness badge still renders in the page header,
+// so Home stays coherent even without a Protocol (ADR-0008).
+function GenerateTrainingCta(): React.JSX.Element {
+  return (
+    <Card className="flex flex-col gap-5 p-5">
+      <span className="label-mono text-[11px] text-cyan">
+        GET STARTED // NO ACTIVE PROTOCOL
+      </span>
+      <div className="flex flex-col gap-1.5">
+        <h2 className="font-display text-2xl font-bold text-text-primary">
+          Generate training
+        </h2>
+        <p className="label-mono text-[11px] text-text-secondary">
+          AI PROTOCOLS &middot; STANDALONE SESSIONS
+        </p>
+      </div>
+      <div className="flex flex-col gap-2.5">
+        <Link
+          href="/protocols/new"
+          className={buttonVariants({ className: "w-full" })}
+        >
+          <Zap className="h-4 w-4" />
+          Generate a protocol
+        </Link>
+        <Link
+          href="/sessions/new"
+          className={buttonVariants({
+            variant: "secondary",
+            className: "w-full",
+          })}
+        >
+          Generate a workout
+          <ArrowRight className="h-4 w-4" />
+        </Link>
+      </div>
+    </Card>
   );
 }
 
