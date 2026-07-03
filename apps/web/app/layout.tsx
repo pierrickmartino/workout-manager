@@ -30,7 +30,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "PULSE // Workout Manager",
-  description: "AI-assisted workout programs and sessions.",
+  description: "AI-assisted workout protocols and sessions.",
   manifest: "/manifest.json",
 };
 

@@ -4,7 +4,7 @@ import { Zap } from "lucide-react";
 
 import { GenerationProgress } from "@/components/GenerationProgress";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
-import { useProgramGeneration } from "@/lib/use-program-generation";
+import { useProtocolGeneration } from "@/lib/use-protocol-generation";
 import { Field } from "@/components/pulse/field";
 import { Alert } from "@/components/pulse/alert";
 import { Select } from "@/components/ui/select";
@@ -20,8 +20,8 @@ function parseEquipment(value: string): string[] {
     .filter((item) => item.length > 0);
 }
 
-export function GenerateProgramForm() {
-  const { phase, error, start } = useProgramGeneration();
+export function GenerateProtocolForm() {
+  const { phase, error, start } = useProtocolGeneration();
   const busy = phase === "submitting" || phase === "generating";
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -94,7 +94,7 @@ export function GenerateProgramForm() {
 
       <Button type="submit" className="w-full">
         <Zap className="h-4 w-4" />
-        Generate program
+        Generate protocol
       </Button>
     </form>
   );
