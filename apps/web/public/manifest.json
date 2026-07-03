@@ -1,7 +1,7 @@
 {
   "name": "Workout Manager",
   "short_name": "Workouts",
-  "description": "AI-assisted workout programs and sessions.",
+  "description": "AI-assisted workout protocols and sessions.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",

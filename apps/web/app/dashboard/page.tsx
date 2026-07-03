@@ -79,16 +79,16 @@ export default async function DashboardPage() {
             Generate training
           </h2>
           <p className="label-mono text-[11px] text-text-secondary">
-            AI PROGRAMS &middot; STANDALONE SESSIONS
+            AI PROTOCOLS &middot; STANDALONE SESSIONS
           </p>
         </div>
         <div className="flex flex-col gap-2.5">
           <Link
-            href="/programs/new"
+            href="/protocols/new"
             className={buttonVariants({ className: "w-full" })}
           >
             <Zap className="h-4 w-4" />
-            Generate a program
+            Generate a protocol
           </Link>
           <Link
             href="/sessions/new"

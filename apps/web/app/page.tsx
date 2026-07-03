@@ -31,7 +31,7 @@ export default function HomePage() {
             Your command center
           </h2>
           <p className="font-mono text-[13px] leading-relaxed text-text-muted">
-            Generated programs, standalone sessions, logged performance, and
+            Generated protocols, standalone sessions, logged performance, and
             progress — one operator dashboard.
           </p>
         </div>

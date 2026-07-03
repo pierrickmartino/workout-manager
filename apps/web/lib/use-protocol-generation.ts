@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { pollProgramJob, startGeneration } from "@/app/programs/actions";
-import type { GenerateProgramInput } from "@/lib/programs-types";
+import { pollProtocolJob, startGeneration } from "@/app/protocols/actions";
+import type { GenerateProtocolInput } from "@/lib/protocols-types";
 
-// Drives the async Program generation flow on the client (Slice 7, ADR-0005):
-// submit, then poll the job to completion and navigate to the adopted Program. A
+// Drives the async Protocol generation flow on the client (Slice 7, ADR-0005):
+// submit, then poll the job to completion and navigate to the adopted Protocol. A
 // cache hit short-circuits straight to navigation; a miss/bypass shows progress
 // while the worker runs, so a long multi-week generation never blocks the UI.
 
@@ -15,27 +15,27 @@ export type GenerationPhase = "idle" | "submitting" | "generating" | "error";
 
 const POLL_INTERVAL_MS = 1500;
 
-interface ProgramGeneration {
+interface ProtocolGeneration {
   phase: GenerationPhase;
   error: string | null;
-  start: (input: GenerateProgramInput) => Promise<void>;
+  start: (input: GenerateProtocolInput) => Promise<void>;
 }
 
-export function useProgramGeneration(): ProgramGeneration {
+export function useProtocolGeneration(): ProtocolGeneration {
   const router = useRouter();
   const [phase, setPhase] = useState<GenerationPhase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
 
-  const goToProgram = useCallback(
-    (programId: number) => {
-      router.push(`/programs/${programId}`);
+  const goToProtocol = useCallback(
+    (protocolId: number) => {
+      router.push(`/protocols/${protocolId}`);
     },
     [router],
   );
 
   const start = useCallback(
-    async (input: GenerateProgramInput) => {
+    async (input: GenerateProtocolInput) => {
       setError(null);
       setPhase("submitting");
       const result = await startGeneration(input);
@@ -44,14 +44,14 @@ export function useProgramGeneration(): ProgramGeneration {
         setPhase("error");
         return;
       }
-      if (result.job.program_id !== null) {
-        goToProgram(result.job.program_id); // cache hit — instant
+      if (result.job.protocol_id !== null) {
+        goToProtocol(result.job.protocol_id); // cache hit — instant
         return;
       }
       setJobId(result.job.job_id);
       setPhase("generating");
     },
-    [goToProgram],
+    [goToProtocol],
   );
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export function useProgramGeneration(): ProgramGeneration {
     let timer: ReturnType<typeof setTimeout>;
 
     const tick = async (): Promise<void> => {
-      const result = await pollProgramJob(jobId);
+      const result = await pollProtocolJob(jobId);
       if (cancelled) return;
 
       if (!result.job || result.job.status === "failed") {
@@ -69,8 +69,8 @@ export function useProgramGeneration(): ProgramGeneration {
         setPhase("error");
         return;
       }
-      if (result.job.status === "complete" && result.job.program_id !== null) {
-        goToProgram(result.job.program_id);
+      if (result.job.status === "complete" && result.job.protocol_id !== null) {
+        goToProtocol(result.job.protocol_id);
         return;
       }
       timer = setTimeout(tick, POLL_INTERVAL_MS); // still pending — keep polling
@@ -81,7 +81,7 @@ export function useProgramGeneration(): ProgramGeneration {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [phase, jobId, goToProgram]);
+  }, [phase, jobId, goToProtocol]);
 
   return { phase, error, start };
 }

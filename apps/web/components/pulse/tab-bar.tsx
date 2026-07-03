@@ -23,7 +23,7 @@ const TABS: Tab[] = [
     label: "TRAIN",
     href: "/sessions/new",
     icon: Zap,
-    match: ["/sessions", "/programs", "/exercises"],
+    match: ["/sessions", "/protocols", "/exercises"],
   },
   {
     label: "STATS",

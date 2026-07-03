@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
 
-import { fetchProgram } from "@/lib/programs";
-import type { ProgramProgress, ProgramSession } from "@/lib/programs-types";
+import { fetchProtocol } from "@/lib/protocols";
+import type { ProtocolProgress, ProtocolSession } from "@/lib/protocols-types";
 import type { ExercisePrescription } from "@/lib/sessions-types";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -11,60 +11,60 @@ import { SegmentedBar } from "@/components/pulse/segmented-bar";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-// Displays a user-owned multi-week Program: its self-paced next Session and the
+// Displays a user-owned multi-week Protocol: its self-paced next Session and the
 // full week-by-week schedule. Upcoming Sessions show the recommended load already
 // progressed from the user's Logged Sets (ADR-0004); the backend returns 404
-// (→ notFound) for anyone who does not own the Program.
-export default async function ProgramPage({
+// (→ notFound) for anyone who does not own the Protocol.
+export default async function ProtocolPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const programId = Number(id);
-  if (!Number.isInteger(programId)) notFound();
+  const protocolId = Number(id);
+  if (!Number.isInteger(protocolId)) notFound();
 
-  const envelope = await fetchProgram(programId);
+  const envelope = await fetchProtocol(protocolId);
   if (!envelope.success || !envelope.data) {
     notFound();
   }
 
-  const program = envelope.data;
-  const total = program.sessions.length;
-  const done = program.completed_count;
+  const protocol = envelope.data;
+  const total = protocol.sessions.length;
+  const done = protocol.completed_count;
   const progress = total > 0 ? done / total : 0;
 
   return (
     <section className="flex flex-col gap-7">
       <PageHeader
-        overline="PULSE // PROGRAM"
-        title={<span className="capitalize">{program.training_type}</span>}
-        action={<Badge variant="cyan">{program.weeks}W</Badge>}
+        overline="PULSE // PROTOCOL"
+        title={<span className="capitalize">{protocol.training_type}</span>}
+        action={<Badge variant="cyan">{protocol.weeks}W</Badge>}
       />
 
-      {/* Program overview + completion. */}
+      {/* Protocol overview + completion. */}
       <Card className="flex flex-col gap-4 p-5">
         <div className="flex items-center justify-between">
           <span className="label-mono text-[11px] capitalize text-cyan">
-            {program.objective}
+            {protocol.objective}
           </span>
           <span className="label-mono text-[10px] text-text-muted">
             {done}/{total} DONE
           </span>
         </div>
         <SegmentedBar value={progress} segments={Math.min(total, 14) || 1} />
-        <NextUp program={program} />
+        <NextUp protocol={protocol} />
       </Card>
 
       <div className="flex flex-col gap-4">
         <SectionHeader meta={`${total} SESSIONS`}>SCHEDULE</SectionHeader>
         <ol className="flex list-none flex-col gap-3 p-0">
-          {program.sessions.map((session, index) => (
+          {protocol.sessions.map((session, index) => (
             <li key={session.session_id}>
               <SessionCard
                 session={session}
                 index={index + 1}
-                isNext={session.session_id === program.next_session?.session_id}
+                isNext={session.session_id === protocol.next_session?.session_id}
               />
             </li>
           ))}
@@ -74,18 +74,18 @@ export default async function ProgramPage({
   );
 }
 
-function NextUp({ program }: { program: ProgramProgress }) {
-  if (program.next_session === null) {
+function NextUp({ protocol }: { protocol: ProtocolProgress }) {
+  if (protocol.next_session === null) {
     return (
       <div className="flex items-center gap-2.5 rounded-sm border border-cyan/40 bg-cyan-dim px-3.5 py-3">
         <CheckCircle2 className="h-4 w-4 shrink-0 text-cyan" aria-hidden />
         <span className="font-mono text-[13px] text-cyan">
-          Program complete — every session has been logged.
+          Protocol complete — every session has been logged.
         </span>
       </div>
     );
   }
-  const next = program.next_session;
+  const next = protocol.next_session;
   return (
     <div className="flex flex-col gap-3">
       <span className="label-mono text-[10px] text-text-muted">NEXT UP</span>
@@ -99,7 +99,7 @@ function SessionCard({
   index,
   isNext,
 }: {
-  session: ProgramSession;
+  session: ProtocolSession;
   index: number;
   isNext: boolean;
 }) {
