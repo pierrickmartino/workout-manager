@@ -1,17 +1,17 @@
-"""The self-paced program view (ADR-0001): which Session comes next, and — with
+"""The self-paced protocol view (ADR-0001): which Session comes next, and — with
 Progression (ADR-0004) — at what adjusted load.
 
-``program_progress`` joins a user-owned Program to the user's performance record
+``protocol_progress`` joins a user-owned Protocol to the user's performance record
 and surfaces the *next un-performed Session* — the first Session, in position
 order, the user has not yet logged. There is no calendar binding: a missed Session
 is simply still next, so the user always picks up where they left off.
 
-``progressed_program`` extends that view: it overlays each *upcoming* (un-performed)
+``progressed_protocol`` extends that view: it overlays each *upcoming* (un-performed)
 Prescription's recommended load with the deterministic ``next_load`` adjustment
 computed from the user's most recent Logged Sets of that Exercise. Already-performed
 Sessions are history and keep their logged load. The overlay is read-only — it
-returns fresh view objects and never mutates the stored Program (or the cached
-artifact behind it). Pure orchestration over the Program and Logged-Session
+returns fresh view objects and never mutates the stored Protocol (or the cached
+artifact behind it). Pure orchestration over the Protocol and Logged-Session
 repositories; no AI, no HTTP."""
 
 from __future__ import annotations
@@ -24,34 +24,34 @@ from app.repositories.logged_session_repository import (
     LoggedSessionView,
     LoggedSetView,
 )
-from app.repositories.program_repository import (
-    ProgramRepository,
-    ProgramSessionView,
-    ProgramView,
+from app.repositories.protocol_repository import (
+    ProtocolRepository,
+    ProtocolSessionView,
+    ProtocolView,
 )
 
 
 @dataclass(frozen=True)
-class ProgramProgressView:
-    """A Program plus its self-paced position: what is done and what is next."""
+class ProtocolProgressView:
+    """A Protocol plus its self-paced position: what is done and what is next."""
 
-    program: ProgramView
-    next_session: ProgramSessionView | None
+    protocol: ProtocolView
+    next_session: ProtocolSessionView | None
     completed_count: int
 
 
 def _progress_over(
-    program: ProgramView, performed: set[int]
-) -> tuple[int, ProgramSessionView | None]:
-    """The completed count and next un-performed Session over a ProgramView."""
+    protocol: ProtocolView, performed: set[int]
+) -> tuple[int, ProtocolSessionView | None]:
+    """The completed count and next un-performed Session over a ProtocolView."""
 
     completed_count = sum(
-        1 for session in program.sessions if session.session_id in performed
+        1 for session in protocol.sessions if session.session_id in performed
     )
     next_session = next(
         (
             session
-            for session in program.sessions
+            for session in protocol.sessions
             if session.session_id not in performed
         ),
         None,
@@ -59,28 +59,28 @@ def _progress_over(
     return completed_count, next_session
 
 
-def program_progress(
+def protocol_progress(
     clerk_user_id: str,
-    program_id: int,
+    protocol_id: int,
     *,
-    programs: ProgramRepository,
+    protocols: ProtocolRepository,
     logged: LoggedSessionRepository,
-) -> ProgramProgressView | None:
-    """Return the owner's Program with its next un-performed Session, or ``None``.
+) -> ProtocolProgressView | None:
+    """Return the owner's Protocol with its next un-performed Session, or ``None``.
 
-    ``None`` if the Program is missing or owned by another user. The next Session
+    ``None`` if the Protocol is missing or owned by another user. The next Session
     is the first (by position) whose underlying Session the user has not logged a
     performance of; ``None`` once every Session has been performed.
     """
 
-    program = programs.get(program_id, clerk_user_id)
-    if program is None:
+    protocol = protocols.get(protocol_id, clerk_user_id)
+    if protocol is None:
         return None
 
     performed = {entry.session_id for entry in logged.list_for_user(clerk_user_id)}
-    completed_count, next_session = _progress_over(program, performed)
-    return ProgramProgressView(
-        program=program,
+    completed_count, next_session = _progress_over(protocol, performed)
+    return ProtocolProgressView(
+        protocol=protocol,
         next_session=next_session,
         completed_count=completed_count,
     )
@@ -107,9 +107,9 @@ def _latest_sets_by_exercise(
 
 
 def _adjusted_session(
-    session: ProgramSessionView,
+    session: ProtocolSessionView,
     latest_sets: dict[int, list[LoggedSetView]],
-) -> ProgramSessionView:
+) -> ProtocolSessionView:
     """A copy of ``session`` with each Prescription's load progressed."""
 
     adjusted = [
@@ -124,23 +124,23 @@ def _adjusted_session(
     return replace(session, prescriptions=adjusted)
 
 
-def progressed_program(
+def progressed_protocol(
     clerk_user_id: str,
-    program_id: int,
+    protocol_id: int,
     *,
-    programs: ProgramRepository,
+    protocols: ProtocolRepository,
     logged: LoggedSessionRepository,
-) -> ProgramProgressView | None:
-    """Return the owner's Program with upcoming loads progressed, or ``None``.
+) -> ProtocolProgressView | None:
+    """Return the owner's Protocol with upcoming loads progressed, or ``None``.
 
-    Like ``program_progress``, but every *un-performed* Session's recommended loads
+    Like ``protocol_progress``, but every *un-performed* Session's recommended loads
     are overlaid with the ``next_load`` adjustment from the user's latest Logged
     Sets. Performed Sessions are left as logged. The returned view is freshly built
-    — the stored Program (and any cached source) is never mutated.
+    — the stored Protocol (and any cached source) is never mutated.
     """
 
-    program = programs.get(program_id, clerk_user_id)
-    if program is None:
+    protocol = protocols.get(protocol_id, clerk_user_id)
+    if protocol is None:
         return None
 
     logged_sessions = logged.list_for_user(clerk_user_id)
@@ -151,16 +151,16 @@ def progressed_program(
         session
         if session.session_id in performed
         else _adjusted_session(session, latest_sets)
-        for session in program.sessions
+        for session in protocol.sessions
     ]
-    adjusted_program = replace(program, sessions=sessions)
+    adjusted_protocol = replace(protocol, sessions=sessions)
 
-    completed_count, next_session = _progress_over(adjusted_program, performed)
-    return ProgramProgressView(
-        program=adjusted_program,
+    completed_count, next_session = _progress_over(adjusted_protocol, performed)
+    return ProtocolProgressView(
+        protocol=adjusted_protocol,
         next_session=next_session,
         completed_count=completed_count,
     )
 
 
-__all__ = ["ProgramProgressView", "program_progress", "progressed_program"]
+__all__ = ["ProtocolProgressView", "protocol_progress", "progressed_protocol"]

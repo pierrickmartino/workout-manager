@@ -52,8 +52,8 @@ class GeneratedSubstitute(BaseModel):
     precautions: list[str] = Field(default_factory=list)
 
 
-class GeneratedProgramSession(BaseModel):
-    """One Session inside a Generated Program, fixed to a Week/Day position.
+class GeneratedProtocolSession(BaseModel):
+    """One Session inside a Generated Protocol, fixed to a Week/Day position.
 
     The ``week``/``day`` labels are descriptive ordering (ADR-0001) — not calendar
     dates — and make each week's Session distinct so per-week progression and
@@ -65,11 +65,11 @@ class GeneratedProgramSession(BaseModel):
     prescriptions: list[GeneratedExercisePrescription] = Field(min_length=1)
 
 
-class GeneratedProgram(BaseModel):
-    """The AI's output for a multi-week Program: every week's Sessions up front.
+class GeneratedProtocol(BaseModel):
+    """The AI's output for a multi-week Protocol: every week's Sessions up front.
 
     Immutable and fully enumerated — there is no repeated weekly template; one
-    ``GeneratedProgramSession`` exists for every (week, day) the request asked
-    for. Adoption deep-copies it into a user-owned, mutable Program."""
+    ``GeneratedProtocolSession`` exists for every (week, day) the request asked
+    for. Adoption deep-copies it into a user-owned, mutable Protocol."""
 
-    sessions: list[GeneratedProgramSession] = Field(min_length=1)
+    sessions: list[GeneratedProtocolSession] = Field(min_length=1)

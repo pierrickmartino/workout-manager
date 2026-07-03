@@ -9,7 +9,7 @@ small port:
 - ``JobQueue.enqueue`` accepts a generation request and returns a ``job_id``
   without blocking on the work.
 - ``JobQueue.get_state`` resolves a ``job_id`` to ``Pending | Complete | Failed``
-  (plus the adopted ``program_id`` on completion), so the PWA can poll.
+  (plus the adopted ``protocol_id`` on completion), so the PWA can poll.
 
 ``InMemoryJobQueue`` runs jobs only on an explicit ``work()`` call (the test/local
 double), while ``RqJobQueue`` backs the same port with Redis-Queue in production
@@ -35,16 +35,16 @@ class JobStatus(str, Enum):
 class JobState:
     """A poll-able snapshot of a job: its status and, once done, its outcome.
 
-    ``program_id`` is the adopted user-owned Program on ``COMPLETE``; ``error`` is
+    ``protocol_id`` is the adopted user-owned Protocol on ``COMPLETE``; ``error`` is
     a user-safe message on ``FAILED``. Both are ``None`` while ``PENDING``.
     """
 
     status: JobStatus
-    program_id: int | None = None
+    protocol_id: int | None = None
     error: str | None = None
 
 
-# A runner turns the enqueued arguments into the adopted Program's id.
+# A runner turns the enqueued arguments into the adopted Protocol's id.
 GenerationRunner = Callable[[object, str, str | None], int]
 
 
@@ -87,9 +87,9 @@ class InMemoryJobQueue:
 
         for job_id, (request, clerk_user_id, cache_key) in list(self._pending.items()):
             try:
-                program_id = self._runner(request, clerk_user_id, cache_key)
+                protocol_id = self._runner(request, clerk_user_id, cache_key)
                 self._states[job_id] = JobState(
-                    status=JobStatus.COMPLETE, program_id=program_id
+                    status=JobStatus.COMPLETE, protocol_id=protocol_id
                 )
             except Exception as exc:  # surfaced via polling, never raised here
                 self._states[job_id] = JobState(
@@ -103,20 +103,20 @@ class InMemoryJobQueue:
 
 # A failed generation must not leak the worker's traceback to the client; the
 # poll surfaces a single user-safe message (mirrors the old synchronous 502).
-GENERATION_FAILED_MESSAGE = "The program could not be generated. Please try again."
+GENERATION_FAILED_MESSAGE = "The protocol could not be generated. Please try again."
 
 
 def state_from_rq(status: str | None, result: object) -> JobState:
     """Map an RQ job status to a poll-able ``JobState`` (pure, I/O-free).
 
-    ``finished`` carries the adopted Program id as the job result; ``failed`` is
+    ``finished`` carries the adopted Protocol id as the job result; ``failed`` is
     reported with a user-safe message; everything else (queued, started, …) is
     still ``PENDING`` from the PWA's point of view.
     """
 
     if status == "finished":
-        program_id = result if isinstance(result, int) else None
-        return JobState(status=JobStatus.COMPLETE, program_id=program_id)
+        protocol_id = result if isinstance(result, int) else None
+        return JobState(status=JobStatus.COMPLETE, protocol_id=protocol_id)
     if status == "failed":
         return JobState(status=JobStatus.FAILED, error=GENERATION_FAILED_MESSAGE)
     return JobState(status=JobStatus.PENDING)

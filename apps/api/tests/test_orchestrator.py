@@ -3,7 +3,7 @@
 ``submit`` is the single async front door. It consults the Generation Cache and
 branches:
 
-- **hit** → Adopt immediately and return the user-owned Program, with no job;
+- **hit** → Adopt immediately and return the user-owned Protocol, with no job;
 - **miss** → enqueue a job carrying the miss's cache key (the worker stores), and
   return a handle without any synchronous AI call;
 - **bypass** (a Sensitive Constraint) → enqueue a job with *no* cache key, so the
@@ -21,18 +21,18 @@ from dataclasses import dataclass, field
 from app.generation.cache import GenerationCache, InMemoryCacheStore
 from app.generation.job_queue import InMemoryJobQueue, JobStatus
 from app.generation.orchestrator import GenerationOrchestrator
-from app.generation.program_generator import ProgramGenerationRequest
-from app.generation.program_service import cache_request_for, run_generation
+from app.generation.protocol_generator import ProtocolGenerationRequest
+from app.generation.protocol_service import cache_request_for, run_generation
 from app.generation.schema import (
     GeneratedExercisePrescription,
-    GeneratedProgram,
-    GeneratedProgramSession,
+    GeneratedProtocol,
+    GeneratedProtocolSession,
 )
 from app.repositories.exercise_repository import InMemoryExerciseRepository
-from app.repositories.program_repository import InMemoryProgramRepository
+from app.repositories.protocol_repository import InMemoryProtocolRepository
 
 
-PARAMS = ProgramGenerationRequest(
+PARAMS = ProtocolGenerationRequest(
     training_type="strength",
     objective="gain muscle mass",
     sessions_per_week=1,
@@ -56,11 +56,11 @@ class _CountingGenerator:
     def __init__(self) -> None:
         self.calls = 0
 
-    def generate(self, request: ProgramGenerationRequest) -> GeneratedProgram:
+    def generate(self, request: ProtocolGenerationRequest) -> GeneratedProtocol:
         self.calls += 1
-        return GeneratedProgram(
+        return GeneratedProtocol(
             sessions=[
-                GeneratedProgramSession(
+                GeneratedProtocolSession(
                     week=1,
                     day=1,
                     prescriptions=[
@@ -77,7 +77,7 @@ def _build():
     """Compose an orchestrator whose queue runs ``run_generation`` on ``work()``."""
 
     exercises = InMemoryExerciseRepository()
-    programs = InMemoryProgramRepository(exercises)
+    protocols = InMemoryProtocolRepository(exercises)
     cache = GenerationCache(InMemoryCacheStore())
     generator = _CountingGenerator()
 
@@ -89,15 +89,15 @@ def _build():
             cache=cache,
             generator=generator,
             exercises=exercises,
-            programs=programs,
+            protocols=protocols,
         )
         return view.id
 
     queue = InMemoryJobQueue(runner)
     orchestrator = GenerationOrchestrator(
-        cache=cache, queue=queue, exercises=exercises, programs=programs
+        cache=cache, queue=queue, exercises=exercises, protocols=protocols
     )
-    return orchestrator, queue, generator, programs
+    return orchestrator, queue, generator, protocols
 
 
 def test_cache_miss_enqueues_a_job_and_returns_a_handle_without_generating():
@@ -110,9 +110,9 @@ def test_cache_miss_enqueues_a_job_and_returns_a_handle_without_generating():
         PARAMS, "user_a", cache_request_for(PARAMS, profile)
     )
 
-    # Assert — a job handle came back, no Program inline, and NO synchronous AI
+    # Assert — a job handle came back, no Protocol inline, and NO synchronous AI
     assert outcome.job_id is not None
-    assert outcome.program is None
+    assert outcome.protocol is None
     assert generator.calls == 0
     assert queue.get_state(outcome.job_id).status is JobStatus.PENDING
 
@@ -127,27 +127,27 @@ def test_cache_hit_adopts_inline_and_enqueues_no_job():
     # Act — an equivalent request from another user now hits the cache
     outcome = orchestrator.submit(PARAMS, "user_b", cache_request_for(PARAMS, profile))
 
-    # Assert — Adopted inline (a Program, no job) with NO second AI call
-    assert outcome.program is not None
-    assert outcome.program.clerk_user_id == "user_b"
+    # Assert — Adopted inline (a Protocol, no job) with NO second AI call
+    assert outcome.protocol is not None
+    assert outcome.protocol.clerk_user_id == "user_b"
     assert outcome.job_id is None
     assert generator.calls == 1
     assert queue.get_state(first.job_id).status is JobStatus.COMPLETE
 
 
-def test_worked_miss_stores_the_artifact_and_adopts_a_user_owned_program():
+def test_worked_miss_stores_the_artifact_and_adopts_a_user_owned_protocol():
     # Arrange
-    orchestrator, queue, generator, programs = _build()
+    orchestrator, queue, generator, protocols = _build()
     profile = _FakeProfile(fitness_levels={"strength": 5})
 
     # Act — submit, then let the worker run
     outcome = orchestrator.submit(PARAMS, "user_a", cache_request_for(PARAMS, profile))
     queue.work()
 
-    # Assert — the job completed to an adopted, retrievable Program
+    # Assert — the job completed to an adopted, retrievable Protocol
     state = queue.get_state(outcome.job_id)
     assert state.status is JobStatus.COMPLETE
-    assert programs.get(state.program_id, "user_a") is not None
+    assert protocols.get(state.protocol_id, "user_a") is not None
 
 
 def test_sensitive_bypass_never_stores_so_a_later_equivalent_request_misses():
@@ -170,5 +170,5 @@ def test_sensitive_bypass_never_stores_so_a_later_equivalent_request_misses():
     # Assert — the bypass stored nothing, so the ordinary user MISSED and
     # triggered a second, separate generation (never served the sensitive output)
     assert outcome.job_id is not None
-    assert outcome.program is None
+    assert outcome.protocol is None
     assert generator.calls == 2

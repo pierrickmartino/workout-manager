@@ -18,9 +18,9 @@ from app.generation.llm import build_llm_client
 from app.generation.orchestrator import GenerationOrchestrator
 from app.generation.worker import QUEUE_NAME
 from app.generation.generator import LlmSessionGenerator, SessionGenerator
-from app.generation.program_generator import (
-    LlmProgramGenerator,
-    ProgramGenerator,
+from app.generation.protocol_generator import (
+    LlmProtocolGenerator,
+    ProtocolGenerator,
 )
 from app.generation.regenerator import (
     LlmSessionRegenerator,
@@ -42,9 +42,9 @@ from app.repositories.generation_feedback_repository import (
     GenerationFeedbackRepository,
     SqlGenerationFeedbackRepository,
 )
-from app.repositories.program_repository import (
-    ProgramRepository,
-    SqlProgramRepository,
+from app.repositories.protocol_repository import (
+    ProtocolRepository,
+    SqlProtocolRepository,
 )
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
@@ -94,10 +94,10 @@ def get_logged_session_repository(
     return SqlLoggedSessionRepository(session)
 
 
-def get_program_repository(
+def get_protocol_repository(
     session: Session = Depends(get_session),
-) -> ProgramRepository:
-    return SqlProgramRepository(session)
+) -> ProtocolRepository:
+    return SqlProtocolRepository(session)
 
 
 def get_metric_entry_repository(
@@ -112,10 +112,10 @@ def get_session_generator(
     return LlmSessionGenerator(build_llm_client(settings))
 
 
-def get_program_generator(
+def get_protocol_generator(
     settings: Settings = Depends(get_settings),
-) -> ProgramGenerator:
-    return LlmProgramGenerator(build_llm_client(settings))
+) -> ProtocolGenerator:
+    return LlmProtocolGenerator(build_llm_client(settings))
 
 
 def get_generation_cache(
@@ -136,10 +136,10 @@ def get_generation_orchestrator(
     cache: GenerationCache = Depends(get_generation_cache),
     queue: JobQueue = Depends(get_job_queue),
     exercises: ExerciseRepository = Depends(get_exercise_repository),
-    programs: ProgramRepository = Depends(get_program_repository),
+    protocols: ProtocolRepository = Depends(get_protocol_repository),
 ) -> GenerationOrchestrator:
     return GenerationOrchestrator(
-        cache=cache, queue=queue, exercises=exercises, programs=programs
+        cache=cache, queue=queue, exercises=exercises, protocols=protocols
     )
 
 

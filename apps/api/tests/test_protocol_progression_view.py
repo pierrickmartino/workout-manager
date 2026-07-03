@@ -1,10 +1,10 @@
-"""Behavior of the program-view Progression overlay (Slice 8, ADR-0004).
+"""Behavior of the protocol-view Progression overlay (Slice 8, ADR-0004).
 
-``progressed_program`` is the read-side join of a user-owned Program to the user's
-Logged Sets: it surfaces the self-paced next Session (like ``program_progress``)
+``progressed_protocol`` is the read-side join of a user-owned Protocol to the user's
+Logged Sets: it surfaces the self-paced next Session (like ``protocol_progress``)
 *and* overlays each upcoming Prescription's recommended load with the deterministic
 ``next_load`` adjustment. Already-performed Sessions are history and stay as logged;
-the stored Program — and therefore any cached/Generated source — is never mutated.
+the stored Protocol — and therefore any cached/Generated source — is never mutated.
 Exercised with in-memory repositories."""
 
 from __future__ import annotations
@@ -12,24 +12,24 @@ from __future__ import annotations
 from datetime import date
 
 from app.adoption.service import adopt
-from app.generation.program_generator import ProgramGenerationRequest
+from app.generation.protocol_generator import ProtocolGenerationRequest
 from app.generation.schema import (
     GeneratedExercisePrescription,
-    GeneratedProgram,
-    GeneratedProgramSession,
+    GeneratedProtocol,
+    GeneratedProtocolSession,
 )
-from app.programs.progress import progressed_program
+from app.protocols.progress import progressed_protocol
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.logged_session_repository import (
     InMemoryLoggedSessionRepository,
     LoggedSessionDraft,
     LoggedSetDraft,
 )
-from app.repositories.program_repository import InMemoryProgramRepository
+from app.repositories.protocol_repository import InMemoryProtocolRepository
 from app.repositories.session_repository import InMemorySessionRepository
 
 
-PARAMS = ProgramGenerationRequest(
+PARAMS = ProtocolGenerationRequest(
     training_type="strength",
     objective="gain muscle mass",
     sessions_per_week=1,
@@ -39,10 +39,10 @@ PARAMS = ProgramGenerationRequest(
 )
 
 
-def _three_week_program() -> GeneratedProgram:
-    return GeneratedProgram(
+def _three_week_protocol() -> GeneratedProtocol:
+    return GeneratedProtocol(
         sessions=[
-            GeneratedProgramSession(
+            GeneratedProtocolSession(
                 week=week,
                 day=1,
                 title=f"Week {week}",
@@ -62,10 +62,10 @@ def _three_week_program() -> GeneratedProgram:
 
 def _build():
     exercises = InMemoryExerciseRepository()
-    programs = InMemoryProgramRepository(exercises)
+    protocols = InMemoryProtocolRepository(exercises)
     sessions = InMemorySessionRepository(exercises)
     logged = InMemoryLoggedSessionRepository(sessions, exercises)
-    return exercises, programs, logged
+    return exercises, protocols, logged
 
 
 def _log_week_one(logged, user, view, *, reps, effort):
@@ -93,18 +93,18 @@ def _log_week_one(logged, user, view, *, reps, effort):
 
 def test_strong_logged_sets_raise_the_load_on_upcoming_sessions():
     # Arrange — perform Week 1 with all reps hit at low effort
-    exercises, programs, logged = _build()
-    view = adopt(_three_week_program(), "user_strong", PARAMS,
-                 exercises=exercises, programs=programs)
+    exercises, protocols, logged = _build()
+    view = adopt(_three_week_protocol(), "user_strong", PARAMS,
+                 exercises=exercises, protocols=protocols)
     _log_week_one(logged, "user_strong", view, reps=5, effort=6)
 
     # Act
-    progress = progressed_program(
-        "user_strong", view.id, programs=programs, logged=logged
+    progress = progressed_protocol(
+        "user_strong", view.id, protocols=protocols, logged=logged
     )
 
     # Assert — Weeks 2 & 3 (upcoming) carry the raised recommendation
-    upcoming = progress.program.sessions[1:]
+    upcoming = progress.protocol.sessions[1:]
     assert [s.prescriptions[0].recommended_load for s in upcoming] == [
         "62.5 kg",
         "62.5 kg",
@@ -115,14 +115,14 @@ def test_strong_logged_sets_raise_the_load_on_upcoming_sessions():
 
 def test_missed_reps_reduce_the_load_on_upcoming_sessions():
     # Arrange — perform Week 1 but fall short of the prescribed reps
-    exercises, programs, logged = _build()
-    view = adopt(_three_week_program(), "user_missed", PARAMS,
-                 exercises=exercises, programs=programs)
+    exercises, protocols, logged = _build()
+    view = adopt(_three_week_protocol(), "user_missed", PARAMS,
+                 exercises=exercises, protocols=protocols)
     _log_week_one(logged, "user_missed", view, reps=3, effort=9)
 
     # Act
-    progress = progressed_program(
-        "user_missed", view.id, programs=programs, logged=logged
+    progress = progressed_protocol(
+        "user_missed", view.id, protocols=protocols, logged=logged
     )
 
     # Assert
@@ -131,59 +131,59 @@ def test_missed_reps_reduce_the_load_on_upcoming_sessions():
 
 def test_already_performed_sessions_keep_their_logged_load():
     # Arrange
-    exercises, programs, logged = _build()
-    view = adopt(_three_week_program(), "user_hist", PARAMS,
-                 exercises=exercises, programs=programs)
+    exercises, protocols, logged = _build()
+    view = adopt(_three_week_protocol(), "user_hist", PARAMS,
+                 exercises=exercises, protocols=protocols)
     _log_week_one(logged, "user_hist", view, reps=5, effort=6)
 
     # Act
-    progress = progressed_program(
-        "user_hist", view.id, programs=programs, logged=logged
+    progress = progressed_protocol(
+        "user_hist", view.id, protocols=protocols, logged=logged
     )
 
     # Assert — Week 1 is history; its recommendation is untouched
-    assert progress.program.sessions[0].prescriptions[0].recommended_load == "60 kg"
+    assert progress.protocol.sessions[0].prescriptions[0].recommended_load == "60 kg"
 
 
 def test_no_logged_sets_leaves_every_load_unchanged():
-    # Arrange — a brand-new program, nothing performed
-    exercises, programs, logged = _build()
-    view = adopt(_three_week_program(), "user_fresh", PARAMS,
-                 exercises=exercises, programs=programs)
+    # Arrange — a brand-new protocol, nothing performed
+    exercises, protocols, logged = _build()
+    view = adopt(_three_week_protocol(), "user_fresh", PARAMS,
+                 exercises=exercises, protocols=protocols)
 
     # Act
-    progress = progressed_program(
-        "user_fresh", view.id, programs=programs, logged=logged
+    progress = progressed_protocol(
+        "user_fresh", view.id, protocols=protocols, logged=logged
     )
 
     # Assert
-    loads = [s.prescriptions[0].recommended_load for s in progress.program.sessions]
+    loads = [s.prescriptions[0].recommended_load for s in progress.protocol.sessions]
     assert loads == ["60 kg", "60 kg", "60 kg"]
 
 
-def test_overlay_does_not_mutate_the_stored_program():
+def test_overlay_does_not_mutate_the_stored_protocol():
     # Arrange — strong performance would raise the recommendation
-    exercises, programs, logged = _build()
-    view = adopt(_three_week_program(), "user_iso", PARAMS,
-                 exercises=exercises, programs=programs)
+    exercises, protocols, logged = _build()
+    view = adopt(_three_week_protocol(), "user_iso", PARAMS,
+                 exercises=exercises, protocols=protocols)
     _log_week_one(logged, "user_iso", view, reps=5, effort=6)
 
     # Act — read it twice through the overlay
-    progressed_program("user_iso", view.id, programs=programs, logged=logged)
+    progressed_protocol("user_iso", view.id, protocols=protocols, logged=logged)
 
-    # Assert — the stored Program is unchanged; the overlay is a read-time view
-    stored = programs.get(view.id, "user_iso")
+    # Assert — the stored Protocol is unchanged; the overlay is a read-time view
+    stored = protocols.get(view.id, "user_iso")
     loads = [s.prescriptions[0].recommended_load for s in stored.sessions]
     assert loads == ["60 kg", "60 kg", "60 kg"]
 
 
-def test_overlay_is_none_for_a_program_not_owned_by_the_user():
+def test_overlay_is_none_for_a_protocol_not_owned_by_the_user():
     # Arrange
-    exercises, programs, logged = _build()
-    view = adopt(_three_week_program(), "user_owner", PARAMS,
-                 exercises=exercises, programs=programs)
+    exercises, protocols, logged = _build()
+    view = adopt(_three_week_protocol(), "user_owner", PARAMS,
+                 exercises=exercises, protocols=protocols)
 
     # Act / Assert
-    assert progressed_program(
-        "user_intruder", view.id, programs=programs, logged=logged
+    assert progressed_protocol(
+        "user_intruder", view.id, protocols=protocols, logged=logged
     ) is None
