@@ -6,7 +6,7 @@ L’objectif de l’application est de permettre à des utilisateurs débutants,
 
 L’application doit permettre deux grands cas d’usage :
 
-1. Créer un **programme d’entraînement complet sur plusieurs semaines**.
+1. Créer un **protocole d’entraînement complet sur plusieurs semaines**.
 2. Créer une **séance d’entraînement unique**.
 
 L’application devra être conçue de manière modulaire, maintenable et évolutive.
@@ -35,9 +35,9 @@ L’application devra rester prudente sur les recommandations sportives, en part
 
 ---
 
-## 2. Création d’un programme d’entraînement
+## 2. Création d’un protocole d’entraînement
 
-L’utilisateur doit pouvoir générer un programme d’entraînement sur plusieurs semaines.
+L’utilisateur doit pouvoir générer un protocole d’entraînement sur plusieurs semaines.
 
 Pour cela, l’application lui demandera notamment :
 
@@ -64,9 +64,9 @@ Pour cela, l’application lui demandera notamment :
 * La durée moyenne des séances
 * Les équipements disponibles
 
-Une fois ces paramètres renseignés, l’application utilisera un modèle IA pour générer un programme personnalisé.
+Une fois ces paramètres renseignés, l’application utilisera un modèle IA pour générer un protocole personnalisé.
 
-Un programme est composé de plusieurs séances d’entraînement.
+Un protocole est composé de plusieurs séances d’entraînement.
 
 Chaque séance est composée de plusieurs exercices.
 
@@ -90,7 +90,7 @@ Chaque exercice peut contenir des informations comme :
 
 ## 3. Création d’une séance unique
 
-L’utilisateur doit aussi pouvoir générer une séance d’entraînement isolée, sans créer de programme complet.
+L’utilisateur doit aussi pouvoir générer une séance d’entraînement isolée, sans créer de protocole complet.
 
 Pour cela, l’application lui demandera notamment :
 
@@ -106,7 +106,7 @@ Une séance est composée d’un groupe d’exercices structurés.
 
 ## 4. Feedback utilisateur et régénération
 
-Après la génération d’un programme ou d’une séance, l’utilisateur pourra donner un avis :
+Après la génération d’un protocole ou d’une séance, l’utilisateur pourra donner un avis :
 
 * Positif
 * Négatif
@@ -119,7 +119,7 @@ Dans une première version, une seule régénération sera autorisée.
 
 Avant de régénérer :
 
-* Pour un programme, l’utilisateur pourra choisir de conserver certaines séances.
+* Pour un protocole, l’utilisateur pourra choisir de conserver certaines séances.
 * Pour une séance unique, l’utilisateur pourra choisir de conserver certains exercices.
 
 L’IA devra alors régénérer uniquement les parties non conservées.
@@ -149,7 +149,7 @@ Si un utilisateur ne peut pas réaliser un exercice proposé, il doit pouvoir de
 
 Pour limiter les coûts liés aux appels au modèle IA, l’application devra mettre en place un système de cache.
 
-Si une demande de génération correspond à des paramètres déjà connus, l’application pourra réutiliser un programme ou une séance déjà généré.
+Si une demande de génération correspond à des paramètres déjà connus, l’application pourra réutiliser un protocole ou une séance déjà généré.
 
 Le cache devra être basé sur des paramètres normalisés, par exemple :
 
@@ -162,7 +162,7 @@ Le cache devra être basé sur des paramètres normalisés, par exemple :
 * Contraintes importantes
 * Profil sportif simplifié
 
-Le système devra éviter de réutiliser un programme inadapté si le profil utilisateur contient des différences importantes.
+Le système devra éviter de réutiliser un protocole inadapté si le profil utilisateur contient des différences importantes.
 
 ---
 
@@ -205,4 +205,4 @@ Stockage tokens :
 
 Architecture :
 * Next.js gère l’expérience utilisateur.
-* FastAPI gère la logique métier, l’IA, les programmes, les séances, les feedbacks et les données utilisateur.
+* FastAPI gère la logique métier, l’IA, les protocoles, les séances, les feedbacks et les données utilisateur.

@@ -34,7 +34,7 @@ Current state: a single Clerk modal sign-in + one flat profile form (`app/onboar
 
 Current state: styled dashboard with greeting, a hero CTA card, a nav-row list, and a `DataList` profile snapshot (`app/dashboard/page.tsx`).
 
-- 🟡 **"Today's Protocol" hero card** — a styled hero card now exists, but it's a **generate-training CTA** (Generate a program / a workout), not the designed session hero (`INITIATE SESSION` with duration, volume, target kcal). Backing "Next up" data exists in program detail; surfacing a real *today's session* still needs building.
+- 🟡 **"Today's Protocol" hero card** — a styled hero card now exists, but it's a **generate-training CTA** (Generate a protocol / a workout), not the designed session hero (`INITIATE SESSION` with duration, volume, target kcal). Backing "Next up" data exists in protocol detail; surfacing a real *today's session* still needs building.
 - ❌ **Readiness score** ("87% READY") — a *static* `READY` / `EXTRA CAUTION` badge (derived from `is_sensitive`) now renders in the header, but the computed percentage score does not exist.
 - ❌ **Week Cycle strip** — M–S day dots with current position (`04/05`).
 - ❌ **Queued Protocols list** — upcoming sessions with per-session completion/readiness %.
@@ -60,9 +60,9 @@ Current state: no analytics surface. `app/metrics` is a (now styled) body-metric
 - ❌ **Muscle distribution** (Chest 28% / Back 24% / Legs 30% / Arms 18%).
 - ❌ **Recent Records / PR feed**.
 
-## F4 — Program Builder
+## F4 — Protocol Builder
 
-Current state: AI generation form + read-only program view (`app/programs/new`, `app/programs/[id]`). No manual/visual builder.
+Current state: AI generation form + read-only protocol view (`app/protocols/new`, `app/protocols/[id]`). No manual/visual builder.
 
 - ❌ **Visual week matrix** — M–S grid with per-day module counts.
 - ❌ **Day/module editor** — add, remove, edit Exercise Prescriptions (sets×reps, load) directly.
@@ -111,7 +111,7 @@ Current state: name, description, difficulty, muscles, variations/alternatives (
 
 With the Pulse presentation layer now in place (theme, shell, tab bar, styled screens), the
 remaining work is **capability, not styling**: the three items above are net-new logic, and the
-lower-leverage gaps (Analytics charts F3, Program Builder F4, Exercise Detail tabs/charts F6) are
-mostly *wiring already-existing data* (programs, sessions, prescriptions, logs, metrics, exercise
+lower-leverage gaps (Analytics charts F3, Protocol Builder F4, Exercise Detail tabs/charts F6) are
+mostly *wiring already-existing data* (protocols, sessions, prescriptions, logs, metrics, exercise
 catalog, the `/exercises/[id]/progress` time series) into the styled components — the main missing
 dependency there is a charting library, which is not yet installed.
