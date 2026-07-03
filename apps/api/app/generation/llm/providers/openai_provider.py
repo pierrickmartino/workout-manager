@@ -7,7 +7,7 @@ schema), assembles the final completion, extracts the text from
 ``choices[].message.content``, and wraps any SDK/network failure as
 ``GenerationError``. Streaming is an internal transport detail — the port
 returns final text, never chunks — preserving the ADR-0005 rationale that a
-large multi-week Program generation must not hit HTTP/SDK timeouts."""
+large multi-week Protocol generation must not hit HTTP/SDK timeouts."""
 
 from __future__ import annotations
 

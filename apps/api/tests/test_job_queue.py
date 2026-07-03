@@ -17,7 +17,7 @@ from app.generation.job_queue import (
     RqJobQueue,
     state_from_rq,
 )
-from app.generation.program_generator import ProgramGenerationRequest
+from app.generation.protocol_generator import ProtocolGenerationRequest
 
 
 def test_enqueue_returns_a_handle_without_running_the_job():
@@ -53,13 +53,13 @@ def test_worked_job_completes_and_is_retrievable_by_id():
     # Assert — the result survives and is retrievable by the handle alone
     state = queue.get_state(job_id)
     assert state.status is JobStatus.COMPLETE
-    assert state.program_id == 42
+    assert state.protocol_id == 42
 
 
 def test_a_failing_generation_is_surfaced_as_a_failed_state():
     # Arrange — a runner that fails the way a malformed generation would
     def runner(request, clerk_user_id, cache_key):
-        raise RuntimeError("the program could not be generated")
+        raise RuntimeError("the protocol could not be generated")
 
     queue = InMemoryJobQueue(runner)
     job_id = queue.enqueue("req", "user_a", None)
@@ -79,11 +79,11 @@ def test_unknown_job_id_has_no_state():
     assert queue.get_state("nope") is None
 
 
-def test_rq_status_maps_finished_to_complete_with_the_program_id():
+def test_rq_status_maps_finished_to_complete_with_the_protocol_id():
     state = state_from_rq("finished", 99)
 
     assert state.status is JobStatus.COMPLETE
-    assert state.program_id == 99
+    assert state.protocol_id == 99
 
 
 def test_rq_status_maps_failed_to_a_user_safe_message():
@@ -120,7 +120,7 @@ def test_rq_queue_enqueues_the_worker_function_with_serialized_args():
     from app.generation.worker import run_generation_job
 
     queue = _FakeRqQueue()
-    request = ProgramGenerationRequest(
+    request = ProtocolGenerationRequest(
         training_type="strength",
         objective="gain muscle mass",
         sessions_per_week=1,

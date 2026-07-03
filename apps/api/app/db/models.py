@@ -106,15 +106,15 @@ class ExerciseRelationship(SQLModel, table=True):
     kind: str
 
 
-class Program(SQLModel, table=True):
+class Protocol(SQLModel, table=True):
     """A user-owned, multi-week training plan (ADR-0001).
 
-    Created by Adopting a Generated Program: a deep copy the user owns and may
+    Created by Adopting a Generated Protocol: a deep copy the user owns and may
     mutate without touching the immutable source. It records the full generation
     parameter set and owns its fully-enumerated ``WorkoutSession`` rows — one per
     (week, day) — followed as a self-paced sequence."""
 
-    __tablename__ = "program"
+    __tablename__ = "protocol"
 
     id: int | None = Field(default=None, primary_key=True)
     clerk_user_id: str = Field(index=True)
@@ -130,8 +130,8 @@ class WorkoutSession(SQLModel, table=True):
     """A single prescribed workout owned by one user.
 
     One unified concept (CONTEXT.md): a Session either stands alone (no
-    ``program_id``, no Week/Day position) or belongs to a Program, in which case
-    it carries its ``program_id``, descriptive ``week``/``day`` labels, and a
+    ``protocol_id``, no Week/Day position) or belongs to a Protocol, in which case
+    it carries its ``protocol_id``, descriptive ``week``/``day`` labels, and a
     zero-based ``position`` fixing its place in the self-paced sequence. It
     records the training parameters and owns its ordered ExercisePrescriptions."""
 
@@ -143,8 +143,8 @@ class WorkoutSession(SQLModel, table=True):
     duration_minutes: int
     created_at: datetime = Field(default_factory=_utcnow)
 
-    # Program linkage — all null for a standalone Session (Slices 3-4 path).
-    program_id: int | None = Field(default=None, foreign_key="program.id", index=True)
+    # Protocol linkage — all null for a standalone Session (Slices 3-4 path).
+    protocol_id: int | None = Field(default=None, foreign_key="protocol.id", index=True)
     objective: str | None = Field(default=None)
     week: int | None = Field(default=None)
     day: int | None = Field(default=None)

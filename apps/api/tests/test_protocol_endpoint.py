@@ -1,10 +1,10 @@
-"""Behavior of the Program endpoints end to end under async generation (Slice 7).
+"""Behavior of the Protocol endpoints end to end under async generation (Slice 7).
 
 A generate request no longer blocks on the AI: a cache **miss** returns a job
 handle (``202``) and a worker completes the generation independently, so a dropped
-mobile connection never loses the result; the PWA polls ``/programs/jobs/{id}``
-until the adopted Program id appears. A cache **hit** still returns instantly
-(``200``) with the Program id and no job. The AI generator, repositories, cache
+mobile connection never loses the result; the PWA polls ``/protocols/jobs/{id}``
+until the adopted Protocol id appears. A cache **hit** still returns instantly
+(``200``) with the Protocol id and no job. The AI generator, repositories, cache
 and queue are injected via dependency overrides so the tests run offline; the
 in-memory queue's ``work()`` stands in for the out-of-process RQ worker.
 """
@@ -20,12 +20,12 @@ from app.config import Settings, get_settings
 from app.generation.generator import GenerationError
 from app.generation.job_queue import InMemoryJobQueue
 from app.generation.orchestrator import GenerationOrchestrator
-from app.generation.program_generator import ProgramGenerationRequest
-from app.generation.program_service import run_generation
+from app.generation.protocol_generator import ProtocolGenerationRequest
+from app.generation.protocol_service import run_generation
 from app.generation.schema import (
     GeneratedExercisePrescription,
-    GeneratedProgram,
-    GeneratedProgramSession,
+    GeneratedProtocol,
+    GeneratedProtocolSession,
 )
 from app.generation.cache import GenerationCache, InMemoryCacheStore
 from app.main import create_app
@@ -34,7 +34,7 @@ from app.repositories.deps import (
     get_generation_orchestrator,
     get_logged_session_repository,
     get_profile_repository,
-    get_program_repository,
+    get_protocol_repository,
 )
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.logged_session_repository import (
@@ -46,28 +46,28 @@ from app.repositories.profile_repository import (
     InMemoryProfileRepository,
     ProfileUpdate,
 )
-from app.repositories.program_repository import InMemoryProgramRepository
+from app.repositories.protocol_repository import InMemoryProtocolRepository
 from app.repositories.session_repository import InMemorySessionRepository
 from tests.conftest import ISSUER, make_signing_context
 
 
-class FakeProgramGenerator:
+class FakeProtocolGenerator:
     def __init__(self, *, result=None, error=None):
         self._result = result
         self._error = error
         self.calls = 0
 
-    def generate(self, request: ProgramGenerationRequest) -> GeneratedProgram:
+    def generate(self, request: ProtocolGenerationRequest) -> GeneratedProtocol:
         self.calls += 1
         if self._error is not None:
             raise self._error
         return self._result
 
 
-def _default_program() -> GeneratedProgram:
-    return GeneratedProgram(
+def _default_protocol() -> GeneratedProtocol:
+    return GeneratedProtocol(
         sessions=[
-            GeneratedProgramSession(
+            GeneratedProtocolSession(
                 week=week,
                 day=1,
                 title=f"Week {week} Push",
@@ -103,38 +103,38 @@ class _Harness:
 
     def submit(self, sub, **overrides):
         return self.client.post(
-            "/api/programs/generate", headers=self.auth(sub), json=_body(**overrides)
+            "/api/protocols/generate", headers=self.auth(sub), json=_body(**overrides)
         )
 
     def poll(self, sub, job_id):
         return self.client.get(
-            f"/api/programs/jobs/{job_id}", headers=self.auth(sub)
+            f"/api/protocols/jobs/{job_id}", headers=self.auth(sub)
         )
 
-    def generate_program_id(self, sub, **overrides) -> int:
+    def generate_protocol_id(self, sub, **overrides) -> int:
         """Run a full generate, following the async path to the adopted id."""
 
         data = self.submit(sub, **overrides).json()["data"]
-        if data["program_id"] is not None:  # cache hit — instant
-            return data["program_id"]
+        if data["protocol_id"] is not None:  # cache hit — instant
+            return data["protocol_id"]
         self.queue.work()  # the out-of-process worker runs
         job = self.poll(sub, data["job_id"]).json()["data"]
         assert job["status"] == "complete"
-        return job["program_id"]
+        return job["protocol_id"]
 
-    def fetch_program(self, sub, program_id):
+    def fetch_protocol(self, sub, protocol_id):
         return self.client.get(
-            f"/api/programs/{program_id}", headers=self.auth(sub)
+            f"/api/protocols/{protocol_id}", headers=self.auth(sub)
         )
 
 
 def build_harness(generator=None, ctx=None, profiles=None, cache=None) -> _Harness:
     ctx = ctx or make_signing_context()
     exercises = InMemoryExerciseRepository()
-    programs = InMemoryProgramRepository(exercises)
+    protocols = InMemoryProtocolRepository(exercises)
     sessions = InMemorySessionRepository(exercises)
     logged = InMemoryLoggedSessionRepository(sessions, exercises)
-    generator = generator or FakeProgramGenerator(result=_default_program())
+    generator = generator or FakeProtocolGenerator(result=_default_protocol())
     profiles = profiles or InMemoryProfileRepository()
     cache = cache or GenerationCache(InMemoryCacheStore())
 
@@ -146,20 +146,20 @@ def build_harness(generator=None, ctx=None, profiles=None, cache=None) -> _Harne
             cache=cache,
             generator=generator,
             exercises=exercises,
-            programs=programs,
+            protocols=protocols,
         )
         return view.id
 
     queue = InMemoryJobQueue(runner)
     orchestrator = GenerationOrchestrator(
-        cache=cache, queue=queue, exercises=exercises, programs=programs
+        cache=cache, queue=queue, exercises=exercises, protocols=protocols
     )
 
     app = create_app()
     app.dependency_overrides[get_jwks] = lambda: ctx.jwks
     app.dependency_overrides[get_settings] = lambda: Settings(clerk_issuer=ISSUER)
     app.dependency_overrides[get_exercise_repository] = lambda: exercises
-    app.dependency_overrides[get_program_repository] = lambda: programs
+    app.dependency_overrides[get_protocol_repository] = lambda: protocols
     app.dependency_overrides[get_logged_session_repository] = lambda: logged
     app.dependency_overrides[get_profile_repository] = lambda: profiles
     app.dependency_overrides[get_generation_orchestrator] = lambda: orchestrator
@@ -181,7 +181,7 @@ def _body(**overrides):
 
 def test_generate_requires_authentication():
     h = build_harness()
-    response = h.client.post("/api/programs/generate", json=_body())
+    response = h.client.post("/api/protocols/generate", json=_body())
     assert response.status_code == 401
     assert response.json()["success"] is False
 
@@ -193,19 +193,19 @@ def test_generate_rejects_zero_weeks():
     assert response.json()["success"] is False
 
 
-def test_cache_miss_enqueues_a_job_that_completes_to_a_program():
+def test_cache_miss_enqueues_a_job_that_completes_to_a_protocol():
     # Arrange
     h = build_harness()
 
     # Act — submit returns a handle immediately, without generating inline
     submitted = h.submit("user_gen")
 
-    # Assert — accepted (202), a pending job, no Program yet, no AI call yet
+    # Assert — accepted (202), a pending job, no Protocol yet, no AI call yet
     assert submitted.status_code == 202
     data = submitted.json()["data"]
     assert data["status"] == "pending"
     assert data["job_id"]
-    assert data["program_id"] is None
+    assert data["protocol_id"] is None
     assert h.generator.calls == 0
 
     # Act — the worker runs independently of the original request
@@ -213,37 +213,37 @@ def test_cache_miss_enqueues_a_job_that_completes_to_a_program():
     job = h.poll("user_gen", data["job_id"]).json()["data"]
 
     # Assert — the result is retrievable by the handle alone, and the adopted
-    # Program is fully enumerated week to week
+    # Protocol is fully enumerated week to week
     assert job["status"] == "complete"
-    program = h.fetch_program("user_gen", job["program_id"]).json()["data"]
-    assert program["weeks"] == 2
-    assert [s["week"] for s in program["sessions"]] == [1, 2]
-    loads = [s["prescriptions"][0]["recommended_load"] for s in program["sessions"]]
+    protocol = h.fetch_protocol("user_gen", job["protocol_id"]).json()["data"]
+    assert protocol["weeks"] == 2
+    assert [s["week"] for s in protocol["sessions"]] == [1, 2]
+    loads = [s["prescriptions"][0]["recommended_load"] for s in protocol["sessions"]]
     assert loads == ["60% 1RM", "65% 1RM"]
 
 
-def test_cache_hit_returns_a_program_instantly_with_no_job():
+def test_cache_hit_returns_a_protocol_instantly_with_no_job():
     # Arrange — prime the cache with one full generation
     h = build_harness()
-    first_id = h.generate_program_id("user_one")
+    first_id = h.generate_protocol_id("user_one")
 
     # Act — an equivalent request from a second user
     response = h.submit("user_two")
 
-    # Assert — served from cache: 200, the Program id inline, no job, one AI call
+    # Assert — served from cache: 200, the Protocol id inline, no job, one AI call
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["status"] == "complete"
     assert data["job_id"] is None
-    assert data["program_id"] is not None
-    assert data["program_id"] != first_id
+    assert data["protocol_id"] is not None
+    assert data["protocol_id"] != first_id
     assert h.generator.calls == 1
 
 
 def test_failed_generation_surfaces_through_the_job_not_the_request():
     # Arrange — an under-enumerated generation fails boundary validation
     h = build_harness(
-        generator=FakeProgramGenerator(error=GenerationError("not enumerated"))
+        generator=FakeProtocolGenerator(error=GenerationError("not enumerated"))
     )
 
     # Act — the request is still accepted; the failure lands on the job
@@ -255,7 +255,7 @@ def test_failed_generation_surfaces_through_the_job_not_the_request():
 
     # Assert — polling reports a failed job with a user-safe message
     assert job["status"] == "failed"
-    assert job["program_id"] is None
+    assert job["protocol_id"] is None
     assert job["error"]
 
 
@@ -273,20 +273,20 @@ def test_sensitive_user_always_regenerates():
     h = build_harness(profiles=profiles)
 
     # Act — the sensitive user requests the same parameters twice, each to done
-    h.generate_program_id("user_sensitive")
-    h.generate_program_id("user_sensitive")
+    h.generate_protocol_id("user_sensitive")
+    h.generate_protocol_id("user_sensitive")
 
     # Assert — the cache is bypassed every time: a fresh generation each request
     assert h.generator.calls == 2
 
 
-def test_fetched_program_surfaces_the_next_un_performed_session():
-    # Arrange — a fresh program: Week 1 is next
+def test_fetched_protocol_surfaces_the_next_un_performed_session():
+    # Arrange — a fresh protocol: Week 1 is next
     h = build_harness()
-    program_id = h.generate_program_id("user_next")
+    protocol_id = h.generate_protocol_id("user_next")
 
     # Act
-    fetched = h.fetch_program("user_next", program_id)
+    fetched = h.fetch_protocol("user_next", protocol_id)
 
     # Assert
     assert fetched.status_code == 200
@@ -295,25 +295,25 @@ def test_fetched_program_surfaces_the_next_un_performed_session():
     assert data["next_session"]["week"] == 1
 
 
-def test_another_user_cannot_fetch_someone_elses_program():
+def test_another_user_cannot_fetch_someone_elses_protocol():
     # Arrange
     h = build_harness()
-    program_id = h.generate_program_id("user_owner")
+    protocol_id = h.generate_protocol_id("user_owner")
 
     # Act
-    response = h.fetch_program("user_intruder", program_id)
+    response = h.fetch_protocol("user_intruder", protocol_id)
 
     # Assert
     assert response.status_code == 404
     assert response.json()["success"] is False
 
 
-def _kg_program() -> GeneratedProgram:
-    """A two-week program whose Back Squat carries an adjustable kg load."""
+def _kg_protocol() -> GeneratedProtocol:
+    """A two-week protocol whose Back Squat carries an adjustable kg load."""
 
-    return GeneratedProgram(
+    return GeneratedProtocol(
         sessions=[
-            GeneratedProgramSession(
+            GeneratedProtocolSession(
                 week=week,
                 day=1,
                 title=f"Week {week}",
@@ -331,11 +331,11 @@ def _kg_program() -> GeneratedProgram:
     )
 
 
-def test_fetched_program_shows_progressed_load_for_upcoming_sessions():
-    # Arrange — generate a kg-load program, then perform Week 1 strongly
-    h = build_harness(generator=FakeProgramGenerator(result=_kg_program()))
-    program_id = h.generate_program_id("user_progress")
-    created = h.fetch_program("user_progress", program_id).json()["data"]
+def test_fetched_protocol_shows_progressed_load_for_upcoming_sessions():
+    # Arrange — generate a kg-load protocol, then perform Week 1 strongly
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol_id = h.generate_protocol_id("user_progress")
+    created = h.fetch_protocol("user_progress", protocol_id).json()["data"]
     week_one = created["next_session"]
     h.logged.create(
         "user_progress",
@@ -355,7 +355,7 @@ def test_fetched_program_shows_progressed_load_for_upcoming_sessions():
     )
 
     # Act
-    fetched = h.fetch_program("user_progress", program_id)
+    fetched = h.fetch_protocol("user_progress", protocol_id)
 
     # Assert — the upcoming Week-2 Session shows the raised recommendation
     data = fetched.json()["data"]

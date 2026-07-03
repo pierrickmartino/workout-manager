@@ -5,7 +5,7 @@ the response with Gemini's native ``response_schema`` enforcement plus a JSON
 response mime type, assembles the final text from the streamed chunks' ``.text``,
 and wraps any SDK/network failure as ``GenerationError``. Streaming is an
 internal transport detail — the port returns final text, never chunks — which
-keeps a large multi-week Program generation from hitting HTTP/SDK timeouts
+keeps a large multi-week Protocol generation from hitting HTTP/SDK timeouts
 (ADR-0005)."""
 
 from __future__ import annotations

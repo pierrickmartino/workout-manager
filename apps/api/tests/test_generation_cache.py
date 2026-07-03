@@ -24,8 +24,8 @@ from app.generation.cache import (
 )
 from app.generation.schema import (
     GeneratedExercisePrescription,
-    GeneratedProgram,
-    GeneratedProgramSession,
+    GeneratedProtocol,
+    GeneratedProtocolSession,
 )
 
 
@@ -47,10 +47,10 @@ def _request(**overrides) -> CacheRequest:
     return CacheRequest(**base)
 
 
-def _artifact(load: str = "60% 1RM") -> GeneratedProgram:
-    return GeneratedProgram(
+def _artifact(load: str = "60% 1RM") -> GeneratedProtocol:
+    return GeneratedProtocol(
         sessions=[
-            GeneratedProgramSession(
+            GeneratedProtocolSession(
                 week=1,
                 day=1,
                 prescriptions=[

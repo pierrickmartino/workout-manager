@@ -5,7 +5,7 @@ response with adaptive thinking and native ``output_format`` schema enforcement,
 assembles the final text from the message's content blocks, and wraps any
 SDK/network failure as ``GenerationError``. Streaming is an internal transport
 detail — the port returns final text, never chunks — which keeps a large
-multi-week Program generation from hitting HTTP/SDK timeouts (ADR-0005)."""
+multi-week Protocol generation from hitting HTTP/SDK timeouts (ADR-0005)."""
 
 from __future__ import annotations
 

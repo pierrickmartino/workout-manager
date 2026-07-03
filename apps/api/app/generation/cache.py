@@ -1,6 +1,6 @@
 """Generation Cache: reuse a generated artifact for an equivalent request (ADR-0003).
 
-Generation is expensive, so a Generated Program is cached behind a deliberately
+Generation is expensive, so a Generated Protocol is cached behind a deliberately
 *coarse* key and reused across users — except where caution forbids it. This
 module owns three responsibilities behind one small interface:
 
@@ -27,12 +27,12 @@ from enum import Enum
 from typing import Protocol
 
 from app.domain.fitness_profile import SENSITIVE_CONSTRAINT_TYPES
-from app.generation.schema import GeneratedProgram
+from app.generation.schema import GeneratedProtocol
 
 KEY_PREFIX = "genprog"
 
 # Fitness Level (1–10) bucketing — the key coarsens an exact level to a band so
-# nearby abilities share one cached Program (ADR-0003).
+# nearby abilities share one cached Protocol (ADR-0003).
 INTERMEDIATE_MIN_LEVEL = 4
 ADVANCED_MIN_LEVEL = 8
 
@@ -80,7 +80,7 @@ class CacheResult:
 
     status: CacheStatus
     key: str | None = None
-    artifact: GeneratedProgram | None = None
+    artifact: GeneratedProtocol | None = None
 
 
 class CacheStore(Protocol):
@@ -166,7 +166,7 @@ def _is_sensitive(request: CacheRequest) -> bool:
 
 
 class GenerationCache:
-    """Coarse-keyed reuse of Generated Programs with a hard safety bypass."""
+    """Coarse-keyed reuse of Generated Protocols with a hard safety bypass."""
 
     def __init__(self, store: CacheStore) -> None:
         self._store = store
@@ -182,10 +182,10 @@ class GenerationCache:
         if raw is None:
             return CacheResult(status=CacheStatus.MISS, key=key)
 
-        artifact = GeneratedProgram.model_validate_json(raw)
+        artifact = GeneratedProtocol.model_validate_json(raw)
         return CacheResult(status=CacheStatus.HIT, key=key, artifact=artifact)
 
-    def store(self, key: str, artifact: GeneratedProgram) -> None:
+    def store(self, key: str, artifact: GeneratedProtocol) -> None:
         """Persist a generated ``artifact`` under ``key`` (a non-bypass miss)."""
 
         self._store.set(key, artifact.model_dump_json())

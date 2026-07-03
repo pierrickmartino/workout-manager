@@ -2,7 +2,7 @@
 
 These tests pin the integration the issue's headline acceptance criterion asks
 for: once a user has logged sustained strong progress in a training type, the
-*next* Program generation keys off the advanced Fitness Level — so the cache
+*next* Protocol generation keys off the advanced Fitness Level — so the cache
 lookup targets the right difficulty — while a different type's level is untouched.
 No raw logged history is passed into generation; only the folded coarse level is.
 """
@@ -12,8 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from app.generation.cache import _level_bucket
-from app.generation.program_generator import ProgramGenerationRequest
-from app.generation.program_service import cache_request_for
+from app.generation.protocol_generator import ProtocolGenerationRequest
+from app.generation.protocol_service import cache_request_for
 
 
 @dataclass
@@ -39,8 +39,8 @@ class _ProfileStub:
     height_cm: float | None = None
 
 
-def _params(training_type: str) -> ProgramGenerationRequest:
-    return ProgramGenerationRequest(
+def _params(training_type: str) -> ProtocolGenerationRequest:
+    return ProtocolGenerationRequest(
         training_type=training_type,
         objective="gain muscle mass",
         sessions_per_week=3,
@@ -86,7 +86,7 @@ def test_advanced_level_can_move_the_cache_into_the_next_difficulty_band():
 
 
 def test_progress_in_one_type_does_not_advance_anothers_generation_level():
-    # Arrange — strong strength work, but we are generating a yoga Program
+    # Arrange — strong strength work, but we are generating a yoga Protocol
     profile = _ProfileStub(fitness_levels={"strength": 5, "yoga": 2})
     logged = _strong_sessions("strength", 9)
 

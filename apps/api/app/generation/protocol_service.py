@@ -1,4 +1,4 @@
-"""The multi-week Program generation work: AI output → store → Adoption.
+"""The multi-week Protocol generation work: AI output → store → Adoption.
 
 The cache decision (hit / miss / bypass) is made by the Generation Orchestrator
 (Slice 7, ADR-0005); this module owns the two reusable pieces around it:
@@ -20,12 +20,12 @@ from app.adoption.service import adopt
 from app.config import get_settings
 from app.domain.fitness_profile import advance_level
 from app.generation.cache import CacheRequest, GenerationCache
-from app.generation.program_generator import (
-    ProgramGenerationRequest,
-    ProgramGenerator,
+from app.generation.protocol_generator import (
+    ProtocolGenerationRequest,
+    ProtocolGenerator,
 )
 from app.repositories.exercise_repository import ExerciseRepository
-from app.repositories.program_repository import ProgramRepository, ProgramView
+from app.repositories.protocol_repository import ProtocolRepository, ProtocolView
 
 
 class _ProfileForCache(Protocol):
@@ -47,7 +47,7 @@ class _LoggedSessionForFolding(Protocol):
 
 
 def cache_request_for(
-    params: ProgramGenerationRequest,
+    params: ProtocolGenerationRequest,
     profile: _ProfileForCache,
     logged_sessions: Sequence[_LoggedSessionForFolding] = (),
 ) -> CacheRequest:
@@ -57,7 +57,7 @@ def cache_request_for(
 
     The Fitness Level is the user's baseline with sustained strong logged progress
     *folded in* (ADR-0004), so a user who has progressed keys into — and caches at —
-    the right difficulty for their next Program. Only this coarse, folded level
+    the right difficulty for their next Protocol. Only this coarse, folded level
     reaches generation; the raw ``logged_sessions`` never do.
     """
 
@@ -84,15 +84,15 @@ def cache_request_for(
 
 
 def run_generation(
-    request: ProgramGenerationRequest,
+    request: ProtocolGenerationRequest,
     clerk_user_id: str,
     cache_key: str | None,
     *,
     cache: GenerationCache,
-    generator: ProgramGenerator,
+    generator: ProtocolGenerator,
     exercises: ExerciseRepository,
-    programs: ProgramRepository,
-) -> ProgramView:
+    protocols: ProtocolRepository,
+) -> ProtocolView:
     """Generate fresh, store (only when keyed), then Adopt — the worker's body.
 
     This is the work the async job performs once the cache decision has already
@@ -111,7 +111,7 @@ def run_generation(
         clerk_user_id,
         request,
         exercises=exercises,
-        programs=programs,
+        protocols=protocols,
     )
 
 

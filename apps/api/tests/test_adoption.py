@@ -1,5 +1,5 @@
-"""Adoption: deep-copying an immutable Generated Program into a user-owned,
-mutable Program (ADR-0003). The behaviors that matter: every enumerated week is
+"""Adoption: deep-copying an immutable Generated Protocol into a user-owned,
+mutable Protocol (ADR-0003). The behaviors that matter: every enumerated week is
 copied across, each prescribed Exercise is resolved through the shared catalog,
 and — the headline guarantee — the user's adopted copy is fully independent of the
 source Generated artifact. Exercised with a fake generator output and in-memory
@@ -11,17 +11,17 @@ import copy
 
 from app.adoption.service import adopt
 from app.domain.exercise import Provenance
-from app.generation.program_generator import ProgramGenerationRequest
+from app.generation.protocol_generator import ProtocolGenerationRequest
 from app.generation.schema import (
     GeneratedExercisePrescription,
-    GeneratedProgram,
-    GeneratedProgramSession,
+    GeneratedProtocol,
+    GeneratedProtocolSession,
 )
 from app.repositories.exercise_repository import InMemoryExerciseRepository
-from app.repositories.program_repository import InMemoryProgramRepository
+from app.repositories.protocol_repository import InMemoryProtocolRepository
 
 
-PARAMS = ProgramGenerationRequest(
+PARAMS = ProtocolGenerationRequest(
     training_type="strength",
     objective="gain muscle mass",
     sessions_per_week=1,
@@ -31,11 +31,11 @@ PARAMS = ProgramGenerationRequest(
 )
 
 
-def _generated_program() -> GeneratedProgram:
+def _generated_protocol() -> GeneratedProtocol:
     # Week-1 and Week-5-style progression: distinct loads per week (ADR-0001).
-    return GeneratedProgram(
+    return GeneratedProtocol(
         sessions=[
-            GeneratedProgramSession(
+            GeneratedProtocolSession(
                 week=1,
                 day=1,
                 title="Week 1 Push",
@@ -50,7 +50,7 @@ def _generated_program() -> GeneratedProgram:
                     )
                 ],
             ),
-            GeneratedProgramSession(
+            GeneratedProtocolSession(
                 week=2,
                 day=1,
                 title="Week 2 Push",
@@ -71,18 +71,18 @@ def _generated_program() -> GeneratedProgram:
 
 def _build_repos():
     exercises = InMemoryExerciseRepository()
-    programs = InMemoryProgramRepository(exercises)
-    return exercises, programs
+    protocols = InMemoryProtocolRepository(exercises)
+    return exercises, protocols
 
 
-def test_adopts_every_week_into_a_user_owned_program():
+def test_adopts_every_week_into_a_user_owned_protocol():
     # Arrange
-    exercises, programs = _build_repos()
+    exercises, protocols = _build_repos()
 
     # Act
     view = adopt(
-        _generated_program(), "user_adopt", PARAMS,
-        exercises=exercises, programs=programs,
+        _generated_protocol(), "user_adopt", PARAMS,
+        exercises=exercises, protocols=protocols,
     )
 
     # Assert — user-owned, fully enumerated, weeks distinct
@@ -95,12 +95,12 @@ def test_adopts_every_week_into_a_user_owned_program():
 
 def test_adopted_prescriptions_reuse_the_shared_catalog():
     # Arrange — the same movement appears in both weeks; the catalog dedups it
-    exercises, programs = _build_repos()
+    exercises, protocols = _build_repos()
 
     # Act
     view = adopt(
-        _generated_program(), "user_cat", PARAMS,
-        exercises=exercises, programs=programs,
+        _generated_protocol(), "user_cat", PARAMS,
+        exercises=exercises, protocols=protocols,
     )
 
     # Assert — one catalog Exercise reused across both weeks, ai-generated
@@ -113,13 +113,13 @@ def test_adopted_prescriptions_reuse_the_shared_catalog():
 
 def test_a_curated_catalog_exercise_is_reused_not_clobbered():
     # Arrange — a curated "Back Squat" already exists
-    exercises, programs = _build_repos()
+    exercises, protocols = _build_repos()
     existing = exercises.find_or_create("back squat", provenance=Provenance.CURATED)
 
     # Act
     view = adopt(
-        _generated_program(), "user_curated", PARAMS,
-        exercises=exercises, programs=programs,
+        _generated_protocol(), "user_curated", PARAMS,
+        exercises=exercises, protocols=protocols,
     )
 
     # Assert — reuses it; curated provenance survives adoption
@@ -128,14 +128,14 @@ def test_a_curated_catalog_exercise_is_reused_not_clobbered():
     assert prescribed.provenance == "curated"
 
 
-def test_adoption_does_not_mutate_the_source_generated_program():
+def test_adoption_does_not_mutate_the_source_generated_protocol():
     # Arrange — the Generated artifact is the (future) cache entry; it is immutable
-    exercises, programs = _build_repos()
-    generated = _generated_program()
+    exercises, protocols = _build_repos()
+    generated = _generated_protocol()
     snapshot = copy.deepcopy(generated)
 
     # Act
-    adopt(generated, "user_iso1", PARAMS, exercises=exercises, programs=programs)
+    adopt(generated, "user_iso1", PARAMS, exercises=exercises, protocols=protocols)
 
     # Assert — adoption left the source byte-for-byte unchanged
     assert generated == snapshot
@@ -144,30 +144,30 @@ def test_adoption_does_not_mutate_the_source_generated_program():
 def test_mutating_the_source_after_adoption_does_not_change_the_users_copy():
     # Arrange — adopt, then tamper with the Generated source as if a later user
     # request mutated the shared artifact
-    exercises, programs = _build_repos()
-    generated = _generated_program()
-    view = adopt(generated, "user_iso2", PARAMS, exercises=exercises, programs=programs)
+    exercises, protocols = _build_repos()
+    generated = _generated_protocol()
+    view = adopt(generated, "user_iso2", PARAMS, exercises=exercises, protocols=protocols)
 
-    # Act — mutate the source Generated Program's nested prescription
+    # Act — mutate the source Generated Protocol's nested prescription
     generated.sessions[0].prescriptions[0].recommended_load = "TAMPERED"
     generated.sessions[0].title = "TAMPERED"
 
-    # Assert — the user's adopted, deep-copied Program is untouched
-    refetched = programs.get(view.id, "user_iso2")
+    # Assert — the user's adopted, deep-copied Protocol is untouched
+    refetched = protocols.get(view.id, "user_iso2")
     assert refetched.sessions[0].prescriptions[0].recommended_load == "60% 1RM"
     assert refetched.sessions[0].title == "Week 1 Push"
 
 
-def test_two_users_adopt_independent_copies_from_one_generated_program():
-    # Arrange — adopt-by-copy means one user's Program never aliases another's
-    exercises, programs = _build_repos()
-    generated = _generated_program()
+def test_two_users_adopt_independent_copies_from_one_generated_protocol():
+    # Arrange — adopt-by-copy means one user's Protocol never aliases another's
+    exercises, protocols = _build_repos()
+    generated = _generated_protocol()
 
     # Act
-    view_a = adopt(generated, "user_a", PARAMS, exercises=exercises, programs=programs)
-    view_b = adopt(generated, "user_b", PARAMS, exercises=exercises, programs=programs)
+    view_a = adopt(generated, "user_a", PARAMS, exercises=exercises, protocols=protocols)
+    view_b = adopt(generated, "user_b", PARAMS, exercises=exercises, protocols=protocols)
 
-    # Assert — distinct Programs and distinct underlying Sessions per user
+    # Assert — distinct Protocols and distinct underlying Sessions per user
     assert view_a.id != view_b.id
     a_ids = {s.session_id for s in view_a.sessions}
     b_ids = {s.session_id for s in view_b.sessions}
