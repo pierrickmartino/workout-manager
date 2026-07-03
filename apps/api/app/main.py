@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from app.envelope import error_envelope
 from app.routes.exercises import router as exercises_router
+from app.routes.home import router as home_router
 from app.routes.logs import router as logs_router
 from app.routes.metrics import router as metrics_router
 from app.routes.profile import router as profile_router
@@ -48,6 +49,7 @@ def create_app() -> FastAPI:
     def health() -> dict:
         return {"status": "ok"}
 
+    app.include_router(home_router)
     app.include_router(profile_router)
     app.include_router(sessions_router)
     app.include_router(logs_router)
