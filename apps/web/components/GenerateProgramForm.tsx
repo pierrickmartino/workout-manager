@@ -1,11 +1,15 @@
 "use client";
 
+import { Zap } from "lucide-react";
+
 import { GenerationProgress } from "@/components/GenerationProgress";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
 import { useProgramGeneration } from "@/lib/use-program-generation";
-
-const fieldStyle: React.CSSProperties = { display: "block", marginBottom: "1rem" };
-const labelStyle: React.CSSProperties = { display: "block", fontWeight: 600 };
+import { Field } from "@/components/pulse/field";
+import { Alert } from "@/components/pulse/alert";
+import { Select } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 // Split a free-text equipment list (comma- or newline-separated) into a clean
 // array, dropping blanks — mirrors the standalone Session form.
@@ -38,70 +42,60 @@ export function GenerateProgramForm() {
   }
 
   return (
-    <form onSubmit={onSubmit}>
-      {error ? (
-        <p role="alert" style={{ color: "#b91c1c" }}>
-          {error}
-        </p>
-      ) : null}
+    <form onSubmit={onSubmit} className="flex flex-col gap-5">
+      {error ? <Alert tone="error">{error}</Alert> : null}
 
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Training type</span>
-        <select name="training_type" defaultValue="strength">
+      <Field label="Training type">
+        <Select name="training_type" defaultValue="strength">
           {TRAINING_TYPES.map((trainingType) => (
             <option key={trainingType} value={trainingType}>
               {trainingType}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </Field>
 
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Objective</span>
-        <input
+      <Field label="Objective">
+        <Input
           name="objective"
           required
           placeholder="e.g. gain muscle mass"
           defaultValue="gain muscle mass"
         />
-      </label>
+      </Field>
 
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Sessions per week</span>
-        <input
-          name="sessions_per_week"
-          type="number"
-          min={1}
-          max={14}
-          defaultValue={3}
-        />
-      </label>
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="Sessions / wk">
+          <Input
+            name="sessions_per_week"
+            type="number"
+            min={1}
+            max={14}
+            defaultValue={3}
+          />
+        </Field>
+        <Field label="Weeks">
+          <Input name="weeks" type="number" min={1} max={52} defaultValue={4} />
+        </Field>
+        <Field label="Duration">
+          <Input
+            name="duration_minutes"
+            type="number"
+            min={1}
+            max={360}
+            defaultValue={45}
+          />
+        </Field>
+      </div>
 
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Weeks</span>
-        <input name="weeks" type="number" min={1} max={52} defaultValue={4} />
-      </label>
+      <Field label="Equipment" hint="Leave blank for bodyweight.">
+        <Input name="equipment" placeholder="dumbbells, pull-up bar" />
+      </Field>
 
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Session duration (minutes)</span>
-        <input
-          name="duration_minutes"
-          type="number"
-          min={1}
-          max={360}
-          defaultValue={45}
-        />
-      </label>
-
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Equipment</span>
-        <input
-          name="equipment"
-          placeholder="dumbbells, pull-up bar (leave blank for bodyweight)"
-        />
-      </label>
-
-      <button type="submit">Generate program</button>
+      <Button type="submit" className="w-full">
+        <Zap className="h-4 w-4" />
+        Generate program
+      </Button>
     </form>
   );
 }

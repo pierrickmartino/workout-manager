@@ -9,6 +9,12 @@ import {
   TRAINING_TYPES,
   type Profile,
 } from "@/lib/profile-types";
+import { Field } from "@/components/pulse/field";
+import { Alert } from "@/components/pulse/alert";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 
 interface ProfileFormProps {
   // Pre-fill when editing an existing profile; omit during first onboarding.
@@ -18,8 +24,8 @@ interface ProfileFormProps {
 
 const LEVELS = Array.from({ length: 10 }, (_, i) => i + 1);
 
-const fieldStyle: React.CSSProperties = { display: "block", marginBottom: "1rem" };
-const labelStyle: React.CSSProperties = { display: "block", fontWeight: 600 };
+// Shared fieldset-legend styling in the pulse mono micro-label grammar.
+const legendClass = "label-mono text-[11px] font-medium text-text-secondary";
 
 export function ProfileForm({ profile, submitLabel }: ProfileFormProps) {
   const [state, action, pending] = useActionState<ProfileFormState, FormData>(
@@ -28,143 +34,139 @@ export function ProfileForm({ profile, submitLabel }: ProfileFormProps) {
   );
 
   return (
-    <form action={action}>
-      {state.error ? (
-        <p role="alert" style={{ color: "#b91c1c" }}>
-          {state.error}
-        </p>
-      ) : null}
+    <form action={action} className="flex flex-col gap-5">
+      {state.error ? <Alert tone="error">{state.error}</Alert> : null}
 
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Display name</span>
-        <input name="display_name" defaultValue={profile?.display_name ?? ""} />
-      </label>
+      <Field label="Display name">
+        <Input name="display_name" defaultValue={profile?.display_name ?? ""} />
+      </Field>
 
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Gender</span>
-        <select name="gender" defaultValue={profile?.gender ?? ""}>
+      <Field label="Gender">
+        <Select name="gender" defaultValue={profile?.gender ?? ""}>
           <option value="">—</option>
           {GENDER_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </Field>
 
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Age</span>
-        <input
-          name="age"
-          type="number"
-          min={0}
-          max={150}
-          defaultValue={profile?.age ?? ""}
-        />
-      </label>
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="Age">
+          <Input
+            name="age"
+            type="number"
+            min={0}
+            max={150}
+            defaultValue={profile?.age ?? ""}
+          />
+        </Field>
+        <Field label="Height (cm)">
+          <Input
+            name="height_cm"
+            type="number"
+            step="0.1"
+            defaultValue={profile?.height_cm ?? ""}
+          />
+        </Field>
+        <Field label="Weight (kg)">
+          <Input
+            name="weight_kg"
+            type="number"
+            step="0.1"
+            defaultValue={profile?.weight_kg ?? ""}
+          />
+        </Field>
+      </div>
 
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Height (cm)</span>
-        <input
-          name="height_cm"
-          type="number"
-          step="0.1"
-          defaultValue={profile?.height_cm ?? ""}
-        />
-      </label>
-
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Weight (kg)</span>
-        <input
-          name="weight_kg"
-          type="number"
-          step="0.1"
-          defaultValue={profile?.weight_kg ?? ""}
-        />
-      </label>
-
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Training habits</span>
-        <textarea
+      <Field label="Training habits">
+        <Textarea
           name="training_habits"
           rows={2}
           defaultValue={profile?.training_habits ?? ""}
         />
-      </label>
+      </Field>
 
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Default equipment</span>
-        <input
+      <Field label="Default equipment">
+        <Input
           name="default_equipment"
           placeholder="dumbbells, pull-up bar"
           defaultValue={(profile?.default_equipment ?? []).join(", ")}
         />
-      </label>
+      </Field>
 
-      <fieldset style={fieldStyle}>
-        <legend style={labelStyle}>Fitness level per training type (1–10)</legend>
-        {TRAINING_TYPES.map((trainingType) => (
-          <label
-            key={trainingType}
-            style={{ display: "inline-block", marginRight: "1rem" }}
-          >
-            <span style={{ textTransform: "capitalize" }}>{trainingType}</span>{" "}
-            <select
-              name={`level_${trainingType}`}
-              defaultValue={profile?.fitness_levels?.[trainingType] ?? ""}
-            >
-              <option value="">—</option>
-              {LEVELS.map((level) => (
-                <option key={level} value={level}>
-                  {level}
-                </option>
-              ))}
-            </select>
-          </label>
-        ))}
+      <fieldset className="flex flex-col gap-3 border-0 p-0">
+        <legend className={legendClass}>
+          Fitness level per training type (1–10)
+        </legend>
+        <div className="grid grid-cols-2 gap-3">
+          {TRAINING_TYPES.map((trainingType) => (
+            <label key={trainingType} className="flex flex-col gap-1.5">
+              <span className="font-sans text-[13px] capitalize text-text-secondary">
+                {trainingType}
+              </span>
+              <Select
+                name={`level_${trainingType}`}
+                defaultValue={profile?.fitness_levels?.[trainingType] ?? ""}
+              >
+                <option value="">—</option>
+                {LEVELS.map((level) => (
+                  <option key={level} value={level}>
+                    {level}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          ))}
+        </div>
       </fieldset>
 
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Preferences / limitations (non-medical)</span>
-        <textarea
+      <Field label="Preferences / limitations (non-medical)">
+        <Textarea
           name="preferences"
           rows={2}
           placeholder="no running, no jumping in the apartment"
           defaultValue={(profile?.preferences ?? []).join(", ")}
         />
-      </label>
+      </Field>
 
-      <fieldset style={fieldStyle}>
-        <legend style={labelStyle}>
+      <fieldset className="flex flex-col gap-2.5 border-0 p-0">
+        <legend className={legendClass}>
           Sensitive constraints (trigger extra caution)
         </legend>
-        {SENSITIVE_CONSTRAINT_TYPES.map((constraint) => (
-          <label key={constraint.value} style={{ display: "block" }}>
-            <input
-              type="checkbox"
-              name="sensitive_constraints"
-              value={constraint.value}
-              defaultChecked={profile?.sensitive_constraints?.includes(
-                constraint.value,
-              )}
-            />{" "}
-            {constraint.label}
-          </label>
-        ))}
+        <div className="flex flex-col gap-2">
+          {SENSITIVE_CONSTRAINT_TYPES.map((constraint) => (
+            <label
+              key={constraint.value}
+              className="flex items-center gap-3 rounded-sm border border-border bg-surface px-3.5 py-3 text-sm text-text-primary transition-colors hover:border-border-lite has-[:checked]:border-magenta/50 has-[:checked]:bg-magenta-dim"
+            >
+              <input
+                type="checkbox"
+                name="sensitive_constraints"
+                value={constraint.value}
+                defaultChecked={profile?.sensitive_constraints?.includes(
+                  constraint.value,
+                )}
+                className="h-4 w-4 accent-magenta"
+              />
+              {constraint.label}
+            </label>
+          ))}
+        </div>
       </fieldset>
 
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Recent workout (optional)</span>
-        <textarea
+      <Field label="Recent workout (optional)">
+        <Textarea
           name="recent_workout"
           rows={2}
           defaultValue={profile?.recent_workout ?? ""}
         />
-      </label>
+      </Field>
 
-      <button type="submit" disabled={pending}>
+      <Button type="submit" disabled={pending} className="w-full">
         {pending ? "Saving…" : submitLabel}
-      </button>
+      </Button>
     </form>
   );
 }

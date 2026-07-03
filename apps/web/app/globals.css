@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+/*
+  PULSE design system — dark "tactical command-center" fitness theme.
+  Tokens transcribed from docs/design/pulse.pen. Declaring them inside @theme
+  makes Tailwind emit matching utilities (bg-surface, text-muted, font-mono,
+  rounded-md, …) and exposes them as CSS variables for hand-authored styles.
+*/
+@theme {
+  /* Surfaces */
+  --color-base: #09090b;
+  --color-surface: #18181b;
+  --color-elevated: #27272a;
+
+  /* Borders */
+  --color-border: #27272a;
+  --color-border-lite: #3f3f46;
+
+  /* Text */
+  --color-text-primary: #fafafa;
+  --color-text-secondary: #a1a1aa;
+  --color-text-muted: #71717a;
+
+  /* Accents */
+  --color-cyan: #29e7e0;
+  --color-cyan-dim: #29e7e01f;
+  --color-blue: #4c8dff;
+  --color-violet: #9a6bff;
+  --color-magenta: #ff4d9d;
+  --color-magenta-dim: #ff4d9d1f;
+  --color-on-accent: #04121a;
+
+  /* Typography — wired up from next/font in app/layout.tsx */
+  --font-display: var(--font-space-grotesk), "Space Grotesk", system-ui, sans-serif;
+  --font-sans: var(--font-space-grotesk), "Space Grotesk", system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, monospace;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+
+  /* Max content column — the pulse.pen frames are 390px mobile shells */
+  --spacing-shell: 26rem;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-base);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Native controls inherit the dark theme instead of the OS light default. */
+  input,
+  select,
+  textarea {
+    color-scheme: dark;
+  }
+
+  /* Themed selection + focus ring baseline. */
+  ::selection {
+    background-color: var(--color-cyan-dim);
+    color: var(--color-text-primary);
+  }
+}
+
+/* Indeterminate progress sweep for the generation loader. */
+@keyframes pulse-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+@layer utilities {
+  /* Mono micro-label: the uppercase, letter-spaced labels used everywhere in
+     pulse.pen (overlines, data labels, button text). */
+  .label-mono {
+    font-family: var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* Thin custom scrollbar so long lists stay on-theme. */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-lite) transparent;
+  }
+}

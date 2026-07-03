@@ -1,25 +1,41 @@
+import { Loader2 } from "lucide-react";
+
+import { Card } from "@/components/ui/card";
+import { Overline } from "@/components/pulse/overline";
+
 // The loading/progress indicator shown while a Program generation runs off the
 // request path. It is an accessible live region with an indeterminate progress
 // bar; the reassurance copy reflects that the worker completes the job server-side
 // even if the mobile connection drops (Slice 7, ADR-0005).
-
-const noteStyle: React.CSSProperties = {
-  color: "#64748b",
-  fontSize: "0.875rem",
-};
-
 export function GenerationProgress() {
   return (
-    <div role="status" aria-live="polite">
-      <p>
-        Generating your program… a multi-week plan can take a moment to build.
+    <Card
+      role="status"
+      aria-live="polite"
+      className="flex flex-col gap-4 p-6"
+    >
+      <div className="flex items-center gap-2.5">
+        <Loader2 className="h-4 w-4 animate-spin text-cyan" aria-hidden />
+        <Overline>GENERATING PROTOCOL…</Overline>
+      </div>
+
+      <p className="font-display text-lg font-semibold text-text-primary">
+        Building your multi-week plan
       </p>
-      <progress aria-label="Generating program" style={{ width: "100%" }} />
-      <p style={noteStyle}>
+
+      {/* Indeterminate track: a cyan segment sweeps across the elevated bar. */}
+      <div
+        className="h-1 w-full overflow-hidden rounded-full bg-elevated"
+        aria-label="Generating program"
+      >
+        <div className="h-full w-1/3 animate-[pulse-sweep_1.4s_ease-in-out_infinite] rounded-full bg-cyan" />
+      </div>
+
+      <p className="font-mono text-[13px] leading-relaxed text-text-muted">
         You can keep this page open — generation continues on our side even if
         your connection drops, and your program will be waiting when it&apos;s
         done.
       </p>
-    </div>
+    </Card>
   );
 }

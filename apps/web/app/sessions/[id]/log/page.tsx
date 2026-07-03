@@ -1,8 +1,9 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { LogSessionForm } from "@/components/LogSessionForm";
 import { fetchSession } from "@/lib/sessions";
+import { PageHeader } from "@/components/pulse/page-header";
+import { BackLink } from "@/components/pulse/back-link";
 
 // Records a performance of a user-owned Session. The session is fetched to
 // pre-fill one logging row per prescribed Exercise; the backend returns 404
@@ -25,9 +26,16 @@ export default async function LogSessionPage({
   const today = new Date().toISOString().slice(0, 10);
 
   return (
-    <section>
-      <h1 style={{ textTransform: "capitalize" }}>Log {session.training_type} session</h1>
-      <p>Record what you actually performed.</p>
+    <section className="flex flex-col gap-6">
+      <PageHeader
+        overline="PULSE // LOG"
+        title={
+          <span className="capitalize">Log {session.training_type} session</span>
+        }
+      />
+      <p className="font-mono text-[13px] leading-relaxed text-text-muted">
+        Record what you actually performed.
+      </p>
 
       <LogSessionForm
         sessionId={session.id}
@@ -35,9 +43,7 @@ export default async function LogSessionPage({
         today={today}
       />
 
-      <p style={{ marginTop: "1rem" }}>
-        <Link href={`/sessions/${session.id}`}>← Back to session</Link>
-      </p>
+      <BackLink href={`/sessions/${session.id}`}>Back to session</BackLink>
     </section>
   );
 }

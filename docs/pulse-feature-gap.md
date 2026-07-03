@@ -3,12 +3,20 @@
 A comparison of the **Pulse** design variant (`docs/design/pulse.pen`, 11 screens) against the
 current Workout Manager web app (`apps/web/app`).
 
-**Legend:** ❌ missing · 🟡 partial (data/model exists, designed UX does not) · ⭐ highest-leverage gap
+**Legend:** ❌ missing · 🟡 partial (data/model exists, designed UX does not) · ✅ shipped since this analysis · ⭐ highest-leverage gap
 
 > **Key finding:** The API is complete for the plan/record loop (generate, log, feedback,
 > regenerate, substitute, progress, metrics). Almost every Pulse gap is **frontend experience**,
 > plus two net-new capabilities: a **PR/1RM/volume engine** and a **gamification layer**.
-> The current app is a functional, unstyled, form-driven prototype.
+
+> **Update (2026-07-03):** The Pulse **presentation layer has since shipped** — the full dark
+> "operator" theme is transcribed into `app/globals.css` (`@theme` tokens, Space Grotesk +
+> JetBrains Mono via `next/font`), backed by a shadcn `components/ui/*` primitive set and a
+> custom `components/pulse/*` component library, applied across **every** page. A fixed bottom
+> `TabBar` and a slim branded top bar are wired into the root layout. This closes the two
+> **Foundational** presentation gaps and the Home greeting; it does **not** close any feature
+> capability — there is still no charting dependency, no live-session/timer, and no PR or
+> gamification logic. The remaining gaps below are the *capabilities* the styling now frames.
 
 ---
 
@@ -24,13 +32,13 @@ Current state: a single Clerk modal sign-in + one flat profile form (`app/onboar
 
 ## F1 — Home / Dashboard
 
-Current state: profile fields in a `<dl>` + text links (`app/dashboard/page.tsx`).
+Current state: styled dashboard with greeting, a hero CTA card, a nav-row list, and a `DataList` profile snapshot (`app/dashboard/page.tsx`).
 
-- 🟡 **"Today's Protocol" hero card** — `INITIATE SESSION`, duration, volume, target kcal. Backing data exists (program detail computes self-paced "Next up"); needs a dashboard surface.
-- ❌ **Readiness score** ("87% READY").
+- 🟡 **"Today's Protocol" hero card** — a styled hero card now exists, but it's a **generate-training CTA** (Generate a program / a workout), not the designed session hero (`INITIATE SESSION` with duration, volume, target kcal). Backing "Next up" data exists in program detail; surfacing a real *today's session* still needs building.
+- ❌ **Readiness score** ("87% READY") — a *static* `READY` / `EXTRA CAUTION` badge (derived from `is_sensitive`) now renders in the header, but the computed percentage score does not exist.
 - ❌ **Week Cycle strip** — M–S day dots with current position (`04/05`).
 - ❌ **Queued Protocols list** — upcoming sessions with per-session completion/readiness %.
-- ❌ **Personalized greeting** ("Hey, Pierrick").
+- ✅ **Personalized greeting** ("Hey, {display_name}") — shipped.
 
 ## F2 — Active / Live Session ⭐ (largest gap)
 
@@ -44,7 +52,7 @@ Current state: logging is a static, after-the-fact form (`LogSessionForm`). No l
 
 ## F3 — Analytics
 
-Current state: none. `app/metrics` is a body-weight table; `app/history` is a plain list. No charting dependency installed.
+Current state: no analytics surface. `app/metrics` is a (now styled) body-metric table; `app/history` is a (now styled) session list. Both are lists/tables, not charts — no charting dependency installed.
 
 - ❌ **Total volume chart** with trend + % delta ("128,400 KG · +12%").
 - ❌ **Range toggle** (7D / 30D / 1Y).
@@ -70,7 +78,7 @@ Current state: a profile-edit form (`app/profile/edit`).
 - ❌ **Gamification** — user Level + XP with progress-to-next ("LVL 12 · 760 XP → LEVEL 13"). *(Separate from the domain's per-type `fitness_levels`.)*
 - ❌ **Lifetime stats** — total workouts, total hours, current streak.
 - ❌ **Achievements / badges** — locked & unlocked states, "See all".
-- ❌ **Settings panel** — units (kg/lb), default rest-timer duration, appearance (dark/light).
+- ❌ **Settings panel** — units (kg/lb), default rest-timer duration, appearance. *(The app is now committed dark-only via `globals.css` `color-scheme: dark`; a light theme would be net-new.)*
 - ❌ **Health integrations** — Apple Health linking.
 - ❌ **Account section** — notifications, privacy & data, help & support, log out (only Clerk's `UserButton` today).
 
@@ -87,8 +95,8 @@ Current state: name, description, difficulty, muscles, variations/alternatives (
 
 ## Cross-cutting / Foundational
 
-- ❌ **Bottom tab bar navigation** — Pulse's `F-TabBar` (Home / Session / Analytics / Builder / Profile). Today nav is a single top header link.
-- ❌ **Design system** — Pulse's dark, mono-accented "operator" theme + tokens (`$f-text-primary`, `$f-r-md`, …). App uses default `system-ui` with inline styles.
+- ✅ **Bottom tab bar navigation** — a fixed `TabBar` (`components/pulse/tab-bar.tsx`) is wired into the layout for signed-in users. **Deviation:** it collapses Pulse's five tabs into **four** — Home / Train / Stats / Profile — mapping onto *existing* routes (`/dashboard`, `/sessions`, `/history`, `/profile`), because the dedicated Session / Analytics / Builder destinations don't exist yet. Re-expanding to five tabs is a follow-up once F2–F4 land.
+- ✅ **Design system** — Pulse's dark, mono-accented "operator" theme is transcribed into `app/globals.css` as `@theme` tokens (`--color-*`, `--radius-*`, `--spacing-shell`, fonts via `next/font`), consumed through shadcn `components/ui/*` + custom `components/pulse/*` primitives across all pages. Replaces the former `system-ui` + inline styles.
 - ❌ **Personal Records (PR) engine** — 1RM estimation, PR detection/history. Feeds Analytics, Home, and Exercise Detail; no backing logic today.
 - ❌ **Readiness / target-calorie metrics** — surfaced across Home & Active Session.
 - ❌ **Streak tracking** — appears on Profile and implicitly in Analytics ("active days").
@@ -101,5 +109,9 @@ Current state: name, description, difficulty, muscles, variations/alternatives (
 2. **PR / 1RM / volume analytics engine** — a shared backend capability powering F3 (Analytics), F6 (Exercise Detail), and F1 (Home).
 3. **Gamification layer** (XP / levels / streaks / achievements) — powers F5 and recurs on Home & Analytics.
 
-Everything else is largely presentation over data models that already exist (programs, sessions,
-prescriptions, logs, metrics, exercise catalog).
+With the Pulse presentation layer now in place (theme, shell, tab bar, styled screens), the
+remaining work is **capability, not styling**: the three items above are net-new logic, and the
+lower-leverage gaps (Analytics charts F3, Program Builder F4, Exercise Detail tabs/charts F6) are
+mostly *wiring already-existing data* (programs, sessions, prescriptions, logs, metrics, exercise
+catalog, the `/exercises/[id]/progress` time series) into the styled components — the main missing
+dependency there is a charting library, which is not yet installed.

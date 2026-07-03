@@ -1,6 +1,10 @@
 import Link from "next/link";
 
 import { fetchHistory, type LoggedSession, type LoggedSet } from "@/lib/logs";
+import { PageHeader } from "@/components/pulse/page-header";
+import { Alert } from "@/components/pulse/alert";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 // Lists the user's completed Logged Sessions — the record side of the plan/record
 // split — newest first, each with its Logged Sets and perceived difficulty.
@@ -9,9 +13,11 @@ export default async function HistoryPage() {
 
   if (!envelope.success || !envelope.data) {
     return (
-      <section>
-        <h1>History</h1>
-        <p role="alert">Could not load your history: {envelope.error ?? "unknown error"}</p>
+      <section className="flex flex-col gap-6">
+        <PageHeader overline="PULSE // STATS" title="Training history" />
+        <Alert tone="error">
+          Could not load your history: {envelope.error ?? "unknown error"}
+        </Alert>
       </section>
     );
   }
@@ -19,64 +25,96 @@ export default async function HistoryPage() {
   const history = envelope.data;
 
   return (
-    <section>
-      <h1>Training history</h1>
+    <section className="flex flex-col gap-6">
+      <PageHeader
+        overline="PULSE // STATS"
+        title="Training history"
+        action={<Badge variant="muted">{history.length} LOGGED</Badge>}
+      />
 
       {history.length === 0 ? (
-        <p>
-          You haven&apos;t logged any sessions yet.{" "}
-          <Link href="/sessions/new">Generate a workout →</Link>
-        </p>
+        <Card className="flex flex-col items-start gap-3 p-6">
+          <p className="font-sans text-sm text-text-secondary">
+            You haven&apos;t logged any sessions yet.
+          </p>
+          <Link
+            href="/sessions/new"
+            className="label-mono text-[11px] text-cyan hover:underline"
+          >
+            Generate a workout →
+          </Link>
+        </Card>
       ) : (
-        <ol style={{ listStyle: "none", padding: 0 }}>
+        <ol className="flex list-none flex-col gap-4 p-0">
           {history.map((entry) => (
-            <li key={entry.id} style={{ marginBottom: "1.5rem" }}>
+            <li key={entry.id}>
               <LoggedSessionCard entry={entry} />
             </li>
           ))}
         </ol>
       )}
-
-      <p>
-        <Link href="/dashboard">← Back to dashboard</Link>
-      </p>
     </section>
   );
 }
 
 function LoggedSessionCard({ entry }: { entry: LoggedSession }) {
   return (
-    <article>
-      <h2 style={{ textTransform: "capitalize", marginBottom: "0.25rem" }}>
-        {entry.training_type} session
-      </h2>
-      <p style={{ margin: "0 0 0.5rem" }}>{entry.performed_on}</p>
-      <table>
-        <thead>
-          <tr>
-            <th style={{ textAlign: "left", paddingRight: "1rem" }}>Exercise</th>
-            <th style={{ textAlign: "left", paddingRight: "1rem" }}>Reps</th>
-            <th style={{ textAlign: "left", paddingRight: "1rem" }}>Load</th>
-            <th style={{ textAlign: "left" }}>Difficulty (RPE)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {entry.logged_sets.map((loggedSet) => (
-            <LoggedSetRow key={loggedSet.position} loggedSet={loggedSet} />
-          ))}
-        </tbody>
-      </table>
-    </article>
+    <Card className="flex flex-col gap-4 p-5">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="font-display text-lg font-semibold capitalize text-text-primary">
+          {entry.training_type} session
+        </h2>
+        <span className="label-mono text-[10px] text-text-muted">
+          {entry.performed_on}
+        </span>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <div className="grid grid-cols-[1fr_3rem_4rem_3rem] gap-2 px-1">
+          <SetHead>Exercise</SetHead>
+          <SetHead className="text-right">Reps</SetHead>
+          <SetHead className="text-right">Load</SetHead>
+          <SetHead className="text-right">RPE</SetHead>
+        </div>
+        {entry.logged_sets.map((loggedSet) => (
+          <LoggedSetRow key={loggedSet.position} loggedSet={loggedSet} />
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function SetHead({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <span
+      className={`label-mono text-[9px] text-text-muted ${className ?? ""}`}
+    >
+      {children}
+    </span>
   );
 }
 
 function LoggedSetRow({ loggedSet }: { loggedSet: LoggedSet }) {
   return (
-    <tr>
-      <td style={{ paddingRight: "1rem" }}>{loggedSet.exercise_name}</td>
-      <td style={{ paddingRight: "1rem" }}>{loggedSet.reps}</td>
-      <td style={{ paddingRight: "1rem" }}>{loggedSet.load ?? "—"}</td>
-      <td>{loggedSet.perceived_difficulty ?? "—"}</td>
-    </tr>
+    <div className="grid grid-cols-[1fr_3rem_4rem_3rem] items-center gap-2 rounded-sm border border-border bg-base/40 px-3 py-2.5">
+      <span className="truncate font-sans text-[13px] text-text-primary">
+        {loggedSet.exercise_name}
+      </span>
+      <span className="text-right font-display text-sm font-semibold text-text-primary">
+        {loggedSet.reps}
+      </span>
+      <span className="text-right font-mono text-[13px] text-text-secondary">
+        {loggedSet.load ?? "—"}
+      </span>
+      <span className="text-right font-mono text-[13px] text-cyan">
+        {loggedSet.perceived_difficulty ?? "—"}
+      </span>
+    </div>
   );
 }

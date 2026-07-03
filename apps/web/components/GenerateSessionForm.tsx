@@ -1,12 +1,15 @@
 "use client";
 
 import { useActionState } from "react";
+import { Zap } from "lucide-react";
 
 import { submitGenerate, type GenerateFormState } from "@/app/sessions/actions";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
-
-const fieldStyle: React.CSSProperties = { display: "block", marginBottom: "1rem" };
-const labelStyle: React.CSSProperties = { display: "block", fontWeight: 600 };
+import { Field } from "@/components/pulse/field";
+import { Alert } from "@/components/pulse/alert";
+import { Select } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export function GenerateSessionForm() {
   const [state, action, pending] = useActionState<GenerateFormState, FormData>(
@@ -15,46 +18,40 @@ export function GenerateSessionForm() {
   );
 
   return (
-    <form action={action}>
-      {state.error ? (
-        <p role="alert" style={{ color: "#b91c1c" }}>
-          {state.error}
-        </p>
-      ) : null}
+    <form action={action} className="flex flex-col gap-5">
+      {state.error ? <Alert tone="error">{state.error}</Alert> : null}
 
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Training type</span>
-        <select name="training_type" defaultValue="strength">
+      <Field label="Training type">
+        <Select name="training_type" defaultValue="strength">
           {TRAINING_TYPES.map((trainingType) => (
             <option key={trainingType} value={trainingType}>
               {trainingType}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </Field>
 
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Duration (minutes)</span>
-        <input
+      <Field label="Duration (minutes)">
+        <Input
           name="duration_minutes"
           type="number"
           min={1}
           max={360}
           defaultValue={45}
         />
-      </label>
+      </Field>
 
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Equipment</span>
-        <input
-          name="equipment"
-          placeholder="dumbbells, pull-up bar (leave blank for bodyweight)"
-        />
-      </label>
+      <Field
+        label="Equipment"
+        hint="Leave blank for bodyweight."
+      >
+        <Input name="equipment" placeholder="dumbbells, pull-up bar" />
+      </Field>
 
-      <button type="submit" disabled={pending}>
+      <Button type="submit" disabled={pending} className="w-full">
+        <Zap className="h-4 w-4" />
         {pending ? "Generating…" : "Generate session"}
-      </button>
+      </Button>
     </form>
   );
 }

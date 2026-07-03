@@ -5,6 +5,10 @@ import {
   fetchExerciseProgress,
   type ExerciseProgressPoint,
 } from "@/lib/progress";
+import { PageHeader } from "@/components/pulse/page-header";
+import { BackLink } from "@/components/pulse/back-link";
+import { Alert } from "@/components/pulse/alert";
+import { Card } from "@/components/ui/card";
 
 // The per-exercise progress view (Slice 12): how the user's actual performance of
 // one Exercise has changed over time, drawn purely from the record side (Logged
@@ -23,11 +27,11 @@ export default async function ExerciseProgressPage({
   const envelope = await fetchExerciseProgress(exerciseId);
   if (!envelope.success || !envelope.data) {
     return (
-      <section>
-        <h1>Exercise progress</h1>
-        <p role="alert">
+      <section className="flex flex-col gap-6">
+        <PageHeader overline="PULSE // PROGRESS" title="Exercise progress" />
+        <Alert tone="error">
           Could not load progress: {envelope.error ?? "unknown error"}
-        </p>
+        </Alert>
       </section>
     );
   }
@@ -36,55 +40,74 @@ export default async function ExerciseProgressPage({
   const title = progress.exercise_name || "this exercise";
 
   return (
-    <section>
-      <h1>Progress — {title}</h1>
+    <section className="flex flex-col gap-6">
+      <PageHeader overline="PULSE // PROGRESS" title={title} />
 
       {progress.points.length === 0 ? (
-        <p>
-          You haven&apos;t logged {title} yet.{" "}
-          <Link href="/history">Review your training history →</Link>
-        </p>
+        <Card className="flex flex-col items-start gap-3 p-6">
+          <p className="font-sans text-sm text-text-secondary">
+            You haven&apos;t logged {title} yet.
+          </p>
+          <Link
+            href="/history"
+            className="label-mono text-[11px] text-cyan hover:underline"
+          >
+            Review your training history →
+          </Link>
+        </Card>
       ) : (
-        <ol style={{ listStyle: "none", padding: 0 }}>
+        <ol className="flex list-none flex-col gap-4 p-0">
           {progress.points.map((point) => (
-            <li key={point.logged_session_id} style={{ marginBottom: "1.5rem" }}>
+            <li key={point.logged_session_id}>
               <ProgressPoint point={point} />
             </li>
           ))}
         </ol>
       )}
 
-      <p>
-        <Link href={`/exercises/${exerciseId}`}>← Back to exercise</Link>
-      </p>
+      <BackLink href={`/exercises/${exerciseId}`}>Back to exercise</BackLink>
     </section>
   );
 }
 
 function ProgressPoint({ point }: { point: ExerciseProgressPoint }) {
   return (
-    <article>
-      <h2 style={{ marginBottom: "0.25rem" }}>{point.performed_on}</h2>
-      <table>
-        <thead>
-          <tr>
-            <th style={{ textAlign: "left", paddingRight: "1rem" }}>Set</th>
-            <th style={{ textAlign: "left", paddingRight: "1rem" }}>Reps</th>
-            <th style={{ textAlign: "left", paddingRight: "1rem" }}>Load</th>
-            <th style={{ textAlign: "left" }}>Difficulty (RPE)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {point.sets.map((set) => (
-            <tr key={set.position}>
-              <td style={{ paddingRight: "1rem" }}>{set.position + 1}</td>
-              <td style={{ paddingRight: "1rem" }}>{set.reps}</td>
-              <td style={{ paddingRight: "1rem" }}>{set.load ?? "—"}</td>
-              <td>{set.perceived_difficulty ?? "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </article>
+    <Card className="flex flex-col gap-3 p-5">
+      <h2 className="label-mono text-[11px] text-cyan">{point.performed_on}</h2>
+
+      <div className="flex flex-col gap-1.5">
+        <div className="grid grid-cols-[2.5rem_1fr_1fr_1fr] gap-2 px-1">
+          <span className="label-mono text-[9px] text-text-muted">Set</span>
+          <span className="label-mono text-right text-[9px] text-text-muted">
+            Reps
+          </span>
+          <span className="label-mono text-right text-[9px] text-text-muted">
+            Load
+          </span>
+          <span className="label-mono text-right text-[9px] text-text-muted">
+            RPE
+          </span>
+        </div>
+        {point.sets.map((set) => (
+          <div
+            key={set.position}
+            className="grid grid-cols-[2.5rem_1fr_1fr_1fr] items-center gap-2 rounded-sm border border-border bg-base/40 px-3 py-2.5"
+          >
+            <span className="font-mono text-[13px] font-bold text-cyan">
+              {set.position + 1}
+            </span>
+            <span className="text-right font-display text-sm font-semibold text-text-primary">
+              {set.reps}
+            </span>
+            <span className="text-right font-mono text-[13px] text-text-secondary">
+              {set.load ?? "—"}
+            </span>
+            <span className="text-right font-mono text-[13px] text-cyan">
+              {set.perceived_difficulty ?? "—"}
+            </span>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }

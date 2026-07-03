@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowRight, ClipboardCheck } from "lucide-react";
 
 import { SubstituteButton } from "@/components/SubstituteButton";
 import {
@@ -7,6 +8,12 @@ import {
   type ExercisePrescription,
   type WorkoutSession,
 } from "@/lib/sessions";
+import { PageHeader } from "@/components/pulse/page-header";
+import { SectionHeader } from "@/components/pulse/section-header";
+import { DataList } from "@/components/pulse/data-list";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 
 // Displays a generated standalone Session and its Exercise Prescriptions. The
 // session is user-owned: the backend returns 404 (→ notFound) for anyone else.
@@ -27,29 +34,49 @@ export default async function SessionPage({
   const session = envelope.data;
 
   return (
-    <section>
-      <h1 style={{ textTransform: "capitalize" }}>
-        {session.training_type} session
-      </h1>
-      <p>{session.duration_minutes} minutes</p>
+    <section className="flex flex-col gap-7">
+      <PageHeader
+        overline="PULSE // SESSION"
+        title={<span className="capitalize">{session.training_type}</span>}
+        action={<Badge variant="cyan">{session.duration_minutes} MIN</Badge>}
+      />
 
-      <ol>
-        {session.prescriptions.map((prescription) => (
-          <li key={prescription.position} style={{ marginBottom: "1rem" }}>
-            <PrescriptionCard
-              prescription={prescription}
-              sessionId={session.id}
-            />
-          </li>
-        ))}
-      </ol>
+      <div className="flex flex-col gap-4">
+        <SectionHeader meta={`${session.prescriptions.length} MODULES`}>
+          PROTOCOL
+        </SectionHeader>
+        <ol className="flex list-none flex-col gap-3 p-0">
+          {session.prescriptions.map((prescription, index) => (
+            <li key={prescription.position}>
+              <PrescriptionCard
+                prescription={prescription}
+                sessionId={session.id}
+                index={index + 1}
+              />
+            </li>
+          ))}
+        </ol>
+      </div>
 
-      <p>
-        <Link href={`/sessions/${session.id}/log`}>Log this session →</Link>
-      </p>
-      <p>
-        <Link href="/sessions/new">Generate another →</Link>
-      </p>
+      <div className="flex flex-col gap-2.5">
+        <Link
+          href={`/sessions/${session.id}/log`}
+          className={buttonVariants({ className: "w-full" })}
+        >
+          <ClipboardCheck className="h-4 w-4" />
+          Log this session
+        </Link>
+        <Link
+          href="/sessions/new"
+          className={buttonVariants({
+            variant: "secondary",
+            className: "w-full",
+          })}
+        >
+          Generate another
+          <ArrowRight className="h-4 w-4" />
+        </Link>
+      </div>
     </section>
   );
 }
@@ -57,57 +84,71 @@ export default async function SessionPage({
 function PrescriptionCard({
   prescription,
   sessionId,
+  index,
 }: {
   prescription: ExercisePrescription;
   sessionId: number;
+  index: number;
 }) {
   return (
-    <div>
-      <strong>
-        <Link href={`/exercises/${prescription.exercise_id}`}>
-          {prescription.exercise_name}
-        </Link>
-      </strong>
-      {prescription.provenance === "ai_generated" ? (
-        <span
-          title="AI-generated, not yet reviewed"
-          style={{ marginLeft: "0.5rem", fontSize: "0.8rem", color: "#92400e" }}
-        >
-          (AI-generated)
+    <Card className="flex flex-col gap-4 p-4">
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm bg-base font-mono text-[13px] font-bold text-cyan">
+          {String(index).padStart(2, "0")}
         </span>
-      ) : null}
-      {prescription.exercise_description ? (
-        <p style={{ margin: "0.25rem 0" }}>{prescription.exercise_description}</p>
-      ) : null}
-      <dl style={{ margin: 0 }}>
-        <Detail label="Sets × reps" value={`${prescription.sets} × ${prescription.reps}`} />
-        {prescription.recommended_load ? (
-          <Detail label="Load" value={prescription.recommended_load} />
-        ) : null}
-        {prescription.rest_seconds !== null ? (
-          <Detail label="Rest" value={`${prescription.rest_seconds}s`} />
-        ) : null}
-        {prescription.tempo ? (
-          <Detail label="Tempo" value={prescription.tempo} />
-        ) : null}
-        {prescription.targeted_muscles.length > 0 ? (
-          <Detail
-            label="Muscles"
-            value={prescription.targeted_muscles.join(", ")}
-          />
-        ) : null}
-      </dl>
-      <SubstituteButton sessionId={sessionId} position={prescription.position} />
-    </div>
-  );
-}
+        <div className="flex flex-1 flex-col gap-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={`/exercises/${prescription.exercise_id}`}
+              className="font-display text-[15px] font-semibold text-text-primary transition-colors hover:text-cyan"
+            >
+              {prescription.exercise_name}
+            </Link>
+            {prescription.provenance === "ai_generated" ? (
+              <Badge
+                variant="magenta"
+                title="AI-generated, not yet reviewed"
+              >
+                AI-GENERATED
+              </Badge>
+            ) : null}
+          </div>
+          {prescription.exercise_description ? (
+            <p className="font-sans text-[13px] leading-relaxed text-text-secondary">
+              {prescription.exercise_description}
+            </p>
+          ) : null}
+        </div>
+      </div>
 
-function Detail({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: "flex", gap: "0.5rem" }}>
-      <dt style={{ fontWeight: 600, minWidth: "6rem" }}>{label}</dt>
-      <dd style={{ margin: 0 }}>{value}</dd>
-    </div>
+      <DataList
+        rows={[
+          {
+            label: "Sets × reps",
+            value: `${prescription.sets} × ${prescription.reps}`,
+          },
+          ...(prescription.recommended_load
+            ? [{ label: "Load", value: prescription.recommended_load }]
+            : []),
+          ...(prescription.rest_seconds !== null
+            ? [{ label: "Rest", value: `${prescription.rest_seconds}s` }]
+            : []),
+          ...(prescription.tempo
+            ? [{ label: "Tempo", value: prescription.tempo }]
+            : []),
+          ...(prescription.targeted_muscles.length > 0
+            ? [
+                {
+                  label: "Muscles",
+                  value: prescription.targeted_muscles.join(", "),
+                },
+              ]
+            : []),
+        ]}
+      />
+
+      <SubstituteButton sessionId={sessionId} position={prescription.position} />
+    </Card>
   );
 }
 

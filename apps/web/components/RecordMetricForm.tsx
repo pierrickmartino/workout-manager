@@ -3,9 +3,10 @@
 import { useActionState } from "react";
 
 import { submitMetric, type RecordMetricState } from "@/app/metrics/actions";
-
-const fieldStyle: React.CSSProperties = { display: "block", marginBottom: "1rem" };
-const labelStyle: React.CSSProperties = { display: "block", fontWeight: 600 };
+import { Field } from "@/components/pulse/field";
+import { Alert } from "@/components/pulse/alert";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 interface RecordMetricFormProps {
   today: string;
@@ -23,46 +24,41 @@ export function RecordMetricForm({ today, defaultMetric }: RecordMetricFormProps
   );
 
   return (
-    <form action={action}>
-      {state.error ? (
-        <p role="alert" style={{ color: "#b91c1c" }}>
-          {state.error}
-        </p>
-      ) : null}
-      {state.saved ? (
-        <p role="status" style={{ color: "#15803d" }}>
-          Reading saved.
-        </p>
-      ) : null}
+    <form action={action} className="flex flex-col gap-5">
+      {state.error ? <Alert tone="error">{state.error}</Alert> : null}
+      {state.saved ? <Alert tone="success">Reading saved.</Alert> : null}
 
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Metric</span>
-        <input
+      <Field label="Metric">
+        <Input
           name="metric"
           defaultValue={defaultMetric}
           placeholder="e.g. weight"
           required
         />
-      </label>
+      </Field>
 
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Value</span>
-        <input name="value" type="number" step="any" required style={{ width: "8rem" }} />
-      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Value">
+          <Input name="value" type="number" step="any" required />
+        </Field>
+        <Field label="Unit (optional)">
+          <Input name="unit" placeholder="e.g. kg" />
+        </Field>
+      </div>
 
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Unit (optional)</span>
-        <input name="unit" placeholder="e.g. kg" style={{ width: "8rem" }} />
-      </label>
+      <Field label="Date recorded">
+        <Input
+          name="recorded_on"
+          type="date"
+          defaultValue={today}
+          max={today}
+          required
+        />
+      </Field>
 
-      <label style={fieldStyle}>
-        <span style={labelStyle}>Date recorded</span>
-        <input name="recorded_on" type="date" defaultValue={today} max={today} required />
-      </label>
-
-      <button type="submit" disabled={pending}>
+      <Button type="submit" disabled={pending} className="w-full">
         {pending ? "Saving…" : "Record reading"}
-      </button>
+      </Button>
     </form>
   );
 }

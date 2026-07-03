@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { ProfileForm } from "@/components/ProfileForm";
 import { fetchProfile, isProfileComplete } from "@/lib/profile";
+import { PageHeader } from "@/components/pulse/page-header";
 
 // First-run onboarding. If the profile is already complete we send the user on
 // to their dashboard rather than re-collecting everything.
@@ -12,9 +13,12 @@ export default async function OnboardingPage() {
   }
 
   return (
-    <section>
-      <h1>Set up your Fitness Profile</h1>
-      <p>
+    <section className="flex flex-col gap-6">
+      <PageHeader
+        overline="REGISTER OPERATOR"
+        title="Set up your profile"
+      />
+      <p className="font-mono text-[13px] leading-relaxed text-text-muted">
         Tell us about yourself so we can personalize your training. You can
         change any of this later.
       </p>

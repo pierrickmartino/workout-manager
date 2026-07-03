@@ -1,5 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import {
+  ArrowRight,
+  Dumbbell,
+  History,
+  LineChart,
+  Zap,
+} from "lucide-react";
 
 import {
   GENDER_OPTIONS,
@@ -7,6 +14,14 @@ import {
   isProfileComplete,
   type Profile,
 } from "@/lib/profile";
+import { Alert } from "@/components/pulse/alert";
+import { PageHeader } from "@/components/pulse/page-header";
+import { SectionHeader } from "@/components/pulse/section-header";
+import { NavRow } from "@/components/pulse/nav-row";
+import { DataList } from "@/components/pulse/data-list";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 
 // The dashboard renders the full Fitness Profile that round-tripped through
 // Postgres on the FastAPI backend. New users (incomplete profile) are sent to
@@ -16,11 +31,11 @@ export default async function DashboardPage() {
 
   if (!envelope.success || !envelope.data) {
     return (
-      <section>
-        <h1>Dashboard</h1>
-        <p role="alert">
+      <section className="flex flex-col gap-6">
+        <PageHeader overline="PULSE // DASHBOARD" title="Dashboard" />
+        <Alert tone="error">
           Could not load your profile: {envelope.error ?? "unknown error"}
-        </p>
+        </Alert>
       </section>
     );
   }
@@ -30,69 +45,159 @@ export default async function DashboardPage() {
     redirect("/onboarding");
   }
 
+  const greeting = profile.display_name ?? "operator";
+
   return (
-    <section>
-      <h1>Your Fitness Profile</h1>
-      <ProfileSummary profile={profile} />
-      <p>
-        <Link href="/programs/new">Generate a program →</Link>
-      </p>
-      <p>
-        <Link href="/sessions/new">Generate a workout →</Link>
-      </p>
-      <p>
-        <Link href="/history">Training history →</Link>
-      </p>
-      <p>
-        <Link href="/metrics">Metric history →</Link>
-      </p>
-      <p>
-        <Link href="/profile/edit">Edit profile →</Link>
-      </p>
+    <section className="flex flex-col gap-7">
+      <PageHeader
+        overline="PULSE // DASHBOARD"
+        title={<>Hey, {greeting}</>}
+        action={
+          profile.is_sensitive ? (
+            <Badge variant="magenta">EXTRA CAUTION</Badge>
+          ) : (
+            <Badge variant="cyan">READY</Badge>
+          )
+        }
+      />
+
+      {/* Hero: primary training actions, echoing the "TODAY'S PROTOCOL" card. */}
+      <Card className="flex flex-col gap-5 p-5">
+        <div className="flex items-center justify-between">
+          <span className="label-mono text-[11px] text-cyan">
+            TODAY&apos;S PROTOCOL // 01
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-cyan" />
+            <span className="label-mono text-[10px] text-text-secondary">
+              READY
+            </span>
+          </span>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <h2 className="font-display text-2xl font-bold text-text-primary">
+            Generate training
+          </h2>
+          <p className="label-mono text-[11px] text-text-secondary">
+            AI PROGRAMS &middot; STANDALONE SESSIONS
+          </p>
+        </div>
+        <div className="flex flex-col gap-2.5">
+          <Link
+            href="/programs/new"
+            className={buttonVariants({ className: "w-full" })}
+          >
+            <Zap className="h-4 w-4" />
+            Generate a program
+          </Link>
+          <Link
+            href="/sessions/new"
+            className={buttonVariants({
+              variant: "secondary",
+              className: "w-full",
+            })}
+          >
+            Generate a workout
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </Card>
+
+      {/* Records & profile navigation. */}
+      <div className="flex flex-col gap-4">
+        <SectionHeader>OPERATIONS</SectionHeader>
+        <Card className="divide-y divide-border overflow-hidden py-0">
+          <NavRow
+            icon={History}
+            label="Training history"
+            href="/history"
+            accent="cyan"
+          />
+          <NavRow
+            icon={LineChart}
+            label="Metric history"
+            href="/metrics"
+            accent="violet"
+          />
+          <NavRow
+            icon={Dumbbell}
+            label="Edit profile"
+            href="/profile/edit"
+            accent="blue"
+          />
+        </Card>
+      </div>
+
+      {/* Profile snapshot. */}
+      <div className="flex flex-col gap-4">
+        <SectionHeader meta="SNAPSHOT">FITNESS PROFILE</SectionHeader>
+        <ProfileSummary profile={profile} />
+      </div>
     </section>
   );
 }
 
 function formatGender(gender: string | null): string {
-  if (gender === null) return "(not set)";
+  if (gender === null) return "—";
   return GENDER_OPTIONS.find((option) => option.value === gender)?.label ?? gender;
 }
 
 function formatList(values: string[]): string {
-  return values.length > 0 ? values.join(", ") : "(none)";
+  return values.length > 0 ? values.join(", ") : "—";
 }
 
-function formatLevels(levels: Record<string, number>): string {
+function formatLevels(levels: Record<string, number>): React.ReactNode {
   const entries = Object.entries(levels);
-  if (entries.length === 0) return "(none)";
-  return entries.map(([type, level]) => `${type}: ${level}/10`).join(", ");
+  if (entries.length === 0) return "—";
+  return (
+    <span className="flex flex-wrap justify-end gap-1.5">
+      {entries.map(([type, level]) => (
+        <Badge key={type} variant="outline">
+          {type} {level}/10
+        </Badge>
+      ))}
+    </span>
+  );
 }
 
 function ProfileSummary({ profile }: { profile: Profile }) {
   return (
-    <dl>
-      <dt>Display name</dt>
-      <dd>{profile.display_name ?? "(not set)"}</dd>
-      <dt>Gender</dt>
-      <dd>{formatGender(profile.gender)}</dd>
-      <dt>Age</dt>
-      <dd>{profile.age ?? "(not set)"}</dd>
-      <dt>Height</dt>
-      <dd>{profile.height_cm !== null ? `${profile.height_cm} cm` : "(not set)"}</dd>
-      <dt>Weight</dt>
-      <dd>{profile.weight_kg !== null ? `${profile.weight_kg} kg` : "(not set)"}</dd>
-      <dt>Training habits</dt>
-      <dd>{profile.training_habits ?? "(not set)"}</dd>
-      <dt>Default equipment</dt>
-      <dd>{formatList(profile.default_equipment)}</dd>
-      <dt>Fitness levels</dt>
-      <dd>{formatLevels(profile.fitness_levels)}</dd>
-      <dt>Preferences / limitations</dt>
-      <dd>{formatList(profile.preferences)}</dd>
-      <dt>Sensitive constraints</dt>
-      <dd>{formatList(profile.sensitive_constraints)}</dd>
-      <dt>Requires extra caution (derived)</dt>
-      <dd>{profile.is_sensitive ? "Yes" : "No"}</dd>
-    </dl>
+    <Card className="p-5">
+      <DataList
+        rows={[
+          { label: "Display name", value: profile.display_name ?? "—" },
+          { label: "Gender", value: formatGender(profile.gender) },
+          { label: "Age", value: profile.age ?? "—" },
+          {
+            label: "Height",
+            value:
+              profile.height_cm !== null ? `${profile.height_cm} cm` : "—",
+          },
+          {
+            label: "Weight",
+            value:
+              profile.weight_kg !== null ? `${profile.weight_kg} kg` : "—",
+          },
+          { label: "Training habits", value: profile.training_habits ?? "—" },
+          {
+            label: "Default equipment",
+            value: formatList(profile.default_equipment),
+          },
+          { label: "Fitness levels", value: formatLevels(profile.fitness_levels) },
+          {
+            label: "Preferences / limitations",
+            value: formatList(profile.preferences),
+          },
+          {
+            label: "Sensitive constraints",
+            value: formatList(profile.sensitive_constraints),
+          },
+          {
+            label: "Requires extra caution",
+            value: profile.is_sensitive ? "Yes" : "No",
+          },
+        ]}
+      />
+    </Card>
   );
 }
