@@ -1,0 +1,5 @@
+# 0007 — Program renamed to Protocol; typing.Protocol collisions resolved by aliasing
+
+The domain concept previously called **Program** is renamed to **Protocol** across the codebase (models, tables, routes, files, UI copy) and documentation, to match the product's intended vocabulary (already visible in design docs referring to "Today's Protocol").
+
+This collides with `typing.Protocol`, used throughout the backend for structural-typing interfaces (`ProgramRepository(Protocol)`, `SessionGenerator(Protocol)`, `CacheStore(Protocol)`, etc.). Files that need both the domain model and the interface pattern — repositories, services, and generators for the renamed concept — alias the typing import instead of the domain name: `from typing import Protocol as Interface`. The domain type keeps the clean, unaliased name `Protocol` everywhere, since it's the more prominent and more frequently read name; the `typing.Protocol` interface usage is a structural-typing implementation detail confined to a handful of files.

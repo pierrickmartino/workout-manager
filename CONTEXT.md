@@ -6,12 +6,12 @@ An AI-assisted application for creating, following, and tracking fitness workout
 
 The single most important distinction in the domain: a **plan** is what the AI prescribes; a **record** is what the user actually performed. They are separate concepts, and the same plan can be performed many times.
 
-**Program**:
-A user-owned training plan: a fixed, fully enumerated set of Sessions spanning a user-chosen number of weeks. Every Session for every week is generated up front and occupies a specific position; the same logical workout may differ from week to week to express progression and deloads. A Program is the user's own copy (see Adopt) — mutating it never affects other users or the cache.
-_Avoid_: Plan, routine, cycle
+**Protocol**:
+A user-owned training plan: a fixed, fully enumerated set of Sessions spanning a user-chosen number of weeks. Every Session for every week is generated up front and occupies a specific position; the same logical workout may differ from week to week to express progression and deloads. A Protocol is the user's own copy (see Adopt) — mutating it never affects other users or the cache.
+_Avoid_: Plan, routine, cycle, Program
 
 **Session**:
-A single prescribed workout, composed of Exercise Prescriptions. One unified concept: a Session may belong to a Program (carrying a Week/Day position) or stand alone (generated on its own with no parent or position). It is a *plan*, not a record of execution. Logging and feedback work identically whether or not it belongs to a Program.
+A single prescribed workout, composed of Exercise Prescriptions. One unified concept: a Session may belong to a Protocol (carrying a Week/Day position) or stand alone (generated on its own with no parent or position). It is a *plan*, not a record of execution. Logging and feedback work identically whether or not it belongs to a Protocol.
 _Avoid_: Workout, training (when referring to the plan)
 
 **Exercise**:
@@ -39,7 +39,7 @@ The act of swapping one Exercise Prescription's Exercise for a Variation or Alte
 _Avoid_: Swap, replace (as the domain term)
 
 **Logged Session**:
-A record of the user performing a Session on a specific date. One Session can have many Logged Sessions over the course of a Program.
+A record of the user performing a Session on a specific date. One Session can have many Logged Sessions over the course of a Protocol.
 _Avoid_: Completed session, history entry
 
 **Logged Set**:
@@ -66,16 +66,16 @@ _Avoid_: Constraint (bare), restriction
 
 ## Generation & Reuse
 
-**Generated Program / Generated Session**:
-The immutable AI output produced for a given set of normalized parameters, stored in the cache and shareable across users. Never mutated. The source content from which a user's own Program or Session is made.
-_Avoid_: Template, cached program (loosely)
+**Generated Protocol / Generated Session**:
+The immutable AI output produced for a given set of normalized parameters, stored in the cache and shareable across users. Never mutated. The source content from which a user's own Protocol or Session is made.
+_Avoid_: Template, cached protocol (loosely), Generated Program
 
 **Adopt**:
-The act of taking a Generated Program or Generated Session and deep-copying it into a user-owned Program or Session that the user logs against, gives feedback on, swaps exercises in, and regenerates. Mutations only ever touch the user's copy.
+The act of taking a Generated Protocol or Generated Session and deep-copying it into a user-owned Protocol or Session that the user logs against, gives feedback on, swaps exercises in, and regenerates. Mutations only ever touch the user's copy.
 _Avoid_: Assign, instantiate, clone
 
 **Sensitive Constraint**:
-A profile condition that demands extra caution — injury, rehabilitation, postpartum, or a flagged medical limitation. A user with any Sensitive Constraint is never served a shared/cached Generated Program; the system always generates fresh so postnatal/rehab caution can be applied.
+A profile condition that demands extra caution — injury, rehabilitation, postpartum, or a flagged medical limitation. A user with any Sensitive Constraint is never served a shared/cached Generated Protocol; the system always generates fresh so postnatal/rehab caution can be applied.
 _Avoid_: Restriction, limitation (generic)
 
 ## Feedback
@@ -83,7 +83,7 @@ _Avoid_: Restriction, limitation (generic)
 Two distinct concepts. Never collapse them into one "Feedback".
 
 **Generation Feedback**:
-A positive/negative verdict on a generated/adopted Program or Session — "did the AI give me a good plan?" — with an optional free-text reason. Captured at the level being judged (Program or Session) and is the trigger for regeneration.
+A positive/negative verdict on a generated/adopted Protocol or Session — "did the AI give me a good plan?" — with an optional free-text reason. Captured at the level being judged (Protocol or Session) and is the trigger for regeneration.
 _Avoid_: Feedback (bare), rating
 
 **Performance Feedback**:
@@ -91,5 +91,5 @@ The user's perceived effort/difficulty for a workout they actually did, recorded
 _Avoid_: Feedback (bare), RPE (loosely)
 
 **Regeneration**:
-Replacing the non-kept Exercise Prescriptions of a single Session with fresh AI output, conditioned on the kept Prescriptions and the negative Generation Feedback reason. Operates only on a Session (never a whole Program), on the user's own copy, and is limited to once per Session in v1.
-_Avoid_: Regenerate program, retry, redo
+Replacing the non-kept Exercise Prescriptions of a single Session with fresh AI output, conditioned on the kept Prescriptions and the negative Generation Feedback reason. Operates only on a Session (never a whole Protocol), on the user's own copy, and is limited to once per Session in v1.
+_Avoid_: Regenerate protocol, retry, redo
