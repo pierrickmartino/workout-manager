@@ -83,3 +83,79 @@ export function heroStats(protocol: ProtocolProgress): HeroStats {
     sets: prescriptions.reduce((total, p) => total + p.sets, 0),
   };
 }
+
+// The most upcoming Sessions the Queue shows before deferring the rest to the
+// Protocol detail's "view all". ADR-0008 calls for ≈3–5; five keeps the Home
+// card scannable without a per-row completion ring.
+export const QUEUE_CAP = 5;
+
+// One Queue row: an upcoming un-performed Session's honest, calendar-free facts —
+// its Week/Day position label, its module count (Exercise Prescriptions), and the
+// Protocol's per-session duration. There is deliberately NO per-session
+// completion or readiness percentage: completion is binary per Session (ADR-0008),
+// so a per-row ring would be dishonest.
+export interface QueueRow {
+  sessionId: number;
+  // 1-based absolute position of the Session within the Protocol.
+  position: number;
+  // The descriptive Week/Day position label, e.g. "W2 · D1".
+  label: string;
+  // How many Exercise Prescriptions (modules) the Session contains.
+  modules: number;
+  // The Protocol's prescribed per-session duration, in minutes.
+  durationMinutes: number;
+  // Whether this is the Next Session — the first upcoming row.
+  isNext: boolean;
+}
+
+// The Queue view-model: the capped list of upcoming un-performed Sessions, plus
+// the only honest completion aggregate — protocol-level `completed_count / total`
+// as an `X / N` header, never a per-row percentage (ADR-0008). `hasMore` signals
+// that upcoming Sessions were trimmed by the cap, so a "view all" affordance to
+// the Protocol detail should be shown.
+export interface QueueView {
+  rows: QueueRow[];
+  // How many Sessions have been performed so far.
+  completedCount: number;
+  // The Protocol's total number of Sessions.
+  total: number;
+  // The rendered completion header, e.g. "3 / 12".
+  header: string;
+  // How many upcoming un-performed Sessions exist in total (before the cap).
+  totalUpcoming: number;
+  // Whether the cap trimmed the list — i.e. there are more than `rows.length`.
+  hasMore: boolean;
+}
+
+// Derive the Home Queue from a Current Protocol: the upcoming un-performed
+// Sessions (those at or after the Next Session's position) in ascending position
+// order, capped to `QUEUE_CAP`, the first flagged `NEXT`, plus the protocol-level
+// `completed_count / total` completion header. Returns null when the Protocol has
+// no Next Session, so Home shows the Queue only for a live Current Protocol.
+export function queueView(protocol: ProtocolProgress): QueueView | null {
+  const next = protocol.next_session;
+  if (!next) return null;
+
+  const upcoming = protocol.sessions
+    .filter((session) => session.position >= next.position)
+    .sort((a, b) => a.position - b.position);
+
+  const rows: QueueRow[] = upcoming.slice(0, QUEUE_CAP).map((session) => ({
+    sessionId: session.session_id,
+    position: session.position,
+    label: `W${session.week} · D${session.day}`,
+    modules: session.prescriptions.length,
+    durationMinutes: protocol.duration_minutes,
+    isNext: session.position === next.position,
+  }));
+
+  const total = protocol.sessions.length;
+  return {
+    rows,
+    completedCount: protocol.completed_count,
+    total,
+    header: `${protocol.completed_count} / ${total}`,
+    totalUpcoming: upcoming.length,
+    hasMore: upcoming.length > rows.length,
+  };
+}

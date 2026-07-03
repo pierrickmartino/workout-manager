@@ -20,6 +20,7 @@ import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { SessionHero } from "@/components/pulse/session-hero";
 import { WeekCycleStrip } from "@/components/pulse/week-cycle-strip";
+import { QueueList } from "@/components/pulse/queue-list";
 import { NavRow } from "@/components/pulse/nav-row";
 import { DataList } from "@/components/pulse/data-list";
 import { Card } from "@/components/ui/card";
@@ -82,6 +83,9 @@ export default async function DashboardPage() {
           {/* Position within the current week (done / active / upcoming), plus a
               WEEK n/total overline — purely positional, no calendar (ADR-0008). */}
           <WeekCycleStrip protocol={currentProtocol} />
+          {/* The remaining upcoming Sessions with an honest X/N completion header
+              and a "view all" to the Protocol detail — no per-session % (ADR-0008). */}
+          <QueueList protocol={currentProtocol} />
         </>
       ) : (
         <GenerateTrainingCta />
