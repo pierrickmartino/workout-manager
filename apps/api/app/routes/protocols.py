@@ -20,7 +20,8 @@ from app.envelope import success_envelope
 from app.generation.orchestrator import GenerationOrchestrator
 from app.generation.protocol_generator import ProtocolGenerationRequest
 from app.generation.protocol_service import cache_request_for
-from app.protocols.progress import ProtocolProgressView, progressed_protocol
+from app.protocols.progress import progressed_protocol
+from app.protocols.serialization import serialize_protocol_progress
 from app.repositories.deps import (
     get_generation_orchestrator,
     get_logged_session_repository,
@@ -29,11 +30,7 @@ from app.repositories.deps import (
 )
 from app.repositories.logged_session_repository import LoggedSessionRepository
 from app.repositories.profile_repository import ProfileRepository
-from app.repositories.protocol_repository import (
-    ProtocolRepository,
-    ProtocolSessionView,
-    ProtocolView,
-)
+from app.repositories.protocol_repository import ProtocolRepository
 
 router = APIRouter(prefix="/api", tags=["protocols"])
 
@@ -69,57 +66,6 @@ class GenerateProtocolRequest(BaseModel):
             weeks=self.weeks,
             equipment=self.equipment,
         )
-
-
-def _serialize_session(session: ProtocolSessionView) -> dict:
-    return {
-        "session_id": session.session_id,
-        "position": session.position,
-        "week": session.week,
-        "day": session.day,
-        "title": session.title,
-        "prescriptions": [
-            {
-                "position": p.position,
-                "sets": p.sets,
-                "reps": p.reps,
-                "rest_seconds": p.rest_seconds,
-                "tempo": p.tempo,
-                "recommended_load": p.recommended_load,
-                "exercise_id": p.exercise_id,
-                "exercise_name": p.exercise_name,
-                "exercise_description": p.exercise_description,
-                "targeted_muscles": p.targeted_muscles,
-                "required_equipment": p.required_equipment,
-                "provenance": p.provenance,
-            }
-            for p in session.prescriptions
-        ],
-    }
-
-
-def _serialize_protocol(view: ProtocolView) -> dict:
-    return {
-        "id": view.id,
-        "clerk_user_id": view.clerk_user_id,
-        "training_type": view.training_type,
-        "objective": view.objective,
-        "sessions_per_week": view.sessions_per_week,
-        "weeks": view.weeks,
-        "duration_minutes": view.duration_minutes,
-        "sessions": [_serialize_session(s) for s in view.sessions],
-    }
-
-
-def _serialize_progress(progress: ProtocolProgressView) -> dict:
-    data = _serialize_protocol(progress.protocol)
-    data["completed_count"] = progress.completed_count
-    data["next_session"] = (
-        _serialize_session(progress.next_session)
-        if progress.next_session is not None
-        else None
-    )
-    return data
 
 
 def _job_payload(
@@ -219,4 +165,4 @@ def read_protocol(
     )
     if progress is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Protocol not found")
-    return success_envelope(_serialize_progress(progress))
+    return success_envelope(serialize_protocol_progress(progress))

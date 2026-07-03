@@ -152,3 +152,37 @@ def test_get_returns_none_for_an_unknown_protocol(repos):
 
     # Assert
     assert protocol_repo.get(987654, "user_any") is None
+
+
+def test_list_for_user_orders_protocols_most_recently_adopted_first(repos):
+    # Arrange — the same user adopts two Protocols in sequence
+    protocol_repo, exercises = repos
+    first = protocol_repo.create("user_seq", _two_week_draft(exercises))
+    second = protocol_repo.create("user_seq", _two_week_draft(exercises))
+
+    # Act
+    listed = protocol_repo.list_for_user("user_seq")
+
+    # Assert — the most-recently-adopted Protocol comes first
+    assert [p.id for p in listed] == [second.id, first.id]
+
+
+def test_list_for_user_never_returns_another_users_protocols(repos):
+    # Arrange — two users each own a Protocol
+    protocol_repo, exercises = repos
+    mine = protocol_repo.create("user_mine", _two_week_draft(exercises))
+    protocol_repo.create("user_other", _two_week_draft(exercises))
+
+    # Act
+    listed = protocol_repo.list_for_user("user_mine")
+
+    # Assert — only the owner's Protocol is returned
+    assert [p.id for p in listed] == [mine.id]
+
+
+def test_list_for_user_is_empty_when_the_user_owns_no_protocol(repos):
+    # Arrange
+    protocol_repo, _ = repos
+
+    # Assert
+    assert protocol_repo.list_for_user("user_none") == []

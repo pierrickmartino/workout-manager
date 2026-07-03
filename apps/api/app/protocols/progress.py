@@ -163,4 +163,37 @@ def progressed_protocol(
     )
 
 
-__all__ = ["ProtocolProgressView", "protocol_progress", "progressed_protocol"]
+def current_protocol(
+    clerk_user_id: str,
+    *,
+    protocols: ProtocolRepository,
+    logged: LoggedSessionRepository,
+) -> ProtocolProgressView | None:
+    """Return the user's Current Protocol as a progressed view, or ``None``.
+
+    The Current Protocol is the user's *most-recently-adopted* Protocol that still
+    holds an un-performed Session (ADR-0008): Home focuses on the plan the user is
+    actively working through, and never dead-ends on a finished one. Fully-performed
+    Protocols are passed over in favour of an older in-progress one. Returns ``None``
+    when the user owns no Protocol, or when every owned Protocol is complete.
+
+    The selected Protocol is returned through ``progressed_protocol`` so its upcoming
+    loads already carry the ADR-0004 Progression adjustment. Standalone Sessions are
+    not eligible — only adopted Protocols are considered.
+    """
+
+    for protocol in protocols.list_for_user(clerk_user_id):
+        progress = progressed_protocol(
+            clerk_user_id, protocol.id, protocols=protocols, logged=logged
+        )
+        if progress is not None and progress.next_session is not None:
+            return progress
+    return None
+
+
+__all__ = [
+    "ProtocolProgressView",
+    "protocol_progress",
+    "progressed_protocol",
+    "current_protocol",
+]

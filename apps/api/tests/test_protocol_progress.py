@@ -16,7 +16,7 @@ from app.generation.schema import (
     GeneratedProtocol,
     GeneratedProtocolSession,
 )
-from app.protocols.progress import protocol_progress
+from app.protocols.progress import current_protocol, protocol_progress
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.logged_session_repository import (
     InMemoryLoggedSessionRepository,
@@ -156,3 +156,80 @@ def test_another_users_logs_do_not_advance_my_protocol():
     # Assert — my Week-1 is still next
     assert progress.next_session.week == 1
     assert progress.completed_count == 0
+
+
+def test_current_protocol_is_the_only_in_progress_protocol():
+    # Arrange — a single Protocol with nothing performed yet
+    exercises, protocols, logged = _build()
+    adopt(_three_week_protocol(), "user_one", PARAMS,
+          exercises=exercises, protocols=protocols)
+
+    # Act
+    current = current_protocol("user_one", protocols=protocols, logged=logged)
+
+    # Assert — it is the Current Protocol, with its next Session surfaced
+    assert current is not None
+    assert current.next_session.week == 1
+
+
+def test_current_protocol_picks_the_most_recently_adopted_in_progress():
+    # Arrange — two Protocols adopted in sequence, neither performed
+    exercises, protocols, logged = _build()
+    adopt(_three_week_protocol(), "user_recent", PARAMS,
+          exercises=exercises, protocols=protocols)
+    newer = adopt(_three_week_protocol(), "user_recent", PARAMS,
+                  exercises=exercises, protocols=protocols)
+
+    # Act
+    current = current_protocol("user_recent", protocols=protocols, logged=logged)
+
+    # Assert — Home focuses on the most recently adopted Protocol
+    assert current.protocol.id == newer.id
+
+
+def test_current_protocol_skips_a_fully_performed_protocol_for_an_older_one():
+    # Arrange — an older in-progress Protocol, then a newer one performed to completion
+    exercises, protocols, logged = _build()
+    older = adopt(_three_week_protocol(), "user_skip", PARAMS,
+                  exercises=exercises, protocols=protocols)
+    newer = adopt(_three_week_protocol(), "user_skip", PARAMS,
+                  exercises=exercises, protocols=protocols)
+    for session in newer.sessions:
+        _perform(logged, "user_skip", session.session_id)
+
+    # Act
+    current = current_protocol("user_skip", protocols=protocols, logged=logged)
+
+    # Assert — the finished Protocol is passed over for the older, in-progress one
+    assert current.protocol.id == older.id
+    assert current.next_session.week == 1
+
+
+def test_current_protocol_is_none_when_the_user_owns_no_protocol():
+    # Arrange
+    exercises, protocols, logged = _build()
+
+    # Assert
+    assert current_protocol("user_empty", protocols=protocols, logged=logged) is None
+
+
+def test_current_protocol_is_none_when_every_protocol_is_complete():
+    # Arrange — the user's only Protocol is fully performed
+    exercises, protocols, logged = _build()
+    view = adopt(_three_week_protocol(), "user_done_all", PARAMS,
+                 exercises=exercises, protocols=protocols)
+    for session in view.sessions:
+        _perform(logged, "user_done_all", session.session_id)
+
+    # Assert
+    assert current_protocol("user_done_all", protocols=protocols, logged=logged) is None
+
+
+def test_current_protocol_never_selects_another_users_protocol():
+    # Arrange — only another user owns an in-progress Protocol
+    exercises, protocols, logged = _build()
+    adopt(_three_week_protocol(), "user_owner", PARAMS,
+          exercises=exercises, protocols=protocols)
+
+    # Assert — a different user has no Current Protocol
+    assert current_protocol("user_intruder", protocols=protocols, logged=logged) is None

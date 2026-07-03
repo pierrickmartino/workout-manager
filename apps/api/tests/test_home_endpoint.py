@@ -10,30 +10,78 @@ authentication, the envelope, and that the computed state reaches the payload.""
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi.testclient import TestClient
 
+from app.adoption.service import adopt
 from app.auth.dependencies import get_jwks
 from app.config import Settings, get_settings
+from app.generation.protocol_generator import ProtocolGenerationRequest
+from app.generation.schema import (
+    GeneratedExercisePrescription,
+    GeneratedProtocol,
+    GeneratedProtocolSession,
+)
 from app.main import create_app
 from app.repositories.deps import (
     get_logged_session_repository,
     get_profile_repository,
+    get_protocol_repository,
 )
 from app.repositories.exercise_repository import InMemoryExerciseRepository
-from app.repositories.logged_session_repository import InMemoryLoggedSessionRepository
+from app.repositories.logged_session_repository import (
+    InMemoryLoggedSessionRepository,
+    LoggedSessionDraft,
+)
 from app.repositories.profile_repository import (
     InMemoryProfileRepository,
     ProfileUpdate,
 )
+from app.repositories.protocol_repository import InMemoryProtocolRepository
 from app.repositories.session_repository import InMemorySessionRepository
 from tests.conftest import ISSUER, make_signing_context
 
 
+PARAMS = ProtocolGenerationRequest(
+    training_type="strength",
+    objective="gain muscle mass",
+    sessions_per_week=1,
+    duration_minutes=45,
+    weeks=2,
+    equipment=[],
+)
+
+
+def _two_week_protocol() -> GeneratedProtocol:
+    return GeneratedProtocol(
+        sessions=[
+            GeneratedProtocolSession(
+                week=week,
+                day=1,
+                title=f"Week {week}",
+                prescriptions=[
+                    GeneratedExercisePrescription(
+                        exercise_name="Back Squat", sets=5, reps="5"
+                    ),
+                    GeneratedExercisePrescription(
+                        exercise_name="Overhead Press", sets=3, reps="8"
+                    ),
+                ],
+            )
+            for week in (1, 2)
+        ]
+    )
+
+
 class _Harness:
-    def __init__(self, client, ctx, profiles):
+    def __init__(self, client, ctx, profiles, exercises, protocols, logged):
         self.client = client
         self.ctx = ctx
         self.profiles = profiles
+        self.exercises = exercises
+        self.protocols = protocols
+        self.logged = logged
 
     def auth(self, sub):
         return {"Authorization": f"Bearer {self.ctx.mint(sub=sub)}"}
@@ -41,12 +89,27 @@ class _Harness:
     def fetch_home(self, sub):
         return self.client.get("/api/home", headers=self.auth(sub))
 
+    def adopt_protocol(self, sub):
+        return adopt(
+            _two_week_protocol(), sub, PARAMS,
+            exercises=self.exercises, protocols=self.protocols,
+        )
+
+    def perform(self, sub, session_id):
+        self.logged.create(
+            sub,
+            LoggedSessionDraft(
+                session_id=session_id, performed_on=date(2026, 1, 1), logged_sets=[]
+            ),
+        )
+
 
 def build_harness(profiles=None) -> _Harness:
     ctx = make_signing_context()
     exercises = InMemoryExerciseRepository()
     sessions = InMemorySessionRepository(exercises)
     logged = InMemoryLoggedSessionRepository(sessions, exercises)
+    protocols = InMemoryProtocolRepository(exercises)
     profiles = profiles or InMemoryProfileRepository()
 
     app = create_app()
@@ -54,7 +117,8 @@ def build_harness(profiles=None) -> _Harness:
     app.dependency_overrides[get_settings] = lambda: Settings(clerk_issuer=ISSUER)
     app.dependency_overrides[get_profile_repository] = lambda: profiles
     app.dependency_overrides[get_logged_session_repository] = lambda: logged
-    return _Harness(TestClient(app), ctx, profiles)
+    app.dependency_overrides[get_protocol_repository] = lambda: protocols
+    return _Harness(TestClient(app), ctx, profiles, exercises, protocols, logged)
 
 
 def test_home_requires_authentication():
@@ -116,3 +180,62 @@ def test_readiness_is_scoped_to_the_requesting_user():
 
     # Assert — the sensitive user's state does not leak across accounts
     assert data["readiness"] == "READY"
+
+
+def test_home_returns_the_current_protocol_with_hero_backing_data():
+    # Arrange — a user who has adopted a Protocol and performed nothing yet
+    h = build_harness()
+    protocol = h.adopt_protocol("user_active")
+
+    # Act
+    data = h.fetch_home("user_active").json()["data"]
+
+    # Assert — Readiness is still present, and the Current Protocol carries the
+    # Session Hero's backing data: the Protocol's duration and the Next Session
+    # with the prescriptions the modules/sets stats are derived from.
+    assert data["readiness"] == "READY"
+    current = data["current_protocol"]
+    assert current is not None
+    assert current["id"] == protocol.id
+    assert current["duration_minutes"] == 45
+    assert current["completed_count"] == 0
+    assert current["next_session"]["week"] == 1
+    assert len(current["next_session"]["prescriptions"]) == 2
+
+
+def test_home_current_protocol_is_null_when_the_user_owns_no_protocol():
+    # Arrange — a user with no Protocol at all
+    h = build_harness()
+
+    # Act
+    data = h.fetch_home("user_no_protocol").json()["data"]
+
+    # Assert — the empty state: Readiness present, no Current Protocol
+    assert data["readiness"] == "READY"
+    assert data["current_protocol"] is None
+
+
+def test_home_current_protocol_is_null_once_the_protocol_is_complete():
+    # Arrange — the user's only Protocol is fully performed
+    h = build_harness()
+    protocol = h.adopt_protocol("user_finished")
+    for session in protocol.sessions:
+        h.perform("user_finished", session.session_id)
+
+    # Act
+    data = h.fetch_home("user_finished").json()["data"]
+
+    # Assert — Home does not dead-end on a finished plan
+    assert data["current_protocol"] is None
+
+
+def test_home_never_surfaces_another_users_protocol():
+    # Arrange — only another user owns a Protocol
+    h = build_harness()
+    h.adopt_protocol("user_owner")
+
+    # Act — a different user reads Home
+    data = h.fetch_home("user_visitor").json()["data"]
+
+    # Assert — ownership isolation holds end to end
+    assert data["current_protocol"] is None
