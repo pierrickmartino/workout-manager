@@ -18,6 +18,57 @@ export interface HeroStats {
   sets: number;
 }
 
+// A dot's position relative to the Next Session: already performed (`done`), the
+// Next Session itself (`active`), or still to come (`upcoming`). Purely
+// positional — no weekday or date semantics (ADR-0008).
+export type WeekDotState = "done" | "active" | "upcoming";
+
+// One position dot in the Week Cycle strip.
+export interface WeekDot {
+  sessionId: number;
+  position: number;
+  state: WeekDotState;
+}
+
+// The Week Cycle strip view-model: the current week's Sessions as position dots
+// plus a `WEEK n/total` overline. Positional, not calendrical (ADR-0008).
+export interface WeekStrip {
+  dots: WeekDot[];
+  // The 1-based week of the Next Session — the current week.
+  week: number;
+  // The Protocol's total number of weeks.
+  totalWeeks: number;
+  // The rendered overline, e.g. "WEEK 2/6".
+  label: string;
+}
+
+function dotState(position: number, nextPosition: number): WeekDotState {
+  if (position < nextPosition) return "done";
+  if (position === nextPosition) return "active";
+  return "upcoming";
+}
+
+// Derive the Week Cycle strip from a Current Protocol: the Sessions of the
+// current week (the week of the Next Session) as position dots, each tagged
+// done / active / upcoming by position relative to the Next Session.
+export function weekStrip(protocol: ProtocolProgress): WeekStrip | null {
+  const next = protocol.next_session;
+  if (!next) return null;
+  const dots = protocol.sessions
+    .filter((session) => session.week === next.week)
+    .map((session) => ({
+      sessionId: session.session_id,
+      position: session.position,
+      state: dotState(session.position, next.position),
+    }));
+  return {
+    dots,
+    week: next.week,
+    totalWeeks: protocol.weeks,
+    label: `WEEK ${next.week}/${protocol.weeks}`,
+  };
+}
+
 // Derive the hero stats from a Current Protocol. `modules` counts the Next
 // Session's Prescriptions; `sets` sums their prescribed sets; duration is the
 // Protocol's own `duration_minutes`. A Current Protocol from `/api/home` always

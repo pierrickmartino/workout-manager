@@ -19,6 +19,7 @@ import { Alert } from "@/components/pulse/alert";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { SessionHero } from "@/components/pulse/session-hero";
+import { WeekCycleStrip } from "@/components/pulse/week-cycle-strip";
 import { NavRow } from "@/components/pulse/nav-row";
 import { DataList } from "@/components/pulse/data-list";
 import { Card } from "@/components/ui/card";
@@ -76,7 +77,12 @@ export default async function DashboardPage() {
       {/* Hero: the Current Protocol's Next Session, or the generate CTA when the
           user has no Current Protocol (no Protocol, or every one is complete). */}
       {currentProtocol ? (
-        <SessionHero protocol={currentProtocol} />
+        <>
+          <SessionHero protocol={currentProtocol} />
+          {/* Position within the current week (done / active / upcoming), plus a
+              WEEK n/total overline — purely positional, no calendar (ADR-0008). */}
+          <WeekCycleStrip protocol={currentProtocol} />
+        </>
       ) : (
         <GenerateTrainingCta />
       )}
