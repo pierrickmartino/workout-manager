@@ -1,22 +1,45 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { weekStrip } from "./home-view.ts";
+import { queueView, weekStrip, QUEUE_CAP } from "./home-view.ts";
 import type { ProtocolProgress, ProtocolSession } from "./protocols-types.ts";
+import type { ExercisePrescription } from "./sessions-types.ts";
+
+// A minimal Exercise Prescription — only the fields the view-model reads matter;
+// the rest are filled with harmless placeholders so the fixture type-checks.
+function makePrescription(position: number): ExercisePrescription {
+  return {
+    position,
+    sets: 3,
+    reps: "10",
+    rest_seconds: null,
+    tempo: null,
+    recommended_load: null,
+    exercise_id: position,
+    exercise_name: `Exercise ${position}`,
+    exercise_description: null,
+    targeted_muscles: [],
+    required_equipment: [],
+    provenance: "curated",
+  };
+}
 
 // Build a Protocol whose Sessions are laid out `sessionsPerWeek` to a week over
 // `weeks` weeks, numbered by 1-based `position`. `nextPosition` picks the Next
 // Session (the earliest un-performed one); everything before it counts as
-// completed. Keeps the fixtures table-friendly: a case is (weeks, perWeek,
+// completed. `modulesPerSession` fills each Session with that many Prescriptions
+// (default 0). Keeps the fixtures table-friendly: a case is (weeks, perWeek,
 // nextPosition).
 function makeProtocol({
   weeks,
   sessionsPerWeek,
   nextPosition,
+  modulesPerSession = 0,
 }: {
   weeks: number;
   sessionsPerWeek: number;
   nextPosition: number | null;
+  modulesPerSession?: number;
 }): ProtocolProgress {
   const sessions: ProtocolSession[] = [];
   for (let week = 1; week <= weeks; week += 1) {
@@ -28,7 +51,9 @@ function makeProtocol({
         week,
         day,
         title: `Session ${position}`,
-        prescriptions: [],
+        prescriptions: Array.from({ length: modulesPerSession }, (_, i) =>
+          makePrescription(i + 1),
+        ),
       });
     }
   }
@@ -136,4 +161,136 @@ test("returns null when the Protocol has no Next Session", () => {
 
   // Act & Assert
   assert.equal(weekStrip(protocol), null);
+});
+
+test("queue lists the upcoming un-performed Sessions in position order, first flagged NEXT", () => {
+  // Arrange: a 2-week / 3-per-week Protocol whose Next Session is position 4, so
+  // positions 4, 5, 6 remain upcoming (1–3 are performed).
+  const protocol = makeProtocol({
+    weeks: 2,
+    sessionsPerWeek: 3,
+    nextPosition: 4,
+  });
+
+  // Act
+  const queue = queueView(protocol);
+
+  // Assert: rows are exactly the upcoming Sessions in ascending position, and the
+  // Next Session (position 4) is the only one flagged NEXT.
+  assert.ok(queue);
+  assert.deepEqual(
+    queue.rows.map((row) => row.position),
+    [4, 5, 6],
+  );
+  assert.deepEqual(
+    queue.rows.map((row) => row.isNext),
+    [true, false, false],
+  );
+});
+
+test("caps the queue at QUEUE_CAP rows and flags the overflow via hasMore", () => {
+  // Arrange: a fresh 4-week / 3-per-week Protocol (12 upcoming Sessions) — well
+  // over the cap.
+  const protocol = makeProtocol({
+    weeks: 4,
+    sessionsPerWeek: 3,
+    nextPosition: 1,
+  });
+
+  // Act
+  const queue = queueView(protocol);
+
+  // Assert: the list is trimmed to the cap and hasMore signals the "view all".
+  assert.ok(queue);
+  assert.equal(queue.rows.length, QUEUE_CAP);
+  assert.equal(queue.totalUpcoming, 12);
+  assert.equal(queue.hasMore, true);
+});
+
+test("does not flag hasMore when the upcoming Sessions fit within the cap", () => {
+  // Arrange: only two Sessions remain upcoming (positions 5 and 6 of six).
+  const protocol = makeProtocol({
+    weeks: 2,
+    sessionsPerWeek: 3,
+    nextPosition: 5,
+  });
+
+  // Act
+  const queue = queueView(protocol);
+
+  // Assert
+  assert.ok(queue);
+  assert.equal(queue.rows.length, 2);
+  assert.equal(queue.hasMore, false);
+});
+
+test("builds the completion header as completed_count / total", () => {
+  // Arrange: 3 of a 2-week / 3-per-week (6-Session) Protocol are performed.
+  const protocol = makeProtocol({
+    weeks: 2,
+    sessionsPerWeek: 3,
+    nextPosition: 4,
+  });
+
+  // Act
+  const queue = queueView(protocol);
+
+  // Assert: the honest protocol-level aggregate, shown once as a header.
+  assert.ok(queue);
+  assert.equal(queue.completedCount, 3);
+  assert.equal(queue.total, 6);
+  assert.equal(queue.header, "3 / 6");
+});
+
+test("carries module count, per-session duration, and Week/Day label on each row", () => {
+  // Arrange: each Session has 4 Prescriptions; the Next Session is week 2, day 1.
+  const protocol = makeProtocol({
+    weeks: 2,
+    sessionsPerWeek: 3,
+    nextPosition: 4,
+    modulesPerSession: 4,
+  });
+
+  // Act
+  const queue = queueView(protocol);
+
+  // Assert
+  assert.ok(queue);
+  const [first] = queue.rows;
+  assert.equal(first.modules, 4);
+  assert.equal(first.durationMinutes, 45);
+  assert.equal(first.label, "W2 · D1");
+});
+
+test("rows carry no per-session percentage of any kind", () => {
+  // Arrange
+  const protocol = makeProtocol({
+    weeks: 2,
+    sessionsPerWeek: 3,
+    nextPosition: 4,
+    modulesPerSession: 2,
+  });
+
+  // Act
+  const queue = queueView(protocol);
+
+  // Assert: the row shape is exactly the honest fields — no percent/ratio/ring
+  // key sneaks a per-session completion figure onto the row (ADR-0008).
+  assert.ok(queue);
+  assert.deepEqual(
+    Object.keys(queue.rows[0]).sort(),
+    ["durationMinutes", "isNext", "label", "modules", "position", "sessionId"],
+  );
+});
+
+test("returns no queue when the Protocol has no Next Session", () => {
+  // Arrange: a fully-performed Protocol has nothing upcoming to queue.
+  const protocol = makeProtocol({
+    weeks: 2,
+    sessionsPerWeek: 3,
+    nextPosition: null,
+  });
+
+  // Act & Assert
+  assert.equal(queueView(protocol), null);
 });
