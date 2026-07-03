@@ -14,6 +14,7 @@ import {
   isProfileComplete,
   type Profile,
 } from "@/lib/profile";
+import { READINESS_BADGE, fetchHome } from "@/lib/home";
 import { Alert } from "@/components/pulse/alert";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -27,38 +28,47 @@ import { buttonVariants } from "@/components/ui/button";
 // Postgres on the FastAPI backend. New users (incomplete profile) are sent to
 // onboarding first.
 export default async function DashboardPage() {
-  const envelope = await fetchProfile();
+  const [profileEnvelope, homeEnvelope] = await Promise.all([
+    fetchProfile(),
+    fetchHome(),
+  ]);
 
-  if (!envelope.success || !envelope.data) {
+  if (!profileEnvelope.success || !profileEnvelope.data) {
     return (
       <section className="flex flex-col gap-6">
         <PageHeader overline="PULSE // DASHBOARD" title="Dashboard" />
         <Alert tone="error">
-          Could not load your profile: {envelope.error ?? "unknown error"}
+          Could not load your profile: {profileEnvelope.error ?? "unknown error"}
         </Alert>
       </section>
     );
   }
 
-  const profile = envelope.data;
+  const profile = profileEnvelope.data;
   if (!isProfileComplete(profile)) {
     redirect("/onboarding");
   }
 
+  if (!homeEnvelope.success || !homeEnvelope.data) {
+    return (
+      <section className="flex flex-col gap-6">
+        <PageHeader overline="PULSE // DASHBOARD" title="Dashboard" />
+        <Alert tone="error">
+          Could not load your readiness: {homeEnvelope.error ?? "unknown error"}
+        </Alert>
+      </section>
+    );
+  }
+
   const greeting = profile.display_name ?? "operator";
+  const readiness = READINESS_BADGE[homeEnvelope.data.readiness];
 
   return (
     <section className="flex flex-col gap-7">
       <PageHeader
         overline="PULSE // DASHBOARD"
         title={<>Hey, {greeting}</>}
-        action={
-          profile.is_sensitive ? (
-            <Badge variant="magenta">EXTRA CAUTION</Badge>
-          ) : (
-            <Badge variant="cyan">READY</Badge>
-          )
-        }
+        action={<Badge variant={readiness.variant}>{readiness.label}</Badge>}
       />
 
       {/* Hero: primary training actions, echoing the "TODAY'S PROTOCOL" card. */}

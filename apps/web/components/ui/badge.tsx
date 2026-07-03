@@ -11,6 +11,7 @@ const badgeVariants = cva(
     variants: {
       variant: {
         cyan: "bg-cyan-dim text-cyan",
+        violet: "bg-violet-dim text-violet",
         magenta: "bg-magenta-dim text-magenta",
         muted: "bg-elevated text-text-muted",
         outline: "border border-border text-text-secondary",
