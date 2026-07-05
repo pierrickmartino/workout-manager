@@ -18,6 +18,19 @@ current Workout Manager web app (`apps/web/app`).
 > capability — there is still no charting dependency, no live-session/timer, and no PR or
 > gamification logic. The remaining gaps below are the *capabilities* the styling now frames.
 
+> **Update (2026-07-05):** The **F1 — Home / Dashboard** screen has now been largely **built out**
+> (feature, not just styling). A new `GET /api/home` endpoint (`app/routes/home.py`) aggregates the
+> screen's read into `{ readiness, current_protocol }`, and a pure **Readiness domain**
+> (`app/domain/readiness.py`) turns the Fitness Profile + Logged Sessions into a qualitative
+> three-state signal. On the client, the dashboard now renders a **Session Hero**, a positional
+> **Week Cycle strip**, and a **Queue list** off the Current Protocol's progressed view. Two
+> ADRs frame the deliberate deviations from Pulse's dated mock: **ADR-0008** (F1 reinterprets
+> Pulse's calendar-based design for the self-paced, calendar-free plan model) and **ADR-0009**
+> (the week strip is whole-Protocol and positional). What is intentionally **not** built —
+> because there is no honest basis for it (ADR-0008) — is the numeric **readiness percentage**,
+> the **target-calorie**, and any single **volume/tonnage** figure. Live-session mode is still
+> deferred to F2. The F1 section below is updated to match; the remaining sections are unchanged.
+
 ---
 
 ## Onboarding & Auth (FO1–FO4)
@@ -32,12 +45,12 @@ Current state: a single Clerk modal sign-in + one flat profile form (`app/onboar
 
 ## F1 — Home / Dashboard
 
-Current state: styled dashboard with greeting, a hero CTA card, a nav-row list, and a `DataList` profile snapshot (`app/dashboard/page.tsx`).
+Current state: a data-backed dashboard driven by `GET /api/home` — greeting + Readiness badge header, a **Session Hero** for the Current Protocol's Next Session (or a generate-training CTA in the empty state), a positional **Week Cycle strip**, a **Queue list**, an operations nav row, and a `DataList` profile snapshot (`app/dashboard/page.tsx`).
 
-- 🟡 **"Today's Protocol" hero card** — a styled hero card now exists, but it's a **generate-training CTA** (Generate a protocol / a workout), not the designed session hero (`INITIATE SESSION` with duration, volume, target kcal). Backing "Next up" data exists in protocol detail; surfacing a real *today's session* still needs building.
-- ❌ **Readiness score** ("87% READY") — a *static* `READY` / `EXTRA CAUTION` badge (derived from `is_sensitive`) now renders in the header, but the computed percentage score does not exist.
-- ❌ **Week Cycle strip** — M–S day dots with current position (`04/05`).
-- ❌ **Queued Protocols list** — upcoming sessions with per-session completion/readiness %.
+- ✅ **"Today's Protocol" hero card** — the `SessionHero` (`components/pulse/session-hero.tsx`) now renders the Current Protocol's Next Session with an honestly-backed stat row (**DURATION · MODULES · SETS**) and an `Open session` CTA to the Session page; the loads already carry the ADR-0004 Progression adjustment. **Deviations (ADR-0008):** no `target kcal` and no single volume/tonnage figure (no honest basis), and the CTA routes to the existing Session detail rather than launching an `INITIATE SESSION` live mode — live mode is deferred to F2. The generate-training CTA remains as the empty state (no Current Protocol).
+- 🟡 **Readiness score** ("87% READY") — a real, **computed** three-state badge (`READY` / `CAUTION` / `EXTRA CAUTION`) now renders in the header, derived server-side by `assess_readiness` (`app/domain/readiness.py`) from the profile's constraints + the most-recent Logged Session's difficulty — replacing the former static `is_sensitive`-only badge. The designed **numeric percentage** is deliberately not built: the calendar-free plan model gives no honest recovery clock (ADR-0008).
+- ✅ **Week Cycle strip** — `WeekCycleStrip` (`components/pulse/week-cycle-strip.tsx`) shows the Current Protocol's Sessions as done / active / upcoming with a `WEEK n/total` overline. **Deviation (ADR-0008/0009):** it is **positional over the whole Protocol**, not a M–S calendar week — there are no weekday dots or dates.
+- ✅ **Queued Protocols list** — `QueueList` (`components/pulse/queue-list.tsx`) lists the remaining upcoming Sessions under an honest `X/N` completion header, with a "view all" to the Protocol detail. **Deviation (ADR-0008):** no per-session completion/readiness **%**.
 - ✅ **Personalized greeting** ("Hey, {display_name}") — shipped.
 
 ## F2 — Active / Live Session ⭐ (largest gap)
@@ -98,7 +111,7 @@ Current state: name, description, difficulty, muscles, variations/alternatives (
 - ✅ **Bottom tab bar navigation** — a fixed `TabBar` (`components/pulse/tab-bar.tsx`) is wired into the layout for signed-in users. **Deviation:** it collapses Pulse's five tabs into **four** — Home / Train / Stats / Profile — mapping onto *existing* routes (`/dashboard`, `/sessions`, `/history`, `/profile`), because the dedicated Session / Analytics / Builder destinations don't exist yet. Re-expanding to five tabs is a follow-up once F2–F4 land.
 - ✅ **Design system** — Pulse's dark, mono-accented "operator" theme is transcribed into `app/globals.css` as `@theme` tokens (`--color-*`, `--radius-*`, `--spacing-shell`, fonts via `next/font`), consumed through shadcn `components/ui/*` + custom `components/pulse/*` primitives across all pages. Replaces the former `system-ui` + inline styles.
 - ❌ **Personal Records (PR) engine** — 1RM estimation, PR detection/history. Feeds Analytics, Home, and Exercise Detail; no backing logic today.
-- ❌ **Readiness / target-calorie metrics** — surfaced across Home & Active Session.
+- 🟡 **Readiness / target-calorie metrics** — **Readiness** now ships as a computed, qualitative three-state signal (`app/domain/readiness.py`, surfaced on Home via `GET /api/home`); the numeric **readiness percentage** and **target-calorie** are deliberately not built (no honest basis, ADR-0008) and remain unsurfaced on the Active Session (F2).
 - ❌ **Streak tracking** — appears on Profile and implicitly in Analytics ("active days").
 
 ---
