@@ -96,6 +96,16 @@ _Avoid_: Restriction, limitation (generic)
 A qualitative, three-state signal — **Ready**, **Caution**, or **Extra Caution** — of how cautiously the user should train right now, shown on the Home screen. It is derived from the user's constraints (a Sensitive Constraint forces Extra Caution; a Preference / Limitation or a recently hard performance yields Caution) and is deliberately **not** a computed recovery percentage: the self-paced, calendar-free plan model (ADR-0001) gives no honest basis for a "time since last workout" recovery score.
 _Avoid_: Readiness score, recovery %, 87% ready
 
+## Strength & Records
+
+**Estimated 1RM**:
+A single comparable strength figure derived from one Logged Set's absolute Load and integer reps — an *estimate* of the heaviest single repetition the user could perform, never a measured lift. It is the common yardstick for detecting a Personal Record and for the per-Exercise strength number on the Exercise Detail screen. Undefined for non-absolute Loads (bodyweight, percent-of-1RM, qualitative) and for very-high-rep sets, where the estimate is not trustworthy.
+_Avoid_: 1RM (bare, implies a measured lift), one-rep max (as if tested)
+
+**Personal Record (PR)**:
+The best performance a user has ever logged for an Exercise, measured as the highest Estimated 1RM achieved on it. Comparable across rep ranges — a heavier estimated max at five reps outranks a lighter true single — so a PR reflects genuine strength gain, not merely the heaviest bar ever touched. Detected purely from Logged Sets (the record), never from a plan; only absolute-Load sets within a trustworthy rep range can set one.
+_Avoid_: Best, max weight, record (bare)
+
 ## Feedback
 
 Two distinct concepts. Never collapse them into one "Feedback".
