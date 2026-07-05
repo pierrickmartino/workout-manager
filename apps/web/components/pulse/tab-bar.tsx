@@ -27,9 +27,9 @@ const TABS: Tab[] = [
   },
   {
     label: "STATS",
-    href: "/history",
+    href: "/analytics",
     icon: BarChart3,
-    match: ["/history", "/metrics"],
+    match: ["/analytics", "/history", "/metrics"],
   },
   { label: "PROFILE", href: "/profile/edit", icon: User, match: ["/profile"] },
 ];
