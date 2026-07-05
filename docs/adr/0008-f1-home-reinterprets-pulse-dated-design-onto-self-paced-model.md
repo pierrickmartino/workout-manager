@@ -23,7 +23,10 @@ Concretely:
   there is no honest "time since last workout" basis for one.
 - **The week strip shows position, not weekdays.** Dots represent the Sessions of
   the Current Protocol's current week (done / active / upcoming), with a
-  week-of-total overline — not Monday–Sunday day dots.
+  week-of-total overline — not Monday–Sunday day dots. _(Superseded by ADR-0009:
+  the strip now spans the whole Protocol — one segmented pill per week — rather
+  than only the current week. The positional, non-calendrical, binary-completion
+  constraints below still hold.)_
 - **The queue carries no per-session percentages.** It lists upcoming
   un-performed Sessions (position, module count, duration); completion is binary
   per Session, so the only honest aggregate — protocol completion `X / N` — is
