@@ -106,6 +106,10 @@ _Avoid_: 1RM (bare, implies a measured lift), one-rep max (as if tested)
 The best performance a user has ever logged for an Exercise, measured as the highest Estimated 1RM achieved on it. Comparable across rep ranges — a heavier estimated max at five reps outranks a lighter true single — so a PR reflects genuine strength gain, not merely the heaviest bar ever touched. Detected purely from Logged Sets (the record), never from a plan; only absolute-Load sets within a trustworthy rep range can set one.
 _Avoid_: Best, max weight, record (bare)
 
+**Muscle Group**:
+A coarse, curated bucket — Legs, Chest, Back, Shoulders, Arms, or Core — that a catalog Exercise's free-form targeted muscles roll up into, used to show how a user's training is distributed across the body on the Analytics screen. The mapping is curated, not AI-derived; a targeted muscle with no known mapping falls into an explicit **Unclassified** bucket rather than being silently dropped. Coarser than an Exercise's own targeted-muscle list, and distinct from the training-type dimension.
+_Avoid_: Body part, region, muscle (bare)
+
 ## Feedback
 
 Two distinct concepts. Never collapse them into one "Feedback".
