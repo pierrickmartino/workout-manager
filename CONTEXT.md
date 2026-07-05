@@ -30,6 +30,10 @@ _Avoid_: Movement, Exercise Prescription (when referring to the definition)
 The prescription of one Exercise inside a Session — the sets, repetitions, rest, tempo, and recommended load the user is told to perform. References a catalog Exercise. Distinct from the Exercise definition.
 _Avoid_: Exercise (when referring to the prescribed sets/reps)
 
+**Load**:
+The weight prescribed or performed for a set, expressed as one of several *kinds* rather than a bare number: an **absolute** weight (e.g. 70 kg), **bodyweight** (optionally plus added load), a **percent of 1RM**, a **qualitative** effort ("moderate"), or a **range**. Only absolute loads — and bodyweight / percent loads once resolved against the user's mass or estimated 1RM — carry a numeric weight; qualitative loads never do. The free-text-ness is essential to the domain: the AI legitimately prescribes bodyweight and %-based work, so a Load is a *typed value*, never reducible to a single kg figure.
+_Avoid_: Weight (bare), tonnage (for a single set), kg (as the only form)
+
 **Provenance**:
 Whether a catalog Exercise is `ai_generated` (created by the AI, unvalidated) or `curated` (reviewed and trusted). Carried on every Exercise so unvalidated content can be flagged, audited, and later merged or corrected — important given the domain's caution around injury, rehab, and postpartum cases.
 _Avoid_: Source, origin, verified flag
