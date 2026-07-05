@@ -18,52 +18,87 @@ export interface HeroStats {
   sets: number;
 }
 
-// A dot's position relative to the Next Session: already performed (`done`), the
+// A cell's position relative to the Next Session: already performed (`done`), the
 // Next Session itself (`active`), or still to come (`upcoming`). Purely
 // positional — no weekday or date semantics (ADR-0008).
-export type WeekDotState = "done" | "active" | "upcoming";
+export type WeekCellState = "done" | "active" | "upcoming";
 
-// One position dot in the Week Cycle strip.
-export interface WeekDot {
+// One Session cell within a week pill of the completion map.
+export interface WeekCell {
   sessionId: number;
   position: number;
-  state: WeekDotState;
+  state: WeekCellState;
 }
 
-// The Week Cycle strip view-model: the current week's Sessions as position dots
-// plus a `WEEK n/total` overline. Positional, not calendrical (ADR-0008).
-export interface WeekStrip {
-  dots: WeekDot[];
-  // The 1-based week of the Next Session — the current week.
+// One week of the Protocol as a segmented pill: its 1-based week number, its
+// ordered Session cells, and whether it is the current week (the one holding the
+// Next Session). A pill's fill is a count of BINARY Session completions, never a
+// per-session percentage (ADR-0008/0009).
+export interface WeekPill {
   week: number;
-  // The Protocol's total number of weeks.
+  cells: WeekCell[];
+  // True for the single week that holds the Next Session.
+  isCurrent: boolean;
+}
+
+// The Home completion map view-model: every week of the Current Protocol in
+// order, each a pill of done / active / upcoming Session cells, plus a
+// `WEEK n/total` overline. Spans the whole Protocol so the strip answers "how far
+// am I through the Protocol, and what is left?" (ADR-0009). Positional, not
+// calendrical (ADR-0008). The protocol-level `X / N` count is NOT here — it lives
+// once, on the Queue.
+export interface WeekStrip {
+  weeks: WeekPill[];
+  // The 1-based week of the Next Session — the current week.
+  currentWeek: number;
+  // The Protocol's total number of weeks (equals `weeks.length`).
   totalWeeks: number;
   // The rendered overline, e.g. "WEEK 2/6".
   label: string;
 }
 
-function dotState(position: number, nextPosition: number): WeekDotState {
+function cellState(position: number, nextPosition: number): WeekCellState {
   if (position < nextPosition) return "done";
   if (position === nextPosition) return "active";
   return "upcoming";
 }
 
-// Derive the Week Cycle strip from a Current Protocol: the Sessions of the
-// current week (the week of the Next Session) as position dots, each tagged
-// done / active / upcoming by position relative to the Next Session.
+// Derive the Home completion map from a Current Protocol: one pill per week across
+// the whole Protocol (so the pill count matches the `WEEK n/total` overline), each
+// carrying its Sessions in position order tagged done / active / upcoming relative
+// to the Next Session, with the current week flagged. Returns null when the
+// Protocol has no Next Session, so Home shows the map only for a live Current
+// Protocol.
 export function weekStrip(protocol: ProtocolProgress): WeekStrip | null {
   const next = protocol.next_session;
   if (!next) return null;
-  const dots = protocol.sessions
-    .filter((session) => session.week === next.week)
-    .map((session) => ({
-      sessionId: session.session_id,
-      position: session.position,
-      state: dotState(session.position, next.position),
-    }));
+
+  // Group Sessions by their week so each pill draws from its own week's Sessions.
+  const sessionsByWeek = new Map<number, ProtocolSession[]>();
+  for (const session of protocol.sessions) {
+    const bucket = sessionsByWeek.get(session.week);
+    if (bucket) bucket.push(session);
+    else sessionsByWeek.set(session.week, [session]);
+  }
+
+  // Iterate 1..weeks (not the grouped keys) so the pill count is tied to the
+  // Protocol's total weeks and always matches the overline.
+  const weeks: WeekPill[] = [];
+  for (let week = 1; week <= protocol.weeks; week += 1) {
+    const cells = (sessionsByWeek.get(week) ?? [])
+      .slice()
+      .sort((a, b) => a.position - b.position)
+      .map((session) => ({
+        sessionId: session.session_id,
+        position: session.position,
+        state: cellState(session.position, next.position),
+      }));
+    weeks.push({ week, cells, isCurrent: week === next.week });
+  }
+
   return {
-    dots,
-    week: next.week,
+    weeks,
+    currentWeek: next.week,
     totalWeeks: protocol.weeks,
     label: `WEEK ${next.week}/${protocol.weeks}`,
   };

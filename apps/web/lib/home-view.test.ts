@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { queueView, weekStrip, QUEUE_CAP } from "./home-view.ts";
+import type { WeekStrip } from "./home-view.ts";
 import type { ProtocolProgress, ProtocolSession } from "./protocols-types.ts";
 import type { ExercisePrescription } from "./sessions-types.ts";
 
@@ -75,30 +76,22 @@ function makeProtocol({
   };
 }
 
-test("returns one dot per Session in the current week", () => {
-  // Arrange: a 2-week / 3-per-week Protocol, Next Session is the first of week 2.
+// Collapse a strip into a compact, table-friendly view: each week as its number,
+// current-week flag, and the ordered states of its cells. Lets the whole-Protocol
+// map be asserted at a glance without reaching into cell objects.
+function weekShape(strip: WeekStrip) {
+  return strip.weeks.map((week) => ({
+    week: week.week,
+    isCurrent: week.isCurrent,
+    states: week.cells.map((cell) => cell.state),
+  }));
+}
+
+test("emits one pill per Protocol week, in ascending week order", () => {
+  // Arrange: a 4-week / 3-per-week Protocol — the map spans every week, not just
+  // the current one, so the pill count matches the WEEK n/total overline.
   const protocol = makeProtocol({
-    weeks: 2,
-    sessionsPerWeek: 3,
-    nextPosition: 4,
-  });
-
-  // Act
-  const strip = weekStrip(protocol);
-
-  // Assert: only week 2's three Sessions become dots.
-  assert.ok(strip);
-  assert.equal(strip.dots.length, 3);
-  assert.deepEqual(
-    strip.dots.map((d) => d.position),
-    [4, 5, 6],
-  );
-});
-
-test("tags a mid-week Next Session's dots as done / active / upcoming by position", () => {
-  // Arrange: Next Session is the middle Session of week 2 (positions 4, 5, 6).
-  const protocol = makeProtocol({
-    weeks: 2,
+    weeks: 4,
     sessionsPerWeek: 3,
     nextPosition: 5,
   });
@@ -106,15 +99,26 @@ test("tags a mid-week Next Session's dots as done / active / upcoming by positio
   // Act
   const strip = weekStrip(protocol);
 
-  // Assert: earlier position is done, the Next Session is active, later is upcoming.
+  // Assert: four pills — one per week — in order, each carrying its week's cells.
   assert.ok(strip);
+  assert.equal(strip.weeks.length, 4);
+  assert.equal(strip.weeks.length, strip.totalWeeks);
   assert.deepEqual(
-    strip.dots.map((d) => d.state),
-    ["done", "active", "upcoming"],
+    strip.weeks.map((w) => w.week),
+    [1, 2, 3, 4],
+  );
+  assert.deepEqual(
+    strip.weeks.map((w) => w.cells.map((c) => c.position)),
+    [
+      [1, 2, 3],
+      [4, 5, 6],
+      [7, 8, 9],
+      [10, 11, 12],
+    ],
   );
 });
 
-test("tags no dots as done in the first week when the very first Session is next", () => {
+test("tags every cell upcoming (bar the active one) when the Next Session is the first", () => {
   // Arrange: a fresh Protocol — the Next Session is week 1's first Session.
   const protocol = makeProtocol({
     weeks: 3,
@@ -125,12 +129,114 @@ test("tags no dots as done in the first week when the very first Session is next
   // Act
   const strip = weekStrip(protocol);
 
-  // Assert: the first Session is active and the rest of week 1 is upcoming.
+  // Assert: nothing is done; week 1 opens with the active cell, all else upcoming.
   assert.ok(strip);
+  assert.deepEqual(weekShape(strip), [
+    { week: 1, isCurrent: true, states: ["active", "upcoming", "upcoming"] },
+    { week: 2, isCurrent: false, states: ["upcoming", "upcoming", "upcoming"] },
+    { week: 3, isCurrent: false, states: ["upcoming", "upcoming", "upcoming"] },
+  ]);
+});
+
+test("tags cells done / active / upcoming around a mid-Protocol Next Session", () => {
+  // Arrange: Next Session is the middle Session of week 2 (positions 4, 5, 6).
+  const protocol = makeProtocol({
+    weeks: 3,
+    sessionsPerWeek: 3,
+    nextPosition: 5,
+  });
+
+  // Act
+  const strip = weekStrip(protocol);
+
+  // Assert: week 1 is fully done, week 2 straddles the Next Session, week 3 is all
+  // upcoming — and only week 2 is flagged current.
+  assert.ok(strip);
+  assert.deepEqual(weekShape(strip), [
+    { week: 1, isCurrent: false, states: ["done", "done", "done"] },
+    { week: 2, isCurrent: true, states: ["done", "active", "upcoming"] },
+    { week: 3, isCurrent: false, states: ["upcoming", "upcoming", "upcoming"] },
+  ]);
+});
+
+test("tags every earlier cell done when the Next Session is the very last", () => {
+  // Arrange: only the final Session of a 2-week / 3-per-week Protocol is upcoming.
+  const protocol = makeProtocol({
+    weeks: 2,
+    sessionsPerWeek: 3,
+    nextPosition: 6,
+  });
+
+  // Act
+  const strip = weekStrip(protocol);
+
+  // Assert: week 1 is done and week 2 ends on the active last cell.
+  assert.ok(strip);
+  assert.deepEqual(weekShape(strip), [
+    { week: 1, isCurrent: false, states: ["done", "done", "done"] },
+    { week: 2, isCurrent: true, states: ["done", "done", "active"] },
+  ]);
+});
+
+test("flags exactly the week holding the Next Session as current", () => {
+  // Arrange: Next Session is in week 3 of a 5-week Protocol.
+  const protocol = makeProtocol({
+    weeks: 5,
+    sessionsPerWeek: 2,
+    nextPosition: 5,
+  });
+
+  // Act
+  const strip = weekStrip(protocol);
+
+  // Assert: current-week flag is true on week 3 alone.
+  assert.ok(strip);
+  assert.equal(strip.currentWeek, 3);
   assert.deepEqual(
-    strip.dots.map((d) => d.state),
-    ["active", "upcoming", "upcoming"],
+    strip.weeks.map((w) => w.isCurrent),
+    [false, false, true, false, false],
   );
+});
+
+test("renders one cell per pill for a single-Session-per-week Protocol", () => {
+  // Arrange: each week holds exactly one Session; the Next Session is week 2's.
+  const protocol = makeProtocol({
+    weeks: 4,
+    sessionsPerWeek: 1,
+    nextPosition: 2,
+  });
+
+  // Act
+  const strip = weekStrip(protocol);
+
+  // Assert: four single-cell pills, tagged done / active / upcoming across weeks.
+  assert.ok(strip);
+  assert.deepEqual(weekShape(strip), [
+    { week: 1, isCurrent: false, states: ["done"] },
+    { week: 2, isCurrent: true, states: ["active"] },
+    { week: 3, isCurrent: false, states: ["upcoming"] },
+    { week: 4, isCurrent: false, states: ["upcoming"] },
+  ]);
+});
+
+test("renders a single pill for a one-week Protocol", () => {
+  // Arrange: a one-week Protocol — the whole map is a single pill.
+  const protocol = makeProtocol({
+    weeks: 1,
+    sessionsPerWeek: 3,
+    nextPosition: 2,
+  });
+
+  // Act
+  const strip = weekStrip(protocol);
+
+  // Assert: one pill, WEEK 1/1, its cells straddling the Next Session.
+  assert.ok(strip);
+  assert.equal(strip.weeks.length, 1);
+  assert.equal(strip.label, "WEEK 1/1");
+  assert.deepEqual(weekShape(strip), [
+    { week: 1, isCurrent: true, states: ["done", "active", "upcoming"] },
+  ]);
 });
 
 test("derives the WEEK n/total label from the Next Session's week and the Protocol's weeks", () => {
@@ -146,7 +252,7 @@ test("derives the WEEK n/total label from the Next Session's week and the Protoc
 
   // Assert
   assert.ok(strip);
-  assert.equal(strip.week, 2);
+  assert.equal(strip.currentWeek, 2);
   assert.equal(strip.totalWeeks, 6);
   assert.equal(strip.label, "WEEK 2/6");
 });
