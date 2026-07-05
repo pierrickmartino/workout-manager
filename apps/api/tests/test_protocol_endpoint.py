@@ -27,6 +27,7 @@ from app.generation.schema import (
     GeneratedProtocol,
     GeneratedProtocolSession,
 )
+from app.domain.load import parse_load
 from app.generation.cache import GenerationCache, InMemoryCacheStore
 from app.main import create_app
 from app.repositories.deps import (
@@ -219,7 +220,7 @@ def test_cache_miss_enqueues_a_job_that_completes_to_a_protocol():
     assert protocol["weeks"] == 2
     assert [s["week"] for s in protocol["sessions"]] == [1, 2]
     loads = [s["prescriptions"][0]["recommended_load"] for s in protocol["sessions"]]
-    assert loads == ["60% 1RM", "65% 1RM"]
+    assert loads == [parse_load("60% 1RM").to_dict(), parse_load("65% 1RM").to_dict()]
 
 
 def test_cache_hit_returns_a_protocol_instantly_with_no_job():
@@ -346,7 +347,7 @@ def test_fetched_protocol_shows_progressed_load_for_upcoming_sessions():
                 LoggedSetDraft(
                     exercise_id=week_one["prescriptions"][0]["exercise_id"],
                     reps=5,
-                    load="60 kg",
+                    load=parse_load("60 kg").to_dict(),
                     perceived_difficulty=6,
                 )
                 for _ in range(3)
@@ -360,4 +361,4 @@ def test_fetched_protocol_shows_progressed_load_for_upcoming_sessions():
     # Assert — the upcoming Week-2 Session shows the raised recommendation
     data = fetched.json()["data"]
     assert data["next_session"]["week"] == 2
-    assert data["next_session"]["prescriptions"][0]["recommended_load"] == "62.5 kg"
+    assert data["next_session"]["prescriptions"][0]["recommended_load"] == parse_load("62.5 kg").to_dict()

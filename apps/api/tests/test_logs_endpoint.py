@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from app.auth.dependencies import get_jwks
 from app.config import Settings, get_settings
+from app.domain.load import load_from_input
 from app.generation.generator import GenerationRequest
 from app.generation.schema import GeneratedExercisePrescription, GeneratedSession
 from app.main import create_app
@@ -84,7 +85,8 @@ def _log_body(session, **overrides):
             {
                 "exercise_id": exercise_id,
                 "reps": 5,
-                "load": "70kg",
+                "load_kind": "absolute",
+                "load_value": "70",
                 "perceived_difficulty": 8,
             }
         ],
@@ -126,7 +128,7 @@ def test_user_logs_a_performance_and_reads_it_back_in_history():
     assert data["performed_on"] == "2026-06-20"
     assert data["training_type"] == "strength"
     assert data["logged_sets"][0]["reps"] == 5
-    assert data["logged_sets"][0]["load"] == "70kg"
+    assert data["logged_sets"][0]["load"] == load_from_input("absolute", "70").to_dict()
     assert data["logged_sets"][0]["perceived_difficulty"] == 8
     assert data["logged_sets"][0]["exercise_name"] == "Back Squat"
 

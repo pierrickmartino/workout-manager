@@ -11,6 +11,7 @@ import copy
 
 from app.adoption.service import adopt
 from app.domain.exercise import Provenance
+from app.domain.load import parse_load
 from app.generation.protocol_generator import ProtocolGenerationRequest
 from app.generation.schema import (
     GeneratedExercisePrescription,
@@ -89,8 +90,8 @@ def test_adopts_every_week_into_a_user_owned_protocol():
     assert view.clerk_user_id == "user_adopt"
     assert view.weeks == 2
     assert [s.week for s in view.sessions] == [1, 2]
-    assert view.sessions[0].prescriptions[0].recommended_load == "60% 1RM"
-    assert view.sessions[1].prescriptions[0].recommended_load == "65% 1RM"
+    assert view.sessions[0].prescriptions[0].recommended_load == parse_load("60% 1RM").to_dict()
+    assert view.sessions[1].prescriptions[0].recommended_load == parse_load("65% 1RM").to_dict()
 
 
 def test_adopted_prescriptions_reuse_the_shared_catalog():
@@ -154,7 +155,7 @@ def test_mutating_the_source_after_adoption_does_not_change_the_users_copy():
 
     # Assert — the user's adopted, deep-copied Protocol is untouched
     refetched = protocols.get(view.id, "user_iso2")
-    assert refetched.sessions[0].prescriptions[0].recommended_load == "60% 1RM"
+    assert refetched.sessions[0].prescriptions[0].recommended_load == parse_load("60% 1RM").to_dict()
     assert refetched.sessions[0].title == "Week 1 Push"
 
 

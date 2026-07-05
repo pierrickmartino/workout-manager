@@ -28,7 +28,7 @@ class PrescriptionDraft:
     reps: str
     rest_seconds: int | None = None
     tempo: str | None = None
-    recommended_load: str | None = None
+    recommended_load: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -49,7 +49,7 @@ class PrescriptionView:
     reps: str
     rest_seconds: int | None
     tempo: str | None
-    recommended_load: str | None
+    recommended_load: dict | None
     exercise_id: int
     exercise_name: str
     exercise_description: str | None

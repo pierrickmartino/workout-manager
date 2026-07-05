@@ -2,6 +2,8 @@
 // so it is safe to import from both Server and Client Components. The
 // server-only data access (Clerk auth + fetch) lives in `lib/sessions.ts`.
 
+import type { Load } from "./load";
+
 // Training types a Session can be generated for. Mirrors the Fitness Level
 // dimensions used elsewhere in the app.
 export const TRAINING_TYPES = [
@@ -22,7 +24,7 @@ export interface ExercisePrescription {
   reps: string;
   rest_seconds: number | null;
   tempo: string | null;
-  recommended_load: string | null;
+  recommended_load: Load | null;
   exercise_id: number;
   exercise_name: string;
   exercise_description: string | null;

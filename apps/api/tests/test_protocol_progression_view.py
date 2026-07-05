@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import date
 
 from app.adoption.service import adopt
+from app.domain.load import parse_load
 from app.generation.protocol_generator import ProtocolGenerationRequest
 from app.generation.schema import (
     GeneratedExercisePrescription,
@@ -82,7 +83,7 @@ def _log_week_one(logged, user, view, *, reps, effort):
                 LoggedSetDraft(
                     exercise_id=exercise_id,
                     reps=reps,
-                    load="60 kg",
+                    load=parse_load("60 kg").to_dict(),
                     perceived_difficulty=effort,
                 )
                 for _ in range(3)
@@ -105,12 +106,10 @@ def test_strong_logged_sets_raise_the_load_on_upcoming_sessions():
 
     # Assert — Weeks 2 & 3 (upcoming) carry the raised recommendation
     upcoming = progress.protocol.sessions[1:]
-    assert [s.prescriptions[0].recommended_load for s in upcoming] == [
-        "62.5 kg",
-        "62.5 kg",
-    ]
+    raised = parse_load("62.5 kg").to_dict()
+    assert [s.prescriptions[0].recommended_load for s in upcoming] == [raised, raised]
     assert progress.next_session.week == 2
-    assert progress.next_session.prescriptions[0].recommended_load == "62.5 kg"
+    assert progress.next_session.prescriptions[0].recommended_load == raised
 
 
 def test_missed_reps_reduce_the_load_on_upcoming_sessions():
@@ -126,7 +125,7 @@ def test_missed_reps_reduce_the_load_on_upcoming_sessions():
     )
 
     # Assert
-    assert progress.next_session.prescriptions[0].recommended_load == "55 kg"
+    assert progress.next_session.prescriptions[0].recommended_load == parse_load("55 kg").to_dict()
 
 
 def test_already_performed_sessions_keep_their_logged_load():
@@ -142,7 +141,7 @@ def test_already_performed_sessions_keep_their_logged_load():
     )
 
     # Assert — Week 1 is history; its recommendation is untouched
-    assert progress.protocol.sessions[0].prescriptions[0].recommended_load == "60 kg"
+    assert progress.protocol.sessions[0].prescriptions[0].recommended_load == parse_load("60 kg").to_dict()
 
 
 def test_no_logged_sets_leaves_every_load_unchanged():
@@ -158,7 +157,7 @@ def test_no_logged_sets_leaves_every_load_unchanged():
 
     # Assert
     loads = [s.prescriptions[0].recommended_load for s in progress.protocol.sessions]
-    assert loads == ["60 kg", "60 kg", "60 kg"]
+    assert loads == [parse_load("60 kg").to_dict()] * 3
 
 
 def test_overlay_does_not_mutate_the_stored_protocol():
@@ -174,7 +173,7 @@ def test_overlay_does_not_mutate_the_stored_protocol():
     # Assert — the stored Protocol is unchanged; the overlay is a read-time view
     stored = protocols.get(view.id, "user_iso")
     loads = [s.prescriptions[0].recommended_load for s in stored.sessions]
-    assert loads == ["60 kg", "60 kg", "60 kg"]
+    assert loads == [parse_load("60 kg").to_dict()] * 3
 
 
 def test_overlay_is_none_for_a_protocol_not_owned_by_the_user():

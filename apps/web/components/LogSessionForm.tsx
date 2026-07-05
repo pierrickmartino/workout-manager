@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import { submitLog, type LogFormState } from "@/app/sessions/[id]/log/actions";
+import { LOAD_KIND_OPTIONS } from "@/lib/load";
 import type { ExercisePrescription } from "@/lib/sessions-types";
 import { Field } from "@/components/pulse/field";
 import { Alert } from "@/components/pulse/alert";
@@ -65,7 +66,7 @@ export function LogSessionForm({
             <span className="font-display text-[15px] font-semibold text-text-primary">
               {prescription.exercise_name}
             </span>
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-2 gap-2.5">
               <label className="flex flex-col gap-1.5">
                 <span className="label-mono text-[9px] text-text-muted">
                   Reps
@@ -75,16 +76,6 @@ export function LogSessionForm({
                   type="number"
                   min={0}
                   aria-label={`Reps for ${prescription.exercise_name}`}
-                />
-              </label>
-              <label className="flex flex-col gap-1.5">
-                <span className="label-mono text-[9px] text-text-muted">
-                  Load
-                </span>
-                <Input
-                  name="load"
-                  placeholder="70kg"
-                  aria-label={`Load for ${prescription.exercise_name}`}
                 />
               </label>
               <label className="flex flex-col gap-1.5">
@@ -103,6 +94,37 @@ export function LogSessionForm({
                     </option>
                   ))}
                 </Select>
+              </label>
+            </div>
+            {/* Load is a typed value (ADR-0010): the user picks its kind, then
+                gives the value that kind carries. The picked kind is sent as-is
+                so the record fixes the load's meaning at the boundary. */}
+            <div className="grid grid-cols-[7rem_1fr] gap-2.5">
+              <label className="flex flex-col gap-1.5">
+                <span className="label-mono text-[9px] text-text-muted">
+                  Load kind
+                </span>
+                <Select
+                  name="load_kind"
+                  defaultValue="absolute"
+                  aria-label={`Load kind for ${prescription.exercise_name}`}
+                >
+                  {LOAD_KIND_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="label-mono text-[9px] text-text-muted">
+                  Load
+                </span>
+                <Input
+                  name="load_value"
+                  placeholder="70"
+                  aria-label={`Load for ${prescription.exercise_name}`}
+                />
               </label>
             </div>
           </div>

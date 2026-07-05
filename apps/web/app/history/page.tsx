@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { fetchHistory, type LoggedSession, type LoggedSet } from "@/lib/logs";
+import { formatLoad } from "@/lib/load";
 import { PageHeader } from "@/components/pulse/page-header";
 import { Alert } from "@/components/pulse/alert";
 import { Card } from "@/components/ui/card";
@@ -110,7 +111,7 @@ function LoggedSetRow({ loggedSet }: { loggedSet: LoggedSet }) {
         {loggedSet.reps}
       </span>
       <span className="text-right font-mono text-[13px] text-text-secondary">
-        {loggedSet.load ?? "—"}
+        {formatLoad(loggedSet.load)}
       </span>
       <span className="text-right font-mono text-[13px] text-cyan">
         {loggedSet.perceived_difficulty ?? "—"}

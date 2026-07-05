@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
+from app.domain.load import parse_load
 from app.domain.progression import next_load
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
@@ -29,6 +30,15 @@ from app.repositories.protocol_repository import (
     ProtocolSessionView,
     ProtocolView,
 )
+from app.repositories.session_repository import PrescriptionView
+
+
+@dataclass(frozen=True)
+class _LoadedPrescription:
+    """The minimal shape ``next_load`` reads: the rep target and free-text load."""
+
+    reps: str
+    recommended_load: str | None
 
 
 @dataclass(frozen=True)
@@ -106,16 +116,40 @@ def _latest_sets_by_exercise(
     return latest
 
 
+def _progressed_load(
+    prescription: PrescriptionView, sets: list[LoggedSetView]
+) -> dict | None:
+    """Run the ADR-0004 ``next_load`` adjustment over a typed Load.
+
+    The stored load is a typed ``{kind, text, ...}`` dict; ``next_load`` still
+    operates on the free-text ``text`` (only single-number absolute loads move —
+    bodyweight, %-1RM, ranges and qualitative loads are left untouched). The result
+    is re-typed through :func:`parse_load` so the view stays a typed Load end to end.
+    """
+
+    load = prescription.recommended_load
+    adjusted_text = next_load(
+        _LoadedPrescription(
+            reps=prescription.reps,
+            recommended_load=load["text"] if load else None,
+        ),
+        sets,
+    )
+    if adjusted_text is None:
+        return None
+    return parse_load(adjusted_text).to_dict()
+
+
 def _adjusted_session(
     session: ProtocolSessionView,
     latest_sets: dict[int, list[LoggedSetView]],
 ) -> ProtocolSessionView:
-    """A copy of ``session`` with each Prescription's load progressed."""
+    """A copy of ``session`` with each Prescription's typed load progressed."""
 
     adjusted = [
         replace(
             prescription,
-            recommended_load=next_load(
+            recommended_load=_progressed_load(
                 prescription, latest_sets.get(prescription.exercise_id, [])
             ),
         )

@@ -5,6 +5,7 @@ import {
   fetchExerciseProgress,
   type ExerciseProgressPoint,
 } from "@/lib/progress";
+import { formatLoad } from "@/lib/load";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
 import { Alert } from "@/components/pulse/alert";
@@ -100,7 +101,7 @@ function ProgressPoint({ point }: { point: ExerciseProgressPoint }) {
               {set.reps}
             </span>
             <span className="text-right font-mono text-[13px] text-text-secondary">
-              {set.load ?? "—"}
+              {formatLoad(set.load)}
             </span>
             <span className="text-right font-mono text-[13px] text-cyan">
               {set.perceived_difficulty ?? "—"}

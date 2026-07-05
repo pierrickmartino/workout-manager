@@ -56,7 +56,7 @@ def adopt(
                     reps=item.reps,
                     rest_seconds=item.rest_seconds,
                     tempo=item.tempo,
-                    recommended_load=item.recommended_load,
+                    recommended_load=item.typed_load,
                 )
             )
         session_drafts.append(
