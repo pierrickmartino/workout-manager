@@ -14,12 +14,23 @@ export function toAnalyticsRange(value: string | undefined): AnalyticsRange {
     : "7d";
 }
 
-// The honest count read model for one range window (F3 Slice 1): sessions,
-// active days, and total sets, drawn straight from the record side (Logged
-// Sessions / Logged Sets) with no Load parsing or conversion.
+// One curated Muscle Group's share of the window's set count (F3 Slice 2). `group`
+// is the display label (Legs / Chest / Back / Shoulders / Arms / Core /
+// Unclassified); `pct` is an exact float and the shares sum to 100 over the groups
+// that received work.
+export interface MuscleShare {
+  group: string;
+  pct: number;
+}
+
+// The honest count read model for one range window (F3 Slice 1–2): sessions,
+// active days, total sets, and the set-count muscle distribution, drawn straight
+// from the record side (Logged Sessions / Logged Sets) with no Load parsing or
+// conversion. `muscle_distribution` is empty when nothing was logged.
 export interface AnalyticsOverview {
   range: AnalyticsRange;
   sessions: number;
   active_days: number;
   total_sets: number;
+  muscle_distribution: MuscleShare[];
 }

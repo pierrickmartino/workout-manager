@@ -36,7 +36,11 @@ SQUAT = 1
 def build_client(ctx=None):
     ctx = ctx or make_signing_context()
     exercises = InMemoryExerciseRepository()
-    exercises.find_or_create("Back Squat", provenance=Provenance.CURATED)
+    exercises.find_or_create(
+        "Back Squat",
+        provenance=Provenance.CURATED,
+        targeted_muscles=["quadriceps", "glutes"],
+    )
     sessions = InMemorySessionRepository(exercises)
     logged = InMemoryLoggedSessionRepository(sessions, exercises)
     app = create_app()
@@ -87,6 +91,20 @@ def test_analytics_returns_range_scoped_counts_in_the_envelope():
     assert data["total_sets"] == 5
 
 
+def test_analytics_serializes_the_muscle_distribution():
+    # Arrange — three Back Squat sets today; the Exercise trains only Legs
+    client, ctx, sessions, logged = build_client()
+    _perform(sessions, logged, "user_dist", date.today(), 3)
+
+    # Act
+    response = client.get("/api/analytics?range=7d", headers=_auth(ctx, "user_dist"))
+
+    # Assert — the distribution rides in the envelope as ordered group/pct pairs
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["muscle_distribution"] == [{"group": "Legs", "pct": 100.0}]
+
+
 def test_analytics_empty_state_is_zero_counts_not_an_error():
     # Arrange — the user has logged nothing
     client, ctx, _, _ = build_client()
@@ -103,6 +121,7 @@ def test_analytics_empty_state_is_zero_counts_not_an_error():
         "sessions": 0,
         "active_days": 0,
         "total_sets": 0,
+        "muscle_distribution": [],
     }
 
 
