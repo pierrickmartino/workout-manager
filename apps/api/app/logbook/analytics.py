@@ -40,6 +40,7 @@ from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
     LoggedSessionView,
 )
+from app.repositories.profile_repository import ProfileRepository
 
 # The Recent Records feed shows the most recent PRs, all-time — decoupled from the
 # range toggle so it is rarely empty even on a quiet week.
@@ -99,12 +100,18 @@ def analytics_overview(
     *,
     logged: LoggedSessionRepository,
     today: date,
+    profiles: ProfileRepository | None = None,
 ) -> AnalyticsOverview:
     """Return the user's session / active-day / total-set counts for ``window``.
 
     A Logged Session counts when its ``performed_on`` falls in the rolling window
     of ``window.days`` calendar days ending on ``today`` (inclusive on both ends).
     A user who has logged nothing yields all-zero counts, never an error.
+
+    ``profiles`` supplies the user's recorded body weight so ``bodyweight`` sets
+    convert into volume; without it (or without a recorded weight) those sets stay
+    excluded and disclosed in coverage. ``percent_1rm`` sets convert against each
+    Exercise's best Estimated 1RM, taken from the Personal Records detected below.
     """
 
     start = today - timedelta(days=window.days - 1)
@@ -119,9 +126,25 @@ def analytics_overview(
     recent = tuple(reversed(records[-RECENT_RECORDS_LIMIT:]))
     new_prs = sum(1 for record in records if start <= record.performed_on <= today)
 
+    # Records are oldest-first with each strictly beating the prior for its Exercise,
+    # so the last one wins: this leaves each Exercise's best Estimated 1RM, the figure
+    # percent-of-1RM sets convert against.
+    best_1rm_by_exercise = {
+        record.exercise_id: record.estimated_1rm for record in records
+    }
+    body_weight_kg = (
+        profiles.get_or_create(clerk_user_id).weight_kg if profiles is not None else None
+    )
+
     # Total volume is computed over the whole history (the engine slices its own
     # window and the preceding one for the delta), then bucketed daily for the chart.
-    series = volume_series(_volume_sets(history), days=window.days, today=today)
+    series = volume_series(
+        _volume_sets(history),
+        days=window.days,
+        today=today,
+        body_weight_kg=body_weight_kg,
+        estimated_1rm_by_exercise=best_1rm_by_exercise,
+    )
 
     return AnalyticsOverview(
         range=window.value,
@@ -162,8 +185,9 @@ def _set_records(history: list[LoggedSessionView]) -> list[LoggedSetRecord]:
 def _volume_sets(history: list[LoggedSessionView]) -> list[VolumeSet]:
     """Flatten Logged Sessions into dated Logged Sets for the volume engine.
 
-    The engine needs only each set's reps, typed Load, and the date it was performed
-    on — the session's ``performed_on`` — to convert and bucket it.
+    The engine needs each set's reps, typed Load, the date it was performed on — the
+    session's ``performed_on`` — and its ``exercise_id`` (so a percent-of-1RM set can
+    be converted against that Exercise's Estimated 1RM) to convert and bucket it.
     """
 
     return [
@@ -171,6 +195,7 @@ def _volume_sets(history: list[LoggedSessionView]) -> list[VolumeSet]:
             reps=logged_set.reps,
             load=logged_set.load,
             performed_on=session.performed_on,
+            exercise_id=logged_set.exercise_id,
         )
         for session in history
         for logged_set in session.logged_sets
