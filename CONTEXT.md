@@ -50,6 +50,10 @@ _Avoid_: Substitute, replacement (as the relationship name)
 The act of swapping one Exercise Prescription's Exercise for a Variation or Alternative within the user's own Session copy. Resolved lookup-first over catalog relationships (filtered by the user's equipment, constraints, and goal), falling back to AI only when no suitable link exists. Unlimited and distinct from Regeneration.
 _Avoid_: Swap, replace (as the domain term)
 
+**Live Session**:
+A single performance of a Session while it is underway — after the user starts training, before it becomes a Logged Session. The transient, in-flight precursor to a Logged Session: it holds the sets done so far, which set is current, and how long the workout has been running. It is a *record being built*, never a plan, and it becomes a Logged Session when the user finishes.
+_Avoid_: Active Session, active plan, workout in progress
+
 **Logged Session**:
 A record of the user performing a Session on a specific date. One Session can have many Logged Sessions over the course of a Protocol.
 _Avoid_: Completed session, history entry
