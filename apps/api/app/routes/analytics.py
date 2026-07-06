@@ -21,8 +21,12 @@ from fastapi import APIRouter, Depends, Query
 from app.auth.dependencies import get_current_user
 from app.envelope import success_envelope
 from app.logbook.analytics import AnalyticsOverview, AnalyticsRange, analytics_overview
-from app.repositories.deps import get_logged_session_repository
+from app.repositories.deps import (
+    get_logged_session_repository,
+    get_profile_repository,
+)
 from app.repositories.logged_session_repository import LoggedSessionRepository
+from app.repositories.profile_repository import ProfileRepository
 
 router = APIRouter(prefix="/api", tags=["analytics"])
 
@@ -62,8 +66,9 @@ def read_analytics(
     range: AnalyticsRange = Query(default=AnalyticsRange.SEVEN_DAY),
     clerk_user_id: str = Depends(get_current_user),
     logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+    profiles: ProfileRepository = Depends(get_profile_repository),
 ) -> dict:
     overview = analytics_overview(
-        clerk_user_id, range, logged=logged, today=date.today()
+        clerk_user_id, range, logged=logged, today=date.today(), profiles=profiles
     )
     return success_envelope(_serialize(overview))

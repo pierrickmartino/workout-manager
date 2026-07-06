@@ -1,9 +1,11 @@
-"""The pure volume engine (F3 Slice 5): converting typed Loads to kg volume and
+"""The pure volume engine (F3 Slice 5–6): converting typed Loads to kg volume and
 rolling a stream of Logged Sets into a daily-bucketed series with disclosed
 coverage and an equal-window trend delta.
 
 ``set_volume`` is the per-set conversion — ``absolute`` and ``range`` loads carry a
-kilogram volume; every other kind is not-yet-convertible and returns ``None``.
+kilogram volume outright, ``bodyweight`` resolves against the user's body weight and
+``percent_1rm`` against the Exercise's Estimated 1RM; a conversion whose input is
+missing returns ``None`` and is disclosed in coverage rather than guessed.
 ``volume_series`` buckets convertible volume by day across a rolling window, reports
 the fraction of logged reps it actually converted (coverage), and compares the
 window against the immediately preceding equal-length window (the delta). Pure over
@@ -16,7 +18,7 @@ from datetime import date
 from datetime import timedelta
 
 from app.domain.load import LoadKind, ParsedLoad
-from app.domain.volume import VolumeSet, set_volume, volume_series
+from app.domain.volume import VolumePoint, VolumeSet, set_volume, volume_series
 
 TODAY = date(2026, 7, 5)
 
@@ -62,22 +64,122 @@ def test_qualitative_and_load_less_sets_are_not_convertible():
     assert set_volume(None, reps=5) is None
 
 
-def test_bodyweight_and_percent_1rm_are_not_yet_convertible():
-    # Arrange — the two kinds this slice deliberately leaves for a later slice
+def test_bodyweight_set_converts_using_body_weight():
+    # Arrange — ten strict pull-ups at a recorded body weight of 70 kg
     bodyweight = ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict()
-    percent = ParsedLoad(
-        kind=LoadKind.PERCENT_1RM, text="70% 1RM", percent=70.0
+
+    # Act
+    volume = set_volume(bodyweight, reps=10, body_weight_kg=70.0)
+
+    # Assert — the body itself is the load: 10 × 70 kg
+    assert volume == 700.0
+
+
+def test_bodyweight_set_adds_the_extra_load_on_top_of_body_weight():
+    # Arrange — five weighted pull-ups: 70 kg of body plus a 20 kg belt
+    weighted = ParsedLoad(
+        kind=LoadKind.BODYWEIGHT, text="bodyweight + 20 kg", added_kg=20.0
     ).to_dict()
 
-    # Act / Assert — both fall into the uncovered fraction for now, never a guess
-    assert set_volume(bodyweight, reps=5) is None
-    assert set_volume(percent, reps=5) is None
+    # Act
+    volume = set_volume(weighted, reps=5, body_weight_kg=70.0)
+
+    # Assert — each rep moves body + belt: 5 × (70 + 20)
+    assert volume == 450.0
+
+
+def test_bodyweight_set_is_excluded_when_body_weight_is_unknown():
+    # Arrange — a bodyweight set logged by a user who never recorded their weight
+    bodyweight = ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict()
+
+    # Act / Assert — no honest figure exists, so the set stays excluded (coverage),
+    # never counted as zero
+    assert set_volume(bodyweight, reps=10, body_weight_kg=None) is None
+
+
+def test_percent_1rm_set_converts_against_the_estimated_1rm():
+    # Arrange — three reps at 80% of a 100 kg Estimated 1RM
+    percent = ParsedLoad(
+        kind=LoadKind.PERCENT_1RM, text="80% 1RM", percent=80.0
+    ).to_dict()
+
+    # Act
+    volume = set_volume(percent, reps=3, estimated_1rm=100.0)
+
+    # Assert — 80% of 100 kg is 80 kg per rep: 3 × 80
+    assert volume == 240.0
+
+
+def test_percent_1rm_set_is_excluded_when_no_estimated_1rm_exists():
+    # Arrange — a percentage set for an Exercise with no Estimated 1RM yet
+    percent = ParsedLoad(
+        kind=LoadKind.PERCENT_1RM, text="80% 1RM", percent=80.0
+    ).to_dict()
+
+    # Act / Assert — nothing to take a percentage of, so the set stays excluded
+    assert set_volume(percent, reps=3, estimated_1rm=None) is None
+
+
+def _bodyweight(added_kg: float | None = None) -> dict:
+    text = "bodyweight" if added_kg is None else f"bodyweight + {added_kg:g} kg"
+    return ParsedLoad(
+        kind=LoadKind.BODYWEIGHT, text=text, added_kg=added_kg
+    ).to_dict()
+
+
+def _percent(pct: float) -> dict:
+    return ParsedLoad(
+        kind=LoadKind.PERCENT_1RM, text=f"{pct:g}% 1RM", percent=pct
+    ).to_dict()
 
 
 def _set(kg, reps, day):
     """A convertible absolute-load VolumeSet performed on ``day``."""
 
     return VolumeSet(reps=reps, load=_abs(kg), performed_on=day)
+
+
+PULLUP = 3
+SQUAT = 1
+
+
+def test_volume_series_folds_in_bodyweight_and_percent_sets_with_context():
+    # Arrange — a bodyweight set (10 pull-ups at 70 kg body = 700) and a percent set
+    # (3 reps at 80% of Squat's 100 kg Estimated 1RM = 240), both today
+    history = [
+        VolumeSet(reps=10, load=_bodyweight(), performed_on=TODAY, exercise_id=PULLUP),
+        VolumeSet(reps=3, load=_percent(80.0), performed_on=TODAY, exercise_id=SQUAT),
+    ]
+
+    # Act
+    series = volume_series(
+        history,
+        days=7,
+        today=TODAY,
+        body_weight_kg=70.0,
+        estimated_1rm_by_exercise={SQUAT: 100.0},
+    )
+
+    # Assert — both convert and sum into the day; every logged rep counted
+    assert series.points == (VolumePoint(TODAY, 940.0),)
+    assert series.coverage_pct == 100.0
+
+
+def test_volume_series_excludes_unconvertible_sets_but_counts_them_in_coverage():
+    # Arrange — an absolute set (convertible) alongside a bodyweight set with no body
+    # weight and a percent set with no Estimated 1RM (both unconvertible), 5 reps each
+    history = [
+        _set(100.0, 5, TODAY),
+        VolumeSet(reps=5, load=_bodyweight(), performed_on=TODAY, exercise_id=PULLUP),
+        VolumeSet(reps=5, load=_percent(80.0), performed_on=TODAY, exercise_id=SQUAT),
+    ]
+
+    # Act — no body weight and no 1RM supplied, so only the absolute set converts
+    series = volume_series(history, days=7, today=TODAY)
+
+    # Assert — only the absolute volume points, but coverage sees all 15 reps: 5 / 15
+    assert series.points == (VolumePoint(TODAY, 500.0),)
+    assert series.coverage_pct == 5 / 15 * 100
 
 
 def test_volume_series_buckets_convertible_volume_by_day():

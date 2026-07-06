@@ -18,12 +18,19 @@ from app.config import Settings, get_settings
 from app.domain.exercise import Provenance
 from app.domain.load import LoadKind, ParsedLoad
 from app.main import create_app
-from app.repositories.deps import get_logged_session_repository
+from app.repositories.deps import (
+    get_logged_session_repository,
+    get_profile_repository,
+)
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.logged_session_repository import (
     InMemoryLoggedSessionRepository,
     LoggedSessionDraft,
     LoggedSetDraft,
+)
+from app.repositories.profile_repository import (
+    InMemoryProfileRepository,
+    ProfileUpdate,
 )
 from app.repositories.session_repository import (
     InMemorySessionRepository,
@@ -34,8 +41,9 @@ from tests.conftest import ISSUER, make_signing_context
 SQUAT = 1
 
 
-def build_client(ctx=None):
+def build_client(ctx=None, profiles=None):
     ctx = ctx or make_signing_context()
+    profiles = profiles or InMemoryProfileRepository()
     exercises = InMemoryExerciseRepository()
     exercises.find_or_create(
         "Back Squat",
@@ -48,6 +56,7 @@ def build_client(ctx=None):
     app.dependency_overrides[get_jwks] = lambda: ctx.jwks
     app.dependency_overrides[get_settings] = lambda: Settings(clerk_issuer=ISSUER)
     app.dependency_overrides[get_logged_session_repository] = lambda: logged
+    app.dependency_overrides[get_profile_repository] = lambda: profiles
     return TestClient(app), ctx, sessions, logged
 
 
@@ -253,3 +262,40 @@ def test_analytics_serializes_the_daily_volume_series():
     assert volume["coverage"] == 100.0
     # this window's 500 kg vs the prior window's 400 kg → +25%
     assert volume["delta"] == 25.0
+
+
+def _perform_bodyweight(sessions, logged, user, performed_on, reps):
+    """Log a single plain-bodyweight Squat set of ``reps`` (volume tests)."""
+
+    session_view = sessions.create(
+        user,
+        SessionDraft(training_type="strength", duration_minutes=45, prescriptions=[]),
+    )
+    load = ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict()
+    logged.create(
+        user,
+        LoggedSessionDraft(
+            session_id=session_view.id,
+            performed_on=performed_on,
+            logged_sets=[LoggedSetDraft(exercise_id=SQUAT, reps=reps, load=load)],
+        ),
+    )
+
+
+def test_analytics_folds_bodyweight_volume_using_the_recorded_body_weight():
+    # Arrange — a recorded 70 kg body weight and a plain bodyweight set of 10 reps
+    profiles = InMemoryProfileRepository()
+    profiles.update("user_bw", ProfileUpdate(weight_kg=70.0))
+    client, ctx, sessions, logged = build_client(profiles=profiles)
+    _perform_bodyweight(sessions, logged, "user_bw", date.today(), 10)
+
+    # Act
+    response = client.get("/api/analytics?range=7d", headers=_auth(ctx, "user_bw"))
+
+    # Assert — the body weight resolves the set end to end: 10 × 70 = 700, fully covered
+    assert response.status_code == 200
+    volume = response.json()["data"]["volume"]
+    assert volume["points"] == [
+        {"date": date.today().isoformat(), "volume_kg": 700.0},
+    ]
+    assert volume["coverage"] == 100.0

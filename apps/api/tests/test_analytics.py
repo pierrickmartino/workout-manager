@@ -23,6 +23,10 @@ from app.repositories.logged_session_repository import (
     LoggedSessionDraft,
     LoggedSetDraft,
 )
+from app.repositories.profile_repository import (
+    InMemoryProfileRepository,
+    ProfileUpdate,
+)
 from app.repositories.session_repository import (
     InMemorySessionRepository,
     SessionDraft,
@@ -400,6 +404,12 @@ def _abs_load(kg: float) -> dict:
     return ParsedLoad(kind=LoadKind.ABSOLUTE, text=f"{kg:g} kg", kg=kg).to_dict()
 
 
+def _bodyweight_load() -> dict:
+    """The stored typed-Load dict for a plain bodyweight load (volume tests)."""
+
+    return ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict()
+
+
 def test_overview_carries_the_daily_volume_series_for_the_window():
     # Arrange — 100kg×5 today and 80kg×5 yesterday, both absolute and convertible
     _, sessions, logged = _build()
@@ -469,3 +479,76 @@ def test_overview_volume_is_empty_when_nothing_is_logged():
     assert overview.volume_points == ()
     assert overview.volume_coverage == 0.0
     assert overview.volume_delta is None
+
+
+def _percent_load(pct: float) -> dict:
+    """The stored typed-Load dict for a percent-of-1RM load (volume tests)."""
+
+    return ParsedLoad(
+        kind=LoadKind.PERCENT_1RM, text=f"{pct:g}% 1RM", percent=pct
+    ).to_dict()
+
+
+def test_overview_folds_bodyweight_and_percent_volume_when_the_inputs_exist():
+    # Arrange — a recorded 70 kg body weight, a Squat Estimated 1RM (100 kg × 1), a
+    # bodyweight Press set (10 × 70 = 700) and an 80% Squat set (3 × 80 = 240), today.
+    _, sessions, logged = _build()
+    profiles = InMemoryProfileRepository()
+    profiles.update("user_fold", ProfileUpdate(weight_kg=70.0))
+    _log(
+        sessions,
+        logged,
+        "user_fold",
+        TODAY,
+        [
+            LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs_load(100.0)),
+            LoggedSetDraft(exercise_id=SQUAT, reps=3, load=_percent_load(80.0)),
+            LoggedSetDraft(exercise_id=PRESS, reps=10, load=_bodyweight_load()),
+        ],
+    )
+
+    # Act
+    overview = analytics_overview(
+        "user_fold",
+        AnalyticsRange.SEVEN_DAY,
+        logged=logged,
+        today=TODAY,
+        profiles=profiles,
+    )
+
+    # Assert — all three convert (100 + 240 + 700) and every rep is covered
+    assert [(p.performed_on, p.volume_kg) for p in overview.volume_points] == [
+        (TODAY, 1040.0)
+    ]
+    assert overview.volume_coverage == 100.0
+
+
+def test_overview_excludes_bodyweight_when_body_weight_is_unrecorded():
+    # Arrange — the same bodyweight Press set, but no profile weight to resolve it
+    _, sessions, logged = _build()
+    profiles = InMemoryProfileRepository()  # weight_kg stays None
+    _log(
+        sessions,
+        logged,
+        "user_nobw",
+        TODAY,
+        [
+            LoggedSetDraft(exercise_id=SQUAT, reps=5, load=_abs_load(100.0)),
+            LoggedSetDraft(exercise_id=PRESS, reps=5, load=_bodyweight_load()),
+        ],
+    )
+
+    # Act
+    overview = analytics_overview(
+        "user_nobw",
+        AnalyticsRange.SEVEN_DAY,
+        logged=logged,
+        today=TODAY,
+        profiles=profiles,
+    )
+
+    # Assert — only the absolute set converts; the bodyweight reps show in coverage
+    assert [(p.performed_on, p.volume_kg) for p in overview.volume_points] == [
+        (TODAY, 500.0)
+    ]
+    assert overview.volume_coverage == 50.0
