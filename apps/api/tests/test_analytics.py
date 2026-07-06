@@ -14,6 +14,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from app.domain.exercise import Provenance
+from app.domain.load import LoadKind, ParsedLoad
 from app.domain.muscle_groups import MuscleGroup
 from app.logbook.analytics import AnalyticsRange, analytics_overview
 from app.repositories.exercise_repository import InMemoryExerciseRepository
@@ -49,6 +50,12 @@ def _build():
     sessions = InMemorySessionRepository(exercises)
     logged = InMemoryLoggedSessionRepository(sessions, exercises)
     return exercises, sessions, logged
+
+
+def _abs(kg: float) -> dict:
+    """The stored typed-Load dict for an absolute kilogram load."""
+
+    return ParsedLoad(kind=LoadKind.ABSOLUTE, text=f"{kg:g} kg", kg=kg).to_dict()
 
 
 def _log(sessions, logged, user, performed_on, sets):
@@ -265,6 +272,109 @@ def test_another_users_sessions_do_not_count_toward_my_totals():
     # Assert — only my own performance is counted
     assert overview.sessions == 1
     assert overview.total_sets == 1
+
+
+def test_recent_records_surface_all_time_prs_newest_first_decoupled_from_the_window():
+    # Arrange — a 100 kg PR 200 days ago and a heavier 110 kg PR 100 days ago, both
+    # far outside the 7-day window the toggle is on
+    _, sessions, logged = _build()
+    _log(
+        sessions,
+        logged,
+        "user_pr",
+        TODAY - timedelta(days=200),
+        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(100.0))],
+    )
+    _log(
+        sessions,
+        logged,
+        "user_pr",
+        TODAY - timedelta(days=100),
+        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(110.0))],
+    )
+
+    # Act — the short window would exclude both, but the feed is decoupled from it
+    overview = analytics_overview(
+        "user_pr", AnalyticsRange.SEVEN_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — both all-time PRs show, newest first, with gain over the prior PR
+    assert [r.estimated_1rm for r in overview.recent_records] == [110.0, 100.0]
+    assert overview.recent_records[0].gain == 10.0
+    assert overview.recent_records[0].exercise_name == "Back Squat"
+
+
+def test_recent_records_keep_only_the_eight_most_recent():
+    # Arrange — ten PRs on ten distinct days, each newer day heavier than the last so
+    # every set clears the previous best (day 10 = oldest = 100 kg … day 1 = 109 kg)
+    _, sessions, logged = _build()
+    for day in range(1, 11):
+        kg = 100.0 + (10 - day)
+        _log(
+            sessions,
+            logged,
+            "user_many",
+            TODAY - timedelta(days=day),
+            [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(kg))],
+        )
+
+    # Act
+    overview = analytics_overview(
+        "user_many", AnalyticsRange.NINETY_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — capped at the eight newest; the heaviest (newest) leads
+    assert len(overview.recent_records) == 8
+    assert overview.recent_records[0].estimated_1rm == 109.0
+
+
+def test_new_prs_count_only_records_dated_inside_the_window():
+    # Arrange — one PR 40 days ago (outside 30d) and one 2 days ago (inside)
+    _, sessions, logged = _build()
+    _log(
+        sessions,
+        logged,
+        "user_win_pr",
+        TODAY - timedelta(days=40),
+        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(100.0))],
+    )
+    _log(
+        sessions,
+        logged,
+        "user_win_pr",
+        TODAY - timedelta(days=2),
+        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(110.0))],
+    )
+
+    # Act
+    overview = analytics_overview(
+        "user_win_pr", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — only the in-window PR is counted, though the feed still shows both
+    assert overview.new_prs == 1
+    assert len(overview.recent_records) == 2
+
+
+def test_a_user_with_no_records_has_an_empty_feed_and_zero_new_prs():
+    # Arrange — a session logged with only a qualitative load: no PR possible
+    _, sessions, logged = _build()
+    _log(
+        sessions,
+        logged,
+        "user_no_pr",
+        TODAY,
+        [LoggedSetDraft(exercise_id=SQUAT, reps=5)],
+    )
+
+    # Act
+    overview = analytics_overview(
+        "user_no_pr", AnalyticsRange.SEVEN_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — honest empty state, not an error
+    assert overview.recent_records == ()
+    assert overview.new_prs == 0
 
 
 def test_two_sessions_on_the_same_day_are_two_sessions_but_one_active_day():

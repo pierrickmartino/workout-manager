@@ -1,14 +1,17 @@
-"""Range-scoped Analytics counts (F3 Slice 1) — an honest read of the *record*.
+"""Range-scoped Analytics counts (F3 Slice 1–4) — an honest read of the *record*.
 
 ``analytics_overview`` reads the user's Logged Sessions and projects them onto a
 single ``AnalyticsOverview``: the count of Logged Sessions, active days (distinct
 ``performed_on``), total Logged Sets, and the set-count **muscle distribution**
-performed inside the selected rolling window ending on a reference ``today``. Every
-number comes straight from Logged Sessions and Logged Sets — no Load parsing, no
-Estimated 1RM, no conversion — so the read model is honest and shippable on its own
-(the volume series and new-PR tile arrive in later slices). The distribution rolls
-each Exercise's free-form muscles into the six curated Muscle Groups plus
-Unclassified (``domain/muscle_groups.py``), weighted purely by set count.
+performed inside the selected rolling window ending on a reference ``today``. The
+count and distribution come straight from Logged Sessions and Logged Sets — no Load
+parsing, no conversion.
+
+On top of the counts it derives Personal Records read-time (``domain/personal_records``)
+over the user's whole history: the **last 8 PRs all-time** (deliberately decoupled from
+the range toggle, so the feed is rarely empty) and the range-scoped **new-PRs count**.
+PRs are detected purely from Logged Sets, never a plan; only absolute-Load sets in the
+trustworthy rep window can set one.
 
 Reads are scoped to the owning user because the underlying repository's
 ``list_for_user`` already is. Pure orchestration over the Logged-Session
@@ -21,7 +24,19 @@ from datetime import date, timedelta
 from enum import Enum
 
 from app.domain.muscle_groups import distribution
-from app.repositories.logged_session_repository import LoggedSessionRepository
+from app.domain.personal_records import (
+    LoggedSetRecord,
+    PersonalRecord,
+    detect_personal_records,
+)
+from app.repositories.logged_session_repository import (
+    LoggedSessionRepository,
+    LoggedSessionView,
+)
+
+# The Recent Records feed shows the most recent PRs, all-time — decoupled from the
+# range toggle so it is rarely empty even on a quiet week.
+RECENT_RECORDS_LIMIT = 8
 
 
 class AnalyticsRange(Enum):
@@ -45,6 +60,11 @@ class AnalyticsOverview:
     groups that received work, in canonical body order with Unclassified last. It
     is empty when nothing was logged. Kept as a tuple so the read model stays
     immutable; the pairs preserve order for rendering.
+
+    ``recent_records`` is the last ``RECENT_RECORDS_LIMIT`` Personal Records all-time
+    (Slice 4), newest first and **decoupled from the window** so the feed rarely
+    empties. ``new_prs`` counts only the PRs whose date falls inside the selected
+    window — the number the bento's fourth tile shows.
     """
 
     range: str
@@ -52,6 +72,8 @@ class AnalyticsOverview:
     active_days: int
     total_sets: int
     muscle_distribution: tuple[tuple[str, float], ...]
+    recent_records: tuple[PersonalRecord, ...]
+    new_prs: int
 
 
 def analytics_overview(
@@ -69,11 +91,16 @@ def analytics_overview(
     """
 
     start = today - timedelta(days=window.days - 1)
+    history = logged.list_for_user(clerk_user_id)
     in_window = [
-        session
-        for session in logged.list_for_user(clerk_user_id)
-        if start <= session.performed_on <= today
+        session for session in history if start <= session.performed_on <= today
     ]
+
+    # Personal Records are detected over the whole history, not just the window: the
+    # feed is decoupled from the toggle, and only the count is scoped to the window.
+    records = detect_personal_records(_set_records(history))
+    recent = tuple(reversed(records[-RECENT_RECORDS_LIMIT:]))
+    new_prs = sum(1 for record in records if start <= record.performed_on <= today)
 
     return AnalyticsOverview(
         range=window.value,
@@ -83,11 +110,34 @@ def analytics_overview(
         muscle_distribution=tuple(
             (group.value, pct) for group, pct in distribution(in_window).items()
         ),
+        recent_records=recent,
+        new_prs=new_prs,
     )
+
+
+def _set_records(history: list[LoggedSessionView]) -> list[LoggedSetRecord]:
+    """Flatten Logged Sessions into dated Logged Set records for PR detection.
+
+    Each Logged Set is paired with its session's ``performed_on`` so the detector,
+    which knows nothing about sessions, can order the stream and stamp each PR.
+    """
+
+    return [
+        LoggedSetRecord(
+            exercise_id=logged_set.exercise_id,
+            exercise_name=logged_set.exercise_name,
+            reps=logged_set.reps,
+            load=logged_set.load,
+            performed_on=session.performed_on,
+        )
+        for session in history
+        for logged_set in session.logged_sets
+    ]
 
 
 __all__ = [
     "AnalyticsRange",
     "AnalyticsOverview",
     "analytics_overview",
+    "RECENT_RECORDS_LIMIT",
 ]

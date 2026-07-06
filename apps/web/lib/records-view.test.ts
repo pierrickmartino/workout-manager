@@ -1,0 +1,65 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+
+import { toRecordRows } from "./records-view.ts";
+import type { PersonalRecordEntry } from "./analytics-types.ts";
+
+// `toRecordRows` turns the API's Personal Record entries into display rows for the
+// Recent Records feed: a rounded Estimated 1RM, a gain-over-prior-PR badge (with a
+// distinct "first PR" state), and a short human date. Pure and server-free.
+
+const RECORD: PersonalRecordEntry = {
+  exercise: "Back Squat",
+  estimated_1rm: 110.0,
+  gain: 10.0,
+  date: "2026-07-04",
+};
+
+test("formats a record's estimate, gain, and date for display", () => {
+  // Arrange / Act
+  const [row] = toRecordRows([RECORD]);
+
+  // Assert
+  assert.equal(row.exercise, "Back Squat");
+  assert.equal(row.estimate, "110 kg");
+  assert.equal(row.gain, "+10 kg");
+  assert.equal(row.date, "Jul 4");
+});
+
+test("rounds a fractional Estimated 1RM to whole kilograms", () => {
+  // Arrange — Epley estimates are often fractional (90 kg × 5 → 105 kg here)
+  const record: PersonalRecordEntry = { ...RECORD, estimated_1rm: 105.4, gain: 5.4 };
+
+  // Act
+  const [row] = toRecordRows([record]);
+
+  // Assert — the eye gets whole kilograms, not a long float
+  assert.equal(row.estimate, "105 kg");
+  assert.equal(row.gain, "+5 kg");
+});
+
+test("marks the first-ever PR distinctly instead of a zero gain", () => {
+  // Arrange — a first-ever record carries no prior PR to improve on (gain 0)
+  const record: PersonalRecordEntry = { ...RECORD, gain: 0 };
+
+  // Act
+  const [row] = toRecordRows([record]);
+
+  // Assert — a clear "first" badge, never a misleading "+0 kg"
+  assert.equal(row.gain, "First PR");
+});
+
+test("preserves the feed's newest-first order", () => {
+  // Arrange — the API already hands records newest-first
+  const older: PersonalRecordEntry = { ...RECORD, estimated_1rm: 100, date: "2026-06-01" };
+  const newer: PersonalRecordEntry = { ...RECORD, estimated_1rm: 110, date: "2026-07-04" };
+
+  // Act
+  const rows = toRecordRows([newer, older]);
+
+  // Assert — order is carried through untouched
+  assert.deepEqual(
+    rows.map((row) => row.estimate),
+    ["110 kg", "100 kg"],
+  );
+});

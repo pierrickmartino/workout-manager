@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { History, LineChart } from "lucide-react";
+import { History, LineChart, Trophy } from "lucide-react";
 
 import {
   ANALYTICS_RANGES,
@@ -14,13 +14,15 @@ import { Bento, BentoTile } from "@/components/pulse/bento";
 import { Alert } from "@/components/pulse/alert";
 import { Card } from "@/components/ui/card";
 import { toMuscleBars, type MuscleBar } from "@/lib/muscle-distribution";
+import { toRecordRows, type RecordRow } from "@/lib/records-view";
 import { cn } from "@/lib/utils";
 
-// The Analytics screen (F3 Slice 1–2): honest, range-scoped counts drawn straight
-// from the record side — sessions, active days, total sets — plus the set-count
-// muscle distribution, rendered in the operator theme and reachable from the Stats
-// tab. The volume chart and new-PRs tile arrive in later slices. A user who has
-// logged nothing sees a clear empty state, not an error.
+// The Analytics screen (F3 Slice 1–4): honest, range-scoped counts drawn straight
+// from the record side — sessions, active days, total sets, new PRs — plus the
+// set-count muscle distribution and the Recent Records feed, rendered in the
+// operator theme and reachable from the Stats tab. The records feed is decoupled
+// from the range toggle, so it shows all-time PRs even when the window is quiet. A
+// user who has logged nothing sees a clear empty state, not an error.
 export default async function AnalyticsPage({
   searchParams,
 }: {
@@ -44,6 +46,7 @@ export default async function AnalyticsPage({
   const overview = envelope.data;
   const hasHistory = overview.sessions > 0;
   const muscleBars = toMuscleBars(overview.muscle_distribution);
+  const recordRows = toRecordRows(overview.recent_records);
 
   return (
     <section className="flex flex-col gap-6">
@@ -54,9 +57,10 @@ export default async function AnalyticsPage({
       {hasHistory ? (
         <>
           <Bento>
-            <BentoTile label="SESSIONS" value={overview.sessions} span="full" />
+            <BentoTile label="SESSIONS" value={overview.sessions} />
             <BentoTile label="ACTIVE DAYS" value={overview.active_days} />
             <BentoTile label="TOTAL SETS" value={overview.total_sets} />
+            <BentoTile label="NEW PRS" value={overview.new_prs} />
           </Bento>
           <MuscleDistribution bars={muscleBars} />
         </>
@@ -74,6 +78,8 @@ export default async function AnalyticsPage({
           </Link>
         </Card>
       )}
+
+      {recordRows.length > 0 ? <RecentRecords rows={recordRows} /> : null}
 
       <div className="flex flex-col gap-4">
         <SectionHeader>OPERATIONS</SectionHeader>
@@ -146,6 +152,42 @@ function MuscleDistribution({ bars }: { bars: MuscleBar[] }) {
             </div>
           ))
         )}
+      </Card>
+    </div>
+  );
+}
+
+// The Recent Records feed (F3 Slice 4): the last 8 Personal Records all-time, newest
+// first, each a row of Exercise · new Estimated 1RM · gain over the prior PR · date.
+// Deliberately decoupled from the range toggle so genuine strength milestones stay
+// visible even on a quiet week. PRs are derived read-time from Logged Sets — a
+// heavier estimated max at more reps outranks a lighter true single.
+function RecentRecords({ rows }: { rows: RecordRow[] }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <SectionHeader>RECENT RECORDS</SectionHeader>
+      <Card className="divide-y divide-border overflow-hidden py-0">
+        {rows.map((row, index) => (
+          <div
+            key={`${row.exercise}-${row.date}-${index}`}
+            className="flex items-center gap-3.5 px-4 py-3.5"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm bg-cyan-dim text-cyan">
+              <Trophy className="h-[18px] w-[18px]" aria-hidden />
+            </span>
+            <div className="flex flex-1 flex-col gap-0.5">
+              <span className="font-sans text-[15px] font-medium text-text-primary">
+                {row.exercise}
+              </span>
+              <span className="label-mono text-[11px] text-text-muted">
+                {row.gain} · {row.date}
+              </span>
+            </div>
+            <span className="font-display text-lg font-semibold text-text-primary tabular-nums">
+              {row.estimate}
+            </span>
+          </div>
+        ))}
       </Card>
     </div>
   );
