@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
 from app.auth.dependencies import get_current_user
+from app.domain.completion import parse_completion_outcome
 from app.domain.load import LoadKind, load_from_input
 from app.envelope import success_envelope
 from app.logbook.service import (
@@ -83,10 +84,23 @@ class LogSetBody(BaseModel):
 
 
 class LogSessionBody(BaseModel):
-    """Validated request to record a performance of a Session."""
+    """Validated request to record a performance of a Session.
+
+    ``completion_outcome`` is the optional, client-declared Completion Outcome
+    (ADR-0013): ``"completed"`` | ``"incomplete"``. Absent means the record does not
+    declare one — the column stays null and the Session still advances the Protocol."""
 
     performed_on: date
     logged_sets: list[LogSetBody] = Field(min_length=1)
+    completion_outcome: str | None = None
+
+    @field_validator("completion_outcome")
+    @classmethod
+    def _known_outcome(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        # Normalize and reject anything outside the vocabulary at the boundary.
+        return parse_completion_outcome(value).value
 
 
 def _serialize(view: LoggedSessionView) -> dict:
@@ -96,6 +110,7 @@ def _serialize(view: LoggedSessionView) -> dict:
         "session_id": view.session_id,
         "training_type": view.training_type,
         "performed_on": view.performed_on.isoformat(),
+        "completion_outcome": view.completion_outcome,
         "logged_sets": [
             {
                 "position": s.position,
@@ -122,6 +137,7 @@ def create_log(
     request = LogSessionRequest(
         session_id=session_id,
         performed_on=payload.performed_on,
+        completion_outcome=payload.completion_outcome,
         logged_sets=[s.to_draft() for s in payload.logged_sets],
     )
     try:

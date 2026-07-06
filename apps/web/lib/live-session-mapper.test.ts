@@ -112,6 +112,34 @@ test("produces N Logged Sets per exercise from N completed sets", () => {
   );
 });
 
+test("sends 'completed' when every prescribed set was attempted", () => {
+  // Arrange — complete all five prescribed sets
+  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  for (const index of [0, 1, 2, 3, 4]) state = complete(state, index, 5, "70", 7);
+  state = liveSessionReducer(state, { type: "FINISH" });
+
+  // Act
+  const payload = mapFinishToLog(state, "2026-07-06");
+
+  // Assert — the mapper carries the derived Completion Outcome (ADR-0013)
+  assert.ok(payload);
+  assert.equal(payload.completion_outcome, "completed");
+});
+
+test("sends 'incomplete' when a prescribed set was left un-attempted", () => {
+  // Arrange — complete only some sets, leaving the rest un-attempted
+  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  state = complete(state, 0, 5, "70", 7);
+  state = liveSessionReducer(state, { type: "FINISH" });
+
+  // Act
+  const payload = mapFinishToLog(state, "2026-07-06");
+
+  // Assert — a partial performance is declared Incomplete
+  assert.ok(payload);
+  assert.equal(payload.completion_outcome, "incomplete");
+});
+
 test("only completed sets are logged — skipped/pending sets are dropped", () => {
   // Arrange — complete just the first set, leave the rest un-attempted
   let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });

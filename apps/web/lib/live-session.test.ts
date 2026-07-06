@@ -7,6 +7,7 @@ import {
   progressPercent,
   currentModule,
   nextExercise,
+  completionOutcome,
 } from "./live-session.ts";
 import type { LiveSessionState } from "./live-session.ts";
 import type { WorkoutSession } from "./sessions-types.ts";
@@ -273,6 +274,42 @@ test("currentModule stays on the last module once all sets are done", () => {
 
   // Assert — clamped to the final module, never y+1
   assert.deepEqual(currentModule(state), { index: 2, total: 2 });
+});
+
+test("completionOutcome is 'completed' only when every prescribed set is attempted", () => {
+  // Arrange — attempt (complete) all five prescribed sets
+  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  for (const index of [0, 1, 2, 3, 4]) state = complete(state, index);
+
+  // Act / Assert — all attempted → Completed (ADR-0013)
+  assert.equal(completionOutcome(state), "completed");
+});
+
+test("completionOutcome is 'incomplete' when a set is skipped (left un-attempted)", () => {
+  // Arrange — complete four sets, skip the fifth with ADVANCE (never attempted)
+  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  for (const index of [0, 1, 2, 3]) state = complete(state, index);
+  state = liveSessionReducer(state, { type: "ADVANCE" }); // skip the last set
+
+  // Act / Assert — one prescribed set left un-attempted → Incomplete
+  assert.equal(completionOutcome(state), "incomplete");
+});
+
+test("a zero-rep completed set still counts as attempted (stays Completed)", () => {
+  // Arrange — attempt every set, but grind the last one out to zero reps
+  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  for (const index of [0, 1, 2, 3]) state = complete(state, index);
+  state = liveSessionReducer(state, {
+    type: "COMPLETE_SET",
+    index: 4,
+    reps: 0, // ground to failure — still attempted, not skipped
+    loadKind: "absolute",
+    loadValue: "70",
+    rpe: 10,
+  });
+
+  // Act / Assert — a zero-rep *completed* set is attempted, so still Completed
+  assert.equal(completionOutcome(state), "completed");
 });
 
 test("nextExercise previews the exercise of the upcoming module", () => {

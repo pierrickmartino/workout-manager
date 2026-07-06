@@ -10,6 +10,11 @@ export type SetStatus = "pending" | "completed";
 
 export type LiveStatus = "not_started" | "in_progress" | "finished";
 
+// The Completion Outcome (ADR-0013): whether the performance attempted every
+// prescribed set. Completed when all sets were attempted (a zero-rep completed set
+// still counts as attempted); Incomplete when any set was left un-attempted.
+export type CompletionOutcome = "completed" | "incomplete";
+
 // One prescribed set, expanded from an Exercise Prescription into its own row.
 // `reps`/`loadKind`/`loadValue`/`rpe` are the user-editable record; the
 // `prescribed*` fields keep the original plan for the eye.
@@ -181,6 +186,16 @@ export function progressPercent(state: LiveSessionState): number {
   if (total === 0) return 0;
   const attempted = state.sets.filter((set) => set.status === "completed").length;
   return Math.round((attempted / total) * 100);
+}
+
+// The derived Completion Outcome (ADR-0013): Completed only when every prescribed
+// set was attempted (a set is "attempted" once it is completed — even at zero reps,
+// ground out to failure); Incomplete when any prescribed set is still pending
+// (skipped/left un-attempted). This is the client-declared verdict the finish
+// mapper sends; it reaches 100% progress exactly when the outcome is Completed.
+export function completionOutcome(state: LiveSessionState): CompletionOutcome {
+  const anyUnattempted = state.sets.some((set) => set.status !== "completed");
+  return anyUnattempted ? "incomplete" : "completed";
 }
 
 // The current module as a 1-based `x` of `y` total modules, for the header. `x`

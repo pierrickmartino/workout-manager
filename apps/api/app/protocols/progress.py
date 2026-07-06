@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
+from app.domain.completion import CompletionOutcome
 from app.domain.load import parse_load
 from app.domain.progression import next_load
 from app.repositories.logged_session_repository import (
@@ -48,6 +49,25 @@ class ProtocolProgressView:
     protocol: ProtocolView
     next_session: ProtocolSessionView | None
     completed_count: int
+
+
+def _advances(entry: LoggedSessionView) -> bool:
+    """Whether a Logged Session advances its Protocol past the performed Session.
+
+    Only a *Completed* performance advances (ADR-0013): an Incomplete log leaves the
+    Session as the Next Session, to be retried. An *undeclared* outcome (``None``)
+    still advances — it predates the Completion Outcome and keeps ADR-0001's original
+    "any log advances" rule, which the static log form relies on by defaulting to
+    Completed.
+    """
+
+    return entry.completion_outcome != CompletionOutcome.INCOMPLETE.value
+
+
+def _advancing_sessions(logged_sessions: list[LoggedSessionView]) -> set[int]:
+    """The set of Session ids that have at least one *advancing* Logged Session."""
+
+    return {entry.session_id for entry in logged_sessions if _advances(entry)}
 
 
 def _progress_over(
@@ -87,7 +107,7 @@ def protocol_progress(
     if protocol is None:
         return None
 
-    performed = {entry.session_id for entry in logged.list_for_user(clerk_user_id)}
+    performed = _advancing_sessions(logged.list_for_user(clerk_user_id))
     completed_count, next_session = _progress_over(protocol, performed)
     return ProtocolProgressView(
         protocol=protocol,
@@ -178,7 +198,10 @@ def progressed_protocol(
         return None
 
     logged_sessions = logged.list_for_user(clerk_user_id)
-    performed = {entry.session_id for entry in logged_sessions}
+    # Advancement keys off a *Completed* log (ADR-0013), but the Progression overlay
+    # still reads *every* logged set: the sets done inside an Incomplete performance
+    # are real history (volume, PRs) and legitimately drive the next recommended load.
+    performed = _advancing_sessions(logged_sessions)
     latest_sets = _latest_sets_by_exercise(logged_sessions)
 
     sessions = [

@@ -4,13 +4,14 @@
 // the payload to the server action. No schema change: the Logged Session record
 // already carries N Logged Sets per Exercise via its flat, ordered list.
 
-import type { LiveSessionState } from "./live-session.ts";
+import { completionOutcome, type LiveSessionState } from "./live-session.ts";
 import type { LogSessionInput, LogSetInput } from "./logs-types";
 
 // Map a finished Live Session to the log request. Returns null when no set was
-// completed, so an abandoned Live Session writes nothing (Completion Outcome and
-// the rest of the record semantics are later slices). Only completed sets become
-// Logged Sets; their order follows the flat, position-ordered set list.
+// completed, so an abandoned Live Session writes nothing. Only completed sets
+// become Logged Sets; their order follows the flat, position-ordered set list. The
+// payload carries the derived Completion Outcome (ADR-0013) the engine computes
+// from whether every prescribed set was attempted.
 export function mapFinishToLog(
   state: LiveSessionState,
   performedOn: string,
@@ -28,5 +29,9 @@ export function mapFinishToLog(
 
   if (loggedSets.length === 0) return null;
 
-  return { performed_on: performedOn, logged_sets: loggedSets };
+  return {
+    performed_on: performedOn,
+    completion_outcome: completionOutcome(state),
+    logged_sets: loggedSets,
+  };
 }
