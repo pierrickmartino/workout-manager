@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, ClipboardCheck } from "lucide-react";
+import { ArrowRight, ClipboardCheck, Play } from "lucide-react";
 
 import { SubstituteButton } from "@/components/SubstituteButton";
 import {
@@ -60,8 +60,18 @@ export default async function SessionPage({
 
       <div className="flex flex-col gap-2.5">
         <Link
-          href={`/sessions/${session.id}/log`}
+          href={`/sessions/${session.id}/live`}
           className={buttonVariants({ className: "w-full" })}
+        >
+          <Play className="h-4 w-4" />
+          Start session
+        </Link>
+        <Link
+          href={`/sessions/${session.id}/log`}
+          className={buttonVariants({
+            variant: "secondary",
+            className: "w-full",
+          })}
         >
           <ClipboardCheck className="h-4 w-4" />
           Log this session
