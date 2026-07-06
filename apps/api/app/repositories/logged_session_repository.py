@@ -50,6 +50,10 @@ class LoggedSetView:
     perceived_difficulty: int | None
     exercise_id: int
     exercise_name: str
+    # The performed Exercise's free-form targeted muscles, denormalized onto the
+    # view so read models (e.g. the Analytics muscle distribution) never touch the
+    # ORM — mirrors how ``exercise_name`` is carried here.
+    targeted_muscles: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -92,6 +96,7 @@ def _set_view(logged_set: LoggedSet, exercise: Exercise) -> LoggedSetView:
         perceived_difficulty=logged_set.perceived_difficulty,
         exercise_id=exercise.id,
         exercise_name=exercise.name,
+        targeted_muscles=list(exercise.targeted_muscles),
     )
 
 

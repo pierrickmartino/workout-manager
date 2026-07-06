@@ -1,10 +1,10 @@
 """Analytics route: the honest count read model the Analytics screen renders from.
 
 ``GET /api/analytics?range=7d|30d|90d`` returns the standard envelope with the
-range-scoped counts — sessions, active days, and total sets — computed by
-``logbook/analytics.py`` over the user's Logged Sessions. Every number comes
-straight from the *record* side with no Load parsing or conversion, so this slice
-is honest on its own; the volume series, new-PR tile, and muscle distribution
+range-scoped counts — sessions, active days, total sets — and the set-count muscle
+distribution, computed by ``logbook/analytics.py`` over the user's Logged Sessions.
+Every number comes straight from the *record* side with no Load parsing or
+conversion, so this read is honest on its own; the volume series and new-PR tile
 arrive in later slices. The window ends on the server's current date; an unknown
 range is rejected by validation and surfaced in the same error envelope. Reads are
 scoped to the owning user."""
@@ -30,6 +30,9 @@ def _serialize(overview: AnalyticsOverview) -> dict:
         "sessions": overview.sessions,
         "active_days": overview.active_days,
         "total_sets": overview.total_sets,
+        "muscle_distribution": [
+            {"group": group, "pct": pct} for group, pct in overview.muscle_distribution
+        ],
     }
 
 
