@@ -40,11 +40,13 @@ class LogSessionRequest:
 
     ``completion_outcome`` carries the client-declared Completion Outcome (ADR-0013)
     — ``"completed"`` | ``"incomplete"``, or ``None`` when the record does not
-    declare one."""
+    declare one. ``duration_seconds`` carries the recorded Session Duration
+    (ADR-0014) — actual training time in whole seconds, or ``None`` when unrecorded."""
 
     session_id: int
     performed_on: date
     completion_outcome: str | None = None
+    duration_seconds: int | None = None
     logged_sets: list[LoggedSetDraft] = field(default_factory=list)
 
 
@@ -77,6 +79,7 @@ def log_session(
         session_id=request.session_id,
         performed_on=request.performed_on,
         completion_outcome=request.completion_outcome,
+        duration_seconds=request.duration_seconds,
         logged_sets=list(request.logged_sets),
     )
     return logged.create(clerk_user_id, draft)

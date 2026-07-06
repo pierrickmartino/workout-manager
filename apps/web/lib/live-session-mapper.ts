@@ -5,13 +5,15 @@
 // already carries N Logged Sets per Exercise via its flat, ordered list.
 
 import { completionOutcome, type LiveSessionState } from "./live-session.ts";
+import { durationSeconds } from "./live-timer.ts";
 import type { LogSessionInput, LogSetInput } from "./logs-types";
 
 // Map a finished Live Session to the log request. Returns null when no set was
 // completed, so an abandoned Live Session writes nothing. Only completed sets
 // become Logged Sets; their order follows the flat, position-ordered set list. The
 // payload carries the derived Completion Outcome (ADR-0013) the engine computes
-// from whether every prescribed set was attempted.
+// from whether every prescribed set was attempted, and the recorded Session Duration
+// (ADR-0014) — start → last activity, excluding the idle tail, or null when untracked.
 export function mapFinishToLog(
   state: LiveSessionState,
   performedOn: string,
@@ -32,6 +34,7 @@ export function mapFinishToLog(
   return {
     performed_on: performedOn,
     completion_outcome: completionOutcome(state),
+    duration_seconds: durationSeconds(state.startedAt, state.lastActivityAt),
     logged_sets: loggedSets,
   };
 }

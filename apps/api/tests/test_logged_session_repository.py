@@ -174,6 +174,39 @@ def test_completion_outcome_defaults_to_none_when_undeclared(repos):
     assert view.completion_outcome is None
 
 
+def test_duration_seconds_round_trips_on_the_record(repos):
+    # Arrange — a live-tracked performance recording its Session Duration (ADR-0014)
+    logged, sessions, exercises = repos
+    session_view, squat, press = _session_with_two_exercises(sessions, exercises)
+
+    # Act
+    view = logged.create(
+        "user_owner",
+        LoggedSessionDraft(
+            session_id=session_view.id,
+            performed_on=date(2026, 6, 20),
+            duration_seconds=1830,
+            logged_sets=[LoggedSetDraft(exercise_id=squat.id, reps=5)],
+        ),
+    )
+
+    # Assert — the recorded duration persists and reads back on the view
+    assert view.duration_seconds == 1830
+    assert logged.get(view.id, "user_owner").duration_seconds == 1830
+
+
+def test_duration_seconds_defaults_to_none_when_unrecorded(repos):
+    # Arrange — a log-after-the-fact performance never measures a duration (ADR-0014)
+    logged, sessions, exercises = repos
+    session_view, squat, press = _session_with_two_exercises(sessions, exercises)
+
+    # Act
+    view = logged.create("user_owner", _log_draft(session_view.id, squat, press))
+
+    # Assert — the column is nullable; an unrecorded duration stays null
+    assert view.duration_seconds is None
+
+
 def test_get_does_not_leak_another_users_log(repos):
     # Arrange — a Logged Session is user-owned; another user must not read it
     logged, sessions, exercises = repos

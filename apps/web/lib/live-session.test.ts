@@ -312,6 +312,112 @@ test("a zero-rep completed set still counts as attempted (stays Completed)", () 
   assert.equal(completionOutcome(state), "completed");
 });
 
+// Session Duration tracking (issue #88 — F2·S3). The engine stamps a start time on
+// START and moves a last-activity time on each set completion, so the recorded
+// duration (start → last activity) excludes the idle tail after the final set
+// (ADR-0014). Timestamps are opt-in: an event without `now` leaves them untouched.
+
+test("initLiveSession has no timestamps until the session starts", () => {
+  const state = initLiveSession(SESSION);
+  assert.equal(state.startedAt, null);
+  assert.equal(state.lastActivityAt, null);
+});
+
+test("START stamps the start time and seeds last-activity from `now`", () => {
+  // Arrange / Act
+  const started = liveSessionReducer(initLiveSession(SESSION), {
+    type: "START",
+    now: 1_000_000,
+  });
+
+  // Assert — both the start and the first last-activity are the start instant
+  assert.equal(started.startedAt, 1_000_000);
+  assert.equal(started.lastActivityAt, 1_000_000);
+});
+
+test("START without a `now` leaves the timestamps unset", () => {
+  // Timing is opt-in — a caller that doesn't track time still gets a valid start.
+  const started = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  assert.equal(started.status, "in_progress");
+  assert.equal(started.startedAt, null);
+  assert.equal(started.lastActivityAt, null);
+});
+
+test("COMPLETE_SET moves last-activity to `now`, leaving the start fixed", () => {
+  // Arrange
+  const start = 1_000_000;
+  let state = liveSessionReducer(initLiveSession(SESSION), {
+    type: "START",
+    now: start,
+  });
+
+  // Act — a set completed 40 s in
+  state = liveSessionReducer(state, {
+    type: "COMPLETE_SET",
+    index: 0,
+    reps: 5,
+    loadKind: "absolute",
+    loadValue: "70",
+    rpe: 7,
+    now: start + 40_000,
+  });
+
+  // Assert — start is fixed, last-activity advanced to the completion instant
+  assert.equal(state.startedAt, start);
+  assert.equal(state.lastActivityAt, start + 40_000);
+});
+
+test("last-activity is the final set's completion, not the idle time after it", () => {
+  // Arrange — three sets completed, each later than the last
+  const start = 1_000_000;
+  let state = liveSessionReducer(initLiveSession(SESSION), {
+    type: "START",
+    now: start,
+  });
+  const times = [start + 30_000, start + 90_000, start + 150_000];
+  times.forEach((now, index) => {
+    state = liveSessionReducer(state, {
+      type: "COMPLETE_SET",
+      index,
+      reps: 5,
+      loadKind: "absolute",
+      loadValue: "70",
+      rpe: 7,
+      now,
+    });
+  });
+
+  // Act — the user sits idle, then finishes 10 minutes later
+  state = liveSessionReducer(state, { type: "FINISH", now: start + 750_000 });
+
+  // Assert — FINISH does not touch last-activity; it stays at the final completion,
+  // so the idle tail is excluded from the duration (start → last activity).
+  assert.equal(state.lastActivityAt, start + 150_000);
+  assert.equal(state.startedAt, start);
+});
+
+test("COMPLETE_SET without a `now` leaves last-activity where it was", () => {
+  // Arrange
+  const start = 1_000_000;
+  let state = liveSessionReducer(initLiveSession(SESSION), {
+    type: "START",
+    now: start,
+  });
+
+  // Act — a completion that carries no timestamp
+  state = liveSessionReducer(state, {
+    type: "COMPLETE_SET",
+    index: 0,
+    reps: 5,
+    loadKind: "absolute",
+    loadValue: "70",
+    rpe: 7,
+  });
+
+  // Assert — last-activity is unchanged (still the start instant)
+  assert.equal(state.lastActivityAt, start);
+});
+
 test("nextExercise previews the exercise of the upcoming module", () => {
   // Arrange — on the squat module, the next module is Push-up
   let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });

@@ -177,6 +177,56 @@ test("an empty load value maps to a null load, not the empty string", () => {
   assert.equal(payload.logged_sets[0].perceived_difficulty, null);
 });
 
+test("records the Session Duration as start → last activity, excluding the idle tail", () => {
+  // Arrange — a timed START, two sets completed, then an idle gap before FINISH
+  const start = 1_000_000;
+  let state = liveSessionReducer(initLiveSession(SESSION), {
+    type: "START",
+    now: start,
+  });
+  state = liveSessionReducer(state, {
+    type: "COMPLETE_SET",
+    index: 0,
+    reps: 5,
+    loadKind: "absolute",
+    loadValue: "70",
+    rpe: 7,
+    now: start + 60_000,
+  });
+  state = liveSessionReducer(state, {
+    type: "COMPLETE_SET",
+    index: 1,
+    reps: 5,
+    loadKind: "absolute",
+    loadValue: "70",
+    rpe: 7,
+    now: start + 300_000, // last activity at 5 minutes
+  });
+  // Sit idle, then finish 10 minutes after the last set.
+  state = liveSessionReducer(state, { type: "FINISH", now: start + 900_000 });
+
+  // Act
+  const payload = mapFinishToLog(state, "2026-07-06");
+
+  // Assert — duration is start → last activity (300 s), not the wall-clock to finish
+  assert.ok(payload);
+  assert.equal(payload.duration_seconds, 300);
+});
+
+test("records no duration for an untracked session (the static-form case)", () => {
+  // Arrange — completions dispatched without any `now` timestamps
+  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  state = complete(state, 0, 5, "70", 7);
+  state = liveSessionReducer(state, { type: "FINISH" });
+
+  // Act
+  const payload = mapFinishToLog(state, "2026-07-06");
+
+  // Assert — with no start/activity captured, the recorded duration is null
+  assert.ok(payload);
+  assert.equal(payload.duration_seconds, null);
+});
+
 test("finishing with zero completed sets writes nothing (null payload)", () => {
   // Arrange — start and finish without completing any set
   let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });

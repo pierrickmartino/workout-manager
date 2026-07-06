@@ -30,6 +30,9 @@ export interface LoggedSession {
   performed_on: string;
   // The declared Completion Outcome, or null when the record does not declare one.
   completion_outcome: CompletionOutcome | null;
+  // The recorded Session Duration in whole seconds (ADR-0014), or null when the
+  // performance was not live-tracked (e.g. logged after the fact through the form).
+  duration_seconds: number | null;
   logged_sets: LoggedSet[];
 }
 
@@ -52,5 +55,8 @@ export interface LogSetInput {
 export interface LogSessionInput {
   performed_on: string;
   completion_outcome: CompletionOutcome;
+  // The recorded Session Duration in whole seconds (ADR-0014). Optional and nullable:
+  // the Live Session sends start → last-activity time; the static form omits it.
+  duration_seconds?: number | null;
   logged_sets: LogSetInput[];
 }

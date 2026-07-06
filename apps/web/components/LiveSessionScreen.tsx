@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useReducer, useState, useTransition } from "react";
-import { Check, Flag, SkipForward } from "lucide-react";
+import { Check, Clock, Flag, SkipForward } from "lucide-react";
 
 import {
   finishLiveSession,
@@ -17,6 +17,7 @@ import {
   type LiveSessionState,
 } from "@/lib/live-session";
 import { mapFinishToLog } from "@/lib/live-session-mapper";
+import { elapsedSeconds, formatElapsed } from "@/lib/live-timer";
 import { LOAD_KIND_OPTIONS, type LoadKind } from "@/lib/load";
 import type { WorkoutSession } from "@/lib/sessions-types";
 import { PageHeader } from "@/components/pulse/page-header";
@@ -49,16 +50,27 @@ export function LiveSessionScreen({ session, today }: LiveSessionScreenProps) {
   );
   const [finishState, setFinishState] = useState<FinishState>({ error: null });
   const [pending, startTransition] = useTransition();
+  // A wall-clock "now" that ticks each second. The elapsed timer is always derived
+  // from `state.startedAt` vs this value (never a decrementing counter), so a
+  // backgrounded or locked tab shows the correct time on return (ADR-0014).
+  const [now, setNow] = useState(() => Date.now());
 
-  // Arriving at /live starts the performance (not_started → in_progress).
+  // Arriving at /live starts the performance (not_started → in_progress) and stamps
+  // the start instant that Session Duration is measured from.
   useEffect(() => {
-    dispatch({ type: "START" });
+    dispatch({ type: "START", now: Date.now() });
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
   }, []);
 
   const percent = progressPercent(state);
   const module = currentModule(state);
   const upcoming = nextExercise(state);
   const completedCount = state.sets.filter((s) => s.status === "completed").length;
+  const elapsed = formatElapsed(elapsedSeconds(state.startedAt, now));
 
   function handleFinish() {
     const payload = mapFinishToLog(state, today);
@@ -85,11 +97,20 @@ export function LiveSessionScreen({ session, today }: LiveSessionScreenProps) {
           <span className="label-mono text-[11px] text-text-muted">
             PROGRESS
           </span>
-          <span className="font-mono text-[13px] font-bold text-cyan">
+          <span
+            className="flex items-center gap-1.5 font-mono text-[13px] font-bold text-text-primary"
+            aria-label="Elapsed time"
+          >
+            <Clock className="h-3.5 w-3.5 text-text-muted" aria-hidden />
+            {elapsed}
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <SegmentedBar value={percent / 100} className="flex-1" />
+          <span className="ml-3 font-mono text-[13px] font-bold text-cyan">
             {percent}%
           </span>
         </div>
-        <SegmentedBar value={percent / 100} />
         <p className="font-mono text-[12px] text-text-secondary">
           {upcoming ? (
             <>
@@ -123,6 +144,7 @@ export function LiveSessionScreen({ session, today }: LiveSessionScreenProps) {
                     loadKind,
                     loadValue,
                     rpe,
+                    now: Date.now(),
                   })
                 }
                 onSkip={() => dispatch({ type: "ADVANCE" })}

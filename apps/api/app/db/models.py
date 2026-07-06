@@ -199,6 +199,11 @@ class LoggedSession(SQLModel, table=True):
     # log that never declares one (a legacy after-the-fact record) leaves it unset,
     # and only an explicit ``incomplete`` holds the Session as the Next Session.
     completion_outcome: str | None = Field(default=None)
+    # Session Duration (ADR-0014): whole seconds of actual training time, measured
+    # start → last activity so idle gaps are excluded. Nullable and known only for a
+    # live-tracked performance — a log recorded after the fact through the static
+    # form never measures one and stays NULL.
+    duration_seconds: int | None = Field(default=None)
     created_at: datetime = Field(default_factory=_utcnow)
 
 

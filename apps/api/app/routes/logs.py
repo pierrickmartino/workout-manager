@@ -88,11 +88,16 @@ class LogSessionBody(BaseModel):
 
     ``completion_outcome`` is the optional, client-declared Completion Outcome
     (ADR-0013): ``"completed"`` | ``"incomplete"``. Absent means the record does not
-    declare one — the column stays null and the Session still advances the Protocol."""
+    declare one — the column stays null and the Session still advances the Protocol.
+
+    ``duration_seconds`` is the optional recorded Session Duration (ADR-0014) — actual
+    training time in whole seconds, measured start → last activity. Absent (the static
+    form's path) leaves it null; a value can never run backwards, so it must be ≥ 0."""
 
     performed_on: date
     logged_sets: list[LogSetBody] = Field(min_length=1)
     completion_outcome: str | None = None
+    duration_seconds: int | None = Field(default=None, ge=0)
 
     @field_validator("completion_outcome")
     @classmethod
@@ -111,6 +116,7 @@ def _serialize(view: LoggedSessionView) -> dict:
         "training_type": view.training_type,
         "performed_on": view.performed_on.isoformat(),
         "completion_outcome": view.completion_outcome,
+        "duration_seconds": view.duration_seconds,
         "logged_sets": [
             {
                 "position": s.position,
@@ -138,6 +144,7 @@ def create_log(
         session_id=session_id,
         performed_on=payload.performed_on,
         completion_outcome=payload.completion_outcome,
+        duration_seconds=payload.duration_seconds,
         logged_sets=[s.to_draft() for s in payload.logged_sets],
     )
     try:
