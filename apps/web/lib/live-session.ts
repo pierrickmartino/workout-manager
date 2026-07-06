@@ -39,10 +39,16 @@ export interface LiveSessionState {
   sets: LiveSet[];
   currentIndex: number;
   status: LiveStatus;
+  // Wall-clock timestamps (epoch ms) backing Session Duration (ADR-0014).
+  // `startedAt` is stamped on START; `lastActivityAt` moves to each set completion,
+  // so start → last activity excludes the idle tail after the final set. Both are
+  // null until a timed START (timing is opt-in — see `now` on the events).
+  startedAt: number | null;
+  lastActivityAt: number | null;
 }
 
 export type LiveEvent =
-  | { type: "START" }
+  | { type: "START"; now?: number }
   | {
       type: "COMPLETE_SET";
       index: number;
@@ -50,9 +56,10 @@ export type LiveEvent =
       loadKind: LoadKind;
       loadValue: string;
       rpe: number | null;
+      now?: number;
     }
   | { type: "ADVANCE" }
-  | { type: "FINISH" };
+  | { type: "FINISH"; now?: number };
 
 // Parse the leading whole-number rep count from a free-text prescription (e.g.
 // "8-12" → 8, "10" → 10). Non-numeric prescriptions (e.g. "AMRAP") pre-fill 0,
@@ -118,6 +125,8 @@ export function initLiveSession(session: WorkoutSession): LiveSessionState {
     sets,
     currentIndex: 0,
     status: "not_started",
+    startedAt: null,
+    lastActivityAt: null,
   };
 }
 
@@ -130,7 +139,14 @@ export function liveSessionReducer(
   switch (event.type) {
     case "START":
       if (state.status !== "not_started") return state;
-      return { ...state, status: "in_progress" };
+      // A timed START seeds both the start and the first last-activity instant; an
+      // untimed one leaves them null (timing is opt-in).
+      return {
+        ...state,
+        status: "in_progress",
+        startedAt: event.now ?? null,
+        lastActivityAt: event.now ?? null,
+      };
 
     case "COMPLETE_SET": {
       const sets = state.sets.map((set, index) =>
@@ -145,7 +161,14 @@ export function liveSessionReducer(
             }
           : set,
       );
-      return { ...state, sets, currentIndex: firstPendingIndex(sets) };
+      // Completing a set is the activity that moves last-activity; a completion
+      // without a `now` leaves it untouched.
+      return {
+        ...state,
+        sets,
+        currentIndex: firstPendingIndex(sets),
+        lastActivityAt: event.now ?? state.lastActivityAt,
+      };
     }
 
     case "ADVANCE":

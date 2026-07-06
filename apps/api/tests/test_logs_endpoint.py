@@ -207,6 +207,58 @@ def test_an_unknown_completion_outcome_is_rejected():
     assert response.json()["success"] is False
 
 
+def test_recorded_session_duration_is_persisted_and_serialized():
+    # Arrange — a live-tracked performance carrying its Session Duration (ADR-0014)
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_duration")
+    session = _generate_session(client, headers)
+
+    # Act
+    logged = client.post(
+        f"/api/sessions/{session['id']}/logs",
+        headers=headers,
+        json=_log_body(session, duration_seconds=1830),
+    )
+
+    # Assert — the recorded duration round-trips in the serialized view
+    assert logged.status_code == 200
+    assert logged.json()["data"]["duration_seconds"] == 1830
+
+
+def test_duration_seconds_is_optional_and_defaults_to_null():
+    # Arrange — a log that never records a duration (the static form path)
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_no_duration")
+    session = _generate_session(client, headers)
+
+    # Act
+    logged = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=_log_body(session)
+    )
+
+    # Assert — an unrecorded duration serializes as null
+    assert logged.status_code == 200
+    assert logged.json()["data"]["duration_seconds"] is None
+
+
+def test_a_negative_duration_seconds_is_rejected():
+    # Arrange
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_bad_duration")
+    session = _generate_session(client, headers)
+
+    # Act — a duration can never run backwards
+    response = client.post(
+        f"/api/sessions/{session['id']}/logs",
+        headers=headers,
+        json=_log_body(session, duration_seconds=-5),
+    )
+
+    # Assert
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+
+
 def test_same_session_logged_twice_yields_two_history_entries():
     # Arrange
     client, ctx = build_client()

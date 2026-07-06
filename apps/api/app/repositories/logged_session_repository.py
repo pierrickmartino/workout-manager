@@ -37,11 +37,14 @@ class LoggedSessionDraft:
 
     ``completion_outcome`` is the client-declared Completion Outcome (ADR-0013) —
     ``"completed"`` | ``"incomplete"``, or ``None`` when the record does not declare
-    one (e.g. a log-after-the-fact through the static form)."""
+    one (e.g. a log-after-the-fact through the static form). ``duration_seconds`` is
+    the recorded Session Duration (ADR-0014) — actual training time in whole seconds,
+    or ``None`` when unrecorded (the static form measures none)."""
 
     session_id: int
     performed_on: date
     completion_outcome: str | None = None
+    duration_seconds: int | None = None
     logged_sets: list[LoggedSetDraft] = field(default_factory=list)
 
 
@@ -73,6 +76,9 @@ class LoggedSessionView:
     logged_sets: list[LoggedSetView]
     # The client-declared Completion Outcome (ADR-0013), or ``None`` when undeclared.
     completion_outcome: str | None = None
+    # The recorded Session Duration in whole seconds (ADR-0014), or ``None`` when
+    # the performance was not live-tracked and measured no duration.
+    duration_seconds: int | None = None
 
 
 class LoggedSessionRepository(Protocol):
@@ -130,6 +136,7 @@ class SqlLoggedSessionRepository:
             performed_on=logged.performed_on,
             logged_sets=views,
             completion_outcome=logged.completion_outcome,
+            duration_seconds=logged.duration_seconds,
         )
 
     def create(
@@ -140,6 +147,7 @@ class SqlLoggedSessionRepository:
             session_id=draft.session_id,
             performed_on=draft.performed_on,
             completion_outcome=draft.completion_outcome,
+            duration_seconds=draft.duration_seconds,
         )
         self._session.add(logged)
         self._session.commit()
@@ -204,6 +212,7 @@ class InMemoryLoggedSessionRepository:
             performed_on=logged.performed_on,
             logged_sets=views,
             completion_outcome=logged.completion_outcome,
+            duration_seconds=logged.duration_seconds,
         )
 
     def create(
@@ -215,6 +224,7 @@ class InMemoryLoggedSessionRepository:
             session_id=draft.session_id,
             performed_on=draft.performed_on,
             completion_outcome=draft.completion_outcome,
+            duration_seconds=draft.duration_seconds,
         )
         self._next_id += 1
         self._logged[logged.id] = logged
