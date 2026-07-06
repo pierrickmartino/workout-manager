@@ -1,4 +1,4 @@
-"""Range-scoped Analytics counts (F3 Slice 1–4) — an honest read of the *record*.
+"""Range-scoped Analytics read model (F3 Slice 1–5) — an honest read of the *record*.
 
 ``analytics_overview`` reads the user's Logged Sessions and projects them onto a
 single ``AnalyticsOverview``: the count of Logged Sessions, active days (distinct
@@ -6,6 +6,12 @@ single ``AnalyticsOverview``: the count of Logged Sessions, active days (distinc
 performed inside the selected rolling window ending on a reference ``today``. The
 count and distribution come straight from Logged Sessions and Logged Sets — no Load
 parsing, no conversion.
+
+On top of the counts it adds the total-**volume** line (Slice 5): the daily-bucketed
+kg volume converted from typed Loads (``domain/volume``), the coverage percentage of
+logged reps that actually converted, and the trend delta against the immediately
+preceding equal-length window — the one part of the read model that does resolve
+Loads, and does so coverage-honestly (ADR-0010).
 
 On top of the counts it derives Personal Records read-time (``domain/personal_records``)
 over the user's whole history: the **last 8 PRs all-time** (deliberately decoupled from
@@ -29,6 +35,7 @@ from app.domain.personal_records import (
     PersonalRecord,
     detect_personal_records,
 )
+from app.domain.volume import VolumePoint, VolumeSet, volume_series
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
     LoggedSessionView,
@@ -65,6 +72,13 @@ class AnalyticsOverview:
     (Slice 4), newest first and **decoupled from the window** so the feed rarely
     empties. ``new_prs`` counts only the PRs whose date falls inside the selected
     window — the number the bento's fourth tile shows.
+
+    ``volume_points`` is the daily-bucketed total-volume line for the window (Slice 5),
+    ascending and empty when nothing convertible was logged. ``volume_coverage`` is the
+    share (0–100) of the window's logged reps the line actually converted — the honest
+    caption behind "from N% of your logged volume". ``volume_delta`` is the window's
+    total volume against the immediately preceding equal-length window, or ``None`` when
+    there is no prior volume to compare against.
     """
 
     range: str
@@ -74,6 +88,9 @@ class AnalyticsOverview:
     muscle_distribution: tuple[tuple[str, float], ...]
     recent_records: tuple[PersonalRecord, ...]
     new_prs: int
+    volume_points: tuple[VolumePoint, ...]
+    volume_coverage: float
+    volume_delta: float | None
 
 
 def analytics_overview(
@@ -102,6 +119,10 @@ def analytics_overview(
     recent = tuple(reversed(records[-RECENT_RECORDS_LIMIT:]))
     new_prs = sum(1 for record in records if start <= record.performed_on <= today)
 
+    # Total volume is computed over the whole history (the engine slices its own
+    # window and the preceding one for the delta), then bucketed daily for the chart.
+    series = volume_series(_volume_sets(history), days=window.days, today=today)
+
     return AnalyticsOverview(
         range=window.value,
         sessions=len(in_window),
@@ -112,6 +133,9 @@ def analytics_overview(
         ),
         recent_records=recent,
         new_prs=new_prs,
+        volume_points=series.points,
+        volume_coverage=series.coverage_pct,
+        volume_delta=series.delta_pct,
     )
 
 
@@ -126,6 +150,24 @@ def _set_records(history: list[LoggedSessionView]) -> list[LoggedSetRecord]:
         LoggedSetRecord(
             exercise_id=logged_set.exercise_id,
             exercise_name=logged_set.exercise_name,
+            reps=logged_set.reps,
+            load=logged_set.load,
+            performed_on=session.performed_on,
+        )
+        for session in history
+        for logged_set in session.logged_sets
+    ]
+
+
+def _volume_sets(history: list[LoggedSessionView]) -> list[VolumeSet]:
+    """Flatten Logged Sessions into dated Logged Sets for the volume engine.
+
+    The engine needs only each set's reps, typed Load, and the date it was performed
+    on — the session's ``performed_on`` — to convert and bucket it.
+    """
+
+    return [
+        VolumeSet(
             reps=logged_set.reps,
             load=logged_set.load,
             performed_on=session.performed_on,
