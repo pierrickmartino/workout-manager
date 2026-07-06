@@ -137,6 +137,76 @@ def test_user_logs_a_performance_and_reads_it_back_in_history():
     assert entries[0]["id"] == data["id"]
 
 
+def test_client_declared_completion_outcome_is_persisted_and_serialized():
+    # Arrange — the client declares the performance Incomplete (ADR-0013)
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_outcome")
+    session = _generate_session(client, headers)
+
+    # Act
+    logged = client.post(
+        f"/api/sessions/{session['id']}/logs",
+        headers=headers,
+        json=_log_body(session, completion_outcome="incomplete"),
+    )
+
+    # Assert — the declared outcome round-trips in the serialized view
+    assert logged.status_code == 200
+    assert logged.json()["data"]["completion_outcome"] == "incomplete"
+
+
+def test_completion_outcome_is_optional_and_defaults_to_null():
+    # Arrange — a log that never declares an outcome
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_no_outcome")
+    session = _generate_session(client, headers)
+
+    # Act
+    logged = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=_log_body(session)
+    )
+
+    # Assert — an undeclared outcome serializes as null
+    assert logged.status_code == 200
+    assert logged.json()["data"]["completion_outcome"] is None
+
+
+def test_an_explicit_null_completion_outcome_is_accepted():
+    # Arrange — a client that sends the field but declares no outcome
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_null_outcome")
+    session = _generate_session(client, headers)
+
+    # Act — an explicit null passes the boundary validator untouched
+    logged = client.post(
+        f"/api/sessions/{session['id']}/logs",
+        headers=headers,
+        json=_log_body(session, completion_outcome=None),
+    )
+
+    # Assert
+    assert logged.status_code == 200
+    assert logged.json()["data"]["completion_outcome"] is None
+
+
+def test_an_unknown_completion_outcome_is_rejected():
+    # Arrange
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_bad_outcome")
+    session = _generate_session(client, headers)
+
+    # Act — "failed" is not a domain outcome (ADR-0013 rejects the collision term)
+    response = client.post(
+        f"/api/sessions/{session['id']}/logs",
+        headers=headers,
+        json=_log_body(session, completion_outcome="failed"),
+    )
+
+    # Assert
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+
+
 def test_same_session_logged_twice_yields_two_history_entries():
     # Arrange
     client, ctx = build_client()

@@ -62,11 +62,14 @@ def _build():
     return exercises, protocols, logged
 
 
-def _perform(logged, user, session_id):
+def _perform(logged, user, session_id, completion_outcome=None):
     logged.create(
         user,
         LoggedSessionDraft(
-            session_id=session_id, performed_on=date(2026, 1, 1), logged_sets=[]
+            session_id=session_id,
+            performed_on=date(2026, 1, 1),
+            completion_outcome=completion_outcome,
+            logged_sets=[],
         ),
     )
 
@@ -129,6 +132,80 @@ def test_next_session_is_none_once_every_session_is_performed():
     # Assert — the Protocol is finished
     assert progress.next_session is None
     assert progress.completed_count == 3
+
+
+def test_an_incomplete_log_leaves_the_session_as_next():
+    # Arrange — Week 1 is performed but declared Incomplete (a set left un-attempted)
+    exercises, protocols, logged = _build()
+    view = adopt(_three_week_protocol(), "user_incomplete", PARAMS,
+                 exercises=exercises, protocols=protocols)
+    _perform(logged, "user_incomplete", view.sessions[0].session_id,
+             completion_outcome="incomplete")
+
+    # Act
+    progress = protocol_progress(
+        "user_incomplete", view.id, protocols=protocols, logged=logged
+    )
+
+    # Assert — an Incomplete performance does not advance: Week 1 is still next,
+    # and is not counted toward the Protocol's completed count (ADR-0013).
+    assert progress.next_session.week == 1
+    assert progress.completed_count == 0
+
+
+def test_a_completed_log_advances_past_the_session():
+    # Arrange — Week 1 is performed and declared Completed
+    exercises, protocols, logged = _build()
+    view = adopt(_three_week_protocol(), "user_completed", PARAMS,
+                 exercises=exercises, protocols=protocols)
+    _perform(logged, "user_completed", view.sessions[0].session_id,
+             completion_outcome="completed")
+
+    # Act
+    progress = protocol_progress(
+        "user_completed", view.id, protocols=protocols, logged=logged
+    )
+
+    # Assert — a Completed log advances to Week 2 and counts as completed
+    assert progress.next_session.week == 2
+    assert progress.completed_count == 1
+
+
+def test_incomplete_then_completed_advances_the_session():
+    # Arrange — Week 1 is first failed (Incomplete), then retried to Completed
+    exercises, protocols, logged = _build()
+    view = adopt(_three_week_protocol(), "user_retry", PARAMS,
+                 exercises=exercises, protocols=protocols)
+    week_one = view.sessions[0].session_id
+    _perform(logged, "user_retry", week_one, completion_outcome="incomplete")
+    _perform(logged, "user_retry", week_one, completion_outcome="completed")
+
+    # Act
+    progress = protocol_progress(
+        "user_retry", view.id, protocols=protocols, logged=logged
+    )
+
+    # Assert — once any Completed log exists for the Session, it advances
+    assert progress.next_session.week == 2
+    assert progress.completed_count == 1
+
+
+def test_an_undeclared_log_still_advances_the_session():
+    # Arrange — a log that never declares an outcome (NULL) predates ADR-0013 and
+    # keeps ADR-0001's "any log advances" behavior; the static form also relies on
+    # this by defaulting to Completed.
+    exercises, protocols, logged = _build()
+    view = adopt(_three_week_protocol(), "user_legacy", PARAMS,
+                 exercises=exercises, protocols=protocols)
+    _perform(logged, "user_legacy", view.sessions[0].session_id)
+
+    # Act
+    progress = protocol_progress(
+        "user_legacy", view.id, protocols=protocols, logged=logged
+    )
+
+    # Assert — an undeclared (NULL) outcome advances the Protocol
+    assert progress.next_session.week == 2
 
 
 def test_progress_is_none_for_a_protocol_not_owned_by_the_user():

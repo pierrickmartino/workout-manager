@@ -141,6 +141,39 @@ def test_same_session_can_be_logged_multiple_times_separately(repos):
     assert logged.get(second.id, "user_owner").logged_sets[0].reps == 6
 
 
+def test_completion_outcome_round_trips_on_the_record(repos):
+    # Arrange — a performance the client declared Incomplete (ADR-0013)
+    logged, sessions, exercises = repos
+    session_view, squat, press = _session_with_two_exercises(sessions, exercises)
+
+    # Act
+    view = logged.create(
+        "user_owner",
+        LoggedSessionDraft(
+            session_id=session_view.id,
+            performed_on=date(2026, 6, 20),
+            completion_outcome="incomplete",
+            logged_sets=[LoggedSetDraft(exercise_id=squat.id, reps=5)],
+        ),
+    )
+
+    # Assert — the declared outcome persists and reads back on the view
+    assert view.completion_outcome == "incomplete"
+    assert logged.get(view.id, "user_owner").completion_outcome == "incomplete"
+
+
+def test_completion_outcome_defaults_to_none_when_undeclared(repos):
+    # Arrange — a draft that never declares an outcome (e.g. legacy log-after-fact)
+    logged, sessions, exercises = repos
+    session_view, squat, press = _session_with_two_exercises(sessions, exercises)
+
+    # Act
+    view = logged.create("user_owner", _log_draft(session_view.id, squat, press))
+
+    # Assert — the column is nullable; an undeclared outcome stays null
+    assert view.completion_outcome is None
+
+
 def test_get_does_not_leak_another_users_log(repos):
     # Arrange — a Logged Session is user-owned; another user must not read it
     logged, sessions, exercises = repos

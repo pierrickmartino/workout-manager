@@ -194,6 +194,11 @@ class LoggedSession(SQLModel, table=True):
     clerk_user_id: str = Field(index=True)
     session_id: int = Field(foreign_key="workout_session.id", index=True)
     performed_on: date
+    # Completion Outcome (ADR-0013): ``completed`` | ``incomplete``, the client's
+    # declared verdict on whether every prescribed set was attempted. Nullable — a
+    # log that never declares one (a legacy after-the-fact record) leaves it unset,
+    # and only an explicit ``incomplete`` holds the Session as the Next Session.
+    completion_outcome: str | None = Field(default=None)
     created_at: datetime = Field(default_factory=_utcnow)
 
 

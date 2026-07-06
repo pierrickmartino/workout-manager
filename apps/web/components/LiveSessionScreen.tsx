@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useReducer, useState, useTransition } from "react";
-import { Check, Flag } from "lucide-react";
+import { Check, Flag, SkipForward } from "lucide-react";
 
 import {
   finishLiveSession,
@@ -125,6 +125,7 @@ export function LiveSessionScreen({ session, today }: LiveSessionScreenProps) {
                     rpe,
                   })
                 }
+                onSkip={() => dispatch({ type: "ADVANCE" })}
               />
             </li>
           ))}
@@ -155,12 +156,15 @@ interface SetRowProps {
     loadValue: string,
     rpe: number | null,
   ) => void;
+  onSkip: () => void;
 }
 
 // One prescribed set. Its edited reps/load/RPE live as local input state, seeded
 // from the prescription pre-fill; "Complete" folds those values into a
-// COMPLETE_SET event (the engine's only editing path).
-function SetRow({ set, isCurrent, onComplete }: SetRowProps) {
+// COMPLETE_SET event (the engine's only editing path). "Skip" leaves the set
+// un-attempted (ADVANCE) — finishing with any skipped set records the performance
+// Incomplete (ADR-0013).
+function SetRow({ set, isCurrent, onComplete, onSkip }: SetRowProps) {
   const [reps, setReps] = useState(String(set.reps));
   const [loadKind, setLoadKind] = useState<LoadKind>(set.loadKind);
   const [loadValue, setLoadValue] = useState(set.loadValue);
@@ -272,16 +276,27 @@ function SetRow({ set, isCurrent, onComplete }: SetRowProps) {
       </div>
 
       {!completed ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleComplete}
-          className="self-start"
-        >
-          <Check className="h-3.5 w-3.5" />
-          Complete set
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleComplete}
+          >
+            <Check className="h-3.5 w-3.5" />
+            Complete set
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onSkip}
+            aria-label={`Skip ${label}`}
+          >
+            <SkipForward className="h-3.5 w-3.5" />
+            Skip
+          </Button>
+        </div>
       ) : null}
     </Card>
   );

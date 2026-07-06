@@ -36,10 +36,15 @@ class UnknownExerciseError(LogSessionError):
 
 @dataclass(frozen=True)
 class LogSessionRequest:
-    """A request to record a performance: which Session, when, and the sets done."""
+    """A request to record a performance: which Session, when, and the sets done.
+
+    ``completion_outcome`` carries the client-declared Completion Outcome (ADR-0013)
+    — ``"completed"`` | ``"incomplete"``, or ``None`` when the record does not
+    declare one."""
 
     session_id: int
     performed_on: date
+    completion_outcome: str | None = None
     logged_sets: list[LoggedSetDraft] = field(default_factory=list)
 
 
@@ -71,6 +76,7 @@ def log_session(
     draft = LoggedSessionDraft(
         session_id=request.session_id,
         performed_on=request.performed_on,
+        completion_outcome=request.completion_outcome,
         logged_sets=list(request.logged_sets),
     )
     return logged.create(clerk_user_id, draft)

@@ -4,6 +4,11 @@
 
 import type { Load, LoadKind } from "./load";
 
+// The Completion Outcome (ADR-0013) a client declares on a Logged Session:
+// Completed when every prescribed set was attempted, Incomplete when any was left
+// un-attempted. Only a Completed log advances the Protocol to its Next Session.
+export type CompletionOutcome = "completed" | "incomplete";
+
 // One actual set the user performed within a Logged Session — the real reps,
 // load, and perceived difficulty, joined to the catalog Exercise performed.
 export interface LoggedSet {
@@ -23,6 +28,8 @@ export interface LoggedSession {
   session_id: number;
   training_type: string;
   performed_on: string;
+  // The declared Completion Outcome, or null when the record does not declare one.
+  completion_outcome: CompletionOutcome | null;
   logged_sets: LoggedSet[];
 }
 
@@ -38,8 +45,12 @@ export interface LogSetInput {
   perceived_difficulty: number | null;
 }
 
-// The request the user submits to record a performance of a Session.
+// The request the user submits to record a performance of a Session. The
+// `completion_outcome` is the client-declared verdict (ADR-0013): the Live Session
+// derives it from whether every set was attempted; the static form defaults to
+// `completed`.
 export interface LogSessionInput {
   performed_on: string;
+  completion_outcome: CompletionOutcome;
   logged_sets: LogSetInput[];
 }

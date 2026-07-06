@@ -72,8 +72,12 @@ export async function submitLog(
     return { error: "Enter the reps for at least one exercise you performed." };
   }
 
+  // The static form logs a performance after the fact, with no live per-set
+  // tracking to derive from, so it declares the Completion Outcome `completed`
+  // (ADR-0013) — the honest default that advances the Protocol.
   const result = await logSession(sessionId, {
     performed_on: performedOn,
+    completion_outcome: "completed",
     logged_sets: sets,
   });
   if (!result.success || !result.data) {

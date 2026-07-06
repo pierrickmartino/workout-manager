@@ -69,7 +69,7 @@ def _build():
     return exercises, protocols, logged
 
 
-def _log_week_one(logged, user, view, *, reps, effort):
+def _log_week_one(logged, user, view, *, reps, effort, completion_outcome=None):
     """Log Week 1's Back Squat as performed with the given reps/effort per set."""
 
     week_one = view.sessions[0]
@@ -79,6 +79,7 @@ def _log_week_one(logged, user, view, *, reps, effort):
         LoggedSessionDraft(
             session_id=week_one.session_id,
             performed_on=date(2026, 1, 1),
+            completion_outcome=completion_outcome,
             logged_sets=[
                 LoggedSetDraft(
                     exercise_id=exercise_id,
@@ -110,6 +111,27 @@ def test_strong_logged_sets_raise_the_load_on_upcoming_sessions():
     assert [s.prescriptions[0].recommended_load for s in upcoming] == [raised, raised]
     assert progress.next_session.week == 2
     assert progress.next_session.prescriptions[0].recommended_load == raised
+
+
+def test_incomplete_week_one_stays_next_yet_its_sets_still_progress_the_load():
+    # Arrange — Week 1 is performed strong but declared Incomplete (ADR-0013): a
+    # set was left un-attempted, so it must be retried.
+    exercises, protocols, logged = _build()
+    view = adopt(_three_week_protocol(), "user_partial", PARAMS,
+                 exercises=exercises, protocols=protocols)
+    _log_week_one(logged, "user_partial", view, reps=5, effort=6,
+                  completion_outcome="incomplete")
+
+    # Act
+    progress = progressed_protocol(
+        "user_partial", view.id, protocols=protocols, logged=logged
+    )
+
+    # Assert — Week 1 is still next (Incomplete does not advance), but the sets that
+    # *were* done are real history and still raise the recommended load.
+    assert progress.next_session.week == 1
+    assert progress.completed_count == 0
+    assert progress.next_session.prescriptions[0].recommended_load == parse_load("62.5 kg").to_dict()
 
 
 def test_missed_reps_reduce_the_load_on_upcoming_sessions():

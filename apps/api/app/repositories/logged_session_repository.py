@@ -33,10 +33,15 @@ class LoggedSetDraft:
 
 @dataclass(frozen=True)
 class LoggedSessionDraft:
-    """A performance to record: which Session, on what date, and the sets done."""
+    """A performance to record: which Session, on what date, and the sets done.
+
+    ``completion_outcome`` is the client-declared Completion Outcome (ADR-0013) —
+    ``"completed"`` | ``"incomplete"``, or ``None`` when the record does not declare
+    one (e.g. a log-after-the-fact through the static form)."""
 
     session_id: int
     performed_on: date
+    completion_outcome: str | None = None
     logged_sets: list[LoggedSetDraft] = field(default_factory=list)
 
 
@@ -66,6 +71,8 @@ class LoggedSessionView:
     training_type: str
     performed_on: date
     logged_sets: list[LoggedSetView]
+    # The client-declared Completion Outcome (ADR-0013), or ``None`` when undeclared.
+    completion_outcome: str | None = None
 
 
 class LoggedSessionRepository(Protocol):
@@ -122,6 +129,7 @@ class SqlLoggedSessionRepository:
             training_type=self._training_type(logged.session_id),
             performed_on=logged.performed_on,
             logged_sets=views,
+            completion_outcome=logged.completion_outcome,
         )
 
     def create(
@@ -131,6 +139,7 @@ class SqlLoggedSessionRepository:
             clerk_user_id=clerk_user_id,
             session_id=draft.session_id,
             performed_on=draft.performed_on,
+            completion_outcome=draft.completion_outcome,
         )
         self._session.add(logged)
         self._session.commit()
@@ -194,6 +203,7 @@ class InMemoryLoggedSessionRepository:
             training_type=self._training_type(logged.session_id, logged.clerk_user_id),
             performed_on=logged.performed_on,
             logged_sets=views,
+            completion_outcome=logged.completion_outcome,
         )
 
     def create(
@@ -204,6 +214,7 @@ class InMemoryLoggedSessionRepository:
             clerk_user_id=clerk_user_id,
             session_id=draft.session_id,
             performed_on=draft.performed_on,
+            completion_outcome=draft.completion_outcome,
         )
         self._next_id += 1
         self._logged[logged.id] = logged
