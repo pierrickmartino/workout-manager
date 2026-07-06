@@ -62,6 +62,10 @@ _Avoid_: Completed session, history entry
 A record of one actual set the user performed — the real repetitions, load, and perceived difficulty — within a Logged Session.
 _Avoid_: Result, performance entry
 
+**Completion Outcome**:
+Whether a Logged Session is **Completed** or **Incomplete** — a property of the record itself. Completed when every prescribed set of the Session was attempted, regardless of the reps or load achieved; Incomplete when any prescribed set was left un-attempted. A set ground out to zero reps is still *attempted*, so missing reps or training to failure never makes a Session Incomplete — only un-done prescribed work does. Only a Completed Logged Session advances a Protocol to its Next Session; an Incomplete one leaves that Session as next and must be retried by running the whole Session again.
+_Avoid_: Failed, partial, abandoned (as the domain term); status
+
 ## Profile
 
 **Fitness Profile**:
