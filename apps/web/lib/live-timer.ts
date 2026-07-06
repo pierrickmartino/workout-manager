@@ -8,6 +8,50 @@ const MS_PER_SECOND = 1000;
 const SECONDS_PER_MINUTE = 60;
 const SECONDS_PER_HOUR = 3600;
 
+// The rest countdown between sets (issue #89 — F2·S4). Fallback rest when an
+// Exercise Prescription names no `rest_seconds` of its own.
+export const DEFAULT_REST_SECONDS = 90;
+
+// Whole seconds the `−15 / +15` controls add to or subtract from a running rest.
+export const REST_ADJUST_STEP_SECONDS = 15;
+
+// The rest duration a completed set's rest countdown starts from: the
+// prescription's own `rest_seconds`, or the named fallback when it has none.
+export function resolveRestSeconds(restSeconds: number | null): number {
+  return restSeconds ?? DEFAULT_REST_SECONDS;
+}
+
+// The wall-clock instant a rest of `restSeconds` started at `now` will elapse.
+// Stored and compared against a live `now`, so a backgrounded/locked tab reads the
+// correct remaining time on return — never a decrementing tick counter.
+export function restTargetEnd(now: number, restSeconds: number): number {
+  return now + restSeconds * MS_PER_SECOND;
+}
+
+// Whole seconds left on a running rest: the ceiling of the wall-clock gap to
+// `targetEndAt`, so the display reads the full duration for the first tick and only
+// reaches 0 the instant the rest truly elapses. Clamped to 0 once past the
+// target-end, and 0 when no rest is running (`targetEndAt` null).
+export function restRemainingSeconds(
+  targetEndAt: number | null,
+  now: number,
+): number {
+  if (targetEndAt === null) return 0;
+  return Math.max(0, Math.ceil((targetEndAt - now) / MS_PER_SECOND));
+}
+
+// Shift a running rest's target-end by `deltaSeconds` — how the `−15 / +15`
+// controls adjust the countdown. The result never falls before `now`, so a `−15`
+// past the end simply ends the rest instead of banking negative time that a later
+// `+15` would have to climb back out of.
+export function adjustRestTargetEnd(
+  targetEndAt: number,
+  deltaSeconds: number,
+  now: number,
+): number {
+  return Math.max(now, targetEndAt + deltaSeconds * MS_PER_SECOND);
+}
+
 // Whole seconds of wall-clock between `startedAt` and `now`. Zero before a session
 // has started (no start timestamp) and never negative if the clock jumps backwards.
 export function elapsedSeconds(startedAt: number | null, now: number): number {

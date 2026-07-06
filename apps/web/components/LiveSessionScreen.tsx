@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useReducer, useState, useTransition } from "react";
-import { Check, Clock, Flag, SkipForward } from "lucide-react";
+import { Check, Clock, Flag, Minus, Plus, SkipForward, Timer } from "lucide-react";
 
 import {
   finishLiveSession,
@@ -17,7 +17,15 @@ import {
   type LiveSessionState,
 } from "@/lib/live-session";
 import { mapFinishToLog } from "@/lib/live-session-mapper";
-import { elapsedSeconds, formatElapsed } from "@/lib/live-timer";
+import {
+  elapsedSeconds,
+  formatElapsed,
+  resolveRestSeconds,
+  restTargetEnd,
+  restRemainingSeconds,
+  adjustRestTargetEnd,
+  REST_ADJUST_STEP_SECONDS,
+} from "@/lib/live-timer";
 import { LOAD_KIND_OPTIONS, type LoadKind } from "@/lib/load";
 import type { WorkoutSession } from "@/lib/sessions-types";
 import { PageHeader } from "@/components/pulse/page-header";
@@ -54,6 +62,11 @@ export function LiveSessionScreen({ session, today }: LiveSessionScreenProps) {
   // from `state.startedAt` vs this value (never a decrementing counter), so a
   // backgrounded or locked tab shows the correct time on return (ADR-0014).
   const [now, setNow] = useState(() => Date.now());
+  // The rest countdown between sets (issue #89 — F2·S4). A stored target-end
+  // timestamp — null when no rest is running — compared to the ticking `now`, so
+  // like the elapsed timer it survives a phone lock. Purely client-side: rest is
+  // never written to the record.
+  const [restEndAt, setRestEndAt] = useState<number | null>(null);
 
   // Arriving at /live starts the performance (not_started → in_progress) and stamps
   // the start instant that Session Duration is measured from.
@@ -66,11 +79,68 @@ export function LiveSessionScreen({ session, today }: LiveSessionScreenProps) {
     return () => clearInterval(interval);
   }, []);
 
+  const restRemaining = restRemainingSeconds(restEndAt, now);
+  const isResting = restEndAt !== null;
+
+  // When the running rest elapses, resume into the next set by clearing it — the
+  // current-set pointer already moved on set completion, so the next set is simply
+  // revealed once the countdown card disappears.
+  useEffect(() => {
+    if (restEndAt !== null && restRemainingSeconds(restEndAt, now) === 0) {
+      setRestEndAt(null);
+    }
+  }, [restEndAt, now]);
+
   const percent = progressPercent(state);
   const module = currentModule(state);
   const upcoming = nextExercise(state);
   const completedCount = state.sets.filter((s) => s.status === "completed").length;
   const elapsed = formatElapsed(elapsedSeconds(state.startedAt, now));
+
+  // The prescription's own rest for the set at `index`, or null when it names none
+  // (resolveRestSeconds then supplies the fallback). Looked up from the raw Session
+  // by module position, keeping rest out of the record-building engine entirely.
+  function restSecondsForSet(index: number): number | null {
+    const position = state.sets[index]?.modulePosition;
+    const prescription = session.prescriptions.find((p) => p.position === position);
+    return prescription?.rest_seconds ?? null;
+  }
+
+  function handleCompleteSet(
+    index: number,
+    reps: number,
+    loadKind: LoadKind,
+    loadValue: string,
+    rpe: number | null,
+  ) {
+    const completedAt = Date.now();
+    dispatch({
+      type: "COMPLETE_SET",
+      index,
+      reps,
+      loadKind,
+      loadValue,
+      rpe,
+      now: completedAt,
+    });
+    // Auto-start a rest countdown, but only while sets remain — rest is *between*
+    // sets, so completing the final set goes straight to finishing.
+    const morePending = state.sets.some(
+      (s, i) => i !== index && s.status === "pending",
+    );
+    if (morePending) {
+      const rest = resolveRestSeconds(restSecondsForSet(index));
+      setRestEndAt(restTargetEnd(completedAt, rest));
+    }
+  }
+
+  // The `−15 / +15` controls shift the running rest's target-end; a shift never
+  // banks time before now (see adjustRestTargetEnd).
+  function adjustRest(deltaSeconds: number) {
+    setRestEndAt((prev) =>
+      prev === null ? prev : adjustRestTargetEnd(prev, deltaSeconds, Date.now()),
+    );
+  }
 
   function handleFinish() {
     const payload = mapFinishToLog(state, today);
@@ -126,6 +196,55 @@ export function LiveSessionScreen({ session, today }: LiveSessionScreenProps) {
         <Alert tone="error">{finishState.error}</Alert>
       ) : null}
 
+      {isResting ? (
+        <Card className="flex flex-col gap-3 border-cyan p-4">
+          <div className="flex items-center justify-between">
+            <span className="label-mono flex items-center gap-1.5 text-[11px] text-text-muted">
+              <Timer className="h-3.5 w-3.5" aria-hidden />
+              REST
+            </span>
+            <span
+              className="font-mono text-[28px] font-bold leading-none text-cyan"
+              aria-label="Rest remaining"
+            >
+              {formatElapsed(restRemaining)}
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-2.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => adjustRest(-REST_ADJUST_STEP_SECONDS)}
+              aria-label={`Subtract ${REST_ADJUST_STEP_SECONDS} seconds of rest`}
+            >
+              <Minus className="h-3.5 w-3.5" />
+              {REST_ADJUST_STEP_SECONDS}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setRestEndAt(null)}
+              aria-label="Skip rest"
+            >
+              <SkipForward className="h-3.5 w-3.5" />
+              Skip
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => adjustRest(REST_ADJUST_STEP_SECONDS)}
+              aria-label={`Add ${REST_ADJUST_STEP_SECONDS} seconds of rest`}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {REST_ADJUST_STEP_SECONDS}
+            </Button>
+          </div>
+        </Card>
+      ) : null}
+
       <div className="flex flex-col gap-3">
         <SectionHeader meta={`${completedCount}/${state.sets.length} SETS`}>
           SETS
@@ -137,15 +256,7 @@ export function LiveSessionScreen({ session, today }: LiveSessionScreenProps) {
                 set={set}
                 isCurrent={index === state.currentIndex}
                 onComplete={(reps, loadKind, loadValue, rpe) =>
-                  dispatch({
-                    type: "COMPLETE_SET",
-                    index,
-                    reps,
-                    loadKind,
-                    loadValue,
-                    rpe,
-                    now: Date.now(),
-                  })
+                  handleCompleteSet(index, reps, loadKind, loadValue, rpe)
                 }
                 onSkip={() => dispatch({ type: "ADVANCE" })}
               />
