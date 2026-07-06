@@ -23,14 +23,27 @@ export interface MuscleShare {
   pct: number;
 }
 
-// The honest count read model for one range window (F3 Slice 1–2): sessions,
-// active days, total sets, and the set-count muscle distribution, drawn straight
-// from the record side (Logged Sessions / Logged Sets) with no Load parsing or
-// conversion. `muscle_distribution` is empty when nothing was logged.
+// One Personal Record in the Recent Records feed (F3 Slice 4): the Exercise, the new
+// Estimated 1RM it set, the `gain` over the Exercise's prior PR (0 for the first-ever
+// record), and the ISO `date` it was performed on. Derived read-time from Logged Sets.
+export interface PersonalRecordEntry {
+  exercise: string;
+  estimated_1rm: number;
+  gain: number;
+  date: string;
+}
+
+// The honest read model for one range window (F3 Slice 1–4): sessions, active days,
+// total sets, and the set-count muscle distribution drawn straight from the record
+// side, plus the last 8 Personal Records all-time (`recent_records`, decoupled from
+// the window so it is rarely empty) and the range-scoped `new_prs` count.
+// `muscle_distribution` and `recent_records` are empty when nothing qualifies.
 export interface AnalyticsOverview {
   range: AnalyticsRange;
   sessions: number;
   active_days: number;
   total_sets: number;
   muscle_distribution: MuscleShare[];
+  recent_records: PersonalRecordEntry[];
+  new_prs: number;
 }

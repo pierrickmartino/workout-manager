@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from app.auth.dependencies import get_jwks
 from app.config import Settings, get_settings
 from app.domain.exercise import Provenance
+from app.domain.load import LoadKind, ParsedLoad
 from app.main import create_app
 from app.repositories.deps import get_logged_session_repository
 from app.repositories.exercise_repository import InMemoryExerciseRepository
@@ -71,6 +72,24 @@ def _perform(sessions, logged, user, performed_on, set_count):
     )
 
 
+def _perform_pr(sessions, logged, user, performed_on, kg):
+    """Log a single absolute-load Squat single that can set a Personal Record."""
+
+    session_view = sessions.create(
+        user,
+        SessionDraft(training_type="strength", duration_minutes=45, prescriptions=[]),
+    )
+    load = ParsedLoad(kind=LoadKind.ABSOLUTE, text=f"{kg:g} kg", kg=kg).to_dict()
+    logged.create(
+        user,
+        LoggedSessionDraft(
+            session_id=session_view.id,
+            performed_on=performed_on,
+            logged_sets=[LoggedSetDraft(exercise_id=SQUAT, reps=1, load=load)],
+        ),
+    )
+
+
 def test_analytics_returns_range_scoped_counts_in_the_envelope():
     # Arrange — two recent performances (today, yesterday) totalling five sets
     client, ctx, sessions, logged = build_client()
@@ -105,6 +124,37 @@ def test_analytics_serializes_the_muscle_distribution():
     assert data["muscle_distribution"] == [{"group": "Legs", "pct": 100.0}]
 
 
+def test_analytics_serializes_the_recent_records_feed_and_new_prs_tile():
+    # Arrange — a 100 kg PR 40 days ago (outside 30d) and a heavier 110 kg PR 2 days
+    # ago (inside 30d)
+    client, ctx, sessions, logged = build_client()
+    _perform_pr(sessions, logged, "user_pr", date.today() - timedelta(days=40), 100.0)
+    _perform_pr(sessions, logged, "user_pr", date.today() - timedelta(days=2), 110.0)
+
+    # Act
+    response = client.get("/api/analytics?range=30d", headers=_auth(ctx, "user_pr"))
+
+    # Assert — the feed rides in the envelope newest-first, decoupled from the window;
+    # new_prs counts only the in-window record
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["new_prs"] == 1
+    assert data["recent_records"] == [
+        {
+            "exercise": "Back Squat",
+            "estimated_1rm": 110.0,
+            "gain": 10.0,
+            "date": (date.today() - timedelta(days=2)).isoformat(),
+        },
+        {
+            "exercise": "Back Squat",
+            "estimated_1rm": 100.0,
+            "gain": 0.0,
+            "date": (date.today() - timedelta(days=40)).isoformat(),
+        },
+    ]
+
+
 def test_analytics_empty_state_is_zero_counts_not_an_error():
     # Arrange — the user has logged nothing
     client, ctx, _, _ = build_client()
@@ -122,6 +172,8 @@ def test_analytics_empty_state_is_zero_counts_not_an_error():
         "active_days": 0,
         "total_sets": 0,
         "muscle_distribution": [],
+        "recent_records": [],
+        "new_prs": 0,
     }
 
 

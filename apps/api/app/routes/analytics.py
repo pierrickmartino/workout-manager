@@ -1,13 +1,14 @@
 """Analytics route: the honest count read model the Analytics screen renders from.
 
 ``GET /api/analytics?range=7d|30d|90d`` returns the standard envelope with the
-range-scoped counts — sessions, active days, total sets — and the set-count muscle
-distribution, computed by ``logbook/analytics.py`` over the user's Logged Sessions.
-Every number comes straight from the *record* side with no Load parsing or
-conversion, so this read is honest on its own; the volume series and new-PR tile
-arrive in later slices. The window ends on the server's current date; an unknown
-range is rejected by validation and surfaced in the same error envelope. Reads are
-scoped to the owning user."""
+range-scoped counts — sessions, active days, total sets — the set-count muscle
+distribution, the last 8 Personal Records all-time (``recent_records``), and the
+range-scoped ``new_prs`` count, all computed by ``logbook/analytics.py`` over the
+user's Logged Sessions. The counts come straight from the *record* side with no
+conversion; the records are Estimated-1RM PRs derived read-time from Logged Sets.
+The window ends on the server's current date; an unknown range is rejected by
+validation and surfaced in the same error envelope. Reads are scoped to the owning
+user."""
 
 from __future__ import annotations
 
@@ -33,6 +34,16 @@ def _serialize(overview: AnalyticsOverview) -> dict:
         "muscle_distribution": [
             {"group": group, "pct": pct} for group, pct in overview.muscle_distribution
         ],
+        "recent_records": [
+            {
+                "exercise": record.exercise_name,
+                "estimated_1rm": record.estimated_1rm,
+                "gain": record.gain,
+                "date": record.performed_on.isoformat(),
+            }
+            for record in overview.recent_records
+        ],
+        "new_prs": overview.new_prs,
     }
 
 
