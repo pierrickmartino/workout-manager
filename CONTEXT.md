@@ -50,6 +50,10 @@ _Avoid_: Substitute, replacement (as the relationship name)
 The act of swapping one Exercise Prescription's Exercise for a Variation or Alternative within the user's own Session copy. Resolved lookup-first over catalog relationships (filtered by the user's equipment, constraints, and goal), falling back to AI only when no suitable link exists. Unlimited and distinct from Regeneration.
 _Avoid_: Swap, replace (as the domain term)
 
+**Live Session**:
+A single performance of a Session while it is underway — after the user starts training, before it becomes a Logged Session. The transient, in-flight precursor to a Logged Session: it holds the sets done so far, which set is current, and how long the workout has been running. It is a *record being built*, never a plan. It becomes a Logged Session when the user finishes — or is automatically ended as Incomplete after a prolonged gap of inactivity, so a recorded Session Duration never counts time the user was away.
+_Avoid_: Active Session, active plan, workout in progress
+
 **Logged Session**:
 A record of the user performing a Session on a specific date. One Session can have many Logged Sessions over the course of a Protocol.
 _Avoid_: Completed session, history entry
@@ -57,6 +61,14 @@ _Avoid_: Completed session, history entry
 **Logged Set**:
 A record of one actual set the user performed — the real repetitions, load, and perceived difficulty — within a Logged Session.
 _Avoid_: Result, performance entry
+
+**Completion Outcome**:
+Whether a Logged Session is **Completed** or **Incomplete** — a property of the record itself. Completed when every prescribed set of the Session was attempted, regardless of the reps or load achieved; Incomplete when any prescribed set was left un-attempted. A set ground out to zero reps is still *attempted*, so missing reps or training to failure never makes a Session Incomplete — only un-done prescribed work does. Only a Completed Logged Session advances a Protocol to its Next Session; an Incomplete one leaves that Session as next and must be retried by running the whole Session again.
+_Avoid_: Failed, partial, abandoned (as the domain term); status
+
+**Session Duration**:
+The elapsed active time of a Logged Session — measured from when the user starts training to their last recorded activity, deliberately excluding any prolonged idle gap so the figure reflects time actually training, not wall-clock time with the phone locked. Known only when the performance was tracked live; absent when a performance is logged after the fact. It is the honest basis a future average-workout-time figure would build on.
+_Avoid_: Elapsed time, workout length, wall-clock time
 
 ## Profile
 
