@@ -6,15 +6,22 @@ import {
   fetchAnalytics,
   toAnalyticsRange,
   type AnalyticsRange,
+  type VolumeSeries,
 } from "@/lib/analytics";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { NavRow } from "@/components/pulse/nav-row";
 import { Bento, BentoTile } from "@/components/pulse/bento";
 import { Alert } from "@/components/pulse/alert";
+import { VolumeChart } from "@/components/pulse/volume-chart";
 import { Card } from "@/components/ui/card";
 import { toMuscleBars, type MuscleBar } from "@/lib/muscle-distribution";
 import { toRecordRows, type RecordRow } from "@/lib/records-view";
+import {
+  toVolumeRows,
+  formatVolumeDelta,
+  formatCoverageCaption,
+} from "@/lib/volume-view";
 import { cn } from "@/lib/utils";
 
 // The Analytics screen (F3 Slice 1–4): honest, range-scoped counts drawn straight
@@ -56,6 +63,7 @@ export default async function AnalyticsPage({
 
       {hasHistory ? (
         <>
+          <TotalVolume volume={overview.volume} range={range} />
           <Bento>
             <BentoTile label="SESSIONS" value={overview.sessions} />
             <BentoTile label="ACTIVE DAYS" value={overview.active_days} />
@@ -151,6 +159,53 @@ function MuscleDistribution({ bars }: { bars: MuscleBar[] }) {
               </div>
             </div>
           ))
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// The total-volume line chart (F3 Slice 5): daily kg volume converted from typed
+// Loads, with the "+N%" trend delta against the immediately preceding equal-length
+// window and a caption disclosing coverage — the share of logged volume the line
+// actually computed. Bodyweight and %-1RM sets aren't convertible yet, so a window of
+// only those work reads as an honest empty state, not a fabricated zero line.
+function TotalVolume({
+  volume,
+  range,
+}: {
+  volume: VolumeSeries;
+  range: AnalyticsRange;
+}) {
+  const rows = toVolumeRows(volume.points);
+  const delta = formatVolumeDelta(volume.delta);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <SectionHeader>TOTAL VOLUME</SectionHeader>
+      <Card className="flex flex-col gap-4 p-6">
+        {rows.length === 0 ? (
+          <p className="font-sans text-sm text-text-secondary">
+            No absolute-load volume in this window yet. Log sets with a weight in
+            kilograms and your total volume will chart here.
+          </p>
+        ) : (
+          <>
+            {delta ? (
+              <div className="flex items-baseline gap-2">
+                <span className="font-display text-2xl font-semibold text-text-primary tabular-nums">
+                  {delta}
+                </span>
+                <span className="label-mono text-[11px] text-text-muted">
+                  vs. previous {RANGE_LABELS[range]}
+                </span>
+              </div>
+            ) : null}
+            <VolumeChart rows={rows} />
+            <p className="label-mono text-[11px] text-text-muted">
+              {formatCoverageCaption(volume.coverage)}
+            </p>
+          </>
         )}
       </Card>
     </div>

@@ -392,3 +392,80 @@ def test_two_sessions_on_the_same_day_are_two_sessions_but_one_active_day():
     assert overview.sessions == 2
     assert overview.active_days == 1
     assert overview.total_sets == 2
+
+
+def _abs_load(kg: float) -> dict:
+    """The stored typed-Load dict for an absolute kilogram load (volume tests)."""
+
+    return ParsedLoad(kind=LoadKind.ABSOLUTE, text=f"{kg:g} kg", kg=kg).to_dict()
+
+
+def test_overview_carries_the_daily_volume_series_for_the_window():
+    # Arrange — 100kg×5 today and 80kg×5 yesterday, both absolute and convertible
+    _, sessions, logged = _build()
+    _log(
+        sessions,
+        logged,
+        "user_vol",
+        TODAY,
+        [LoggedSetDraft(exercise_id=SQUAT, reps=5, load=_abs_load(100.0))],
+    )
+    _log(
+        sessions,
+        logged,
+        "user_vol",
+        TODAY - timedelta(days=1),
+        [LoggedSetDraft(exercise_id=SQUAT, reps=5, load=_abs_load(80.0))],
+    )
+
+    # Act
+    overview = analytics_overview(
+        "user_vol", AnalyticsRange.SEVEN_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — daily points ascending, full coverage, no prior-window baseline
+    assert [(p.performed_on, p.volume_kg) for p in overview.volume_points] == [
+        (TODAY - timedelta(days=1), 400.0),
+        (TODAY, 500.0),
+    ]
+    assert overview.volume_coverage == 100.0
+    assert overview.volume_delta is None
+
+
+def test_overview_volume_coverage_discloses_unconvertible_reps():
+    # Arrange — 5 absolute reps and 5 qualitative reps in the window
+    _, sessions, logged = _build()
+    qualitative = ParsedLoad(kind=LoadKind.QUALITATIVE, text="hard").to_dict()
+    _log(
+        sessions,
+        logged,
+        "user_cov",
+        TODAY,
+        [
+            LoggedSetDraft(exercise_id=SQUAT, reps=5, load=_abs_load(100.0)),
+            LoggedSetDraft(exercise_id=SQUAT, reps=5, load=qualitative),
+        ],
+    )
+
+    # Act
+    overview = analytics_overview(
+        "user_cov", AnalyticsRange.SEVEN_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — only half the logged reps converted
+    assert overview.volume_coverage == 50.0
+
+
+def test_overview_volume_is_empty_when_nothing_is_logged():
+    # Arrange — a user with no history
+    _, _, logged = _build()
+
+    # Act
+    overview = analytics_overview(
+        "user_empty_vol", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — the honest empty state, not an error
+    assert overview.volume_points == ()
+    assert overview.volume_coverage == 0.0
+    assert overview.volume_delta is None

@@ -2,10 +2,12 @@
 
 ``GET /api/analytics?range=7d|30d|90d`` returns the standard envelope with the
 range-scoped counts — sessions, active days, total sets — the set-count muscle
-distribution, the last 8 Personal Records all-time (``recent_records``), and the
-range-scoped ``new_prs`` count, all computed by ``logbook/analytics.py`` over the
-user's Logged Sessions. The counts come straight from the *record* side with no
-conversion; the records are Estimated-1RM PRs derived read-time from Logged Sets.
+distribution, the last 8 Personal Records all-time (``recent_records``), the
+range-scoped ``new_prs`` count, and the daily total-**volume** series with its
+coverage percentage and equal-window delta, all computed by ``logbook/analytics.py``
+over the user's Logged Sessions. The counts come straight from the *record* side with
+no conversion; the records are Estimated-1RM PRs derived read-time from Logged Sets,
+and volume is the coverage-honest kg total from typed Loads (ADR-0010).
 The window ends on the server's current date; an unknown range is rejected by
 validation and surfaced in the same error envelope. Reads are scoped to the owning
 user."""
@@ -44,6 +46,14 @@ def _serialize(overview: AnalyticsOverview) -> dict:
             for record in overview.recent_records
         ],
         "new_prs": overview.new_prs,
+        "volume": {
+            "points": [
+                {"date": point.performed_on.isoformat(), "volume_kg": point.volume_kg}
+                for point in overview.volume_points
+            ],
+            "coverage": overview.volume_coverage,
+            "delta": overview.volume_delta,
+        },
     }
 
 

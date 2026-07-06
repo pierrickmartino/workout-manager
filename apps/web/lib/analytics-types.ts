@@ -33,11 +33,32 @@ export interface PersonalRecordEntry {
   date: string;
 }
 
-// The honest read model for one range window (F3 Slice 1–4): sessions, active days,
+// One day's total converted volume (F3 Slice 5): the ISO `date` it was performed on
+// and the kg `volume_kg` moved that day. Only days with convertible (absolute/range)
+// volume appear; the series is ascending by date.
+export interface VolumePoint {
+  date: string;
+  volume_kg: number;
+}
+
+// The total-volume line for one window (F3 Slice 5): the daily `points`, the
+// `coverage` percentage of logged reps the line actually converted (bodyweight and
+// %-1RM sets are not yet convertible and sit in the uncovered remainder), and the
+// `delta` percent against the immediately preceding equal-length window — `null` when
+// there is no prior volume to compare against. `points` is empty when nothing converts.
+export interface VolumeSeries {
+  points: VolumePoint[];
+  coverage: number;
+  delta: number | null;
+}
+
+// The honest read model for one range window (F3 Slice 1–5): sessions, active days,
 // total sets, and the set-count muscle distribution drawn straight from the record
-// side, plus the last 8 Personal Records all-time (`recent_records`, decoupled from
-// the window so it is rarely empty) and the range-scoped `new_prs` count.
-// `muscle_distribution` and `recent_records` are empty when nothing qualifies.
+// side, the last 8 Personal Records all-time (`recent_records`, decoupled from the
+// window so it is rarely empty), the range-scoped `new_prs` count, and the daily
+// total-`volume` series with disclosed coverage and an equal-window delta.
+// `muscle_distribution`, `recent_records`, and `volume.points` are empty when nothing
+// qualifies.
 export interface AnalyticsOverview {
   range: AnalyticsRange;
   sessions: number;
@@ -46,4 +67,5 @@ export interface AnalyticsOverview {
   muscle_distribution: MuscleShare[];
   recent_records: PersonalRecordEntry[];
   new_prs: number;
+  volume: VolumeSeries;
 }

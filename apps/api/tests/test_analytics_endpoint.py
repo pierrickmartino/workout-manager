@@ -174,6 +174,7 @@ def test_analytics_empty_state_is_zero_counts_not_an_error():
         "muscle_distribution": [],
         "recent_records": [],
         "new_prs": 0,
+        "volume": {"points": [], "coverage": 0.0, "delta": None},
     }
 
 
@@ -212,3 +213,43 @@ def test_analytics_requires_authentication():
 
     # Assert
     assert response.status_code == 401
+
+
+def _perform_load(sessions, logged, user, performed_on, kg, reps):
+    """Log a single absolute-load Squat set of ``reps`` at ``kg`` (volume tests)."""
+
+    session_view = sessions.create(
+        user,
+        SessionDraft(training_type="strength", duration_minutes=45, prescriptions=[]),
+    )
+    load = ParsedLoad(kind=LoadKind.ABSOLUTE, text=f"{kg:g} kg", kg=kg).to_dict()
+    logged.create(
+        user,
+        LoggedSessionDraft(
+            session_id=session_view.id,
+            performed_on=performed_on,
+            logged_sets=[LoggedSetDraft(exercise_id=SQUAT, reps=reps, load=load)],
+        ),
+    )
+
+
+def test_analytics_serializes_the_daily_volume_series():
+    # Arrange — 100kg×5 today (inside 7d) and 80kg×5 eight days ago (prior 7d window)
+    client, ctx, sessions, logged = build_client()
+    _perform_load(sessions, logged, "user_vol", date.today(), 100.0, 5)
+    _perform_load(
+        sessions, logged, "user_vol", date.today() - timedelta(days=8), 80.0, 5
+    )
+
+    # Act
+    response = client.get("/api/analytics?range=7d", headers=_auth(ctx, "user_vol"))
+
+    # Assert — the daily points, coverage, and equal-window delta ride in the envelope
+    assert response.status_code == 200
+    volume = response.json()["data"]["volume"]
+    assert volume["points"] == [
+        {"date": date.today().isoformat(), "volume_kg": 500.0},
+    ]
+    assert volume["coverage"] == 100.0
+    # this window's 500 kg vs the prior window's 400 kg → +25%
+    assert volume["delta"] == 25.0
