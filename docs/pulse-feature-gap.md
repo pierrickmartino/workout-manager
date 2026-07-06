@@ -31,6 +31,24 @@ current Workout Manager web app (`apps/web/app`).
 > the **target-calorie**, and any single **volume/tonnage** figure. Live-session mode is still
 > deferred to F2. The F1 section below is updated to match; the remaining sections are unchanged.
 
+> **Update (2026-07-06):** The **F3 — Analytics** screen has now been **built out** across six
+> vertical slices (feature, not just styling), and the long-missing **PR / 1RM / volume engine**
+> now exists as shared backend capability. A new `GET /api/analytics?range=7d|30d|90d` endpoint
+> (`app/routes/analytics.py`) is fed by a pure orchestration read model (`app/logbook/analytics.py`)
+> over five net-new pure domain modules: **`load.py`** (a typed **Load** value object at the write
+> boundary — ADR-0010 — persisted as JSON via migration 0010, so downstream reads never re-guess
+> the free-text vocabulary), **`one_rep_max.py`** (Epley **Estimated 1RM**, trustworthy 1–12-rep
+> window), **`personal_records.py`** (read-time **PR** detection — no PR table), **`muscle_groups.py`**
+> (curated six-group roll-up, set-count weighted), and **`volume.py`** (total-volume series with a
+> disclosed **coverage %**, now converting absolute, range, bodyweight, and %-1RM loads). The client
+> renders a count-based **bento** (sessions · active days · sets · new PRs), a **muscle-distribution**
+> bar split, a **Recent Records** feed, and a **total-volume line chart** — the first use of
+> **Recharts**, which is now installed, closing the "no charting dependency" blocker that gated F3,
+> F6, and the Home volume figure. **ADR-0010** and **ADR-0011** frame the typed-Load engine and F3's
+> deliberate reinterpretation of Pulse onto honest aggregates. What is intentionally **not** built:
+> the 1Y range, and any figure with no honest basis. The F3 and Cross-cutting sections below are
+> updated to match; the remaining sections are unchanged.
+
 ---
 
 ## Onboarding & Auth (FO1–FO4)
@@ -65,13 +83,16 @@ Current state: logging is a static, after-the-fact form (`LogSessionForm`). No l
 
 ## F3 — Analytics
 
-Current state: no analytics surface. `app/metrics` is a (now styled) body-metric table; `app/history` is a (now styled) session list. Both are lists/tables, not charts — no charting dependency installed.
+Current state: a data-backed Analytics screen (`app/analytics/page.tsx`) driven by
+`GET /api/analytics?range=7d|30d|90d` — a count-based bento, a muscle-distribution split, a
+Recent Records feed, and a total-volume line chart. `app/metrics` (body-metric table) and
+`app/history` (session list) remain as their own list/table surfaces.
 
-- ❌ **Total volume chart** with trend + % delta ("128,400 KG · +12%").
-- ❌ **Range toggle** (7D / 30D / 1Y).
-- ❌ **Bento stats** — sessions, avg time, new PRs, active days.
-- ❌ **Muscle distribution** (Chest 28% / Back 24% / Legs 30% / Arms 18%).
-- ❌ **Recent Records / PR feed**.
+- ✅ **Total volume chart** with trend + % delta — `VolumeChart` (`components/pulse/volume-chart.tsx`, the app's first **Recharts** use) plots daily-bucketed volume from `domain/volume.py`, with a `+N%` delta over the preceding equal-length window and a **coverage caption** disclosing the share of logged reps that actually converted. Absolute, range, bodyweight, and %-1RM loads all convert; qualitative/load-less sets fall into the disclosed uncovered fraction rather than being fabricated as zero. **Deviation (ADR-0011):** no fixed headline figure like "128,400 KG" — the honest number is window- and coverage-dependent.
+- 🟡 **Range toggle** — a shared **7D / 30D / 90D** toggle is wired across every tile and the chart. **Deviation:** Pulse's **1Y** is replaced by 90D (no honest basis for a year of aggregates on the current data volume).
+- ✅ **Bento stats** — `Bento` (`components/pulse/bento.tsx`) renders four honest tiles: **sessions**, **active days** (distinct performed-on), **total sets**, and range-scoped **new PRs**. **Deviation:** "avg time" is not shown (no per-session duration is logged).
+- ✅ **Muscle distribution** — labeled operator-theme bars from `domain/muscle_groups.py`, a curated roll-up of each Exercise's free-form `targeted_muscles` into six groups (Legs / Chest / Back / Shoulders / Arms / Core) plus an explicit **Unclassified** bucket, weighted by set count and split evenly across the groups a Set maps to (percentages sum to 100%).
+- ✅ **Recent Records / PR feed** — the last 8 all-time PRs (exercise · new Estimated 1RM · gain over prior PR · date), from read-time `domain/personal_records.py` on top of Epley `domain/one_rep_max.py`. Decoupled from the range toggle so the feed is rarely empty; only absolute-Load sets in the 1–12-rep window qualify.
 
 ## F4 — Protocol Builder
 
@@ -103,14 +124,14 @@ Current state: name, description, difficulty, muscles, variations/alternatives (
 - ❌ **Numbered execution steps** — instructions exist in the catalog but aren't rendered step-by-step.
 - ❌ **Muscle map** — primary/secondary visualization.
 - ❌ **Per-exercise stats** — Personal Best, estimated 1RM, total logs count.
-- 🟡 **Top-set trend chart** — last N sessions ("+7.5KG"). `/exercises/[id]/progress` returns the time series; needs charting.
+- 🟡 **Top-set trend chart** — last N sessions ("+7.5KG"). `/exercises/[id]/progress` returns the time series; the charting blocker is now gone (**Recharts** shipped with F3), so this is wiring the existing series into a `VolumeChart`-style component.
 - ❌ **`ADD TO PROTOCOL`** action.
 
 ## Cross-cutting / Foundational
 
 - ✅ **Bottom tab bar navigation** — a fixed `TabBar` (`components/pulse/tab-bar.tsx`) is wired into the layout for signed-in users. **Deviation:** it collapses Pulse's five tabs into **four** — Home / Train / Stats / Profile — mapping onto *existing* routes (`/dashboard`, `/sessions`, `/history`, `/profile`), because the dedicated Session / Analytics / Builder destinations don't exist yet. Re-expanding to five tabs is a follow-up once F2–F4 land.
 - ✅ **Design system** — Pulse's dark, mono-accented "operator" theme is transcribed into `app/globals.css` as `@theme` tokens (`--color-*`, `--radius-*`, `--spacing-shell`, fonts via `next/font`), consumed through shadcn `components/ui/*` + custom `components/pulse/*` primitives across all pages. Replaces the former `system-ui` + inline styles.
-- ❌ **Personal Records (PR) engine** — 1RM estimation, PR detection/history. Feeds Analytics, Home, and Exercise Detail; no backing logic today.
+- ✅ **Personal Records (PR) engine** — now shipped as shared read-time capability on top of the typed Load (ADR-0010): `domain/one_rep_max.py` (Epley **Estimated 1RM**, 1–12-rep window) and `domain/personal_records.py` (**PR** detection over a chronological Logged-Set stream — a set is a PR when its Estimated 1RM strictly beats every prior set's for that Exercise). Read-time only — **no PR table, no write hook**. Surfaced on Analytics (F3) today; still to be wired into Home and Exercise Detail (F6). A companion `domain/volume.py` engine converts typed loads (absolute, range, bodyweight, %-1RM) into total volume with a disclosed coverage %.
 - 🟡 **Readiness / target-calorie metrics** — **Readiness** now ships as a computed, qualitative three-state signal (`app/domain/readiness.py`, surfaced on Home via `GET /api/home`); the numeric **readiness percentage** and **target-calorie** are deliberately not built (no honest basis, ADR-0008) and remain unsurfaced on the Active Session (F2).
 - ❌ **Streak tracking** — appears on Profile and implicitly in Analytics ("active days").
 
@@ -119,12 +140,13 @@ Current state: name, description, difficulty, muscles, variations/alternatives (
 ## Highest-leverage missing capabilities (suggested build order)
 
 1. **Live Active Session + rest timer** (F2) — the core loop; currently the biggest functional hole (logging is post-hoc only).
-2. **PR / 1RM / volume analytics engine** — a shared backend capability powering F3 (Analytics), F6 (Exercise Detail), and F1 (Home).
-3. **Gamification layer** (XP / levels / streaks / achievements) — powers F5 and recurs on Home & Analytics.
+2. **Gamification layer** (XP / levels / streaks / achievements) — powers F5 and recurs on Home & Analytics.
+3. **Fan the PR / 1RM / volume engine out** to F6 (Exercise Detail Personal Best / estimated 1RM / top-set trend) and F1 (Home), reusing the shared `one_rep_max` / `personal_records` / `volume` domain modules already backing Analytics.
 
-With the Pulse presentation layer now in place (theme, shell, tab bar, styled screens), the
-remaining work is **capability, not styling**: the three items above are net-new logic, and the
-lower-leverage gaps (Analytics charts F3, Protocol Builder F4, Exercise Detail tabs/charts F6) are
-mostly *wiring already-existing data* (protocols, sessions, prescriptions, logs, metrics, exercise
-catalog, the `/exercises/[id]/progress` time series) into the styled components — the main missing
-dependency there is a charting library, which is not yet installed.
+The **PR / 1RM / volume analytics engine** — previously #2 on this list — has now shipped as
+shared backend capability (F3), so the remaining work is **capability, not styling** *and no longer
+net-new analytics logic*: item 1 is the last big net-new domain, item 2 is a fresh domain, and
+item 3 plus the lower-leverage gaps (Protocol Builder F4, Exercise Detail tabs/charts F6) are mostly
+*wiring already-existing data* (protocols, sessions, prescriptions, logs, metrics, exercise catalog,
+the `/exercises/[id]/progress` time series, and now the analytics engine) into the styled
+components. The charting-library blocker is gone — **Recharts** shipped with F3.
