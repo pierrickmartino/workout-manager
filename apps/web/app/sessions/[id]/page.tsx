@@ -128,7 +128,7 @@ function PrescriptionCard({
             value: `${prescription.sets} × ${prescription.reps}`,
           },
           ...(prescription.recommended_load
-            ? [{ label: "Load", value: prescription.recommended_load }]
+            ? [{ label: "Load", value: prescription.recommended_load.text }]
             : []),
           ...(prescription.rest_seconds !== null
             ? [{ label: "Rest", value: `${prescription.rest_seconds}s` }]

@@ -158,7 +158,7 @@ function PrescriptionRow({
       <span className="shrink-0 font-mono text-[12px] text-text-muted">
         {prescription.sets} × {prescription.reps}
         {prescription.recommended_load
-          ? ` @ ${prescription.recommended_load}`
+          ? ` @ ${prescription.recommended_load.text}`
           : ""}
       </span>
     </div>

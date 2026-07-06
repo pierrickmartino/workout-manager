@@ -174,7 +174,10 @@ class ExercisePrescription(SQLModel, table=True):
     reps: str
     rest_seconds: int | None = Field(default=None)
     tempo: str | None = Field(default=None)
-    recommended_load: str | None = Field(default=None)
+    # Typed Load (ADR-0010): a ``{kind, text, ...payload}`` value object, never a
+    # bare string — so downstream analytics read the meaning instead of re-guessing
+    # the free-text. See ``app.domain.load.ParsedLoad``.
+    recommended_load: dict | None = Field(default=None, sa_column=Column(JSON, nullable=True))
 
 
 class LoggedSession(SQLModel, table=True):
@@ -208,7 +211,10 @@ class LoggedSet(SQLModel, table=True):
     exercise_id: int = Field(foreign_key="exercise.id", index=True)
     position: int
     reps: int
-    load: str | None = Field(default=None)
+    # Typed Load (ADR-0010): a ``{kind, text, ...payload}`` value object matching
+    # ``app.domain.load.ParsedLoad``, so a logged bodyweight or %-1RM set carries
+    # its meaning and is never silently dropped by a kg-only aggregate.
+    load: dict | None = Field(default=None, sa_column=Column(JSON, nullable=True))
     perceived_difficulty: int | None = Field(default=None)
 
 

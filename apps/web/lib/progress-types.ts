@@ -2,12 +2,14 @@
 // it is safe to import from both Server and Client Components. The server-only
 // data access (Clerk auth + fetch) lives in `lib/progress.ts`.
 
+import type { Load } from "./load";
+
 // One actual set within a logged performance, as surfaced on the progress view —
 // the real reps, load, and perceived difficulty the user did.
 export interface ExerciseProgressSet {
   position: number;
   reps: number;
-  load: string | null;
+  load: Load | null;
   perceived_difficulty: number | null;
 }
 

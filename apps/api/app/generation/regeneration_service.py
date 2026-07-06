@@ -53,7 +53,8 @@ def _kept_context(
             exercise_name=p.exercise_name,
             sets=p.sets,
             reps=p.reps,
-            recommended_load=p.recommended_load,
+            # The prompt shows the load as text; the stored Load is a typed dict.
+            recommended_load=p.recommended_load["text"] if p.recommended_load else None,
         )
         for p in view.prescriptions
         if p.position in keep
@@ -114,7 +115,7 @@ def regenerate_session(
                 reps=item.reps,
                 rest_seconds=item.rest_seconds,
                 tempo=item.tempo,
-                recommended_load=item.recommended_load,
+                recommended_load=item.typed_load,
             )
         )
 

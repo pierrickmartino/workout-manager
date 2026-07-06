@@ -11,9 +11,10 @@ from __future__ import annotations
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.auth.dependencies import get_current_user
+from app.domain.load import LoadKind, load_from_input
 from app.envelope import success_envelope
 from app.logbook.service import (
     LogSessionRequest,
@@ -43,20 +44,40 @@ MIN_REPS = 0
 MIN_RPE = 1
 MAX_RPE = 10
 
+DEFAULT_LOAD_KIND = "absolute"
+
 
 class LogSetBody(BaseModel):
-    """One actual set performed, referencing the catalog Exercise."""
+    """One actual set performed, referencing the catalog Exercise.
+
+    The load is captured as a typed Load (ADR-0010): ``load_kind`` is the kind the
+    user picked and ``load_value`` its value field (a number for ``absolute`` /
+    ``percent_1rm``, a ``low-high`` pair for ``range``, the added kilograms for
+    ``bodyweight``, free text for ``qualitative``). The picked kind is authoritative,
+    so the persisted set carries meaning, not a free-text string to be re-guessed."""
 
     exercise_id: int
     reps: int = Field(ge=MIN_REPS)
-    load: str | None = None
+    load_kind: str = DEFAULT_LOAD_KIND
+    load_value: str | None = None
     perceived_difficulty: int | None = Field(default=None, ge=MIN_RPE, le=MAX_RPE)
 
+    @field_validator("load_kind")
+    @classmethod
+    def _known_load_kind(cls, value: str) -> str:
+        try:
+            LoadKind(value)
+        except ValueError as exc:
+            allowed = ", ".join(kind.value for kind in LoadKind)
+            raise ValueError(f"load_kind must be one of: {allowed}") from exc
+        return value
+
     def to_draft(self) -> LoggedSetDraft:
+        parsed = load_from_input(self.load_kind, self.load_value)
         return LoggedSetDraft(
             exercise_id=self.exercise_id,
             reps=self.reps,
-            load=self.load,
+            load=parsed.to_dict() if parsed is not None else None,
             perceived_difficulty=self.perceived_difficulty,
         )
 

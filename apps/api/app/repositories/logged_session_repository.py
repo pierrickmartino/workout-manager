@@ -27,7 +27,7 @@ class LoggedSetDraft:
 
     exercise_id: int
     reps: int
-    load: str | None = None
+    load: dict | None = None
     perceived_difficulty: int | None = None
 
 
@@ -46,7 +46,7 @@ class LoggedSetView:
 
     position: int
     reps: int
-    load: str | None
+    load: dict | None
     perceived_difficulty: int | None
     exercise_id: int
     exercise_name: str

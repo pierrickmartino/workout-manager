@@ -11,9 +11,17 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from app.domain.load import parse_load
+
 
 class GeneratedExercisePrescription(BaseModel):
-    """One prescribed Exercise: the catalog definition plus its prescription."""
+    """One prescribed Exercise: the catalog definition plus its prescription.
+
+    The AI emits ``recommended_load`` as the free-text load vocabulary it is fluent
+    in (``"70kg"``, ``"bodyweight"``, ``"70% 1RM"``). ``typed_load`` is the
+    generation-ingestion boundary (ADR-0010): it runs :func:`parse_load` once so
+    everything downstream persists and reads a typed ``{kind, text, ...}`` Load
+    instead of re-guessing the string forever."""
 
     exercise_name: str
     exercise_description: str | None = None
@@ -24,6 +32,15 @@ class GeneratedExercisePrescription(BaseModel):
     rest_seconds: int | None = None
     tempo: str | None = None
     recommended_load: str | None = None
+
+    @property
+    def typed_load(self) -> dict | None:
+        """The prescription's load as a typed ``ParsedLoad`` dict, or ``None`` when
+        the AI prescribed no load."""
+
+        if self.recommended_load is None:
+            return None
+        return parse_load(self.recommended_load).to_dict()
 
 
 class GeneratedSession(BaseModel):

@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.auth.dependencies import get_jwks
 from app.config import Settings, get_settings
+from app.domain.load import parse_load
 from app.generation.generator import GenerationError, GenerationRequest
 from app.generation.schema import GeneratedExercisePrescription, GeneratedSession
 from app.main import create_app
@@ -116,7 +117,7 @@ def test_generate_returns_a_session_with_its_prescriptions():
     assert prescription["reps"] == "5"
     assert prescription["rest_seconds"] == 120
     assert prescription["tempo"] == "3-1-1"
-    assert prescription["recommended_load"] == "70% 1RM"
+    assert prescription["recommended_load"] == parse_load("70% 1RM").to_dict()
     assert prescription["provenance"] == "ai_generated"
 
 

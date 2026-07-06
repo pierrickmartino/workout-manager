@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.domain.load import parse_load
 from app.generation.generator import GenerationError, GenerationRequest
 from app.generation.schema import (
     GeneratedExercisePrescription,
@@ -80,7 +81,7 @@ def test_persists_a_session_the_user_can_see_with_its_prescriptions():
         "Overhead Press",
     ]
     assert view.prescriptions[0].sets == 5
-    assert view.prescriptions[0].recommended_load == "70% 1RM"
+    assert view.prescriptions[0].recommended_load == parse_load("70% 1RM").to_dict()
 
 
 def test_ai_invented_exercises_are_stored_with_ai_generated_provenance():

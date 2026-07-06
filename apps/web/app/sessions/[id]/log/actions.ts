@@ -20,7 +20,8 @@ function strings(form: FormData, name: string): string[] {
 function loggedSets(form: FormData): LogSetInput[] {
   const exerciseIds = strings(form, "exercise_id");
   const reps = strings(form, "reps");
-  const loads = strings(form, "load");
+  const loadKinds = strings(form, "load_kind");
+  const loadValues = strings(form, "load_value");
   const rpes = strings(form, "rpe");
 
   const sets: LogSetInput[] = [];
@@ -39,10 +40,13 @@ function loggedSets(form: FormData): LogSetInput[] {
         ? rpeValue
         : null;
 
+    // Carry the picked kind through; the backend types the load from it. An empty
+    // value means "no load recorded" for this set (the backend maps it to null).
     sets.push({
       exercise_id: exerciseId,
       reps: repsValue,
-      load: loads[row] === "" ? null : loads[row],
+      load_kind: (loadKinds[row] || "absolute") as LogSetInput["load_kind"],
+      load_value: loadValues[row] === "" ? null : loadValues[row],
       perceived_difficulty: perceivedDifficulty,
     });
   }
