@@ -19,6 +19,7 @@ import { Alert } from "@/components/pulse/alert";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { SessionHero } from "@/components/pulse/session-hero";
+import { ResumeSessionBanner } from "@/components/pulse/resume-session-banner";
 import { WeekCycleStrip } from "@/components/pulse/week-cycle-strip";
 import { QueueList } from "@/components/pulse/queue-list";
 import { NavRow } from "@/components/pulse/nav-row";
@@ -74,6 +75,10 @@ export default async function DashboardPage() {
         title={<>Hey, {greeting}</>}
         action={<Badge variant={readiness.variant}>{readiness.label}</Badge>}
       />
+
+      {/* Resume affordance: shown only when an unfinished Live Session is held in
+          the client-side slot (ADR-0012). Renders nothing otherwise. */}
+      <ResumeSessionBanner />
 
       {/* Hero: the Current Protocol's Next Session, or the generate CTA when the
           user has no Current Protocol (no Protocol, or every one is complete). */}

@@ -69,7 +69,65 @@ export type LiveEvent =
       now?: number;
     }
   | { type: "ADVANCE" }
-  | { type: "FINISH"; now?: number };
+  | { type: "FINISH"; now?: number }
+  // Restore a persisted Live Session wholesale (issue #91 — F2·S6). Used on the
+  // next foreground to resume the single `localStorage` slot exactly where the user
+  // left off, rather than re-initializing and re-STARTing the performance.
+  | { type: "HYDRATE"; state: LiveSessionState };
+
+// The idle cap (ADR-0014): a gap of inactivity longer than this auto-ends the Live
+// Session as Incomplete on the next foreground, so a recorded Session Duration
+// never counts time the user was away. Thirty minutes.
+export const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+
+// What returning to the live route does, decided from the single persisted slot
+// (issue #91 — F2·S6):
+// - `start_fresh` — no unfinished performance persisted; begin this Session.
+// - `resume` — the persisted performance is this Session, within the idle window;
+//   restore it (set table, current set, elapsed timer) and carry on.
+// - `auto_end` — the persisted performance is this Session but idle past the cap;
+//   finalize it as Incomplete (ADR-0014) and show a summary instead of resuming.
+// - `blocked` — a *different* unfinished performance exists; starting this one is
+//   blocked with a resume-or-end prompt so real work is never discarded (ADR-0012).
+export type LiveEntry =
+  | { kind: "start_fresh" }
+  | { kind: "resume"; state: LiveSessionState }
+  | { kind: "auto_end"; state: LiveSessionState }
+  | { kind: "blocked"; existing: LiveSessionState };
+
+// Whether the idle gap between `lastActivityAt` and `now` has run past the cap. An
+// untimed performance (no last-activity) can't be measured, so it never expires.
+function isIdleExpired(lastActivityAt: number | null, now: number): boolean {
+  if (lastActivityAt === null) return false;
+  return now - lastActivityAt > IDLE_TIMEOUT_MS;
+}
+
+// Decide what happens when the user arrives at a Session's live route, given the
+// single persisted slot (`stored`, or null when empty), the `requestedSessionId`,
+// and the current wall-clock `now`. This is the engine's resume-vs-auto-end and
+// single-session-enforcement verdict; the screen renders it. Pure — no I/O.
+export function resolveLiveEntry(
+  stored: LiveSessionState | null,
+  requestedSessionId: number,
+  now: number,
+): LiveEntry {
+  // An empty slot, or a slot holding an already-finished performance, has nothing
+  // to resume — begin this Session fresh.
+  if (stored === null || stored.status === "finished") {
+    return { kind: "start_fresh" };
+  }
+  // An unfinished performance of a *different* Session blocks starting this one:
+  // there is only one slot, and real work is never silently superseded (ADR-0012).
+  if (stored.sessionId !== requestedSessionId) {
+    return { kind: "blocked", existing: stored };
+  }
+  // The unfinished performance is this Session: resume it, unless the idle gap has
+  // run past the cap, in which case it auto-ends as Incomplete on this foreground.
+  if (isIdleExpired(stored.lastActivityAt, now)) {
+    return { kind: "auto_end", state: stored };
+  }
+  return { kind: "resume", state: stored };
+}
 
 // Parse the leading whole-number rep count from a free-text prescription (e.g.
 // "8-12" → 8, "10" → 10). Non-numeric prescriptions (e.g. "AMRAP") pre-fill 0,
@@ -205,6 +263,11 @@ export function liveSessionReducer(
 
     case "FINISH":
       return { ...state, status: "finished" };
+
+    case "HYDRATE":
+      // Adopt the persisted snapshot wholesale — it is already a complete,
+      // immutable state (restored from the slot), so it replaces the current one.
+      return event.state;
 
     default:
       return state;
