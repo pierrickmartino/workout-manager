@@ -2,12 +2,14 @@ import { notFound } from "next/navigation";
 
 import { fetchExercise } from "@/lib/sessions";
 import { fetchExerciseProgress } from "@/lib/progress";
+import { fetchExerciseRecords } from "@/lib/exercise-records";
 import { toExerciseTab } from "@/lib/exercise-detail-view";
 import { PageHeader } from "@/components/pulse/page-header";
 import { Alert } from "@/components/pulse/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ExerciseTabs } from "@/components/exercise/exercise-tabs";
+import { StatHeader } from "@/components/exercise/stat-header";
 import { SpecsPanel } from "@/components/exercise/specs-panel";
 import { HistoryPanel } from "@/components/exercise/history-panel";
 import { RecordsPanel } from "@/components/exercise/records-panel";
@@ -38,6 +40,14 @@ export default async function ExercisePage({
 
   const exercise = envelope.data;
 
+  // The stat header reads the record side (Personal Record + Total Sets) and sits
+  // above the tabs on every lens, so it is fetched here rather than per-tab. A failed
+  // read simply omits the header — the catalog SPECS content still renders — rather
+  // than breaking the page or fabricating figures.
+  const recordsEnvelope = await fetchExerciseRecords(exerciseId);
+  const records =
+    recordsEnvelope.success && recordsEnvelope.data ? recordsEnvelope.data : null;
+
   return (
     <section className="flex flex-col gap-7">
       <PageHeader
@@ -53,6 +63,8 @@ export default async function ExercisePage({
           )
         }
       />
+
+      {records ? <StatHeader records={records} /> : null}
 
       <ExerciseTabs exerciseId={exerciseId} active={tab} />
 
