@@ -22,7 +22,11 @@ VALID_PAYLOAD = """
 {
   "exercise_name": "Wall Sit",
   "exercise_description": "An isometric quad hold against a wall.",
-  "instructions": "Slide down a wall until your thighs are parallel.",
+  "instructions": [
+    "Set your back flat against a wall.",
+    "Slide down until your thighs are parallel to the floor.",
+    "Hold the position."
+  ],
   "difficulty": 2,
   "targeted_muscles": ["quads"],
   "required_equipment": [],
@@ -48,6 +52,12 @@ def test_substitute_generator_validates_transport_output():
 
     # Assert — parsed substitute plus the schema-constrained transport request
     assert generated.exercise_name == "Wall Sit"
+    # Execution Steps arrive as an ordered list, not a prose blob (ADR-0015)
+    assert generated.instructions == [
+        "Set your back flat against a wall.",
+        "Slide down until your thighs are parallel to the floor.",
+        "Hold the position.",
+    ]
     assert generated.difficulty == 2
     from app.generation.schema import GeneratedSubstitute
 
@@ -70,6 +80,19 @@ def test_substitute_prompt_carries_equipment_and_constraints():
     assert "Barbell Back Squat" in prompt
     assert "dumbbell" in prompt
     assert "no jumping" in prompt
+
+
+def test_substitute_system_prompt_asks_for_ordered_execution_steps():
+    # Arrange
+    llm = FakeStructuredLLM(text=VALID_PAYLOAD)
+    generator = LlmSubstituteGenerator(llm)
+
+    # Act
+    generator.generate(REQUEST)
+
+    # Assert — the model is told to emit ordered steps, not a prose blob (ADR-0015)
+    system = llm.calls[0]["system"].lower()
+    assert "step" in system
 
 
 def test_substitute_generator_wraps_malformed_output_as_generation_error():

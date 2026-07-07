@@ -56,7 +56,7 @@ def _fallback_substitute() -> GeneratedSubstitute:
     return GeneratedSubstitute(
         exercise_name="Wall Sit",
         exercise_description="Isometric quad hold.",
-        instructions="Sit against a wall.",
+        instructions=["Set your back against a wall.", "Sit down to parallel."],
         difficulty=2,
         targeted_muscles=["quads"],
         required_equipment=[],
@@ -141,6 +141,14 @@ def test_falls_back_to_ai_when_no_catalog_link_fits_and_stores_it_as_ai_generate
     assert swapped.exercise_name == "Wall Sit"
     assert swapped.provenance == "ai_generated"
     assert swapped.sets == 5 and swapped.reps == "5"
+
+    # …and the invented movement persists its instructions as an ordered step list
+    # (ADR-0015), not a prose blob, so the catalog reads back genuine steps.
+    stored = exercises.find_or_create("Wall Sit", provenance=Provenance.AI_GENERATED)
+    assert stored.instructions == [
+        "Set your back against a wall.",
+        "Sit down to parallel.",
+    ]
 
 
 def test_substitution_is_unlimited_and_never_consumes_the_regeneration_guard():

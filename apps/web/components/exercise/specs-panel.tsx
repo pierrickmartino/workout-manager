@@ -5,6 +5,7 @@ import type {
   ExerciseDetail,
   RelatedExerciseSummary,
 } from "@/lib/sessions-types";
+import { toExecutionSteps } from "@/lib/exercise-detail-view";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { DataList } from "@/components/pulse/data-list";
 import { Card } from "@/components/ui/card";
@@ -44,20 +45,46 @@ export function SpecsPanel({ exercise }: SpecsPanelProps): React.JSX.Element {
         </Card>
       ) : null}
 
-      {exercise.instructions ? (
-        <div className="flex flex-col gap-4">
-          <SectionHeader>HOW TO PERFORM</SectionHeader>
-          <Card className="p-5">
-            <p className="whitespace-pre-line font-sans text-[14px] leading-relaxed text-text-secondary">
-              {exercise.instructions}
-            </p>
-          </Card>
-        </div>
-      ) : null}
+      <ExecutionSteps instructions={exercise.instructions} />
 
       <StringList title="PRECAUTIONS" items={exercise.precautions} />
       <RelatedList title="VARIATIONS" items={exercise.variations} />
       <RelatedList title="ALTERNATIVES" items={exercise.alternatives} />
+    </div>
+  );
+}
+
+// Execution Steps (ADR-0015): two or more authored steps render as a numbered
+// `01…0N` list; a single step renders as an un-numbered guidance block (never a
+// lone "01", which reads as a bug). The rendered count always equals what the
+// author wrote — the honest/fabricated decision lives in `toExecutionSteps`.
+function ExecutionSteps({ instructions }: { instructions: string[] }) {
+  const steps = toExecutionSteps(instructions);
+  if (steps.kind === "empty") return null;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <SectionHeader>HOW TO PERFORM</SectionHeader>
+      {steps.kind === "single" ? (
+        <Card className="p-5">
+          <p className="font-sans text-[14px] leading-relaxed text-text-secondary">
+            {steps.step}
+          </p>
+        </Card>
+      ) : (
+        <Card className="flex flex-col gap-4 p-5">
+          {steps.steps.map((step) => (
+            <div key={step.ordinal} className="flex items-start gap-3">
+              <span className="label-mono mt-0.5 shrink-0 text-[12px] text-magenta">
+                {step.ordinal}
+              </span>
+              <span className="font-sans text-[14px] leading-relaxed text-text-secondary">
+                {step.text}
+              </span>
+            </div>
+          ))}
+        </Card>
+      )}
     </div>
   );
 }

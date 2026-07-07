@@ -28,7 +28,7 @@ class ExerciseRepository(Protocol):
         description: str | None = None,
         targeted_muscles: Sequence[str] = (),
         required_equipment: Sequence[str] = (),
-        instructions: str | None = None,
+        instructions: Sequence[str] = (),
         difficulty: int | None = None,
         precautions: Sequence[str] = (),
     ) -> Exercise:
@@ -47,7 +47,7 @@ def _new_exercise(
     description: str | None,
     targeted_muscles: Sequence[str],
     required_equipment: Sequence[str],
-    instructions: str | None,
+    instructions: Sequence[str],
     difficulty: int | None,
     precautions: Sequence[str],
 ) -> Exercise:
@@ -58,7 +58,7 @@ def _new_exercise(
         description=description,
         targeted_muscles=list(targeted_muscles),
         required_equipment=list(required_equipment),
-        instructions=instructions,
+        instructions=list(instructions),
         difficulty=difficulty,
         precautions=list(precautions),
     )
@@ -76,7 +76,7 @@ class SqlExerciseRepository:
         description: str | None = None,
         targeted_muscles: Sequence[str] = (),
         required_equipment: Sequence[str] = (),
-        instructions: str | None = None,
+        instructions: Sequence[str] = (),
         difficulty: int | None = None,
         precautions: Sequence[str] = (),
     ) -> Exercise:
@@ -134,7 +134,7 @@ class InMemoryExerciseRepository:
         description: str | None = None,
         targeted_muscles: Sequence[str] = (),
         required_equipment: Sequence[str] = (),
-        instructions: str | None = None,
+        instructions: Sequence[str] = (),
         difficulty: int | None = None,
         precautions: Sequence[str] = (),
     ) -> Exercise:

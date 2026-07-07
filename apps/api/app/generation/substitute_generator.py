@@ -63,7 +63,8 @@ def _system_prompt() -> str:
         "one movement that achieves a similar training effect. Respect the user's "
         "available equipment and constraints absolutely — never prescribe a movement "
         "that needs equipment they lack or that their constraints rule out. Provide "
-        "the exercise name, a short description, execution instructions, a 1–10 "
+        "the exercise name, a short description, execution instructions as an ordered "
+        "list of discrete steps (one action per step, in performance order), a 1–10 "
         "difficulty, targeted muscles, required equipment, and any precautions. "
         "Respond strictly in the required JSON schema."
     )

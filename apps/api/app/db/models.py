@@ -82,7 +82,12 @@ class Exercise(SQLModel, table=True):
     # Enriched detail (Slice 11): execution guidance, a 1–10 difficulty aligned
     # with Fitness Level, and safety precautions — surfaced on the Exercise page
     # and important given the domain's caution around injury and rehab.
-    instructions: str | None = Field(default=None)
+    #
+    # ``instructions`` is an ordered list of Execution Steps (ADR-0015), stored as
+    # JSON — one step per authored line, never a prose blob re-guessed on every read.
+    instructions: list[str] = Field(
+        default_factory=list, sa_column=Column(JSON, nullable=False)
+    )
     difficulty: int | None = Field(default=None)
     precautions: list[str] = Field(
         default_factory=list, sa_column=Column(JSON, nullable=False)

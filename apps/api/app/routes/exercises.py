@@ -41,7 +41,7 @@ def _serialize(exercise: Exercise, related: list[RelatedExercise]) -> dict:
         "provenance": exercise.provenance,
         "targeted_muscles": list(exercise.targeted_muscles),
         "required_equipment": list(exercise.required_equipment),
-        "instructions": exercise.instructions,
+        "instructions": list(exercise.instructions),
         "difficulty": exercise.difficulty,
         "precautions": list(exercise.precautions),
         "variations": [

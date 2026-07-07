@@ -69,7 +69,9 @@ export interface ExerciseDetail {
   provenance: string;
   targeted_muscles: string[];
   required_equipment: string[];
-  instructions: string | null;
+  // Ordered Execution Steps (ADR-0015): one entry per authored step, never a prose
+  // blob. Rendered numbered (2+) or as a single un-numbered block.
+  instructions: string[];
   difficulty: number | null;
   precautions: string[];
   variations: RelatedExerciseSummary[];

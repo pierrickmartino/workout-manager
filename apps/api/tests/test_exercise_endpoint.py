@@ -63,7 +63,7 @@ def test_exercise_detail_surfaces_enriched_fields_and_relationships():
         description="A barbell squat.",
         targeted_muscles=["quads", "glutes"],
         required_equipment=["barbell"],
-        instructions="Brace and sit down between your hips.",
+        instructions=["Brace your core.", "Sit down between your hips."],
         difficulty=6,
         precautions=["keep a neutral spine"],
     )
@@ -79,7 +79,10 @@ def test_exercise_detail_surfaces_enriched_fields_and_relationships():
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["name"] == "Back Squat"
-    assert data["instructions"] == "Brace and sit down between your hips."
+    assert data["instructions"] == [
+        "Brace your core.",
+        "Sit down between your hips.",
+    ]
     assert data["difficulty"] == 6
     assert data["precautions"] == ["keep a neutral spine"]
     assert data["targeted_muscles"] == ["quads", "glutes"]

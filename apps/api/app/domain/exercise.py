@@ -33,3 +33,18 @@ def normalize_name(name: str) -> str:
     """
 
     return _WHITESPACE.sub(" ", name.strip()).lower()
+
+
+def parse_instruction_steps(instructions: str | None) -> list[str]:
+    """Split authored execution prose into ordered Execution Steps (ADR-0015).
+
+    The single source of truth for the newline-split honesty rule: one step per
+    non-empty line, blank lines dropped, each line trimmed — and **no** sentence-
+    level chopping. A single paragraph (no line breaks) therefore becomes a
+    single-element list, and ``None``/blank prose becomes an empty list. The number
+    of steps always equals what the author actually wrote.
+    """
+
+    if instructions is None:
+        return []
+    return [line.strip() for line in instructions.splitlines() if line.strip()]
