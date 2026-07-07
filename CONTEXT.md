@@ -23,8 +23,12 @@ A single prescribed workout, composed of Exercise Prescriptions. One unified con
 _Avoid_: Workout, training (when referring to the plan)
 
 **Exercise**:
-A movement definition in the shared, global catalog — name, description, targeted muscles, difficulty, required equipment, variations, alternatives, precautions. One Exercise (e.g. "Barbell Back Squat") is shared across all users; AI-invented movements are stored once and enriched once for everyone. Distinct from the prescription of its sets/reps.
+A movement definition in the shared, global catalog — name, description, ordered Execution Steps, targeted muscles (split into Primary and Secondary), difficulty, required equipment, variations, alternatives, precautions. One Exercise (e.g. "Barbell Back Squat") is shared across all users; AI-invented movements are stored once and enriched once for everyone. Distinct from the prescription of its sets/reps.
 _Avoid_: Movement, Exercise Prescription (when referring to the definition)
+
+**Execution Steps**:
+The ordered sequence of instructions for performing an Exercise — an enumerated list of discrete steps, not a prose blob. The count of steps reflects what the author (AI enrichment) actually wrote; there is no sentence-level chopping that fabricates step boundaries. An Exercise with no discrete steps carries a single step (rendered as plain guidance) rather than a false "step 01 of 1".
+_Avoid_: Instructions (as free text), how-to, description
 
 **Exercise Prescription**:
 The prescription of one Exercise inside a Session — the sets, repetitions, rest, tempo, and recommended load the user is told to perform. References a catalog Exercise. Distinct from the Exercise definition.
@@ -115,12 +119,20 @@ A single comparable strength figure derived from one Logged Set's absolute Load 
 _Avoid_: 1RM (bare, implies a measured lift), one-rep max (as if tested)
 
 **Personal Record (PR)**:
-The best performance a user has ever logged for an Exercise, measured as the highest Estimated 1RM achieved on it. Comparable across rep ranges — a heavier estimated max at five reps outranks a lighter true single — so a PR reflects genuine strength gain, not merely the heaviest bar ever touched. Detected purely from Logged Sets (the record), never from a plan; only absolute-Load sets within a trustworthy rep range can set one.
-_Avoid_: Best, max weight, record (bare)
+The best performance a user has ever logged for an Exercise, measured as the highest Estimated 1RM achieved on it. Comparable across rep ranges — a heavier estimated max at five reps outranks a lighter true single — so a PR reflects genuine strength gain, not merely the heaviest bar ever touched. Detected purely from Logged Sets (the record), never from a plan; only absolute-Load sets within a trustworthy rep range can set one. Surfaced on the Exercise Detail screen as the single strength figure — never split into a separate "personal best" load tile, which would collide with this term.
+_Avoid_: Best, max weight, record (bare), personal best (for the raw heaviest load)
+
+**Top Set**:
+The single best Estimated 1RM set within one Logged Session for a given Exercise — that session's strength high-water mark. It is the per-session scalar the Exercise Detail top-set trend plots over the last several sessions, so the trend reads as Personal-Record trajectory on one yardstick. Distinct from the Personal Record, which is the best Top Set across *all* sessions; undefined for a session with no absolute-Load set in the trustworthy rep range.
+_Avoid_: Best set (bare), heaviest set, top weight
 
 **Muscle Group**:
 A coarse, curated bucket — Legs, Chest, Back, Shoulders, Arms, or Core — that a catalog Exercise's free-form targeted muscles roll up into, used to show how a user's training is distributed across the body on the Analytics screen. The mapping is curated, not AI-derived; a targeted muscle with no known mapping falls into an explicit **Unclassified** bucket rather than being silently dropped. Coarser than an Exercise's own targeted-muscle list, and distinct from the training-type dimension.
 _Avoid_: Body part, region, muscle (bare)
+
+**Primary / Secondary Muscle**:
+The emphasis split of an Exercise's targeted muscles: the Primary muscles are the prime movers a movement is chosen to train; the Secondary muscles assist. Their union is the Exercise's full targeted-muscle list — the durable set the Muscle Group roll-up reads — so the split is an *emphasis annotation* layered on top, not a replacement. Present only where the AI enrichment actually asserted it (or a curator did); an Exercise with no asserted split has no Primary/Secondary distinction and is shown as a flat muscle list rather than one with a fabricated primacy. Distinct from Muscle Group, which is the coarse six-bucket roll-up.
+_Avoid_: Prime/assisting mover (as the stored term), main muscle
 
 ## Feedback
 
