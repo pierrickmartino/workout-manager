@@ -39,7 +39,12 @@ def _serialize(exercise: Exercise, related: list[RelatedExercise]) -> dict:
         "name": exercise.name,
         "description": exercise.description,
         "provenance": exercise.provenance,
+        # The flat union stays the durable analytics-facing field; the
+        # Primary/Secondary emphasis split (ADR-0016) rides alongside it, empty
+        # when the Exercise asserts no primacy.
         "targeted_muscles": list(exercise.targeted_muscles),
+        "primary_muscles": list(exercise.primary_muscles),
+        "secondary_muscles": list(exercise.secondary_muscles),
         "required_equipment": list(exercise.required_equipment),
         "instructions": list(exercise.instructions),
         "difficulty": exercise.difficulty,

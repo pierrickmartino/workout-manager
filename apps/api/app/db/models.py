@@ -72,7 +72,19 @@ class Exercise(SQLModel, table=True):
     name: str
     description: str | None = Field(default=None)
     provenance: str
+    # ``targeted_muscles`` is the flat, durable union the F3 Muscle Group roll-up
+    # reads (ADR-0011). ``primary_muscles`` / ``secondary_muscles`` are the
+    # Primary/Secondary emphasis annotation layered on top (ADR-0016): populated
+    # only where enrichment or a curator actually asserts a split, never
+    # backfilled by guessing. An empty split means "no asserted primacy", not
+    # "all primary" — the SPECS map falls back to the flat union in that case.
     targeted_muscles: list[str] = Field(
+        default_factory=list, sa_column=Column(JSON, nullable=False)
+    )
+    primary_muscles: list[str] = Field(
+        default_factory=list, sa_column=Column(JSON, nullable=False)
+    )
+    secondary_muscles: list[str] = Field(
         default_factory=list, sa_column=Column(JSON, nullable=False)
     )
     required_equipment: list[str] = Field(

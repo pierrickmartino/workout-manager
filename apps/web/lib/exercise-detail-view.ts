@@ -48,3 +48,43 @@ export function toExecutionSteps(instructions: string[]): ExecutionSteps {
     })),
   };
 }
+
+// The muscle emphasis of a catalog Exercise (ADR-0016), as the SPECS muscle map
+// should render it:
+// - `split`: a populated Primary/Secondary split — shown as PRIMARY/SECONDARY
+//   sections (a section renders only when its list is non-empty);
+// - `flat`: no asserted split, so the flat targeted-muscle union is shown as one
+//   row with no primacy;
+// - `empty`: no muscles recorded at all, so no muscle map is shown.
+export type MuscleEmphasis =
+  | { kind: "empty" }
+  | { kind: "flat"; muscles: string[] }
+  | { kind: "split"; primary: string[]; secondary: string[] };
+
+// The three muscle fields the serializer returns: the durable flat union plus the
+// Primary/Secondary emphasis split layered on top.
+export interface ExerciseMuscles {
+  targeted_muscles: string[];
+  primary_muscles: string[];
+  secondary_muscles: string[];
+}
+
+function cleaned(muscles: string[]): string[] {
+  return muscles.map((muscle) => muscle.trim()).filter((muscle) => muscle.length > 0);
+}
+
+// Decide how the muscle map renders. Primacy is honored only when the split is
+// actually asserted: an empty split falls back to the flat union — this helper
+// never fabricates a primary/secondary from a flat list. Blank entries are dropped
+// defensively so a stray whitespace value can never surface as a real muscle.
+export function toMuscleEmphasis(muscles: ExerciseMuscles): MuscleEmphasis {
+  const primary = cleaned(muscles.primary_muscles);
+  const secondary = cleaned(muscles.secondary_muscles);
+  if (primary.length > 0 || secondary.length > 0) {
+    return { kind: "split", primary, secondary };
+  }
+
+  const flat = cleaned(muscles.targeted_muscles);
+  if (flat.length === 0) return { kind: "empty" };
+  return { kind: "flat", muscles: flat };
+}

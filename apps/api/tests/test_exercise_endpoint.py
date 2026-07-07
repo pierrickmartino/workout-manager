@@ -62,6 +62,8 @@ def test_exercise_detail_surfaces_enriched_fields_and_relationships():
         provenance=Provenance.CURATED,
         description="A barbell squat.",
         targeted_muscles=["quads", "glutes"],
+        primary_muscles=["quads"],
+        secondary_muscles=["glutes"],
         required_equipment=["barbell"],
         instructions=["Brace your core.", "Sit down between your hips."],
         difficulty=6,
@@ -85,6 +87,30 @@ def test_exercise_detail_surfaces_enriched_fields_and_relationships():
     ]
     assert data["difficulty"] == 6
     assert data["precautions"] == ["keep a neutral spine"]
+    # The flat union stays the durable analytics-facing field; the Primary/Secondary
+    # emphasis split (ADR-0016) rides alongside it.
     assert data["targeted_muscles"] == ["quads", "glutes"]
+    assert data["primary_muscles"] == ["quads"]
+    assert data["secondary_muscles"] == ["glutes"]
     assert [v["name"] for v in data["variations"]] == ["Box Squat"]
     assert [a["name"] for a in data["alternatives"]] == ["Goblet Squat"]
+
+
+def test_exercise_detail_omits_primacy_for_a_flat_muscle_list():
+    # Arrange — a curated Exercise with only a flat targeted-muscle list, no split
+    client, ctx, exercises, _ = build_client()
+    plank = exercises.find_or_create(
+        "Plank",
+        provenance=Provenance.CURATED,
+        targeted_muscles=["core"],
+    )
+
+    # Act
+    response = client.get(f"/api/exercises/{plank.id}", headers=_auth(ctx))
+
+    # Assert — the union is served, and the split is empty (no fabricated primacy)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["targeted_muscles"] == ["core"]
+    assert data["primary_muscles"] == []
+    assert data["secondary_muscles"] == []

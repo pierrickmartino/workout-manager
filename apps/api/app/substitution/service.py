@@ -157,6 +157,8 @@ def _generate_substitute(
         provenance=Provenance.AI_GENERATED,
         description=generated.exercise_description,
         targeted_muscles=generated.targeted_muscles,
+        primary_muscles=generated.primary_muscles,
+        secondary_muscles=generated.secondary_muscles,
         required_equipment=generated.required_equipment,
         instructions=generated.instructions,
         difficulty=generated.difficulty,

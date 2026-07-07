@@ -67,7 +67,12 @@ export interface ExerciseDetail {
   name: string;
   description: string | null;
   provenance: string;
+  // The flat, durable muscle union the analytics roll-up reads (ADR-0011), plus the
+  // Primary/Secondary emphasis split layered on top (ADR-0016). The split is empty
+  // when the Exercise asserts no primacy; the SPECS map falls back to the union then.
   targeted_muscles: string[];
+  primary_muscles: string[];
+  secondary_muscles: string[];
   required_equipment: string[];
   // Ordered Execution Steps (ADR-0015): one entry per authored step, never a prose
   // blob. Rendered numbered (2+) or as a single un-numbered block.

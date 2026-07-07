@@ -62,6 +62,37 @@ def test_stores_instructions_as_an_ordered_step_list(repo):
     ]
 
 
+def test_stores_a_primary_secondary_muscle_split(repo):
+    # Act — the catalog now carries a Primary/Secondary emphasis split (ADR-0016)
+    # layered on top of the flat targeted-muscle union.
+    exercise = repo.find_or_create(
+        "Bulgarian Split Squat",
+        provenance=Provenance.AI_GENERATED,
+        targeted_muscles=["quads", "glutes", "hamstrings"],
+        primary_muscles=["quads"],
+        secondary_muscles=["glutes", "hamstrings"],
+    )
+
+    # Assert — the split persists alongside the durable union
+    assert exercise.targeted_muscles == ["quads", "glutes", "hamstrings"]
+    assert exercise.primary_muscles == ["quads"]
+    assert exercise.secondary_muscles == ["glutes", "hamstrings"]
+
+
+def test_muscle_split_defaults_to_empty_lists(repo):
+    # Act — an Exercise created with only the flat list, no asserted split
+    exercise = repo.find_or_create(
+        "Plank",
+        provenance=Provenance.CURATED,
+        targeted_muscles=["core"],
+    )
+
+    # Assert — no fabricated primacy: the split stays empty (ADR-0016)
+    assert exercise.targeted_muscles == ["core"]
+    assert exercise.primary_muscles == []
+    assert exercise.secondary_muscles == []
+
+
 def test_instructions_default_to_an_empty_step_list(repo):
     # Act — an Exercise created without instructions
     exercise = repo.find_or_create("Plank", provenance=Provenance.AI_GENERATED)

@@ -67,7 +67,13 @@ class GeneratedSubstitute(BaseModel):
     # than a prose blob re-guessed on every read.
     instructions: list[str] = Field(default_factory=list)
     difficulty: int | None = None
+    # ``targeted_muscles`` stays the flat, durable union the F3 Muscle Group roll-up
+    # reads. ``primary_muscles`` / ``secondary_muscles`` are the Primary/Secondary
+    # emphasis annotation layered on top (ADR-0016) — populated only when the model
+    # actually asserts a split, never fabricated from the flat list.
     targeted_muscles: list[str] = Field(default_factory=list)
+    primary_muscles: list[str] = Field(default_factory=list)
+    secondary_muscles: list[str] = Field(default_factory=list)
     required_equipment: list[str] = Field(default_factory=list)
     precautions: list[str] = Field(default_factory=list)
 
