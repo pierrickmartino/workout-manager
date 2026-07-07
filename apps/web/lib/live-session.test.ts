@@ -95,6 +95,34 @@ test("initLiveSession pre-fills reps and load from the prescription", () => {
   assert.equal(firstPushup.loadValue, "");
 });
 
+test("initLiveSession threads previous performance onto set rows by ordinal", () => {
+  // Arrange — the squat has a previous performance to beat; the push-up never
+  // logged one (issue #90 — F2·S5).
+  const session: WorkoutSession = {
+    ...SESSION,
+    prescriptions: [
+      {
+        ...SESSION.prescriptions[0],
+        previous_performance: [
+          { reps: 8, load: { kind: "absolute", text: "65 kg", kg: 65 } },
+          { reps: 8, load: { kind: "absolute", text: "65 kg", kg: 65 } },
+        ],
+      },
+      SESSION.prescriptions[1],
+    ],
+  };
+
+  // Act
+  const state = initLiveSession(session);
+
+  // Assert — set 1 and 2 align to the two previous sets; set 3 has none logged,
+  // and the push-up (no history) has none at all.
+  assert.deepEqual(state.sets[0].previous, { reps: 8, loadText: "65 kg" });
+  assert.deepEqual(state.sets[1].previous, { reps: 8, loadText: "65 kg" });
+  assert.equal(state.sets[2].previous, null);
+  assert.equal(state.sets[3].previous, null);
+});
+
 test("START moves a not-started session in progress", () => {
   // Arrange
   const state = initLiveSession(SESSION);

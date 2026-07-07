@@ -116,14 +116,15 @@ def protocol_progress(
     )
 
 
-def _latest_sets_by_exercise(
+def latest_sets_by_exercise(
     logged_sessions: list[LoggedSessionView],
 ) -> dict[int, list[LoggedSetView]]:
     """Map each Exercise to the Logged Sets from its most recent performance.
 
     ``logged_sessions`` arrives newest-first, so the first time an Exercise is
     seen wins: the user's latest sets for that movement drive its next recommended
-    load.
+    load. Every performance is read — including Incomplete ones — because the sets
+    done inside an Incomplete Session are real history.
     """
 
     latest: dict[int, list[LoggedSetView]] = {}
@@ -136,7 +137,7 @@ def _latest_sets_by_exercise(
     return latest
 
 
-def _progressed_load(
+def progressed_load(
     prescription: PrescriptionView, sets: list[LoggedSetView]
 ) -> dict | None:
     """Run the ADR-0004 ``next_load`` adjustment over a typed Load.
@@ -169,7 +170,7 @@ def _adjusted_session(
     adjusted = [
         replace(
             prescription,
-            recommended_load=_progressed_load(
+            recommended_load=progressed_load(
                 prescription, latest_sets.get(prescription.exercise_id, [])
             ),
         )
@@ -202,7 +203,7 @@ def progressed_protocol(
     # still reads *every* logged set: the sets done inside an Incomplete performance
     # are real history (volume, PRs) and legitimately drive the next recommended load.
     performed = _advancing_sessions(logged_sessions)
-    latest_sets = _latest_sets_by_exercise(logged_sessions)
+    latest_sets = latest_sets_by_exercise(logged_sessions)
 
     sessions = [
         session
@@ -253,4 +254,6 @@ __all__ = [
     "protocol_progress",
     "progressed_protocol",
     "current_protocol",
+    "latest_sets_by_exercise",
+    "progressed_load",
 ]

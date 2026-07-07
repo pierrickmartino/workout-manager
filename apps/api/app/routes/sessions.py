@@ -30,16 +30,20 @@ from app.generation.regeneration_service import (
 from app.generation.regenerator import SessionRegenerator
 from app.generation.service import generate_session
 from app.generation.substitute_generator import SubstituteGenerator
+from app.live.hydration import hydrate_session
+from app.live.serialization import serialize_hydrated_session
 from app.repositories.deps import (
     get_exercise_relationship_repository,
     get_exercise_repository,
     get_generation_feedback_repository,
+    get_logged_session_repository,
     get_profile_repository,
     get_session_generator,
     get_session_regenerator,
     get_session_repository,
     get_substitute_generator,
 )
+from app.repositories.logged_session_repository import LoggedSessionRepository
 from app.repositories.exercise_relationship_repository import (
     ExerciseRelationshipRepository,
 )
@@ -143,6 +147,28 @@ def read_session(
     if view is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Session not found")
     return success_envelope(_serialize(view))
+
+
+@router.get("/sessions/{session_id}/live")
+def hydrate_live_session(
+    session_id: int,
+    clerk_user_id: str = Depends(get_current_user),
+    sessions: SessionRepository = Depends(get_session_repository),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+) -> dict:
+    """Return the owner's Session hydrated for the live screen (issue #90).
+
+    The recommended loads carry the ADR-0004 Progression adjustment and each
+    Exercise carries its previous performance to beat. ``404`` for anyone who does
+    not own the Session, so non-owners never seed a Live Session.
+    """
+
+    view = hydrate_session(
+        clerk_user_id, session_id, sessions=sessions, logged=logged
+    )
+    if view is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Session not found")
+    return success_envelope(serialize_hydrated_session(view))
 
 
 class FeedbackRequest(BaseModel):
