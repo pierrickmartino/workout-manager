@@ -28,7 +28,9 @@ VALID_PAYLOAD = """
     "Hold the position."
   ],
   "difficulty": 2,
-  "targeted_muscles": ["quads"],
+  "targeted_muscles": ["quads", "glutes"],
+  "primary_muscles": ["quads"],
+  "secondary_muscles": ["glutes"],
   "required_equipment": [],
   "precautions": ["stop if you feel knee pain"]
 }
@@ -59,6 +61,11 @@ def test_substitute_generator_validates_transport_output():
         "Hold the position.",
     ]
     assert generated.difficulty == 2
+    # The Primary/Secondary emphasis split (ADR-0016) rides alongside the flat
+    # targeted-muscle union, which stays the durable analytics-facing field.
+    assert generated.targeted_muscles == ["quads", "glutes"]
+    assert generated.primary_muscles == ["quads"]
+    assert generated.secondary_muscles == ["glutes"]
     from app.generation.schema import GeneratedSubstitute
 
     call = llm.calls[0]
@@ -93,6 +100,41 @@ def test_substitute_system_prompt_asks_for_ordered_execution_steps():
     # Assert — the model is told to emit ordered steps, not a prose blob (ADR-0015)
     system = llm.calls[0]["system"].lower()
     assert "step" in system
+
+
+def test_substitute_system_prompt_asks_for_a_primary_secondary_split():
+    # Arrange
+    llm = FakeStructuredLLM(text=VALID_PAYLOAD)
+    generator = LlmSubstituteGenerator(llm)
+
+    # Act
+    generator.generate(REQUEST)
+
+    # Assert — the model is asked to split muscle emphasis into primary/secondary
+    # (ADR-0016) so newly invented movements enter the catalog with a real split.
+    system = llm.calls[0]["system"].lower()
+    assert "primary" in system
+    assert "secondary" in system
+
+
+def test_substitute_split_defaults_empty_when_the_model_omits_it():
+    # Arrange — an older-shaped payload with no primary/secondary split at all
+    payload = """
+    {
+      "exercise_name": "Wall Sit",
+      "targeted_muscles": ["quads"],
+      "required_equipment": []
+    }
+    """
+    generator = LlmSubstituteGenerator(FakeStructuredLLM(text=payload))
+
+    # Act
+    generated = generator.generate(REQUEST)
+
+    # Assert — no fabricated primacy: the split is empty, the union survives
+    assert generated.primary_muscles == []
+    assert generated.secondary_muscles == []
+    assert generated.targeted_muscles == ["quads"]
 
 
 def test_substitute_generator_wraps_malformed_output_as_generation_error():

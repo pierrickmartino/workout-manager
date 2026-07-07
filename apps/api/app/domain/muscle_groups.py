@@ -1,8 +1,10 @@
 """Muscle Groups — the curated roll-up behind the Analytics muscle distribution.
 
-An Exercise's ``targeted_muscles`` is a free-form string list with no
-primary/secondary flag (ADR-0011), so this module rolls those muscles into six
-coarse, **curated** Muscle Groups — Legs, Chest, Back, Shoulders, Arms, Core —
+An Exercise's ``targeted_muscles`` is a free-form string list kept as the durable
+analytics-facing union (ADR-0016, amending ADR-0011): the Primary/Secondary emphasis
+split lives in separate fields and does not touch this roll-up. This module rolls
+those union muscles into six coarse, **curated** Muscle Groups — Legs, Chest, Back,
+Shoulders, Arms, Core —
 with an explicit **Unclassified** bucket for anything with no known mapping.
 Unclassified is shown, never dropped: an unmapped or AI-invented muscle stays
 visible rather than silently vanishing.

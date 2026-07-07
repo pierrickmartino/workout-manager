@@ -5,10 +5,11 @@ import type {
   ExerciseDetail,
   RelatedExerciseSummary,
 } from "@/lib/sessions-types";
-import { toExecutionSteps } from "@/lib/exercise-detail-view";
+import { toExecutionSteps, toMuscleEmphasis } from "@/lib/exercise-detail-view";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { DataList } from "@/components/pulse/data-list";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 interface SpecsPanelProps {
   exercise: ExerciseDetail;
@@ -22,9 +23,6 @@ export function SpecsPanel({ exercise }: SpecsPanelProps): React.JSX.Element {
   const metaRows = [
     ...(exercise.difficulty !== null
       ? [{ label: "Difficulty", value: `${exercise.difficulty} / 10` }]
-      : []),
-    ...(exercise.targeted_muscles.length > 0
-      ? [{ label: "Muscles", value: exercise.targeted_muscles.join(", ") }]
       : []),
     ...(exercise.required_equipment.length > 0
       ? [{ label: "Equipment", value: exercise.required_equipment.join(", ") }]
@@ -44,6 +42,8 @@ export function SpecsPanel({ exercise }: SpecsPanelProps): React.JSX.Element {
           <DataList rows={metaRows} />
         </Card>
       ) : null}
+
+      <MuscleMap exercise={exercise} />
 
       <ExecutionSteps instructions={exercise.instructions} />
 
@@ -85,6 +85,79 @@ function ExecutionSteps({ instructions }: { instructions: string[] }) {
           ))}
         </Card>
       )}
+    </div>
+  );
+}
+
+// The SPECS muscle map (ADR-0016). A populated Primary/Secondary split renders
+// PRIMARY and SECONDARY sub-sections; an Exercise that asserts no split falls back
+// to a flat targeted-muscle row. No Exercise ever shows a primacy it doesn't have —
+// the honest/flat decision lives entirely in `toMuscleEmphasis`.
+function MuscleMap({ exercise }: { exercise: ExerciseDetail }) {
+  const emphasis = toMuscleEmphasis(exercise);
+  if (emphasis.kind === "empty") return null;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <SectionHeader>MUSCLES</SectionHeader>
+      <Card className="flex flex-col gap-5 p-5">
+        {emphasis.kind === "flat" ? (
+          <MuscleChips muscles={emphasis.muscles} variant="muted" />
+        ) : (
+          <>
+            <MuscleGroup
+              label="PRIMARY"
+              muscles={emphasis.primary}
+              variant="magenta"
+            />
+            {emphasis.secondary.length > 0 ? (
+              <MuscleGroup
+                label="SECONDARY"
+                muscles={emphasis.secondary}
+                variant="muted"
+              />
+            ) : null}
+          </>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function MuscleGroup({
+  label,
+  muscles,
+  variant,
+}: {
+  label: string;
+  muscles: string[];
+  variant: "magenta" | "muted";
+}) {
+  if (muscles.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-2.5">
+      <span className="label-mono text-[10px] tracking-wider text-text-muted">
+        {label}
+      </span>
+      <MuscleChips muscles={muscles} variant={variant} />
+    </div>
+  );
+}
+
+function MuscleChips({
+  muscles,
+  variant,
+}: {
+  muscles: string[];
+  variant: "magenta" | "muted";
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {muscles.map((muscle) => (
+        <Badge key={muscle} variant={variant}>
+          {muscle}
+        </Badge>
+      ))}
     </div>
   );
 }

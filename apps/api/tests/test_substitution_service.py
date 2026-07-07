@@ -58,7 +58,9 @@ def _fallback_substitute() -> GeneratedSubstitute:
         exercise_description="Isometric quad hold.",
         instructions=["Set your back against a wall.", "Sit down to parallel."],
         difficulty=2,
-        targeted_muscles=["quads"],
+        targeted_muscles=["quads", "glutes"],
+        primary_muscles=["quads"],
+        secondary_muscles=["glutes"],
         required_equipment=[],
         precautions=["stop if knee pain"],
     )
@@ -149,6 +151,11 @@ def test_falls_back_to_ai_when_no_catalog_link_fits_and_stores_it_as_ai_generate
         "Set your back against a wall.",
         "Sit down to parallel.",
     ]
+    # …and its Primary/Secondary emphasis split (ADR-0016) enters the catalog too,
+    # alongside the flat targeted-muscle union.
+    assert stored.targeted_muscles == ["quads", "glutes"]
+    assert stored.primary_muscles == ["quads"]
+    assert stored.secondary_muscles == ["glutes"]
 
 
 def test_substitution_is_unlimited_and_never_consumes_the_regeneration_guard():

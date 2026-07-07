@@ -1,7 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { toExerciseTab, toExecutionSteps } from "./exercise-detail-view.ts";
+import {
+  toExerciseTab,
+  toExecutionSteps,
+  toMuscleEmphasis,
+} from "./exercise-detail-view.ts";
 
 // `toExerciseTab` narrows an untrusted ?tab= query value to one of the Exercise
 // Detail tabs, defaulting to SPECS so refresh and shared links land somewhere
@@ -104,5 +108,82 @@ test("drops blank entries so the step count stays honest", () => {
       { ordinal: "01", text: "Set your feet." },
       { ordinal: "02", text: "Drive up." },
     ],
+  });
+});
+
+// `toMuscleEmphasis` decides how the SPECS muscle map renders (ADR-0016): a
+// populated Primary/Secondary split shows PRIMARY/SECONDARY sections, an absent
+// split falls back to the flat targeted-muscle list, and nothing renders when
+// there are no muscles at all. It never fabricates primacy from a flat list.
+
+test("renders PRIMARY/SECONDARY sections when the split is populated", () => {
+  // Arrange — an Exercise that actually asserts an emphasis split
+  const result = toMuscleEmphasis({
+    targeted_muscles: ["quads", "glutes", "hamstrings"],
+    primary_muscles: ["quads"],
+    secondary_muscles: ["glutes", "hamstrings"],
+  });
+
+  // Assert — the split drives the render, primary and secondary kept distinct
+  assert.deepEqual(result, {
+    kind: "split",
+    primary: ["quads"],
+    secondary: ["glutes", "hamstrings"],
+  });
+});
+
+test("falls back to a flat muscle list when no split is asserted", () => {
+  // Arrange — only the flat union is present (a curated, un-enriched row)
+  const result = toMuscleEmphasis({
+    targeted_muscles: ["core"],
+    primary_muscles: [],
+    secondary_muscles: [],
+  });
+
+  // Assert — no fabricated primacy: render the flat targeted list
+  assert.deepEqual(result, { kind: "flat", muscles: ["core"] });
+});
+
+test("treats a primary-only split as a real split, not a flat list", () => {
+  // Arrange — prime movers asserted, but no secondary named
+  const result = toMuscleEmphasis({
+    targeted_muscles: ["biceps"],
+    primary_muscles: ["biceps"],
+    secondary_muscles: [],
+  });
+
+  // Assert — a populated split with an empty secondary section, still honest
+  assert.deepEqual(result, {
+    kind: "split",
+    primary: ["biceps"],
+    secondary: [],
+  });
+});
+
+test("renders empty when there are no muscles at all", () => {
+  // Assert — an Exercise with nothing recorded shows no muscle map
+  assert.deepEqual(
+    toMuscleEmphasis({
+      targeted_muscles: [],
+      primary_muscles: [],
+      secondary_muscles: [],
+    }),
+    { kind: "empty" },
+  );
+});
+
+test("drops blank muscle entries so the map stays honest", () => {
+  // Arrange — stray whitespace entries must not surface as real muscles
+  const result = toMuscleEmphasis({
+    targeted_muscles: ["quads", "  ", "glutes"],
+    primary_muscles: ["quads", ""],
+    secondary_muscles: ["  "],
+  });
+
+  // Assert — blanks are dropped; a primary-only split survives
+  assert.deepEqual(result, {
+    kind: "split",
+    primary: ["quads"],
+    secondary: [],
   });
 });

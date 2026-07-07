@@ -65,8 +65,11 @@ def _system_prompt() -> str:
         "that needs equipment they lack or that their constraints rule out. Provide "
         "the exercise name, a short description, execution instructions as an ordered "
         "list of discrete steps (one action per step, in performance order), a 1–10 "
-        "difficulty, targeted muscles, required equipment, and any precautions. "
-        "Respond strictly in the required JSON schema."
+        "difficulty, required equipment, and any precautions. For muscles, list the "
+        "full set worked in targeted_muscles, and also split that emphasis into "
+        "primary_muscles (the prime movers) and secondary_muscles (the assisting "
+        "muscles) — every muscle you name in the split must also appear in "
+        "targeted_muscles. Respond strictly in the required JSON schema."
     )
 
 
