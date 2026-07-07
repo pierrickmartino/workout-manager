@@ -62,7 +62,10 @@ class GeneratedSubstitute(BaseModel):
 
     exercise_name: str
     exercise_description: str | None = None
-    instructions: str | None = None
+    # Execution Steps (ADR-0015): an ordered list, one entry per discrete step, so
+    # the invented movement enters the catalog with genuine numbered steps rather
+    # than a prose blob re-guessed on every read.
+    instructions: list[str] = Field(default_factory=list)
     difficulty: int | None = None
     targeted_muscles: list[str] = Field(default_factory=list)
     required_equipment: list[str] = Field(default_factory=list)

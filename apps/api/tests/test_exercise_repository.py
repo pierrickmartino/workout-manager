@@ -47,6 +47,29 @@ def test_creates_a_new_exercise_with_provenance_and_fields(repo):
     assert exercise.required_equipment == ["barbell"]
 
 
+def test_stores_instructions_as_an_ordered_step_list(repo):
+    # Act — the catalog now carries Execution Steps, not a prose blob (ADR-0015)
+    exercise = repo.find_or_create(
+        "Wall Sit",
+        provenance=Provenance.AI_GENERATED,
+        instructions=["Set your back against a wall.", "Slide down to parallel."],
+    )
+
+    # Assert — the ordered steps are persisted verbatim
+    assert exercise.instructions == [
+        "Set your back against a wall.",
+        "Slide down to parallel.",
+    ]
+
+
+def test_instructions_default_to_an_empty_step_list(repo):
+    # Act — an Exercise created without instructions
+    exercise = repo.find_or_create("Plank", provenance=Provenance.AI_GENERATED)
+
+    # Assert — an empty list, never None or a lone fabricated step
+    assert exercise.instructions == []
+
+
 def test_equivalent_normalized_name_reuses_the_existing_exercise(repo):
     # Arrange
     first = repo.find_or_create("Push-Up", provenance=Provenance.AI_GENERATED)
