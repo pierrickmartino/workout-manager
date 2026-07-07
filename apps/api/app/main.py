@@ -15,6 +15,7 @@ from app.routes.metrics import router as metrics_router
 from app.routes.profile import router as profile_router
 from app.routes.protocols import router as protocols_router
 from app.routes.progress import router as progress_router
+from app.routes.records import router as records_router
 from app.routes.sessions import router as sessions_router
 
 HTTP_UNPROCESSABLE_ENTITY = 422
@@ -58,6 +59,7 @@ def create_app() -> FastAPI:
     app.include_router(exercises_router)
     app.include_router(metrics_router)
     app.include_router(progress_router)
+    app.include_router(records_router)
     app.include_router(analytics_router)
     return app
 
