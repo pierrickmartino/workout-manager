@@ -5,6 +5,12 @@ import {
   elapsedSeconds,
   durationSeconds,
   formatElapsed,
+  resolveRestSeconds,
+  restTargetEnd,
+  restRemainingSeconds,
+  adjustRestTargetEnd,
+  DEFAULT_REST_SECONDS,
+  REST_ADJUST_STEP_SECONDS,
 } from "./live-timer.ts";
 
 // The Live Session timers (issue #88 — F2·S3) are pure timestamp math. Elapsed and
@@ -62,4 +68,87 @@ test("formatElapsed renders M:SS under an hour", () => {
 test("formatElapsed renders H:MM:SS once past an hour", () => {
   assert.equal(formatElapsed(3600), "1:00:00");
   assert.equal(formatElapsed(3661), "1:01:01");
+});
+
+// The rest countdown (issue #89 — F2·S4). Rest between sets defaults to the
+// Exercise Prescription's `rest_seconds`, with a named-constant fallback when the
+// prescription has none. Like the elapsed timer, it is wall-clock — a stored
+// target-end timestamp compared to a passed `now` — so a phone lock or refresh
+// mid-rest can't corrupt it.
+
+test("resolveRestSeconds uses the prescription's rest_seconds when present", () => {
+  // A prescription that names its own rest keeps it.
+  assert.equal(resolveRestSeconds(120), 120);
+});
+
+test("resolveRestSeconds falls back to the default when the prescription has none", () => {
+  // An absent (null) rest_seconds falls back to the named constant.
+  assert.equal(resolveRestSeconds(null), DEFAULT_REST_SECONDS);
+});
+
+test("restTargetEnd is the wall-clock instant the rest elapses", () => {
+  // Arrange — a 90 s rest started at a known instant
+  const now = 1_000_000;
+
+  // Act / Assert — target-end is stored as `now` plus the rest in milliseconds
+  assert.equal(restTargetEnd(now, 90), now + 90_000);
+});
+
+test("restRemainingSeconds counts down whole seconds, rounding a part-second up", () => {
+  // Arrange — 89.25 s of wall-clock still left until the target-end
+  const now = 1_000_000;
+  const targetEnd = now + 89_250;
+
+  // Act / Assert — a countdown shows the ceiling, so it reads 1:30 for the first
+  // tick and only hits 0 the instant it truly elapses
+  assert.equal(restRemainingSeconds(targetEnd, now), 90);
+});
+
+test("restRemainingSeconds clamps to 0 once the rest has elapsed", () => {
+  // `now` is past the target-end — the rest is over, never a negative remainder.
+  const targetEnd = 1_000_000;
+  assert.equal(restRemainingSeconds(targetEnd, targetEnd + 5_000), 0);
+});
+
+test("restRemainingSeconds is 0 when no rest is running", () => {
+  // No target-end (null) means no active rest countdown.
+  assert.equal(restRemainingSeconds(null, 1_000_000), 0);
+});
+
+test("adjustRestTargetEnd extends the rest by +15", () => {
+  // Arrange — 30 s left on the rest
+  const now = 1_000_000;
+  const targetEnd = now + 30_000;
+
+  // Act — the `+15` control pushes the target-end out
+  const extended = adjustRestTargetEnd(targetEnd, REST_ADJUST_STEP_SECONDS, now);
+
+  // Assert — 15 s more remain
+  assert.equal(restRemainingSeconds(extended, now), 45);
+});
+
+test("adjustRestTargetEnd shortens the rest by −15", () => {
+  // Arrange — 30 s left on the rest
+  const now = 1_000_000;
+  const targetEnd = now + 30_000;
+
+  // Act — the `−15` control pulls the target-end in
+  const shortened = adjustRestTargetEnd(targetEnd, -REST_ADJUST_STEP_SECONDS, now);
+
+  // Assert — 15 s less remain
+  assert.equal(restRemainingSeconds(shortened, now), 15);
+});
+
+test("adjustRestTargetEnd never pulls the target-end before now", () => {
+  // Arrange — only 5 s left, so a −15 would push the target-end into the past
+  const now = 1_000_000;
+  const targetEnd = now + 5_000;
+
+  // Act — subtracting more than remains
+  const clamped = adjustRestTargetEnd(targetEnd, -REST_ADJUST_STEP_SECONDS, now);
+
+  // Assert — the rest ends now (0 remaining), never banking negative time that a
+  // later `+15` would have to climb back out of
+  assert.equal(clamped, now);
+  assert.equal(restRemainingSeconds(clamped, now), 0);
 });
