@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Play } from "lucide-react";
 
 import type { ProtocolProgress } from "@/lib/protocols-types";
 import { heroStats } from "@/lib/home-view";
@@ -13,9 +13,9 @@ interface SessionHeroProps {
 
 // The Home Session Hero: the focal card for a Current Protocol's Next Session.
 // It surfaces the honestly-backed stat row — duration · modules · sets — and a
-// primary action that opens the Session's existing detail/log page. No
-// target-calorie and no single volume/tonnage number (ADR-0008); live-session
-// mode is deferred to F2, so the button just routes to the Session page.
+// primary "Start session" CTA that launches the live route for the Next Session
+// (issue #91 — F2·S6), with a secondary link to the Session's detail page. No
+// target-calorie and no single volume/tonnage number (ADR-0008).
 export function SessionHero({ protocol }: SessionHeroProps): React.JSX.Element {
   const next = protocol.next_session;
   const stats = heroStats(protocol);
@@ -53,13 +53,25 @@ export function SessionHero({ protocol }: SessionHeroProps): React.JSX.Element {
       />
 
       {next ? (
-        <Link
-          href={`/sessions/${next.session_id}`}
-          className={buttonVariants({ className: "w-full" })}
-        >
-          Open session
-          <ArrowRight className="h-4 w-4" />
-        </Link>
+        <div className="flex flex-col gap-2.5">
+          <Link
+            href={`/sessions/${next.session_id}/live`}
+            className={buttonVariants({ className: "w-full" })}
+          >
+            <Play className="h-4 w-4" />
+            Start session
+          </Link>
+          <Link
+            href={`/sessions/${next.session_id}`}
+            className={buttonVariants({
+              variant: "secondary",
+              className: "w-full",
+            })}
+          >
+            View session
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
       ) : null}
     </Card>
   );

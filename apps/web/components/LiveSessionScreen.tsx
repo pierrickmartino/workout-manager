@@ -1,15 +1,29 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useReducer, useState, useTransition } from "react";
-import { Check, Clock, Flag, Minus, Plus, SkipForward, Timer } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  Clock,
+  Flag,
+  Minus,
+  Plus,
+  Play,
+  SkipForward,
+  Timer,
+} from "lucide-react";
 
 import {
   finishLiveSession,
+  recordLiveSession,
   type FinishState,
 } from "@/app/sessions/[id]/live/actions";
 import {
   initLiveSession,
   liveSessionReducer,
+  resolveLiveEntry,
+  completionOutcome,
   progressPercent,
   currentModule,
   nextExercise,
@@ -18,6 +32,12 @@ import {
 } from "@/lib/live-session";
 import { mapFinishToLog } from "@/lib/live-session-mapper";
 import {
+  readLiveSessionSlot,
+  writeLiveSessionSlot,
+  clearLiveSessionSlot,
+} from "@/lib/live-session-storage";
+import {
+  durationSeconds,
   elapsedSeconds,
   formatElapsed,
   resolveRestSeconds,
@@ -37,7 +57,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 
 const RPE_VALUES = Array.from({ length: 10 }, (_, index) => index + 1);
 
@@ -46,10 +66,18 @@ interface LiveSessionScreenProps {
   today: string;
 }
 
-// Runs a Session live and records it per set (issue #86 — F2·S1). The pure engine
-// (lib/live-session) holds the record being built; this screen is a thin shell
-// that dispatches events and reads the header derivations. On Finish it maps the
-// state to the log payload and hands it to the server action.
+// The screen's lifecycle, decided on the first foreground from the persisted slot
+// (issue #91 — F2·S6): `deciding` until the entry is resolved, then the running
+// performance, a summary for an idle auto-ended session, or a block when a
+// different unfinished session must be resumed or ended first.
+type Phase = "deciding" | "live" | "summary" | "blocked";
+
+// Runs a Session live and records it per set (issue #86 — F2·S1), surviving refresh
+// and phone-lock via a single `localStorage` slot with resume, idle auto-end, and
+// single-session enforcement (issue #91 — F2·S6). The pure engine (lib/live-session)
+// holds the record being built and decides the entry; this screen is a thin shell
+// that persists state, dispatches events, and reads the header derivations. On
+// Finish it maps the state to the log payload and hands it to the server action.
 export function LiveSessionScreen({ session, today }: LiveSessionScreenProps) {
   const [state, dispatch] = useReducer(
     liveSessionReducer,
@@ -58,6 +86,13 @@ export function LiveSessionScreen({ session, today }: LiveSessionScreenProps) {
   );
   const [finishState, setFinishState] = useState<FinishState>({ error: null });
   const [pending, startTransition] = useTransition();
+  // The lifecycle phase, plus the states the non-live phases render from: the
+  // idle-ended performance for the summary, and the other unfinished session that
+  // blocks starting this one.
+  const [phase, setPhase] = useState<Phase>("deciding");
+  const [summary, setSummary] = useState<LiveSessionState | null>(null);
+  const [blockedExisting, setBlockedExisting] =
+    useState<LiveSessionState | null>(null);
   // A wall-clock "now" that ticks each second. The elapsed timer is always derived
   // from `state.startedAt` vs this value (never a decrementing counter), so a
   // backgrounded or locked tab shows the correct time on return (ADR-0014).
@@ -68,16 +103,95 @@ export function LiveSessionScreen({ session, today }: LiveSessionScreenProps) {
   // never written to the record.
   const [restEndAt, setRestEndAt] = useState<number | null>(null);
 
-  // Arriving at /live starts the performance (not_started → in_progress) and stamps
-  // the start instant that Session Duration is measured from.
+  // Resolve what arriving at this live route does, from the single persisted slot
+  // (ADR-0012). Runs once on the first foreground — the idle guard (ADR-0014) is
+  // evaluated here, never on a background timer, so the user experiences "I came
+  // back after 40 minutes and it had ended my workout" on return, not while away.
   useEffect(() => {
-    dispatch({ type: "START", now: Date.now() });
+    const entry = resolveLiveEntry(readLiveSessionSlot(), session.id, Date.now());
+    switch (entry.kind) {
+      case "start_fresh":
+        // A fresh performance: START stamps the instant Session Duration measures
+        // from (not_started → in_progress).
+        dispatch({ type: "START", now: Date.now() });
+        setPhase("live");
+        break;
+      case "resume":
+        // Restore the persisted performance exactly — set table, current set, and
+        // the timestamps backing the elapsed timer.
+        dispatch({ type: "HYDRATE", state: entry.state });
+        setPhase("live");
+        break;
+      case "auto_end":
+        endIdleSession(entry.state);
+        break;
+      case "blocked":
+        setBlockedExisting(entry.existing);
+        setPhase("blocked");
+        break;
+    }
+    // Only the initial mount decides the entry; `session.id`/`today` are stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Persist every state change while the performance is live, so a refresh or lock
+  // resumes exactly here. Non-live phases (summary/blocked) never write.
+  useEffect(() => {
+    if (phase === "live") writeLiveSessionSlot(state);
+  }, [state, phase]);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Finalize an idle-expired performance as Incomplete (ADR-0014): record the
+  // completed sets (idle-excluded duration) and show a summary instead of resuming.
+  // The slot is cleared only once the record succeeds — a failed POST keeps the
+  // slot so the next foreground retries the auto-end rather than losing the sets.
+  function endIdleSession(stored: LiveSessionState) {
+    const finished = liveSessionReducer(stored, { type: "FINISH" });
+    setSummary(finished);
+    setPhase("summary");
+    const payload = mapFinishToLog(finished, today);
+    if (!payload) {
+      // No completed set to record — nothing to persist, so just drop the slot.
+      clearLiveSessionSlot();
+      return;
+    }
+    startTransition(async () => {
+      const result = await recordLiveSession(stored.sessionId, payload);
+      if (result?.error) {
+        setFinishState({ error: result.error });
+        return;
+      }
+      clearLiveSessionSlot();
+    });
+  }
+
+  // End the other unfinished session that blocks this one: record it as-is (no work
+  // discarded — ADR-0012), then start this Session fresh in place. The slot is
+  // cleared only after a successful record, so a failed POST keeps that session's
+  // work intact and the user stays on the block to retry.
+  function handleEndExisting() {
+    const existing = blockedExisting;
+    if (!existing) return;
+    const finished = liveSessionReducer(existing, { type: "FINISH" });
+    const payload = mapFinishToLog(finished, today);
+    startTransition(async () => {
+      if (payload) {
+        const result = await recordLiveSession(existing.sessionId, payload);
+        if (result?.error) {
+          setFinishState({ error: result.error });
+          return;
+        }
+      }
+      clearLiveSessionSlot();
+      setBlockedExisting(null);
+      dispatch({ type: "START", now: Date.now() });
+      setPhase("live");
+    });
+  }
 
   const restRemaining = restRemainingSeconds(restEndAt, now);
   const isResting = restEndAt !== null;
@@ -143,11 +257,64 @@ export function LiveSessionScreen({ session, today }: LiveSessionScreenProps) {
   }
 
   function handleFinish() {
-    const payload = mapFinishToLog(state, today);
+    const snapshot = state;
+    const payload = mapFinishToLog(snapshot, today);
+    // Clear the slot up front: the success path redirects to history and never
+    // returns here, so an uncleared slot would otherwise re-offer to "resume" an
+    // already-logged session. On failure the snapshot is written back below.
+    clearLiveSessionSlot();
     startTransition(async () => {
       const result = await finishLiveSession(session.id, payload);
-      if (result?.error) setFinishState({ error: result.error });
+      if (result?.error) {
+        setFinishState({ error: result.error });
+        writeLiveSessionSlot(snapshot);
+      }
     });
+  }
+
+  // Before the entry is resolved (SSR and the first client render), show a stable
+  // placeholder — the resume-vs-auto-end decision needs `localStorage`, which is
+  // client-only, so nothing performance-specific renders until the effect runs.
+  if (phase === "deciding") {
+    return (
+      <section className="flex flex-col gap-6">
+        <PageHeader
+          overline="PULSE // LIVE"
+          title={<span className="capitalize">{session.training_type}</span>}
+        />
+        <Card className="p-4">
+          <p className="font-mono text-[13px] text-text-secondary">
+            Preparing session…
+          </p>
+        </Card>
+      </section>
+    );
+  }
+
+  // A different unfinished session blocks starting this one (ADR-0012): resume it
+  // or end it first — never silently supersede real work.
+  if (phase === "blocked" && blockedExisting) {
+    return (
+      <BlockedPrompt
+        session={session}
+        existing={blockedExisting}
+        error={finishState.error}
+        pending={pending}
+        onEndExisting={handleEndExisting}
+      />
+    );
+  }
+
+  // An idle-expired performance was auto-ended as Incomplete (ADR-0014): show a
+  // summary of what was recorded rather than resuming.
+  if (phase === "summary" && summary) {
+    return (
+      <IdleEndedSummary
+        session={session}
+        summary={summary}
+        error={finishState.error}
+      />
+    );
   }
 
   return (
@@ -275,6 +442,145 @@ export function LiveSessionScreen({ session, today }: LiveSessionScreenProps) {
         {pending ? "Finishing…" : "Finish session"}
       </Button>
 
+      <BackLink href={`/sessions/${session.id}`}>Back to session</BackLink>
+    </section>
+  );
+}
+
+interface BlockedPromptProps {
+  session: WorkoutSession;
+  existing: LiveSessionState;
+  error: string | null;
+  pending: boolean;
+  onEndExisting: () => void;
+}
+
+// The single-session guard (ADR-0012): another performance is unfinished, so
+// starting this one is blocked. The user resumes that one or ends it first — its
+// completed sets are recorded on End, never discarded.
+function BlockedPrompt({
+  session,
+  existing,
+  error,
+  pending,
+  onEndExisting,
+}: BlockedPromptProps): React.JSX.Element {
+  const completed = existing.sets.filter((s) => s.status === "completed").length;
+  return (
+    <section className="flex flex-col gap-6">
+      <PageHeader
+        overline="PULSE // LIVE"
+        title={<span className="capitalize">{session.training_type}</span>}
+        action={<Badge variant="magenta">BLOCKED</Badge>}
+      />
+
+      {error ? <Alert tone="error">{error}</Alert> : null}
+
+      <Card className="flex flex-col gap-4 border-magenta/50 p-5">
+        <span className="flex h-11 w-11 items-center justify-center rounded-sm bg-magenta-dim">
+          <AlertTriangle className="h-5 w-5 text-magenta" aria-hidden />
+        </span>
+        <div className="flex flex-col gap-1.5">
+          <h2 className="font-display text-lg font-semibold text-text-primary">
+            Another session is in progress
+          </h2>
+          <p className="font-mono text-[13px] leading-relaxed text-text-muted">
+            You have {completed} set{completed === 1 ? "" : "s"} recorded in an
+            unfinished session. Resume it, or end it first — your completed sets
+            are kept either way.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2.5">
+          <Link
+            href={`/sessions/${existing.sessionId}/live`}
+            className={buttonVariants({ className: "w-full" })}
+          >
+            <Play className="h-4 w-4" />
+            Resume current session
+          </Link>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={onEndExisting}
+            disabled={pending}
+            className="w-full"
+          >
+            <Flag className="h-4 w-4" />
+            {pending ? "Ending…" : "End it and start this one"}
+          </Button>
+        </div>
+      </Card>
+
+      <BackLink href={`/sessions/${session.id}`}>Back to session</BackLink>
+    </section>
+  );
+}
+
+interface IdleEndedSummaryProps {
+  session: WorkoutSession;
+  summary: LiveSessionState;
+  error: string | null;
+}
+
+// The idle auto-end summary (ADR-0014): the user returned after >30 minutes, so
+// the performance was finalized as Incomplete. The completed sets and the
+// idle-excluded duration are what got recorded — shown here instead of resuming.
+function IdleEndedSummary({
+  session,
+  summary,
+  error,
+}: IdleEndedSummaryProps): React.JSX.Element {
+  const completed = summary.sets.filter((s) => s.status === "completed").length;
+  const total = summary.sets.length;
+  const duration = durationSeconds(summary.startedAt, summary.lastActivityAt);
+  const outcome = completionOutcome(summary);
+
+  return (
+    <section className="flex flex-col gap-6">
+      <PageHeader
+        overline="PULSE // LIVE"
+        title={<span className="capitalize">{session.training_type}</span>}
+        action={
+          <Badge variant={outcome === "incomplete" ? "magenta" : "cyan"}>
+            {outcome === "incomplete" ? "INCOMPLETE" : "COMPLETED"}
+          </Badge>
+        }
+      />
+
+      {error ? <Alert tone="error">{error}</Alert> : null}
+
+      <Card className="flex flex-col gap-4 p-5">
+        <div className="flex flex-col gap-1.5">
+          <h2 className="font-display text-lg font-semibold text-text-primary">
+            Session ended after inactivity
+          </h2>
+          <p className="font-mono text-[13px] leading-relaxed text-text-muted">
+            You were away for more than 30 minutes, so this session was ended and
+            recorded as Incomplete. Your completed sets were saved — run the whole
+            session again to advance your protocol.
+          </p>
+        </div>
+        <div className="flex items-center justify-between border-t border-border pt-4">
+          <span className="label-mono text-[11px] text-text-muted">SETS DONE</span>
+          <span className="font-mono text-[13px] font-bold text-text-primary">
+            {completed}/{total}
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="label-mono text-[11px] text-text-muted">DURATION</span>
+          <span className="flex items-center gap-1.5 font-mono text-[13px] font-bold text-text-primary">
+            <Clock className="h-3.5 w-3.5 text-text-muted" aria-hidden />
+            {duration === null ? "—" : formatElapsed(duration)}
+          </span>
+        </div>
+      </Card>
+
+      <Link
+        href="/history"
+        className={buttonVariants({ className: "w-full" })}
+      >
+        View training history
+      </Link>
       <BackLink href={`/sessions/${session.id}`}>Back to session</BackLink>
     </section>
   );
