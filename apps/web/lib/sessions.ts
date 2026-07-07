@@ -51,6 +51,20 @@ export async function fetchSession(
   return (await response.json()) as Envelope<WorkoutSession>;
 }
 
+// Hydration read for the Live Session screen (issue #90 — F2·S5): the owner's
+// Session with recommended loads progression-adjusted (ADR-0004) and each Exercise
+// carrying its previous performance to beat. The backend returns 404 for
+// non-owners, exactly like the plain Session read.
+export async function fetchLiveSession(
+  id: number,
+): Promise<Envelope<WorkoutSession>> {
+  const response = await fetch(`${API_URL}/api/sessions/${id}/live`, {
+    headers: await authHeaders(),
+    cache: "no-store",
+  });
+  return (await response.json()) as Envelope<WorkoutSession>;
+}
+
 export async function fetchExercise(
   id: number,
 ): Promise<Envelope<ExerciseDetail>> {

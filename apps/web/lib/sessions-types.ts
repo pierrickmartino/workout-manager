@@ -16,6 +16,13 @@ export const TRAINING_TYPES = [
 
 export type TrainingType = (typeof TRAINING_TYPES)[number];
 
+// One set of an Exercise's previous performance — the reps and load the user did
+// last time, surfaced on the live screen as the reference to beat (issue #90).
+export interface PreviousSet {
+  reps: number;
+  load: Load | null;
+}
+
 // The prescription of one Exercise within a Session — the sets/reps/etc. the
 // user is told to perform, joined to its catalog Exercise definition.
 export interface ExercisePrescription {
@@ -31,6 +38,10 @@ export interface ExercisePrescription {
   targeted_muscles: string[];
   required_equipment: string[];
   provenance: string;
+  // The Exercise's most recent Logged Sets, aligned to this prescription's sets by
+  // ordinal. Present only on the live hydration read (issue #90); omitted on the
+  // plain Session read, so it is optional. Empty when the Exercise was never logged.
+  previous_performance?: PreviousSet[];
 }
 
 export interface WorkoutSession {

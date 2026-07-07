@@ -3,10 +3,17 @@
 // built, holding the sets done so far and which set is current. It has NO
 // server-only imports, so both the Server route and the Client screen can use it.
 
-import { NO_LOAD, type Load, type LoadKind } from "./load.ts";
-import type { WorkoutSession } from "./sessions-types";
+import { formatLoad, NO_LOAD, type Load, type LoadKind } from "./load.ts";
+import type { PreviousSet, WorkoutSession } from "./sessions-types";
 
 export type SetStatus = "pending" | "completed";
+
+// The previous-performance reference shown alongside a set — the reps and
+// display-ready load the user did on this Exercise last time (issue #90 — F2·S5).
+export interface PreviousReference {
+  reps: number;
+  loadText: string;
+}
 
 export type LiveStatus = "not_started" | "in_progress" | "finished";
 
@@ -27,6 +34,9 @@ export interface LiveSet {
   moduleSetCount: number; // total prescribed sets in this module
   prescribedReps: string;
   prescribedLoadText: string;
+  // The previous performance to beat for this set, aligned by ordinal, or null
+  // when the Exercise has no logged set at this ordinal (or none at all).
+  previous: PreviousReference | null;
   reps: number;
   loadKind: LoadKind;
   loadValue: string;
@@ -94,6 +104,18 @@ function prefillLoad(load: Load | null): { kind: LoadKind; value: string } {
   }
 }
 
+// The previous-performance reference for the 1-based ``setNumber`` of a
+// prescription, aligned to its logged sets by ordinal. Null when the Exercise has
+// no logged set at this ordinal — a shorter history, or no history at all.
+function previousReference(
+  previousPerformance: PreviousSet[] | undefined,
+  setNumber: number,
+): PreviousReference | null {
+  const previous = previousPerformance?.[setNumber - 1];
+  if (!previous) return null;
+  return { reps: previous.reps, loadText: formatLoad(previous.load) };
+}
+
 // Expand a Session's Exercise Prescriptions into a flat, position-ordered list of
 // individual set rows, each pre-filled from the raw Session read. The result is a
 // not-yet-started Live Session ready for START.
@@ -111,6 +133,10 @@ export function initLiveSession(session: WorkoutSession): LiveSessionState {
         moduleSetCount: prescription.sets,
         prescribedReps: prescription.reps,
         prescribedLoadText: prescription.recommended_load?.text ?? NO_LOAD,
+        previous: previousReference(
+          prescription.previous_performance,
+          setNumber,
+        ),
         reps: prefillReps(prescription.reps),
         loadKind: load.kind,
         loadValue: load.value,

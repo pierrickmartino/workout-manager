@@ -348,6 +348,12 @@ function SetRow({ set, isCurrent, onComplete, onSkip }: SetRowProps) {
         Prescribed: {set.prescribedReps} reps · {set.prescribedLoadText}
       </p>
 
+      {set.previous ? (
+        <p className="font-mono text-[11px] text-cyan/80">
+          Previous: {set.previous.reps} reps · {set.previous.loadText}
+        </p>
+      ) : null}
+
       <div className="grid grid-cols-2 gap-2.5">
         <label className="flex flex-col gap-1.5">
           <span className="label-mono text-[9px] text-text-muted">Reps</span>
