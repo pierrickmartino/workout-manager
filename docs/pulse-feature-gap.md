@@ -49,6 +49,29 @@ current Workout Manager web app (`apps/web/app`).
 > the 1Y range, and any figure with no honest basis. The F3 and Cross-cutting sections below are
 > updated to match; the remaining sections are unchanged.
 
+> **Update (2026-07-07):** The **F2 — Active / Live Session** screen — this document's ⭐ *largest
+> gap* — has now been **built out** across six vertical slices (feature, not just styling), closing
+> the core plan/record loop. Running a Session live is an **ephemeral, client-side performance**
+> (**ADR-0012**): React state persisted to a single `localStorage` slot (surviving refresh, crash,
+> and phone-lock), with nothing reaching the backend until finish, at which point the existing
+> `POST /api/sessions/{id}/logs` records the Logged Session at **per-set** granularity. The client
+> (`components/LiveSessionScreen.tsx`, off a live hydration read `fetchLiveSession`) renders a
+> **set-by-set table** pre-filled from progression-adjusted loads with a **previous-performance**
+> column to beat, a **wall-clock elapsed timer** and a **rest countdown** (`−15 / SKIP / +15`,
+> auto-resuming the next set — timers are timestamp-based so they survive backgrounding), a
+> **set-based `% complete`** progress bar, and a **next-exercise preview**. Three ADRs frame the
+> new domain rules: **ADR-0012** (ephemeral client-side Live Session), **ADR-0013** (a client-declared
+> **Completion Outcome** — *Completed* / *Incomplete* — where only a *Completed* log advances the
+> Protocol, so a partial workout leaves its Session as Next to be retried; backed by
+> `domain/completion.py` and `protocols/progress.py`), and **ADR-0014** (**Session Duration** recorded
+> from start to last activity, idle gaps excluded, with a 30-minute inactivity gap **auto-ending** the
+> Live Session as Incomplete on the next foreground). Entry is wired from Home: the `SessionHero` CTA
+> now launches live mode, and a `ResumeSessionBanner` surfaces an unfinished Live Session. At most
+> **one** Live Session exists at a time (single slot), enforced rather than silently superseded. What
+> is intentionally **not** built: cross-device resume (the one capability ADR-0012 forgoes) and a
+> server-persisted Active Session entity. The F2 and F1 (SessionHero) sections plus the Cross-cutting
+> and build-order sections below are updated to match; the remaining sections are unchanged.
+
 ---
 
 ## Onboarding & Auth (FO1–FO4)
@@ -65,21 +88,25 @@ Current state: a single Clerk modal sign-in + one flat profile form (`app/onboar
 
 Current state: a data-backed dashboard driven by `GET /api/home` — greeting + Readiness badge header, a **Session Hero** for the Current Protocol's Next Session (or a generate-training CTA in the empty state), a positional **Week Cycle strip**, a **Queue list**, an operations nav row, and a `DataList` profile snapshot (`app/dashboard/page.tsx`).
 
-- ✅ **"Today's Protocol" hero card** — the `SessionHero` (`components/pulse/session-hero.tsx`) now renders the Current Protocol's Next Session with an honestly-backed stat row (**DURATION · MODULES · SETS**) and an `Open session` CTA to the Session page; the loads already carry the ADR-0004 Progression adjustment. **Deviations (ADR-0008):** no `target kcal` and no single volume/tonnage figure (no honest basis), and the CTA routes to the existing Session detail rather than launching an `INITIATE SESSION` live mode — live mode is deferred to F2. The generate-training CTA remains as the empty state (no Current Protocol).
+- ✅ **"Today's Protocol" hero card** — the `SessionHero` (`components/pulse/session-hero.tsx`) now renders the Current Protocol's Next Session with an honestly-backed stat row (**DURATION · MODULES · SETS**) and an `Open session` CTA to the Session page; the loads already carry the ADR-0004 Progression adjustment. The `Open session` CTA now **launches live mode** (`/sessions/{id}/live`) — the F2 Live Session has since shipped — and a `ResumeSessionBanner` surfaces above the hero whenever an unfinished Live Session is held in `localStorage`. **Deviations (ADR-0008):** no `target kcal` and no single volume/tonnage figure (no honest basis). The generate-training CTA remains as the empty state (no Current Protocol).
 - 🟡 **Readiness score** ("87% READY") — a real, **computed** three-state badge (`READY` / `CAUTION` / `EXTRA CAUTION`) now renders in the header, derived server-side by `assess_readiness` (`app/domain/readiness.py`) from the profile's constraints + the most-recent Logged Session's difficulty — replacing the former static `is_sensitive`-only badge. The designed **numeric percentage** is deliberately not built: the calendar-free plan model gives no honest recovery clock (ADR-0008).
 - ✅ **Week Cycle strip** — `WeekCycleStrip` (`components/pulse/week-cycle-strip.tsx`) shows the Current Protocol's Sessions as done / active / upcoming with a `WEEK n/total` overline. **Deviation (ADR-0008/0009):** it is **positional over the whole Protocol**, not a M–S calendar week — there are no weekday dots or dates.
 - ✅ **Queued Protocols list** — `QueueList` (`components/pulse/queue-list.tsx`) lists the remaining upcoming Sessions under an honest `X/N` completion header, with a "view all" to the Protocol detail. **Deviation (ADR-0008):** no per-session completion/readiness **%**.
 - ✅ **Personalized greeting** ("Hey, {display_name}") — shipped.
 
-## F2 — Active / Live Session ⭐ (largest gap)
+## F2 — Active / Live Session (was ⭐ largest gap — now shipped)
 
-Current state: logging is a static, after-the-fact form (`LogSessionForm`). No live workout mode.
+Current state: a client-side **Live Session** (`app/sessions/[id]/live`, `components/LiveSessionScreen.tsx`)
+runs a Session set-by-set and records it per set on finish. The static after-the-fact form
+(`LogSessionForm`) remains as the fallback path (and the only path for a performance not tracked live).
+The Live Session is an **ephemeral client-side performance** (ADR-0012): React state persisted to a
+single `localStorage` slot, nothing reaching the backend until finish.
 
-- ❌ **In-progress session screen** — module `03/07`, `43% COMPLETE`.
-- ❌ **Live set-by-set table** — previous-performance column, editable kg/reps, per-set completion check, `COMPLETE SET`.
-- ❌ **Rest timer** — countdown with `−15 / SKIP / +15`, auto-resume next set. No timer anywhere in the app.
-- ❌ **Elapsed workout timer** (`12:48`).
-- ❌ **Next-exercise preview** ("Incline Dumbbell Press").
+- ✅ **In-progress session screen** — `LiveSessionScreen` runs the Session live with a **set-based `% complete`** progress bar. **Deviation (ADR-0013):** the bar reaches 100% exactly when every prescribed set is attempted — the bar *is* the Completed criterion — rather than tracking Pulse's `module 03/07` position.
+- ✅ **Live set-by-set table** — per-set rows pre-filled from progression-adjusted loads, each Exercise carrying a **previous-performance** value to beat (hydrated by `fetchLiveSession`, F2·S5), with per-set completion advancing the current-set pointer. Logs at **per-set** granularity (one Logged Set per completed set) versus the static form's one-per-Exercise collapse.
+- ✅ **Rest timer** — a wall-clock countdown between sets (`−15 / SKIP / +15`, `REST_ADJUST_STEP_SECONDS = 15`) that auto-resumes into the next set on elapse. Timestamp-based (`lib/live-timer.ts`), so it survives a phone lock — the first timer in the app.
+- ✅ **Elapsed workout timer** — a wall-clock elapsed timer derived from the stored `startedAt` against a ticking `now`, backing the recorded **Session Duration** (ADR-0014, start-to-last-activity with idle gaps excluded; a 30-minute idle gap auto-ends the session Incomplete on next foreground).
+- ✅ **Next-exercise preview** — a "Next up: {exercise}" line from `nextExercise(state)`.
 
 ## F3 — Analytics
 
@@ -90,7 +117,7 @@ Recent Records feed, and a total-volume line chart. `app/metrics` (body-metric t
 
 - ✅ **Total volume chart** with trend + % delta — `VolumeChart` (`components/pulse/volume-chart.tsx`, the app's first **Recharts** use) plots daily-bucketed volume from `domain/volume.py`, with a `+N%` delta over the preceding equal-length window and a **coverage caption** disclosing the share of logged reps that actually converted. Absolute, range, bodyweight, and %-1RM loads all convert; qualitative/load-less sets fall into the disclosed uncovered fraction rather than being fabricated as zero. **Deviation (ADR-0011):** no fixed headline figure like "128,400 KG" — the honest number is window- and coverage-dependent.
 - 🟡 **Range toggle** — a shared **7D / 30D / 90D** toggle is wired across every tile and the chart. **Deviation:** Pulse's **1Y** is replaced by 90D (no honest basis for a year of aggregates on the current data volume).
-- ✅ **Bento stats** — `Bento` (`components/pulse/bento.tsx`) renders four honest tiles: **sessions**, **active days** (distinct performed-on), **total sets**, and range-scoped **new PRs**. **Deviation:** "avg time" is not shown (no per-session duration is logged).
+- ✅ **Bento stats** — `Bento` (`components/pulse/bento.tsx`) renders four honest tiles: **sessions**, **active days** (distinct performed-on), **total sets**, and range-scoped **new PRs**. **Deviation:** "avg time" is not shown — Session Duration is now recorded for *live-tracked* performances (ADR-0014) but not for statically-logged ones, so an honest average is not yet surfaced here.
 - ✅ **Muscle distribution** — labeled operator-theme bars from `domain/muscle_groups.py`, a curated roll-up of each Exercise's free-form `targeted_muscles` into six groups (Legs / Chest / Back / Shoulders / Arms / Core) plus an explicit **Unclassified** bucket, weighted by set count and split evenly across the groups a Set maps to (percentages sum to 100%).
 - ✅ **Recent Records / PR feed** — the last 8 all-time PRs (exercise · new Estimated 1RM · gain over prior PR · date), from read-time `domain/personal_records.py` on top of Epley `domain/one_rep_max.py`. Decoupled from the range toggle so the feed is rarely empty; only absolute-Load sets in the 1–12-rep window qualify.
 
@@ -132,21 +159,22 @@ Current state: name, description, difficulty, muscles, variations/alternatives (
 - ✅ **Bottom tab bar navigation** — a fixed `TabBar` (`components/pulse/tab-bar.tsx`) is wired into the layout for signed-in users. **Deviation:** it collapses Pulse's five tabs into **four** — Home / Train / Stats / Profile — mapping onto *existing* routes (`/dashboard`, `/sessions`, `/history`, `/profile`), because the dedicated Session / Analytics / Builder destinations don't exist yet. Re-expanding to five tabs is a follow-up once F2–F4 land.
 - ✅ **Design system** — Pulse's dark, mono-accented "operator" theme is transcribed into `app/globals.css` as `@theme` tokens (`--color-*`, `--radius-*`, `--spacing-shell`, fonts via `next/font`), consumed through shadcn `components/ui/*` + custom `components/pulse/*` primitives across all pages. Replaces the former `system-ui` + inline styles.
 - ✅ **Personal Records (PR) engine** — now shipped as shared read-time capability on top of the typed Load (ADR-0010): `domain/one_rep_max.py` (Epley **Estimated 1RM**, 1–12-rep window) and `domain/personal_records.py` (**PR** detection over a chronological Logged-Set stream — a set is a PR when its Estimated 1RM strictly beats every prior set's for that Exercise). Read-time only — **no PR table, no write hook**. Surfaced on Analytics (F3) today; still to be wired into Home and Exercise Detail (F6). A companion `domain/volume.py` engine converts typed loads (absolute, range, bodyweight, %-1RM) into total volume with a disclosed coverage %.
-- 🟡 **Readiness / target-calorie metrics** — **Readiness** now ships as a computed, qualitative three-state signal (`app/domain/readiness.py`, surfaced on Home via `GET /api/home`); the numeric **readiness percentage** and **target-calorie** are deliberately not built (no honest basis, ADR-0008) and remain unsurfaced on the Active Session (F2).
+- 🟡 **Readiness / target-calorie metrics** — **Readiness** now ships as a computed, qualitative three-state signal (`app/domain/readiness.py`, surfaced on Home via `GET /api/home`); the numeric **readiness percentage** and **target-calorie** are deliberately not built (no honest basis, ADR-0008). The Active Session (F2) has since shipped but, consistent with ADR-0008, surfaces neither on it.
+- 🟡 **Completion Outcome + Session Duration** — new domain rules landed with F2: a client-declared **Completion Outcome** (Completed / Incomplete) gates Protocol advancement (ADR-0013, `domain/completion.py` + `protocols/progress.py`), and a live-tracked **Session Duration** is now recorded, idle-bounded (ADR-0014). Duration is known only for **live-tracked** performances; ADR-0011's "avg time" figure gains an honest basis but is not yet surfaced on Analytics.
 - ❌ **Streak tracking** — appears on Profile and implicitly in Analytics ("active days").
 
 ---
 
 ## Highest-leverage missing capabilities (suggested build order)
 
-1. **Live Active Session + rest timer** (F2) — the core loop; currently the biggest functional hole (logging is post-hoc only).
-2. **Gamification layer** (XP / levels / streaks / achievements) — powers F5 and recurs on Home & Analytics.
+1. ~~**Live Active Session + rest timer** (F2)~~ — **shipped** (ADR-0012/0013/0014): the core plan/record loop is now closed with a per-set live mode, rest + elapsed timers, and Completion-Outcome-gated advancement.
+2. **Gamification layer** (XP / levels / streaks / achievements) — powers F5 and recurs on Home & Analytics. Now the largest net-new gap; **Streak tracking** is a natural first slice off the existing "active days" aggregate.
 3. **Fan the PR / 1RM / volume engine out** to F6 (Exercise Detail Personal Best / estimated 1RM / top-set trend) and F1 (Home), reusing the shared `one_rep_max` / `personal_records` / `volume` domain modules already backing Analytics.
 
-The **PR / 1RM / volume analytics engine** — previously #2 on this list — has now shipped as
-shared backend capability (F3), so the remaining work is **capability, not styling** *and no longer
-net-new analytics logic*: item 1 is the last big net-new domain, item 2 is a fresh domain, and
-item 3 plus the lower-leverage gaps (Protocol Builder F4, Exercise Detail tabs/charts F6) are mostly
-*wiring already-existing data* (protocols, sessions, prescriptions, logs, metrics, exercise catalog,
-the `/exercises/[id]/progress` time series, and now the analytics engine) into the styled
-components. The charting-library blocker is gone — **Recharts** shipped with F3.
+Both #1 (the F2 Live Session) and the **PR / 1RM / volume analytics engine** (F3) have now shipped, so
+the remaining work is **capability, not styling** *and no longer net-new analytics logic or the live
+loop*: item 2 is the last big fresh domain, and item 3 plus the lower-leverage gaps (Protocol Builder
+F4, Exercise Detail tabs/charts F6) are mostly *wiring already-existing data* (protocols, sessions,
+prescriptions, logs, metrics, exercise catalog, the `/exercises/[id]/progress` time series, and now the
+analytics engine) into the styled components. The charting-library blocker is gone — **Recharts** shipped
+with F3.
