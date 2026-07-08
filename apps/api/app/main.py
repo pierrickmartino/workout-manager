@@ -13,6 +13,7 @@ from app.routes.home import router as home_router
 from app.routes.logs import router as logs_router
 from app.routes.metrics import router as metrics_router
 from app.routes.profile import router as profile_router
+from app.routes.profile_progress import router as profile_progress_router
 from app.routes.protocols import router as protocols_router
 from app.routes.progress import router as progress_router
 from app.routes.records import router as records_router
@@ -53,6 +54,7 @@ def create_app() -> FastAPI:
 
     app.include_router(home_router)
     app.include_router(profile_router)
+    app.include_router(profile_progress_router)
     app.include_router(sessions_router)
     app.include_router(logs_router)
     app.include_router(protocols_router)

@@ -31,7 +31,7 @@ const TABS: Tab[] = [
     icon: BarChart3,
     match: ["/analytics", "/history", "/metrics"],
   },
-  { label: "PROFILE", href: "/profile/edit", icon: User, match: ["/profile"] },
+  { label: "PROFILE", href: "/profile", icon: User, match: ["/profile"] },
 ];
 
 function isActive(pathname: string, tab: Tab): boolean {
