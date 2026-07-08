@@ -5,21 +5,31 @@ import type {
   ExerciseDetail,
   RelatedExerciseSummary,
 } from "@/lib/sessions-types";
+import type { TopSetPoint } from "@/lib/exercise-stats-view";
 import { toExecutionSteps, toMuscleEmphasis } from "@/lib/exercise-detail-view";
+import { toTopSetTrend } from "@/lib/top-set-trend-view";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { DataList } from "@/components/pulse/data-list";
+import { TopSetTrendChart } from "@/components/exercise/top-set-trend-chart";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 interface SpecsPanelProps {
   exercise: ExerciseDetail;
+  // The Top-Set series from the record side (ADR-0017), transformed into the trend
+  // chart here. Empty (a bodyweight / never-logged Exercise) hides the chart entirely.
+  topSetSeries: TopSetPoint[];
 }
 
 // The SPECS lens (ADR-0017): the catalog facts the detail page has always shown —
-// description, difficulty / muscles / equipment, execution instructions,
-// precautions, and the typed Variations / Alternatives a user can substitute
-// toward. Purely the honest catalog read; no record-side figures live here.
-export function SpecsPanel({ exercise }: SpecsPanelProps): React.JSX.Element {
+// description, difficulty / muscles / equipment, execution instructions, precautions,
+// and the typed Variations / Alternatives a user can substitute toward — plus the
+// Top-Set Trend, the one record-side figure this lens carries: a Personal-Record
+// trajectory on the same Estimated-1RM yardstick as the stat header.
+export function SpecsPanel({
+  exercise,
+  topSetSeries,
+}: SpecsPanelProps): React.JSX.Element {
   const metaRows = [
     ...(exercise.difficulty !== null
       ? [{ label: "Difficulty", value: `${exercise.difficulty} / 10` }]
@@ -43,6 +53,8 @@ export function SpecsPanel({ exercise }: SpecsPanelProps): React.JSX.Element {
         </Card>
       ) : null}
 
+      <TopSetTrend series={topSetSeries} />
+
       <MuscleMap exercise={exercise} />
 
       <ExecutionSteps instructions={exercise.instructions} />
@@ -50,6 +62,27 @@ export function SpecsPanel({ exercise }: SpecsPanelProps): React.JSX.Element {
       <StringList title="PRECAUTIONS" items={exercise.precautions} />
       <RelatedList title="VARIATIONS" items={exercise.variations} />
       <RelatedList title="ALTERNATIVES" items={exercise.alternatives} />
+    </div>
+  );
+}
+
+// The Top-Set Trend (ADR-0017): a bar chart of the best Estimated 1RM per qualifying
+// session with a `+N KG` delta pill. Honest degradation lives in `toTopSetTrend`: no
+// qualifying session renders no chart at all, and a single qualifying session renders
+// one bar and no pill — never a fabricated zero bar or a "+0 KG" trend.
+function TopSetTrend({ series }: { series: TopSetPoint[] }) {
+  const trend = toTopSetTrend(series);
+  if (trend.rows.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <SectionHeader className="flex-1">TOP-SET TREND</SectionHeader>
+        {trend.delta ? <Badge variant="cyan">{trend.delta}</Badge> : null}
+      </div>
+      <Card className="p-5">
+        <TopSetTrendChart rows={trend.rows} />
+      </Card>
     </div>
   );
 }

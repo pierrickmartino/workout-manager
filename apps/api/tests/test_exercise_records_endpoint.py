@@ -96,6 +96,42 @@ def test_records_endpoint_returns_pr_and_total_sets_under_the_envelope():
     assert data["total_sets"] == 2
 
 
+def test_records_endpoint_returns_the_top_set_series_oldest_first():
+    # Arrange — two qualifying squat sessions, the newer heavier
+    client, ctx, sessions, logged = build_client()
+    _perform(sessions, logged, "user_ts", SQUAT, date(2026, 1, 1), 1, _absolute(100.0))
+    _perform(sessions, logged, "user_ts", SQUAT, date(2026, 1, 8), 1, _absolute(120.0))
+
+    # Act
+    response = client.get(
+        f"/api/exercises/{SQUAT}/records", headers=_auth(ctx, "user_ts")
+    )
+
+    # Assert — the series rides the envelope, oldest-first, dates ISO-serialized
+    assert response.status_code == 200
+    series = response.json()["data"]["top_set_series"]
+    assert series == [
+        {"date": "2026-01-01", "estimated_1rm": 100.0},
+        {"date": "2026-01-08", "estimated_1rm": 120.0},
+    ]
+
+
+def test_records_endpoint_returns_an_empty_series_for_a_non_absolute_exercise():
+    # Arrange — a bodyweight push-up has no qualifying Top Set
+    client, ctx, sessions, logged = build_client()
+    bodyweight = ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict()
+    _perform(sessions, logged, "user_bw", PUSHUP, date(2026, 1, 1), 12, bodyweight)
+
+    # Act
+    response = client.get(
+        f"/api/exercises/{PUSHUP}/records", headers=_auth(ctx, "user_bw")
+    )
+
+    # Assert — an honest empty series (no chart), never a fabricated zero bar
+    assert response.status_code == 200
+    assert response.json()["data"]["top_set_series"] == []
+
+
 def test_records_endpoint_hides_personal_record_for_a_non_absolute_exercise():
     # Arrange — a bodyweight push-up: no comparable Estimated 1RM
     client, ctx, sessions, logged = build_client()

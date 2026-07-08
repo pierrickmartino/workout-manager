@@ -20,17 +20,42 @@ logic, no ORM, no HTTP. Reads are scoped to the owning user because the underlyi
 repository's ``list_for_user`` already is. Mirrors ``logbook/progress.py`` and
 ``logbook/analytics.py``.
 
-Later F6 slices extend this same module with the top-set series and PR milestones."""
+F6 Slice 3 extends this same module with ``top_set_series`` — the Top Set (best Est. 1RM)
+per qualifying session, oldest-first — reusing the same one-yardstick set qualifier
+(``estimated_1rm_for_set``) as the PR tile. A later slice adds PR milestones."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 
-from app.domain.personal_records import LoggedSetRecord, detect_personal_records
+from app.domain.personal_records import (
+    LoggedSetRecord,
+    detect_personal_records,
+    estimated_1rm_for_set,
+)
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
     LoggedSessionView,
 )
+
+# The Top-Set Trend charts only the most recent qualifying sessions so the bar chart
+# reads as a trajectory, not a wall of history (ADR-0017: "the last 8 qualifying
+# sessions"). Older points fall off the left rather than being averaged away.
+TOP_SET_SERIES_LIMIT = 8
+
+
+@dataclass(frozen=True)
+class TopSetPoint:
+    """One qualifying session's Top Set — its best Estimated 1RM (kg) on that date.
+
+    A session contributes a point only when it holds at least one absolute-Load set in
+    the trustworthy rep window; ``estimated_1rm`` is the best such Est. 1RM in it. There
+    is no zero-padding — a session with nothing qualifying is simply absent, never a 0.
+    """
+
+    performed_on: date
+    estimated_1rm: float
 
 
 @dataclass(frozen=True)
@@ -40,13 +65,17 @@ class ExerciseRecordsView:
     ``personal_record`` is the highest Estimated 1RM (kg), or ``None`` when the Exercise
     has no absolute-Load set in the trustworthy rep window — the signal to *hide* the PR
     tile rather than show zero. ``total_sets`` counts every Logged Set of the Exercise.
-    ``exercise_name`` is empty when the user has never logged the Exercise.
+    ``top_set_series`` is the Top Set (best Est. 1RM) per qualifying session, oldest-first
+    and capped at the last :data:`TOP_SET_SERIES_LIMIT`, with no zero-padding — empty for
+    an Exercise with no qualifying session. ``exercise_name`` is empty when the user has
+    never logged the Exercise.
     """
 
     exercise_id: int
     exercise_name: str
     personal_record: float | None
     total_sets: int
+    top_set_series: list[TopSetPoint]
 
 
 def exercise_records(
@@ -85,7 +114,37 @@ def exercise_records(
         exercise_name=exercise_name,
         personal_record=personal_record,
         total_sets=total_sets,
+        top_set_series=_top_set_series(history, exercise_id),
     )
+
+
+def _top_set_series(
+    history: list[LoggedSessionView], exercise_id: int
+) -> list[TopSetPoint]:
+    """The Top Set (best Est. 1RM) per qualifying session, oldest-first, last N only.
+
+    Each Logged Session contributes at most one point: the best Estimated 1RM among its
+    absolute-Load sets of the Exercise in the trustworthy rep window. Sessions with no
+    such set are omitted (no zero-padding). Points are ordered oldest-first and capped
+    at the last :data:`TOP_SET_SERIES_LIMIT` so the trend reads as a recent trajectory.
+    """
+
+    points: list[TopSetPoint] = []
+    for session in history:
+        best: float | None = None
+        for logged_set in session.logged_sets:
+            if logged_set.exercise_id != exercise_id:
+                continue
+            estimate = estimated_1rm_for_set(logged_set.load, logged_set.reps)
+            if estimate is None:
+                continue
+            if best is None or estimate > best:
+                best = estimate
+        if best is not None:
+            points.append(TopSetPoint(performed_on=session.performed_on, estimated_1rm=best))
+
+    points.sort(key=lambda point: point.performed_on)
+    return points[-TOP_SET_SERIES_LIMIT:]
 
 
 def _set_records(
@@ -112,4 +171,9 @@ def _set_records(
     ]
 
 
-__all__ = ["ExerciseRecordsView", "exercise_records"]
+__all__ = [
+    "ExerciseRecordsView",
+    "TopSetPoint",
+    "TOP_SET_SERIES_LIMIT",
+    "exercise_records",
+]

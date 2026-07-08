@@ -13,6 +13,16 @@ export interface ExerciseRecords {
   exercise_name: string;
   personal_record: number | null;
   total_sets: number;
+  top_set_series: TopSetPoint[];
+}
+
+// One qualifying session's Top Set (ADR-0017): the ISO `date` it was performed on and
+// the best Estimated 1RM (kg) it reached. The series is oldest-first and capped to the
+// last N sessions with no zero-padding, so a session with no absolute-Load set is simply
+// absent — never a fabricated zero bar. Empty when the Exercise has no qualifying session.
+export interface TopSetPoint {
+  date: string;
+  estimated_1rm: number;
 }
 
 // One headline tile: its mono `label` and display `value`, ready for the StatRow.
