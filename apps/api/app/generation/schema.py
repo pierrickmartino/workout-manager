@@ -78,6 +78,19 @@ class GeneratedSubstitute(BaseModel):
     precautions: list[str] = Field(default_factory=list)
 
 
+class GeneratedMuscleEmphasis(BaseModel):
+    """The AI's Primary/Secondary split for one *existing* catalog Exercise (issue #107).
+
+    The re-enrichment pass (ADR-0016) feeds the model an Exercise's flat
+    ``targeted_muscles`` union and asks it to classify those same muscles into prime
+    movers and assisting muscles. Only the split is returned: ``targeted_muscles`` is
+    the durable analytics-facing field and is never rewritten by the pass, so the F3
+    Muscle Group roll-up is unaffected. An empty split means "no asserted primacy"."""
+
+    primary_muscles: list[str] = Field(default_factory=list)
+    secondary_muscles: list[str] = Field(default_factory=list)
+
+
 class GeneratedProtocolSession(BaseModel):
     """One Session inside a Generated Protocol, fixed to a Week/Day position.
 

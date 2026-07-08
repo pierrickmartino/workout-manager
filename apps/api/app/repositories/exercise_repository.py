@@ -42,6 +42,28 @@ class ExerciseRepository(Protocol):
         """Return the catalog Exercise with ``exercise_id``, or ``None``."""
         ...
 
+    def list_by_provenance(self, provenance: Provenance) -> list[Exercise]:
+        """Return every catalog Exercise carrying ``provenance``.
+
+        The re-enrichment pass (issue #107) reads the ``ai_generated`` rows through
+        this so it can scope its AI batch to invented movements and never touch
+        curated content (ADR-0016)."""
+        ...
+
+    def set_muscle_emphasis(
+        self,
+        exercise_id: int,
+        *,
+        primary_muscles: Sequence[str],
+        secondary_muscles: Sequence[str],
+    ) -> Exercise | None:
+        """Write the Primary/Secondary emphasis split (ADR-0016) on one Exercise.
+
+        Updates *only* ``primary_muscles`` / ``secondary_muscles`` — the durable
+        ``targeted_muscles`` union the F3 roll-up reads is left untouched — and
+        returns the updated Exercise, or ``None`` if no row has ``exercise_id``."""
+        ...
+
 
 def _new_exercise(
     name: str,
@@ -129,6 +151,30 @@ class SqlExerciseRepository:
     def get(self, exercise_id: int) -> Exercise | None:
         return self._session.get(Exercise, exercise_id)
 
+    def list_by_provenance(self, provenance: Provenance) -> list[Exercise]:
+        return list(
+            self._session.exec(
+                select(Exercise).where(Exercise.provenance == provenance.value)
+            ).all()
+        )
+
+    def set_muscle_emphasis(
+        self,
+        exercise_id: int,
+        *,
+        primary_muscles: Sequence[str],
+        secondary_muscles: Sequence[str],
+    ) -> Exercise | None:
+        exercise = self._session.get(Exercise, exercise_id)
+        if exercise is None:
+            return None
+        exercise.primary_muscles = list(primary_muscles)
+        exercise.secondary_muscles = list(secondary_muscles)
+        self._session.add(exercise)
+        self._session.commit()
+        self._session.refresh(exercise)
+        return exercise
+
 
 class InMemoryExerciseRepository:
     def __init__(self) -> None:
@@ -175,6 +221,27 @@ class InMemoryExerciseRepository:
 
     def get(self, exercise_id: int) -> Exercise | None:
         return self._by_id.get(exercise_id)
+
+    def list_by_provenance(self, provenance: Provenance) -> list[Exercise]:
+        return [
+            exercise
+            for exercise in self._by_id.values()
+            if exercise.provenance == provenance.value
+        ]
+
+    def set_muscle_emphasis(
+        self,
+        exercise_id: int,
+        *,
+        primary_muscles: Sequence[str],
+        secondary_muscles: Sequence[str],
+    ) -> Exercise | None:
+        exercise = self._by_id.get(exercise_id)
+        if exercise is None:
+            return None
+        exercise.primary_muscles = list(primary_muscles)
+        exercise.secondary_muscles = list(secondary_muscles)
+        return exercise
 
 
 __all__ = [

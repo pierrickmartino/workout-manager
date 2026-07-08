@@ -167,6 +167,55 @@ def test_get_returns_none_for_an_unknown_id(repo):
     assert repo.get(9999) is None
 
 
+def test_list_by_provenance_returns_only_matching_rows(repo):
+    # Arrange — a mixed catalog of AI-invented and curated movements
+    ai_a = repo.find_or_create("Wall Sit", provenance=Provenance.AI_GENERATED)
+    repo.find_or_create("Back Squat", provenance=Provenance.CURATED)
+    ai_b = repo.find_or_create("Cossack Squat", provenance=Provenance.AI_GENERATED)
+
+    # Act — the re-enrichment pass asks for the ai_generated rows only (issue #107)
+    ai_rows = repo.list_by_provenance(Provenance.AI_GENERATED)
+
+    # Assert — every ai_generated row, no curated one
+    ids = {row.id for row in ai_rows}
+    assert ids == {ai_a.id, ai_b.id}
+    assert all(row.provenance == "ai_generated" for row in ai_rows)
+
+
+def test_set_muscle_emphasis_writes_the_split_and_leaves_the_union(repo):
+    # Arrange — an ai_generated row carrying only the flat union, no split yet
+    exercise = repo.find_or_create(
+        "Cossack Squat",
+        provenance=Provenance.AI_GENERATED,
+        targeted_muscles=["quads", "glutes", "adductors"],
+    )
+
+    # Act — the pass asserts a Primary/Secondary split (ADR-0016)
+    updated = repo.set_muscle_emphasis(
+        exercise.id,
+        primary_muscles=["quads"],
+        secondary_muscles=["glutes", "adductors"],
+    )
+
+    # Assert — the split is written; the durable union is untouched
+    assert updated is not None
+    assert updated.primary_muscles == ["quads"]
+    assert updated.secondary_muscles == ["glutes", "adductors"]
+    assert updated.targeted_muscles == ["quads", "glutes", "adductors"]
+    # …and it persists: a fresh read sees the same split
+    refetched = repo.get(exercise.id)
+    assert refetched.primary_muscles == ["quads"]
+    assert refetched.secondary_muscles == ["glutes", "adductors"]
+
+
+def test_set_muscle_emphasis_on_an_unknown_id_returns_none(repo):
+    # Assert — no row to update, no exception
+    assert (
+        repo.set_muscle_emphasis(9999, primary_muscles=["quads"], secondary_muscles=[])
+        is None
+    )
+
+
 def test_losing_concurrent_insert_returns_the_winning_row():
     # Arrange — two requests race to create the same new Exercise. SQLite's
     # in-memory engine shares one DB across sessions on the thread, so we can
