@@ -134,6 +134,16 @@ _Avoid_: Body part, region, muscle (bare)
 The emphasis split of an Exercise's targeted muscles: the Primary muscles are the prime movers a movement is chosen to train; the Secondary muscles assist. Their union is the Exercise's full targeted-muscle list — the durable set the Muscle Group roll-up reads — so the split is an *emphasis annotation* layered on top, not a replacement. Present only where the AI enrichment actually asserted it (or a curator did); an Exercise with no asserted split has no Primary/Secondary distinction and is shown as a flat muscle list rather than one with a fabricated primacy. Distinct from Muscle Group, which is the coarse six-bucket roll-up.
 _Avoid_: Prime/assisting mover (as the stored term), main muscle
 
+## Gamification
+
+**XP**:
+The honest experience currency of an account — a single accumulating figure derived **read-time** from the user's Logged Sessions and Logged Sets, never a stored, awarded, or write-hooked balance. Like a Personal Record, it is a pure projection of the *record*: a corrected, back-dated, or deleted log simply recomputes it, so it can never drift from what the user actually logged. It counts training-type-neutral units (Logged Sessions and attempted Logged Sets), deliberately **not** converted volume or Session Duration, so a yoga session and a barbell session earn comparably and no honesty caveat (load-conversion coverage, live-only duration) leaks in. It rewards work *performed*, not plan adherence, so an Incomplete Logged Session still earns XP for the sets attempted.
+_Avoid_: Points (bare), score, balance, reward currency
+
+**Operator Level**:
+The account-wide progression tier a user's total XP maps into — a single unbounded number ("LVL 12") that climbs as lifetime logged work accumulates. Distinct from Fitness Level in every dimension: an Operator Level is **one number for the whole account** and measures *investment* (how much you have logged), whereas a Fitness Level is a **per-training-type 1–10 score** measuring *ability*. The UI may shorten it to "LVL"; it is never a Fitness Level, a rank, or a skill.
+_Avoid_: Level (bare), Fitness Level, rank, XP level
+
 ## Feedback
 
 Two distinct concepts. Never collapse them into one "Feedback".
