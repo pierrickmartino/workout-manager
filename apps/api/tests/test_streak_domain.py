@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from app.domain.streak import current_streak
+from app.domain.streak import current_streak, longest_week_run
 
 # A Wednesday; its ISO week runs Mon 2026-07-06 .. Sun 2026-07-12.
 TODAY = date(2026, 7, 8)
@@ -94,3 +94,43 @@ def test_a_stale_last_session_two_weeks_ago_is_a_broken_streak():
 
     # Act / Assert
     assert current_streak(dates, TODAY) == 0
+
+
+# ``longest_week_run`` — the longest run of consecutive training weeks *anywhere* in the
+# history, not anchored to the current week. It backs the streak-length Achievements
+# (F5 Slice 3): "reach a 4-week streak" asks whether the user ever strung four
+# consecutive weeks together, so an old run counts and a break today never erases it.
+
+
+def test_longest_run_of_an_empty_history_is_zero():
+    # Arrange / Act / Assert — nothing logged, no run, no error
+    assert longest_week_run([]) == 0
+
+
+def test_longest_run_counts_the_best_consecutive_stretch_not_the_current_one():
+    # Arrange — an old four-week run, a gap, then a recent two-week run
+    dates = [
+        date(2026, 2, 2),  # week 1
+        date(2026, 2, 9),  # week 2
+        date(2026, 2, 16),  # week 3
+        date(2026, 2, 23),  # week 4
+        # (gap)
+        date(2026, 7, 1),  # recent week
+        date(2026, 7, 8),  # recent week + 1
+    ]
+
+    # Act — the best stretch is the old four-week run, even though it is not current
+    assert longest_week_run(dates) == 4
+
+
+def test_longest_run_ignores_within_week_repeats():
+    # Arrange — three sessions in one week and one the next: two consecutive weeks
+    dates = [
+        date(2026, 7, 6),
+        date(2026, 7, 7),
+        date(2026, 7, 8),
+        date(2026, 7, 13),  # next week
+    ]
+
+    # Act / Assert — the run is measured in weeks, not sessions
+    assert longest_week_run(dates) == 2

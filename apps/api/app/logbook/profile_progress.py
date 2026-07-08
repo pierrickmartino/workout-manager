@@ -7,8 +7,9 @@ Streak, and the lifetime Total Sessions / Total Sets. Every figure is derived fr
 or deleted log simply recomputes, mirroring ``logbook/analytics.py`` and
 ``domain/personal_records.py``.
 
-This is the shared spine later F5 slices extend (Achievements). Pure orchestration over
-the Logged-Session repository: no ORM, no HTTP, user-scoped because the repository is.
+This is the shared spine the F5 slices extend: Slice 3 adds the Achievement wall. Pure
+orchestration over the Logged-Session repository: no ORM, no HTTP, user-scoped because the
+repository is.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
+from app.domain.achievements import Achievement, evaluate_achievements
 from app.domain.experience import OperatorLevel, operator_level, total_xp
 from app.domain.streak import current_streak
 from app.repositories.logged_session_repository import LoggedSessionRepository
@@ -29,8 +31,10 @@ class ProfileProgress:
     the whole record — and ``level`` is the Operator Level it maps into (ADR-0018).
     ``streak`` is the number of consecutive weeks ending at the current week in which at
     least one Logged Session exists (ADR-0019). ``total_sessions`` and ``total_sets`` are
-    all-time counts over the user's whole record. Every figure is read-time and
-    non-monotonic: a user who has logged nothing projects to all zeros and Level 1.
+    all-time counts over the user's whole record. ``achievements`` is the whole curated
+    catalog evaluated read-time — each unlocked iff its predicate currently holds, with
+    live progress while locked (ADR-0018). Every figure is read-time and non-monotonic: a
+    user who has logged nothing projects to all zeros, Level 1, and an all-locked wall.
     """
 
     xp: int
@@ -38,6 +42,7 @@ class ProfileProgress:
     streak: int
     total_sessions: int
     total_sets: int
+    achievements: list[Achievement]
 
 
 def profile_progress(
@@ -61,6 +66,7 @@ def profile_progress(
         streak=current_streak([session.performed_on for session in history], today),
         total_sessions=len(history),
         total_sets=sum(len(session.logged_sets) for session in history),
+        achievements=evaluate_achievements(history),
     )
 
 

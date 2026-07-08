@@ -58,4 +58,30 @@ def current_streak(session_dates: Iterable[date], today: date) -> int:
     return streak
 
 
-__all__ = ["current_streak"]
+def longest_week_run(session_dates: Iterable[date]) -> int:
+    """Return the longest run of consecutive training weeks anywhere in the history.
+
+    Unlike :func:`current_streak`, this is not anchored to the current week: it reports
+    the best stretch the user ever strung together, so an old four-week run still counts
+    and simply *not training this week* never erases it. Weeks are bucketed by their
+    Monday, so several sessions in one week count once and a within-week rest day never
+    breaks a run. A user who has logged nothing yields ``0``.
+
+    It backs the streak-length Achievements (ADR-0018): monotonic in the chronological
+    prefix — adding a later week can only extend or start a run — so the earliest date a
+    given run length is reached is recoverable by replay, and it re-locks honestly if the
+    logs behind the run are deleted.
+    """
+
+    weeks = sorted({_week_start(day) for day in session_dates})
+    if not weeks:
+        return 0
+
+    longest = run = 1
+    for previous, current in zip(weeks, weeks[1:]):
+        run = run + 1 if current - previous == _WEEK else 1
+        longest = max(longest, run)
+    return longest
+
+
+__all__ = ["current_streak", "longest_week_run"]

@@ -1,14 +1,21 @@
+import Link from "next/link";
 import { User } from "lucide-react";
 
 import { fetchProfileProgress } from "@/lib/profile-progress";
+import { toAchievementCards } from "@/lib/achievements-view";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { NavRow } from "@/components/pulse/nav-row";
 import { SignOutRow } from "@/components/pulse/sign-out-row";
 import { LevelBadge } from "@/components/pulse/level-badge";
+import { AchievementWall } from "@/components/pulse/achievement-wall";
 import { Bento, BentoTile } from "@/components/pulse/bento";
 import { Alert } from "@/components/pulse/alert";
 import { Card } from "@/components/ui/card";
+
+// How many badges the compact Profile summary shows before the "see all" affordance
+// reaches the full catalog — keeping the summary short (ADR-0019).
+const SUMMARY_COUNT = 4;
 
 // The Profile view screen (F5 Slices 1–2): the net-new landing page for the Profile tab,
 // which until now had only the edit form. It reflects the user's real training back to
@@ -17,7 +24,8 @@ import { Card } from "@/components/ui/card";
 // (ADR-0018) — plus the two account affordances that belong here: a link to the Fitness
 // Profile edit form and an explicit log-out. A brand-new user with no history sees
 // sensible zero states (Level 1, 0 XP, no streak), not an error. Later F5 slices layer
-// Achievements onto this same spine.
+// Achievements onto this same spine — a compact wall with a "see all" affordance to the
+// full catalog.
 export default async function ProfilePage() {
   const envelope = await fetchProfileProgress();
 
@@ -32,7 +40,10 @@ export default async function ProfilePage() {
     );
   }
 
-  const { xp, level, streak, total_sessions, total_sets } = envelope.data;
+  const { xp, level, streak, total_sessions, total_sets, achievements } =
+    envelope.data;
+  const cards = toAchievementCards(achievements);
+  const unlockedCount = cards.filter((card) => card.unlocked).length;
 
   return (
     <section className="flex flex-col gap-6">
@@ -51,6 +62,24 @@ export default async function ProfilePage() {
           <BentoTile label="TOTAL SESSIONS" value={total_sessions} />
           <BentoTile label="TOTAL SETS" value={total_sets} span="full" />
         </Bento>
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <SectionHeader
+          meta={
+            cards.length > SUMMARY_COUNT ? (
+              <Link
+                href="/profile/achievements"
+                className="transition-colors hover:text-cyan"
+              >
+                SEE ALL →
+              </Link>
+            ) : undefined
+          }
+        >
+          ACHIEVEMENTS · {unlockedCount}/{cards.length}
+        </SectionHeader>
+        <AchievementWall cards={cards.slice(0, SUMMARY_COUNT)} />
       </div>
 
       <div className="flex flex-col gap-4">

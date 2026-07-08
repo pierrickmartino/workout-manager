@@ -14,12 +14,30 @@ from datetime import date
 from fastapi import APIRouter, Depends
 
 from app.auth.dependencies import get_current_user
+from app.domain.achievements import Achievement
 from app.envelope import success_envelope
 from app.logbook.profile_progress import ProfileProgress, profile_progress
 from app.repositories.deps import get_logged_session_repository
 from app.repositories.logged_session_repository import LoggedSessionRepository
 
 router = APIRouter(prefix="/api", tags=["profile"])
+
+
+def _serialize_achievement(achievement: Achievement) -> dict:
+    return {
+        "id": achievement.id,
+        "name": achievement.name,
+        "criteria": achievement.criteria,
+        "unlocked": achievement.unlocked,
+        "current": achievement.current,
+        "target": achievement.target,
+        # ISO-8601 date, or null while the badge is locked.
+        "unlocked_on": (
+            achievement.unlocked_on.isoformat()
+            if achievement.unlocked_on is not None
+            else None
+        ),
+    }
 
 
 def _serialize(progress: ProfileProgress) -> dict:
@@ -34,6 +52,9 @@ def _serialize(progress: ProfileProgress) -> dict:
         "streak": progress.streak,
         "total_sessions": progress.total_sessions,
         "total_sets": progress.total_sets,
+        "achievements": [
+            _serialize_achievement(achievement) for achievement in progress.achievements
+        ],
     }
 
 
