@@ -15,10 +15,15 @@ export const DEFAULT_REST_SECONDS = 90;
 // Whole seconds the `−15 / +15` controls add to or subtract from a running rest.
 export const REST_ADJUST_STEP_SECONDS = 15;
 
-// The rest duration a completed set's rest countdown starts from: the
-// prescription's own `rest_seconds`, or the named fallback when it has none.
-export function resolveRestSeconds(restSeconds: number | null): number {
-  return restSeconds ?? DEFAULT_REST_SECONDS;
+// The rest duration a completed set's rest countdown starts from. The user's
+// Fitness Profile default (issue #121) takes precedence when set — a global rest
+// preference — falling back to the prescription's own `rest_seconds`, and finally
+// to the named constant when neither is set (so existing users are unaffected).
+export function resolveRestSeconds(
+  restSeconds: number | null,
+  defaultRestSeconds: number | null = null,
+): number {
+  return defaultRestSeconds ?? restSeconds ?? DEFAULT_REST_SECONDS;
 }
 
 // The wall-clock instant a rest of `restSeconds` started at `now` will elapse.

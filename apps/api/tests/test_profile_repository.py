@@ -132,3 +132,22 @@ def test_update_creates_the_profile_when_absent(repo):
     # Assert
     assert updated.clerk_user_id == "user_brandnew"
     assert updated.age == 34
+
+
+def test_default_rest_seconds_is_none_on_a_fresh_profile(repo):
+    # A brand-new profile carries no default rest-timer duration.
+    profile = repo.get_or_create("user_norest")
+
+    assert profile.default_rest_seconds is None
+
+
+def test_update_round_trips_the_default_rest_seconds(repo):
+    # Arrange
+    repo.get_or_create("user_rest")
+
+    # Act — the user sets a 120s default rest
+    updated = repo.update("user_rest", ProfileUpdate(default_rest_seconds=120))
+
+    # Assert — it persists and reads back
+    assert updated.default_rest_seconds == 120
+    assert repo.get_or_create("user_rest").default_rest_seconds == 120

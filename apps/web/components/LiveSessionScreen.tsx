@@ -64,6 +64,9 @@ const RPE_VALUES = Array.from({ length: 10 }, (_, index) => index + 1);
 interface LiveSessionScreenProps {
   session: WorkoutSession;
   today: string;
+  // The user's default rest-timer duration in whole seconds (issue #121), or null
+  // when unset — then each set's rest falls back to the prescription's own value.
+  defaultRestSeconds: number | null;
 }
 
 // The screen's lifecycle, decided on the first foreground from the persisted slot
@@ -78,7 +81,11 @@ type Phase = "deciding" | "live" | "summary" | "blocked";
 // holds the record being built and decides the entry; this screen is a thin shell
 // that persists state, dispatches events, and reads the header derivations. On
 // Finish it maps the state to the log payload and hands it to the server action.
-export function LiveSessionScreen({ session, today }: LiveSessionScreenProps) {
+export function LiveSessionScreen({
+  session,
+  today,
+  defaultRestSeconds,
+}: LiveSessionScreenProps) {
   const [state, dispatch] = useReducer(
     liveSessionReducer,
     session,
@@ -243,7 +250,10 @@ export function LiveSessionScreen({ session, today }: LiveSessionScreenProps) {
       (s, i) => i !== index && s.status === "pending",
     );
     if (morePending) {
-      const rest = resolveRestSeconds(restSecondsForSet(index));
+      const rest = resolveRestSeconds(
+        restSecondsForSet(index),
+        defaultRestSeconds,
+      );
       setRestEndAt(restTargetEnd(completedAt, rest));
     }
   }

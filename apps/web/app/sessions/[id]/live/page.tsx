@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { LiveSessionScreen } from "@/components/LiveSessionScreen";
 import { fetchLiveSession } from "@/lib/sessions";
+import { fetchProfile } from "@/lib/profile";
 
 // Runs a user-owned Session live, recording it per set (issue #86 — F2·S1). The
 // Session is fetched through the live hydration read (issue #90 — F2·S5), so the
@@ -22,8 +23,20 @@ export default async function LiveSessionPage({
     notFound();
   }
 
+  // The user's default rest-timer setting seeds the rest countdown (issue #121). A
+  // failed/empty profile read simply leaves it null — the Live Session then falls
+  // back to each prescription's own rest, so the workout is never blocked on it.
+  const profile = await fetchProfile();
+  const defaultRestSeconds = profile.data?.default_rest_seconds ?? null;
+
   const session = envelope.data;
   const today = new Date().toISOString().slice(0, 10);
 
-  return <LiveSessionScreen session={session} today={today} />;
+  return (
+    <LiveSessionScreen
+      session={session}
+      today={today}
+      defaultRestSeconds={defaultRestSeconds}
+    />
+  );
 }

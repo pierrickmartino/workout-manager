@@ -79,6 +79,7 @@ function toProfileInput(form: FormData): ProfileInput {
     weight_kg: number(form, "weight_kg"),
     training_habits: text(form, "training_habits"),
     recent_workout: text(form, "recent_workout"),
+    default_rest_seconds: number(form, "default_rest_seconds"),
     default_equipment: list(form, "default_equipment"),
     fitness_levels: fitnessLevels(form),
     preferences: list(form, "preferences"),

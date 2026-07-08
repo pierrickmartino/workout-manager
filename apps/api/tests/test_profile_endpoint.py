@@ -238,6 +238,48 @@ def test_put_rejects_a_fitness_level_out_of_range():
     assert response.json()["success"] is False
 
 
+def test_default_rest_seconds_is_null_on_a_fresh_profile():
+    # Arrange
+    client, ctx, _ = build_client()
+    headers = {"Authorization": f"Bearer {ctx.mint(sub='user_norest')}"}
+
+    # Act
+    data = client.get("/api/profile", headers=headers).json()["data"]
+
+    # Assert — an existing user who never set one is unaffected
+    assert data["default_rest_seconds"] is None
+
+
+def test_put_round_trips_the_default_rest_seconds():
+    # Arrange
+    client, ctx, _ = build_client()
+    headers = {"Authorization": f"Bearer {ctx.mint(sub='user_rest')}"}
+
+    # Act
+    client.put(
+        "/api/profile", headers=headers, json=full_payload(default_rest_seconds=120)
+    )
+    reloaded = client.get("/api/profile", headers=headers).json()["data"]
+
+    # Assert
+    assert reloaded["default_rest_seconds"] == 120
+
+
+def test_put_rejects_a_non_positive_default_rest_seconds():
+    # Arrange
+    client, ctx, _ = build_client()
+    headers = {"Authorization": f"Bearer {ctx.mint(sub='user_badrest')}"}
+
+    # Act
+    response = client.put(
+        "/api/profile", headers=headers, json=full_payload(default_rest_seconds=0)
+    )
+
+    # Assert — a rest of zero (or negative) is not a valid duration
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+
+
 def test_put_requires_authentication():
     # Arrange
     client, _, _ = build_client()
