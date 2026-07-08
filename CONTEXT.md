@@ -148,6 +148,10 @@ _Avoid_: Level (bare), Fitness Level, rank, XP level
 The number of consecutive weeks in which the user logged at least one Session — a consistency signal shown on Profile. Deliberately **weekly, not daily**: the plan model is self-paced and calendar-free (ADR-0001), so there is no "today" to miss, and a daily streak would pressure training through the rest days the domain's safety posture (Sensitive Constraints, Readiness caution) treats as legitimate. Derived **read-time** from Logged Sessions' dates — the same distinct-date basis as Analytics' active days, bucketed by week — so it recomputes from the record and is never a stored counter. Any Logged Session keeps it alive regardless of Completion Outcome (work performed, not plan adherence).
 _Avoid_: Daily streak, don't-break-the-chain, active days (that is the distinct-date count, not the consecutive-week run)
 
+**Achievement**:
+A named, curated training milestone a user unlocks when their logged history satisfies its predicate — e.g. a session-count threshold, a Streak length, covering all six Muscle Groups, or a first Personal Record. Evaluated **read-time** over the record like a Personal Record: "unlocked" iff the predicate currently holds, with an honest unlock date recovered as the earliest point in the replayed history where it first held — there is no achievement table and no unlock write hook. The catalog is **curated and fixed** (like the Muscle Group buckets), not AI-generated, and deliberately **type-neutral** so a yoga or mobility user is never faced with an all-locked strength wall. A locked Achievement shows its criteria and live progress. Because it is a pure predicate over current logs, an Achievement can **re-lock** if the logs behind it are deleted — the same non-monotonicity as Operator Level.
+_Avoid_: Badge (as a separate concept — it is the visual of an Achievement), trophy, unlock record, reward
+
 ## Feedback
 
 Two distinct concepts. Never collapse them into one "Feedback".
