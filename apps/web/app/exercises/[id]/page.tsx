@@ -68,7 +68,12 @@ export default async function ExercisePage({
 
       <ExerciseTabs exerciseId={exerciseId} active={tab} />
 
-      {tab === "specs" ? <SpecsPanel exercise={exercise} /> : null}
+      {tab === "specs" ? (
+        <SpecsPanel
+          exercise={exercise}
+          topSetSeries={records?.top_set_series ?? []}
+        />
+      ) : null}
       {tab === "history" ? <HistoryTab exerciseId={exerciseId} /> : null}
       {tab === "records" ? <RecordsPanel /> : null}
 

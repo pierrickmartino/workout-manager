@@ -233,3 +233,81 @@ def test_never_performed_exercise_is_an_honest_empty_state():
     assert view.total_sets == 0
     assert view.personal_record is None
     assert view.exercise_name == ""
+    assert view.top_set_series == []
+
+
+def test_top_set_series_is_the_best_estimated_1rm_per_session_oldest_first():
+    # Arrange — two performances; each session's *best* Est. 1RM is the top set, and
+    # the later session's is heavier
+    _, sessions, logged = _build()
+    s1 = _session(sessions, "user_ts1")
+    s2 = _session(sessions, "user_ts1")
+    _log(
+        logged,
+        "user_ts1",
+        s1,
+        date(2026, 1, 1),
+        [
+            LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(100.0)),
+            LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(110.0)),
+        ],
+    )
+    _log(
+        logged,
+        "user_ts1",
+        s2,
+        date(2026, 1, 8),
+        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(120.0))],
+    )
+
+    # Act
+    view = exercise_records("user_ts1", SQUAT, logged=logged)
+
+    # Assert — one point per session, oldest-first, each the session's best Est. 1RM
+    assert [(p.performed_on, p.estimated_1rm) for p in view.top_set_series] == [
+        (date(2026, 1, 1), 110.0),
+        (date(2026, 1, 8), 120.0),
+    ]
+
+
+def test_top_set_series_omits_non_qualifying_sessions_with_no_zero_padding():
+    # Arrange — three sessions, but the middle one holds only a bodyweight set, so it
+    # has no comparable Est. 1RM and must not appear (never a 0-height gap bar)
+    _, sessions, logged = _build()
+    s1 = _session(sessions, "user_gap")
+    s2 = _session(sessions, "user_gap")
+    s3 = _session(sessions, "user_gap")
+    bodyweight = ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict()
+    _log(logged, "user_gap", s1, date(2026, 1, 1),
+         [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(100.0))])
+    _log(logged, "user_gap", s2, date(2026, 1, 8),
+         [LoggedSetDraft(exercise_id=SQUAT, reps=5, load=bodyweight)])
+    _log(logged, "user_gap", s3, date(2026, 1, 15),
+         [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(105.0))])
+
+    # Act
+    view = exercise_records("user_gap", SQUAT, logged=logged)
+
+    # Assert — only the two qualifying sessions contribute; no gap point for the middle
+    assert [(p.performed_on, p.estimated_1rm) for p in view.top_set_series] == [
+        (date(2026, 1, 1), 100.0),
+        (date(2026, 1, 15), 105.0),
+    ]
+
+
+def test_top_set_series_caps_at_the_last_eight_qualifying_sessions():
+    # Arrange — ten qualifying squat sessions, one per day, increasing
+    _, sessions, logged = _build()
+    for day in range(1, 11):
+        s = _session(sessions, "user_cap")
+        _log(logged, "user_cap", s, date(2026, 1, day),
+             [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(100.0 + day))])
+
+    # Act
+    view = exercise_records("user_cap", SQUAT, logged=logged)
+
+    # Assert — only the most recent eight, still oldest-first (days 3..10 kept)
+    assert len(view.top_set_series) == 8
+    assert [p.performed_on for p in view.top_set_series] == [
+        date(2026, 1, day) for day in range(3, 11)
+    ]

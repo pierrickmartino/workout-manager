@@ -53,12 +53,14 @@ class PersonalRecord:
     performed_on: date
 
 
-def _estimated_1rm(load: dict | None, reps: int) -> float | None:
+def estimated_1rm_for_set(load: dict | None, reps: int) -> float | None:
     """The Estimated 1RM for one set, or ``None`` if it can't set a PR.
 
     Only ``absolute`` loads carry a comparable kilogram figure; every other Load kind
     (and any load-less set) is ineligible. Reps are gated to the trustworthy window by
-    :func:`estimate_1rm`.
+    :func:`estimate_1rm`. This is the *one yardstick* the record side compares on — the
+    PR detector, the Personal Record tile, and the top-set trend all qualify a set
+    through it, so "best Est. 1RM" means the same thing everywhere (ADR-0017).
     """
 
     if load is None:
@@ -86,7 +88,7 @@ def detect_personal_records(
     records: list[PersonalRecord] = []
 
     for record in ordered:
-        estimate = _estimated_1rm(record.load, record.reps)
+        estimate = estimated_1rm_for_set(record.load, record.reps)
         if estimate is None:
             continue
         previous = best_by_exercise.get(record.exercise_id)
@@ -106,4 +108,9 @@ def detect_personal_records(
     return records
 
 
-__all__ = ["LoggedSetRecord", "PersonalRecord", "detect_personal_records"]
+__all__ = [
+    "LoggedSetRecord",
+    "PersonalRecord",
+    "detect_personal_records",
+    "estimated_1rm_for_set",
+]
