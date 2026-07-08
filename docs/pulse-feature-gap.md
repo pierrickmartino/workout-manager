@@ -72,6 +72,30 @@ current Workout Manager web app (`apps/web/app`).
 > server-persisted Active Session entity. The F2 and F1 (SessionHero) sections plus the Cross-cutting
 > and build-order sections below are updated to match; the remaining sections are unchanged.
 
+> **Update (2026-07-08):** The **F6 — Exercise Detail** screen has now been **built out** across seven
+> vertical slices (feature, not just styling), fanning the shipped Estimated-1RM / PR engine (ADR-0010)
+> out onto a per-exercise screen — item 3 of the build order below. The page is now Pulse's **tabbed
+> layout** — a stat header over **SPECS / HISTORY / RECORDS** — with the active lens URL-driven via
+> `?tab=` (`components/exercise/exercise-tabs.tsx`, off a `toExerciseTab` view helper). A new
+> `GET /api/exercises/{id}/records` endpoint (`app/routes/records.py`) over a pure read model
+> (`app/logbook/exercise_records.py`) reuses `one_rep_max.py` / `personal_records.py` — **no new
+> strength logic** — to serve the header's **PERSONAL RECORD** (highest Estimated 1RM) + **TOTAL SETS**
+> tiles, the **Top-Set Trend** series (best Est. 1RM per qualifying session, last 8), and the **RECORDS**
+> PR-milestone feed. **SPECS** renders numbered **Execution Steps** and a **PRIMARY / SECONDARY** muscle
+> map, and **HISTORY** absorbs the former standalone `/exercises/[id]/progress` list (now redirected). Two
+> of the three catalog-touching slices changed the *shared catalog* schema: **`instructions` became an
+> ordered `list[str]`** (ADR-0015, migration 0013) and the catalog gained stored **`primary_muscles` /
+> `secondary_muscles`** (ADR-0016, migration 0014) as an emphasis annotation over the kept
+> `targeted_muscles` union — so F3's muscle roll-up is untouched — populated for `ai_generated` rows by a
+> one-off re-enrichment pass (`app/generation/muscle_emphasis_reenrichment.py`). Three ADRs frame the
+> deviations: **ADR-0015** (Execution Steps, no sentence-chopping), **ADR-0016** (muscle emphasis split,
+> amends ADR-0011), and **ADR-0017** (F6 shows **one** strength tile not two, hides strength surfaces for
+> non-absolute exercises rather than zeroing them, and treats "top set" as best Est. 1RM). What is
+> intentionally **not** built: `ADD TO PROTOCOL` (a real add needs the F4 Protocol-Builder mutation model —
+> ADR-0001/0017 — so it ships as an honest **disabled seam**, never a faked write), plus the mock's hero
+> photo and favorite control (no honest basis). The F6, Cross-cutting, and build-order sections below are
+> updated to match; the remaining sections are unchanged.
+
 ---
 
 ## Onboarding & Auth (FO1–FO4)
@@ -143,22 +167,22 @@ Current state: a profile-edit form (`app/profile/edit`).
 - ❌ **Health integrations** — Apple Health linking.
 - ❌ **Account section** — notifications, privacy & data, help & support, log out (only Clerk's `UserButton` today).
 
-## F6 — Exercise Detail
+## F6 — Exercise Detail (now shipped)
 
-Current state: name, description, difficulty, muscles, variations/alternatives (`app/exercises/[id]`).
+Current state: a tabbed Exercise Detail screen (`app/exercises/[id]/page.tsx`) — a Personal Record + Total Sets stat header over **SPECS / HISTORY / RECORDS** tabs (URL-driven via `?tab=`), backed by `GET /api/exercises/{id}/records` and reusing the shipped Estimated-1RM / PR engine (ADR-0010). The former standalone `/exercises/[id]/progress` list is folded into HISTORY and redirected.
 
-- ❌ **Tabbed layout** — Specs / History / Records.
-- ❌ **Numbered execution steps** — instructions exist in the catalog but aren't rendered step-by-step.
-- ❌ **Muscle map** — primary/secondary visualization.
-- ❌ **Per-exercise stats** — Personal Best, estimated 1RM, total logs count.
-- 🟡 **Top-set trend chart** — last N sessions ("+7.5KG"). `/exercises/[id]/progress` returns the time series; the charting blocker is now gone (**Recharts** shipped with F3), so this is wiring the existing series into a `VolumeChart`-style component.
-- ❌ **`ADD TO PROTOCOL`** action.
+- ✅ **Tabbed layout** — `ExerciseTabs` (`components/exercise/exercise-tabs.tsx`) renders three non-redundant lenses (ADR-0017): **SPECS** (Execution Steps · muscle map · top-set trend), **HISTORY** (every Logged Session of this Exercise), **RECORDS** (only the PR-setting sets). The active tab is URL-driven so refresh and shared links land on the same lens.
+- ✅ **Numbered execution steps** — `instructions` is now an ordered `list[str]` in the shared catalog (ADR-0015, migration 0013), rendered by `SpecsPanel` as a numbered `01…0N` list. **Deviation (ADR-0015):** the step count is exactly what the author wrote — a single-element list renders as an un-numbered guidance block (never a lone "01"), and legacy prose backfilled by **newline split only**, no sentence-chopping.
+- ✅ **Muscle map** — a **PRIMARY / SECONDARY** split now stored on the catalog (`primary_muscles` / `secondary_muscles`, ADR-0016, migration 0014) as an emphasis annotation over the kept `targeted_muscles` union. **Deviation (ADR-0016):** primacy is only shown where enrichment actually asserts it (populated for `ai_generated` rows by a one-off re-enrichment pass); an Exercise with no asserted split falls back to a flat targeted-muscle row rather than fabricating primacy. No anatomical diagram — labeled muscle sections, consistent with the operator theme.
+- 🟡 **Per-exercise stats** — `StatHeader` (`components/exercise/stat-header.tsx`) shows a single **PERSONAL RECORD** (highest Estimated 1RM) beside **TOTAL SETS** (a Logged-Set count). **Deviation (ADR-0017):** one strength tile, not Pulse's two (`PERSONAL BEST` load + `EST. 1RM`) — CONTEXT.md reserves "Personal Record" for the highest Est. 1RM. For a bodyweight / qualitative / %-1RM / range exercise the PR tile is **hidden, not zeroed** (TOTAL SETS always shows); a `0 kg` would be fabricated.
+- ✅ **Top-set trend chart** — `TopSetTrendChart` (`components/exercise/top-set-trend-chart.tsx`), a Recharts bar chart of the best **Est. 1RM per qualifying session** (last 8, no zero-padding) with a `latest − oldest` pill. **Deviation (ADR-0017):** "top set" is defined as best Est. 1RM so the trend, the PR tile, and the RECORDS tab tell **one** strength story on the same yardstick; one qualifying session shows a single bar and no pill, and the chart is hidden entirely for non-absolute exercises.
+- 🟡 **`ADD TO PROTOCOL`** action — rendered as an honest **disabled seam** ("arrives with the Protocol Builder"). **Deviation (ADR-0001/0017):** a Protocol is fully enumerated up front and the only Session mutation is Substitution (a swap, not an add); a real add needs the F4 Protocol-Builder mutation model, so the CTA is a disabled placeholder rather than a dead or faked write.
 
 ## Cross-cutting / Foundational
 
 - ✅ **Bottom tab bar navigation** — a fixed `TabBar` (`components/pulse/tab-bar.tsx`) is wired into the layout for signed-in users. **Deviation:** it collapses Pulse's five tabs into **four** — Home / Train / Stats / Profile — mapping onto *existing* routes (`/dashboard`, `/sessions`, `/history`, `/profile`), because the dedicated Session / Analytics / Builder destinations don't exist yet. Re-expanding to five tabs is a follow-up once F2–F4 land.
 - ✅ **Design system** — Pulse's dark, mono-accented "operator" theme is transcribed into `app/globals.css` as `@theme` tokens (`--color-*`, `--radius-*`, `--spacing-shell`, fonts via `next/font`), consumed through shadcn `components/ui/*` + custom `components/pulse/*` primitives across all pages. Replaces the former `system-ui` + inline styles.
-- ✅ **Personal Records (PR) engine** — now shipped as shared read-time capability on top of the typed Load (ADR-0010): `domain/one_rep_max.py` (Epley **Estimated 1RM**, 1–12-rep window) and `domain/personal_records.py` (**PR** detection over a chronological Logged-Set stream — a set is a PR when its Estimated 1RM strictly beats every prior set's for that Exercise). Read-time only — **no PR table, no write hook**. Surfaced on Analytics (F3) today; still to be wired into Home and Exercise Detail (F6). A companion `domain/volume.py` engine converts typed loads (absolute, range, bodyweight, %-1RM) into total volume with a disclosed coverage %.
+- ✅ **Personal Records (PR) engine** — now shipped as shared read-time capability on top of the typed Load (ADR-0010): `domain/one_rep_max.py` (Epley **Estimated 1RM**, 1–12-rep window) and `domain/personal_records.py` (**PR** detection over a chronological Logged-Set stream — a set is a PR when its Estimated 1RM strictly beats every prior set's for that Exercise). Read-time only — **no PR table, no write hook**. Surfaced on Analytics (F3) and now on Exercise Detail (F6, via `logbook/exercise_records.py` — Personal Record tile, Top-Set Trend, RECORDS feed); still to be wired into Home. A companion `domain/volume.py` engine converts typed loads (absolute, range, bodyweight, %-1RM) into total volume with a disclosed coverage %.
 - 🟡 **Readiness / target-calorie metrics** — **Readiness** now ships as a computed, qualitative three-state signal (`app/domain/readiness.py`, surfaced on Home via `GET /api/home`); the numeric **readiness percentage** and **target-calorie** are deliberately not built (no honest basis, ADR-0008). The Active Session (F2) has since shipped but, consistent with ADR-0008, surfaces neither on it.
 - 🟡 **Completion Outcome + Session Duration** — new domain rules landed with F2: a client-declared **Completion Outcome** (Completed / Incomplete) gates Protocol advancement (ADR-0013, `domain/completion.py` + `protocols/progress.py`), and a live-tracked **Session Duration** is now recorded, idle-bounded (ADR-0014). Duration is known only for **live-tracked** performances; ADR-0011's "avg time" figure gains an honest basis but is not yet surfaced on Analytics.
 - ❌ **Streak tracking** — appears on Profile and implicitly in Analytics ("active days").
@@ -169,12 +193,12 @@ Current state: name, description, difficulty, muscles, variations/alternatives (
 
 1. ~~**Live Active Session + rest timer** (F2)~~ — **shipped** (ADR-0012/0013/0014): the core plan/record loop is now closed with a per-set live mode, rest + elapsed timers, and Completion-Outcome-gated advancement.
 2. **Gamification layer** (XP / levels / streaks / achievements) — powers F5 and recurs on Home & Analytics. Now the largest net-new gap; **Streak tracking** is a natural first slice off the existing "active days" aggregate.
-3. **Fan the PR / 1RM / volume engine out** to F6 (Exercise Detail Personal Best / estimated 1RM / top-set trend) and F1 (Home), reusing the shared `one_rep_max` / `personal_records` / `volume` domain modules already backing Analytics.
+3. ~~**Fan the PR / 1RM / volume engine out** to F6~~ — **F6 (Exercise Detail) shipped** (ADR-0015/0016/0017): the Personal Record tile, Top-Set Trend, and RECORDS feed reuse the shared `one_rep_max` / `personal_records` engine over the new `logbook/exercise_records.py` read model. The remaining fan-out target is **F1 (Home)**, plus the two catalog-schema pieces this landed (Execution Steps as `list[str]`, muscle emphasis split) are now available to any future consumer.
 
-Both #1 (the F2 Live Session) and the **PR / 1RM / volume analytics engine** (F3) have now shipped, so
-the remaining work is **capability, not styling** *and no longer net-new analytics logic or the live
-loop*: item 2 is the last big fresh domain, and item 3 plus the lower-leverage gaps (Protocol Builder
-F4, Exercise Detail tabs/charts F6) are mostly *wiring already-existing data* (protocols, sessions,
-prescriptions, logs, metrics, exercise catalog, the `/exercises/[id]/progress` time series, and now the
-analytics engine) into the styled components. The charting-library blocker is gone — **Recharts** shipped
-with F3.
+#1 (the F2 Live Session), the **PR / 1RM / volume analytics engine** (F3), and now **F6 (Exercise Detail)**
+have all shipped, so the remaining work is **capability, not styling** *and no longer net-new analytics
+logic, the live loop, or the per-exercise records screen*: item 2 (Gamification) is the last big fresh
+domain, and the lower-leverage gaps (Protocol Builder F4, the Home PR fan-out) are mostly *wiring
+already-existing data* (protocols, sessions, prescriptions, logs, metrics, exercise catalog, and now the
+analytics + exercise-records engines) into the styled components. The charting-library blocker is gone —
+**Recharts** shipped with F3 and now backs the F6 Top-Set Trend chart too.
