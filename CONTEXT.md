@@ -134,6 +134,24 @@ _Avoid_: Body part, region, muscle (bare)
 The emphasis split of an Exercise's targeted muscles: the Primary muscles are the prime movers a movement is chosen to train; the Secondary muscles assist. Their union is the Exercise's full targeted-muscle list — the durable set the Muscle Group roll-up reads — so the split is an *emphasis annotation* layered on top, not a replacement. Present only where the AI enrichment actually asserted it (or a curator did); an Exercise with no asserted split has no Primary/Secondary distinction and is shown as a flat muscle list rather than one with a fabricated primacy. Distinct from Muscle Group, which is the coarse six-bucket roll-up.
 _Avoid_: Prime/assisting mover (as the stored term), main muscle
 
+## Gamification
+
+**XP**:
+The honest experience currency of an account — a single accumulating figure derived **read-time** from the user's Logged Sessions and Logged Sets, never a stored, awarded, or write-hooked balance. Like a Personal Record, it is a pure projection of the *record*: a corrected, back-dated, or deleted log simply recomputes it, so it can never drift from what the user actually logged. It counts training-type-neutral units (Logged Sessions and attempted Logged Sets), deliberately **not** converted volume or Session Duration, so a yoga session and a barbell session earn comparably and no honesty caveat (load-conversion coverage, live-only duration) leaks in. It rewards work *performed*, not plan adherence, so an Incomplete Logged Session still earns XP for the sets attempted.
+_Avoid_: Points (bare), score, balance, reward currency
+
+**Operator Level**:
+The account-wide progression tier a user's total XP maps into — a single unbounded number ("LVL 12") that climbs as lifetime logged work accumulates. Distinct from Fitness Level in every dimension: an Operator Level is **one number for the whole account** and measures *investment* (how much you have logged), whereas a Fitness Level is a **per-training-type 1–10 score** measuring *ability*. The UI may shorten it to "LVL"; it is never a Fitness Level, a rank, or a skill.
+_Avoid_: Level (bare), Fitness Level, rank, XP level
+
+**Streak**:
+The number of consecutive weeks in which the user logged at least one Session — a consistency signal shown on Profile. Deliberately **weekly, not daily**: the plan model is self-paced and calendar-free (ADR-0001), so there is no "today" to miss, and a daily streak would pressure training through the rest days the domain's safety posture (Sensitive Constraints, Readiness caution) treats as legitimate. Derived **read-time** from Logged Sessions' dates — the same distinct-date basis as Analytics' active days, bucketed by week — so it recomputes from the record and is never a stored counter. Any Logged Session keeps it alive regardless of Completion Outcome (work performed, not plan adherence).
+_Avoid_: Daily streak, don't-break-the-chain, active days (that is the distinct-date count, not the consecutive-week run)
+
+**Achievement**:
+A named, curated training milestone a user unlocks when their logged history satisfies its predicate — e.g. a session-count threshold, a Streak length, covering all six Muscle Groups, or a first Personal Record. Evaluated **read-time** over the record like a Personal Record: "unlocked" iff the predicate currently holds, with an honest unlock date recovered as the earliest point in the replayed history where it first held — there is no achievement table and no unlock write hook. The catalog is **curated and fixed** (like the Muscle Group buckets), not AI-generated, and deliberately **type-neutral** so a yoga or mobility user is never faced with an all-locked strength wall. A locked Achievement shows its criteria and live progress. Because it is a pure predicate over current logs, an Achievement can **re-lock** if the logs behind it are deleted — the same non-monotonicity as Operator Level.
+_Avoid_: Badge (as a separate concept — it is the visual of an Achievement), trophy, unlock record, reward
+
 ## Feedback
 
 Two distinct concepts. Never collapse them into one "Feedback".
