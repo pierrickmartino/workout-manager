@@ -2,11 +2,12 @@
 
 ``GET /api/exercises/{exercise_id}/records`` returns the user's Personal Record (the
 highest Estimated 1RM, or ``null`` when the Exercise has no absolute-Load history),
-Total Sets (a count of their Logged Sets), and the Top-Set Trend series (the best
-Estimated 1RM per qualifying session, oldest-first) for a single Exercise, under the
+Total Sets (a count of their Logged Sets), the Top-Set Trend series (the best Estimated
+1RM per qualifying session, oldest-first), and the PR milestones (every set that struck a
+new Estimated-1RM best, newest-first — the RECORDS lens) for a single Exercise, under the
 standard envelope. It is read-only over the *record* side — no plan is read or mutated,
 no AI runs — and reuses the shipped Estimated-1RM / Personal-Record engine (ADR-0010).
-Reads are scoped to the owning user (F6 Slices 2–3)."""
+Reads are scoped to the owning user (F6 Slices 2–4)."""
 
 from __future__ import annotations
 
@@ -30,6 +31,15 @@ def _serialize(view: ExerciseRecordsView) -> dict:
         "top_set_series": [
             {"date": point.performed_on.isoformat(), "estimated_1rm": point.estimated_1rm}
             for point in view.top_set_series
+        ],
+        "pr_milestones": [
+            {
+                "exercise": milestone.exercise_name,
+                "estimated_1rm": milestone.estimated_1rm,
+                "gain": milestone.gain,
+                "date": milestone.performed_on.isoformat(),
+            }
+            for milestone in view.pr_milestones
         ],
     }
 

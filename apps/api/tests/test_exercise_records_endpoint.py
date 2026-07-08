@@ -116,6 +116,43 @@ def test_records_endpoint_returns_the_top_set_series_oldest_first():
     ]
 
 
+def test_records_endpoint_returns_pr_milestones_newest_first():
+    # Arrange — two squat PRs on different dates, the newer heavier
+    client, ctx, sessions, logged = build_client()
+    _perform(sessions, logged, "user_m", SQUAT, date(2026, 1, 1), 1, _absolute(100.0))
+    _perform(sessions, logged, "user_m", SQUAT, date(2026, 2, 1), 1, _absolute(110.0))
+
+    # Act
+    response = client.get(
+        f"/api/exercises/{SQUAT}/records", headers=_auth(ctx, "user_m")
+    )
+
+    # Assert — milestones ride the envelope newest-first, each with its Est. 1RM, gain
+    # over the prior PR (0 for the first), and ISO date
+    assert response.status_code == 200
+    milestones = response.json()["data"]["pr_milestones"]
+    assert milestones == [
+        {"exercise": "Back Squat", "estimated_1rm": 110.0, "gain": 10.0, "date": "2026-02-01"},
+        {"exercise": "Back Squat", "estimated_1rm": 100.0, "gain": 0.0, "date": "2026-01-01"},
+    ]
+
+
+def test_records_endpoint_returns_empty_milestones_for_a_non_absolute_exercise():
+    # Arrange — a bodyweight push-up can set no Personal Record
+    client, ctx, sessions, logged = build_client()
+    bodyweight = ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict()
+    _perform(sessions, logged, "user_bw3", PUSHUP, date(2026, 1, 1), 12, bodyweight)
+
+    # Act
+    response = client.get(
+        f"/api/exercises/{PUSHUP}/records", headers=_auth(ctx, "user_bw3")
+    )
+
+    # Assert — an honest empty milestone list, not an error
+    assert response.status_code == 200
+    assert response.json()["data"]["pr_milestones"] == []
+
+
 def test_records_endpoint_returns_an_empty_series_for_a_non_absolute_exercise():
     # Arrange — a bodyweight push-up has no qualifying Top Set
     client, ctx, sessions, logged = build_client()

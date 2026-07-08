@@ -3,17 +3,22 @@
 // Components. The server-only data access (Clerk auth + fetch) lives in
 // `lib/exercise-records.ts`.
 
+import type { PersonalRecordEntry } from "./analytics-types";
+
 // The API's per-exercise stat-header read model (ADR-0017): the Personal Record
 // (highest Estimated 1RM in kg, or `null` when the Exercise has no absolute-Load
 // history) and Total Sets (a count of the user's Logged Sets). `personal_record` is
 // `null` — not 0 — for a bodyweight / qualitative / %-1RM / range Exercise, the signal
-// to hide the tile rather than fabricate a zero. Later slices extend this shape.
+// to hide the tile rather than fabricate a zero. `top_set_series` feeds the SPECS trend;
+// `pr_milestones` feeds the RECORDS lens (F6 Slice 4): every PR-setting set newest-first,
+// empty for an Exercise that can set no Personal Record.
 export interface ExerciseRecords {
   exercise_id: number;
   exercise_name: string;
   personal_record: number | null;
   total_sets: number;
   top_set_series: TopSetPoint[];
+  pr_milestones: PersonalRecordEntry[];
 }
 
 // One qualifying session's Top Set (ADR-0017): the ISO `date` it was performed on and

@@ -295,6 +295,52 @@ def test_top_set_series_omits_non_qualifying_sessions_with_no_zero_padding():
     ]
 
 
+def test_pr_milestones_are_the_pr_setting_sets_newest_first_with_gain():
+    # Arrange — three squat singles, each heavier, plus one that fails to beat the
+    # standing PR: only the three that set a new best are milestones
+    _, sessions, logged = _build()
+    s1 = _session(sessions, "user_pr")
+    s2 = _session(sessions, "user_pr")
+    s3 = _session(sessions, "user_pr")
+    s4 = _session(sessions, "user_pr")
+    _log(logged, "user_pr", s1, date(2026, 1, 1),
+         [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(100.0))])
+    _log(logged, "user_pr", s2, date(2026, 1, 8),
+         [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(110.0))])
+    _log(logged, "user_pr", s3, date(2026, 1, 15),
+         [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(105.0))])  # no PR
+    _log(logged, "user_pr", s4, date(2026, 1, 22),
+         [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(120.0))])
+
+    # Act
+    view = exercise_records("user_pr", SQUAT, logged=logged)
+
+    # Assert — newest-first, each carrying the new Est. 1RM, the gain over the prior
+    # PR (0 for the first), and its date; the non-PR set never appears
+    assert [
+        (m.estimated_1rm, m.gain, m.performed_on) for m in view.pr_milestones
+    ] == [
+        (120.0, 10.0, date(2026, 1, 22)),
+        (110.0, 10.0, date(2026, 1, 8)),
+        (100.0, 0.0, date(2026, 1, 1)),
+    ]
+
+
+def test_pr_milestones_are_empty_when_no_set_can_set_a_record():
+    # Arrange — a bodyweight push-up: nothing carries a comparable Estimated 1RM
+    _, sessions, logged = _build()
+    s = _session(sessions, "user_bw2")
+    bodyweight = ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict()
+    _log(logged, "user_bw2", s, date(2026, 1, 1),
+         [LoggedSetDraft(exercise_id=PRESS, reps=12, load=bodyweight)])
+
+    # Act
+    view = exercise_records("user_bw2", PRESS, logged=logged)
+
+    # Assert — an honest empty milestone list, not an error
+    assert view.pr_milestones == []
+
+
 def test_top_set_series_caps_at_the_last_eight_qualifying_sessions():
     # Arrange — ten qualifying squat sessions, one per day, increasing
     _, sessions, logged = _build()

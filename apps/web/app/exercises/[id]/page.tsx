@@ -75,7 +75,9 @@ export default async function ExercisePage({
         />
       ) : null}
       {tab === "history" ? <HistoryTab exerciseId={exerciseId} /> : null}
-      {tab === "records" ? <RecordsPanel /> : null}
+      {tab === "records" ? (
+        <RecordsPanel milestones={records?.pr_milestones ?? []} />
+      ) : null}
 
       <AddToProtocolSeam />
     </section>

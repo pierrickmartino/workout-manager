@@ -16,6 +16,7 @@ const ABSOLUTE: ExerciseRecords = {
   personal_record: 110.0,
   total_sets: 12,
   top_set_series: [],
+  pr_milestones: [],
 };
 
 test("renders PERSONAL RECORD and TOTAL SETS for an absolute-load exercise", () => {
@@ -48,6 +49,7 @@ test("hides the PERSONAL RECORD tile for a non-absolute exercise, leaving TOTAL 
     personal_record: null,
     total_sets: 8,
     top_set_series: [],
+    pr_milestones: [],
   };
 
   // Act

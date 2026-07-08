@@ -22,7 +22,9 @@ repository's ``list_for_user`` already is. Mirrors ``logbook/progress.py`` and
 
 F6 Slice 3 extends this same module with ``top_set_series`` — the Top Set (best Est. 1RM)
 per qualifying session, oldest-first — reusing the same one-yardstick set qualifier
-(``estimated_1rm_for_set``) as the PR tile. A later slice adds PR milestones."""
+(``estimated_1rm_for_set``) as the PR tile. F6 Slice 4 adds ``pr_milestones`` — every set
+that struck a new Estimated-1RM best, newest-first (the RECORDS lens) — reusing the same
+``detect_personal_records`` output already computed for the Personal Record tile."""
 
 from __future__ import annotations
 
@@ -31,6 +33,7 @@ from datetime import date
 
 from app.domain.personal_records import (
     LoggedSetRecord,
+    PersonalRecord,
     detect_personal_records,
     estimated_1rm_for_set,
 )
@@ -67,8 +70,11 @@ class ExerciseRecordsView:
     tile rather than show zero. ``total_sets`` counts every Logged Set of the Exercise.
     ``top_set_series`` is the Top Set (best Est. 1RM) per qualifying session, oldest-first
     and capped at the last :data:`TOP_SET_SERIES_LIMIT`, with no zero-padding — empty for
-    an Exercise with no qualifying session. ``exercise_name`` is empty when the user has
-    never logged the Exercise.
+    an Exercise with no qualifying session. ``pr_milestones`` is every set that struck a
+    new Estimated-1RM best for the Exercise — the RECORDS lens (ADR-0017) — newest-first,
+    each carrying the new Est. 1RM, the gain over the prior PR (``0.0`` for the first), and
+    its date; empty for an Exercise that can set no Personal Record. ``exercise_name`` is
+    empty when the user has never logged the Exercise.
     """
 
     exercise_id: int
@@ -76,6 +82,7 @@ class ExerciseRecordsView:
     personal_record: float | None
     total_sets: int
     top_set_series: list[TopSetPoint]
+    pr_milestones: list[PersonalRecord]
 
 
 def exercise_records(
@@ -115,6 +122,10 @@ def exercise_records(
         personal_record=personal_record,
         total_sets=total_sets,
         top_set_series=_top_set_series(history, exercise_id),
+        # The RECORDS lens shows the milestones newest-first (mirroring the Analytics
+        # feed); the detector returns them oldest-first, so reverse the same records
+        # already computed for the PR tile — no second pass over the history.
+        pr_milestones=list(reversed(records)),
     )
 
 
