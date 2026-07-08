@@ -13,6 +13,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from app.domain.exercise import Provenance
+from app.domain.experience import PER_SET_XP, SESSION_XP, operator_level, total_xp
 from app.logbook.profile_progress import profile_progress
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.logged_session_repository import (
@@ -75,6 +76,22 @@ def test_projects_streak_and_lifetime_counts_together():
     assert progress.total_sets == 6
 
 
+def test_projects_xp_and_operator_level_from_the_record():
+    # Arrange — three sessions of 3 + 2 + 1 attempted sets
+    sessions, logged = _build()
+    _log(sessions, logged, "user_c", date(2026, 7, 8), 3)
+    _log(sessions, logged, "user_c", date(2026, 7, 1), 2)
+    _log(sessions, logged, "user_c", date(2026, 6, 24), 1)
+
+    # Act
+    progress = profile_progress("user_c", logged=logged, today=TODAY)
+
+    # Assert — XP is the sessions+sets projection and the level is derived from it
+    expected_xp = 3 * SESSION_XP + 6 * PER_SET_XP
+    assert progress.xp == expected_xp
+    assert progress.level == operator_level(expected_xp)
+
+
 def test_empty_user_projects_to_all_zeros():
     # Arrange — a brand-new user with no logged history
     _, logged = _build()
@@ -82,10 +99,13 @@ def test_empty_user_projects_to_all_zeros():
     # Act
     progress = profile_progress("newcomer", logged=logged, today=TODAY)
 
-    # Assert — sensible zero states, not an error
+    # Assert — sensible zero states, not an error; zero XP maps to Level 1
     assert progress.streak == 0
     assert progress.total_sessions == 0
     assert progress.total_sets == 0
+    assert progress.xp == 0
+    assert progress.level == operator_level(0)
+    assert progress.level.level == 1
 
 
 def test_lifetime_counts_are_all_time_not_windowed():
