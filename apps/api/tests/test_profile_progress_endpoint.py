@@ -94,7 +94,15 @@ def test_returns_streak_and_lifetime_counts_in_the_envelope():
     body = response.json()
     assert body["success"] is True
     assert body["error"] is None
+    # XP: two sessions of 3 + 2 sets = 2 * 100 + 5 * 10 = 250, landing inside Level 1.
     assert body["data"] == {
+        "xp": 250,
+        "level": {
+            "level": 1,
+            "xp_into_level": 250,
+            "xp_span_of_level": 400,
+            "xp_to_next": 150,
+        },
         "streak": 2,
         "total_sessions": 2,
         "total_sets": 5,
@@ -108,11 +116,22 @@ def test_empty_user_sees_zero_states_not_an_error():
     # Act
     response = client.get("/api/profile/progress", headers=_auth(ctx, "newcomer"))
 
-    # Assert — sensible zeros in a success envelope
+    # Assert — sensible zeros in a success envelope; 0 XP is Level 1 with an empty bar
     assert response.status_code == 200
     body = response.json()
     assert body["success"] is True
-    assert body["data"] == {"streak": 0, "total_sessions": 0, "total_sets": 0}
+    assert body["data"] == {
+        "xp": 0,
+        "level": {
+            "level": 1,
+            "xp_into_level": 0,
+            "xp_span_of_level": 400,
+            "xp_to_next": 400,
+        },
+        "streak": 0,
+        "total_sessions": 0,
+        "total_sets": 0,
+    }
 
 
 def test_projection_is_scoped_to_the_authenticated_user():
@@ -125,11 +144,12 @@ def test_projection_is_scoped_to_the_authenticated_user():
 
     # Assert — I see my own empty projection, not their sets
     assert response.status_code == 200
-    assert response.json()["data"] == {
-        "streak": 0,
-        "total_sessions": 0,
-        "total_sets": 0,
-    }
+    data = response.json()["data"]
+    assert data["streak"] == 0
+    assert data["total_sessions"] == 0
+    assert data["total_sets"] == 0
+    assert data["xp"] == 0
+    assert data["level"]["level"] == 1
 
 
 def test_requires_authentication():

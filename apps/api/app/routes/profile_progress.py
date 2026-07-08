@@ -1,8 +1,9 @@
 """Profile progress route: the honest read model the Profile view screen renders from.
 
-``GET /api/profile/progress`` returns the standard envelope with the weekly Streak and
-lifetime Total Sessions / Total Sets, computed by ``logbook/profile_progress.py`` over
-the user's Logged Sessions. Every figure is derived read-time from the *record* side —
+``GET /api/profile/progress`` returns the standard envelope with the account's XP and
+Operator Level, the weekly Streak, and the lifetime Total Sessions / Total Sets, computed
+by ``logbook/profile_progress.py`` over the user's Logged Sessions. Every figure is
+derived read-time from the *record* side —
 no stored counters (ADR-0018) — so the numbers can never drift from the log. The Streak
 window ends on the server's current date. Reads are scoped to the authenticated user."""
 
@@ -23,6 +24,13 @@ router = APIRouter(prefix="/api", tags=["profile"])
 
 def _serialize(progress: ProfileProgress) -> dict:
     return {
+        "xp": progress.xp,
+        "level": {
+            "level": progress.level.level,
+            "xp_into_level": progress.level.xp_into_level,
+            "xp_span_of_level": progress.level.xp_span_of_level,
+            "xp_to_next": progress.level.xp_to_next,
+        },
         "streak": progress.streak,
         "total_sessions": progress.total_sessions,
         "total_sets": progress.total_sets,
