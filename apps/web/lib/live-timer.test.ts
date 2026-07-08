@@ -86,6 +86,23 @@ test("resolveRestSeconds falls back to the default when the prescription has non
   assert.equal(resolveRestSeconds(null), DEFAULT_REST_SECONDS);
 });
 
+test("resolveRestSeconds prefers the user's profile default over the prescription (issue #121)", () => {
+  // When the user has set a default rest on their Fitness Profile it overrides
+  // the prescription's own rest — the profile setting acts as a global default.
+  assert.equal(resolveRestSeconds(120, 60), 60);
+});
+
+test("resolveRestSeconds falls back to the prescription when the user set no default", () => {
+  // A null profile default leaves the prescription's own rest in charge, so
+  // existing users are unaffected.
+  assert.equal(resolveRestSeconds(120, null), 120);
+});
+
+test("resolveRestSeconds falls back to the constant when neither default nor prescription is set", () => {
+  // No profile default and no prescription rest → the hard-coded fallback.
+  assert.equal(resolveRestSeconds(null, null), DEFAULT_REST_SECONDS);
+});
+
 test("restTargetEnd is the wall-clock instant the rest elapses", () => {
   // Arrange — a 90 s rest started at a known instant
   const now = 1_000_000;

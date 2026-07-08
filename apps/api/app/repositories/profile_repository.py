@@ -29,6 +29,7 @@ class ProfileUpdate:
     weight_kg: float | None = None
     training_habits: str | None = None
     recent_workout: str | None = None
+    default_rest_seconds: int | None = None
     default_equipment: list[str] = field(default_factory=list)
     fitness_levels: dict[str, int] = field(default_factory=dict)
     preferences: list[str] = field(default_factory=list)
@@ -54,6 +55,7 @@ def _apply_update(profile: Profile, update: ProfileUpdate) -> None:
     profile.weight_kg = update.weight_kg
     profile.training_habits = update.training_habits
     profile.recent_workout = update.recent_workout
+    profile.default_rest_seconds = update.default_rest_seconds
     profile.default_equipment = list(update.default_equipment)
     profile.fitness_levels = dict(update.fitness_levels)
     profile.preferences = list(update.preferences)

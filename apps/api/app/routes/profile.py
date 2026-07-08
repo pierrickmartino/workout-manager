@@ -38,6 +38,9 @@ class ProfileUpdateRequest(BaseModel):
     weight_kg: float | None = Field(default=None, gt=0)
     training_habits: str | None = None
     recent_workout: str | None = None
+    # A default rest-timer duration in whole seconds; when set it must be positive.
+    # Null leaves the Live Session on the prescription's own rest fallback.
+    default_rest_seconds: int | None = Field(default=None, gt=0)
     default_equipment: list[str] = Field(default_factory=list)
     fitness_levels: dict[str, int] = Field(default_factory=dict)
     preferences: list[str] = Field(default_factory=list)
@@ -65,6 +68,7 @@ class ProfileUpdateRequest(BaseModel):
             weight_kg=self.weight_kg,
             training_habits=self.training_habits,
             recent_workout=self.recent_workout,
+            default_rest_seconds=self.default_rest_seconds,
             default_equipment=self.default_equipment,
             fitness_levels=self.fitness_levels,
             preferences=self.preferences,
@@ -83,6 +87,7 @@ def _serialize(profile: Profile) -> dict:
         "weight_kg": profile.weight_kg,
         "training_habits": profile.training_habits,
         "recent_workout": profile.recent_workout,
+        "default_rest_seconds": profile.default_rest_seconds,
         "default_equipment": profile.default_equipment,
         "fitness_levels": profile.fitness_levels,
         "preferences": profile.preferences,

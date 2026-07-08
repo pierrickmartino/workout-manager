@@ -44,6 +44,9 @@ export interface Profile {
   weight_kg: number | null;
   training_habits: string | null;
   recent_workout: string | null;
+  // The user's default rest-timer duration in whole seconds; null when unset, in
+  // which case the Live Session falls back to the prescription's own rest.
+  default_rest_seconds: number | null;
   default_equipment: string[];
   fitness_levels: Record<string, number>;
   preferences: string[];
@@ -60,6 +63,7 @@ export interface ProfileInput {
   weight_kg: number | null;
   training_habits: string | null;
   recent_workout: string | null;
+  default_rest_seconds: number | null;
   default_equipment: string[];
   fitness_levels: Record<string, number>;
   preferences: string[];

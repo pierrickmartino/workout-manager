@@ -96,6 +96,16 @@ export function ProfileForm({ profile, submitLabel }: ProfileFormProps) {
         />
       </Field>
 
+      <Field label="Default rest timer (seconds)">
+        <Input
+          name="default_rest_seconds"
+          type="number"
+          min={1}
+          placeholder="Leave blank to use each exercise's prescribed rest"
+          defaultValue={profile?.default_rest_seconds ?? ""}
+        />
+      </Field>
+
       <fieldset className="flex flex-col gap-3 border-0 p-0">
         <legend className={legendClass}>
           Fitness level per training type (1–10)

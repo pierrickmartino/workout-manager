@@ -42,6 +42,12 @@ class Profile(SQLModel, table=True):
     training_habits: str | None = Field(default=None)
     recent_workout: str | None = Field(default=None)
 
+    # The user's preferred default rest-timer duration, in whole seconds. Nullable:
+    # when unset the Live Session's rest countdown falls back to each Exercise
+    # Prescription's own ``rest_seconds`` (F5 Slice 4). An independent settings
+    # value, not part of the gamification projection (ADR-0019).
+    default_rest_seconds: int | None = Field(default=None)
+
     # Structured collections (JSON columns).
     default_equipment: list[str] = Field(
         default_factory=list, sa_column=Column(JSON, nullable=False)
