@@ -12,16 +12,32 @@ export interface OperatorLevel {
   xp_to_next: number;
 }
 
-// The honest Profile read model (F5 Slices 1–2): the account's `xp` and Operator `level`,
+// One evaluated Achievement (F5 Slice 3): a curated, type-neutral milestone projected
+// read-time over the user's Logged history. `unlocked` is whether its predicate holds over
+// the whole current record; `current`/`target` are the live progress a locked badge shows
+// ("Log 25 Sessions — 18/25"); `unlocked_on` is the ISO date it was first earned, or null
+// while locked. Because it is a pure projection of current logs, a badge re-locks if the
+// logs behind it are deleted.
+export interface Achievement {
+  id: string;
+  name: string;
+  criteria: string;
+  unlocked: boolean;
+  current: number;
+  target: number;
+  unlocked_on: string | null;
+}
+
+// The honest Profile read model (F5 Slices 1–3): the account's `xp` and Operator `level`,
 // the weekly `streak` — consecutive weeks ending at the current week in which at least one
-// Session was logged — and the lifetime `total_sessions` / `total_sets` counts. Every
-// figure is derived read-time from the user's Logged Sessions, so a brand-new user
-// projects to all zeros and Level 1. This is the shared spine later F5 slices extend
-// (Achievements).
+// Session was logged — the lifetime `total_sessions` / `total_sets` counts, and the
+// `achievements` wall. Every figure is derived read-time from the user's Logged Sessions,
+// so a brand-new user projects to all zeros, Level 1, and an all-locked wall.
 export interface ProfileProgress {
   xp: number;
   level: OperatorLevel;
   streak: number;
   total_sessions: number;
   total_sets: number;
+  achievements: Achievement[];
 }

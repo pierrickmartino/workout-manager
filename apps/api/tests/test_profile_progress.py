@@ -135,3 +135,37 @@ def test_projection_is_scoped_to_the_owning_user():
     # Assert — only the owner's sessions are projected
     assert progress.total_sessions == 1
     assert progress.total_sets == 3
+
+
+def _achievement(progress, achievement_id):
+    return next(a for a in progress.achievements if a.id == achievement_id)
+
+
+def test_projects_the_achievement_wall_over_the_record():
+    # Arrange — five Logged Sessions across five consecutive weeks
+    sessions, logged = _build()
+    for week in range(5):
+        _log(sessions, logged, "user_d", date(2026, 6, 1) + timedelta(weeks=week), 1)
+
+    # Act
+    progress = profile_progress("user_d", logged=logged, today=TODAY)
+
+    # Assert — the wall rides on the same read model: the 5-session and 4-week badges
+    # unlock, the 25-session one shows live progress
+    assert _achievement(progress, "sessions-5").unlocked is True
+    assert _achievement(progress, "streak-4").unlocked is True
+    twenty_five = _achievement(progress, "sessions-25")
+    assert twenty_five.unlocked is False
+    assert (twenty_five.current, twenty_five.target) == (5, 25)
+
+
+def test_empty_user_projects_an_all_locked_wall():
+    # Arrange — a brand-new user
+    _, logged = _build()
+
+    # Act
+    progress = profile_progress("newcomer", logged=logged, today=TODAY)
+
+    # Assert — the whole catalog is present and every badge is locked at 0, no error
+    assert len(progress.achievements) > 0
+    assert all(not a.unlocked and a.current == 0 for a in progress.achievements)

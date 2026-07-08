@@ -94,8 +94,11 @@ def test_returns_streak_and_lifetime_counts_in_the_envelope():
     body = response.json()
     assert body["success"] is True
     assert body["error"] is None
+    data = body["data"]
+    # The achievement wall serializes alongside; its shape is asserted on its own below.
+    achievements = data.pop("achievements")
     # XP: two sessions of 3 + 2 sets = 2 * 100 + 5 * 10 = 250, landing inside Level 1.
-    assert body["data"] == {
+    assert data == {
         "xp": 250,
         "level": {
             "level": 1,
@@ -107,6 +110,8 @@ def test_returns_streak_and_lifetime_counts_in_the_envelope():
         "total_sessions": 2,
         "total_sets": 5,
     }
+    # Two Logged Sessions is short of every threshold, so the wall is all locked.
+    assert achievements and all(a["unlocked"] is False for a in achievements)
 
 
 def test_empty_user_sees_zero_states_not_an_error():
@@ -120,7 +125,9 @@ def test_empty_user_sees_zero_states_not_an_error():
     assert response.status_code == 200
     body = response.json()
     assert body["success"] is True
-    assert body["data"] == {
+    data = body["data"]
+    achievements = data.pop("achievements")
+    assert data == {
         "xp": 0,
         "level": {
             "level": 1,
@@ -132,6 +139,12 @@ def test_empty_user_sees_zero_states_not_an_error():
         "total_sessions": 0,
         "total_sets": 0,
     }
+    # A brand-new user sees the whole catalog locked at 0 progress, no unlock dates.
+    assert achievements
+    assert all(
+        a["unlocked"] is False and a["current"] == 0 and a["unlocked_on"] is None
+        for a in achievements
+    )
 
 
 def test_projection_is_scoped_to_the_authenticated_user():
@@ -150,6 +163,36 @@ def test_projection_is_scoped_to_the_authenticated_user():
     assert data["total_sets"] == 0
     assert data["xp"] == 0
     assert data["level"]["level"] == 1
+
+
+def test_serializes_an_unlocked_achievement_with_its_earned_date():
+    # Arrange — five Logged Sessions unlock the 5-session badge; the fifth is dated
+    client, ctx, sessions, logged = build_client()
+    first_five = [date(2026, 6, 1) + timedelta(days=i) for i in range(5)]
+    for day in first_five:
+        _perform(sessions, logged, "user_e", day, 1)
+
+    # Act
+    response = client.get("/api/profile/progress", headers=_auth(ctx, "user_e"))
+
+    # Assert — the badge serializes with the full DTO shape, unlocked on the earliest
+    # qualifying date
+    assert response.status_code == 200
+    achievements = response.json()["data"]["achievements"]
+    by_id = {a["id"]: a for a in achievements}
+    assert by_id["sessions-5"] == {
+        "id": "sessions-5",
+        "name": "5 Sessions",
+        "criteria": "Log 5 Sessions",
+        "unlocked": True,
+        "current": 5,
+        "target": 5,
+        "unlocked_on": first_five[4].isoformat(),
+    }
+    # A still-locked badge carries live progress and no date.
+    assert by_id["sessions-25"]["unlocked"] is False
+    assert by_id["sessions-25"]["current"] == 5
+    assert by_id["sessions-25"]["unlocked_on"] is None
 
 
 def test_requires_authentication():
