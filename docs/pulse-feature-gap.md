@@ -96,6 +96,37 @@ current Workout Manager web app (`apps/web/app`).
 > photo and favorite control (no honest basis). The F6, Cross-cutting, and build-order sections below are
 > updated to match; the remaining sections are unchanged.
 
+> **Update (2026-07-08, later):** The **F5 — Profile** screen and its **gamification layer** — item 2 of
+> the build order below and *the last big net-new domain* — have now been **built out** across four vertical
+> slices (feature, not just styling). The whole game layer is a **read-time projection of the Logged record,
+> not a ledger** (**ADR-0018**): exactly like the PR engine (ADR-0010) there is **no XP table, no unlock
+> table, and no write-path hook** — every figure recomputes from the logs on read, so it can never drift,
+> backfills every existing user for free, and is honestly **non-monotonic** (deleting logs lowers XP, can
+> drop the Level, and re-locks a badge). A new `GET /api/profile/progress` endpoint (`app/routes/profile_progress.py`)
+> over a pure read model (`app/logbook/profile_progress.py`) projects the user's Logged Sessions onto three
+> net-new pure domain modules: **`experience.py`** (**XP** = a flat `SESSION_XP` per Logged Session + `PER_SET_XP`
+> per attempted Logged Set — training-type-neutral, live-vs-static-neutral, outcome-neutral by construction —
+> feeding a closed-form, unbounded **Operator Level** curve with no stored table), **`streak.py`** (the **Streak**
+> — consecutive weeks with ≥1 Logged Session, plus `longest_week_run` behind the streak Achievements), and
+> **`achievements.py`** (a curated, **type-neutral** catalog — 5/25/100 Sessions, 4/12-week Streak, all-six
+> Muscle-Group coverage, first Personal Record — each unlocked iff its predicate currently holds, with live
+> `current/target` progress while locked and an honest `unlocked_on` recovered by chronological replay). The
+> client's net-new Profile view (`app/profile/page.tsx`) renders a `LevelBadge` (XP progress bar), a **LIFETIME**
+> bento (**Streak · Total Sessions · Total Sets**), a compact `AchievementWall` with a "see all" to the full
+> catalog (`app/profile/achievements/page.tsx`), and an **Account** section (edit-profile link + explicit
+> `SignOutRow`). **ADR-0019** frames the screen-level scope: the **Streak is weekly, not daily** — deliberately,
+> because the plan model is calendar-free (ADR-0008) *and* a daily chain would pressure users to train through
+> the rest days this safety-first domain treats as legitimate. Slice 4 also shipped the first real **Setting** —
+> a **default rest-timer duration** on the Fitness Profile (nullable `default_rest_seconds`, migration 0015),
+> which the Live Session's `resolveRestSeconds` now prefers over each Prescription's own `rest_seconds`
+> (an independent settings value, *not* part of the gamification projection). What is intentionally **not**
+> built (ADR-0019, honestly-unbuildable not deferred): **total-hours** lifetime stat (Session Duration is
+> live-only, ADR-0014 — same call as Analytics' avg-time), **appearance/theme** (the app is committed dark-only),
+> **Apple Health** (HealthKit has no web API), and **notifications settings** (no subsystem to configure).
+> Named future slices: **units (kg/lb)**, **account/data deletion**, and the **Home/Analytics gamification
+> fan-out**. The F5, Cross-cutting, and build-order sections below are updated to match; the remaining sections
+> are unchanged.
+
 ---
 
 ## Onboarding & Auth (FO1–FO4)
@@ -156,16 +187,16 @@ Current state: AI generation form + read-only protocol view (`app/protocols/new`
 - ❌ **Protocol config panel** — frequency / cycle length / mode as editable knobs.
 - ❌ **`SIMULATE` / `DEPLOY PROTOCOL`** flow.
 
-## F5 — Profile
+## F5 — Profile (now largely shipped)
 
-Current state: a profile-edit form (`app/profile/edit`).
+Current state: a data-backed Profile view (`app/profile/page.tsx`) driven by `GET /api/profile/progress` — an Operator-Level badge with an XP progress bar, a LIFETIME bento (Streak · Total Sessions · Total Sets), a compact Achievement wall with a "see all" to the full catalog (`app/profile/achievements`), and an Account section. The `app/profile/edit` form remains as the Fitness Profile editor. The whole gamification layer is a read-time projection of the Logged record — no XP/unlock table, no write hook (ADR-0018).
 
-- ❌ **Gamification** — user Level + XP with progress-to-next ("LVL 12 · 760 XP → LEVEL 13"). *(Separate from the domain's per-type `fitness_levels`.)*
-- ❌ **Lifetime stats** — total workouts, total hours, current streak.
-- ❌ **Achievements / badges** — locked & unlocked states, "See all".
-- ❌ **Settings panel** — units (kg/lb), default rest-timer duration, appearance. *(The app is now committed dark-only via `globals.css` `color-scheme: dark`; a light theme would be net-new.)*
-- ❌ **Health integrations** — Apple Health linking.
-- ❌ **Account section** — notifications, privacy & data, help & support, log out (only Clerk's `UserButton` today).
+- ✅ **Gamification** — user Level + XP with progress-to-next. `LevelBadge` (`components/pulse/level-badge.tsx`) renders the **Operator Level** and an XP bar toward the next level, from `domain/experience.py`: **XP** is a flat `SESSION_XP` per Logged Session + `PER_SET_XP` per attempted Logged Set (training-type-neutral, live-vs-static-neutral, outcome-neutral by construction), and **Operator Level** is a closed-form, unbounded curve over that XP with no stored table. **Deviation (ADR-0018):** every figure is read-time and **non-monotonic** (deleting logs lowers XP and can drop the Level); this is distinct in every dimension from the domain's per-type `fitness_levels` (ability vs. account-wide investment).
+- 🟡 **Lifetime stats** — a LIFETIME `Bento` shows **Streak · Total Sessions · Total Sets**, all-time counts over the whole record. **Deviation (ADR-0019):** **total hours is dropped** — Session Duration is known only for live-tracked performances (ADR-0014), so a lifetime total would badly understate reality (the same call that kept avg-time off the Analytics bento, ADR-0011); it earns its place once statically-logged Sessions also capture a duration.
+- ✅ **Achievements / badges** — `AchievementWall` (`components/pulse/achievement-wall.tsx`) renders a curated, **type-neutral** catalog from `domain/achievements.py` (5/25/100 Sessions, 4/12-week Streak, all-six-Muscle-Group coverage, first Personal Record), each unlocked iff its predicate currently holds, with live `current/target` progress while locked and an honest `unlocked_on` recovered by chronological replay. The compact Profile summary shows the first four with a **SEE ALL** to the full catalog page. **Deviation (ADR-0018):** no unlock table — a badge re-locks if the logs behind it are deleted; the type-neutral majority means a yoga/mobility user never faces an all-locked strength wall.
+- 🟡 **Settings panel** — the first real setting shipped: a **default rest-timer duration** on the Fitness Profile edit form (nullable `default_rest_seconds`, migration 0015), which the Live Session's `resolveRestSeconds` now prefers over each Prescription's own `rest_seconds` (ADR-0019, F5 Slice 4). **Deviations (ADR-0019):** **units (kg/lb)** is a named future slice (scoped as store-canonical-kg / convert-at-every-boundary, not a smuggled toggle), and **appearance/theme** is omitted as honestly-unbuildable — the app is committed dark-only (`globals.css` `color-scheme: dark`); a light theme is net-new effort, not a toggle.
+- ❌ **Health integrations** — Apple Health linking. **Omitted, not deferred (ADR-0019):** HealthKit has no web API and there is no native iOS shell to bridge through, so it is not buildable in this architecture — never stubbed as a faked seam.
+- 🟡 **Account section** — an **Account** card with an edit-fitness-profile link and an explicit **log out** (`SignOutRow`, surfaced from the existing Clerk control). **Deviations (ADR-0019):** **notifications settings** are omitted (no notification subsystem to configure), and **account/data deletion** is a named future slice built to *actually* cascade-delete (a button that only promised deletion would be the worst faked seam).
 
 ## F6 — Exercise Detail (now shipped)
 
@@ -185,20 +216,23 @@ Current state: a tabbed Exercise Detail screen (`app/exercises/[id]/page.tsx`) �
 - ✅ **Personal Records (PR) engine** — now shipped as shared read-time capability on top of the typed Load (ADR-0010): `domain/one_rep_max.py` (Epley **Estimated 1RM**, 1–12-rep window) and `domain/personal_records.py` (**PR** detection over a chronological Logged-Set stream — a set is a PR when its Estimated 1RM strictly beats every prior set's for that Exercise). Read-time only — **no PR table, no write hook**. Surfaced on Analytics (F3) and now on Exercise Detail (F6, via `logbook/exercise_records.py` — Personal Record tile, Top-Set Trend, RECORDS feed); still to be wired into Home. A companion `domain/volume.py` engine converts typed loads (absolute, range, bodyweight, %-1RM) into total volume with a disclosed coverage %.
 - 🟡 **Readiness / target-calorie metrics** — **Readiness** now ships as a computed, qualitative three-state signal (`app/domain/readiness.py`, surfaced on Home via `GET /api/home`); the numeric **readiness percentage** and **target-calorie** are deliberately not built (no honest basis, ADR-0008). The Active Session (F2) has since shipped but, consistent with ADR-0008, surfaces neither on it.
 - 🟡 **Completion Outcome + Session Duration** — new domain rules landed with F2: a client-declared **Completion Outcome** (Completed / Incomplete) gates Protocol advancement (ADR-0013, `domain/completion.py` + `protocols/progress.py`), and a live-tracked **Session Duration** is now recorded, idle-bounded (ADR-0014). Duration is known only for **live-tracked** performances; ADR-0011's "avg time" figure gains an honest basis but is not yet surfaced on Analytics.
-- ❌ **Streak tracking** — appears on Profile and implicitly in Analytics ("active days").
+- ✅ **Gamification engine** — now shipped as a shared read-time projection of the Logged record (ADR-0018), mirroring the PR engine (ADR-0010): `domain/experience.py` (**XP** + closed-form **Operator Level**), `domain/streak.py` (weekly **Streak** + `longest_week_run`), and `domain/achievements.py` (a curated, type-neutral **Achievement** catalog). Read-time only — **no XP table, no unlock table, no write hook** — so every figure recomputes from the logs, backfills existing users for free, and is non-monotonic. Surfaced on **Profile (F5)** via `logbook/profile_progress.py` + `GET /api/profile/progress`; the **Home / Analytics fan-out** is a named later slice (as the PR engine landed on Analytics before Home).
+- ✅ **Streak tracking** — a weekly **Streak** (`domain/streak.py`) now ships on Profile: consecutive weeks with ≥1 Logged Session, on the same distinct-date basis as Analytics' active days. **Deviation (ADR-0019):** deliberately **weekly, not daily** — the plan model is calendar-free (ADR-0008) *and* a daily don't-break-the-chain mechanic would pressure users to train through the rest days a safety-first domain (Sensitive Constraints, Readiness caution) treats as legitimate.
 
 ---
 
 ## Highest-leverage missing capabilities (suggested build order)
 
 1. ~~**Live Active Session + rest timer** (F2)~~ — **shipped** (ADR-0012/0013/0014): the core plan/record loop is now closed with a per-set live mode, rest + elapsed timers, and Completion-Outcome-gated advancement.
-2. **Gamification layer** (XP / levels / streaks / achievements) — powers F5 and recurs on Home & Analytics. Now the largest net-new gap; **Streak tracking** is a natural first slice off the existing "active days" aggregate.
+2. ~~**Gamification layer** (XP / levels / streaks / achievements)~~ — **F5 (Profile) shipped** (ADR-0018/0019): XP + Operator Level, the weekly Streak, and the type-neutral Achievement catalog all ship as a **read-time projection of the Logged record** (no XP/unlock table, no write hook), over the net-new `domain/experience.py` / `streak.py` / `achievements.py` and the `logbook/profile_progress.py` read model. The remaining fan-out target is **Home / Analytics** (surfacing XP/Level/Streak off the same endpoint), and the named F5 follow-on slices — **units (kg/lb)**, **account/data deletion** — are self-contained settings work, not fresh domain.
 3. ~~**Fan the PR / 1RM / volume engine out** to F6~~ — **F6 (Exercise Detail) shipped** (ADR-0015/0016/0017): the Personal Record tile, Top-Set Trend, and RECORDS feed reuse the shared `one_rep_max` / `personal_records` engine over the new `logbook/exercise_records.py` read model. The remaining fan-out target is **F1 (Home)**, plus the two catalog-schema pieces this landed (Execution Steps as `list[str]`, muscle emphasis split) are now available to any future consumer.
 
-#1 (the F2 Live Session), the **PR / 1RM / volume analytics engine** (F3), and now **F6 (Exercise Detail)**
-have all shipped, so the remaining work is **capability, not styling** *and no longer net-new analytics
-logic, the live loop, or the per-exercise records screen*: item 2 (Gamification) is the last big fresh
-domain, and the lower-leverage gaps (Protocol Builder F4, the Home PR fan-out) are mostly *wiring
-already-existing data* (protocols, sessions, prescriptions, logs, metrics, exercise catalog, and now the
-analytics + exercise-records engines) into the styled components. The charting-library blocker is gone —
-**Recharts** shipped with F3 and now backs the F6 Top-Set Trend chart too.
+#1 (the F2 Live Session), the **PR / 1RM / volume analytics engine** (F3), **F6 (Exercise Detail)**, and now
+the **F5 (Profile) gamification layer** have all shipped, so *every net-new domain the analysis called out is
+built* — the live loop, the analytics engine, the per-exercise records screen, and the XP/Level/Streak/Achievement
+engine. The remaining work is **capability wiring, not fresh domain or styling**: the biggest open screen is
+**Protocol Builder (F4)** — a manual mutation model over the exercise catalog — and the rest is *fanning
+already-shipped engines* (gamification onto Home/Analytics, the PR engine onto Home) and *self-contained settings*
+(units, account deletion) into the styled components, over data that already exists (protocols, sessions,
+prescriptions, logs, metrics, exercise catalog, and the analytics / exercise-records / gamification engines). The
+charting-library blocker is long gone — **Recharts** shipped with F3 and backs the F6 Top-Set Trend chart too.
