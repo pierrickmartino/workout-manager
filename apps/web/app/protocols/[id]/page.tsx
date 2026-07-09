@@ -39,7 +39,17 @@ export default async function ProtocolPage({
       <PageHeader
         overline="PULSE // PROTOCOL"
         title={<span className="capitalize">{protocol.training_type}</span>}
-        action={<Badge variant="cyan">{protocol.weeks}W</Badge>}
+        action={
+          <div className="flex items-center gap-3">
+            <Badge variant="cyan">{protocol.weeks}W</Badge>
+            <Link
+              href={`/protocols/${protocol.id}/edit`}
+              className="label-mono text-[10px] text-text-muted transition-colors hover:text-cyan"
+            >
+              EDIT
+            </Link>
+          </div>
+        }
       />
 
       {/* Protocol overview + completion. */}

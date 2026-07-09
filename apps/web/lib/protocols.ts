@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 
+import type { DeployPayload } from "./protocol-builder";
 import type {
   GenerateProtocolInput,
   ProtocolJob,
@@ -51,6 +52,23 @@ export async function startProtocolGeneration(
     cache: "no-store",
   });
   return (await response.json()) as Envelope<ProtocolJob>;
+}
+
+// Deploy an edited Protocol (ADR-0020): send the desired un-performed tail; the
+// backend validates it, atomically replaces that tail in place, and returns the
+// progressed Protocol. A rejected draft comes back as a non-2xx envelope whose
+// `error` names the first problem — nothing is persisted.
+export async function deployProtocol(
+  id: number,
+  payload: DeployPayload,
+): Promise<Envelope<ProtocolProgress>> {
+  const response = await fetch(`${API_URL}/api/protocols/${id}/deploy`, {
+    method: "POST",
+    headers: { ...(await authHeaders()), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+  return (await response.json()) as Envelope<ProtocolProgress>;
 }
 
 // Poll a generation job by its handle. The adopted `protocol_id` appears once the

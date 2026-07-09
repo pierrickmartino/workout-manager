@@ -12,13 +12,16 @@ from app.protocols.progress import ProtocolProgressView
 from app.repositories.protocol_repository import ProtocolSessionView, ProtocolView
 
 
-def serialize_session(session: ProtocolSessionView) -> dict:
+def serialize_session(
+    session: ProtocolSessionView, *, performed: bool = False
+) -> dict:
     return {
         "session_id": session.session_id,
         "position": session.position,
         "week": session.week,
         "day": session.day,
         "title": session.title,
+        "performed": performed,
         "prescriptions": [
             {
                 "position": p.position,
@@ -39,7 +42,9 @@ def serialize_session(session: ProtocolSessionView) -> dict:
     }
 
 
-def serialize_protocol(view: ProtocolView) -> dict:
+def serialize_protocol(
+    view: ProtocolView, *, performed_session_ids: frozenset[int] = frozenset()
+) -> dict:
     return {
         "id": view.id,
         "clerk_user_id": view.clerk_user_id,
@@ -48,15 +53,22 @@ def serialize_protocol(view: ProtocolView) -> dict:
         "sessions_per_week": view.sessions_per_week,
         "weeks": view.weeks,
         "duration_minutes": view.duration_minutes,
-        "sessions": [serialize_session(s) for s in view.sessions],
+        "sessions": [
+            serialize_session(s, performed=s.session_id in performed_session_ids)
+            for s in view.sessions
+        ],
     }
 
 
 def serialize_protocol_progress(progress: ProtocolProgressView) -> dict:
-    data = serialize_protocol(progress.protocol)
+    performed = progress.performed_session_ids
+    data = serialize_protocol(progress.protocol, performed_session_ids=performed)
     data["completed_count"] = progress.completed_count
     data["next_session"] = (
-        serialize_session(progress.next_session)
+        serialize_session(
+            progress.next_session,
+            performed=progress.next_session.session_id in performed,
+        )
         if progress.next_session is not None
         else None
     )

@@ -49,6 +49,9 @@ class ProtocolProgressView:
     protocol: ProtocolView
     next_session: ProtocolSessionView | None
     completed_count: int
+    # The ids of Sessions with an advancing Logged Session (ADR-0013) — the frozen
+    # prefix the Builder renders read-only and deploy refuses to touch (ADR-0020).
+    performed_session_ids: frozenset[int] = frozenset()
 
 
 def _advances(entry: LoggedSessionView) -> bool:
@@ -113,6 +116,7 @@ def protocol_progress(
         protocol=protocol,
         next_session=next_session,
         completed_count=completed_count,
+        performed_session_ids=frozenset(performed),
     )
 
 
@@ -218,6 +222,7 @@ def progressed_protocol(
         protocol=adjusted_protocol,
         next_session=next_session,
         completed_count=completed_count,
+        performed_session_ids=frozenset(performed),
     )
 
 

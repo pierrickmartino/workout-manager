@@ -13,6 +13,9 @@ export interface ProtocolSession {
   week: number;
   day: number;
   title: string | null;
+  // Whether this Session has an advancing Logged Session (ADR-0013). Performed
+  // Sessions are the frozen record the Builder renders read-only (ADR-0020).
+  performed: boolean;
   prescriptions: ExercisePrescription[];
 }
 
