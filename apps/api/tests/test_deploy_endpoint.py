@@ -222,6 +222,81 @@ def test_deploy_leaves_progress_and_performed_ids_unchanged():
     assert data["next_session"]["prescriptions"][0]["reps"] == "8"
 
 
+def test_deploy_adds_and_reorders_prescriptions_in_an_un_performed_session():
+    # Arrange — a fresh Protocol; Week 1 holds a single Back Squat Prescription
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_add")
+    protocol_id = protocol["id"]
+    original = protocol["sessions"][0]["prescriptions"][0]
+    exercise_id = original["exercise_id"]
+
+    body = _deploy_body(protocol)
+    # Add a second Prescription (a movement picked from the Library — here the same
+    # catalog Exercise is enough to exercise the add path) and reorder it to the
+    # front, so the deployed order is the added movement, then the original.
+    added = {
+        "exercise_id": exercise_id,
+        "sets": 4,
+        "reps": "10",
+        "rest_seconds": 60,
+        "tempo": None,
+        "load_kind": "absolute",
+        "load_value": "",
+    }
+    body["sessions"][0]["prescriptions"] = [added, body["sessions"][0]["prescriptions"][0]]
+
+    # Act
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_add"),
+        json=body,
+    )
+
+    # Assert — Week 1 now holds both, in the deployed order with contiguous positions
+    assert response.status_code == 200
+    after = h.fetch_protocol("user_add", protocol_id).json()["data"]
+    week_one = after["sessions"][0]["prescriptions"]
+    assert [p["reps"] for p in week_one] == ["10", "5"]
+    assert [p["position"] for p in week_one] == [0, 1]
+
+
+def test_deploy_rejects_a_prescription_referencing_an_unknown_exercise():
+    # Arrange — add a Prescription that points at an Exercise not in the catalog,
+    # the bad-reference case a pick-only Library should make unreachable but deploy
+    # must still guard server-side (ADR-0021).
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_badref")
+    protocol_id = protocol["id"]
+    body = _deploy_body(protocol)
+    body["sessions"][0]["prescriptions"].append(
+        {
+            "exercise_id": 999999,
+            "sets": 3,
+            "reps": "8",
+            "rest_seconds": None,
+            "tempo": None,
+            "load_kind": "absolute",
+            "load_value": "",
+        }
+    )
+
+    # Act
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_badref"),
+        json=body,
+    )
+
+    # Assert — rejected, naming the offending Prescription; nothing persisted
+    assert response.status_code == 422
+    errors = response.json()["errors"]
+    offending = next(e for e in errors if e["code"] == "unknown_exercise")
+    assert offending["session_id"] == protocol["sessions"][0]["session_id"]
+    assert offending["position"] == 1
+    after = h.fetch_protocol("user_badref", protocol_id).json()["data"]
+    assert len(after["sessions"][0]["prescriptions"]) == 1
+
+
 def test_another_user_cannot_deploy_to_someone_elses_protocol():
     h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
     protocol = _fresh_protocol(h, "user_owner")

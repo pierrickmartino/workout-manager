@@ -2,7 +2,7 @@
 
 import { useReducer, useState, useTransition } from "react";
 import Link from "next/link";
-import { Lock } from "lucide-react";
+import { ArrowDown, ArrowUp, Lock, Plus, Trash2 } from "lucide-react";
 
 import { submitDeploy } from "@/app/protocols/[id]/edit/actions";
 import {
@@ -12,9 +12,11 @@ import {
   type BuilderDraft,
   type DraftPrescription,
   type DraftSession,
+  type PickedExercise,
 } from "@/lib/protocol-builder";
 import { LOAD_KIND_OPTIONS, type LoadKind } from "@/lib/load";
 import type { ProtocolProgress } from "@/lib/protocols-types";
+import { ExerciseLibrary } from "@/components/ExerciseLibrary";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { Alert } from "@/components/pulse/alert";
@@ -104,6 +106,28 @@ export function ProtocolBuilder({ protocol }: ProtocolBuilderProps) {
                     loadValue,
                   })
                 }
+                onAdd={(exercise) =>
+                  dispatch({
+                    type: "ADD_PRESCRIPTION",
+                    sessionId: session.sessionId,
+                    exercise,
+                  })
+                }
+                onRemove={(position) =>
+                  dispatch({
+                    type: "REMOVE_PRESCRIPTION",
+                    sessionId: session.sessionId,
+                    position,
+                  })
+                }
+                onReorder={(from, to) =>
+                  dispatch({
+                    type: "REORDER_PRESCRIPTION",
+                    sessionId: session.sessionId,
+                    from,
+                    to,
+                  })
+                }
                 index={sessionIndex + 1}
               />
             </li>
@@ -135,6 +159,9 @@ interface SessionEditorProps {
     value: string | number | null,
   ) => void;
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
+  onAdd: (exercise: PickedExercise) => void;
+  onRemove: (position: number) => void;
+  onReorder: (from: number, to: number) => void;
 }
 
 function SessionEditor({
@@ -142,8 +169,13 @@ function SessionEditor({
   index,
   onEditField,
   onEditLoad,
+  onAdd,
+  onRemove,
+  onReorder,
 }: SessionEditorProps) {
   const locked = session.performed;
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const lastPosition = session.prescriptions.length - 1;
   return (
     <Card
       className={`flex flex-col gap-3 p-4 ${locked ? "opacity-70" : ""}`}
@@ -174,18 +206,108 @@ function SessionEditor({
             {locked ? (
               <PrescriptionReadOnly prescription={prescription} />
             ) : (
-              <PrescriptionEditor
-                prescription={prescription}
-                onEditField={(field, value) => onEditField(position, field, value)}
-                onEditLoad={(loadKind, loadValue) =>
-                  onEditLoad(position, loadKind, loadValue)
-                }
-              />
+              <div className="flex flex-col gap-2">
+                <PrescriptionEditor
+                  prescription={prescription}
+                  onEditField={(field, value) => onEditField(position, field, value)}
+                  onEditLoad={(loadKind, loadValue) =>
+                    onEditLoad(position, loadKind, loadValue)
+                  }
+                />
+                <PrescriptionControls
+                  name={prescription.exerciseName}
+                  canMoveUp={position > 0}
+                  canMoveDown={position < lastPosition}
+                  onMoveUp={() => onReorder(position, position - 1)}
+                  onMoveDown={() => onReorder(position, position + 1)}
+                  onRemove={() => onRemove(position)}
+                />
+              </div>
             )}
           </li>
         ))}
       </ul>
+
+      {locked ? null : (
+        <div className="flex flex-col gap-3 border-t border-border pt-3">
+          {libraryOpen ? (
+            <ExerciseLibrary
+              onPick={(exercise) => {
+                onAdd(exercise);
+                setLibraryOpen(false);
+              }}
+            />
+          ) : null}
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="w-full"
+            onClick={() => setLibraryOpen((open) => !open)}
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden />
+            {libraryOpen ? "CLOSE LIBRARY" : "ADD MODULE"}
+          </Button>
+        </div>
+      )}
     </Card>
+  );
+}
+
+interface PrescriptionControlsProps {
+  name: string;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onRemove: () => void;
+}
+
+// Reorder (up/down) and remove controls for one Prescription in an un-performed
+// Session. Reordering here is what the deploy payload carries as the new `position`.
+function PrescriptionControls({
+  name,
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown,
+  onRemove,
+}: PrescriptionControlsProps) {
+  return (
+    <div className="flex items-center justify-end gap-1.5">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        disabled={!canMoveUp}
+        aria-label={`Move ${name} up`}
+        onClick={onMoveUp}
+      >
+        <ArrowUp className="h-4 w-4" aria-hidden />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        disabled={!canMoveDown}
+        aria-label={`Move ${name} down`}
+        onClick={onMoveDown}
+      >
+        <ArrowDown className="h-4 w-4" aria-hidden />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 text-magenta"
+        aria-label={`Remove ${name}`}
+        onClick={onRemove}
+      >
+        <Trash2 className="h-4 w-4" aria-hidden />
+      </Button>
+    </div>
   );
 }
 

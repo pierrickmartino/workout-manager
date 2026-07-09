@@ -8,7 +8,7 @@ authentication like the rest of the API. Responses use the standard envelope."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth.dependencies import get_current_user
 from app.db.models import Exercise
@@ -27,6 +27,49 @@ from app.repositories.exercise_repository import ExerciseRepository
 router = APIRouter(prefix="/api", tags=["exercises"])
 
 HTTP_NOT_FOUND = 404
+
+# The Exercise Library page bounds: a sensible default page and a cap so one search
+# never returns an unbounded slice of the catalog.
+DEFAULT_SEARCH_LIMIT = 20
+MAX_SEARCH_LIMIT = 50
+
+
+def _search_result(exercise: Exercise) -> dict:
+    """The pick-only Library projection of a catalog Exercise: just enough to choose
+    a movement and know if it is unvalidated. Provenance is surfaced exactly as the
+    Session view and Exercise Detail do (ADR-0021)."""
+
+    return {
+        "id": exercise.id,
+        "name": exercise.name,
+        "targeted_muscles": list(exercise.targeted_muscles),
+        "required_equipment": list(exercise.required_equipment),
+        "difficulty": exercise.difficulty,
+        "provenance": exercise.provenance,
+    }
+
+
+@router.get("/exercises")
+def search_exercises(
+    query: str = Query(default="", description="Name substring to match."),
+    limit: int = Query(default=DEFAULT_SEARCH_LIMIT, ge=1, le=MAX_SEARCH_LIMIT),
+    offset: int = Query(default=0, ge=0),
+    _: str = Depends(get_current_user),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+) -> dict:
+    """Search the shared catalog by normalized name for the Exercise Library.
+
+    Returns each match's id, name, targeted muscles, required equipment, difficulty,
+    and provenance — ranked curated-first then by name and paginated. Pick-only: a
+    query with no match returns an empty result and never creates a catalog
+    Exercise (ADR-0002/0021). Responses use the standard envelope with pagination
+    meta."""
+
+    page = exercises.search(query, limit=limit, offset=offset)
+    return success_envelope(
+        [_search_result(exercise) for exercise in page.items],
+        meta={"total": page.total, "limit": limit, "offset": offset},
+    )
 
 
 def _summary(related: RelatedExercise) -> dict:

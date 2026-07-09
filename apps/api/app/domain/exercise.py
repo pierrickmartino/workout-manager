@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 from enum import Enum
+from typing import Protocol, TypeVar
 
 _WHITESPACE = re.compile(r"\s+")
 
@@ -33,6 +34,35 @@ def normalize_name(name: str) -> str:
     """
 
     return _WHITESPACE.sub(" ", name.strip()).lower()
+
+
+class _Rankable(Protocol):
+    """The two fields the Exercise Library ranks a catalog match on."""
+
+    provenance: str
+    normalized_name: str
+
+
+_RankableT = TypeVar("_RankableT", bound=_Rankable)
+
+
+def rank_exercise_matches(matches: list[_RankableT]) -> list[_RankableT]:
+    """Order Exercise Library search results curated-first, then by name.
+
+    The library surfaces the trusted, human-reviewed catalog before AI-invented
+    entries (ADR-0002/0021), and within each Provenance tier orders by the
+    normalized name so results read A→Z. Pure and non-mutating: the input list is
+    left as the caller passed it; a new, sorted list is returned. ``sorted`` is
+    stable, so matches identical on both keys keep their original relative order.
+    """
+
+    return sorted(
+        matches,
+        key=lambda match: (
+            0 if match.provenance == Provenance.CURATED.value else 1,
+            match.normalized_name,
+        ),
+    )
 
 
 def parse_instruction_steps(instructions: str | None) -> list[str]:

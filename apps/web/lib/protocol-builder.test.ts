@@ -204,3 +204,163 @@ test("toDeployPayload emits only the un-performed tail with Load as kind+value",
   assert.equal(prescription.load_value, "80");
   assert.equal(prescription.exercise_id, 100);
 });
+
+test("ADD_PRESCRIPTION appends a new editable Prescription to an un-performed Session", () => {
+  // Arrange — a Session with one existing Prescription
+  const draft = initBuilderDraft(protocol());
+
+  // Act — pick an Exercise from the Library to add
+  const next = builderReducer(draft, {
+    type: "ADD_PRESCRIPTION",
+    sessionId: 1,
+    exercise: { id: 200, name: "Romanian Deadlift" },
+  });
+
+  // Assert — appended at the end, carrying the picked Exercise and editable defaults
+  const prescriptions = next.sessions[0].prescriptions;
+  assert.equal(prescriptions.length, 2);
+  const added = prescriptions[1];
+  assert.equal(added.exerciseId, 200);
+  assert.equal(added.exerciseName, "Romanian Deadlift");
+  assert.ok(added.sets >= 1);
+  assert.notEqual(added.reps, "");
+  // …and the original draft is untouched (immutable)
+  assert.equal(draft.sessions[0].prescriptions.length, 1);
+});
+
+test("ADD_PRESCRIPTION is a no-op on a performed Session (frozen prefix)", () => {
+  // Arrange — Session 1 is performed
+  const draft = initBuilderDraft(
+    protocol({ sessions: [session({ session_id: 1, performed: true })] }),
+  );
+
+  // Act
+  const next = builderReducer(draft, {
+    type: "ADD_PRESCRIPTION",
+    sessionId: 1,
+    exercise: { id: 200, name: "Romanian Deadlift" },
+  });
+
+  // Assert — nothing added
+  assert.deepEqual(next, draft);
+});
+
+test("REMOVE_PRESCRIPTION drops the Prescription at a position in an un-performed Session", () => {
+  // Arrange — a Session with two Prescriptions
+  const draft = initBuilderDraft(
+    protocol({
+      sessions: [
+        session({
+          prescriptions: [
+            prescription({ exercise_id: 100, exercise_name: "Back Squat" }),
+            prescription({ exercise_id: 200, exercise_name: "Leg Press" }),
+          ],
+        }),
+      ],
+    }),
+  );
+
+  // Act — drop the first
+  const next = builderReducer(draft, {
+    type: "REMOVE_PRESCRIPTION",
+    sessionId: 1,
+    position: 0,
+  });
+
+  // Assert — only the second remains; the original draft is untouched
+  assert.deepEqual(
+    next.sessions[0].prescriptions.map((p) => p.exerciseName),
+    ["Leg Press"],
+  );
+  assert.equal(draft.sessions[0].prescriptions.length, 2);
+});
+
+test("REMOVE_PRESCRIPTION is a no-op on a performed Session (frozen prefix)", () => {
+  const draft = initBuilderDraft(
+    protocol({ sessions: [session({ session_id: 1, performed: true })] }),
+  );
+
+  const next = builderReducer(draft, {
+    type: "REMOVE_PRESCRIPTION",
+    sessionId: 1,
+    position: 0,
+  });
+
+  assert.deepEqual(next, draft);
+});
+
+test("REORDER_PRESCRIPTION moves a Prescription to a new position", () => {
+  // Arrange — three Prescriptions A, B, C
+  const draft = initBuilderDraft(
+    protocol({
+      sessions: [
+        session({
+          prescriptions: [
+            prescription({ exercise_id: 1, exercise_name: "A" }),
+            prescription({ exercise_id: 2, exercise_name: "B" }),
+            prescription({ exercise_id: 3, exercise_name: "C" }),
+          ],
+        }),
+      ],
+    }),
+  );
+
+  // Act — move C (index 2) to the front (index 0)
+  const next = builderReducer(draft, {
+    type: "REORDER_PRESCRIPTION",
+    sessionId: 1,
+    from: 2,
+    to: 0,
+  });
+
+  // Assert — the new order is C, A, B (this is what deploy persists as position)
+  assert.deepEqual(
+    next.sessions[0].prescriptions.map((p) => p.exerciseName),
+    ["C", "A", "B"],
+  );
+});
+
+test("REORDER_PRESCRIPTION with an out-of-range index leaves the order unchanged", () => {
+  const draft = initBuilderDraft(protocol());
+
+  const next = builderReducer(draft, {
+    type: "REORDER_PRESCRIPTION",
+    sessionId: 1,
+    from: 0,
+    to: 5,
+  });
+
+  assert.deepEqual(next, draft);
+});
+
+test("a reordered un-performed Session's new order flows through to the deploy payload", () => {
+  // Arrange — two Prescriptions in an un-performed Session
+  const base = initBuilderDraft(
+    protocol({
+      sessions: [
+        session({
+          prescriptions: [
+            prescription({ exercise_id: 1, exercise_name: "A" }),
+            prescription({ exercise_id: 2, exercise_name: "B" }),
+          ],
+        }),
+      ],
+    }),
+  );
+
+  // Act — swap them, then derive the tail
+  const draft = builderReducer(base, {
+    type: "REORDER_PRESCRIPTION",
+    sessionId: 1,
+    from: 0,
+    to: 1,
+  });
+  const payload = toDeployPayload(draft);
+
+  // Assert — the payload's prescription order (which becomes position on deploy)
+  // reflects the reorder
+  assert.deepEqual(
+    payload.sessions[0].prescriptions.map((p) => p.exercise_id),
+    [2, 1],
+  );
+});

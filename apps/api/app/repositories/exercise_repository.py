@@ -10,13 +10,27 @@ for tests; the same contract runs over both."""
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Protocol
 
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.db.models import Exercise
-from app.domain.exercise import Provenance, normalize_name
+from app.domain.exercise import Provenance, normalize_name, rank_exercise_matches
+
+
+@dataclass(frozen=True)
+class ExerciseSearchPage:
+    """One page of Exercise Library results plus the full match count.
+
+    ``items`` is the ranked, limit/offset-sliced slice the caller shows;
+    ``total`` is how many catalog Exercises matched the query in all, so the route
+    can report pagination meta (ADR-0021: the library is a read over the shared
+    catalog — it never creates)."""
+
+    items: list[Exercise]
+    total: int
 
 
 class ExerciseRepository(Protocol):
@@ -40,6 +54,17 @@ class ExerciseRepository(Protocol):
 
     def get(self, exercise_id: int) -> Exercise | None:
         """Return the catalog Exercise with ``exercise_id``, or ``None``."""
+        ...
+
+    def search(
+        self, query: str, *, limit: int, offset: int
+    ) -> ExerciseSearchPage:
+        """Return the catalog Exercises whose normalized name contains ``query``.
+
+        The query is normalized the same way names are (ADR-0002), so matching is
+        case- and whitespace-insensitive; a blank query matches nothing. Results
+        are ranked curated-first then by name and sliced by ``limit``/``offset``.
+        Read-only — the Exercise Library never creates a catalog entry (ADR-0021)."""
         ...
 
     def list_by_provenance(self, provenance: Provenance) -> list[Exercise]:
@@ -90,6 +115,17 @@ def _new_exercise(
         difficulty=difficulty,
         precautions=list(precautions),
     )
+
+
+def _page(matches: list[Exercise], limit: int, offset: int) -> ExerciseSearchPage:
+    """Rank the matched Exercises and slice out the requested page.
+
+    Ranking and pagination live here so the SQL and in-memory repositories share
+    one ordering (the pure ``rank_exercise_matches``) and one slice rule, and never
+    drift. ``total`` is the full match count before the slice."""
+
+    ranked = rank_exercise_matches(matches)
+    return ExerciseSearchPage(items=ranked[offset : offset + limit], total=len(ranked))
 
 
 class SqlExerciseRepository:
@@ -150,6 +186,21 @@ class SqlExerciseRepository:
 
     def get(self, exercise_id: int) -> Exercise | None:
         return self._session.get(Exercise, exercise_id)
+
+    def search(
+        self, query: str, *, limit: int, offset: int
+    ) -> ExerciseSearchPage:
+        normalized = normalize_name(query)
+        if not normalized:
+            return ExerciseSearchPage(items=[], total=0)
+        matches = list(
+            self._session.exec(
+                select(Exercise).where(
+                    Exercise.normalized_name.contains(normalized)
+                )
+            ).all()
+        )
+        return _page(matches, limit, offset)
 
     def list_by_provenance(self, provenance: Provenance) -> list[Exercise]:
         return list(
@@ -222,6 +273,19 @@ class InMemoryExerciseRepository:
     def get(self, exercise_id: int) -> Exercise | None:
         return self._by_id.get(exercise_id)
 
+    def search(
+        self, query: str, *, limit: int, offset: int
+    ) -> ExerciseSearchPage:
+        normalized = normalize_name(query)
+        if not normalized:
+            return ExerciseSearchPage(items=[], total=0)
+        matches = [
+            exercise
+            for exercise in self._by_id.values()
+            if normalized in exercise.normalized_name
+        ]
+        return _page(matches, limit, offset)
+
     def list_by_provenance(self, provenance: Provenance) -> list[Exercise]:
         return [
             exercise
@@ -246,6 +310,7 @@ class InMemoryExerciseRepository:
 
 __all__ = [
     "ExerciseRepository",
+    "ExerciseSearchPage",
     "SqlExerciseRepository",
     "InMemoryExerciseRepository",
 ]
