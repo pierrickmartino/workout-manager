@@ -253,3 +253,61 @@ def test_losing_concurrent_insert_returns_the_winning_row():
             select(Exercise).where(Exercise.normalized_name == "clean")
         ).all()
         assert len(rows) == 1
+
+
+def test_search_matches_a_normalized_name_substring(repo):
+    # Arrange — a small catalog
+    repo.find_or_create("Back Squat", provenance=Provenance.CURATED)
+    repo.find_or_create("Front Squat", provenance=Provenance.CURATED)
+    repo.find_or_create("Deadlift", provenance=Provenance.CURATED)
+
+    # Act — substring match, case-insensitive via normalization
+    page = repo.search("SQUAT", limit=10, offset=0)
+
+    # Assert — both squats, not the deadlift
+    assert {e.name for e in page.items} == {"Back Squat", "Front Squat"}
+    assert page.total == 2
+
+
+def test_search_orders_curated_first_then_by_name(repo):
+    # Arrange — a mix of provenance across matching names
+    repo.find_or_create("Zercher Squat", provenance=Provenance.CURATED)
+    repo.find_or_create("Air Squat", provenance=Provenance.AI_GENERATED)
+    repo.find_or_create("Back Squat", provenance=Provenance.CURATED)
+
+    # Act
+    page = repo.search("squat", limit=10, offset=0)
+
+    # Assert — curated A→Z, then the AI-invented one last (ADR-0002/0021)
+    assert [e.name for e in page.items] == [
+        "Back Squat",
+        "Zercher Squat",
+        "Air Squat",
+    ]
+
+
+def test_search_paginates_with_limit_and_offset(repo):
+    # Arrange — three curated matches, ranked Back < Front < Goblet
+    repo.find_or_create("Goblet Squat", provenance=Provenance.CURATED)
+    repo.find_or_create("Back Squat", provenance=Provenance.CURATED)
+    repo.find_or_create("Front Squat", provenance=Provenance.CURATED)
+
+    # Act — the second page of size one
+    page = repo.search("squat", limit=1, offset=1)
+
+    # Assert — the middle of the ranked order, with the full match count
+    assert [e.name for e in page.items] == ["Front Squat"]
+    assert page.total == 3
+
+
+def test_search_returns_no_matches_and_creates_nothing(repo):
+    # Arrange
+    repo.find_or_create("Deadlift", provenance=Provenance.CURATED)
+
+    # Act — a movement absent from the catalog
+    page = repo.search("clean and jerk", limit=10, offset=0)
+
+    # Assert — empty result, and the catalog was not grown (pick-only, ADR-0021)
+    assert page.items == []
+    assert page.total == 0
+    assert repo.search("", limit=10, offset=0).total == 0

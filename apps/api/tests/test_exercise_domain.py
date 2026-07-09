@@ -6,11 +6,23 @@ the normalization (what counts as "the same name") and the Provenance values."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from app.domain.exercise import (
     Provenance,
     normalize_name,
     parse_instruction_steps,
+    rank_exercise_matches,
 )
+
+
+@dataclass(frozen=True)
+class _Match:
+    """A minimal Exercise-like stand-in for the ranking helper: it needs only a
+    Provenance and a normalized name to be ordered."""
+
+    provenance: str
+    normalized_name: str
 
 
 def test_normalize_lowercases_and_trims():
@@ -96,3 +108,55 @@ def test_none_and_blank_prose_yield_an_empty_list():
     assert parse_instruction_steps(None) == []
     assert parse_instruction_steps("") == []
     assert parse_instruction_steps("   \n\t\n") == []
+
+
+def test_rank_orders_curated_before_ai_generated():
+    # Arrange — an AI-invented match precedes a curated one by name alone
+    matches = [
+        _Match(Provenance.AI_GENERATED.value, "air squat"),
+        _Match(Provenance.CURATED.value, "back squat"),
+    ]
+
+    # Act
+    ranked = rank_exercise_matches(matches)
+
+    # Assert — the trusted curated entry is surfaced first (ADR-0002/0021)
+    assert [m.provenance for m in ranked] == [
+        Provenance.CURATED.value,
+        Provenance.AI_GENERATED.value,
+    ]
+
+
+def test_rank_orders_by_normalized_name_within_a_provenance():
+    # Arrange — three curated matches out of alphabetical order
+    matches = [
+        _Match(Provenance.CURATED.value, "goblet squat"),
+        _Match(Provenance.CURATED.value, "back squat"),
+        _Match(Provenance.CURATED.value, "front squat"),
+    ]
+
+    # Act
+    ranked = rank_exercise_matches(matches)
+
+    # Assert — a stable, sensible A→Z order within the tier
+    assert [m.normalized_name for m in ranked] == [
+        "back squat",
+        "front squat",
+        "goblet squat",
+    ]
+
+
+def test_rank_returns_a_new_list_and_leaves_the_input_untouched():
+    # Arrange
+    matches = [
+        _Match(Provenance.AI_GENERATED.value, "zercher squat"),
+        _Match(Provenance.CURATED.value, "back squat"),
+    ]
+    original = list(matches)
+
+    # Act
+    ranked = rank_exercise_matches(matches)
+
+    # Assert — pure: the caller's list is not reordered in place
+    assert ranked is not matches
+    assert matches == original

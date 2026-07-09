@@ -45,6 +45,20 @@ export interface BuilderDraft {
 // (it is a typed kind+value pair, not a single scalar).
 export type PrescriptionField = "sets" | "reps" | "restSeconds" | "tempo";
 
+// The editable defaults a freshly-added Prescription starts from. Nothing is
+// fabricated on the user's behalf beyond a followable starting point they then
+// retarget: a Load is deliberately left empty (absent Loads are legitimate,
+// ADR-0010), and the reps default matches the log form's placeholder.
+const NEW_PRESCRIPTION_SETS = 3;
+const NEW_PRESCRIPTION_REPS = "8-12";
+
+// A catalog Exercise picked from the Library, carrying just what a new Prescription
+// needs to name it (Module E surfaces the rest for the picker).
+export interface PickedExercise {
+  id: number;
+  name: string;
+}
+
 export type BuilderEvent =
   | {
       type: "EDIT_PRESCRIPTION";
@@ -59,6 +73,22 @@ export type BuilderEvent =
       position: number;
       loadKind: LoadKind;
       loadValue: string;
+    }
+  | {
+      type: "ADD_PRESCRIPTION";
+      sessionId: number;
+      exercise: PickedExercise;
+    }
+  | {
+      type: "REMOVE_PRESCRIPTION";
+      sessionId: number;
+      position: number;
+    }
+  | {
+      type: "REORDER_PRESCRIPTION";
+      sessionId: number;
+      from: number;
+      to: number;
     };
 
 // Derive the editable kind+value pair a Prescription's Load starts from, off the
@@ -144,9 +174,74 @@ export function builderReducer(
         loadValue: event.loadValue,
       }));
 
+    case "ADD_PRESCRIPTION":
+      return mapSessionPrescriptions(state, event.sessionId, (prescriptions) => [
+        ...prescriptions,
+        newPrescription(event.exercise),
+      ]);
+
+    case "REMOVE_PRESCRIPTION":
+      return mapSessionPrescriptions(state, event.sessionId, (prescriptions) =>
+        prescriptions.filter((_, index) => index !== event.position),
+      );
+
+    case "REORDER_PRESCRIPTION":
+      return mapSessionPrescriptions(state, event.sessionId, (prescriptions) =>
+        movePrescription(prescriptions, event.from, event.to),
+      );
+
     default:
       return state;
   }
+}
+
+// A freshly-picked Library Exercise as a new draft Prescription, with editable
+// defaults the user then retargets.
+function newPrescription(exercise: PickedExercise): DraftPrescription {
+  return {
+    exerciseId: exercise.id,
+    exerciseName: exercise.name,
+    sets: NEW_PRESCRIPTION_SETS,
+    reps: NEW_PRESCRIPTION_REPS,
+    restSeconds: null,
+    tempo: null,
+    loadKind: "absolute",
+    loadValue: "",
+  };
+}
+
+// Move the Prescription at `from` to index `to`, shifting the rest, and return a new
+// array. An out-of-range index leaves the order unchanged.
+function movePrescription(
+  prescriptions: DraftPrescription[],
+  from: number,
+  to: number,
+): DraftPrescription[] {
+  const last = prescriptions.length - 1;
+  if (from < 0 || from > last || to < 0 || to > last || from === to) {
+    return prescriptions;
+  }
+  const reordered = [...prescriptions];
+  const [moved] = reordered.splice(from, 1);
+  reordered.splice(to, 0, moved);
+  return reordered;
+}
+
+// Replace an un-performed Session's whole Prescription list via `change`, returning a
+// new draft. A performed Session (frozen prefix) or an unknown Session id is left
+// untouched — the same invariant the server enforces on deploy (ADR-0020).
+function mapSessionPrescriptions(
+  state: BuilderDraft,
+  sessionId: number,
+  change: (prescriptions: DraftPrescription[]) => DraftPrescription[],
+): BuilderDraft {
+  return {
+    ...state,
+    sessions: state.sessions.map((session) => {
+      if (session.sessionId !== sessionId || session.performed) return session;
+      return { ...session, prescriptions: change(session.prescriptions) };
+    }),
+  };
 }
 
 // Apply `change` to the Prescription at `position` inside the un-performed Session
