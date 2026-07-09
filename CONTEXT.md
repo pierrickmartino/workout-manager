@@ -7,7 +7,7 @@ An AI-assisted application for creating, following, and tracking fitness workout
 The single most important distinction in the domain: a **plan** is what the AI prescribes; a **record** is what the user actually performed. They are separate concepts, and the same plan can be performed many times.
 
 **Protocol**:
-A user-owned training plan: a fixed, fully enumerated set of Sessions spanning a user-chosen number of weeks. Every Session for every week is generated up front and occupies a specific position; the same logical workout may differ from week to week to express progression and deloads. A Protocol is the user's own copy (see Adopt) — mutating it never affects other users or the cache.
+A user-owned training plan: a fully enumerated set of Sessions spanning a user-chosen number of weeks, each Session occupying a specific position; the same logical workout may differ from week to week to express progression and deloads. It originates as the user's own copy of an AI generation (see Adopt) and may then be **edited directly by the user** — reshaping the number of weeks and the per-week session count, adding or removing Sessions, and authoring Exercise Prescriptions by hand — so a Protocol's content is not necessarily wholly AI-generated. Editing only ever reaches the *un-performed* remainder: a Session the user has already performed is settled record and is never rewritten or reordered. May carry a user-given name. Mutating a Protocol never affects other users or the cache.
 _Avoid_: Plan, routine, cycle, Program
 
 **Current Protocol**:
