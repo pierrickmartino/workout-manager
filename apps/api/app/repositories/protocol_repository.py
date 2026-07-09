@@ -89,6 +89,26 @@ class ProtocolRepository(Interface):
         user owns none."""
         ...
 
+    def replace_tail(
+        self,
+        protocol_id: int,
+        clerk_user_id: str,
+        *,
+        session_prescriptions: dict[int, list[PrescriptionDraft]],
+    ) -> ProtocolView | None:
+        """Atomically replace the Prescriptions of the named un-performed Sessions
+        (Module F, ADR-0020).
+
+        ``session_prescriptions`` maps a Session id to its new ordered
+        Prescriptions; each named Session's Prescriptions are deleted and re-inserted
+        in place, with contiguous positions, while the Session row itself (its id,
+        Week/Day, position) and every Session *not* named — the frozen performed
+        prefix among them — is left untouched. The whole rewrite commits in one
+        transaction, so a failure persists nothing. Owner-scoped: returns the updated
+        Protocol, or ``None`` if it is missing or owned by another user. A named id
+        that is not one of this Protocol's Sessions is ignored."""
+        ...
+
 
 class SqlProtocolRepository:
     def __init__(self, session: Session) -> None:
@@ -188,6 +208,50 @@ class SqlProtocolRepository:
             .order_by(Protocol.created_at.desc(), Protocol.id.desc())
         ).all()
         return [self._view(protocol) for protocol in protocols]
+
+    def replace_tail(
+        self,
+        protocol_id: int,
+        clerk_user_id: str,
+        *,
+        session_prescriptions: dict[int, list[PrescriptionDraft]],
+    ) -> ProtocolView | None:
+        protocol = self._session.get(Protocol, protocol_id)
+        if protocol is None or protocol.clerk_user_id != clerk_user_id:
+            return None
+
+        workouts = self._session.exec(
+            select(WorkoutSession).where(WorkoutSession.protocol_id == protocol_id)
+        ).all()
+        by_id = {workout.id: workout for workout in workouts}
+
+        # Stage every delete and insert, then commit once — the whole tail replace is
+        # a single transaction, so a mid-way failure leaves the Protocol untouched.
+        for session_id, prescriptions in session_prescriptions.items():
+            if session_id not in by_id:
+                continue
+            current = self._session.exec(
+                select(ExercisePrescription).where(
+                    ExercisePrescription.session_id == session_id
+                )
+            ).all()
+            for prescription in current:
+                self._session.delete(prescription)
+            for position, draft in enumerate(prescriptions):
+                self._session.add(
+                    ExercisePrescription(
+                        session_id=session_id,
+                        exercise_id=draft.exercise_id,
+                        position=position,
+                        sets=draft.sets,
+                        reps=draft.reps,
+                        rest_seconds=draft.rest_seconds,
+                        tempo=draft.tempo,
+                        recommended_load=draft.recommended_load,
+                    )
+                )
+        self._session.commit()
+        return self._view(protocol)
 
 
 class InMemoryProtocolRepository:
@@ -290,6 +354,37 @@ class InMemoryProtocolRepository:
         ]
         owned.sort(key=lambda p: (p.created_at, p.id), reverse=True)
         return [self._view(protocol) for protocol in owned]
+
+    def replace_tail(
+        self,
+        protocol_id: int,
+        clerk_user_id: str,
+        *,
+        session_prescriptions: dict[int, list[PrescriptionDraft]],
+    ) -> ProtocolView | None:
+        protocol = self._protocols.get(protocol_id)
+        if protocol is None or protocol.clerk_user_id != clerk_user_id:
+            return None
+
+        session_ids = {w.id for w in self._sessions.get(protocol_id, [])}
+        for session_id, prescriptions in session_prescriptions.items():
+            if session_id not in session_ids:
+                continue
+            self._prescriptions[session_id] = [
+                ExercisePrescription(
+                    id=position + 1,
+                    session_id=session_id,
+                    exercise_id=draft.exercise_id,
+                    position=position,
+                    sets=draft.sets,
+                    reps=draft.reps,
+                    rest_seconds=draft.rest_seconds,
+                    tempo=draft.tempo,
+                    recommended_load=draft.recommended_load,
+                )
+                for position, draft in enumerate(prescriptions)
+            ]
+        return self._view(protocol)
 
 
 __all__ = [

@@ -52,6 +52,7 @@ function makeProtocol({
         week,
         day,
         title: `Session ${position}`,
+        performed: false,
         prescriptions: Array.from({ length: modulesPerSession }, (_, i) =>
           makePrescription(i + 1),
         ),
