@@ -34,6 +34,13 @@ interface ProtocolBuilderProps {
   protocol: ProtocolProgress;
 }
 
+// Shape bounds mirror the server's deploy validation (weeks 1–52, frequency 1–14).
+// The inputs constrain to these; deploy re-checks server-side (ADR-0020).
+const MIN_WEEKS = 1;
+const MAX_WEEKS = 52;
+const MIN_SESSIONS_PER_WEEK = 1;
+const MAX_SESSIONS_PER_WEEK = 14;
+
 // The Protocol Builder screen (Module I, ADR-0020). Edits stage in a client-side
 // draft via the pure reducer and change nothing live until DEPLOY PROTOCOL sends the
 // desired un-performed tail. Performed Sessions render read-only (the frozen prefix,
@@ -89,10 +96,16 @@ export function ProtocolBuilder({ protocol }: ProtocolBuilderProps) {
       <ConfigPanel
         name={draft.name}
         cadenceLabel={matrix.cadenceLabel}
+        weeks={draft.weeks}
+        sessionsPerWeek={draft.sessionsPerWeek}
         objective={protocol.objective}
         trainingType={protocol.training_type}
         durationMinutes={protocol.duration_minutes}
         onEditName={(name) => dispatch({ type: "EDIT_NAME", name })}
+        onSetWeeks={(weeks) => dispatch({ type: "SET_WEEKS", weeks })}
+        onSetSessionsPerWeek={(sessionsPerWeek) =>
+          dispatch({ type: "SET_SESSIONS_PER_WEEK", sessionsPerWeek })
+        }
       />
 
       {error ? <Alert tone="error">{error}</Alert> : null}
@@ -104,6 +117,12 @@ export function ProtocolBuilder({ protocol }: ProtocolBuilderProps) {
         matrix={matrix}
         selectedSessionId={selectedSessionId}
         onSelect={setSelectedSessionId}
+        onAddSession={(week) => dispatch({ type: "ADD_SESSION", week })}
+        onAddWeek={() => {
+          const nextWeek = draft.weeks + 1;
+          dispatch({ type: "SET_WEEKS", weeks: nextWeek });
+          dispatch({ type: "ADD_SESSION", week: nextWeek });
+        }}
       />
 
       {selectedSession ? (
@@ -149,6 +168,13 @@ export function ProtocolBuilder({ protocol }: ProtocolBuilderProps) {
               to,
             })
           }
+          onRemoveSession={() => {
+            dispatch({
+              type: "REMOVE_SESSION",
+              sessionId: selectedSession.sessionId,
+            });
+            setSelectedSessionId(null);
+          }}
         />
       ) : null}
 
@@ -170,10 +196,14 @@ export function ProtocolBuilder({ protocol }: ProtocolBuilderProps) {
 interface ConfigPanelProps {
   name: string | null;
   cadenceLabel: string;
+  weeks: number;
+  sessionsPerWeek: number;
   objective: string;
   trainingType: string;
   durationMinutes: number;
   onEditName: (name: string) => void;
+  onSetWeeks: (weeks: number) => void;
+  onSetSessionsPerWeek: (sessionsPerWeek: number) => void;
 }
 
 // The Protocol config panel (Module H, ADR-0021). Reinterprets Pulse's config panel
@@ -185,10 +215,14 @@ interface ConfigPanelProps {
 function ConfigPanel({
   name,
   cadenceLabel,
+  weeks,
+  sessionsPerWeek,
   objective,
   trainingType,
   durationMinutes,
   onEditName,
+  onSetWeeks,
+  onSetSessionsPerWeek,
 }: ConfigPanelProps) {
   return (
     <Card className="flex flex-col gap-4 p-4">
@@ -210,6 +244,25 @@ function ConfigPanel({
         </span>
       </label>
 
+      {/* Reshape: weeks and per-week frequency are editable (ADR-0021). Frequency is a
+          soft header — the matrix renders the actual per-week count (ADR-0020). */}
+      <div className="grid grid-cols-2 gap-3">
+        <ShapeField
+          label="Weeks"
+          value={weeks}
+          min={MIN_WEEKS}
+          max={MAX_WEEKS}
+          onChange={onSetWeeks}
+        />
+        <ShapeField
+          label="Sessions / week"
+          value={sessionsPerWeek}
+          min={MIN_SESSIONS_PER_WEEK}
+          max={MAX_SESSIONS_PER_WEEK}
+          onChange={onSetSessionsPerWeek}
+        />
+      </div>
+
       {/* Read-only generation provenance — displayed for context, not editable in
           v1 (ADR-0021). No `mode` control. */}
       <dl className="grid grid-cols-3 gap-2 border-t border-border pt-3">
@@ -218,6 +271,38 @@ function ConfigPanel({
         <ReadOnlyField label="Duration" value={`${durationMinutes} min`} />
       </dl>
     </Card>
+  );
+}
+
+interface ShapeFieldProps {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (value: number) => void;
+}
+
+// A bounded numeric reshape input (weeks / frequency). An unparseable or empty entry
+// is ignored so the draft never holds a NaN; out-of-range values are clamped, and the
+// server validates again on deploy.
+function ShapeField({ label, value, min, max, onChange }: ShapeFieldProps) {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="label-mono text-[9px] text-text-muted">{label}</span>
+      <Input
+        type="number"
+        inputMode="numeric"
+        min={min}
+        max={max}
+        value={value}
+        aria-label={label}
+        onChange={(e) => {
+          const next = Number.parseInt(e.target.value, 10);
+          if (Number.isNaN(next)) return;
+          onChange(Math.min(max, Math.max(min, next)));
+        }}
+      />
+    </label>
   );
 }
 
@@ -236,6 +321,8 @@ interface SessionMatrixProps {
   matrix: BuilderMatrix;
   selectedSessionId: number | null;
   onSelect: (sessionId: number) => void;
+  onAddSession: (week: number) => void;
+  onAddWeek: () => void;
 }
 
 // The Protocol's positional Week × session-slot overview (ADR-0021), replacing the
@@ -248,6 +335,8 @@ function SessionMatrix({
   matrix,
   selectedSessionId,
   onSelect,
+  onAddSession,
+  onAddWeek,
 }: SessionMatrixProps) {
   return (
     <div className="flex flex-col gap-4">
@@ -269,11 +358,48 @@ function SessionMatrix({
                   />
                 </li>
               ))}
+              <li>
+                <AddSlotButton
+                  label={`Add a Session to week ${row.week}`}
+                  onClick={() => onAddSession(row.week)}
+                />
+              </li>
             </ul>
           </div>
         ))}
       </div>
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={onAddWeek}
+        className="w-full"
+      >
+        <Plus className="mr-1 inline h-3.5 w-3.5" aria-hidden />
+        ADD WEEK
+      </Button>
     </div>
+  );
+}
+
+// The empty-slot affordance in a matrix row: adds a new, empty un-performed Session
+// to that week (ADR-0020). It matches a cell's footprint so the grid reads evenly.
+function AddSlotButton({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="flex h-16 w-16 flex-col items-center justify-center rounded-md border border-dashed border-border text-text-muted transition-colors hover:border-cyan/50 hover:text-cyan"
+    >
+      <Plus className="h-4 w-4" aria-hidden />
+      <span className="label-mono text-[8px]">ADD</span>
+    </button>
   );
 }
 
@@ -339,6 +465,7 @@ interface SessionEditorProps {
   onAdd: (exercise: PickedExercise) => void;
   onRemove: (position: number) => void;
   onReorder: (from: number, to: number) => void;
+  onRemoveSession: () => void;
 }
 
 // The Prescription editor for the one Session the matrix has open. Its slot label
@@ -351,6 +478,7 @@ function SessionEditor({
   onAdd,
   onRemove,
   onReorder,
+  onRemoveSession,
 }: SessionEditorProps) {
   const locked = session.performed;
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -376,7 +504,16 @@ function SessionEditor({
             <Lock className="mr-1 inline h-3 w-3" aria-hidden />
             PERFORMED
           </Badge>
-        ) : null}
+        ) : (
+          <button
+            type="button"
+            onClick={onRemoveSession}
+            aria-label={`Remove week ${session.week}, slot ${session.day}`}
+            className="flex h-8 w-8 items-center justify-center rounded-sm border border-border text-text-muted transition-colors hover:border-danger/60 hover:text-danger"
+          >
+            <Trash2 className="h-4 w-4" aria-hidden />
+          </button>
+        )}
       </div>
 
       <ul className="flex flex-col gap-3 border-t border-border pt-3">

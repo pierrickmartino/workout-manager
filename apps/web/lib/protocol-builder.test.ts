@@ -548,3 +548,159 @@ test("builderMatrix flags each cell performed so the overview can distinguish th
     ],
   );
 });
+
+// --- Slice 3: add / remove Sessions and reshape weeks / frequency (Module D) ---
+
+test("SET_WEEKS changes the plan's week count (a soft header, ADR-0020)", () => {
+  // Arrange
+  const draft = initBuilderDraft(protocol());
+
+  // Act — grow the cycle to 4 weeks
+  const next = builderReducer(draft, { type: "SET_WEEKS", weeks: 4 });
+
+  // Assert — the header value changes; nothing else is touched
+  assert.equal(next.weeks, 4);
+  assert.equal(next.sessionsPerWeek, draft.sessionsPerWeek);
+  assert.deepEqual(next.sessions, draft.sessions);
+});
+
+test("SET_SESSIONS_PER_WEEK changes the per-week frequency header", () => {
+  // Arrange
+  const draft = initBuilderDraft(protocol());
+
+  // Act
+  const next = builderReducer(draft, {
+    type: "SET_SESSIONS_PER_WEEK",
+    sessionsPerWeek: 3,
+  });
+
+  // Assert
+  assert.equal(next.sessionsPerWeek, 3);
+});
+
+test("ADD_SESSION appends an empty un-performed Session slot in the given week", () => {
+  // Arrange — a one-Session week-1 draft
+  const draft = initBuilderDraft(protocol());
+
+  // Act — add a new slot to week 2
+  const next = builderReducer(draft, { type: "ADD_SESSION", week: 2 });
+
+  // Assert — a new, empty, un-performed Session appears in week 2
+  assert.equal(next.sessions.length, 2);
+  const added = next.sessions[next.sessions.length - 1];
+  assert.equal(added.week, 2);
+  assert.equal(added.performed, false);
+  assert.deepEqual(added.prescriptions, []);
+});
+
+test("ADD_SESSION numbers the new slot's day after the week's existing Sessions", () => {
+  // Arrange — week 1 already holds one Session (day 1)
+  const draft = initBuilderDraft(protocol());
+
+  // Act — add a second Session to week 1
+  const next = builderReducer(draft, { type: "ADD_SESSION", week: 1 });
+
+  // Assert — the new slot takes day 2
+  assert.equal(next.sessions[1].week, 1);
+  assert.equal(next.sessions[1].day, 2);
+});
+
+test("a new Session can be filled from the Library via ADD_PRESCRIPTION", () => {
+  // Arrange — add an empty slot, then pick an Exercise into it
+  const added = builderReducer(initBuilderDraft(protocol()), {
+    type: "ADD_SESSION",
+    week: 2,
+  });
+  const slotId = added.sessions[added.sessions.length - 1].sessionId;
+
+  // Act
+  const filled = builderReducer(added, {
+    type: "ADD_PRESCRIPTION",
+    sessionId: slotId,
+    exercise: { id: 200, name: "Deadlift" },
+  });
+
+  // Assert — the previously-empty slot now carries the picked movement
+  const slot = filled.sessions.find((s) => s.sessionId === slotId);
+  assert.equal(slot?.prescriptions.length, 1);
+  assert.equal(slot?.prescriptions[0].exerciseName, "Deadlift");
+});
+
+test("REMOVE_SESSION drops an un-performed Session from the draft", () => {
+  // Arrange — a two-Session draft
+  const draft = initBuilderDraft(
+    protocol({
+      sessions: [
+        session({ session_id: 1, week: 1, day: 1 }),
+        session({ session_id: 2, week: 2, day: 1 }),
+      ],
+    }),
+  );
+
+  // Act
+  const next = builderReducer(draft, { type: "REMOVE_SESSION", sessionId: 2 });
+
+  // Assert
+  assert.deepEqual(
+    next.sessions.map((s) => s.sessionId),
+    [1],
+  );
+});
+
+test("REMOVE_SESSION is a no-op on a performed Session (frozen prefix)", () => {
+  // Arrange — Session 1 is performed
+  const draft = initBuilderDraft(
+    protocol({
+      sessions: [
+        session({ session_id: 1, week: 1, day: 1, performed: true }),
+        session({ session_id: 2, week: 2, day: 1, performed: false }),
+      ],
+    }),
+  );
+
+  // Act — try to remove the frozen Session
+  const next = builderReducer(draft, { type: "REMOVE_SESSION", sessionId: 1 });
+
+  // Assert — the frozen Session survives; the draft is unchanged
+  assert.deepEqual(
+    next.sessions.map((s) => s.sessionId),
+    [1, 2],
+  );
+});
+
+test("a newly-added Session deploys with a null session_id for the server to insert", () => {
+  // Arrange — add a filled new slot to week 2
+  const added = builderReducer(initBuilderDraft(protocol()), {
+    type: "ADD_SESSION",
+    week: 2,
+  });
+  const slotId = added.sessions[added.sessions.length - 1].sessionId;
+  const filled = builderReducer(added, {
+    type: "ADD_PRESCRIPTION",
+    sessionId: slotId,
+    exercise: { id: 200, name: "Deadlift" },
+  });
+
+  // Act
+  const payload = toDeployPayload(filled);
+
+  // Assert — the existing Session keeps its id; the new slot sends session_id null
+  assert.deepEqual(
+    payload.sessions.map((s) => s.session_id),
+    [1, null],
+  );
+});
+
+test("toDeployPayload carries the reshaped weeks and frequency header", () => {
+  // Arrange — reshape both header values
+  let draft = initBuilderDraft(protocol());
+  draft = builderReducer(draft, { type: "SET_WEEKS", weeks: 6 });
+  draft = builderReducer(draft, { type: "SET_SESSIONS_PER_WEEK", sessionsPerWeek: 4 });
+
+  // Act
+  const payload = toDeployPayload(draft);
+
+  // Assert
+  assert.equal(payload.weeks, 6);
+  assert.equal(payload.sessions_per_week, 4);
+});

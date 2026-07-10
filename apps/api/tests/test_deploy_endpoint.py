@@ -344,6 +344,100 @@ def test_deploy_with_a_blank_name_falls_back_to_the_derived_label():
     assert data["label"] == "gain muscle mass · strength"
 
 
+def test_deploy_adds_a_new_un_performed_session_and_reenumerates_the_tail():
+    # Arrange — a fresh two-week Protocol; add a third week as a new empty-id slot the
+    # user filled from the Library (ADR-0020 Slice 3: add Sessions + reshape weeks)
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_addsession")
+    protocol_id = protocol["id"]
+    exercise_id = protocol["sessions"][0]["prescriptions"][0]["exercise_id"]
+
+    body = _deploy_body(protocol)
+    body["weeks"] = 3
+    body["sessions"].append(
+        {
+            "session_id": None,  # a brand-new Session slot
+            "week": 3,
+            "day": 1,
+            "prescriptions": [
+                {
+                    "exercise_id": exercise_id,
+                    "sets": 4,
+                    "reps": "6",
+                    "rest_seconds": None,
+                    "tempo": None,
+                    "load_kind": "absolute",
+                    "load_value": "",
+                }
+            ],
+        }
+    )
+
+    # Act
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_addsession"),
+        json=body,
+    )
+
+    # Assert — three Sessions, contiguous positions, positional week/day labels
+    assert response.status_code == 200
+    after = h.fetch_protocol("user_addsession", protocol_id).json()["data"]
+    assert after["weeks"] == 3
+    assert [s["position"] for s in after["sessions"]] == [0, 1, 2]
+    assert [(s["week"], s["day"]) for s in after["sessions"]] == [(1, 1), (2, 1), (3, 1)]
+    assert after["sessions"][2]["prescriptions"][0]["reps"] == "6"
+
+
+def test_deploy_reshapes_the_tail_while_preserving_the_performed_prefix():
+    # Arrange — perform Week 1 (frozen), then add a Week 3 to the un-performed tail
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_reshape")
+    protocol_id = protocol["id"]
+    _perform_week_one(h, "user_reshape", protocol)
+    performed_before = h.fetch_protocol("user_reshape", protocol_id).json()["data"]
+    frozen = performed_before["sessions"][0]
+    exercise_id = frozen["prescriptions"][0]["exercise_id"]
+
+    body = _deploy_body(performed_before)  # excludes the frozen Week 1
+    body["weeks"] = 3
+    body["sessions"].append(
+        {
+            "session_id": None,
+            "week": 3,
+            "day": 1,
+            "prescriptions": [
+                {
+                    "exercise_id": exercise_id,
+                    "sets": 3,
+                    "reps": "5",
+                    "rest_seconds": None,
+                    "tempo": None,
+                    "load_kind": "absolute",
+                    "load_value": "",
+                }
+            ],
+        }
+    )
+
+    # Act
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_reshape"),
+        json=body,
+    )
+
+    # Assert — the frozen Week 1 keeps its id/position and stays completed; the tail is
+    # re-enumerated after it into contiguous positions and weeks
+    assert response.status_code == 200
+    after = h.fetch_protocol("user_reshape", protocol_id).json()["data"]
+    assert after["sessions"][0]["session_id"] == frozen["session_id"]
+    assert after["sessions"][0]["performed"] is True
+    assert [s["position"] for s in after["sessions"]] == [0, 1, 2]
+    assert [s["week"] for s in after["sessions"]] == [1, 2, 3]
+    assert after["completed_count"] == 1
+
+
 def test_another_user_cannot_deploy_to_someone_elses_protocol():
     h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
     protocol = _fresh_protocol(h, "user_owner")

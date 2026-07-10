@@ -18,12 +18,45 @@ from app.repositories.exercise_repository import (
     SqlExerciseRepository,
 )
 from app.repositories.protocol_repository import (
+    DeploySessionSpec,
     InMemoryProtocolRepository,
     ProtocolDraft,
     ProtocolSessionDraft,
+    ProtocolView,
     SqlProtocolRepository,
 )
 from app.repositories.session_repository import PrescriptionDraft
+
+
+def _tail_specs(view: ProtocolView, *, performed: set[int] = frozenset()) -> list:
+    """Echo a Protocol's un-performed Sessions as a re-enumerated tail — a no-op
+    deploy unless a test edits it. Positions continue after the performed prefix."""
+
+    prefix_len = sum(1 for s in view.sessions if s.session_id in performed)
+    specs = []
+    for offset, session in enumerate(
+        s for s in view.sessions if s.session_id not in performed
+    ):
+        specs.append(
+            DeploySessionSpec(
+                position=prefix_len + offset,
+                week=session.week,
+                day=session.day,
+                title=session.title,
+                prescriptions=[
+                    PrescriptionDraft(
+                        exercise_id=p.exercise_id,
+                        sets=p.sets,
+                        reps=p.reps,
+                        rest_seconds=p.rest_seconds,
+                        tempo=p.tempo,
+                        recommended_load=p.recommended_load,
+                    )
+                    for p in session.prescriptions
+                ],
+            )
+        )
+    return specs
 
 
 @pytest.fixture(params=["in_memory", "sql"])
@@ -214,17 +247,20 @@ def test_create_persists_an_explicit_name(repos):
     assert protocol_repo.get(view.id, "user_named").name == "Summer Cut"
 
 
-def test_replace_tail_sets_the_protocol_name(repos):
+def test_deploy_tail_sets_the_protocol_name(repos):
     # Arrange — an unnamed Protocol
     protocol_repo, exercises = repos
     created = protocol_repo.create("user_deploy", _two_week_draft(exercises))
     assert created.name is None
 
     # Act — a deploy carries the name through the same tail-replace write (ADR-0020)
-    updated = protocol_repo.replace_tail(
+    updated = protocol_repo.deploy_tail(
         created.id,
         "user_deploy",
-        session_prescriptions={},
+        performed_session_ids=set(),
+        tail=_tail_specs(created),
+        weeks=created.weeks,
+        sessions_per_week=created.sessions_per_week,
         name="My Plan",
     )
 
@@ -233,7 +269,7 @@ def test_replace_tail_sets_the_protocol_name(repos):
     assert protocol_repo.get(created.id, "user_deploy").name == "My Plan"
 
 
-def test_replace_tail_can_clear_the_protocol_name(repos):
+def test_deploy_tail_can_clear_the_protocol_name(repos):
     # Arrange — a named Protocol
     protocol_repo, exercises = repos
     created = protocol_repo.create(
@@ -241,10 +277,104 @@ def test_replace_tail_can_clear_the_protocol_name(repos):
     )
 
     # Act — the user clears the name (falls back to the derived label)
-    updated = protocol_repo.replace_tail(
-        created.id, "user_clear", session_prescriptions={}, name=None
+    updated = protocol_repo.deploy_tail(
+        created.id,
+        "user_clear",
+        performed_session_ids=set(),
+        tail=_tail_specs(created),
+        weeks=created.weeks,
+        sessions_per_week=created.sessions_per_week,
+        name=None,
     )
 
     # Assert
     assert updated.name is None
     assert protocol_repo.get(created.id, "user_clear").name is None
+
+
+def test_deploy_tail_adds_a_new_session_and_reshapes_the_week_count(repos):
+    # Arrange — a two-week Protocol, nothing performed
+    protocol_repo, exercises = repos
+    created = protocol_repo.create("user_grow", _two_week_draft(exercises))
+    squat_id = created.sessions[0].prescriptions[0].exercise_id
+
+    # Act — append a third Session (a new week) and grow the shape to 3 weeks
+    specs = _tail_specs(created)
+    specs.append(
+        DeploySessionSpec(
+            position=len(specs),
+            week=3,
+            day=1,
+            title=None,
+            prescriptions=[PrescriptionDraft(exercise_id=squat_id, sets=3, reps="5")],
+        )
+    )
+    updated = protocol_repo.deploy_tail(
+        created.id,
+        "user_grow",
+        performed_session_ids=set(),
+        tail=specs,
+        weeks=3,
+        sessions_per_week=1,
+    )
+
+    # Assert — the Protocol now has three Sessions in contiguous positions and weeks=3
+    assert updated.weeks == 3
+    assert [s.position for s in updated.sessions] == [0, 1, 2]
+    assert [s.week for s in updated.sessions] == [1, 2, 3]
+
+
+def test_deploy_tail_removes_an_un_performed_session(repos):
+    # Arrange — a two-week Protocol
+    protocol_repo, exercises = repos
+    created = protocol_repo.create("user_trim", _two_week_draft(exercises))
+
+    # Act — deploy only the first Session (drop the second), shrinking to one week
+    specs = _tail_specs(created)[:1]
+    updated = protocol_repo.deploy_tail(
+        created.id,
+        "user_trim",
+        performed_session_ids=set(),
+        tail=specs,
+        weeks=1,
+        sessions_per_week=1,
+    )
+
+    # Assert — the dropped Session (and its Prescriptions) is gone
+    assert len(updated.sessions) == 1
+    assert updated.sessions[0].position == 0
+
+
+def test_deploy_tail_leaves_a_performed_session_untouched(repos):
+    # Arrange — a two-week Protocol; treat Session 1 as performed (frozen)
+    protocol_repo, exercises = repos
+    created = protocol_repo.create("user_freeze", _two_week_draft(exercises))
+    frozen = created.sessions[0]
+    performed = {frozen.session_id}
+
+    # Act — redeploy only the un-performed tail (Session 2), edited
+    specs = _tail_specs(created, performed=performed)
+    specs[0] = replace(
+        specs[0],
+        prescriptions=[
+            PrescriptionDraft(
+                exercise_id=frozen.prescriptions[0].exercise_id, sets=9, reps="3"
+            )
+        ],
+    )
+    updated = protocol_repo.deploy_tail(
+        created.id,
+        "user_freeze",
+        performed_session_ids=performed,
+        tail=specs,
+        weeks=2,
+        sessions_per_week=1,
+    )
+
+    # Assert — Session 1 keeps its id, position, and original Prescriptions
+    assert updated.sessions[0].session_id == frozen.session_id
+    assert updated.sessions[0].position == 0
+    assert updated.sessions[0].prescriptions == frozen.prescriptions
+    # …and the edited tail landed at position 1
+    assert updated.sessions[1].position == 1
+    assert updated.sessions[1].prescriptions[0].sets == 9
