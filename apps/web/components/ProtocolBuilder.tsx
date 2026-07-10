@@ -1,15 +1,16 @@
 "use client";
 
-import { useReducer, useState, useTransition } from "react";
+import { useEffect, useReducer, useState, useTransition } from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, Lock, Plus, Trash2 } from "lucide-react";
 
-import { submitDeploy } from "@/app/protocols/[id]/edit/actions";
+import { runSimulation, submitDeploy } from "@/app/protocols/[id]/edit/actions";
 import {
   builderMatrix,
   builderReducer,
   initBuilderDraft,
   toDeployPayload,
+  toSimulatePayload,
   type BuilderDraft,
   type BuilderMatrix,
   type DraftPrescription,
@@ -18,9 +19,11 @@ import {
   type PickedExercise,
 } from "@/lib/protocol-builder";
 import { LOAD_KIND_OPTIONS, type LoadKind } from "@/lib/load";
-import type { ProtocolProgress } from "@/lib/protocols-types";
+import type { BalancePreview, ProtocolProgress } from "@/lib/protocols-types";
+import { toMuscleBars } from "@/lib/muscle-distribution";
 import { cn } from "@/lib/utils";
 import { ExerciseLibrary } from "@/components/ExerciseLibrary";
+import { MuscleSplit } from "@/components/pulse/muscle-split";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { Alert } from "@/components/pulse/alert";
@@ -62,6 +65,17 @@ export function ProtocolBuilder({ protocol }: ProtocolBuilderProps) {
   const [error, setError] = useState<string | null>(null);
   const [deployed, setDeployed] = useState(false);
   const [pending, startTransition] = useTransition();
+  // SIMULATE's read-only balance preview of the current draft (ADR-0021). Held apart
+  // from the deploy flow: it stays open and recomputes each run, and any structural
+  // edit clears it so a stale preview never lingers over a changed plan.
+  const [preview, setPreview] = useState<BalancePreview | null>(null);
+  const [simulating, startSimulate] = useTransition();
+
+  // Any draft edit invalidates a shown preview — drop it so the panel never lingers
+  // over a plan it no longer describes; the user re-runs SIMULATE to see the new split.
+  useEffect(() => {
+    setPreview(null);
+  }, [draft]);
 
   const matrix = builderMatrix(draft);
   const selectedSession =
@@ -78,6 +92,21 @@ export function ProtocolBuilder({ protocol }: ProtocolBuilderProps) {
         return;
       }
       setDeployed(true);
+    });
+  }
+
+  function onSimulate() {
+    setError(null);
+    startSimulate(async () => {
+      const result = await runSimulation(
+        draft.protocolId,
+        toSimulatePayload(draft),
+      );
+      if (result.error || !result.preview) {
+        setError(result.error ?? "Could not simulate the protocol.");
+        return;
+      }
+      setPreview(result.preview);
     });
   }
 
@@ -178,7 +207,17 @@ export function ProtocolBuilder({ protocol }: ProtocolBuilderProps) {
         />
       ) : null}
 
+      {preview ? <BalancePreviewPanel preview={preview} /> : null}
+
       <div className="flex flex-col gap-3">
+        <Button
+          variant="ghost"
+          onClick={onSimulate}
+          disabled={simulating}
+          className="w-full"
+        >
+          {simulating ? "Simulating…" : "SIMULATE"}
+        </Button>
         <Button onClick={onDeploy} disabled={pending} className="w-full">
           {pending ? "Deploying…" : "DEPLOY PROTOCOL"}
         </Button>
@@ -190,6 +229,64 @@ export function ProtocolBuilder({ protocol }: ProtocolBuilderProps) {
         </Link>
       </div>
     </section>
+  );
+}
+
+// The SIMULATE balance preview (Module C, ADR-0021): a read-only, non-predictive read
+// on the whole edited draft — per-week Session/Set counts and the curated Muscle-Group
+// split. There is deliberately no fatigue/recovery/projected-volume/1RM figure; the
+// domain has no honest basis for one, so this panel only reports what the plan is.
+function BalancePreviewPanel({ preview }: { preview: BalancePreview }) {
+  const muscleBars = toMuscleBars(preview.muscle_distribution);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <SectionHeader>BALANCE PREVIEW</SectionHeader>
+      <Card className="flex flex-col gap-5 p-6">
+        <div className="flex items-baseline justify-between">
+          <span className="label-mono text-[11px] text-text-secondary">
+            {preview.total_sessions} SESSIONS
+          </span>
+          <span className="label-mono text-[11px] text-text-secondary">
+            {preview.total_sets} SETS
+          </span>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {preview.weeks.length === 0 ? (
+            <p className="font-sans text-sm text-text-secondary">
+              This plan has no sessions yet — add one to preview its balance.
+            </p>
+          ) : (
+            preview.weeks.map((week) => (
+              <div
+                key={week.week}
+                className="flex items-baseline justify-between border-b border-border/40 pb-2 last:border-0 last:pb-0"
+              >
+                <span className="font-display text-sm text-text-primary">
+                  Week {week.week}
+                </span>
+                <span className="label-mono text-[11px] text-text-secondary tabular-nums">
+                  {week.session_count}{" "}
+                  {week.session_count === 1 ? "session" : "sessions"} ·{" "}
+                  {week.set_count} {week.set_count === 1 ? "set" : "sets"}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <span className="label-mono text-[11px] text-text-muted">
+            MUSCLE SPLIT
+          </span>
+          <MuscleSplit
+            bars={muscleBars}
+            emptyMessage="No muscle data yet — add sets to see the split."
+          />
+        </div>
+      </Card>
+    </div>
   );
 }
 

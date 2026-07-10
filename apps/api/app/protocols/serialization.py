@@ -9,6 +9,7 @@ byte-for-byte the same payload."""
 from __future__ import annotations
 
 from app.domain.protocol import protocol_label
+from app.protocols.balance_preview import BalancePreview
 from app.protocols.progress import ProtocolProgressView
 from app.repositories.protocol_repository import ProtocolSessionView, ProtocolView
 
@@ -81,8 +82,34 @@ def serialize_protocol_progress(progress: ProtocolProgressView) -> dict:
     return data
 
 
+def serialize_balance_preview(preview: BalancePreview) -> dict:
+    """The non-predictive SIMULATE payload the Builder renders (ADR-0021): per-week
+    Session/Set counts, plan totals, and the curated Muscle-Group split as an ordered
+    list (``muscle_groups.distribution`` already emits it in canonical GROUP_ORDER, so
+    the list reads Legs→…→Unclassified). No fatigue/recovery/volume figure is present —
+    none is computed."""
+
+    return {
+        "weeks": [
+            {
+                "week": week.week,
+                "session_count": week.session_count,
+                "set_count": week.set_count,
+            }
+            for week in preview.weeks
+        ],
+        "total_sessions": sum(week.session_count for week in preview.weeks),
+        "total_sets": sum(week.set_count for week in preview.weeks),
+        "muscle_distribution": [
+            {"group": group.value, "pct": pct}
+            for group, pct in preview.muscle_distribution.items()
+        ],
+    }
+
+
 __all__ = [
     "serialize_session",
     "serialize_protocol",
     "serialize_protocol_progress",
+    "serialize_balance_preview",
 ]

@@ -460,3 +460,41 @@ export function toDeployPayload(draft: BuilderDraft): DeployPayload {
       })),
   };
 }
+
+// One Prescription as the SIMULATE endpoint reads it: just the two facts a
+// non-predictive balance preview needs — which catalog Exercise (to roll its muscles
+// up server-side) and how many Sets it prescribes (the weight).
+export interface SimulatePrescriptionPayload {
+  exercise_id: number;
+  sets: number;
+}
+
+export interface SimulateSessionPayload {
+  week: number;
+  prescriptions: SimulatePrescriptionPayload[];
+}
+
+export interface SimulatePayload {
+  weeks: number;
+  sessions_per_week: number;
+  sessions: SimulateSessionPayload[];
+}
+
+// Derive the whole-plan preview payload for SIMULATE (Module C, ADR-0021). Unlike
+// `toDeployPayload`, every Session is sent — the performed prefix included — so the
+// per-week counts and Muscle-Group split reflect the whole edited plan, unsaved edits
+// and all, not just the un-performed tail. It carries no reps/rest/tempo/Load: the
+// preview only counts Sets and rolls Exercises up by muscle.
+export function toSimulatePayload(draft: BuilderDraft): SimulatePayload {
+  return {
+    weeks: draft.weeks,
+    sessions_per_week: draft.sessionsPerWeek,
+    sessions: draft.sessions.map((session) => ({
+      week: session.week,
+      prescriptions: session.prescriptions.map((prescription) => ({
+        exercise_id: prescription.exerciseId,
+        sets: prescription.sets,
+      })),
+    })),
+  };
+}

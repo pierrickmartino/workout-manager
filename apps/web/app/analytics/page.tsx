@@ -14,6 +14,7 @@ import { NavRow } from "@/components/pulse/nav-row";
 import { Bento, BentoTile } from "@/components/pulse/bento";
 import { Alert } from "@/components/pulse/alert";
 import { VolumeChart } from "@/components/pulse/volume-chart";
+import { MuscleSplit } from "@/components/pulse/muscle-split";
 import { Card } from "@/components/ui/card";
 import { toMuscleBars, type MuscleBar } from "@/lib/muscle-distribution";
 import { toRecordRows, type RecordRow } from "@/lib/records-view";
@@ -110,56 +111,17 @@ export default async function AnalyticsPage({
   );
 }
 
-// A stable, curated color per Muscle Group so the split reads consistently across
-// visits. Unclassified is deliberately muted — it is the honest "leftovers"
-// bucket, shown but never competing with a real group for the eye.
-const GROUP_COLOR: Record<string, string> = {
-  Legs: "bg-cyan",
-  Chest: "bg-violet",
-  Back: "bg-blue",
-  Shoulders: "bg-magenta",
-  Arms: "bg-cyan",
-  Core: "bg-violet",
-  Unclassified: "bg-text-muted",
-};
-
-// The set-count muscle distribution as a stack of labeled horizontal bars in the
-// operator theme (F3 Slice 2). Each group's fill width is its exact share, so the
-// bars stay proportional even as the labels round. Weighted purely by set count —
-// no Load, no Estimated 1RM — so no single heavy lift can dominate the split.
+// The set-count muscle distribution for the analytics window: the shared MuscleSplit
+// bars under the screen's section heading and Card.
 function MuscleDistribution({ bars }: { bars: MuscleBar[] }) {
   return (
     <div className="flex flex-col gap-4">
       <SectionHeader>MUSCLE SPLIT</SectionHeader>
       <Card className="flex flex-col gap-3 p-6">
-        {bars.length === 0 ? (
-          <p className="font-sans text-sm text-text-secondary">
-            No muscle data yet — the sets logged in this window don&apos;t list
-            targeted muscles.
-          </p>
-        ) : (
-          bars.map((bar) => (
-            <div key={bar.group} className="flex flex-col gap-1.5">
-              <div className="flex items-baseline justify-between">
-                <span className="label-mono text-[11px] text-text-secondary">
-                  {bar.group}
-                </span>
-                <span className="font-display text-sm font-semibold text-text-primary tabular-nums">
-                  {bar.label}
-                </span>
-              </div>
-              <div className="h-1.5 overflow-hidden rounded-[2px] bg-elevated">
-                <span
-                  className={cn(
-                    "block h-full rounded-[2px]",
-                    GROUP_COLOR[bar.group] ?? "bg-cyan",
-                  )}
-                  style={{ width: `${bar.width}%` }}
-                />
-              </div>
-            </div>
-          ))
-        )}
+        <MuscleSplit
+          bars={bars}
+          emptyMessage="No muscle data yet — the sets logged in this window don't list targeted muscles."
+        />
       </Card>
     </div>
   );

@@ -6,6 +6,7 @@ import {
   builderReducer,
   builderMatrix,
   toDeployPayload,
+  toSimulatePayload,
 } from "./protocol-builder.ts";
 import type { BuilderDraft } from "./protocol-builder.ts";
 import type { ProtocolProgress } from "./protocols-types.ts";
@@ -703,4 +704,48 @@ test("toDeployPayload carries the reshaped weeks and frequency header", () => {
   // Assert
   assert.equal(payload.weeks, 6);
   assert.equal(payload.sessions_per_week, 4);
+});
+
+test("toSimulatePayload previews the WHOLE plan, performed prefix included", () => {
+  // Arrange — a performed Week 1 (frozen) and an un-performed Week 2. SIMULATE shows
+  // the whole edited plan, so unlike DEPLOY it must not drop the performed prefix.
+  const source = protocol({
+    sessions: [
+      session({ session_id: 1, week: 1, day: 1, performed: true }),
+      session({ session_id: 2, position: 1, week: 2, day: 1, performed: false }),
+    ],
+  });
+  const draft = initBuilderDraft(source);
+
+  // Act
+  const payload = toSimulatePayload(draft);
+
+  // Assert — both weeks are present, in order
+  assert.deepEqual(
+    payload.sessions.map((s) => s.week),
+    [1, 2],
+  );
+  assert.equal(payload.weeks, 2);
+  assert.equal(payload.sessions_per_week, 1);
+});
+
+test("toSimulatePayload sends only the exercise id and set count per Prescription", () => {
+  // Arrange — a Prescription the preview only needs to count and roll up by muscle
+  const draft = initBuilderDraft(
+    protocol({
+      sessions: [
+        session({
+          prescriptions: [prescription({ exercise_id: 42, sets: 4 })],
+        }),
+      ],
+    }),
+  );
+
+  // Act
+  const payload = toSimulatePayload(draft);
+
+  // Assert — a lean, read-only payload: no reps/rest/tempo/Load ride along
+  assert.deepEqual(payload.sessions[0].prescriptions, [
+    { exercise_id: 42, sets: 4 },
+  ]);
 });

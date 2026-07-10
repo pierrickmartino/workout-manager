@@ -33,13 +33,17 @@ from app.protocols.deploy_validation import (
     DraftSession,
     validate_deploy,
 )
+from app.protocols.balance_preview import build_balance_preview
 from app.protocols.progress import progressed_protocol, protocol_progress
 from app.protocols.reenumeration import (
     EnumeratedSession,
     TailSession,
     reenumerate_tail,
 )
-from app.protocols.serialization import serialize_protocol_progress
+from app.protocols.serialization import (
+    serialize_balance_preview,
+    serialize_protocol_progress,
+)
 from app.repositories.deps import (
     get_exercise_repository,
     get_generation_orchestrator,
@@ -395,3 +399,82 @@ def deploy_protocol(
         clerk_user_id, protocol_id, protocols=protocols, logged=logged
     )
     return success_envelope(serialize_protocol_progress(updated))
+
+
+class SimulatePrescriptionBody(BaseModel):
+    """The only two facts SIMULATE reads off a Prescription: which catalog Exercise it
+    is (to roll its muscles up) and how many Sets it prescribes (the weight)."""
+
+    exercise_id: int
+    sets: int
+
+
+class SimulateSessionBody(BaseModel):
+    """One Session in the whole-plan simulate draft. ``week`` groups the per-week
+    counts; a preview is non-committal, so nothing here is validated."""
+
+    week: int
+    prescriptions: list[SimulatePrescriptionBody] = Field(default_factory=list)
+
+
+class SimulateProtocolBody(BaseModel):
+    """The whole edited plan — performed prefix and un-performed tail alike — as the
+    Builder previews it. It carries *every* Session so the per-week counts and the
+    Muscle-Group split reflect the plan the user will actually deploy, unsaved edits
+    included (ADR-0021), not just the frozen tail a DEPLOY would send."""
+
+    weeks: int
+    sessions_per_week: int
+    sessions: list[SimulateSessionBody] = Field(default_factory=list)
+
+
+@router.post("/protocols/{protocol_id}/simulate")
+def simulate_protocol(
+    protocol_id: int,
+    payload: SimulateProtocolBody,
+    clerk_user_id: str = Depends(get_current_user),
+    protocols: ProtocolRepository = Depends(get_protocol_repository),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+) -> dict:
+    """Return a read-only, non-predictive balance preview of the draft (Module C).
+
+    Ownership is verified (``404`` otherwise); nothing is written. Per-week Session/Set
+    counts and the curated Muscle-Group distribution are computed over the whole draft,
+    with each Exercise's muscles resolved from the shared catalog. No fatigue, recovery,
+    projected volume, or 1RM curve is computed — the domain has no honest basis for one
+    (ADR-0021)."""
+
+    progress = protocol_progress(
+        clerk_user_id, protocol_id, protocols=protocols, logged=logged
+    )
+    if progress is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Protocol not found")
+
+    draft = DeployDraft(
+        weeks=payload.weeks,
+        sessions_per_week=payload.sessions_per_week,
+        sessions=[
+            DraftSession(
+                session_id=None,
+                week=session.week,
+                day=0,
+                prescriptions=[
+                    DraftPrescription(
+                        exercise_id=prescription.exercise_id,
+                        sets=prescription.sets,
+                        reps="",
+                    )
+                    for prescription in session.prescriptions
+                ],
+            )
+            for session in payload.sessions
+        ],
+    )
+
+    def resolve_muscles(exercise_id: int) -> list[str]:
+        exercise = exercises.get(exercise_id)
+        return list(exercise.targeted_muscles) if exercise is not None else []
+
+    preview = build_balance_preview(draft, resolve_muscles=resolve_muscles)
+    return success_envelope(serialize_balance_preview(preview))

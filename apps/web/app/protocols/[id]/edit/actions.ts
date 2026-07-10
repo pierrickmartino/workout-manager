@@ -1,9 +1,9 @@
 "use server";
 
-import { deployProtocol } from "@/lib/protocols";
+import { deployProtocol, simulateProtocol } from "@/lib/protocols";
 import { searchExercises } from "@/lib/exercises";
-import type { DeployPayload } from "@/lib/protocol-builder";
-import type { ProtocolProgress } from "@/lib/protocols-types";
+import type { DeployPayload, SimulatePayload } from "@/lib/protocol-builder";
+import type { BalancePreview, ProtocolProgress } from "@/lib/protocols-types";
 import type { ExerciseSearchResult } from "@/lib/exercises-types";
 
 // Server action backing DEPLOY PROTOCOL. The Clerk JWT is attached server-side in
@@ -23,6 +23,25 @@ export async function submitDeploy(
     return { protocol: null, error: result.error ?? "Could not deploy the protocol." };
   }
   return { protocol: result.data, error: null };
+}
+
+// Result of a SIMULATE run: the balance preview, or a user-safe message.
+export interface SimulateResult {
+  preview: BalancePreview | null;
+  error: string | null;
+}
+
+// Server action backing SIMULATE. The Clerk JWT is attached server-side; the preview
+// is read-only and non-predictive (ADR-0021) — it never writes and never projects.
+export async function runSimulation(
+  protocolId: number,
+  payload: SimulatePayload,
+): Promise<SimulateResult> {
+  const result = await simulateProtocol(protocolId, payload);
+  if (!result.success || !result.data) {
+    return { preview: null, error: result.error ?? "Could not simulate the protocol." };
+  }
+  return { preview: result.data, error: null };
 }
 
 // Result of an Exercise Library search: the ranked matches, or a user-safe message.
