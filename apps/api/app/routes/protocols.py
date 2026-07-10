@@ -225,11 +225,22 @@ class DeploySessionBody(BaseModel):
 
 class DeployProtocolBody(BaseModel):
     """The desired un-performed tail plus the plan shape, staged client-side and
-    committed atomically by ``DEPLOY PROTOCOL`` (ADR-0020)."""
+    committed atomically by ``DEPLOY PROTOCOL`` (ADR-0020).
+
+    ``name`` is the config panel's user-editable Protocol name (ADR-0021). It rides
+    through this same DEPLOY write rather than a separate call; a blank/whitespace
+    value is normalized to ``None`` so the Protocol falls back to its derived label.
+    """
 
     weeks: int
     sessions_per_week: int
+    name: str | None = None
     sessions: list[DeploySessionBody] = Field(default_factory=list)
+
+    def normalized_name(self) -> str | None:
+        if self.name is None or not self.name.strip():
+            return None
+        return self.name.strip()
 
 
 def _deploy_error_response(errors: list[DeployError]) -> JSONResponse:
@@ -326,7 +337,10 @@ def deploy_protocol(
         if session.session_id is not None
     }
     protocols.replace_tail(
-        protocol_id, clerk_user_id, session_prescriptions=session_prescriptions
+        protocol_id,
+        clerk_user_id,
+        session_prescriptions=session_prescriptions,
+        name=payload.normalized_name(),
     )
 
     updated = progressed_protocol(

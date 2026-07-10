@@ -8,6 +8,7 @@ byte-for-byte the same payload."""
 
 from __future__ import annotations
 
+from app.domain.protocol import protocol_label
 from app.protocols.progress import ProtocolProgressView
 from app.repositories.protocol_repository import ProtocolSessionView, ProtocolView
 
@@ -53,6 +54,11 @@ def serialize_protocol(
         "sessions_per_week": view.sessions_per_week,
         "weeks": view.weeks,
         "duration_minutes": view.duration_minutes,
+        # The user-editable name (nullable) plus the resolved display label — the
+        # name when set, else the derived ``objective · training_type`` (ADR-0021),
+        # so an unnamed adopted Protocol reads sensibly with no backfill.
+        "name": view.name,
+        "label": protocol_label(view.name, view.objective, view.training_type),
         "sessions": [
             serialize_session(s, performed=s.session_id in performed_session_ids)
             for s in view.sessions

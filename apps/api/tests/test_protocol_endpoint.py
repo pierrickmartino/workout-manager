@@ -309,6 +309,19 @@ def test_another_user_cannot_fetch_someone_elses_protocol():
     assert response.json()["success"] is False
 
 
+def test_fetched_protocol_exposes_name_and_derived_label():
+    # Arrange — a freshly adopted Protocol is unnamed (F4 Slice 5)
+    h = build_harness()
+    protocol_id = h.generate_protocol_id("user_label")
+
+    # Act
+    data = h.fetch_protocol("user_label", protocol_id).json()["data"]
+
+    # Assert — name is unset and the label falls back to objective · training_type
+    assert data["name"] is None
+    assert data["label"] == "gain muscle mass · strength"
+
+
 def _kg_protocol() -> GeneratedProtocol:
     """A two-week protocol whose Back Squat carries an adjustable kg load."""
 

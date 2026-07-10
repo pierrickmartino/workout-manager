@@ -146,6 +146,11 @@ class Protocol(SQLModel, table=True):
     sessions_per_week: int
     weeks: int
     duration_minutes: int
+    # The user-editable Protocol name (Pulse's "PROTOCOL ID", ADR-0021). Nullable and
+    # never backfilled: an adopted Protocol is born unnamed, and read paths fall back
+    # to a derived ``objective · training_type`` label until the user sets one in the
+    # Builder's config panel.
+    name: str | None = Field(default=None)
     created_at: datetime = Field(default_factory=_utcnow)
 
 

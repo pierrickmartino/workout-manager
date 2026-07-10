@@ -7,6 +7,8 @@ another user."""
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -186,3 +188,63 @@ def test_list_for_user_is_empty_when_the_user_owns_no_protocol(repos):
 
     # Assert
     assert protocol_repo.list_for_user("user_none") == []
+
+
+def test_a_freshly_adopted_protocol_has_no_name(repos):
+    # Arrange / Act — a Protocol is born unnamed (F4 Slice 5); the derived label
+    # covers the display until the user sets one.
+    protocol_repo, exercises = repos
+    view = protocol_repo.create("user_unnamed", _two_week_draft(exercises))
+
+    # Assert
+    assert view.name is None
+
+
+def test_create_persists_an_explicit_name(repos):
+    # Arrange — a draft carrying a name
+    protocol_repo, exercises = repos
+    draft = _two_week_draft(exercises)
+    named = replace(draft, name="Summer Cut")
+
+    # Act
+    view = protocol_repo.create("user_named", named)
+
+    # Assert — the name is stored and read back
+    assert view.name == "Summer Cut"
+    assert protocol_repo.get(view.id, "user_named").name == "Summer Cut"
+
+
+def test_replace_tail_sets_the_protocol_name(repos):
+    # Arrange — an unnamed Protocol
+    protocol_repo, exercises = repos
+    created = protocol_repo.create("user_deploy", _two_week_draft(exercises))
+    assert created.name is None
+
+    # Act — a deploy carries the name through the same tail-replace write (ADR-0020)
+    updated = protocol_repo.replace_tail(
+        created.id,
+        "user_deploy",
+        session_prescriptions={},
+        name="My Plan",
+    )
+
+    # Assert — the name persists alongside the (unchanged) tail
+    assert updated.name == "My Plan"
+    assert protocol_repo.get(created.id, "user_deploy").name == "My Plan"
+
+
+def test_replace_tail_can_clear_the_protocol_name(repos):
+    # Arrange — a named Protocol
+    protocol_repo, exercises = repos
+    created = protocol_repo.create(
+        "user_clear", replace(_two_week_draft(exercises), name="Old Name")
+    )
+
+    # Act — the user clears the name (falls back to the derived label)
+    updated = protocol_repo.replace_tail(
+        created.id, "user_clear", session_prescriptions={}, name=None
+    )
+
+    # Assert
+    assert updated.name is None
+    assert protocol_repo.get(created.id, "user_clear").name is None

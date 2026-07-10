@@ -36,6 +36,10 @@ export interface DraftSession {
 
 export interface BuilderDraft {
   protocolId: number;
+  // The user-editable Protocol name, edited in the config panel (ADR-0021). `null`
+  // when unnamed — the read side falls back to the derived label. It rides through
+  // DEPLOY in the payload, not a separate write.
+  name: string | null;
   weeks: number;
   sessionsPerWeek: number;
   sessions: DraftSession[];
@@ -89,6 +93,10 @@ export type BuilderEvent =
       sessionId: number;
       from: number;
       to: number;
+    }
+  | {
+      type: "EDIT_NAME";
+      name: string;
     };
 
 // Derive the editable kind+value pair a Prescription's Load starts from, off the
@@ -129,6 +137,7 @@ function prefillLoad(load: Load | null): { kind: LoadKind; value: string } {
 export function initBuilderDraft(protocol: ProtocolProgress): BuilderDraft {
   return {
     protocolId: protocol.id,
+    name: protocol.name,
     weeks: protocol.weeks,
     sessionsPerWeek: protocol.sessions_per_week,
     sessions: protocol.sessions.map((session) => ({
@@ -189,6 +198,9 @@ export function builderReducer(
       return mapSessionPrescriptions(state, event.sessionId, (prescriptions) =>
         movePrescription(prescriptions, event.from, event.to),
       );
+
+    case "EDIT_NAME":
+      return { ...state, name: event.name };
 
     default:
       return state;
@@ -354,6 +366,9 @@ export interface DeploySessionPayload {
 export interface DeployPayload {
   weeks: number;
   sessions_per_week: number;
+  // The user-editable name rides through DEPLOY (ADR-0021); the server normalizes a
+  // blank value to the derived label.
+  name: string | null;
   sessions: DeploySessionPayload[];
 }
 
@@ -364,6 +379,7 @@ export function toDeployPayload(draft: BuilderDraft): DeployPayload {
   return {
     weeks: draft.weeks,
     sessions_per_week: draft.sessionsPerWeek,
+    name: draft.name,
     sessions: draft.sessions
       .filter((session) => !session.performed)
       .map((session) => ({

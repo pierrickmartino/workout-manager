@@ -38,7 +38,7 @@ export default async function ProtocolPage({
     <section className="flex flex-col gap-7">
       <PageHeader
         overline="PULSE // PROTOCOL"
-        title={<span className="capitalize">{protocol.training_type}</span>}
+        title={<span>{protocol.label}</span>}
         action={
           <div className="flex items-center gap-3">
             <Badge variant="cyan">{protocol.weeks}W</Badge>
