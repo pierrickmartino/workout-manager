@@ -34,6 +34,11 @@ from app.protocols.deploy_validation import (
     validate_deploy,
 )
 from app.protocols.progress import progressed_protocol, protocol_progress
+from app.protocols.reenumeration import (
+    EnumeratedSession,
+    TailSession,
+    reenumerate_tail,
+)
 from app.protocols.serialization import serialize_protocol_progress
 from app.repositories.deps import (
     get_exercise_repository,
@@ -46,6 +51,7 @@ from app.repositories.exercise_repository import ExerciseRepository
 from app.repositories.logged_session_repository import LoggedSessionRepository
 from app.repositories.profile_repository import ProfileRepository
 from app.repositories.protocol_repository import ProtocolRepository
+from app.repositories.protocol_repository import DeploySessionSpec
 from app.repositories.session_repository import PrescriptionDraft
 
 router = APIRouter(prefix="/api", tags=["protocols"])
@@ -214,10 +220,12 @@ class DeployPrescriptionBody(BaseModel):
 
 
 class DeploySessionBody(BaseModel):
-    """One Session in the desired un-performed tail, naming the existing Session it
-    edits by ``session_id``."""
+    """One Session in the desired un-performed tail. ``session_id`` names the existing
+    Session it edits, or is ``None`` for a newly-added empty slot (ADR-0020). ``week``
+    is the slot's client-intended week — the grouping the server re-enumerates into
+    positional labels; ``day`` orders Sessions within a week."""
 
-    session_id: int
+    session_id: int | None = None
     week: int
     day: int
     prescriptions: list[DeployPrescriptionBody] = Field(default_factory=list)
@@ -321,25 +329,65 @@ def deploy_protocol(
     if errors:
         return _deploy_error_response(errors)
 
-    session_prescriptions = {
-        session.session_id: [
-            PrescriptionDraft(
-                exercise_id=prescription.exercise_id,
-                sets=prescription.sets,
-                reps=prescription.reps,
-                rest_seconds=prescription.rest_seconds,
-                tempo=prescription.tempo,
-                recommended_load=prescription.recommended_load,
-            )
-            for prescription in session.prescriptions
-        ]
-        for session in draft.sessions
-        if session.session_id is not None
+    # Fold the validated tail back into one enumerated sequence (Module A): the frozen
+    # performed prefix seeds the positions/weeks, the desired tail is re-enumerated
+    # after it, then the tail portion is persisted in place (Module F).
+    prefix = [
+        EnumeratedSession(
+            session_id=session.session_id,
+            position=session.position,
+            week=session.week,
+            day=session.day,
+        )
+        for session in progress.protocol.sessions
+        if session.session_id in performed
+    ]
+    titles = {
+        session.session_id: session.title
+        for session in progress.protocol.sessions
     }
-    protocols.replace_tail(
+    tail = [
+        TailSession(
+            session_id=session.session_id,
+            week=session.week,
+            day=session.day,
+            payload=(
+                titles.get(session.session_id),
+                [
+                    PrescriptionDraft(
+                        exercise_id=prescription.exercise_id,
+                        sets=prescription.sets,
+                        reps=prescription.reps,
+                        rest_seconds=prescription.rest_seconds,
+                        tempo=prescription.tempo,
+                        recommended_load=prescription.recommended_load,
+                    )
+                    for prescription in session.prescriptions
+                ],
+            ),
+        )
+        for session in draft.sessions
+    ]
+
+    enumerated = reenumerate_tail(prefix, tail)
+    tail_specs = [
+        DeploySessionSpec(
+            position=session.position,
+            week=session.week,
+            day=session.day,
+            title=session.payload[0],
+            prescriptions=session.payload[1],
+        )
+        for session in enumerated[len(prefix) :]
+    ]
+
+    protocols.deploy_tail(
         protocol_id,
         clerk_user_id,
-        session_prescriptions=session_prescriptions,
+        performed_session_ids=performed,
+        tail=tail_specs,
+        weeks=payload.weeks,
+        sessions_per_week=payload.sessions_per_week,
         name=payload.normalized_name(),
     )
 

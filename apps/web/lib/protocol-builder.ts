@@ -25,7 +25,10 @@ export interface DraftPrescription {
 }
 
 // One Session in the draft. `performed` marks the frozen prefix (ADR-0020): a
-// performed Session is read-only and never included in the deploy tail.
+// performed Session is read-only and never included in the deploy tail. A
+// newly-added Session slot has no server id yet, so it carries a unique *negative*
+// client id as its draft handle; `toDeployPayload` sends it as a null `session_id`
+// for the server to insert (Module A/F re-enumerate the tail on DEPLOY).
 export interface DraftSession {
   sessionId: number;
   week: number;
@@ -97,6 +100,22 @@ export type BuilderEvent =
   | {
       type: "EDIT_NAME";
       name: string;
+    }
+  | {
+      type: "ADD_SESSION";
+      week: number;
+    }
+  | {
+      type: "REMOVE_SESSION";
+      sessionId: number;
+    }
+  | {
+      type: "SET_WEEKS";
+      weeks: number;
+    }
+  | {
+      type: "SET_SESSIONS_PER_WEEK";
+      sessionsPerWeek: number;
     };
 
 // Derive the editable kind+value pair a Prescription's Load starts from, off the
@@ -202,9 +221,48 @@ export function builderReducer(
     case "EDIT_NAME":
       return { ...state, name: event.name };
 
+    case "ADD_SESSION":
+      return {
+        ...state,
+        sessions: [...state.sessions, newSession(state.sessions, event.week)],
+      };
+
+    case "REMOVE_SESSION":
+      return {
+        ...state,
+        sessions: state.sessions.filter(
+          (session) => session.sessionId !== event.sessionId || session.performed,
+        ),
+      };
+
+    case "SET_WEEKS":
+      return { ...state, weeks: event.weeks };
+
+    case "SET_SESSIONS_PER_WEEK":
+      return { ...state, sessionsPerWeek: event.sessionsPerWeek };
+
     default:
       return state;
   }
+}
+
+// A fresh empty Session slot for `week`, appended to the un-performed tail (ADR-0020).
+// It starts with no Prescriptions — nothing is fabricated; the user fills it from the
+// Library. Its `day` follows the week's existing Sessions, and it takes a unique
+// negative client id (see `DraftSession`) so edits can target it before it is saved.
+function newSession(sessions: DraftSession[], week: number): DraftSession {
+  const daysInWeek = sessions
+    .filter((session) => session.week === week)
+    .map((session) => session.day);
+  const nextDay = daysInWeek.length > 0 ? Math.max(...daysInWeek) + 1 : 1;
+  const lowestId = Math.min(0, ...sessions.map((session) => session.sessionId));
+  return {
+    sessionId: lowestId - 1,
+    week,
+    day: nextDay,
+    performed: false,
+    prescriptions: [],
+  };
 }
 
 // A freshly-picked Library Exercise as a new draft Prescription, with editable
@@ -357,7 +415,9 @@ export interface DeployPrescriptionPayload {
 }
 
 export interface DeploySessionPayload {
-  session_id: number;
+  // A real Session id for an edited existing Session, or `null` for a newly-added
+  // slot the server inserts and enumerates on DEPLOY (ADR-0020).
+  session_id: number | null;
   week: number;
   day: number;
   prescriptions: DeployPrescriptionPayload[];
@@ -383,7 +443,9 @@ export function toDeployPayload(draft: BuilderDraft): DeployPayload {
     sessions: draft.sessions
       .filter((session) => !session.performed)
       .map((session) => ({
-        session_id: session.sessionId,
+        // A negative client id marks a not-yet-persisted slot — send null so the
+        // server inserts it (Module A/F).
+        session_id: session.sessionId < 0 ? null : session.sessionId,
         week: session.week,
         day: session.day,
         prescriptions: session.prescriptions.map((prescription) => ({

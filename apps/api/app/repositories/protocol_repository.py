@@ -39,6 +39,20 @@ class ProtocolSessionDraft:
 
 
 @dataclass(frozen=True)
+class DeploySessionSpec:
+    """One fully-enumerated Session in the new un-performed tail a ``DEPLOY`` writes
+    (Module F, ADR-0020). ``position``/``week``/``day`` come from the re-enumeration
+    (Module A) and are persisted verbatim; ``title`` is carried through for an edited
+    existing Session and ``None`` for a fresh empty slot."""
+
+    position: int
+    week: int
+    day: int
+    prescriptions: list[PrescriptionDraft] = field(default_factory=list)
+    title: str | None = None
+
+
+@dataclass(frozen=True)
 class ProtocolDraft:
     """A multi-week Protocol to persist: the parameter set plus ordered Sessions."""
 
@@ -99,28 +113,31 @@ class ProtocolRepository(Interface):
         user owns none."""
         ...
 
-    def replace_tail(
+    def deploy_tail(
         self,
         protocol_id: int,
         clerk_user_id: str,
         *,
-        session_prescriptions: dict[int, list[PrescriptionDraft]],
+        performed_session_ids: set[int],
+        tail: list[DeploySessionSpec],
+        weeks: int,
+        sessions_per_week: int,
         name: str | None = _KEEP_NAME,
     ) -> ProtocolView | None:
-        """Atomically replace the Prescriptions of the named un-performed Sessions
-        (Module F, ADR-0020), optionally updating the Protocol ``name`` in the same
-        write.
+        """Atomically replace the whole un-performed tail of a Protocol (Module F,
+        ADR-0020) and reshape it.
 
-        ``session_prescriptions`` maps a Session id to its new ordered
-        Prescriptions; each named Session's Prescriptions are deleted and re-inserted
-        in place, with contiguous positions, while the Session row itself (its id,
-        Week/Day, position) and every Session *not* named — the frozen performed
-        prefix among them — is left untouched. When ``name`` is supplied it is set on
-        the Protocol (an explicit ``None`` clears it back to the derived label); when
-        omitted the name is left as-is. The whole rewrite commits in one transaction,
+        Every Session *not* in ``performed_session_ids`` — the editable tail — and its
+        Prescriptions are deleted, and ``tail`` (the re-enumerated desired Sessions,
+        each carrying its ``position``/``week``/``day`` from Module A) is inserted in
+        its place, so Sessions can be added, removed, and re-enumerated in one write.
+        The frozen performed Sessions are left byte-for-byte untouched, keeping their
+        ids, so history/PRs/Progression can never be orphaned. ``weeks`` and
+        ``sessions_per_week`` (the soft header, ADR-0020) are updated on the Protocol,
+        and ``name`` is set when supplied (an explicit ``None`` clears it to the derived
+        label; omitted leaves it as-is). The whole rewrite commits in one transaction,
         so a failure persists nothing. Owner-scoped: returns the updated Protocol, or
-        ``None`` if it is missing or owned by another user. A named id that is not one
-        of this Protocol's Sessions is ignored."""
+        ``None`` if it is missing or owned by another user."""
         ...
 
 
@@ -225,12 +242,15 @@ class SqlProtocolRepository:
         ).all()
         return [self._view(protocol) for protocol in protocols]
 
-    def replace_tail(
+    def deploy_tail(
         self,
         protocol_id: int,
         clerk_user_id: str,
         *,
-        session_prescriptions: dict[int, list[PrescriptionDraft]],
+        performed_session_ids: set[int],
+        tail: list[DeploySessionSpec],
+        weeks: int,
+        sessions_per_week: int,
         name: str | None = _KEEP_NAME,
     ) -> ProtocolView | None:
         protocol = self._session.get(Protocol, protocol_id)
@@ -239,29 +259,48 @@ class SqlProtocolRepository:
 
         if name is not _KEEP_NAME:
             protocol.name = name
-            self._session.add(protocol)
+        protocol.weeks = weeks
+        protocol.sessions_per_week = sessions_per_week
+        self._session.add(protocol)
 
+        # Stage every delete and insert, then commit once — the whole tail replace is a
+        # single transaction, so a mid-way failure leaves the Protocol untouched. The
+        # performed prefix is skipped entirely: its rows keep their ids and content.
         workouts = self._session.exec(
             select(WorkoutSession).where(WorkoutSession.protocol_id == protocol_id)
         ).all()
-        by_id = {workout.id: workout for workout in workouts}
-
-        # Stage every delete and insert, then commit once — the whole tail replace is
-        # a single transaction, so a mid-way failure leaves the Protocol untouched.
-        for session_id, prescriptions in session_prescriptions.items():
-            if session_id not in by_id:
+        for workout in workouts:
+            if workout.id in performed_session_ids:
                 continue
             current = self._session.exec(
                 select(ExercisePrescription).where(
-                    ExercisePrescription.session_id == session_id
+                    ExercisePrescription.session_id == workout.id
                 )
             ).all()
             for prescription in current:
                 self._session.delete(prescription)
-            for position, draft in enumerate(prescriptions):
+            self._session.delete(workout)
+        # Free the deleted rows' positions before the inserts reuse them.
+        self._session.flush()
+
+        for spec in tail:
+            workout = WorkoutSession(
+                clerk_user_id=clerk_user_id,
+                training_type=protocol.training_type,
+                duration_minutes=protocol.duration_minutes,
+                protocol_id=protocol.id,
+                objective=protocol.objective,
+                week=spec.week,
+                day=spec.day,
+                position=spec.position,
+                title=spec.title,
+            )
+            self._session.add(workout)
+            self._session.flush()  # assign the new Session id without committing
+            for position, draft in enumerate(spec.prescriptions):
                 self._session.add(
                     ExercisePrescription(
-                        session_id=session_id,
+                        session_id=workout.id,
                         exercise_id=draft.exercise_id,
                         position=position,
                         sets=draft.sets,
@@ -378,12 +417,15 @@ class InMemoryProtocolRepository:
         owned.sort(key=lambda p: (p.created_at, p.id), reverse=True)
         return [self._view(protocol) for protocol in owned]
 
-    def replace_tail(
+    def deploy_tail(
         self,
         protocol_id: int,
         clerk_user_id: str,
         *,
-        session_prescriptions: dict[int, list[PrescriptionDraft]],
+        performed_session_ids: set[int],
+        tail: list[DeploySessionSpec],
+        weeks: int,
+        sessions_per_week: int,
         name: str | None = _KEEP_NAME,
     ) -> ProtocolView | None:
         protocol = self._protocols.get(protocol_id)
@@ -392,15 +434,37 @@ class InMemoryProtocolRepository:
 
         if name is not _KEEP_NAME:
             protocol.name = name
+        protocol.weeks = weeks
+        protocol.sessions_per_week = sessions_per_week
 
-        session_ids = {w.id for w in self._sessions.get(protocol_id, [])}
-        for session_id, prescriptions in session_prescriptions.items():
-            if session_id not in session_ids:
-                continue
-            self._prescriptions[session_id] = [
+        # Drop every un-performed Session (and its Prescriptions); the frozen performed
+        # prefix is kept exactly as it was.
+        kept: list[WorkoutSession] = []
+        for workout in self._sessions.get(protocol_id, []):
+            if workout.id in performed_session_ids:
+                kept.append(workout)
+            else:
+                self._prescriptions.pop(workout.id, None)
+
+        for spec in tail:
+            workout = WorkoutSession(
+                id=self._next_session_id,
+                clerk_user_id=clerk_user_id,
+                training_type=protocol.training_type,
+                duration_minutes=protocol.duration_minutes,
+                protocol_id=protocol.id,
+                objective=protocol.objective,
+                week=spec.week,
+                day=spec.day,
+                position=spec.position,
+                title=spec.title,
+            )
+            self._next_session_id += 1
+            kept.append(workout)
+            self._prescriptions[workout.id] = [
                 ExercisePrescription(
                     id=position + 1,
-                    session_id=session_id,
+                    session_id=workout.id,
                     exercise_id=draft.exercise_id,
                     position=position,
                     sets=draft.sets,
@@ -409,13 +473,16 @@ class InMemoryProtocolRepository:
                     tempo=draft.tempo,
                     recommended_load=draft.recommended_load,
                 )
-                for position, draft in enumerate(prescriptions)
+                for position, draft in enumerate(spec.prescriptions)
             ]
+
+        self._sessions[protocol_id] = kept
         return self._view(protocol)
 
 
 __all__ = [
     "ProtocolSessionDraft",
+    "DeploySessionSpec",
     "ProtocolDraft",
     "ProtocolSessionView",
     "ProtocolView",
