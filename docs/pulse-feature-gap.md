@@ -127,6 +127,43 @@ current Workout Manager web app (`apps/web/app`).
 > fan-out**. The F5, Cross-cutting, and build-order sections below are updated to match; the remaining sections
 > are unchanged.
 
+> **Update (2026-07-10):** The **F4 — Protocol Builder** screen — the last big open screen and the app's
+> **first manual authoring / mutation model** — has now been **built out** across seven vertical slices
+> (feature, not just styling), so *every* Pulse screen is now feature-backed. Until now a Protocol could be
+> created **only** by Adopt (ADR-0003) and changed **only** by Substitution / Regeneration; F4 lets a user edit
+> the plan itself — grow/shrink weeks and per-week session count, add/remove Sessions, and author, reorder, and
+> delete Exercise Prescriptions by hand. The central safety rule is **ADR-0020**: editing only ever reaches the
+> **un-performed tail** — a Session with an advancing Logged Session (ADR-0013) is settled record and is never
+> rewritten, so Logged Sessions, PRs (ADR-0010), and the Progression overlay (ADR-0004) can never be orphaned.
+> Edits **stage client-side** (mirroring the Live Session's ephemeral posture, ADR-0012) and commit atomically
+> with **`DEPLOY`**, which sends the desired un-performed tail; the server **replaces that tail in place**,
+> preserving performed `session_id`s untouched, and is the single **validation gate** (rejecting empty Sessions,
+> Prescriptions with no valid catalog Exercise, `sets < 1`, or an empty rep target — load stays optional). The
+> **frozen performed prefix is server-enforced** (`app/protocols/deploy_validation.py`), not merely respected by
+> the client. A new `POST /api/protocols/{id}/deploy` endpoint drives the tail-replace over
+> `app/protocols/reenumeration.py`, backed by a nullable Protocol **`name`** column (Pulse's "PROTOCOL ID",
+> migration 0016, with a derived `objective · training_type` fallback label so existing Protocols read fine
+> unbackfilled) and a net-new `GET /api/exercises?query=` **Exercise Library** search (the catalog had only
+> `get`-by-id before). On the client, a net-new `ProtocolBuilder` (`components/ProtocolBuilder.tsx`, off
+> `app/protocols/[id]/edit`) hosts the whole staged draft over `lib/protocol-builder.ts`, with an
+> `ExerciseLibrary` pick panel and a `MuscleSplit` preview. **ADR-0021** frames the screen-level reinterpretation
+> (as with every prior F): the week matrix is **positional Week × session-slot**, not a M–S weekday grid
+> (calendar-free, ADR-0001/0009); **`MODE`/`HYPER` is dropped** (no field behind it); **`SIMULATE` is a
+> non-predictive balance preview** (`POST /api/protocols/{id}/simulate` over `app/protocols/balance_preview.py`,
+> reusing the curated Muscle-Group roll-up, ADR-0011 — no fatigue/volume prediction, just "this plan is 60% Legs"
+> before you commit); and the **Exercise Library is pick-only over the shared catalog** — no manual free-create,
+> because a raw name-only insert would pollute the global deduped/enriched catalog (ADR-0002) for every user.
+> Hand-set loads stay **Progression-adjustable** (no pin flag) and `sessions_per_week` becomes a **soft default**,
+> not a rigid invariant (ADR-0020). Slice 7 also **unblocks F6's `ADD TO PROTOCOL`**: the disabled seam ADR-0017
+> left now **deep-links into the builder** with the Exercise queued for placement into an un-performed Session of
+> the user's Current Protocol — staying the honest disabled seam only when there is no Protocol or no un-performed
+> Session. What is intentionally **not** built: **blank-slate authoring** of a brand-new Protocol (a larger
+> surface that partly duplicates generation — v1 layers "create empty + apply these edits" on later over exactly
+> these primitives, ADR-0020); **manual Exercise free-create** (a generation concern, ADR-0021); the **`MODE`
+> knob**; editable **`objective` / `training_type` / `duration_minutes`** (generation/cache provenance, cascade
+> ambiguity with no payoff); and any predictive simulation. The F4, F6 (`ADD TO PROTOCOL`), Cross-cutting, and
+> build-order sections below are updated to match; the remaining sections are unchanged.
+
 ---
 
 ## Onboarding & Auth (FO1–FO4)
@@ -176,16 +213,18 @@ Recent Records feed, and a total-volume line chart. `app/metrics` (body-metric t
 - ✅ **Muscle distribution** — labeled operator-theme bars from `domain/muscle_groups.py`, a curated roll-up of each Exercise's free-form `targeted_muscles` into six groups (Legs / Chest / Back / Shoulders / Arms / Core) plus an explicit **Unclassified** bucket, weighted by set count and split evenly across the groups a Set maps to (percentages sum to 100%).
 - ✅ **Recent Records / PR feed** — the last 8 all-time PRs (exercise · new Estimated 1RM · gain over prior PR · date), from read-time `domain/personal_records.py` on top of Epley `domain/one_rep_max.py`. Decoupled from the range toggle so the feed is rarely empty; only absolute-Load sets in the 1–12-rep window qualify.
 
-## F4 — Protocol Builder
+## F4 — Protocol Builder (now shipped)
 
-Current state: AI generation form + read-only protocol view (`app/protocols/new`, `app/protocols/[id]`). No manual/visual builder.
+Current state: a manual **Protocol Builder** (`app/protocols/[id]/edit`, `components/ProtocolBuilder.tsx`) edits an adopted Protocol's shape and Prescriptions as a client-side staged draft, committed atomically by `DEPLOY`. The AI generation form (`app/protocols/new`) and read-only protocol view (`app/protocols/[id]`) remain. This is the app's **first manual authoring / mutation model** — it edits only the **un-performed tail**, leaving the settled record frozen (ADR-0020).
 
-- ❌ **Visual week matrix** — M–S grid with per-day module counts.
-- ❌ **Day/module editor** — add, remove, edit Exercise Prescriptions (sets×reps, load) directly.
-- ❌ **`ADD MODULE`** interaction.
-- ❌ **Exercise Library browser** — searchable catalog ("420 movements", `QUERY MOVEMENTS…`). No exercise-search UI exists.
-- ❌ **Protocol config panel** — frequency / cycle length / mode as editable knobs.
-- ❌ **`SIMULATE` / `DEPLOY PROTOCOL`** flow.
+- ✅ **Visual week matrix** — a **positional Week × session-slot** grid (rows = weeks, columns = the 1..N Sessions in that week, cell = Prescription count). **Deviation (ADR-0021/0009):** it is positional, **not** an M–S weekday grid with dates — the plan model is self-paced and calendar-free (ADR-0001), and it renders the *actual* per-week count rather than assuming a fixed frequency (deload weeks legitimately differ).
+- ✅ **Day/module editor** — Exercise Prescriptions can be added, removed, edited (sets × reps, load), **and reordered** (`position` is just a field) within any un-performed Session, staged in `lib/protocol-builder.ts`. Load entry **reuses the log form's kind-picker** (`load_from_input`) so building a Prescription and logging a set speak one Load language. Hand-set loads stay **Progression-adjustable** (no pin flag, ADR-0020) — a manual load is simply the base the ADR-0004 overlay nudges from.
+- ✅ **`ADD MODULE` interaction** — new Session slots are created by growing the shape (more weeks / higher frequency) as **empty skeletons** the user fills from the catalog; `DEPLOY` rejects any still-empty Session (an empty Session would otherwise surface as the Next Session and launch an empty Live Session). **Deviation (ADR-0020):** `sessions_per_week` is a **soft default / header value**, not a rigid invariant — a frequency change applies to un-performed/new weeks while frozen performed weeks keep their real counts.
+- ✅ **Exercise Library browser** — a searchable catalog panel (`components/ExerciseLibrary.tsx`) over the net-new `GET /api/exercises?query=` (the catalog had only `get`-by-id before), surfacing each row's `provenance` exactly as the Session view and Exercise Detail do. **Deviation (ADR-0021):** it is **pick-only** — no manual free-create, because a raw name-only insert would pollute the global deduped/enriched shared catalog (ADR-0002) for every user; a wanted-but-absent movement is a **generation** concern, a documented v1 limitation not a faked seam.
+- 🟡 **Protocol config panel** — an editable **`name`** (Pulse's "PROTOCOL ID", nullable, migration 0016, derived `objective · training_type` fallback) plus **frequency** and **weeks**. **Deviations (ADR-0021):** the config is deliberately narrowed to `name` + frequency + weeks; **`objective` / `training_type` / `duration_minutes`** are shown but **not editable** in v1 (generation/cache provenance, cascade-to-Sessions ambiguity with no payoff), and Pulse's **`MODE`/`HYPER` knob is dropped** — no `mode` field exists and none is added (a fabricated control with nothing behind it).
+- ✅ **`SIMULATE` / `DEPLOY PROTOCOL` flow** — **`DEPLOY`** (`POST /api/protocols/{id}/deploy`) is the single commit + validation gate: it sends the desired un-performed tail and the server **replaces that tail in place** (performed `session_id`s preserved untouched, frozen prefix **server-enforced** via `app/protocols/deploy_validation.py` + `app/protocols/reenumeration.py`), rejecting empty Sessions, Prescriptions with no valid catalog Exercise, `sets < 1`, or an empty rep target. **`SIMULATE`** (`POST /api/protocols/{id}/simulate`, `app/protocols/balance_preview.py`) is reinterpreted as a **non-predictive balance preview** — per-week session/set counts and the **Muscle-Group distribution across the whole edited Protocol** (reusing `domain/muscle_groups.py`, ADR-0011). **Deviation (ADR-0021):** no fatigue/volume/1RM projection (no fatigue model, no recovery clock, no honest headline volume) — just what the plan you built actually *is*.
+
+**Deviation — blank-slate authoring (ADR-0020):** creating a brand-new Protocol from scratch is intentionally **not** in v1 scope (a larger surface that partly duplicates generation); the builder edits an existing adopted Protocol, and "create empty + apply the same edits" can layer on later over exactly these primitives.
 
 ## F5 — Profile (now largely shipped)
 
@@ -207,11 +246,11 @@ Current state: a tabbed Exercise Detail screen (`app/exercises/[id]/page.tsx`) �
 - ✅ **Muscle map** — a **PRIMARY / SECONDARY** split now stored on the catalog (`primary_muscles` / `secondary_muscles`, ADR-0016, migration 0014) as an emphasis annotation over the kept `targeted_muscles` union. **Deviation (ADR-0016):** primacy is only shown where enrichment actually asserts it (populated for `ai_generated` rows by a one-off re-enrichment pass); an Exercise with no asserted split falls back to a flat targeted-muscle row rather than fabricating primacy. No anatomical diagram — labeled muscle sections, consistent with the operator theme.
 - 🟡 **Per-exercise stats** — `StatHeader` (`components/exercise/stat-header.tsx`) shows a single **PERSONAL RECORD** (highest Estimated 1RM) beside **TOTAL SETS** (a Logged-Set count). **Deviation (ADR-0017):** one strength tile, not Pulse's two (`PERSONAL BEST` load + `EST. 1RM`) — CONTEXT.md reserves "Personal Record" for the highest Est. 1RM. For a bodyweight / qualitative / %-1RM / range exercise the PR tile is **hidden, not zeroed** (TOTAL SETS always shows); a `0 kg` would be fabricated.
 - ✅ **Top-set trend chart** — `TopSetTrendChart` (`components/exercise/top-set-trend-chart.tsx`), a Recharts bar chart of the best **Est. 1RM per qualifying session** (last 8, no zero-padding) with a `latest − oldest` pill. **Deviation (ADR-0017):** "top set" is defined as best Est. 1RM so the trend, the PR tile, and the RECORDS tab tell **one** strength story on the same yardstick; one qualifying session shows a single bar and no pill, and the chart is hidden entirely for non-absolute exercises.
-- 🟡 **`ADD TO PROTOCOL`** action — rendered as an honest **disabled seam** ("arrives with the Protocol Builder"). **Deviation (ADR-0001/0017):** a Protocol is fully enumerated up front and the only Session mutation is Substitution (a swap, not an add); a real add needs the F4 Protocol-Builder mutation model, so the CTA is a disabled placeholder rather than a dead or faked write.
+- ✅ **`ADD TO PROTOCOL`** action — now **wired to the Protocol Builder** (F4 Slice 7, ADR-0021): the CTA **deep-links into the builder** with this Exercise queued for placement into an un-performed Session of the user's Current Protocol (a staged edit, deployed like any other, ADR-0020). **Deviation (ADR-0017/0021):** when there is no Current Protocol or no un-performed Session it stays the honest **disabled seam** ADR-0017 left — never a faked write — since a real add still requires the F4 mutation model and an editable target.
 
 ## Cross-cutting / Foundational
 
-- ✅ **Bottom tab bar navigation** — a fixed `TabBar` (`components/pulse/tab-bar.tsx`) is wired into the layout for signed-in users. **Deviation:** it collapses Pulse's five tabs into **four** — Home / Train / Stats / Profile — mapping onto *existing* routes (`/dashboard`, `/sessions`, `/history`, `/profile`), because the dedicated Session / Analytics / Builder destinations don't exist yet. Re-expanding to five tabs is a follow-up once F2–F4 land.
+- ✅ **Bottom tab bar navigation** — a fixed `TabBar` (`components/pulse/tab-bar.tsx`) is wired into the layout for signed-in users. **Deviation:** it collapses Pulse's five tabs into **four** — Home / Train / Stats / Profile — where `TRAIN` now spans the shipped Session / Protocol / Exercise / Builder destinations (`match: ["/sessions", "/protocols", "/exercises"]`) and `STATS` spans Analytics / History / Metrics, rather than giving the Builder its own tab. Now that F2–F4 have all landed, re-expanding to a dedicated fifth tab is an optional polish call, not a blocked follow-up.
 - ✅ **Design system** — Pulse's dark, mono-accented "operator" theme is transcribed into `app/globals.css` as `@theme` tokens (`--color-*`, `--radius-*`, `--spacing-shell`, fonts via `next/font`), consumed through shadcn `components/ui/*` + custom `components/pulse/*` primitives across all pages. Replaces the former `system-ui` + inline styles.
 - ✅ **Personal Records (PR) engine** — now shipped as shared read-time capability on top of the typed Load (ADR-0010): `domain/one_rep_max.py` (Epley **Estimated 1RM**, 1–12-rep window) and `domain/personal_records.py` (**PR** detection over a chronological Logged-Set stream — a set is a PR when its Estimated 1RM strictly beats every prior set's for that Exercise). Read-time only — **no PR table, no write hook**. Surfaced on Analytics (F3) and now on Exercise Detail (F6, via `logbook/exercise_records.py` — Personal Record tile, Top-Set Trend, RECORDS feed); still to be wired into Home. A companion `domain/volume.py` engine converts typed loads (absolute, range, bodyweight, %-1RM) into total volume with a disclosed coverage %.
 - 🟡 **Readiness / target-calorie metrics** — **Readiness** now ships as a computed, qualitative three-state signal (`app/domain/readiness.py`, surfaced on Home via `GET /api/home`); the numeric **readiness percentage** and **target-calorie** are deliberately not built (no honest basis, ADR-0008). The Active Session (F2) has since shipped but, consistent with ADR-0008, surfaces neither on it.
@@ -227,12 +266,21 @@ Current state: a tabbed Exercise Detail screen (`app/exercises/[id]/page.tsx`) �
 2. ~~**Gamification layer** (XP / levels / streaks / achievements)~~ — **F5 (Profile) shipped** (ADR-0018/0019): XP + Operator Level, the weekly Streak, and the type-neutral Achievement catalog all ship as a **read-time projection of the Logged record** (no XP/unlock table, no write hook), over the net-new `domain/experience.py` / `streak.py` / `achievements.py` and the `logbook/profile_progress.py` read model. The remaining fan-out target is **Home / Analytics** (surfacing XP/Level/Streak off the same endpoint), and the named F5 follow-on slices — **units (kg/lb)**, **account/data deletion** — are self-contained settings work, not fresh domain.
 3. ~~**Fan the PR / 1RM / volume engine out** to F6~~ — **F6 (Exercise Detail) shipped** (ADR-0015/0016/0017): the Personal Record tile, Top-Set Trend, and RECORDS feed reuse the shared `one_rep_max` / `personal_records` engine over the new `logbook/exercise_records.py` read model. The remaining fan-out target is **F1 (Home)**, plus the two catalog-schema pieces this landed (Execution Steps as `list[str]`, muscle emphasis split) are now available to any future consumer.
 
-#1 (the F2 Live Session), the **PR / 1RM / volume analytics engine** (F3), **F6 (Exercise Detail)**, and now
-the **F5 (Profile) gamification layer** have all shipped, so *every net-new domain the analysis called out is
-built* — the live loop, the analytics engine, the per-exercise records screen, and the XP/Level/Streak/Achievement
-engine. The remaining work is **capability wiring, not fresh domain or styling**: the biggest open screen is
-**Protocol Builder (F4)** — a manual mutation model over the exercise catalog — and the rest is *fanning
-already-shipped engines* (gamification onto Home/Analytics, the PR engine onto Home) and *self-contained settings*
-(units, account deletion) into the styled components, over data that already exists (protocols, sessions,
-prescriptions, logs, metrics, exercise catalog, and the analytics / exercise-records / gamification engines). The
-charting-library blocker is long gone — **Recharts** shipped with F3 and backs the F6 Top-Set Trend chart too.
+4. ~~**Protocol Builder** (F4) — the manual mutation model~~ — **F4 (Protocol Builder) shipped** (ADR-0020/0021):
+   the app's first manual authoring model edits the **un-performed tail** of an adopted Protocol (frozen performed
+   prefix, server-enforced), staging a client-side draft that commits atomically via `POST /api/protocols/{id}/deploy`,
+   with a net-new `GET /api/exercises?query=` Exercise Library, a non-predictive `SIMULATE` balance preview, and a
+   Protocol `name`. This also unblocked F6's `ADD TO PROTOCOL` (Slice 7). Remaining v1 limitations are **blank-slate
+   authoring** and **manual Exercise free-create** (both scoped out, not faked).
+
+#1 (the F2 Live Session), the **PR / 1RM / volume analytics engine** (F3), **F6 (Exercise Detail)**, the
+**F5 (Profile) gamification layer**, and now the **F4 (Protocol Builder) mutation model** have all shipped —
+so *every net-new domain the analysis called out is built* **and every Pulse screen is now feature-backed**:
+the live loop, the analytics engine, the per-exercise records screen, the XP/Level/Streak/Achievement engine,
+and the manual authoring model. The remaining work is **capability wiring, not fresh domain or styling** —
+*fanning already-shipped engines* (gamification onto Home/Analytics, the PR engine onto Home) and *self-contained
+settings* (units, account deletion) into the styled components, plus the two documented F4 v1 limitations
+(blank-slate authoring, manual Exercise create) — over data and engines that already exist (protocols, sessions,
+prescriptions, logs, metrics, exercise catalog, and the analytics / exercise-records / gamification / builder
+engines). The charting-library blocker is long gone — **Recharts** shipped with F3 and backs the F6 Top-Set
+Trend chart too.
