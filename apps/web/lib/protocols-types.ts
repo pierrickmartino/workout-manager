@@ -2,6 +2,7 @@
 // import from both Server and Client Components. The server-only data access
 // (Clerk auth + fetch) lives in `lib/protocols.ts`.
 
+import type { MuscleShare } from "./analytics-types";
 import type { ExercisePrescription } from "./sessions-types";
 
 // One Session inside a Protocol, fixed to a descriptive Week/Day position (no
@@ -60,4 +61,25 @@ export interface ProtocolProgress {
   sessions: ProtocolSession[];
   next_session: ProtocolSession | null;
   completed_count: number;
+}
+
+// The non-predictive balance preview behind SIMULATE (Module C, ADR-0021): the size
+// of one positional week — how many Sessions it holds and how many Sets they total.
+export interface WeekBalance {
+  week: number;
+  session_count: number;
+  set_count: number;
+}
+
+// SIMULATE's read-only balance preview of the whole edited draft. The Muscle-Group
+// split is the same `{group, pct}` shape Analytics uses (the curated six-bucket
+// roll-up: sums to 100 with an explicit Unclassified bucket when applicable), so the
+// Builder preview and the Analytics screen render one consistent split. Deliberately
+// carries no fatigue/recovery/projected-volume/1RM figure — the domain has no honest
+// basis for one (ADR-0021); it only counts and rolls up what the user has built.
+export interface BalancePreview {
+  weeks: WeekBalance[];
+  total_sessions: number;
+  total_sets: number;
+  muscle_distribution: MuscleShare[];
 }

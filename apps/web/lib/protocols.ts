@@ -1,7 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 
-import type { DeployPayload } from "./protocol-builder";
+import type { DeployPayload, SimulatePayload } from "./protocol-builder";
 import type {
+  BalancePreview,
   GenerateProtocolInput,
   ProtocolJob,
   ProtocolProgress,
@@ -69,6 +70,24 @@ export async function deployProtocol(
     cache: "no-store",
   });
   return (await response.json()) as Envelope<ProtocolProgress>;
+}
+
+// Preview an edited Protocol's balance (SIMULATE, ADR-0021): send the whole draft and
+// get back per-week Session/Set counts plus the curated Muscle-Group distribution.
+// Read-only and non-predictive — nothing is written and no fatigue/recovery/volume
+// figure is computed. Ownership is verified server-side (a non-owner gets a 404
+// envelope).
+export async function simulateProtocol(
+  id: number,
+  payload: SimulatePayload,
+): Promise<Envelope<BalancePreview>> {
+  const response = await fetch(`${API_URL}/api/protocols/${id}/simulate`, {
+    method: "POST",
+    headers: { ...(await authHeaders()), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+  return (await response.json()) as Envelope<BalancePreview>;
 }
 
 // Poll a generation job by its handle. The adopted `protocol_id` appears once the
