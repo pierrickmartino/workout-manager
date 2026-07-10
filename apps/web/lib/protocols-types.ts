@@ -52,6 +52,11 @@ export interface ProtocolProgress {
   sessions_per_week: number;
   weeks: number;
   duration_minutes: number;
+  // The user-editable Protocol name (nullable) and its resolved display label — the
+  // name when set, else a derived `objective · training_type` (ADR-0021), so an
+  // unnamed adopted Protocol still reads sensibly.
+  name: string | null;
+  label: string;
   sessions: ProtocolSession[];
   next_session: ProtocolSession | null;
   completed_count: number;

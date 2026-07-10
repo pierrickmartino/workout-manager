@@ -71,6 +71,8 @@ function makeProtocol({
     sessions_per_week: sessionsPerWeek,
     weeks,
     duration_minutes: 45,
+    name: null,
+    label: "hypertrophy · strength",
     sessions,
     next_session: next,
     completed_count: nextPosition === null ? sessions.length : nextPosition - 1,

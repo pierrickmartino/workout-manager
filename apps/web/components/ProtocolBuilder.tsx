@@ -74,22 +74,26 @@ export function ProtocolBuilder({ protocol }: ProtocolBuilderProps) {
     });
   }
 
+  // The live display label: the name the user is editing, else the derived
+  // `objective · training_type` fallback the backend resolved (ADR-0021).
+  const displayLabel = draft.name?.trim() ? draft.name.trim() : protocol.label;
+
   return (
     <section className="flex flex-col gap-7">
       <PageHeader
         overline="PULSE // BUILDER"
-        title={<span className="capitalize">{protocol.training_type}</span>}
+        title={<span>{displayLabel}</span>}
         action={<Badge variant="cyan">{draft.weeks}W</Badge>}
       />
 
-      <div className="flex items-center justify-between">
-        <span className="label-mono text-[11px] capitalize text-cyan">
-          {protocol.objective}
-        </span>
-        <span className="label-mono text-[10px] text-text-muted">
-          {matrix.cadenceLabel}
-        </span>
-      </div>
+      <ConfigPanel
+        name={draft.name}
+        cadenceLabel={matrix.cadenceLabel}
+        objective={protocol.objective}
+        trainingType={protocol.training_type}
+        durationMinutes={protocol.duration_minutes}
+        onEditName={(name) => dispatch({ type: "EDIT_NAME", name })}
+      />
 
       {error ? <Alert tone="error">{error}</Alert> : null}
       {deployed ? (
@@ -160,6 +164,71 @@ export function ProtocolBuilder({ protocol }: ProtocolBuilderProps) {
         </Link>
       </div>
     </section>
+  );
+}
+
+interface ConfigPanelProps {
+  name: string | null;
+  cadenceLabel: string;
+  objective: string;
+  trainingType: string;
+  durationMinutes: number;
+  onEditName: (name: string) => void;
+}
+
+// The Protocol config panel (Module H, ADR-0021). Reinterprets Pulse's config panel
+// onto the honest model: the user edits the Protocol **name**, and the plan's
+// frequency and cycle length head the panel. `objective`, `training_type`, and
+// `duration_minutes` are generation/cache provenance — shown for context but
+// read-only in v1 — and there is deliberately **no `mode` knob** (dropped, no
+// backing field).
+function ConfigPanel({
+  name,
+  cadenceLabel,
+  objective,
+  trainingType,
+  durationMinutes,
+  onEditName,
+}: ConfigPanelProps) {
+  return (
+    <Card className="flex flex-col gap-4 p-4">
+      <div className="flex items-center justify-between">
+        <span className="label-mono text-[10px] text-text-muted">CONFIG</span>
+        <span className="label-mono text-[10px] text-cyan">{cadenceLabel}</span>
+      </div>
+
+      <label className="flex flex-col gap-1.5">
+        <span className="label-mono text-[9px] text-text-muted">Protocol name</span>
+        <Input
+          value={name ?? ""}
+          aria-label="Protocol name"
+          placeholder={`${objective} · ${trainingType}`}
+          onChange={(e) => onEditName(e.target.value)}
+        />
+        <span className="label-mono text-[9px] text-text-muted">
+          Leave blank to use {objective} · {trainingType}.
+        </span>
+      </label>
+
+      {/* Read-only generation provenance — displayed for context, not editable in
+          v1 (ADR-0021). No `mode` control. */}
+      <dl className="grid grid-cols-3 gap-2 border-t border-border pt-3">
+        <ReadOnlyField label="Objective" value={objective} />
+        <ReadOnlyField label="Training type" value={trainingType} />
+        <ReadOnlyField label="Duration" value={`${durationMinutes} min`} />
+      </dl>
+    </Card>
+  );
+}
+
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <dt className="label-mono text-[9px] text-text-muted">{label}</dt>
+      <dd className="truncate font-sans text-[13px] capitalize text-text-secondary">
+        {value}
+      </dd>
+    </div>
   );
 }
 

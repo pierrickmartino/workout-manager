@@ -297,6 +297,53 @@ def test_deploy_rejects_a_prescription_referencing_an_unknown_exercise():
     assert len(after["sessions"][0]["prescriptions"]) == 1
 
 
+def test_deploy_persists_the_protocol_name_and_returns_it_as_the_label():
+    # Arrange — a fresh, unnamed Protocol
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_name")
+    protocol_id = protocol["id"]
+    body = _deploy_body(protocol)
+    body["name"] = "Summer Split"
+
+    # Act — the name rides through the DEPLOY path (ADR-0021), not a separate write
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_name"),
+        json=body,
+    )
+
+    # Assert — the deployed Protocol carries the name, and the label is the name
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["name"] == "Summer Split"
+    assert data["label"] == "Summer Split"
+    # And it persists: a fresh fetch reads the name back
+    after = h.fetch_protocol("user_name", protocol_id).json()["data"]
+    assert after["name"] == "Summer Split"
+
+
+def test_deploy_with_a_blank_name_falls_back_to_the_derived_label():
+    # Arrange — a fresh Protocol; the user submits a whitespace-only name
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_blank")
+    protocol_id = protocol["id"]
+    body = _deploy_body(protocol)
+    body["name"] = "   "
+
+    # Act
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_blank"),
+        json=body,
+    )
+
+    # Assert — a blank name is stored as unset and the derived label shows instead
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["name"] is None
+    assert data["label"] == "gain muscle mass · strength"
+
+
 def test_another_user_cannot_deploy_to_someone_elses_protocol():
     h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
     protocol = _fresh_protocol(h, "user_owner")

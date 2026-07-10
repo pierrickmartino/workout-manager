@@ -11,9 +11,13 @@ another. SQLModel-backed and in-memory implementations honor the same contract."
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Protocol as Interface
+from typing import Any, Protocol as Interface
 
 from sqlmodel import Session, select
+
+# Sentinel distinguishing "leave the Protocol name unchanged" (the default) from an
+# explicit ``name=None`` that clears it back to the derived label (F4 Slice 5).
+_KEEP_NAME: Any = object()
 
 from app.db.models import Exercise, ExercisePrescription, Protocol, WorkoutSession
 from app.repositories.exercise_repository import ExerciseRepository
@@ -44,6 +48,9 @@ class ProtocolDraft:
     weeks: int
     duration_minutes: int
     sessions: list[ProtocolSessionDraft] = field(default_factory=list)
+    # The user-editable Protocol name (ADR-0021). ``None`` for a freshly adopted
+    # Protocol — read paths fall back to the derived ``objective · training_type``.
+    name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -70,6 +77,9 @@ class ProtocolView:
     weeks: int
     duration_minutes: int
     sessions: list[ProtocolSessionView]
+    # The user-editable name, or ``None`` when unnamed — resolved to a display label
+    # (with the derived fallback) by ``app.domain.protocol.protocol_label``.
+    name: str | None = None
 
 
 class ProtocolRepository(Interface):
@@ -95,18 +105,22 @@ class ProtocolRepository(Interface):
         clerk_user_id: str,
         *,
         session_prescriptions: dict[int, list[PrescriptionDraft]],
+        name: str | None = _KEEP_NAME,
     ) -> ProtocolView | None:
         """Atomically replace the Prescriptions of the named un-performed Sessions
-        (Module F, ADR-0020).
+        (Module F, ADR-0020), optionally updating the Protocol ``name`` in the same
+        write.
 
         ``session_prescriptions`` maps a Session id to its new ordered
         Prescriptions; each named Session's Prescriptions are deleted and re-inserted
         in place, with contiguous positions, while the Session row itself (its id,
         Week/Day, position) and every Session *not* named — the frozen performed
-        prefix among them — is left untouched. The whole rewrite commits in one
-        transaction, so a failure persists nothing. Owner-scoped: returns the updated
-        Protocol, or ``None`` if it is missing or owned by another user. A named id
-        that is not one of this Protocol's Sessions is ignored."""
+        prefix among them — is left untouched. When ``name`` is supplied it is set on
+        the Protocol (an explicit ``None`` clears it back to the derived label); when
+        omitted the name is left as-is. The whole rewrite commits in one transaction,
+        so a failure persists nothing. Owner-scoped: returns the updated Protocol, or
+        ``None`` if it is missing or owned by another user. A named id that is not one
+        of this Protocol's Sessions is ignored."""
         ...
 
 
@@ -147,6 +161,7 @@ class SqlProtocolRepository:
             sessions_per_week=protocol.sessions_per_week,
             weeks=protocol.weeks,
             duration_minutes=protocol.duration_minutes,
+            name=protocol.name,
             sessions=[self._session_view(w) for w in workouts],
         )
 
@@ -158,6 +173,7 @@ class SqlProtocolRepository:
             sessions_per_week=draft.sessions_per_week,
             weeks=draft.weeks,
             duration_minutes=draft.duration_minutes,
+            name=draft.name,
         )
         self._session.add(protocol)
         self._session.commit()
@@ -215,10 +231,15 @@ class SqlProtocolRepository:
         clerk_user_id: str,
         *,
         session_prescriptions: dict[int, list[PrescriptionDraft]],
+        name: str | None = _KEEP_NAME,
     ) -> ProtocolView | None:
         protocol = self._session.get(Protocol, protocol_id)
         if protocol is None or protocol.clerk_user_id != clerk_user_id:
             return None
+
+        if name is not _KEEP_NAME:
+            protocol.name = name
+            self._session.add(protocol)
 
         workouts = self._session.exec(
             select(WorkoutSession).where(WorkoutSession.protocol_id == protocol_id)
@@ -292,6 +313,7 @@ class InMemoryProtocolRepository:
             sessions_per_week=protocol.sessions_per_week,
             weeks=protocol.weeks,
             duration_minutes=protocol.duration_minutes,
+            name=protocol.name,
             sessions=[self._session_view(w) for w in workouts],
         )
 
@@ -304,6 +326,7 @@ class InMemoryProtocolRepository:
             sessions_per_week=draft.sessions_per_week,
             weeks=draft.weeks,
             duration_minutes=draft.duration_minutes,
+            name=draft.name,
         )
         self._next_protocol_id += 1
         self._protocols[protocol.id] = protocol
@@ -361,10 +384,14 @@ class InMemoryProtocolRepository:
         clerk_user_id: str,
         *,
         session_prescriptions: dict[int, list[PrescriptionDraft]],
+        name: str | None = _KEEP_NAME,
     ) -> ProtocolView | None:
         protocol = self._protocols.get(protocol_id)
         if protocol is None or protocol.clerk_user_id != clerk_user_id:
             return None
+
+        if name is not _KEEP_NAME:
+            protocol.name = name
 
         session_ids = {w.id for w in self._sessions.get(protocol_id, [])}
         for session_id, prescriptions in session_prescriptions.items():

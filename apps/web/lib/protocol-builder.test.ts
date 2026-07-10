@@ -57,6 +57,8 @@ function protocol(overrides = {}): ProtocolProgress {
     sessions_per_week: 1,
     weeks: 2,
     duration_minutes: 45,
+    name: null,
+    label: "gain muscle mass · strength",
     completed_count: 0,
     next_session: null,
     sessions: [session()],
@@ -204,6 +206,52 @@ test("toDeployPayload emits only the un-performed tail with Load as kind+value",
   assert.equal(prescription.load_kind, "percent_1rm");
   assert.equal(prescription.load_value, "80");
   assert.equal(prescription.exercise_id, 100);
+});
+
+test("initBuilderDraft carries the Protocol name into the draft", () => {
+  // Arrange — a named Protocol
+  const source = protocol({ name: "Summer Split" });
+
+  // Act
+  const draft = initBuilderDraft(source);
+
+  // Assert
+  assert.equal(draft.name, "Summer Split");
+});
+
+test("initBuilderDraft leaves the name null when the Protocol is unnamed", () => {
+  // Arrange / Act — an adopted Protocol never named
+  const draft = initBuilderDraft(protocol({ name: null }));
+
+  // Assert
+  assert.equal(draft.name, null);
+});
+
+test("EDIT_NAME sets the draft name without touching Sessions", () => {
+  // Arrange
+  const draft = initBuilderDraft(protocol());
+
+  // Act — the config panel edits the name
+  const next = builderReducer(draft, { type: "EDIT_NAME", name: "My Plan" });
+
+  // Assert — the name changed, Sessions untouched, original draft immutable
+  assert.equal(next.name, "My Plan");
+  assert.deepEqual(next.sessions, draft.sessions);
+  assert.equal(draft.name, null);
+});
+
+test("toDeployPayload carries the edited name so it rides through DEPLOY", () => {
+  // Arrange — a draft whose name the user edited in the config panel
+  const draft = builderReducer(initBuilderDraft(protocol()), {
+    type: "EDIT_NAME",
+    name: "Summer Split",
+  });
+
+  // Act
+  const payload = toDeployPayload(draft);
+
+  // Assert — the name travels in the deploy payload (ADR-0021)
+  assert.equal(payload.name, "Summer Split");
 });
 
 test("ADD_PRESCRIPTION appends a new editable Prescription to an un-performed Session", () => {
