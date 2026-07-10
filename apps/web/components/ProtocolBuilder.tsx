@@ -6,16 +6,20 @@ import { ArrowDown, ArrowUp, Lock, Plus, Trash2 } from "lucide-react";
 
 import { submitDeploy } from "@/app/protocols/[id]/edit/actions";
 import {
+  builderMatrix,
   builderReducer,
   initBuilderDraft,
   toDeployPayload,
   type BuilderDraft,
+  type BuilderMatrix,
   type DraftPrescription,
   type DraftSession,
+  type MatrixCell,
   type PickedExercise,
 } from "@/lib/protocol-builder";
 import { LOAD_KIND_OPTIONS, type LoadKind } from "@/lib/load";
 import type { ProtocolProgress } from "@/lib/protocols-types";
+import { cn } from "@/lib/utils";
 import { ExerciseLibrary } from "@/components/ExerciseLibrary";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -40,9 +44,22 @@ export function ProtocolBuilder({ protocol }: ProtocolBuilderProps) {
     protocol,
     initBuilderDraft,
   );
+  // Which Session the matrix has open in the Prescription editor. Defaults to the
+  // Next (first un-performed) Session, the one the user most likely came to edit.
+  const [selectedSessionId, setSelectedSessionId] = useState<number | null>(
+    () =>
+      protocol.next_session?.session_id ??
+      protocol.sessions[0]?.session_id ??
+      null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [deployed, setDeployed] = useState(false);
   const [pending, startTransition] = useTransition();
+
+  const matrix = builderMatrix(draft);
+  const selectedSession =
+    draft.sessions.find((session) => session.sessionId === selectedSessionId) ??
+    null;
 
   function onDeploy() {
     setError(null);
@@ -70,7 +87,7 @@ export function ProtocolBuilder({ protocol }: ProtocolBuilderProps) {
           {protocol.objective}
         </span>
         <span className="label-mono text-[10px] text-text-muted">
-          {draft.sessionsPerWeek}×/WEEK · {draft.weeks} WEEKS
+          {matrix.cadenceLabel}
         </span>
       </div>
 
@@ -79,61 +96,57 @@ export function ProtocolBuilder({ protocol }: ProtocolBuilderProps) {
         <Alert tone="success">Protocol deployed — your changes are live.</Alert>
       ) : null}
 
-      <div className="flex flex-col gap-4">
-        <SectionHeader meta={`${draft.sessions.length} SESSIONS`}>
-          SESSIONS
-        </SectionHeader>
-        <ol className="flex list-none flex-col gap-3 p-0">
-          {draft.sessions.map((session, sessionIndex) => (
-            <li key={session.sessionId}>
-              <SessionEditor
-                session={session}
-                onEditField={(position, field, value) =>
-                  dispatch({
-                    type: "EDIT_PRESCRIPTION",
-                    sessionId: session.sessionId,
-                    position,
-                    field,
-                    value,
-                  })
-                }
-                onEditLoad={(position, loadKind, loadValue) =>
-                  dispatch({
-                    type: "EDIT_LOAD",
-                    sessionId: session.sessionId,
-                    position,
-                    loadKind,
-                    loadValue,
-                  })
-                }
-                onAdd={(exercise) =>
-                  dispatch({
-                    type: "ADD_PRESCRIPTION",
-                    sessionId: session.sessionId,
-                    exercise,
-                  })
-                }
-                onRemove={(position) =>
-                  dispatch({
-                    type: "REMOVE_PRESCRIPTION",
-                    sessionId: session.sessionId,
-                    position,
-                  })
-                }
-                onReorder={(from, to) =>
-                  dispatch({
-                    type: "REORDER_PRESCRIPTION",
-                    sessionId: session.sessionId,
-                    from,
-                    to,
-                  })
-                }
-                index={sessionIndex + 1}
-              />
-            </li>
-          ))}
-        </ol>
-      </div>
+      <SessionMatrix
+        matrix={matrix}
+        selectedSessionId={selectedSessionId}
+        onSelect={setSelectedSessionId}
+      />
+
+      {selectedSession ? (
+        <SessionEditor
+          session={selectedSession}
+          onEditField={(position, field, value) =>
+            dispatch({
+              type: "EDIT_PRESCRIPTION",
+              sessionId: selectedSession.sessionId,
+              position,
+              field,
+              value,
+            })
+          }
+          onEditLoad={(position, loadKind, loadValue) =>
+            dispatch({
+              type: "EDIT_LOAD",
+              sessionId: selectedSession.sessionId,
+              position,
+              loadKind,
+              loadValue,
+            })
+          }
+          onAdd={(exercise) =>
+            dispatch({
+              type: "ADD_PRESCRIPTION",
+              sessionId: selectedSession.sessionId,
+              exercise,
+            })
+          }
+          onRemove={(position) =>
+            dispatch({
+              type: "REMOVE_PRESCRIPTION",
+              sessionId: selectedSession.sessionId,
+              position,
+            })
+          }
+          onReorder={(from, to) =>
+            dispatch({
+              type: "REORDER_PRESCRIPTION",
+              sessionId: selectedSession.sessionId,
+              from,
+              to,
+            })
+          }
+        />
+      ) : null}
 
       <div className="flex flex-col gap-3">
         <Button onClick={onDeploy} disabled={pending} className="w-full">
@@ -150,9 +163,104 @@ export function ProtocolBuilder({ protocol }: ProtocolBuilderProps) {
   );
 }
 
+interface SessionMatrixProps {
+  matrix: BuilderMatrix;
+  selectedSessionId: number | null;
+  onSelect: (sessionId: number) => void;
+}
+
+// The Protocol's positional Week × session-slot overview (ADR-0021), replacing the
+// plain Session list. Rows are weeks; cells are the Sessions occupying that week's
+// slots, in order — purely positional, with no weekday or date labels, and each
+// row is as wide as the week's *actual* Session count (deloads render narrower).
+// Each cell shows its Prescription count; performed Sessions read dimmed and
+// locked, distinct from live ones. Selecting a cell opens that Session below.
+function SessionMatrix({
+  matrix,
+  selectedSessionId,
+  onSelect,
+}: SessionMatrixProps) {
+  return (
+    <div className="flex flex-col gap-4">
+      <SectionHeader meta={matrix.cadenceLabel}>OVERVIEW</SectionHeader>
+      <div className="flex flex-col gap-2">
+        {matrix.rows.map((row) => (
+          <div key={row.week} className="flex items-center gap-3">
+            <span className="w-9 shrink-0 label-mono text-[10px] text-text-muted">
+              WK {row.week}
+            </span>
+            <ul className="flex flex-1 list-none flex-wrap gap-2 p-0">
+              {row.cells.map((cell, slotIndex) => (
+                <li key={cell.sessionId}>
+                  <MatrixCellButton
+                    cell={cell}
+                    slot={slotIndex + 1}
+                    selected={cell.sessionId === selectedSessionId}
+                    onSelect={() => onSelect(cell.sessionId)}
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface MatrixCellButtonProps {
+  cell: MatrixCell;
+  slot: number;
+  selected: boolean;
+  onSelect: () => void;
+}
+
+// One matrix cell: a Session at a week's slot. Renders its Prescription count as
+// the headline figure, a positional `SLOT n` (never a weekday) or a lock for a
+// performed Session, and highlights when it is the one open in the editor.
+function MatrixCellButton({
+  cell,
+  slot,
+  selected,
+  onSelect,
+}: MatrixCellButtonProps) {
+  const count = cell.prescriptionCount;
+  const label =
+    `Week ${cell.week}, slot ${slot} — ${count} ${count === 1 ? "exercise" : "exercises"}` +
+    (cell.performed ? ", performed" : "");
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      aria-label={label}
+      className={cn(
+        "flex h-16 w-16 flex-col items-center justify-center gap-1 rounded-md border transition-colors",
+        selected
+          ? "border-cyan ring-2 ring-cyan/30"
+          : "border-border hover:border-cyan/50",
+        cell.performed
+          ? "bg-base/50 text-text-muted opacity-70"
+          : "bg-surface text-text-primary",
+      )}
+    >
+      {cell.performed ? (
+        <Lock className="h-3 w-3" aria-hidden />
+      ) : (
+        <span className="label-mono text-[8px] text-text-muted">
+          SLOT {slot}
+        </span>
+      )}
+      <span className="font-mono text-[18px] font-bold leading-none">
+        {count}
+      </span>
+      <span className="label-mono text-[8px] text-text-muted">EX</span>
+    </button>
+  );
+}
+
 interface SessionEditorProps {
   session: DraftSession;
-  index: number;
   onEditField: (
     position: number,
     field: "sets" | "reps" | "restSeconds" | "tempo",
@@ -164,9 +272,11 @@ interface SessionEditorProps {
   onReorder: (from: number, to: number) => void;
 }
 
+// The Prescription editor for the one Session the matrix has open. Its slot label
+// stays positional (Week × slot, no dates, ADR-0021). A performed Session renders
+// read-only — the frozen prefix (ADR-0020).
 function SessionEditor({
   session,
-  index,
   onEditField,
   onEditLoad,
   onAdd,
@@ -182,11 +292,11 @@ function SessionEditor({
     >
       <div className="flex items-center gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm bg-base font-mono text-[13px] font-bold text-cyan">
-          {String(index).padStart(2, "0")}
+          W{session.week}
         </span>
         <div className="flex flex-1 flex-col gap-0.5">
           <span className="font-display text-[15px] font-semibold text-text-primary">
-            Week {session.week}, Day {session.day}
+            Week {session.week}, Slot {session.day}
           </span>
           <span className="label-mono text-[9px] text-text-muted">
             {session.prescriptions.length} EXERCISES

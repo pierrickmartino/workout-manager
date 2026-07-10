@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   initBuilderDraft,
   builderReducer,
+  builderMatrix,
   toDeployPayload,
 } from "./protocol-builder.ts";
 import type { BuilderDraft } from "./protocol-builder.ts";
@@ -362,5 +363,140 @@ test("a reordered un-performed Session's new order flows through to the deploy p
   assert.deepEqual(
     payload.sessions[0].prescriptions.map((p) => p.exercise_id),
     [2, 1],
+  );
+});
+
+// `builderMatrix` derives the builder's positional Week × session-slot overview
+// (F4 Slice 4, ADR-0021): rows are weeks, cells are the Sessions occupying that
+// week's slots in order — no weekday or date binding. It renders the *actual*
+// per-week Session count (weeks may legitimately differ, e.g. deloads) and each
+// cell carries what the overview and its navigation need.
+
+test("builderMatrix groups Sessions into one row per week, in ascending week order", () => {
+  // Arrange — a 2-week Protocol, two Sessions per week, given out of order
+  const draft = initBuilderDraft(
+    protocol({
+      weeks: 2,
+      sessions_per_week: 2,
+      sessions: [
+        session({ session_id: 3, week: 2, day: 1 }),
+        session({ session_id: 1, week: 1, day: 1 }),
+        session({ session_id: 4, week: 2, day: 2 }),
+        session({ session_id: 2, week: 1, day: 2 }),
+      ],
+    }),
+  );
+
+  // Act
+  const matrix = builderMatrix(draft);
+
+  // Assert — two rows, weeks ascending, cells in day order within each week
+  assert.deepEqual(
+    matrix.rows.map((row) => row.week),
+    [1, 2],
+  );
+  assert.deepEqual(
+    matrix.rows.map((row) => row.cells.map((cell) => cell.sessionId)),
+    [
+      [1, 2],
+      [3, 4],
+    ],
+  );
+});
+
+test("builderMatrix cells carry each Session's Prescription count", () => {
+  // Arrange — two Sessions with differing numbers of Prescriptions
+  const draft = initBuilderDraft(
+    protocol({
+      weeks: 1,
+      sessions_per_week: 2,
+      sessions: [
+        session({
+          session_id: 1,
+          week: 1,
+          day: 1,
+          prescriptions: [prescription(), prescription(), prescription()],
+        }),
+        session({
+          session_id: 2,
+          week: 1,
+          day: 2,
+          prescriptions: [prescription()],
+        }),
+      ],
+    }),
+  );
+
+  // Act
+  const matrix = builderMatrix(draft);
+
+  // Assert — each cell's count is the number of Prescriptions in that Session
+  assert.deepEqual(
+    matrix.rows[0].cells.map((cell) => cell.prescriptionCount),
+    [3, 1],
+  );
+});
+
+test("builderMatrix renders the real per-week Session count for uneven weeks", () => {
+  // Arrange — week 1 has three Sessions, week 2 is a one-Session deload
+  const draft = initBuilderDraft(
+    protocol({
+      weeks: 2,
+      sessions_per_week: 3,
+      sessions: [
+        session({ session_id: 1, week: 1, day: 1 }),
+        session({ session_id: 2, week: 1, day: 2 }),
+        session({ session_id: 3, week: 1, day: 3 }),
+        session({ session_id: 4, week: 2, day: 1 }),
+      ],
+    }),
+  );
+
+  // Act
+  const matrix = builderMatrix(draft);
+
+  // Assert — each row's width is the actual count, not a fixed frequency
+  assert.deepEqual(
+    matrix.rows.map((row) => row.cells.length),
+    [3, 1],
+  );
+});
+
+test("builderMatrix reports the plan's cadence as a frequency × cycle header", () => {
+  // Arrange — a 6-per-week, 6-week Protocol
+  const draft = initBuilderDraft(
+    protocol({ weeks: 6, sessions_per_week: 6, sessions: [session()] }),
+  );
+
+  // Act
+  const matrix = builderMatrix(draft);
+
+  // Assert — the cadence header reads frequency/WK · weeks WK
+  assert.equal(matrix.cadenceLabel, "6/WK · 6 WK");
+});
+
+test("builderMatrix flags each cell performed so the overview can distinguish them", () => {
+  // Arrange — a performed Session followed by an un-performed one
+  const draft = initBuilderDraft(
+    protocol({
+      weeks: 1,
+      sessions_per_week: 2,
+      sessions: [
+        session({ session_id: 1, week: 1, day: 1, performed: true }),
+        session({ session_id: 2, week: 1, day: 2, performed: false }),
+      ],
+    }),
+  );
+
+  // Act
+  const matrix = builderMatrix(draft);
+
+  // Assert — the performed flag rides each cell for the read/navigation surface
+  assert.deepEqual(
+    matrix.rows[0].cells.map((cell) => [cell.sessionId, cell.performed]),
+    [
+      [1, true],
+      [2, false],
+    ],
   );
 });

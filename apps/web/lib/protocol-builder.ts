@@ -267,6 +267,70 @@ function mapPrescription(
   };
 }
 
+// One cell of the builder's positional Week × session-slot matrix (ADR-0021): the
+// Session occupying a slot in its week. Positional only — `week`/`day` place the
+// cell in the grid with no weekday or date semantics. `prescriptionCount` is what
+// the overview renders in the cell; `performed` distinguishes the frozen prefix
+// (ADR-0020) so it reads read-only; `sessionId` is the navigation target the
+// screen opens in the Prescription editor.
+export interface MatrixCell {
+  sessionId: number;
+  week: number;
+  day: number;
+  prescriptionCount: number;
+  performed: boolean;
+}
+
+// One row of the matrix: a week and the Sessions occupying its slots, in order.
+export interface MatrixRow {
+  week: number;
+  cells: MatrixCell[];
+}
+
+// The builder's Week × session-slot overview view-model (ADR-0021). `rows` are the
+// weeks in ascending order, each carrying the *actual* Sessions in that week — so
+// uneven weeks (e.g. deloads) render their real count rather than a fixed
+// frequency. `cadenceLabel` is the plan's nominal cadence header, e.g. `6/WK · 6 WK`.
+export interface BuilderMatrix {
+  rows: MatrixRow[];
+  cadenceLabel: string;
+}
+
+// Derive the positional Week × session-slot matrix from a builder draft. Sessions
+// are grouped by their week into ascending rows, each row's cells ordered by `day`
+// (the slot within the week). No week is fabricated: only weeks that actually hold
+// Sessions become rows, so the grid reflects the real per-week count including
+// uneven weeks. The cadence header reports the plan's nominal frequency × weeks.
+export function builderMatrix(draft: BuilderDraft): BuilderMatrix {
+  const byWeek = new Map<number, MatrixCell[]>();
+  for (const session of draft.sessions) {
+    const cell: MatrixCell = {
+      sessionId: session.sessionId,
+      week: session.week,
+      day: session.day,
+      prescriptionCount: session.prescriptions.length,
+      performed: session.performed,
+    };
+    const bucket = byWeek.get(session.week);
+    if (bucket) bucket.push(cell);
+    else byWeek.set(session.week, [cell]);
+  }
+
+  const rows: MatrixRow[] = [...byWeek.keys()]
+    .sort((a, b) => a - b)
+    .map((week) => ({
+      week,
+      cells: (byWeek.get(week) ?? [])
+        .slice()
+        .sort((a, b) => a.day - b.day),
+    }));
+
+  return {
+    rows,
+    cadenceLabel: `${draft.sessionsPerWeek}/WK · ${draft.weeks} WK`,
+  };
+}
+
 // One Prescription as the deploy endpoint receives it: the Load travels as its
 // kind+value (resolved server-side through `load_from_input`), never a pre-resolved
 // dict, so building and logging share one Load path.
