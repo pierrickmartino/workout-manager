@@ -749,3 +749,91 @@ test("toSimulatePayload sends only the exercise id and set count per Prescriptio
     { exercise_id: 42, sets: 4 },
   ]);
 });
+
+// The F6 ADD TO PROTOCOL deep-link (Slice 7, ADR-0021): an Exercise arrives from its
+// detail screen queued for placement. SEED_QUEUED_EXERCISE holds it on the draft;
+// PLACE_QUEUED_EXERCISE drops it into an un-performed Session and clears the queue —
+// a staged edit deployed like any other, never an immediate write (ADR-0020).
+
+test("initBuilderDraft starts with no queued Exercise", () => {
+  // Arrange / Act — a plain draft, no deep-link
+  const draft = initBuilderDraft(protocol());
+
+  // Assert — nothing queued for placement
+  assert.equal(draft.queuedExercise, null);
+});
+
+test("SEED_QUEUED_EXERCISE holds the deep-linked Exercise on the draft for placement", () => {
+  // Arrange
+  const draft = initBuilderDraft(protocol());
+
+  // Act — the F6 deep-link seeds the Exercise it carried
+  const next = builderReducer(draft, {
+    type: "SEED_QUEUED_EXERCISE",
+    exercise: { id: 200, name: "Romanian Deadlift" },
+  });
+
+  // Assert — queued, and no Session touched yet (placement is a separate step)
+  assert.deepEqual(next.queuedExercise, { id: 200, name: "Romanian Deadlift" });
+  assert.deepEqual(next.sessions, draft.sessions);
+  // …and the original draft is untouched (immutable)
+  assert.equal(draft.queuedExercise, null);
+});
+
+test("PLACE_QUEUED_EXERCISE drops the queued Exercise into an un-performed Session and clears the queue", () => {
+  // Arrange — a queued Exercise waiting to be placed
+  const seeded = builderReducer(initBuilderDraft(protocol()), {
+    type: "SEED_QUEUED_EXERCISE",
+    exercise: { id: 200, name: "Romanian Deadlift" },
+  });
+
+  // Act — the user drops it into Session 1
+  const next = builderReducer(seeded, {
+    type: "PLACE_QUEUED_EXERCISE",
+    sessionId: 1,
+  });
+
+  // Assert — appended as a new editable Prescription, and the queue is cleared
+  const prescriptions = next.sessions[0].prescriptions;
+  assert.equal(prescriptions.length, 2);
+  const added = prescriptions[1];
+  assert.equal(added.exerciseId, 200);
+  assert.equal(added.exerciseName, "Romanian Deadlift");
+  assert.ok(added.sets >= 1);
+  assert.notEqual(added.reps, "");
+  assert.equal(next.queuedExercise, null);
+});
+
+test("PLACE_QUEUED_EXERCISE is a no-op on a performed Session and keeps the queue (frozen prefix)", () => {
+  // Arrange — Session 1 is performed; an Exercise is queued
+  const seeded = builderReducer(
+    initBuilderDraft(
+      protocol({ sessions: [session({ session_id: 1, performed: true })] }),
+    ),
+    { type: "SEED_QUEUED_EXERCISE", exercise: { id: 200, name: "Romanian Deadlift" } },
+  );
+
+  // Act — try to drop it into the frozen Session
+  const next = builderReducer(seeded, {
+    type: "PLACE_QUEUED_EXERCISE",
+    sessionId: 1,
+  });
+
+  // Assert — nothing placed, and the Exercise stays queued for a valid Session
+  assert.deepEqual(next, seeded);
+  assert.deepEqual(next.queuedExercise, { id: 200, name: "Romanian Deadlift" });
+});
+
+test("PLACE_QUEUED_EXERCISE with nothing queued is a no-op", () => {
+  // Arrange — no deep-link, so nothing is queued
+  const draft = initBuilderDraft(protocol());
+
+  // Act
+  const next = builderReducer(draft, {
+    type: "PLACE_QUEUED_EXERCISE",
+    sessionId: 1,
+  });
+
+  // Assert — the draft is untouched
+  assert.deepEqual(next, draft);
+});

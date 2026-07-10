@@ -35,6 +35,10 @@ import { Button } from "@/components/ui/button";
 
 interface ProtocolBuilderProps {
   protocol: ProtocolProgress;
+  // An Exercise deep-linked from F6's ADD TO PROTOCOL (ADR-0021), queued for
+  // placement into an un-performed Session. `null`/absent when the builder was opened
+  // normally.
+  queuedExercise?: PickedExercise | null;
 }
 
 // Shape bounds mirror the server's deploy validation (weeks 1–52, frequency 1–14).
@@ -48,11 +52,24 @@ const MAX_SESSIONS_PER_WEEK = 14;
 // draft via the pure reducer and change nothing live until DEPLOY PROTOCOL sends the
 // desired un-performed tail. Performed Sessions render read-only (the frozen prefix,
 // enforced again server-side). Leaving the page discards the draft with no effect.
-export function ProtocolBuilder({ protocol }: ProtocolBuilderProps) {
+export function ProtocolBuilder({
+  protocol,
+  queuedExercise = null,
+}: ProtocolBuilderProps) {
+  // Seed the F6-queued Exercise into the initial draft (ADR-0021) so it is waiting to
+  // be placed the moment the builder opens — no mount effect, no flash of an empty
+  // queue. Placement (and clearing the queue) happens through the reducer.
   const [draft, dispatch] = useReducer(
     builderReducer,
     protocol,
-    initBuilderDraft,
+    (source): BuilderDraft => {
+      const base = initBuilderDraft(source);
+      if (!queuedExercise) return base;
+      return builderReducer(base, {
+        type: "SEED_QUEUED_EXERCISE",
+        exercise: queuedExercise,
+      });
+    },
   );
   // Which Session the matrix has open in the Prescription editor. Defaults to the
   // Next (first un-performed) Session, the one the user most likely came to edit.
@@ -142,6 +159,14 @@ export function ProtocolBuilder({ protocol }: ProtocolBuilderProps) {
         <Alert tone="success">Protocol deployed — your changes are live.</Alert>
       ) : null}
 
+      {draft.queuedExercise ? (
+        <Alert tone="info">
+          <span className="font-semibold">{draft.queuedExercise.name}</span> is
+          queued — pick an upcoming session below and place it, then DEPLOY to add
+          it.
+        </Alert>
+      ) : null}
+
       <SessionMatrix
         matrix={matrix}
         selectedSessionId={selectedSessionId}
@@ -157,6 +182,13 @@ export function ProtocolBuilder({ protocol }: ProtocolBuilderProps) {
       {selectedSession ? (
         <SessionEditor
           session={selectedSession}
+          queuedExerciseName={draft.queuedExercise?.name ?? null}
+          onPlaceQueued={() =>
+            dispatch({
+              type: "PLACE_QUEUED_EXERCISE",
+              sessionId: selectedSession.sessionId,
+            })
+          }
           onEditField={(position, field, value) =>
             dispatch({
               type: "EDIT_PRESCRIPTION",
@@ -553,6 +585,11 @@ function MatrixCellButton({
 
 interface SessionEditorProps {
   session: DraftSession;
+  // The name of the F6-queued Exercise waiting to be placed (ADR-0021), or `null`
+  // when nothing is queued. Drives the "place here" affordance on an un-performed
+  // Session.
+  queuedExerciseName: string | null;
+  onPlaceQueued: () => void;
   onEditField: (
     position: number,
     field: "sets" | "reps" | "restSeconds" | "tempo",
@@ -570,6 +607,8 @@ interface SessionEditorProps {
 // read-only — the frozen prefix (ADR-0020).
 function SessionEditor({
   session,
+  queuedExerciseName,
+  onPlaceQueued,
   onEditField,
   onEditLoad,
   onAdd,
@@ -640,6 +679,24 @@ function SessionEditor({
           </li>
         ))}
       </ul>
+
+      {locked || !queuedExerciseName ? null : (
+        <div className="flex flex-col gap-2 border-t border-border pt-3">
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            className="w-full"
+            onClick={onPlaceQueued}
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden />
+            PLACE {queuedExerciseName}
+          </Button>
+          <p className="label-mono text-[9px] text-text-muted">
+            Adds {queuedExerciseName} here as a new module — edit it below, then DEPLOY.
+          </p>
+        </div>
+      )}
 
       {locked ? null : (
         <div className="flex flex-col gap-3 border-t border-border pt-3">

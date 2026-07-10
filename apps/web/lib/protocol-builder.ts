@@ -46,6 +46,11 @@ export interface BuilderDraft {
   weeks: number;
   sessionsPerWeek: number;
   sessions: DraftSession[];
+  // An Exercise deep-linked from F6's `ADD TO PROTOCOL` (ADR-0021), queued for
+  // placement: SEED_QUEUED_EXERCISE holds it here until the user drops it into an
+  // un-performed Session (PLACE_QUEUED_EXERCISE), which then clears it. `null` when
+  // the builder was opened normally, with nothing waiting to be placed.
+  queuedExercise: PickedExercise | null;
 }
 
 // Which scalar field of a Prescription an edit targets. Load is edited separately
@@ -116,6 +121,14 @@ export type BuilderEvent =
   | {
       type: "SET_SESSIONS_PER_WEEK";
       sessionsPerWeek: number;
+    }
+  | {
+      type: "SEED_QUEUED_EXERCISE";
+      exercise: PickedExercise;
+    }
+  | {
+      type: "PLACE_QUEUED_EXERCISE";
+      sessionId: number;
     };
 
 // Derive the editable kind+value pair a Prescription's Load starts from, off the
@@ -159,6 +172,8 @@ export function initBuilderDraft(protocol: ProtocolProgress): BuilderDraft {
     name: protocol.name,
     weeks: protocol.weeks,
     sessionsPerWeek: protocol.sessions_per_week,
+    // A freshly-read draft has nothing queued; the F6 deep-link seeds it after init.
+    queuedExercise: null,
     sessions: protocol.sessions.map((session) => ({
       sessionId: session.session_id,
       week: session.week,
@@ -241,9 +256,44 @@ export function builderReducer(
     case "SET_SESSIONS_PER_WEEK":
       return { ...state, sessionsPerWeek: event.sessionsPerWeek };
 
+    case "SEED_QUEUED_EXERCISE":
+      return { ...state, queuedExercise: event.exercise };
+
+    case "PLACE_QUEUED_EXERCISE":
+      return placeQueuedExercise(state, event.sessionId);
+
     default:
       return state;
   }
+}
+
+// Drop the queued Exercise (from the F6 deep-link, ADR-0021) into the un-performed
+// Session `sessionId` as a new Prescription, and clear the queue — a staged edit
+// deployed like any other (ADR-0020). Nothing to place (no queued Exercise), a
+// performed Session (frozen prefix), or an unknown Session leaves the draft untouched,
+// keeping the queue so the honest deep-link intent isn't silently dropped.
+function placeQueuedExercise(
+  state: BuilderDraft,
+  sessionId: number,
+): BuilderDraft {
+  const queued = state.queuedExercise;
+  if (!queued) return state;
+  const target = state.sessions.find(
+    (session) => session.sessionId === sessionId && !session.performed,
+  );
+  if (!target) return state;
+  return {
+    ...state,
+    queuedExercise: null,
+    sessions: state.sessions.map((session) =>
+      session === target
+        ? {
+            ...session,
+            prescriptions: [...session.prescriptions, newPrescription(queued)],
+          }
+        : session,
+    ),
+  };
 }
 
 // A fresh empty Session slot for `week`, appended to the un-performed tail (ADR-0020).

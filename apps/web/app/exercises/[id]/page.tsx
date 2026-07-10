@@ -1,13 +1,16 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { fetchExercise } from "@/lib/sessions";
 import { fetchExerciseProgress } from "@/lib/progress";
 import { fetchExerciseRecords } from "@/lib/exercise-records";
+import { fetchHome } from "@/lib/home";
 import { toExerciseTab } from "@/lib/exercise-detail-view";
+import type { ProtocolProgress } from "@/lib/protocols-types";
 import { PageHeader } from "@/components/pulse/page-header";
 import { Alert } from "@/components/pulse/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { ExerciseTabs } from "@/components/exercise/exercise-tabs";
 import { StatHeader } from "@/components/exercise/stat-header";
 import { SpecsPanel } from "@/components/exercise/specs-panel";
@@ -48,6 +51,15 @@ export default async function ExercisePage({
   const records =
     recordsEnvelope.success && recordsEnvelope.data ? recordsEnvelope.data : null;
 
+  // ADD TO PROTOCOL targets the user's Current Protocol (ADR-0021), so the Home read
+  // supplies it here. A failed read simply leaves the control a disabled seam rather
+  // than breaking the page or fabricating a target.
+  const homeEnvelope = await fetchHome();
+  const currentProtocol =
+    homeEnvelope.success && homeEnvelope.data
+      ? homeEnvelope.data.current_protocol
+      : null;
+
   return (
     <section className="flex flex-col gap-7">
       <PageHeader
@@ -79,7 +91,11 @@ export default async function ExercisePage({
         <RecordsPanel milestones={records?.pr_milestones ?? []} />
       ) : null}
 
-      <AddToProtocolSeam />
+      <AddToProtocol
+        exerciseId={exerciseId}
+        exerciseName={exercise.name}
+        currentProtocol={currentProtocol}
+      />
     </section>
   );
 }
@@ -99,11 +115,50 @@ async function HistoryTab({ exerciseId }: { exerciseId: number }) {
   return <HistoryPanel progress={envelope.data} />;
 }
 
-// ADD TO PROTOCOL is deferred to F4 (ADR-0017): a Protocol is fully enumerated up
-// front and no "append an Exercise" mutation exists yet, so this ships as an honest
-// disabled seam — visibly present, clearly labelled, and doing nothing — rather than
-// a dead or fabricated write.
-function AddToProtocolSeam() {
+// ADD TO PROTOCOL, now wired to the Protocol Builder (F4 Slice 7, ADR-0021). When the
+// user has a Current Protocol with an un-performed Session, it deep-links into the
+// builder with this Exercise queued for placement — the user drops it into a Session
+// and DEPLOYs like any other staged edit (ADR-0020), never an immediate write. With no
+// Protocol or no un-performed Session it stays the honest disabled seam ADR-0017 left,
+// with a clear reason, rather than a faked or dead write.
+function AddToProtocol({
+  exerciseId,
+  exerciseName,
+  currentProtocol,
+}: {
+  exerciseId: number;
+  exerciseName: string;
+  currentProtocol: ProtocolProgress | null;
+}) {
+  const target = currentProtocol?.next_session ? currentProtocol : null;
+
+  if (!target) {
+    return (
+      <AddToProtocolDisabled
+        reason={
+          currentProtocol
+            ? "This protocol has no upcoming session to add to."
+            : "Generate a protocol first."
+        }
+      />
+    );
+  }
+
+  // Queue the Exercise (id + name) on the builder deep-link so it can be placed
+  // without a second catalog fetch; the builder seeds it from these params.
+  const href =
+    `/protocols/${target.id}/edit` +
+    `?queue=${exerciseId}` +
+    `&queueName=${encodeURIComponent(exerciseName)}`;
+
+  return (
+    <Link href={href} className={buttonVariants({ className: "w-full" })}>
+      Add to Protocol
+    </Link>
+  );
+}
+
+function AddToProtocolDisabled({ reason }: { reason: string }) {
   return (
     <div className="flex flex-col items-center gap-2">
       <Button
@@ -111,13 +166,11 @@ function AddToProtocolSeam() {
         className="w-full"
         disabled
         aria-disabled="true"
-        title="Arrives with the Protocol Builder"
+        title={reason}
       >
         Add to Protocol
       </Button>
-      <p className="label-mono text-[10px] text-text-muted">
-        Arrives with the Protocol Builder
-      </p>
+      <p className="label-mono text-[10px] text-text-muted">{reason}</p>
     </div>
   );
 }
