@@ -4,8 +4,8 @@
 existing catalog Exercise's name and its flat ``targeted_muscles`` union, it returns
 a Primary/Secondary split of *those same muscles*. The concrete
 ``LlmMuscleEmphasisGenerator`` runs through the provider-agnostic ``StructuredLLM``
-transport constrained to ``GeneratedMuscleEmphasis``; output crosses the boundary
-through ``parse_generated_muscle_emphasis`` and raises ``GenerationError`` on anything
+transport constrained to ``GeneratedMuscleEmphasis``; output crosses the shared
+``generate_structured`` boundary and raises ``GenerationError`` on anything
 malformed, so a bad split is never written to the catalog.
 
 The pass classifies the *existing* union rather than inventing muscles, so
@@ -17,10 +17,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from pydantic import ValidationError
-
-from app.generation.llm.port import GenerationError, StructuredLLM
+from app.generation.llm.port import StructuredLLM
 from app.generation.schema import GeneratedMuscleEmphasis
+from app.generation.structured import generate_structured
 
 MAX_TOKENS = 1000
 
@@ -43,17 +42,6 @@ class MuscleEmphasisGenerator(Protocol):
         """Produce a schema-valid Primary/Secondary split for ``request`` or raise
         ``GenerationError`` if the model output cannot be validated."""
         ...
-
-
-def parse_generated_muscle_emphasis(raw_json: str) -> GeneratedMuscleEmphasis:
-    """Validate raw model output against the split schema at the boundary."""
-
-    try:
-        return GeneratedMuscleEmphasis.model_validate_json(raw_json)
-    except ValidationError as exc:
-        raise GenerationError(
-            f"muscle emphasis generation did not match the schema: {exc}"
-        ) from exc
 
 
 def _system_prompt() -> str:
@@ -92,18 +80,18 @@ class LlmMuscleEmphasisGenerator:
         self._llm = llm
 
     def generate(self, request: MuscleEmphasisRequest) -> GeneratedMuscleEmphasis:
-        text = self._llm.complete(
+        return generate_structured(
+            llm=self._llm,
             system=_system_prompt(),
             user=_user_prompt(request),
             schema=GeneratedMuscleEmphasis,
             max_tokens=MAX_TOKENS,
+            subject="muscle emphasis generation",
         )
-        return parse_generated_muscle_emphasis(text)
 
 
 __all__ = [
     "MuscleEmphasisRequest",
     "MuscleEmphasisGenerator",
     "LlmMuscleEmphasisGenerator",
-    "parse_generated_muscle_emphasis",
 ]
