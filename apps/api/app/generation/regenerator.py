@@ -6,8 +6,8 @@ concrete ``LlmSessionRegenerator`` runs through the provider-agnostic
 The output is the set of **replacement** Exercise Prescriptions for the
 prescriptions the user chose to drop — conditioned on the kept Prescriptions and
 the negative Generation Feedback reason so progression stays coherent
-(CONTEXT.md). Output crosses the boundary through ``parse_generated_session``
-(reused from the generator), so a malformed regeneration raises
+(CONTEXT.md). Output crosses the shared ``generate_structured`` boundary against
+the ``GeneratedSession`` schema, so a malformed regeneration raises
 ``GenerationError`` and never reaches the user's copy."""
 
 from __future__ import annotations
@@ -15,9 +15,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from app.generation.generator import parse_generated_session
 from app.generation.llm.port import StructuredLLM
 from app.generation.schema import GeneratedSession
+from app.generation.structured import generate_structured
 
 MAX_TOKENS = 8000
 
@@ -106,13 +106,14 @@ class LlmSessionRegenerator:
         self._llm = llm
 
     def regenerate(self, request: RegenerationRequest) -> GeneratedSession:
-        text = self._llm.complete(
+        return generate_structured(
+            llm=self._llm,
             system=_system_prompt(),
             user=_user_prompt(request),
             schema=GeneratedSession,
             max_tokens=MAX_TOKENS,
+            subject="generation",
         )
-        return parse_generated_session(text)
 
 
 __all__ = [

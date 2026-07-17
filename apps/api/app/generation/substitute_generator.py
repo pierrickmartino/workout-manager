@@ -6,20 +6,18 @@ that fits the user's equipment and constraints. The concrete
 ``LlmSubstituteGenerator`` runs through the provider-agnostic ``StructuredLLM``
 transport, constrained to the ``GeneratedSubstitute`` schema, so the invented
 movement arrives with its full enriched detail and can enter the catalog once, as
-``ai_generated``, for everyone. Output crosses the boundary through
-``parse_generated_substitute`` and raises ``GenerationError`` on anything
-malformed."""
+``ai_generated``, for everyone. Output crosses the shared ``generate_structured``
+boundary against the ``GeneratedSubstitute`` schema and raises ``GenerationError``
+on anything malformed."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Protocol
 
-from pydantic import ValidationError
-
-from app.generation.generator import GenerationError
 from app.generation.llm.port import StructuredLLM
 from app.generation.schema import GeneratedSubstitute
+from app.generation.structured import generate_structured
 
 MAX_TOKENS = 4000
 
@@ -43,17 +41,6 @@ class SubstituteGenerator(Protocol):
         """Produce a schema-valid substitute Exercise for ``request`` or raise
         ``GenerationError`` if the model output cannot be validated."""
         ...
-
-
-def parse_generated_substitute(raw_json: str) -> GeneratedSubstitute:
-    """Validate raw model output against the substitute schema at the boundary."""
-
-    try:
-        return GeneratedSubstitute.model_validate_json(raw_json)
-    except ValidationError as exc:
-        raise GenerationError(
-            f"substitute generation did not match the schema: {exc}"
-        ) from exc
 
 
 def _system_prompt() -> str:
@@ -101,18 +88,18 @@ class LlmSubstituteGenerator:
         self._llm = llm
 
     def generate(self, request: SubstituteRequest) -> GeneratedSubstitute:
-        text = self._llm.complete(
+        return generate_structured(
+            llm=self._llm,
             system=_system_prompt(),
             user=_user_prompt(request),
             schema=GeneratedSubstitute,
             max_tokens=MAX_TOKENS,
+            subject="substitute generation",
         )
-        return parse_generated_substitute(text)
 
 
 __all__ = [
     "SubstituteRequest",
     "SubstituteGenerator",
     "LlmSubstituteGenerator",
-    "parse_generated_substitute",
 ]

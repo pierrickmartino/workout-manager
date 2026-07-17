@@ -13,11 +13,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from pydantic import ValidationError
-
 from app.generation.generator import GenerationError
 from app.generation.llm.port import StructuredLLM
 from app.generation.schema import GeneratedProtocol
+from app.generation.structured import generate_structured, parse_or_raise
 
 MAX_TOKENS = 32000
 
@@ -74,13 +73,9 @@ def parse_generated_protocol(
     callers never adopt a half-formed Protocol.
     """
 
-    try:
-        protocol = GeneratedProtocol.model_validate_json(raw_json)
-    except ValidationError as exc:
-        raise GenerationError(
-            f"protocol generation did not match the schema: {exc}"
-        ) from exc
-
+    protocol = parse_or_raise(
+        raw_json, GeneratedProtocol, subject="protocol generation"
+    )
     _ensure_fully_enumerated(protocol, weeks=weeks, sessions_per_week=sessions_per_week)
     return protocol
 
@@ -124,15 +119,20 @@ class LlmProtocolGenerator:
         self._llm = llm
 
     def generate(self, request: ProtocolGenerationRequest) -> GeneratedProtocol:
-        text = self._llm.complete(
+        protocol = generate_structured(
+            llm=self._llm,
             system=_system_prompt(),
             user=_user_prompt(request),
             schema=GeneratedProtocol,
             max_tokens=MAX_TOKENS,
+            subject="protocol generation",
         )
-        return parse_generated_protocol(
-            text, weeks=request.weeks, sessions_per_week=request.sessions_per_week
+        _ensure_fully_enumerated(
+            protocol,
+            weeks=request.weeks,
+            sessions_per_week=request.sessions_per_week,
         )
+        return protocol
 
 
 __all__ = [

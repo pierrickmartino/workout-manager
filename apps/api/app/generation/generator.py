@@ -12,10 +12,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from pydantic import ValidationError
-
 from app.generation.llm.port import GenerationError, StructuredLLM
 from app.generation.schema import GeneratedSession
+from app.generation.structured import generate_structured, parse_or_raise
 
 MAX_TOKENS = 8000
 
@@ -44,10 +43,7 @@ def parse_generated_session(raw_json: str) -> GeneratedSession:
     half-formed generations.
     """
 
-    try:
-        return GeneratedSession.model_validate_json(raw_json)
-    except ValidationError as exc:
-        raise GenerationError(f"generation did not match the schema: {exc}") from exc
+    return parse_or_raise(raw_json, GeneratedSession, subject="generation")
 
 
 def _system_prompt() -> str:
@@ -82,13 +78,14 @@ class LlmSessionGenerator:
         self._llm = llm
 
     def generate(self, request: GenerationRequest) -> GeneratedSession:
-        text = self._llm.complete(
+        return generate_structured(
+            llm=self._llm,
             system=_system_prompt(),
             user=_user_prompt(request),
             schema=GeneratedSession,
             max_tokens=MAX_TOKENS,
+            subject="generation",
         )
-        return parse_generated_session(text)
 
 
 __all__ = [
