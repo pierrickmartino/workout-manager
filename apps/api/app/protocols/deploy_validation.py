@@ -18,6 +18,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from app.domain.superset import SupersetMember, validate_supersets
+
 # The shape bounds mirror the generate endpoint's constants (a single source of
 # truth lives here; ``routes/protocols.py`` imports these). ADR-0001 already allows
 # weeks to differ per deload, so ``sessions_per_week`` is a soft header value, but
@@ -39,6 +41,9 @@ class DraftPrescription:
     rest_seconds: int | None = None
     tempo: str | None = None
     recommended_load: dict | None = None
+    # Superset grouping (ADR-0023): both ``None`` for a flat, solo Prescription.
+    superset_group: str | None = None
+    round_rest_seconds: int | None = None
 
 
 @dataclass(frozen=True)
@@ -78,8 +83,14 @@ def validate_deploy(
     performed_session_ids: set[int],
     known_session_ids: set[int],
     exercise_exists: Callable[[int], bool],
+    has_sensitive_constraint: bool = False,
 ) -> list[DeployError]:
-    """Return every reason ``draft`` cannot be deployed, or ``[]`` when it is safe."""
+    """Return every reason ``draft`` cannot be deployed, or ``[]`` when it is safe.
+
+    ``has_sensitive_constraint`` is threaded to the shared Superset validator (ADR-0023)
+    so the seam is wired from the start; the safety-suppression behaviour it drives
+    lands in a later slice.
+    """
 
     errors: list[DeployError] = []
 
@@ -117,6 +128,7 @@ def validate_deploy(
                 performed_session_ids,
                 known_session_ids,
                 exercise_exists,
+                has_sensitive_constraint,
             )
         )
 
@@ -128,6 +140,7 @@ def _session_errors(
     performed_session_ids: set[int],
     known_session_ids: set[int],
     exercise_exists: Callable[[int], bool],
+    has_sensitive_constraint: bool,
 ) -> list[DeployError]:
     """Validate one draft Session in isolation."""
 
@@ -169,7 +182,39 @@ def _session_errors(
             )
         )
 
+    errors.extend(_superset_errors(session, has_sensitive_constraint))
+
     return errors
+
+
+def _superset_errors(
+    session: DraftSession, has_sensitive_constraint: bool
+) -> list[DeployError]:
+    """Hard-reject any invalid Superset grouping in the Session, delegating to the
+    shared validator (ADR-0023) so DEPLOY and generation agree on "what a valid
+    Superset is". Each structural violation is located by Session id and the group's
+    first member position; nothing is persisted on rejection."""
+
+    members = [
+        SupersetMember(
+            position=position,
+            superset_group=prescription.superset_group,
+            sets=prescription.sets,
+            round_rest_seconds=prescription.round_rest_seconds,
+        )
+        for position, prescription in enumerate(session.prescriptions)
+    ]
+    return [
+        DeployError(
+            code=violation.code,
+            message=violation.message,
+            session_id=session.session_id,
+            position=violation.position,
+        )
+        for violation in validate_supersets(
+            members, has_sensitive_constraint=has_sensitive_constraint
+        )
+    ]
 
 
 def _prescription_errors(

@@ -2,13 +2,14 @@
 
 import { useEffect, useReducer, useState, useTransition } from "react";
 import Link from "next/link";
-import { ArrowDown, ArrowUp, Lock, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Link2, Lock, Plus, Trash2, Unlink } from "lucide-react";
 
 import { runSimulation, submitDeploy } from "@/app/protocols/[id]/edit/actions";
 import {
   builderMatrix,
   builderReducer,
   initBuilderDraft,
+  supersetLayout,
   toDeployPayload,
   toSimulatePayload,
   type BuilderDraft,
@@ -17,6 +18,7 @@ import {
   type DraftSession,
   type MatrixCell,
   type PickedExercise,
+  type SupersetSlot,
 } from "@/lib/protocol-builder";
 import { LOAD_KIND_OPTIONS, type LoadKind } from "@/lib/load";
 import type { BalancePreview, ProtocolProgress } from "@/lib/protocols-types";
@@ -227,6 +229,28 @@ export function ProtocolBuilder({
               sessionId: selectedSession.sessionId,
               from,
               to,
+            })
+          }
+          onGroupWithNext={(position) =>
+            dispatch({
+              type: "GROUP_WITH_NEXT",
+              sessionId: selectedSession.sessionId,
+              position,
+            })
+          }
+          onUngroup={(position) =>
+            dispatch({
+              type: "UNGROUP",
+              sessionId: selectedSession.sessionId,
+              position,
+            })
+          }
+          onEditRoundRest={(position, roundRestSeconds) =>
+            dispatch({
+              type: "EDIT_ROUND_REST",
+              sessionId: selectedSession.sessionId,
+              position,
+              roundRestSeconds,
             })
           }
           onRemoveSession={() => {
@@ -599,6 +623,9 @@ interface SessionEditorProps {
   onAdd: (exercise: PickedExercise) => void;
   onRemove: (position: number) => void;
   onReorder: (from: number, to: number) => void;
+  onGroupWithNext: (position: number) => void;
+  onUngroup: (position: number) => void;
+  onEditRoundRest: (position: number, roundRestSeconds: number | null) => void;
   onRemoveSession: () => void;
 }
 
@@ -614,11 +641,18 @@ function SessionEditor({
   onAdd,
   onRemove,
   onReorder,
+  onGroupWithNext,
+  onUngroup,
+  onEditRoundRest,
   onRemoveSession,
 }: SessionEditorProps) {
   const locked = session.performed;
   const [libraryOpen, setLibraryOpen] = useState(false);
   const lastPosition = session.prescriptions.length - 1;
+  // The per-Prescription Superset layout (ADR-0023): member badges (A/B/C), the group
+  // ends, and where the single round-rest field belongs. A flat Session has an all-solo
+  // layout, so nothing extra renders.
+  const layout = supersetLayout(session.prescriptions);
   return (
     <Card
       className={`flex flex-col gap-3 p-4 ${locked ? "opacity-70" : ""}`}
@@ -653,31 +687,39 @@ function SessionEditor({
       </div>
 
       <ul className="flex flex-col gap-3 border-t border-border pt-3">
-        {session.prescriptions.map((prescription, position) => (
-          <li key={position}>
-            {locked ? (
-              <PrescriptionReadOnly prescription={prescription} />
-            ) : (
-              <div className="flex flex-col gap-2">
-                <PrescriptionEditor
-                  prescription={prescription}
-                  onEditField={(field, value) => onEditField(position, field, value)}
-                  onEditLoad={(loadKind, loadValue) =>
-                    onEditLoad(position, loadKind, loadValue)
-                  }
-                />
-                <PrescriptionControls
-                  name={prescription.exerciseName}
-                  canMoveUp={position > 0}
-                  canMoveDown={position < lastPosition}
-                  onMoveUp={() => onReorder(position, position - 1)}
-                  onMoveDown={() => onReorder(position, position + 1)}
-                  onRemove={() => onRemove(position)}
-                />
-              </div>
-            )}
-          </li>
-        ))}
+        {session.prescriptions.map((prescription, position) => {
+          const slot = layout[position];
+          return (
+            <li key={position}>
+              {locked ? (
+                <PrescriptionReadOnly prescription={prescription} slot={slot} />
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <PrescriptionEditor
+                    prescription={prescription}
+                    slot={slot}
+                    onEditField={(field, value) => onEditField(position, field, value)}
+                    onEditLoad={(loadKind, loadValue) =>
+                      onEditLoad(position, loadKind, loadValue)
+                    }
+                    onEditRoundRest={(value) => onEditRoundRest(position, value)}
+                  />
+                  <PrescriptionControls
+                    name={prescription.exerciseName}
+                    slot={slot}
+                    canMoveUp={position > 0}
+                    canMoveDown={position < lastPosition}
+                    onMoveUp={() => onReorder(position, position - 1)}
+                    onMoveDown={() => onReorder(position, position + 1)}
+                    onGroupWithNext={() => onGroupWithNext(position)}
+                    onUngroup={() => onUngroup(position)}
+                    onRemove={() => onRemove(position)}
+                  />
+                </div>
+              )}
+            </li>
+          );
+        })}
       </ul>
 
       {locked || !queuedExerciseName ? null : (
@@ -726,25 +768,57 @@ function SessionEditor({
 
 interface PrescriptionControlsProps {
   name: string;
+  slot: SupersetSlot;
   canMoveUp: boolean;
   canMoveDown: boolean;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  onGroupWithNext: () => void;
+  onUngroup: () => void;
   onRemove: () => void;
 }
 
-// Reorder (up/down) and remove controls for one Prescription in an un-performed
-// Session. Reordering here is what the deploy payload carries as the new `position`.
+// Reorder (up/down), Superset group/ungroup, and remove controls for one Prescription
+// in an un-performed Session. Reordering here is what the deploy payload carries as the
+// new `position`; grouping links this Prescription with the next into a Superset
+// (ADR-0023) — the keyboard/button path, no drag required.
 function PrescriptionControls({
   name,
+  slot,
   canMoveUp,
   canMoveDown,
   onMoveUp,
   onMoveDown,
+  onGroupWithNext,
+  onUngroup,
   onRemove,
 }: PrescriptionControlsProps) {
   return (
     <div className="flex items-center justify-end gap-1.5">
+      {slot.canGroupWithNext ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-cyan"
+          aria-label={`Group ${name} with next into a superset`}
+          onClick={onGroupWithNext}
+        >
+          <Link2 className="h-4 w-4" aria-hidden />
+        </Button>
+      ) : null}
+      {slot.group !== null ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-cyan"
+          aria-label={`Ungroup ${name} from its superset`}
+          onClick={onUngroup}
+        >
+          <Unlink className="h-4 w-4" aria-hidden />
+        </Button>
+      ) : null}
       <Button
         type="button"
         variant="ghost"
@@ -783,13 +857,18 @@ function PrescriptionControls({
 
 function PrescriptionReadOnly({
   prescription,
+  slot,
 }: {
   prescription: DraftPrescription;
+  slot: SupersetSlot;
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="truncate font-sans text-[13px] text-text-secondary">
-        {prescription.exerciseName}
+      <span className="flex items-center gap-2 truncate">
+        {slot.memberLabel ? <SupersetBadge label={slot.memberLabel} /> : null}
+        <span className="truncate font-sans text-[13px] text-text-secondary">
+          {prescription.exerciseName}
+        </span>
       </span>
       <span className="shrink-0 font-mono text-[12px] text-text-muted">
         {prescription.sets} × {prescription.reps}
@@ -798,25 +877,49 @@ function PrescriptionReadOnly({
   );
 }
 
+// The A/B/C member badge for a Prescription inside a Superset (ADR-0023) — a compact,
+// mono chip that communicates round-major membership without restructuring the row.
+function SupersetBadge({ label }: { label: string }) {
+  return (
+    <span
+      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-cyan/15 font-mono text-[10px] font-bold text-cyan"
+      aria-label={`Superset member ${label}`}
+    >
+      {label}
+    </span>
+  );
+}
+
 interface PrescriptionEditorProps {
   prescription: DraftPrescription;
+  slot: SupersetSlot;
   onEditField: (
     field: "sets" | "reps" | "restSeconds" | "tempo",
     value: string | number | null,
   ) => void;
   onEditLoad: (loadKind: LoadKind, loadValue: string) => void;
+  onEditRoundRest: (roundRestSeconds: number | null) => void;
 }
 
 function PrescriptionEditor({
   prescription,
+  slot,
   onEditField,
   onEditLoad,
+  onEditRoundRest,
 }: PrescriptionEditorProps) {
   const name = prescription.exerciseName;
+  // While grouped, a member's own rest is dormant (ADR-0023): the group rests once per
+  // round, so the per-member Rest input collapses and the single round-rest field shows
+  // on the group's last member instead. Ungrouping brings the member's rest input back.
+  const grouped = slot.group !== null;
   return (
     <div className="flex flex-col gap-3 rounded-md border border-border bg-surface p-3">
-      <span className="font-display text-[14px] font-semibold text-text-primary">
-        {name}
+      <span className="flex items-center gap-2">
+        {slot.memberLabel ? <SupersetBadge label={slot.memberLabel} /> : null}
+        <span className="font-display text-[14px] font-semibold text-text-primary">
+          {name}
+        </span>
       </span>
 
       <div className="grid grid-cols-2 gap-2.5">
@@ -842,23 +945,25 @@ function PrescriptionEditor({
       </div>
 
       <div className="grid grid-cols-2 gap-2.5">
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">
-            Rest (sec)
-          </span>
-          <Input
-            type="number"
-            min={0}
-            value={prescription.restSeconds ?? ""}
-            aria-label={`Rest seconds for ${name}`}
-            onChange={(e) =>
-              onEditField(
-                "restSeconds",
-                e.target.value === "" ? null : toIntOrZero(e.target.value),
-              )
-            }
-          />
-        </label>
+        {grouped ? null : (
+          <label className="flex flex-col gap-1.5">
+            <span className="label-mono text-[9px] text-text-muted">
+              Rest (sec)
+            </span>
+            <Input
+              type="number"
+              min={0}
+              value={prescription.restSeconds ?? ""}
+              aria-label={`Rest seconds for ${name}`}
+              onChange={(e) =>
+                onEditField(
+                  "restSeconds",
+                  e.target.value === "" ? null : toIntOrZero(e.target.value),
+                )
+              }
+            />
+          </label>
+        )}
         <label className="flex flex-col gap-1.5">
           <span className="label-mono text-[9px] text-text-muted">Tempo</span>
           <Input
@@ -871,6 +976,27 @@ function PrescriptionEditor({
           />
         </label>
       </div>
+
+      {/* One group-owned round-rest field, rendered on the Superset's last member —
+          the round rests at the boundary, after every member (ADR-0023). */}
+      {slot.isLastMember ? (
+        <label className="flex flex-col gap-1.5">
+          <span className="label-mono text-[9px] text-cyan">
+            Round rest (sec)
+          </span>
+          <Input
+            type="number"
+            min={0}
+            value={slot.roundRestSeconds ?? ""}
+            aria-label={`Round rest for superset ${slot.group}`}
+            onChange={(e) =>
+              onEditRoundRest(
+                e.target.value === "" ? null : toIntOrZero(e.target.value),
+              )
+            }
+          />
+        </label>
+      ) : null}
 
       {/* Load is a typed value (ADR-0010): pick the kind, then give the value that
           kind carries — the same picker the log form uses. */}

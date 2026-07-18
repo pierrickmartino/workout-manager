@@ -206,6 +206,14 @@ class ExercisePrescription(SQLModel, table=True):
     # bare string — so downstream analytics read the meaning instead of re-guessing
     # the free-text. See ``app.domain.load.ParsedLoad``.
     recommended_load: dict | None = Field(default=None, sa_column=Column(JSON, nullable=True))
+    # Superset grouping (ADR-0023) — both NULL for a flat, solo Prescription. Members
+    # of one Superset share ``superset_group`` (an ordered, contiguous run) and carry
+    # the group-owned ``round_rest_seconds`` (denormalized onto each member so it is
+    # reorder-stable — the round-rest belongs to the group, not to whichever member
+    # lands last). A grouped member's own ``rest_seconds`` goes dormant and returns
+    # intact on ungroup. Additive and nullable: existing flat Protocols read unchanged.
+    superset_group: str | None = Field(default=None)
+    round_rest_seconds: int | None = Field(default=None)
 
 
 class LoggedSession(SQLModel, table=True):

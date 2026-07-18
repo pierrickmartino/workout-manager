@@ -21,7 +21,11 @@ from app.repositories.exercise_repository import ExerciseRepository
 
 @dataclass(frozen=True)
 class PrescriptionDraft:
-    """One Exercise Prescription to persist, referencing a catalog Exercise."""
+    """One Exercise Prescription to persist, referencing a catalog Exercise.
+
+    ``superset_group``/``round_rest_seconds`` overlay Supersets (ADR-0023): both
+    ``None`` for a flat, solo Prescription; members of one Superset share the group
+    tag and carry the group-owned round-rest denormalized onto each member."""
 
     exercise_id: int
     sets: int
@@ -29,6 +33,8 @@ class PrescriptionDraft:
     rest_seconds: int | None = None
     tempo: str | None = None
     recommended_load: dict | None = None
+    superset_group: str | None = None
+    round_rest_seconds: int | None = None
 
 
 @dataclass(frozen=True)
@@ -50,6 +56,8 @@ class PrescriptionView:
     rest_seconds: int | None
     tempo: str | None
     recommended_load: dict | None
+    superset_group: str | None
+    round_rest_seconds: int | None
     exercise_id: int
     exercise_name: str
     exercise_description: str | None
@@ -125,6 +133,8 @@ def _draft_from(prescription: ExercisePrescription) -> PrescriptionDraft:
         rest_seconds=prescription.rest_seconds,
         tempo=prescription.tempo,
         recommended_load=prescription.recommended_load,
+        superset_group=prescription.superset_group,
+        round_rest_seconds=prescription.round_rest_seconds,
     )
 
 
@@ -154,6 +164,8 @@ def _prescription_view(
         rest_seconds=prescription.rest_seconds,
         tempo=prescription.tempo,
         recommended_load=prescription.recommended_load,
+        superset_group=prescription.superset_group,
+        round_rest_seconds=prescription.round_rest_seconds,
         exercise_id=exercise.id,
         exercise_name=exercise.name,
         exercise_description=exercise.description,
@@ -200,6 +212,8 @@ class SqlSessionRepository:
                     rest_seconds=prescription.rest_seconds,
                     tempo=prescription.tempo,
                     recommended_load=prescription.recommended_load,
+                    superset_group=prescription.superset_group,
+                    round_rest_seconds=prescription.round_rest_seconds,
                 )
             )
 
@@ -315,6 +329,8 @@ class InMemorySessionRepository:
                 rest_seconds=prescription.rest_seconds,
                 tempo=prescription.tempo,
                 recommended_load=prescription.recommended_load,
+                superset_group=prescription.superset_group,
+                round_rest_seconds=prescription.round_rest_seconds,
             )
             for position, prescription in enumerate(prescriptions)
         ]
@@ -385,6 +401,8 @@ class InMemorySessionRepository:
                 rest_seconds=p.rest_seconds,
                 tempo=p.tempo,
                 recommended_load=p.recommended_load,
+                superset_group=p.superset_group,
+                round_rest_seconds=p.round_rest_seconds,
             )
             for p in current
         ]

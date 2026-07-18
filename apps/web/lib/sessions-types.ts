@@ -32,6 +32,12 @@ export interface ExercisePrescription {
   rest_seconds: number | null;
   tempo: string | null;
   recommended_load: Load | null;
+  // Superset overlay (ADR-0023): the group tag members of one Superset share and the
+  // group-owned round-rest. Both null on a flat, solo Prescription. Optional here like
+  // `previous_performance` — the Protocol/Builder read always carries them (the server
+  // serializes them on every Prescription), while pre-Superset read paths need not.
+  superset_group?: string | null;
+  round_rest_seconds?: number | null;
   exercise_id: number;
   exercise_name: string;
   exercise_description: string | null;

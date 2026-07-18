@@ -438,6 +438,107 @@ def test_deploy_reshapes_the_tail_while_preserving_the_performed_prefix():
     assert after["completed_count"] == 1
 
 
+def _superset_member(exercise_id: int, *, sets: int, group: str, round_rest: int | None) -> dict:
+    """A grouped Prescription in a deploy payload: it carries the shared group tag and
+    the group-owned round-rest (denormalized onto each member, ADR-0023)."""
+
+    return {
+        "exercise_id": exercise_id,
+        "sets": sets,
+        "reps": "8",
+        "rest_seconds": None,
+        "tempo": None,
+        "load_kind": "absolute",
+        "load_value": "",
+        "superset_group": group,
+        "round_rest_seconds": round_rest,
+    }
+
+
+def test_deploy_persists_a_superset_and_reads_it_back():
+    # Arrange — a fresh Protocol; group Week 1 into a two-member Superset (both members
+    # reuse the seeded Back Squat id — enough to exercise the grouping round-trip)
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_superset")
+    protocol_id = protocol["id"]
+    exercise_id = protocol["sessions"][0]["prescriptions"][0]["exercise_id"]
+
+    body = _deploy_body(protocol)
+    body["sessions"][0]["prescriptions"] = [
+        _superset_member(exercise_id, sets=3, group="1", round_rest=120),
+        _superset_member(exercise_id, sets=3, group="1", round_rest=120),
+    ]
+
+    # Act
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_superset"),
+        json=body,
+    )
+
+    # Assert — deploy succeeds, and a fresh read shows the same Superset on both members
+    assert response.status_code == 200
+    after = h.fetch_protocol("user_superset", protocol_id).json()["data"]
+    week_one = after["sessions"][0]["prescriptions"]
+    assert [p["superset_group"] for p in week_one] == ["1", "1"]
+    assert [p["round_rest_seconds"] for p in week_one] == [120, 120]
+
+
+def test_deploy_hard_rejects_an_uneven_superset_and_persists_nothing():
+    # Arrange — a fresh Protocol; group Week 1 into a Superset whose members disagree
+    # on set count (ragged rounds), which the shared validator forbids (ADR-0023)
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_uneven")
+    protocol_id = protocol["id"]
+    exercise_id = protocol["sessions"][0]["prescriptions"][0]["exercise_id"]
+
+    body = _deploy_body(protocol)
+    body["sessions"][0]["prescriptions"] = [
+        _superset_member(exercise_id, sets=3, group="1", round_rest=120),
+        _superset_member(exercise_id, sets=4, group="1", round_rest=120),
+    ]
+
+    # Act
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_uneven"),
+        json=body,
+    )
+
+    # Assert — hard-rejected with the located Superset error; nothing persisted
+    assert response.status_code == 422
+    errors = response.json()["errors"]
+    offending = next(e for e in errors if e["code"] == "superset_uneven_sets")
+    assert offending["session_id"] == protocol["sessions"][0]["session_id"]
+    after = h.fetch_protocol("user_uneven", protocol_id).json()["data"]
+    assert len(after["sessions"][0]["prescriptions"]) == 1
+    assert after["sessions"][0]["prescriptions"][0]["superset_group"] is None
+
+
+def test_deploy_hard_rejects_a_lone_member_superset():
+    # Arrange — a single Prescription carrying a group tag (a Superset needs 2+)
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_lone")
+    protocol_id = protocol["id"]
+    exercise_id = protocol["sessions"][0]["prescriptions"][0]["exercise_id"]
+
+    body = _deploy_body(protocol)
+    body["sessions"][0]["prescriptions"] = [
+        _superset_member(exercise_id, sets=3, group="1", round_rest=120),
+    ]
+
+    # Act
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_lone"),
+        json=body,
+    )
+
+    # Assert — rejected with the lone-member code
+    assert response.status_code == 422
+    assert "superset_lone_member" in [e["code"] for e in response.json()["errors"]]
+
+
 def test_another_user_cannot_deploy_to_someone_elses_protocol():
     h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
     protocol = _fresh_protocol(h, "user_owner")
