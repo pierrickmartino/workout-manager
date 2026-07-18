@@ -1,6 +1,6 @@
 # 0012 — The Live Session is an ephemeral, client-side performance
 
-**Status:** proposed
+**Status:** accepted
 
 F2 introduces the **Live Session** — a Session while it is being performed (sets done so far, current set, running elapsed time). We keep this entirely on the client: React state, persisted to `localStorage` for refresh/crash/lock survival, rather than as a server-persisted in-progress entity. Nothing reaches the backend until the user finishes, at which point the existing `POST /api/sessions/{id}/logs` records a Logged Session — now at **per-set** granularity (one Logged Set per completed set, versus the static form's one-per-Exercise collapse). The record model already supports this: `logged_sets` is a flat ordered list keyed by `position`, so no schema change is needed for granularity.
 

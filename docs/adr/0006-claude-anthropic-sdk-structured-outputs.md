@@ -1,3 +1,7 @@
+---
+status: accepted
+---
+
 # 0006 — Pluggable AI generation providers behind a structured-output port
 
 AI generation runs behind a single provider-agnostic port, **`StructuredLLM`**, so the
