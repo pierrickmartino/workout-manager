@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { apiGet, apiSend, type Envelope } from "./api";
 
 import type { DeployPayload, SimulatePayload } from "./protocol-builder";
 import type {
@@ -13,31 +13,14 @@ import type {
 // "@/lib/protocols-types" to avoid pulling this server-only module into the bundle.
 export * from "./protocols-types";
 
-// Server-side data access for the Protocol view. The Clerk JWT is attached here
-// and never reaches the browser; the FastAPI backend verifies it via JWKS, joins
-// the Protocol to its self-paced position, and progresses upcoming loads (ADR-0004).
-const API_URL = process.env.API_URL ?? "http://localhost:8000";
-
-interface Envelope<T> {
-  success: boolean;
-  data: T | null;
-  error: string | null;
-}
-
-async function authHeaders(): Promise<Record<string, string>> {
-  const { getToken } = await auth();
-  const token = await getToken();
-  return { Authorization: `Bearer ${token}` };
-}
-
+// Server-side data access for the Protocol view. The transport seam (lib/api.ts)
+// attaches the Clerk JWT — it never reaches the browser; the FastAPI backend verifies
+// it via JWKS, joins the Protocol to its self-paced position, and progresses upcoming
+// loads (ADR-0004).
 export async function fetchProtocol(
   id: number,
 ): Promise<Envelope<ProtocolProgress>> {
-  const response = await fetch(`${API_URL}/api/protocols/${id}`, {
-    headers: await authHeaders(),
-    cache: "no-store",
-  });
-  return (await response.json()) as Envelope<ProtocolProgress>;
+  return apiGet(`/api/protocols/${id}`);
 }
 
 // Submit a Protocol generation. Generation runs off the request path: the backend
@@ -46,13 +29,7 @@ export async function fetchProtocol(
 export async function startProtocolGeneration(
   input: GenerateProtocolInput,
 ): Promise<Envelope<ProtocolJob>> {
-  const response = await fetch(`${API_URL}/api/protocols/generate`, {
-    method: "POST",
-    headers: { ...(await authHeaders()), "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-    cache: "no-store",
-  });
-  return (await response.json()) as Envelope<ProtocolJob>;
+  return apiSend("/api/protocols/generate", "POST", input);
 }
 
 // Deploy an edited Protocol (ADR-0020): send the desired un-performed tail; the
@@ -63,13 +40,7 @@ export async function deployProtocol(
   id: number,
   payload: DeployPayload,
 ): Promise<Envelope<ProtocolProgress>> {
-  const response = await fetch(`${API_URL}/api/protocols/${id}/deploy`, {
-    method: "POST",
-    headers: { ...(await authHeaders()), "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    cache: "no-store",
-  });
-  return (await response.json()) as Envelope<ProtocolProgress>;
+  return apiSend(`/api/protocols/${id}/deploy`, "POST", payload);
 }
 
 // Preview an edited Protocol's balance (SIMULATE, ADR-0021): send the whole draft and
@@ -81,13 +52,7 @@ export async function simulateProtocol(
   id: number,
   payload: SimulatePayload,
 ): Promise<Envelope<BalancePreview>> {
-  const response = await fetch(`${API_URL}/api/protocols/${id}/simulate`, {
-    method: "POST",
-    headers: { ...(await authHeaders()), "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    cache: "no-store",
-  });
-  return (await response.json()) as Envelope<BalancePreview>;
+  return apiSend(`/api/protocols/${id}/simulate`, "POST", payload);
 }
 
 // Poll a generation job by its handle. The adopted `protocol_id` appears once the
@@ -95,9 +60,5 @@ export async function simulateProtocol(
 export async function fetchProtocolJob(
   jobId: string,
 ): Promise<Envelope<ProtocolJob>> {
-  const response = await fetch(`${API_URL}/api/protocols/jobs/${jobId}`, {
-    headers: await authHeaders(),
-    cache: "no-store",
-  });
-  return (await response.json()) as Envelope<ProtocolJob>;
+  return apiGet(`/api/protocols/jobs/${jobId}`);
 }

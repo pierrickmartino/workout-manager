@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { apiGet, apiSend, type Envelope } from "./api";
 
 import type { Profile, ProfileInput } from "./profile-types";
 
@@ -8,38 +8,15 @@ import type { Profile, ProfileInput } from "./profile-types";
 // (and its `server-only` dependency) into the browser bundle.
 export * from "./profile-types";
 
-// Server-side data access for the Fitness Profile. The Clerk JWT is attached
-// here and never reaches the browser; the FastAPI backend verifies it via JWKS.
-const API_URL = process.env.API_URL ?? "http://localhost:8000";
-
-interface Envelope<T> {
-  success: boolean;
-  data: T | null;
-  error: string | null;
-}
-
-async function authHeaders(): Promise<Record<string, string>> {
-  const { getToken } = await auth();
-  const token = await getToken();
-  return { Authorization: `Bearer ${token}` };
-}
-
+// Server-side data access for the Fitness Profile. The transport seam (lib/api.ts)
+// attaches the Clerk JWT — it never reaches the browser; the FastAPI backend
+// verifies it via JWKS.
 export async function fetchProfile(): Promise<Envelope<Profile>> {
-  const response = await fetch(`${API_URL}/api/profile`, {
-    headers: await authHeaders(),
-    cache: "no-store",
-  });
-  return (await response.json()) as Envelope<Profile>;
+  return apiGet("/api/profile");
 }
 
 export async function saveProfile(
   input: ProfileInput,
 ): Promise<Envelope<Profile>> {
-  const response = await fetch(`${API_URL}/api/profile`, {
-    method: "PUT",
-    headers: { ...(await authHeaders()), "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-    cache: "no-store",
-  });
-  return (await response.json()) as Envelope<Profile>;
+  return apiSend("/api/profile", "PUT", input);
 }

@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { apiGet, type Envelope } from "./api";
 
 import type { HomeData } from "./home-types";
 
@@ -7,27 +7,9 @@ import type { HomeData } from "./home-types";
 // "@/lib/home-types" to avoid pulling this server-only module into the bundle.
 export * from "./home-types";
 
-// Server-side data access for the Home screen's aggregated read. The Clerk JWT is
-// attached here and never reaches the browser; the FastAPI backend verifies it via
-// JWKS and computes Readiness server-side (ADR-0008).
-const API_URL = process.env.API_URL ?? "http://localhost:8000";
-
-interface Envelope<T> {
-  success: boolean;
-  data: T | null;
-  error: string | null;
-}
-
-async function authHeaders(): Promise<Record<string, string>> {
-  const { getToken } = await auth();
-  const token = await getToken();
-  return { Authorization: `Bearer ${token}` };
-}
-
+// Server-side data access for the Home screen's aggregated read. The transport seam
+// (lib/api.ts) attaches the Clerk JWT — it never reaches the browser; the FastAPI
+// backend verifies it via JWKS and computes Readiness server-side (ADR-0008).
 export async function fetchHome(): Promise<Envelope<HomeData>> {
-  const response = await fetch(`${API_URL}/api/home`, {
-    headers: await authHeaders(),
-    cache: "no-store",
-  });
-  return (await response.json()) as Envelope<HomeData>;
+  return apiGet("/api/home");
 }

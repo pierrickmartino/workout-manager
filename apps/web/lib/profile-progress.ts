@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { apiGet, type Envelope } from "./api";
 
 import type { ProfileProgress } from "./profile-progress-types";
 
@@ -8,27 +8,10 @@ import type { ProfileProgress } from "./profile-progress-types";
 // browser bundle.
 export * from "./profile-progress-types";
 
-// Server-side data access for the Profile view's progress read model. The Clerk JWT
-// is attached here and never reaches the browser; the FastAPI backend verifies it via
-// JWKS, scopes the read to the owning user, and projects the figures server-side.
-const API_URL = process.env.API_URL ?? "http://localhost:8000";
-
-interface Envelope<T> {
-  success: boolean;
-  data: T | null;
-  error: string | null;
-}
-
-async function authHeaders(): Promise<Record<string, string>> {
-  const { getToken } = await auth();
-  const token = await getToken();
-  return { Authorization: `Bearer ${token}` };
-}
-
+// Server-side data access for the Profile view's progress read model. The transport
+// seam (lib/api.ts) attaches the Clerk JWT — it never reaches the browser; the FastAPI
+// backend verifies it via JWKS, scopes the read to the owning user, and projects the
+// figures server-side.
 export async function fetchProfileProgress(): Promise<Envelope<ProfileProgress>> {
-  const response = await fetch(`${API_URL}/api/profile/progress`, {
-    headers: await authHeaders(),
-    cache: "no-store",
-  });
-  return (await response.json()) as Envelope<ProfileProgress>;
+  return apiGet("/api/profile/progress");
 }
