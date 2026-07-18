@@ -10,7 +10,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.quality.terminology_guard import (
+    BANNED_TERMS,
     find_stray_program,
+    find_violations,
     format_findings,
     is_excluded,
 )
@@ -114,3 +116,83 @@ def test_message_identifies_offending_file_and_match(tmp_path: Path) -> None:
     assert "apps/api/app/generation/foo.py" in message
     assert ":1:" in message
     assert "Program" in message
+
+
+# --- Generalized registry: the guard now enforces more than the Program rename ---
+
+
+def test_current_tree_has_no_terminology_violations() -> None:
+    # Act — scan the real tree for the full banned-term registry
+    findings = find_violations()
+
+    # Assert — every registered term is absent from production source
+    assert findings == [], format_findings(findings)
+
+
+def test_flags_daily_streak_identifier(tmp_path: Path) -> None:
+    # Arrange — Streak is weekly, not daily (ADR-0001)
+    _write(tmp_path, "apps/api/app/domain/streak.py", "daily_streak = 0\n")
+
+    # Act
+    findings = find_violations(repo_root=tmp_path)
+
+    # Assert
+    assert len(findings) == 1
+    assert findings[0].term == "daily streak"
+    assert findings[0].match == "daily_streak"
+
+
+def test_flags_personal_best_and_max_weight_in_frontend(tmp_path: Path) -> None:
+    # Arrange — both are deliberately-avoided synonyms for Personal Record / Load
+    _write(
+        tmp_path,
+        "apps/web/lib/exercise-stats-view.ts",
+        "const personalBest = 100;\nconst max_weight = 200;\n",
+    )
+
+    # Act
+    findings = find_violations(repo_root=tmp_path)
+
+    # Assert — both offending identifiers are reported
+    matched = {(f.line, f.match) for f in findings}
+    assert (1, "personalBest") in matched
+    assert (2, "max_weight") in matched
+
+
+def test_flags_readiness_and_recovery_score_forms(tmp_path: Path) -> None:
+    # Arrange — Readiness is a 3-state signal, never a computed score/percentage
+    _write(
+        tmp_path,
+        "apps/web/lib/home-view.ts",
+        "const readinessScore = 0.8;\nconst recovery_percent = 87;\n",
+    )
+
+    # Act
+    findings = find_violations(repo_root=tmp_path)
+
+    # Assert
+    matched = {f.match for f in findings}
+    assert "readinessScore" in matched
+    assert "recovery_percent" in matched
+
+
+def test_ignores_recovery_as_english_prose(tmp_path: Path) -> None:
+    # Arrange — the domain legitimately says there is *no* recovery figure; only
+    # the compound score/percentage identifier forms are banned, not bare prose.
+    _write(
+        tmp_path,
+        "apps/api/app/domain/readiness.py",
+        "# no fatigue/recovery/volume figure is present\n",
+    )
+
+    # Act
+    findings = find_violations(repo_root=tmp_path)
+
+    # Assert — bare "recovery" prose is not a violation
+    assert findings == []
+
+
+def test_registry_has_no_duplicate_term_names() -> None:
+    # A duplicate name would make find_stray_program's lookup ambiguous.
+    names = [term.name for term in BANNED_TERMS]
+    assert len(names) == len(set(names))

@@ -1,10 +1,22 @@
-"""Terminology guard: a regression tripwire for the Program to Protocol rename.
+"""Terminology guard: regression tripwires for forbidden domain terms.
 
-The domain concept once called *Program* was renamed to *Protocol* everywhere in
-the codebase (issue #44). This guard scans the backend and frontend source and
-fails if a stray whole-word "Program" identifier reappears, so a future change
-can't silently regress the rename. It is intentionally simple — a tripwire, not
-a general-purpose linter.
+``CONTEXT.md`` fixes the domain's language and lists, for every concept, the
+words to _Avoid_. Most of those are casual synonyms that only matter in prose;
+a handful are *hard regressions* — a term the codebase was deliberately moved
+away from (or one whose very shape encodes a rejected design), whose reappearance
+as an identifier is a bug. This guard encodes that second set as executable
+tripwires, so each class of regression is caught forever rather than
+re-litigated in review — the domain glossary made enforceable.
+
+Each :class:`BannedTerm` pairs a pattern that matches the *identifier* forms
+(``dailyStreak``, ``daily_streak``, a ``/route`` segment) while leaving ordinary
+English prose untouched, with the guidance a developer needs to fix it. The
+guard is intentionally simple — a tripwire, not a general-purpose linter — and
+every term in the registry is verified absent from the current tree by
+``test_current_tree_has_no_terminology_violations``.
+
+Adding the next renamed or rejected term is a one-line addition to
+``BANNED_TERMS``.
 """
 
 from __future__ import annotations
@@ -17,7 +29,7 @@ from pathlib import Path
 # <repo>/apps/api/app/quality/terminology_guard.py, so the root is four parents up.
 REPO_ROOT = Path(__file__).resolve().parents[4]
 
-# Source trees to scan — the renamed production surface, backend and frontend.
+# Source trees to scan — the production surface, backend and frontend.
 SOURCE_ROOTS: tuple[str, ...] = (
     "apps/api/app",
     "apps/web/app",
@@ -26,11 +38,11 @@ SOURCE_ROOTS: tuple[str, ...] = (
 )
 
 # Paths intentionally left untouched by the guard:
-# - the guard's own module necessarily names "Program" to describe what it forbids;
+# - the guard's own module necessarily names the forbidden terms to forbid them;
 # - the Alembic migrations must retain the historical ``program`` table/column
 #   names to perform and reverse the rename;
 # - the origin idea documents and the Codex PR-comments analysis are historical
-#   records allowed to quote the original "Program" wording verbatim.
+#   records allowed to quote the original wording verbatim.
 EXCLUDED_PATHS: tuple[str, ...] = (
     "apps/api/app/quality/terminology_guard.py",
     "apps/api/app/alembic",
@@ -41,21 +53,96 @@ EXCLUDED_PATHS: tuple[str, ...] = (
 # File extensions worth scanning inside the source roots.
 SCAN_EXTENSIONS: frozenset[str] = frozenset({".py", ".ts", ".tsx", ".js", ".jsx"})
 
-# Matches the capitalized identifier fragment "Program" (class names, components,
-# strings), the snake_case fragment "program_" (columns/variables like
-# ``program_id``), and the "/programs" route segment — while leaving lowercase
-# English prose such as "the program ran" untouched.
-PATTERN = re.compile(r"Program|program_|/programs?\b")
+
+@dataclass(frozen=True)
+class BannedTerm:
+    """A forbidden domain term, its identifier pattern, and how to fix it.
+
+    ``pattern`` must match only *identifier* forms so ordinary English prose in
+    comments (e.g. "the training program ran") never trips the guard.
+    ``guidance`` is shown to the developer and names the term to use instead and
+    the CONTEXT.md / ADR reference that fixes it.
+    """
+
+    name: str
+    pattern: re.Pattern[str]
+    guidance: str
+
+
+# The registry. Every entry is a *hard* regression — a term the codebase moved
+# away from or whose shape encodes a rejected design — verified absent from the
+# current tree. Casual prose synonyms from CONTEXT.md's _Avoid_ lists are
+# deliberately NOT here: they collide with legitimate identifiers ("weight",
+# "status", "level", "feedback") and belong in review, not a tripwire.
+BANNED_TERMS: tuple[BannedTerm, ...] = (
+    BannedTerm(
+        name="Program",
+        # Capitalized identifier fragment ("ProgramRepository"), the snake_case
+        # fragment ("program_id"), and the "/programs" route segment — while
+        # leaving lowercase prose such as "the program ran" untouched.
+        pattern=re.compile(r"Program|program_|/programs?\b"),
+        guidance=(
+            "The domain concept 'Program' was renamed to 'Protocol' (issue #44, "
+            "ADR-0007). Rename these identifiers to 'Protocol'."
+        ),
+    ),
+    BannedTerm(
+        name="daily streak",
+        pattern=re.compile(r"daily_streak|dailyStreak|/daily-streak\b"),
+        guidance=(
+            "Streak is deliberately *weekly*, not daily (ADR-0001, CONTEXT 'Streak'): "
+            "the plan model is self-paced and calendar-free, so there is no 'today' "
+            "to miss. Use the weekly consecutive-week Streak."
+        ),
+    ),
+    BannedTerm(
+        name="personal best",
+        pattern=re.compile(r"personal_best|personalBest"),
+        guidance=(
+            "Use 'Personal Record' — the best Estimated 1RM ever logged (CONTEXT "
+            "'Personal Record'). 'personal best' is the deliberately-avoided raw "
+            "heaviest-load concept it must never be confused with."
+        ),
+    ),
+    BannedTerm(
+        name="max weight",
+        pattern=re.compile(r"max_weight|maxWeight"),
+        guidance=(
+            "Load is a typed value, never a bare kg (CONTEXT 'Load'). Per-Exercise "
+            "strength is the Personal Record (Estimated 1RM), not a 'max weight' tile "
+            "(CONTEXT 'Personal Record')."
+        ),
+    ),
+    BannedTerm(
+        name="readiness/recovery score",
+        pattern=re.compile(
+            r"readiness_score|readinessScore|recovery_score|recoveryScore"
+            r"|recovery_percent|recoveryPercent"
+        ),
+        guidance=(
+            "Readiness is a qualitative three-state signal (Ready / Caution / Extra "
+            "Caution), NOT a computed score or recovery percentage (ADR-0001, CONTEXT "
+            "'Readiness'): the calendar-free model gives no honest basis for a "
+            "recovery %."
+        ),
+    ),
+)
 
 
 @dataclass(frozen=True)
 class Finding:
-    """A single stray-"Program" occurrence, located by repo-relative path."""
+    """A single forbidden-term occurrence, located by repo-relative path.
+
+    ``match`` is the offending substring; ``term`` and ``guidance`` identify
+    which banned term matched and how to fix it.
+    """
 
     file: str
     line: int
     text: str
     match: str
+    term: str = ""
+    guidance: str = ""
 
 
 def is_excluded(rel_path: str, excluded: tuple[str, ...] = EXCLUDED_PATHS) -> bool:
@@ -63,12 +150,13 @@ def is_excluded(rel_path: str, excluded: tuple[str, ...] = EXCLUDED_PATHS) -> bo
     return any(rel_path == e or rel_path.startswith(f"{e}/") for e in excluded)
 
 
-def find_stray_program(
+def find_violations(
     repo_root: Path = REPO_ROOT,
     source_roots: tuple[str, ...] = SOURCE_ROOTS,
     excluded: tuple[str, ...] = EXCLUDED_PATHS,
+    terms: tuple[BannedTerm, ...] = BANNED_TERMS,
 ) -> list[Finding]:
-    """Scan the source roots and return every stray "Program" occurrence found."""
+    """Scan the source roots and return every forbidden-term occurrence found."""
     findings: list[Finding] = []
     for root in source_roots:
         base = repo_root / root
@@ -80,33 +168,47 @@ def find_stray_program(
             rel_path = path.relative_to(repo_root).as_posix()
             if is_excluded(rel_path, excluded):
                 continue
-            findings.extend(_scan_file(path, rel_path))
+            findings.extend(_scan_file(path, rel_path, terms))
     return findings
 
 
-def _scan_file(path: Path, rel_path: str) -> list[Finding]:
+def find_stray_program(
+    repo_root: Path = REPO_ROOT,
+    source_roots: tuple[str, ...] = SOURCE_ROOTS,
+    excluded: tuple[str, ...] = EXCLUDED_PATHS,
+) -> list[Finding]:
+    """Scan for stray "Program" identifiers only (the original rename tripwire)."""
+    program_term = next(t for t in BANNED_TERMS if t.name == "Program")
+    return find_violations(repo_root, source_roots, excluded, terms=(program_term,))
+
+
+def _scan_file(path: Path, rel_path: str, terms: tuple[BannedTerm, ...]) -> list[Finding]:
     findings: list[Finding] = []
     text = path.read_text(encoding="utf-8", errors="ignore")
     for lineno, line in enumerate(text.splitlines(), start=1):
-        match = PATTERN.search(line)
-        if match:
-            findings.append(
-                Finding(
-                    file=rel_path,
-                    line=lineno,
-                    text=line.strip(),
-                    match=match.group(),
+        for term in terms:
+            match = term.pattern.search(line)
+            if match:
+                findings.append(
+                    Finding(
+                        file=rel_path,
+                        line=lineno,
+                        text=line.strip(),
+                        match=match.group(),
+                        term=term.name,
+                        guidance=term.guidance,
+                    )
                 )
-            )
     return findings
 
 
 def format_findings(findings: list[Finding]) -> str:
-    """Render findings into a message that names each offending file and match."""
+    """Render findings into a message naming each offending file, match, and fix."""
     lines = [
-        "Stray 'Program' terminology found — the Program->Protocol rename has "
-        "regressed. Rename these to 'Protocol':",
+        "Forbidden terminology found — these identifiers regress the domain "
+        "language fixed in CONTEXT.md. Fix each before merging:",
     ]
     for f in findings:
-        lines.append(f"  {f.file}:{f.line}: {f.text!r} (matched {f.match!r})")
+        guidance = f" — {f.guidance}" if f.guidance else ""
+        lines.append(f"  {f.file}:{f.line}: {f.text!r} (matched {f.match!r}){guidance}")
     return "\n".join(lines)
