@@ -34,6 +34,10 @@ _Avoid_: Instructions (as free text), how-to, description
 The prescription of one Exercise inside a Session — the sets, repetitions, rest, tempo, and recommended load the user is told to perform. References a catalog Exercise. Distinct from the Exercise definition.
 _Avoid_: Exercise (when referring to the prescribed sets/reps)
 
+**Superset**:
+An ordered group of two or more Exercise Prescriptions within one Session, performed in **rounds** — one set of each member in turn — resting only at the **round boundary**, never between members. It is an ordering-and-rest overlay on Prescriptions: it does not change what each set *is* (reps, load, and muscle attribution are unchanged), only the sequence in which sets are performed and where rest falls. A Prescription belongs to at most one Superset, and Supersets do not nest. The one umbrella term covers two members and many (no separate "circuit" or "giant set").
+_Avoid_: Circuit, giant set, block, group (bare, collides with Muscle Group), module (that is one Prescription), compound set
+
 **Load**:
 The weight prescribed or performed for a set, expressed as one of several *kinds* rather than a bare number: an **absolute** weight (e.g. 70 kg), **bodyweight** (optionally plus added load), a **percent of 1RM**, a **qualitative** effort ("moderate"), or a **range**. Only absolute loads — and bodyweight / percent loads once resolved against the user's mass or estimated 1RM — carry a numeric weight; qualitative loads never do. The free-text-ness is essential to the domain: the AI legitimately prescribes bodyweight and %-based work, so a Load is a *typed value*, never reducible to a single kg figure.
 _Avoid_: Weight (bare), tonnage (for a single set), kg (as the only form)
