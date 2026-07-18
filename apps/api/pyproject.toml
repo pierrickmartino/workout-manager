@@ -4,7 +4,12 @@ version = "0.1.0"
 description = "Workout Manager FastAPI backend"
 requires-python = ">=3.11"
 dependencies = [
-    "fastapi>=0.115",
+    "fastapi>=0.139",
+    # Pinned directly for CVE-2026-48710 ("BadHost"): a malformed Host header can
+    # desync request.url.path from the dispatched route. FastAPI's own range
+    # (starlette>=0.46.0, no upper bound) permits but does not require the fix, so
+    # the floor is set here explicitly. Fixed in Starlette 1.0.1.
+    "starlette>=1.0.1",
     "uvicorn[standard]>=0.32",
     "sqlmodel>=0.0.22",
     "alembic>=1.13",
