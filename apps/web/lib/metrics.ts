@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { apiGet, apiSend, type Envelope } from "./api";
 
 import type { MetricEntry, RecordMetricInput } from "./metrics-types";
 
@@ -7,43 +7,20 @@ import type { MetricEntry, RecordMetricInput } from "./metrics-types";
 // "@/lib/metrics-types" to avoid pulling this server-only module into the browser.
 export * from "./metrics-types";
 
-// Server-side data access for the metric history. The Clerk JWT is attached here
-// and never reaches the browser; the FastAPI backend verifies it via JWKS, scopes
-// every reading to the owning user, and keeps these records separate from the
-// mutable Fitness Profile snapshot.
-const API_URL = process.env.API_URL ?? "http://localhost:8000";
-
-interface Envelope<T> {
-  success: boolean;
-  data: T | null;
-  error: string | null;
-}
-
-async function authHeaders(): Promise<Record<string, string>> {
-  const { getToken } = await auth();
-  const token = await getToken();
-  return { Authorization: `Bearer ${token}` };
-}
-
+// Server-side data access for the metric history. The transport seam (lib/api.ts)
+// attaches the Clerk JWT — it never reaches the browser; the FastAPI backend verifies
+// it via JWKS, scopes every reading to the owning user, and keeps these records
+// separate from the mutable Fitness Profile snapshot. The optional metric filter is
+// encoded here, where its URL semantics live.
 export async function recordMetric(
   input: RecordMetricInput,
 ): Promise<Envelope<MetricEntry>> {
-  const response = await fetch(`${API_URL}/api/metrics`, {
-    method: "POST",
-    headers: { ...(await authHeaders()), "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-    cache: "no-store",
-  });
-  return (await response.json()) as Envelope<MetricEntry>;
+  return apiSend("/api/metrics", "POST", input);
 }
 
 export async function fetchMetrics(
   metric?: string,
 ): Promise<Envelope<MetricEntry[]>> {
   const query = metric ? `?metric=${encodeURIComponent(metric)}` : "";
-  const response = await fetch(`${API_URL}/api/metrics${query}`, {
-    headers: await authHeaders(),
-    cache: "no-store",
-  });
-  return (await response.json()) as Envelope<MetricEntry[]>;
+  return apiGet(`/api/metrics${query}`);
 }

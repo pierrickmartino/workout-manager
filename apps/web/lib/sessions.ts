@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { apiGet, apiSend, type Envelope } from "./api";
 
 import type {
   ExerciseDetail,
@@ -12,43 +12,19 @@ import type {
 // (and its `server-only` dependency) into the browser bundle.
 export * from "./sessions-types";
 
-// Server-side data access for standalone Session generation. The Clerk JWT is
-// attached here and never reaches the browser; the FastAPI backend verifies it
-// via JWKS, then runs the AI generation path (ADR-0006).
-const API_URL = process.env.API_URL ?? "http://localhost:8000";
-
-interface Envelope<T> {
-  success: boolean;
-  data: T | null;
-  error: string | null;
-}
-
-async function authHeaders(): Promise<Record<string, string>> {
-  const { getToken } = await auth();
-  const token = await getToken();
-  return { Authorization: `Bearer ${token}` };
-}
-
+// Server-side data access for standalone Session generation. The transport seam
+// (lib/api.ts) attaches the Clerk JWT — it never reaches the browser; the FastAPI
+// backend verifies it via JWKS, then runs the AI generation path (ADR-0006).
 export async function generateSession(
   input: GenerateSessionInput,
 ): Promise<Envelope<WorkoutSession>> {
-  const response = await fetch(`${API_URL}/api/sessions/generate`, {
-    method: "POST",
-    headers: { ...(await authHeaders()), "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-    cache: "no-store",
-  });
-  return (await response.json()) as Envelope<WorkoutSession>;
+  return apiSend("/api/sessions/generate", "POST", input);
 }
 
 export async function fetchSession(
   id: number,
 ): Promise<Envelope<WorkoutSession>> {
-  const response = await fetch(`${API_URL}/api/sessions/${id}`, {
-    headers: await authHeaders(),
-    cache: "no-store",
-  });
-  return (await response.json()) as Envelope<WorkoutSession>;
+  return apiGet(`/api/sessions/${id}`);
 }
 
 // Hydration read for the Live Session screen (issue #90 — F2·S5): the owner's
@@ -58,37 +34,25 @@ export async function fetchSession(
 export async function fetchLiveSession(
   id: number,
 ): Promise<Envelope<WorkoutSession>> {
-  const response = await fetch(`${API_URL}/api/sessions/${id}/live`, {
-    headers: await authHeaders(),
-    cache: "no-store",
-  });
-  return (await response.json()) as Envelope<WorkoutSession>;
+  return apiGet(`/api/sessions/${id}/live`);
 }
 
 export async function fetchExercise(
   id: number,
 ): Promise<Envelope<ExerciseDetail>> {
-  const response = await fetch(`${API_URL}/api/exercises/${id}`, {
-    headers: await authHeaders(),
-    cache: "no-store",
-  });
-  return (await response.json()) as Envelope<ExerciseDetail>;
+  return apiGet(`/api/exercises/${id}`);
 }
 
 // Substitute the Exercise prescribed at ``position`` in the user's own Session
 // copy. Lookup-first over the catalog, AI fallback only when nothing fits; it is
-// unlimited and never consumes the regeneration limit.
+// unlimited and never consumes the regeneration limit. The POST carries no body, so
+// the seam sends no `Content-Type` — preserved exactly as before.
 export async function substitutePrescription(
   sessionId: number,
   position: number,
 ): Promise<Envelope<WorkoutSession>> {
-  const response = await fetch(
-    `${API_URL}/api/sessions/${sessionId}/prescriptions/${position}/substitute`,
-    {
-      method: "POST",
-      headers: await authHeaders(),
-      cache: "no-store",
-    },
+  return apiSend(
+    `/api/sessions/${sessionId}/prescriptions/${position}/substitute`,
+    "POST",
   );
-  return (await response.json()) as Envelope<WorkoutSession>;
 }
