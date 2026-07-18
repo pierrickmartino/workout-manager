@@ -1,0 +1,62 @@
+name: CI
+
+# Runs the test suites that already exist in the repo on every push and PR, so
+# the 100+ backend/frontend tests and the terminology guard actually execute
+# instead of relying on someone running them locally. See REVIEW.md for the
+# domain invariants these checks defend.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API (pytest + terminology guard)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      # The suite is fully offline (SQLite, injected JWKS, fake LLM) — no live
+      # Postgres/Redis/Clerk needed. The terminology guard runs as a test here.
+      - name: Run tests with coverage
+        run: pytest --cov --cov-report=term-missing
+        # The project's bar is 80% (see .claude/rules/common/testing.md). Turn the
+        # gate on once the current baseline is confirmed at/above it:
+        #   run: pytest --cov --cov-report=term-missing --cov-fail-under=80
+
+  web:
+    name: Web (node --test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
