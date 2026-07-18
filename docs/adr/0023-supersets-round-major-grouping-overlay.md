@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # 0023 — Supersets are a round-major grouping overlay, generated and hand-built
