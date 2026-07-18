@@ -5,6 +5,7 @@ import {
   initBuilderDraft,
   builderReducer,
   builderMatrix,
+  supersetLayout,
   toDeployPayload,
   toSimulatePayload,
 } from "./protocol-builder.ts";
@@ -26,6 +27,8 @@ function prescription(overrides = {}) {
     rest_seconds: 90,
     tempo: null,
     recommended_load: { kind: "absolute", text: "60 kg", kg: 60 },
+    superset_group: null,
+    round_rest_seconds: null,
     exercise_id: 100,
     exercise_name: "Back Squat",
     exercise_description: null,
@@ -836,4 +839,328 @@ test("PLACE_QUEUED_EXERCISE with nothing queued is a no-op", () => {
 
   // Assert — the draft is untouched
   assert.deepEqual(next, draft);
+});
+
+// --- Slice 1: Supersets — a round-major grouping overlay (ADR-0023). The reducer
+// groups 2+ contiguous un-performed Prescriptions into a Superset (shared group tag +
+// one group-owned round-rest), keeps the tail contiguous, and lets a member's own rest
+// go dormant while grouped and return on ungroup. Grouping never touches the frozen
+// prefix. `supersetLayout` derives the A/B/C member badges the Builder renders.
+
+function twoPrescriptionSession(overrides = {}) {
+  return session({
+    prescriptions: [
+      prescription({ exercise_id: 1, exercise_name: "A", rest_seconds: 60 }),
+      prescription({ exercise_id: 2, exercise_name: "B", rest_seconds: 75 }),
+    ],
+    ...overrides,
+  });
+}
+
+test("initBuilderDraft reads a stored Superset grouping into the draft", () => {
+  // Arrange — a Session already carrying a two-member Superset
+  const source = protocol({
+    sessions: [
+      session({
+        prescriptions: [
+          prescription({ exercise_id: 1, superset_group: "1", round_rest_seconds: 120 }),
+          prescription({ exercise_id: 2, superset_group: "1", round_rest_seconds: 120 }),
+        ],
+      }),
+    ],
+  });
+
+  // Act
+  const draft = initBuilderDraft(source);
+
+  // Assert — both members carry the shared tag and the group-owned round-rest
+  const prescriptions = draft.sessions[0].prescriptions;
+  assert.deepEqual(
+    prescriptions.map((p) => p.supersetGroup),
+    ["1", "1"],
+  );
+  assert.deepEqual(
+    prescriptions.map((p) => p.roundRestSeconds),
+    [120, 120],
+  );
+});
+
+test("initBuilderDraft leaves a flat Prescription ungrouped", () => {
+  // Arrange / Act — an ordinary flat Protocol
+  const draft = initBuilderDraft(protocol());
+
+  // Assert — no group tag, no round-rest
+  const only = draft.sessions[0].prescriptions[0];
+  assert.equal(only.supersetGroup, null);
+  assert.equal(only.roundRestSeconds, null);
+});
+
+test("GROUP_WITH_NEXT groups two solo Prescriptions and seeds the round-rest from the last member's rest", () => {
+  // Arrange — two solo Prescriptions (rest 60 and 75)
+  const draft = initBuilderDraft(protocol({ sessions: [twoPrescriptionSession()] }));
+
+  // Act — group the first with the next
+  const next = builderReducer(draft, {
+    type: "GROUP_WITH_NEXT",
+    sessionId: 1,
+    position: 0,
+  });
+
+  // Assert — both share one tag, and the round-rest seeds from the last member's rest
+  const prescriptions = next.sessions[0].prescriptions;
+  assert.equal(prescriptions[0].supersetGroup, prescriptions[1].supersetGroup);
+  assert.notEqual(prescriptions[0].supersetGroup, null);
+  assert.deepEqual(
+    prescriptions.map((p) => p.roundRestSeconds),
+    [75, 75],
+  );
+  // …and each member's own rest is preserved (dormant, not erased)
+  assert.deepEqual(
+    prescriptions.map((p) => p.restSeconds),
+    [60, 75],
+  );
+  // …and the original draft is untouched (immutable)
+  assert.equal(draft.sessions[0].prescriptions[0].supersetGroup, null);
+});
+
+test("UNGROUP clears the group and round-rest, restoring each member's own rest", () => {
+  // Arrange — a grouped two-member Superset
+  const grouped = builderReducer(
+    initBuilderDraft(protocol({ sessions: [twoPrescriptionSession()] })),
+    { type: "GROUP_WITH_NEXT", sessionId: 1, position: 0 },
+  );
+
+  // Act — ungroup it
+  const next = builderReducer(grouped, {
+    type: "UNGROUP",
+    sessionId: 1,
+    position: 0,
+  });
+
+  // Assert — no tags, no round-rest, and the dormant individual rests return intact
+  const prescriptions = next.sessions[0].prescriptions;
+  assert.deepEqual(
+    prescriptions.map((p) => p.supersetGroup),
+    [null, null],
+  );
+  assert.deepEqual(
+    prescriptions.map((p) => p.roundRestSeconds),
+    [null, null],
+  );
+  assert.deepEqual(
+    prescriptions.map((p) => p.restSeconds),
+    [60, 75],
+  );
+});
+
+test("EDIT_ROUND_REST sets the round-rest on every member of the group", () => {
+  // Arrange — a grouped two-member Superset
+  const grouped = builderReducer(
+    initBuilderDraft(protocol({ sessions: [twoPrescriptionSession()] })),
+    { type: "GROUP_WITH_NEXT", sessionId: 1, position: 0 },
+  );
+
+  // Act — edit the group's round-rest
+  const next = builderReducer(grouped, {
+    type: "EDIT_ROUND_REST",
+    sessionId: 1,
+    position: 1,
+    roundRestSeconds: 150,
+  });
+
+  // Assert — the round-rest is group-owned: both members carry the new value
+  assert.deepEqual(
+    next.sessions[0].prescriptions.map((p) => p.roundRestSeconds),
+    [150, 150],
+  );
+});
+
+test("GROUP_WITH_NEXT extends an existing Superset to a third member, keeping the round-rest", () => {
+  // Arrange — three solo Prescriptions; group the first two
+  const draft = initBuilderDraft(
+    protocol({
+      sessions: [
+        session({
+          prescriptions: [
+            prescription({ exercise_id: 1, exercise_name: "A", rest_seconds: 60 }),
+            prescription({ exercise_id: 2, exercise_name: "B", rest_seconds: 75 }),
+            prescription({ exercise_id: 3, exercise_name: "C", rest_seconds: 90 }),
+          ],
+        }),
+      ],
+    }),
+  );
+  const twoGrouped = builderReducer(draft, {
+    type: "GROUP_WITH_NEXT",
+    sessionId: 1,
+    position: 0,
+  });
+
+  // Act — extend the group to include C
+  const next = builderReducer(twoGrouped, {
+    type: "GROUP_WITH_NEXT",
+    sessionId: 1,
+    position: 1,
+  });
+
+  // Assert — all three share one tag and the same (preserved) round-rest
+  const prescriptions = next.sessions[0].prescriptions;
+  const tag = prescriptions[0].supersetGroup;
+  assert.notEqual(tag, null);
+  assert.deepEqual(
+    prescriptions.map((p) => p.supersetGroup),
+    [tag, tag, tag],
+  );
+  assert.deepEqual(
+    prescriptions.map((p) => p.roundRestSeconds),
+    [75, 75, 75],
+  );
+});
+
+test("REORDER_PRESCRIPTION that would split a Superset is a no-op (contiguity preserved)", () => {
+  // Arrange — a grouped [A,B] Superset followed by a solo C
+  const draft = initBuilderDraft(
+    protocol({
+      sessions: [
+        session({
+          prescriptions: [
+            prescription({ exercise_id: 1, exercise_name: "A", rest_seconds: 60 }),
+            prescription({ exercise_id: 2, exercise_name: "B", rest_seconds: 75 }),
+            prescription({ exercise_id: 3, exercise_name: "C", rest_seconds: 90 }),
+          ],
+        }),
+      ],
+    }),
+  );
+  const grouped = builderReducer(draft, {
+    type: "GROUP_WITH_NEXT",
+    sessionId: 1,
+    position: 0,
+  });
+
+  // Act — try to move C (index 2) between A and B (index 1), which would split the group
+  const next = builderReducer(grouped, {
+    type: "REORDER_PRESCRIPTION",
+    sessionId: 1,
+    from: 2,
+    to: 1,
+  });
+
+  // Assert — the split is refused; order and grouping are unchanged
+  assert.deepEqual(next, grouped);
+});
+
+test("REORDER_PRESCRIPTION that keeps every Superset contiguous still applies", () => {
+  // Arrange — a solo A, then a grouped [B,C] Superset
+  const draft = initBuilderDraft(
+    protocol({
+      sessions: [
+        session({
+          prescriptions: [
+            prescription({ exercise_id: 1, exercise_name: "A", rest_seconds: 60 }),
+            prescription({ exercise_id: 2, exercise_name: "B", rest_seconds: 75 }),
+            prescription({ exercise_id: 3, exercise_name: "C", rest_seconds: 90 }),
+          ],
+        }),
+      ],
+    }),
+  );
+  const grouped = builderReducer(draft, {
+    type: "GROUP_WITH_NEXT",
+    sessionId: 1,
+    position: 1,
+  });
+
+  // Act — move solo A (index 0) to the end (index 2): [B,C] stays contiguous
+  const next = builderReducer(grouped, {
+    type: "REORDER_PRESCRIPTION",
+    sessionId: 1,
+    from: 0,
+    to: 2,
+  });
+
+  // Assert — the reorder applied and the group is still intact and contiguous
+  assert.deepEqual(
+    next.sessions[0].prescriptions.map((p) => p.exerciseName),
+    ["B", "C", "A"],
+  );
+  assert.equal(
+    next.sessions[0].prescriptions[0].supersetGroup,
+    next.sessions[0].prescriptions[1].supersetGroup,
+  );
+});
+
+test("grouping is a no-op on a performed Session (frozen prefix)", () => {
+  // Arrange — a performed two-Prescription Session
+  const draft = initBuilderDraft(
+    protocol({ sessions: [twoPrescriptionSession({ performed: true })] }),
+  );
+
+  // Act
+  const next = builderReducer(draft, {
+    type: "GROUP_WITH_NEXT",
+    sessionId: 1,
+    position: 0,
+  });
+
+  // Assert — the frozen Session is never grouped
+  assert.deepEqual(next, draft);
+});
+
+test("toDeployPayload carries the Superset group tag and round-rest", () => {
+  // Arrange — a grouped two-member Superset in an un-performed Session
+  const grouped = builderReducer(
+    initBuilderDraft(protocol({ sessions: [twoPrescriptionSession()] })),
+    { type: "GROUP_WITH_NEXT", sessionId: 1, position: 0 },
+  );
+
+  // Act
+  const payload = toDeployPayload(grouped);
+
+  // Assert — the grouping rides through DEPLOY on both members
+  const prescriptions = payload.sessions[0].prescriptions;
+  assert.equal(prescriptions[0].superset_group, prescriptions[1].superset_group);
+  assert.notEqual(prescriptions[0].superset_group, null);
+  assert.deepEqual(
+    prescriptions.map((p) => p.round_rest_seconds),
+    [75, 75],
+  );
+});
+
+test("supersetLayout labels a group's members A, B, C and marks its ends", () => {
+  // Arrange — a solo A, then a grouped [B,C] Superset
+  const draft = initBuilderDraft(
+    protocol({
+      sessions: [
+        session({
+          prescriptions: [
+            prescription({ exercise_id: 1, exercise_name: "A", rest_seconds: 60 }),
+            prescription({ exercise_id: 2, exercise_name: "B", rest_seconds: 75 }),
+            prescription({ exercise_id: 3, exercise_name: "C", rest_seconds: 90 }),
+          ],
+        }),
+      ],
+    }),
+  );
+  const grouped = builderReducer(draft, {
+    type: "GROUP_WITH_NEXT",
+    sessionId: 1,
+    position: 1,
+  });
+
+  // Act
+  const layout = supersetLayout(grouped.sessions[0].prescriptions);
+
+  // Assert — A is solo; B and C carry member badges and mark the group's first/last
+  assert.equal(layout[0].memberLabel, null);
+  assert.deepEqual(
+    layout.map((slot) => slot.memberLabel),
+    [null, "A", "B"],
+  );
+  assert.deepEqual(
+    layout.map((slot) => slot.isLastMember),
+    [false, false, true],
+  );
+  // …and the group's round-rest (seeded from the last member C's rest) is surfaced
+  assert.equal(layout[1].roundRestSeconds, 90);
 });

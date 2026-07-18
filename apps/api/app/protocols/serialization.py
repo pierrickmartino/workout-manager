@@ -32,6 +32,9 @@ def serialize_session(
                 "rest_seconds": p.rest_seconds,
                 "tempo": p.tempo,
                 "recommended_load": p.recommended_load,
+                # Superset overlay (ADR-0023): both null on a flat, solo Prescription.
+                "superset_group": p.superset_group,
+                "round_rest_seconds": p.round_rest_seconds,
                 "exercise_id": p.exercise_id,
                 "exercise_name": p.exercise_name,
                 "exercise_description": p.exercise_description,

@@ -207,6 +207,11 @@ class DeployPrescriptionBody(BaseModel):
     tempo: str | None = None
     load_kind: str = DEFAULT_LOAD_KIND
     load_value: str | None = None
+    # Superset overlay (ADR-0023): the group tag members of one Superset share and the
+    # group-owned round-rest. Both ``None`` for a flat, solo Prescription. Validated by
+    # the shared Superset validator on the deploy gate.
+    superset_group: str | None = None
+    round_rest_seconds: int | None = None
 
     @field_validator("load_kind")
     @classmethod
@@ -316,6 +321,8 @@ def deploy_protocol(
                         rest_seconds=prescription.rest_seconds,
                         tempo=prescription.tempo,
                         recommended_load=prescription.resolved_load(),
+                        superset_group=prescription.superset_group,
+                        round_rest_seconds=prescription.round_rest_seconds,
                     )
                     for prescription in session.prescriptions
                 ],
@@ -329,6 +336,9 @@ def deploy_protocol(
         performed_session_ids=performed,
         known_session_ids=known,
         exercise_exists=lambda exercise_id: exercises.get(exercise_id) is not None,
+        # The Sensitive-Constraint suppression behaviour lands in a later slice
+        # (ADR-0023); the seam is wired here so the signature is stable.
+        has_sensitive_constraint=False,
     )
     if errors:
         return _deploy_error_response(errors)
@@ -365,6 +375,8 @@ def deploy_protocol(
                         rest_seconds=prescription.rest_seconds,
                         tempo=prescription.tempo,
                         recommended_load=prescription.recommended_load,
+                        superset_group=prescription.superset_group,
+                        round_rest_seconds=prescription.round_rest_seconds,
                     )
                     for prescription in session.prescriptions
                 ],

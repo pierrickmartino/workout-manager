@@ -22,6 +22,13 @@ export interface DraftPrescription {
   tempo: string | null;
   loadKind: LoadKind;
   loadValue: string;
+  // Superset overlay (ADR-0023): `supersetGroup` is `null` for a flat, solo
+  // Prescription; members of one Superset share the tag. `roundRestSeconds` is the
+  // group-owned round-rest, denormalized onto each member so it is reorder-stable. A
+  // grouped member's own `restSeconds` stays put — dormant while grouped, restored on
+  // ungroup.
+  supersetGroup: string | null;
+  roundRestSeconds: number | null;
 }
 
 // One Session in the draft. `performed` marks the frozen prefix (ADR-0020): a
@@ -101,6 +108,29 @@ export type BuilderEvent =
       sessionId: number;
       from: number;
       to: number;
+    }
+  | {
+      // Group the Prescription at `position` with the next one into a Superset
+      // (ADR-0023), unifying any groups they already belong to. Seeds a new group's
+      // round-rest from the last member's own rest.
+      type: "GROUP_WITH_NEXT";
+      sessionId: number;
+      position: number;
+    }
+  | {
+      // Dissolve the Superset the Prescription at `position` belongs to: clear the
+      // group tag and round-rest on every member, restoring their dormant own rest.
+      type: "UNGROUP";
+      sessionId: number;
+      position: number;
+    }
+  | {
+      // Edit the group-owned round-rest of the Superset at `position`, applied to
+      // every member so it stays consistent regardless of order.
+      type: "EDIT_ROUND_REST";
+      sessionId: number;
+      position: number;
+      roundRestSeconds: number | null;
     }
   | {
       type: "EDIT_NAME";
@@ -190,6 +220,8 @@ export function initBuilderDraft(protocol: ProtocolProgress): BuilderDraft {
           tempo: prescription.tempo,
           loadKind: load.kind,
           loadValue: load.value,
+          supersetGroup: prescription.superset_group ?? null,
+          roundRestSeconds: prescription.round_rest_seconds ?? null,
         };
       }),
     })),
@@ -229,8 +261,26 @@ export function builderReducer(
       );
 
     case "REORDER_PRESCRIPTION":
+      // A reorder must never leave a Superset non-contiguous (ADR-0023): if moving
+      // this Prescription would split a group, refuse the move.
+      return mapSessionPrescriptions(state, event.sessionId, (prescriptions) => {
+        const moved = movePrescription(prescriptions, event.from, event.to);
+        return supersetsAreContiguous(moved) ? moved : prescriptions;
+      });
+
+    case "GROUP_WITH_NEXT":
       return mapSessionPrescriptions(state, event.sessionId, (prescriptions) =>
-        movePrescription(prescriptions, event.from, event.to),
+        groupWithNext(prescriptions, event.position),
+      );
+
+    case "UNGROUP":
+      return mapSessionPrescriptions(state, event.sessionId, (prescriptions) =>
+        ungroup(prescriptions, event.position),
+      );
+
+    case "EDIT_ROUND_REST":
+      return mapSessionPrescriptions(state, event.sessionId, (prescriptions) =>
+        editRoundRest(prescriptions, event.position, event.roundRestSeconds),
       );
 
     case "EDIT_NAME":
@@ -327,6 +377,8 @@ function newPrescription(exercise: PickedExercise): DraftPrescription {
     tempo: null,
     loadKind: "absolute",
     loadValue: "",
+    supersetGroup: null,
+    roundRestSeconds: null,
   };
 }
 
@@ -345,6 +397,168 @@ function movePrescription(
   const [moved] = reordered.splice(from, 1);
   reordered.splice(to, 0, moved);
   return reordered;
+}
+
+// A fresh Superset tag for a Session: one past the largest numeric tag already in use,
+// so a new group never collides with an existing one. Tags originate here (the reducer
+// is the only author this slice), so a simple numeric scheme suffices.
+function freshSupersetTag(prescriptions: DraftPrescription[]): string {
+  const used = prescriptions
+    .map((prescription) => prescription.supersetGroup)
+    .filter((group): group is string => group !== null)
+    .map((group) => Number.parseInt(group, 10))
+    .filter((value) => Number.isInteger(value));
+  return String(used.length > 0 ? Math.max(...used) + 1 : 1);
+}
+
+// Group the Prescription at `position` with the next one into one Superset, unifying
+// any groups they already belong to (ADR-0023). The unified group takes the first
+// member's tag (else the next's, else a fresh tag) and one round-rest: an existing
+// group's round-rest is kept, otherwise it seeds from the last member's own rest. An
+// out-of-range `position` (no next Prescription) leaves the list untouched.
+function groupWithNext(
+  prescriptions: DraftPrescription[],
+  position: number,
+): DraftPrescription[] {
+  const first = prescriptions[position];
+  const next = prescriptions[position + 1];
+  if (!first || !next) return prescriptions;
+
+  const tag = first.supersetGroup ?? next.supersetGroup ?? freshSupersetTag(prescriptions);
+  const absorbed = new Set<string>();
+  if (first.supersetGroup) absorbed.add(first.supersetGroup);
+  if (next.supersetGroup) absorbed.add(next.supersetGroup);
+
+  const existingRoundRest =
+    (first.supersetGroup ? first.roundRestSeconds : null) ??
+    (next.supersetGroup ? next.roundRestSeconds : null);
+  const roundRest = existingRoundRest ?? next.restSeconds;
+
+  return prescriptions.map((prescription, index) => {
+    const joins =
+      index === position ||
+      index === position + 1 ||
+      (prescription.supersetGroup !== null && absorbed.has(prescription.supersetGroup));
+    if (!joins) return prescription;
+    return { ...prescription, supersetGroup: tag, roundRestSeconds: roundRest };
+  });
+}
+
+// Dissolve the Superset the Prescription at `position` belongs to: clear the tag and
+// round-rest on every member, so each member's own (dormant) rest is live again. A
+// Prescription that is not in a group leaves the list untouched.
+function ungroup(
+  prescriptions: DraftPrescription[],
+  position: number,
+): DraftPrescription[] {
+  const tag = prescriptions[position]?.supersetGroup ?? null;
+  if (tag === null) return prescriptions;
+  return prescriptions.map((prescription) =>
+    prescription.supersetGroup === tag
+      ? { ...prescription, supersetGroup: null, roundRestSeconds: null }
+      : prescription,
+  );
+}
+
+// Set the group-owned round-rest of the Superset at `position` on every member, so the
+// value stays consistent no matter which member the edit came from. A no-op when the
+// Prescription is not grouped.
+function editRoundRest(
+  prescriptions: DraftPrescription[],
+  position: number,
+  roundRestSeconds: number | null,
+): DraftPrescription[] {
+  const tag = prescriptions[position]?.supersetGroup ?? null;
+  if (tag === null) return prescriptions;
+  return prescriptions.map((prescription) =>
+    prescription.supersetGroup === tag
+      ? { ...prescription, roundRestSeconds }
+      : prescription,
+  );
+}
+
+// Whether every Superset occupies an unbroken run of positions — the invariant the
+// reducer maintains on reorder and the deploy gate re-checks (ADR-0023).
+function supersetsAreContiguous(prescriptions: DraftPrescription[]): boolean {
+  const bounds = new Map<string, { first: number; last: number; count: number }>();
+  prescriptions.forEach((prescription, index) => {
+    const group = prescription.supersetGroup;
+    if (group === null) return;
+    const bound = bounds.get(group);
+    if (!bound) bounds.set(group, { first: index, last: index, count: 1 });
+    else {
+      bound.last = index;
+      bound.count += 1;
+    }
+  });
+  for (const { first, last, count } of bounds.values()) {
+    if (last - first + 1 !== count) return false;
+  }
+  return true;
+}
+
+// One Prescription's Superset display facts, aligned to the Session's Prescription
+// list — what the Builder renders per row (ADR-0023). Solo Prescriptions carry a null
+// `memberLabel`; a grouped member gets its A/B/C badge, whether it opens or closes the
+// group (so the round-rest field renders once, on the last member), and the group's
+// round-rest. `canGroupWithNext` gates the "group with next" control.
+export interface SupersetSlot {
+  group: string | null;
+  memberLabel: string | null;
+  isFirstMember: boolean;
+  isLastMember: boolean;
+  roundRestSeconds: number | null;
+  canGroupWithNext: boolean;
+}
+
+// Derive the per-Prescription Superset layout for a Session. Members of a group are
+// lettered A, B, C… in order; the group's first/last members are flagged so the UI can
+// bracket it and place the single round-rest field on its last member.
+export function supersetLayout(
+  prescriptions: DraftPrescription[],
+): SupersetSlot[] {
+  const totals = new Map<string, number>();
+  for (const prescription of prescriptions) {
+    if (prescription.supersetGroup !== null) {
+      totals.set(
+        prescription.supersetGroup,
+        (totals.get(prescription.supersetGroup) ?? 0) + 1,
+      );
+    }
+  }
+
+  const ordinals = new Map<string, number>();
+  return prescriptions.map((prescription, index) => {
+    const group = prescription.supersetGroup;
+    const next = prescriptions[index + 1];
+    // A Prescription can start/extend a group with its neighbour when one exists and
+    // is not already in the *same* group.
+    const canGroupWithNext =
+      next !== undefined && (group === null || next.supersetGroup !== group);
+
+    if (group === null) {
+      return {
+        group: null,
+        memberLabel: null,
+        isFirstMember: false,
+        isLastMember: false,
+        roundRestSeconds: null,
+        canGroupWithNext,
+      };
+    }
+
+    const ordinal = ordinals.get(group) ?? 0;
+    ordinals.set(group, ordinal + 1);
+    const total = totals.get(group) ?? 1;
+    return {
+      group,
+      memberLabel: String.fromCharCode(65 + ordinal),
+      isFirstMember: ordinal === 0,
+      isLastMember: ordinal === total - 1,
+      roundRestSeconds: prescription.roundRestSeconds,
+      canGroupWithNext,
+    };
+  });
 }
 
 // Replace an un-performed Session's whole Prescription list via `change`, returning a
@@ -462,6 +676,10 @@ export interface DeployPrescriptionPayload {
   tempo: string | null;
   load_kind: LoadKind;
   load_value: string;
+  // Superset overlay (ADR-0023): the shared group tag and group-owned round-rest, both
+  // null on a flat, solo Prescription. The deploy gate validates the grouping.
+  superset_group: string | null;
+  round_rest_seconds: number | null;
 }
 
 export interface DeploySessionPayload {
@@ -506,6 +724,8 @@ export function toDeployPayload(draft: BuilderDraft): DeployPayload {
           tempo: prescription.tempo,
           load_kind: prescription.loadKind,
           load_value: prescription.loadValue,
+          superset_group: prescription.supersetGroup,
+          round_rest_seconds: prescription.roundRestSeconds,
         })),
       })),
   };
