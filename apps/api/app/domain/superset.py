@@ -21,8 +21,11 @@ The rules (ADR-0023):
 
 The signature also accepts ``has_sensitive_constraint``: a user with any Sensitive
 Constraint is never given a Superset (a safety rule of the same class as the cache
-bypass, ADR-0003). That parameter is accepted here so the interface is stable, but the
-suppression *behaviour* lands in a later slice; this slice does not act on it.
+bypass, ADR-0003). When set, every group present is reported as
+``superset_forbidden_under_sensitive_constraint`` — the safety gate is the dominant
+reason, so it short-circuits the structural shape checks and names each group once.
+A flat plan (no groups) is untouched; a non-medical Preference / Limitation never
+sets this flag, so grouping stays allowed for those users.
 """
 
 from __future__ import annotations
@@ -63,14 +66,18 @@ def validate_supersets(
 ) -> list[SupersetViolation]:
     """Return every structural Superset violation in ``members``, or ``[]`` if valid.
 
-    ``has_sensitive_constraint`` is accepted to keep the interface stable; the
-    safety-suppression behaviour it will drive lands in a later slice (ADR-0023), so
-    it does not affect the result here.
+    When ``has_sensitive_constraint`` is set, any group present is forbidden
+    outright (ADR-0023): each group yields a single
+    ``superset_forbidden_under_sensitive_constraint`` violation, short-circuiting the
+    structural checks, because the safety gate is the dominant reason a Sensitive-
+    Constraint user cannot be handed that group.
     """
 
     violations: list[SupersetViolation] = []
     for group, group_members in _groups(members).items():
-        violations.extend(_group_violations(group, group_members))
+        violations.extend(
+            _group_violations(group, group_members, has_sensitive_constraint)
+        )
     return violations
 
 
@@ -88,12 +95,29 @@ def _groups(
 
 
 def _group_violations(
-    group: str, members: list[SupersetMember]
+    group: str, members: list[SupersetMember], has_sensitive_constraint: bool
 ) -> list[SupersetViolation]:
     """Every violation for one tagged group, located to its first member."""
 
     ordered = sorted(members, key=lambda member: member.position)
     anchor = ordered[0].position
+
+    # A Sensitive-Constraint user is never given a Superset (ADR-0023): the group is
+    # forbidden outright, so the safety gate is the single reported reason and the
+    # structural shape checks below are moot.
+    if has_sensitive_constraint:
+        return [
+            SupersetViolation(
+                code="superset_forbidden_under_sensitive_constraint",
+                message=(
+                    f"Superset '{group}' is not allowed while a sensitive constraint "
+                    "(injury, rehabilitation, postpartum, or a flagged medical "
+                    "limitation) is active."
+                ),
+                group=group,
+                position=anchor,
+            )
+        ]
 
     # A lone group cannot be any other kind of Superset problem — report only that,
     # so a one-member group never also trips the round-rest/set-count checks.

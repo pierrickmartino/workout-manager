@@ -175,6 +175,38 @@ def test_system_prompt_instructs_the_model_to_use_supersets():
     assert "superset" in llm.calls[0]["system"].lower()
 
 
+SENSITIVE_REQUEST = GenerationRequest(
+    training_type="strength",
+    duration_minutes=45,
+    equipment=["barbell"],
+    has_sensitive_constraint=True,
+)
+
+
+def test_sensitive_request_degrades_even_a_valid_generated_superset_to_flat():
+    # Arrange — a *valid* Superset from the model, but the request is Sensitive-
+    # Constraint: it must never reach the user (ADR-0023).
+    generator = LlmSessionGenerator(FakeStructuredLLM(text=_superset_payload()))
+
+    # Act — the generation still succeeds, ungrouped
+    generated = generator.generate(SENSITIVE_REQUEST)
+
+    # Assert — a flat plan, both Prescriptions kept
+    assert len(generated.prescriptions) == 2
+    assert all(p.superset_group is None for p in generated.prescriptions)
+    assert all(p.round_rest_seconds is None for p in generated.prescriptions)
+
+
+def test_sensitive_request_prompt_instructs_the_model_to_emit_no_supersets():
+    # Arrange / Act
+    llm = FakeStructuredLLM(text=VALID_PAYLOAD)
+    LlmSessionGenerator(llm).generate(SENSITIVE_REQUEST)
+
+    # Assert — the model is told *not* to prescribe Supersets for this user
+    system = llm.calls[0]["system"].lower()
+    assert "no superset" in system or "do not" in system
+
+
 # --- Generated Supersets: schema, parse-boundary validation, degrade-to-flat ---
 # ADR-0023: the generator may prescribe a Superset (a group tag + round-rest per
 # prescription). A valid group survives the parse boundary; a malformed one

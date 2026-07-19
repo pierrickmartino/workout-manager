@@ -17,6 +17,7 @@ from app.main import create_app
 from app.repositories.deps import (
     get_exercise_repository,
     get_generation_feedback_repository,
+    get_profile_repository,
     get_session_generator,
     get_session_regenerator,
     get_session_repository,
@@ -25,6 +26,7 @@ from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.generation_feedback_repository import (
     InMemoryGenerationFeedbackRepository,
 )
+from app.repositories.profile_repository import InMemoryProfileRepository
 from app.repositories.session_repository import InMemorySessionRepository
 from tests.conftest import ISSUER, make_signing_context
 
@@ -73,6 +75,7 @@ def build_client(regenerator=None, ctx=None):
     app.dependency_overrides[get_session_generator] = lambda: FakeGenerator()
     app.dependency_overrides[get_session_regenerator] = lambda: regenerator
     app.dependency_overrides[get_generation_feedback_repository] = lambda: feedback
+    app.dependency_overrides[get_profile_repository] = lambda: InMemoryProfileRepository()
     return TestClient(app), ctx
 
 

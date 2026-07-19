@@ -148,14 +148,61 @@ def test_only_the_offending_group_is_reported_among_several():
     assert violations[0].group == "B"
 
 
-def test_signature_accepts_has_sensitive_constraint_and_still_allows_a_valid_group():
-    # Arrange — a valid Superset for a user flagged with a Sensitive Constraint. The
-    # suppression *behaviour* lands in Slice 4; this slice only proves the parameter
-    # is accepted and does not itself reject a structurally-valid group.
+def test_a_valid_group_is_forbidden_under_a_sensitive_constraint():
+    # Arrange — a structurally-valid Superset, but the user carries a Sensitive
+    # Constraint. Supersets compress rest and raise intensity, so they are a safety
+    # rule of the same class as the cache bypass (ADR-0003): forbidden outright,
+    # regardless of shape.
     members = _grouped("A", [0, 1])
 
     # Act
     violations = validate_supersets(members, has_sensitive_constraint=True)
+
+    # Assert — the group is named as forbidden, located to its first member
+    assert [v.code for v in violations] == [
+        "superset_forbidden_under_sensitive_constraint"
+    ]
+    assert violations[0].group == "A"
+    assert violations[0].position == 0
+
+
+def test_a_flat_plan_is_allowed_under_a_sensitive_constraint():
+    # Arrange — a Sensitive-Constraint user with no Supersets at all
+    members = [_member(position=0), _member(position=1), _member(position=2)]
+
+    # Act
+    violations = validate_supersets(members, has_sensitive_constraint=True)
+
+    # Assert — the gate only forbids grouping; a flat plan is untouched
+    assert violations == []
+
+
+def test_the_forbidden_gate_reports_once_per_group_not_per_structural_flaw():
+    # Arrange — a Sensitive-Constraint user with a group that is *also* structurally
+    # invalid (uneven set counts). The safety gate is the dominant reason; the group
+    # should be named forbidden once, not buried under shape violations.
+    members = [
+        _member(position=0, superset_group="A", sets=3, round_rest_seconds=90),
+        _member(position=1, superset_group="A", sets=4, round_rest_seconds=90),
+    ]
+
+    # Act
+    violations = validate_supersets(members, has_sensitive_constraint=True)
+
+    # Assert — a single forbidden violation for the group
+    assert [v.code for v in violations] == [
+        "superset_forbidden_under_sensitive_constraint"
+    ]
+    assert violations[0].group == "A"
+
+
+def test_a_non_sensitive_user_keeps_a_valid_group():
+    # Arrange — the same valid group, flag unset (a non-medical Preference / Limitation
+    # never sets it): grouping stays allowed.
+    members = _grouped("A", [0, 1])
+
+    # Act
+    violations = validate_supersets(members, has_sensitive_constraint=False)
 
     # Assert
     assert violations == []

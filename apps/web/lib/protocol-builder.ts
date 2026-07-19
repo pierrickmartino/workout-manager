@@ -58,6 +58,12 @@ export interface BuilderDraft {
   // un-performed Session (PLACE_QUEUED_EXERCISE), which then clears it. `null` when
   // the builder was opened normally, with nothing waiting to be placed.
   queuedExercise: PickedExercise | null;
+  // Whether Supersets are paused because the user carries a Sensitive Constraint
+  // (ADR-0023). When true, `initBuilderDraft` opened the draft with any existing
+  // Superset in the editable tail auto-unlinked (staged, not committed) and the
+  // screen shows an explanatory banner — so the user never hits a confusing
+  // hard-block on an unrelated edit. The DEPLOY validator remains the backstop.
+  supersetsSuppressed: boolean;
 }
 
 // Which scalar field of a Prescription an edit targets. Load is edited separately
@@ -213,10 +219,26 @@ function prefillLoad(load: Load | null): { kind: LoadKind; value: string } {
   }
 }
 
+// How the builder opens for a given user. A Sensitive-Constraint user (injury, rehab,
+// postpartum, flagged medical) is never handed a Superset (ADR-0023), so the draft
+// opens with grouping paused; a non-medical Preference / Limitation never sets this.
+export interface InitBuilderOptions {
+  hasSensitiveConstraint?: boolean;
+}
+
 // Read a fetched Protocol into an editable builder draft. Each Session keeps its
 // `performed` flag so the screen renders the frozen prefix read-only, and each
 // Prescription's stored Load is expanded into the kind+value the picker edits.
-export function initBuilderDraft(protocol: ProtocolProgress): BuilderDraft {
+//
+// When opened by a Sensitive-Constraint user, any Superset in the *editable* tail is
+// auto-unlinked (staged, not committed) and `supersetsSuppressed` is set so the screen
+// shows a banner (ADR-0023). Performed Sessions are settled record (ADR-0020) and are
+// never deployed, so their grouping is left untouched.
+export function initBuilderDraft(
+  protocol: ProtocolProgress,
+  options: InitBuilderOptions = {},
+): BuilderDraft {
+  const suppress = options.hasSensitiveConstraint ?? false;
   return {
     protocolId: protocol.id,
     name: protocol.name,
@@ -224,6 +246,7 @@ export function initBuilderDraft(protocol: ProtocolProgress): BuilderDraft {
     sessionsPerWeek: protocol.sessions_per_week,
     // A freshly-read draft has nothing queued; the F6 deep-link seeds it after init.
     queuedExercise: null,
+    supersetsSuppressed: suppress,
     sessions: protocol.sessions.map((session) => ({
       sessionId: session.session_id,
       week: session.week,
@@ -231,6 +254,9 @@ export function initBuilderDraft(protocol: ProtocolProgress): BuilderDraft {
       performed: session.performed,
       prescriptions: session.prescriptions.map((prescription) => {
         const load = prefillLoad(prescription.recommended_load);
+        // Auto-unlink the editable tail's groups under suppression; the frozen prefix
+        // (a performed Session) keeps its settled grouping.
+        const paused = suppress && !session.performed;
         return {
           exerciseId: prescription.exercise_id,
           exerciseName: prescription.exercise_name,
@@ -240,8 +266,8 @@ export function initBuilderDraft(protocol: ProtocolProgress): BuilderDraft {
           tempo: prescription.tempo,
           loadKind: load.kind,
           loadValue: load.value,
-          supersetGroup: prescription.superset_group ?? null,
-          roundRestSeconds: prescription.round_rest_seconds ?? null,
+          supersetGroup: paused ? null : prescription.superset_group ?? null,
+          roundRestSeconds: paused ? null : prescription.round_rest_seconds ?? null,
         };
       }),
     })),

@@ -39,6 +39,10 @@ interface ProtocolBuilderProps {
   // placement into an un-performed Session. `null`/absent when the builder was opened
   // normally.
   queuedExercise?: PickedExercise | null;
+  // Whether the user carries a Sensitive Constraint (ADR-0023). When true the builder
+  // opens with existing Supersets auto-unlinked in the editable tail and shows a
+  // banner; a non-medical Preference / Limitation never sets this.
+  hasSensitiveConstraint?: boolean;
 }
 
 // Shape bounds mirror the server's deploy validation (weeks 1–52, frequency 1–14).
@@ -55,6 +59,7 @@ const MAX_SESSIONS_PER_WEEK = 14;
 export function ProtocolBuilder({
   protocol,
   queuedExercise = null,
+  hasSensitiveConstraint = false,
 }: ProtocolBuilderProps) {
   // Seed the F6-queued Exercise into the initial draft (ADR-0021) so it is waiting to
   // be placed the moment the builder opens — no mount effect, no flash of an empty
@@ -63,7 +68,7 @@ export function ProtocolBuilder({
     builderReducer,
     protocol,
     (source): BuilderDraft => {
-      const base = initBuilderDraft(source);
+      const base = initBuilderDraft(source, { hasSensitiveConstraint });
       if (!queuedExercise) return base;
       return builderReducer(base, {
         type: "SEED_QUEUED_EXERCISE",
@@ -157,6 +162,14 @@ export function ProtocolBuilder({
       {error ? <Alert tone="error">{error}</Alert> : null}
       {deployed ? (
         <Alert tone="success">Protocol deployed — your changes are live.</Alert>
+      ) : null}
+
+      {draft.supersetsSuppressed ? (
+        <Alert tone="info">
+          Supersets are paused while a sensitive constraint (injury, rehabilitation,
+          postpartum, or a flagged medical limitation) is active. Any existing
+          Supersets have been unlinked in this draft; deploy is unaffected otherwise.
+        </Alert>
       ) : null}
 
       {draft.queuedExercise ? (
