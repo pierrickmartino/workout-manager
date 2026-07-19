@@ -133,6 +133,26 @@ export type BuilderEvent =
       roundRestSeconds: number | null;
     }
   | {
+      // Drag `from` and drop it *onto* the row at `to`, forming or joining a Superset
+      // (ADR-0023, #156). The dragged row is first detached from any group it was in
+      // (dragging it away), then placed adjacent to the target and grouped — an
+      // enhancement over GROUP_WITH_NEXT, never a replacement for it.
+      type: "GROUP_BY_DRAG";
+      sessionId: number;
+      from: number;
+      to: number;
+    }
+  | {
+      // Drag `from` to reposition it at `to` (ADR-0023, #156). A move that keeps every
+      // Superset contiguous is a plain reorder; a move that pulls the dragged member
+      // out of its group ungroups just that member (dissolving a group left with <2).
+      // A move that still can't stay contiguous is refused — DEPLOY is the backstop.
+      type: "REORDER_BY_DRAG";
+      sessionId: number;
+      from: number;
+      to: number;
+    }
+  | {
       type: "EDIT_NAME";
       name: string;
     }
@@ -281,6 +301,16 @@ export function builderReducer(
     case "EDIT_ROUND_REST":
       return mapSessionPrescriptions(state, event.sessionId, (prescriptions) =>
         editRoundRest(prescriptions, event.position, event.roundRestSeconds),
+      );
+
+    case "GROUP_BY_DRAG":
+      return mapSessionPrescriptions(state, event.sessionId, (prescriptions) =>
+        groupByDrag(prescriptions, event.from, event.to),
+      );
+
+    case "REORDER_BY_DRAG":
+      return mapSessionPrescriptions(state, event.sessionId, (prescriptions) =>
+        reorderByDrag(prescriptions, event.from, event.to),
       );
 
     case "EDIT_NAME":
@@ -475,6 +505,84 @@ function editRoundRest(
       ? { ...prescription, roundRestSeconds }
       : prescription,
   );
+}
+
+// Detach the Prescription at `index` from any Superset it belongs to — clearing its
+// tag and round-rest — then dissolve any group the removal leaves with a single
+// member (a Superset needs ≥2). Used by the drag gestures where a dragged row must
+// leave its old group before being repositioned or regrouped (ADR-0023).
+function detachFromGroup(
+  prescriptions: DraftPrescription[],
+  index: number,
+): DraftPrescription[] {
+  const target = prescriptions[index];
+  if (!target || target.supersetGroup === null) return prescriptions;
+  const detached = prescriptions.map((prescription, i) =>
+    i === index
+      ? { ...prescription, supersetGroup: null, roundRestSeconds: null }
+      : prescription,
+  );
+  return dissolveSingletonGroups(detached);
+}
+
+// Clear the tag and round-rest of any Superset left with fewer than two members — a
+// lone tag is not a valid group (ADR-0023). Returns a new array; solo Prescriptions
+// and healthy groups pass through untouched.
+function dissolveSingletonGroups(
+  prescriptions: DraftPrescription[],
+): DraftPrescription[] {
+  const counts = new Map<string, number>();
+  for (const prescription of prescriptions) {
+    const group = prescription.supersetGroup;
+    if (group !== null) counts.set(group, (counts.get(group) ?? 0) + 1);
+  }
+  return prescriptions.map((prescription) => {
+    const group = prescription.supersetGroup;
+    if (group !== null && (counts.get(group) ?? 0) < 2) {
+      return { ...prescription, supersetGroup: null, roundRestSeconds: null };
+    }
+    return prescription;
+  });
+}
+
+// Drop the Prescription at `from` onto the row at `to`, forming or joining a Superset
+// (ADR-0023). The dragged row is detached from any prior group first (dragging it away
+// ungroups it), then moved adjacent to the target and grouped with it via the same
+// `groupWithNext` union the keyboard path uses. An out-of-range or self drop is a
+// no-op. Dropping onto a grouped target joins that Superset.
+function groupByDrag(
+  prescriptions: DraftPrescription[],
+  from: number,
+  to: number,
+): DraftPrescription[] {
+  const last = prescriptions.length - 1;
+  if (from < 0 || from > last || to < 0 || to > last || from === to) {
+    return prescriptions;
+  }
+  const detached = detachFromGroup(prescriptions, from);
+  const moved = movePrescription(detached, from, to);
+  // After the move the dragged row sits at `to`; the drop target is the neighbour it
+  // landed against — below it when dragging down, above it when dragging up.
+  const anchor = from < to ? to - 1 : to;
+  return groupWithNext(moved, anchor);
+}
+
+// Reposition the Prescription at `from` to `to` by drag (ADR-0023). A move that keeps
+// every Superset contiguous applies as-is. A move that pulls the dragged member out of
+// its group ungroups just that member (dissolving any group left with <2) and applies
+// if that restores contiguity. A move that still splits a group — e.g. a solo dropped
+// into a group's middle — is refused; DEPLOY remains the backstop.
+function reorderByDrag(
+  prescriptions: DraftPrescription[],
+  from: number,
+  to: number,
+): DraftPrescription[] {
+  const moved = movePrescription(prescriptions, from, to);
+  if (moved === prescriptions) return prescriptions;
+  if (supersetsAreContiguous(moved)) return moved;
+  // The dragged row now sits at `to`; detach it from its group and retry.
+  const detached = detachFromGroup(moved, to);
+  return supersetsAreContiguous(detached) ? detached : prescriptions;
 }
 
 // Whether every Superset occupies an unbroken run of positions — the invariant the
