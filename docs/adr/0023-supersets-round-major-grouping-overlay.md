@@ -111,3 +111,10 @@ hard-block on an unrelated edit; the validator remains the backstop at DEPLOY.
   attribution. This "no" is asserted so it is not re-litigated.
 - Equal-counts and non-nesting are user-facing constraints a future reader may question;
   relaxing either later means revisiting the Live interleaving and the validator together.
+- **The round-rest wins over the global default-rest preference.** "The Superset owns a
+  single round-rest" is honest only if that value is not silently overridden: a user's
+  global default-rest (issue #121) applies to **solo** Prescriptions, but a Superset's
+  explicit `round_rest_seconds` is used as-is at the round boundary (falling back to the
+  global default → the 90s constant only when no round-rest is set). Otherwise the global
+  default could shorten a Superset's prescribed rest — the intensity-raising direction this
+  ADR's safety posture guards against — or lengthen it and defeat the Superset's purpose.
