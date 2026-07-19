@@ -1314,6 +1314,37 @@ test("GROUP_BY_DRAG dropping a solo onto a grouped row joins that Superset", () 
   );
 });
 
+test("GROUP_BY_DRAG dropping a member onto its own co-member preserves the edited round-rest", () => {
+  // Arrange — a two-member Superset [A,B] with an edited round-rest of 120s
+  const grouped = builderReducer(
+    initBuilderDraft(protocol({ sessions: [twoPrescriptionSession()] })),
+    { type: "GROUP_WITH_NEXT", sessionId: 1, position: 0 },
+  );
+  const edited = builderReducer(grouped, {
+    type: "EDIT_ROUND_REST",
+    sessionId: 1,
+    position: 1,
+    roundRestSeconds: 120,
+  });
+
+  // Act — drag A (index 0) onto its co-member B (index 1), inside the same group
+  const next = builderReducer(edited, {
+    type: "GROUP_BY_DRAG",
+    sessionId: 1,
+    from: 0,
+    to: 1,
+  });
+
+  // Assert — the group is untouched: same tag and the 120s round-rest is not lost
+  const prescriptions = next.sessions[0].prescriptions;
+  assert.equal(prescriptions[0].supersetGroup, prescriptions[1].supersetGroup);
+  assert.notEqual(prescriptions[0].supersetGroup, null);
+  assert.deepEqual(
+    prescriptions.map((p) => p.roundRestSeconds),
+    [120, 120],
+  );
+});
+
 test("GROUP_BY_DRAG dragging a member out of its group onto a solo forms a new pair and dissolves the leftover singleton", () => {
   // Arrange — a grouped [A,B] Superset and a solo C
   const grouped = builderReducer(
