@@ -1164,3 +1164,251 @@ test("supersetLayout labels a group's members A, B, C and marks its ends", () =>
   // …and the group's round-rest (seeded from the last member C's rest) is surfaced
   assert.equal(layout[1].roundRestSeconds, 90);
 });
+
+// --- Slice 5: drag-to-group and drag-to-reorder in the Builder (ADR-0023, #156).
+// Drag is an *enhancement* over #153's keyboard/button group/ungroup/reorder path,
+// which stays as the accessibility floor. Two pure gesture events translate a drop
+// into the resulting draft: `GROUP_BY_DRAG` (drop one row onto another → form/join a
+// Superset) and `REORDER_BY_DRAG` (reposition a row → reorder, auto-ungrouping a
+// member dragged out of its group). Contiguity is maintained where the reducer can and
+// stays enforced at DEPLOY. Both no-op on the frozen (performed) prefix.
+
+function threePrescriptionSession(overrides = {}) {
+  return session({
+    prescriptions: [
+      prescription({ exercise_id: 1, exercise_name: "A", rest_seconds: 60 }),
+      prescription({ exercise_id: 2, exercise_name: "B", rest_seconds: 75 }),
+      prescription({ exercise_id: 3, exercise_name: "C", rest_seconds: 90 }),
+    ],
+    ...overrides,
+  });
+}
+
+test("GROUP_BY_DRAG dropping one solo row onto another forms a Superset", () => {
+  // Arrange — two solo Prescriptions
+  const draft = initBuilderDraft(protocol({ sessions: [twoPrescriptionSession()] }));
+
+  // Act — drag A (index 0) onto B (index 1)
+  const next = builderReducer(draft, {
+    type: "GROUP_BY_DRAG",
+    sessionId: 1,
+    from: 0,
+    to: 1,
+  });
+
+  // Assert — both now share one Superset tag, adjacent
+  const prescriptions = next.sessions[0].prescriptions;
+  assert.equal(prescriptions.length, 2);
+  assert.notEqual(prescriptions[0].supersetGroup, null);
+  assert.equal(prescriptions[0].supersetGroup, prescriptions[1].supersetGroup);
+});
+
+test("GROUP_BY_DRAG dropping a solo onto a grouped row joins that Superset", () => {
+  // Arrange — a grouped [A,B] Superset followed by a solo C
+  const grouped = builderReducer(
+    initBuilderDraft(protocol({ sessions: [threePrescriptionSession()] })),
+    { type: "GROUP_WITH_NEXT", sessionId: 1, position: 0 },
+  );
+
+  // Act — drag C (index 2) onto B (index 1), inside the existing group
+  const next = builderReducer(grouped, {
+    type: "GROUP_BY_DRAG",
+    sessionId: 1,
+    from: 2,
+    to: 1,
+  });
+
+  // Assert — all three now share the one Superset tag, still contiguous
+  const prescriptions = next.sessions[0].prescriptions;
+  const tag = prescriptions[0].supersetGroup;
+  assert.notEqual(tag, null);
+  assert.deepEqual(
+    prescriptions.map((p) => p.supersetGroup),
+    [tag, tag, tag],
+  );
+});
+
+test("GROUP_BY_DRAG dragging a member out of its group onto a solo forms a new pair and dissolves the leftover singleton", () => {
+  // Arrange — a grouped [A,B] Superset and a solo C
+  const grouped = builderReducer(
+    initBuilderDraft(protocol({ sessions: [threePrescriptionSession()] })),
+    { type: "GROUP_WITH_NEXT", sessionId: 1, position: 0 },
+  );
+
+  // Act — drag B (index 1) out of the [A,B] group onto solo C (index 2)
+  const next = builderReducer(grouped, {
+    type: "GROUP_BY_DRAG",
+    sessionId: 1,
+    from: 1,
+    to: 2,
+  });
+
+  // Assert — order is [A, C, B]; A is a dissolved singleton (solo again), C and B pair
+  const prescriptions = next.sessions[0].prescriptions;
+  assert.deepEqual(
+    prescriptions.map((p) => p.exerciseName),
+    ["A", "C", "B"],
+  );
+  assert.equal(prescriptions[0].supersetGroup, null);
+  assert.notEqual(prescriptions[1].supersetGroup, null);
+  assert.equal(prescriptions[1].supersetGroup, prescriptions[2].supersetGroup);
+});
+
+test("REORDER_BY_DRAG repositions a solo row within the Session", () => {
+  // Arrange — three solo Prescriptions A, B, C
+  const draft = initBuilderDraft(
+    protocol({ sessions: [threePrescriptionSession()] }),
+  );
+
+  // Act — drag C (index 2) to the front (index 0)
+  const next = builderReducer(draft, {
+    type: "REORDER_BY_DRAG",
+    sessionId: 1,
+    from: 2,
+    to: 0,
+  });
+
+  // Assert — new order C, A, B (what deploy persists as position)
+  assert.deepEqual(
+    next.sessions[0].prescriptions.map((p) => p.exerciseName),
+    ["C", "A", "B"],
+  );
+});
+
+test("REORDER_BY_DRAG dragging a grouped member past a solo ungroups just that member, leaving the rest of the group intact", () => {
+  // Arrange — a three-member Superset [A,B,C] followed by a solo D. (Group A+B,
+  // extend to C; D stays solo.)
+  const fourItemSession = session({
+    prescriptions: [
+      prescription({ exercise_id: 1, exercise_name: "A", rest_seconds: 60 }),
+      prescription({ exercise_id: 2, exercise_name: "B", rest_seconds: 75 }),
+      prescription({ exercise_id: 3, exercise_name: "C", rest_seconds: 90 }),
+      prescription({ exercise_id: 4, exercise_name: "D", rest_seconds: 45 }),
+    ],
+  });
+  const paired = builderReducer(
+    initBuilderDraft(protocol({ sessions: [fourItemSession] })),
+    { type: "GROUP_WITH_NEXT", sessionId: 1, position: 0 },
+  );
+  const trio = builderReducer(paired, {
+    type: "GROUP_WITH_NEXT",
+    sessionId: 1,
+    position: 1,
+  });
+
+  // Act — drag A (index 0) out past solo D to the end (index 3)
+  const next = builderReducer(trio, {
+    type: "REORDER_BY_DRAG",
+    sessionId: 1,
+    from: 0,
+    to: 3,
+  });
+
+  // Assert — order [B, C, D, A]; B and C stay grouped and contiguous, A pulled out solo
+  const prescriptions = next.sessions[0].prescriptions;
+  assert.deepEqual(
+    prescriptions.map((p) => p.exerciseName),
+    ["B", "C", "D", "A"],
+  );
+  assert.notEqual(prescriptions[0].supersetGroup, null);
+  assert.equal(prescriptions[0].supersetGroup, prescriptions[1].supersetGroup);
+  assert.equal(prescriptions[2].supersetGroup, null);
+  assert.equal(prescriptions[3].supersetGroup, null);
+  // …and the pulled-out member's dormant round-rest is cleared
+  assert.equal(prescriptions[3].roundRestSeconds, null);
+});
+
+test("REORDER_BY_DRAG reordering within a group keeps every member grouped and contiguous", () => {
+  // Arrange — a three-member Superset [A,B,C]
+  const paired = builderReducer(
+    initBuilderDraft(protocol({ sessions: [threePrescriptionSession()] })),
+    { type: "GROUP_WITH_NEXT", sessionId: 1, position: 0 },
+  );
+  const trio = builderReducer(paired, {
+    type: "GROUP_WITH_NEXT",
+    sessionId: 1,
+    position: 1,
+  });
+
+  // Act — drag C (index 2) to the front (index 0); the group stays contiguous
+  const next = builderReducer(trio, {
+    type: "REORDER_BY_DRAG",
+    sessionId: 1,
+    from: 2,
+    to: 0,
+  });
+
+  // Assert — order is [C, A, B] and all three remain in the one Superset
+  const prescriptions = next.sessions[0].prescriptions;
+  assert.deepEqual(
+    prescriptions.map((p) => p.exerciseName),
+    ["C", "A", "B"],
+  );
+  const tag = prescriptions[0].supersetGroup;
+  assert.notEqual(tag, null);
+  assert.deepEqual(
+    prescriptions.map((p) => p.supersetGroup),
+    [tag, tag, tag],
+  );
+});
+
+test("REORDER_BY_DRAG refuses a move that would drop a solo into a group's middle (DEPLOY is the backstop)", () => {
+  // Arrange — a solo A, then a grouped [B,C] Superset
+  const grouped = builderReducer(
+    initBuilderDraft(protocol({ sessions: [threePrescriptionSession()] })),
+    { type: "GROUP_WITH_NEXT", sessionId: 1, position: 1 },
+  );
+
+  // Act — drag solo A (index 0) into the middle of [B,C] (index 1)
+  const next = builderReducer(grouped, {
+    type: "REORDER_BY_DRAG",
+    sessionId: 1,
+    from: 0,
+    to: 1,
+  });
+
+  // Assert — the split is refused; order and grouping are unchanged
+  assert.deepEqual(next, grouped);
+});
+
+test("drag gestures are a no-op on a performed Session (frozen prefix)", () => {
+  // Arrange — a performed multi-Prescription Session
+  const draft = initBuilderDraft(
+    protocol({ sessions: [threePrescriptionSession({ performed: true })] }),
+  );
+
+  // Act — try to group-by-drag and reorder-by-drag the frozen Session
+  const grouped = builderReducer(draft, {
+    type: "GROUP_BY_DRAG",
+    sessionId: 1,
+    from: 0,
+    to: 1,
+  });
+  const reordered = builderReducer(draft, {
+    type: "REORDER_BY_DRAG",
+    sessionId: 1,
+    from: 0,
+    to: 2,
+  });
+
+  // Assert — the frozen prefix is never restructured
+  assert.deepEqual(grouped, draft);
+  assert.deepEqual(reordered, draft);
+});
+
+test("a drag-formed Superset rides through toDeployPayload contiguous", () => {
+  // Arrange — drag A onto B to form a group in an un-performed Session
+  const grouped = builderReducer(
+    initBuilderDraft(protocol({ sessions: [twoPrescriptionSession()] })),
+    { type: "GROUP_BY_DRAG", sessionId: 1, from: 0, to: 1 },
+  );
+
+  // Act
+  const payload = toDeployPayload(grouped);
+
+  // Assert — both members carry the shared tag and a round-rest on the deploy tail
+  const prescriptions = payload.sessions[0].prescriptions;
+  assert.notEqual(prescriptions[0].superset_group, null);
+  assert.equal(prescriptions[0].superset_group, prescriptions[1].superset_group);
+  assert.ok(prescriptions.every((p) => p.round_rest_seconds !== null));
+});
