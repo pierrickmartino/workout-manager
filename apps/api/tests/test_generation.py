@@ -139,3 +139,189 @@ def test_generator_propagates_transport_failures_as_generation_error():
     # Act / Assert
     with pytest.raises(GenerationError):
         generator.generate(REQUEST)
+
+
+def test_generator_keeps_a_valid_generated_superset():
+    # Arrange — the transport returns a valid Superset
+    generator = LlmSessionGenerator(FakeStructuredLLM(text=_superset_payload()))
+
+    # Act
+    generated = generator.generate(REQUEST)
+
+    # Assert — grouping survives through the generator's parse boundary
+    assert [p.superset_group for p in generated.prescriptions] == ["ss1", "ss1"]
+
+
+def test_generator_degrades_a_malformed_generated_superset_to_flat():
+    # Arrange — the transport returns an uneven (invalid) Superset
+    generator = LlmSessionGenerator(
+        FakeStructuredLLM(text=_superset_payload(sets_a=3, sets_b=5))
+    )
+
+    # Act — the generation still succeeds, ungrouped
+    generated = generator.generate(REQUEST)
+
+    # Assert
+    assert len(generated.prescriptions) == 2
+    assert all(p.superset_group is None for p in generated.prescriptions)
+
+
+def test_system_prompt_instructs_the_model_to_use_supersets():
+    # Arrange / Act — the transport records the exact prompts it was asked to run
+    llm = FakeStructuredLLM(text=VALID_PAYLOAD)
+    LlmSessionGenerator(llm).generate(REQUEST)
+
+    # Assert — the model is told to prescribe Supersets where appropriate
+    assert "superset" in llm.calls[0]["system"].lower()
+
+
+# --- Generated Supersets: schema, parse-boundary validation, degrade-to-flat ---
+# ADR-0023: the generator may prescribe a Superset (a group tag + round-rest per
+# prescription). A valid group survives the parse boundary; a malformed one
+# degrades-to-flat — its Prescriptions are kept, the grouping is dropped — so one
+# bad group never fails the whole generation.
+
+
+def _superset_payload(*, sets_a: int = 3, sets_b: int = 3, round_rest: int = 90) -> str:
+    """Two contiguous prescriptions sharing group ``ss1``. Defaults are a *valid*
+    Superset; callers vary a field to make it malformed."""
+
+    return f"""
+    {{
+      "prescriptions": [
+        {{
+          "exercise_name": "Dumbbell Curl", "sets": {sets_a}, "reps": "10",
+          "superset_group": "ss1", "round_rest_seconds": {round_rest}
+        }},
+        {{
+          "exercise_name": "Triceps Pushdown", "sets": {sets_b}, "reps": "10",
+          "superset_group": "ss1", "round_rest_seconds": {round_rest}
+        }}
+      ]
+    }}
+    """
+
+
+def test_valid_generated_superset_survives_the_parse_boundary():
+    # Act
+    generated = parse_generated_session(_superset_payload())
+
+    # Assert — both members keep the group tag and the group-owned round-rest
+    groups = [p.superset_group for p in generated.prescriptions]
+    assert groups == ["ss1", "ss1"]
+    assert all(p.round_rest_seconds == 90 for p in generated.prescriptions)
+
+
+def test_solo_prescription_has_no_grouping_by_default():
+    # Arrange — a plain flat generation carries no Superset fields
+    generated = parse_generated_session(VALID_PAYLOAD)
+
+    # Assert
+    assert generated.prescriptions[0].superset_group is None
+    assert generated.prescriptions[0].round_rest_seconds is None
+
+
+def test_uneven_generated_superset_degrades_to_flat():
+    # Arrange — members with unequal set counts are not a valid Superset (not N rounds)
+    payload = _superset_payload(sets_a=3, sets_b=4)
+
+    # Act — degrade-to-flat, not raise: the whole generation still succeeds
+    generated = parse_generated_session(payload)
+
+    # Assert — both Prescriptions kept, but ungrouped (tag + round-rest dropped)
+    assert len(generated.prescriptions) == 2
+    assert [p.exercise_name for p in generated.prescriptions] == [
+        "Dumbbell Curl",
+        "Triceps Pushdown",
+    ]
+    assert all(p.superset_group is None for p in generated.prescriptions)
+    assert all(p.round_rest_seconds is None for p in generated.prescriptions)
+
+
+def test_missing_round_rest_generated_superset_degrades_to_flat():
+    # Arrange — a group with no round-rest cannot rest at the round boundary
+    payload = """
+    {
+      "prescriptions": [
+        {"exercise_name": "Curl", "sets": 3, "reps": "10", "superset_group": "ss1"},
+        {"exercise_name": "Pushdown", "sets": 3, "reps": "10", "superset_group": "ss1"}
+      ]
+    }
+    """
+
+    # Act
+    generated = parse_generated_session(payload)
+
+    # Assert — ungrouped, both kept
+    assert all(p.superset_group is None for p in generated.prescriptions)
+
+
+def test_lone_member_generated_superset_degrades_to_flat():
+    # Arrange — a single tagged Prescription is not a Superset (needs ≥2 members)
+    payload = """
+    {
+      "prescriptions": [
+        {"exercise_name": "Curl", "sets": 3, "reps": "10",
+         "superset_group": "ss1", "round_rest_seconds": 90},
+        {"exercise_name": "Bench", "sets": 3, "reps": "5"}
+      ]
+    }
+    """
+
+    # Act
+    generated = parse_generated_session(payload)
+
+    # Assert — the lone member is ungrouped; the solo is untouched
+    assert generated.prescriptions[0].superset_group is None
+    assert generated.prescriptions[0].round_rest_seconds is None
+
+
+def test_non_contiguous_generated_superset_degrades_to_flat():
+    # Arrange — a solo Prescription sits between two members of the same group
+    payload = """
+    {
+      "prescriptions": [
+        {"exercise_name": "Curl", "sets": 3, "reps": "10",
+         "superset_group": "ss1", "round_rest_seconds": 90},
+        {"exercise_name": "Bench", "sets": 3, "reps": "5"},
+        {"exercise_name": "Pushdown", "sets": 3, "reps": "10",
+         "superset_group": "ss1", "round_rest_seconds": 90}
+      ]
+    }
+    """
+
+    # Act
+    generated = parse_generated_session(payload)
+
+    # Assert — the ss1 members are ungrouped; all three Prescriptions survive
+    assert len(generated.prescriptions) == 3
+    assert all(p.superset_group is None for p in generated.prescriptions)
+
+
+def test_a_valid_group_is_kept_when_another_group_degrades():
+    # Arrange — ss1 is valid; ss2 is uneven and must degrade without touching ss1
+    payload = """
+    {
+      "prescriptions": [
+        {"exercise_name": "Curl", "sets": 3, "reps": "10",
+         "superset_group": "ss1", "round_rest_seconds": 90},
+        {"exercise_name": "Pushdown", "sets": 3, "reps": "10",
+         "superset_group": "ss1", "round_rest_seconds": 90},
+        {"exercise_name": "Row", "sets": 4, "reps": "10",
+         "superset_group": "ss2", "round_rest_seconds": 60},
+        {"exercise_name": "Fly", "sets": 3, "reps": "10",
+         "superset_group": "ss2", "round_rest_seconds": 60}
+      ]
+    }
+    """
+
+    # Act
+    generated = parse_generated_session(payload)
+
+    # Assert — ss1 preserved, ss2 flattened
+    assert [p.superset_group for p in generated.prescriptions] == [
+        "ss1",
+        "ss1",
+        None,
+        None,
+    ]

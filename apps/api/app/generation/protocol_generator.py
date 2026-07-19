@@ -17,6 +17,7 @@ from app.generation.generator import GenerationError
 from app.generation.llm.port import StructuredLLM
 from app.generation.schema import GeneratedProtocol
 from app.generation.structured import generate_structured, parse_or_raise
+from app.generation.superset_degrade import degrade_protocol_to_flat
 
 MAX_TOKENS = 32000
 
@@ -70,12 +71,14 @@ def parse_generated_protocol(
 
     Returns the typed ``GeneratedProtocol`` on success; raises ``GenerationError``
     for invalid JSON, any schema violation, or an under-enumerated protocol, so
-    callers never adopt a half-formed Protocol.
+    callers never adopt a half-formed Protocol. Any invalid generated Superset is
+    degraded to flat per Session (ADR-0023) rather than failing the request.
     """
 
     protocol = parse_or_raise(
         raw_json, GeneratedProtocol, subject="protocol generation"
     )
+    protocol = degrade_protocol_to_flat(protocol)
     _ensure_fully_enumerated(protocol, weeks=weeks, sessions_per_week=sessions_per_week)
     return protocol
 
@@ -89,7 +92,12 @@ def _system_prompt() -> str:
         "template. Each Session carries its week and day position and a set of "
         "Exercise Prescriptions (exercise name, short description, targeted "
         "muscles, required equipment, sets, reps, rest seconds, tempo, recommended "
-        "load). Only prescribe exercises that fit the training type, objective, "
+        "load). Where two or more movements are best trained back-to-back — "
+        "antagonist pairs or accessory work — prescribe a Superset: give those "
+        "contiguous prescriptions a shared superset_group tag, equal set counts (a "
+        "Superset is N rounds), and a single round_rest_seconds on each member for "
+        "the rest taken once per round. Leave superset_group null for a solo "
+        "exercise. Only prescribe exercises that fit the training type, objective, "
         "session duration, and available equipment. Respond strictly in the "
         "required JSON schema."
     )
@@ -127,6 +135,7 @@ class LlmProtocolGenerator:
             max_tokens=MAX_TOKENS,
             subject="protocol generation",
         )
+        protocol = degrade_protocol_to_flat(protocol)
         _ensure_fully_enumerated(
             protocol,
             weeks=request.weeks,

@@ -132,6 +132,58 @@ def test_equivalent_exercise_name_reuses_the_existing_catalog_entry():
     assert squat.provenance == "curated"
 
 
+def _superset_generation() -> GeneratedSession:
+    # Two contiguous members sharing group "ss1" — a valid Superset (ADR-0023).
+    return GeneratedSession(
+        prescriptions=[
+            GeneratedExercisePrescription(
+                exercise_name="Dumbbell Curl",
+                sets=3,
+                reps="10",
+                superset_group="ss1",
+                round_rest_seconds=90,
+            ),
+            GeneratedExercisePrescription(
+                exercise_name="Triceps Pushdown",
+                sets=3,
+                reps="10",
+                superset_group="ss1",
+                round_rest_seconds=90,
+            ),
+        ]
+    )
+
+
+def test_a_generated_superset_persists_onto_the_session():
+    # Arrange — a valid generated Superset
+    exercises, sessions = _build_repos()
+    generator = FakeGenerator(result=_superset_generation())
+
+    # Act
+    view = generate_session(
+        REQUEST, "user_ss", generator=generator, exercises=exercises, sessions=sessions
+    )
+
+    # Assert — the grouping and group-owned round-rest are persisted on both members
+    assert [p.superset_group for p in view.prescriptions] == ["ss1", "ss1"]
+    assert all(p.round_rest_seconds == 90 for p in view.prescriptions)
+
+
+def test_a_solo_generated_prescription_persists_ungrouped():
+    # Arrange — a plain flat generation
+    exercises, sessions = _build_repos()
+    generator = FakeGenerator(result=_two_exercise_generation())
+
+    # Act
+    view = generate_session(
+        REQUEST, "user_flat", generator=generator, exercises=exercises, sessions=sessions
+    )
+
+    # Assert — no grouping leaks onto a flat Session
+    assert all(p.superset_group is None for p in view.prescriptions)
+    assert all(p.round_rest_seconds is None for p in view.prescriptions)
+
+
 def test_malformed_generation_is_not_persisted():
     # Arrange — the generator fails at the boundary
     exercises, sessions = _build_repos()
