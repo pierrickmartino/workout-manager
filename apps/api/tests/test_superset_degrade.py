@@ -71,6 +71,35 @@ def test_only_the_offending_group_is_flattened():
     assert [p.superset_group for p in result] == ["ss1", "ss1", None, None]
 
 
+def test_a_valid_group_is_flattened_under_a_sensitive_constraint():
+    # Arrange — a *structurally valid* group; the passive generation path must still
+    # strip it for a Sensitive-Constraint user (ADR-0023), the degrade twin of the
+    # DEPLOY hard-reject.
+    prescriptions = [
+        _p("Curl", group="ss1", round_rest=90),
+        _p("Pushdown", group="ss1", round_rest=90),
+    ]
+
+    # Act
+    result = degrade_prescriptions_to_flat(prescriptions, has_sensitive_constraint=True)
+
+    # Assert — both kept, ungrouped, round-rest cleared: the user keeps a flat plan
+    assert [p.exercise_name for p in result] == ["Curl", "Pushdown"]
+    assert all(p.superset_group is None for p in result)
+    assert all(p.round_rest_seconds is None for p in result)
+
+
+def test_a_flat_generation_is_untouched_under_a_sensitive_constraint():
+    # Arrange — nothing grouped to begin with
+    prescriptions = [_p("Squat"), _p("Bench")]
+
+    # Act
+    result = degrade_prescriptions_to_flat(prescriptions, has_sensitive_constraint=True)
+
+    # Assert — a flat plan round-trips unchanged
+    assert [p.superset_group for p in result] == [None, None]
+
+
 def test_does_not_mutate_the_input_prescriptions():
     # Arrange — an offending group whose members would be flattened
     prescriptions = [

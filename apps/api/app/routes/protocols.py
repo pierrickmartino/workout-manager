@@ -12,11 +12,14 @@ All responses use the standard envelope."""
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
 from app.auth.dependencies import get_current_user
+from app.domain.fitness_profile import is_sensitive
 from app.domain.load import LoadKind, load_from_input
 from app.envelope import error_envelope, success_envelope
 from app.generation.orchestrator import GenerationOrchestrator
@@ -133,9 +136,16 @@ def generate(
     difficulty for their next Protocol.
     """
 
-    params = payload.to_generation_request()
     profile = profiles.get_or_create(clerk_user_id)
     history = logged.list_for_user(clerk_user_id)
+    # A user with any Sensitive Constraint is never handed a Superset (ADR-0023): the
+    # flag rides on the generation request so the prompt instructs none and the parse
+    # boundary degrades any that slip through. It is derived from the stored constraint
+    # types (the same gate as the cache bypass), never trusted from the client.
+    params = replace(
+        payload.to_generation_request(),
+        has_sensitive_constraint=is_sensitive(profile),
+    )
     outcome = orchestrator.submit(
         params, clerk_user_id, cache_request_for(params, profile, history)
     )
@@ -285,6 +295,7 @@ def deploy_protocol(
     protocols: ProtocolRepository = Depends(get_protocol_repository),
     logged: LoggedSessionRepository = Depends(get_logged_session_repository),
     exercises: ExerciseRepository = Depends(get_exercise_repository),
+    profiles: ProfileRepository = Depends(get_profile_repository),
 ) -> object:
     """Validate the desired un-performed tail and, on success, replace it in place.
 
@@ -331,14 +342,17 @@ def deploy_protocol(
         ],
     )
 
+    # A user with any Sensitive Constraint is never handed a Superset (ADR-0023): the
+    # shared validator hard-rejects one at DEPLOY, the same safety class as the cache
+    # bypass. The flag is derived from the stored constraint types, never trusted from
+    # the client.
+    profile = profiles.get_or_create(clerk_user_id)
     errors = validate_deploy(
         draft,
         performed_session_ids=performed,
         known_session_ids=known,
         exercise_exists=lambda exercise_id: exercises.get(exercise_id) is not None,
-        # The Sensitive-Constraint suppression behaviour lands in a later slice
-        # (ADR-0023); the seam is wired here so the signature is stable.
-        has_sensitive_constraint=False,
+        has_sensitive_constraint=is_sensitive(profile),
     )
     if errors:
         return _deploy_error_response(errors)

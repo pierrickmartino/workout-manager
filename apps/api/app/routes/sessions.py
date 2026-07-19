@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from app.auth.dependencies import get_current_user
 from app.domain.feedback import parse_verdict
+from app.domain.fitness_profile import is_sensitive
 from app.envelope import success_envelope
 from app.generation.generator import (
     GenerationError,
@@ -78,11 +79,14 @@ class GenerateSessionRequest(BaseModel):
     duration_minutes: int = Field(ge=MIN_DURATION_MINUTES, le=MAX_DURATION_MINUTES)
     equipment: list[str] = Field(default_factory=list)
 
-    def to_generation_request(self) -> GenerationRequest:
+    def to_generation_request(
+        self, *, has_sensitive_constraint: bool = False
+    ) -> GenerationRequest:
         return GenerationRequest(
             training_type=self.training_type,
             duration_minutes=self.duration_minutes,
             equipment=self.equipment,
+            has_sensitive_constraint=has_sensitive_constraint,
         )
 
 
@@ -120,10 +124,17 @@ def generate(
     generator: SessionGenerator = Depends(get_session_generator),
     exercises: ExerciseRepository = Depends(get_exercise_repository),
     sessions: SessionRepository = Depends(get_session_repository),
+    profiles: ProfileRepository = Depends(get_profile_repository),
 ) -> dict:
+    # A user with any Sensitive Constraint is never handed a Superset (ADR-0023): the
+    # flag rides on the generation request so the prompt instructs none and the parse
+    # boundary degrades any that slip through. Derived from stored constraint types.
+    profile = profiles.get_or_create(clerk_user_id)
     try:
         view = generate_session(
-            payload.to_generation_request(),
+            payload.to_generation_request(
+                has_sensitive_constraint=is_sensitive(profile)
+            ),
             clerk_user_id,
             generator=generator,
             exercises=exercises,

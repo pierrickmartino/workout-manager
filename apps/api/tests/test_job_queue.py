@@ -145,6 +145,9 @@ def test_rq_queue_enqueues_the_worker_function_with_serialized_args():
         "duration_minutes": 45,
         "weeks": 1,
         "equipment": ["barbell"],
+        # The Sensitive-Constraint safety flag rides in the serialized payload so it
+        # survives the worker's dict round-trip (ADR-0023).
+        "has_sensitive_constraint": False,
     }
     assert user_id == "user_a"
     assert cache_key == "genprog:key"

@@ -180,6 +180,54 @@ def test_protocol_system_prompt_instructs_the_model_to_use_supersets():
     assert "superset" in llm.calls[0]["system"].lower()
 
 
+def _sensitive_request(**overrides) -> ProtocolGenerationRequest:
+    base = dict(
+        training_type="strength",
+        objective="gain muscle mass",
+        sessions_per_week=1,
+        duration_minutes=45,
+        weeks=1,
+        equipment=["barbell"],
+        has_sensitive_constraint=True,
+    )
+    base.update(overrides)
+    return ProtocolGenerationRequest(**base)
+
+
+def test_sensitive_request_degrades_even_a_valid_generated_superset_to_flat():
+    # Arrange — the model returned a *structurally valid* Superset, but the request
+    # carries a Sensitive Constraint: it must never reach the user (ADR-0023).
+    raw = _one_session_protocol(
+        '{"exercise_name": "Curl", "sets": 3, "reps": "10", '
+        '"superset_group": "ss1", "round_rest_seconds": 90}, '
+        '{"exercise_name": "Pushdown", "sets": 3, "reps": "10", '
+        '"superset_group": "ss1", "round_rest_seconds": 90}'
+    )
+    generator = LlmProtocolGenerator(FakeStructuredLLM(text=raw))
+
+    # Act — the generation still succeeds; the group is stripped
+    generated = generator.generate(_sensitive_request())
+
+    # Assert — a flat plan, both Prescriptions kept
+    prescriptions = generated.sessions[0].prescriptions
+    assert len(prescriptions) == 2
+    assert all(p.superset_group is None for p in prescriptions)
+    assert all(p.round_rest_seconds is None for p in prescriptions)
+
+
+def test_sensitive_request_prompt_instructs_the_model_to_emit_no_supersets():
+    # Arrange — a fully-enumerated flat generation is enough; we assert on the prompt
+    llm = FakeStructuredLLM(text=_enumerated_json(weeks=1, sessions_per_week=1))
+
+    # Act
+    LlmProtocolGenerator(llm).generate(_sensitive_request())
+
+    # Assert — the model is told *not* to prescribe Supersets for this user
+    system = llm.calls[0]["system"].lower()
+    assert "superset" in system
+    assert "no superset" in system or "do not" in system
+
+
 def test_protocol_generator_degrades_a_malformed_generated_superset():
     # Arrange — a 1x1 Protocol whose only Session carries an uneven Superset
     raw = _one_session_protocol(

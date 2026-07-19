@@ -22,11 +22,17 @@ MAX_TOKENS = 8000
 
 @dataclass(frozen=True)
 class GenerationRequest:
-    """A request for one standalone Session: type, duration, and equipment."""
+    """A request for one standalone Session: type, duration, and equipment.
+
+    ``has_sensitive_constraint`` carries the user's safety flag into generation
+    (ADR-0023): when set, the prompt instructs no Supersets and any group that slips
+    through is degraded to flat, so a Sensitive-Constraint user is never handed one.
+    """
 
     training_type: str
     duration_minutes: int
     equipment: list[str] = field(default_factory=list)
+    has_sensitive_constraint: bool = False
 
 
 class SessionGenerator(Protocol):
@@ -49,19 +55,35 @@ def parse_generated_session(raw_json: str) -> GeneratedSession:
     return degrade_session_to_flat(parsed)
 
 
-def _system_prompt() -> str:
+def _system_prompt(*, has_sensitive_constraint: bool = False) -> str:
     return (
         "You are a strength and conditioning coach. Generate a single, standalone "
         "training Session as a set of Exercise Prescriptions. For each prescription "
         "give the exercise name, a short description, targeted muscles, required "
         "equipment, and the sets, reps, rest (seconds), tempo, and recommended load. "
-        "Where two or more movements are best trained back-to-back — antagonist pairs "
-        "or accessory work — prescribe a Superset: give those contiguous prescriptions "
-        "a shared superset_group tag, equal set counts (a Superset is N rounds), and a "
-        "single round_rest_seconds on each member for the rest taken once per round. "
-        "Leave superset_group null for a solo exercise. "
-        "Only prescribe exercises that fit the requested training type, duration, and "
-        "the available equipment. Respond strictly in the required JSON schema."
+        + _superset_guidance(has_sensitive_constraint)
+        + " Only prescribe exercises that fit the requested training type, duration, "
+        "and the available equipment. Respond strictly in the required JSON schema."
+    )
+
+
+def _superset_guidance(has_sensitive_constraint: bool) -> str:
+    """The Superset instruction, which flips to a hard prohibition for a user with a
+    Sensitive Constraint (ADR-0023): they must never be prescribed a Superset."""
+
+    if has_sensitive_constraint:
+        return (
+            "This user has a sensitive constraint (injury, rehabilitation, "
+            "postpartum, or a flagged medical limitation): do NOT prescribe any "
+            "Supersets. Leave superset_group null on every prescription and give "
+            "each exercise its own rest."
+        )
+    return (
+        "Where two or more movements are best trained back-to-back — antagonist "
+        "pairs or accessory work — prescribe a Superset: give those contiguous "
+        "prescriptions a shared superset_group tag, equal set counts (a Superset is "
+        "N rounds), and a single round_rest_seconds on each member for the rest "
+        "taken once per round. Leave superset_group null for a solo exercise."
     )
 
 
@@ -88,13 +110,17 @@ class LlmSessionGenerator:
     def generate(self, request: GenerationRequest) -> GeneratedSession:
         generated = generate_structured(
             llm=self._llm,
-            system=_system_prompt(),
+            system=_system_prompt(
+                has_sensitive_constraint=request.has_sensitive_constraint
+            ),
             user=_user_prompt(request),
             schema=GeneratedSession,
             max_tokens=MAX_TOKENS,
             subject="generation",
         )
-        return degrade_session_to_flat(generated)
+        return degrade_session_to_flat(
+            generated, has_sensitive_constraint=request.has_sensitive_constraint
+        )
 
 
 __all__ = [

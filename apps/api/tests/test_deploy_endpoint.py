@@ -18,6 +18,10 @@ from app.repositories.logged_session_repository import (
     LoggedSessionDraft,
     LoggedSetDraft,
 )
+from app.repositories.profile_repository import (
+    InMemoryProfileRepository,
+    ProfileUpdate,
+)
 from tests.test_protocol_endpoint import (
     FakeProtocolGenerator,
     build_harness,
@@ -537,6 +541,80 @@ def test_deploy_hard_rejects_a_lone_member_superset():
     # Assert — rejected with the lone-member code
     assert response.status_code == 422
     assert "superset_lone_member" in [e["code"] for e in response.json()["errors"]]
+
+
+def test_deploy_hard_rejects_a_superset_for_a_sensitive_constraint_user():
+    # Arrange — a user carrying a Sensitive Constraint (injury) deploys a
+    # *structurally valid* Superset. Supersets compress rest and raise intensity, so
+    # this is a safety hard-block of the same class as the cache bypass (ADR-0023):
+    # rejected at the shared validator seam, not merely discouraged in a prompt.
+    profiles = InMemoryProfileRepository()
+    profiles.update("user_injured", ProfileUpdate(sensitive_constraints=["injury"]))
+    h = build_harness(
+        generator=FakeProtocolGenerator(result=_kg_protocol()), profiles=profiles
+    )
+    protocol = _fresh_protocol(h, "user_injured")
+    protocol_id = protocol["id"]
+    exercise_id = protocol["sessions"][0]["prescriptions"][0]["exercise_id"]
+
+    body = _deploy_body(protocol)
+    body["sessions"][0]["prescriptions"] = [
+        _superset_member(exercise_id, sets=3, group="1", round_rest=120),
+        _superset_member(exercise_id, sets=3, group="1", round_rest=120),
+    ]
+
+    # Act
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_injured"),
+        json=body,
+    )
+
+    # Assert — hard-rejected with the located forbidden error; nothing persisted
+    assert response.status_code == 422
+    errors = response.json()["errors"]
+    offending = next(
+        e
+        for e in errors
+        if e["code"] == "superset_forbidden_under_sensitive_constraint"
+    )
+    assert offending["session_id"] == protocol["sessions"][0]["session_id"]
+    after = h.fetch_protocol("user_injured", protocol_id).json()["data"]
+    assert len(after["sessions"][0]["prescriptions"]) == 1
+    assert after["sessions"][0]["prescriptions"][0]["superset_group"] is None
+
+
+def test_a_non_medical_preference_user_can_still_deploy_a_superset():
+    # Arrange — a Preference / Limitation is NOT a Sensitive Constraint (ADR-0023): it
+    # must not suppress Supersets. This user carries only a preference and deploys a
+    # valid Superset.
+    profiles = InMemoryProfileRepository()
+    profiles.update("user_pref", ProfileUpdate(preferences=["dislikes overhead work"]))
+    h = build_harness(
+        generator=FakeProtocolGenerator(result=_kg_protocol()), profiles=profiles
+    )
+    protocol = _fresh_protocol(h, "user_pref")
+    protocol_id = protocol["id"]
+    exercise_id = protocol["sessions"][0]["prescriptions"][0]["exercise_id"]
+
+    body = _deploy_body(protocol)
+    body["sessions"][0]["prescriptions"] = [
+        _superset_member(exercise_id, sets=3, group="1", round_rest=120),
+        _superset_member(exercise_id, sets=3, group="1", round_rest=120),
+    ]
+
+    # Act
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_pref"),
+        json=body,
+    )
+
+    # Assert — deploy succeeds; the Superset is persisted intact
+    assert response.status_code == 200
+    after = h.fetch_protocol("user_pref", protocol_id).json()["data"]
+    week_one = after["sessions"][0]["prescriptions"]
+    assert [p["superset_group"] for p in week_one] == ["1", "1"]
 
 
 def test_another_user_cannot_deploy_to_someone_elses_protocol():

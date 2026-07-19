@@ -281,6 +281,47 @@ def test_sensitive_user_always_regenerates():
     assert h.generator.calls == 2
 
 
+class _RecordingProtocolGenerator(FakeProtocolGenerator):
+    """A FakeProtocolGenerator that also remembers each request it was handed, so a
+    test can assert what the route threaded into generation."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.requests = []
+
+    def generate(self, request: ProtocolGenerationRequest) -> GeneratedProtocol:
+        self.requests.append(request)
+        return super().generate(request)
+
+
+def test_generation_for_a_sensitive_user_carries_the_constraint_flag():
+    # Arrange — a Sensitive-Constraint user's generation must instruct no Supersets and
+    # degrade any that slip through (ADR-0023), so the route threads the derived flag
+    # onto the generation request the worker runs.
+    profiles = InMemoryProfileRepository()
+    profiles.update("user_injured", ProfileUpdate(sensitive_constraints=["injury"]))
+    generator = _RecordingProtocolGenerator(result=_default_protocol())
+    h = build_harness(generator=generator, profiles=profiles)
+
+    # Act
+    h.generate_protocol_id("user_injured")
+
+    # Assert — the request the generator ran carried the safety flag
+    assert generator.requests[-1].has_sensitive_constraint is True
+
+
+def test_generation_for_a_non_sensitive_user_leaves_the_constraint_flag_unset():
+    # Arrange — a plain user (no Sensitive Constraint): Supersets stay allowed
+    generator = _RecordingProtocolGenerator(result=_default_protocol())
+    h = build_harness(generator=generator)
+
+    # Act
+    h.generate_protocol_id("user_plain")
+
+    # Assert
+    assert generator.requests[-1].has_sensitive_constraint is False
+
+
 def test_fetched_protocol_surfaces_the_next_un_performed_session():
     # Arrange — a fresh protocol: Week 1 is next
     h = build_harness()

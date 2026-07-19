@@ -18,11 +18,13 @@ from app.main import create_app
 from app.repositories.deps import (
     get_exercise_repository,
     get_logged_session_repository,
+    get_profile_repository,
     get_session_generator,
     get_session_repository,
 )
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.logged_session_repository import InMemoryLoggedSessionRepository
+from app.repositories.profile_repository import InMemoryProfileRepository
 from app.repositories.session_repository import InMemorySessionRepository
 from tests.conftest import ISSUER, make_signing_context
 
@@ -58,6 +60,7 @@ def build_client(ctx=None):
     app.dependency_overrides[get_session_repository] = lambda: sessions
     app.dependency_overrides[get_logged_session_repository] = lambda: logged
     app.dependency_overrides[get_session_generator] = lambda: FakeGenerator()
+    app.dependency_overrides[get_profile_repository] = lambda: InMemoryProfileRepository()
     return TestClient(app), ctx
 
 

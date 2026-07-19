@@ -15,10 +15,15 @@ from app.generation.schema import GeneratedExercisePrescription, GeneratedSessio
 from app.main import create_app
 from app.repositories.deps import (
     get_exercise_repository,
+    get_profile_repository,
     get_session_generator,
     get_session_repository,
 )
 from app.repositories.exercise_repository import InMemoryExerciseRepository
+from app.repositories.profile_repository import (
+    InMemoryProfileRepository,
+    ProfileUpdate,
+)
 from app.repositories.session_repository import InMemorySessionRepository
 from tests.conftest import ISSUER, make_signing_context
 
@@ -52,17 +57,19 @@ def _default_generation() -> GeneratedSession:
     )
 
 
-def build_client(generator=None, ctx=None):
+def build_client(generator=None, ctx=None, profiles=None):
     ctx = ctx or make_signing_context()
     exercises = InMemoryExerciseRepository()
     sessions = InMemorySessionRepository(exercises)
     generator = generator or FakeGenerator(result=_default_generation())
+    profiles = profiles or InMemoryProfileRepository()
     app = create_app()
     app.dependency_overrides[get_jwks] = lambda: ctx.jwks
     app.dependency_overrides[get_settings] = lambda: Settings(clerk_issuer=ISSUER)
     app.dependency_overrides[get_exercise_repository] = lambda: exercises
     app.dependency_overrides[get_session_repository] = lambda: sessions
     app.dependency_overrides[get_session_generator] = lambda: generator
+    app.dependency_overrides[get_profile_repository] = lambda: profiles
     return TestClient(app), ctx
 
 
@@ -190,3 +197,53 @@ def test_generate_rejects_a_non_positive_duration():
     # Assert
     assert response.status_code == 422
     assert response.json()["success"] is False
+
+
+class RecordingGenerator(FakeGenerator):
+    """A FakeGenerator that remembers each request, so a test can assert what the
+    route threaded into generation."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.requests = []
+
+    def generate(self, request: GenerationRequest) -> GeneratedSession:
+        self.requests.append(request)
+        return super().generate(request)
+
+
+def test_generation_for_a_sensitive_user_carries_the_constraint_flag():
+    # Arrange — a Sensitive-Constraint user's standalone Session generation must
+    # instruct no Supersets and degrade any that slip through (ADR-0023): the route
+    # threads the derived flag onto the request.
+    profiles = InMemoryProfileRepository()
+    profiles.update("user_injured", ProfileUpdate(sensitive_constraints=["injury"]))
+    generator = RecordingGenerator(result=_default_generation())
+    client, ctx = build_client(generator=generator, profiles=profiles)
+
+    # Act
+    response = client.post(
+        "/api/sessions/generate",
+        headers=_auth(ctx, "user_injured"),
+        json=_generate_body(),
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert generator.requests[-1].has_sensitive_constraint is True
+
+
+def test_generation_for_a_non_sensitive_user_leaves_the_flag_unset():
+    # Arrange — a plain user: Supersets stay allowed
+    generator = RecordingGenerator(result=_default_generation())
+    client, ctx = build_client(generator=generator)
+
+    # Act
+    client.post(
+        "/api/sessions/generate",
+        headers=_auth(ctx, "user_plain"),
+        json=_generate_body(),
+    )
+
+    # Assert
+    assert generator.requests[-1].has_sensitive_constraint is False

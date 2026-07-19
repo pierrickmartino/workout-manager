@@ -95,6 +95,92 @@ test("initBuilderDraft carries the Protocol shape and flags performed Sessions",
   );
 });
 
+test("initBuilderDraft auto-unlinks Supersets and flags suppression for a Sensitive-Constraint user", () => {
+  // Arrange — an un-performed Session holding a two-member Superset, opened by a user
+  // with a Sensitive Constraint. Supersets compress rest and raise intensity, so they
+  // are paused while the constraint is active (ADR-0023): the draft opens flat with a
+  // banner, and the validator remains the backstop at DEPLOY.
+  const source = protocol({
+    sessions: [
+      session({
+        prescriptions: [
+          prescription({ superset_group: "1", round_rest_seconds: 120 }),
+          prescription({ superset_group: "1", round_rest_seconds: 120 }),
+        ],
+      }),
+    ],
+  });
+
+  // Act
+  const draft = initBuilderDraft(source, { hasSensitiveConstraint: true });
+
+  // Assert — every member is ungrouped (staged, not committed) and the banner flag set
+  const members = draft.sessions[0].prescriptions;
+  assert.deepEqual(
+    members.map((p) => p.supersetGroup),
+    [null, null],
+  );
+  assert.deepEqual(
+    members.map((p) => p.roundRestSeconds),
+    [null, null],
+  );
+  assert.equal(draft.supersetsSuppressed, true);
+});
+
+test("initBuilderDraft keeps Supersets and leaves suppression off for a non-sensitive user", () => {
+  // Arrange — the same grouped Session, opened by a user with no Sensitive Constraint
+  const source = protocol({
+    sessions: [
+      session({
+        prescriptions: [
+          prescription({ superset_group: "1", round_rest_seconds: 120 }),
+          prescription({ superset_group: "1", round_rest_seconds: 120 }),
+        ],
+      }),
+    ],
+  });
+
+  // Act — no option (the default) preserves grouping
+  const draft = initBuilderDraft(source);
+
+  // Assert — the Superset survives and no banner is shown
+  const members = draft.sessions[0].prescriptions;
+  assert.deepEqual(
+    members.map((p) => p.supersetGroup),
+    ["1", "1"],
+  );
+  assert.equal(draft.supersetsSuppressed, false);
+});
+
+test("initBuilderDraft leaves a performed Session's Superset untouched under suppression", () => {
+  // Arrange — a performed (frozen) Session carries a Superset; a Sensitive-Constraint
+  // user opens the builder. The frozen prefix is settled record (ADR-0020) and is never
+  // deployed, so the auto-unlink only touches the editable tail.
+  const source = protocol({
+    sessions: [
+      session({
+        session_id: 1,
+        performed: true,
+        prescriptions: [
+          prescription({ superset_group: "1", round_rest_seconds: 120 }),
+          prescription({ superset_group: "1", round_rest_seconds: 120 }),
+        ],
+      }),
+      session({ session_id: 2, position: 1, week: 1, day: 2, performed: false }),
+    ],
+  });
+
+  // Act
+  const draft = initBuilderDraft(source, { hasSensitiveConstraint: true });
+
+  // Assert — the performed Session's grouping is preserved; the banner still shows
+  assert.deepEqual(
+    draft.sessions[0].prescriptions.map((p) => p.supersetGroup),
+    ["1", "1"],
+  );
+  assert.equal(draft.supersetsSuppressed, true);
+});
+
 test("initBuilderDraft expands a stored Load into the picker's kind and value", () => {
   // Arrange — a %-of-1RM Load
   const source = protocol({

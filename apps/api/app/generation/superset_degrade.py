@@ -11,8 +11,10 @@ so "what a valid Superset is" has one definition; only the reaction differs.
 
 These helpers are pure and immutable: valid groups pass through untouched and only
 an offending member is copied (with its grouping cleared), so the input models are
-never mutated. This slice keeps the validator's safety flag at its permissive
-default — Sensitive-Constraint suppression of generated Supersets is a later slice.
+never mutated. They also carry ``has_sensitive_constraint`` into the shared
+validator: for a Sensitive-Constraint user *every* group is forbidden (ADR-0023),
+so a stray generated Superset that slips past the prompt is degraded to flat — the
+passive twin of the DEPLOY hard-reject.
 """
 
 from __future__ import annotations
@@ -29,8 +31,10 @@ from app.generation.schema import (
 
 def _offending_groups(
     prescriptions: Sequence[GeneratedExercisePrescription],
+    has_sensitive_constraint: bool,
 ) -> set[str]:
-    """The group tags with any structural Superset violation (validator-defined)."""
+    """The group tags with any Superset violation (validator-defined). Under a
+    Sensitive Constraint every group is forbidden, so all of them offend."""
 
     members = [
         SupersetMember(
@@ -41,21 +45,29 @@ def _offending_groups(
         )
         for position, prescription in enumerate(prescriptions)
     ]
-    return {violation.group for violation in validate_supersets(members)}
+    return {
+        violation.group
+        for violation in validate_supersets(
+            members, has_sensitive_constraint=has_sensitive_constraint
+        )
+    }
 
 
 def degrade_prescriptions_to_flat(
     prescriptions: Sequence[GeneratedExercisePrescription],
+    *,
+    has_sensitive_constraint: bool = False,
 ) -> list[GeneratedExercisePrescription]:
     """Ungroup every invalid Superset in ``prescriptions``, keeping the Prescriptions.
 
     Returns a new list: a member of a valid group (or a solo) passes through
     unchanged, while a member of an offending group is copied with its
     ``superset_group`` and ``round_rest_seconds`` cleared. An all-valid input
-    round-trips its groups intact.
+    round-trips its groups intact — unless ``has_sensitive_constraint`` is set, in
+    which case every group is forbidden (ADR-0023) and flattened.
     """
 
-    offending = _offending_groups(prescriptions)
+    offending = _offending_groups(prescriptions, has_sensitive_constraint)
     if not offending:
         return list(prescriptions)
     return [
@@ -70,21 +82,35 @@ def degrade_prescriptions_to_flat(
     ]
 
 
-def degrade_session_to_flat(session: GeneratedSession) -> GeneratedSession:
-    """Return ``session`` with any invalid generated Superset degraded to flat."""
+def degrade_session_to_flat(
+    session: GeneratedSession, *, has_sensitive_constraint: bool = False
+) -> GeneratedSession:
+    """Return ``session`` with any invalid generated Superset degraded to flat (and,
+    under a Sensitive Constraint, every Superset flattened)."""
 
     return session.model_copy(
-        update={"prescriptions": degrade_prescriptions_to_flat(session.prescriptions)}
+        update={
+            "prescriptions": degrade_prescriptions_to_flat(
+                session.prescriptions,
+                has_sensitive_constraint=has_sensitive_constraint,
+            )
+        }
     )
 
 
-def degrade_protocol_to_flat(protocol: GeneratedProtocol) -> GeneratedProtocol:
-    """Return ``protocol`` with every Session's invalid Supersets degraded to flat."""
+def degrade_protocol_to_flat(
+    protocol: GeneratedProtocol, *, has_sensitive_constraint: bool = False
+) -> GeneratedProtocol:
+    """Return ``protocol`` with every Session's invalid Supersets degraded to flat
+    (and, under a Sensitive Constraint, every Superset flattened)."""
 
     degraded_sessions = [
         session.model_copy(
             update={
-                "prescriptions": degrade_prescriptions_to_flat(session.prescriptions)
+                "prescriptions": degrade_prescriptions_to_flat(
+                    session.prescriptions,
+                    has_sensitive_constraint=has_sensitive_constraint,
+                )
             }
         )
         for session in protocol.sessions
