@@ -81,7 +81,17 @@ function isLiveSet(value: unknown): boolean {
     typeof set.exerciseId === "number" &&
     typeof set.exerciseName === "string" &&
     typeof set.setNumber === "number" &&
-    SET_STATUSES.includes(set.status as SetStatus)
+    SET_STATUSES.includes(set.status as SetStatus) &&
+    // Superset overlay (ADR-0023, added in #161). A slot from an older schema
+    // lacks these, so requiring them rejects a legacy slot before its missing
+    // fields are read: an undefined `supersetLabel` would otherwise render
+    // "SUPERSET undefined", and a falsy `restsAfter` would suppress every rest
+    // timer. A rejected slot deserializes to null → the caller starts fresh.
+    typeof set.unitIndex === "number" &&
+    isNullableString(set.supersetGroup) &&
+    isNullableString(set.supersetLabel) &&
+    typeof set.restsAfter === "boolean" &&
+    isNullableNumber(set.restSeconds)
   );
 }
 
@@ -91,6 +101,10 @@ function isLiveStatus(value: unknown): value is LiveStatus {
 
 function isNullableNumber(value: unknown): boolean {
   return value === null || typeof value === "number";
+}
+
+function isNullableString(value: unknown): boolean {
+  return value === null || typeof value === "string";
 }
 
 // Browser convenience wrappers over `window.localStorage`, guarded so they are
