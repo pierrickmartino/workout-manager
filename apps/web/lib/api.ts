@@ -14,13 +14,22 @@ import { auth } from "@clerk/nextjs/server";
 // build time, so the JWT-attach path can never leak into the browser bundle.
 const API_URL = process.env.API_URL ?? "http://localhost:8000";
 
+// Pagination metadata a paginated endpoint attaches alongside `data`: the full record
+// `total` across every page, and the `limit`/`offset` window this page was read with.
+export interface PaginationMeta {
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 // The standard wire envelope every backend endpoint returns. Declared once here so
 // the domain modules stop re-declaring it and `apiGet`/`apiSend` can name their
-// return type; callers keep inferring it.
+// return type; callers keep inferring it. `meta` rides only on paginated responses.
 export interface Envelope<T> {
   success: boolean;
   data: T | null;
   error: string | null;
+  meta?: PaginationMeta;
 }
 
 async function authHeaders(): Promise<Record<string, string>> {

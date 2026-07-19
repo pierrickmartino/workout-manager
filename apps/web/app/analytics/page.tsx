@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { History, LineChart, Trophy } from "lucide-react";
+import { Dumbbell, History, LineChart, Trophy } from "lucide-react";
 
 import {
   ANALYTICS_RANGES,
@@ -55,6 +55,12 @@ export default async function AnalyticsPage({
   const hasHistory = overview.sessions > 0;
   const muscleBars = toMuscleBars(overview.muscle_distribution);
   const recordRows = toRecordRows(overview.recent_records);
+  // The Strength Analytics screen is offered only to a user with qualifying strength
+  // history — for this slice, the same condition the strength read model gates on
+  // (`has_qualifying_strength`): at least one all-time Personal Record. Gating on the
+  // feed already in hand keeps this screen a single fetch rather than lure a user with
+  // no comparable strength history into an empty screen.
+  const hasQualifyingStrength = overview.recent_records.length > 0;
 
   return (
     <section className="flex flex-col gap-6">
@@ -93,6 +99,14 @@ export default async function AnalyticsPage({
       <div className="flex flex-col gap-4">
         <SectionHeader>OPERATIONS</SectionHeader>
         <Card className="divide-y divide-border overflow-hidden py-0">
+          {hasQualifyingStrength ? (
+            <NavRow
+              icon={Dumbbell}
+              label="Strength Analytics"
+              href="/analytics/strength"
+              accent="cyan"
+            />
+          ) : null}
           <NavRow
             icon={History}
             label="Training history"
