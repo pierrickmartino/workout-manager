@@ -21,14 +21,30 @@ export interface Gamification {
   streak: number;
 }
 
+// The user's most recent Personal Record shown in Home's OPERATOR STATUS section
+// (issue #167): the newest PR by date across all Exercises — the Exercise it was set
+// on (`exercise_id` + `exercise` name) and its new `estimated_1rm` on the ISO `date`.
+// It is the glossary's Personal Record (ADR-0010), derived read-time from Logged Sets,
+// never a raw "personal best". `null` when no absolute-Load PR in a trustworthy rep
+// window exists — a brand-new account or a bodyweight-only trainee — so the line is
+// hidden, never shown as "0 kg".
+export interface LatestPr {
+  exercise_id: number;
+  exercise: string;
+  estimated_1rm: number;
+  date: string;
+}
+
 // The aggregated Home read. `current_protocol` is the progressed view of the
 // user's Current Protocol — the most-recently-adopted Protocol still holding an
 // un-performed Session — or `null` in the empty state (no Protocol, or all
 // complete). `readiness` and `gamification` are present in both states.
+// `latest_pr` is the newest Personal Record, or `null` when the user has none.
 export interface HomeData {
   readiness: Readiness;
   current_protocol: ProtocolProgress | null;
   gamification: Gamification;
+  latest_pr: LatestPr | null;
 }
 
 // How each Readiness state renders as a header badge — its display label and the

@@ -4,7 +4,7 @@
 // `lib/home.ts`; the shapes it consumes come from `lib/protocols-types`.
 
 import type { ProtocolProgress, ProtocolSession } from "./protocols-types";
-import type { Gamification } from "./home-types";
+import type { Gamification, LatestPr } from "./home-types";
 import type { OperatorLevel } from "./profile-progress-types";
 
 // The Session Hero's headline stats — duration · modules · sets — for a Current
@@ -224,5 +224,35 @@ export function operatorStatus(gamification: Gamification): OperatorStatus {
     level: gamification.level,
     streak: gamification.streak,
     streakLabel: `${gamification.streak} WK STREAK`,
+  };
+}
+
+// The Home "Latest PR" line view-model (issue #167): the user's most recent Personal
+// Record, ready to render in OPERATOR STATUS. `exercise` names the lift and
+// `exerciseId` links to it; `estimate` is the new Estimated 1RM rounded to whole
+// kilograms — matching the Recent Records feed (records-view) so a PR reads the same
+// everywhere — and `text` is the composed "Deadlift — 142 kg est. 1RM". The label is
+// "Latest PR" (never "Top PR", which collides with Top Set, nor the banned "Personal
+// Best") and lives in the component; the estimate is deliberately never "0 kg".
+export interface LatestPrLine {
+  exercise: string;
+  exerciseId: number;
+  // The whole-kg Estimated 1RM, e.g. "142 kg est. 1RM".
+  estimate: string;
+  // The composed line, e.g. "Deadlift — 142 kg est. 1RM".
+  text: string;
+}
+
+// Derive the Latest-PR line from the Home read's `latest_pr`. Returns null when the
+// user has no Personal Record (a brand-new account or a bodyweight-only trainee), so
+// Home hides the line rather than fabricating a "0 kg" — Level and Streak still render.
+export function latestPrLine(latestPr: LatestPr | null): LatestPrLine | null {
+  if (!latestPr) return null;
+  const estimate = `${Math.round(latestPr.estimated_1rm)} kg est. 1RM`;
+  return {
+    exercise: latestPr.exercise,
+    exerciseId: latestPr.exercise_id,
+    estimate,
+    text: `${latestPr.exercise} — ${estimate}`,
   };
 }

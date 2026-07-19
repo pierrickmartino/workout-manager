@@ -5,6 +5,7 @@ import {
   Dumbbell,
   History,
   LineChart,
+  Trophy,
   Zap,
 } from "lucide-react";
 
@@ -15,7 +16,7 @@ import {
   type Profile,
 } from "@/lib/profile";
 import { READINESS_BADGE, fetchHome } from "@/lib/home";
-import { operatorStatus } from "@/lib/home-view";
+import { latestPrLine, operatorStatus } from "@/lib/home-view";
 import { Alert } from "@/components/pulse/alert";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -45,7 +46,8 @@ export default async function DashboardPage() {
       <section className="flex flex-col gap-6">
         <PageHeader overline="PULSE // DASHBOARD" title="Dashboard" />
         <Alert tone="error">
-          Could not load your profile: {profileEnvelope.error ?? "unknown error"}
+          Could not load your profile:{" "}
+          {profileEnvelope.error ?? "unknown error"}
         </Alert>
       </section>
     );
@@ -71,6 +73,7 @@ export default async function DashboardPage() {
   const readiness = READINESS_BADGE[homeEnvelope.data.readiness];
   const currentProtocol = homeEnvelope.data.current_protocol;
   const status = operatorStatus(homeEnvelope.data.gamification);
+  const latestPr = latestPrLine(homeEnvelope.data.latest_pr);
 
   return (
     <section className="flex flex-col gap-7">
@@ -108,6 +111,25 @@ export default async function DashboardPage() {
       <div className="flex flex-col gap-4">
         <SectionHeader>OPERATOR STATUS</SectionHeader>
         <LevelBadge xp={status.xp} level={status.level} />
+        {/* Latest PR: the user's most recent Personal Record, linking to the
+            Exercise. Rendered only when a PR exists — hidden, never "0 kg", for new
+            accounts and bodyweight-only trainees (issue #167, ADR-0010). */}
+        {latestPr ? (
+          <Link
+            href={`/exercises/${latestPr.exerciseId}`}
+            className="flex items-center gap-3 rounded-md border border-border bg-surface px-4 py-3 transition-colors hover:border-cyan/40"
+          >
+            <Trophy className="h-4 w-4 shrink-0 text-cyan" />
+            <div className="flex flex-col">
+              <span className="label-mono text-[10px] text-text-muted">
+                LATEST PR
+              </span>
+              <span className="font-sans text-sm font-medium text-text-primary">
+                {latestPr.text}
+              </span>
+            </div>
+          </Link>
+        ) : null}
         <Bento>
           <BentoTile
             label="STREAK"
@@ -194,7 +216,9 @@ function GenerateTrainingCta(): React.JSX.Element {
 
 function formatGender(gender: string | null): string {
   if (gender === null) return "—";
-  return GENDER_OPTIONS.find((option) => option.value === gender)?.label ?? gender;
+  return (
+    GENDER_OPTIONS.find((option) => option.value === gender)?.label ?? gender
+  );
 }
 
 function formatList(values: string[]): string {
@@ -225,20 +249,21 @@ function ProfileSummary({ profile }: { profile: Profile }) {
           { label: "Age", value: profile.age ?? "—" },
           {
             label: "Height",
-            value:
-              profile.height_cm !== null ? `${profile.height_cm} cm` : "—",
+            value: profile.height_cm !== null ? `${profile.height_cm} cm` : "—",
           },
           {
             label: "Weight",
-            value:
-              profile.weight_kg !== null ? `${profile.weight_kg} kg` : "—",
+            value: profile.weight_kg !== null ? `${profile.weight_kg} kg` : "—",
           },
           { label: "Training habits", value: profile.training_habits ?? "—" },
           {
             label: "Default equipment",
             value: formatList(profile.default_equipment),
           },
-          { label: "Fitness levels", value: formatLevels(profile.fitness_levels) },
+          {
+            label: "Fitness levels",
+            value: formatLevels(profile.fitness_levels),
+          },
           {
             label: "Preferences / limitations",
             value: formatList(profile.preferences),

@@ -37,6 +37,7 @@ from app.domain.personal_records import (
     detect_personal_records,
     estimated_1rm_for_set,
 )
+from app.logbook.records import set_records
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
     LoggedSessionView,
@@ -152,7 +153,9 @@ def _top_set_series(
             if best is None or estimate > best:
                 best = estimate
         if best is not None:
-            points.append(TopSetPoint(performed_on=session.performed_on, estimated_1rm=best))
+            points.append(
+                TopSetPoint(performed_on=session.performed_on, estimated_1rm=best)
+            )
 
     points.sort(key=lambda point: point.performed_on)
     return points[-TOP_SET_SERIES_LIMIT:]
@@ -164,21 +167,13 @@ def _set_records(
     """Flatten the Exercise's Logged Sets into dated records for PR detection.
 
     Filtered to the one Exercise so the detector — which is scoped per Exercise but
-    otherwise history-wide — only ever weighs this movement. Each set is paired with
-    its session's ``performed_on`` so the stream can be ordered.
+    otherwise history-wide — only ever weighs this movement. Reuses the shared
+    history flattening (``logbook/records``) so a per-Exercise PR is stamped exactly
+    as the all-time Analytics / Home feeds stamp it, then narrows to this movement.
     """
 
     return [
-        LoggedSetRecord(
-            exercise_id=logged_set.exercise_id,
-            exercise_name=logged_set.exercise_name,
-            reps=logged_set.reps,
-            load=logged_set.load,
-            performed_on=session.performed_on,
-        )
-        for session in history
-        for logged_set in session.logged_sets
-        if logged_set.exercise_id == exercise_id
+        record for record in set_records(history) if record.exercise_id == exercise_id
     ]
 
 

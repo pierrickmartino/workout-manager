@@ -1,9 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { operatorStatus, queueView, weekStrip, QUEUE_CAP } from "./home-view.ts";
+import {
+  latestPrLine,
+  operatorStatus,
+  queueView,
+  weekStrip,
+  QUEUE_CAP,
+} from "./home-view.ts";
 import type { WeekStrip } from "./home-view.ts";
-import type { Gamification } from "./home-types.ts";
+import type { Gamification, LatestPr } from "./home-types.ts";
 import type { ProtocolProgress, ProtocolSession } from "./protocols-types.ts";
 import type { ExercisePrescription } from "./sessions-types.ts";
 
@@ -387,10 +393,14 @@ test("rows carry no per-session percentage of any kind", () => {
   // Assert: the row shape is exactly the honest fields — no percent/ratio/ring
   // key sneaks a per-session completion figure onto the row (ADR-0008).
   assert.ok(queue);
-  assert.deepEqual(
-    Object.keys(queue.rows[0]).sort(),
-    ["durationMinutes", "isNext", "label", "modules", "position", "sessionId"],
-  );
+  assert.deepEqual(Object.keys(queue.rows[0]).sort(), [
+    "durationMinutes",
+    "isNext",
+    "label",
+    "modules",
+    "position",
+    "sessionId",
+  ]);
 });
 
 test("returns no queue when the Protocol has no Next Session", () => {
@@ -445,7 +455,12 @@ test("operator status renders a zero-week streak for a brand-new user", () => {
   // Arrange: a fresh account with no logs — Level 1, empty bar, no streak.
   const gamification: Gamification = {
     xp: 0,
-    level: { level: 1, xp_into_level: 0, xp_span_of_level: 400, xp_to_next: 400 },
+    level: {
+      level: 1,
+      xp_into_level: 0,
+      xp_span_of_level: 400,
+      xp_to_next: 400,
+    },
     streak: 0,
   };
 
@@ -457,4 +472,31 @@ test("operator status renders a zero-week streak for a brand-new user", () => {
   assert.equal(status.level.level, 1);
   assert.equal(status.streak, 0);
   assert.equal(status.streakLabel, "0 WK STREAK");
+});
+
+test("latest PR line names the Exercise and its Estimated 1RM, rounded to whole kg", () => {
+  // Arrange: the newest Personal Record — a Deadlift Est. 1RM with a fractional kg.
+  const latestPr: LatestPr = {
+    exercise_id: 7,
+    exercise: "Deadlift",
+    estimated_1rm: 142.4,
+    date: "2026-07-10",
+  };
+
+  // Act
+  const line = latestPrLine(latestPr);
+
+  // Assert: the Exercise, its whole-kg estimate, the linkable id, and the composed
+  // "Deadlift — 142 kg est. 1RM" the OPERATOR STATUS line renders.
+  assert.ok(line);
+  assert.equal(line.exercise, "Deadlift");
+  assert.equal(line.exerciseId, 7);
+  assert.equal(line.estimate, "142 kg est. 1RM");
+  assert.equal(line.text, "Deadlift — 142 kg est. 1RM");
+});
+
+test("latest PR line is hidden (null) when the user has no Personal Record", () => {
+  // Arrange: a brand-new account or bodyweight-only trainee projects to no PR.
+  // Act & Assert: null so the line is hidden, never rendered as "0 kg".
+  assert.equal(latestPrLine(null), null);
 });
