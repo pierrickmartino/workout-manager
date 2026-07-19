@@ -4,6 +4,8 @@
 // `lib/home.ts`; the shapes it consumes come from `lib/protocols-types`.
 
 import type { ProtocolProgress, ProtocolSession } from "./protocols-types";
+import type { Gamification } from "./home-types";
+import type { OperatorLevel } from "./profile-progress-types";
 
 // The Session Hero's headline stats — duration · modules · sets — for a Current
 // Protocol's Next Session. Deliberately no target-calorie and no single volume /
@@ -192,5 +194,35 @@ export function queueView(protocol: ProtocolProgress): QueueView | null {
     header: `${protocol.completed_count} / ${total}`,
     totalUpcoming: upcoming.length,
     hasMore: upcoming.length > rows.length,
+  };
+}
+
+// The Home OPERATOR STATUS view-model (issue #166): the account's Level / XP —
+// passed straight through to the shared `LevelBadge` — plus an explicitly-weekly
+// Streak label. Rendered in both the Current-Protocol and empty states, so the
+// user always sees their honest standing. A brand-new user is Level 1, 0 XP, and
+// a "0 WK STREAK".
+export interface OperatorStatus {
+  // The account's total XP — the LevelBadge's headline figure.
+  xp: number;
+  // Where that XP sits on the Operator Level curve — the LevelBadge's input.
+  level: OperatorLevel;
+  // The weekly consecutive-week Streak count (ADR-0019).
+  streak: number;
+  // The rendered, explicitly-weekly Streak label, e.g. "3 WK STREAK". Weekly by
+  // construction — never a daily / don't-break-the-chain framing (ADR-0019).
+  streakLabel: string;
+}
+
+// Derive the OPERATOR STATUS view-model from the Home read's gamification block.
+// A pure pass-through of the honest figures plus the weekly Streak label; the
+// Level/XP go untouched to the shared LevelBadge so Home and Profile render the
+// exact same number.
+export function operatorStatus(gamification: Gamification): OperatorStatus {
+  return {
+    xp: gamification.xp,
+    level: gamification.level,
+    streak: gamification.streak,
+    streakLabel: `${gamification.streak} WK STREAK`,
   };
 }

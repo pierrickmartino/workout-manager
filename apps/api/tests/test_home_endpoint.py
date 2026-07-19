@@ -95,11 +95,13 @@ class _Harness:
             exercises=self.exercises, protocols=self.protocols,
         )
 
-    def perform(self, sub, session_id):
+    def perform(self, sub, session_id, performed_on=None):
         self.logged.create(
             sub,
             LoggedSessionDraft(
-                session_id=session_id, performed_on=date(2026, 1, 1), logged_sets=[]
+                session_id=session_id,
+                performed_on=performed_on or date(2026, 1, 1),
+                logged_sets=[],
             ),
         )
 
@@ -140,7 +142,20 @@ def test_home_returns_readiness_and_a_null_current_protocol():
     body = response.json()
     assert body["success"] is True
     assert body["error"] is None
-    assert body["data"] == {"readiness": "READY", "current_protocol": None}
+    assert body["data"] == {
+        "readiness": "READY",
+        "current_protocol": None,
+        "gamification": {
+            "xp": 0,
+            "level": {
+                "level": 1,
+                "xp_into_level": 0,
+                "xp_span_of_level": 400,
+                "xp_to_next": 400,
+            },
+            "streak": 0,
+        },
+    }
 
 
 def test_a_sensitive_user_sees_extra_caution():
@@ -239,3 +254,62 @@ def test_home_never_surfaces_another_users_protocol():
 
     # Assert — ownership isolation holds end to end
     assert data["current_protocol"] is None
+
+
+def test_home_carries_the_gamification_block_alongside_readiness():
+    # Arrange — a user who has adopted a Protocol and performed its first Session
+    h = build_harness()
+    protocol = h.adopt_protocol("user_gamified")
+    h.perform("user_gamified", protocol.sessions[0].session_id, date.today())
+
+    # Act
+    data = h.fetch_home("user_gamified").json()["data"]
+
+    # Assert — the gamification fan-out rides alongside the existing fields, with
+    # the full Operator Level shape the LevelBadge renders from
+    assert set(data) == {"readiness", "current_protocol", "gamification"}
+    gamification = data["gamification"]
+    # One Logged Session with no sets earns a flat SESSION_XP (100).
+    assert gamification["xp"] == 100
+    assert set(gamification["level"]) == {
+        "level",
+        "xp_into_level",
+        "xp_span_of_level",
+        "xp_to_next",
+    }
+    assert gamification["level"]["level"] == 1
+    assert gamification["streak"] == 1
+
+
+def test_home_gamification_agrees_with_profile_progress_for_the_same_user():
+    # Arrange — the same performed history reaches both surfaces
+    h = build_harness()
+    protocol = h.adopt_protocol("user_parity")
+    h.perform("user_parity", protocol.sessions[0].session_id, date.today())
+
+    # Act — read the shared read model directly and the Home fan-out
+    from datetime import date as _date
+
+    from app.logbook.profile_progress import profile_progress
+
+    progress = profile_progress("user_parity", logged=h.logged, today=_date.today())
+    gamification = h.fetch_home("user_parity").json()["data"]["gamification"]
+
+    # Assert — Home and Profile can never disagree on the same account
+    assert gamification["xp"] == progress.xp
+    assert gamification["streak"] == progress.streak
+    assert gamification["level"]["level"] == progress.level.level
+
+
+def test_home_gamification_zero_state_for_a_brand_new_user():
+    # Arrange — a brand-new user with no logged history
+    h = build_harness()
+
+    # Act
+    gamification = h.fetch_home("user_fresh").json()["data"]["gamification"]
+
+    # Assert — Level 1, an empty XP bar, and a 0-week streak — never blank
+    assert gamification["xp"] == 0
+    assert gamification["level"]["level"] == 1
+    assert gamification["level"]["xp_into_level"] == 0
+    assert gamification["streak"] == 0

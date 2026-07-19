@@ -18,8 +18,8 @@ from dataclasses import dataclass
 from datetime import date
 
 from app.domain.achievements import Achievement, evaluate_achievements
-from app.domain.experience import OperatorLevel, operator_level, total_xp
-from app.domain.streak import current_streak
+from app.domain.experience import OperatorLevel
+from app.logbook.gamification import project_gamification
 from app.repositories.logged_session_repository import LoggedSessionRepository
 
 
@@ -59,11 +59,11 @@ def profile_progress(
     """
 
     history = logged.list_for_user(clerk_user_id)
-    xp = total_xp(len(session.logged_sets) for session in history)
+    gamification = project_gamification(history, today=today)
     return ProfileProgress(
-        xp=xp,
-        level=operator_level(xp),
-        streak=current_streak([session.performed_on for session in history], today),
+        xp=gamification.xp,
+        level=gamification.level,
+        streak=gamification.streak,
         total_sessions=len(history),
         total_sets=sum(len(session.logged_sets) for session in history),
         achievements=evaluate_achievements(history),
