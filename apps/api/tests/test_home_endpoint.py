@@ -16,6 +16,8 @@ from fastapi.testclient import TestClient
 
 from app.adoption.service import adopt
 from app.auth.dependencies import get_jwks
+from app.domain.exercise import Provenance
+from app.domain.load import LoadKind, ParsedLoad
 from app.config import Settings, get_settings
 from app.generation.protocol_generator import ProtocolGenerationRequest
 from app.generation.schema import (
@@ -33,6 +35,7 @@ from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.logged_session_repository import (
     InMemoryLoggedSessionRepository,
     LoggedSessionDraft,
+    LoggedSetDraft,
 )
 from app.repositories.profile_repository import (
     InMemoryProfileRepository,
@@ -41,6 +44,12 @@ from app.repositories.profile_repository import (
 from app.repositories.protocol_repository import InMemoryProtocolRepository
 from app.repositories.session_repository import InMemorySessionRepository
 from tests.conftest import ISSUER, make_signing_context
+
+
+def _abs(kg: float) -> dict:
+    """The stored typed-Load dict for an absolute kilogram load."""
+
+    return ParsedLoad(kind=LoadKind.ABSOLUTE, text=f"{kg:g} kg", kg=kg).to_dict()
 
 
 PARAMS = ProtocolGenerationRequest(
@@ -91,19 +100,25 @@ class _Harness:
 
     def adopt_protocol(self, sub):
         return adopt(
-            _two_week_protocol(), sub, PARAMS,
-            exercises=self.exercises, protocols=self.protocols,
+            _two_week_protocol(),
+            sub,
+            PARAMS,
+            exercises=self.exercises,
+            protocols=self.protocols,
         )
 
-    def perform(self, sub, session_id, performed_on=None):
+    def perform(self, sub, session_id, performed_on=None, logged_sets=None):
         self.logged.create(
             sub,
             LoggedSessionDraft(
                 session_id=session_id,
                 performed_on=performed_on or date(2026, 1, 1),
-                logged_sets=[],
+                logged_sets=logged_sets or [],
             ),
         )
+
+    def exercise_id(self, name):
+        return self.exercises.find_or_create(name, provenance=Provenance.CURATED).id
 
 
 def build_harness(profiles=None) -> _Harness:
@@ -155,6 +170,7 @@ def test_home_returns_readiness_and_a_null_current_protocol():
             },
             "streak": 0,
         },
+        "latest_pr": None,
     }
 
 
@@ -267,7 +283,7 @@ def test_home_carries_the_gamification_block_alongside_readiness():
 
     # Assert — the gamification fan-out rides alongside the existing fields, with
     # the full Operator Level shape the LevelBadge renders from
-    assert set(data) == {"readiness", "current_protocol", "gamification"}
+    assert set(data) == {"readiness", "current_protocol", "gamification", "latest_pr"}
     gamification = data["gamification"]
     # One Logged Session with no sets earns a flat SESSION_XP (100).
     assert gamification["xp"] == 100
@@ -313,3 +329,64 @@ def test_home_gamification_zero_state_for_a_brand_new_user():
     assert gamification["level"]["level"] == 1
     assert gamification["level"]["xp_into_level"] == 0
     assert gamification["streak"] == 0
+
+
+def test_home_carries_the_latest_personal_record():
+    # Arrange — a user who has performed a Session with an absolute-Load Back Squat set
+    # heavy enough to set a Personal Record.
+    h = build_harness()
+    protocol = h.adopt_protocol("user_pr")
+    squat = h.exercise_id("Back Squat")
+    h.perform(
+        "user_pr",
+        protocol.sessions[0].session_id,
+        performed_on=date(2026, 7, 10),
+        logged_sets=[LoggedSetDraft(exercise_id=squat, reps=1, load=_abs(142.0))],
+    )
+
+    # Act
+    data = h.fetch_home("user_pr").json()["data"]
+
+    # Assert — the Latest PR rides alongside the existing fields, naming the Exercise,
+    # its Estimated 1RM, and the date it was set.
+    assert "latest_pr" in data
+    assert data["latest_pr"] == {
+        "exercise_id": squat,
+        "exercise": "Back Squat",
+        "estimated_1rm": 142.0,
+        "date": "2026-07-10",
+    }
+
+
+def test_home_latest_pr_is_null_for_a_brand_new_user():
+    # Arrange — a fresh account with no logged history
+    h = build_harness()
+
+    # Act
+    data = h.fetch_home("user_fresh_pr").json()["data"]
+
+    # Assert — the line is hidden, never a fabricated "0 kg"; Home reads fine without it
+    assert data["latest_pr"] is None
+
+
+def test_home_latest_pr_is_null_for_an_absolute_load_less_history():
+    # Arrange — a bodyweight-only trainee: reps logged, but no absolute Load, so no set
+    # carries a comparable Estimated 1RM and none can set a PR.
+    h = build_harness()
+    protocol = h.adopt_protocol("user_bw")
+    squat = h.exercise_id("Back Squat")
+    bodyweight = ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict()
+    h.perform(
+        "user_bw",
+        protocol.sessions[0].session_id,
+        performed_on=date(2026, 7, 10),
+        logged_sets=[LoggedSetDraft(exercise_id=squat, reps=10, load=bodyweight)],
+    )
+
+    # Act
+    data = h.fetch_home("user_bw").json()["data"]
+
+    # Assert — hidden, and Level / Streak still render normally
+    assert data["latest_pr"] is None
+    assert data["gamification"]["level"]["level"] == 1
+    assert data["gamification"]["streak"] >= 0

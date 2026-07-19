@@ -30,12 +30,9 @@ from datetime import date, timedelta
 from enum import Enum
 
 from app.domain.muscle_groups import distribution
-from app.domain.personal_records import (
-    LoggedSetRecord,
-    PersonalRecord,
-    detect_personal_records,
-)
+from app.domain.personal_records import PersonalRecord, detect_personal_records
 from app.domain.volume import VolumePoint, VolumeSet, volume_series
+from app.logbook.records import set_records
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
     LoggedSessionView,
@@ -122,7 +119,7 @@ def analytics_overview(
 
     # Personal Records are detected over the whole history, not just the window: the
     # feed is decoupled from the toggle, and only the count is scoped to the window.
-    records = detect_personal_records(_set_records(history))
+    records = detect_personal_records(set_records(history))
     recent = tuple(reversed(records[-RECENT_RECORDS_LIMIT:]))
     new_prs = sum(1 for record in records if start <= record.performed_on <= today)
 
@@ -160,26 +157,6 @@ def analytics_overview(
         volume_coverage=series.coverage_pct,
         volume_delta=series.delta_pct,
     )
-
-
-def _set_records(history: list[LoggedSessionView]) -> list[LoggedSetRecord]:
-    """Flatten Logged Sessions into dated Logged Set records for PR detection.
-
-    Each Logged Set is paired with its session's ``performed_on`` so the detector,
-    which knows nothing about sessions, can order the stream and stamp each PR.
-    """
-
-    return [
-        LoggedSetRecord(
-            exercise_id=logged_set.exercise_id,
-            exercise_name=logged_set.exercise_name,
-            reps=logged_set.reps,
-            load=logged_set.load,
-            performed_on=session.performed_on,
-        )
-        for session in history
-        for logged_set in session.logged_sets
-    ]
 
 
 def _volume_sets(history: list[LoggedSessionView]) -> list[VolumeSet]:

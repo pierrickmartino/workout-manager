@@ -20,8 +20,10 @@ from fastapi import APIRouter, Depends
 
 from app.auth.dependencies import get_current_user
 from app.domain.readiness import assess_readiness
+from app.domain.personal_records import PersonalRecord
 from app.envelope import success_envelope
 from app.logbook.gamification import GamificationSummary, project_gamification
+from app.logbook.records import latest_personal_record
 from app.protocols.progress import current_protocol
 from app.protocols.serialization import serialize_protocol_progress
 from app.repositories.deps import (
@@ -59,16 +61,22 @@ def read_home(
     # uses, so the two screens can never disagree (issue #166, ADR-0018/0019).
     gamification = project_gamification(history, today=date.today())
 
+    # The most recent Personal Record, projected off the same history — the newest PR
+    # by date across every Exercise, or None when the record holds no absolute-Load PR
+    # in the trustworthy rep window (new account, bodyweight-only trainee). Read-time
+    # and non-monotonic (ADR-0010/0018): it disappears if the logs behind it are
+    # deleted. The client hides the line when it is null rather than showing "0 kg".
+    latest_pr = latest_personal_record(history)
+
     current = current_protocol(clerk_user_id, protocols=protocols, logged=logged)
     return success_envelope(
         {
             "readiness": readiness.value,
             "current_protocol": (
-                serialize_protocol_progress(current)
-                if current is not None
-                else None
+                serialize_protocol_progress(current) if current is not None else None
             ),
             "gamification": _serialize_gamification(gamification),
+            "latest_pr": _serialize_latest_pr(latest_pr),
         }
     )
 
@@ -87,4 +95,22 @@ def _serialize_gamification(gamification: GamificationSummary) -> dict:
             "xp_to_next": gamification.level.xp_to_next,
         },
         "streak": gamification.streak,
+    }
+
+
+def _serialize_latest_pr(record: PersonalRecord | None) -> dict | None:
+    """The Latest-PR block, or ``None`` when the user has no Personal Record.
+
+    Names the Exercise (id + name, so the client can link to it) and its Estimated
+    1RM on the date it was set. Mirrors the Analytics feed's ``exercise`` /
+    ``estimated_1rm`` / ``date`` field naming so the two surfaces agree byte for byte.
+    """
+
+    if record is None:
+        return None
+    return {
+        "exercise_id": record.exercise_id,
+        "exercise": record.exercise_name,
+        "estimated_1rm": record.estimated_1rm,
+        "date": record.performed_on.isoformat(),
     }
