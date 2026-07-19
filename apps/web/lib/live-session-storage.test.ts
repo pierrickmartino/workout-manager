@@ -111,6 +111,34 @@ test("loadLiveSession returns null for a well-formed but wrong-shaped slot", () 
   assert.equal(loadLiveSession(storage), null);
 });
 
+test("loadLiveSession rejects a legacy slot missing the Superset overlay fields", () => {
+  // Arrange — a slot in the pre-#161 shape: a solo set with `moduleIndex` but
+  // none of the Superset-overlay fields (unitIndex/supersetLabel/restsAfter…).
+  // Hydrating it would render "SUPERSET undefined" and suppress rest timers.
+  const storage = fakeStorage();
+  const legacySet = {
+    exerciseId: 100,
+    exerciseName: "Back Squat",
+    moduleIndex: 0,
+    setNumber: 1,
+    status: "pending",
+  };
+  storage.setItem(
+    LIVE_SESSION_SLOT_KEY,
+    JSON.stringify({
+      sessionId: 42,
+      currentIndex: 0,
+      status: "in_progress",
+      startedAt: 1_000_000,
+      lastActivityAt: 1_000_000,
+      sets: [legacySet],
+    }),
+  );
+
+  // Act / Assert — the stale-shaped slot is rejected, so the caller starts fresh
+  assert.equal(loadLiveSession(storage), null);
+});
+
 test("clearLiveSession empties the slot", () => {
   // Arrange
   const storage = fakeStorage();
