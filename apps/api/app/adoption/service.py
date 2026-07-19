@@ -57,6 +57,8 @@ def adopt(
                     rest_seconds=item.rest_seconds,
                     tempo=item.tempo,
                     recommended_load=item.typed_load,
+                    superset_group=item.superset_group,
+                    round_rest_seconds=item.round_rest_seconds,
                 )
             )
         session_drafts.append(

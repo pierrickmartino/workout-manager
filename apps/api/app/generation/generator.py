@@ -15,6 +15,7 @@ from typing import Protocol
 from app.generation.llm.port import GenerationError, StructuredLLM
 from app.generation.schema import GeneratedSession
 from app.generation.structured import generate_structured, parse_or_raise
+from app.generation.superset_degrade import degrade_session_to_flat
 
 MAX_TOKENS = 8000
 
@@ -40,10 +41,12 @@ def parse_generated_session(raw_json: str) -> GeneratedSession:
 
     Returns the typed ``GeneratedSession`` on success; raises ``GenerationError``
     for invalid JSON or any schema violation, so callers never persist
-    half-formed generations.
+    half-formed generations. Any invalid generated Superset is degraded to flat
+    (ADR-0023) rather than failing the request.
     """
 
-    return parse_or_raise(raw_json, GeneratedSession, subject="generation")
+    parsed = parse_or_raise(raw_json, GeneratedSession, subject="generation")
+    return degrade_session_to_flat(parsed)
 
 
 def _system_prompt() -> str:
@@ -52,6 +55,11 @@ def _system_prompt() -> str:
         "training Session as a set of Exercise Prescriptions. For each prescription "
         "give the exercise name, a short description, targeted muscles, required "
         "equipment, and the sets, reps, rest (seconds), tempo, and recommended load. "
+        "Where two or more movements are best trained back-to-back — antagonist pairs "
+        "or accessory work — prescribe a Superset: give those contiguous prescriptions "
+        "a shared superset_group tag, equal set counts (a Superset is N rounds), and a "
+        "single round_rest_seconds on each member for the rest taken once per round. "
+        "Leave superset_group null for a solo exercise. "
         "Only prescribe exercises that fit the requested training type, duration, and "
         "the available equipment. Respond strictly in the required JSON schema."
     )
@@ -78,7 +86,7 @@ class LlmSessionGenerator:
         self._llm = llm
 
     def generate(self, request: GenerationRequest) -> GeneratedSession:
-        return generate_structured(
+        generated = generate_structured(
             llm=self._llm,
             system=_system_prompt(),
             user=_user_prompt(request),
@@ -86,6 +94,7 @@ class LlmSessionGenerator:
             max_tokens=MAX_TOKENS,
             subject="generation",
         )
+        return degrade_session_to_flat(generated)
 
 
 __all__ = [

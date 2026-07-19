@@ -32,6 +32,14 @@ class GeneratedExercisePrescription(BaseModel):
     rest_seconds: int | None = None
     tempo: str | None = None
     recommended_load: str | None = None
+    # Superset grouping (ADR-0023): both ``None`` for a flat, solo Prescription.
+    # Members of one generated Superset share ``superset_group`` and each carries the
+    # group-owned ``round_rest_seconds`` (denormalized per member so it survives
+    # reorder). The parse boundary validates each group against the shared Superset
+    # validator and degrades an invalid group to flat; grouping lives in the output,
+    # not the request, so the coarse cache key (ADR-0003) is unchanged.
+    superset_group: str | None = None
+    round_rest_seconds: int | None = None
 
     @property
     def typed_load(self) -> dict | None:

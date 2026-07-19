@@ -159,6 +159,78 @@ def test_mutating_the_source_after_adoption_does_not_change_the_users_copy():
     assert refetched.sessions[0].title == "Week 1 Push"
 
 
+def _superset_protocol() -> GeneratedProtocol:
+    # One week, one Session pairing two movements as a valid Superset (ADR-0023).
+    return GeneratedProtocol(
+        sessions=[
+            GeneratedProtocolSession(
+                week=1,
+                day=1,
+                title="Arms",
+                prescriptions=[
+                    GeneratedExercisePrescription(
+                        exercise_name="Dumbbell Curl",
+                        sets=3,
+                        reps="10",
+                        superset_group="ss1",
+                        round_rest_seconds=90,
+                    ),
+                    GeneratedExercisePrescription(
+                        exercise_name="Triceps Pushdown",
+                        sets=3,
+                        reps="10",
+                        superset_group="ss1",
+                        round_rest_seconds=90,
+                    ),
+                ],
+            )
+        ]
+    )
+
+
+_SUPERSET_PARAMS = ProtocolGenerationRequest(
+    training_type="hypertrophy",
+    objective="gain muscle mass",
+    sessions_per_week=1,
+    duration_minutes=45,
+    weeks=1,
+    equipment=["dumbbell"],
+)
+
+
+def test_a_generated_superset_persists_through_adopt():
+    # Arrange — a cached artifact carrying a valid Superset
+    exercises, protocols = _build_repos()
+
+    # Act
+    view = adopt(
+        _superset_protocol(), "user_ss_adopt", _SUPERSET_PARAMS,
+        exercises=exercises, protocols=protocols,
+    )
+
+    # Assert — the grouping and group-owned round-rest deep-copy onto both members
+    prescriptions = view.sessions[0].prescriptions
+    assert [p.superset_group for p in prescriptions] == ["ss1", "ss1"]
+    assert all(p.round_rest_seconds == 90 for p in prescriptions)
+
+
+def test_adopted_superset_is_independent_of_the_source_artifact():
+    # Arrange — adopt, then tamper with the shared Generated artifact's grouping
+    exercises, protocols = _build_repos()
+    generated = _superset_protocol()
+    view = adopt(
+        generated, "user_ss_iso", _SUPERSET_PARAMS,
+        exercises=exercises, protocols=protocols,
+    )
+
+    # Act — mutate the source group tag as if a later request touched the cache entry
+    generated.sessions[0].prescriptions[0].superset_group = "TAMPERED"
+
+    # Assert — the user's adopted copy still reads the original grouping
+    refetched = protocols.get(view.id, "user_ss_iso")
+    assert refetched.sessions[0].prescriptions[0].superset_group == "ss1"
+
+
 def test_two_users_adopt_independent_copies_from_one_generated_protocol():
     # Arrange — adopt-by-copy means one user's Protocol never aliases another's
     exercises, protocols = _build_repos()
