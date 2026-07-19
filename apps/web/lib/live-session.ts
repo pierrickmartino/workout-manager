@@ -452,6 +452,36 @@ export function currentSuperset(state: LiveSessionState): {
   };
 }
 
+// The "up next" cue for the rest card: the on-deck set the current-set pointer sits
+// on — what the user will perform when the running rest ends.
+export interface RestCue {
+  exerciseName: string;
+  // The on-deck set's 1-based ordinal within its module — the round number when the
+  // set belongs to a Superset.
+  setNumber: number;
+  // Total prescribed sets in that module — the round count when grouped.
+  setCount: number;
+  // The Superset display letter (A, B…) when the on-deck set is grouped, else null.
+  supersetLabel: string | null;
+}
+
+// The rest-card cue: describe the on-deck set — the one the pointer already advanced
+// to on the completion that started this rest. At a Superset round boundary the
+// pointer sits on the first member of the *next* round, so this honestly names that
+// member (e.g. "Bench Press · round 2/3"), never the exercise *after* it that
+// `nextExercise` (a forward look-ahead) would surface. Null only for a Session with
+// no prescribed sets.
+export function restCue(state: LiveSessionState): RestCue | null {
+  const set = currentSet(state);
+  if (!set) return null;
+  return {
+    exerciseName: set.exerciseName,
+    setNumber: set.setNumber,
+    setCount: set.moduleSetCount,
+    supersetLabel: set.supersetLabel,
+  };
+}
+
 // A preview of the next exercise to come — the first upcoming set (in performed
 // order) whose Exercise differs from the current one. Inside a Superset this
 // naturally surfaces the co-member (the very next set is another Exercise); for a

@@ -69,7 +69,7 @@ Session (the user confirms the count), never automated form correction for
 Sensitive-Constraint users. Value is reduced between-set friction — the single
 biggest cited reason users abandon trackers — not medical form judgment.
 
-### Rest-Timer & Superset Round Cues
+### Rest-Timer & Superset Round Cues — Shipped
 A low-cost, high-value polish item: an explicit rest timer that respects the
 Superset model — rest falls only at the **round boundary**, never between members
 (CONTEXT 'Superset'). Most trackers get supersets wrong; ours already models them
@@ -77,6 +77,18 @@ correctly, so a timer that cues "round 2 of 3, next: goblet squat" is a
 differentiator that falls straight out of existing structure. Ephemeral,
 client-side, and part of the Live Session only. Pairs naturally with the
 voice-guided item above and needs no schema change.
+
+**Delivered.** The rest timer and round-major Superset expansion already shipped
+(F2·S4 / ADR-0023), so this reduced to a polish pass: (1) the rest card now cues the
+**on-deck set** directly — `next: {exercise} · round N/M` (or `· set N/M` when solo) —
+reading the current-set pointer rather than the forward look-ahead, which at a round
+boundary honestly names the member you'll perform next instead of the one after it;
+(2) the persistent "Next up" line mirrors that on-deck set while resting so the two
+surfaces never disagree; and (3) a correctness fix — a Superset's deliberate
+`round_rest_seconds` now wins over the user's global default-rest preference at the
+round boundary (**amends ADR-0023**: "the Superset owns its round-rest"), so the global
+default can no longer silently shorten a Superset's prescribed rest. Logic lives in the
+pure `restCue` / `resolveRestSeconds` view-model with co-located tests; no schema change.
 
 ---
 
