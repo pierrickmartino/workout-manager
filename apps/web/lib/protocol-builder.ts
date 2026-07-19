@@ -585,6 +585,14 @@ function groupByDrag(
   if (from < 0 || from > last || to < 0 || to > last || from === to) {
     return prescriptions;
   }
+  // Dropping a member onto a co-member of the *same* Superset is a no-op: they are
+  // already grouped, so re-forming would needlessly detach — dissolving the group and
+  // its edited round-rest — then rebuild the pair from an individual rest, silently
+  // discarding the round-rest the user set (ADR-0023).
+  const fromGroup = prescriptions[from].supersetGroup;
+  if (fromGroup !== null && fromGroup === prescriptions[to].supersetGroup) {
+    return prescriptions;
+  }
   const detached = detachFromGroup(prescriptions, from);
   const moved = movePrescription(detached, from, to);
   // After the move the dragged row sits at `to`; the drop target is the neighbour it
