@@ -4,7 +4,11 @@
 // server-only imports, so both the Server route and the Client screen can use it.
 
 import { formatLoad, NO_LOAD, type Load, type LoadKind } from "./load.ts";
-import type { PreviousSet, WorkoutSession } from "./sessions-types";
+import type {
+  ExercisePrescription,
+  PreviousSet,
+  WorkoutSession,
+} from "./sessions-types";
 
 export type SetStatus = "pending" | "completed";
 
@@ -29,9 +33,25 @@ export interface LiveSet {
   exerciseId: number;
   exerciseName: string;
   modulePosition: number; // the prescription's position — identifies the module
-  moduleIndex: number; // 0-based ordinal of the module, for `x/y` display
-  setNumber: number; // 1-based set within its module
-  moduleSetCount: number; // total prescribed sets in this module
+  // 0-based ordinal of the *unit* this set belongs to, for the header's `x/y`. A
+  // solo Prescription is one unit; a whole Superset is one unit (ADR-0023), so all
+  // its interleaved members share this index.
+  unitIndex: number;
+  setNumber: number; // 1-based set within its module — the round number when grouped
+  moduleSetCount: number; // total prescribed sets in this module — the round count
+  // Superset overlay (ADR-0023). `supersetGroup` is the persisted group tag (null on
+  // a solo Prescription); `supersetLabel` is its display letter (A, B…) for the round
+  // badge. Both null when the set is not part of a Superset.
+  supersetGroup: string | null;
+  supersetLabel: string | null;
+  // Whether a rest countdown starts after this set. False between members within a
+  // round (a Superset rests only at the round boundary — ADR-0023), true for the
+  // last member of each round and for every solo set.
+  restsAfter: boolean;
+  // The plan rest to run after this set when `restsAfter` is true: the Superset's
+  // round-rest at a round boundary, or a solo Prescription's own rest. Null lets the
+  // caller fall back to its default. Irrelevant (null) when `restsAfter` is false.
+  restSeconds: number | null;
   prescribedReps: string;
   prescribedLoadText: string;
   // The previous performance to beat for this set, aligned by ordinal, or null
@@ -174,32 +194,125 @@ function previousReference(
   return { reps: previous.reps, loadText: formatLoad(previous.load) };
 }
 
-// Expand a Session's Exercise Prescriptions into a flat, position-ordered list of
-// individual set rows, each pre-filled from the raw Session read. The result is a
-// not-yet-started Live Session ready for START.
+// One countable step of a Session: a solo Exercise Prescription, or a contiguous
+// run of Prescriptions sharing a Superset tag (ADR-0023). Units are what the header
+// counts and what expansion order is decided per.
+interface SessionUnit {
+  group: string | null; // the shared Superset tag, or null for a solo Prescription
+  members: ExercisePrescription[];
+}
+
+// Partition a Session's Prescriptions into units: each solo Prescription is its own
+// unit, and a maximal contiguous run of Prescriptions with the same non-null
+// `superset_group` collapses into one Superset unit. Contiguity is the persisted
+// invariant (ADR-0023) the DEPLOY gate / generation degrade already enforce.
+function partitionUnits(
+  prescriptions: readonly ExercisePrescription[],
+): SessionUnit[] {
+  const units: SessionUnit[] = [];
+  for (const prescription of prescriptions) {
+    const group = prescription.superset_group ?? null;
+    const last = units[units.length - 1];
+    if (group !== null && last !== undefined && last.group === group) {
+      last.members.push(prescription);
+    } else {
+      units.push({ group, members: [prescription] });
+    }
+  }
+  return units;
+}
+
+// Build one expanded set row from an Exercise Prescription, carrying its unit index
+// and Superset overlay. `setNumber` is the set's ordinal within its member (the
+// round number when grouped); previous-performance still aligns by that ordinal, so
+// interleaving never disturbs it (ADR-0023).
+function buildLiveSet(
+  prescription: ExercisePrescription,
+  unitIndex: number,
+  setNumber: number,
+  supersetGroup: string | null,
+  supersetLabel: string | null,
+  restsAfter: boolean,
+  restSeconds: number | null,
+): LiveSet {
+  const load = prefillLoad(prescription.recommended_load);
+  return {
+    exerciseId: prescription.exercise_id,
+    exerciseName: prescription.exercise_name,
+    modulePosition: prescription.position,
+    unitIndex,
+    setNumber,
+    moduleSetCount: prescription.sets,
+    supersetGroup,
+    supersetLabel,
+    restsAfter,
+    restSeconds,
+    prescribedReps: prescription.reps,
+    prescribedLoadText: prescription.recommended_load?.text ?? NO_LOAD,
+    previous: previousReference(prescription.previous_performance, setNumber),
+    reps: prefillReps(prescription.reps),
+    loadKind: load.kind,
+    loadValue: load.value,
+    rpe: null,
+    status: "pending",
+  };
+}
+
+// Expand a Session's Exercise Prescriptions into a flat, ordered list of individual
+// set rows, each pre-filled from the raw Session read. Solo Prescriptions expand
+// module-major (all their sets in a row); a Superset expands round-major — one set
+// of each member per round (`A1, B1, A2, B2…`), resting only at the round boundary
+// (ADR-0023). The result is a not-yet-started Live Session ready for START.
 export function initLiveSession(session: WorkoutSession): LiveSessionState {
   const sets: LiveSet[] = [];
-  session.prescriptions.forEach((prescription, moduleIndex) => {
-    const load = prefillLoad(prescription.recommended_load);
-    for (let setNumber = 1; setNumber <= prescription.sets; setNumber += 1) {
-      sets.push({
-        exerciseId: prescription.exercise_id,
-        exerciseName: prescription.exercise_name,
-        modulePosition: prescription.position,
-        moduleIndex,
-        setNumber,
-        moduleSetCount: prescription.sets,
-        prescribedReps: prescription.reps,
-        prescribedLoadText: prescription.recommended_load?.text ?? NO_LOAD,
-        previous: previousReference(
-          prescription.previous_performance,
-          setNumber,
-        ),
-        reps: prefillReps(prescription.reps),
-        loadKind: load.kind,
-        loadValue: load.value,
-        rpe: null,
-        status: "pending",
+  let supersetOrdinal = 0;
+
+  partitionUnits(session.prescriptions).forEach((unit, unitIndex) => {
+    // A valid Superset is two or more members (ADR-0023); a lone tagged Prescription
+    // is treated as solo, so a degenerate group never shows a round badge or borrows
+    // the round-major path.
+    const isSuperset = unit.group !== null && unit.members.length >= 2;
+
+    if (!isSuperset) {
+      const [prescription] = unit.members;
+      for (let setNumber = 1; setNumber <= prescription.sets; setNumber += 1) {
+        sets.push(
+          buildLiveSet(
+            prescription,
+            unitIndex,
+            setNumber,
+            null,
+            null,
+            true,
+            prescription.rest_seconds ?? null,
+          ),
+        );
+      }
+      return;
+    }
+
+    const label = String.fromCharCode(65 + supersetOrdinal);
+    supersetOrdinal += 1;
+    // Members share a set count (equal counts are enforced — ADR-0023); `rounds`
+    // takes the max so a ragged group that slipped through still expands safely.
+    const rounds = Math.max(...unit.members.map((member) => member.sets));
+    const lastMemberIndex = unit.members.length - 1;
+
+    for (let round = 1; round <= rounds; round += 1) {
+      unit.members.forEach((member, memberIndex) => {
+        if (round > member.sets) return; // ragged tail — this member has no set here
+        const isRoundBoundary = memberIndex === lastMemberIndex;
+        sets.push(
+          buildLiveSet(
+            member,
+            unitIndex,
+            round,
+            unit.group,
+            label,
+            isRoundBoundary,
+            isRoundBoundary ? (member.round_rest_seconds ?? null) : null,
+          ),
+        );
       });
     }
   });
@@ -310,24 +423,47 @@ export function completionOutcome(state: LiveSessionState): CompletionOutcome {
   return anyUnattempted ? "incomplete" : "completed";
 }
 
-// The current module as a 1-based `x` of `y` total modules, for the header. `x`
-// tracks the current-set pointer and never exceeds `y`.
-export function currentModule(state: LiveSessionState): {
+// The current unit as a 1-based `x` of `y` total units, for the header. A Superset
+// counts as one unit alongside solo Prescriptions (ADR-0023), so its interleaved
+// members never inflate the count. `x` tracks the current-set pointer, never past `y`.
+export function currentUnit(state: LiveSessionState): {
   index: number;
   total: number;
 } {
-  const total = new Set(state.sets.map((set) => set.modulePosition)).size;
+  const total = new Set(state.sets.map((set) => set.unitIndex)).size;
   const set = currentSet(state);
-  return { index: set ? set.moduleIndex + 1 : 0, total };
+  return { index: set ? set.unitIndex + 1 : 0, total };
 }
 
-// A preview of the exercise the next module introduces — the first set whose
-// module comes after the current one. Null when the current module is the last.
-export function nextExercise(state: LiveSessionState): string | null {
+// The Superset context of the current set for the round badge (`SUPERSET A · ROUND
+// 2/3`): its display label and the current round of the total. Null when the current
+// set is a solo Prescription, so the header falls back to the plain unit indicator.
+export function currentSuperset(state: LiveSessionState): {
+  label: string;
+  round: number;
+  totalRounds: number;
+} | null {
   const set = currentSet(state);
-  if (!set) return null;
-  const upcoming = state.sets.find(
-    (candidate) => candidate.moduleIndex > set.moduleIndex,
-  );
-  return upcoming ? upcoming.exerciseName : null;
+  if (!set || set.supersetLabel === null) return null;
+  return {
+    label: set.supersetLabel,
+    round: set.setNumber,
+    totalRounds: set.moduleSetCount,
+  };
+}
+
+// A preview of the next exercise to come — the first upcoming set (in performed
+// order) whose Exercise differs from the current one. Inside a Superset this
+// naturally surfaces the co-member (the very next set is another Exercise); for a
+// solo module it previews the next module. Null when nothing different remains.
+export function nextExercise(state: LiveSessionState): string | null {
+  if (state.sets.length === 0) return null;
+  const index = Math.min(state.currentIndex, state.sets.length - 1);
+  const currentName = state.sets[index].exerciseName;
+  for (let ahead = index + 1; ahead < state.sets.length; ahead += 1) {
+    if (state.sets[ahead].exerciseName !== currentName) {
+      return state.sets[ahead].exerciseName;
+    }
+  }
+  return null;
 }

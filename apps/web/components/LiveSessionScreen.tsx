@@ -25,7 +25,8 @@ import {
   resolveLiveEntry,
   completionOutcome,
   progressPercent,
-  currentModule,
+  currentUnit,
+  currentSuperset,
   nextExercise,
   type LiveSet,
   type LiveSessionState,
@@ -213,19 +214,11 @@ export function LiveSessionScreen({
   }, [restEndAt, now]);
 
   const percent = progressPercent(state);
-  const module = currentModule(state);
+  const unit = currentUnit(state);
+  const superset = currentSuperset(state);
   const upcoming = nextExercise(state);
   const completedCount = state.sets.filter((s) => s.status === "completed").length;
   const elapsed = formatElapsed(elapsedSeconds(state.startedAt, now));
-
-  // The prescription's own rest for the set at `index`, or null when it names none
-  // (resolveRestSeconds then supplies the fallback). Looked up from the raw Session
-  // by module position, keeping rest out of the record-building engine entirely.
-  function restSecondsForSet(index: number): number | null {
-    const position = state.sets[index]?.modulePosition;
-    const prescription = session.prescriptions.find((p) => p.position === position);
-    return prescription?.rest_seconds ?? null;
-  }
 
   function handleCompleteSet(
     index: number,
@@ -235,6 +228,7 @@ export function LiveSessionScreen({
     rpe: number | null,
   ) {
     const completedAt = Date.now();
+    const set = state.sets[index];
     dispatch({
       type: "COMPLETE_SET",
       index,
@@ -244,16 +238,16 @@ export function LiveSessionScreen({
       rpe,
       now: completedAt,
     });
-    // Auto-start a rest countdown, but only while sets remain — rest is *between*
-    // sets, so completing the final set goes straight to finishing.
+    // Auto-start a rest countdown, but only while sets remain and this set actually
+    // rests after it. A Superset rests only at the round boundary (ADR-0023), so a
+    // set in the middle of a round (`restsAfter` false) flows straight to its
+    // co-member; the engine also carries the rest to use (round-rest vs the module's
+    // own), with the user's default taking precedence.
     const morePending = state.sets.some(
       (s, i) => i !== index && s.status === "pending",
     );
-    if (morePending) {
-      const rest = resolveRestSeconds(
-        restSecondsForSet(index),
-        defaultRestSeconds,
-      );
+    if (morePending && set.restsAfter) {
+      const rest = resolveRestSeconds(set.restSeconds, defaultRestSeconds);
       setRestEndAt(restTargetEnd(completedAt, rest));
     }
   }
@@ -334,7 +328,9 @@ export function LiveSessionScreen({
         title={<span className="capitalize">{session.training_type}</span>}
         action={
           <Badge variant="cyan">
-            MODULE {module.index}/{module.total}
+            {superset
+              ? `SUPERSET ${superset.label} · ROUND ${superset.round}/${superset.totalRounds}`
+              : `MODULE ${unit.index}/${unit.total}`}
           </Badge>
         }
       />
