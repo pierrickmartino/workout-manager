@@ -103,6 +103,20 @@ test("resolveRestSeconds falls back to the constant when neither default nor pre
   assert.equal(resolveRestSeconds(null, null), DEFAULT_REST_SECONDS);
 });
 
+test("resolveRestSeconds prefers an explicit Superset round-rest over the global default (ADR-0023)", () => {
+  // A Superset's round-rest is deliberate — "the Superset owns its round-rest" — so
+  // the user's global default must NOT override it. With preferExplicit set, the
+  // explicit round-rest wins even when a global default is present.
+  assert.equal(resolveRestSeconds(120, 60, true), 120);
+});
+
+test("resolveRestSeconds with preferExplicit still falls back to the global default when no round-rest is set", () => {
+  // A Superset with no round-rest set falls back to the global default → constant,
+  // exactly as a solo set would.
+  assert.equal(resolveRestSeconds(null, 60, true), 60);
+  assert.equal(resolveRestSeconds(null, null, true), DEFAULT_REST_SECONDS);
+});
+
 test("restTargetEnd is the wall-clock instant the rest elapses", () => {
   // Arrange — a 90 s rest started at a known instant
   const now = 1_000_000;

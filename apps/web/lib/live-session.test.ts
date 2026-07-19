@@ -7,6 +7,7 @@ import {
   progressPercent,
   currentUnit,
   nextExercise,
+  restCue,
   completionOutcome,
 } from "./live-session.ts";
 import type { LiveSessionState } from "./live-session.ts";
@@ -255,6 +256,29 @@ function complete(state: LiveSessionState, index: number): LiveSessionState {
     rpe: 7,
   });
 }
+
+test("restCue names the on-deck solo set the pointer sits on, with a set indicator and no round badge", () => {
+  // Arrange — complete Back Squat set 1; the pointer advances to set 2 of 3, the
+  // set the user will perform when the rest ends.
+  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  state = complete(state, 0);
+
+  // Act / Assert — the rest cue describes that on-deck set: exercise, its set N/M,
+  // and no Superset label (a solo Prescription).
+  assert.deepEqual(restCue(state), {
+    exerciseName: "Back Squat",
+    setNumber: 2,
+    setCount: 3,
+    supersetLabel: null,
+  });
+});
+
+test("restCue is null for a Session with no prescribed sets", () => {
+  // An empty Session has no on-deck set to cue.
+  const empty: WorkoutSession = { ...SESSION, prescriptions: [] };
+  const state = liveSessionReducer(initLiveSession(empty), { type: "START" });
+  assert.equal(restCue(state), null);
+});
 
 test("progressPercent is attempted sets over total prescribed sets", () => {
   // Arrange — 5 prescribed sets total

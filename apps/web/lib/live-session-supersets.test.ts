@@ -7,6 +7,7 @@ import {
   currentUnit,
   currentSuperset,
   nextExercise,
+  restCue,
   completionOutcome,
   progressPercent,
   type LiveSessionState,
@@ -192,6 +193,42 @@ test("nextExercise previews the co-member while on a Superset member", () => {
 
   // Act / Assert — the preview naturally surfaces the co-member (no special-casing)
   assert.equal(nextExercise(state), "Barbell Row");
+});
+
+test("restCue names the on-deck member at a round boundary, not the exercise after it", () => {
+  // Arrange — complete Bench(A round 1) then Barbell Row(B round 1): the round-1
+  // boundary, where the round-rest fires. The pointer has advanced to Bench round 2 —
+  // what the user will perform when the rest ends.
+  let state = liveSessionReducer(initLiveSession(GROUPED), { type: "START" });
+  state = complete(state, 0);
+  state = complete(state, 1);
+
+  // Act / Assert — the rest cue honestly names the on-deck member (Bench, round 2/3)
+  // with its Superset label, NOT the co-member the forward look-ahead surfaces.
+  assert.deepEqual(restCue(state), {
+    exerciseName: "Bench Press",
+    setNumber: 2,
+    setCount: 3,
+    supersetLabel: "A",
+  });
+  // The two "next"s diverge here: the look-ahead names the exercise *after* the
+  // on-deck one, which is exactly why the rest card must read the on-deck set.
+  assert.equal(nextExercise(state), "Barbell Row");
+});
+
+test("restCue drops the round badge once the pointer reaches the solo Prescription", () => {
+  // Arrange — work through the whole Superset and the first solo Plank set; the
+  // pointer now sits on Plank set 2 of 2.
+  let state = liveSessionReducer(initLiveSession(GROUPED), { type: "START" });
+  for (const index of [0, 1, 2, 3, 4, 5, 6]) state = complete(state, index);
+
+  // Act / Assert — a solo on-deck set shows a set indicator and no Superset label
+  assert.deepEqual(restCue(state), {
+    exerciseName: "Plank",
+    setNumber: 2,
+    setCount: 2,
+    supersetLabel: null,
+  });
 });
 
 test("previous-performance stays aligned per member by set ordinal despite interleaving", () => {

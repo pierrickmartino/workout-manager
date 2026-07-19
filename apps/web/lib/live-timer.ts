@@ -19,10 +19,20 @@ export const REST_ADJUST_STEP_SECONDS = 15;
 // Fitness Profile default (issue #121) takes precedence when set — a global rest
 // preference — falling back to the prescription's own `rest_seconds`, and finally
 // to the named constant when neither is set (so existing users are unaffected).
+//
+// `preferExplicit` flips that precedence for a Superset round boundary (ADR-0023):
+// "the Superset owns its round-rest", so an explicit `round_rest_seconds` wins over
+// the global default and is honoured as-is — the global default (then the constant)
+// only fills in when the Superset carries no round-rest. This keeps the global
+// preference from silently shortening a Superset's deliberate rest — the intensity-
+// raising direction the ADR's safety posture guards against — or lengthening it and
+// defeating the Superset's purpose.
 export function resolveRestSeconds(
   restSeconds: number | null,
   defaultRestSeconds: number | null = null,
+  preferExplicit = false,
 ): number {
+  if (preferExplicit && restSeconds !== null) return restSeconds;
   return defaultRestSeconds ?? restSeconds ?? DEFAULT_REST_SECONDS;
 }
 

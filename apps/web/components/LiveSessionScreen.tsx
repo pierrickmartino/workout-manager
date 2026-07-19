@@ -28,6 +28,7 @@ import {
   currentUnit,
   currentSuperset,
   nextExercise,
+  restCue,
   type LiveSet,
   type LiveSessionState,
 } from "@/lib/live-session";
@@ -216,7 +217,13 @@ export function LiveSessionScreen({
   const percent = progressPercent(state);
   const unit = currentUnit(state);
   const superset = currentSuperset(state);
-  const upcoming = nextExercise(state);
+  // The on-deck set — what the user performs when the rest ends. The rest card cues
+  // it directly, and the persistent "Next up" line mirrors it *while resting* so the
+  // two never disagree at a Superset round boundary (where the forward look-ahead
+  // names the exercise after the on-deck one). When not resting, "Next up" keeps its
+  // forward look-ahead, preserving the useful mid-round "co-member is next" cue.
+  const cue = restCue(state);
+  const upcoming = isResting ? (cue?.exerciseName ?? null) : nextExercise(state);
   const completedCount = state.sets.filter((s) => s.status === "completed").length;
   const elapsed = formatElapsed(elapsedSeconds(state.startedAt, now));
 
@@ -247,7 +254,14 @@ export function LiveSessionScreen({
       (s, i) => i !== index && s.status === "pending",
     );
     if (morePending && set.restsAfter) {
-      const rest = resolveRestSeconds(set.restSeconds, defaultRestSeconds);
+      // A round boundary carries the Superset's own round-rest, which wins over the
+      // global default (ADR-0023 — "the Superset owns its round-rest"); a solo set
+      // still lets the user's global default take precedence.
+      const rest = resolveRestSeconds(
+        set.restSeconds,
+        defaultRestSeconds,
+        set.supersetGroup !== null,
+      );
       setRestEndAt(restTargetEnd(completedAt, rest));
     }
   }
@@ -383,6 +397,21 @@ export function LiveSessionScreen({
               {formatElapsed(restRemaining)}
             </span>
           </div>
+          {cue ? (
+            <p
+              className="font-mono text-[12px] text-text-secondary"
+              aria-label="Up next"
+            >
+              Up next:{" "}
+              <span className="text-text-primary">{cue.exerciseName}</span>
+              <span className="text-text-muted">
+                {" · "}
+                {cue.supersetLabel
+                  ? `superset ${cue.supersetLabel} · round ${cue.setNumber}/${cue.setCount}`
+                  : `set ${cue.setNumber}/${cue.setCount}`}
+              </span>
+            </p>
+          ) : null}
           <div className="grid grid-cols-3 gap-2.5">
             <Button
               type="button"
