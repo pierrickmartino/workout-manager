@@ -1,8 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { queueView, weekStrip, QUEUE_CAP } from "./home-view.ts";
+import { operatorStatus, queueView, weekStrip, QUEUE_CAP } from "./home-view.ts";
 import type { WeekStrip } from "./home-view.ts";
+import type { Gamification } from "./home-types.ts";
 import type { ProtocolProgress, ProtocolSession } from "./protocols-types.ts";
 import type { ExercisePrescription } from "./sessions-types.ts";
 
@@ -402,4 +403,58 @@ test("returns no queue when the Protocol has no Next Session", () => {
 
   // Act & Assert
   assert.equal(queueView(protocol), null);
+});
+
+// Build a gamification block with a given streak; the Level/XP figures are
+// harmless placeholders the transform passes straight through to the LevelBadge.
+function makeGamification(streak: number): Gamification {
+  return {
+    xp: 760,
+    level: {
+      level: 12,
+      xp_into_level: 360,
+      xp_span_of_level: 900,
+      xp_to_next: 540,
+    },
+    streak,
+  };
+}
+
+test("operator status passes XP and Level straight through for the LevelBadge", () => {
+  // Arrange
+  const gamification = makeGamification(3);
+
+  // Act
+  const status = operatorStatus(gamification);
+
+  // Assert: the Level/XP figures are the LevelBadge's inputs, untouched.
+  assert.equal(status.xp, 760);
+  assert.deepEqual(status.level, gamification.level);
+  assert.equal(status.streak, 3);
+});
+
+test("operator status labels the streak explicitly weekly", () => {
+  // Arrange & Act
+  const status = operatorStatus(makeGamification(3));
+
+  // Assert: an explicitly-weekly label — no daily / don't-break-the-chain framing.
+  assert.equal(status.streakLabel, "3 WK STREAK");
+});
+
+test("operator status renders a zero-week streak for a brand-new user", () => {
+  // Arrange: a fresh account with no logs — Level 1, empty bar, no streak.
+  const gamification: Gamification = {
+    xp: 0,
+    level: { level: 1, xp_into_level: 0, xp_span_of_level: 400, xp_to_next: 400 },
+    streak: 0,
+  };
+
+  // Act
+  const status = operatorStatus(gamification);
+
+  // Assert: a rendered zero state, never blank or broken.
+  assert.equal(status.xp, 0);
+  assert.equal(status.level.level, 1);
+  assert.equal(status.streak, 0);
+  assert.equal(status.streakLabel, "0 WK STREAK");
 });

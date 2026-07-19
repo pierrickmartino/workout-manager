@@ -15,6 +15,7 @@ import {
   type Profile,
 } from "@/lib/profile";
 import { READINESS_BADGE, fetchHome } from "@/lib/home";
+import { operatorStatus } from "@/lib/home-view";
 import { Alert } from "@/components/pulse/alert";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -22,6 +23,8 @@ import { SessionHero } from "@/components/pulse/session-hero";
 import { ResumeSessionBanner } from "@/components/pulse/resume-session-banner";
 import { WeekCycleStrip } from "@/components/pulse/week-cycle-strip";
 import { QueueList } from "@/components/pulse/queue-list";
+import { LevelBadge } from "@/components/pulse/level-badge";
+import { Bento, BentoTile } from "@/components/pulse/bento";
 import { NavRow } from "@/components/pulse/nav-row";
 import { DataList } from "@/components/pulse/data-list";
 import { Card } from "@/components/ui/card";
@@ -67,6 +70,7 @@ export default async function DashboardPage() {
   const greeting = profile.display_name ?? "operator";
   const readiness = READINESS_BADGE[homeEnvelope.data.readiness];
   const currentProtocol = homeEnvelope.data.current_protocol;
+  const status = operatorStatus(homeEnvelope.data.gamification);
 
   return (
     <section className="flex flex-col gap-7">
@@ -95,6 +99,24 @@ export default async function DashboardPage() {
       ) : (
         <GenerateTrainingCta />
       )}
+
+      {/* Operator status: the account's Level / XP and weekly Streak, projected
+          read-time from Logged Sessions (ADR-0018/0019). Deliberately OUTSIDE the
+          Current-Protocol conditional so it renders in both the active and empty
+          states, and drawn from the same read model as Profile so the two agree
+          (issue #166). */}
+      <div className="flex flex-col gap-4">
+        <SectionHeader>OPERATOR STATUS</SectionHeader>
+        <LevelBadge xp={status.xp} level={status.level} />
+        <Bento>
+          <BentoTile
+            label="STREAK"
+            value={status.streak}
+            caption={status.streak === 1 ? "WEEK" : "WEEKS"}
+            span="full"
+          />
+        </Bento>
+      </div>
 
       {/* Records & profile navigation. */}
       <div className="flex flex-col gap-4">
