@@ -5,7 +5,7 @@ import {
   initLiveSession,
   liveSessionReducer,
   progressPercent,
-  currentModule,
+  currentUnit,
   nextExercise,
   completionOutcome,
 } from "./live-session.ts";
@@ -281,27 +281,27 @@ test("progressPercent reaches 100 only when every prescribed set is attempted", 
   assert.equal(progressPercent(state), 100);
 });
 
-test("currentModule reports the current module as x of y", () => {
-  // Arrange — pointer starts on module 1 of 2
+test("currentUnit reports the current unit as x of y (each solo module is one unit)", () => {
+  // Arrange — pointer starts on unit 1 of 2 (two solo modules, so unit == module)
   let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
-  assert.deepEqual(currentModule(state), { index: 1, total: 2 });
+  assert.deepEqual(currentUnit(state), { index: 1, total: 2 });
 
   // Act — finish the squat module (its three sets)
   state = complete(state, 0);
   state = complete(state, 1);
   state = complete(state, 2);
 
-  // Assert — now on module 2 of 2
-  assert.deepEqual(currentModule(state), { index: 2, total: 2 });
+  // Assert — now on unit 2 of 2
+  assert.deepEqual(currentUnit(state), { index: 2, total: 2 });
 });
 
-test("currentModule stays on the last module once all sets are done", () => {
+test("currentUnit stays on the last unit once all sets are done", () => {
   // Arrange / Act — everything complete, pointer parked past the end
   let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
   for (const index of [0, 1, 2, 3, 4]) state = complete(state, index);
 
-  // Assert — clamped to the final module, never y+1
-  assert.deepEqual(currentModule(state), { index: 2, total: 2 });
+  // Assert — clamped to the final unit, never y+1
+  assert.deepEqual(currentUnit(state), { index: 2, total: 2 });
 });
 
 test("completionOutcome is 'completed' only when every prescribed set is attempted", () => {
