@@ -119,7 +119,7 @@ never a dated schedule. Recording the fork protects the invariant from drift.
 
 ## 4. Progress, Analytics & Strength Intelligence
 
-### Strength Intelligence Dashboard
+### Strength Intelligence Dashboard — Shipped
 Users in 2026 want "more than sets and reps" — estimated strength, volume,
 muscle-level progress, and trends over time. We already compute Estimated 1RM,
 Top Set, Personal Records, Muscle Group roll-ups, and volume — the domain is
@@ -128,6 +128,30 @@ fans these out: a per-Exercise strength trajectory (Top Set trend), Muscle Group
 balance over time, and PR history, all read-time from Logged Sets. No new
 computation, only presentation — honoring the "only absolute-Load sets in a
 trustworthy rep range" rule so the numbers never lie.
+
+**Delivered.** Shipped as a dedicated **Strength Analytics** screen at
+`/analytics/strength`, linked from `/analytics` (**ADR-0024**), read-time over
+Logged Sets with no LLM and no stored ledger. It fans out three sections: (1) a
+per-Exercise strength trajectory rendered as **ranked small-multiples** — the top
+~5–6 qualifying Exercises by recent frequency, each a mini Top-Set trend that taps
+through to the canonical single-story chart on `/exercises/[id]` rather than
+re-rendering it here (avoiding the "competing bests" problem ADR-0017 killed); (2)
+**Muscle Group balance over time** — deliberately the *one* exception to
+"presentation only", a new pure `muscle_groups` weekly-composition series (with
+tests) bucketed on **weeks** to reuse the Streak's self-paced cadence (ADR-0001),
+descriptive-only and never flagging an under-trained bucket; and (3) the full
+all-time, all-Exercise **flat reverse-chronological PR timeline** (reusing
+`detect_personal_records` verbatim), with the `/analytics` Recent Records feed
+re-cast as a teaser that links in (**amends ADR-0011**). The strength lens is
+**gated**: the nav entry appears only for users with qualifying absolute-Load
+history in the trustworthy 1–12-rep window, with honest per-section hides and a
+single teaching empty state — never a wall of zeros — for the partial or
+non-strength case (ADR-0017 / ADR-0018/0019). Named **"Strength Analytics"**, not
+"Strength Intelligence Dashboard": "Intelligence" would falsely imply an AI judging
+the user's strength when every figure is a deterministic projection, so the honest
+name won (a UI/naming call — `CONTEXT.md` unchanged). Domain logic lives in pure
+`logbook/strength_analytics`, `logbook/top_sets`, and `domain/muscle_groups`
+functions with co-located view-models and tests.
 
 ### Data Export & Portability
 A recurring user demand and a trust signal: let users export their own record
