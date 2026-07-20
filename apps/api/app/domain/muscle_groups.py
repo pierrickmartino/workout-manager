@@ -67,6 +67,13 @@ GROUP_ORDER: tuple[MuscleGroup, ...] = (
     MuscleGroup.UNCLASSIFIED,
 )
 
+# The six **real** Muscle Groups a user actually trains, in canonical body order —
+# GROUP_ORDER without the Unclassified leftovers bucket. The fixed roster the Muscle
+# Group Coverage read reports on: Unclassified is never a coverage target (ADR-0025).
+REAL_GROUPS: tuple[MuscleGroup, ...] = tuple(
+    group for group in GROUP_ORDER if group is not MuscleGroup.UNCLASSIFIED
+)
+
 # Curated map from a normalized free-form muscle to its Muscle Group. Kept as data
 # (not heuristics) so the roll-up is auditable and deterministic. Common synonyms
 # and the plural/singular the catalog tends to emit are listed explicitly; anything
@@ -312,13 +319,62 @@ def weekly_distribution(
     return series
 
 
+@dataclass(frozen=True)
+class GroupCoverage:
+    """One real Muscle Group's presence over the recent coverage window.
+
+    ``covered`` is ``True`` iff the group was trained at least once inside the window —
+    presence, not a threshold or a proportion. Frozen and value-typed, mirroring
+    :class:`WeeklyComposition`'s discipline, so the coverage read stays immutable and the
+    six rows carry the group alongside its state rather than a bare bool the caller must
+    re-pair with a label.
+    """
+
+    group: MuscleGroup
+    covered: bool
+
+
+def recent_coverage(
+    history: Iterable[_DatedLoggedSession],
+    *,
+    reference: date,
+    weeks: int,
+) -> tuple[GroupCoverage, ...]:
+    """Report each of the six real Muscle Groups trained / not-trained over the window.
+
+    The window is the ``weeks`` consecutive weeks ending at ``reference``'s week, bucketed
+    by Monday exactly as :func:`weekly_distribution` — so an absent group is precisely one
+    with no segment in any of the drift chart's bars (ADR-0025). A group counts as *covered*
+    when at least one in-window Logged Set rolls a muscle into it via :func:`covered_groups`;
+    presence, never a threshold. Every one of :data:`REAL_GROUPS` is returned in canonical
+    order (Unclassified is never a coverage target); a group trained only outside the window
+    reads not-trained, and an empty or wholly out-of-window history reads six not-trained
+    rows — the caller decides how to present that honest "nothing recent" state.
+    """
+
+    this_week = week_start(reference)
+    earliest = this_week - (weeks - 1) * _WEEK if weeks > 0 else this_week + _WEEK
+    in_window = [
+        session
+        for session in history
+        if earliest <= week_start(session.performed_on) <= this_week
+    ]
+    covered = covered_groups(in_window)
+    return tuple(
+        GroupCoverage(group=group, covered=group in covered) for group in REAL_GROUPS
+    )
+
+
 __all__ = [
     "MuscleGroup",
     "GROUP_ORDER",
+    "REAL_GROUPS",
     "MUSCLE_BALANCE_WEEKS",
     "WeeklyComposition",
+    "GroupCoverage",
     "classify",
     "covered_groups",
     "distribution",
+    "recent_coverage",
     "weekly_distribution",
 ]

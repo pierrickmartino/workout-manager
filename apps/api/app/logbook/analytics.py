@@ -29,7 +29,12 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from enum import Enum
 
-from app.domain.muscle_groups import distribution
+from app.domain.muscle_groups import (
+    MUSCLE_BALANCE_WEEKS,
+    GroupCoverage,
+    distribution,
+    recent_coverage,
+)
 from app.domain.personal_records import PersonalRecord, detect_personal_records
 from app.domain.volume import VolumePoint, VolumeSet, volume_series
 from app.logbook.records import set_records
@@ -77,6 +82,11 @@ class AnalyticsOverview:
     caption behind "from N% of your logged volume". ``volume_delta`` is the window's
     total volume against the immediately preceding equal-length window, or ``None`` when
     there is no prior volume to compare against.
+
+    ``coverage`` is the neutral Muscle Group Coverage signal (ADR-0025): each of the six
+    real Muscle Groups read trained / not-trained over a **fixed 8-week window that does
+    not follow ``range``** — coverage reads its own recent slice so a well-rotated user is
+    never rebuked at the 7-day scale. Always all six groups in canonical order, ungated.
     """
 
     range: str
@@ -89,6 +99,7 @@ class AnalyticsOverview:
     volume_points: tuple[VolumePoint, ...]
     volume_coverage: float
     volume_delta: float | None
+    coverage: tuple[GroupCoverage, ...]
 
 
 def analytics_overview(
@@ -156,6 +167,11 @@ def analytics_overview(
         volume_points=series.points,
         volume_coverage=series.coverage_pct,
         volume_delta=series.delta_pct,
+        # Coverage reads its own fixed 8-week slice of the full history — deliberately the
+        # range-independent window (ADR-0025), not the range-scoped ``in_window`` set.
+        coverage=recent_coverage(
+            history, reference=today, weeks=MUSCLE_BALANCE_WEEKS
+        ),
     )
 
 

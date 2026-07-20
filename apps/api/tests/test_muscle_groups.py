@@ -18,10 +18,13 @@ from datetime import date
 import pytest
 
 from app.domain.muscle_groups import (
+    GROUP_ORDER,
+    GroupCoverage,
     MuscleGroup,
     classify,
     covered_groups,
     distribution,
+    recent_coverage,
     weekly_distribution,
 )
 
@@ -371,3 +374,101 @@ def test_covered_groups_collapses_muscles_that_share_a_group():
 
     # Act / Assert — the shared group appears once; the unmapped muscle contributes nothing
     assert covered_groups(history) == {MuscleGroup.LEGS}
+
+
+# ``recent_coverage`` — the neutral windowed presence signal (issue #188 / ADR-0025):
+# each of the six real Muscle Groups reported trained / not-trained over the last
+# ``weeks`` weeks relative to a reference date. Presence, not a threshold: one in-window
+# set covers a group; work outside the window does not. Built on ``covered_groups`` so it
+# can never disagree with the Full Coverage Achievement on what "covered" means.
+
+# The six real groups in canonical order — the shape ``recent_coverage`` always returns,
+# Unclassified never among them.
+_REAL_GROUPS = tuple(g for g in GROUP_ORDER if g is not MuscleGroup.UNCLASSIFIED)
+
+
+def _covered_map(coverage: tuple[GroupCoverage, ...]) -> dict[MuscleGroup, bool]:
+    return {row.group: row.covered for row in coverage}
+
+
+def test_recent_coverage_reports_each_real_group_trained_or_not_over_the_window():
+    # Arrange — Legs trained inside the 8-week window; nothing else
+    history = [_DatedSession(_TODAY, [_LoggedSet(["quadriceps"])])]
+
+    # Act
+    coverage = recent_coverage(history, reference=_TODAY, weeks=8)
+
+    # Assert — Legs reads trained, the other five real groups read not-trained
+    assert _covered_map(coverage) == {
+        MuscleGroup.LEGS: True,
+        MuscleGroup.CHEST: False,
+        MuscleGroup.BACK: False,
+        MuscleGroup.SHOULDERS: False,
+        MuscleGroup.ARMS: False,
+        MuscleGroup.CORE: False,
+    }
+
+
+def test_recent_coverage_a_group_trained_only_outside_the_window_reads_not_trained():
+    # Arrange — _TODAY's week opens Mon 2026-07-06; an 8-week window reaches back to the
+    # week of Mon 2026-05-18. Chest was last trained a day before that window opens.
+    history = [_DatedSession(date(2026, 5, 17), [_LoggedSet(["chest"])])]
+
+    # Act
+    coverage = recent_coverage(history, reference=_TODAY, weeks=8)
+
+    # Assert — the out-of-window Chest work does not count; nothing reads trained
+    assert not any(row.covered for row in coverage)
+
+
+def test_recent_coverage_the_earliest_week_in_the_window_still_counts():
+    # Arrange — trained on the Monday the 8-week window opens (Mon 2026-05-18): the window
+    # is inclusive of its eighth week back, matching the drift chart's oldest bar.
+    history = [_DatedSession(date(2026, 5, 18), [_LoggedSet(["chest"])])]
+
+    # Act
+    coverage = recent_coverage(history, reference=_TODAY, weeks=8)
+
+    # Assert — Chest, trained in the boundary week, reads trained
+    assert _covered_map(coverage)[MuscleGroup.CHEST] is True
+
+
+def test_recent_coverage_a_single_in_window_set_covers_a_group():
+    # Arrange — one lone Core set inside the window: presence, not a threshold
+    history = [_DatedSession(_TODAY, [_LoggedSet(["abs"])])]
+
+    # Act / Assert — a single set is enough to read Core as trained
+    coverage = recent_coverage(history, reference=_TODAY, weeks=8)
+    assert _covered_map(coverage)[MuscleGroup.CORE] is True
+
+
+def test_recent_coverage_always_returns_the_six_real_groups_in_canonical_order():
+    # Arrange — a history training a mix; the shape must be all six real groups, ordered,
+    # Unclassified never among them, regardless of what was trained
+    history = [_DatedSession(_TODAY, [_LoggedSet(["quadriceps"]), _LoggedSet(["chest"])])]
+
+    # Act
+    coverage = recent_coverage(history, reference=_TODAY, weeks=8)
+
+    # Assert — exactly REAL_GROUPS, in canonical body order, no Unclassified
+    assert tuple(row.group for row in coverage) == _REAL_GROUPS
+    assert MuscleGroup.UNCLASSIFIED not in {row.group for row in coverage}
+
+
+def test_recent_coverage_of_an_empty_history_reads_six_not_trained_rows():
+    # Arrange / Act — no history at all
+    coverage = recent_coverage([], reference=_TODAY, weeks=8)
+
+    # Assert — still the six real groups, every one not-trained (never dropped to zero rows)
+    assert tuple(row.group for row in coverage) == _REAL_GROUPS
+    assert all(row.covered is False for row in coverage)
+
+
+def test_recent_coverage_ignores_unmapped_in_window_work():
+    # Arrange — in-window training that rolls up only to Unclassified: it covers no real
+    # group, so all six read not-trained (the Unclassified footnote is a separate slice)
+    history = [_DatedSession(_TODAY, [_LoggedSet(["unobtainium"]), _LoggedSet([])])]
+
+    # Act / Assert
+    coverage = recent_coverage(history, reference=_TODAY, weeks=8)
+    assert all(row.covered is False for row in coverage)

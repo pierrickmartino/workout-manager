@@ -19,7 +19,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query
 
 from app.auth.dependencies import get_current_user
-from app.domain.muscle_groups import WeeklyComposition
+from app.domain.muscle_groups import MUSCLE_BALANCE_WEEKS, WeeklyComposition
 from app.domain.personal_records import PersonalRecord
 from app.envelope import success_envelope
 from app.logbook.analytics import AnalyticsOverview, AnalyticsRange, analytics_overview
@@ -66,6 +66,15 @@ def _serialize(overview: AnalyticsOverview) -> dict:
             ],
             "coverage": overview.volume_coverage,
             "delta": overview.volume_delta,
+        },
+        # Muscle Group Coverage (ADR-0025): the six real groups each trained / not-trained
+        # over the labeled, range-independent 8-week window, in canonical order.
+        "coverage": {
+            "weeks": MUSCLE_BALANCE_WEEKS,
+            "groups": [
+                {"group": row.group.value, "covered": row.covered}
+                for row in overview.coverage
+            ],
         },
     }
 

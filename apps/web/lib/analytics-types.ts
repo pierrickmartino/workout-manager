@@ -52,6 +52,24 @@ export interface VolumeSeries {
   delta: number | null;
 }
 
+// One real Muscle Group's recent presence (issue #188 / ADR-0025): the display `group`
+// label (Legs / Chest / Back / Shoulders / Arms / Core — never Unclassified) and whether
+// it was `covered` — trained at least once — in the coverage window. Presence, not a
+// proportion: it names what has and hasn't appeared, it never flags or ranks.
+export interface GroupCoverage {
+  group: string;
+  covered: boolean;
+}
+
+// The Muscle Group Coverage signal for the Analytics screen (issue #188 / ADR-0025): the
+// six real groups each trained / not-trained over a fixed `weeks`-week window that is
+// **independent of the range toggle**, in canonical order. Always all six groups, ungated
+// and type-neutral — a pure yoga/mobility history reads the same shape as a barbell one.
+export interface RecentCoverage {
+  weeks: number;
+  groups: GroupCoverage[];
+}
+
 // The honest read model for one range window (F3 Slice 1–5): sessions, active days,
 // total sets, and the set-count muscle distribution drawn straight from the record
 // side, the last 8 Personal Records all-time (`recent_records`, decoupled from the
@@ -68,4 +86,5 @@ export interface AnalyticsOverview {
   recent_records: PersonalRecordEntry[];
   new_prs: number;
   volume: VolumeSeries;
+  coverage: RecentCoverage;
 }
