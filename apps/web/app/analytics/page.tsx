@@ -15,8 +15,10 @@ import { Bento, BentoTile } from "@/components/pulse/bento";
 import { Alert } from "@/components/pulse/alert";
 import { VolumeChart } from "@/components/pulse/volume-chart";
 import { MuscleSplit } from "@/components/pulse/muscle-split";
+import { MuscleCoverage } from "@/components/analytics/muscle-coverage";
 import { Card } from "@/components/ui/card";
 import { toMuscleBars, type MuscleBar } from "@/lib/muscle-distribution";
+import { toCoverageView } from "@/lib/muscle-coverage-view";
 import {
   toRecordRows,
   toRecentRecordsTeaser,
@@ -59,6 +61,7 @@ export default async function AnalyticsPage({
   const overview = envelope.data;
   const hasHistory = overview.sessions > 0;
   const muscleBars = toMuscleBars(overview.muscle_distribution);
+  const coverageView = toCoverageView(overview.coverage);
   const recordRows = toRecordRows(overview.recent_records);
   // The Strength Analytics screen is offered only to a user with qualifying strength
   // history — the same condition the strength read model gates on
@@ -101,6 +104,11 @@ export default async function AnalyticsPage({
           </Link>
         </Card>
       )}
+
+      {/* Muscle Group Coverage (ADR-0025): ungated and type-neutral, beside the Muscle
+          Split — presence next to proportion. Rendered for every user, including a pure
+          yoga/mobility/bodyweight history, over its own fixed 8-week window. */}
+      <MuscleCoverage view={coverageView} />
 
       {recordRows.length > 0 ? (
         <RecentRecords rows={recordRows} teaser={recordsTeaser} />

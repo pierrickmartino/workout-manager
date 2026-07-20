@@ -15,7 +15,7 @@ from datetime import date, timedelta
 
 from app.domain.exercise import Provenance
 from app.domain.load import LoadKind, ParsedLoad
-from app.domain.muscle_groups import MuscleGroup
+from app.domain.muscle_groups import GROUP_ORDER, MuscleGroup
 from app.logbook.analytics import AnalyticsRange, analytics_overview
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.logged_session_repository import (
@@ -552,3 +552,52 @@ def test_overview_excludes_bodyweight_when_body_weight_is_unrecorded():
         (TODAY, 500.0)
     ]
     assert overview.volume_coverage == 50.0
+
+
+def _covered_groups(overview) -> set[MuscleGroup]:
+    """The set of real Muscle Groups the overview's coverage reads as trained."""
+
+    return {MuscleGroup(row.group) for row in overview.coverage if row.covered}
+
+
+def test_overview_coverage_is_a_fixed_eight_week_window_independent_of_the_range():
+    # Arrange — Legs trained 40 days ago: outside the 7d/30d ranges, but well inside the
+    # fixed 8-week (56-day) coverage window. Coverage must not follow the range toggle.
+    _, sessions, logged = _build()
+    _log(
+        sessions,
+        logged,
+        "user_cov",
+        TODAY - timedelta(days=40),
+        [LoggedSetDraft(exercise_id=SQUAT, reps=5)],
+    )
+
+    # Act — the same history read under all three ranges
+    overviews = [
+        analytics_overview("user_cov", window, logged=logged, today=TODAY)
+        for window in AnalyticsRange
+    ]
+
+    # Assert — every range reports the identical coverage, and Legs reads trained even
+    # though the 7d/30d counts exclude that session entirely
+    coverages = {tuple(o.coverage) for o in overviews}
+    assert len(coverages) == 1
+    for overview in overviews:
+        assert _covered_groups(overview) == {MuscleGroup.LEGS}
+
+
+def test_overview_coverage_reports_all_six_real_groups_ungated():
+    # Arrange — a user who has logged nothing still gets the full six-row coverage shape,
+    # every group not-trained, so the ungated section can always render.
+    _, _, logged = _build()
+
+    # Act
+    overview = analytics_overview(
+        "user_nocov", AnalyticsRange.SEVEN_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — six real groups in canonical order, all not-trained
+    assert tuple(MuscleGroup(row.group) for row in overview.coverage) == tuple(
+        group for group in GROUP_ORDER if group is not MuscleGroup.UNCLASSIFIED
+    )
+    assert all(row.covered is False for row in overview.coverage)

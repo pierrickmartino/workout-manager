@@ -133,6 +133,30 @@ def test_analytics_serializes_the_muscle_distribution():
     assert data["muscle_distribution"] == [{"group": "Legs", "pct": 100.0}]
 
 
+def test_analytics_serializes_the_six_group_coverage_in_canonical_order():
+    # Arrange — three Back Squat sets today; the Exercise trains only Legs. Coverage reads
+    # its own fixed 8-week window, so the recent work covers Legs and nothing else.
+    client, ctx, sessions, logged = build_client()
+    _perform(sessions, logged, "user_cov", date.today(), 3)
+
+    # Act
+    response = client.get("/api/analytics?range=7d", headers=_auth(ctx, "user_cov"))
+
+    # Assert — the six real groups ride in the envelope in canonical order, each with a
+    # covered boolean, under a labeled 8-week window; Legs is the only one trained
+    assert response.status_code == 200
+    coverage = response.json()["data"]["coverage"]
+    assert coverage["weeks"] == 8
+    assert coverage["groups"] == [
+        {"group": "Legs", "covered": True},
+        {"group": "Chest", "covered": False},
+        {"group": "Back", "covered": False},
+        {"group": "Shoulders", "covered": False},
+        {"group": "Arms", "covered": False},
+        {"group": "Core", "covered": False},
+    ]
+
+
 def test_analytics_serializes_the_recent_records_feed_and_new_prs_tile():
     # Arrange — a 100 kg PR 40 days ago (outside 30d) and a heavier 110 kg PR 2 days
     # ago (inside 30d)
@@ -184,6 +208,17 @@ def test_analytics_empty_state_is_zero_counts_not_an_error():
         "recent_records": [],
         "new_prs": 0,
         "volume": {"points": [], "coverage": 0.0, "delta": None},
+        "coverage": {
+            "weeks": 8,
+            "groups": [
+                {"group": "Legs", "covered": False},
+                {"group": "Chest", "covered": False},
+                {"group": "Back", "covered": False},
+                {"group": "Shoulders", "covered": False},
+                {"group": "Arms", "covered": False},
+                {"group": "Core", "covered": False},
+            ],
+        },
     }
 
 
