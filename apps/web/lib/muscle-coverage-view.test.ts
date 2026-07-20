@@ -12,6 +12,7 @@ import type { RecentCoverage } from "./analytics-types.ts";
 
 const SIX: RecentCoverage = {
   weeks: 8,
+  unclassified_present: false,
   groups: [
     { group: "Legs", covered: true },
     { group: "Chest", covered: false },
@@ -46,7 +47,10 @@ test("gives each row a screen-reader label naming the group, state, and window",
 
   // Assert — the aria label conveys everything the icon alone cannot
   assert.equal(view.rows[0].ariaLabel, "Legs: trained in the last 8 weeks");
-  assert.equal(view.rows[1].ariaLabel, "Chest: not trained in the last 8 weeks");
+  assert.equal(
+    view.rows[1].ariaLabel,
+    "Chest: not trained in the last 8 weeks",
+  );
 });
 
 test("labels the window from the read model's week count", () => {
@@ -63,6 +67,7 @@ test("is empty when no group has been trained, to avoid six not-trained rows", (
   // Arrange — a user with no recent (or no mapped) history: every group not-trained
   const none: RecentCoverage = {
     weeks: 8,
+    unclassified_present: false,
     groups: SIX.groups.map((g) => ({ group: g.group, covered: false })),
   };
 
@@ -70,4 +75,43 @@ test("is empty when no group has been trained, to avoid six not-trained rows", (
   const view = toCoverageView(none);
   assert.equal(view.isEmpty, true);
   assert.equal(view.rows.length, 6);
+});
+
+test("has no footnote when no in-window work falls outside the six groups", () => {
+  // Act / Assert — nothing unmapped, so the disclosure footnote stays absent
+  assert.equal(toCoverageView(SIX).footnote, null);
+});
+
+test("surfaces a neutral footnote only when in-window unclassified work exists", () => {
+  // Arrange — the same coverage, now with unmapped work disclosed in the window
+  const withUnclassified: RecentCoverage = {
+    ...SIX,
+    unclassified_present: true,
+  };
+
+  // Act / Assert — a descriptive, non-prescriptive footnote (no "low", no "train X")
+  const footnote = toCoverageView(withUnclassified).footnote;
+  assert.equal(footnote, "Some recent sets list muscles we don't map yet.");
+});
+
+test("reads only-unclassified history as six not-trained rows with the footnote", () => {
+  // Arrange — a history of only unmapped work: real work exists, it just maps to no group
+  const onlyUnclassified: RecentCoverage = {
+    weeks: 8,
+    unclassified_present: true,
+    groups: SIX.groups.map((g) => ({ group: g.group, covered: false })),
+  };
+
+  // Act — the section shows the honest six not-trained rows, not the "log a few sessions"
+  // teaching empty state (that would deny work the user actually logged), plus the footnote
+  const view = toCoverageView(onlyUnclassified);
+
+  // Assert
+  assert.equal(view.isEmpty, false);
+  assert.equal(view.rows.length, 6);
+  assert.ok(view.rows.every((row) => !row.covered));
+  assert.equal(
+    view.footnote,
+    "Some recent sets list muscles we don't map yet.",
+  );
 });

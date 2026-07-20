@@ -31,7 +31,7 @@ from enum import Enum
 
 from app.domain.muscle_groups import (
     MUSCLE_BALANCE_WEEKS,
-    GroupCoverage,
+    RecentCoverage,
     distribution,
     recent_coverage,
 )
@@ -87,6 +87,8 @@ class AnalyticsOverview:
     real Muscle Groups read trained / not-trained over a **fixed 8-week window that does
     not follow ``range``** — coverage reads its own recent slice so a well-rotated user is
     never rebuked at the 7-day scale. Always all six groups in canonical order, ungated.
+    Its ``unclassified_present`` flag discloses any in-window work that rolls up outside the
+    six real groups, so the "of 6" figure stays honest (issue #189).
     """
 
     range: str
@@ -99,7 +101,7 @@ class AnalyticsOverview:
     volume_points: tuple[VolumePoint, ...]
     volume_coverage: float
     volume_delta: float | None
-    coverage: tuple[GroupCoverage, ...]
+    coverage: RecentCoverage
 
 
 def analytics_overview(

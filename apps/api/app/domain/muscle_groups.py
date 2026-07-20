@@ -334,12 +334,45 @@ class GroupCoverage:
     covered: bool
 
 
+@dataclass(frozen=True)
+class RecentCoverage:
+    """The neutral Muscle Group Coverage read over the recent window (ADR-0025).
+
+    ``groups`` is the six real Muscle Groups in canonical order, each trained / not-trained;
+    ``unclassified_present`` is ``True`` iff some in-window Logged Set lists a muscle that
+    rolls up to Unclassified (unmapped, AI-invented, or an Exercise with no muscles recorded),
+    the signal behind the neutral disclosure footnote (issue #189). Unclassified is disclosed,
+    never dropped — but it is never one of the six and never a coverage target, so the flag
+    leaves every real-group state untouched. Frozen and value-typed, mirroring
+    :class:`WeeklyComposition`'s discipline, so the whole read stays immutable.
+    """
+
+    groups: tuple[GroupCoverage, ...]
+    unclassified_present: bool
+
+
+def _has_unclassified(history: Iterable[_LoggedSession]) -> bool:
+    """Whether any Logged Set in ``history`` rolls up to the Unclassified bucket.
+
+    Reuses :func:`_groups_for_set` so the "counts as Unclassified" rule is identical to the
+    one the distribution weighs by: a set lists an unmapped muscle, or records no muscles at
+    all. A set that trains a real group *and* an unmapped muscle still counts — the unmapped
+    work is real work sitting outside the six, which is exactly what the footnote discloses.
+    """
+
+    return any(
+        MuscleGroup.UNCLASSIFIED in _groups_for_set(logged_set)
+        for session in history
+        for logged_set in session.logged_sets
+    )
+
+
 def recent_coverage(
     history: Iterable[_DatedLoggedSession],
     *,
     reference: date,
     weeks: int,
-) -> tuple[GroupCoverage, ...]:
+) -> RecentCoverage:
     """Report each of the six real Muscle Groups trained / not-trained over the window.
 
     The window is the ``weeks`` consecutive weeks ending at ``reference``'s week, bucketed
@@ -350,6 +383,11 @@ def recent_coverage(
     order (Unclassified is never a coverage target); a group trained only outside the window
     reads not-trained, and an empty or wholly out-of-window history reads six not-trained
     rows — the caller decides how to present that honest "nothing recent" state.
+
+    Alongside the six, :attr:`RecentCoverage.unclassified_present` discloses whether any
+    in-window set rolls up to Unclassified, so the "of 6" figure stays honest about work
+    that falls outside the real groups (issue #189) without ever listing Unclassified as a
+    seventh row or a coverage target.
     """
 
     this_week = week_start(reference)
@@ -360,8 +398,12 @@ def recent_coverage(
         if earliest <= week_start(session.performed_on) <= this_week
     ]
     covered = covered_groups(in_window)
-    return tuple(
-        GroupCoverage(group=group, covered=group in covered) for group in REAL_GROUPS
+    return RecentCoverage(
+        groups=tuple(
+            GroupCoverage(group=group, covered=group in covered)
+            for group in REAL_GROUPS
+        ),
+        unclassified_present=_has_unclassified(in_window),
     )
 
 
@@ -372,6 +414,7 @@ __all__ = [
     "MUSCLE_BALANCE_WEEKS",
     "WeeklyComposition",
     "GroupCoverage",
+    "RecentCoverage",
     "classify",
     "covered_groups",
     "distribution",

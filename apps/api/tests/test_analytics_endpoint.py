@@ -155,6 +155,49 @@ def test_analytics_serializes_the_six_group_coverage_in_canonical_order():
         {"group": "Arms", "covered": False},
         {"group": "Core", "covered": False},
     ]
+    # All the recent work maps to a real group, so nothing sits outside the six
+    assert coverage["unclassified_present"] is False
+
+
+def test_analytics_discloses_in_window_unclassified_work_in_the_envelope():
+    # Arrange — an Exercise whose muscles the curated map doesn't know: its recent sets
+    # roll up to Unclassified, so the envelope must disclose the work outside the six.
+    client, ctx, sessions, logged = build_client()
+    mystery = logged._exercises.find_or_create(
+        "Aerial Silks",
+        provenance=Provenance.CURATED,
+        targeted_muscles=["unobtainium"],
+    )
+    session_view = sessions.create(
+        "user_unc",
+        SessionDraft(training_type="strength", duration_minutes=45, prescriptions=[]),
+    )
+    logged.create(
+        "user_unc",
+        LoggedSessionDraft(
+            session_id=session_view.id,
+            performed_on=date.today(),
+            logged_sets=[LoggedSetDraft(exercise_id=mystery.id, reps=5)],
+        ),
+    )
+
+    # Act
+    response = client.get("/api/analytics?range=7d", headers=_auth(ctx, "user_unc"))
+
+    # Assert — the six real groups stay honest (all not-trained) while the envelope
+    # discloses that in-window work fell outside them; Unclassified is never a group row
+    assert response.status_code == 200
+    coverage = response.json()["data"]["coverage"]
+    assert all(row["covered"] is False for row in coverage["groups"])
+    assert [row["group"] for row in coverage["groups"]] == [
+        "Legs",
+        "Chest",
+        "Back",
+        "Shoulders",
+        "Arms",
+        "Core",
+    ]
+    assert coverage["unclassified_present"] is True
 
 
 def test_analytics_serializes_the_recent_records_feed_and_new_prs_tile():
@@ -218,6 +261,7 @@ def test_analytics_empty_state_is_zero_counts_not_an_error():
                 {"group": "Arms", "covered": False},
                 {"group": "Core", "covered": False},
             ],
+            "unclassified_present": False,
         },
     }
 

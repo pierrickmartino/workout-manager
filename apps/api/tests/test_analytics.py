@@ -557,7 +557,7 @@ def test_overview_excludes_bodyweight_when_body_weight_is_unrecorded():
 def _covered_groups(overview) -> set[MuscleGroup]:
     """The set of real Muscle Groups the overview's coverage reads as trained."""
 
-    return {MuscleGroup(row.group) for row in overview.coverage if row.covered}
+    return {MuscleGroup(row.group) for row in overview.coverage.groups if row.covered}
 
 
 def test_overview_coverage_is_a_fixed_eight_week_window_independent_of_the_range():
@@ -580,7 +580,7 @@ def test_overview_coverage_is_a_fixed_eight_week_window_independent_of_the_range
 
     # Assert — every range reports the identical coverage, and Legs reads trained even
     # though the 7d/30d counts exclude that session entirely
-    coverages = {tuple(o.coverage) for o in overviews}
+    coverages = {o.coverage for o in overviews}
     assert len(coverages) == 1
     for overview in overviews:
         assert _covered_groups(overview) == {MuscleGroup.LEGS}
@@ -597,7 +597,7 @@ def test_overview_coverage_reports_all_six_real_groups_ungated():
     )
 
     # Assert — six real groups in canonical order, all not-trained
-    assert tuple(MuscleGroup(row.group) for row in overview.coverage) == tuple(
+    assert tuple(MuscleGroup(row.group) for row in overview.coverage.groups) == tuple(
         group for group in GROUP_ORDER if group is not MuscleGroup.UNCLASSIFIED
     )
-    assert all(row.covered is False for row in overview.coverage)
+    assert all(row.covered is False for row in overview.coverage.groups)

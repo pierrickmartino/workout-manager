@@ -399,7 +399,7 @@ def test_recent_coverage_reports_each_real_group_trained_or_not_over_the_window(
     coverage = recent_coverage(history, reference=_TODAY, weeks=8)
 
     # Assert — Legs reads trained, the other five real groups read not-trained
-    assert _covered_map(coverage) == {
+    assert _covered_map(coverage.groups) == {
         MuscleGroup.LEGS: True,
         MuscleGroup.CHEST: False,
         MuscleGroup.BACK: False,
@@ -418,7 +418,7 @@ def test_recent_coverage_a_group_trained_only_outside_the_window_reads_not_train
     coverage = recent_coverage(history, reference=_TODAY, weeks=8)
 
     # Assert — the out-of-window Chest work does not count; nothing reads trained
-    assert not any(row.covered for row in coverage)
+    assert not any(row.covered for row in coverage.groups)
 
 
 def test_recent_coverage_the_earliest_week_in_the_window_still_counts():
@@ -430,7 +430,7 @@ def test_recent_coverage_the_earliest_week_in_the_window_still_counts():
     coverage = recent_coverage(history, reference=_TODAY, weeks=8)
 
     # Assert — Chest, trained in the boundary week, reads trained
-    assert _covered_map(coverage)[MuscleGroup.CHEST] is True
+    assert _covered_map(coverage.groups)[MuscleGroup.CHEST] is True
 
 
 def test_recent_coverage_a_single_in_window_set_covers_a_group():
@@ -439,20 +439,22 @@ def test_recent_coverage_a_single_in_window_set_covers_a_group():
 
     # Act / Assert — a single set is enough to read Core as trained
     coverage = recent_coverage(history, reference=_TODAY, weeks=8)
-    assert _covered_map(coverage)[MuscleGroup.CORE] is True
+    assert _covered_map(coverage.groups)[MuscleGroup.CORE] is True
 
 
 def test_recent_coverage_always_returns_the_six_real_groups_in_canonical_order():
     # Arrange — a history training a mix; the shape must be all six real groups, ordered,
     # Unclassified never among them, regardless of what was trained
-    history = [_DatedSession(_TODAY, [_LoggedSet(["quadriceps"]), _LoggedSet(["chest"])])]
+    history = [
+        _DatedSession(_TODAY, [_LoggedSet(["quadriceps"]), _LoggedSet(["chest"])])
+    ]
 
     # Act
     coverage = recent_coverage(history, reference=_TODAY, weeks=8)
 
     # Assert — exactly REAL_GROUPS, in canonical body order, no Unclassified
-    assert tuple(row.group for row in coverage) == _REAL_GROUPS
-    assert MuscleGroup.UNCLASSIFIED not in {row.group for row in coverage}
+    assert tuple(row.group for row in coverage.groups) == _REAL_GROUPS
+    assert MuscleGroup.UNCLASSIFIED not in {row.group for row in coverage.groups}
 
 
 def test_recent_coverage_of_an_empty_history_reads_six_not_trained_rows():
@@ -460,8 +462,8 @@ def test_recent_coverage_of_an_empty_history_reads_six_not_trained_rows():
     coverage = recent_coverage([], reference=_TODAY, weeks=8)
 
     # Assert — still the six real groups, every one not-trained (never dropped to zero rows)
-    assert tuple(row.group for row in coverage) == _REAL_GROUPS
-    assert all(row.covered is False for row in coverage)
+    assert tuple(row.group for row in coverage.groups) == _REAL_GROUPS
+    assert all(row.covered is False for row in coverage.groups)
 
 
 def test_recent_coverage_ignores_unmapped_in_window_work():
@@ -471,4 +473,69 @@ def test_recent_coverage_ignores_unmapped_in_window_work():
 
     # Act / Assert
     coverage = recent_coverage(history, reference=_TODAY, weeks=8)
-    assert all(row.covered is False for row in coverage)
+    assert all(row.covered is False for row in coverage.groups)
+
+
+# ``unclassified_present`` — the in-window disclosure signal (issue #189 / ADR-0025): the
+# boolean behind the neutral coverage footnote. It is True iff some in-window Logged Set
+# lists a muscle that rolls up to Unclassified (unmapped, AI-invented, or no muscles at
+# all), so the "of 6" figure is honest about work sitting outside the six real groups.
+# Unclassified is disclosed, never dropped — but it is never one of the six and never a
+# coverage target, so the real-group states stay untouched by its presence.
+
+
+def test_unclassified_present_is_set_when_in_window_work_rolls_up_to_unclassified():
+    # Arrange — a real Chest set and an unmapped set in the same in-window session: the
+    # six stay honest (Chest trained) while the unmapped work is disclosed alongside them
+    history = [
+        _DatedSession(_TODAY, [_LoggedSet(["chest"]), _LoggedSet(["unobtainium"])])
+    ]
+
+    # Act
+    coverage = recent_coverage(history, reference=_TODAY, weeks=8)
+
+    # Assert — Chest reads trained, and the Unclassified work in-window is disclosed
+    assert _covered_map(coverage.groups)[MuscleGroup.CHEST] is True
+    assert coverage.unclassified_present is True
+
+
+def test_only_unclassified_history_reads_six_not_trained_with_the_footnote_present():
+    # Arrange — a history of exclusively unmapped work inside the window (the yoga/mobility
+    # user whose modality produces muscles the curated map doesn't know yet)
+    history = [_DatedSession(_TODAY, [_LoggedSet(["unobtainium"]), _LoggedSet([])])]
+
+    # Act
+    coverage = recent_coverage(history, reference=_TODAY, weeks=8)
+
+    # Assert — every real group not-trained, yet the work is disclosed, never dropped
+    assert all(row.covered is False for row in coverage.groups)
+    assert coverage.unclassified_present is True
+
+
+def test_unclassified_present_is_false_when_all_in_window_work_maps_to_real_groups():
+    # Arrange — every in-window set rolls up to one of the six: nothing to disclose
+    history = [
+        _DatedSession(_TODAY, [_LoggedSet(["quadriceps"]), _LoggedSet(["chest"])])
+    ]
+
+    # Act / Assert — no unmapped work, so no footnote signal
+    coverage = recent_coverage(history, reference=_TODAY, weeks=8)
+    assert coverage.unclassified_present is False
+
+
+def test_unclassified_present_ignores_out_of_window_unmapped_work():
+    # Arrange — the only unmapped work sits a day before the 8-week window opens (window
+    # opens Mon 2026-05-18 relative to _TODAY); it must not raise the in-window signal
+    history = [_DatedSession(date(2026, 5, 17), [_LoggedSet(["unobtainium"])])]
+
+    # Act / Assert — out-of-window Unclassified work is not disclosed as recent
+    coverage = recent_coverage(history, reference=_TODAY, weeks=8)
+    assert coverage.unclassified_present is False
+
+
+def test_unclassified_present_is_false_for_an_empty_history():
+    # Arrange / Act — no history at all
+    coverage = recent_coverage([], reference=_TODAY, weeks=8)
+
+    # Assert — nothing logged, nothing to disclose
+    assert coverage.unclassified_present is False
