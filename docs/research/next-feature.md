@@ -162,7 +162,7 @@ themselves. This is cheap to build behind a repository read, strengthens the
 data-ownership story, and pairs with the Health-platform sync above. Add
 rate-limiting and scope it strictly to the requesting user's own data.
 
-### Muscle Group Balance & Coverage Prompts
+### Muscle Group Balance & Coverage Prompts — Shipped
 Extending the Achievement that rewards covering all six Muscle Groups: a passive
 Analytics insight that shows distribution and flags an under-trained bucket
 ("Back is 4% of recent volume"). It reads the same curated roll-up (with the
@@ -170,6 +170,31 @@ explicit Unclassified bucket, never silently dropped) and never prescribes — i
 informs. This nudges balanced training without a calendar or a "you missed leg
 day" guilt mechanic, staying inside the self-paced posture. Pure read-time
 projection; no new stored state.
+
+**Delivered — but deliberately reframed, not built as proposed.** Designed against
+the domain, the "flags an under-trained bucket" framing came out the other way and
+shipped as a neutral, descriptive **Muscle Group Coverage** signal that never flags,
+ranks, or prescribes (**ADR-0025**). Three decisions carried the reframing: (1)
+**coverage, not proportion** — the "% of recent volume" framing is dropped entirely
+(doubly wrong: the roll-up is set-count, never volume, and the moment a surface says
+"4% is *low*" it becomes the banned flag), so it reads strictly *presence* — "trained
+/ not trained in this window" per group, a fact not a verdict — while balance-over-time
+already shipped as ADR-0024's drift chart; (2) a **fixed, labeled 8-week window** rather
+than the screen's 7d/30d/90d toggle (over 7 days a perfectly-rotated self-paced user
+would read "2 of 6", the exact "you missed leg day" rebuke ADR-0001 rejects), reusing the
+drift chart's `MUSCLE_BALANCE_WEEKS` span and weekly cadence so the two can never
+contradict; and (3) it lives **ungated on the main `/analytics` screen** beside the
+snapshot Muscle Split — coverage is type-neutral (reachable from a pure yoga/mobility
+history), so placing it behind the strength gate would hide it from exactly the users it
+is most for. A single `covered_groups` predicate is now shared with the Full Coverage
+Achievement (read all-time by the achievement, over 8 weeks by coverage) so the two
+surfaces cannot drift, and any in-window **Unclassified** work is disclosed as a neutral
+footnote — never a seventh checklist row or a coverage target — keeping the "of 6"
+denominator honest. Domain logic lives in pure `domain/muscle_groups` (`recent_coverage`
+returning frozen `GroupCoverage` rows plus an `unclassified_present` flag) with a
+`toCoverageView` view-model and a thin `MuscleCoverage` renderer (icon-plus-text per
+state, never colour alone), all co-located with tests. No stored state, no write hook, no
+LLM, no schema change.
 
 ---
 
