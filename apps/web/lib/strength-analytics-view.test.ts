@@ -20,6 +20,7 @@ const RECORD = {
 const OPEN: StrengthAnalyticsOverview = {
   has_qualifying_strength: true,
   trajectories: [],
+  muscle_balance: [],
   records: [RECORD],
 };
 
@@ -30,6 +31,7 @@ test("shapes the PR timeline into display rows, newest-first order preserved", (
   const overview: StrengthAnalyticsOverview = {
     has_qualifying_strength: true,
     trajectories: [],
+    muscle_balance: [],
     records: [
       { ...RECORD, estimated_1rm: 110, date: "2026-07-04" },
       { ...RECORD, estimated_1rm: 100, gain: 0, date: "2026-06-01" },
@@ -67,6 +69,7 @@ test("marks a closed gate as empty with no rows for the honest empty state", () 
   const overview: StrengthAnalyticsOverview = {
     has_qualifying_strength: false,
     trajectories: [],
+    muscle_balance: [],
     records: [],
   };
 
@@ -87,6 +90,7 @@ test("has no previous page on the first page and a next page when more remain", 
   const overview: StrengthAnalyticsOverview = {
     has_qualifying_strength: true,
     trajectories: [],
+    muscle_balance: [],
     records: [RECORD],
   };
 
@@ -107,6 +111,7 @@ test("has a previous page but no next page on the last page", () => {
   const overview: StrengthAnalyticsOverview = {
     has_qualifying_strength: true,
     trajectories: [],
+    muscle_balance: [],
     records: [RECORD],
   };
 

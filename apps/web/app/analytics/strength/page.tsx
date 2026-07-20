@@ -7,10 +7,12 @@ import {
   type StrengthTimelineView,
 } from "@/lib/strength-analytics-view";
 import { toStrengthTrajectories } from "@/lib/strength-trajectories-view";
+import { toMuscleBalance } from "@/lib/muscle-balance-view";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { Alert } from "@/components/pulse/alert";
 import { StrengthTrajectories } from "@/components/analytics/strength-trajectories";
+import { MuscleBalance } from "@/components/analytics/muscle-balance";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -56,6 +58,7 @@ export default async function StrengthAnalyticsPage({
     total,
   });
   const trajectories = toStrengthTrajectories(envelope.data.trajectories);
+  const muscleBalance = toMuscleBalance(envelope.data.muscle_balance);
 
   return (
     <section className="flex flex-col gap-6">
@@ -66,6 +69,7 @@ export default async function StrengthAnalyticsPage({
       ) : (
         <>
           <StrengthTrajectories tiles={trajectories} />
+          <MuscleBalance view={muscleBalance} />
           <PersonalRecordTimeline view={view} offset={offset} />
         </>
       )}

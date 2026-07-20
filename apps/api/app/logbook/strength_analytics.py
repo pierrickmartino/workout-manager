@@ -18,11 +18,18 @@ over the Logged-Session repository; no ORM, no HTTP."""
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 
+from app.domain.muscle_groups import WeeklyComposition, weekly_distribution
 from app.domain.personal_records import PersonalRecord, detect_personal_records
 from app.logbook.records import set_records
 from app.logbook.top_sets import ExerciseTrajectory, rank_qualifying_exercises
 from app.repositories.logged_session_repository import LoggedSessionRepository
+
+# The Muscle-Group balance charts the last eight weeks — the same weekly cadence the
+# Streak counts on (ADR-0024: weekly, not daily), a window long enough to read drift
+# yet short enough to stay legible as stacked bars on a phone.
+MUSCLE_BALANCE_WEEKS = 8
 
 
 @dataclass(frozen=True)
@@ -52,6 +59,11 @@ class StrengthAnalyticsOverview:
     total_records: int
     has_qualifying_strength: bool
     trajectories: tuple[ExerciseTrajectory, ...]
+    # The Muscle-Group balance-over-time series (ADR-0024 / issue #178): one set-count
+    # composition per week over the last :data:`MUSCLE_BALANCE_WEEKS`, oldest-first. It
+    # reads *all* logged sets (not just qualifying strength), is descriptive only, and
+    # keeps untrained weeks as honest empty compositions rather than dropping them.
+    weekly_muscle_balance: tuple[WeeklyComposition, ...]
 
 
 def strength_analytics_overview(
@@ -60,6 +72,7 @@ def strength_analytics_overview(
     logged: LoggedSessionRepository,
     limit: int | None = None,
     offset: int = 0,
+    today: date | None = None,
 ) -> StrengthAnalyticsOverview:
     """Return the user's newest-first Personal Record timeline for one page.
 
@@ -77,13 +90,24 @@ def strength_analytics_overview(
     end = len(timeline) if limit is None else offset + limit
     page = tuple(timeline[offset:end])
 
+    reference = today if today is not None else date.today()
+
     return StrengthAnalyticsOverview(
         pr_timeline=page,
         total_records=len(timeline),
         has_qualifying_strength=bool(timeline),
         # The small-multiples are the whole ranked set, independent of the timeline page.
         trajectories=tuple(rank_qualifying_exercises(history)),
+        weekly_muscle_balance=tuple(
+            weekly_distribution(
+                history, reference=reference, weeks=MUSCLE_BALANCE_WEEKS
+            )
+        ),
     )
 
 
-__all__ = ["StrengthAnalyticsOverview", "strength_analytics_overview"]
+__all__ = [
+    "MUSCLE_BALANCE_WEEKS",
+    "StrengthAnalyticsOverview",
+    "strength_analytics_overview",
+]

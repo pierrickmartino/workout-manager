@@ -19,6 +19,8 @@ from app.auth.dependencies import get_jwks
 from app.config import Settings, get_settings
 from app.domain.exercise import Provenance
 from app.domain.load import LoadKind, ParsedLoad
+from app.domain.week import week_start
+from app.logbook.strength_analytics import MUSCLE_BALANCE_WEEKS
 from app.main import create_app
 from app.repositories.deps import get_logged_session_repository
 from app.repositories.exercise_repository import InMemoryExerciseRepository
@@ -169,16 +171,61 @@ def test_strength_empty_state_is_a_closed_gate_not_an_error():
     # Act
     response = client.get("/api/analytics/strength", headers=_auth(ctx, "user_none"))
 
-    # Assert — a clear closed-gate read model, not an error
+    # Assert — a clear closed-gate read model, not an error. The muscle balance still
+    # spans the full window as honest empty weeks (never dropped), oldest-first.
     assert response.status_code == 200
     body = response.json()
     assert body["success"] is True
+    this_monday = week_start(date.today())
+    expected_weeks = [
+        (this_monday - timedelta(weeks=MUSCLE_BALANCE_WEEKS - 1 - offset)).isoformat()
+        for offset in range(MUSCLE_BALANCE_WEEKS)
+    ]
     assert body["data"] == {
         "has_qualifying_strength": False,
         "records": [],
         "trajectories": [],
+        "muscle_balance": [
+            {"week": week, "groups": []} for week in expected_weeks
+        ],
     }
     assert body["meta"] == {"total": 0, "limit": 20, "offset": 0}
+
+
+def test_strength_serializes_the_weekly_muscle_balance_in_the_envelope():
+    # Arrange — one Legs session this week; the balance reads all logged sets
+    client, ctx, sessions, logged = build_client()
+    session_view = sessions.create(
+        "user_bal",
+        SessionDraft(training_type="strength", duration_minutes=45, prescriptions=[]),
+    )
+    load = ParsedLoad(kind=LoadKind.ABSOLUTE, text="80 kg", kg=80.0).to_dict()
+    logged.create(
+        "user_bal",
+        LoggedSessionDraft(
+            session_id=session_view.id,
+            performed_on=date.today(),
+            logged_sets=[LoggedSetDraft(exercise_id=SQUAT, reps=5, load=load)],
+        ),
+    )
+
+    # Act
+    response = client.get("/api/analytics/strength", headers=_auth(ctx, "user_bal"))
+
+    # Assert — a full window of weeks, oldest-first, this week carrying the Legs split
+    assert response.status_code == 200
+    balance = response.json()["data"]["muscle_balance"]
+    assert len(balance) == MUSCLE_BALANCE_WEEKS
+    assert balance[-1] == {
+        "week": week_start(date.today()).isoformat(),
+        "groups": [{"group": "Legs", "pct": 100.0}],
+    }
+    assert balance[0] == {
+        "week": (
+            week_start(date.today()) - timedelta(weeks=MUSCLE_BALANCE_WEEKS - 1)
+        ).isoformat(),
+        "groups": [],
+    }
 
 
 def test_strength_is_scoped_to_the_requesting_user():
