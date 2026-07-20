@@ -1,19 +1,6 @@
 import { cn } from "@/lib/utils";
 import type { MuscleBar } from "@/lib/muscle-distribution";
-
-// A stable, curated color per Muscle Group so the split reads consistently across the
-// app — the Analytics screen and the Builder's SIMULATE preview share this palette.
-// Unclassified is deliberately muted — it is the honest "leftovers" bucket, shown but
-// never competing with a real group for the eye.
-const GROUP_COLOR: Record<string, string> = {
-  Legs: "bg-cyan",
-  Chest: "bg-violet",
-  Back: "bg-blue",
-  Shoulders: "bg-magenta",
-  Arms: "bg-cyan",
-  Core: "bg-violet",
-  Unclassified: "bg-text-muted",
-};
+import { GROUP_COLOR, GROUP_COLOR_FALLBACK } from "./muscle-colors";
 
 interface MuscleSplitProps {
   bars: MuscleBar[];
@@ -50,7 +37,7 @@ export function MuscleSplit({ bars, emptyMessage }: MuscleSplitProps) {
             <span
               className={cn(
                 "block h-full rounded-[2px]",
-                GROUP_COLOR[bar.group] ?? "bg-cyan",
+                GROUP_COLOR[bar.group] ?? GROUP_COLOR_FALLBACK,
               )}
               style={{ width: `${bar.width}%` }}
             />

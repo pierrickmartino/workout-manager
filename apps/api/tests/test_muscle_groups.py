@@ -13,10 +13,16 @@ dominates the split. No mocks: the inputs are plain stubs, mirroring
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 
 import pytest
 
-from app.domain.muscle_groups import MuscleGroup, classify, distribution
+from app.domain.muscle_groups import (
+    MuscleGroup,
+    classify,
+    distribution,
+    weekly_distribution,
+)
 
 
 @dataclass
@@ -31,6 +37,18 @@ class _LoggedSession:
     """Minimal stand-in for a Logged Session: just its ordered Logged Sets."""
 
     logged_sets: list[_LoggedSet] = field(default_factory=list)
+
+
+@dataclass
+class _DatedSession:
+    """A Logged Session carrying the ``performed_on`` date the weekly series buckets on."""
+
+    performed_on: date
+    logged_sets: list[_LoggedSet] = field(default_factory=list)
+
+
+# A Wednesday; its ISO week opens Monday 2026-07-06 and closes Sunday 2026-07-12.
+_TODAY = date(2026, 7, 8)
 
 
 def test_a_known_muscle_rolls_up_into_its_curated_group():
@@ -167,3 +185,144 @@ def test_groups_are_returned_in_canonical_body_order_unclassified_last():
         MuscleGroup.CORE,
         MuscleGroup.UNCLASSIFIED,
     ]
+
+
+# ``weekly_distribution`` — the per-week composition series (issue #178 / ADR-0024):
+# the same even-split, set-count distribution as the snapshot, but bucketed by Monday
+# into an ordered, oldest-first series of ``weeks`` weeks ending at the reference date.
+# It is the one genuinely new computation in Strength Analytics; the snapshot only ever
+# describes a single window.
+
+
+def test_a_single_weeks_composition_matches_the_snapshot_rule():
+    # Arrange — one session this week on a Legs-only Exercise; a one-week window
+    history = [_DatedSession(_TODAY, [_LoggedSet(["quadriceps"])])]
+
+    # Act
+    series = weekly_distribution(history, reference=_TODAY, weeks=1)
+
+    # Assert — a one-element series whose week is this Monday and whose composition is
+    # the same 100%-Legs the snapshot ``distribution`` yields
+    assert [week.week_start for week in series] == [date(2026, 7, 6)]
+    assert series[0].composition == {MuscleGroup.LEGS: 100.0}
+
+
+def test_each_week_is_normalized_independently_and_ordered_oldest_first():
+    # Arrange — last week trained Legs only, this week trained Chest only
+    history = [
+        _DatedSession(date(2026, 7, 1), [_LoggedSet(["quadriceps"])]),  # last week
+        _DatedSession(_TODAY, [_LoggedSet(["chest"])]),  # this week
+    ]
+
+    # Act
+    series = weekly_distribution(history, reference=_TODAY, weeks=2)
+
+    # Assert — oldest week first; each week sums to 100 over only what it trained
+    assert [week.week_start for week in series] == [
+        date(2026, 6, 29),
+        date(2026, 7, 6),
+    ]
+    assert series[0].composition == {MuscleGroup.LEGS: 100.0}
+    assert series[1].composition == {MuscleGroup.CHEST: 100.0}
+
+
+def test_a_set_splits_evenly_across_groups_within_its_week():
+    # Arrange — one compound set (Chest + Shoulders + Arms) this week
+    history = [_DatedSession(_TODAY, [_LoggedSet(["chest", "front delts", "triceps"])])]
+
+    # Act
+    series = weekly_distribution(history, reference=_TODAY, weeks=1)
+
+    # Assert — the week's single set splits into equal thirds, summing to 100
+    assert series[0].composition == pytest.approx(
+        {
+            MuscleGroup.CHEST: 100 / 3,
+            MuscleGroup.SHOULDERS: 100 / 3,
+            MuscleGroup.ARMS: 100 / 3,
+        }
+    )
+
+
+def test_a_week_with_no_training_is_an_honest_empty_week_not_dropped():
+    # Arrange — training this week and two weeks ago, nothing in the week between
+    history = [
+        _DatedSession(date(2026, 6, 24), [_LoggedSet(["chest"])]),  # two weeks ago
+        _DatedSession(_TODAY, [_LoggedSet(["quadriceps"])]),  # this week
+    ]
+
+    # Act — a three-week window spanning the gap week
+    series = weekly_distribution(history, reference=_TODAY, weeks=3)
+
+    # Assert — the middle week stays in the series with an empty composition, never dropped
+    assert [week.week_start for week in series] == [
+        date(2026, 6, 22),
+        date(2026, 6, 29),
+        date(2026, 7, 6),
+    ]
+    assert series[0].composition == {MuscleGroup.CHEST: 100.0}
+    assert series[1].composition == {}
+    assert series[2].composition == {MuscleGroup.LEGS: 100.0}
+
+
+def test_a_sunday_and_the_next_monday_land_in_different_weeks():
+    # Arrange — a session on Sunday 2026-07-12 and one on Monday 2026-07-13
+    history = [
+        _DatedSession(date(2026, 7, 12), [_LoggedSet(["chest"])]),  # Sunday
+        _DatedSession(date(2026, 7, 13), [_LoggedSet(["quadriceps"])]),  # next Monday
+    ]
+
+    # Act — reference in the later (Monday-opened) week
+    series = weekly_distribution(history, reference=date(2026, 7, 13), weeks=2)
+
+    # Assert — the Sunday buckets to the 07-06 week, the Monday opens the 07-13 week
+    assert [week.week_start for week in series] == [
+        date(2026, 7, 6),
+        date(2026, 7, 13),
+    ]
+    assert series[0].composition == {MuscleGroup.CHEST: 100.0}
+    assert series[1].composition == {MuscleGroup.LEGS: 100.0}
+
+
+def test_unclassified_sets_are_shown_in_their_week():
+    # Arrange — a week whose only set trains an unmapped muscle
+    history = [_DatedSession(_TODAY, [_LoggedSet(["unobtainium"])])]
+
+    # Act
+    series = weekly_distribution(history, reference=_TODAY, weeks=1)
+
+    # Assert — the leftovers bucket is shown, never dropped
+    assert series[0].composition == {MuscleGroup.UNCLASSIFIED: 100.0}
+
+
+def test_sessions_outside_the_window_are_ignored():
+    # Arrange — a session long before the window and one inside it
+    history = [
+        _DatedSession(date(2026, 1, 1), [_LoggedSet(["chest"])]),  # far past
+        _DatedSession(_TODAY, [_LoggedSet(["quadriceps"])]),  # this week
+    ]
+
+    # Act — a two-week window that excludes the January session
+    series = weekly_distribution(history, reference=_TODAY, weeks=2)
+
+    # Assert — only in-window weeks appear; the far-past session contributes nothing
+    assert [week.week_start for week in series] == [
+        date(2026, 6, 29),
+        date(2026, 7, 6),
+    ]
+    assert series[0].composition == {}
+    assert series[1].composition == {MuscleGroup.LEGS: 100.0}
+
+
+def test_an_all_empty_window_yields_zero_weeks_that_are_all_empty():
+    # Arrange — a user who logged nothing in the window
+    # Act
+    series = weekly_distribution([], reference=_TODAY, weeks=3)
+
+    # Assert — the window is still spanned, every week an honest empty composition
+    assert len(series) == 3
+    assert all(week.composition == {} for week in series)
+
+
+def test_a_non_positive_week_count_yields_an_empty_series():
+    # Arrange / Act / Assert — nothing to span, no error
+    assert weekly_distribution([], reference=_TODAY, weeks=0) == []

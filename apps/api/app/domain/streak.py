@@ -19,13 +19,9 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import date, timedelta
 
+from app.domain.week import week_start as _week_start
+
 _WEEK = timedelta(days=7)
-
-
-def _week_start(day: date) -> date:
-    """The Monday of ``day``'s ISO week — the canonical bucket for that week."""
-
-    return day - timedelta(days=day.weekday())
 
 
 def current_streak(session_dates: Iterable[date], today: date) -> int:

@@ -21,10 +21,15 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
+from datetime import date, timedelta
 from enum import Enum
 from typing import Protocol
 
+from app.domain.week import week_start
+
 _WHITESPACE = re.compile(r"\s+")
+_WEEK = timedelta(days=7)
 
 
 class MuscleGroup(str, Enum):
@@ -145,6 +150,13 @@ class _LoggedSession(Protocol):
     logged_sets: Sequence[_LoggedSet]
 
 
+class _DatedLoggedSession(_LoggedSession, Protocol):
+    """A Logged Session that also carries the date it was performed, so the weekly
+    series can bucket it by its Monday."""
+
+    performed_on: date
+
+
 def _normalize(muscle: str) -> str:
     """Canonical lookup key: lowercased, trimmed, internal whitespace collapsed."""
 
@@ -173,15 +185,14 @@ def _groups_for_set(logged_set: _LoggedSet) -> set[MuscleGroup]:
     return groups or {MuscleGroup.UNCLASSIFIED}
 
 
-def distribution(history: Iterable[_LoggedSession]) -> dict[MuscleGroup, float]:
-    """Return the set-count muscle distribution as ``{group: pct}``.
+def _weigh(history: Iterable[_LoggedSession]) -> tuple[dict[MuscleGroup, float], float]:
+    """Accumulate the even-split, set-count group weights over ``history``.
 
     Every Logged Set carries one unit of weight, split **evenly across the distinct
     groups** its Exercise maps to (a set that trains two groups gives each a half).
-    Weight is summed across the whole history and normalized to percentages that
-    sum to 100. The result holds only the groups that received weight, in canonical
-    ``GROUP_ORDER``; a history with no sets yields an empty distribution — the
-    honest empty state, never an error.
+    Returns the raw per-group weights and the total set count, before normalization —
+    the shared kernel behind both the snapshot ``distribution`` and each week of
+    ``weekly_distribution`` so the two can never weigh a set differently.
     """
 
     weights: dict[MuscleGroup, float] = {}
@@ -193,10 +204,20 @@ def distribution(history: Iterable[_LoggedSession]) -> dict[MuscleGroup, float]:
             for group in groups:
                 weights[group] = weights.get(group, 0.0) + share
             total += 1.0
+    return weights, total
+
+
+def _as_percentages(
+    weights: dict[MuscleGroup, float], total: float
+) -> dict[MuscleGroup, float]:
+    """Normalize raw group weights to percentages that sum to 100, in ``GROUP_ORDER``.
+
+    Only groups that received weight appear, ordered canonically (Unclassified last).
+    A total of zero — no sets weighed — yields ``{}``, the honest empty state.
+    """
 
     if total == 0.0:
         return {}
-
     return {
         group: weights[group] / total * 100.0
         for group in GROUP_ORDER
@@ -204,9 +225,72 @@ def distribution(history: Iterable[_LoggedSession]) -> dict[MuscleGroup, float]:
     }
 
 
+def distribution(history: Iterable[_LoggedSession]) -> dict[MuscleGroup, float]:
+    """Return the set-count muscle distribution as ``{group: pct}``.
+
+    Every Logged Set carries one unit of weight, split **evenly across the distinct
+    groups** its Exercise maps to (a set that trains two groups gives each a half).
+    Weight is summed across the whole history and normalized to percentages that
+    sum to 100. The result holds only the groups that received weight, in canonical
+    ``GROUP_ORDER``; a history with no sets yields an empty distribution — the
+    honest empty state, never an error.
+    """
+
+    return _as_percentages(*_weigh(history))
+
+
+@dataclass(frozen=True)
+class WeeklyComposition:
+    """One week's set-count muscle composition in the balance-over-time series.
+
+    ``week_start`` is the Monday the week is bucketed on; ``composition`` is that
+    week's ``{group: pct}`` under the same even-split rule as the snapshot, normalized
+    to 100 over the groups trained that week — or an empty dict for a week with no
+    training, kept in the series as an honest empty week rather than dropped.
+    """
+
+    week_start: date
+    composition: dict[MuscleGroup, float]
+
+
+def weekly_distribution(
+    history: Iterable[_DatedLoggedSession],
+    *,
+    reference: date,
+    weeks: int,
+) -> list[WeeklyComposition]:
+    """Return the muscle composition per week, oldest-first, over the last ``weeks``.
+
+    The series spans the ``weeks`` consecutive weeks ending at ``reference``'s week,
+    each bucketed by its Monday and composed with the identical even-split, set-count
+    rule as :func:`distribution`, normalized to 100 **within that week**. Every week in
+    the window appears — a week with no training is an honest empty composition (``{}``),
+    never silently dropped — so the series always has exactly ``weeks`` elements (or none
+    when ``weeks`` is not positive). Sessions outside the window are ignored.
+    """
+
+    if weeks <= 0:
+        return []
+
+    buckets: dict[date, list[_DatedLoggedSession]] = {}
+    for session in history:
+        buckets.setdefault(week_start(session.performed_on), []).append(session)
+
+    this_week = week_start(reference)
+    series: list[WeeklyComposition] = []
+    for offset in range(weeks - 1, -1, -1):
+        monday = this_week - offset * _WEEK
+        series.append(
+            WeeklyComposition(monday, _as_percentages(*_weigh(buckets.get(monday, []))))
+        )
+    return series
+
+
 __all__ = [
     "MuscleGroup",
     "GROUP_ORDER",
+    "WeeklyComposition",
     "classify",
     "distribution",
+    "weekly_distribution",
 ]

@@ -19,6 +19,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query
 
 from app.auth.dependencies import get_current_user
+from app.domain.muscle_groups import WeeklyComposition
 from app.domain.personal_records import PersonalRecord
 from app.envelope import success_envelope
 from app.logbook.analytics import AnalyticsOverview, AnalyticsRange, analytics_overview
@@ -91,6 +92,21 @@ def _serialize_record(record: PersonalRecord) -> dict:
     }
 
 
+def _serialize_week(week: WeeklyComposition) -> dict:
+    """One week of the Muscle-Group balance series: its Monday and the per-group split.
+
+    ``groups`` reuses the snapshot distribution's ``{group, pct}`` shape, already in
+    canonical order (Unclassified last); an untrained week serializes with an empty
+    ``groups`` list — the honest empty week, never dropped."""
+
+    return {
+        "week": week.week_start.isoformat(),
+        "groups": [
+            {"group": group, "pct": pct} for group, pct in week.composition.items()
+        ],
+    }
+
+
 def _serialize_trajectory(trajectory: ExerciseTrajectory) -> dict:
     return {
         "exercise_id": trajectory.exercise_id,
@@ -114,7 +130,8 @@ def read_strength_analytics(
 ) -> dict:
     """The Strength Analytics screen's read model: the all-time, all-Exercise Personal
     Record stream (newest-first, paginated), the ranked strength ``trajectories`` — the
-    top qualifying Exercises' Top-Set small-multiples (issue #177) — and the
+    top qualifying Exercises' Top-Set small-multiples (issue #177) — the weekly
+    ``muscle_balance`` composition series (issue #178), and the
     ``has_qualifying_strength`` gate.
 
     The timeline paginates via ``limit``/``offset``; the trajectories are the whole ranked
@@ -124,7 +141,7 @@ def read_strength_analytics(
     empty timeline, and no trajectories, never an error."""
 
     overview = strength_analytics_overview(
-        clerk_user_id, logged=logged, limit=limit, offset=offset
+        clerk_user_id, logged=logged, limit=limit, offset=offset, today=date.today()
     )
     return success_envelope(
         {
@@ -133,6 +150,9 @@ def read_strength_analytics(
             "trajectories": [
                 _serialize_trajectory(trajectory)
                 for trajectory in overview.trajectories
+            ],
+            "muscle_balance": [
+                _serialize_week(week) for week in overview.weekly_muscle_balance
             ],
         },
         meta={"total": overview.total_records, "limit": limit, "offset": offset},

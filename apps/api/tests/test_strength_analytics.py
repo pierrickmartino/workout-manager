@@ -14,7 +14,11 @@ from datetime import date, timedelta
 
 from app.domain.exercise import Provenance
 from app.domain.load import LoadKind, ParsedLoad
-from app.logbook.strength_analytics import strength_analytics_overview
+from app.domain.muscle_groups import MuscleGroup
+from app.logbook.strength_analytics import (
+    MUSCLE_BALANCE_WEEKS,
+    strength_analytics_overview,
+)
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.logged_session_repository import (
     InMemoryLoggedSessionRepository,
@@ -233,6 +237,44 @@ def test_trajectories_rank_the_users_qualifying_lifts_regardless_of_the_page():
         (SQUAT, [100.0, 110.0]),
         (PRESS, [60.0]),
     ]
+
+
+def test_weekly_muscle_balance_spans_the_window_oldest_first_with_this_weeks_split():
+    # Arrange — one Legs session this week (a Sunday); the balance reads all logged
+    # sets, not just qualifying-strength ones
+    _, sessions, logged = _build()
+    _log(
+        sessions,
+        logged,
+        "user_bal",
+        TODAY,
+        [LoggedSetDraft(exercise_id=SQUAT, reps=5, load=_abs(80.0))],
+    )
+
+    # Act
+    overview = strength_analytics_overview("user_bal", logged=logged, today=TODAY)
+
+    # Assert — a full window of weeks, oldest-first, the last being this week's Legs split
+    balance = overview.weekly_muscle_balance
+    assert len(balance) == MUSCLE_BALANCE_WEEKS
+    weeks = [week.week_start for week in balance]
+    assert weeks == sorted(weeks)  # oldest-first
+    assert balance[-1].week_start == date(2026, 6, 29)  # Monday of TODAY's week
+    assert balance[-1].composition == {MuscleGroup.LEGS: 100.0}
+    # Untrained earlier weeks are honest empty weeks, never dropped
+    assert balance[0].composition == {}
+
+
+def test_weekly_muscle_balance_of_an_empty_history_is_all_empty_weeks():
+    # Arrange — a user who has logged nothing
+    _, _, logged = _build()
+
+    # Act
+    overview = strength_analytics_overview("user_empty_bal", logged=logged, today=TODAY)
+
+    # Assert — the window is still spanned; every week is an honest empty composition
+    assert len(overview.weekly_muscle_balance) == MUSCLE_BALANCE_WEEKS
+    assert all(week.composition == {} for week in overview.weekly_muscle_balance)
 
 
 def test_a_user_with_no_qualifying_strength_has_no_trajectories():
