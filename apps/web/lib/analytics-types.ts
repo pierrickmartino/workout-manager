@@ -65,9 +65,13 @@ export interface GroupCoverage {
 // six real groups each trained / not-trained over a fixed `weeks`-week window that is
 // **independent of the range toggle**, in canonical order. Always all six groups, ungated
 // and type-neutral — a pure yoga/mobility history reads the same shape as a barbell one.
+// `unclassified_present` is true when some in-window set lists a muscle outside the six
+// real groups (issue #189) — the signal behind a neutral disclosure footnote, never a
+// seventh group and never a coverage target.
 export interface RecentCoverage {
   weeks: number;
   groups: GroupCoverage[];
+  unclassified_present: boolean;
 }
 
 // The honest read model for one range window (F3 Slice 1–5): sessions, active days,

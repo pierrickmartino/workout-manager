@@ -69,12 +69,16 @@ def _serialize(overview: AnalyticsOverview) -> dict:
         },
         # Muscle Group Coverage (ADR-0025): the six real groups each trained / not-trained
         # over the labeled, range-independent 8-week window, in canonical order.
+        # ``unclassified_present`` discloses any in-window work that rolls up outside the six
+        # real groups (issue #189) — the signal behind the neutral footnote, never a seventh
+        # row and never a coverage target.
         "coverage": {
             "weeks": MUSCLE_BALANCE_WEEKS,
             "groups": [
                 {"group": row.group.value, "covered": row.covered}
-                for row in overview.coverage
+                for row in overview.coverage.groups
             ],
+            "unclassified_present": overview.coverage.unclassified_present,
         },
     }
 

@@ -18,6 +18,8 @@ interface MuscleCoverageProps {
 // scale (ADR-0001/0025). Accessibility: each row carries icon **and** text (never color
 // alone) and one composed `aria-label`, so the state is legible to a screen reader. A user
 // with no recent training sees a single teaching empty state, never six "not trained" rows.
+// When some in-window work rolls up outside the six real groups, a neutral `footnote`
+// discloses it (issue #189) — descriptive only, never a seventh row and never a nudge.
 // A thin renderer — all shaping lives in the `muscle-coverage-view` view-model.
 export function MuscleCoverage({ view }: MuscleCoverageProps) {
   return (
@@ -37,6 +39,9 @@ export function MuscleCoverage({ view }: MuscleCoverageProps) {
           ))}
         </ul>
       )}
+      {view.footnote ? (
+        <p className="font-sans text-[13px] text-text-muted">{view.footnote}</p>
+      ) : null}
     </div>
   );
 }
