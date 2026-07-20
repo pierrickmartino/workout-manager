@@ -20,6 +20,7 @@ import pytest
 from app.domain.muscle_groups import (
     MuscleGroup,
     classify,
+    covered_groups,
     distribution,
     weekly_distribution,
 )
@@ -326,3 +327,47 @@ def test_an_all_empty_window_yields_zero_weeks_that_are_all_empty():
 def test_a_non_positive_week_count_yields_an_empty_series():
     # Arrange / Act / Assert — nothing to span, no error
     assert weekly_distribution([], reference=_TODAY, weeks=0) == []
+
+
+# ``covered_groups`` — the shared "covered" predicate (issue #187): the set of the six
+# real Muscle Groups a history has trained, Unclassified excluded. It is the single
+# definition both the Muscle Group Coverage read and the Full Coverage Achievement lean
+# on, so the two surfaces can never drift on what "covered" means.
+
+
+def test_covered_groups_returns_the_real_groups_trained():
+    # Arrange — a history training a Legs and a Chest muscle
+    history = [
+        _LoggedSession([_LoggedSet(["quadriceps"]), _LoggedSet(["chest"])]),
+    ]
+
+    # Act / Assert — exactly the two real groups those muscles roll up into
+    assert covered_groups(history) == {MuscleGroup.LEGS, MuscleGroup.CHEST}
+
+
+def test_covered_groups_of_an_empty_history_is_the_empty_set():
+    # Arrange / Act / Assert — nothing trained, nothing covered (the honest empty state)
+    assert covered_groups([]) == set()
+
+
+def test_covered_groups_never_counts_the_unclassified_bucket():
+    # Arrange — a history whose only sets train unmapped muscles (and an Exercise with
+    # no muscles recorded at all), all of which fall to Unclassified
+    history = [
+        _LoggedSession([_LoggedSet(["unobtainium"]), _LoggedSet([])]),
+    ]
+
+    # Act / Assert — Unclassified is not one of the six, so nothing is covered
+    assert covered_groups(history) == set()
+
+
+def test_covered_groups_collapses_muscles_that_share_a_group():
+    # Arrange — several muscles across the history that all roll up into Legs, plus one
+    # unmapped muscle that must be ignored
+    history = [
+        _LoggedSession([_LoggedSet(["quadriceps", "hamstrings"])]),
+        _LoggedSession([_LoggedSet(["calves"]), _LoggedSet(["unobtainium"])]),
+    ]
+
+    # Act / Assert — the shared group appears once; the unmapped muscle contributes nothing
+    assert covered_groups(history) == {MuscleGroup.LEGS}

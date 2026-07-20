@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Protocol
 
-from app.domain.muscle_groups import MuscleGroup, classify
+from app.domain.muscle_groups import MuscleGroup, covered_groups
 from app.domain.personal_records import LoggedSetRecord, detect_personal_records
 from app.domain.streak import longest_week_run
 
@@ -89,19 +89,14 @@ def _longest_streak(history: Sequence[_LoggedSession]) -> int:
 def _muscle_groups_covered(history: Sequence[_LoggedSession]) -> int:
     """How many of the six real Muscle Groups the history has ever trained.
 
-    Any Exercise whose free-form muscles roll into a real group counts it; the
-    Unclassified bucket is not one of the six and never contributes. Reachable from a
-    non-strength history — a yoga/mobility session still targets muscles.
+    Derived from the shared :func:`covered_groups` predicate (issue #187) so this count
+    and the Muscle Group Coverage read can never drift on what "covered" means: any
+    Exercise whose free-form muscles roll into a real group counts it; the Unclassified
+    bucket is not one of the six and never contributes. Reachable from a non-strength
+    history — a yoga/mobility session still targets muscles.
     """
 
-    covered: set[MuscleGroup] = set()
-    for session in history:
-        for logged_set in session.logged_sets:
-            for muscle in logged_set.targeted_muscles:
-                group = classify(muscle)
-                if group is not MuscleGroup.UNCLASSIFIED:
-                    covered.add(group)
-    return len(covered)
+    return len(covered_groups(history))
 
 
 def _has_personal_record(history: Sequence[_LoggedSession]) -> int:

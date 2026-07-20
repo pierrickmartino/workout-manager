@@ -31,6 +31,13 @@ from app.domain.week import week_start
 _WHITESPACE = re.compile(r"\s+")
 _WEEK = timedelta(days=7)
 
+# The shared eight-week span for the Muscle-Group surfaces (issue #187): the recent
+# window both the balance-over-time drift chart and the coming Muscle Group Coverage read
+# lean on, so they can never disagree on how far back "recent" reaches. Eight weeks is the
+# same weekly cadence the Streak counts on (ADR-0024/0025: weekly, not daily) — long enough
+# to read drift, short enough to stay legible as stacked bars on a phone.
+MUSCLE_BALANCE_WEEKS = 8
+
 
 class MuscleGroup(str, Enum):
     """A coarse, curated bucket a free-form targeted muscle rolls up into.
@@ -174,6 +181,25 @@ def classify(muscle: str) -> MuscleGroup:
     return _MUSCLE_TO_GROUP.get(_normalize(muscle), MuscleGroup.UNCLASSIFIED)
 
 
+def covered_groups(history: Iterable[_LoggedSession]) -> set[MuscleGroup]:
+    """Return the set of the six **real** Muscle Groups the history has trained.
+
+    A group is *covered* iff some Logged Set's Exercise rolls a muscle into it via
+    :func:`classify`; the Unclassified bucket is never one of the six and never counts.
+    The single shared definition of "covered" (issue #187) behind both the Muscle Group
+    Coverage read and the Full Coverage Achievement, so the two can never disagree. An
+    empty history — or one that trained only unmapped muscles — yields the empty set.
+    """
+
+    return {
+        group
+        for session in history
+        for logged_set in session.logged_sets
+        for muscle in logged_set.targeted_muscles
+        if (group := classify(muscle)) is not MuscleGroup.UNCLASSIFIED
+    }
+
+
 def _groups_for_set(logged_set: _LoggedSet) -> set[MuscleGroup]:
     """The distinct Muscle Groups one Logged Set's Exercise trains.
 
@@ -289,8 +315,10 @@ def weekly_distribution(
 __all__ = [
     "MuscleGroup",
     "GROUP_ORDER",
+    "MUSCLE_BALANCE_WEEKS",
     "WeeklyComposition",
     "classify",
+    "covered_groups",
     "distribution",
     "weekly_distribution",
 ]
