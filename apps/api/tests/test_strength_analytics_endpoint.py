@@ -34,6 +34,7 @@ from app.repositories.session_repository import (
 from tests.conftest import ISSUER, make_signing_context
 
 SQUAT = 1
+PRESS = 2
 
 
 def build_client(ctx=None):
@@ -43,6 +44,11 @@ def build_client(ctx=None):
         "Back Squat",
         provenance=Provenance.CURATED,
         targeted_muscles=["quadriceps", "glutes"],
+    )
+    exercises.find_or_create(
+        "Overhead Press",
+        provenance=Provenance.CURATED,
+        targeted_muscles=["shoulders", "triceps"],
     )
     sessions = InMemorySessionRepository(exercises)
     logged = InMemoryLoggedSessionRepository(sessions, exercises)
@@ -167,7 +173,11 @@ def test_strength_empty_state_is_a_closed_gate_not_an_error():
     assert response.status_code == 200
     body = response.json()
     assert body["success"] is True
-    assert body["data"] == {"has_qualifying_strength": False, "records": []}
+    assert body["data"] == {
+        "has_qualifying_strength": False,
+        "records": [],
+        "trajectories": [],
+    }
     assert body["meta"] == {"total": 0, "limit": 20, "offset": 0}
 
 
@@ -184,6 +194,75 @@ def test_strength_is_scoped_to_the_requesting_user():
     data = response.json()["data"]
     assert data["records"] == []
     assert data["has_qualifying_strength"] is False
+
+
+def test_strength_serializes_ranked_trajectories_in_the_envelope():
+    # Arrange — the squat is trained twice, the press once
+    client, ctx, sessions, logged = build_client()
+
+    def _log(user, performed_on, sets):
+        session_view = sessions.create(
+            user,
+            SessionDraft(
+                training_type="strength", duration_minutes=45, prescriptions=[]
+            ),
+        )
+        logged.create(
+            user,
+            LoggedSessionDraft(
+                session_id=session_view.id, performed_on=performed_on, logged_sets=sets
+            ),
+        )
+
+    def _abs(kg):
+        return ParsedLoad(kind=LoadKind.ABSOLUTE, text=f"{kg:g} kg", kg=kg).to_dict()
+
+    _log(
+        "user_traj",
+        date.today() - timedelta(days=10),
+        [
+            LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(100.0)),
+            LoggedSetDraft(exercise_id=PRESS, reps=1, load=_abs(60.0)),
+        ],
+    )
+    _log(
+        "user_traj",
+        date.today() - timedelta(days=3),
+        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(110.0))],
+    )
+
+    # Act
+    response = client.get("/api/analytics/strength", headers=_auth(ctx, "user_traj"))
+
+    # Assert — the small-multiples ride in the envelope, most-frequent first, each with
+    # its oldest-first Top-Set series of {date, estimated_1rm}
+    assert response.status_code == 200
+    assert response.json()["data"]["trajectories"] == [
+        {
+            "exercise_id": SQUAT,
+            "exercise": "Back Squat",
+            "series": [
+                {
+                    "date": (date.today() - timedelta(days=10)).isoformat(),
+                    "estimated_1rm": 100.0,
+                },
+                {
+                    "date": (date.today() - timedelta(days=3)).isoformat(),
+                    "estimated_1rm": 110.0,
+                },
+            ],
+        },
+        {
+            "exercise_id": PRESS,
+            "exercise": "Overhead Press",
+            "series": [
+                {
+                    "date": (date.today() - timedelta(days=10)).isoformat(),
+                    "estimated_1rm": 60.0,
+                },
+            ],
+        },
+    ]
 
 
 def test_strength_requires_authentication():

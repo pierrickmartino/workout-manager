@@ -24,6 +24,10 @@ const BORDER = "#27272a";
 
 interface TopSetTrendChartProps {
   rows: TopSetTrendRow[];
+  // The chart body height. Defaults to the full `h-48` used on Exercise Detail; the
+  // Strength Analytics small-multiples pass a shorter class so a grid of them stays
+  // compact. Any other styling is unchanged, so the two surfaces read as one chart.
+  heightClass?: string;
 }
 
 // The Top-Set Trend bar chart (F6 Slice 3): one bar per qualifying session, the best
@@ -32,11 +36,17 @@ interface TopSetTrendChartProps {
 // draw; the SPECS panel (a Server Component) transforms the API series into `rows` and
 // hands them down. The most-recent bar is highlighted so the eye lands on the latest
 // state. Callers render this only for a non-empty series, so there is no empty branch.
-export function TopSetTrendChart({ rows }: TopSetTrendChartProps) {
+export function TopSetTrendChart({
+  rows,
+  heightClass = "h-48",
+}: TopSetTrendChartProps) {
   return (
-    <div className="h-48 w-full">
+    <div className={`${heightClass} w-full`}>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
+        <BarChart
+          data={rows}
+          margin={{ top: 8, right: 8, bottom: 0, left: -12 }}
+        >
           <XAxis
             dataKey="label"
             tick={{ fill: MUTED, fontSize: 11 }}
@@ -52,8 +62,15 @@ export function TopSetTrendChart({ rows }: TopSetTrendChartProps) {
             domain={["dataMin - 10", "dataMax + 5"]}
             tickFormatter={(value: number) => `${Math.round(value)}`}
           />
-          <Tooltip cursor={{ fill: "rgba(41, 231, 224, 0.06)" }} content={<TrendTooltip />} />
-          <Bar dataKey="estimate" radius={[2, 2, 0, 0]} isAnimationActive={false}>
+          <Tooltip
+            cursor={{ fill: "rgba(41, 231, 224, 0.06)" }}
+            content={<TrendTooltip />}
+          />
+          <Bar
+            dataKey="estimate"
+            radius={[2, 2, 0, 0]}
+            isAnimationActive={false}
+          >
             {rows.map((row) => (
               <Cell key={row.date} fill={row.isLatest ? CYAN : CYAN_DIM} />
             ))}

@@ -21,6 +21,7 @@ from dataclasses import dataclass
 
 from app.domain.personal_records import PersonalRecord, detect_personal_records
 from app.logbook.records import set_records
+from app.logbook.top_sets import ExerciseTrajectory, rank_qualifying_exercises
 from app.repositories.logged_session_repository import LoggedSessionRepository
 
 
@@ -33,14 +34,24 @@ class StrengthAnalyticsOverview:
     set a new Estimated-1RM best for its Exercise with the gain over that Exercise's prior
     PR. ``total_records`` is the full count across every page, so the caller can paginate.
 
+    ``trajectories`` is the ranked strength small-multiples (ADR-0024 / issue #177): the
+    user's top few *qualifying* Exercises by recent training frequency, each with its
+    oldest-first Top-Set series. Unlike the PR timeline it is **not** paginated — it is the
+    whole small-multiples set, the same on every page — because it is a fixed handful the
+    screen renders in one grid above the timeline.
+
     ``has_qualifying_strength`` gates the screen: true iff the user holds at least one
     Personal Record. A user with no comparable strength history reads ``False`` here and is
-    never offered the screen (nor shown a fabricated zero if they reach it directly).
+    never offered the screen (nor shown a fabricated zero if they reach it directly). A
+    qualifying trajectory and a Personal Record open the gate on the same condition — the
+    first absolute-Load set in the trustworthy window both sets a PR and starts a trajectory
+    — so the flag stays a single honest signal.
     """
 
     pr_timeline: tuple[PersonalRecord, ...]
     total_records: int
     has_qualifying_strength: bool
+    trajectories: tuple[ExerciseTrajectory, ...]
 
 
 def strength_analytics_overview(
@@ -70,6 +81,8 @@ def strength_analytics_overview(
         pr_timeline=page,
         total_records=len(timeline),
         has_qualifying_strength=bool(timeline),
+        # The small-multiples are the whole ranked set, independent of the timeline page.
+        trajectories=tuple(rank_qualifying_exercises(history)),
     )
 
 
