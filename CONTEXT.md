@@ -89,7 +89,7 @@ A 1–10 score of the user's ability, held **per training type** — a user can 
 _Avoid_: Beginner/intermediate/advanced (as the stored value), skill, rank
 
 **Progression**:
-The deterministic, no-AI adjustment of an Exercise Prescription's recommended load on the user's own copy, computed from Logged Sets (e.g. all reps hit at low perceived effort → increase load). The primary mechanism by which recommendations adjust over time; leaves the cached artifact untouched.
+The deterministic, no-AI adjustment of an Exercise Prescription on the user's own copy, computed from Logged Sets (e.g. all reps hit at low perceived effort → advance). For a movement with an external weight it steps the recommended load; for a **bodyweight** movement carrying added load it steps that added load; for a **pure bodyweight** movement — where there is no weight to add — it steps the target reps and, at the top of the range, *suggests* advancing to a harder Variation rather than growing reps without bound. It never auto-swaps a movement (that stays a user-initiated Substitution). The primary mechanism by which recommendations adjust over time; leaves the cached artifact untouched.
 _Avoid_: Progress (the records), adaptation
 
 **Preference / Limitation**:
@@ -118,16 +118,20 @@ _Avoid_: Readiness score, recovery %, 87% ready
 
 ## Strength & Records
 
+**Performed Body Weight**:
+The user's body mass at the moment a Logged Set was performed, captured onto the record so a bodyweight set's strength estimate is fixed by what actually happened and can never drift when the user's current weight later changes. Distinct from the Fitness Profile's mutable "now" weight and from a dated body-metric reading. Absent on sets logged before it was captured, or when no weight was on file at log time — which simply leaves that set outside strength records rather than guessing a mass.
+_Avoid_: Bodyweight (bare — collides with the Load kind), current weight, mass
+
 **Estimated 1RM**:
-A single comparable strength figure derived from one Logged Set's absolute Load and integer reps — an *estimate* of the heaviest single repetition the user could perform, never a measured lift. It is the common yardstick for detecting a Personal Record and for the per-Exercise strength number on the Exercise Detail screen. Undefined for non-absolute Loads (bodyweight, percent-of-1RM, qualitative) and for very-high-rep sets, where the estimate is not trustworthy.
+A single comparable strength figure derived from one Logged Set's resolved Load and integer reps — an *estimate* of the heaviest single repetition the user could perform, never a measured lift. It is the common yardstick for detecting a Personal Record and for the per-Exercise strength number on the Exercise Detail screen. Defined for **absolute** Loads and for **bodyweight** Loads once resolved against the set's Performed Body Weight (plus any added load); still undefined for percent-of-1RM and qualitative Loads and for very-high-rep sets, where the estimate is not trustworthy. For a bodyweight movement it serves only as the *within-Exercise* ordering yardstick — full body weight is an unreliable absolute across movements (a push-up lifts far less of it than a pull-up), so a bodyweight record is never surfaced as a kilogram headline comparable to a barbell lift.
 _Avoid_: 1RM (bare, implies a measured lift), one-rep max (as if tested)
 
 **Personal Record (PR)**:
-The best performance a user has ever logged for an Exercise, measured as the highest Estimated 1RM achieved on it. Comparable across rep ranges — a heavier estimated max at five reps outranks a lighter true single — so a PR reflects genuine strength gain, not merely the heaviest bar ever touched. Detected purely from Logged Sets (the record), never from a plan; only absolute-Load sets within a trustworthy rep range can set one. Surfaced on the Exercise Detail screen as the single strength figure — never split into a separate "personal best" load tile, which would collide with this term.
+The best performance a user has ever logged for an Exercise, measured as the highest Estimated 1RM achieved on it. Comparable across rep ranges — a heavier estimated max at five reps outranks a lighter true single — so a PR reflects genuine strength gain, not merely the heaviest bar ever touched. Detected purely from Logged Sets (the record), never from a plan; absolute-Load sets, and **bodyweight sets carrying a Performed Body Weight**, within a trustworthy rep range can set one. Surfaced on the Exercise Detail screen as the single strength figure — never split into a separate "personal best" load tile, which would collide with this term. A bodyweight movement's record is shown as the *set* that achieved it (its reps and any added load), not as a kilogram figure, since bodyweight is an unreliable absolute across movements.
 _Avoid_: Best, max weight, record (bare), personal best (for the raw heaviest load)
 
 **Top Set**:
-The single best Estimated 1RM set within one Logged Session for a given Exercise — that session's strength high-water mark. It is the per-session scalar the Exercise Detail top-set trend plots over the last several sessions, so the trend reads as Personal-Record trajectory on one yardstick. Distinct from the Personal Record, which is the best Top Set across *all* sessions; undefined for a session with no absolute-Load set in the trustworthy rep range.
+The single best Estimated 1RM set within one Logged Session for a given Exercise — that session's strength high-water mark. It is the per-session scalar the Exercise Detail top-set trend plots over the last several sessions, so the trend reads as Personal-Record trajectory on one yardstick. Distinct from the Personal Record, which is the best Top Set across *all* sessions; undefined for a session with no absolute-Load or Performed-Body-Weight set in the trustworthy rep range.
 _Avoid_: Best set (bare), heaviest set, top weight
 
 **Muscle Group**:
