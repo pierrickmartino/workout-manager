@@ -35,7 +35,8 @@ Concretely:
   a "daily quota" reading back into a model that rejects both. The chart is **descriptive
   only** — it *shows* distribution drift; *flagging* an under-trained bucket is a separate
   concern (the backlog's Muscle-Group Coverage-Prompts item), kept off this screen so the
-  two don't collide.
+  two don't collide. (That item was later designed as a *neutral* windowed-coverage signal
+  that deliberately does **not** flag, on `/analytics` — see ADR-0025.)
 
 - **PR history is the full all-time, all-Exercise timeline; `/analytics`'s feed becomes a
   teaser.** ADR-0011 caps the Recent Records feed at the last 8 PRs *because PRs are
