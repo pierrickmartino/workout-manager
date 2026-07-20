@@ -17,7 +17,12 @@ import { VolumeChart } from "@/components/pulse/volume-chart";
 import { MuscleSplit } from "@/components/pulse/muscle-split";
 import { Card } from "@/components/ui/card";
 import { toMuscleBars, type MuscleBar } from "@/lib/muscle-distribution";
-import { toRecordRows, type RecordRow } from "@/lib/records-view";
+import {
+  toRecordRows,
+  toRecentRecordsTeaser,
+  type RecordRow,
+  type RecentRecordsTeaser,
+} from "@/lib/records-view";
 import {
   toVolumeRows,
   formatVolumeDelta,
@@ -56,11 +61,14 @@ export default async function AnalyticsPage({
   const muscleBars = toMuscleBars(overview.muscle_distribution);
   const recordRows = toRecordRows(overview.recent_records);
   // The Strength Analytics screen is offered only to a user with qualifying strength
-  // history — for this slice, the same condition the strength read model gates on
+  // history — the same condition the strength read model gates on
   // (`has_qualifying_strength`): at least one all-time Personal Record. Gating on the
   // feed already in hand keeps this screen a single fetch rather than lure a user with
-  // no comparable strength history into an empty screen.
-  const hasQualifyingStrength = overview.recent_records.length > 0;
+  // no comparable strength history into an empty screen. The same teaser drives both the
+  // Recent Records "See all records →" link and the Operations nav entry, so the two
+  // affordances into the strength screen can never disagree (ADR-0011).
+  const recordsTeaser = toRecentRecordsTeaser(overview.recent_records);
+  const hasQualifyingStrength = recordsTeaser !== null;
 
   return (
     <section className="flex flex-col gap-6">
@@ -94,7 +102,9 @@ export default async function AnalyticsPage({
         </Card>
       )}
 
-      {recordRows.length > 0 ? <RecentRecords rows={recordRows} /> : null}
+      {recordRows.length > 0 ? (
+        <RecentRecords rows={recordRows} teaser={recordsTeaser} />
+      ) : null}
 
       <div className="flex flex-col gap-4">
         <SectionHeader>OPERATIONS</SectionHeader>
@@ -192,11 +202,33 @@ function TotalVolume({
 // first, each a row of Exercise · new Estimated 1RM · gain over the prior PR · date.
 // Deliberately decoupled from the range toggle so genuine strength milestones stay
 // visible even on a quiet week. PRs are derived read-time from Logged Sets — a
-// heavier estimated max at more reps outranks a lighter true single.
-function RecentRecords({ rows }: { rows: RecordRow[] }) {
+// heavier estimated max at more reps outranks a lighter true single. When the user has
+// qualifying strength history, the section header carries a teaser into the full,
+// all-time PR timeline on the Strength Analytics screen (ADR-0011): the 8-cap feed is a
+// teaser here, not the only PR-history surface.
+function RecentRecords({
+  rows,
+  teaser,
+}: {
+  rows: RecordRow[];
+  teaser: RecentRecordsTeaser | null;
+}) {
   return (
     <div className="flex flex-col gap-4">
-      <SectionHeader>RECENT RECORDS</SectionHeader>
+      <SectionHeader
+        meta={
+          teaser ? (
+            <Link
+              href={teaser.href}
+              className="text-cyan hover:underline"
+            >
+              {teaser.label}
+            </Link>
+          ) : null
+        }
+      >
+        RECENT RECORDS
+      </SectionHeader>
       <Card className="divide-y divide-border overflow-hidden py-0">
         {rows.map((row, index) => (
           <div

@@ -46,7 +46,12 @@ Concretely:
   so a window-scoped feed would read as empty/broken. The feed shows the **last 8
   PRs all-time**, newest first (Exercise · new Estimated 1RM · gain over the prior
   PR · date). The window-scoped view of PRs lives in the bento's **new-PRs count**,
-  not the feed.
+  not the feed. **Amended by ADR-0024 (issue #179):** the 8-cap feed is now a
+  **teaser**, not the only PR-history surface. When the user has qualifying strength
+  history it carries a *"See all records →"* affordance into the full, all-time PR
+  timeline on the Strength Analytics screen (`/analytics/strength`); the affordance
+  is gated on the same condition as that screen's nav entry, so it never lands on an
+  empty gate. The last-8 content itself is unchanged.
 
 ## Consequences
 
