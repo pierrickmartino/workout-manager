@@ -1,0 +1,194 @@
+"""The Strength Analytics read model (F-strength Slice 1): a strength lens over the
+honest *record* side. ``strength_analytics_overview`` reads the user's Logged Sessions
+once and projects the all-time, all-Exercise **Personal Record timeline** — the same
+PRs the Analytics feed detects, reversed to newest-first and paginated — alongside a
+``has_qualifying_strength`` gate flag that is true iff the user holds at least one
+Personal Record. It reuses ``logbook/records.set_records`` +
+``domain/personal_records.detect_personal_records`` verbatim; no new strength math, no
+stored ledger. Read-only over the record side and scoped to the owning user. Exercised
+with the in-memory Logged-Session repository."""
+
+from __future__ import annotations
+
+from datetime import date, timedelta
+
+from app.domain.exercise import Provenance
+from app.domain.load import LoadKind, ParsedLoad
+from app.logbook.strength_analytics import strength_analytics_overview
+from app.repositories.exercise_repository import InMemoryExerciseRepository
+from app.repositories.logged_session_repository import (
+    InMemoryLoggedSessionRepository,
+    LoggedSessionDraft,
+    LoggedSetDraft,
+)
+from app.repositories.session_repository import (
+    InMemorySessionRepository,
+    SessionDraft,
+)
+
+SQUAT = 1
+PRESS = 2
+TODAY = date(2026, 7, 5)
+
+
+def _build():
+    exercises = InMemoryExerciseRepository()
+    exercises.find_or_create(
+        "Back Squat",
+        provenance=Provenance.CURATED,
+        targeted_muscles=["quadriceps", "glutes"],
+    )
+    exercises.find_or_create(
+        "Overhead Press",
+        provenance=Provenance.CURATED,
+        targeted_muscles=["shoulders", "triceps"],
+    )
+    sessions = InMemorySessionRepository(exercises)
+    logged = InMemoryLoggedSessionRepository(sessions, exercises)
+    return exercises, sessions, logged
+
+
+def _abs(kg: float) -> dict:
+    """The stored typed-Load dict for an absolute kilogram load."""
+
+    return ParsedLoad(kind=LoadKind.ABSOLUTE, text=f"{kg:g} kg", kg=kg).to_dict()
+
+
+def _log(sessions, logged, user, performed_on, sets):
+    session_view = sessions.create(
+        user,
+        SessionDraft(training_type="strength", duration_minutes=45, prescriptions=[]),
+    )
+    logged.create(
+        user,
+        LoggedSessionDraft(
+            session_id=session_view.id,
+            performed_on=performed_on,
+            logged_sets=sets,
+        ),
+    )
+
+
+def test_pr_timeline_is_all_time_newest_first_and_gate_is_open():
+    # Arrange — a 100 kg PR 200 days ago, a heavier 110 kg PR 100 days ago
+    _, sessions, logged = _build()
+    _log(
+        sessions,
+        logged,
+        "user_pr",
+        TODAY - timedelta(days=200),
+        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(100.0))],
+    )
+    _log(
+        sessions,
+        logged,
+        "user_pr",
+        TODAY - timedelta(days=100),
+        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(110.0))],
+    )
+
+    # Act
+    overview = strength_analytics_overview("user_pr", logged=logged)
+
+    # Assert — both all-time PRs, newest first, with gain over the prior PR; gate open
+    assert overview.has_qualifying_strength is True
+    assert [r.estimated_1rm for r in overview.pr_timeline] == [110.0, 100.0]
+    assert overview.pr_timeline[0].gain == 10.0
+    assert overview.total_records == 2
+
+
+def test_a_user_with_no_qualifying_strength_gets_a_closed_gate_not_an_error():
+    # Arrange — a session logged with only a bodyweight load: no absolute-Load PR possible
+    _, sessions, logged = _build()
+    _log(
+        sessions,
+        logged,
+        "user_no_pr",
+        TODAY,
+        [
+            LoggedSetDraft(
+                exercise_id=SQUAT,
+                reps=5,
+                load=ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict(),
+            )
+        ],
+    )
+
+    # Act
+    overview = strength_analytics_overview("user_no_pr", logged=logged)
+
+    # Assert — the honest empty state: closed gate, empty timeline, not an error
+    assert overview.has_qualifying_strength is False
+    assert overview.pr_timeline == ()
+    assert overview.total_records == 0
+
+
+def test_an_empty_history_yields_a_closed_gate_zero_state():
+    # Arrange — a user who has logged nothing at all
+    _, _, logged = _build()
+
+    # Act
+    overview = strength_analytics_overview("user_empty", logged=logged)
+
+    # Assert
+    assert overview.has_qualifying_strength is False
+    assert overview.pr_timeline == ()
+    assert overview.total_records == 0
+
+
+def _log_ascending_prs(sessions, logged, user, count):
+    """Log ``count`` Squat singles on distinct days, each heavier than the last.
+
+    Oldest day is lightest, so every set clears the prior best and records — giving a
+    newest-first timeline whose leading (heaviest) entry is the most recent day.
+    """
+
+    for day in range(1, count + 1):
+        kg = 100.0 + (count - day)  # day 1 = newest = heaviest
+        _log(
+            sessions,
+            logged,
+            user,
+            TODAY - timedelta(days=day),
+            [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(kg))],
+        )
+
+
+def test_pagination_returns_only_the_requested_page_but_the_full_total():
+    # Arrange — five all-time PRs; ask for the first two, newest first
+    _, sessions, logged = _build()
+    _log_ascending_prs(sessions, logged, "user_page", 5)
+
+    # Act
+    overview = strength_analytics_overview("user_page", logged=logged, limit=2, offset=0)
+
+    # Assert — a two-row page (heaviest/newest first), but the total still reports all five
+    assert [r.estimated_1rm for r in overview.pr_timeline] == [104.0, 103.0]
+    assert overview.total_records == 5
+
+
+def test_pagination_offset_walks_into_the_middle_of_the_timeline():
+    # Arrange — five all-time PRs
+    _, sessions, logged = _build()
+    _log_ascending_prs(sessions, logged, "user_off", 5)
+
+    # Act — skip the first two, take the next two
+    overview = strength_analytics_overview("user_off", logged=logged, limit=2, offset=2)
+
+    # Assert — the third and fourth newest
+    assert [r.estimated_1rm for r in overview.pr_timeline] == [102.0, 101.0]
+    assert overview.total_records == 5
+
+
+def test_an_offset_past_the_end_yields_an_empty_page_with_the_gate_still_open():
+    # Arrange — three all-time PRs
+    _, sessions, logged = _build()
+    _log_ascending_prs(sessions, logged, "user_end", 3)
+
+    # Act — page beyond the last record
+    overview = strength_analytics_overview("user_end", logged=logged, limit=2, offset=10)
+
+    # Assert — an empty page, but the user still qualifies and the total is honest
+    assert overview.pr_timeline == ()
+    assert overview.total_records == 3
+    assert overview.has_qualifying_strength is True

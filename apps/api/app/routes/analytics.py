@@ -19,8 +19,10 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query
 
 from app.auth.dependencies import get_current_user
+from app.domain.personal_records import PersonalRecord
 from app.envelope import success_envelope
 from app.logbook.analytics import AnalyticsOverview, AnalyticsRange, analytics_overview
+from app.logbook.strength_analytics import strength_analytics_overview
 from app.repositories.deps import (
     get_logged_session_repository,
     get_profile_repository,
@@ -29,6 +31,11 @@ from app.repositories.logged_session_repository import LoggedSessionRepository
 from app.repositories.profile_repository import ProfileRepository
 
 router = APIRouter(prefix="/api", tags=["analytics"])
+
+# The Strength Analytics PR timeline paginates like the Exercise catalog: a modest
+# default page, capped so an over-range request is rejected rather than served.
+DEFAULT_TIMELINE_LIMIT = 20
+MAX_TIMELINE_LIMIT = 50
 
 
 def _serialize(overview: AnalyticsOverview) -> dict:
@@ -72,3 +79,38 @@ def read_analytics(
         clerk_user_id, range, logged=logged, today=date.today(), profiles=profiles
     )
     return success_envelope(_serialize(overview))
+
+
+def _serialize_record(record: PersonalRecord) -> dict:
+    return {
+        "exercise": record.exercise_name,
+        "estimated_1rm": record.estimated_1rm,
+        "gain": record.gain,
+        "date": record.performed_on.isoformat(),
+    }
+
+
+@router.get("/analytics/strength")
+def read_strength_analytics(
+    limit: int = Query(default=DEFAULT_TIMELINE_LIMIT, ge=1, le=MAX_TIMELINE_LIMIT),
+    offset: int = Query(default=0, ge=0),
+    clerk_user_id: str = Depends(get_current_user),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+) -> dict:
+    """The Strength Analytics screen's PR timeline: the all-time, all-Exercise Personal
+    Record stream, newest-first and paginated, plus the ``has_qualifying_strength`` gate.
+
+    Reads are scoped to the owning user. An out-of-range ``limit``/``offset`` is rejected
+    by validation and surfaced in the same error envelope; a user with no qualifying
+    strength history reads a closed gate and an empty timeline, never an error."""
+
+    overview = strength_analytics_overview(
+        clerk_user_id, logged=logged, limit=limit, offset=offset
+    )
+    return success_envelope(
+        {
+            "has_qualifying_strength": overview.has_qualifying_strength,
+            "records": [_serialize_record(record) for record in overview.pr_timeline],
+        },
+        meta={"total": overview.total_records, "limit": limit, "offset": offset},
+    )
