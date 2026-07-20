@@ -134,6 +134,10 @@ _Avoid_: Best set (bare), heaviest set, top weight
 A coarse, curated bucket — Legs, Chest, Back, Shoulders, Arms, or Core — that a catalog Exercise's free-form targeted muscles roll up into, used to show how a user's training is distributed across the body on the Analytics screen. The mapping is curated, not AI-derived; a targeted muscle with no known mapping falls into an explicit **Unclassified** bucket rather than being silently dropped. Coarser than an Exercise's own targeted-muscle list, and distinct from the training-type dimension.
 _Avoid_: Body part, region, muscle (bare)
 
+**Muscle Group Coverage**:
+Which of the six real Muscle Groups a stretch of the user's record has trained *at all* — a presence/absence fact per group, distinct from the proportional split (the Muscle Group distribution / balance). Read over a recent window on the Analytics screen and, all-time, by the Full Coverage Achievement; the two share one definition of "covered". The Unclassified bucket is never a coverage target — it is not a group anyone trains — though recent unmapped work is disclosed, never silently dropped. Descriptive only: coverage names what has and hasn't appeared, and never prescribes training a gap.
+_Avoid_: Balance, distribution (those are the proportional split, not presence), quota, missed leg day
+
 **Primary / Secondary Muscle**:
 The emphasis split of an Exercise's targeted muscles: the Primary muscles are the prime movers a movement is chosen to train; the Secondary muscles assist. Their union is the Exercise's full targeted-muscle list — the durable set the Muscle Group roll-up reads — so the split is an *emphasis annotation* layered on top, not a replacement. Present only where the AI enrichment actually asserted it (or a curator did); an Exercise with no asserted split has no Primary/Secondary distinction and is shown as a flat muscle list rather than one with a fabricated primacy. Distinct from Muscle Group, which is the coarse six-bucket roll-up.
 _Avoid_: Prime/assisting mover (as the stored term), main muscle
