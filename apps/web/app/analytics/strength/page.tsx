@@ -6,9 +6,11 @@ import {
   toStrengthTimelineView,
   type StrengthTimelineView,
 } from "@/lib/strength-analytics-view";
+import { toStrengthTrajectories } from "@/lib/strength-trajectories-view";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { Alert } from "@/components/pulse/alert";
+import { StrengthTrajectories } from "@/components/analytics/strength-trajectories";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -16,13 +18,16 @@ import { cn } from "@/lib/utils";
 // first page matches whether or not a ?offset= is supplied.
 const TIMELINE_LIMIT = 20;
 
-// The Strength Analytics screen (F-strength Slice 1): a dedicated strength lens over the
-// honest record side, showing the user's complete Personal Record timeline as a flat
-// reverse-chronological stream — each row the Exercise, its new Estimated 1RM, the gain
-// over the prior PR, and the date. Everything is a read-time projection over Logged Sets;
-// a user with no qualifying strength history sees an honest empty state that explains what
-// a strength record needs, never a fabricated zero. A thin renderer: all row shaping,
-// paging, and the empty/gate decision live in the `strength-analytics-view` view-model.
+// The Strength Analytics screen: a dedicated strength lens over the honest record side.
+// It leads with the ranked strength trajectories (issue #177) — small-multiples of the
+// user's most-trained qualifying lifts, each tapping through to its full Exercise Detail
+// chart — then the complete Personal Record timeline as a flat reverse-chronological
+// stream (Exercise · new Estimated 1RM · gain over the prior PR · date). Everything is a
+// read-time projection over Logged Sets; a user with no qualifying strength history sees
+// an honest empty state that explains what a strength record needs, never a fabricated
+// zero, and the trajectories section hides itself when there are no qualifying lifts. A
+// thin renderer: all row/tile shaping, paging, and the empty/gate decision live in the
+// `strength-analytics-view` and `strength-trajectories-view` view-models.
 export default async function StrengthAnalyticsPage({
   searchParams,
 }: {
@@ -50,6 +55,7 @@ export default async function StrengthAnalyticsPage({
     offset,
     total,
   });
+  const trajectories = toStrengthTrajectories(envelope.data.trajectories);
 
   return (
     <section className="flex flex-col gap-6">
@@ -58,7 +64,10 @@ export default async function StrengthAnalyticsPage({
       {view.isEmpty ? (
         <StrengthEmptyState />
       ) : (
-        <PersonalRecordTimeline view={view} offset={offset} />
+        <>
+          <StrengthTrajectories tiles={trajectories} />
+          <PersonalRecordTimeline view={view} offset={offset} />
+        </>
       )}
     </section>
   );
@@ -77,9 +86,10 @@ function StrengthEmptyState() {
   return (
     <Card className="flex flex-col items-start gap-3 p-6">
       <p className="font-sans text-sm text-text-secondary">
-        No strength records yet. A strength record comes from a set logged with a
-        weight in kilograms at 1–12 reps — enough to estimate a one-rep max. Log a
-        few working sets and your Personal Record timeline will build here.
+        No strength records yet. A strength record comes from a set logged with
+        a weight in kilograms at 1–12 reps — enough to estimate a one-rep max.
+        Log a few working sets and your Personal Record timeline will build
+        here.
       </p>
       <Link
         href="/sessions/new"
