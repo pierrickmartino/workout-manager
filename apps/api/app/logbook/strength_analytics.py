@@ -20,16 +20,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-from app.domain.muscle_groups import WeeklyComposition, weekly_distribution
+from app.domain.muscle_groups import (
+    MUSCLE_BALANCE_WEEKS,
+    WeeklyComposition,
+    weekly_distribution,
+)
 from app.domain.personal_records import PersonalRecord, detect_personal_records
 from app.logbook.records import set_records
 from app.logbook.top_sets import ExerciseTrajectory, rank_qualifying_exercises
 from app.repositories.logged_session_repository import LoggedSessionRepository
 
-# The Muscle-Group balance charts the last eight weeks — the same weekly cadence the
-# Streak counts on (ADR-0024: weekly, not daily), a window long enough to read drift
-# yet short enough to stay legible as stacked bars on a phone.
-MUSCLE_BALANCE_WEEKS = 8
+# The balance-over-time series spans :data:`MUSCLE_BALANCE_WEEKS`, imported from the
+# muscle-groups domain so the chart provably shares its recent window with the coming
+# Muscle Group Coverage read (issue #187) rather than keeping its own private eight.
 
 
 @dataclass(frozen=True)
