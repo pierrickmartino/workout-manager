@@ -23,6 +23,10 @@ from app.repositories.logged_session_repository import (
     InMemoryLoggedSessionRepository,
     LoggedSetDraft,
 )
+from app.repositories.profile_repository import (
+    InMemoryProfileRepository,
+    ProfileUpdate,
+)
 from app.repositories.session_repository import (
     InMemorySessionRepository,
     PrescriptionDraft,
@@ -34,7 +38,8 @@ def _wire():
     exercises = InMemoryExerciseRepository()
     sessions = InMemorySessionRepository(exercises)
     logged = InMemoryLoggedSessionRepository(sessions, exercises)
-    return sessions, exercises, logged
+    profiles = InMemoryProfileRepository()
+    return sessions, exercises, logged, profiles
 
 
 def _owned_session(sessions, exercises, owner="user_owner"):
@@ -52,7 +57,7 @@ def _owned_session(sessions, exercises, owner="user_owner"):
 
 def test_log_session_records_a_performance_for_the_owner():
     # Arrange
-    sessions, exercises, logged = _wire()
+    sessions, exercises, logged, profiles = _wire()
     session_view, squat = _owned_session(sessions, exercises)
     request = LogSessionRequest(
         session_id=session_view.id,
@@ -66,7 +71,7 @@ def test_log_session_records_a_performance_for_the_owner():
 
     # Act
     view = log_session(
-        request, "user_owner", sessions=sessions, exercises=exercises, logged=logged
+        request, "user_owner", sessions=sessions, exercises=exercises, logged=logged, profiles=profiles
     )
 
     # Assert
@@ -76,9 +81,61 @@ def test_log_session_records_a_performance_for_the_owner():
     assert logged.get(view.id, "user_owner") is not None
 
 
+def test_log_session_snapshots_one_profile_weight_onto_every_set():
+    # Arrange — the owner has a body weight on file and performs two sets
+    sessions, exercises, logged, profiles = _wire()
+    session_view, squat = _owned_session(sessions, exercises)
+    profiles.update("user_owner", ProfileUpdate(weight_kg=77.0))
+    request = LogSessionRequest(
+        session_id=session_view.id,
+        performed_on=date(2026, 6, 20),
+        logged_sets=[
+            LoggedSetDraft(exercise_id=squat.id, reps=8),
+            LoggedSetDraft(exercise_id=squat.id, reps=6),
+        ],
+    )
+
+    # Act
+    view = log_session(
+        request,
+        "user_owner",
+        sessions=sessions,
+        exercises=exercises,
+        logged=logged,
+        profiles=profiles,
+    )
+
+    # Assert — one performance shares one mass, captured once at the write boundary
+    assert [s.body_weight_kg for s in view.logged_sets] == [77.0, 77.0]
+
+
+def test_log_session_without_a_profile_weight_records_no_body_weight():
+    # Arrange — the owner has no body weight on file
+    sessions, exercises, logged, profiles = _wire()
+    session_view, squat = _owned_session(sessions, exercises)
+    request = LogSessionRequest(
+        session_id=session_view.id,
+        performed_on=date(2026, 6, 20),
+        logged_sets=[LoggedSetDraft(exercise_id=squat.id, reps=8)],
+    )
+
+    # Act
+    view = log_session(
+        request,
+        "user_owner",
+        sessions=sessions,
+        exercises=exercises,
+        logged=logged,
+        profiles=profiles,
+    )
+
+    # Assert — no mass is invented; the set stays outside strength records
+    assert view.logged_sets[0].body_weight_kg is None
+
+
 def test_log_session_rejects_logging_another_users_session():
     # Arrange — the Session belongs to user_owner
-    sessions, exercises, logged = _wire()
+    sessions, exercises, logged, profiles = _wire()
     session_view, squat = _owned_session(sessions, exercises)
     request = LogSessionRequest(
         session_id=session_view.id,
@@ -94,13 +151,14 @@ def test_log_session_rejects_logging_another_users_session():
             sessions=sessions,
             exercises=exercises,
             logged=logged,
+            profiles=profiles,
         )
     assert logged.list_for_user("user_intruder") == []
 
 
 def test_log_session_rejects_an_unknown_exercise():
     # Arrange — a logged set references an exercise id that is not in the catalog
-    sessions, exercises, logged = _wire()
+    sessions, exercises, logged, profiles = _wire()
     session_view, _ = _owned_session(sessions, exercises)
     request = LogSessionRequest(
         session_id=session_view.id,
@@ -111,6 +169,11 @@ def test_log_session_rejects_an_unknown_exercise():
     # Act / Assert
     with pytest.raises(UnknownExerciseError):
         log_session(
-            request, "user_owner", sessions=sessions, exercises=exercises, logged=logged
+            request,
+            "user_owner",
+            sessions=sessions,
+            exercises=exercises,
+            logged=logged,
+            profiles=profiles,
         )
     assert logged.list_for_user("user_owner") == []

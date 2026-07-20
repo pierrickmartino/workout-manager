@@ -262,6 +262,12 @@ class LoggedSet(SQLModel, table=True):
     # its meaning and is never silently dropped by a kg-only aggregate.
     load: dict | None = Field(default=None, sa_column=Column(JSON, nullable=True))
     perceived_difficulty: int | None = Field(default=None)
+    # Performed Body Weight (ADR-0026): the performer's body mass at the moment this
+    # set was logged, snapshotted from the Profile once at the write boundary so a
+    # bodyweight set's strength estimate is fixed by what happened and never drifts.
+    # NULL when no weight was on file — the set is left outside strength records, not
+    # given a fabricated mass. Additive/nullable: sets logged before this stay NULL.
+    body_weight_kg: float | None = Field(default=None)
 
 
 class MetricEntry(SQLModel, table=True):

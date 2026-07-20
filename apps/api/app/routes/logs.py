@@ -26,6 +26,7 @@ from app.logbook.service import (
 from app.repositories.deps import (
     get_exercise_repository,
     get_logged_session_repository,
+    get_profile_repository,
     get_session_repository,
 )
 from app.repositories.exercise_repository import ExerciseRepository
@@ -34,6 +35,7 @@ from app.repositories.logged_session_repository import (
     LoggedSessionView,
     LoggedSetDraft,
 )
+from app.repositories.profile_repository import ProfileRepository
 from app.repositories.session_repository import SessionRepository
 
 router = APIRouter(prefix="/api", tags=["logs"])
@@ -125,6 +127,7 @@ def _serialize(view: LoggedSessionView) -> dict:
                 "perceived_difficulty": s.perceived_difficulty,
                 "exercise_id": s.exercise_id,
                 "exercise_name": s.exercise_name,
+                "body_weight_kg": s.body_weight_kg,
             }
             for s in view.logged_sets
         ],
@@ -139,6 +142,7 @@ def create_log(
     sessions: SessionRepository = Depends(get_session_repository),
     exercises: ExerciseRepository = Depends(get_exercise_repository),
     logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+    profiles: ProfileRepository = Depends(get_profile_repository),
 ) -> dict:
     request = LogSessionRequest(
         session_id=session_id,
@@ -154,6 +158,7 @@ def create_log(
             sessions=sessions,
             exercises=exercises,
             logged=logged,
+            profiles=profiles,
         )
     except SessionNotOwnedError as exc:
         raise HTTPException(

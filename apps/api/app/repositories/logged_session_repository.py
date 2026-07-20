@@ -23,12 +23,17 @@ from app.repositories.session_repository import SessionRepository
 
 @dataclass(frozen=True)
 class LoggedSetDraft:
-    """One actual set to record, referencing the catalog Exercise performed."""
+    """One actual set to record, referencing the catalog Exercise performed.
+
+    ``body_weight_kg`` is the Performed Body Weight (ADR-0026) — the performer's mass
+    snapshotted onto the set at the write boundary, or ``None`` when no weight is on
+    file (never guessed). It is raw record data, like ``reps`` or ``load``."""
 
     exercise_id: int
     reps: int
     load: dict | None = None
     perceived_difficulty: int | None = None
+    body_weight_kg: float | None = None
 
 
 @dataclass(frozen=True)
@@ -58,6 +63,9 @@ class LoggedSetView:
     perceived_difficulty: int | None
     exercise_id: int
     exercise_name: str
+    # Performed Body Weight (ADR-0026), carried through so later slices can score a
+    # bodyweight set against the mass performed at; ``None`` when none was captured.
+    body_weight_kg: float | None = None
     # The performed Exercise's free-form targeted muscles, denormalized onto the
     # view so read models (e.g. the Analytics muscle distribution) never touch the
     # ORM — mirrors how ``exercise_name`` is carried here.
@@ -109,6 +117,7 @@ def _set_view(logged_set: LoggedSet, exercise: Exercise) -> LoggedSetView:
         perceived_difficulty=logged_set.perceived_difficulty,
         exercise_id=exercise.id,
         exercise_name=exercise.name,
+        body_weight_kg=logged_set.body_weight_kg,
         targeted_muscles=list(exercise.targeted_muscles),
     )
 
@@ -162,6 +171,7 @@ class SqlLoggedSessionRepository:
                     reps=logged_set.reps,
                     load=logged_set.load,
                     perceived_difficulty=logged_set.perceived_difficulty,
+                    body_weight_kg=logged_set.body_weight_kg,
                 )
             )
         self._session.commit()
@@ -237,6 +247,7 @@ class InMemoryLoggedSessionRepository:
                 reps=logged_set.reps,
                 load=logged_set.load,
                 perceived_difficulty=logged_set.perceived_difficulty,
+                body_weight_kg=logged_set.body_weight_kg,
             )
             for position, logged_set in enumerate(draft.logged_sets)
         ]
