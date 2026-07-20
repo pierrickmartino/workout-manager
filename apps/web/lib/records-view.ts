@@ -24,6 +24,26 @@ function formatRecordDate(iso: string): string {
   return `${MONTHS[month - 1]} ${day}`;
 }
 
+// The "See all records" teaser that links the account-wide Recent Records feed (the
+// last 8 PRs all-time) into the full, all-time Personal Record timeline on the Strength
+// Analytics screen. `href` is the timeline target; `label` is the affordance text.
+export interface RecentRecordsTeaser {
+  href: string;
+  label: string;
+}
+
+// Decide whether the Recent Records feed shows a teaser into the full PR timeline.
+// Returned only when the user has qualifying strength history — the same condition that
+// gates the Strength Analytics nav entry (at least one all-time PR) — so the link never
+// lands on an empty screen. `null` means: render no affordance. Pure and server-free.
+export function toRecentRecordsTeaser(
+  records: readonly PersonalRecordEntry[],
+): RecentRecordsTeaser | null {
+  return records.length > 0
+    ? { href: "/analytics/strength", label: "See all records →" }
+    : null;
+}
+
 // Turn the API's Personal Record entries into display rows, preserving the feed's
 // newest-first order. Pure and server-free, so it is safe from either a Server or
 // Client Component.

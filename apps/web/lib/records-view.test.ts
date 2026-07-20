@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { toRecordRows } from "./records-view.ts";
+import { toRecordRows, toRecentRecordsTeaser } from "./records-view.ts";
 import type { PersonalRecordEntry } from "./analytics-types.ts";
 
 // `toRecordRows` turns the API's Personal Record entries into display rows for the
@@ -62,4 +62,28 @@ test("preserves the feed's newest-first order", () => {
     rows.map((row) => row.estimate),
     ["110 kg", "100 kg"],
   );
+});
+
+// `toRecentRecordsTeaser` decides the "See all records" affordance that links the
+// account-wide Recent Records feed into the full PR timeline on the Strength Analytics
+// screen — shown only when the user has qualifying strength history, so it never lands
+// on an empty screen.
+
+test("offers a teaser into the strength PR timeline when records exist", () => {
+  // Arrange — the user has qualifying strength history in the feed
+  // Act
+  const teaser = toRecentRecordsTeaser([RECORD]);
+
+  // Assert — a live affordance pointing at the Strength Analytics timeline
+  assert.notEqual(teaser, null);
+  assert.equal(teaser?.href, "/analytics/strength");
+});
+
+test("shows no teaser when the user has no qualifying strength history", () => {
+  // Arrange — an empty feed means the strength screen would be an empty gate
+  // Act
+  const teaser = toRecentRecordsTeaser([]);
+
+  // Assert — no dead link, consistent with the gated nav entry
+  assert.equal(teaser, null);
 });
