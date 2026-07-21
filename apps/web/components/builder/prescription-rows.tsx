@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -13,9 +14,11 @@ import {
   PointerSensor,
   TouchSensor,
   closestCenter,
+  useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -25,7 +28,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import { LOAD_KIND_OPTIONS, type LoadKind } from "@/lib/load";
-import { classifyDrag, rowDropId } from "@/lib/protocol-builder";
+import { boxDropId, chipDropId, classifyDrag, rowDropId } from "@/lib/protocol-builder";
 import type {
   DraftPrescription,
   DropIntent,
@@ -45,13 +48,15 @@ import { Button } from "@/components/ui/button";
 
 type PrescriptionField = "sets" | "reps" | "restSeconds" | "tempo";
 
-// The drag id scheme is owned by `lib/protocol-builder` (`rowDropId` / `classifyDrag`,
-// #217) so the render layer and the pure classifier never drift: each un-performed row
-// is a sortable source (`row-<pos>`) whose grip handle is the *only* drag source, and a
-// drop is classified into a semantic `DropIntent`. Positions are stable within one drag
-// (the reducer dispatches only on drop), so the index doubles as the id. The container
-// box + link chip drop targets (`box-`/`chip-`) arrive with drag-driven grouping in a
-// later slice; today only row bodies exist, so drops resolve to reorder/leave.
+// The drag id scheme is owned by `lib/protocol-builder` (`rowDropId` / `chipDropId` /
+// `boxDropId` / `classifyDrag`, #217) so the render layer and the pure classifier never
+// drift: each un-performed row is a sortable source (`row-<pos>`) whose grip handle is
+// the *only* drag source, and a drop is classified into a semantic `DropIntent`.
+// Positions are stable within one drag (the reducer dispatches only on drop), so the
+// index doubles as the id. Alongside the row bodies (reorder / leave-group) the two
+// group drop targets are wired here (#218): a solo's link chip (`chip-<pos>`) forms a
+// new Superset, and a container box (`box-<group>`) joins that Superset — both surfaced
+// while a drag is in flight and resolved by the self-healing resolver on release.
 
 // The pointer drag only starts after an 8px move so taps still reach the row's
 // buttons; touch waits 150ms so a scroll gesture isn't hijacked into a drag.
@@ -76,10 +81,10 @@ interface PrescriptionListProps {
   onGroupWithNext: (position: number) => void;
   onUngroup: (position: number) => void;
   onRemove: (position: number) => void;
-  // Drag gesture (#217): a drop is classified into a semantic `DropIntent` and applied
-  // by the self-healing resolver. This slice only produces reorder/leave intents (row
-  // bodies are the only drop targets); drag-driven grouping arrives with the container
-  // box + link chip targets in a later slice.
+  // Drag gesture (#217/#218): a drop is classified into a semantic `DropIntent` and
+  // applied by the self-healing resolver. All four intents are drag-reachable — row
+  // bodies reorder or leave a group, a solo's link chip forms a new Superset, and a
+  // container box joins one — so Superset membership is fully drag-manipulable.
   onResolveDrop: (intent: DropIntent) => void;
 }
 
@@ -99,6 +104,11 @@ export function PrescriptionList({
   onRemove,
   onResolveDrop,
 }: PrescriptionListProps) {
+  // The row currently being dragged (`row-<pos>` id), or null when idle. The group drop
+  // targets (link chips, container join hint) surface only while a drag is in flight
+  // (#218) — escalating feedback that keeps the resting list uncluttered.
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: POINTER_ACTIVATION_DISTANCE },
@@ -129,16 +139,27 @@ export function PrescriptionList({
   const rowIds = prescriptions.map((_, position) => rowDropId(position));
   const lastPosition = prescriptions.length - 1;
 
+  function onDragStart(event: DragStartEvent) {
+    setDraggingId(String(event.active.id));
+  }
+
   function onDragEnd(event: DragEndEvent) {
+    setDraggingId(null);
     const { active, over } = event;
     // The pure classifier decides what the drop means (or nothing, for a malformed id
-    // or a drop onto self); the reducer's resolver then applies it (#217).
+    // or a drop onto self); the reducer's resolver then applies it (#217/#218). The
+    // over id's prefix names the intent: a row body reorders/leaves, a link chip forms
+    // a new Superset, a container box joins one.
     const intent = classifyDrag(
       String(active.id),
       over ? String(over.id) : null,
       prescriptions,
     );
     if (intent) onResolveDrop(intent);
+  }
+
+  function onDragCancel() {
+    setDraggingId(null);
   }
 
   // Bracket the flat layout into render items: a solo Prescription renders as a bare
@@ -151,7 +172,9 @@ export function PrescriptionList({
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
+      onDragStart={onDragStart}
       onDragEnd={onDragEnd}
+      onDragCancel={onDragCancel}
     >
       <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
         <ul className="flex flex-col gap-3 border-t border-border pt-3">
@@ -164,6 +187,7 @@ export function PrescriptionList({
                 slot={layout[item.position]}
                 canMoveUp={item.position > 0}
                 canMoveDown={item.position < lastPosition}
+                draggingId={draggingId}
                 onEditField={onEditField}
                 onEditLoad={onEditLoad}
                 onReorder={onReorder}
@@ -179,6 +203,7 @@ export function PrescriptionList({
                 prescriptions={prescriptions}
                 layout={layout}
                 lastPosition={lastPosition}
+                draggingId={draggingId}
                 onEditField={onEditField}
                 onEditLoad={onEditLoad}
                 onEditRoundRest={onEditRoundRest}
@@ -231,6 +256,10 @@ interface SupersetContainerProps {
   prescriptions: DraftPrescription[];
   layout: SupersetSlot[];
   lastPosition: number;
+  // The row currently being dragged (`row-<pos>`), or null when idle — used to skip the
+  // join highlight while one of this group's *own* members is being reordered inside the
+  // box (dropping a co-member on its own box is a resolver no-op, #218).
+  draggingId: string | null;
   onEditField: (
     position: number,
     field: PrescriptionField,
@@ -247,15 +276,21 @@ interface SupersetContainerProps {
 // A Superset rendered as a visible bordered container wrapping its member rows (#215,
 // Builder-only — Live and read-only views stay badge-only, ADR-0023). The A/B/C member
 // badge stays inside each member row; the group's single round-rest field lives on the
-// container (not on whichever member lands last), so rest belongs to the group. Each
-// member keeps its own drag grip, move/link/unlink/remove controls — no drag behavior
-// changes here; grouping/ungrouping still runs through those controls.
+// container (not on whichever member lands last), so rest belongs to the group.
+//
+// The container box is itself the group's join drop target (`box-<group>`, #218):
+// releasing a dragged Prescription inside the box adds it to this Superset via the
+// self-healing resolver. The box lights up while it is the live drop target — except
+// when one of its own members is the thing being dragged (dropping a co-member back on
+// its own box is a resolver no-op, so promising a join there would mislead). The
+// `Link2`/`Unlink` and move buttons remain the keyboard/SR floor, untouched.
 function SupersetContainer({
   group,
   positions,
   prescriptions,
   layout,
   lastPosition,
+  draggingId,
   onEditField,
   onEditLoad,
   onEditRoundRest,
@@ -266,9 +301,21 @@ function SupersetContainer({
 }: SupersetContainerProps) {
   const firstPosition = positions[0];
   const firstSlot = layout[firstPosition];
+  const { setNodeRef, isOver } = useDroppable({ id: boxDropId(group) });
+  const draggingOwnMember =
+    draggingId !== null && positions.some((position) => rowDropId(position) === draggingId);
+  const showJoinTarget = isOver && !draggingOwnMember;
   return (
     <li>
-      <div className="flex flex-col gap-3 rounded-lg border border-cyan/40 bg-cyan/5 p-2.5">
+      <div
+        ref={setNodeRef}
+        className={cn(
+          "flex flex-col gap-3 rounded-lg border p-2.5 transition-colors",
+          showJoinTarget
+            ? "border-cyan bg-cyan/15 ring-1 ring-cyan/50"
+            : "border-cyan/40 bg-cyan/5",
+        )}
+      >
         <div className="flex items-center justify-between px-0.5">
           <span className="label-mono flex items-center gap-1.5 text-[9px] text-cyan">
             <Link2 className="h-3 w-3" aria-hidden />
@@ -326,6 +373,10 @@ interface SortablePrescriptionRowProps {
   slot: SupersetSlot;
   canMoveUp: boolean;
   canMoveDown: boolean;
+  // The row currently being dragged (`row-<pos>`), or null/absent when idle. A solo row
+  // reveals its link chip (form-a-new-Superset drop target) while *another* row is being
+  // dragged (#218); member rows inside a container never show it (they join via the box).
+  draggingId?: string | null;
   onEditField: (
     position: number,
     field: PrescriptionField,
@@ -340,16 +391,18 @@ interface SortablePrescriptionRowProps {
 
 // One draggable row. The grip handle is the *only* drag source — a 44px target in its
 // own unused-space column (WCAG 2.5.5), so a fingertip that lands there drags and never
-// edits a Prescription field (#216). The row itself is the reorder drop target. The
-// group drop target no longer lives on the handle; it is relocated to the container box
-// and a link chip in later slices, so the handle does one job: start a drag. The
-// keyboard/button controls below remain the accessibility floor.
+// edits a Prescription field (#216). The row itself is the reorder drop target; a solo
+// row also carries a link chip drop target that forms a new Superset when another row is
+// released onto it (#218) — the group drop target lives there and on the container box,
+// never on the handle, so the handle does one job: start a drag. The keyboard/button
+// controls below remain the accessibility floor.
 function SortablePrescriptionRow({
   position,
   prescription,
   slot,
   canMoveUp,
   canMoveDown,
+  draggingId,
   onEditField,
   onEditLoad,
   onReorder,
@@ -385,6 +438,11 @@ function SortablePrescriptionRow({
           onEditLoad(position, loadKind, loadValue)
         }
       />
+      {slot.group === null &&
+      draggingId != null &&
+      draggingId !== rowDropId(position) ? (
+        <SupersetLinkChip position={position} />
+      ) : null}
       <div className="flex items-center justify-between gap-1.5">
         <button
           type="button"
@@ -410,6 +468,31 @@ function SortablePrescriptionRow({
         />
       </div>
     </li>
+  );
+}
+
+// A solo row's link-chip drop target: releasing another dragged Prescription onto it
+// forms a new Superset from the two (`chip-<pos>` → `form-group`, #218). It is a 44px
+// pointer/touch affordance surfaced only mid-drag; keyboard and screen-reader users form
+// groups through the `Link2` button floor, so the chip is `aria-hidden` (it adds no new
+// tab stop). Its id comes from `chipDropId` so the render layer and classifier stay in
+// lockstep.
+function SupersetLinkChip({ position }: { position: number }) {
+  const { setNodeRef, isOver } = useDroppable({ id: chipDropId(position) });
+  return (
+    <div
+      ref={setNodeRef}
+      aria-hidden
+      className={cn(
+        "label-mono flex h-11 items-center justify-center gap-1.5 rounded-md border border-dashed text-[10px] transition-colors touch-none",
+        isOver
+          ? "border-cyan bg-cyan/15 text-cyan"
+          : "border-border/70 text-text-muted",
+      )}
+    >
+      <Link2 className="h-4 w-4" aria-hidden />
+      {isOver ? "Release to start a superset" : "Drop here to start a superset"}
+    </div>
   );
 }
 
