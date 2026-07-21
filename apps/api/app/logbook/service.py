@@ -9,7 +9,7 @@ mutated. Pure orchestration over the repositories; no AI, no HTTP."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 
 from app.repositories.exercise_repository import ExerciseRepository
@@ -19,6 +19,7 @@ from app.repositories.logged_session_repository import (
     LoggedSessionView,
     LoggedSetDraft,
 )
+from app.repositories.profile_repository import ProfileRepository
 from app.repositories.session_repository import SessionRepository
 
 
@@ -57,11 +58,17 @@ def log_session(
     sessions: SessionRepository,
     exercises: ExerciseRepository,
     logged: LoggedSessionRepository,
+    profiles: ProfileRepository,
 ) -> LoggedSessionView:
     """Record a performance of the user's Session, or raise before persisting.
 
     Raises ``SessionNotOwnedError`` if the Session is not the user's, or
     ``UnknownExerciseError`` if any logged set references an unknown Exercise.
+
+    Snapshots the performer's current Profile weight onto every set as its Performed
+    Body Weight (ADR-0026) — one performance shares one mass, captured once here at
+    the write boundary. When no weight is on file the snapshot is ``None`` and the set
+    is left outside strength records rather than resolved against a guessed mass.
     """
 
     if sessions.get(request.session_id, clerk_user_id) is None:
@@ -75,12 +82,16 @@ def log_session(
                 f"Exercise {logged_set.exercise_id} is not in the catalog."
             )
 
+    performed_body_weight = profiles.get_or_create(clerk_user_id).weight_kg
     draft = LoggedSessionDraft(
         session_id=request.session_id,
         performed_on=request.performed_on,
         completion_outcome=request.completion_outcome,
         duration_seconds=request.duration_seconds,
-        logged_sets=list(request.logged_sets),
+        logged_sets=[
+            replace(logged_set, body_weight_kg=performed_body_weight)
+            for logged_set in request.logged_sets
+        ],
     )
     return logged.create(clerk_user_id, draft)
 
