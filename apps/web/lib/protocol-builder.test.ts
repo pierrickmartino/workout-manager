@@ -1251,6 +1251,121 @@ test("supersetLayout labels a group's members A, B, C and marks its ends", () =>
   assert.equal(layout[1].roundRestSeconds, 90);
 });
 
+// --- #215: the Builder renders a Superset as a visible bordered *container* wrapping
+// its members. `supersetLayout` gains `groupSize` — the container-grouping fact the box
+// needs: how many members it wraps (0 for a solo Prescription, so a solo renders outside
+// any container). The A/B/C badge, first/last-member flags, and the group-owned
+// round-rest already carried by the slot place the badge and the single round-rest field
+// on the container. These tests cover the extension across solo / 2-member / many-member
+// / mixed layouts.
+
+test("supersetLayout reports groupSize 0 for solo Prescriptions", () => {
+  // Arrange — three solo Prescriptions, none grouped
+  const draft = initBuilderDraft(
+    protocol({ sessions: [threePrescriptionSession()] }),
+  );
+
+  // Act
+  const layout = supersetLayout(draft.sessions[0].prescriptions);
+
+  // Assert — every solo reports a group size of 0, so it renders outside a container
+  assert.deepEqual(
+    layout.map((slot) => slot.groupSize),
+    [0, 0, 0],
+  );
+});
+
+test("supersetLayout reports groupSize 2 for both members of a pair", () => {
+  // Arrange — a grouped [A,B] Superset followed by a solo C
+  const grouped = builderReducer(
+    initBuilderDraft(protocol({ sessions: [threePrescriptionSession()] })),
+    { type: "GROUP_WITH_NEXT", sessionId: 1, position: 0 },
+  );
+
+  // Act
+  const layout = supersetLayout(grouped.sessions[0].prescriptions);
+
+  // Assert — the two members each report a size of 2; the solo reports 0
+  assert.deepEqual(
+    layout.map((slot) => slot.groupSize),
+    [2, 2, 0],
+  );
+});
+
+test("supersetLayout reports the full groupSize on every member of a many-member group", () => {
+  // Arrange — group all three into one Superset (A,B → then B,C absorbs into one)
+  const base = initBuilderDraft(
+    protocol({ sessions: [threePrescriptionSession()] }),
+  );
+  const paired = builderReducer(base, {
+    type: "GROUP_WITH_NEXT",
+    sessionId: 1,
+    position: 0,
+  });
+  const trio = builderReducer(paired, {
+    type: "GROUP_WITH_NEXT",
+    sessionId: 1,
+    position: 1,
+  });
+
+  // Act
+  const layout = supersetLayout(trio.sessions[0].prescriptions);
+
+  // Assert — all three members report the full size of 3
+  assert.deepEqual(
+    layout.map((slot) => slot.groupSize),
+    [3, 3, 3],
+  );
+  assert.deepEqual(
+    layout.map((slot) => slot.memberLabel),
+    ["A", "B", "C"],
+  );
+});
+
+test("supersetLayout reports per-group sizes across a mixed layout", () => {
+  // Arrange — [A,B] grouped, a solo C, then [D,E] grouped: two independent groups
+  // separated by a solo. Positions 0-1 = group of 2, 2 = solo, 3-4 = group of 2.
+  const draft = initBuilderDraft(
+    protocol({
+      sessions: [
+        session({
+          prescriptions: [
+            prescription({ exercise_id: 1, exercise_name: "A", rest_seconds: 60 }),
+            prescription({ exercise_id: 2, exercise_name: "B", rest_seconds: 60 }),
+            prescription({ exercise_id: 3, exercise_name: "C", rest_seconds: 60 }),
+            prescription({ exercise_id: 4, exercise_name: "D", rest_seconds: 60 }),
+            prescription({ exercise_id: 5, exercise_name: "E", rest_seconds: 60 }),
+          ],
+        }),
+      ],
+    }),
+  );
+  const first = builderReducer(draft, {
+    type: "GROUP_WITH_NEXT",
+    sessionId: 1,
+    position: 0,
+  });
+  const both = builderReducer(first, {
+    type: "GROUP_WITH_NEXT",
+    sessionId: 1,
+    position: 3,
+  });
+
+  // Act
+  const layout = supersetLayout(both.sessions[0].prescriptions);
+
+  // Assert — each slot reports the size of its own group; the solo reports 0. Member
+  // letters restart per group, so the two boxes are self-labelled A/B independently.
+  assert.deepEqual(
+    layout.map((slot) => slot.groupSize),
+    [2, 2, 0, 2, 2],
+  );
+  assert.deepEqual(
+    layout.map((slot) => slot.memberLabel),
+    ["A", "B", null, "A", "B"],
+  );
+});
+
 // --- Slice 5: drag-to-group and drag-to-reorder in the Builder (ADR-0023, #156).
 // Drag is an *enhancement* over #153's keyboard/button group/ungroup/reorder path,
 // which stays as the accessibility floor. Two pure gesture events translate a drop

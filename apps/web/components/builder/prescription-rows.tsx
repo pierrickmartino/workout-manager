@@ -140,6 +140,12 @@ export function PrescriptionList({
     if (to !== null && to !== from) onReorderByDrag(from, to);
   }
 
+  // Bracket the flat layout into render items: a solo Prescription renders as a bare
+  // row, while a contiguous run of one Superset's members renders inside a single
+  // visible container (#215). Contiguity is a reducer invariant (ADR-0023), so a run of
+  // same-group slots is the whole group.
+  const items = buildRenderItems(layout);
+
   return (
     <DndContext
       sensors={sensors}
@@ -148,17 +154,140 @@ export function PrescriptionList({
     >
       <SortableContext items={rowIds} strategy={verticalListSortingStrategy}>
         <ul className="flex flex-col gap-3 border-t border-border pt-3">
-          {prescriptions.map((prescription, position) => (
+          {items.map((item) =>
+            item.kind === "solo" ? (
+              <SortablePrescriptionRow
+                key={`row-${item.position}`}
+                position={item.position}
+                prescription={prescriptions[item.position]}
+                slot={layout[item.position]}
+                canMoveUp={item.position > 0}
+                canMoveDown={item.position < lastPosition}
+                onEditField={onEditField}
+                onEditLoad={onEditLoad}
+                onReorder={onReorder}
+                onGroupWithNext={onGroupWithNext}
+                onUngroup={onUngroup}
+                onRemove={onRemove}
+              />
+            ) : (
+              <SupersetContainer
+                key={`grp-${item.group}-${item.positions[0]}`}
+                group={item.group}
+                positions={item.positions}
+                prescriptions={prescriptions}
+                layout={layout}
+                lastPosition={lastPosition}
+                onEditField={onEditField}
+                onEditLoad={onEditLoad}
+                onEditRoundRest={onEditRoundRest}
+                onReorder={onReorder}
+                onGroupWithNext={onGroupWithNext}
+                onUngroup={onUngroup}
+                onRemove={onRemove}
+              />
+            ),
+          )}
+        </ul>
+      </SortableContext>
+    </DndContext>
+  );
+}
+
+// A render item is either a solo Prescription or the contiguous run of one Superset's
+// members. `positions` are the run's indices into the Prescription/layout arrays.
+type RenderItem =
+  | { kind: "solo"; position: number }
+  | { kind: "group"; group: string; positions: number[] };
+
+// Walk the per-row layout into render items, collapsing each contiguous run of one
+// group's members into a single `group` item so the render layer can wrap it in one
+// container. Solo rows pass through as `solo` items. Relies on the reducer's contiguity
+// invariant (ADR-0023): a group's members are always an unbroken run.
+function buildRenderItems(layout: SupersetSlot[]): RenderItem[] {
+  const items: RenderItem[] = [];
+  let position = 0;
+  while (position < layout.length) {
+    const { group } = layout[position];
+    if (group === null) {
+      items.push({ kind: "solo", position });
+      position += 1;
+      continue;
+    }
+    const positions: number[] = [];
+    while (position < layout.length && layout[position].group === group) {
+      positions.push(position);
+      position += 1;
+    }
+    items.push({ kind: "group", group, positions });
+  }
+  return items;
+}
+
+interface SupersetContainerProps {
+  group: string;
+  positions: number[];
+  prescriptions: DraftPrescription[];
+  layout: SupersetSlot[];
+  lastPosition: number;
+  onEditField: (
+    position: number,
+    field: PrescriptionField,
+    value: string | number | null,
+  ) => void;
+  onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
+  onEditRoundRest: (position: number, roundRestSeconds: number | null) => void;
+  onReorder: (from: number, to: number) => void;
+  onGroupWithNext: (position: number) => void;
+  onUngroup: (position: number) => void;
+  onRemove: (position: number) => void;
+}
+
+// A Superset rendered as a visible bordered container wrapping its member rows (#215,
+// Builder-only — Live and read-only views stay badge-only, ADR-0023). The A/B/C member
+// badge stays inside each member row; the group's single round-rest field lives on the
+// container (not on whichever member lands last), so rest belongs to the group. Each
+// member keeps its own drag grip, move/link/unlink/remove controls — no drag behavior
+// changes here; grouping/ungrouping still runs through those controls.
+function SupersetContainer({
+  group,
+  positions,
+  prescriptions,
+  layout,
+  lastPosition,
+  onEditField,
+  onEditLoad,
+  onEditRoundRest,
+  onReorder,
+  onGroupWithNext,
+  onUngroup,
+  onRemove,
+}: SupersetContainerProps) {
+  const firstPosition = positions[0];
+  const firstSlot = layout[firstPosition];
+  return (
+    <li>
+      <div className="flex flex-col gap-3 rounded-lg border border-cyan/40 bg-cyan/5 p-2.5">
+        <div className="flex items-center justify-between px-0.5">
+          <span className="label-mono flex items-center gap-1.5 text-[9px] text-cyan">
+            <Link2 className="h-3 w-3" aria-hidden />
+            SUPERSET
+          </span>
+          <span className="label-mono text-[9px] text-text-muted">
+            {firstSlot.groupSize} EXERCISES
+          </span>
+        </div>
+        <ul className="flex flex-col gap-3">
+          {positions.map((position) => (
             <SortablePrescriptionRow
-              key={position}
+              key={`row-${position}`}
               position={position}
-              prescription={prescription}
+              prescription={prescriptions[position]}
               slot={layout[position]}
               canMoveUp={position > 0}
               canMoveDown={position < lastPosition}
               onEditField={onEditField}
               onEditLoad={onEditLoad}
-              onEditRoundRest={onEditRoundRest}
               onReorder={onReorder}
               onGroupWithNext={onGroupWithNext}
               onUngroup={onUngroup}
@@ -166,8 +295,27 @@ export function PrescriptionList({
             />
           ))}
         </ul>
-      </SortableContext>
-    </DndContext>
+
+        {/* One group-owned round-rest field for the whole Superset — the round rests
+            once at the boundary, after every member (ADR-0023). The edit applies to
+            every member regardless of which position carries it. */}
+        <label className="flex flex-col gap-1.5">
+          <span className="label-mono text-[9px] text-cyan">Round rest (sec)</span>
+          <Input
+            type="number"
+            min={0}
+            value={firstSlot.roundRestSeconds ?? ""}
+            aria-label={`Round rest for superset ${group}`}
+            onChange={(e) =>
+              onEditRoundRest(
+                firstPosition,
+                e.target.value === "" ? null : toIntOrZero(e.target.value),
+              )
+            }
+          />
+        </label>
+      </div>
+    </li>
   );
 }
 
@@ -191,7 +339,6 @@ interface SortablePrescriptionRowProps {
     value: string | number | null,
   ) => void;
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
-  onEditRoundRest: (position: number, roundRestSeconds: number | null) => void;
   onReorder: (from: number, to: number) => void;
   onGroupWithNext: (position: number) => void;
   onUngroup: (position: number) => void;
@@ -210,7 +357,6 @@ function SortablePrescriptionRow({
   canMoveDown,
   onEditField,
   onEditLoad,
-  onEditRoundRest,
   onReorder,
   onGroupWithNext,
   onUngroup,
@@ -246,7 +392,6 @@ function SortablePrescriptionRow({
         onEditLoad={(loadKind, loadValue) =>
           onEditLoad(position, loadKind, loadValue)
         }
-        onEditRoundRest={(value) => onEditRoundRest(position, value)}
       />
       <div className="flex items-center justify-between gap-1.5">
         <button
@@ -411,7 +556,6 @@ interface PrescriptionEditorProps {
   slot: SupersetSlot;
   onEditField: (field: PrescriptionField, value: string | number | null) => void;
   onEditLoad: (loadKind: LoadKind, loadValue: string) => void;
-  onEditRoundRest: (roundRestSeconds: number | null) => void;
 }
 
 function PrescriptionEditor({
@@ -419,7 +563,6 @@ function PrescriptionEditor({
   slot,
   onEditField,
   onEditLoad,
-  onEditRoundRest,
 }: PrescriptionEditorProps) {
   const name = prescription.exerciseName;
   // While grouped, a member's own rest is dormant (ADR-0023): the group rests once per
@@ -489,27 +632,6 @@ function PrescriptionEditor({
           />
         </label>
       </div>
-
-      {/* One group-owned round-rest field, rendered on the Superset's last member —
-          the round rests at the boundary, after every member (ADR-0023). */}
-      {slot.isLastMember ? (
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-cyan">
-            Round rest (sec)
-          </span>
-          <Input
-            type="number"
-            min={0}
-            value={slot.roundRestSeconds ?? ""}
-            aria-label={`Round rest for superset ${slot.group}`}
-            onChange={(e) =>
-              onEditRoundRest(
-                e.target.value === "" ? null : toIntOrZero(e.target.value),
-              )
-            }
-          />
-        </label>
-      ) : null}
 
       {/* Load is a typed value (ADR-0010): pick the kind, then give the value that
           kind carries — the same picker the log form uses. */}
