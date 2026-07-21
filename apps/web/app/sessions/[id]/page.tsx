@@ -3,11 +3,17 @@ import { notFound } from "next/navigation";
 import { ArrowRight, ClipboardCheck, Play } from "lucide-react";
 
 import { SubstituteButton } from "@/components/SubstituteButton";
+import { HarderVariationOffer } from "@/components/HarderVariationOffer";
 import {
+  fetchHarderVariation,
   fetchSession,
   type ExercisePrescription,
   type WorkoutSession,
 } from "@/lib/sessions";
+import {
+  toHarderVariationOffer,
+  type HarderVariationOffer as HarderVariationOfferView,
+} from "@/lib/harder-variation-view";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { DataList } from "@/components/pulse/data-list";
@@ -33,6 +39,18 @@ export default async function SessionPage({
 
   const session = envelope.data;
 
+  // Read the harder-Variation offer per prescription (#202). The endpoint returns
+  // `null` for anything not at a pure-bodyweight rep ceiling, so most resolve to no
+  // offer; a failed read simply shows none. Fetched in parallel to keep the page fast.
+  const offers = await Promise.all(
+    session.prescriptions.map(async (prescription) => {
+      const offer = await fetchHarderVariation(session.id, prescription.position);
+      return toHarderVariationOffer(
+        offer.success && offer.data ? offer.data.suggested_variation : null,
+      );
+    }),
+  );
+
   return (
     <section className="flex flex-col gap-7">
       <PageHeader
@@ -52,6 +70,7 @@ export default async function SessionPage({
                 prescription={prescription}
                 sessionId={session.id}
                 index={index + 1}
+                harderVariation={offers[index]}
               />
             </li>
           ))}
@@ -95,10 +114,12 @@ function PrescriptionCard({
   prescription,
   sessionId,
   index,
+  harderVariation,
 }: {
   prescription: ExercisePrescription;
   sessionId: number;
   index: number;
+  harderVariation: HarderVariationOfferView;
 }) {
   return (
     <Card className="flex flex-col gap-4 p-4">
@@ -155,6 +176,12 @@ function PrescriptionCard({
               ]
             : []),
         ]}
+      />
+
+      <HarderVariationOffer
+        sessionId={sessionId}
+        position={prescription.position}
+        offer={harderVariation}
       />
 
       <SubstituteButton sessionId={sessionId} position={prescription.position} />

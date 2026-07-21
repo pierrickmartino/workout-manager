@@ -3,6 +3,7 @@
 // server-only data access (Clerk auth + fetch) lives in `lib/sessions.ts`.
 
 import type { Load } from "./load";
+import type { SuggestedVariation } from "./harder-variation-view";
 
 // Training types a Session can be generated for. Mirrors the Fitness Level
 // dimensions used elsewhere in the app.
@@ -57,6 +58,14 @@ export interface WorkoutSession {
   duration_minutes: number;
   has_been_regenerated: boolean;
   prescriptions: ExercisePrescription[];
+}
+
+// The harder-Variation offer read for one Prescription (#202): the catalog
+// Exercise to advance to at the pure-bodyweight rep ceiling, or `null` when there
+// is none on file and the prescription holds. The client feeds `suggested_variation`
+// to `toHarderVariationOffer` (lib/harder-variation-view) to build the display model.
+export interface HarderVariationResponse {
+  suggested_variation: SuggestedVariation | null;
 }
 
 // A short reference to a related catalog Exercise (a Variation or Alternative),
