@@ -13,7 +13,6 @@ import {
   PointerSensor,
   TouchSensor,
   closestCenter,
-  useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -41,11 +40,13 @@ import { Button } from "@/components/ui/button";
 
 type PrescriptionField = "sets" | "reps" | "restSeconds" | "tempo";
 
-// The drag id scheme: each un-performed row is a sortable source (`row-<pos>`) and
-// also carries a distinct group drop-target (`grp-<pos>`). The single drag source is
-// the grip handle; *where* it is dropped decides intent — onto a row body reorders,
-// onto a row's link chip groups. Positions are stable within one drag (the reducer
-// dispatches only on drop), so the index doubles as the id.
+// The drag id scheme: each un-performed row is a sortable source (`row-<pos>`) whose
+// grip handle is the *only* drag source. Dropping onto another row body reorders.
+// The group drop-target (`grp-<pos>`) is being relocated off the handle (#216) — it
+// becomes the container box + a dedicated link chip in later slices; the handler still
+// routes a `grp-` drop so grouping re-enables the moment that target returns. Positions
+// are stable within one drag (the reducer dispatches only on drop), so the index
+// doubles as the id.
 const ROW_ID_PREFIX = "row-";
 const GROUP_ID_PREFIX = "grp-";
 
@@ -345,10 +346,12 @@ interface SortablePrescriptionRowProps {
   onRemove: (position: number) => void;
 }
 
-// One draggable, droppable row. The grip handle is the only drag source (so the row's
-// inputs and buttons stay usable); the row itself is the reorder drop target and its
-// link chip is the group drop target. `isOver` on the group chip highlights it as a
-// superset target while another row hovers it.
+// One draggable row. The grip handle is the *only* drag source — a 44px target in its
+// own unused-space column (WCAG 2.5.5), so a fingertip that lands there drags and never
+// edits a Prescription field (#216). The row itself is the reorder drop target. The
+// group drop target no longer lives on the handle; it is relocated to the container box
+// and a link chip in later slices, so the handle does one job: start a drag. The
+// keyboard/button controls below remain the accessibility floor.
 function SortablePrescriptionRow({
   position,
   prescription,
@@ -370,9 +373,6 @@ function SortablePrescriptionRow({
     transition,
     isDragging,
   } = useSortable({ id: `${ROW_ID_PREFIX}${position}` });
-  const { setNodeRef: setGroupRef, isOver: isGroupTarget } = useDroppable({
-    id: `${GROUP_ID_PREFIX}${position}`,
-  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -396,19 +396,14 @@ function SortablePrescriptionRow({
       <div className="flex items-center justify-between gap-1.5">
         <button
           type="button"
-          ref={setGroupRef}
           {...attributes}
           {...listeners}
           aria-hidden
           tabIndex={-1}
-          className={cn(
-            "flex h-8 items-center gap-1 rounded-sm border border-dashed border-border px-2 text-text-muted transition-colors touch-none cursor-grab active:cursor-grabbing",
-            isGroupTarget && "border-cyan bg-cyan/10 text-cyan",
-          )}
-          title="Drag to reorder, or drop another exercise here to superset"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm border border-dashed border-border text-text-muted transition-colors touch-none cursor-grab hover:text-text-primary active:cursor-grabbing"
+          title="Drag to reorder"
         >
-          <GripVertical className="h-4 w-4" aria-hidden />
-          <Link2 className="h-3.5 w-3.5" aria-hidden />
+          <GripVertical className="h-5 w-5" aria-hidden />
         </button>
         <PrescriptionControls
           name={prescription.exerciseName}
@@ -460,7 +455,7 @@ function PrescriptionControls({
           type="button"
           variant="ghost"
           size="icon"
-          className="h-8 w-8 text-cyan"
+          className="h-11 w-11 text-cyan"
           aria-label={`Group ${name} with next into a superset`}
           onClick={onGroupWithNext}
         >
@@ -472,7 +467,7 @@ function PrescriptionControls({
           type="button"
           variant="ghost"
           size="icon"
-          className="h-8 w-8 text-cyan"
+          className="h-11 w-11 text-cyan"
           aria-label={`Ungroup ${name} from its superset`}
           onClick={onUngroup}
         >
@@ -483,7 +478,7 @@ function PrescriptionControls({
         type="button"
         variant="ghost"
         size="icon"
-        className="h-8 w-8"
+        className="h-11 w-11"
         disabled={!canMoveUp}
         aria-label={`Move ${name} up`}
         onClick={onMoveUp}
@@ -494,7 +489,7 @@ function PrescriptionControls({
         type="button"
         variant="ghost"
         size="icon"
-        className="h-8 w-8"
+        className="h-11 w-11"
         disabled={!canMoveDown}
         aria-label={`Move ${name} down`}
         onClick={onMoveDown}
@@ -505,7 +500,7 @@ function PrescriptionControls({
         type="button"
         variant="ghost"
         size="icon"
-        className="h-8 w-8 text-magenta"
+        className="h-11 w-11 text-magenta"
         aria-label={`Remove ${name}`}
         onClick={onRemove}
       >
