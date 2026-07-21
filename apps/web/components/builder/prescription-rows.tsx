@@ -25,7 +25,12 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import { LOAD_KIND_OPTIONS, type LoadKind } from "@/lib/load";
-import type { DraftPrescription, SupersetSlot } from "@/lib/protocol-builder";
+import { classifyDrag, rowDropId } from "@/lib/protocol-builder";
+import type {
+  DraftPrescription,
+  DropIntent,
+  SupersetSlot,
+} from "@/lib/protocol-builder";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -40,15 +45,13 @@ import { Button } from "@/components/ui/button";
 
 type PrescriptionField = "sets" | "reps" | "restSeconds" | "tempo";
 
-// The drag id scheme: each un-performed row is a sortable source (`row-<pos>`) whose
-// grip handle is the *only* drag source. Dropping onto another row body reorders.
-// The group drop-target (`grp-<pos>`) is being relocated off the handle (#216) — it
-// becomes the container box + a dedicated link chip in later slices; the handler still
-// routes a `grp-` drop so grouping re-enables the moment that target returns. Positions
-// are stable within one drag (the reducer dispatches only on drop), so the index
-// doubles as the id.
-const ROW_ID_PREFIX = "row-";
-const GROUP_ID_PREFIX = "grp-";
+// The drag id scheme is owned by `lib/protocol-builder` (`rowDropId` / `classifyDrag`,
+// #217) so the render layer and the pure classifier never drift: each un-performed row
+// is a sortable source (`row-<pos>`) whose grip handle is the *only* drag source, and a
+// drop is classified into a semantic `DropIntent`. Positions are stable within one drag
+// (the reducer dispatches only on drop), so the index doubles as the id. The container
+// box + link chip drop targets (`box-`/`chip-`) arrive with drag-driven grouping in a
+// later slice; today only row bodies exist, so drops resolve to reorder/leave.
 
 // The pointer drag only starts after an 8px move so taps still reach the row's
 // buttons; touch waits 150ms so a scroll gesture isn't hijacked into a drag.
@@ -73,10 +76,11 @@ interface PrescriptionListProps {
   onGroupWithNext: (position: number) => void;
   onUngroup: (position: number) => void;
   onRemove: (position: number) => void;
-  // Drag gestures (Slice 5): drop a row onto another's link chip to form/join a
-  // Superset; drop it onto a row body to reposition it.
-  onGroupByDrag: (from: number, to: number) => void;
-  onReorderByDrag: (from: number, to: number) => void;
+  // Drag gesture (#217): a drop is classified into a semantic `DropIntent` and applied
+  // by the self-healing resolver. This slice only produces reorder/leave intents (row
+  // bodies are the only drop targets); drag-driven grouping arrives with the container
+  // box + link chip targets in a later slice.
+  onResolveDrop: (intent: DropIntent) => void;
 }
 
 // The Session's Prescription rows. A performed Session renders a plain read-only list;
@@ -93,8 +97,7 @@ export function PrescriptionList({
   onGroupWithNext,
   onUngroup,
   onRemove,
-  onGroupByDrag,
-  onReorderByDrag,
+  onResolveDrop,
 }: PrescriptionListProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -123,22 +126,19 @@ export function PrescriptionList({
     );
   }
 
-  const rowIds = prescriptions.map((_, position) => `${ROW_ID_PREFIX}${position}`);
+  const rowIds = prescriptions.map((_, position) => rowDropId(position));
   const lastPosition = prescriptions.length - 1;
 
   function onDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-    if (!over) return;
-    const from = positionFromId(String(active.id));
-    const overId = String(over.id);
-    if (from === null) return;
-    if (overId.startsWith(GROUP_ID_PREFIX)) {
-      const to = positionFromId(overId);
-      if (to !== null && to !== from) onGroupByDrag(from, to);
-      return;
-    }
-    const to = positionFromId(overId);
-    if (to !== null && to !== from) onReorderByDrag(from, to);
+    // The pure classifier decides what the drop means (or nothing, for a malformed id
+    // or a drop onto self); the reducer's resolver then applies it (#217).
+    const intent = classifyDrag(
+      String(active.id),
+      over ? String(over.id) : null,
+      prescriptions,
+    );
+    if (intent) onResolveDrop(intent);
   }
 
   // Bracket the flat layout into render items: a solo Prescription renders as a bare
@@ -320,14 +320,6 @@ function SupersetContainer({
   );
 }
 
-// Strip the id prefix to the row position it encodes; `null` for a malformed id so the
-// drag handler ignores it rather than acting on a NaN.
-function positionFromId(id: string): number | null {
-  const raw = id.slice(id.indexOf("-") + 1);
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isInteger(parsed) ? parsed : null;
-}
-
 interface SortablePrescriptionRowProps {
   position: number;
   prescription: DraftPrescription;
@@ -372,7 +364,7 @@ function SortablePrescriptionRow({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: `${ROW_ID_PREFIX}${position}` });
+  } = useSortable({ id: rowDropId(position) });
 
   const style = {
     transform: CSS.Transform.toString(transform),

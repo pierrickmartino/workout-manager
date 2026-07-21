@@ -139,24 +139,13 @@ export type BuilderEvent =
       roundRestSeconds: number | null;
     }
   | {
-      // Drag `from` and drop it *onto* the row at `to`, forming or joining a Superset
-      // (ADR-0023, #156). The dragged row is first detached from any group it was in
-      // (dragging it away), then placed adjacent to the target and grouped — an
-      // enhancement over GROUP_WITH_NEXT, never a replacement for it.
-      type: "GROUP_BY_DRAG";
+      // Apply a drag-end that the manipulation layer already classified into a semantic
+      // `DropIntent` (#217, ADR-0023). The self-healing resolver derives Superset
+      // membership from the container boundary, so contiguity holds by construction —
+      // superseding the old GROUP_BY_DRAG / REORDER_BY_DRAG pair.
+      type: "RESOLVE_DROP";
       sessionId: number;
-      from: number;
-      to: number;
-    }
-  | {
-      // Drag `from` to reposition it at `to` (ADR-0023, #156). A move that keeps every
-      // Superset contiguous is a plain reorder; a move that pulls the dragged member
-      // out of its group ungroups just that member (dissolving a group left with <2).
-      // A move that still can't stay contiguous is refused — DEPLOY is the backstop.
-      type: "REORDER_BY_DRAG";
-      sessionId: number;
-      from: number;
-      to: number;
+      intent: DropIntent;
     }
   | {
       type: "EDIT_NAME";
@@ -329,14 +318,9 @@ export function builderReducer(
         editRoundRest(prescriptions, event.position, event.roundRestSeconds),
       );
 
-    case "GROUP_BY_DRAG":
+    case "RESOLVE_DROP":
       return mapSessionPrescriptions(state, event.sessionId, (prescriptions) =>
-        groupByDrag(prescriptions, event.from, event.to),
-      );
-
-    case "REORDER_BY_DRAG":
-      return mapSessionPrescriptions(state, event.sessionId, (prescriptions) =>
-        reorderByDrag(prescriptions, event.from, event.to),
+        resolveDrop(prescriptions, event.intent),
       );
 
     case "EDIT_NAME":
@@ -601,24 +585,6 @@ function groupByDrag(
   return groupWithNext(moved, anchor);
 }
 
-// Reposition the Prescription at `from` to `to` by drag (ADR-0023). A move that keeps
-// every Superset contiguous applies as-is. A move that pulls the dragged member out of
-// its group ungroups just that member (dissolving any group left with <2) and applies
-// if that restores contiguity. A move that still splits a group — e.g. a solo dropped
-// into a group's middle — is refused; DEPLOY remains the backstop.
-function reorderByDrag(
-  prescriptions: DraftPrescription[],
-  from: number,
-  to: number,
-): DraftPrescription[] {
-  const moved = movePrescription(prescriptions, from, to);
-  if (moved === prescriptions) return prescriptions;
-  if (supersetsAreContiguous(moved)) return moved;
-  // The dragged row now sits at `to`; detach it from its group and retry.
-  const detached = detachFromGroup(moved, to);
-  return supersetsAreContiguous(detached) ? detached : prescriptions;
-}
-
 // Whether every Superset occupies an unbroken run of positions — the invariant the
 // reducer maintains on reorder and the deploy gate re-checks (ADR-0023).
 function supersetsAreContiguous(prescriptions: DraftPrescription[]): boolean {
@@ -637,6 +603,190 @@ function supersetsAreContiguous(prescriptions: DraftPrescription[]): boolean {
     if (last - first + 1 !== count) return false;
   }
   return true;
+}
+
+// --- The manipulation layer's two pure modules (#217, ADR-0023). A drag-intent
+// classifier turns a raw @dnd-kit drag-end into a semantic intent; a self-healing
+// drop resolver applies that intent to the Prescription list, deriving Superset
+// membership from the container boundary so contiguity holds by construction.
+
+// The semantic meaning of a drag-end, decoupled from @dnd-kit's raw drop event
+// (ADR-0023). `reorder` repositions a row (among solos, or within its own group);
+// `form-group` starts a new Superset (solo onto solo / a link chip); `join-group`
+// adds the dragged row to an existing container; `leave-group` pulls a member out of
+// its box. Positions index the Session's Prescription list; `group` is a Superset tag.
+export type DropIntent =
+  | { kind: "reorder"; from: number; to: number }
+  | { kind: "form-group"; from: number; to: number }
+  | { kind: "join-group"; from: number; group: string }
+  | { kind: "leave-group"; from: number; to: number };
+
+// The drop-target id scheme shared by the classifier and the render layer, so the two
+// never drift: a row body reorders (`row-<pos>`), a solo's link chip forms a new group
+// (`chip-<pos>`), and a Superset container joins that group (`box-<group>`). The active
+// (dragged) node is always a row.
+const ROW_DROP_PREFIX = "row-";
+const CHIP_DROP_PREFIX = "chip-";
+const BOX_DROP_PREFIX = "box-";
+
+export function rowDropId(position: number): string {
+  return `${ROW_DROP_PREFIX}${position}`;
+}
+export function chipDropId(position: number): string {
+  return `${CHIP_DROP_PREFIX}${position}`;
+}
+export function boxDropId(group: string): string {
+  return `${BOX_DROP_PREFIX}${group}`;
+}
+
+// Parse a `<prefix><integer>` id to its position, or `null` for a mismatched prefix or
+// a non-integer tail — a malformed id yields no action rather than a NaN move.
+function parsePositionId(id: string, prefix: string): number | null {
+  if (!id.startsWith(prefix)) return null;
+  const tail = id.slice(prefix.length);
+  const parsed = Number.parseInt(tail, 10);
+  return Number.isInteger(parsed) && String(parsed) === tail ? parsed : null;
+}
+
+// The Superset tag encoded in a container-box id, or `null` for a mismatched prefix or
+// empty tag.
+function parseBoxId(id: string): string | null {
+  if (!id.startsWith(BOX_DROP_PREFIX)) return null;
+  const tag = id.slice(BOX_DROP_PREFIX.length);
+  return tag.length > 0 ? tag : null;
+}
+
+// The first/last positions a Superset occupies, or `null` if the tag is absent — used
+// to tell a within-box reorder from a member being dragged outside its own container.
+function groupSpan(
+  prescriptions: DraftPrescription[],
+  group: string,
+): { first: number; last: number } | null {
+  let first = -1;
+  let last = -1;
+  prescriptions.forEach((prescription, index) => {
+    if (prescription.supersetGroup === group) {
+      if (first < 0) first = index;
+      last = index;
+    }
+  });
+  return first < 0 ? null : { first, last };
+}
+
+// Map a raw drag-end (dragged row id, drop-target id) to a semantic DropIntent, or
+// `null` when nothing should happen — a malformed/absent id, a drop onto self, or a
+// member dropped back onto its own container (ADR-0023). The dragged node is always a
+// row; the target's id prefix names the intent. A grouped member dropped on a row
+// *inside* its own box is a within-group reorder; dropped *outside* it leaves the group.
+export function classifyDrag(
+  activeId: string,
+  overId: string | null,
+  prescriptions: DraftPrescription[],
+): DropIntent | null {
+  const from = parsePositionId(activeId, ROW_DROP_PREFIX);
+  if (from === null || from < 0 || from >= prescriptions.length) return null;
+  if (overId === null) return null;
+
+  const chip = parsePositionId(overId, CHIP_DROP_PREFIX);
+  if (chip !== null) {
+    return chip === from ? null : { kind: "form-group", from, to: chip };
+  }
+
+  const box = parseBoxId(overId);
+  if (box !== null) {
+    if (prescriptions[from].supersetGroup === box) return null;
+    return groupSpan(prescriptions, box)
+      ? { kind: "join-group", from, group: box }
+      : null;
+  }
+
+  const to = parsePositionId(overId, ROW_DROP_PREFIX);
+  if (to === null || to < 0 || to >= prescriptions.length || to === from) {
+    return null;
+  }
+  const group = prescriptions[from].supersetGroup;
+  if (group !== null) {
+    const span = groupSpan(prescriptions, group);
+    const inside = span !== null && to >= span.first && to <= span.last;
+    if (!inside) return { kind: "leave-group", from, to };
+  }
+  return { kind: "reorder", from, to };
+}
+
+// Apply a semantic DropIntent to a Prescription list, deriving Superset membership from
+// the container boundary so every result stays contiguous (ADR-0023). This replaces the
+// old "refuse a move that splits a group" no-op: a reorder repositions; a leave-group
+// detaches the dragged member (dissolving a group left under two); a form/join-group
+// places the member adjacent to its new group and tags it. Round-rest ownership and a
+// grouped member's dormant own rest are preserved throughout.
+export function resolveDrop(
+  prescriptions: DraftPrescription[],
+  intent: DropIntent,
+): DraftPrescription[] {
+  switch (intent.kind) {
+    case "reorder":
+      // Among solos or within one group's run; a solo that would land strictly inside
+      // another group is snapped to that group's edge so contiguity holds.
+      return moveKeepingContiguous(prescriptions, intent.from, intent.to);
+    case "leave-group": {
+      // Pull the dragged member out of its box first (clearing its round-rest and
+      // dissolving a group left under two), then reposition the now-solo row.
+      const detached = detachFromGroup(prescriptions, intent.from);
+      return moveKeepingContiguous(detached, intent.from, intent.to);
+    }
+    case "form-group":
+      // Solo onto solo / a link chip: reuse the keyboard path's group union so drag
+      // and button grouping stay one behavior.
+      return groupByDrag(prescriptions, intent.from, intent.to);
+    case "join-group":
+      return joinGroup(prescriptions, intent.from, intent.group);
+  }
+}
+
+// Reposition the row at `from` to `to`, but never leave a Superset split: a now-solo
+// row that lands strictly between two members of the same group is snapped just past
+// that group's near edge, in the drag direction (ADR-0023). A move that already keeps
+// every group contiguous applies as-is. This is what makes contiguity hold by
+// construction, replacing the old "refuse the move" no-op.
+function moveKeepingContiguous(
+  prescriptions: DraftPrescription[],
+  from: number,
+  to: number,
+): DraftPrescription[] {
+  const moved = movePrescription(prescriptions, from, to);
+  if (moved === prescriptions || supersetsAreContiguous(moved)) return moved;
+  // The dragged row (now at `to`) wedged into a group's run; both neighbours share it.
+  const straddled = moved[to - 1]?.supersetGroup ?? moved[to + 1]?.supersetGroup ?? null;
+  if (straddled === null) return moved;
+  const span = groupSpan(moved, straddled);
+  if (!span) return moved;
+  return movePrescription(moved, to, from < to ? span.last : span.first);
+}
+
+// Add the Prescription at `from` to the existing Superset `group`: detach it from any
+// prior group, move it adjacent to the group's run, and tag it with the group's shared
+// round-rest — so the join stays contiguous and rest keeps belonging to the group
+// (ADR-0023). A no-op when the row is already in that group or the group is absent.
+function joinGroup(
+  prescriptions: DraftPrescription[],
+  from: number,
+  group: string,
+): DraftPrescription[] {
+  const target = prescriptions[from];
+  if (!target || target.supersetGroup === group) return prescriptions;
+  const members = prescriptions.filter((p) => p.supersetGroup === group);
+  if (members.length === 0) return prescriptions;
+  const roundRest = members[0].roundRestSeconds;
+
+  const detached = detachFromGroup(prescriptions, from);
+  const span = groupSpan(detached, group);
+  if (!span) return prescriptions;
+  const moved = movePrescription(detached, from, span.last);
+  return moved.map((prescription, index) =>
+    index === span.last
+      ? { ...prescription, supersetGroup: group, roundRestSeconds: roundRest }
+      : prescription,
+  );
 }
 
 // One Prescription's Superset display facts, aligned to the Session's Prescription
