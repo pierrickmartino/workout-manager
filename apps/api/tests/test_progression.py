@@ -8,7 +8,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.domain.progression import next_load
+from app.domain.progression import (
+    ProgressionKind,
+    next_load,
+    next_prescription,
+)
 
 
 @dataclass
@@ -198,3 +202,151 @@ def test_a_reduction_never_drops_below_zero():
 
     # Act / Assert — clamped at zero, never negative
     assert next_load(prescription, sets) == "0 kg"
+
+
+# --- next_prescription: the typed result over every load kind (ADR-0026) ---
+
+
+def test_next_prescription_reports_an_absolute_load_step():
+    # Arrange — strong performance on an external-weight prescription
+    prescription = _Prescription(reps="5", recommended_load="60 kg")
+    sets = [_LoggedSet(reps=5, perceived_difficulty=6) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets)
+
+    # Assert — a typed result tagged as a load step with the stepped kg and
+    # the (unchanged) rep target carried through
+    assert result.kind is ProgressionKind.LOAD_STEP
+    assert result.recommended_load == "62.5 kg"
+    assert result.reps == "5"
+
+
+def test_weighted_bodyweight_all_reps_at_low_effort_steps_the_added_load():
+    # Arrange — a belt-loaded dip: bodyweight plus 10 kg, every rep hit easily
+    prescription = _Prescription(reps="5", recommended_load="bodyweight + 10 kg")
+    sets = [_LoggedSet(reps=5, perceived_difficulty=6) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets)
+
+    # Assert — the *added* kilograms step up with the same increment as an
+    # external-weight load; the movement stays bodyweight
+    assert result.kind is ProgressionKind.ADDED_LOAD_STEP
+    assert result.recommended_load == "bodyweight + 12.5 kg"
+    assert result.reps == "5"
+
+
+def test_weighted_bodyweight_missed_reps_steps_the_added_load_down():
+    # Arrange — fell short of the prescribed reps on a weighted dip
+    prescription = _Prescription(reps="5", recommended_load="bodyweight + 10 kg")
+    sets = [
+        _LoggedSet(reps=5, perceived_difficulty=8),
+        _LoggedSet(reps=3, perceived_difficulty=9),
+    ]
+
+    # Act
+    result = next_prescription(prescription, sets)
+
+    # Assert — the added kilograms back off, same larger decrement as a bare load
+    assert result.kind is ProgressionKind.ADDED_LOAD_STEP
+    assert result.recommended_load == "bodyweight + 5 kg"
+
+
+def test_weighted_bodyweight_reduction_collapses_to_pure_bodyweight_at_zero():
+    # Arrange — a light belt load with a badly missed set
+    prescription = _Prescription(reps="5", recommended_load="bodyweight + 2.5 kg")
+    sets = [_LoggedSet(reps=1, perceived_difficulty=10)]
+
+    # Act
+    result = next_prescription(prescription, sets)
+
+    # Assert — clamped at zero: the added load is gone, leaving the movement bodyweight
+    assert result.kind is ProgressionKind.ADDED_LOAD_STEP
+    assert result.recommended_load == "bodyweight"
+
+
+def test_pure_bodyweight_strong_performance_steps_the_rep_target_up():
+    # Arrange — pull-ups at bodyweight, 8–12 target, top of the range hit easily.
+    # No weight to add, so the rep target itself must advance.
+    prescription = _Prescription(reps="8-12", recommended_load="bodyweight")
+    sets = [_LoggedSet(reps=12, perceived_difficulty=6) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets)
+
+    # Assert — the target tightens toward the ceiling by raising the floor; the
+    # movement (bodyweight) is unchanged
+    assert result.kind is ProgressionKind.REPS_STEP
+    assert result.reps == "9-12"
+    assert result.recommended_load == "bodyweight"
+
+
+def test_pure_bodyweight_holds_once_the_rep_target_reaches_the_ceiling():
+    # Arrange — the floor has already climbed to the top of the range
+    prescription = _Prescription(reps="12-12", recommended_load="bodyweight")
+    sets = [_LoggedSet(reps=12, perceived_difficulty=6) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets)
+
+    # Assert — no unbounded rep growth: the target holds at the ceiling (the
+    # harder-Variation suggestion is a separate slice)
+    assert result.kind is ProgressionKind.HOLD
+    assert result.reps == "12-12"
+    assert result.recommended_load == "bodyweight"
+
+
+def test_pure_bodyweight_missed_reps_leaves_the_prescription_untouched():
+    # Arrange — fell short of the target floor on pure bodyweight
+    prescription = _Prescription(reps="8-12", recommended_load="bodyweight")
+    sets = [_LoggedSet(reps=5, perceived_difficulty=9) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets)
+
+    # Assert — reps never step *down*; the prescription is left as-is to be retried
+    assert result.kind is ProgressionKind.HOLD
+    assert result.reps == "8-12"
+    assert result.recommended_load == "bodyweight"
+
+
+def test_next_prescription_holds_a_load_with_no_single_clean_value():
+    # Arrange — a %-1RM load has no single kilogram value to step, and is not
+    # bodyweight; there is nothing to move
+    prescription = _Prescription(reps="5", recommended_load="70% 1RM")
+    sets = [_LoggedSet(reps=5, perceived_difficulty=6) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets)
+
+    # Assert — untouched, reported as a hold
+    assert result.kind is ProgressionKind.HOLD
+    assert result.reps == "5"
+    assert result.recommended_load == "70% 1RM"
+
+
+def test_next_prescription_holds_a_qualitative_load():
+    # Arrange — a qualitative effort load carries no number to step and is not bodyweight
+    prescription = _Prescription(reps="5", recommended_load="moderate")
+    sets = [_LoggedSet(reps=5, perceived_difficulty=6) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets)
+
+    # Assert — left untouched
+    assert result.kind is ProgressionKind.HOLD
+    assert result.recommended_load == "moderate"
+
+
+def test_weighted_bodyweight_reps_hit_at_high_effort_holds_the_added_load():
+    # Arrange — every rep made on a weighted dip, but it was a grind
+    prescription = _Prescription(reps="5", recommended_load="bodyweight + 10 kg")
+    sets = [_LoggedSet(reps=5, perceived_difficulty=9) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets)
+
+    # Assert — hard sets hold; only easy ones earn more added load
+    assert result.kind is ProgressionKind.HOLD
+    assert result.recommended_load == "bodyweight + 10 kg"

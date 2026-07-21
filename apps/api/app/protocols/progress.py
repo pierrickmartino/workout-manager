@@ -7,8 +7,9 @@ order, the user has not yet logged. There is no calendar binding: a missed Sessi
 is simply still next, so the user always picks up where they left off.
 
 ``progressed_protocol`` extends that view: it overlays each *upcoming* (un-performed)
-Prescription's recommended load with the deterministic ``next_load`` adjustment
-computed from the user's most recent Logged Sets of that Exercise. Already-performed
+Prescription with the deterministic ``next_prescription`` adjustment (recommended
+load, or rep target for pure bodyweight) computed from the user's most recent Logged
+Sets of that Exercise. Already-performed
 Sessions are history and keep their logged load. The overlay is read-only — it
 returns fresh view objects and never mutates the stored Protocol (or the cached
 artifact behind it). Pure orchestration over the Protocol and Logged-Session
@@ -20,7 +21,7 @@ from dataclasses import dataclass, replace
 
 from app.domain.completion import CompletionOutcome
 from app.domain.load import parse_load
-from app.domain.progression import next_load
+from app.domain.progression import next_prescription
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
     LoggedSessionView,
@@ -36,7 +37,7 @@ from app.repositories.session_repository import PrescriptionView
 
 @dataclass(frozen=True)
 class _LoadedPrescription:
-    """The minimal shape ``next_load`` reads: the rep target and free-text load."""
+    """The minimal shape ``next_prescription`` reads: rep target and free-text load."""
 
     reps: str
     recommended_load: str | None
@@ -141,42 +142,44 @@ def latest_sets_by_exercise(
     return latest
 
 
-def progressed_load(
+def progressed_prescription(
     prescription: PrescriptionView, sets: list[LoggedSetView]
-) -> dict | None:
-    """Run the ADR-0004 ``next_load`` adjustment over a typed Load.
+) -> PrescriptionView:
+    """Overlay the ADR-0004 Progression adjustment onto a Prescription view.
 
-    The stored load is a typed ``{kind, text, ...}`` dict; ``next_load`` still
-    operates on the free-text ``text`` (only single-number absolute loads move —
-    bodyweight, %-1RM, ranges and qualitative loads are left untouched). The result
-    is re-typed through :func:`parse_load` so the view stays a typed Load end to end.
+    Delegates to :func:`next_prescription`, which reads the free-text load and rep
+    target and returns the stepped values: an external-weight load moves its kg, a
+    weighted-bodyweight load its added kg, and a pure-bodyweight movement its rep
+    target (ADR-0026); %-1RM, ranges and qualitative loads are left untouched. The
+    stored load is a typed ``{kind, text, ...}`` dict, so the stepped load text is
+    re-typed through :func:`parse_load` to keep the view a typed Load end to end.
     """
 
     load = prescription.recommended_load
-    adjusted_text = next_load(
+    result = next_prescription(
         _LoadedPrescription(
             reps=prescription.reps,
             recommended_load=load["text"] if load else None,
         ),
         sets,
     )
-    if adjusted_text is None:
-        return None
-    return parse_load(adjusted_text).to_dict()
+    adjusted_load = (
+        parse_load(result.recommended_load).to_dict()
+        if result.recommended_load is not None
+        else None
+    )
+    return replace(prescription, reps=result.reps, recommended_load=adjusted_load)
 
 
 def _adjusted_session(
     session: ProtocolSessionView,
     latest_sets: dict[int, list[LoggedSetView]],
 ) -> ProtocolSessionView:
-    """A copy of ``session`` with each Prescription's typed load progressed."""
+    """A copy of ``session`` with each Prescription progressed (load and reps)."""
 
     adjusted = [
-        replace(
-            prescription,
-            recommended_load=progressed_load(
-                prescription, latest_sets.get(prescription.exercise_id, [])
-            ),
+        progressed_prescription(
+            prescription, latest_sets.get(prescription.exercise_id, [])
         )
         for prescription in session.prescriptions
     ]
@@ -260,5 +263,5 @@ __all__ = [
     "progressed_protocol",
     "current_protocol",
     "latest_sets_by_exercise",
-    "progressed_load",
+    "progressed_prescription",
 ]

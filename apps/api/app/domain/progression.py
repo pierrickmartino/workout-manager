@@ -1,23 +1,37 @@
-"""Progression — the deterministic, no-AI load adjustment (ADR-0004).
+"""Progression — the deterministic, no-AI Prescription adjustment (ADR-0004/0026).
 
-``next_load`` is a pure function: given an Exercise Prescription and the Logged
-Sets the user actually performed, it returns the recommended load for the
-*upcoming* Prescriptions of that Exercise. It costs no AI call and reads nothing
+``next_prescription`` is a pure function: given an Exercise Prescription and the
+Logged Sets the user actually performed, it returns the adjusted Prescription for
+the *upcoming* Prescriptions of that Exercise. It costs no AI call and reads nothing
 external, so a cached/Generated artifact is never touched — only the user's own
-copy moves.
+copy moves. (``next_load`` is the load-only view of the same rule, kept for callers
+that overlay just the load.)
 
-The rule is a fixed-increment double-progression: when every Logged Set meets the
-top of the prescribed rep range at low perceived effort, the load steps up by
-``INCREASE_KG``; when any set falls short of the bottom of the range, it steps
-down by ``DECREASE_KG``; otherwise it holds. Loads are free-text (``"60 kg"``,
-``"bodyweight"``, ``"70% 1RM"``), so anything without a single clean numeric value
-is left untouched rather than mangled.
+The rule is a fixed-increment double-progression driven by one signal — every set
+at the top of the prescribed rep range at low perceived effort is strong, any set
+below the bottom is a miss — but *what* it steps depends on the Load kind (ADR-0026):
+
+- **Absolute** (external weight): step the recommended kilograms — up by
+  ``INCREASE_KG`` on strong performance, down by ``DECREASE_KG`` on a miss.
+- **Bodyweight + added load**: step the *added* kilograms with the same increments;
+  a reduction that reaches zero collapses back to a bare ``"bodyweight"`` movement.
+- **Pure bodyweight** (nothing to add): step the *rep target* instead — raise its
+  floor one rep toward the ceiling on strong performance, and hold at the ceiling
+  (the harder-Variation suggestion is a separate slice), so reps never grow unbound.
+
+Loads are free-text (``"60 kg"``, ``"bodyweight + 10 kg"``, ``"70% 1RM"``); a
+%-1RM, range, or qualitative load — anything with no single clean value to move — is
+left untouched rather than mangled.
 """
 
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
+from enum import Enum
 from typing import Protocol
+
+from app.domain.load import LoadKind, parse_load
 
 # A fixed-increment step keeps the rule simple and auditable (vs. percentage math
 # on noisy free-text loads). Reductions are larger than increases: backing off
@@ -84,44 +98,167 @@ def _format_load(value: float, suffix: str) -> str:
     return f"{number}{suffix}"
 
 
-def next_load(
-    prescription: _Prescription, logged_sets: list[_LoggedSet]
-) -> str | None:
-    """Return the adjusted recommended load for ``prescription``'s next outing.
+class ProgressionKind(str, Enum):
+    """What kind of adjustment Progression made to a Prescription's next outing.
 
-    Holds the current recommendation unchanged when there is nothing to act on —
-    no Logged Sets, an unparseable rep target, or a load with no clean numeric
-    value. Strong performance (every set at the rep ceiling, all at low perceived
-    effort) steps the load up; otherwise it holds.
+    The four outcomes are mutually exclusive: a load moved (``LOAD_STEP``), the
+    added weight on a bodyweight movement moved (``ADDED_LOAD_STEP``), the rep
+    target on a pure-bodyweight movement moved (``REPS_STEP``), or nothing moved
+    (``HOLD``). A step covers both directions — a strong-performance increase and a
+    missed-reps decrease are both a step of their kind.
+    """
+
+    LOAD_STEP = "load_step"
+    ADDED_LOAD_STEP = "added_load_step"
+    REPS_STEP = "reps_step"
+    HOLD = "hold"
+
+
+@dataclass(frozen=True)
+class NextPrescription:
+    """The adjusted Prescription state for its next outing, tagged by what moved.
+
+    ``reps`` and ``recommended_load`` carry the resulting values — equal to the
+    inputs when ``kind`` is ``HOLD`` — so a caller can apply the result uniformly
+    without re-deriving which field changed.
+    """
+
+    kind: ProgressionKind
+    reps: str
+    recommended_load: str | None
+
+
+def next_prescription(
+    prescription: _Prescription, logged_sets: list[_LoggedSet]
+) -> NextPrescription:
+    """Return the deterministically adjusted Prescription for its next outing.
+
+    Reads only the user's Logged Sets (reps + perceived effort) and never touches a
+    shared/cached artifact. Holds unchanged when there is nothing to act on — no
+    Logged Sets, an unparseable rep target, or a load with no clean numeric value.
+    For an external-weight load, strong performance (every set at the rep ceiling,
+    all at low perceived effort) steps the load up and missed reps step it down.
     """
 
     current = prescription.recommended_load
-    if not logged_sets:
-        return current
-    if current is None:
-        return None
+    reps = prescription.reps
+    if not logged_sets or current is None:
+        return NextPrescription(ProgressionKind.HOLD, reps, current)
+
+    target = _parse_rep_target(reps)
+    if target is None:
+        return NextPrescription(ProgressionKind.HOLD, reps, current)
+    floor, ceiling = target
+
+    # The typed Load fixes the meaning once (ADR-0010): a bodyweight movement steps
+    # its added weight (or, pure, its reps) rather than the kg the absolute path moves.
+    load = parse_load(current)
+    if load.kind is LoadKind.BODYWEIGHT:
+        return _next_bodyweight(
+            reps, current, load.added_kg, floor, ceiling, logged_sets
+        )
 
     parsed = _parse_load(current)
-    target = _parse_rep_target(prescription.reps)
-    if parsed is None or target is None:
-        return current
-
+    if parsed is None:
+        return NextPrescription(ProgressionKind.HOLD, reps, current)
     value, suffix = parsed
-    floor, ceiling = target
 
     # Missed reps take precedence: backing off is the cautious direction, so it is
     # decided before any increase even if effort happened to read as low.
-    missed = any(logged.reps < floor for logged in logged_sets)
-    if missed:
-        return _format_load(max(value - DECREASE_KG, 0.0), suffix)
+    if any(logged.reps < floor for logged in logged_sets):
+        stepped = _format_load(max(value - DECREASE_KG, 0.0), suffix)
+        return NextPrescription(ProgressionKind.LOAD_STEP, reps, stepped)
 
-    hit_ceiling = all(logged.reps >= ceiling for logged in logged_sets)
-    low_effort = all(
+    if _hit_ceiling(logged_sets, ceiling) and _low_effort(logged_sets):
+        stepped = _format_load(value + INCREASE_KG, suffix)
+        return NextPrescription(ProgressionKind.LOAD_STEP, reps, stepped)
+
+    return NextPrescription(ProgressionKind.HOLD, reps, current)
+
+
+def _next_bodyweight(
+    reps: str,
+    current: str,
+    added_kg: float | None,
+    floor: int,
+    ceiling: int,
+    logged_sets: list[_LoggedSet],
+) -> NextPrescription:
+    """Progress a bodyweight Prescription (ADR-0026).
+
+    With added load, the extra kilograms step exactly like an absolute load — up on
+    strong performance, down on a miss. Pure bodyweight — no weight to add — has no
+    kilograms to move, so it steps the rep target instead (see
+    :func:`_next_pure_bodyweight`).
+    """
+
+    if added_kg is None:
+        return _next_pure_bodyweight(reps, current, floor, ceiling, logged_sets)
+
+    if any(logged.reps < floor for logged in logged_sets):
+        stepped = _format_added(max(added_kg - DECREASE_KG, 0.0))
+        return NextPrescription(ProgressionKind.ADDED_LOAD_STEP, reps, stepped)
+
+    if _hit_ceiling(logged_sets, ceiling) and _low_effort(logged_sets):
+        stepped = _format_added(added_kg + INCREASE_KG)
+        return NextPrescription(ProgressionKind.ADDED_LOAD_STEP, reps, stepped)
+
+    return NextPrescription(ProgressionKind.HOLD, reps, current)
+
+
+def _next_pure_bodyweight(
+    reps: str,
+    current: str,
+    floor: int,
+    ceiling: int,
+    logged_sets: list[_LoggedSet],
+) -> NextPrescription:
+    """Progress a pure-bodyweight Prescription by stepping its rep target (ADR-0026).
+
+    With no weight to add, strong performance raises the target's floor one rep
+    toward the ceiling, tightening the range upward. At the ceiling it holds — the
+    harder-Variation suggestion is a separate slice, so reps never grow unbounded.
+    """
+
+    if floor >= ceiling:
+        return NextPrescription(ProgressionKind.HOLD, reps, current)
+
+    if _hit_ceiling(logged_sets, ceiling) and _low_effort(logged_sets):
+        stepped = f"{floor + 1}-{ceiling}"
+        return NextPrescription(ProgressionKind.REPS_STEP, stepped, current)
+
+    return NextPrescription(ProgressionKind.HOLD, reps, current)
+
+
+def _format_added(added: float) -> str:
+    """Render a bodyweight load's added kilograms. Zero added collapses to the
+    bare ``"bodyweight"`` movement rather than a redundant ``"+ 0 kg"``."""
+
+    if added <= 0:
+        return "bodyweight"
+    number = int(added) if added == int(added) else added
+    return f"bodyweight + {number} kg"
+
+
+def _hit_ceiling(logged_sets: list[_LoggedSet], ceiling: int) -> bool:
+    return all(logged.reps >= ceiling for logged in logged_sets)
+
+
+def _low_effort(logged_sets: list[_LoggedSet]) -> bool:
+    return all(
         logged.perceived_difficulty is not None
         and logged.perceived_difficulty <= LOW_EFFORT_MAX
         for logged in logged_sets
     )
-    if hit_ceiling and low_effort:
-        return _format_load(value + INCREASE_KG, suffix)
 
-    return current
+
+def next_load(
+    prescription: _Prescription, logged_sets: list[_LoggedSet]
+) -> str | None:
+    """The recommended load half of :func:`next_prescription` (ADR-0004).
+
+    Retained as the load-only view for callers that only overlay the load; the rep
+    axis (pure-bodyweight progression) is read off :func:`next_prescription`.
+    """
+
+    return next_prescription(prescription, logged_sets).recommended_load
