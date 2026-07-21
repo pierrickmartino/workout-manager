@@ -1,7 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { toStrengthTimelineView } from "./strength-analytics-view.ts";
+import {
+  STRENGTH_EMPTY_STATE_COPY,
+  toStrengthTimelineView,
+} from "./strength-analytics-view.ts";
 import type { StrengthAnalyticsOverview } from "./strength-analytics-types.ts";
 
 // `toStrengthTimelineView` shapes the Strength Analytics screen's Personal Record
@@ -107,6 +110,16 @@ test("has no previous page on the first page and a next page when more remain", 
   // Assert
   assert.equal(view.hasPreviousPage, false);
   assert.equal(view.hasNextPage, true);
+});
+
+test("the empty-state copy names the bodyweight path, not only a weight in kg", () => {
+  // A pure-calisthenics user now reaches this screen (ADR-0026), so the teaching empty
+  // state must name the bodyweight path honestly — Performed Body Weight in the 1–12 rep
+  // window — rather than implying strength records need "a weight in kilograms" alone.
+  assert.match(STRENGTH_EMPTY_STATE_COPY, /body\s?weight/i);
+  assert.match(STRENGTH_EMPTY_STATE_COPY, /1[–-]12/);
+  // It still names the absolute-load path, so the copy teaches both honestly.
+  assert.match(STRENGTH_EMPTY_STATE_COPY, /kilograms?|kg/i);
 });
 
 test("has a previous page but no next page on the last page", () => {

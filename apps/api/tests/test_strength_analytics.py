@@ -101,6 +101,37 @@ def test_pr_timeline_is_all_time_newest_first_and_gate_is_open():
     assert overview.total_records == 2
 
 
+def test_a_pure_calisthenics_user_with_a_captured_mass_opens_the_gate():
+    # Arrange — a pure-bodyweight Pull-up in the 1–12 rep window with the performer's
+    # mass snapshotted onto the set (ADR-0026): no kg on the load at all, yet it now
+    # resolves to a kg-equivalent and sets a Personal Record.
+    _, sessions, logged = _build()
+    _log(
+        sessions,
+        logged,
+        "user_calisthenics",
+        TODAY,
+        [
+            LoggedSetDraft(
+                exercise_id=PRESS,
+                reps=8,
+                load=ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict(),
+                body_weight_kg=75.0,
+            )
+        ],
+    )
+
+    # Act
+    overview = strength_analytics_overview("user_calisthenics", logged=logged)
+
+    # Assert — the strength screen's gate admits the calisthenics user: one bodyweight
+    # PR on the timeline, surfaced as the set that achieved it (reps, not a kg headline).
+    assert overview.has_qualifying_strength is True
+    assert overview.total_records == 1
+    assert overview.pr_timeline[0].is_bodyweight is True
+    assert overview.pr_timeline[0].reps == 8
+
+
 def test_a_user_with_no_qualifying_strength_gets_a_closed_gate_not_an_error():
     # Arrange — a session logged with only a bodyweight load: no absolute-Load PR possible
     _, sessions, logged = _build()

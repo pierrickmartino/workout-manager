@@ -308,6 +308,39 @@ def test_recent_records_surface_all_time_prs_newest_first_decoupled_from_the_win
     assert overview.recent_records[0].exercise_name == "Back Squat"
 
 
+def test_recent_records_surface_a_bodyweight_pr_so_the_nav_gate_admits_calisthenics():
+    # Arrange — a pure-calisthenics user: one bodyweight Pull-up in the 1–12 rep window
+    # with the performer's mass snapshotted onto the set (ADR-0026). No absolute-load work
+    # at all. This feed is the signal the Analytics screen gates the Strength Analytics nav
+    # entry on, so a non-empty feed here is what admits the calisthenics user (#201).
+    _, sessions, logged = _build()
+    _log(
+        sessions,
+        logged,
+        "user_calisthenics",
+        TODAY,
+        [
+            LoggedSetDraft(
+                exercise_id=PRESS,
+                reps=8,
+                load=ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict(),
+                body_weight_kg=75.0,
+            )
+        ],
+    )
+
+    # Act
+    overview = analytics_overview(
+        "user_calisthenics", AnalyticsRange.SEVEN_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — the bodyweight set sets a PR and surfaces on the feed as the set that
+    # achieved it (reps, not a kg headline), opening the nav gate for a calisthenics user.
+    assert len(overview.recent_records) == 1
+    assert overview.recent_records[0].is_bodyweight is True
+    assert overview.recent_records[0].reps == 8
+
+
 def test_recent_records_keep_only_the_eight_most_recent():
     # Arrange — ten PRs on ten distinct days, each newer day heavier than the last so
     # every set clears the previous best (day 10 = oldest = 100 kg … day 1 = 109 kg)

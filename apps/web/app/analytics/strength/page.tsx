@@ -3,6 +3,7 @@ import { Trophy } from "lucide-react";
 
 import { fetchStrengthAnalytics } from "@/lib/strength-analytics";
 import {
+  STRENGTH_EMPTY_STATE_COPY,
   toStrengthTimelineView,
   type StrengthTimelineView,
 } from "@/lib/strength-analytics-view";
@@ -85,15 +86,14 @@ function toOffset(value: string | undefined): number {
 }
 
 // The honest empty state for a user with no qualifying strength history: it explains
-// exactly what a strength record needs rather than showing a fabricated "0 kg".
+// exactly what a strength record needs — naming both the absolute-load and the bodyweight
+// path (ADR-0026) — rather than showing a fabricated "0 kg". The copy lives in the
+// view-model so it stays testable and beside the gate decision that surfaces it.
 function StrengthEmptyState() {
   return (
     <Card className="flex flex-col items-start gap-3 p-6">
       <p className="font-sans text-sm text-text-secondary">
-        No strength records yet. A strength record comes from a set logged with
-        a weight in kilograms at 1–12 reps — enough to estimate a one-rep max.
-        Log a few working sets and your Personal Record timeline will build
-        here.
+        {STRENGTH_EMPTY_STATE_COPY}
       </p>
       <Link
         href="/sessions/new"
