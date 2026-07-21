@@ -10,7 +10,7 @@ responses use the standard envelope."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.auth.dependencies import get_current_user
@@ -56,7 +56,10 @@ from app.repositories.generation_feedback_repository import (
 from app.repositories.profile_repository import ProfileRepository
 from app.repositories.session_repository import SessionRepository, SessionView
 from app.substitution.service import (
+    HarderVariationSuggestion,
     PrescriptionNotFound,
+    SubstituteNotAvailable,
+    harder_variation_suggestion,
     substitute_exercise,
 )
 from app.substitution.service import SessionNotFound as SubstituteSessionNotFound
@@ -174,9 +177,7 @@ def hydrate_live_session(
     not own the Session, so non-owners never seed a Live Session.
     """
 
-    view = hydrate_session(
-        clerk_user_id, session_id, sessions=sessions, logged=logged
-    )
+    view = hydrate_session(clerk_user_id, session_id, sessions=sessions, logged=logged)
     if view is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Session not found")
     return success_envelope(serialize_hydrated_session(view))
@@ -280,10 +281,20 @@ def regenerate(
     return success_envelope(_serialize(view))
 
 
+class SubstituteBody(BaseModel):
+    """The optional accept payload for a Substitution. ``target_exercise_id`` names a
+    specific catalog Variation/Alternative to advance to — e.g. accepting the
+    harder-Variation offer at the rep ceiling (#202). Omitted, the swap resolves
+    automatically, lookup-first."""
+
+    target_exercise_id: int | None = None
+
+
 @router.post("/sessions/{session_id}/prescriptions/{position}/substitute")
 def substitute(
     session_id: int,
     position: int,
+    body: SubstituteBody | None = Body(default=None),
     clerk_user_id: str = Depends(get_current_user),
     relationships: ExerciseRelationshipRepository = Depends(
         get_exercise_relationship_repository
@@ -293,11 +304,13 @@ def substitute(
     profiles: ProfileRepository = Depends(get_profile_repository),
     generator: SubstituteGenerator = Depends(get_substitute_generator),
 ) -> dict:
+    target_exercise_id = body.target_exercise_id if body is not None else None
     try:
         view = substitute_exercise(
             session_id,
             clerk_user_id,
             position,
+            target_exercise_id=target_exercise_id,
             relationships=relationships,
             exercises=exercises,
             sessions=sessions,
@@ -308,9 +321,63 @@ def substitute(
         raise HTTPException(
             status_code=HTTP_NOT_FOUND, detail="Prescription not found"
         ) from exc
+    except SubstituteNotAvailable as exc:
+        raise HTTPException(
+            status_code=HTTP_CONFLICT,
+            detail="That substitute is not available for this prescription.",
+        ) from exc
     except GenerationError as exc:
         raise HTTPException(
             status_code=HTTP_BAD_GATEWAY,
             detail="No substitute could be found. Please try again.",
         ) from exc
     return success_envelope(_serialize(view))
+
+
+def _serialize_suggestion(suggestion: HarderVariationSuggestion | None) -> dict:
+    """The harder-Variation offer, or ``null`` when the prescription holds. The
+    ``exercise_id`` is what the client POSTs back as ``target_exercise_id`` to accept.
+    """
+
+    return {
+        "suggested_variation": (
+            {"exercise_id": suggestion.exercise_id, "name": suggestion.name}
+            if suggestion is not None
+            else None
+        )
+    }
+
+
+@router.get("/sessions/{session_id}/prescriptions/{position}/harder-variation")
+def read_harder_variation(
+    session_id: int,
+    position: int,
+    clerk_user_id: str = Depends(get_current_user),
+    relationships: ExerciseRelationshipRepository = Depends(
+        get_exercise_relationship_repository
+    ),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    sessions: SessionRepository = Depends(get_session_repository),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+    profiles: ProfileRepository = Depends(get_profile_repository),
+) -> dict:
+    """Offer the next harder Variation when this pure-bodyweight Prescription has hit
+    its rep ceiling (#202), else ``null``. Read-only; accepting is a POST to
+    ``/substitute`` with the returned ``exercise_id`` as ``target_exercise_id``."""
+
+    try:
+        suggestion = harder_variation_suggestion(
+            session_id,
+            clerk_user_id,
+            position,
+            relationships=relationships,
+            exercises=exercises,
+            sessions=sessions,
+            logged=logged,
+            profiles=profiles,
+        )
+    except (SubstituteSessionNotFound, PrescriptionNotFound) as exc:
+        raise HTTPException(
+            status_code=HTTP_NOT_FOUND, detail="Prescription not found"
+        ) from exc
+    return success_envelope(_serialize_suggestion(suggestion))
