@@ -13,6 +13,9 @@ const RECORD: PersonalRecordEntry = {
   estimated_1rm: 110.0,
   gain: 10.0,
   date: "2026-07-04",
+  reps: 1,
+  is_bodyweight: false,
+  added_kg: null,
 };
 
 test("formats a record's estimate, gain, and date for display", () => {
@@ -62,6 +65,43 @@ test("preserves the feed's newest-first order", () => {
     rows.map((row) => row.estimate),
     ["110 kg", "100 kg"],
   );
+});
+
+test("renders a bodyweight record as the set that achieved it, never kilograms", () => {
+  // Arrange — a pure bodyweight PR of 12 reps (its kg-equivalent estimate must not leak)
+  const record: PersonalRecordEntry = {
+    ...RECORD,
+    exercise: "Pull-up",
+    estimated_1rm: 90.0,
+    reps: 12,
+    is_bodyweight: true,
+    added_kg: null,
+  };
+
+  // Act
+  const [row] = toRecordRows([record]);
+
+  // Assert — the set, not a fabricated kg headline (ADR-0026)
+  assert.equal(row.estimate, "bodyweight × 12");
+  assert.ok(!row.estimate.includes("kg"));
+});
+
+test("renders a weighted bodyweight record with its added load", () => {
+  // Arrange — bodyweight + 20 kg for 5 reps
+  const record: PersonalRecordEntry = {
+    ...RECORD,
+    exercise: "Dip",
+    estimated_1rm: 125.0,
+    reps: 5,
+    is_bodyweight: true,
+    added_kg: 20,
+  };
+
+  // Act
+  const [row] = toRecordRows([record]);
+
+  // Assert — the belt load shows; the kg-equivalent estimate never does
+  assert.equal(row.estimate, "bodyweight + 20 kg × 5");
 });
 
 // `toRecentRecordsTeaser` decides the "See all records" affordance that links the

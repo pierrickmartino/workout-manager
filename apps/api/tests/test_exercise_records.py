@@ -357,3 +357,82 @@ def test_top_set_series_caps_at_the_last_eight_qualifying_sessions():
     assert [p.performed_on for p in view.top_set_series] == [
         date(2026, 1, day) for day in range(3, 11)
     ]
+
+
+def _bodyweight(added_kg=None) -> dict:
+    """The stored typed-Load dict for a bodyweight (optionally + added) load."""
+
+    text = "bodyweight" if added_kg is None else f"bodyweight + {added_kg:g} kg"
+    return ParsedLoad(kind=LoadKind.BODYWEIGHT, text=text, added_kg=added_kg).to_dict()
+
+
+def test_a_qualifying_massless_bodyweight_set_prompts_to_record_body_weight():
+    # Arrange — 8 pull-ups in the window, but no Performed Body Weight was captured
+    _, sessions, logged = _build()
+    s = _session(sessions, "user_n")
+    _log(
+        logged, "user_n", s, date(2026, 1, 1),
+        [LoggedSetDraft(exercise_id=PRESS, reps=8, load=_bodyweight(), body_weight_kg=None)],
+    )
+
+    # Act
+    view = exercise_records("user_n", PRESS, logged=logged)
+
+    # Assert — record-ineligible only for the missing mass → nudge on, no fabricated PR
+    assert view.body_weight_nudge is True
+    assert view.pr_milestones == []
+    assert view.personal_record is None
+
+
+def test_the_nudge_is_silenced_once_the_exercise_holds_a_record():
+    # Arrange — a mass-captured PR set, plus a later mass-less set of the same movement
+    _, sessions, logged = _build()
+    s1 = _session(sessions, "user_n2")
+    _log(
+        logged, "user_n2", s1, date(2026, 1, 1),
+        [LoggedSetDraft(exercise_id=PRESS, reps=8, load=_bodyweight(), body_weight_kg=75.0)],
+    )
+    s2 = _session(sessions, "user_n2")
+    _log(
+        logged, "user_n2", s2, date(2026, 1, 8),
+        [LoggedSetDraft(exercise_id=PRESS, reps=6, load=_bodyweight(), body_weight_kg=None)],
+    )
+
+    # Act
+    view = exercise_records("user_n2", PRESS, logged=logged)
+
+    # Assert — the user is already scoring, so no prompt despite the mass-less set
+    assert view.body_weight_nudge is False
+    assert len(view.pr_milestones) == 1
+
+
+def test_no_nudge_for_a_high_rep_massless_bodyweight_set():
+    # Arrange — 20 push-ups without a mass: ineligible for the rep window, not the mass
+    _, sessions, logged = _build()
+    s = _session(sessions, "user_n3")
+    _log(
+        logged, "user_n3", s, date(2026, 1, 1),
+        [LoggedSetDraft(exercise_id=PRESS, reps=20, load=_bodyweight(), body_weight_kg=None)],
+    )
+
+    # Act
+    view = exercise_records("user_n3", PRESS, logged=logged)
+
+    # Assert — recording a weight would not unlock a record here, so no prompt
+    assert view.body_weight_nudge is False
+
+
+def test_no_nudge_for_an_absolute_load_exercise():
+    # Arrange — an ordinary weighted squat: the nudge is a bodyweight-only concern
+    _, sessions, logged = _build()
+    s = _session(sessions, "user_n4")
+    _log(
+        logged, "user_n4", s, date(2026, 1, 1),
+        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(100.0))],
+    )
+
+    # Act
+    view = exercise_records("user_n4", SQUAT, logged=logged)
+
+    # Assert
+    assert view.body_weight_nudge is False

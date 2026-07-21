@@ -104,12 +104,18 @@ def test_strength_returns_the_newest_first_pr_timeline_and_open_gate():
             "estimated_1rm": 110.0,
             "gain": 10.0,
             "date": (date.today() - timedelta(days=100)).isoformat(),
+            "reps": 1,
+            "is_bodyweight": False,
+            "added_kg": None,
         },
         {
             "exercise": "Back Squat",
             "estimated_1rm": 100.0,
             "gain": 0.0,
             "date": (date.today() - timedelta(days=200)).isoformat(),
+            "reps": 1,
+            "is_bodyweight": False,
+            "added_kg": None,
         },
     ]
     assert body["meta"] == {"total": 2, "limit": 20, "offset": 0}

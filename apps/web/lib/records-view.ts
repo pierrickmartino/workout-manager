@@ -1,8 +1,11 @@
 import type { PersonalRecordEntry } from "./analytics-types";
+import { formatRecordAchievement } from "./record-achievement.ts";
 
-// A Personal Record prepared for the Recent Records feed: the Exercise name, its new
-// Estimated 1RM and gain-over-prior-PR rounded to whole kilograms for the eye, and a
-// short human date. `gain` becomes a distinct "First PR" badge for the first-ever
+// A Personal Record prepared for the Recent Records feed: the Exercise name, its
+// achievement headline, the gain-over-prior-PR, and a short human date. `estimate` is
+// the honest headline (ADR-0026) — an absolute record's whole-kg Estimated 1RM, or a
+// bodyweight record's set ("bodyweight × 12" / "bodyweight + 20 kg × 5"), never a
+// bodyweight kg figure. `gain` becomes a distinct "First PR" badge for the first-ever
 // record rather than a misleading "+0 kg".
 export interface RecordRow {
   exercise: string;
@@ -50,7 +53,7 @@ export function toRecentRecordsTeaser(
 export function toRecordRows(records: readonly PersonalRecordEntry[]): RecordRow[] {
   return records.map((record) => ({
     exercise: record.exercise,
-    estimate: `${Math.round(record.estimated_1rm)} kg`,
+    estimate: formatRecordAchievement(record),
     gain: record.gain > 0 ? `+${Math.round(record.gain)} kg` : "First PR",
     date: formatRecordDate(record.date),
   }));

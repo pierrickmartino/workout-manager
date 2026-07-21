@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends
 from app.auth.dependencies import get_current_user
 from app.envelope import success_envelope
 from app.logbook.exercise_records import ExerciseRecordsView, exercise_records
+from app.logbook.records import personal_record_payload
 from app.repositories.deps import get_logged_session_repository
 from app.repositories.logged_session_repository import LoggedSessionRepository
 
@@ -28,18 +29,13 @@ def _serialize(view: ExerciseRecordsView) -> dict:
         "exercise_name": view.exercise_name,
         "personal_record": view.personal_record,
         "total_sets": view.total_sets,
+        "body_weight_nudge": view.body_weight_nudge,
         "top_set_series": [
             {"date": point.performed_on.isoformat(), "estimated_1rm": point.estimated_1rm}
             for point in view.top_set_series
         ],
         "pr_milestones": [
-            {
-                "exercise": milestone.exercise_name,
-                "estimated_1rm": milestone.estimated_1rm,
-                "gain": milestone.gain,
-                "date": milestone.performed_on.isoformat(),
-            }
-            for milestone in view.pr_milestones
+            personal_record_payload(milestone) for milestone in view.pr_milestones
         ],
     }
 
