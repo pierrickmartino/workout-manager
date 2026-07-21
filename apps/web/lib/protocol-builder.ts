@@ -642,13 +642,16 @@ function supersetsAreContiguous(prescriptions: DraftPrescription[]): boolean {
 // One Prescription's Superset display facts, aligned to the Session's Prescription
 // list — what the Builder renders per row (ADR-0023). Solo Prescriptions carry a null
 // `memberLabel`; a grouped member gets its A/B/C badge, whether it opens or closes the
-// group (so the round-rest field renders once, on the last member), and the group's
-// round-rest. `canGroupWithNext` gates the "group with next" control.
+// group (so the Builder brackets the group into one visible container, #215), and the
+// group's round-rest. `groupSize` is the container-grouping fact the box needs: how many
+// members the container wraps — `0` for a solo Prescription, so it renders outside any
+// container. `canGroupWithNext` gates the "group with next" control.
 export interface SupersetSlot {
   group: string | null;
   memberLabel: string | null;
   isFirstMember: boolean;
   isLastMember: boolean;
+  groupSize: number;
   roundRestSeconds: number | null;
   canGroupWithNext: boolean;
 }
@@ -684,6 +687,7 @@ export function supersetLayout(
         memberLabel: null,
         isFirstMember: false,
         isLastMember: false,
+        groupSize: 0,
         roundRestSeconds: null,
         canGroupWithNext,
       };
@@ -697,6 +701,7 @@ export function supersetLayout(
       memberLabel: String.fromCharCode(65 + ordinal),
       isFirstMember: ordinal === 0,
       isLastMember: ordinal === total - 1,
+      groupSize: total,
       roundRestSeconds: prescription.roundRestSeconds,
       canGroupWithNext,
     };
