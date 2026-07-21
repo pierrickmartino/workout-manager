@@ -76,7 +76,11 @@ Drag-and-drop is an *enhancement* over the existing `aria`-labelled arrow/button
 which remain the accessible path — DnD must not be an accessibility regression. When the
 Builder opens for a Sensitive-Constraint user, it **auto-unlinks groups in the draft** (a
 safety-driven, staged-not-committed degrade) with a banner, so they never hit a confusing
-hard-block on an unrelated edit; the validator remains the backstop at DEPLOY.
+hard-block on an unrelated edit; the validator remains the backstop at DEPLOY. In the Builder
+*specifically*, a Superset renders as a **visible bordered container** the user drags members into
+(the drop target for grouping), with the A/B/C member badge kept *inside* it; Live and read-only
+views stay badge-only per the "communicate grouping rather than restructure the screen" choice
+above — the container is an authoring affordance, not a change to the Live model.
 
 ## Considered options
 
