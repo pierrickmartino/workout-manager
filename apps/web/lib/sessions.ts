@@ -3,6 +3,7 @@ import { apiGet, apiSend, type Envelope } from "./api";
 import type {
   ExerciseDetail,
   GenerateSessionInput,
+  HarderVariationResponse,
   WorkoutSession,
 } from "./sessions-types";
 
@@ -45,14 +46,33 @@ export async function fetchExercise(
 
 // Substitute the Exercise prescribed at ``position`` in the user's own Session
 // copy. Lookup-first over the catalog, AI fallback only when nothing fits; it is
-// unlimited and never consumes the regeneration limit. The POST carries no body, so
-// the seam sends no `Content-Type` — preserved exactly as before.
+// unlimited and never consumes the regeneration limit. Called without
+// ``targetExerciseId`` the POST carries no body, so the seam sends no
+// `Content-Type` — preserved exactly as before. Passing ``targetExerciseId`` names
+// a specific catalog Variation/Alternative to advance to — e.g. accepting the
+// harder-Variation offer at the rep ceiling (#202) — sent as `target_exercise_id`.
 export async function substitutePrescription(
   sessionId: number,
   position: number,
+  targetExerciseId?: number,
 ): Promise<Envelope<WorkoutSession>> {
-  return apiSend(
-    `/api/sessions/${sessionId}/prescriptions/${position}/substitute`,
-    "POST",
+  const path = `/api/sessions/${sessionId}/prescriptions/${position}/substitute`;
+  if (targetExerciseId === undefined) {
+    return apiSend(path, "POST");
+  }
+  return apiSend(path, "POST", { target_exercise_id: targetExerciseId });
+}
+
+// Read the harder-Variation offer for one Prescription (#202): the next harder
+// Variation to advance to when a pure-bodyweight prescription has hit its rep
+// ceiling and is still hitting it easily, or `{ suggested_variation: null }` when
+// there is none. Read-only; accepting is a `substitutePrescription` POST with the
+// returned `exercise_id` as `target_exercise_id`.
+export async function fetchHarderVariation(
+  sessionId: number,
+  position: number,
+): Promise<Envelope<HarderVariationResponse>> {
+  return apiGet(
+    `/api/sessions/${sessionId}/prescriptions/${position}/harder-variation`,
   );
 }
