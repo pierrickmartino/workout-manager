@@ -15,6 +15,7 @@ import {
   type BuilderDraft,
   type BuilderMatrix,
   type DraftSession,
+  type DropIntent,
   type MatrixCell,
   type PickedExercise,
 } from "@/lib/protocol-builder";
@@ -264,20 +265,11 @@ export function ProtocolBuilder({
               roundRestSeconds,
             })
           }
-          onGroupByDrag={(from, to) =>
+          onResolveDrop={(intent) =>
             dispatch({
-              type: "GROUP_BY_DRAG",
+              type: "RESOLVE_DROP",
               sessionId: selectedSession.sessionId,
-              from,
-              to,
-            })
-          }
-          onReorderByDrag={(from, to) =>
-            dispatch({
-              type: "REORDER_BY_DRAG",
-              sessionId: selectedSession.sessionId,
-              from,
-              to,
+              intent,
             })
           }
           onRemoveSession={() => {
@@ -653,8 +645,7 @@ interface SessionEditorProps {
   onGroupWithNext: (position: number) => void;
   onUngroup: (position: number) => void;
   onEditRoundRest: (position: number, roundRestSeconds: number | null) => void;
-  onGroupByDrag: (from: number, to: number) => void;
-  onReorderByDrag: (from: number, to: number) => void;
+  onResolveDrop: (intent: DropIntent) => void;
   onRemoveSession: () => void;
 }
 
@@ -673,8 +664,7 @@ function SessionEditor({
   onGroupWithNext,
   onUngroup,
   onEditRoundRest,
-  onGroupByDrag,
-  onReorderByDrag,
+  onResolveDrop,
   onRemoveSession,
 }: SessionEditorProps) {
   const locked = session.performed;
@@ -727,8 +717,7 @@ function SessionEditor({
         onGroupWithNext={onGroupWithNext}
         onUngroup={onUngroup}
         onRemove={onRemove}
-        onGroupByDrag={onGroupByDrag}
-        onReorderByDrag={onReorderByDrag}
+        onResolveDrop={onResolveDrop}
       />
 
       {locked || !queuedExerciseName ? null : (

@@ -8,8 +8,13 @@ import {
   supersetLayout,
   toDeployPayload,
   toSimulatePayload,
+  classifyDrag,
+  resolveDrop,
+  rowDropId,
+  chipDropId,
+  boxDropId,
 } from "./protocol-builder.ts";
-import type { BuilderDraft } from "./protocol-builder.ts";
+import type { BuilderDraft, DraftPrescription } from "./protocol-builder.ts";
 import type { ProtocolProgress } from "./protocols-types.ts";
 
 // The Protocol Builder draft reducer (Module D, ADR-0020) is a pure reducer over
@@ -1385,16 +1390,15 @@ function threePrescriptionSession(overrides = {}) {
   });
 }
 
-test("GROUP_BY_DRAG dropping one solo row onto another forms a Superset", () => {
+test("RESOLVE_DROP form-group: dropping one solo row onto another forms a Superset", () => {
   // Arrange — two solo Prescriptions
   const draft = initBuilderDraft(protocol({ sessions: [twoPrescriptionSession()] }));
 
   // Act — drag A (index 0) onto B (index 1)
   const next = builderReducer(draft, {
-    type: "GROUP_BY_DRAG",
+    type: "RESOLVE_DROP",
     sessionId: 1,
-    from: 0,
-    to: 1,
+    intent: { kind: "form-group", from: 0, to: 1 },
   });
 
   // Assert — both now share one Superset tag, adjacent
@@ -1404,32 +1408,30 @@ test("GROUP_BY_DRAG dropping one solo row onto another forms a Superset", () => 
   assert.equal(prescriptions[0].supersetGroup, prescriptions[1].supersetGroup);
 });
 
-test("GROUP_BY_DRAG dropping a solo onto a grouped row joins that Superset", () => {
+test("RESOLVE_DROP join-group: dropping a solo into an existing container joins that Superset", () => {
   // Arrange — a grouped [A,B] Superset followed by a solo C
   const grouped = builderReducer(
     initBuilderDraft(protocol({ sessions: [threePrescriptionSession()] })),
     { type: "GROUP_WITH_NEXT", sessionId: 1, position: 0 },
   );
+  const tag = grouped.sessions[0].prescriptions[0].supersetGroup as string;
 
-  // Act — drag C (index 2) onto B (index 1), inside the existing group
+  // Act — drag C (index 2) into the [A,B] container
   const next = builderReducer(grouped, {
-    type: "GROUP_BY_DRAG",
+    type: "RESOLVE_DROP",
     sessionId: 1,
-    from: 2,
-    to: 1,
+    intent: { kind: "join-group", from: 2, group: tag },
   });
 
   // Assert — all three now share the one Superset tag, still contiguous
   const prescriptions = next.sessions[0].prescriptions;
-  const tag = prescriptions[0].supersetGroup;
-  assert.notEqual(tag, null);
   assert.deepEqual(
     prescriptions.map((p) => p.supersetGroup),
     [tag, tag, tag],
   );
 });
 
-test("GROUP_BY_DRAG dropping a member onto its own co-member preserves the edited round-rest", () => {
+test("RESOLVE_DROP reorder within a group preserves the edited round-rest", () => {
   // Arrange — a two-member Superset [A,B] with an edited round-rest of 120s
   const grouped = builderReducer(
     initBuilderDraft(protocol({ sessions: [twoPrescriptionSession()] })),
@@ -1442,12 +1444,11 @@ test("GROUP_BY_DRAG dropping a member onto its own co-member preserves the edite
     roundRestSeconds: 120,
   });
 
-  // Act — drag A (index 0) onto its co-member B (index 1), inside the same group
+  // Act — drag A (index 0) onto its co-member B (index 1), within the same box
   const next = builderReducer(edited, {
-    type: "GROUP_BY_DRAG",
+    type: "RESOLVE_DROP",
     sessionId: 1,
-    from: 0,
-    to: 1,
+    intent: { kind: "reorder", from: 0, to: 1 },
   });
 
   // Assert — the group is untouched: same tag and the 120s round-rest is not lost
@@ -1460,7 +1461,7 @@ test("GROUP_BY_DRAG dropping a member onto its own co-member preserves the edite
   );
 });
 
-test("GROUP_BY_DRAG dragging a member out of its group onto a solo forms a new pair and dissolves the leftover singleton", () => {
+test("RESOLVE_DROP form-group: dragging a member out of its group onto a solo forms a new pair and dissolves the leftover singleton", () => {
   // Arrange — a grouped [A,B] Superset and a solo C
   const grouped = builderReducer(
     initBuilderDraft(protocol({ sessions: [threePrescriptionSession()] })),
@@ -1469,10 +1470,9 @@ test("GROUP_BY_DRAG dragging a member out of its group onto a solo forms a new p
 
   // Act — drag B (index 1) out of the [A,B] group onto solo C (index 2)
   const next = builderReducer(grouped, {
-    type: "GROUP_BY_DRAG",
+    type: "RESOLVE_DROP",
     sessionId: 1,
-    from: 1,
-    to: 2,
+    intent: { kind: "form-group", from: 1, to: 2 },
   });
 
   // Assert — order is [A, C, B]; A is a dissolved singleton (solo again), C and B pair
@@ -1486,7 +1486,7 @@ test("GROUP_BY_DRAG dragging a member out of its group onto a solo forms a new p
   assert.equal(prescriptions[1].supersetGroup, prescriptions[2].supersetGroup);
 });
 
-test("REORDER_BY_DRAG repositions a solo row within the Session", () => {
+test("RESOLVE_DROP reorder repositions a solo row within the Session", () => {
   // Arrange — three solo Prescriptions A, B, C
   const draft = initBuilderDraft(
     protocol({ sessions: [threePrescriptionSession()] }),
@@ -1494,10 +1494,9 @@ test("REORDER_BY_DRAG repositions a solo row within the Session", () => {
 
   // Act — drag C (index 2) to the front (index 0)
   const next = builderReducer(draft, {
-    type: "REORDER_BY_DRAG",
+    type: "RESOLVE_DROP",
     sessionId: 1,
-    from: 2,
-    to: 0,
+    intent: { kind: "reorder", from: 2, to: 0 },
   });
 
   // Assert — new order C, A, B (what deploy persists as position)
@@ -1507,7 +1506,7 @@ test("REORDER_BY_DRAG repositions a solo row within the Session", () => {
   );
 });
 
-test("REORDER_BY_DRAG dragging a grouped member past a solo ungroups just that member, leaving the rest of the group intact", () => {
+test("RESOLVE_DROP leave-group: dragging a grouped member past a solo ungroups just that member, leaving the rest of the group intact", () => {
   // Arrange — a three-member Superset [A,B,C] followed by a solo D. (Group A+B,
   // extend to C; D stays solo.)
   const fourItemSession = session({
@@ -1530,10 +1529,9 @@ test("REORDER_BY_DRAG dragging a grouped member past a solo ungroups just that m
 
   // Act — drag A (index 0) out past solo D to the end (index 3)
   const next = builderReducer(trio, {
-    type: "REORDER_BY_DRAG",
+    type: "RESOLVE_DROP",
     sessionId: 1,
-    from: 0,
-    to: 3,
+    intent: { kind: "leave-group", from: 0, to: 3 },
   });
 
   // Assert — order [B, C, D, A]; B and C stay grouped and contiguous, A pulled out solo
@@ -1550,7 +1548,7 @@ test("REORDER_BY_DRAG dragging a grouped member past a solo ungroups just that m
   assert.equal(prescriptions[3].roundRestSeconds, null);
 });
 
-test("REORDER_BY_DRAG reordering within a group keeps every member grouped and contiguous", () => {
+test("RESOLVE_DROP reorder within a group keeps every member grouped and contiguous", () => {
   // Arrange — a three-member Superset [A,B,C]
   const paired = builderReducer(
     initBuilderDraft(protocol({ sessions: [threePrescriptionSession()] })),
@@ -1564,10 +1562,9 @@ test("REORDER_BY_DRAG reordering within a group keeps every member grouped and c
 
   // Act — drag C (index 2) to the front (index 0); the group stays contiguous
   const next = builderReducer(trio, {
-    type: "REORDER_BY_DRAG",
+    type: "RESOLVE_DROP",
     sessionId: 1,
-    from: 2,
-    to: 0,
+    intent: { kind: "reorder", from: 2, to: 0 },
   });
 
   // Assert — order is [C, A, B] and all three remain in the one Superset
@@ -1584,55 +1581,11 @@ test("REORDER_BY_DRAG reordering within a group keeps every member grouped and c
   );
 });
 
-test("REORDER_BY_DRAG refuses a move that would drop a solo into a group's middle (DEPLOY is the backstop)", () => {
-  // Arrange — a solo A, then a grouped [B,C] Superset
-  const grouped = builderReducer(
-    initBuilderDraft(protocol({ sessions: [threePrescriptionSession()] })),
-    { type: "GROUP_WITH_NEXT", sessionId: 1, position: 1 },
-  );
-
-  // Act — drag solo A (index 0) into the middle of [B,C] (index 1)
-  const next = builderReducer(grouped, {
-    type: "REORDER_BY_DRAG",
-    sessionId: 1,
-    from: 0,
-    to: 1,
-  });
-
-  // Assert — the split is refused; order and grouping are unchanged
-  assert.deepEqual(next, grouped);
-});
-
-test("drag gestures are a no-op on a performed Session (frozen prefix)", () => {
-  // Arrange — a performed multi-Prescription Session
-  const draft = initBuilderDraft(
-    protocol({ sessions: [threePrescriptionSession({ performed: true })] }),
-  );
-
-  // Act — try to group-by-drag and reorder-by-drag the frozen Session
-  const grouped = builderReducer(draft, {
-    type: "GROUP_BY_DRAG",
-    sessionId: 1,
-    from: 0,
-    to: 1,
-  });
-  const reordered = builderReducer(draft, {
-    type: "REORDER_BY_DRAG",
-    sessionId: 1,
-    from: 0,
-    to: 2,
-  });
-
-  // Assert — the frozen prefix is never restructured
-  assert.deepEqual(grouped, draft);
-  assert.deepEqual(reordered, draft);
-});
-
 test("a drag-formed Superset rides through toDeployPayload contiguous", () => {
   // Arrange — drag A onto B to form a group in an un-performed Session
   const grouped = builderReducer(
     initBuilderDraft(protocol({ sessions: [twoPrescriptionSession()] })),
-    { type: "GROUP_BY_DRAG", sessionId: 1, from: 0, to: 1 },
+    { type: "RESOLVE_DROP", sessionId: 1, intent: { kind: "form-group", from: 0, to: 1 } },
   );
 
   // Act
@@ -1643,4 +1596,366 @@ test("a drag-formed Superset rides through toDeployPayload contiguous", () => {
   assert.notEqual(prescriptions[0].superset_group, null);
   assert.equal(prescriptions[0].superset_group, prescriptions[1].superset_group);
   assert.ok(prescriptions.every((p) => p.round_rest_seconds !== null));
+});
+
+// --- Slice 6: the manipulation layer's two pure modules (#217, ADR-0023). The
+// drag-intent classifier maps a raw @dnd-kit drag-end (active id, over id) to a
+// semantic DropIntent; the self-healing drop resolver applies an intent to a
+// Prescription list with membership derived from the container boundary, so
+// contiguity holds by construction (replacing the old "refuse a split" no-op).
+
+// Build a plain DraftPrescription list (all solo) of the given names, so a resolver
+// test can start from an explicit, order-visible layout.
+function soloPrescriptions(...names: string[]): DraftPrescription[] {
+  return initBuilderDraft(
+    protocol({
+      sessions: [
+        session({
+          prescriptions: names.map((name, index) =>
+            prescription({ exercise_id: index + 1, exercise_name: name, rest_seconds: 60 }),
+          ),
+        }),
+      ],
+    }),
+  ).sessions[0].prescriptions;
+}
+
+// Group positions [0..count-1] of a fresh N-solo list into one Superset by chaining
+// GROUP_WITH_NEXT, returning just the resulting Prescription list.
+function groupedPrescriptions(names: string[], groupCount: number): DraftPrescription[] {
+  let draft = initBuilderDraft(
+    protocol({
+      sessions: [
+        session({
+          prescriptions: names.map((name, index) =>
+            prescription({ exercise_id: index + 1, exercise_name: name, rest_seconds: 60 }),
+          ),
+        }),
+      ],
+    }),
+  );
+  for (let position = 0; position < groupCount - 1; position += 1) {
+    draft = builderReducer(draft, { type: "GROUP_WITH_NEXT", sessionId: 1, position });
+  }
+  return draft.sessions[0].prescriptions;
+}
+
+// classifyDrag ---------------------------------------------------------------
+
+test("classifyDrag maps a row body dropped on another row (both solo) to a reorder", () => {
+  const rows = soloPrescriptions("A", "B", "C");
+  const intent = classifyDrag(rowDropId(2), rowDropId(0), rows);
+  assert.deepEqual(intent, { kind: "reorder", from: 2, to: 0 });
+});
+
+test("classifyDrag maps a link chip drop to a form-group intent", () => {
+  const rows = soloPrescriptions("A", "B");
+  const intent = classifyDrag(rowDropId(0), chipDropId(1), rows);
+  assert.deepEqual(intent, { kind: "form-group", from: 0, to: 1 });
+});
+
+test("classifyDrag maps a container box drop to a join-group intent naming the group", () => {
+  // Arrange — [A,B] grouped, C solo
+  const rows = groupedPrescriptions(["A", "B", "C"], 2);
+  const group = rows[0].supersetGroup as string;
+
+  // Act — drag solo C onto the [A,B] container box
+  const intent = classifyDrag(rowDropId(2), boxDropId(group), rows);
+
+  // Assert — C joins the named group
+  assert.deepEqual(intent, { kind: "join-group", from: 2, group });
+});
+
+test("classifyDrag maps a grouped member dropped on a row outside its box to a leave-group", () => {
+  // Arrange — [A,B] grouped, C solo
+  const rows = groupedPrescriptions(["A", "B", "C"], 2);
+
+  // Act — drag member B (index 1) onto solo C's row (index 2), outside the box
+  const intent = classifyDrag(rowDropId(1), rowDropId(2), rows);
+
+  // Assert — B leaves its group
+  assert.deepEqual(intent, { kind: "leave-group", from: 1, to: 2 });
+});
+
+test("classifyDrag maps a grouped member dropped on a row inside its own box to a plain reorder", () => {
+  // Arrange — [A,B,C] all one group
+  const rows = groupedPrescriptions(["A", "B", "C"], 3);
+
+  // Act — drag member C (index 2) onto member A's row (index 0), still inside the box
+  const intent = classifyDrag(rowDropId(2), rowDropId(0), rows);
+
+  // Assert — a within-group reorder, not a leave
+  assert.deepEqual(intent, { kind: "reorder", from: 2, to: 0 });
+});
+
+test("classifyDrag yields no action for a malformed active id", () => {
+  const rows = soloPrescriptions("A", "B");
+  assert.equal(classifyDrag("row-xyz", rowDropId(1), rows), null);
+});
+
+test("classifyDrag yields no action for a malformed or absent over id", () => {
+  const rows = soloPrescriptions("A", "B");
+  assert.equal(classifyDrag(rowDropId(0), "grp-nope", rows), null);
+  assert.equal(classifyDrag(rowDropId(0), null, rows), null);
+});
+
+test("classifyDrag yields no action when a row is dropped on itself", () => {
+  const rows = soloPrescriptions("A", "B");
+  assert.equal(classifyDrag(rowDropId(1), rowDropId(1), rows), null);
+});
+
+test("classifyDrag treats a drop onto a member's own container box as no action", () => {
+  const rows = groupedPrescriptions(["A", "B"], 2);
+  const group = rows[0].supersetGroup as string;
+  // Member A dropped back onto its own box changes nothing.
+  assert.equal(classifyDrag(rowDropId(0), boxDropId(group), rows), null);
+});
+
+// resolveDrop ----------------------------------------------------------------
+
+const names = (prescriptions: DraftPrescription[]) =>
+  prescriptions.map((p) => p.exerciseName);
+const groups = (prescriptions: DraftPrescription[]) =>
+  prescriptions.map((p) => p.supersetGroup);
+
+// Every Superset occupies an unbroken run of positions.
+function assertContiguous(prescriptions: DraftPrescription[]) {
+  const seen = new Map<string, { first: number; last: number; count: number }>();
+  prescriptions.forEach((p, i) => {
+    if (p.supersetGroup === null) return;
+    const bound = seen.get(p.supersetGroup);
+    if (!bound) seen.set(p.supersetGroup, { first: i, last: i, count: 1 });
+    else {
+      bound.last = i;
+      bound.count += 1;
+    }
+  });
+  for (const { first, last, count } of seen.values()) {
+    assert.equal(last - first + 1, count, "a Superset must stay contiguous");
+  }
+}
+
+test("resolveDrop reorders among solos", () => {
+  const rows = soloPrescriptions("A", "B", "C");
+  const next = resolveDrop(rows, { kind: "reorder", from: 2, to: 0 });
+  assert.deepEqual(names(next), ["C", "A", "B"]);
+  assert.deepEqual(groups(next), [null, null, null]);
+  assertContiguous(next);
+});
+
+test("resolveDrop reorders within a group and every member stays grouped", () => {
+  const rows = groupedPrescriptions(["A", "B", "C"], 3);
+  const tag = rows[0].supersetGroup;
+
+  const next = resolveDrop(rows, { kind: "reorder", from: 2, to: 0 });
+
+  assert.deepEqual(names(next), ["C", "A", "B"]);
+  assert.deepEqual(groups(next), [tag, tag, tag]);
+  assertContiguous(next);
+});
+
+test("resolveDrop leaves a member out of a 3-member group, keeping the rest grouped", () => {
+  const rows = groupedPrescriptions(["A", "B", "C"], 3);
+  const tag = rows[0].supersetGroup;
+
+  // Drag member A out to the end (outside its box)
+  const next = resolveDrop(rows, { kind: "leave-group", from: 0, to: 2 });
+
+  assert.deepEqual(names(next), ["B", "C", "A"]);
+  assert.equal(next[0].supersetGroup, tag);
+  assert.equal(next[1].supersetGroup, tag);
+  assert.equal(next[2].supersetGroup, null); // A pulled out, now solo
+  assert.equal(next[2].roundRestSeconds, null); // its dormant round-rest cleared
+  assertContiguous(next);
+});
+
+test("resolveDrop dissolves a two-member group when one member leaves", () => {
+  // [A,B] grouped, C solo
+  const rows = groupedPrescriptions(["A", "B", "C"], 2);
+
+  // Drag member B out of the pair onto C's spot
+  const next = resolveDrop(rows, { kind: "leave-group", from: 1, to: 2 });
+
+  assert.deepEqual(names(next), ["A", "C", "B"]);
+  assert.deepEqual(groups(next), [null, null, null]); // the pair dissolved
+  assertContiguous(next);
+});
+
+test("resolveDrop forms a new Superset from a solo dropped onto a solo", () => {
+  const rows = soloPrescriptions("A", "B", "C");
+
+  const next = resolveDrop(rows, { kind: "form-group", from: 0, to: 1 });
+
+  // A and B now share one tag, adjacent; C stays solo
+  assert.notEqual(next[0].supersetGroup, null);
+  assert.equal(next[0].supersetGroup, next[1].supersetGroup);
+  assert.equal(next[2].supersetGroup, null);
+  assertContiguous(next);
+});
+
+test("resolveDrop joins a solo into an existing group and preserves the group's round-rest", () => {
+  // [A,B] grouped with an edited 120s round-rest, C solo
+  let draft = initBuilderDraft(
+    protocol({
+      sessions: [
+        session({
+          prescriptions: ["A", "B", "C"].map((name, index) =>
+            prescription({ exercise_id: index + 1, exercise_name: name, rest_seconds: 60 }),
+          ),
+        }),
+      ],
+    }),
+  );
+  draft = builderReducer(draft, { type: "GROUP_WITH_NEXT", sessionId: 1, position: 0 });
+  draft = builderReducer(draft, {
+    type: "EDIT_ROUND_REST",
+    sessionId: 1,
+    position: 1,
+    roundRestSeconds: 120,
+  });
+  const rows = draft.sessions[0].prescriptions;
+  const tag = rows[0].supersetGroup as string;
+
+  // Drag solo C into the [A,B] container
+  const next = resolveDrop(rows, { kind: "join-group", from: 2, group: tag });
+
+  // All three now carry the tag and the same 120s round-rest, still contiguous
+  assert.deepEqual(
+    groups(next),
+    [tag, tag, tag],
+  );
+  assert.deepEqual(
+    next.map((p) => p.roundRestSeconds),
+    [120, 120, 120],
+  );
+  assertContiguous(next);
+  // C keeps its own (now dormant) rest untouched
+  const joined = next.find((p) => p.exerciseName === "C");
+  assert.equal(joined?.restSeconds, 60);
+});
+
+test("resolveDrop keeps a member's own rest dormant (unchanged) when forming a group", () => {
+  const rows = soloPrescriptions("A", "B");
+  const next = resolveDrop(rows, { kind: "form-group", from: 0, to: 1 });
+  // Own rests are preserved (dormant while grouped); the group owns a round-rest.
+  assert.deepEqual(
+    next.map((p) => p.restSeconds),
+    [60, 60],
+  );
+  assert.ok(next.every((p) => p.roundRestSeconds !== null));
+});
+
+test("resolveDrop keeps every Superset contiguous when a solo is dropped between two groups", () => {
+  // [A,B] group 1, [C,D] group 2, E solo
+  let draft = initBuilderDraft(
+    protocol({
+      sessions: [
+        session({
+          prescriptions: ["A", "B", "C", "D", "E"].map((name, index) =>
+            prescription({ exercise_id: index + 1, exercise_name: name, rest_seconds: 60 }),
+          ),
+        }),
+      ],
+    }),
+  );
+  draft = builderReducer(draft, { type: "GROUP_WITH_NEXT", sessionId: 1, position: 0 });
+  draft = builderReducer(draft, { type: "GROUP_WITH_NEXT", sessionId: 1, position: 2 });
+  const rows = draft.sessions[0].prescriptions;
+
+  // Reorder solo E (index 4) to the front (index 0)
+  const next = resolveDrop(rows, { kind: "reorder", from: 4, to: 0 });
+
+  assert.deepEqual(names(next), ["E", "A", "B", "C", "D"]);
+  assertContiguous(next);
+});
+
+test("resolveDrop returns the list unchanged for an out-of-range reorder", () => {
+  const rows = soloPrescriptions("A", "B");
+  const next = resolveDrop(rows, { kind: "reorder", from: 0, to: 9 });
+  assert.deepEqual(names(next), ["A", "B"]);
+});
+
+test("resolveDrop snaps a solo out of a group's middle instead of splitting it (self-healing)", () => {
+  // Solo A, then grouped [B,C]
+  let draft = initBuilderDraft(
+    protocol({
+      sessions: [
+        session({
+          prescriptions: ["A", "B", "C"].map((name, index) =>
+            prescription({ exercise_id: index + 1, exercise_name: name, rest_seconds: 60 }),
+          ),
+        }),
+      ],
+    }),
+  );
+  draft = builderReducer(draft, { type: "GROUP_WITH_NEXT", sessionId: 1, position: 1 });
+  const rows = draft.sessions[0].prescriptions;
+  const tag = rows[1].supersetGroup;
+
+  // Drag solo A (index 0) down into the middle of [B,C] (index 1)
+  const next = resolveDrop(rows, { kind: "reorder", from: 0, to: 1 });
+
+  // A cannot wedge between B and C; it snaps just past the group, which stays intact
+  assert.deepEqual(names(next), ["B", "C", "A"]);
+  assert.deepEqual(groups(next), [tag, tag, null]);
+  assertContiguous(next);
+});
+
+test("RESOLVE_DROP applies a classified reorder to an un-performed Session", () => {
+  const draft = initBuilderDraft(
+    protocol({ sessions: [threePrescriptionSession()] }),
+  );
+  const intent = classifyDrag(rowDropId(2), rowDropId(0), draft.sessions[0].prescriptions);
+  assert.notEqual(intent, null);
+
+  const next = builderReducer(draft, {
+    type: "RESOLVE_DROP",
+    sessionId: 1,
+    intent: intent!,
+  });
+
+  assert.deepEqual(
+    next.sessions[0].prescriptions.map((p) => p.exerciseName),
+    ["C", "A", "B"],
+  );
+});
+
+test("RESOLVE_DROP is a no-op on a performed Session (frozen prefix)", () => {
+  const draft = initBuilderDraft(
+    protocol({ sessions: [threePrescriptionSession({ performed: true })] }),
+  );
+
+  const next = builderReducer(draft, {
+    type: "RESOLVE_DROP",
+    sessionId: 1,
+    intent: { kind: "reorder", from: 0, to: 2 },
+  });
+
+  assert.deepEqual(next, draft);
+});
+
+test("resolveDrop keeps a foreign group contiguous when a leaving member lands in its middle", () => {
+  // [A,B] group 1, [C,D] group 2
+  let draft = initBuilderDraft(
+    protocol({
+      sessions: [
+        session({
+          prescriptions: ["A", "B", "C", "D"].map((name, index) =>
+            prescription({ exercise_id: index + 1, exercise_name: name, rest_seconds: 60 }),
+          ),
+        }),
+      ],
+    }),
+  );
+  draft = builderReducer(draft, { type: "GROUP_WITH_NEXT", sessionId: 1, position: 0 });
+  draft = builderReducer(draft, { type: "GROUP_WITH_NEXT", sessionId: 1, position: 2 });
+  const rows = draft.sessions[0].prescriptions;
+
+  // Drag member A out of group 1, targeting index 2 (inside group 2)
+  const next = resolveDrop(rows, { kind: "leave-group", from: 0, to: 2 });
+
+  // Group 1 dissolves (B left solo); A snaps clear of group 2, which stays intact
+  assert.deepEqual(names(next), ["B", "C", "D", "A"]);
+  assertContiguous(next);
+  assert.equal(next[3].supersetGroup, null);
 });
