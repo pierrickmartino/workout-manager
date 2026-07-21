@@ -4,8 +4,9 @@
 Session to the user's performance record and returns two reference numbers per
 set the Pulse mock shows:
 
-* the **load to lift today** — every recommended load overlaid with the
-  deterministic ADR-0004 ``next_load`` adjustment (Home already surfaces the same
+* the **load to lift today** — every Prescription overlaid with the deterministic
+  ADR-0004 ``next_prescription`` adjustment, which steps the recommended load or, for
+  a pure-bodyweight movement, the rep target (Home already surfaces the same
   progression for a Protocol's Next Session); and
 * the **previous performance to beat** — the Logged Sets from each Exercise's
   *most recent* performance across the user's whole history, aligned to the
@@ -20,7 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from app.protocols.progress import latest_sets_by_exercise, progressed_load
+from app.protocols.progress import latest_sets_by_exercise, progressed_prescription
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
     LoggedSetView,
@@ -76,11 +77,8 @@ def hydrate_session(
     latest_sets = latest_sets_by_exercise(logged.list_for_user(clerk_user_id))
 
     prescriptions = [
-        replace(
-            prescription,
-            recommended_load=progressed_load(
-                prescription, latest_sets.get(prescription.exercise_id, [])
-            ),
+        progressed_prescription(
+            prescription, latest_sets.get(prescription.exercise_id, [])
         )
         for prescription in session.prescriptions
     ]

@@ -61,6 +61,29 @@ def _three_week_protocol() -> GeneratedProtocol:
     )
 
 
+def _pure_bodyweight_protocol() -> GeneratedProtocol:
+    """A three-week pull-up Protocol: pure bodyweight, an 8–12 rep target."""
+
+    return GeneratedProtocol(
+        sessions=[
+            GeneratedProtocolSession(
+                week=week,
+                day=1,
+                title=f"Week {week}",
+                prescriptions=[
+                    GeneratedExercisePrescription(
+                        exercise_name="Pull-Up",
+                        sets=3,
+                        reps="8-12",
+                        recommended_load="bodyweight",
+                    )
+                ],
+            )
+            for week in (1, 2, 3)
+        ]
+    )
+
+
 def _build():
     exercises = InMemoryExerciseRepository()
     protocols = InMemoryProtocolRepository(exercises)
@@ -69,8 +92,10 @@ def _build():
     return exercises, protocols, logged
 
 
-def _log_week_one(logged, user, view, *, reps, effort, completion_outcome=None):
-    """Log Week 1's Back Squat as performed with the given reps/effort per set."""
+def _log_week_one(
+    logged, user, view, *, reps, effort, load="60 kg", completion_outcome=None
+):
+    """Log Week 1's first Exercise as performed with the given reps/effort per set."""
 
     week_one = view.sessions[0]
     exercise_id = week_one.prescriptions[0].exercise_id
@@ -84,7 +109,7 @@ def _log_week_one(logged, user, view, *, reps, effort, completion_outcome=None):
                 LoggedSetDraft(
                     exercise_id=exercise_id,
                     reps=reps,
-                    load=parse_load("60 kg").to_dict(),
+                    load=parse_load(load).to_dict(),
                     perceived_difficulty=effort,
                 )
                 for _ in range(3)
@@ -111,6 +136,28 @@ def test_strong_logged_sets_raise_the_load_on_upcoming_sessions():
     assert [s.prescriptions[0].recommended_load for s in upcoming] == [raised, raised]
     assert progress.next_session.week == 2
     assert progress.next_session.prescriptions[0].recommended_load == raised
+
+
+def test_strong_pure_bodyweight_steps_the_rep_target_on_upcoming_sessions():
+    # Arrange — a pull-up Protocol at bodyweight; Week 1's top of the 8–12 range hit
+    # easily. There is no weight to add, so the rep target itself must advance.
+    exercises, protocols, logged = _build()
+    view = adopt(_pure_bodyweight_protocol(), "user_calisthenics", PARAMS,
+                 exercises=exercises, protocols=protocols)
+    _log_week_one(logged, "user_calisthenics", view, reps=12, effort=6,
+                  load="bodyweight")
+
+    # Act
+    progress = progressed_protocol(
+        "user_calisthenics", view.id, protocols=protocols, logged=logged
+    )
+
+    # Assert — upcoming Weeks 2 & 3 tighten the target toward the ceiling (raised
+    # floor) while staying bodyweight; the load overlay leaves the movement alone.
+    upcoming = progress.protocol.sessions[1:]
+    bodyweight = parse_load("bodyweight").to_dict()
+    assert [s.prescriptions[0].reps for s in upcoming] == ["9-12", "9-12"]
+    assert [s.prescriptions[0].recommended_load for s in upcoming] == [bodyweight, bodyweight]
 
 
 def test_incomplete_week_one_stays_next_yet_its_sets_still_progress_the_load():
