@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { Zap } from "lucide-react";
 
 import { submitGenerate, type GenerateFormState } from "@/app/sessions/actions";
+import { EquipmentField } from "@/components/EquipmentField";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
 import { Field } from "@/components/pulse/field";
 import { Alert } from "@/components/pulse/alert";
@@ -41,12 +42,7 @@ export function GenerateSessionForm() {
         />
       </Field>
 
-      <Field
-        label="Equipment"
-        hint="Leave blank for bodyweight."
-      >
-        <Input name="equipment" placeholder="dumbbells, pull-up bar" />
-      </Field>
+      <EquipmentField />
 
       <Button type="submit" disabled={pending} className="w-full">
         <Zap className="h-4 w-4" />

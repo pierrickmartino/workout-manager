@@ -3,22 +3,15 @@
 import { Zap } from "lucide-react";
 
 import { GenerationProgress } from "@/components/GenerationProgress";
+import { EquipmentField } from "@/components/EquipmentField";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
 import { useProtocolGeneration } from "@/lib/use-protocol-generation";
+import { parseEquipment } from "@/lib/equipment-presets";
 import { Field } from "@/components/pulse/field";
 import { Alert } from "@/components/pulse/alert";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-
-// Split a free-text equipment list (comma- or newline-separated) into a clean
-// array, dropping blanks — mirrors the standalone Session form.
-function parseEquipment(value: string): string[] {
-  return value
-    .split(/[\n,]/)
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
-}
 
 export function GenerateProtocolForm() {
   const { phase, error, start } = useProtocolGeneration();
@@ -88,9 +81,7 @@ export function GenerateProtocolForm() {
         </Field>
       </div>
 
-      <Field label="Equipment" hint="Leave blank for bodyweight.">
-        <Input name="equipment" placeholder="dumbbells, pull-up bar" />
-      </Field>
+      <EquipmentField />
 
       <Button type="submit" className="w-full">
         <Zap className="h-4 w-4" />
