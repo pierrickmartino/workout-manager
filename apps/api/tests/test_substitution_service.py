@@ -11,9 +11,12 @@ offline and deterministically."""
 
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
 from app.domain.exercise import Provenance
+from app.domain.load import parse_load
 from app.domain.substitution import RelationKind
 from app.generation.schema import GeneratedSubstitute
 from app.generation.substitute_generator import SubstituteRequest
@@ -21,6 +24,11 @@ from app.repositories.exercise_relationship_repository import (
     InMemoryExerciseRelationshipRepository,
 )
 from app.repositories.exercise_repository import InMemoryExerciseRepository
+from app.repositories.logged_session_repository import (
+    InMemoryLoggedSessionRepository,
+    LoggedSessionDraft,
+    LoggedSetDraft,
+)
 from app.repositories.profile_repository import (
     InMemoryProfileRepository,
     ProfileUpdate,
@@ -31,8 +39,11 @@ from app.repositories.session_repository import (
     SessionDraft,
 )
 from app.substitution.service import (
+    HarderVariationSuggestion,
     PrescriptionNotFound,
     SessionNotFound,
+    SubstituteNotAvailable,
+    harder_variation_suggestion,
     substitute_exercise,
 )
 
@@ -275,6 +286,333 @@ def test_substituting_an_absent_position_is_a_prescription_not_found():
             created.id,
             "user_a",
             position=99,
+            relationships=relationships,
+            exercises=exercises,
+            sessions=sessions,
+            profiles=profiles,
+            generator=FakeSubstituteGenerator(),
+        )
+
+
+# --- Harder-Variation suggestion at the rep ceiling (#202 / ADR-0026) ---
+
+
+def _seed_bodyweight_session(exercises, sessions, user="user_a"):
+    """A pure-bodyweight pull-up prescription with a fixed 5-rep target (its own
+    ceiling) plus a harder Variation and an easier one linked in the catalog."""
+
+    pullup = exercises.find_or_create(
+        "Pull-Up", provenance=Provenance.CURATED, difficulty=5
+    )
+    created = sessions.create(
+        user,
+        SessionDraft(
+            training_type="strength",
+            duration_minutes=30,
+            prescriptions=[
+                PrescriptionDraft(
+                    exercise_id=pullup.id,
+                    sets=3,
+                    reps="5",
+                    recommended_load=parse_load("bodyweight").to_dict(),
+                ),
+            ],
+        ),
+    )
+    return created, pullup
+
+
+def _log_ceiling_performance(logged, session_id, exercise_id, user="user_a"):
+    """Record a performance that hits the rep ceiling at low perceived effort — the
+    strong signal that earns the harder-Variation offer."""
+
+    logged.create(
+        user,
+        LoggedSessionDraft(
+            session_id=session_id,
+            performed_on=date(2026, 7, 20),
+            completion_outcome="completed",
+            logged_sets=[
+                LoggedSetDraft(
+                    exercise_id=exercise_id,
+                    reps=5,
+                    load=parse_load("bodyweight").to_dict(),
+                    perceived_difficulty=6,
+                )
+                for _ in range(3)
+            ],
+        ),
+    )
+
+
+def test_suggests_the_next_harder_variation_at_the_rep_ceiling():
+    # Arrange — a pull-up at its ceiling hit easily, with a harder Variation on file
+    exercises, relationships, sessions, profiles = _build()
+    logged = InMemoryLoggedSessionRepository(sessions, exercises)
+    created, pullup = _seed_bodyweight_session(exercises, sessions)
+    archer = exercises.find_or_create(
+        "Archer Pull-Up", provenance=Provenance.CURATED, difficulty=7
+    )
+    relationships.add(pullup.id, archer.id, RelationKind.VARIATION)
+    _log_ceiling_performance(logged, created.id, pullup.id)
+
+    # Act
+    suggestion = harder_variation_suggestion(
+        created.id,
+        "user_a",
+        position=0,
+        relationships=relationships,
+        exercises=exercises,
+        sessions=sessions,
+        logged=logged,
+        profiles=profiles,
+    )
+
+    # Assert — the harder same-movement Variation is offered by name
+    assert suggestion == HarderVariationSuggestion(
+        exercise_id=archer.id, name="Archer Pull-Up"
+    )
+
+
+def test_no_suggestion_when_no_harder_variation_exists():
+    # Arrange — at the ceiling, but only an *easier* Variation is linked
+    exercises, relationships, sessions, profiles = _build()
+    logged = InMemoryLoggedSessionRepository(sessions, exercises)
+    created, pullup = _seed_bodyweight_session(exercises, sessions)
+    knee = exercises.find_or_create(
+        "Ring Row", provenance=Provenance.CURATED, difficulty=3
+    )
+    relationships.add(pullup.id, knee.id, RelationKind.VARIATION)
+    _log_ceiling_performance(logged, created.id, pullup.id)
+
+    # Act
+    suggestion = harder_variation_suggestion(
+        created.id,
+        "user_a",
+        position=0,
+        relationships=relationships,
+        exercises=exercises,
+        sessions=sessions,
+        logged=logged,
+        profiles=profiles,
+    )
+
+    # Assert — nothing harder to offer: hold at the ceiling
+    assert suggestion is None
+
+
+def test_no_suggestion_before_the_rep_ceiling_is_reached():
+    # Arrange — a harder Variation exists, but the performance missed the ceiling
+    exercises, relationships, sessions, profiles = _build()
+    logged = InMemoryLoggedSessionRepository(sessions, exercises)
+    created, pullup = _seed_bodyweight_session(exercises, sessions)
+    archer = exercises.find_or_create(
+        "Archer Pull-Up", provenance=Provenance.CURATED, difficulty=7
+    )
+    relationships.add(pullup.id, archer.id, RelationKind.VARIATION)
+    logged.create(
+        "user_a",
+        LoggedSessionDraft(
+            session_id=created.id,
+            performed_on=date(2026, 7, 20),
+            completion_outcome="completed",
+            logged_sets=[
+                LoggedSetDraft(
+                    exercise_id=pullup.id,
+                    reps=3,  # short of the 5-rep ceiling
+                    load=parse_load("bodyweight").to_dict(),
+                    perceived_difficulty=9,
+                )
+            ],
+        ),
+    )
+
+    # Act
+    suggestion = harder_variation_suggestion(
+        created.id,
+        "user_a",
+        position=0,
+        relationships=relationships,
+        exercises=exercises,
+        sessions=sessions,
+        logged=logged,
+        profiles=profiles,
+    )
+
+    # Assert — progression has not flagged the ceiling, so no offer is made
+    assert suggestion is None
+
+
+def test_a_sensitive_constraint_user_is_not_offered_a_contraindicated_variation():
+    # Arrange — the harder Variation is contraindicated by the user's constraint
+    exercises, relationships, sessions, profiles = _build()
+    logged = InMemoryLoggedSessionRepository(sessions, exercises)
+    created, pullup = _seed_bodyweight_session(exercises, sessions)
+    profiles.update("user_a", ProfileUpdate(sensitive_constraints=["shoulder injury"]))
+    archer = exercises.find_or_create(
+        "Archer Pull-Up",
+        provenance=Provenance.CURATED,
+        difficulty=7,
+        precautions=["shoulder injury"],
+    )
+    relationships.add(pullup.id, archer.id, RelationKind.VARIATION)
+    _log_ceiling_performance(logged, created.id, pullup.id)
+
+    # Act
+    suggestion = harder_variation_suggestion(
+        created.id,
+        "user_a",
+        position=0,
+        relationships=relationships,
+        exercises=exercises,
+        sessions=sessions,
+        logged=logged,
+        profiles=profiles,
+    )
+
+    # Assert — safety posture (ADR-0003): never push a Sensitive-Constraint user
+    # toward a movement their constraint rules out, not even as an offer
+    assert suggestion is None
+
+
+def test_accepting_a_suggestion_advances_via_substitution():
+    # Arrange — a live suggestion to progress the pull-up to the archer pull-up
+    exercises, relationships, sessions, profiles = _build()
+    created, pullup = _seed_bodyweight_session(exercises, sessions)
+    archer = exercises.find_or_create(
+        "Archer Pull-Up", provenance=Provenance.CURATED, difficulty=7
+    )
+    relationships.add(pullup.id, archer.id, RelationKind.VARIATION)
+    generator = FakeSubstituteGenerator()  # must not be called — this is a lookup
+
+    # Act — accept by substituting to the suggested harder Variation
+    view = substitute_exercise(
+        created.id,
+        "user_a",
+        position=0,
+        target_exercise_id=archer.id,
+        relationships=relationships,
+        exercises=exercises,
+        sessions=sessions,
+        profiles=profiles,
+        generator=generator,
+    )
+
+    # Assert — the movement advances to the chosen Variation, sets/reps preserved,
+    # routed through the existing Substitution flow (no AI)
+    swapped = view.prescriptions[0]
+    assert swapped.exercise_name == "Archer Pull-Up"
+    assert swapped.sets == 3 and swapped.reps == "5"
+    assert generator.calls == 0
+
+
+def test_declining_a_suggestion_leaves_the_prescription_unchanged():
+    # Arrange — a suggestion is available but the user never accepts it
+    exercises, relationships, sessions, profiles = _build()
+    logged = InMemoryLoggedSessionRepository(sessions, exercises)
+    created, pullup = _seed_bodyweight_session(exercises, sessions)
+    archer = exercises.find_or_create(
+        "Archer Pull-Up", provenance=Provenance.CURATED, difficulty=7
+    )
+    relationships.add(pullup.id, archer.id, RelationKind.VARIATION)
+    _log_ceiling_performance(logged, created.id, pullup.id)
+
+    # Act — reading the suggestion must never mutate the plan
+    harder_variation_suggestion(
+        created.id,
+        "user_a",
+        position=0,
+        relationships=relationships,
+        exercises=exercises,
+        sessions=sessions,
+        logged=logged,
+        profiles=profiles,
+    )
+
+    # Assert — the movement is untouched; only an accepted Substitution swaps it
+    unchanged = sessions.get(created.id, "user_a")
+    assert unchanged.prescriptions[0].exercise_id == pullup.id
+    assert unchanged.prescriptions[0].exercise_name == "Pull-Up"
+
+
+def test_no_suggestion_without_a_logged_performance():
+    # Arrange — a harder Variation exists, but nothing has been performed yet
+    exercises, relationships, sessions, profiles = _build()
+    logged = InMemoryLoggedSessionRepository(sessions, exercises)
+    created, pullup = _seed_bodyweight_session(exercises, sessions)
+    archer = exercises.find_or_create(
+        "Archer Pull-Up", provenance=Provenance.CURATED, difficulty=7
+    )
+    relationships.add(pullup.id, archer.id, RelationKind.VARIATION)
+
+    # Act
+    suggestion = harder_variation_suggestion(
+        created.id,
+        "user_a",
+        position=0,
+        relationships=relationships,
+        exercises=exercises,
+        sessions=sessions,
+        logged=logged,
+        profiles=profiles,
+    )
+
+    # Assert — no evidence of a ceiling performance, so nothing is offered
+    assert suggestion is None
+
+
+def test_suggestion_on_an_unowned_session_is_not_found():
+    exercises, relationships, sessions, profiles = _build()
+    logged = InMemoryLoggedSessionRepository(sessions, exercises)
+    created, _ = _seed_bodyweight_session(exercises, sessions, user="owner")
+
+    with pytest.raises(SessionNotFound):
+        harder_variation_suggestion(
+            created.id,
+            "intruder",
+            position=0,
+            relationships=relationships,
+            exercises=exercises,
+            sessions=sessions,
+            logged=logged,
+            profiles=profiles,
+        )
+
+
+def test_suggestion_at_an_absent_position_is_a_prescription_not_found():
+    exercises, relationships, sessions, profiles = _build()
+    logged = InMemoryLoggedSessionRepository(sessions, exercises)
+    created, _ = _seed_bodyweight_session(exercises, sessions)
+
+    with pytest.raises(PrescriptionNotFound):
+        harder_variation_suggestion(
+            created.id,
+            "user_a",
+            position=99,
+            relationships=relationships,
+            exercises=exercises,
+            sessions=sessions,
+            logged=logged,
+            profiles=profiles,
+        )
+
+
+def test_advancing_to_an_unlinked_target_is_rejected():
+    # Arrange — an arbitrary exercise that is *not* a catalog substitute of the pull-up
+    exercises, relationships, sessions, profiles = _build()
+    created, pullup = _seed_bodyweight_session(exercises, sessions)
+    unrelated = exercises.find_or_create(
+        "Barbell Curl", provenance=Provenance.CURATED, difficulty=4
+    )
+
+    # Act / Assert — a target must be a real, compatible catalog link, so the safety
+    # posture cannot be bypassed by naming any exercise id
+    with pytest.raises(SubstituteNotAvailable):
+        substitute_exercise(
+            created.id,
+            "user_a",
+            position=0,
+            target_exercise_id=unrelated.id,
             relationships=relationships,
             exercises=exercises,
             sessions=sessions,

@@ -16,8 +16,10 @@ below the bottom is a miss — but *what* it steps depends on the Load kind (ADR
 - **Bodyweight + added load**: step the *added* kilograms with the same increments;
   a reduction that reaches zero collapses back to a bare ``"bodyweight"`` movement.
 - **Pure bodyweight** (nothing to add): step the *rep target* instead — raise its
-  floor one rep toward the ceiling on strong performance, and hold at the ceiling
-  (the harder-Variation suggestion is a separate slice), so reps never grow unbound.
+  floor one rep toward the ceiling on strong performance; at the ceiling, where reps
+  can grow no further, raise a ``suggest_harder_variation`` signal rather than growing
+  reps unbound. The movement is never swapped here — that stays a user-initiated
+  Substitution; the signal is only an offer.
 
 Loads are free-text (``"60 kg"``, ``"bodyweight + 10 kg"``, ``"70% 1RM"``); a
 %-1RM, range, or qualitative load — anything with no single clean value to move — is
@@ -121,11 +123,19 @@ class NextPrescription:
     ``reps`` and ``recommended_load`` carry the resulting values — equal to the
     inputs when ``kind`` is ``HOLD`` — so a caller can apply the result uniformly
     without re-deriving which field changed.
+
+    ``suggest_harder_variation`` is an orthogonal signal, not a fifth ``kind``: a
+    pure-bodyweight movement that has reached the top of its rep range and is still
+    hitting it easily has nothing left to step (reps never grow unbounded, ADR-0026),
+    so instead of stalling it *offers* a harder Variation. The prescription itself
+    still holds — the movement is never auto-swapped; the swap stays a user-initiated
+    Substitution — so ``kind`` remains ``HOLD`` when this fires.
     """
 
     kind: ProgressionKind
     reps: str
     recommended_load: str | None
+    suggest_harder_variation: bool = False
 
 
 def next_prescription(
@@ -216,18 +226,23 @@ def _next_pure_bodyweight(
     """Progress a pure-bodyweight Prescription by stepping its rep target (ADR-0026).
 
     With no weight to add, strong performance raises the target's floor one rep
-    toward the ceiling, tightening the range upward. At the ceiling it holds — the
-    harder-Variation suggestion is a separate slice, so reps never grow unbounded.
+    toward the ceiling, tightening the range upward. Once the target is already at
+    the ceiling, reps can grow no further, so continued strong performance raises a
+    harder-Variation suggestion instead of stalling (the movement is never swapped
+    here — that stays a user-initiated Substitution). Anything short of strong work
+    holds unchanged with no suggestion.
     """
 
-    if floor >= ceiling:
+    if not (_hit_ceiling(logged_sets, ceiling) and _low_effort(logged_sets)):
         return NextPrescription(ProgressionKind.HOLD, reps, current)
 
-    if _hit_ceiling(logged_sets, ceiling) and _low_effort(logged_sets):
+    if floor < ceiling:
         stepped = f"{floor + 1}-{ceiling}"
         return NextPrescription(ProgressionKind.REPS_STEP, stepped, current)
 
-    return NextPrescription(ProgressionKind.HOLD, reps, current)
+    return NextPrescription(
+        ProgressionKind.HOLD, reps, current, suggest_harder_variation=True
+    )
 
 
 def _format_added(added: float) -> str:
@@ -252,9 +267,7 @@ def _low_effort(logged_sets: list[_LoggedSet]) -> bool:
     )
 
 
-def next_load(
-    prescription: _Prescription, logged_sets: list[_LoggedSet]
-) -> str | None:
+def next_load(prescription: _Prescription, logged_sets: list[_LoggedSet]) -> str | None:
     """The recommended load half of :func:`next_prescription` (ADR-0004).
 
     Retained as the load-only view for callers that only overlay the load; the rep

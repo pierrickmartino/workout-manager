@@ -282,19 +282,76 @@ def test_pure_bodyweight_strong_performance_steps_the_rep_target_up():
     assert result.recommended_load == "bodyweight"
 
 
-def test_pure_bodyweight_holds_once_the_rep_target_reaches_the_ceiling():
-    # Arrange — the floor has already climbed to the top of the range
+def test_pure_bodyweight_at_the_ceiling_suggests_a_harder_variation():
+    # Arrange — the floor has already climbed to the top of the range and the top
+    # is still hit easily: there is nowhere left for reps to grow
     prescription = _Prescription(reps="12-12", recommended_load="bodyweight")
     sets = [_LoggedSet(reps=12, perceived_difficulty=6) for _ in range(3)]
 
     # Act
     result = next_prescription(prescription, sets)
 
-    # Assert — no unbounded rep growth: the target holds at the ceiling (the
-    # harder-Variation suggestion is a separate slice)
+    # Assert — no unbounded rep growth: the prescription holds unchanged, but a
+    # harder-Variation suggestion is raised instead of silently stalling (ADR-0026)
     assert result.kind is ProgressionKind.HOLD
     assert result.reps == "12-12"
     assert result.recommended_load == "bodyweight"
+    assert result.suggest_harder_variation is True
+
+
+def test_pure_bodyweight_at_the_ceiling_at_high_effort_holds_without_suggesting():
+    # Arrange — at the ceiling, but the top set was a grind
+    prescription = _Prescription(reps="12-12", recommended_load="bodyweight")
+    sets = [_LoggedSet(reps=12, perceived_difficulty=9) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets)
+
+    # Assert — a hard ceiling set has not earned a harder movement yet; plain hold
+    assert result.kind is ProgressionKind.HOLD
+    assert result.suggest_harder_variation is False
+
+
+def test_single_rep_target_pure_bodyweight_suggests_at_the_ceiling():
+    # Arrange — a fixed 5-rep bodyweight target (floor == ceiling) hit easily
+    prescription = _Prescription(reps="5", recommended_load="bodyweight")
+    sets = [_LoggedSet(reps=5, perceived_difficulty=6) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets)
+
+    # Assert — a single-value target is already at its ceiling, so strong work
+    # offers the harder Variation rather than inventing a range to grow into
+    assert result.kind is ProgressionKind.HOLD
+    assert result.reps == "5"
+    assert result.suggest_harder_variation is True
+
+
+def test_reps_step_below_the_ceiling_does_not_suggest_a_harder_variation():
+    # Arrange — mid-range pure bodyweight, top hit easily but room to grow reps
+    prescription = _Prescription(reps="8-12", recommended_load="bodyweight")
+    sets = [_LoggedSet(reps=12, perceived_difficulty=6) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets)
+
+    # Assert — reps step up first; no suggestion until the ceiling is reached
+    assert result.kind is ProgressionKind.REPS_STEP
+    assert result.reps == "9-12"
+    assert result.suggest_harder_variation is False
+
+
+def test_absolute_load_step_never_suggests_a_harder_variation():
+    # Arrange — an external-weight prescription steps load, not movement
+    prescription = _Prescription(reps="5", recommended_load="60 kg")
+    sets = [_LoggedSet(reps=5, perceived_difficulty=6) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets)
+
+    # Assert — the harder-Variation signal is a pure-bodyweight-only concern
+    assert result.kind is ProgressionKind.LOAD_STEP
+    assert result.suggest_harder_variation is False
 
 
 def test_pure_bodyweight_missed_reps_leaves_the_prescription_untouched():
