@@ -9,6 +9,10 @@ interface RecordsPanelProps {
   // Exercise that can set no Personal Record (bodyweight / qualitative / no qualifying
   // history) — which renders the honest empty state, never an error.
   milestones: PersonalRecordEntry[];
+  // True when a bodyweight set is record-ineligible *only* for a missing Performed Body
+  // Weight (ADR-0026) — the signal to prompt the user to record their weight so their
+  // calisthenics work can start setting records.
+  bodyWeightNudge?: boolean;
 }
 
 // The RECORDS lens (ADR-0017): the sets where the user struck a new best Estimated 1RM
@@ -16,17 +20,30 @@ interface RecordsPanelProps {
 // same yardstick the stat header and the SPECS trend read. Each row is a new Est. 1RM ·
 // gain over the prior PR (a distinct "First PR" badge for the first) · date, newest
 // first. An Exercise with no PR history shows an honest empty state, not a fabrication.
-export function RecordsPanel({ milestones }: RecordsPanelProps): React.JSX.Element {
+export function RecordsPanel({
+  milestones,
+  bodyWeightNudge = false,
+}: RecordsPanelProps): React.JSX.Element {
   const rows = toRecordRows(milestones);
 
   if (rows.length === 0) {
     return (
       <Card className="flex flex-col items-start gap-2 p-6">
-        <p className="font-sans text-sm text-text-secondary">
-          No Personal Records yet. Log absolute-load sets in the 1–12 rep range and
-          each new Estimated 1RM will land here as a milestone.
+        {bodyWeightNudge ? (
+          <p className="font-sans text-sm text-text-secondary">
+            Record your body weight to unlock Personal Records here — your bodyweight
+            sets in the 1–12 rep range will then score an Estimated 1RM against the
+            weight you performed at.
+          </p>
+        ) : (
+          <p className="font-sans text-sm text-text-secondary">
+            No Personal Records yet. Log absolute-load or bodyweight sets in the 1–12
+            rep range and each new Estimated 1RM will land here as a milestone.
+          </p>
+        )}
+        <p className="label-mono text-[11px] text-text-muted">
+          {bodyWeightNudge ? "RECORD YOUR BODY WEIGHT" : "NO RECORDS"}
         </p>
-        <p className="label-mono text-[11px] text-text-muted">NO RECORDS</p>
       </Card>
     );
   }

@@ -355,6 +355,10 @@ def test_home_carries_the_latest_personal_record():
         "exercise": "Back Squat",
         "estimated_1rm": 142.0,
         "date": "2026-07-10",
+        "gain": 0.0,
+        "reps": 1,
+        "is_bodyweight": False,
+        "added_kg": None,
     }
 
 

@@ -17,6 +17,7 @@ const ABSOLUTE: ExerciseRecords = {
   total_sets: 12,
   top_set_series: [],
   pr_milestones: [],
+  body_weight_nudge: false,
 };
 
 test("renders PERSONAL RECORD and TOTAL SETS for an absolute-load exercise", () => {
@@ -41,8 +42,8 @@ test("rounds a fractional Estimated 1RM to whole kilograms", () => {
   assert.equal(pr.value, "105 kg");
 });
 
-test("hides the PERSONAL RECORD tile for a non-absolute exercise, leaving TOTAL SETS", () => {
-  // Arrange — a bodyweight movement: no comparable Estimated 1RM
+test("hides the PERSONAL RECORD tile for a non-absolute exercise with no record", () => {
+  // Arrange — a bodyweight movement with no qualifying record (e.g. no captured mass)
   const records: ExerciseRecords = {
     exercise_id: 2,
     exercise_name: "Push-up",
@@ -50,6 +51,7 @@ test("hides the PERSONAL RECORD tile for a non-absolute exercise, leaving TOTAL 
     total_sets: 8,
     top_set_series: [],
     pr_milestones: [],
+    body_weight_nudge: false,
   };
 
   // Act
@@ -57,6 +59,39 @@ test("hides the PERSONAL RECORD tile for a non-absolute exercise, leaving TOTAL 
 
   // Assert — TOTAL SETS alone; no zeroed PR tile
   assert.deepEqual(tiles, [{ label: "TOTAL SETS", value: "8" }]);
+});
+
+test("shows the PERSONAL RECORD tile for a qualifying bodyweight exercise, as the set", () => {
+  // Arrange — a bodyweight Pull-up with a real record (mass captured): the kg headline
+  // field stays null, but the newest milestone carries the set that achieved it
+  const records: ExerciseRecords = {
+    exercise_id: 3,
+    exercise_name: "Pull-up",
+    personal_record: null,
+    total_sets: 20,
+    top_set_series: [],
+    pr_milestones: [
+      {
+        exercise: "Pull-up",
+        estimated_1rm: 90.0,
+        gain: 0,
+        date: "2026-02-01",
+        reps: 12,
+        is_bodyweight: true,
+        added_kg: null,
+      },
+    ],
+    body_weight_nudge: false,
+  };
+
+  // Act
+  const tiles = toStatTiles(records);
+
+  // Assert — the PR tile now renders (no longer hidden), showing the set, never kg
+  assert.deepEqual(tiles, [
+    { label: "PERSONAL RECORD", value: "bodyweight × 12" },
+    { label: "TOTAL SETS", value: "20" },
+  ]);
 });
 
 test("never labels a tile 'personal best' for the raw heaviest load", () => {

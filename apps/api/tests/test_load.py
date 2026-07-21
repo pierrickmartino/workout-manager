@@ -10,7 +10,13 @@ from __future__ import annotations
 
 import pytest
 
-from app.domain.load import LoadKind, ParsedLoad, load_from_input, parse_load
+from app.domain.load import (
+    LoadKind,
+    ParsedLoad,
+    load_from_input,
+    parse_load,
+    resolve_bodyweight_kg,
+)
 
 
 def test_a_bare_number_is_an_absolute_load():
@@ -206,3 +212,47 @@ def test_load_from_input_builds_a_range_from_a_hyphenated_value():
     assert parsed.low_kg == 70.0
     assert parsed.high_kg == 80.0
     assert parsed.text == "70-80 kg"
+
+
+def test_resolve_bodyweight_kg_adds_body_weight_to_added_load():
+    # Arrange — bodyweight + 20 kg performed at a captured mass of 80 kg
+    parsed = load_from_input("bodyweight", "20")
+
+    # Act
+    resolved = resolve_bodyweight_kg(parsed, 80.0)
+
+    # Assert — the kg-equivalent is mass plus the added load
+    assert resolved == 100.0
+
+
+def test_resolve_bodyweight_kg_uses_mass_alone_for_pure_bodyweight():
+    # Arrange — a pure bodyweight set (no added load) at 72.5 kg
+    parsed = load_from_input("bodyweight", None)
+
+    # Act
+    resolved = resolve_bodyweight_kg(parsed, 72.5)
+
+    # Assert — the kg-equivalent is the body weight itself
+    assert resolved == 72.5
+
+
+def test_resolve_bodyweight_kg_is_none_when_no_mass_was_captured():
+    # Arrange — a bodyweight set with no Performed Body Weight on file
+    parsed = load_from_input("bodyweight", "20")
+
+    # Act
+    resolved = resolve_bodyweight_kg(parsed, None)
+
+    # Assert — the mass is never guessed, so it cannot resolve
+    assert resolved is None
+
+
+def test_resolve_bodyweight_kg_ignores_non_bodyweight_loads():
+    # Arrange — an absolute load carries its own kg; it is not a bodyweight resolution
+    parsed = parse_load("60 kg")
+
+    # Act
+    resolved = resolve_bodyweight_kg(parsed, 80.0)
+
+    # Assert — resolution applies only to the bodyweight kind
+    assert resolved is None

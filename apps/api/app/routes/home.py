@@ -23,7 +23,7 @@ from app.domain.readiness import assess_readiness
 from app.domain.personal_records import PersonalRecord
 from app.envelope import success_envelope
 from app.logbook.gamification import GamificationSummary, project_gamification
-from app.logbook.records import latest_personal_record
+from app.logbook.records import latest_personal_record, personal_record_payload
 from app.protocols.progress import current_protocol
 from app.protocols.serialization import serialize_protocol_progress
 from app.repositories.deps import (
@@ -101,16 +101,13 @@ def _serialize_gamification(gamification: GamificationSummary) -> dict:
 def _serialize_latest_pr(record: PersonalRecord | None) -> dict | None:
     """The Latest-PR block, or ``None`` when the user has no Personal Record.
 
-    Names the Exercise (id + name, so the client can link to it) and its Estimated
-    1RM on the date it was set. Mirrors the Analytics feed's ``exercise`` /
-    ``estimated_1rm`` / ``date`` field naming so the two surfaces agree byte for byte.
+    Names the Exercise (id + name, so the client can link to it) atop the shared
+    Personal-Record payload — its Estimated 1RM, gain, and date plus the set descriptor
+    (``reps`` / ``is_bodyweight`` / ``added_kg``) — so a bodyweight Latest PR renders as
+    the set that achieved it, not a kilogram headline (ADR-0026). Mirrors the Analytics
+    feed's field naming so the two surfaces agree byte for byte.
     """
 
     if record is None:
         return None
-    return {
-        "exercise_id": record.exercise_id,
-        "exercise": record.exercise_name,
-        "estimated_1rm": record.estimated_1rm,
-        "date": record.performed_on.isoformat(),
-    }
+    return {"exercise_id": record.exercise_id, **personal_record_payload(record)}

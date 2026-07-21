@@ -481,6 +481,9 @@ test("latest PR line names the Exercise and its Estimated 1RM, rounded to whole 
     exercise: "Deadlift",
     estimated_1rm: 142.4,
     date: "2026-07-10",
+    reps: 1,
+    is_bodyweight: false,
+    added_kg: null,
   };
 
   // Act
@@ -493,6 +496,28 @@ test("latest PR line names the Exercise and its Estimated 1RM, rounded to whole 
   assert.equal(line.exerciseId, 7);
   assert.equal(line.estimate, "142 kg est. 1RM");
   assert.equal(line.text, "Deadlift — 142 kg est. 1RM");
+});
+
+test("latest PR line renders a bodyweight record as the set, never a kg headline", () => {
+  // Arrange: the newest PR is a pure bodyweight set of 12 reps.
+  const latestPr: LatestPr = {
+    exercise_id: 9,
+    exercise: "Pull-up",
+    estimated_1rm: 90.0,
+    date: "2026-07-10",
+    reps: 12,
+    is_bodyweight: true,
+    added_kg: null,
+  };
+
+  // Act
+  const line = latestPrLine(latestPr);
+
+  // Assert: the set that achieved it, with no fabricated kilogram figure (ADR-0026).
+  assert.ok(line);
+  assert.equal(line.estimate, "bodyweight × 12");
+  assert.equal(line.text, "Pull-up — bodyweight × 12");
+  assert.ok(!line.text.includes("kg"));
 });
 
 test("latest PR line is hidden (null) when the user has no Personal Record", () => {

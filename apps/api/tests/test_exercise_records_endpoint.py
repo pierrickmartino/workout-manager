@@ -74,6 +74,85 @@ def _perform(sessions, logged, user, exercise_id, performed_on, reps, load):
     )
 
 
+def _bodyweight(added_kg: float | None = None) -> dict:
+    text = "bodyweight" if added_kg is None else f"bodyweight + {added_kg:g} kg"
+    return ParsedLoad(kind=LoadKind.BODYWEIGHT, text=text, added_kg=added_kg).to_dict()
+
+
+def _perform_bw(sessions, logged, user, exercise_id, performed_on, reps, *, added_kg, mass):
+    session_view = sessions.create(
+        user,
+        SessionDraft(training_type="strength", duration_minutes=45, prescriptions=[]),
+    )
+    logged.create(
+        user,
+        LoggedSessionDraft(
+            session_id=session_view.id,
+            performed_on=performed_on,
+            logged_sets=[
+                LoggedSetDraft(
+                    exercise_id=exercise_id,
+                    reps=reps,
+                    load=_bodyweight(added_kg),
+                    body_weight_kg=mass,
+                )
+            ],
+        ),
+    )
+
+
+def test_records_endpoint_surfaces_a_bodyweight_pr_as_the_set_not_kilograms():
+    # Arrange — 8 pull-ups at a captured mass of 75 kg: a qualifying bodyweight PR
+    client, ctx, sessions, logged = build_client()
+    _perform_bw(
+        sessions, logged, "user_bw_pr", PUSHUP, date(2026, 1, 1), 8,
+        added_kg=None, mass=75.0,
+    )
+
+    # Act
+    response = client.get(
+        f"/api/exercises/{PUSHUP}/records", headers=_auth(ctx, "user_bw_pr")
+    )
+
+    # Assert — the milestone carries the set descriptor (reps, bodyweight, no added), and
+    # the kg headline field stays null so no fabricated kilogram is shown (ADR-0026)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["personal_record"] is None
+    assert data["body_weight_nudge"] is False
+    assert data["pr_milestones"] == [
+        {
+            "exercise": "Push-up",
+            "estimated_1rm": 75.0 * (1 + 8 / 30),
+            "gain": 0.0,
+            "date": "2026-01-01",
+            "reps": 8,
+            "is_bodyweight": True,
+            "added_kg": None,
+        }
+    ]
+
+
+def test_records_endpoint_nudges_to_record_body_weight_when_mass_is_missing():
+    # Arrange — a qualifying bodyweight set (8 reps) logged with no Performed Body Weight
+    client, ctx, sessions, logged = build_client()
+    _perform_bw(
+        sessions, logged, "user_nudge", PUSHUP, date(2026, 1, 1), 8,
+        added_kg=None, mass=None,
+    )
+
+    # Act
+    response = client.get(
+        f"/api/exercises/{PUSHUP}/records", headers=_auth(ctx, "user_nudge")
+    )
+
+    # Assert — record-ineligible only for the missing mass, so prompt to record weight
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["pr_milestones"] == []
+    assert data["body_weight_nudge"] is True
+
+
 def test_records_endpoint_returns_pr_and_total_sets_under_the_envelope():
     # Arrange — two squat singles on different dates, the newer heavier
     client, ctx, sessions, logged = build_client()
@@ -132,8 +211,24 @@ def test_records_endpoint_returns_pr_milestones_newest_first():
     assert response.status_code == 200
     milestones = response.json()["data"]["pr_milestones"]
     assert milestones == [
-        {"exercise": "Back Squat", "estimated_1rm": 110.0, "gain": 10.0, "date": "2026-02-01"},
-        {"exercise": "Back Squat", "estimated_1rm": 100.0, "gain": 0.0, "date": "2026-01-01"},
+        {
+            "exercise": "Back Squat",
+            "estimated_1rm": 110.0,
+            "gain": 10.0,
+            "date": "2026-02-01",
+            "reps": 1,
+            "is_bodyweight": False,
+            "added_kg": None,
+        },
+        {
+            "exercise": "Back Squat",
+            "estimated_1rm": 100.0,
+            "gain": 0.0,
+            "date": "2026-01-01",
+            "reps": 1,
+            "is_bodyweight": False,
+            "added_kg": None,
+        },
     ]
 
 

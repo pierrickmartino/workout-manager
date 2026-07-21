@@ -221,12 +221,18 @@ def test_analytics_serializes_the_recent_records_feed_and_new_prs_tile():
             "estimated_1rm": 110.0,
             "gain": 10.0,
             "date": (date.today() - timedelta(days=2)).isoformat(),
+            "reps": 1,
+            "is_bodyweight": False,
+            "added_kg": None,
         },
         {
             "exercise": "Back Squat",
             "estimated_1rm": 100.0,
             "gain": 0.0,
             "date": (date.today() - timedelta(days=40)).isoformat(),
+            "reps": 1,
+            "is_bodyweight": False,
+            "added_kg": None,
         },
     ]
 

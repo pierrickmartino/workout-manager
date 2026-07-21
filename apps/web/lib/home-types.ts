@@ -33,6 +33,12 @@ export interface LatestPr {
   exercise: string;
   estimated_1rm: number;
   date: string;
+  // The set descriptor (ADR-0026): a bodyweight Latest PR renders as the set that
+  // achieved it — `reps` and any `added_kg` — never a kilogram headline. `is_bodyweight`
+  // is `false` and `added_kg` `null` for an ordinary absolute record.
+  reps: number;
+  is_bodyweight: boolean;
+  added_kg: number | null;
 }
 
 // The aggregated Home read. `current_protocol` is the progressed view of the

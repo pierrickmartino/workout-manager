@@ -6,6 +6,7 @@
 import type { ProtocolProgress, ProtocolSession } from "./protocols-types";
 import type { Gamification, LatestPr } from "./home-types";
 import type { OperatorLevel } from "./profile-progress-types";
+import { formatRecordAchievement } from "./record-achievement.ts";
 
 // The Session Hero's headline stats — duration · modules · sets — for a Current
 // Protocol's Next Session. Deliberately no target-calorie and no single volume /
@@ -229,26 +230,31 @@ export function operatorStatus(gamification: Gamification): OperatorStatus {
 
 // The Home "Latest PR" line view-model (issue #167): the user's most recent Personal
 // Record, ready to render in OPERATOR STATUS. `exercise` names the lift and
-// `exerciseId` links to it; `estimate` is the new Estimated 1RM rounded to whole
-// kilograms — matching the Recent Records feed (records-view) so a PR reads the same
-// everywhere — and `text` is the composed "Deadlift — 142 kg est. 1RM". The label is
-// "Latest PR" (never "Top PR", which collides with Top Set, nor the banned "Personal
-// Best") and lives in the component; the estimate is deliberately never "0 kg".
+// `exerciseId` links to it; `estimate` is the honest headline — an absolute record's
+// whole-kg Estimated 1RM ("142 kg est. 1RM"), or a bodyweight record's set
+// ("bodyweight × 12"), matching the Recent Records feed so a PR reads the same
+// everywhere (ADR-0026) — and `text` is the composed line. The label is "Latest PR"
+// (never "Top PR", which collides with Top Set, nor the banned "Personal Best") and
+// lives in the component; the estimate is deliberately never "0 kg".
 export interface LatestPrLine {
   exercise: string;
   exerciseId: number;
-  // The whole-kg Estimated 1RM, e.g. "142 kg est. 1RM".
+  // The honest headline: "142 kg est. 1RM" for an absolute record, "bodyweight × 12"
+  // for a bodyweight one.
   estimate: string;
-  // The composed line, e.g. "Deadlift — 142 kg est. 1RM".
+  // The composed line, e.g. "Deadlift — 142 kg est. 1RM" or "Pull-up — bodyweight × 12".
   text: string;
 }
 
 // Derive the Latest-PR line from the Home read's `latest_pr`. Returns null when the
-// user has no Personal Record (a brand-new account or a bodyweight-only trainee), so
-// Home hides the line rather than fabricating a "0 kg" — Level and Streak still render.
+// user has no Personal Record (a brand-new account), so Home hides the line rather than
+// fabricating a "0 kg" — Level and Streak still render. A bodyweight record renders as
+// the set that achieved it (ADR-0026); an absolute one keeps its "kg est. 1RM" wording.
 export function latestPrLine(latestPr: LatestPr | null): LatestPrLine | null {
   if (!latestPr) return null;
-  const estimate = `${Math.round(latestPr.estimated_1rm)} kg est. 1RM`;
+  const estimate = latestPr.is_bodyweight
+    ? formatRecordAchievement(latestPr)
+    : `${Math.round(latestPr.estimated_1rm)} kg est. 1RM`;
   return {
     exercise: latestPr.exercise,
     exerciseId: latestPr.exercise_id,

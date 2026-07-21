@@ -31,6 +31,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.domain.load import LoadKind, ParsedLoad
+from app.domain.one_rep_max import MAX_TRUSTWORTHY_REPS, MIN_TRUSTWORTHY_REPS
 from app.domain.personal_records import (
     LoggedSetRecord,
     PersonalRecord,
@@ -66,6 +68,11 @@ class ExerciseRecordsView:
     total_sets: int
     top_set_series: list[TopSetPoint]
     pr_milestones: list[PersonalRecord]
+    # True when a bodyweight set is record-ineligible *only* because no Performed Body
+    # Weight was on file (ADR-0026) — the signal to prompt the user to record their body
+    # weight so their calisthenics work can start setting Personal Records. False once the
+    # Exercise holds any Personal Record, or when no would-be-eligible mass-less set exists.
+    body_weight_nudge: bool = False
 
 
 def exercise_records(
@@ -96,8 +103,15 @@ def exercise_records(
 
     records = detect_personal_records(_set_records(history, exercise_id))
     # Records are oldest-first with each strictly beating the prior, so the last is the
-    # highest Estimated 1RM — the Personal Record. Absent when nothing qualified.
-    personal_record = records[-1].estimated_1rm if records else None
+    # highest Estimated 1RM — the Personal Record. The ``personal_record`` kg figure is
+    # the *absolute* headline only: a bodyweight record must never surface as a kilogram
+    # (ADR-0026), so it is withheld here and the tile renders the set from the milestones
+    # instead. Absent when nothing qualified.
+    personal_record = (
+        records[-1].estimated_1rm
+        if records and not records[-1].is_bodyweight
+        else None
+    )
 
     return ExerciseRecordsView(
         exercise_id=exercise_id,
@@ -109,7 +123,38 @@ def exercise_records(
         # feed); the detector returns them oldest-first, so reverse the same records
         # already computed for the PR tile — no second pass over the history.
         pr_milestones=list(reversed(records)),
+        body_weight_nudge=_needs_body_weight_nudge(history, exercise_id, records),
     )
+
+
+def _needs_body_weight_nudge(
+    history: list[LoggedSessionView],
+    exercise_id: int,
+    records: list[PersonalRecord],
+) -> bool:
+    """Whether to prompt the user to record their body weight for this Exercise.
+
+    True only when the Exercise holds no Personal Record yet *and* the user has logged a
+    bodyweight set that would qualify — a bodyweight Load with reps in the trustworthy
+    1–12 window — save for the one missing fact: no Performed Body Weight was captured on
+    it. That is the honest ask (ADR-0026): recording a weight would unlock records the
+    user's calisthenics work has already earned. Once any record exists the prompt is
+    silenced, so it never nags a user who is already scoring.
+    """
+
+    if records:
+        return False
+    for session in history:
+        for logged_set in session.logged_sets:
+            if logged_set.exercise_id != exercise_id:
+                continue
+            if logged_set.body_weight_kg is not None or logged_set.load is None:
+                continue
+            if not (MIN_TRUSTWORTHY_REPS <= logged_set.reps <= MAX_TRUSTWORTHY_REPS):
+                continue
+            if ParsedLoad.from_dict(logged_set.load).kind is LoadKind.BODYWEIGHT:
+                return True
+    return False
 
 
 def _set_records(

@@ -15,6 +15,9 @@ const RECORD = {
   estimated_1rm: 110.0,
   gain: 10.0,
   date: "2026-07-04",
+  reps: 1,
+  is_bodyweight: false,
+  added_kg: null,
 };
 
 const OPEN: StrengthAnalyticsOverview = {

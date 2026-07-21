@@ -4,6 +4,7 @@
 // `lib/exercise-records.ts`.
 
 import type { PersonalRecordEntry } from "./analytics-types";
+import { formatRecordAchievement } from "./record-achievement.ts";
 
 // The API's per-exercise stat-header read model (ADR-0017): the Personal Record
 // (highest Estimated 1RM in kg, or `null` when the Exercise has no absolute-Load
@@ -19,6 +20,10 @@ export interface ExerciseRecords {
   total_sets: number;
   top_set_series: TopSetPoint[];
   pr_milestones: PersonalRecordEntry[];
+  // True when a bodyweight set is record-ineligible *only* because no Performed Body
+  // Weight was on file (ADR-0026) — the signal to prompt the user to record their weight
+  // so their calisthenics work can set records. `false` once any record exists.
+  body_weight_nudge: boolean;
 }
 
 // One qualifying session's Top Set (ADR-0017): the ISO `date` it was performed on and
@@ -37,19 +42,38 @@ export interface StatTile {
 }
 
 // Decide which stat-header tiles render and format them. TOTAL SETS always renders —
-// a count always exists. The PERSONAL RECORD tile renders only when the Exercise has a
-// real Estimated 1RM (absolute-Load history), rounded to whole kilograms; for every
-// other Exercise it is omitted, never shown as `0 kg` (ADR-0017). The strength tile is
-// always labelled PERSONAL RECORD — never "personal best" for the raw heaviest load,
-// which CONTEXT.md forbids. Pure and server-free.
+// a count always exists. The PERSONAL RECORD tile renders whenever the Exercise has a
+// record: an absolute record shows its whole-kg Estimated 1RM; a qualifying bodyweight
+// record (ADR-0026) shows the set that achieved it — "bodyweight × 12" — from the newest
+// milestone, never a fabricated kg figure. An Exercise with no record omits the tile,
+// never shown as `0 kg` (ADR-0017). The tile is always labelled PERSONAL RECORD — never
+// "personal best" for the raw heaviest load, which CONTEXT.md forbids. Pure and
+// server-free.
 export function toStatTiles(records: ExerciseRecords): StatTile[] {
   const tiles: StatTile[] = [];
-  if (records.personal_record !== null) {
-    tiles.push({
-      label: "PERSONAL RECORD",
-      value: `${Math.round(records.personal_record)} kg`,
-    });
+  const personalRecord = personalRecordTile(records);
+  if (personalRecord !== null) {
+    tiles.push(personalRecord);
   }
   tiles.push({ label: "TOTAL SETS", value: `${records.total_sets}` });
   return tiles;
+}
+
+// The PERSONAL RECORD tile, or `null` when the Exercise has no record to show. An
+// absolute record uses the whole-kg headline; otherwise the newest PR milestone — the
+// current record, since milestones strictly increase — supplies a bodyweight record's
+// set descriptor. Records with no milestone at all (a movement that can set none) yield
+// no tile, so it is hidden rather than zeroed.
+function personalRecordTile(records: ExerciseRecords): StatTile | null {
+  if (records.personal_record !== null) {
+    return {
+      label: "PERSONAL RECORD",
+      value: `${Math.round(records.personal_record)} kg`,
+    };
+  }
+  const currentRecord = records.pr_milestones[0];
+  if (currentRecord) {
+    return { label: "PERSONAL RECORD", value: formatRecordAchievement(currentRecord) };
+  }
+  return null;
 }

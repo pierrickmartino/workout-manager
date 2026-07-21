@@ -130,6 +130,26 @@ def parse_load(raw: str) -> ParsedLoad:
     return ParsedLoad(kind=LoadKind.QUALITATIVE, text=raw)
 
 
+def resolve_bodyweight_kg(
+    parsed: ParsedLoad, performed_body_weight: float | None
+) -> float | None:
+    """Resolve a ``bodyweight`` Load to its kg-equivalent against a captured mass.
+
+    The single source of truth for bodyweight resolution (ADR-0026): a pure
+    ``bodyweight`` set resolves to the Performed Body Weight, and a ``bodyweight +
+    added`` set to mass plus the added load. Returns ``None`` when the Load is not a
+    bodyweight kind, or when no Performed Body Weight was captured — the mass is never
+    guessed, so a set with no snapshot stays unresolved (and therefore unscored)
+    rather than being resolved against a fabricated weight.
+    """
+
+    if parsed.kind is not LoadKind.BODYWEIGHT:
+        return None
+    if performed_body_weight is None:
+        return None
+    return performed_body_weight + (parsed.added_kg or 0.0)
+
+
 def load_from_input(kind: str, value: str | None) -> ParsedLoad | None:
     """Build a typed Load from the log form's kind picker plus its value field.
 
@@ -189,4 +209,10 @@ def load_from_input(kind: str, value: str | None) -> ParsedLoad | None:
     )
 
 
-__all__ = ["LoadKind", "ParsedLoad", "parse_load", "load_from_input"]
+__all__ = [
+    "LoadKind",
+    "ParsedLoad",
+    "parse_load",
+    "load_from_input",
+    "resolve_bodyweight_kg",
+]

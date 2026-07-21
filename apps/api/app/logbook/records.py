@@ -40,10 +40,32 @@ def set_records(history: list[LoggedSessionView]) -> list[LoggedSetRecord]:
             reps=logged_set.reps,
             load=logged_set.load,
             performed_on=session.performed_on,
+            body_weight_kg=logged_set.body_weight_kg,
         )
         for session in history
         for logged_set in session.logged_sets
     ]
+
+
+def personal_record_payload(record: PersonalRecord) -> dict:
+    """The one JSON shape every Personal-Record surface emits (records, analytics, home).
+
+    Centralized so the feeds cannot drift: ``exercise`` / ``estimated_1rm`` / ``gain`` /
+    ``date`` are the within-Exercise ordering figures, and ``reps`` / ``is_bodyweight`` /
+    ``added_kg`` are the set descriptor a client renders a bodyweight record from — the set
+    that achieved it, never a kilogram headline (ADR-0026). ``added_kg`` is ``None`` for an
+    absolute record and for a pure-bodyweight one.
+    """
+
+    return {
+        "exercise": record.exercise_name,
+        "estimated_1rm": record.estimated_1rm,
+        "gain": record.gain,
+        "date": record.performed_on.isoformat(),
+        "reps": record.reps,
+        "is_bodyweight": record.is_bodyweight,
+        "added_kg": record.added_kg,
+    }
 
 
 def latest_personal_record(
@@ -61,4 +83,4 @@ def latest_personal_record(
     return records[-1] if records else None
 
 
-__all__ = ["set_records", "latest_personal_record"]
+__all__ = ["set_records", "latest_personal_record", "personal_record_payload"]

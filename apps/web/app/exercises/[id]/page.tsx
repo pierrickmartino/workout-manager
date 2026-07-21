@@ -88,7 +88,10 @@ export default async function ExercisePage({
       ) : null}
       {tab === "history" ? <HistoryTab exerciseId={exerciseId} /> : null}
       {tab === "records" ? (
-        <RecordsPanel milestones={records?.pr_milestones ?? []} />
+        <RecordsPanel
+          milestones={records?.pr_milestones ?? []}
+          bodyWeightNudge={records?.body_weight_nudge ?? false}
+        />
       ) : null}
 
       <AddToProtocol

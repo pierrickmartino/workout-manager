@@ -18,7 +18,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 
-from app.domain.load import LoadKind, ParsedLoad
+from app.domain.load import LoadKind, ParsedLoad, resolve_bodyweight_kg
 from app.domain.one_rep_max import estimate_1rm
 
 
@@ -36,6 +36,10 @@ class LoggedSetRecord:
     reps: int
     load: dict | None
     performed_on: date
+    # The Performed Body Weight (ADR-0026) snapshotted onto the set, or ``None`` when
+    # none was captured. A bodyweight set scores only against this mass; an absolute
+    # set ignores it entirely.
+    body_weight_kg: float | None = None
 
 
 @dataclass(frozen=True)
@@ -44,6 +48,11 @@ class PersonalRecord:
 
     ``gain`` is the improvement over the Exercise's prior PR — ``0.0`` for the
     first-ever record, since there is nothing to beat yet.
+
+    The set-descriptor fields let a surface render a bodyweight record honestly (ADR-0026)
+    as *the set that achieved it* — ``reps`` and any ``added_kg`` — rather than a kilogram
+    headline. ``is_bodyweight`` tells absolute records (which keep their kg figure) apart
+    from bodyweight ones. For an absolute record ``added_kg`` is ``None``.
     """
 
     exercise_id: int
@@ -51,24 +60,41 @@ class PersonalRecord:
     estimated_1rm: float
     gain: float
     performed_on: date
+    reps: int = 0
+    is_bodyweight: bool = False
+    added_kg: float | None = None
 
 
-def estimated_1rm_for_set(load: dict | None, reps: int) -> float | None:
+def estimated_1rm_for_set(
+    load: dict | None, reps: int, body_weight_kg: float | None = None
+) -> float | None:
     """The Estimated 1RM for one set, or ``None`` if it can't set a PR.
 
-    Only ``absolute`` loads carry a comparable kilogram figure; every other Load kind
-    (and any load-less set) is ineligible. Reps are gated to the trustworthy window by
-    :func:`estimate_1rm`. This is the *one yardstick* the record side compares on — the
-    PR detector, the Personal Record tile, and the top-set trend all qualify a set
-    through it, so "best Est. 1RM" means the same thing everywhere (ADR-0017).
+    Two Load kinds carry a comparable kilogram figure: an ``absolute`` load carries its
+    kg directly, and a ``bodyweight`` load resolves to a kg-equivalent against the
+    ``body_weight_kg`` performed at (the snapshotted Performed Body Weight, ADR-0026) —
+    ``bodyweight`` or ``bodyweight + added``. A bodyweight set with no captured mass, and
+    every other Load kind (or a load-less set), is ineligible. Reps are gated to the
+    trustworthy window by :func:`estimate_1rm`, so a 13+-rep set of either kind scores
+    ``None``. This is the *one yardstick* the record side compares on — the PR detector,
+    the Personal Record tile, and the top-set trend all qualify a set through it, so
+    "best Est. 1RM" means the same thing everywhere (ADR-0017). Absolute behavior is
+    unchanged: the default ``body_weight_kg`` of ``None`` never affects an absolute set.
     """
 
     if load is None:
         return None
     parsed = ParsedLoad.from_dict(load)
-    if parsed.kind is not LoadKind.ABSOLUTE or parsed.kg is None:
-        return None
-    return estimate_1rm(parsed.kg, reps)
+    if parsed.kind is LoadKind.ABSOLUTE:
+        if parsed.kg is None:
+            return None
+        return estimate_1rm(parsed.kg, reps)
+    if parsed.kind is LoadKind.BODYWEIGHT:
+        resolved = resolve_bodyweight_kg(parsed, body_weight_kg)
+        if resolved is None:
+            return None
+        return estimate_1rm(resolved, reps)
+    return None
 
 
 def detect_personal_records(
@@ -88,12 +114,16 @@ def detect_personal_records(
     records: list[PersonalRecord] = []
 
     for record in ordered:
-        estimate = estimated_1rm_for_set(record.load, record.reps)
+        estimate = estimated_1rm_for_set(
+            record.load, record.reps, record.body_weight_kg
+        )
         if estimate is None:
             continue
         previous = best_by_exercise.get(record.exercise_id)
         if previous is not None and estimate <= previous:
             continue
+        parsed = ParsedLoad.from_dict(record.load) if record.load else None
+        is_bodyweight = parsed is not None and parsed.kind is LoadKind.BODYWEIGHT
         records.append(
             PersonalRecord(
                 exercise_id=record.exercise_id,
@@ -101,6 +131,9 @@ def detect_personal_records(
                 estimated_1rm=estimate,
                 gain=0.0 if previous is None else estimate - previous,
                 performed_on=record.performed_on,
+                reps=record.reps,
+                is_bodyweight=is_bodyweight,
+                added_kg=parsed.added_kg if is_bodyweight else None,
             )
         )
         best_by_exercise[record.exercise_id] = estimate

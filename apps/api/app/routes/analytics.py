@@ -23,6 +23,7 @@ from app.domain.muscle_groups import MUSCLE_BALANCE_WEEKS, WeeklyComposition
 from app.domain.personal_records import PersonalRecord
 from app.envelope import success_envelope
 from app.logbook.analytics import AnalyticsOverview, AnalyticsRange, analytics_overview
+from app.logbook.records import personal_record_payload
 from app.logbook.strength_analytics import strength_analytics_overview
 from app.logbook.top_sets import ExerciseTrajectory
 from app.repositories.deps import (
@@ -50,13 +51,7 @@ def _serialize(overview: AnalyticsOverview) -> dict:
             {"group": group, "pct": pct} for group, pct in overview.muscle_distribution
         ],
         "recent_records": [
-            {
-                "exercise": record.exercise_name,
-                "estimated_1rm": record.estimated_1rm,
-                "gain": record.gain,
-                "date": record.performed_on.isoformat(),
-            }
-            for record in overview.recent_records
+            personal_record_payload(record) for record in overview.recent_records
         ],
         "new_prs": overview.new_prs,
         "volume": {
@@ -97,12 +92,7 @@ def read_analytics(
 
 
 def _serialize_record(record: PersonalRecord) -> dict:
-    return {
-        "exercise": record.exercise_name,
-        "estimated_1rm": record.estimated_1rm,
-        "gain": record.gain,
-        "date": record.performed_on.isoformat(),
-    }
+    return personal_record_payload(record)
 
 
 def _serialize_week(week: WeeklyComposition) -> dict:

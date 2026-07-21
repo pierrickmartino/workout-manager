@@ -26,11 +26,17 @@ export interface MuscleShare {
 // One Personal Record in the Recent Records feed (F3 Slice 4): the Exercise, the new
 // Estimated 1RM it set, the `gain` over the Exercise's prior PR (0 for the first-ever
 // record), and the ISO `date` it was performed on. Derived read-time from Logged Sets.
+// The set descriptor — `reps`, `is_bodyweight`, and any `added_kg` — lets a bodyweight
+// record render as the set that achieved it, never a kilogram headline (ADR-0026);
+// `added_kg` is `null` for an absolute record and for a pure bodyweight one.
 export interface PersonalRecordEntry {
   exercise: string;
   estimated_1rm: number;
   gain: number;
   date: string;
+  reps: number;
+  is_bodyweight: boolean;
+  added_kg: number | null;
 }
 
 // One day's total converted volume (F3 Slice 5): the ISO `date` it was performed on
