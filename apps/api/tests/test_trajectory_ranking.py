@@ -31,7 +31,19 @@ def _abs(kg: float) -> dict:
     return ParsedLoad(kind=LoadKind.ABSOLUTE, text=f"{kg:g} kg", kg=kg).to_dict()
 
 
-def _set(exercise_id: int, reps: int, load: dict) -> LoggedSetView:
+def _bw(added_kg: float | None = None) -> dict:
+    text = "bodyweight" if added_kg is None else f"bodyweight + {added_kg:g} kg"
+    return ParsedLoad(
+        kind=LoadKind.BODYWEIGHT, text=text, added_kg=added_kg
+    ).to_dict()
+
+
+def _set(
+    exercise_id: int,
+    reps: int,
+    load: dict,
+    body_weight_kg: float | None = None,
+) -> LoggedSetView:
     return LoggedSetView(
         position=0,
         reps=reps,
@@ -39,6 +51,7 @@ def _set(exercise_id: int, reps: int, load: dict) -> LoggedSetView:
         perceived_difficulty=None,
         exercise_id=exercise_id,
         exercise_name=NAMES[exercise_id],
+        body_weight_kg=body_weight_kg,
     )
 
 
@@ -158,6 +171,23 @@ def test_each_trajectory_series_is_capped_to_the_recent_sessions():
     assert len(ranked) == 1
     assert len(ranked[0].series) == TOP_SET_SERIES_LIMIT
     assert ranked[0].series[0].performed_on == date(2026, 1, 3)
+
+
+def test_includes_a_bodyweight_exercise_with_qualifying_sessions():
+    # Arrange — the press is pure bodyweight, scored against a captured mass, in-window
+    history = [
+        _session(date(2026, 1, 1), [_set(PRESS, 5, _bw(), body_weight_kg=80.0)]),
+        _session(date(2026, 1, 8), [_set(PRESS, 8, _bw(), body_weight_kg=80.0)]),
+    ]
+
+    # Act
+    ranked = rank_qualifying_exercises(history)
+
+    # Assert — the bodyweight Exercise earns a small-multiple, drawn on the shared yardstick
+    assert [t.exercise_id for t in ranked] == [PRESS]
+    series = ranked[0].series
+    assert [p.performed_on for p in series] == [date(2026, 1, 1), date(2026, 1, 8)]
+    assert series[1].estimated_1rm > series[0].estimated_1rm
 
 
 def test_empty_history_yields_no_trajectories():

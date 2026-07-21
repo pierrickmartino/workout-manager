@@ -2,7 +2,8 @@
 Strength Analytics read through (issue #177). ``top_set_series`` projects a Logged-Session
 history onto one Exercise's oldest-first trajectory of Top Sets (the best Estimated 1RM
 per qualifying session), capped to the most recent ``TOP_SET_SERIES_LIMIT``, with no
-zero-padding for a session that holds no absolute-Load set in the trustworthy rep window.
+zero-padding for a session that holds no scorable set — absolute, or bodyweight resolved
+against its Performed Body Weight — in the trustworthy rep window.
 It reuses the same one-yardstick set qualifier (``estimated_1rm_for_set``) as the Personal
 Record tile, so "the Top Set" means one thing everywhere. Pure over the repository view.
 """
@@ -28,7 +29,21 @@ def _abs(kg: float) -> dict:
     return ParsedLoad(kind=LoadKind.ABSOLUTE, text=f"{kg:g} kg", kg=kg).to_dict()
 
 
-def _set(exercise_id: int, reps: int, load: dict) -> LoggedSetView:
+def _bw(added_kg: float | None = None) -> dict:
+    """The stored typed-Load dict for a bodyweight load, pure or with added kg."""
+
+    text = "bodyweight" if added_kg is None else f"bodyweight + {added_kg:g} kg"
+    return ParsedLoad(
+        kind=LoadKind.BODYWEIGHT, text=text, added_kg=added_kg
+    ).to_dict()
+
+
+def _set(
+    exercise_id: int,
+    reps: int,
+    load: dict,
+    body_weight_kg: float | None = None,
+) -> LoggedSetView:
     return LoggedSetView(
         position=0,
         reps=reps,
@@ -36,6 +51,7 @@ def _set(exercise_id: int, reps: int, load: dict) -> LoggedSetView:
         perceived_difficulty=None,
         exercise_id=exercise_id,
         exercise_name="Back Squat" if exercise_id == SQUAT else "Overhead Press",
+        body_weight_kg=body_weight_kg,
     )
 
 
@@ -121,3 +137,53 @@ def test_only_the_requested_exercises_sets_contribute():
 
     # Assert — the press's heavier set never bleeds into the squat's trajectory
     assert series == [TopSetPoint(performed_on=date(2026, 1, 1), estimated_1rm=100.0)]
+
+
+def test_top_set_series_scores_a_bodyweight_session_against_its_performed_body_weight():
+    # Arrange — one bodyweight + 20 kg pull-up set at 5 reps, performed at 80 kg body weight
+    history = [_session(date(2026, 1, 1), [_set(SQUAT, 5, _bw(20.0), body_weight_kg=80.0)])]
+
+    # Act
+    series = top_set_series(history, SQUAT)
+
+    # Assert — resolves to 100 kg-equivalent and scores via the shared Epley yardstick
+    assert series == [
+        TopSetPoint(performed_on=date(2026, 1, 1), estimated_1rm=100.0 * (1 + 5 / 30))
+    ]
+
+
+def test_top_set_series_excludes_bodyweight_sets_above_the_rep_window():
+    # Arrange — a high-rep (13) bodyweight set is honest endurance work, not a strength max
+    history = [_session(date(2026, 1, 1), [_set(SQUAT, 13, _bw(), body_weight_kg=80.0)])]
+
+    # Act
+    series = top_set_series(history, SQUAT)
+
+    # Assert — no Top Set point; the session is simply absent (no zero-padding)
+    assert series == []
+
+
+def test_top_set_series_excludes_bodyweight_sets_with_no_performed_body_weight():
+    # Arrange — a bodyweight set with no captured mass cannot be resolved to a strength figure
+    history = [_session(date(2026, 1, 1), [_set(SQUAT, 5, _bw(), body_weight_kg=None)])]
+
+    # Act
+    series = top_set_series(history, SQUAT)
+
+    # Assert — the honest empty trend, not a fabricated point
+    assert series == []
+
+
+def test_top_set_series_rises_when_reps_climb_at_fixed_body_weight():
+    # Arrange — same movement and body weight, more reps in the later session
+    history = [
+        _session(date(2026, 1, 1), [_set(SQUAT, 5, _bw(), body_weight_kg=80.0)]),
+        _session(date(2026, 1, 8), [_set(SQUAT, 10, _bw(), body_weight_kg=80.0)]),
+    ]
+
+    # Act
+    series = top_set_series(history, SQUAT)
+
+    # Assert — reps climbing at fixed mass reads as progress: the trajectory moves up
+    assert [p.performed_on for p in series] == [date(2026, 1, 1), date(2026, 1, 8)]
+    assert series[1].estimated_1rm > series[0].estimated_1rm
