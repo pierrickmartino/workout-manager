@@ -18,6 +18,7 @@ import {
   useDroppable,
   useSensor,
   useSensors,
+  type Announcements,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
@@ -35,7 +36,9 @@ import {
   chipDropId,
   classifyDrag,
   dragFeedback,
+  dragMicrocopy,
   rowDropId,
+  supersetGroupLetter,
 } from "@/lib/protocol-builder";
 import type {
   DraftPrescription,
@@ -191,9 +194,45 @@ export function PrescriptionList({
   // losing-member container. Null when nothing valid is under the pointer yet.
   const feedback =
     draggingId !== null ? dragFeedback(draggingId, overId, prescriptions) : null;
+  // The foreshadowing microcopy for the live drag (#220): the target-anchored text a
+  // pointer/touch user reads *before* release. Its `foreshadow` string is the single
+  // source the visible label and the `onDragOver` announcement both render, so a sighted
+  // and a screen-reader user get the same words (ADR-0027). Null when nothing valid is
+  // under the pointer yet — the same no-ops the classifier rejects.
+  const microcopy =
+    draggingId !== null ? dragMicrocopy(draggingId, overId, prescriptions) : null;
+  const foreshadow = microcopy?.foreshadow ?? null;
   // The position of the lifted row (its id is `row-<pos>`), or -1 when idle — the source
   // that dims into a placeholder gap and whose clone rides in the DragOverlay.
   const draggingPosition = draggingId !== null ? rowIds.indexOf(draggingId) : -1;
+
+  // Mirror the visible foreshadow into @dnd-kit's live-region announcements so a
+  // screen-reader user mid-drag hears the same outcome the sighted user sees, and the
+  // committed result on drop (ADR-0027). `onDragOver` speaks the foreshadow; `onDragEnd`
+  // speaks the settled `commit` — both from the one `dragMicrocopy` source, so the two
+  // renderings can never disagree. The button floor stays the keyboard/SR parity path;
+  // these announcements narrate the *drag* enhancement only.
+  const announcements: Announcements = {
+    onDragStart: ({ active }) => {
+      const position = rowIds.indexOf(String(active.id));
+      return position >= 0
+        ? `Picked up ${prescriptions[position].exerciseName}.`
+        : undefined;
+    },
+    onDragOver: ({ active, over }) =>
+      dragMicrocopy(
+        String(active.id),
+        over ? String(over.id) : null,
+        prescriptions,
+      )?.foreshadow,
+    onDragEnd: ({ active, over }) =>
+      dragMicrocopy(
+        String(active.id),
+        over ? String(over.id) : null,
+        prescriptions,
+      )?.commit,
+    onDragCancel: () => "Movement cancelled.",
+  };
 
   // Bracket the flat layout into render items: a solo Prescription renders as a bare
   // row, while a contiguous run of one Superset's members renders inside a single
@@ -205,6 +244,7 @@ export function PrescriptionList({
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
+      accessibility={{ announcements }}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDragEnd={onDragEnd}
@@ -228,6 +268,7 @@ export function PrescriptionList({
                   lastPosition,
                 )}
                 chipActive={feedback?.formGroupChip === item.position}
+                foreshadow={foreshadow}
                 onEditField={onEditField}
                 onEditLoad={onEditLoad}
                 onReorder={onReorder}
@@ -246,6 +287,7 @@ export function PrescriptionList({
                 joinActive={feedback?.joinGroup === item.group}
                 losingMember={feedback?.losingGroup === item.group}
                 insertionGap={feedback?.insertionGap ?? null}
+                foreshadow={foreshadow}
                 onEditField={onEditField}
                 onEditLoad={onEditLoad}
                 onEditRoundRest={onEditRoundRest}
@@ -294,7 +336,18 @@ function insertionEdgeFor(
 // accent bar, deliberately distinct from the filled group drop-zones (a bar, not a fill),
 // so the two intents — reorder vs group — never read the same. Centered in the list's
 // 12px row gap. Decorative only.
-function InsertionLine({ edge }: { edge: "top" | "bottom" }) {
+//
+// When a `label` is present (#220) it anchors the foreshadow microcopy — "Move here" for a
+// reorder, "Release to remove … from superset A" for a member leaving — as a pill riding
+// the line at the drop slot, not under the pointer, so it stays readable during a touch
+// drag. The pill is `aria-hidden`; the same words reach a screen reader via `announcements`.
+function InsertionLine({
+  edge,
+  label,
+}: {
+  edge: "top" | "bottom";
+  label?: string | null;
+}) {
   return (
     <span
       aria-hidden
@@ -302,7 +355,13 @@ function InsertionLine({ edge }: { edge: "top" | "bottom" }) {
         "pointer-events-none absolute inset-x-0 z-10 h-0.5 rounded-full bg-cyan shadow-[0_0_6px_rgba(34,211,238,0.7)]",
         edge === "top" ? "-top-[7px]" : "-bottom-[7px]",
       )}
-    />
+    >
+      {label ? (
+        <span className="label-mono absolute left-0 -top-2 z-10 max-w-full truncate rounded-sm bg-cyan px-1.5 py-0.5 text-[9px] text-bg-primary shadow-sm">
+          {label}
+        </span>
+      ) : null}
+    </span>
   );
 }
 
@@ -379,6 +438,10 @@ interface SupersetContainerProps {
   joinActive: boolean;
   losingMember: boolean;
   insertionGap: number | null;
+  // The live foreshadow microcopy for the whole drag (#220), or null when idle. Shown as
+  // the box's join banner when a row is over it, and threaded to member rows for a
+  // within-group reorder's insertion-line label.
+  foreshadow: string | null;
   onEditField: (
     position: number,
     field: PrescriptionField,
@@ -412,6 +475,7 @@ function SupersetContainer({
   joinActive,
   losingMember,
   insertionGap,
+  foreshadow,
   onEditField,
   onEditLoad,
   onEditRoundRest,
@@ -422,6 +486,10 @@ function SupersetContainer({
 }: SupersetContainerProps) {
   const firstPosition = positions[0];
   const firstSlot = layout[firstPosition];
+  // The group's user-facing letter (A = first Superset in the Session, #220) — the same
+  // name the drag microcopy speaks, so the round-rest control and the drag announcements
+  // refer to the group the same way instead of leaking its internal tag.
+  const groupLetter = supersetGroupLetter(prescriptions, group);
   // The box registers as the group's join drop target; whether it *lights* is decided by
   // the shared feedback classifier (`joinActive`), not the raw hover — so a co-member
   // dropped back on its own box (a resolver no-op) never promises a join (#218/#219).
@@ -448,6 +516,18 @@ function SupersetContainer({
             {firstSlot.groupSize} EXERCISES
           </span>
         </div>
+        {/* The join foreshadow, anchored inside the box (the join drop target) rather than
+            under the pointer, so it stays readable during a touch drag (#220). Shown only
+            while a row is over the box; the same words reach a screen reader via
+            `announcements`, so this pill is `aria-hidden`. */}
+        {joinActive && foreshadow ? (
+          <p
+            aria-hidden
+            className="label-mono truncate rounded-sm bg-cyan px-1.5 py-1 text-[9px] text-bg-primary"
+          >
+            {foreshadow}
+          </p>
+        ) : null}
         <ul className="flex flex-col gap-3">
           {positions.map((position) => (
             <SortablePrescriptionRow
@@ -461,6 +541,7 @@ function SupersetContainer({
               // insertion line does appear for a within-group reorder.
               chipActive={false}
               insertionEdge={insertionEdgeFor(position, insertionGap, lastPosition)}
+              foreshadow={foreshadow}
               onEditField={onEditField}
               onEditLoad={onEditLoad}
               onReorder={onReorder}
@@ -480,7 +561,7 @@ function SupersetContainer({
             type="number"
             min={0}
             value={firstSlot.roundRestSeconds ?? ""}
-            aria-label={`Round rest for superset ${group}`}
+            aria-label={`Round rest for superset ${groupLetter}`}
             onChange={(e) =>
               onEditRoundRest(
                 firstPosition,
@@ -509,6 +590,11 @@ interface SortablePrescriptionRowProps {
   // it fills solid). Both come from the shared `dragFeedback` classifier.
   insertionEdge: "top" | "bottom" | null;
   chipActive: boolean;
+  // The live foreshadow microcopy for the whole drag (#220), or null when idle. A row
+  // renders it only where it is the active drop target — on its insertion line when it is
+  // the reorder/leave slot, or on its link chip when it is the form-group target — so the
+  // single active string never double-shows.
+  foreshadow: string | null;
   onEditField: (
     position: number,
     field: PrescriptionField,
@@ -537,6 +623,7 @@ function SortablePrescriptionRow({
   draggingId,
   insertionEdge,
   chipActive,
+  foreshadow,
   onEditField,
   onEditLoad,
   onReorder,
@@ -569,7 +656,9 @@ function SortablePrescriptionRow({
         isDragging && "rounded-md opacity-40 outline-dashed outline-1 outline-border",
       )}
     >
-      {insertionEdge ? <InsertionLine edge={insertionEdge} /> : null}
+      {insertionEdge ? (
+        <InsertionLine edge={insertionEdge} label={foreshadow} />
+      ) : null}
       <PrescriptionEditor
         prescription={prescription}
         slot={slot}
@@ -581,7 +670,11 @@ function SortablePrescriptionRow({
       {slot.group === null &&
       draggingId != null &&
       draggingId !== rowDropId(position) ? (
-        <SupersetLinkChip position={position} active={chipActive} />
+        <SupersetLinkChip
+          position={position}
+          active={chipActive}
+          foreshadow={foreshadow}
+        />
       ) : null}
       <div className="flex items-center justify-between gap-1.5">
         <button
@@ -620,9 +713,11 @@ function SortablePrescriptionRow({
 function SupersetLinkChip({
   position,
   active,
+  foreshadow,
 }: {
   position: number;
   active: boolean;
+  foreshadow: string | null;
 }) {
   // The chip registers as the form-group drop target; whether it fills solid is decided
   // by the shared `dragFeedback` classifier (`active`), so the escalation matches the
@@ -641,7 +736,13 @@ function SupersetLinkChip({
       )}
     >
       <Link2 className="h-4 w-4" aria-hidden />
-      {active ? "Release to start a superset" : "Drop here to start a superset"}
+      {/* Live target: the foreshadow names the exercise the new Superset starts with
+          ("Release to start a superset with …", #220), one source with the announcement. */}
+      <span className="truncate">
+        {active
+          ? (foreshadow ?? "Release to start a superset")
+          : "Drop here to start a superset"}
+      </span>
     </div>
   );
 }

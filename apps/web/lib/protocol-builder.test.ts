@@ -11,6 +11,7 @@ import {
   classifyDrag,
   resolveDrop,
   dragFeedback,
+  dragMicrocopy,
   rowDropId,
   chipDropId,
   boxDropId,
@@ -2030,4 +2031,100 @@ test("dragFeedback marks the losing container and an insertion line when a membe
   assert.equal(feedback?.insertionGap, 3); // dragging downward, lands after C
   assert.equal(feedback?.joinGroup, null);
   assert.equal(feedback?.formGroupChip, null);
+});
+
+// --- Slice 8 (#220): foreshadowing microcopy + mirrored SR announcements. `dragMicrocopy`
+// turns a live drag (active id, over id) into one source with two renderings: the visible
+// target-anchored `foreshadow` (also the onDragOver announcement) and the `commit`
+// announcement fired onDragEnd. Both are derived from `classifyDrag`, so the words a
+// sighted user reads and the words a screen-reader user hears can never disagree with the
+// drop the resolver will apply (ADR-0027).
+
+test("dragMicrocopy foreshadows a reorder with 'Move here' and commits with the moved name", () => {
+  const rows = soloPrescriptions("Back Squat", "Bench Press", "Deadlift");
+  // Drag Deadlift (2) up onto Back Squat (0): a plain reorder among solos.
+  const copy = dragMicrocopy(rowDropId(2), rowDropId(0), rows);
+  assert.equal(copy?.foreshadow, "Move here");
+  assert.equal(copy?.commit, "Moved Deadlift");
+});
+
+test("dragMicrocopy names the target exercise when forming a new Superset", () => {
+  const rows = soloPrescriptions("Back Squat", "Bench Press", "Deadlift");
+  // Drag Back Squat (0) onto Bench Press's (1) link chip → start a group with Bench Press.
+  const copy = dragMicrocopy(rowDropId(0), chipDropId(1), rows);
+  assert.equal(copy?.foreshadow, "Release to start a superset with Bench Press");
+  assert.equal(copy?.commit, "Started a superset with Bench Press");
+});
+
+test("dragMicrocopy names the group by its letter when joining a Superset", () => {
+  // [A,B] grouped (the Session's first Superset, so "superset A"), C solo.
+  const rows = groupedPrescriptions(["Row", "Curl", "Press"], 2);
+  const group = rows[0].supersetGroup as string;
+  // Drag solo Press (2) into the [Row,Curl] container box → join superset A.
+  const copy = dragMicrocopy(rowDropId(2), boxDropId(group), rows);
+  assert.equal(copy?.foreshadow, "Release to add to superset A");
+  assert.equal(copy?.commit, "Added Press to superset A");
+});
+
+test("dragMicrocopy names the leaving member and its group when a member leaves", () => {
+  // [A,B] grouped (superset A), C solo.
+  const rows = groupedPrescriptions(["Row", "Curl", "Press"], 2);
+  // Drag member Curl (1) out onto solo Press's row (2), outside the box → leave-group.
+  const copy = dragMicrocopy(rowDropId(1), rowDropId(2), rows);
+  assert.equal(copy?.foreshadow, "Release to remove Curl from superset A");
+  assert.equal(copy?.commit, "Removed Curl from superset A");
+});
+
+test("dragMicrocopy yields null for a no-op drop (self, malformed, or own box)", () => {
+  const solo = soloPrescriptions("A", "B");
+  assert.equal(dragMicrocopy(rowDropId(1), rowDropId(1), solo), null); // onto self
+  assert.equal(dragMicrocopy("row-xyz", rowDropId(0), solo), null); // malformed active
+  assert.equal(dragMicrocopy(rowDropId(0), null, solo), null); // absent over
+
+  const grouped = groupedPrescriptions(["A", "B"], 2);
+  const group = grouped[0].supersetGroup as string;
+  assert.equal(dragMicrocopy(rowDropId(0), boxDropId(group), grouped), null); // own box
+});
+
+test("dragMicrocopy letters the second Superset 'B', disambiguating groups by order", () => {
+  // [A,B] group 1 (superset A), [C,D] group 2 (superset B), E solo.
+  let draft = initBuilderDraft(
+    protocol({
+      sessions: [
+        session({
+          prescriptions: ["A", "B", "C", "D", "E"].map((name, index) =>
+            prescription({ exercise_id: index + 1, exercise_name: name, rest_seconds: 60 }),
+          ),
+        }),
+      ],
+    }),
+  );
+  draft = builderReducer(draft, { type: "GROUP_WITH_NEXT", sessionId: 1, position: 0 });
+  draft = builderReducer(draft, { type: "GROUP_WITH_NEXT", sessionId: 1, position: 2 });
+  const rows = draft.sessions[0].prescriptions;
+  const secondGroup = rows[2].supersetGroup as string;
+
+  // Drag solo E (4) into the second container → it is named "superset B", not "A".
+  const copy = dragMicrocopy(rowDropId(4), boxDropId(secondGroup), rows);
+  assert.equal(copy?.foreshadow, "Release to add to superset B");
+  assert.equal(copy?.commit, "Added E to superset B");
+});
+
+test("dragMicrocopy keeps the foreshadow and commit renderings in sync from one source", () => {
+  // [Row,Curl] grouped (superset A), Press solo. Every intent's two renderings are built
+  // from the same resolved names, so the member and group letter agree across both.
+  const rows = groupedPrescriptions(["Row", "Curl", "Press"], 2);
+  const group = rows[0].supersetGroup as string;
+
+  const join = dragMicrocopy(rowDropId(2), boxDropId(group), rows);
+  // The group letter that foreshadows the join is the same one the commit confirms.
+  assert.ok(join?.foreshadow.includes("superset A"));
+  assert.ok(join?.commit.includes("superset A"));
+
+  const leave = dragMicrocopy(rowDropId(1), rowDropId(2), rows);
+  // The member named before release is the same member named on commit.
+  assert.ok(leave?.foreshadow.includes("Curl"));
+  assert.ok(leave?.commit.includes("Curl"));
+  assert.ok(leave?.foreshadow.includes("superset A"));
+  assert.ok(leave?.commit.includes("superset A"));
 });

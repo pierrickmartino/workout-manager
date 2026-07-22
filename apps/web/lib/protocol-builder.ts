@@ -771,6 +771,81 @@ function insertionGapFor(from: number, to: number): number {
   return from < to ? to + 1 : to;
 }
 
+// The foreshadowing microcopy view-model (#220, ADR-0027): one source rendered two ways.
+// `foreshadow` is the visible, target-anchored text shown *before* release AND the
+// `onDragOver` screen-reader announcement — the same words for sighted and SR users, which
+// is the ADR-0027 sync obligation satisfied structurally. `commit` is the `onDragEnd`
+// announcement of the settled outcome.
+export interface DragMicrocopy {
+  foreshadow: string;
+  commit: string;
+}
+
+// Derive the live microcopy from the raw drag (dragged row id, hovered target id), or
+// `null` for a no-op drop — the same cases `classifyDrag`/`dragFeedback` reject. The
+// intent picks the strings: `reorder` names no group; `form-group` names the solo the new
+// Superset starts with; `join-group`/`leave-group` name the group by its display letter
+// (A = first Superset in the Session, matching the Live badge — `supersetGroupLetter`).
+export function dragMicrocopy(
+  activeId: string,
+  overId: string | null,
+  prescriptions: DraftPrescription[],
+): DragMicrocopy | null {
+  const intent = classifyDrag(activeId, overId, prescriptions);
+  if (intent === null) return null;
+  const movingName = prescriptions[intent.from].exerciseName;
+  switch (intent.kind) {
+    case "reorder":
+      return { foreshadow: "Move here", commit: `Moved ${movingName}` };
+    case "form-group": {
+      const targetName = prescriptions[intent.to].exerciseName;
+      return {
+        foreshadow: `Release to start a superset with ${targetName}`,
+        commit: `Started a superset with ${targetName}`,
+      };
+    }
+    case "join-group": {
+      const letter = supersetGroupLetter(prescriptions, intent.group);
+      return {
+        foreshadow: `Release to add to superset ${letter}`,
+        commit: `Added ${movingName} to superset ${letter}`,
+      };
+    }
+    case "leave-group": {
+      const letter = supersetGroupLetter(
+        prescriptions,
+        prescriptions[intent.from].supersetGroup ?? "",
+      );
+      return {
+        foreshadow: `Release to remove ${movingName} from superset ${letter}`,
+        commit: `Removed ${movingName} from superset ${letter}`,
+      };
+    }
+  }
+}
+
+// The display letter naming a Superset to the user: A for the first group in the Session,
+// B for the second, and so on by order of first appearance — the same group-order badge
+// the Live view shows ("superset A", `live-session.ts`). Member badges (A/B/C round order,
+// `supersetLayout`) are a separate axis; this letters the *group*, not its members. An
+// absent tag returns the empty string so a malformed call degrades quietly.
+export function supersetGroupLetter(
+  prescriptions: DraftPrescription[],
+  group: string,
+): string {
+  if (group === "") return "";
+  let ordinal = 0;
+  const seen = new Set<string>();
+  for (const prescription of prescriptions) {
+    const tag = prescription.supersetGroup;
+    if (tag === null || seen.has(tag)) continue;
+    if (tag === group) return String.fromCharCode(65 + ordinal);
+    seen.add(tag);
+    ordinal += 1;
+  }
+  return "";
+}
+
 // Apply a semantic DropIntent to a Prescription list, deriving Superset membership from
 // the container boundary so every result stays contiguous (ADR-0023). This replaces the
 // old "refuse a move that splits a group" no-op: a reorder repositions; a leave-group
