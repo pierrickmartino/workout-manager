@@ -60,3 +60,42 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+  lighthouse:
+    name: Lighthouse (advisory)
+    runs-on: ubuntu-latest
+    # Advisory only (ADR-0028): assertions are `warn`, and the job never blocks a
+    # merge. Lab scores wobble run-to-run on shared runners, so this is a reviewed
+    # report — hard-fail gating is deferred until the numbers are stable and the
+    # caching layer makes repeat-load LCP measurable. It audits the public shell
+    # ("/"); authenticated routes need real Clerk + API and are out of scope here.
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: apps/web
+    # Placeholder Clerk/API env so `next build` and `next start` succeed without
+    # secrets — no real credentials, and only the public "/" route is audited.
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk
+      CLERK_SECRET_KEY: sk_test_lighthouse_ci_placeholder
+      API_URL: http://localhost:8000
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # LHCI's default emulation is a throttled Moto G4 on slow 4G — the low-end
+      # Android target from the performance bar. budgets.json (LightWallet) and the
+      # warn assertions live in lighthouserc.json; results upload to a public link.
+      - name: Run Lighthouse CI
+        run: npx --yes @lhci/cli@^0.13.0 autorun

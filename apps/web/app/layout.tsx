@@ -9,6 +9,7 @@ import {
 } from "@clerk/nextjs";
 
 import { TabBar } from "@/components/pulse/tab-bar";
+import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import { buttonVariants } from "@/components/ui/button";
 
 import "./globals.css";
@@ -32,6 +33,19 @@ export const metadata: Metadata = {
   title: "PULSE // Workout Manager",
   description: "AI-assisted workout protocols and sessions.",
   manifest: "/manifest.json",
+  // iOS ignores the manifest icons entirely and needs a linked apple-touch-icon
+  // (180×180, opaque) or the home-screen icon falls back to a page screenshot.
+  icons: {
+    apple: "/apple-touch-icon.png",
+  },
+  // iOS standalone ("Add to Home Screen") is opted into via apple-mobile-web-app
+  // meta tags, which Next emits from this block. Verify on a real device — this
+  // path is not covered by Lighthouse (ADR-0028).
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Workouts",
+  },
 };
 
 export const viewport: Viewport = {
@@ -94,6 +108,9 @@ export default function RootLayout({
           <SignedIn>
             <TabBar />
           </SignedIn>
+
+          {/* Registers the minimal installability service worker (ADR-0028). */}
+          <ServiceWorkerRegistrar />
         </body>
       </html>
     </ClerkProvider>
