@@ -10,6 +10,7 @@ import {
   toSimulatePayload,
   classifyDrag,
   resolveDrop,
+  dragFeedback,
   rowDropId,
   chipDropId,
   boxDropId,
@@ -1958,4 +1959,75 @@ test("resolveDrop keeps a foreign group contiguous when a leaving member lands i
   assert.deepEqual(names(next), ["B", "C", "D", "A"]);
   assertContiguous(next);
   assert.equal(next[3].supersetGroup, null);
+});
+
+// --- Slice 7 (#219): escalating drag feedback view-model. `dragFeedback` turns a live
+// drag (active id, over id) into the visual-state descriptor the render layer paints —
+// the DragOverlay source, the reorder insertion line, the solid group drop-zones, and
+// the "losing member" container. It delegates the *meaning* of the drag to `classifyDrag`
+// so the feedback shown can never contradict the drop the resolver will apply (#217/#218).
+
+test("dragFeedback puts the insertion gap below the target when reordering downward", () => {
+  const rows = soloPrescriptions("A", "B", "C", "D");
+  // Drag A (0) down onto C (2): A lands after C, so the line sits at the C|D boundary.
+  const feedback = dragFeedback(rowDropId(0), rowDropId(2), rows);
+  assert.equal(feedback?.from, 0);
+  assert.equal(feedback?.insertionGap, 3);
+  assert.equal(feedback?.formGroupChip, null);
+  assert.equal(feedback?.joinGroup, null);
+  assert.equal(feedback?.losingGroup, null);
+});
+
+test("dragFeedback puts the insertion gap at the target when reordering upward", () => {
+  const rows = soloPrescriptions("A", "B", "C", "D");
+  // Drag D (3) up onto B (1): D lands before B, so the line sits at the A|B boundary.
+  const feedback = dragFeedback(rowDropId(3), rowDropId(1), rows);
+  assert.equal(feedback?.from, 3);
+  assert.equal(feedback?.insertionGap, 1);
+});
+
+test("dragFeedback yields null for a no-op drop (self, malformed, or own box)", () => {
+  const solo = soloPrescriptions("A", "B");
+  assert.equal(dragFeedback(rowDropId(1), rowDropId(1), solo), null); // onto self
+  assert.equal(dragFeedback("row-xyz", rowDropId(0), solo), null); // malformed active
+  assert.equal(dragFeedback(rowDropId(0), null, solo), null); // absent over
+
+  const grouped = groupedPrescriptions(["A", "B"], 2);
+  const group = grouped[0].supersetGroup as string;
+  assert.equal(dragFeedback(rowDropId(0), boxDropId(group), grouped), null); // own box
+});
+
+test("dragFeedback lights the target link chip when forming a group, with no insertion line", () => {
+  const rows = soloPrescriptions("A", "B", "C");
+  // Drag A onto B's link chip → form a new Superset from the pair.
+  const feedback = dragFeedback(rowDropId(0), chipDropId(1), rows);
+  assert.equal(feedback?.from, 0);
+  assert.equal(feedback?.formGroupChip, 1);
+  assert.equal(feedback?.insertionGap, null);
+  assert.equal(feedback?.joinGroup, null);
+});
+
+test("dragFeedback lights the target container box when joining a group, with no insertion line", () => {
+  // [A,B] grouped, C solo
+  const rows = groupedPrescriptions(["A", "B", "C"], 2);
+  const group = rows[0].supersetGroup as string;
+  // Drag solo C onto the [A,B] container box → join that Superset.
+  const feedback = dragFeedback(rowDropId(2), boxDropId(group), rows);
+  assert.equal(feedback?.from, 2);
+  assert.equal(feedback?.joinGroup, group);
+  assert.equal(feedback?.insertionGap, null);
+  assert.equal(feedback?.formGroupChip, null);
+});
+
+test("dragFeedback marks the losing container and an insertion line when a member leaves its group", () => {
+  // [A,B] grouped, C solo
+  const rows = groupedPrescriptions(["A", "B", "C"], 2);
+  const group = rows[0].supersetGroup as string;
+  // Drag member B (1) out onto solo C's row (2), outside the box → leave-group.
+  const feedback = dragFeedback(rowDropId(1), rowDropId(2), rows);
+  assert.equal(feedback?.from, 1);
+  assert.equal(feedback?.losingGroup, group);
+  assert.equal(feedback?.insertionGap, 3); // dragging downward, lands after C
+  assert.equal(feedback?.joinGroup, null);
+  assert.equal(feedback?.formGroupChip, null);
 });
