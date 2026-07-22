@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import {
   DndContext,
+  DragOverlay,
   PointerSensor,
   TouchSensor,
   closestCenter,
@@ -18,6 +19,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
@@ -28,9 +30,16 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import { LOAD_KIND_OPTIONS, type LoadKind } from "@/lib/load";
-import { boxDropId, chipDropId, classifyDrag, rowDropId } from "@/lib/protocol-builder";
+import {
+  boxDropId,
+  chipDropId,
+  classifyDrag,
+  dragFeedback,
+  rowDropId,
+} from "@/lib/protocol-builder";
 import type {
   DraftPrescription,
+  DragFeedback,
   DropIntent,
   SupersetSlot,
 } from "@/lib/protocol-builder";
@@ -108,6 +117,12 @@ export function PrescriptionList({
   // targets (link chips, container join hint) surface only while a drag is in flight
   // (#218) — escalating feedback that keeps the resting list uncluttered.
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  // The drop target currently hovered (`row-`/`chip-`/`box-` id), or null. Together with
+  // `draggingId` it feeds the pure `dragFeedback` view-model (#219), which decides the
+  // escalating per-state visuals — insertion line, solid drop-zone, losing-member — off
+  // the same classifier the resolver uses, so the feedback can never promise an outcome
+  // the drop won't deliver.
+  const [overId, setOverId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -141,10 +156,18 @@ export function PrescriptionList({
 
   function onDragStart(event: DragStartEvent) {
     setDraggingId(String(event.active.id));
+    setOverId(null);
+  }
+
+  function onDragOver(event: DragOverEvent) {
+    // Track the live hover so `dragFeedback` can escalate the visuals as the pointer
+    // moves; the drop itself is still classified afresh on release.
+    setOverId(event.over ? String(event.over.id) : null);
   }
 
   function onDragEnd(event: DragEndEvent) {
     setDraggingId(null);
+    setOverId(null);
     const { active, over } = event;
     // The pure classifier decides what the drop means (or nothing, for a malformed id
     // or a drop onto self); the reducer's resolver then applies it (#217/#218). The
@@ -160,7 +183,17 @@ export function PrescriptionList({
 
   function onDragCancel() {
     setDraggingId(null);
+    setOverId(null);
   }
+
+  // The escalating feedback for the live drag (#219): a single classified descriptor the
+  // render layer reads for the insertion line, the solid group drop-zones, and the
+  // losing-member container. Null when nothing valid is under the pointer yet.
+  const feedback =
+    draggingId !== null ? dragFeedback(draggingId, overId, prescriptions) : null;
+  // The position of the lifted row (its id is `row-<pos>`), or -1 when idle — the source
+  // that dims into a placeholder gap and whose clone rides in the DragOverlay.
+  const draggingPosition = draggingId !== null ? rowIds.indexOf(draggingId) : -1;
 
   // Bracket the flat layout into render items: a solo Prescription renders as a bare
   // row, while a contiguous run of one Superset's members renders inside a single
@@ -173,6 +206,7 @@ export function PrescriptionList({
       sensors={sensors}
       collisionDetection={closestCenter}
       onDragStart={onDragStart}
+      onDragOver={onDragOver}
       onDragEnd={onDragEnd}
       onDragCancel={onDragCancel}
     >
@@ -188,6 +222,12 @@ export function PrescriptionList({
                 canMoveUp={item.position > 0}
                 canMoveDown={item.position < lastPosition}
                 draggingId={draggingId}
+                insertionEdge={insertionEdgeFor(
+                  item.position,
+                  feedback?.insertionGap ?? null,
+                  lastPosition,
+                )}
+                chipActive={feedback?.formGroupChip === item.position}
                 onEditField={onEditField}
                 onEditLoad={onEditLoad}
                 onReorder={onReorder}
@@ -203,7 +243,9 @@ export function PrescriptionList({
                 prescriptions={prescriptions}
                 layout={layout}
                 lastPosition={lastPosition}
-                draggingId={draggingId}
+                joinActive={feedback?.joinGroup === item.group}
+                losingMember={feedback?.losingGroup === item.group}
+                insertionGap={feedback?.insertionGap ?? null}
                 onEditField={onEditField}
                 onEditLoad={onEditLoad}
                 onEditRoundRest={onEditRoundRest}
@@ -216,7 +258,80 @@ export function PrescriptionList({
           )}
         </ul>
       </SortableContext>
+
+      {/* The lifted clone rides above the list, unclipped by its overflow, so it stays
+          visible even as the list scrolls during a drag (#219). It is the visual anchor
+          the microcopy layer attaches to next. `aria-hidden` — keyboard/SR users drive
+          reorder/group through the button floor, not the overlay. */}
+      <DragOverlay dropAnimation={null}>
+        {draggingPosition >= 0 ? (
+          <DragRowOverlay
+            prescription={prescriptions[draggingPosition]}
+            slot={layout[draggingPosition]}
+          />
+        ) : null}
+      </DragOverlay>
     </DndContext>
+  );
+}
+
+// Which edge of the row at `position` carries the reorder insertion line, given the
+// feedback's boundary `gap` (an index in `[0, length]`). A gap at `position` draws the
+// line above that row; the final boundary (`length`) draws below the last row. Any other
+// gap belongs to a different row. Null when there is no active reorder.
+function insertionEdgeFor(
+  position: number,
+  gap: number | null,
+  lastPosition: number,
+): "top" | "bottom" | null {
+  if (gap === null) return null;
+  if (gap === position) return "top";
+  if (position === lastPosition && gap === position + 1) return "bottom";
+  return null;
+}
+
+// The explicit reorder insertion line drawn in the gap between rows (#219): a solid
+// accent bar, deliberately distinct from the filled group drop-zones (a bar, not a fill),
+// so the two intents — reorder vs group — never read the same. Centered in the list's
+// 12px row gap. Decorative only.
+function InsertionLine({ edge }: { edge: "top" | "bottom" }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "pointer-events-none absolute inset-x-0 z-10 h-0.5 rounded-full bg-cyan shadow-[0_0_6px_rgba(34,211,238,0.7)]",
+        edge === "top" ? "-top-[7px]" : "-bottom-[7px]",
+      )}
+    />
+  );
+}
+
+// The floating clone shown in the DragOverlay while a row is lifted (#219): a compact,
+// shadowed, slightly-scaled card naming the Exercise being moved. It is a visual echo of
+// the row, not an editable copy — the real inputs stay in the dimmed source placeholder,
+// so there is never a duplicate form control. Decorative; the drag is announced through
+// the source row's controls.
+function DragRowOverlay({
+  prescription,
+  slot,
+}: {
+  prescription: DraftPrescription;
+  slot: SupersetSlot;
+}) {
+  return (
+    <div
+      aria-hidden
+      className="flex scale-[1.02] items-center gap-2 rounded-md border border-cyan/60 bg-surface px-3 py-2.5 shadow-lg shadow-black/30 ring-1 ring-cyan/30"
+    >
+      <GripVertical className="h-5 w-5 shrink-0 text-cyan" aria-hidden />
+      {slot.memberLabel ? <SupersetBadge label={slot.memberLabel} /> : null}
+      <span className="truncate font-display text-[14px] font-semibold text-text-primary">
+        {prescription.exerciseName}
+      </span>
+      <span className="ml-auto shrink-0 font-mono text-[12px] text-text-muted">
+        {prescription.sets} × {prescription.reps}
+      </span>
+    </div>
   );
 }
 
@@ -256,10 +371,14 @@ interface SupersetContainerProps {
   prescriptions: DraftPrescription[];
   layout: SupersetSlot[];
   lastPosition: number;
-  // The row currently being dragged (`row-<pos>`), or null when idle — used to skip the
-  // join highlight while one of this group's *own* members is being reordered inside the
-  // box (dropping a co-member on its own box is a resolver no-op, #218).
-  draggingId: string | null;
+  // Escalating drag feedback for this container (#219), all derived from the one
+  // `dragFeedback` classifier so the visuals match the drop. `joinActive`: a dragged row
+  // is over this box and will join it — light it as a solid drop-zone. `losingMember`: one
+  // of this box's own members is being dragged out — show the distinct "losing" state.
+  // `insertionGap` positions the reorder line for a member moved within the box.
+  joinActive: boolean;
+  losingMember: boolean;
+  insertionGap: number | null;
   onEditField: (
     position: number,
     field: PrescriptionField,
@@ -290,7 +409,9 @@ function SupersetContainer({
   prescriptions,
   layout,
   lastPosition,
-  draggingId,
+  joinActive,
+  losingMember,
+  insertionGap,
   onEditField,
   onEditLoad,
   onEditRoundRest,
@@ -301,19 +422,21 @@ function SupersetContainer({
 }: SupersetContainerProps) {
   const firstPosition = positions[0];
   const firstSlot = layout[firstPosition];
-  const { setNodeRef, isOver } = useDroppable({ id: boxDropId(group) });
-  const draggingOwnMember =
-    draggingId !== null && positions.some((position) => rowDropId(position) === draggingId);
-  const showJoinTarget = isOver && !draggingOwnMember;
+  // The box registers as the group's join drop target; whether it *lights* is decided by
+  // the shared feedback classifier (`joinActive`), not the raw hover — so a co-member
+  // dropped back on its own box (a resolver no-op) never promises a join (#218/#219).
+  const { setNodeRef } = useDroppable({ id: boxDropId(group) });
   return (
     <li>
       <div
         ref={setNodeRef}
         className={cn(
           "flex flex-col gap-3 rounded-lg border p-2.5 transition-colors",
-          showJoinTarget
-            ? "border-cyan bg-cyan/15 ring-1 ring-cyan/50"
-            : "border-cyan/40 bg-cyan/5",
+          joinActive
+            ? "border-cyan bg-cyan/20 ring-2 ring-cyan/60"
+            : losingMember
+              ? "border-dashed border-magenta/60 bg-magenta/5 ring-1 ring-magenta/30"
+              : "border-cyan/40 bg-cyan/5",
         )}
       >
         <div className="flex items-center justify-between px-0.5">
@@ -334,6 +457,10 @@ function SupersetContainer({
               slot={layout[position]}
               canMoveUp={position > 0}
               canMoveDown={position < lastPosition}
+              // A member row never shows a link chip (it groups via the box, #218); an
+              // insertion line does appear for a within-group reorder.
+              chipActive={false}
+              insertionEdge={insertionEdgeFor(position, insertionGap, lastPosition)}
               onEditField={onEditField}
               onEditLoad={onEditLoad}
               onReorder={onReorder}
@@ -377,6 +504,11 @@ interface SortablePrescriptionRowProps {
   // reveals its link chip (form-a-new-Superset drop target) while *another* row is being
   // dragged (#218); member rows inside a container never show it (they join via the box).
   draggingId?: string | null;
+  // Escalating feedback for this row (#219): which edge carries the reorder insertion
+  // line (or null), and whether this solo's link chip is the live form-group target (so
+  // it fills solid). Both come from the shared `dragFeedback` classifier.
+  insertionEdge: "top" | "bottom" | null;
+  chipActive: boolean;
   onEditField: (
     position: number,
     field: PrescriptionField,
@@ -403,6 +535,8 @@ function SortablePrescriptionRow({
   canMoveUp,
   canMoveDown,
   draggingId,
+  insertionEdge,
+  chipActive,
   onEditField,
   onEditLoad,
   onReorder,
@@ -428,8 +562,14 @@ function SortablePrescriptionRow({
     <li
       ref={setNodeRef}
       style={style}
-      className={cn("flex flex-col gap-2", isDragging && "opacity-60")}
+      // While lifted, the source dims into a dashed placeholder gap — the row's clone
+      // rides in the DragOverlay instead (#219). `relative` anchors the insertion line.
+      className={cn(
+        "relative flex flex-col gap-2",
+        isDragging && "rounded-md opacity-40 outline-dashed outline-1 outline-border",
+      )}
     >
+      {insertionEdge ? <InsertionLine edge={insertionEdge} /> : null}
       <PrescriptionEditor
         prescription={prescription}
         slot={slot}
@@ -441,7 +581,7 @@ function SortablePrescriptionRow({
       {slot.group === null &&
       draggingId != null &&
       draggingId !== rowDropId(position) ? (
-        <SupersetLinkChip position={position} />
+        <SupersetLinkChip position={position} active={chipActive} />
       ) : null}
       <div className="flex items-center justify-between gap-1.5">
         <button
@@ -477,21 +617,31 @@ function SortablePrescriptionRow({
 // groups through the `Link2` button floor, so the chip is `aria-hidden` (it adds no new
 // tab stop). Its id comes from `chipDropId` so the render layer and classifier stay in
 // lockstep.
-function SupersetLinkChip({ position }: { position: number }) {
-  const { setNodeRef, isOver } = useDroppable({ id: chipDropId(position) });
+function SupersetLinkChip({
+  position,
+  active,
+}: {
+  position: number;
+  active: boolean;
+}) {
+  // The chip registers as the form-group drop target; whether it fills solid is decided
+  // by the shared `dragFeedback` classifier (`active`), so the escalation matches the
+  // drop. When live it goes border-dashed → solid/filled — a fill, distinct from the
+  // reorder insertion line's bar (#219).
+  const { setNodeRef } = useDroppable({ id: chipDropId(position) });
   return (
     <div
       ref={setNodeRef}
       aria-hidden
       className={cn(
-        "label-mono flex h-11 items-center justify-center gap-1.5 rounded-md border border-dashed text-[10px] transition-colors touch-none",
-        isOver
-          ? "border-cyan bg-cyan/15 text-cyan"
-          : "border-border/70 text-text-muted",
+        "label-mono flex h-11 items-center justify-center gap-1.5 rounded-md border text-[10px] transition-colors touch-none",
+        active
+          ? "border-solid border-cyan bg-cyan/20 text-cyan ring-1 ring-cyan/50"
+          : "border-dashed border-border/70 text-text-muted",
       )}
     >
       <Link2 className="h-4 w-4" aria-hidden />
-      {isOver ? "Release to start a superset" : "Drop here to start a superset"}
+      {active ? "Release to start a superset" : "Drop here to start a superset"}
     </div>
   );
 }

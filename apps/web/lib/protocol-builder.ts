@@ -713,6 +713,64 @@ export function classifyDrag(
   return { kind: "reorder", from, to };
 }
 
+// The escalating drag-feedback view-model (#219, ADR-0023): the visual state the render
+// layer paints while a drag is in flight — which row lifted into the DragOverlay (`from`,
+// also the dimmed source placeholder), where the reorder insertion line sits
+// (`insertionGap`, a boundary index in `[0, length]`), which link chip or container box
+// lights as a solid group drop-zone (`formGroupChip` / `joinGroup`), and which container
+// is losing a member (`losingGroup`). All null-but-`from` fields mean "no escalation yet".
+export interface DragFeedback {
+  from: number;
+  insertionGap: number | null;
+  formGroupChip: number | null;
+  joinGroup: string | null;
+  losingGroup: string | null;
+}
+
+// Derive the live drag-feedback from the raw drag (dragged row id, hovered target id),
+// or `null` when nothing should happen — a malformed/absent id, a drop onto self, or a
+// member over its own container (the same no-ops `classifyDrag` rejects). Feedback is
+// derived from `classifyDrag` so the escalating visuals can never promise an outcome the
+// resolver won't produce (#217/#218). The insertion line sits at the target slot: below
+// the hovered row when dragging downward, at it when dragging upward — matching where
+// `movePrescription` lands the row.
+export function dragFeedback(
+  activeId: string,
+  overId: string | null,
+  prescriptions: DraftPrescription[],
+): DragFeedback | null {
+  const intent = classifyDrag(activeId, overId, prescriptions);
+  if (intent === null) return null;
+  const base: DragFeedback = {
+    from: intent.from,
+    insertionGap: null,
+    formGroupChip: null,
+    joinGroup: null,
+    losingGroup: null,
+  };
+  switch (intent.kind) {
+    case "reorder":
+      return { ...base, insertionGap: insertionGapFor(intent.from, intent.to) };
+    case "form-group":
+      return { ...base, formGroupChip: intent.to };
+    case "join-group":
+      return { ...base, joinGroup: intent.group };
+    case "leave-group":
+      return {
+        ...base,
+        losingGroup: prescriptions[intent.from].supersetGroup,
+        insertionGap: insertionGapFor(intent.from, intent.to),
+      };
+  }
+}
+
+// The boundary index where the insertion line is drawn for a move from `from` to `to`:
+// dragging downward the row lands just after the target (`to + 1`), upward it lands at
+// the target (`to`) — the same slot `movePrescription` splices it into.
+function insertionGapFor(from: number, to: number): number {
+  return from < to ? to + 1 : to;
+}
+
 // Apply a semantic DropIntent to a Prescription list, deriving Superset membership from
 // the container boundary so every result stays contiguous (ADR-0023). This replaces the
 // old "refuse a move that splits a group" no-op: a reorder repositions; a leave-group
