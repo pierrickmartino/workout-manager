@@ -98,6 +98,31 @@ def degrade_session_to_flat(
     )
 
 
+def flatten_session_supersets(session: GeneratedSession) -> GeneratedSession:
+    """Return ``session`` with *every* Superset overlay cleared — unconditionally.
+
+    Distinct from :func:`degrade_session_to_flat`, which keeps valid groups and only
+    ungroups the offending ones: this forces the whole Session flat. Regeneration
+    uses it because Regeneration produces flat replacement Prescriptions in v1 — it
+    is not Superset-aware (CONTEXT.md §Regeneration, ADR-0023). That path neither
+    validates grouping nor tells the model the kept prescriptions' group tags, and
+    the regenerate splice appends replacements without re-namespacing, so any group
+    the model volunteers could persist invalid or collide with a kept group; forcing
+    flat is the honest, safe remedy. Pure and immutable — a copy per member.
+    """
+
+    return session.model_copy(
+        update={
+            "prescriptions": [
+                prescription.model_copy(
+                    update={"superset_group": None, "round_rest_seconds": None}
+                )
+                for prescription in session.prescriptions
+            ]
+        }
+    )
+
+
 def degrade_protocol_to_flat(
     protocol: GeneratedProtocol, *, has_sensitive_constraint: bool = False
 ) -> GeneratedProtocol:
@@ -122,4 +147,5 @@ __all__ = [
     "degrade_prescriptions_to_flat",
     "degrade_session_to_flat",
     "degrade_protocol_to_flat",
+    "flatten_session_supersets",
 ]

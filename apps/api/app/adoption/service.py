@@ -10,7 +10,7 @@ future cache entry) stays pristine."""
 
 from __future__ import annotations
 
-from app.domain.exercise import Provenance
+from app.generation.prescriptions import resolve_prescriptions
 from app.generation.protocol_generator import ProtocolGenerationRequest
 from app.generation.schema import GeneratedProtocol
 from app.repositories.exercise_repository import ExerciseRepository
@@ -20,7 +20,6 @@ from app.repositories.protocol_repository import (
     ProtocolSessionDraft,
     ProtocolView,
 )
-from app.repositories.session_repository import PrescriptionDraft
 
 
 def adopt(
@@ -38,37 +37,17 @@ def adopt(
     but never mutated; the returned Protocol shares no mutable state with it.
     """
 
-    session_drafts: list[ProtocolSessionDraft] = []
-    for session in generated.sessions:
-        prescriptions: list[PrescriptionDraft] = []
-        for item in session.prescriptions:
-            exercise = exercises.find_or_create(
-                item.exercise_name,
-                provenance=Provenance.AI_GENERATED,
-                description=item.exercise_description,
-                targeted_muscles=list(item.targeted_muscles),
-                required_equipment=list(item.required_equipment),
-            )
-            prescriptions.append(
-                PrescriptionDraft(
-                    exercise_id=exercise.id,
-                    sets=item.sets,
-                    reps=item.reps,
-                    rest_seconds=item.rest_seconds,
-                    tempo=item.tempo,
-                    recommended_load=item.typed_load,
-                    superset_group=item.superset_group,
-                    round_rest_seconds=item.round_rest_seconds,
-                )
-            )
-        session_drafts.append(
-            ProtocolSessionDraft(
-                week=session.week,
-                day=session.day,
-                title=session.title,
-                prescriptions=prescriptions,
-            )
+    session_drafts = [
+        ProtocolSessionDraft(
+            week=session.week,
+            day=session.day,
+            title=session.title,
+            prescriptions=resolve_prescriptions(
+                session.prescriptions, exercises=exercises
+            ),
         )
+        for session in generated.sessions
+    ]
 
     draft = ProtocolDraft(
         training_type=params.training_type,

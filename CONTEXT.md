@@ -177,5 +177,5 @@ The user's perceived effort/difficulty for a workout they actually did, recorded
 _Avoid_: Feedback (bare), RPE (loosely)
 
 **Regeneration**:
-Replacing the non-kept Exercise Prescriptions of a single Session with fresh AI output, conditioned on the kept Prescriptions and the negative Generation Feedback reason. Operates only on a Session (never a whole Protocol), on the user's own copy, and is limited to once per Session in v1.
+Replacing the non-kept Exercise Prescriptions of a single Session with fresh AI output, conditioned on the kept Prescriptions and the negative Generation Feedback reason. Operates only on a Session (never a whole Protocol), on the user's own copy, and is limited to once per Session in v1. Produces **flat** replacement Prescriptions — Regeneration is **not Superset-aware** in v1: the prompt never asks for grouping, the path does not validate it, and the regenerate splice appends replacements without re-namespacing group tags, so any Superset the model volunteers is stripped rather than persisted invalid or colliding with a kept group (ADR-0023).
 _Avoid_: Regenerate protocol, retry, redo

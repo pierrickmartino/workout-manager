@@ -106,6 +106,33 @@ def test_regeneration_prompt_handles_keeping_nothing():
     assert "none" in prompt.lower()
 
 
+def test_regeneration_strips_any_superset_the_model_volunteers():
+    # Arrange — the model returns a two-member Superset, though the prompt never asked
+    # for grouping. Regeneration is flat in v1 (ADR-0023): it must not survive.
+    grouped = """
+    {
+      "prescriptions": [
+        {"exercise_name": "Bench Press", "sets": 3, "reps": "10",
+         "superset_group": "A", "round_rest_seconds": 120},
+        {"exercise_name": "Barbell Row", "sets": 3, "reps": "10",
+         "superset_group": "A", "round_rest_seconds": 120}
+      ]
+    }
+    """
+    regenerator = LlmSessionRegenerator(FakeStructuredLLM(text=grouped))
+
+    # Act
+    generated = regenerator.regenerate(REQUEST)
+
+    # Assert — the Prescriptions survive, but every Superset overlay is cleared
+    assert [p.exercise_name for p in generated.prescriptions] == [
+        "Bench Press",
+        "Barbell Row",
+    ]
+    assert all(p.superset_group is None for p in generated.prescriptions)
+    assert all(p.round_rest_seconds is None for p in generated.prescriptions)
+
+
 def test_regenerator_wraps_malformed_output_as_generation_error():
     # Arrange — the transport returned something that isn't valid JSON
     regenerator = LlmSessionRegenerator(FakeStructuredLLM(text="not json"))

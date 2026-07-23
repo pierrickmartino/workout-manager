@@ -67,6 +67,14 @@ whether a human is watching:
   Superset (keeps the Prescriptions, drops the grouping) and accepts the generation, so a
   ragged group or a stray group for a Sensitive-Constraint user never costs the user their
   whole session.
+- **Regeneration (passive):** **force-flat** — Regeneration is deliberately *not*
+  Superset-aware in v1, so its output is flattened unconditionally (not just where invalid).
+  The regenerate prompt never asks for grouping, this path does not run the validator, and the
+  splice that appends replacements after the kept Prescriptions does not re-namespace group
+  tags — so a group the model volunteers could persist invalid, or collide with a *kept*
+  group's tag and splice a kept and a replacement Prescription into one incoherent,
+  non-contiguous Superset. Stripping all grouping at the regenerator is the honest remedy
+  until Regeneration is made group-coherent (prompt + re-namespacing + validation together).
 
 **The Builder groups by drag, over a keyboard-accessible floor.** Dragging one row onto
 another forms/joins a group; dragging reorders (so drag-to-reorder lands here too). Because
@@ -115,6 +123,12 @@ above — the container is an authoring affordance, not a change to the Live mod
   attribution. This "no" is asserted so it is not re-litigated.
 - Equal-counts and non-nesting are user-facing constraints a future reader may question;
   relaxing either later means revisiting the Live interleaving and the validator together.
+- **Regeneration is flat in v1, and that is a decision, not an oversight.** A future reader
+  who sees the three catalog-resolution paths (Session generation, Adoption, Regeneration)
+  share one `resolve_prescriptions` seam — which carries the Superset overlay through — must
+  not "fix" Regeneration by letting that grouping survive: making Regeneration group-coherent
+  requires the prompt, splice re-namespacing, and validation to change together. Until then the
+  regenerator force-flattens its own output, mirroring how the generators degrade theirs.
 - **The round-rest wins over the global default-rest preference.** "The Superset owns a
   single round-rest" is honest only if that value is not silently overridden: a user's
   global default-rest (issue #121) applies to **solo** Prescriptions, but a Superset's

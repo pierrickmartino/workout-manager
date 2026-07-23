@@ -10,11 +10,10 @@ propagates before anything is persisted."""
 
 from __future__ import annotations
 
-from app.domain.exercise import Provenance
 from app.generation.generator import GenerationRequest, SessionGenerator
+from app.generation.prescriptions import resolve_prescriptions
 from app.repositories.exercise_repository import ExerciseRepository
 from app.repositories.session_repository import (
-    PrescriptionDraft,
     SessionDraft,
     SessionRepository,
     SessionView,
@@ -37,32 +36,12 @@ def generate_session(
 
     generated = generator.generate(request)
 
-    prescriptions: list[PrescriptionDraft] = []
-    for item in generated.prescriptions:
-        exercise = exercises.find_or_create(
-            item.exercise_name,
-            provenance=Provenance.AI_GENERATED,
-            description=item.exercise_description,
-            targeted_muscles=item.targeted_muscles,
-            required_equipment=item.required_equipment,
-        )
-        prescriptions.append(
-            PrescriptionDraft(
-                exercise_id=exercise.id,
-                sets=item.sets,
-                reps=item.reps,
-                rest_seconds=item.rest_seconds,
-                tempo=item.tempo,
-                recommended_load=item.typed_load,
-                superset_group=item.superset_group,
-                round_rest_seconds=item.round_rest_seconds,
-            )
-        )
-
     draft = SessionDraft(
         training_type=request.training_type,
         duration_minutes=request.duration_minutes,
-        prescriptions=prescriptions,
+        prescriptions=resolve_prescriptions(
+            generated.prescriptions, exercises=exercises
+        ),
     )
     return sessions.create(clerk_user_id, draft)
 
