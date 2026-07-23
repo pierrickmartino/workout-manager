@@ -14,8 +14,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from app.domain.exercise import Provenance
 from app.domain.feedback import Verdict
+from app.generation.prescriptions import resolve_prescriptions
 from app.generation.regenerator import (
     KeptPrescription,
     RegenerationRequest,
@@ -26,7 +26,6 @@ from app.repositories.generation_feedback_repository import (
     GenerationFeedbackRepository,
 )
 from app.repositories.session_repository import (
-    PrescriptionDraft,
     SessionRepository,
     SessionView,
 )
@@ -99,31 +98,13 @@ def regenerate_session(
     )
     generated = regenerator.regenerate(request)
 
-    replacements: list[PrescriptionDraft] = []
-    for item in generated.prescriptions:
-        exercise = exercises.find_or_create(
-            item.exercise_name,
-            provenance=Provenance.AI_GENERATED,
-            description=item.exercise_description,
-            targeted_muscles=item.targeted_muscles,
-            required_equipment=item.required_equipment,
-        )
-        replacements.append(
-            PrescriptionDraft(
-                exercise_id=exercise.id,
-                sets=item.sets,
-                reps=item.reps,
-                rest_seconds=item.rest_seconds,
-                tempo=item.tempo,
-                recommended_load=item.typed_load,
-            )
-        )
-
     result = sessions.regenerate(
         session_id,
         clerk_user_id,
         keep_positions=keep_positions,
-        replacements=replacements,
+        replacements=resolve_prescriptions(
+            generated.prescriptions, exercises=exercises
+        ),
     )
     if result is None:  # ownership was checked above; defensive only
         raise SessionNotFound(session_id)

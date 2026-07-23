@@ -18,6 +18,7 @@ from typing import Protocol
 from app.generation.llm.port import StructuredLLM
 from app.generation.schema import GeneratedSession
 from app.generation.structured import generate_structured
+from app.generation.superset_degrade import flatten_session_supersets
 
 MAX_TOKENS = 8000
 
@@ -100,13 +101,15 @@ class LlmSessionRegenerator:
 
     The transport constrains output to ``GeneratedSession``; this regenerator
     validates the raw text at the shared boundary, so a malformed regeneration
-    raises ``GenerationError`` regardless of provider (ADR-0006)."""
+    raises ``GenerationError`` regardless of provider (ADR-0006). The validated
+    output is then forced flat: Regeneration is not Superset-aware in v1 (see
+    ``regenerate``)."""
 
     def __init__(self, llm: StructuredLLM) -> None:
         self._llm = llm
 
     def regenerate(self, request: RegenerationRequest) -> GeneratedSession:
-        return generate_structured(
+        parsed = generate_structured(
             llm=self._llm,
             system=_system_prompt(),
             user=_user_prompt(request),
@@ -114,6 +117,14 @@ class LlmSessionRegenerator:
             max_tokens=MAX_TOKENS,
             subject="generation",
         )
+        # Regeneration produces flat replacement Prescriptions in v1 — it is not
+        # Superset-aware (CONTEXT.md §Regeneration, ADR-0023). The prompt never asks
+        # for grouping, this path does not validate it, and the regenerate splice
+        # appends replacements without re-namespacing group tags, so any Superset the
+        # model volunteers is stripped here rather than persisted invalid or colliding
+        # with a kept group. This mirrors how the Session/Protocol generators degrade
+        # their output before it is adopted.
+        return flatten_session_supersets(parsed)
 
 
 __all__ = [
