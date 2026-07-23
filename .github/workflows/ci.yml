@@ -75,9 +75,21 @@ jobs:
         working-directory: apps/web
     # Placeholder Clerk/API env so `next build` and `next start` succeed without
     # secrets — no real credentials, and only the public "/" route is audited.
+    #
+    # These MUST be *production* (`pk_live_`/`sk_live_`) placeholders, not dev
+    # (`pk_test_`) ones. A development Clerk instance makes clerkMiddleware run a
+    # "dev-browser handshake": the first real browser navigation (which is exactly
+    # what Lighthouse's headless Chrome does) is 307-redirected to the instance's
+    # Frontend API at `<domain>/v1/client/handshake`. With a placeholder instance
+    # that FAPI doesn't exist, so the redirect dead-ends and Lighthouse reports
+    # ERRORED_DOCUMENT_REQUEST (status 400) instead of auditing the page. Production
+    # instances use first-party cookies and render signed-out users directly with
+    # no handshake, so "/" returns 200 and the audit runs. The key just encodes a
+    # placeholder FAPI domain (base64 of "clerk.lighthouse.example.com$"); no such
+    # instance is ever contacted for the public shell.
     env:
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk
-      CLERK_SECRET_KEY: sk_test_lighthouse_ci_placeholder
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmsubGlnaHRob3VzZS5leGFtcGxlLmNvbSQ
+      CLERK_SECRET_KEY: sk_live_lighthouse_ci_placeholder
       API_URL: http://localhost:8000
     steps:
       - uses: actions/checkout@v4
