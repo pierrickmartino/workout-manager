@@ -14,9 +14,10 @@ Pure and dependency-free over the domain (``load`` + ``one_rep_max``): no ORM, n
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date
+from typing import Protocol
 
 from app.domain.load import LoadKind, ParsedLoad, resolve_bodyweight_kg
 from app.domain.one_rep_max import estimate_1rm
@@ -40,6 +41,62 @@ class LoggedSetRecord:
     # none was captured. A bodyweight set scores only against this mass; an absolute
     # set ignores it entirely.
     body_weight_kg: float | None = None
+
+
+class LoggedSet(Protocol):
+    """The Logged Set fields the flattening reads (satisfied by ``LoggedSetView``).
+
+    ``body_weight_kg`` is named here deliberately. It is the field a hand-rolled second
+    flattening silently omitted, which is what let the First Record milestone disagree
+    with every other Personal-Record surface (ADR-0029) — so the shared shape declares it
+    and a consumer composing from this Protocol cannot quietly drop it again.
+    """
+
+    exercise_id: int
+    exercise_name: str
+    reps: int
+    load: dict | None
+    body_weight_kg: float | None
+
+
+class LoggedSession(Protocol):
+    """The Logged Session fields the flattening reads (satisfied by ``LoggedSessionView``).
+
+    Structural, not nominal: the read model passes repository views straight in, and a
+    test passes plain stubs, without either importing the other.
+    """
+
+    performed_on: date
+    logged_sets: Sequence[LoggedSet]
+
+
+def logged_set_records(history: Iterable[LoggedSession]) -> list[LoggedSetRecord]:
+    """Flatten Logged Sessions into dated Logged Set records for PR detection.
+
+    Each Logged Set is paired with its session's ``performed_on`` — the date lives on the
+    session, not the set — so the detector, which knows nothing about sessions, can order
+    the stream and stamp each PR.
+
+    This is **the one flattening**, and it lives in the domain rather than the read model
+    so a pure consumer (the Achievement catalog) can reach it without inverting the
+    layering. Every Personal-Record surface reads through it, so "a PR" means the same
+    thing on Analytics, Home, Exercise Detail, and the Achievement wall. A hand-rolled
+    ``LoggedSetRecord`` elsewhere in the production tree trips the terminology guard
+    (ADR-0029).
+    """
+
+    return [
+        LoggedSetRecord(
+            exercise_id=logged_set.exercise_id,
+            exercise_name=logged_set.exercise_name,
+            reps=logged_set.reps,
+            load=logged_set.load,
+            performed_on=session.performed_on,
+            body_weight_kg=logged_set.body_weight_kg,
+        )
+        for session in history
+        for logged_set in session.logged_sets
+    ]
 
 
 @dataclass(frozen=True)
@@ -142,8 +199,11 @@ def detect_personal_records(
 
 
 __all__ = [
+    "LoggedSet",
+    "LoggedSession",
     "LoggedSetRecord",
     "PersonalRecord",
     "detect_personal_records",
     "estimated_1rm_for_set",
+    "logged_set_records",
 ]

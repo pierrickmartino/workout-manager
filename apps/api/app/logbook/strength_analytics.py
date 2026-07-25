@@ -3,7 +3,7 @@
 ``strength_analytics_overview`` reads the user's Logged Sessions once and projects them
 onto a frozen ``StrengthAnalyticsOverview``: the all-time, all-Exercise **Personal Record
 timeline**, reverse-chronological and paginated, plus a ``has_qualifying_strength`` gate
-flag. The timeline reuses ``logbook/records.set_records`` +
+flag. The timeline reuses ``domain/personal_records.logged_set_records`` +
 ``domain/personal_records.detect_personal_records`` verbatim — the same PRs every other
 surface reads — reversed to newest-first; there is no new strength math here. The gate is
 true iff the user holds at least one Personal Record (later slices also let qualifying
@@ -25,8 +25,11 @@ from app.domain.muscle_groups import (
     WeeklyComposition,
     weekly_distribution,
 )
-from app.domain.personal_records import PersonalRecord, detect_personal_records
-from app.logbook.records import set_records
+from app.domain.personal_records import (
+    PersonalRecord,
+    detect_personal_records,
+    logged_set_records,
+)
 from app.logbook.top_sets import ExerciseTrajectory, rank_qualifying_exercises
 from app.repositories.logged_session_repository import LoggedSessionRepository
 
@@ -87,7 +90,7 @@ def strength_analytics_overview(
     """
 
     history = logged.list_for_user(clerk_user_id)
-    records = detect_personal_records(set_records(history))
+    records = detect_personal_records(logged_set_records(history))
     timeline = list(reversed(records))
 
     end = len(timeline) if limit is None else offset + limit
