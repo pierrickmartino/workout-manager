@@ -16,7 +16,12 @@ from app.generation.schema import (
     GeneratedProtocol,
     GeneratedProtocolSession,
 )
-from app.protocols.progress import current_protocol, protocol_progress
+from app.protocols.progress import (
+    current_protocol,
+    progressed_protocol,
+    progressed_protocol_from,
+    protocol_progress,
+)
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.logged_session_repository import (
     InMemoryLoggedSessionRepository,
@@ -242,7 +247,11 @@ def test_current_protocol_is_the_only_in_progress_protocol():
           exercises=exercises, protocols=protocols)
 
     # Act
-    current = current_protocol("user_one", protocols=protocols, logged=logged)
+    current = current_protocol(
+        "user_one",
+        protocols=protocols,
+        logged_sessions=logged.list_for_user("user_one"),
+    )
 
     # Assert — it is the Current Protocol, with its next Session surfaced
     assert current is not None
@@ -258,7 +267,11 @@ def test_current_protocol_picks_the_most_recently_adopted_in_progress():
                   exercises=exercises, protocols=protocols)
 
     # Act
-    current = current_protocol("user_recent", protocols=protocols, logged=logged)
+    current = current_protocol(
+        "user_recent",
+        protocols=protocols,
+        logged_sessions=logged.list_for_user("user_recent"),
+    )
 
     # Assert — Home focuses on the most recently adopted Protocol
     assert current.protocol.id == newer.id
@@ -275,7 +288,11 @@ def test_current_protocol_skips_a_fully_performed_protocol_for_an_older_one():
         _perform(logged, "user_skip", session.session_id)
 
     # Act
-    current = current_protocol("user_skip", protocols=protocols, logged=logged)
+    current = current_protocol(
+        "user_skip",
+        protocols=protocols,
+        logged_sessions=logged.list_for_user("user_skip"),
+    )
 
     # Assert — the finished Protocol is passed over for the older, in-progress one
     assert current.protocol.id == older.id
@@ -287,7 +304,14 @@ def test_current_protocol_is_none_when_the_user_owns_no_protocol():
     exercises, protocols, logged = _build()
 
     # Assert
-    assert current_protocol("user_empty", protocols=protocols, logged=logged) is None
+    assert (
+        current_protocol(
+            "user_empty",
+            protocols=protocols,
+            logged_sessions=logged.list_for_user("user_empty"),
+        )
+        is None
+    )
 
 
 def test_current_protocol_is_none_when_every_protocol_is_complete():
@@ -299,7 +323,14 @@ def test_current_protocol_is_none_when_every_protocol_is_complete():
         _perform(logged, "user_done_all", session.session_id)
 
     # Assert
-    assert current_protocol("user_done_all", protocols=protocols, logged=logged) is None
+    assert (
+        current_protocol(
+            "user_done_all",
+            protocols=protocols,
+            logged_sessions=logged.list_for_user("user_done_all"),
+        )
+        is None
+    )
 
 
 def test_current_protocol_never_selects_another_users_protocol():
@@ -309,4 +340,35 @@ def test_current_protocol_never_selects_another_users_protocol():
           exercises=exercises, protocols=protocols)
 
     # Assert — a different user has no Current Protocol
-    assert current_protocol("user_intruder", protocols=protocols, logged=logged) is None
+    assert (
+        current_protocol(
+            "user_intruder",
+            protocols=protocols,
+            logged_sessions=logged.list_for_user("user_intruder"),
+        )
+        is None
+    )
+
+
+def test_progressed_protocol_from_projects_over_a_given_history_with_no_io():
+    # Arrange — a resolved Protocol and an already-loaded history, built via repos but
+    # then handed to the pure projection tier directly. Week 1 is performed.
+    exercises, protocols, logged = _build()
+    view = adopt(_three_week_protocol(), "user_pure", PARAMS,
+                 exercises=exercises, protocols=protocols)
+    _perform(logged, "user_pure", view.sessions[0].session_id)
+
+    protocol = protocols.get(view.id, "user_pure")
+    history = logged.list_for_user("user_pure")
+
+    # Act — the pure core takes data, not repositories, and does no I/O of its own
+    pure = progressed_protocol_from(protocol, history)
+
+    # Assert — it is the whole logic; the service wrapper only adds the one read, so the
+    # two agree exactly. This is the seam current_protocol reuses across many Protocols.
+    assert pure.completed_count == 1
+    assert pure.next_session is not None
+    assert pure.next_session.session_id == view.sessions[1].session_id
+    assert pure == progressed_protocol(
+        "user_pure", view.id, protocols=protocols, logged=logged
+    )

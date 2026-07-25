@@ -68,7 +68,12 @@ def read_home(
     # deleted. The client hides the line when it is null rather than showing "0 kg".
     latest_pr = latest_personal_record(history)
 
-    current = current_protocol(clerk_user_id, protocols=protocols, logged=logged)
+    # Select the Current Protocol over the history already read above — so the whole
+    # request makes one history read regardless of how many Protocols the user owns
+    # (previously a re-read per Protocol; ADR-0018's fan-out convention).
+    current = current_protocol(
+        clerk_user_id, protocols=protocols, logged_sessions=history
+    )
     return success_envelope(
         {
             "readiness": readiness.value,

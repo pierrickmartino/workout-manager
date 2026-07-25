@@ -138,6 +138,58 @@ def build_harness(profiles=None) -> _Harness:
     return _Harness(TestClient(app), ctx, profiles, exercises, protocols, logged)
 
 
+class _CountingLoggedRepository:
+    """A ``LoggedSessionRepository`` that counts ``list_for_user`` reads.
+
+    Wraps a real repository and delegates every call, tallying only the history reads —
+    the seam the K+1 fix concerns. Injected in place of the plain in-memory repo so a
+    test can assert how many times a single request reads the Logged history.
+    """
+
+    def __init__(self, inner):
+        self._inner = inner
+        self.list_calls = 0
+
+    def create(self, *args, **kwargs):
+        return self._inner.create(*args, **kwargs)
+
+    def get(self, *args, **kwargs):
+        return self._inner.get(*args, **kwargs)
+
+    def list_for_user(self, clerk_user_id):
+        self.list_calls += 1
+        return self._inner.list_for_user(clerk_user_id)
+
+
+def test_home_reads_the_logged_history_once_regardless_of_protocol_count():
+    # Arrange — a user who owns one in-progress Protocol (adopted first, so it sorts
+    # last) behind three fully-performed ones. Selecting the Current Protocol must scan
+    # past all three finished Protocols to reach it. Before the fan-out fix, each scanned
+    # Protocol re-read the whole Logged history (a K+1); now the request reads it once.
+    h = build_harness()
+    counting = _CountingLoggedRepository(h.logged)
+    h.client.app.dependency_overrides[get_logged_session_repository] = lambda: counting
+
+    in_progress = h.adopt_protocol("user_many")  # oldest → scanned last, has next
+    for _ in range(3):
+        finished = h.adopt_protocol("user_many")  # newer → scanned first, skipped
+        for session in finished.sessions:
+            h.perform("user_many", session.session_id)
+
+    counting.list_calls = 0  # count only the request, not the setup writes/reads
+
+    # Act
+    response = h.fetch_home("user_many")
+
+    # Assert — the Current Protocol is the in-progress one, found after scanning past the
+    # three finished Protocols, and the whole request read the history exactly once.
+    assert response.status_code == 200
+    current = response.json()["data"]["current_protocol"]
+    assert current is not None
+    assert current["id"] == in_progress.id
+    assert counting.list_calls == 1
+
+
 def test_home_requires_authentication():
     h = build_harness()
     response = h.client.get("/api/home")
