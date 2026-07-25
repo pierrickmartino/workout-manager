@@ -42,6 +42,10 @@ _Avoid_: Circuit, giant set, block, group (bare, collides with Muscle Group), mo
 The weight prescribed or performed for a set, expressed as one of several *kinds* rather than a bare number: an **absolute** weight (e.g. 70 kg), **bodyweight** (optionally plus added load), a **percent of 1RM**, a **qualitative** effort ("moderate"), or a **range**. Only absolute loads — and bodyweight / percent loads once resolved against the user's mass or estimated 1RM — carry a numeric weight; qualitative loads never do. The free-text-ness is essential to the domain: the AI legitimately prescribes bodyweight and %-based work, so a Load is a *typed value*, never reducible to a single kg figure.
 _Avoid_: Weight (bare), tonnage (for a single set), kg (as the only form)
 
+**Quantity**:
+How much of a movement a set prescribes or records, expressed as one of several *kinds* rather than a bare repetition count: a number of **repetitions**, a **distance** covered, or a **duration** worked or held. The counterpart axis to Load — Load is how hard, Quantity is how much — and typed for the same reason: a 10 km run and a set of eight squats are both real sets, and reducing either to a repetition count destroys its meaning. Derived figures such as pace are never stored on a Quantity; they are read-time projections of it, as Estimated 1RM is of a Load.
+_Avoid_: Reps (bare — that is one kind), work, volume (that is kg tonnage), amount, measure
+
 **Provenance**:
 Whether a catalog Exercise is `ai_generated` (created by the AI, unvalidated) or `curated` (reviewed and trusted). Carried on every Exercise so unvalidated content can be flagged, audited, and later merged or corrected — important given the domain's caution around injury, rehab, and postpartum cases.
 _Avoid_: Source, origin, verified flag
@@ -67,7 +71,7 @@ A record of the user performing a Session on a specific date. One Session can ha
 _Avoid_: Completed session, history entry
 
 **Logged Set**:
-A record of one actual set the user performed — the real repetitions, load, and perceived difficulty — within a Logged Session.
+A record of one actual set the user performed — the real Quantity, Load, and perceived difficulty — within a Logged Session. A "set" is not exclusively a strength concept: one 800 m interval of a running session is a Logged Set exactly as one set of eight squats is.
 _Avoid_: Result, performance entry
 
 **Completion Outcome**:
