@@ -10,8 +10,10 @@ logs behind an Achievement re-locks it — and it backfills every existing user 
 The catalog is **data, not AI-generated**, and deliberately **type-neutral**: session
 counts, streak-length milestones, and covering all six Muscle Groups all unlock from a
 yoga / mobility history, so such a user is never faced with an all-locked strength wall.
-Only "first Personal Record" is strength-shaped (it needs an absolute-load lift), and it
-sits alongside the neutral majority rather than gating the wall.
+Only "first Personal Record" is strength-shaped, and it sits alongside the neutral majority
+rather than gating the wall. It reads the Personal Record definition itself rather than a
+private variant, so a calisthenics history unlocks it on the same basis Home does
+(ADR-0026/0029).
 
 Each milestone carries an integer ``current`` progress toward an integer ``target``, so a
 locked Achievement can show live progress ("Log 25 Sessions — 18/25"). Every catalog
@@ -30,7 +32,11 @@ from datetime import date
 from typing import Protocol
 
 from app.domain.muscle_groups import MuscleGroup, covered_groups
-from app.domain.personal_records import LoggedSetRecord, detect_personal_records
+from app.domain.personal_records import (
+    LoggedSet,
+    detect_personal_records,
+    logged_set_records,
+)
 from app.domain.streak import longest_week_run
 
 # The six real Muscle Groups (Unclassified excluded) — the target for full coverage.
@@ -38,13 +44,15 @@ _REAL_MUSCLE_GROUPS = tuple(g for g in MuscleGroup if g is not MuscleGroup.UNCLA
 _ALL_MUSCLE_GROUPS = len(_REAL_MUSCLE_GROUPS)
 
 
-class _LoggedSet(Protocol):
-    """The Logged Set fields the catalog metrics read (satisfied by ``LoggedSetView``)."""
+class _LoggedSet(LoggedSet, Protocol):
+    """The Logged Set fields the catalog metrics read (satisfied by ``LoggedSetView``).
 
-    exercise_id: int
-    exercise_name: str
-    reps: int
-    load: dict | None
+    Composes the shared PR flattening shape (``personal_records.LoggedSet``) and adds only
+    what the catalog needs beyond it — the targeted muscles the coverage metric rolls up.
+    Inheriting rather than restating the PR fields is what stops this Protocol drifting
+    from the flattening again (ADR-0029).
+    """
+
     targeted_muscles: Sequence[str]
 
 
@@ -102,24 +110,15 @@ def _muscle_groups_covered(history: Sequence[_LoggedSession]) -> int:
 def _has_personal_record(history: Sequence[_LoggedSession]) -> int:
     """``1`` once any Exercise has an Estimated-1RM Personal Record, else ``0``.
 
-    The one strength-shaped milestone: only absolute-load lifts in the trustworthy rep
-    window can set a PR (``domain/personal_records.py``), so a purely bodyweight or
-    qualitative history stays at ``0`` — by design, it is the neutral milestones that
-    carry a non-strength user.
+    Qualifies a set through the **shared flattening**, so this milestone reads the same
+    definition of a Personal Record every other surface does (CONTEXT 'Achievement',
+    ADR-0029): an absolute-load lift, or a **bodyweight** set carrying its Performed Body
+    Weight (ADR-0026), in the trustworthy rep window. A percent-of-1RM or qualitative
+    history still stays at ``0`` — that is the Load kinds talking, not a private rule —
+    and the neutral majority of the catalog carries a non-strength user regardless.
     """
 
-    records = detect_personal_records(
-        LoggedSetRecord(
-            exercise_id=logged_set.exercise_id,
-            exercise_name=logged_set.exercise_name,
-            reps=logged_set.reps,
-            load=logged_set.load,
-            performed_on=session.performed_on,
-        )
-        for session in history
-        for logged_set in session.logged_sets
-    )
-    return 1 if records else 0
+    return 1 if detect_personal_records(logged_set_records(history)) else 0
 
 
 @dataclass(frozen=True)

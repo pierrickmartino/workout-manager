@@ -192,6 +192,53 @@ def test_ignores_recovery_as_english_prose(tmp_path: Path) -> None:
     assert findings == []
 
 
+def test_flags_a_hand_rolled_logged_set_record(tmp_path: Path) -> None:
+    # Arrange — a read model re-inlining the flattening instead of routing through the
+    # one domain seam; this is the shape that drops the Performed Body Weight (ADR-0029)
+    _write(
+        tmp_path,
+        "apps/api/app/logbook/some_read_model.py",
+        "records = [LoggedSetRecord(exercise_id=1, reps=5)]\n",
+    )
+
+    # Act
+    findings = find_violations(repo_root=tmp_path)
+
+    # Assert
+    assert len(findings) == 1
+    assert findings[0].term == "hand-rolled LoggedSetRecord"
+    assert findings[0].match == "LoggedSetRecord("
+
+
+def test_allows_the_flattening_module_to_build_records(tmp_path: Path) -> None:
+    # Arrange — the one module the term is exempted in, plus a banned term it is NOT
+    # exempted from, so the per-term allowance cannot silence the whole registry there
+    _write(
+        tmp_path,
+        "apps/api/app/domain/personal_records.py",
+        "record = LoggedSetRecord(exercise_id=1, reps=5)\nprogram_id = 7\n",
+    )
+
+    # Act
+    findings = find_violations(repo_root=tmp_path)
+
+    # Assert — the construction is allowed here; every other tripwire stays live
+    assert [(f.term, f.match) for f in findings] == [("Program", "program_")]
+
+
+def test_type_annotations_naming_the_record_are_not_flagged(tmp_path: Path) -> None:
+    # Arrange — only the construction form is banned; naming the type stays legal so a
+    # read model can still declare what it receives
+    _write(
+        tmp_path,
+        "apps/api/app/logbook/some_read_model.py",
+        "def f(records: list[LoggedSetRecord]) -> LoggedSetRecord | None: ...\n",
+    )
+
+    # Act / Assert
+    assert find_violations(repo_root=tmp_path) == []
+
+
 def test_registry_has_no_duplicate_term_names() -> None:
     # A duplicate name would make find_stray_program's lookup ambiguous.
     names = [term.name for term in BANNED_TERMS]

@@ -67,6 +67,11 @@ class BannedTerm:
     name: str
     pattern: re.Pattern[str]
     guidance: str
+    # Paths where *this* term alone is legitimate — the one module allowed to build
+    # what everywhere else must route through. Distinct from ``EXCLUDED_PATHS``, which
+    # switches the whole registry off for a file; a per-term exemption keeps every other
+    # tripwire live there. Empty for a term that is banned everywhere.
+    allowed_paths: tuple[str, ...] = ()
 
 
 # The registry. Every entry is a *hard* regression — a term the codebase moved
@@ -125,6 +130,21 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
             "'Readiness'): the calendar-free model gives no honest basis for a "
             "recovery %."
         ),
+    ),
+    BannedTerm(
+        name="hand-rolled LoggedSetRecord",
+        # Only the *construction* form — ``LoggedSetRecord(`` — is banned. Type
+        # annotations (``list[LoggedSetRecord]``) and imports carry no paren and stay
+        # legal, so a read model may still name the type it receives.
+        pattern=re.compile(r"LoggedSetRecord\("),
+        guidance=(
+            "Flatten Logged Sessions through "
+            "'domain/personal_records.logged_set_records' instead. A hand-rolled "
+            "LoggedSetRecord is the shape that drops the Performed Body Weight "
+            "(ADR-0026), which is exactly how the First Record milestone came to "
+            "disagree with every other Personal-Record surface (ADR-0029)."
+        ),
+        allowed_paths=("apps/api/app/domain/personal_records.py",),
     ),
 )
 
@@ -187,6 +207,8 @@ def _scan_file(path: Path, rel_path: str, terms: tuple[BannedTerm, ...]) -> list
     text = path.read_text(encoding="utf-8", errors="ignore")
     for lineno, line in enumerate(text.splitlines(), start=1):
         for term in terms:
+            if term.allowed_paths and is_excluded(rel_path, term.allowed_paths):
+                continue
             match = term.pattern.search(line)
             if match:
                 findings.append(

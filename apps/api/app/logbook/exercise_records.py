@@ -37,8 +37,8 @@ from app.domain.personal_records import (
     LoggedSetRecord,
     PersonalRecord,
     detect_personal_records,
+    logged_set_records,
 )
-from app.logbook.records import set_records
 from app.logbook.top_sets import TOP_SET_SERIES_LIMIT, TopSetPoint, top_set_series
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
@@ -101,7 +101,7 @@ def exercise_records(
             if not exercise_name:
                 exercise_name = logged_set.exercise_name
 
-    records = detect_personal_records(_set_records(history, exercise_id))
+    records = detect_personal_records(_exercise_set_records(history, exercise_id))
     # Records are oldest-first with each strictly beating the prior, so the last is the
     # highest Estimated 1RM — the Personal Record. The ``personal_record`` kg figure is
     # the *absolute* headline only: a bodyweight record must never surface as a kilogram
@@ -157,19 +157,22 @@ def _needs_body_weight_nudge(
     return False
 
 
-def _set_records(
+def _exercise_set_records(
     history: list[LoggedSessionView], exercise_id: int
 ) -> list[LoggedSetRecord]:
     """Flatten the Exercise's Logged Sets into dated records for PR detection.
 
     Filtered to the one Exercise so the detector — which is scoped per Exercise but
-    otherwise history-wide — only ever weighs this movement. Reuses the shared
-    history flattening (``logbook/records``) so a per-Exercise PR is stamped exactly
-    as the all-time Analytics / Home feeds stamp it, then narrows to this movement.
+    otherwise history-wide — only ever weighs this movement. Reuses the one domain
+    flattening (``domain/personal_records.logged_set_records``) so a per-Exercise PR is
+    stamped exactly as the all-time Analytics / Home feeds stamp it, then narrows to
+    this movement.
     """
 
     return [
-        record for record in set_records(history) if record.exercise_id == exercise_id
+        record
+        for record in logged_set_records(history)
+        if record.exercise_id == exercise_id
     ]
 
 

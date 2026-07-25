@@ -35,9 +35,12 @@ from app.domain.muscle_groups import (
     distribution,
     recent_coverage,
 )
-from app.domain.personal_records import PersonalRecord, detect_personal_records
+from app.domain.personal_records import (
+    PersonalRecord,
+    detect_personal_records,
+    logged_set_records,
+)
 from app.domain.volume import VolumePoint, VolumeSet, volume_series
-from app.logbook.records import set_records
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
     LoggedSessionView,
@@ -132,7 +135,7 @@ def analytics_overview(
 
     # Personal Records are detected over the whole history, not just the window: the
     # feed is decoupled from the toggle, and only the count is scoped to the window.
-    records = detect_personal_records(set_records(history))
+    records = detect_personal_records(logged_set_records(history))
     recent = tuple(reversed(records[-RECENT_RECORDS_LIMIT:]))
     new_prs = sum(1 for record in records if start <= record.performed_on <= today)
 

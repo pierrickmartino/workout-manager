@@ -1,9 +1,10 @@
 """The shared Personal-Record read helpers behind Analytics and Home.
 
-``app/logbook/records.py`` owns the one history→``LoggedSetRecord`` flattening
-(``set_records``) that Analytics, Home, and the per-Exercise stat header all detect
-PRs off, so PR detection can never drift between surfaces. ``latest_personal_record``
-sits on top of it: the newest Personal Record by date across every Exercise, or
+``app/domain/personal_records.py`` owns the one history→``LoggedSetRecord`` flattening
+(``logged_set_records``) that Analytics, Home, the per-Exercise stat header and the
+Achievement wall all detect PRs off, so PR detection can never drift between surfaces
+(ADR-0029). ``latest_personal_record`` sits on top of it: the newest Personal Record by
+date across every Exercise, or
 ``None`` when the record holds no absolute-Load PR in the trustworthy rep window.
 
 Exercised with the in-memory Logged-Session repository — offline, no ORM."""
@@ -14,7 +15,8 @@ from datetime import date, timedelta
 
 from app.domain.exercise import Provenance
 from app.domain.load import LoadKind, ParsedLoad
-from app.logbook.records import latest_personal_record, set_records
+from app.domain.personal_records import logged_set_records
+from app.logbook.records import latest_personal_record
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.logged_session_repository import (
     InMemoryLoggedSessionRepository,
@@ -61,7 +63,7 @@ def _log(sessions, logged, user, performed_on, sets):
     )
 
 
-def test_set_records_flattens_history_pairing_each_set_with_its_session_date():
+def test_flattening_pairs_each_set_with_its_session_date():
     # Arrange — one session, two sets, on a known date
     sessions, logged = _build()
     _log(
@@ -76,13 +78,36 @@ def test_set_records_flattens_history_pairing_each_set_with_its_session_date():
     )
 
     # Act
-    records = set_records(logged.list_for_user("user_flat"))
+    records = logged_set_records(logged.list_for_user("user_flat"))
 
     # Assert — every Logged Set is flattened and stamped with its session's date
     assert [(r.exercise_id, r.reps, r.performed_on) for r in records] == [
         (SQUAT, 5, TODAY),
         (DEADLIFT, 3, TODAY),
     ]
+
+
+def test_flattening_carries_the_performed_body_weight_onto_each_record():
+    # Arrange — a bodyweight set logged with the mass it was performed at (ADR-0026)
+    sessions, logged = _build()
+    bodyweight = ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict()
+    _log(
+        sessions,
+        logged,
+        "user_mass",
+        TODAY,
+        [
+            LoggedSetDraft(
+                exercise_id=SQUAT, reps=5, load=bodyweight, body_weight_kg=75.0
+            )
+        ],
+    )
+
+    # Act
+    records = logged_set_records(logged.list_for_user("user_mass"))
+
+    # Assert — the field a hand-rolled flattening dropped survives the seam (ADR-0029)
+    assert [record.body_weight_kg for record in records] == [75.0]
 
 
 def test_latest_personal_record_is_the_newest_pr_by_date_across_exercises():

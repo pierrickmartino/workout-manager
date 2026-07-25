@@ -23,12 +23,18 @@ _WEEK = timedelta(days=7)
 
 @dataclass
 class _Set:
-    """Minimal stand-in for a Logged Set: the fields the catalog metrics read."""
+    """Minimal stand-in for a Logged Set: the fields the catalog metrics read.
+
+    ``body_weight_kg`` is the Performed Body Weight (ADR-0026). It belongs here because
+    the shared flattening reads it: a stub that omitted it was how the First Record
+    milestone's dropped-field bug stayed invisible to this suite (ADR-0029).
+    """
 
     exercise_id: int = SQUAT
     exercise_name: str = "Back Squat"
     reps: int = 5
     load: dict | None = None
+    body_weight_kg: float | None = None
     targeted_muscles: list[str] = field(default_factory=list)
 
 

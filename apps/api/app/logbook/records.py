@@ -1,10 +1,11 @@
-"""Shared Personal-Record read helpers — the one PR-detection path every surface reuses.
+"""Shared Personal-Record read helpers over the one domain flattening.
 
 The Analytics feed, the Home "Latest PR" line, and the per-Exercise stat header all
-answer questions about **Personal Records** off the same Logged-Session history. To keep
-those answers from drifting, the history→``LoggedSetRecord`` flattening lives here once
-(``set_records``) rather than being re-inlined per surface, and the detector
-(``domain/personal_records.detect_personal_records``) runs over its output.
+answer questions about **Personal Records** off the same Logged-Session history. The
+history→``LoggedSetRecord`` flattening itself lives in
+``domain/personal_records.logged_set_records`` — in the domain, not here, so the pure
+Achievement catalog can reach it without inverting the layering (ADR-0029) — and the
+detector (``domain/personal_records.detect_personal_records``) runs over its output.
 
 ``latest_personal_record`` sits on top: the single newest Personal Record by date across
 every Exercise, or ``None`` when the record holds no absolute-Load PR in the trustworthy
@@ -17,34 +18,11 @@ Pure orchestration over the Logged-Session repository view: no ORM, no HTTP."""
 from __future__ import annotations
 
 from app.domain.personal_records import (
-    LoggedSetRecord,
     PersonalRecord,
     detect_personal_records,
+    logged_set_records,
 )
 from app.repositories.logged_session_repository import LoggedSessionView
-
-
-def set_records(history: list[LoggedSessionView]) -> list[LoggedSetRecord]:
-    """Flatten Logged Sessions into dated Logged Set records for PR detection.
-
-    Each Logged Set is paired with its session's ``performed_on`` — the date lives on
-    the session, not the set — so the detector, which knows nothing about sessions, can
-    order the stream and stamp each PR. This is the one flattening every PR surface reads
-    through, so "a PR" means the same thing on Analytics, Home, and the Exercise header.
-    """
-
-    return [
-        LoggedSetRecord(
-            exercise_id=logged_set.exercise_id,
-            exercise_name=logged_set.exercise_name,
-            reps=logged_set.reps,
-            load=logged_set.load,
-            performed_on=session.performed_on,
-            body_weight_kg=logged_set.body_weight_kg,
-        )
-        for session in history
-        for logged_set in session.logged_sets
-    ]
 
 
 def personal_record_payload(record: PersonalRecord) -> dict:
@@ -79,8 +57,8 @@ def latest_personal_record(
     *hide* the line rather than show a fabricated zero.
     """
 
-    records = detect_personal_records(set_records(history))
+    records = detect_personal_records(logged_set_records(history))
     return records[-1] if records else None
 
 
-__all__ = ["set_records", "latest_personal_record", "personal_record_payload"]
+__all__ = ["latest_personal_record", "personal_record_payload"]
