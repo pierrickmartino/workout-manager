@@ -12,8 +12,15 @@ load, or rep target for pure bodyweight) computed from the user's most recent Lo
 Sets of that Exercise. Already-performed
 Sessions are history and keep their logged load. The overlay is read-only — it
 returns fresh view objects and never mutates the stored Protocol (or the cached
-artifact behind it). Pure orchestration over the Protocol and Logged-Session
-repositories; no AI, no HTTP."""
+artifact behind it).
+
+The module is layered like the rest of the read model (ADR-0018): a **pure** projection
+tier (``protocol_progress_from`` / ``progressed_protocol_from``) computes over an
+already-loaded history and does no I/O, and a thin **service** tier
+(``protocol_progress`` / ``progressed_protocol``) resolves ownership and reads the
+history once before delegating. ``current_protocol`` selects across a user's Protocols
+by projecting each through the pure tier over one shared history, so choosing the
+Current Protocol never re-reads the history per Protocol. No AI, no HTTP."""
 
 from __future__ import annotations
 
@@ -93,6 +100,28 @@ def _progress_over(
     return completed_count, next_session
 
 
+def protocol_progress_from(
+    protocol: ProtocolView, logged_sessions: list[LoggedSessionView]
+) -> ProtocolProgressView:
+    """The next-un-performed-Session view over an already-loaded history.
+
+    The pure projection tier (mirroring ``project_gamification``): given a resolved
+    Protocol and the user's Logged Sessions, no I/O of its own. The next Session is the
+    first (by position) the user has not logged an advancing performance of; ``None``
+    once every Session has been performed. Callers that already hold the history — a
+    request assembling several reads — fan this out with zero extra reads.
+    """
+
+    performed = _advancing_sessions(logged_sessions)
+    completed_count, next_session = _progress_over(protocol, performed)
+    return ProtocolProgressView(
+        protocol=protocol,
+        next_session=next_session,
+        completed_count=completed_count,
+        performed_session_ids=frozenset(performed),
+    )
+
+
 def protocol_progress(
     clerk_user_id: str,
     protocol_id: int,
@@ -102,23 +131,16 @@ def protocol_progress(
 ) -> ProtocolProgressView | None:
     """Return the owner's Protocol with its next un-performed Session, or ``None``.
 
-    ``None`` if the Protocol is missing or owned by another user. The next Session
-    is the first (by position) whose underlying Session the user has not logged a
-    performance of; ``None`` once every Session has been performed.
+    ``None`` if the Protocol is missing or owned by another user. The service tier: it
+    resolves ownership and reads the history **once**, then delegates to the pure
+    ``protocol_progress_from`` (mirroring how ``profile_progress`` loads once and fans
+    out to ``project_gamification``).
     """
 
     protocol = protocols.get(protocol_id, clerk_user_id)
     if protocol is None:
         return None
-
-    performed = _advancing_sessions(logged.list_for_user(clerk_user_id))
-    completed_count, next_session = _progress_over(protocol, performed)
-    return ProtocolProgressView(
-        protocol=protocol,
-        next_session=next_session,
-        completed_count=completed_count,
-        performed_session_ids=frozenset(performed),
-    )
+    return protocol_progress_from(protocol, logged.list_for_user(clerk_user_id))
 
 
 def latest_sets_by_exercise(
@@ -186,26 +208,19 @@ def _adjusted_session(
     return replace(session, prescriptions=adjusted)
 
 
-def progressed_protocol(
-    clerk_user_id: str,
-    protocol_id: int,
-    *,
-    protocols: ProtocolRepository,
-    logged: LoggedSessionRepository,
-) -> ProtocolProgressView | None:
-    """Return the owner's Protocol with upcoming loads progressed, or ``None``.
+def progressed_protocol_from(
+    protocol: ProtocolView, logged_sessions: list[LoggedSessionView]
+) -> ProtocolProgressView:
+    """The progressed-load view over an already-loaded history.
 
-    Like ``protocol_progress``, but every *un-performed* Session's recommended loads
-    are overlaid with the ``next_load`` adjustment from the user's latest Logged
-    Sets. Performed Sessions are left as logged. The returned view is freshly built
-    — the stored Protocol (and any cached source) is never mutated.
+    Like ``protocol_progress_from``, but every *un-performed* Session's recommended
+    loads are overlaid with the ``next_load`` adjustment from the user's latest Logged
+    Sets. Performed Sessions are left as logged. The returned view is freshly built —
+    the stored Protocol (and any cached source) is never mutated. Pure: no I/O, so a
+    caller iterating a user's Protocols reuses one history instead of re-reading it per
+    Protocol (ADR-0018's fan-out convention).
     """
 
-    protocol = protocols.get(protocol_id, clerk_user_id)
-    if protocol is None:
-        return None
-
-    logged_sessions = logged.list_for_user(clerk_user_id)
     # Advancement keys off a *Completed* log (ADR-0013), but the Progression overlay
     # still reads *every* logged set: the sets done inside an Incomplete performance
     # are real history (volume, PRs) and legitimately drive the next recommended load.
@@ -229,11 +244,30 @@ def progressed_protocol(
     )
 
 
+def progressed_protocol(
+    clerk_user_id: str,
+    protocol_id: int,
+    *,
+    protocols: ProtocolRepository,
+    logged: LoggedSessionRepository,
+) -> ProtocolProgressView | None:
+    """Return the owner's Protocol with upcoming loads progressed, or ``None``.
+
+    The service tier for a single Protocol: resolve ownership, read the history once,
+    delegate to the pure ``progressed_protocol_from``.
+    """
+
+    protocol = protocols.get(protocol_id, clerk_user_id)
+    if protocol is None:
+        return None
+    return progressed_protocol_from(protocol, logged.list_for_user(clerk_user_id))
+
+
 def current_protocol(
     clerk_user_id: str,
     *,
     protocols: ProtocolRepository,
-    logged: LoggedSessionRepository,
+    logged_sessions: list[LoggedSessionView],
 ) -> ProtocolProgressView | None:
     """Return the user's Current Protocol as a progressed view, or ``None``.
 
@@ -243,16 +277,18 @@ def current_protocol(
     Protocols are passed over in favour of an older in-progress one. Returns ``None``
     when the user owns no Protocol, or when every owned Protocol is complete.
 
-    The selected Protocol is returned through ``progressed_protocol`` so its upcoming
-    loads already carry the ADR-0004 Progression adjustment. Standalone Sessions are
-    not eligible — only adopted Protocols are considered.
+    Takes the **already-loaded** history and projects each candidate Protocol through
+    the pure ``progressed_protocol_from`` — so selecting the Current Protocol reads the
+    history *once for the whole request*, however many Protocols the user owns, instead
+    of re-reading it per Protocol (issue: the K+1 this fixes; ADR-0018's convention).
+    The caller (Home) already holds the history it read for Readiness and gamification,
+    so the whole ``GET /api/home`` request makes a single history read. Standalone
+    Sessions are not eligible — only adopted Protocols are considered.
     """
 
     for protocol in protocols.list_for_user(clerk_user_id):
-        progress = progressed_protocol(
-            clerk_user_id, protocol.id, protocols=protocols, logged=logged
-        )
-        if progress is not None and progress.next_session is not None:
+        progress = progressed_protocol_from(protocol, logged_sessions)
+        if progress.next_session is not None:
             return progress
     return None
 
@@ -260,7 +296,9 @@ def current_protocol(
 __all__ = [
     "ProtocolProgressView",
     "protocol_progress",
+    "protocol_progress_from",
     "progressed_protocol",
+    "progressed_protocol_from",
     "current_protocol",
     "latest_sets_by_exercise",
     "progressed_prescription",
