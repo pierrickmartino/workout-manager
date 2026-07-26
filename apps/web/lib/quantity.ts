@@ -15,6 +15,7 @@ const METRES_PER_MILE = 1609.344;
 const METRES_PER_KM = 1000;
 const SECONDS_PER_MINUTE = 60;
 const DISTANCE_KIND: QuantityKind = "distance";
+const DURATION_KIND: QuantityKind = "duration";
 
 // The wire shape the API serializes for a typed Quantity. Only the payload fields the
 // `kind` carries are present; `text` is always there and is what the UI displays.
@@ -79,6 +80,17 @@ export function distanceInput(
     quantity_unit: unit,
     quantity_duration: time === "" ? null : time,
   };
+}
+
+// The per-set request fields for a duration Quantity — timed, non-locomotion work (a
+// hold, a distance-unknown treadmill session). The picked kind and the entered time
+// ride through verbatim; the backend canonicalises to seconds. No unit or companion
+// time: a duration carries no distance, so pace is not derivable (CONTEXT 'Quantity').
+export function durationInput(value: string): {
+  quantity_kind: QuantityKind;
+  quantity_value: string;
+} {
+  return { quantity_kind: DURATION_KIND, quantity_value: value };
 }
 
 // The whole seconds of a canonical seconds figure, formatted as `m:ss` (the display

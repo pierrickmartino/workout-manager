@@ -243,6 +243,146 @@ test("skips a distance row left without a distance value", () => {
   assert.equal(result.request.logged_sets[0].exercise_id, 9);
 });
 
+test("builds a duration set from a mm:ss hold", () => {
+  // Arrange — a 5-minute plank logged as a plan-less duration set (no distance)
+  const input = fields({
+    trainingType: "mobility",
+    sets: [{ exerciseId: 7, kind: "duration", duration: "5:00", loadKind: "bodyweight" }],
+  });
+
+  // Act
+  const result = buildAdhocLogRequest(input);
+
+  // Assert — the picked kind is authoritative; the time rides through verbatim, with
+  // no distance unit and no companion time (a duration carries no pace)
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.request.logged_sets[0], {
+    exercise_id: 7,
+    quantity_kind: "duration",
+    quantity_value: "5:00",
+    load_kind: "bodyweight",
+    load_value: null,
+    perceived_difficulty: null,
+  });
+});
+
+test("builds a duration set from a bare-seconds plank", () => {
+  // Arrange — a 90-second plank entered as a raw seconds count
+  const input = fields({
+    sets: [{ exerciseId: 7, kind: "duration", duration: "90" }],
+  });
+
+  // Act
+  const result = buildAdhocLogRequest(input);
+
+  // Assert — a bare-seconds value is a valid duration and rides through unchanged
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.logged_sets[0].quantity_kind, "duration");
+  assert.equal(result.request.logged_sets[0].quantity_value, "90");
+});
+
+test("builds a distance-unknown treadmill session as a duration set", () => {
+  // Arrange — 45 minutes of zone-2 on a treadmill, distance unknown: time is the amount
+  const input = fields({
+    sets: [{ exerciseId: 7, kind: "duration", duration: "45:00" }],
+  });
+
+  // Act
+  const result = buildAdhocLogRequest(input);
+
+  // Assert — no distance is required; the session records purely as a duration
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.logged_sets.length, 1);
+  assert.equal(result.request.logged_sets[0].quantity_kind, "duration");
+  assert.equal(result.request.logged_sets[0].quantity_value, "45:00");
+});
+
+test("skips a duration row left without a time and keeps a performed one", () => {
+  // Arrange — a duration row the user didn't fill, alongside one they did
+  const input = fields({
+    sets: [
+      { exerciseId: 7, kind: "duration", duration: "" },
+      { exerciseId: 9, kind: "duration", duration: "90" },
+    ],
+  });
+
+  // Act
+  const result = buildAdhocLogRequest(input);
+
+  // Assert — only the performed duration row survives
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.logged_sets.length, 1);
+  assert.equal(result.request.logged_sets[0].exercise_id, 9);
+});
+
+test("rejects a non-positive or non-numeric duration", () => {
+  // Act / Assert — a duration is a positive time; zero and garbage are malformed
+  assert.equal(
+    buildAdhocLogRequest(
+      fields({ sets: [{ exerciseId: 7, kind: "duration", duration: "0" }] }),
+    ).ok,
+    false,
+  );
+  assert.equal(
+    buildAdhocLogRequest(
+      fields({ sets: [{ exerciseId: 7, kind: "duration", duration: "a while" }] }),
+    ).ok,
+    false,
+  );
+  assert.equal(
+    buildAdhocLogRequest(
+      fields({ sets: [{ exerciseId: 7, kind: "duration", duration: "1:aa" }] }),
+    ).ok,
+    false,
+  );
+});
+
+test("builds a heterogeneous session mixing a hold, a run, and a rep set", () => {
+  // Arrange — one plan-less record carrying all three Quantity kinds
+  const input = fields({
+    trainingType: "strength",
+    sets: [
+      { exerciseId: 5, kind: "duration", duration: "1:30", loadKind: "bodyweight" },
+      { exerciseId: 7, kind: "distance", distance: "5", unit: "km" },
+      { exerciseId: 9, kind: "repetitions", reps: "5", loadKind: "absolute", loadValue: "100" },
+    ],
+  });
+
+  // Act
+  const result = buildAdhocLogRequest(input);
+
+  // Assert — all three survive, each typed by its own picked kind
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.logged_sets.length, 3);
+  assert.equal(result.request.logged_sets[0].quantity_kind, "duration");
+  assert.equal(result.request.logged_sets[1].quantity_kind, "distance");
+  assert.equal(result.request.logged_sets[2].quantity_kind, "repetitions");
+});
+
+test("readAdhocFormRows reads a duration row's kind and time", () => {
+  // Arrange — a form with one duration row: a 5-minute hold
+  const form = new FormData();
+  form.set("set_count", "1");
+  form.set("set-0-movement", "Plank");
+  form.set("set-0-kind", "duration");
+  form.set("set-0-duration", "5:00");
+  form.set("set-0-load_kind", "bodyweight");
+
+  // Act
+  const rows = readAdhocFormRows(form);
+
+  // Assert — the duration kind and its time surface for the mapper
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].movementName, "Plank");
+  assert.equal(rows[0].fields.kind, "duration");
+  assert.equal(rows[0].fields.duration, "5:00");
+});
+
 test("rejects a non-positive or non-numeric distance", () => {
   // Act / Assert — a distance is a positive number
   assert.equal(

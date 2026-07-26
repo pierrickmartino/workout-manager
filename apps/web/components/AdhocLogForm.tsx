@@ -30,10 +30,10 @@ function makeRow(kind: QuantityKind): SetRow {
 
 // Logs one or more ad-hoc movements outside any Protocol (ADR-0031): pick a training
 // type, then add a row per set performed. Each row's amount is a typed Quantity
-// (ADR-0032): a rep count or a distance (km/miles, with an optional time). Heterogeneous
-// rows coexist in one Logged Session — a 6 × 800 m interval session is six distance
-// rows, a run then squats is a distance row and a rep row. No Session, no Completion
-// Outcome — a plan-less record.
+// (ADR-0032): a rep count, a distance (km/miles, with an optional time), or a duration (a
+// hold or a distance-unknown timed effort). Heterogeneous rows coexist in one Logged
+// Session — a 6 × 800 m interval session is six distance rows, a run then squats is a
+// distance row and a rep row. No Session, no Completion Outcome — a plan-less record.
 export function AdhocLogForm({ today }: AdhocLogFormProps) {
   const [state, action, pending] = useActionState<AdhocLogFormState, FormData>(
     submitAdhocLog,
@@ -148,11 +148,14 @@ function SetRowFields({ index, kind, onKindChange, onRemove }: SetRowFieldsProps
         >
           <option value="repetitions">Reps</option>
           <option value="distance">Distance</option>
+          <option value="duration">Duration</option>
         </Select>
       </label>
 
       {kind === "distance" ? (
         <DistanceFields prefix={prefix} index={index} />
+      ) : kind === "duration" ? (
+        <DurationFields prefix={prefix} index={index} />
       ) : (
         <RepetitionsFields prefix={prefix} index={index} />
       )}
@@ -235,6 +238,23 @@ function DistanceFields({ prefix, index }: { prefix: string; index: number }) {
           name={`${prefix}-duration`}
           placeholder="mm:ss"
           aria-label={`Time, set ${index + 1}`}
+        />
+      </label>
+    </div>
+  );
+}
+
+function DurationFields({ prefix, index }: { prefix: string; index: number }) {
+  return (
+    <div className="grid grid-cols-2 gap-2.5">
+      <label className="flex flex-col gap-1.5">
+        {/* A duration is timed, non-locomotion work (a hold, a distance-unknown treadmill
+            session): the time is the amount, entered as mm:ss or bare seconds (ADR-0032). */}
+        <span className="label-mono text-[9px] text-text-muted">Time</span>
+        <Input
+          name={`${prefix}-duration`}
+          placeholder="mm:ss"
+          aria-label={`Duration, set ${index + 1}`}
         />
       </label>
     </div>
