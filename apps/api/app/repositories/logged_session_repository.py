@@ -25,12 +25,14 @@ from app.repositories.session_repository import SessionRepository
 class LoggedSetDraft:
     """One actual set to record, referencing the catalog Exercise performed.
 
-    ``body_weight_kg`` is the Performed Body Weight (ADR-0026) — the performer's mass
-    snapshotted onto the set at the write boundary, or ``None`` when no weight is on
-    file (never guessed). It is raw record data, like ``reps`` or ``load``."""
+    ``quantity`` is the typed amount axis (ADR-0032) — the ``{kind, text, ...payload}``
+    Quantity that replaces the old bare ``reps`` int. ``body_weight_kg`` is the Performed
+    Body Weight (ADR-0026) — the performer's mass snapshotted onto the set at the write
+    boundary, or ``None`` when no weight is on file (never guessed). Both are raw record
+    data, like ``load``."""
 
     exercise_id: int
-    reps: int
+    quantity: dict | None = None
     load: dict | None = None
     perceived_difficulty: int | None = None
     body_weight_kg: float | None = None
@@ -55,10 +57,14 @@ class LoggedSessionDraft:
 
 @dataclass(frozen=True)
 class LoggedSetView:
-    """A logged set joined to its catalog Exercise, ready to serialize."""
+    """A logged set joined to its catalog Exercise, ready to serialize.
+
+    ``quantity`` is the typed amount axis (ADR-0032); its ``repetitions`` accessor gives
+    the rep count the strength/volume read paths read through, or ``None`` for a
+    distance or duration amount."""
 
     position: int
-    reps: int
+    quantity: dict | None
     load: dict | None
     perceived_difficulty: int | None
     exercise_id: int
@@ -112,7 +118,7 @@ class LoggedSessionRepository(Protocol):
 def _set_view(logged_set: LoggedSet, exercise: Exercise) -> LoggedSetView:
     return LoggedSetView(
         position=logged_set.position,
-        reps=logged_set.reps,
+        quantity=logged_set.quantity,
         load=logged_set.load,
         perceived_difficulty=logged_set.perceived_difficulty,
         exercise_id=exercise.id,
@@ -168,7 +174,7 @@ class SqlLoggedSessionRepository:
                     logged_session_id=logged.id,
                     exercise_id=logged_set.exercise_id,
                     position=position,
-                    reps=logged_set.reps,
+                    quantity=logged_set.quantity,
                     load=logged_set.load,
                     perceived_difficulty=logged_set.perceived_difficulty,
                     body_weight_kg=logged_set.body_weight_kg,
@@ -244,7 +250,7 @@ class InMemoryLoggedSessionRepository:
                 logged_session_id=logged.id,
                 exercise_id=logged_set.exercise_id,
                 position=position,
-                reps=logged_set.reps,
+                quantity=logged_set.quantity,
                 load=logged_set.load,
                 perceived_difficulty=logged_set.perceived_difficulty,
                 body_weight_kg=logged_set.body_weight_kg,

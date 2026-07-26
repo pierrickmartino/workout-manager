@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { fetchHistory, type LoggedSession, type LoggedSet } from "@/lib/logs";
 import { formatLoad } from "@/lib/load";
+import { formatQuantity } from "@/lib/quantity";
 import { PageHeader } from "@/components/pulse/page-header";
 import { Alert } from "@/components/pulse/alert";
 import { Card } from "@/components/ui/card";
@@ -108,7 +109,7 @@ function LoggedSetRow({ loggedSet }: { loggedSet: LoggedSet }) {
         {loggedSet.exercise_name}
       </span>
       <span className="text-right font-display text-sm font-semibold text-text-primary">
-        {loggedSet.reps}
+        {formatQuantity(loggedSet.quantity)}
       </span>
       <span className="text-right font-mono text-[13px] text-text-secondary">
         {formatLoad(loggedSet.load)}

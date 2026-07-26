@@ -9,6 +9,8 @@ rejected. Mirrors ``test_analytics_endpoint.py``."""
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+
 from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
@@ -73,7 +75,7 @@ def _perform(sessions, logged, user, performed_on, set_count):
             session_id=session_view.id,
             performed_on=performed_on,
             logged_sets=[
-                LoggedSetDraft(exercise_id=SQUAT, reps=5) for _ in range(set_count)
+                LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5)) for _ in range(set_count)
             ],
         ),
     )

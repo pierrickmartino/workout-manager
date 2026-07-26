@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { logSession, type LogSetInput } from "@/lib/logs";
+import { repetitionsInput } from "@/lib/quantity";
 
 export interface LogFormState {
   error: string | null;
@@ -40,11 +41,12 @@ function loggedSets(form: FormData): LogSetInput[] {
         ? rpeValue
         : null;
 
-    // Carry the picked kind through; the backend types the load from it. An empty
+    // Carry the picked kinds through; the backend types the amount and the load from
+    // them. The reps become a repetitions Quantity via the shared mapper. An empty load
     // value means "no load recorded" for this set (the backend maps it to null).
     sets.push({
       exercise_id: exerciseId,
-      reps: repsValue,
+      ...repetitionsInput(repsValue),
       load_kind: (loadKinds[row] || "absolute") as LogSetInput["load_kind"],
       load_value: loadValues[row] === "" ? null : loadValues[row],
       perceived_difficulty: perceivedDifficulty,

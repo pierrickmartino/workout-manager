@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import date
 
 from app.domain.load import LoadKind, ParsedLoad
+from app.domain.quantity import Quantity, QuantityKind
 from app.domain.personal_records import (
     LoggedSetRecord,
     detect_personal_records,
@@ -20,6 +21,12 @@ from app.domain.personal_records import (
 
 SQUAT = 1
 PRESS = 2
+
+
+def _reps(count: int) -> dict:
+    """A stored repetitions Quantity carrying ``count`` — the amount these sets have."""
+
+    return Quantity(kind=QuantityKind.REPETITIONS, text=str(count), count=count).to_dict()
 
 
 def _absolute(kg: float) -> dict:
@@ -32,7 +39,7 @@ def _set(exercise_id, name, kg, reps, performed_on) -> LoggedSetRecord:
     return LoggedSetRecord(
         exercise_id=exercise_id,
         exercise_name=name,
-        reps=reps,
+        quantity=_reps(reps),
         load=_absolute(kg),
         performed_on=performed_on,
     )
@@ -129,14 +136,14 @@ def test_non_absolute_loads_can_never_set_a_record():
     bodyweight = LoggedSetRecord(
         exercise_id=PRESS,
         exercise_name="Push-up",
-        reps=10,
+        quantity=_reps(10),
         load=ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict(),
         performed_on=date(2026, 6, 1),
     )
     qualitative = LoggedSetRecord(
         exercise_id=PRESS,
         exercise_name="Push-up",
-        reps=10,
+        quantity=_reps(10),
         load=ParsedLoad(kind=LoadKind.QUALITATIVE, text="hard").to_dict(),
         performed_on=date(2026, 6, 2),
     )
@@ -161,6 +168,36 @@ def test_a_high_rep_set_is_skipped_and_does_not_block_a_later_pr():
     # Assert — the AMRAP set neither records nor sets a bar the single must clear
     assert len(records) == 1
     assert records[0].estimated_1rm == 100.0
+
+
+def test_a_non_rep_amount_set_can_never_set_a_record():
+    # Arrange — an absolute-loaded set whose amount is a distance, not a rep count
+    # (e.g. a loaded carry logged in metres). No reps means no Epley estimate.
+    distance = Quantity(kind=QuantityKind.DISTANCE, text="40 m", metres=40.0).to_dict()
+    carry = LoggedSetRecord(
+        exercise_id=SQUAT,
+        exercise_name="Farmer Carry",
+        quantity=distance,
+        load=_absolute(100.0),
+        performed_on=date(2026, 6, 1),
+    )
+
+    # Act
+    records = detect_personal_records([carry])
+
+    # Assert — the None rep count degrades to no comparable figure, so no PR
+    assert records == []
+
+
+def test_estimated_1rm_for_a_non_rep_amount_is_none_even_with_an_absolute_load():
+    # Arrange — a heavy absolute load but a duration amount (a 30 s hold)
+    hold = Quantity(kind=QuantityKind.DURATION, text="30", seconds=30.0).to_dict()
+
+    # Act
+    estimate = estimated_1rm_for_set(_absolute(100.0), hold)
+
+    # Assert — the one yardstick needs a rep count; a hold carries none
+    assert estimate is None
 
 
 def test_detection_is_chronological_regardless_of_input_order():
@@ -194,7 +231,7 @@ def test_bodyweight_set_with_captured_mass_scores_via_epley():
     load = _bodyweight()
 
     # Act — the mass resolves the set to 80 kg-equivalent and Epley scores it
-    estimate = estimated_1rm_for_set(load, 5, body_weight_kg=80.0)
+    estimate = estimated_1rm_for_set(load, _reps(5), body_weight_kg=80.0)
 
     # Assert — same Epley the absolute path uses: 80 × (1 + 5/30)
     assert estimate == 80.0 * (1 + 5 / 30)
@@ -205,7 +242,7 @@ def test_weighted_bodyweight_set_scores_mass_plus_added_load():
     load = _bodyweight(20.0)
 
     # Act — resolves to 100 kg-equivalent, then Epley
-    estimate = estimated_1rm_for_set(load, 5, body_weight_kg=80.0)
+    estimate = estimated_1rm_for_set(load, _reps(5), body_weight_kg=80.0)
 
     # Assert
     assert estimate == 100.0 * (1 + 5 / 30)
@@ -216,7 +253,7 @@ def test_bodyweight_set_without_a_captured_mass_scores_nothing():
     load = _bodyweight()
 
     # Act
-    estimate = estimated_1rm_for_set(load, 5, body_weight_kg=None)
+    estimate = estimated_1rm_for_set(load, _reps(5), body_weight_kg=None)
 
     # Assert — no mass, so no comparable figure (never guessed)
     assert estimate is None
@@ -227,7 +264,7 @@ def test_bodyweight_set_outside_the_rep_window_scores_nothing():
     load = _bodyweight()
 
     # Act
-    estimate = estimated_1rm_for_set(load, 13, body_weight_kg=80.0)
+    estimate = estimated_1rm_for_set(load, _reps(13), body_weight_kg=80.0)
 
     # Assert — high-rep endurance work stays intentionally unscored, mass or not
     assert estimate is None
@@ -238,8 +275,8 @@ def test_absolute_scoring_is_unchanged_by_the_new_body_weight_argument():
     load = _absolute(100.0)
 
     # Act — with and without a mass argument
-    without = estimated_1rm_for_set(load, 1)
-    with_mass = estimated_1rm_for_set(load, 1, body_weight_kg=80.0)
+    without = estimated_1rm_for_set(load, _reps(1))
+    with_mass = estimated_1rm_for_set(load, _reps(1), body_weight_kg=80.0)
 
     # Assert — an absolute single is its own 1RM, mass never enters
     assert without == 100.0
@@ -253,7 +290,7 @@ def _bw_set(exercise_id, name, reps, performed_on, *, added_kg=None, body_weight
     return LoggedSetRecord(
         exercise_id=exercise_id,
         exercise_name=name,
-        reps=reps,
+        quantity=_reps(reps),
         load=_bodyweight(added_kg),
         performed_on=performed_on,
         body_weight_kg=body_weight_kg,

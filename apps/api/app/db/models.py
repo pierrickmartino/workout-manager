@@ -246,7 +246,7 @@ class LoggedSession(SQLModel, table=True):
 class LoggedSet(SQLModel, table=True):
     """One actual set the user performed within a Logged Session.
 
-    Records the real ``reps`` and ``load`` and the user's Performance Feedback as
+    Records the real ``quantity`` and ``load`` and the user's Performance Feedback as
     ``perceived_difficulty`` (an RPE-style 1–10 score, optional). References the
     catalog ``Exercise`` that was performed; ``position`` fixes display order."""
 
@@ -256,7 +256,12 @@ class LoggedSet(SQLModel, table=True):
     logged_session_id: int = Field(foreign_key="logged_session.id", index=True)
     exercise_id: int = Field(foreign_key="exercise.id", index=True)
     position: int
-    reps: int
+    # Typed Quantity (ADR-0032): a ``{kind, text, ...payload}`` value object matching
+    # ``app.domain.quantity.Quantity`` — the set's amount axis. A ``repetitions`` kind
+    # carries the rep count that used to live in a bare ``reps`` int; a distance or
+    # duration kind carries a run or a hold. Nullable like ``load``, so a set with no
+    # readable amount is stored as ``None`` rather than a fabricated zero.
+    quantity: dict | None = Field(default=None, sa_column=Column(JSON, nullable=True))
     # Typed Load (ADR-0010): a ``{kind, text, ...payload}`` value object matching
     # ``app.domain.load.ParsedLoad``, so a logged bodyweight or %-1RM set carries
     # its meaning and is never silently dropped by a kg-only aggregate.

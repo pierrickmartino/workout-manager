@@ -9,6 +9,8 @@ repositories; no AI, no HTTP."""
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+
 from datetime import date
 
 from app.domain.exercise import Provenance
@@ -73,7 +75,7 @@ def _log(logged, owner, session_id, exercise_id, *, reps, effort,
             logged_sets=[
                 LoggedSetDraft(
                     exercise_id=exercise_id,
-                    reps=reps,
+                    quantity=reps_quantity(reps),
                     load=parse_load(load).to_dict(),
                     perceived_difficulty=effort,
                 )

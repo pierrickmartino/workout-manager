@@ -16,6 +16,7 @@ from datetime import date, timedelta
 
 from app.domain.achievements import CATALOG, Achievement, evaluate_achievements
 from app.domain.load import LoadKind, ParsedLoad
+from tests.quantities import reps_quantity
 
 SQUAT = 1
 _WEEK = timedelta(days=7)
@@ -25,9 +26,11 @@ _WEEK = timedelta(days=7)
 class _Set:
     """Minimal stand-in for a Logged Set: the fields the catalog metrics read.
 
-    ``body_weight_kg`` is the Performed Body Weight (ADR-0026). It belongs here because
-    the shared flattening reads it: a stub that omitted it was how the First Record
-    milestone's dropped-field bug stayed invisible to this suite (ADR-0029).
+    Built from an ergonomic ``reps`` int, but exposes the typed ``quantity`` the shared
+    flattening reads through (ADR-0032). ``body_weight_kg`` is the Performed Body Weight
+    (ADR-0026). Both belong here because the shared flattening reads them: a stub that
+    omitted a read field was how the First Record milestone's dropped-field bug stayed
+    invisible to this suite (ADR-0029).
     """
 
     exercise_id: int = SQUAT
@@ -36,6 +39,10 @@ class _Set:
     load: dict | None = None
     body_weight_kg: float | None = None
     targeted_muscles: list[str] = field(default_factory=list)
+
+    @property
+    def quantity(self) -> dict:
+        return reps_quantity(self.reps)
 
 
 @dataclass

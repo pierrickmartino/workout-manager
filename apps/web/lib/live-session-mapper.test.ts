@@ -81,14 +81,16 @@ test("maps every completed set to a Logged Set, preserving reps/load/RPE", () =>
   assert.equal(payload.logged_sets.length, 2);
   assert.deepEqual(payload.logged_sets[0], {
     exercise_id: 100,
-    reps: 5,
+    quantity_kind: "repetitions",
+    quantity_value: "5",
     load_kind: "absolute",
     load_value: "70",
     perceived_difficulty: 7,
   });
   assert.deepEqual(payload.logged_sets[1], {
     exercise_id: 100,
-    reps: 4,
+    quantity_kind: "repetitions",
+    quantity_value: "4",
     load_kind: "absolute",
     load_value: "72.5",
     perceived_difficulty: 9,

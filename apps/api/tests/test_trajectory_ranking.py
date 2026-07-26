@@ -7,6 +7,8 @@ Pure over the repository view — no ORM, no HTTP."""
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+
 from datetime import date
 
 from app.domain.load import LoadKind, ParsedLoad
@@ -46,7 +48,7 @@ def _set(
 ) -> LoggedSetView:
     return LoggedSetView(
         position=0,
-        reps=reps,
+        quantity=reps_quantity(reps),
         load=load,
         perceived_difficulty=None,
         exercise_id=exercise_id,

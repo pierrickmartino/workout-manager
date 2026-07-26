@@ -11,6 +11,8 @@ offline and deterministically."""
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+
 from datetime import date
 
 import pytest
@@ -335,7 +337,7 @@ def _log_ceiling_performance(logged, session_id, exercise_id, user="user_a"):
             logged_sets=[
                 LoggedSetDraft(
                     exercise_id=exercise_id,
-                    reps=5,
+                    quantity=reps_quantity(5),
                     load=parse_load("bodyweight").to_dict(),
                     perceived_difficulty=6,
                 )
@@ -419,7 +421,7 @@ def test_no_suggestion_before_the_rep_ceiling_is_reached():
             logged_sets=[
                 LoggedSetDraft(
                     exercise_id=pullup.id,
-                    reps=3,  # short of the 5-rep ceiling
+                    quantity=reps_quantity(3),  # short of the 5-rep ceiling
                     load=parse_load("bodyweight").to_dict(),
                     perceived_difficulty=9,
                 )

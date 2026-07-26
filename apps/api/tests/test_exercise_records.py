@@ -10,6 +10,8 @@ in-memory Logged-Session repository."""
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+
 from datetime import date
 
 from app.domain.exercise import Provenance
@@ -72,9 +74,9 @@ def test_personal_record_is_the_highest_estimated_1rm_over_absolute_load_history
         s,
         date(2026, 1, 1),
         [
-            LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(100.0)),
-            LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(120.0)),
-            LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(110.0)),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_absolute(100.0)),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_absolute(120.0)),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_absolute(110.0)),
         ],
     )
 
@@ -97,8 +99,8 @@ def test_a_heavier_estimated_max_at_more_reps_beats_a_lighter_true_single():
         s,
         date(2026, 1, 1),
         [
-            LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(100.0)),
-            LoggedSetDraft(exercise_id=SQUAT, reps=5, load=_absolute(90.0)),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_absolute(100.0)),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load=_absolute(90.0)),
         ],
     )
 
@@ -122,9 +124,9 @@ def test_personal_record_is_absent_when_only_non_absolute_or_high_rep_sets_exist
         s,
         date(2026, 1, 1),
         [
-            LoggedSetDraft(exercise_id=PRESS, reps=10, load=bodyweight),
-            LoggedSetDraft(exercise_id=PRESS, reps=8, load=qualitative),
-            LoggedSetDraft(exercise_id=PRESS, reps=20, load=_absolute(40.0)),
+            LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(10), load=bodyweight),
+            LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(8), load=qualitative),
+            LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(20), load=_absolute(40.0)),
         ],
     )
 
@@ -146,14 +148,14 @@ def test_total_sets_counts_every_logged_set_of_the_exercise_across_sessions():
         "user_ts",
         s1,
         date(2026, 1, 1),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=5, load=_absolute(100.0))] * 3,
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load=_absolute(100.0))] * 3,
     )
     _log(
         logged,
         "user_ts",
         s2,
         date(2026, 1, 8),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=5, load=_absolute(105.0))] * 2,
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load=_absolute(105.0))] * 2,
     )
 
     # Act
@@ -173,8 +175,8 @@ def test_only_the_requested_exercises_sets_contribute():
         s,
         date(2026, 1, 1),
         [
-            LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(100.0)),
-            LoggedSetDraft(exercise_id=PRESS, reps=1, load=_absolute(200.0)),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_absolute(100.0)),
+            LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(1), load=_absolute(200.0)),
         ],
     )
 
@@ -196,14 +198,14 @@ def test_another_users_performances_do_not_appear():
         "user_them",
         theirs,
         date(2026, 1, 1),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(200.0))],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_absolute(200.0))],
     )
     _log(
         logged,
         "user_me",
         mine,
         date(2026, 1, 2),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(100.0))],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_absolute(100.0))],
     )
 
     # Act
@@ -223,7 +225,7 @@ def test_never_performed_exercise_is_an_honest_empty_state():
         "user_none",
         s,
         date(2026, 1, 1),
-        [LoggedSetDraft(exercise_id=PRESS, reps=1, load=_absolute(60.0))],
+        [LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(1), load=_absolute(60.0))],
     )
 
     # Act
@@ -248,8 +250,8 @@ def test_top_set_series_is_the_best_estimated_1rm_per_session_oldest_first():
         s1,
         date(2026, 1, 1),
         [
-            LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(100.0)),
-            LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(110.0)),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_absolute(100.0)),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_absolute(110.0)),
         ],
     )
     _log(
@@ -257,7 +259,7 @@ def test_top_set_series_is_the_best_estimated_1rm_per_session_oldest_first():
         "user_ts1",
         s2,
         date(2026, 1, 8),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(120.0))],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_absolute(120.0))],
     )
 
     # Act
@@ -279,11 +281,11 @@ def test_top_set_series_omits_non_qualifying_sessions_with_no_zero_padding():
     s3 = _session(sessions, "user_gap")
     bodyweight = ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict()
     _log(logged, "user_gap", s1, date(2026, 1, 1),
-         [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(100.0))])
+         [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_absolute(100.0))])
     _log(logged, "user_gap", s2, date(2026, 1, 8),
-         [LoggedSetDraft(exercise_id=SQUAT, reps=5, load=bodyweight)])
+         [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load=bodyweight)])
     _log(logged, "user_gap", s3, date(2026, 1, 15),
-         [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(105.0))])
+         [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_absolute(105.0))])
 
     # Act
     view = exercise_records("user_gap", SQUAT, logged=logged)
@@ -304,13 +306,13 @@ def test_pr_milestones_are_the_pr_setting_sets_newest_first_with_gain():
     s3 = _session(sessions, "user_pr")
     s4 = _session(sessions, "user_pr")
     _log(logged, "user_pr", s1, date(2026, 1, 1),
-         [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(100.0))])
+         [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_absolute(100.0))])
     _log(logged, "user_pr", s2, date(2026, 1, 8),
-         [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(110.0))])
+         [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_absolute(110.0))])
     _log(logged, "user_pr", s3, date(2026, 1, 15),
-         [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(105.0))])  # no PR
+         [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_absolute(105.0))])  # no PR
     _log(logged, "user_pr", s4, date(2026, 1, 22),
-         [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(120.0))])
+         [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_absolute(120.0))])
 
     # Act
     view = exercise_records("user_pr", SQUAT, logged=logged)
@@ -332,7 +334,7 @@ def test_pr_milestones_are_empty_when_no_set_can_set_a_record():
     s = _session(sessions, "user_bw2")
     bodyweight = ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict()
     _log(logged, "user_bw2", s, date(2026, 1, 1),
-         [LoggedSetDraft(exercise_id=PRESS, reps=12, load=bodyweight)])
+         [LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(12), load=bodyweight)])
 
     # Act
     view = exercise_records("user_bw2", PRESS, logged=logged)
@@ -347,7 +349,7 @@ def test_top_set_series_caps_at_the_last_eight_qualifying_sessions():
     for day in range(1, 11):
         s = _session(sessions, "user_cap")
         _log(logged, "user_cap", s, date(2026, 1, day),
-             [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(100.0 + day))])
+             [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_absolute(100.0 + day))])
 
     # Act
     view = exercise_records("user_cap", SQUAT, logged=logged)
@@ -372,7 +374,7 @@ def test_a_qualifying_massless_bodyweight_set_prompts_to_record_body_weight():
     s = _session(sessions, "user_n")
     _log(
         logged, "user_n", s, date(2026, 1, 1),
-        [LoggedSetDraft(exercise_id=PRESS, reps=8, load=_bodyweight(), body_weight_kg=None)],
+        [LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(8), load=_bodyweight(), body_weight_kg=None)],
     )
 
     # Act
@@ -390,12 +392,12 @@ def test_the_nudge_is_silenced_once_the_exercise_holds_a_record():
     s1 = _session(sessions, "user_n2")
     _log(
         logged, "user_n2", s1, date(2026, 1, 1),
-        [LoggedSetDraft(exercise_id=PRESS, reps=8, load=_bodyweight(), body_weight_kg=75.0)],
+        [LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(8), load=_bodyweight(), body_weight_kg=75.0)],
     )
     s2 = _session(sessions, "user_n2")
     _log(
         logged, "user_n2", s2, date(2026, 1, 8),
-        [LoggedSetDraft(exercise_id=PRESS, reps=6, load=_bodyweight(), body_weight_kg=None)],
+        [LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(6), load=_bodyweight(), body_weight_kg=None)],
     )
 
     # Act
@@ -412,7 +414,7 @@ def test_no_nudge_for_a_high_rep_massless_bodyweight_set():
     s = _session(sessions, "user_n3")
     _log(
         logged, "user_n3", s, date(2026, 1, 1),
-        [LoggedSetDraft(exercise_id=PRESS, reps=20, load=_bodyweight(), body_weight_kg=None)],
+        [LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(20), load=_bodyweight(), body_weight_kg=None)],
     )
 
     # Act
@@ -428,7 +430,7 @@ def test_no_nudge_for_an_absolute_load_exercise():
     s = _session(sessions, "user_n4")
     _log(
         logged, "user_n4", s, date(2026, 1, 1),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_absolute(100.0))],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_absolute(100.0))],
     )
 
     # Act

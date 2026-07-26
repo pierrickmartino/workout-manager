@@ -9,6 +9,8 @@ Record is hidden (``None``) for a movement with no absolute-Load history."""
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+
 from datetime import date
 
 from fastapi.testclient import TestClient
@@ -68,7 +70,7 @@ def _perform(sessions, logged, user, exercise_id, performed_on, reps, load):
             session_id=session_view.id,
             performed_on=performed_on,
             logged_sets=[
-                LoggedSetDraft(exercise_id=exercise_id, reps=reps, load=load)
+                LoggedSetDraft(exercise_id=exercise_id, quantity=reps_quantity(reps), load=load)
             ],
         ),
     )
@@ -92,7 +94,7 @@ def _perform_bw(sessions, logged, user, exercise_id, performed_on, reps, *, adde
             logged_sets=[
                 LoggedSetDraft(
                     exercise_id=exercise_id,
-                    reps=reps,
+                    quantity=reps_quantity(reps),
                     load=_bodyweight(added_kg),
                     body_weight_kg=mass,
                 )

@@ -7,6 +7,8 @@ their history back. Ownership and validation are enforced at the boundary."""
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+
 from fastapi.testclient import TestClient
 
 from app.auth.dependencies import get_jwks
@@ -87,7 +89,8 @@ def _log_body(session, **overrides):
         "logged_sets": [
             {
                 "exercise_id": exercise_id,
-                "reps": 5,
+                "quantity_kind": "repetitions",
+                "quantity_value": "5",
                 "load_kind": "absolute",
                 "load_value": "70",
                 "perceived_difficulty": 8,
@@ -130,7 +133,7 @@ def test_user_logs_a_performance_and_reads_it_back_in_history():
     assert data["session_id"] == session["id"]
     assert data["performed_on"] == "2026-06-20"
     assert data["training_type"] == "strength"
-    assert data["logged_sets"][0]["reps"] == 5
+    assert data["logged_sets"][0]["quantity"] == reps_quantity(5)
     assert data["logged_sets"][0]["load"] == load_from_input("absolute", "70").to_dict()
     assert data["logged_sets"][0]["perceived_difficulty"] == 8
     assert data["logged_sets"][0]["exercise_name"] == "Back Squat"
@@ -333,7 +336,7 @@ def test_logging_an_unknown_exercise_is_rejected():
     response = client.post(
         f"/api/sessions/{session['id']}/logs",
         headers=headers,
-        json=_log_body(session, logged_sets=[{"exercise_id": 9999, "reps": 5}]),
+        json=_log_body(session, logged_sets=[{"exercise_id": 9999, "quantity_value": "5"}]),
     )
 
     # Assert

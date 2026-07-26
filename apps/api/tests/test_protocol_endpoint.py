@@ -11,6 +11,8 @@ in-memory queue's ``work()`` stands in for the out-of-process RQ worker.
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+
 from datetime import date
 
 from fastapi.testclient import TestClient
@@ -400,7 +402,7 @@ def test_fetched_protocol_shows_progressed_load_for_upcoming_sessions():
             logged_sets=[
                 LoggedSetDraft(
                     exercise_id=week_one["prescriptions"][0]["exercise_id"],
-                    reps=5,
+                    quantity=reps_quantity(5),
                     load=parse_load("60 kg").to_dict(),
                     perceived_difficulty=6,
                 )

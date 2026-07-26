@@ -16,6 +16,8 @@ flows down both paths — offline, no ORM."""
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+
 from datetime import date
 
 from app.domain.achievements import Achievement, evaluate_achievements
@@ -88,7 +90,7 @@ def test_a_bodyweight_personal_record_also_unlocks_the_first_record_milestone():
     history = _history(
         LoggedSetDraft(
             exercise_id=PULL_UP,
-            reps=5,
+            quantity=reps_quantity(5),
             load=_bodyweight(),
             body_weight_kg=PERFORMED_BODY_WEIGHT,
         )
@@ -109,7 +111,7 @@ def test_a_bodyweight_personal_record_also_unlocks_the_first_record_milestone():
 def test_an_absolute_personal_record_also_unlocks_the_first_record_milestone():
     # Arrange — the long-standing absolute-load path, guarded against regression
     history = _history(
-        LoggedSetDraft(exercise_id=PULL_UP, reps=5, load=_absolute(100.0))
+        LoggedSetDraft(exercise_id=PULL_UP, quantity=reps_quantity(5), load=_absolute(100.0))
     )
 
     # Act
@@ -125,7 +127,7 @@ def test_an_absolute_personal_record_also_unlocks_the_first_record_milestone():
 def test_a_bodyweight_set_with_no_performed_body_weight_unlocks_neither():
     # Arrange — no mass on file, so the set scores against nothing and is never guessed
     history = _history(
-        LoggedSetDraft(exercise_id=PULL_UP, reps=5, load=_bodyweight())
+        LoggedSetDraft(exercise_id=PULL_UP, quantity=reps_quantity(5), load=_bodyweight())
     )
 
     # Act
@@ -144,7 +146,7 @@ def test_a_qualitative_history_unlocks_neither():
     history = _history(
         LoggedSetDraft(
             exercise_id=PULL_UP,
-            reps=5,
+            quantity=reps_quantity(5),
             load=qualitative,
             body_weight_kg=PERFORMED_BODY_WEIGHT,
         )

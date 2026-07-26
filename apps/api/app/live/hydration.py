@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
+from app.domain.quantity import repetitions_of
 from app.protocols.progress import latest_sets_by_exercise, progressed_prescription
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
@@ -31,9 +32,12 @@ from app.repositories.session_repository import SessionRepository, SessionView
 
 @dataclass(frozen=True)
 class PreviousSetView:
-    """One set of an Exercise's previous performance — the reps and load to beat."""
+    """One set of an Exercise's previous performance — the reps and load to beat.
 
-    reps: int
+    ``reps`` is read from the set's typed Quantity (ADR-0032) via its ``repetitions``
+    accessor; a set with a non-rep amount (a run, a hold) surfaces ``None`` reps."""
+
+    reps: int | None
     load: dict | None
 
 
@@ -52,7 +56,9 @@ class HydratedSessionView:
 
 
 def _previous_set_view(logged_set: LoggedSetView) -> PreviousSetView:
-    return PreviousSetView(reps=logged_set.reps, load=logged_set.load)
+    return PreviousSetView(
+        reps=repetitions_of(logged_set.quantity), load=logged_set.load
+    )
 
 
 def hydrate_session(

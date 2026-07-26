@@ -126,6 +126,20 @@ class Quantity:
         )
 
 
+def repetitions_of(stored: dict | None) -> int | None:
+    """The rep count carried by a *stored* Quantity dict, or ``None`` for a non-rep amount.
+
+    The one accessor the strength/volume read paths reach a logged set's reps through
+    (ADR-0032): it rebuilds the Quantity from its JSON-column form and reads
+    ``repetitions``, so a load-less ``None`` column, or a distance/duration amount,
+    degrades to ``None`` at a single call site instead of each caller re-deciding.
+    """
+
+    if stored is None:
+        return None
+    return Quantity.from_dict(stored).repetitions
+
+
 def quantity_from_input(
     kind: str,
     value: str | None,
@@ -189,4 +203,5 @@ __all__ = [
     "QuantityKind",
     "Quantity",
     "quantity_from_input",
+    "repetitions_of",
 ]
