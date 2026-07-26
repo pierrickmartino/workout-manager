@@ -9,9 +9,11 @@ authentication like the rest of the API. Responses use the standard envelope."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, field_validator
 
 from app.auth.dependencies import get_current_user
 from app.db.models import Exercise
+from app.domain.exercise import Provenance, normalize_name
 from app.domain.substitution import RelationKind
 from app.envelope import success_envelope
 from app.repositories.deps import (
@@ -32,6 +34,10 @@ HTTP_NOT_FOUND = 404
 # never returns an unbounded slice of the catalog.
 DEFAULT_SEARCH_LIMIT = 20
 MAX_SEARCH_LIMIT = 50
+
+# The sane upper bound on a user-typed movement name: long enough for any real
+# movement, short enough to reject a junk paste before it enters the shared catalog.
+MAX_NAME_LENGTH = 100
 
 
 def _search_result(exercise: Exercise) -> dict:
@@ -70,6 +76,46 @@ def search_exercises(
         [_search_result(exercise) for exercise in page.items],
         meta={"total": page.total, "limit": limit, "offset": offset},
     )
+
+
+class CreateExerciseBody(BaseModel):
+    """A request to resolve-or-create a catalog Exercise by name (ADR-0033).
+
+    The plan-less log picker (ADR-0031) posts this when a user names a movement the
+    catalog may not yet hold. The name must have a non-empty normalized identity and
+    stay within ``MAX_NAME_LENGTH`` — the two boundary guards that keep whitespace and
+    junk pastes out of the shared global catalog."""
+
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def _has_normalized_identity(cls, value: str) -> str:
+        if not normalize_name(value):
+            raise ValueError("name must not be blank")
+        if len(value.strip()) > MAX_NAME_LENGTH:
+            raise ValueError(f"name must be at most {MAX_NAME_LENGTH} characters")
+        return value
+
+
+@router.post("/exercises")
+def create_exercise(
+    payload: CreateExerciseBody,
+    _: str = Depends(get_current_user),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+) -> dict:
+    """Resolve ``name`` to a catalog Exercise, creating a ``user_entered`` one on a miss.
+
+    Dedup is by normalized name (ADR-0002), so an existing entry — curated, AI, or a
+    prior user-entered one — is returned as-is with its Provenance untouched; only a
+    genuine miss mints a new, name-only ``user_entered`` movement. This is the sole
+    place a user's typed movement enters the catalog; the log write stays id-only and
+    never mints (ADR-0031/0033). Responses use the standard envelope."""
+
+    exercise = exercises.find_or_create(
+        payload.name, provenance=Provenance.USER_ENTERED
+    )
+    return success_envelope(_search_result(exercise))
 
 
 def _summary(related: RelatedExercise) -> dict:
