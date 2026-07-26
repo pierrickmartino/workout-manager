@@ -47,7 +47,7 @@ How much of a movement a set prescribes or records, expressed as one of several 
 _Avoid_: Reps (bare — that is one kind), work, volume (that is kg tonnage), amount, measure
 
 **Provenance**:
-Whether a catalog Exercise is `ai_generated` (created by the AI, unvalidated) or `curated` (reviewed and trusted). Carried on every Exercise so unvalidated content can be flagged, audited, and later merged or corrected — important given the domain's caution around injury, rehab, and postpartum cases.
+How a catalog Exercise came to exist and how far it can be trusted: `curated` (reviewed by a human, trusted), `ai_generated` (invented by the AI, unvalidated), or `user_entered` (typed by a user when logging an ad-hoc movement with no AI call — the least-validated tier, born with only a name). Carried on every Exercise so unvalidated content can be flagged, audited, and later enriched, merged, or corrected — important given the domain's caution around injury, rehab, and postpartum cases.
 _Avoid_: Source, origin, verified flag
 
 **Variation**:

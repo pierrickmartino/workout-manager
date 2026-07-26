@@ -57,6 +57,9 @@ def test_provenance_values_match_the_domain_vocabulary():
     # Assert — the exact stored strings, per the glossary
     assert Provenance.AI_GENERATED.value == "ai_generated"
     assert Provenance.CURATED.value == "curated"
+    # The third, least-validated tier: a user-typed ad-hoc movement created with no
+    # AI call when logging plan-less (ADR-0033, amending ADR-0002).
+    assert Provenance.USER_ENTERED.value == "user_entered"
 
 
 # Execution Steps (ADR-0015): the single source of truth for the newline-split
@@ -124,6 +127,25 @@ def test_rank_orders_curated_before_ai_generated():
     assert [m.provenance for m in ranked] == [
         Provenance.CURATED.value,
         Provenance.AI_GENERATED.value,
+    ]
+
+
+def test_rank_orders_curated_then_ai_generated_then_user_entered():
+    # Arrange — one match of each Provenance, deliberately in reverse trust order
+    matches = [
+        _Match(Provenance.USER_ENTERED.value, "a movement"),
+        _Match(Provenance.AI_GENERATED.value, "a movement"),
+        _Match(Provenance.CURATED.value, "a movement"),
+    ]
+
+    # Act
+    ranked = rank_exercise_matches(matches)
+
+    # Assert — most-trusted first, least-validated (user-typed) last (ADR-0033)
+    assert [m.provenance for m in ranked] == [
+        Provenance.CURATED.value,
+        Provenance.AI_GENERATED.value,
+        Provenance.USER_ENTERED.value,
     ]
 
 

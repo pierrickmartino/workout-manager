@@ -19,10 +19,27 @@ _WHITESPACE = re.compile(r"\s+")
 
 
 class Provenance(str, Enum):
-    """Whether a catalog Exercise was invented by the AI or reviewed by a human."""
+    """How a catalog Exercise came to exist and how far it can be trusted (ADR-0033).
 
-    AI_GENERATED = "ai_generated"
+    ``CURATED`` is human-reviewed and trusted; ``AI_GENERATED`` was invented by the
+    AI and is unvalidated; ``USER_ENTERED`` was typed by a user when logging an
+    ad-hoc movement with no AI call — the least-validated tier, born with only a
+    name until a later enrichment pass fills it in.
+    """
+
     CURATED = "curated"
+    AI_GENERATED = "ai_generated"
+    USER_ENTERED = "user_entered"
+
+
+# Search ordering by trust: curated first, then AI-invented, then user-typed. Kept
+# as an explicit map so the ranking is total over the vocabulary; any unknown value
+# falls into the AI-generated tier, preserving the pre-ADR-0033 "non-curated → 1".
+_PROVENANCE_RANK: dict[str, int] = {
+    Provenance.CURATED.value: 0,
+    Provenance.AI_GENERATED.value: 1,
+    Provenance.USER_ENTERED.value: 2,
+}
 
 
 def normalize_name(name: str) -> str:
@@ -47,19 +64,20 @@ _RankableT = TypeVar("_RankableT", bound=_Rankable)
 
 
 def rank_exercise_matches(matches: list[_RankableT]) -> list[_RankableT]:
-    """Order Exercise Library search results curated-first, then by name.
+    """Order Exercise Library search results by trust, then by name.
 
     The library surfaces the trusted, human-reviewed catalog before AI-invented
-    entries (ADR-0002/0021), and within each Provenance tier orders by the
-    normalized name so results read A→Z. Pure and non-mutating: the input list is
-    left as the caller passed it; a new, sorted list is returned. ``sorted`` is
-    stable, so matches identical on both keys keep their original relative order.
+    entries and those before user-typed ones (ADR-0002/0021/0033), and within each
+    Provenance tier orders by the normalized name so results read A→Z. Pure and
+    non-mutating: the input list is left as the caller passed it; a new, sorted list
+    is returned. ``sorted`` is stable, so matches identical on both keys keep their
+    original relative order.
     """
 
     return sorted(
         matches,
         key=lambda match: (
-            0 if match.provenance == Provenance.CURATED.value else 1,
+            _PROVENANCE_RANK.get(match.provenance, 1),
             match.normalized_name,
         ),
     )
