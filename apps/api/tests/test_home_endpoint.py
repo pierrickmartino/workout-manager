@@ -10,6 +10,8 @@ authentication, the envelope, and that the computed state reaches the payload.""
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+
 from datetime import date
 
 from fastapi.testclient import TestClient
@@ -393,7 +395,7 @@ def test_home_carries_the_latest_personal_record():
         "user_pr",
         protocol.sessions[0].session_id,
         performed_on=date(2026, 7, 10),
-        logged_sets=[LoggedSetDraft(exercise_id=squat, reps=1, load=_abs(142.0))],
+        logged_sets=[LoggedSetDraft(exercise_id=squat, quantity=reps_quantity(1), load=_abs(142.0))],
     )
 
     # Act
@@ -436,7 +438,7 @@ def test_home_latest_pr_is_null_for_an_absolute_load_less_history():
         "user_bw",
         protocol.sessions[0].session_id,
         performed_on=date(2026, 7, 10),
-        logged_sets=[LoggedSetDraft(exercise_id=squat, reps=10, load=bodyweight)],
+        logged_sets=[LoggedSetDraft(exercise_id=squat, quantity=reps_quantity(10), load=bodyweight)],
     )
 
     # Act

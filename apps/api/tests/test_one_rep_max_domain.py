@@ -59,3 +59,12 @@ def test_a_non_set_of_zero_reps_returns_none():
 
     # Assert
     assert estimate is None
+
+
+def test_a_set_with_no_rep_count_returns_none():
+    # Arrange / Act — a set whose amount is not a rep count (a run, a hold) reaches
+    # here as reps=None via the Quantity accessor; it carries no Estimated 1RM.
+    estimate = estimate_1rm(60.0, None)
+
+    # Assert — the None rep-window path degrades to None, never a TypeError
+    assert estimate is None

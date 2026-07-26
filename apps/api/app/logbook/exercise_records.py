@@ -33,6 +33,7 @@ from dataclasses import dataclass
 
 from app.domain.load import LoadKind, ParsedLoad
 from app.domain.one_rep_max import MAX_TRUSTWORTHY_REPS, MIN_TRUSTWORTHY_REPS
+from app.domain.quantity import repetitions_of
 from app.domain.personal_records import (
     LoggedSetRecord,
     PersonalRecord,
@@ -150,7 +151,8 @@ def _needs_body_weight_nudge(
                 continue
             if logged_set.body_weight_kg is not None or logged_set.load is None:
                 continue
-            if not (MIN_TRUSTWORTHY_REPS <= logged_set.reps <= MAX_TRUSTWORTHY_REPS):
+            reps = repetitions_of(logged_set.quantity)
+            if reps is None or not (MIN_TRUSTWORTHY_REPS <= reps <= MAX_TRUSTWORTHY_REPS):
                 continue
             if ParsedLoad.from_dict(logged_set.load).kind is LoadKind.BODYWEIGHT:
                 return True

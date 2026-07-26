@@ -21,6 +21,7 @@ from typing import Protocol
 
 from app.domain.load import LoadKind, ParsedLoad, resolve_bodyweight_kg
 from app.domain.one_rep_max import estimate_1rm
+from app.domain.quantity import repetitions_of
 
 
 @dataclass(frozen=True)
@@ -29,12 +30,15 @@ class LoggedSetRecord:
 
     The date lives on the Logged Session, not the set, so the read model pairs each
     set with its ``performed_on`` here — giving the detector everything it needs to
-    order the stream and stamp each PR without touching the ORM.
+    order the stream and stamp each PR without touching the ORM. ``quantity`` is the
+    typed amount axis (ADR-0032); its ``repetitions`` accessor gives the rep count the
+    Estimated 1RM needs, or ``None`` for a non-rep amount (a run, a hold) that can set
+    no strength record.
     """
 
     exercise_id: int
     exercise_name: str
-    reps: int
+    quantity: dict | None
     load: dict | None
     performed_on: date
     # The Performed Body Weight (ADR-0026) snapshotted onto the set, or ``None`` when
@@ -54,7 +58,7 @@ class LoggedSet(Protocol):
 
     exercise_id: int
     exercise_name: str
-    reps: int
+    quantity: dict | None
     load: dict | None
     body_weight_kg: float | None
 
@@ -89,7 +93,7 @@ def logged_set_records(history: Iterable[LoggedSession]) -> list[LoggedSetRecord
         LoggedSetRecord(
             exercise_id=logged_set.exercise_id,
             exercise_name=logged_set.exercise_name,
-            reps=logged_set.reps,
+            quantity=logged_set.quantity,
             load=logged_set.load,
             performed_on=session.performed_on,
             body_weight_kg=logged_set.body_weight_kg,
@@ -123,7 +127,7 @@ class PersonalRecord:
 
 
 def estimated_1rm_for_set(
-    load: dict | None, reps: int, body_weight_kg: float | None = None
+    load: dict | None, quantity: dict | None, body_weight_kg: float | None = None
 ) -> float | None:
     """The Estimated 1RM for one set, or ``None`` if it can't set a PR.
 
@@ -131,16 +135,19 @@ def estimated_1rm_for_set(
     kg directly, and a ``bodyweight`` load resolves to a kg-equivalent against the
     ``body_weight_kg`` performed at (the snapshotted Performed Body Weight, ADR-0026) —
     ``bodyweight`` or ``bodyweight + added``. A bodyweight set with no captured mass, and
-    every other Load kind (or a load-less set), is ineligible. Reps are gated to the
-    trustworthy window by :func:`estimate_1rm`, so a 13+-rep set of either kind scores
-    ``None``. This is the *one yardstick* the record side compares on — the PR detector,
-    the Personal Record tile, and the top-set trend all qualify a set through it, so
-    "best Est. 1RM" means the same thing everywhere (ADR-0017). Absolute behavior is
-    unchanged: the default ``body_weight_kg`` of ``None`` never affects an absolute set.
+    every other Load kind (or a load-less set), is ineligible. The rep count comes from
+    the Quantity's ``repetitions`` accessor (ADR-0032): a non-rep amount (a run, a hold)
+    yields ``None`` reps and, gated by :func:`estimate_1rm`, scores ``None`` — as does a
+    13+-rep set of either kind. This is the *one yardstick* the record side compares on —
+    the PR detector, the Personal Record tile, and the top-set trend all qualify a set
+    through it, so "best Est. 1RM" means the same thing everywhere (ADR-0017). Absolute
+    behavior is unchanged: the default ``body_weight_kg`` of ``None`` never affects an
+    absolute set.
     """
 
     if load is None:
         return None
+    reps = repetitions_of(quantity)
     parsed = ParsedLoad.from_dict(load)
     if parsed.kind is LoadKind.ABSOLUTE:
         if parsed.kg is None:
@@ -172,7 +179,7 @@ def detect_personal_records(
 
     for record in ordered:
         estimate = estimated_1rm_for_set(
-            record.load, record.reps, record.body_weight_kg
+            record.load, record.quantity, record.body_weight_kg
         )
         if estimate is None:
             continue
@@ -181,6 +188,9 @@ def detect_personal_records(
             continue
         parsed = ParsedLoad.from_dict(record.load) if record.load else None
         is_bodyweight = parsed is not None and parsed.kind is LoadKind.BODYWEIGHT
+        # A set only reaches here with an Estimated 1RM, which requires a rep count in
+        # the trustworthy window, so ``repetitions`` is a real int for the descriptor.
+        reps = repetitions_of(record.quantity)
         records.append(
             PersonalRecord(
                 exercise_id=record.exercise_id,
@@ -188,7 +198,7 @@ def detect_personal_records(
                 estimated_1rm=estimate,
                 gain=0.0 if previous is None else estimate - previous,
                 performed_on=record.performed_on,
-                reps=record.reps,
+                reps=reps if reps is not None else 0,
                 is_bodyweight=is_bodyweight,
                 added_kg=parsed.added_kg if is_bodyweight else None,
             )

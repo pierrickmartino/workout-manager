@@ -13,6 +13,7 @@ from app.domain.progression import (
     next_load,
     next_prescription,
 )
+from tests.quantities import reps_quantity
 
 
 @dataclass
@@ -25,10 +26,18 @@ class _Prescription:
 
 @dataclass
 class _LoggedSet:
-    """Minimal stand-in for one performed set."""
+    """Minimal stand-in for one performed set.
+
+    Built from an ergonomic ``reps`` int, but exposes the typed ``quantity`` the
+    progression actually reads through (ADR-0032) — so these tests stay readable while
+    exercising the real Quantity accessor path."""
 
     reps: int
     perceived_difficulty: int | None = None
+
+    @property
+    def quantity(self) -> dict:
+        return reps_quantity(self.reps)
 
 
 def test_no_logged_sets_holds_the_recommended_load():

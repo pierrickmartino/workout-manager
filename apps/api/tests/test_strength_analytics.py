@@ -10,6 +10,8 @@ with the in-memory Logged-Session repository."""
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+
 from datetime import date, timedelta
 
 from app.domain.exercise import Provenance
@@ -81,14 +83,14 @@ def test_pr_timeline_is_all_time_newest_first_and_gate_is_open():
         logged,
         "user_pr",
         TODAY - timedelta(days=200),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(100.0))],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_abs(100.0))],
     )
     _log(
         sessions,
         logged,
         "user_pr",
         TODAY - timedelta(days=100),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(110.0))],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_abs(110.0))],
     )
 
     # Act
@@ -114,7 +116,7 @@ def test_a_pure_calisthenics_user_with_a_captured_mass_opens_the_gate():
         [
             LoggedSetDraft(
                 exercise_id=PRESS,
-                reps=8,
+                quantity=reps_quantity(8),
                 load=ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict(),
                 body_weight_kg=75.0,
             )
@@ -143,7 +145,7 @@ def test_a_user_with_no_qualifying_strength_gets_a_closed_gate_not_an_error():
         [
             LoggedSetDraft(
                 exercise_id=SQUAT,
-                reps=5,
+                quantity=reps_quantity(5),
                 load=ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict(),
             )
         ],
@@ -185,7 +187,7 @@ def _log_ascending_prs(sessions, logged, user, count):
             logged,
             user,
             TODAY - timedelta(days=day),
-            [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(kg))],
+            [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_abs(kg))],
         )
 
 
@@ -243,8 +245,8 @@ def test_trajectories_rank_the_users_qualifying_lifts_regardless_of_the_page():
         "user_traj",
         TODAY - timedelta(days=10),
         [
-            LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(100.0)),
-            LoggedSetDraft(exercise_id=PRESS, reps=1, load=_abs(60.0)),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_abs(100.0)),
+            LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(1), load=_abs(60.0)),
         ],
     )
     _log(
@@ -252,7 +254,7 @@ def test_trajectories_rank_the_users_qualifying_lifts_regardless_of_the_page():
         logged,
         "user_traj",
         TODAY - timedelta(days=3),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(110.0))],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_abs(110.0))],
     )
 
     # Act — even asking for an empty second page of the PR timeline
@@ -279,7 +281,7 @@ def test_weekly_muscle_balance_spans_the_window_oldest_first_with_this_weeks_spl
         logged,
         "user_bal",
         TODAY,
-        [LoggedSetDraft(exercise_id=SQUAT, reps=5, load=_abs(80.0))],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load=_abs(80.0))],
     )
 
     # Act
@@ -319,7 +321,7 @@ def test_a_user_with_no_qualifying_strength_has_no_trajectories():
         [
             LoggedSetDraft(
                 exercise_id=SQUAT,
-                reps=5,
+                quantity=reps_quantity(5),
                 load=ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict(),
             )
         ],

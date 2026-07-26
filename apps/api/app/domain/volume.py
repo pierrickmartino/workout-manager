@@ -1,15 +1,18 @@
 """Volume — kg tonnage a user actually moved, converted honestly and disclosed.
 
-``set_volume`` turns one Logged Set's typed Load and its integer reps into the
+``set_volume`` turns one Logged Set's typed Load and its typed Quantity into the
 kilograms it moved: an ``absolute`` load is ``reps × kg``; a ``range`` uses its
 midpoint; a ``bodyweight`` set resolves against the user's recorded body weight
 (plus any added kg); and a ``percent_1rm`` set against the Exercise's Estimated 1RM
-(``domain/one_rep_max.py``). When a conversion's input is missing — no recorded body
-weight, no Estimated 1RM yet — the set returns ``None`` rather than a fabricated
-figure (ADR-0010) and falls into the uncovered fraction the series discloses.
-``qualitative`` and load-less sets never resolve.
+(``domain/one_rep_max.py``). The rep count is read through the Quantity's
+``repetitions`` accessor (ADR-0032): a set whose amount is not a rep count — a
+distance or duration Quantity — has ``None`` reps and simply falls out (no tonnage,
+and it does not count toward coverage). When a conversion's input is missing — no
+recorded body weight, no Estimated 1RM yet — the set returns ``None`` rather than a
+fabricated figure (ADR-0010) and falls into the uncovered fraction the series
+discloses. ``qualitative`` and load-less sets never resolve.
 
-Pure and dependency-free over the domain (``load`` only): no ORM, no HTTP."""
+Pure and dependency-free over the domain (``load`` + ``quantity``): no ORM, no HTTP."""
 
 from __future__ import annotations
 
@@ -18,6 +21,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 
 from app.domain.load import LoadKind, ParsedLoad
+from app.domain.quantity import repetitions_of
 
 
 @dataclass(frozen=True)
@@ -29,10 +33,11 @@ class VolumeSet:
     bucket by day and slice the trend windows without touching the ORM. ``exercise_id``
     identifies which Exercise the set belongs to, so a ``percent_1rm`` set can be
     converted against that Exercise's Estimated 1RM; it is irrelevant to the other Load
-    kinds and defaults to ``0``.
+    kinds and defaults to ``0``. ``quantity`` is the typed amount axis (ADR-0032); its
+    ``repetitions`` accessor yields the rep count, or ``None`` for a non-rep amount.
     """
 
-    reps: int
+    quantity: dict | None
     load: dict | None
     performed_on: date
     exercise_id: int = 0
@@ -64,7 +69,7 @@ class VolumeSeries:
 
 def set_volume(
     load: dict | None,
-    reps: int,
+    quantity: dict | None,
     *,
     body_weight_kg: float | None = None,
     estimated_1rm: float | None = None,
@@ -75,13 +80,18 @@ def set_volume(
     ``reps × midpoint(low, high)``. A ``bodyweight`` set converts to
     ``reps × (body_weight_kg + added_kg)`` once ``body_weight_kg`` is supplied, and a
     ``percent_1rm`` set to ``reps × percent/100 × estimated_1rm`` once the Exercise's
-    Estimated 1RM is known. Every conversion that lacks its input — a bodyweight set
-    with no recorded body weight, a percentage set with no Estimated 1RM, a qualitative
-    or load-less set — returns ``None`` and is counted against coverage rather than
-    guessed at.
+    Estimated 1RM is known. The rep count comes from the Quantity's ``repetitions``
+    accessor (ADR-0032); a set with no rep count — a distance or duration amount — is
+    not convertible to tonnage and returns ``None``. Every conversion that lacks its
+    input — a bodyweight set with no recorded body weight, a percentage set with no
+    Estimated 1RM, a qualitative or load-less set — returns ``None`` and is counted
+    against coverage rather than guessed at.
     """
 
     if load is None:
+        return None
+    reps = repetitions_of(quantity)
+    if reps is None:
         return None
     parsed = ParsedLoad.from_dict(load)
     if parsed.kind is LoadKind.ABSOLUTE and parsed.kg is not None:
@@ -131,7 +141,7 @@ def volume_series(
     def convert(s: VolumeSet) -> float | None:
         return set_volume(
             s.load,
-            s.reps,
+            s.quantity,
             body_weight_kg=body_weight_kg,
             estimated_1rm=one_rm.get(s.exercise_id),
         )
@@ -154,8 +164,15 @@ def volume_series(
         )
     points = tuple(VolumePoint(day, by_day[day]) for day in sorted(by_day))
 
-    total_reps = sum(s.reps for s in window)
-    covered_reps = sum(s.reps for s in window if convert(s) is not None)
+    # Only sets that carry a rep count weigh on coverage; a distance/duration set has
+    # no reps and falls out of the fraction entirely (ADR-0032), never counted as zero.
+    windowed_reps = [(s, repetitions_of(s.quantity)) for s in window]
+    total_reps = sum(reps for _, reps in windowed_reps if reps is not None)
+    covered_reps = sum(
+        reps
+        for s, reps in windowed_reps
+        if reps is not None and convert(s) is not None
+    )
     coverage_pct = (covered_reps / total_reps * 100) if total_reps else 0.0
 
     current_volume = sum(by_day.values())

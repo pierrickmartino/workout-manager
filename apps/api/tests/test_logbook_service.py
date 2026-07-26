@@ -7,6 +7,9 @@ over in-memory repositories; no AI and no database."""
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+from app.domain.quantity import repetitions_of
+
 from datetime import date
 
 import pytest
@@ -64,7 +67,7 @@ def test_log_session_records_a_performance_for_the_owner():
         performed_on=date(2026, 6, 20),
         logged_sets=[
             LoggedSetDraft(
-                exercise_id=squat.id, reps=5, load="70kg", perceived_difficulty=8
+                exercise_id=squat.id, quantity=reps_quantity(5), load="70kg", perceived_difficulty=8
             )
         ],
     )
@@ -77,7 +80,7 @@ def test_log_session_records_a_performance_for_the_owner():
     # Assert
     assert view.session_id == session_view.id
     assert view.performed_on == date(2026, 6, 20)
-    assert view.logged_sets[0].reps == 5
+    assert repetitions_of(view.logged_sets[0].quantity) == 5
     assert logged.get(view.id, "user_owner") is not None
 
 
@@ -90,8 +93,8 @@ def test_log_session_snapshots_one_profile_weight_onto_every_set():
         session_id=session_view.id,
         performed_on=date(2026, 6, 20),
         logged_sets=[
-            LoggedSetDraft(exercise_id=squat.id, reps=8),
-            LoggedSetDraft(exercise_id=squat.id, reps=6),
+            LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(8)),
+            LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(6)),
         ],
     )
 
@@ -116,7 +119,7 @@ def test_log_session_without_a_profile_weight_records_no_body_weight():
     request = LogSessionRequest(
         session_id=session_view.id,
         performed_on=date(2026, 6, 20),
-        logged_sets=[LoggedSetDraft(exercise_id=squat.id, reps=8)],
+        logged_sets=[LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(8))],
     )
 
     # Act
@@ -140,7 +143,7 @@ def test_log_session_rejects_logging_another_users_session():
     request = LogSessionRequest(
         session_id=session_view.id,
         performed_on=date(2026, 6, 20),
-        logged_sets=[LoggedSetDraft(exercise_id=squat.id, reps=5)],
+        logged_sets=[LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(5))],
     )
 
     # Act / Assert — a different user may not log it, and nothing is persisted
@@ -163,7 +166,7 @@ def test_log_session_rejects_an_unknown_exercise():
     request = LogSessionRequest(
         session_id=session_view.id,
         performed_on=date(2026, 6, 20),
-        logged_sets=[LoggedSetDraft(exercise_id=9999, reps=5)],
+        logged_sets=[LoggedSetDraft(exercise_id=9999, quantity=reps_quantity(5))],
     )
 
     # Act / Assert

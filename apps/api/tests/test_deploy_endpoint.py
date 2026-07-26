@@ -11,6 +11,8 @@ route tests use.
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+
 from datetime import date
 
 from app.domain.load import parse_load
@@ -78,7 +80,7 @@ def _perform_week_one(h, sub: str, protocol: dict) -> None:
             logged_sets=[
                 LoggedSetDraft(
                     exercise_id=week_one["prescriptions"][0]["exercise_id"],
-                    reps=5,
+                    quantity=reps_quantity(5),
                     load=parse_load("60 kg").to_dict(),
                     perceived_difficulty=6,
                 )

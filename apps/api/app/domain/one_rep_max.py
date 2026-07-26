@@ -20,15 +20,17 @@ MIN_TRUSTWORTHY_REPS = 1
 MAX_TRUSTWORTHY_REPS = 12
 
 
-def estimate_1rm(load_kg: float, reps: int) -> float | None:
+def estimate_1rm(load_kg: float, reps: int | None) -> float | None:
     """Return the Epley Estimated 1RM for ``load_kg`` lifted for ``reps``.
 
     A single rep returns the load unchanged — the lift already is the 1RM. Reps
     outside the trustworthy 1–12 window return ``None``, so AMRAP and high-rep sets
-    never produce a number the domain would treat as comparable.
+    never produce a number the domain would treat as comparable. ``reps`` is ``None``
+    for a set whose amount is not a rep count — a distance or duration Quantity
+    (ADR-0032) — which likewise carries no Estimated 1RM.
     """
 
-    if reps < MIN_TRUSTWORTHY_REPS or reps > MAX_TRUSTWORTHY_REPS:
+    if reps is None or reps < MIN_TRUSTWORTHY_REPS or reps > MAX_TRUSTWORTHY_REPS:
         return None
 
     if reps == 1:

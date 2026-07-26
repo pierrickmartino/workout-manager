@@ -3,12 +3,13 @@
 // data access (Clerk auth + fetch) lives in `lib/progress.ts`.
 
 import type { Load } from "./load";
+import type { Quantity } from "./quantity";
 
 // One actual set within a logged performance, as surfaced on the progress view —
-// the real reps, load, and perceived difficulty the user did.
+// the real amount (a typed Quantity, ADR-0032), load, and perceived difficulty.
 export interface ExerciseProgressSet {
   position: number;
-  reps: number;
+  quantity: Quantity | null;
   load: Load | null;
   perceived_difficulty: number | null;
 }

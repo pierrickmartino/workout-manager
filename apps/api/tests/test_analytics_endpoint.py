@@ -9,6 +9,8 @@ error; an unknown range is rejected in the standard error envelope."""
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+
 from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
@@ -75,7 +77,7 @@ def _perform(sessions, logged, user, performed_on, set_count):
             session_id=session_view.id,
             performed_on=performed_on,
             logged_sets=[
-                LoggedSetDraft(exercise_id=SQUAT, reps=5) for _ in range(set_count)
+                LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5)) for _ in range(set_count)
             ],
         ),
     )
@@ -94,7 +96,7 @@ def _perform_pr(sessions, logged, user, performed_on, kg):
         LoggedSessionDraft(
             session_id=session_view.id,
             performed_on=performed_on,
-            logged_sets=[LoggedSetDraft(exercise_id=SQUAT, reps=1, load=load)],
+            logged_sets=[LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=load)],
         ),
     )
 
@@ -177,7 +179,7 @@ def test_analytics_discloses_in_window_unclassified_work_in_the_envelope():
         LoggedSessionDraft(
             session_id=session_view.id,
             performed_on=date.today(),
-            logged_sets=[LoggedSetDraft(exercise_id=mystery.id, reps=5)],
+            logged_sets=[LoggedSetDraft(exercise_id=mystery.id, quantity=reps_quantity(5))],
         ),
     )
 
@@ -322,7 +324,7 @@ def _perform_load(sessions, logged, user, performed_on, kg, reps):
         LoggedSessionDraft(
             session_id=session_view.id,
             performed_on=performed_on,
-            logged_sets=[LoggedSetDraft(exercise_id=SQUAT, reps=reps, load=load)],
+            logged_sets=[LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(reps), load=load)],
         ),
     )
 
@@ -362,7 +364,7 @@ def _perform_bodyweight(sessions, logged, user, performed_on, reps):
         LoggedSessionDraft(
             session_id=session_view.id,
             performed_on=performed_on,
-            logged_sets=[LoggedSetDraft(exercise_id=SQUAT, reps=reps, load=load)],
+            logged_sets=[LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(reps), load=load)],
         ),
     )
 

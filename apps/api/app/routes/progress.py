@@ -31,7 +31,7 @@ def _serialize(view: ExerciseProgressView) -> dict:
                 "sets": [
                     {
                         "position": s.position,
-                        "reps": s.reps,
+                        "quantity": s.quantity,
                         "load": s.load,
                         "perceived_difficulty": s.perceived_difficulty,
                     }

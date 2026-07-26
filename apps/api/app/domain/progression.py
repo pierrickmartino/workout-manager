@@ -34,6 +34,7 @@ from enum import Enum
 from typing import Protocol
 
 from app.domain.load import LoadKind, parse_load
+from app.domain.quantity import repetitions_of
 
 # A fixed-increment step keeps the rule simple and auditable (vs. percentage math
 # on noisy free-text loads). Reductions are larger than increases: backing off
@@ -57,7 +58,10 @@ class _Prescription(Protocol):
 
 
 class _LoggedSet(Protocol):
-    reps: int
+    # The typed amount axis (ADR-0032); its rep count is read through
+    # ``repetitions_of``. A set with a non-rep amount (a run, a hold) has ``None`` reps
+    # and neither counts as a missed-reps miss nor as having hit the rep ceiling.
+    quantity: dict | None
     perceived_difficulty: int | None
 
 
@@ -175,7 +179,7 @@ def next_prescription(
 
     # Missed reps take precedence: backing off is the cautious direction, so it is
     # decided before any increase even if effort happened to read as low.
-    if any(logged.reps < floor for logged in logged_sets):
+    if _missed_reps(logged_sets, floor):
         stepped = _format_load(max(value - DECREASE_KG, 0.0), suffix)
         return NextPrescription(ProgressionKind.LOAD_STEP, reps, stepped)
 
@@ -205,7 +209,7 @@ def _next_bodyweight(
     if added_kg is None:
         return _next_pure_bodyweight(reps, current, floor, ceiling, logged_sets)
 
-    if any(logged.reps < floor for logged in logged_sets):
+    if _missed_reps(logged_sets, floor):
         stepped = _format_added(max(added_kg - DECREASE_KG, 0.0))
         return NextPrescription(ProgressionKind.ADDED_LOAD_STEP, reps, stepped)
 
@@ -255,8 +259,27 @@ def _format_added(added: float) -> str:
     return f"bodyweight + {number} kg"
 
 
+def _missed_reps(logged_sets: list[_LoggedSet], floor: int) -> bool:
+    """Whether any set fell below the rep floor — a miss that backs the load off.
+
+    A set with no rep count (a distance or duration amount, ADR-0032) is not a
+    missed-reps event and is skipped, never triggering a decrease.
+    """
+
+    return any(
+        (reps := repetitions_of(logged.quantity)) is not None and reps < floor
+        for logged in logged_sets
+    )
+
+
 def _hit_ceiling(logged_sets: list[_LoggedSet], ceiling: int) -> bool:
-    return all(logged.reps >= ceiling for logged in logged_sets)
+    """Whether every set reached the rep ceiling. A set with no rep count has not
+    reached it, so its presence holds the load rather than stepping it up."""
+
+    return all(
+        (reps := repetitions_of(logged.quantity)) is not None and reps >= ceiling
+        for logged in logged_sets
+    )
 
 
 def _low_effort(logged_sets: list[_LoggedSet]) -> bool:

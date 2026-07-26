@@ -5,6 +5,7 @@ import type {
   ExerciseProgressPoint,
 } from "@/lib/progress-types";
 import { formatLoad } from "@/lib/load";
+import { formatQuantity } from "@/lib/quantity";
 import { Card } from "@/components/ui/card";
 
 interface HistoryPanelProps {
@@ -72,7 +73,7 @@ function ProgressPoint({ point }: { point: ExerciseProgressPoint }) {
               {set.position + 1}
             </span>
             <span className="text-right font-display text-sm font-semibold text-text-primary">
-              {set.reps}
+              {formatQuantity(set.quantity)}
             </span>
             <span className="text-right font-mono text-[13px] text-text-secondary">
               {formatLoad(set.load)}

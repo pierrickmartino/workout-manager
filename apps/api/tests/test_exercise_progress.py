@@ -10,6 +10,9 @@ the in-memory Logged-Session repository."""
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+from app.domain.quantity import repetitions_of
+
 from datetime import date
 
 from app.domain.exercise import Provenance
@@ -71,7 +74,7 @@ def test_one_performance_of_an_exercise_becomes_one_progress_point():
         "user_a",
         session_id,
         date(2026, 1, 1),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=5, load="100kg", perceived_difficulty=7)],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load="100kg", perceived_difficulty=7)],
     )
 
     # Act
@@ -83,7 +86,7 @@ def test_one_performance_of_an_exercise_becomes_one_progress_point():
     assert len(progress.points) == 1
     point = progress.points[0]
     assert point.performed_on == date(2026, 1, 1)
-    assert [s.reps for s in point.sets] == [5]
+    assert [repetitions_of(s.quantity) for s in point.sets] == [5]
     assert point.sets[0].load == "100kg"
     assert point.sets[0].perceived_difficulty == 7
 
@@ -95,11 +98,11 @@ def test_performances_are_ordered_oldest_first_for_a_left_to_right_chart():
     s2 = _session(sessions, "user_b")
     s3 = _session(sessions, "user_b")
     _log(logged, "user_b", s2, date(2026, 2, 1),
-         [LoggedSetDraft(exercise_id=SQUAT, reps=5, load="105kg")])
+         [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load="105kg")])
     _log(logged, "user_b", s1, date(2026, 1, 1),
-         [LoggedSetDraft(exercise_id=SQUAT, reps=5, load="100kg")])
+         [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load="100kg")])
     _log(logged, "user_b", s3, date(2026, 3, 1),
-         [LoggedSetDraft(exercise_id=SQUAT, reps=5, load="110kg")])
+         [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load="110kg")])
 
     # Act
     progress = exercise_progress("user_b", SQUAT, logged=logged)
@@ -119,11 +122,11 @@ def test_only_the_requested_exercise_contributes_points_and_sets():
     mixed = _session(sessions, "user_c")
     press_only = _session(sessions, "user_c")
     _log(logged, "user_c", mixed, date(2026, 1, 1), [
-        LoggedSetDraft(exercise_id=SQUAT, reps=5, load="100kg"),
-        LoggedSetDraft(exercise_id=PRESS, reps=8, load="40kg"),
+        LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load="100kg"),
+        LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(8), load="40kg"),
     ])
     _log(logged, "user_c", press_only, date(2026, 1, 2), [
-        LoggedSetDraft(exercise_id=PRESS, reps=8, load="42kg"),
+        LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(8), load="42kg"),
     ])
 
     # Act
@@ -140,9 +143,9 @@ def test_multiple_sets_of_the_exercise_in_one_session_group_under_one_point():
     _, sessions, logged = _build()
     session_id = _session(sessions, "user_d")
     _log(logged, "user_d", session_id, date(2026, 1, 1), [
-        LoggedSetDraft(exercise_id=SQUAT, reps=5, load="100kg"),
-        LoggedSetDraft(exercise_id=SQUAT, reps=5, load="100kg"),
-        LoggedSetDraft(exercise_id=SQUAT, reps=4, load="100kg"),
+        LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load="100kg"),
+        LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load="100kg"),
+        LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(4), load="100kg"),
     ])
 
     # Act
@@ -150,7 +153,7 @@ def test_multiple_sets_of_the_exercise_in_one_session_group_under_one_point():
 
     # Assert — one date, three sets under it
     assert len(progress.points) == 1
-    assert [s.reps for s in progress.points[0].sets] == [5, 5, 4]
+    assert [repetitions_of(s.quantity) for s in progress.points[0].sets] == [5, 5, 4]
 
 
 def test_progress_is_empty_when_the_exercise_was_never_performed():
@@ -158,7 +161,7 @@ def test_progress_is_empty_when_the_exercise_was_never_performed():
     _, sessions, logged = _build()
     session_id = _session(sessions, "user_e")
     _log(logged, "user_e", session_id, date(2026, 1, 1),
-         [LoggedSetDraft(exercise_id=PRESS, reps=8, load="40kg")])
+         [LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(8), load="40kg")])
 
     # Act
     progress = exercise_progress("user_e", SQUAT, logged=logged)
@@ -174,9 +177,9 @@ def test_another_users_performances_do_not_appear_in_my_progress():
     mine = _session(sessions, "user_me")
     theirs = _session(sessions, "user_them")
     _log(logged, "user_them", theirs, date(2026, 1, 1),
-         [LoggedSetDraft(exercise_id=SQUAT, reps=5, load="200kg")])
+         [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load="200kg")])
     _log(logged, "user_me", mine, date(2026, 1, 2),
-         [LoggedSetDraft(exercise_id=SQUAT, reps=5, load="100kg")])
+         [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load="100kg")])
 
     # Act
     progress = exercise_progress("user_me", SQUAT, logged=logged)

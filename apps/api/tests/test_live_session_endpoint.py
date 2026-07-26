@@ -8,6 +8,8 @@ are injected via dependency overrides so the test runs offline."""
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+
 from datetime import date
 
 from fastapi.testclient import TestClient
@@ -103,7 +105,7 @@ def test_live_hydration_returns_progressed_loads_and_previous_performance():
                 logged_sets=[
                     LoggedSetDraft(
                         exercise_id=squat.id,
-                        reps=5,
+                        quantity=reps_quantity(5),
                         load=parse_load("60 kg").to_dict(),
                         perceived_difficulty=6,
                     )

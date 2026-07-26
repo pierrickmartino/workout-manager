@@ -9,6 +9,9 @@ training type — consumers never touch the ORM."""
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+from app.domain.quantity import repetitions_of
+
 from datetime import date
 
 import pytest
@@ -79,10 +82,10 @@ def _log_draft(session_id, squat, press) -> LoggedSessionDraft:
         performed_on=date(2026, 6, 20),
         logged_sets=[
             LoggedSetDraft(
-                exercise_id=squat.id, reps=5, load="70kg", perceived_difficulty=8
+                exercise_id=squat.id, quantity=reps_quantity(5), load="70kg", perceived_difficulty=8
             ),
             LoggedSetDraft(
-                exercise_id=press.id, reps=10, load="30kg", perceived_difficulty=6
+                exercise_id=press.id, quantity=reps_quantity(10), load="30kg", perceived_difficulty=6
             ),
         ],
     )
@@ -101,7 +104,7 @@ def test_logged_session_round_trips_with_its_sets(repos):
     assert view.clerk_user_id == "user_owner"
     assert view.session_id == session_view.id
     assert view.performed_on == date(2026, 6, 20)
-    assert [s.reps for s in view.logged_sets] == [5, 10]
+    assert [repetitions_of(s.quantity) for s in view.logged_sets] == [5, 10]
     assert [s.load for s in view.logged_sets] == ["70kg", "30kg"]
     assert [s.perceived_difficulty for s in view.logged_sets] == [8, 6]
     assert [s.exercise_name for s in view.logged_sets] == [
@@ -122,7 +125,7 @@ def test_same_session_can_be_logged_multiple_times_separately(repos):
         LoggedSessionDraft(
             session_id=session_view.id,
             performed_on=date(2026, 6, 20),
-            logged_sets=[LoggedSetDraft(exercise_id=squat.id, reps=5, load="70kg")],
+            logged_sets=[LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(5), load="70kg")],
         ),
     )
     second = logged.create(
@@ -130,15 +133,15 @@ def test_same_session_can_be_logged_multiple_times_separately(repos):
         LoggedSessionDraft(
             session_id=session_view.id,
             performed_on=date(2026, 6, 27),
-            logged_sets=[LoggedSetDraft(exercise_id=squat.id, reps=6, load="72kg")],
+            logged_sets=[LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(6), load="72kg")],
         ),
     )
 
     # Assert — each performance is its own record, both tied to the same Session
     assert first.id != second.id
     assert first.session_id == second.session_id == session_view.id
-    assert logged.get(first.id, "user_owner").logged_sets[0].reps == 5
-    assert logged.get(second.id, "user_owner").logged_sets[0].reps == 6
+    assert repetitions_of(logged.get(first.id, "user_owner").logged_sets[0].quantity) == 5
+    assert repetitions_of(logged.get(second.id, "user_owner").logged_sets[0].quantity) == 6
 
 
 def test_completion_outcome_round_trips_on_the_record(repos):
@@ -153,7 +156,7 @@ def test_completion_outcome_round_trips_on_the_record(repos):
             session_id=session_view.id,
             performed_on=date(2026, 6, 20),
             completion_outcome="incomplete",
-            logged_sets=[LoggedSetDraft(exercise_id=squat.id, reps=5)],
+            logged_sets=[LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(5))],
         ),
     )
 
@@ -186,7 +189,7 @@ def test_duration_seconds_round_trips_on_the_record(repos):
             session_id=session_view.id,
             performed_on=date(2026, 6, 20),
             duration_seconds=1830,
-            logged_sets=[LoggedSetDraft(exercise_id=squat.id, reps=5)],
+            logged_sets=[LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(5))],
         ),
     )
 
@@ -238,7 +241,7 @@ def test_history_lists_users_logs_newest_first(repos):
             LoggedSessionDraft(
                 session_id=session_view.id,
                 performed_on=performed_on,
-                logged_sets=[LoggedSetDraft(exercise_id=squat.id, reps=5)],
+                logged_sets=[LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(5))],
             ),
         )
 

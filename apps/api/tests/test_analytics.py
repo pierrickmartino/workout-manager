@@ -11,6 +11,8 @@ owning user. Exercised with the in-memory Logged-Session repository."""
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+
 from datetime import date, timedelta
 
 from app.domain.exercise import Provenance
@@ -86,9 +88,9 @@ def test_counts_sessions_active_days_and_total_sets_in_the_window():
         "user_a",
         TODAY,
         [
-            LoggedSetDraft(exercise_id=SQUAT, reps=5),
-            LoggedSetDraft(exercise_id=SQUAT, reps=5),
-            LoggedSetDraft(exercise_id=PRESS, reps=8),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5)),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5)),
+            LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(8)),
         ],
     )
     _log(
@@ -97,8 +99,8 @@ def test_counts_sessions_active_days_and_total_sets_in_the_window():
         "user_a",
         TODAY - timedelta(days=1),
         [
-            LoggedSetDraft(exercise_id=SQUAT, reps=5),
-            LoggedSetDraft(exercise_id=PRESS, reps=8),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5)),
+            LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(8)),
         ],
     )
 
@@ -123,9 +125,9 @@ def test_overview_carries_the_set_count_muscle_distribution_for_the_window():
         "user_dist",
         TODAY,
         [
-            LoggedSetDraft(exercise_id=SQUAT, reps=5),
-            LoggedSetDraft(exercise_id=SQUAT, reps=5),
-            LoggedSetDraft(exercise_id=PRESS, reps=8),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5)),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5)),
+            LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(8)),
         ],
     )
 
@@ -163,14 +165,14 @@ def test_muscle_distribution_only_covers_sessions_inside_the_window():
         logged,
         "user_win",
         TODAY - timedelta(days=1),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=5)],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5))],
     )
     _log(
         sessions,
         logged,
         "user_win",
         TODAY - timedelta(days=10),
-        [LoggedSetDraft(exercise_id=PRESS, reps=8)],
+        [LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(8))],
     )
 
     # Act — the 7d window excludes the 10-day-old Press session
@@ -191,14 +193,14 @@ def test_sessions_outside_the_rolling_window_are_excluded():
         logged,
         "user_b",
         TODAY - timedelta(days=6),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=5)],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5))],
     )
     _log(
         sessions,
         logged,
         "user_b",
         TODAY - timedelta(days=7),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=5)],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5))],
     )
 
     # Act
@@ -219,7 +221,7 @@ def test_a_wider_range_pulls_in_sessions_a_shorter_one_excludes():
         logged,
         "user_c",
         TODAY - timedelta(days=20),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=5)],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5))],
     )
 
     # Act
@@ -255,7 +257,7 @@ def test_another_users_sessions_do_not_count_toward_my_totals():
     # Arrange — the owner and another user both trained today
     _, sessions, logged = _build()
     _log(
-        sessions, logged, "user_me", TODAY, [LoggedSetDraft(exercise_id=SQUAT, reps=5)]
+        sessions, logged, "user_me", TODAY, [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5))]
     )
     _log(
         sessions,
@@ -263,8 +265,8 @@ def test_another_users_sessions_do_not_count_toward_my_totals():
         "user_them",
         TODAY,
         [
-            LoggedSetDraft(exercise_id=SQUAT, reps=5),
-            LoggedSetDraft(exercise_id=PRESS, reps=8),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5)),
+            LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(8)),
         ],
     )
 
@@ -287,14 +289,14 @@ def test_recent_records_surface_all_time_prs_newest_first_decoupled_from_the_win
         logged,
         "user_pr",
         TODAY - timedelta(days=200),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(100.0))],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_abs(100.0))],
     )
     _log(
         sessions,
         logged,
         "user_pr",
         TODAY - timedelta(days=100),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(110.0))],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_abs(110.0))],
     )
 
     # Act — the short window would exclude both, but the feed is decoupled from it
@@ -322,7 +324,7 @@ def test_recent_records_surface_a_bodyweight_pr_so_the_nav_gate_admits_calisthen
         [
             LoggedSetDraft(
                 exercise_id=PRESS,
-                reps=8,
+                quantity=reps_quantity(8),
                 load=ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict(),
                 body_weight_kg=75.0,
             )
@@ -352,7 +354,7 @@ def test_recent_records_keep_only_the_eight_most_recent():
             logged,
             "user_many",
             TODAY - timedelta(days=day),
-            [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(kg))],
+            [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_abs(kg))],
         )
 
     # Act
@@ -373,14 +375,14 @@ def test_new_prs_count_only_records_dated_inside_the_window():
         logged,
         "user_win_pr",
         TODAY - timedelta(days=40),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(100.0))],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_abs(100.0))],
     )
     _log(
         sessions,
         logged,
         "user_win_pr",
         TODAY - timedelta(days=2),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(110.0))],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_abs(110.0))],
     )
 
     # Act
@@ -401,7 +403,7 @@ def test_a_user_with_no_records_has_an_empty_feed_and_zero_new_prs():
         logged,
         "user_no_pr",
         TODAY,
-        [LoggedSetDraft(exercise_id=SQUAT, reps=5)],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5))],
     )
 
     # Act
@@ -417,8 +419,8 @@ def test_a_user_with_no_records_has_an_empty_feed_and_zero_new_prs():
 def test_two_sessions_on_the_same_day_are_two_sessions_but_one_active_day():
     # Arrange — a double-session day
     _, sessions, logged = _build()
-    _log(sessions, logged, "user_d", TODAY, [LoggedSetDraft(exercise_id=SQUAT, reps=5)])
-    _log(sessions, logged, "user_d", TODAY, [LoggedSetDraft(exercise_id=PRESS, reps=8)])
+    _log(sessions, logged, "user_d", TODAY, [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5))])
+    _log(sessions, logged, "user_d", TODAY, [LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(8))])
 
     # Act
     overview = analytics_overview(
@@ -451,14 +453,14 @@ def test_overview_carries_the_daily_volume_series_for_the_window():
         logged,
         "user_vol",
         TODAY,
-        [LoggedSetDraft(exercise_id=SQUAT, reps=5, load=_abs_load(100.0))],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load=_abs_load(100.0))],
     )
     _log(
         sessions,
         logged,
         "user_vol",
         TODAY - timedelta(days=1),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=5, load=_abs_load(80.0))],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load=_abs_load(80.0))],
     )
 
     # Act
@@ -485,8 +487,8 @@ def test_overview_volume_coverage_discloses_unconvertible_reps():
         "user_cov",
         TODAY,
         [
-            LoggedSetDraft(exercise_id=SQUAT, reps=5, load=_abs_load(100.0)),
-            LoggedSetDraft(exercise_id=SQUAT, reps=5, load=qualitative),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load=_abs_load(100.0)),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load=qualitative),
         ],
     )
 
@@ -534,9 +536,9 @@ def test_overview_folds_bodyweight_and_percent_volume_when_the_inputs_exist():
         "user_fold",
         TODAY,
         [
-            LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs_load(100.0)),
-            LoggedSetDraft(exercise_id=SQUAT, reps=3, load=_percent_load(80.0)),
-            LoggedSetDraft(exercise_id=PRESS, reps=10, load=_bodyweight_load()),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_abs_load(100.0)),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(3), load=_percent_load(80.0)),
+            LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(10), load=_bodyweight_load()),
         ],
     )
 
@@ -566,8 +568,8 @@ def test_overview_excludes_bodyweight_when_body_weight_is_unrecorded():
         "user_nobw",
         TODAY,
         [
-            LoggedSetDraft(exercise_id=SQUAT, reps=5, load=_abs_load(100.0)),
-            LoggedSetDraft(exercise_id=PRESS, reps=5, load=_bodyweight_load()),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load=_abs_load(100.0)),
+            LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(5), load=_bodyweight_load()),
         ],
     )
 
@@ -602,7 +604,7 @@ def test_overview_coverage_is_a_fixed_eight_week_window_independent_of_the_range
         logged,
         "user_cov",
         TODAY - timedelta(days=40),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=5)],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5))],
     )
 
     # Act — the same history read under all three ranges

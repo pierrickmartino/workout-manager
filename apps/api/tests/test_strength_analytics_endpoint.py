@@ -11,6 +11,8 @@ timeline, not an error."""
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+
 from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
@@ -78,7 +80,7 @@ def _perform_pr(sessions, logged, user, performed_on, kg):
         LoggedSessionDraft(
             session_id=session_view.id,
             performed_on=performed_on,
-            logged_sets=[LoggedSetDraft(exercise_id=SQUAT, reps=1, load=load)],
+            logged_sets=[LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=load)],
         ),
     )
 
@@ -211,7 +213,7 @@ def test_strength_serializes_the_weekly_muscle_balance_in_the_envelope():
         LoggedSessionDraft(
             session_id=session_view.id,
             performed_on=date.today(),
-            logged_sets=[LoggedSetDraft(exercise_id=SQUAT, reps=5, load=load)],
+            logged_sets=[LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load=load)],
         ),
     )
 
@@ -274,14 +276,14 @@ def test_strength_serializes_ranked_trajectories_in_the_envelope():
         "user_traj",
         date.today() - timedelta(days=10),
         [
-            LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(100.0)),
-            LoggedSetDraft(exercise_id=PRESS, reps=1, load=_abs(60.0)),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_abs(100.0)),
+            LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(1), load=_abs(60.0)),
         ],
     )
     _log(
         "user_traj",
         date.today() - timedelta(days=3),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(110.0))],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_abs(110.0))],
     )
 
     # Act

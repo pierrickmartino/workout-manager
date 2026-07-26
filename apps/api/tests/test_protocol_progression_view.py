@@ -9,6 +9,8 @@ Exercised with in-memory repositories."""
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+
 from datetime import date
 
 from app.adoption.service import adopt
@@ -108,7 +110,7 @@ def _log_week_one(
             logged_sets=[
                 LoggedSetDraft(
                     exercise_id=exercise_id,
-                    reps=reps,
+                    quantity=reps_quantity(reps),
                     load=parse_load(load).to_dict(),
                     perceived_difficulty=effort,
                 )

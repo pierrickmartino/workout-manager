@@ -6,6 +6,7 @@
 
 import { completionOutcome, type LiveSessionState } from "./live-session.ts";
 import { durationSeconds } from "./live-timer.ts";
+import { repetitionsInput } from "./quantity.ts";
 import type { LogSessionInput, LogSetInput } from "./logs-types";
 
 // Map a finished Live Session to the log request. Returns null when no set was
@@ -22,7 +23,8 @@ export function mapFinishToLog(
     .filter((set) => set.status === "completed")
     .map((set) => ({
       exercise_id: set.exerciseId,
-      reps: set.reps,
+      // The live set's reps become a repetitions Quantity via the shared mapper.
+      ...repetitionsInput(set.reps),
       load_kind: set.loadKind,
       // An empty value means "no load recorded" — the backend maps it to null.
       load_value: set.loadValue === "" ? null : set.loadValue,

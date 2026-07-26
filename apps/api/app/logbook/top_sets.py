@@ -77,7 +77,7 @@ def _session_top_sets(session: LoggedSessionView) -> dict[int, float]:
     best: dict[int, float] = {}
     for logged_set in session.logged_sets:
         estimate = estimated_1rm_for_set(
-            logged_set.load, logged_set.reps, logged_set.body_weight_kg
+            logged_set.load, logged_set.quantity, logged_set.body_weight_kg
         )
         if estimate is None:
             continue

@@ -18,9 +18,16 @@ from datetime import date
 from datetime import timedelta
 
 from app.domain.load import LoadKind, ParsedLoad
+from app.domain.quantity import Quantity, QuantityKind
 from app.domain.volume import VolumePoint, VolumeSet, set_volume, volume_series
 
 TODAY = date(2026, 7, 5)
+
+
+def _reps(count: int) -> dict:
+    """A stored repetitions Quantity carrying ``count`` — the amount every set here has."""
+
+    return Quantity(kind=QuantityKind.REPETITIONS, text=str(count), count=count).to_dict()
 
 
 def _abs(kg: float) -> dict:
@@ -38,7 +45,7 @@ def test_absolute_set_volume_is_reps_times_kg():
     load = _abs(100.0)
 
     # Act
-    volume = set_volume(load, reps=5)
+    volume = set_volume(load, _reps(5))
 
     # Assert — one set of five reps moves 500 kg
     assert volume == 500.0
@@ -49,7 +56,7 @@ def test_range_set_volume_converts_at_the_midpoint():
     load = _range(60.0, 80.0)
 
     # Act
-    volume = set_volume(load, reps=5)
+    volume = set_volume(load, _reps(5))
 
     # Assert — the midpoint (70 kg) drives the conversion: 5 × 70
     assert volume == 350.0
@@ -60,8 +67,38 @@ def test_qualitative_and_load_less_sets_are_not_convertible():
     qualitative = ParsedLoad(kind=LoadKind.QUALITATIVE, text="moderate").to_dict()
 
     # Act / Assert — neither carries a kilogram figure, so both are excluded
-    assert set_volume(qualitative, reps=5) is None
-    assert set_volume(None, reps=5) is None
+    assert set_volume(qualitative, _reps(5)) is None
+    assert set_volume(None, _reps(5)) is None
+
+
+def test_a_non_rep_amount_set_is_not_convertible_to_tonnage():
+    # Arrange — a distance amount (a 5 km run) carries no rep count
+    distance = Quantity(
+        kind=QuantityKind.DISTANCE, text="5 km", metres=5000.0
+    ).to_dict()
+
+    # Act / Assert — with no reps there is no reps × kg to compute, even with a load
+    assert set_volume(_abs(100.0), distance) is None
+
+
+def test_a_non_rep_amount_set_falls_out_of_coverage_entirely():
+    # Arrange — one convertible absolute rep-set and one distance set in the window;
+    # the run has no reps, so it neither converts nor weighs on coverage (ADR-0032)
+    distance = Quantity(
+        kind=QuantityKind.DISTANCE, text="5 km", metres=5000.0
+    ).to_dict()
+    history = [
+        _set(100.0, 5, TODAY),
+        VolumeSet(quantity=distance, load=_abs(100.0), performed_on=TODAY),
+    ]
+
+    # Act
+    series = volume_series(history, days=7, today=TODAY)
+
+    # Assert — only the rep-set's tonnage points, and coverage is a clean 100% of the
+    # 5 reps that exist: the run contributes 0 reps to the denominator, not a miss
+    assert series.points == (VolumePoint(TODAY, 500.0),)
+    assert series.coverage_pct == 100.0
 
 
 def test_bodyweight_set_converts_using_body_weight():
@@ -69,7 +106,7 @@ def test_bodyweight_set_converts_using_body_weight():
     bodyweight = ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict()
 
     # Act
-    volume = set_volume(bodyweight, reps=10, body_weight_kg=70.0)
+    volume = set_volume(bodyweight, _reps(10), body_weight_kg=70.0)
 
     # Assert — the body itself is the load: 10 × 70 kg
     assert volume == 700.0
@@ -82,7 +119,7 @@ def test_bodyweight_set_adds_the_extra_load_on_top_of_body_weight():
     ).to_dict()
 
     # Act
-    volume = set_volume(weighted, reps=5, body_weight_kg=70.0)
+    volume = set_volume(weighted, _reps(5), body_weight_kg=70.0)
 
     # Assert — each rep moves body + belt: 5 × (70 + 20)
     assert volume == 450.0
@@ -94,7 +131,7 @@ def test_bodyweight_set_is_excluded_when_body_weight_is_unknown():
 
     # Act / Assert — no honest figure exists, so the set stays excluded (coverage),
     # never counted as zero
-    assert set_volume(bodyweight, reps=10, body_weight_kg=None) is None
+    assert set_volume(bodyweight, _reps(10), body_weight_kg=None) is None
 
 
 def test_percent_1rm_set_converts_against_the_estimated_1rm():
@@ -104,7 +141,7 @@ def test_percent_1rm_set_converts_against_the_estimated_1rm():
     ).to_dict()
 
     # Act
-    volume = set_volume(percent, reps=3, estimated_1rm=100.0)
+    volume = set_volume(percent, _reps(3), estimated_1rm=100.0)
 
     # Assert — 80% of 100 kg is 80 kg per rep: 3 × 80
     assert volume == 240.0
@@ -117,7 +154,7 @@ def test_percent_1rm_set_is_excluded_when_no_estimated_1rm_exists():
     ).to_dict()
 
     # Act / Assert — nothing to take a percentage of, so the set stays excluded
-    assert set_volume(percent, reps=3, estimated_1rm=None) is None
+    assert set_volume(percent, _reps(3), estimated_1rm=None) is None
 
 
 def _bodyweight(added_kg: float | None = None) -> dict:
@@ -136,7 +173,7 @@ def _percent(pct: float) -> dict:
 def _set(kg, reps, day):
     """A convertible absolute-load VolumeSet performed on ``day``."""
 
-    return VolumeSet(reps=reps, load=_abs(kg), performed_on=day)
+    return VolumeSet(quantity=_reps(reps), load=_abs(kg), performed_on=day)
 
 
 PULLUP = 3
@@ -147,8 +184,8 @@ def test_volume_series_folds_in_bodyweight_and_percent_sets_with_context():
     # Arrange — a bodyweight set (10 pull-ups at 70 kg body = 700) and a percent set
     # (3 reps at 80% of Squat's 100 kg Estimated 1RM = 240), both today
     history = [
-        VolumeSet(reps=10, load=_bodyweight(), performed_on=TODAY, exercise_id=PULLUP),
-        VolumeSet(reps=3, load=_percent(80.0), performed_on=TODAY, exercise_id=SQUAT),
+        VolumeSet(quantity=_reps(10), load=_bodyweight(), performed_on=TODAY, exercise_id=PULLUP),
+        VolumeSet(quantity=_reps(3), load=_percent(80.0), performed_on=TODAY, exercise_id=SQUAT),
     ]
 
     # Act
@@ -170,8 +207,8 @@ def test_volume_series_excludes_unconvertible_sets_but_counts_them_in_coverage()
     # weight and a percent set with no Estimated 1RM (both unconvertible), 5 reps each
     history = [
         _set(100.0, 5, TODAY),
-        VolumeSet(reps=5, load=_bodyweight(), performed_on=TODAY, exercise_id=PULLUP),
-        VolumeSet(reps=5, load=_percent(80.0), performed_on=TODAY, exercise_id=SQUAT),
+        VolumeSet(quantity=_reps(5), load=_bodyweight(), performed_on=TODAY, exercise_id=PULLUP),
+        VolumeSet(quantity=_reps(5), load=_percent(80.0), performed_on=TODAY, exercise_id=SQUAT),
     ]
 
     # Act — no body weight and no 1RM supplied, so only the absolute set converts
@@ -220,7 +257,7 @@ def test_coverage_is_the_share_of_logged_reps_that_converted():
     qualitative = ParsedLoad(kind=LoadKind.QUALITATIVE, text="hard").to_dict()
     history = [
         _set(100.0, 6, TODAY),
-        VolumeSet(reps=4, load=qualitative, performed_on=TODAY),
+        VolumeSet(quantity=_reps(4), load=qualitative, performed_on=TODAY),
     ]
 
     # Act

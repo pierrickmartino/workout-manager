@@ -11,6 +11,9 @@ Exercised with the in-memory Logged-Session repository — offline, no ORM."""
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+from app.domain.quantity import repetitions_of
+
 from datetime import date, timedelta
 
 from app.domain.exercise import Provenance
@@ -72,8 +75,8 @@ def test_flattening_pairs_each_set_with_its_session_date():
         "user_flat",
         TODAY,
         [
-            LoggedSetDraft(exercise_id=SQUAT, reps=5, load=_abs(100.0)),
-            LoggedSetDraft(exercise_id=DEADLIFT, reps=3, load=_abs(140.0)),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load=_abs(100.0)),
+            LoggedSetDraft(exercise_id=DEADLIFT, quantity=reps_quantity(3), load=_abs(140.0)),
         ],
     )
 
@@ -81,7 +84,7 @@ def test_flattening_pairs_each_set_with_its_session_date():
     records = logged_set_records(logged.list_for_user("user_flat"))
 
     # Assert — every Logged Set is flattened and stamped with its session's date
-    assert [(r.exercise_id, r.reps, r.performed_on) for r in records] == [
+    assert [(r.exercise_id, repetitions_of(r.quantity), r.performed_on) for r in records] == [
         (SQUAT, 5, TODAY),
         (DEADLIFT, 3, TODAY),
     ]
@@ -98,7 +101,7 @@ def test_flattening_carries_the_performed_body_weight_onto_each_record():
         TODAY,
         [
             LoggedSetDraft(
-                exercise_id=SQUAT, reps=5, load=bodyweight, body_weight_kg=75.0
+                exercise_id=SQUAT, quantity=reps_quantity(5), load=bodyweight, body_weight_kg=75.0
             )
         ],
     )
@@ -119,14 +122,14 @@ def test_latest_personal_record_is_the_newest_pr_by_date_across_exercises():
         logged,
         "user_a",
         TODAY - timedelta(days=10),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(200.0))],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_abs(200.0))],
     )
     _log(
         sessions,
         logged,
         "user_a",
         TODAY - timedelta(days=3),
-        [LoggedSetDraft(exercise_id=DEADLIFT, reps=1, load=_abs(142.0))],
+        [LoggedSetDraft(exercise_id=DEADLIFT, quantity=reps_quantity(1), load=_abs(142.0))],
     )
 
     # Act
@@ -150,7 +153,7 @@ def test_latest_personal_record_is_none_without_a_qualifying_absolute_load_pr():
         logged,
         "user_bw",
         TODAY,
-        [LoggedSetDraft(exercise_id=SQUAT, reps=10, load=bodyweight)],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(10), load=bodyweight)],
     )
 
     # Act
@@ -177,14 +180,14 @@ def test_latest_personal_record_recomputes_when_the_pr_behind_it_is_removed():
         logged,
         "user_del",
         TODAY - timedelta(days=20),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(130.0))],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_abs(130.0))],
     )
     _log(
         sessions,
         logged,
         "user_del",
         TODAY - timedelta(days=2),
-        [LoggedSetDraft(exercise_id=SQUAT, reps=1, load=_abs(150.0))],
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_abs(150.0))],
     )
     full_history = logged.list_for_user("user_del")
     assert latest_personal_record(full_history).estimated_1rm == 150.0

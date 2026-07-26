@@ -1,7 +1,8 @@
 """Session logging routes: record a performance of a Session and read history.
 
 ``POST /api/sessions/{id}/logs`` records a Logged Session — a performance of the
-user's Session on a date, with its per-set reps, load, and perceived difficulty.
+user's Session on a date, with its per-set typed Quantity, load, and perceived
+difficulty.
 You may only log a Session you own (``404`` otherwise); a set referencing an
 unknown Exercise is rejected (``422``). ``GET /api/logs`` returns the user's
 history, most recent first. All responses use the standard envelope."""
@@ -16,6 +17,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.auth.dependencies import get_current_user
 from app.domain.completion import parse_completion_outcome
 from app.domain.load import LoadKind, load_from_input
+from app.domain.quantity import QuantityKind, quantity_from_input
 from app.envelope import success_envelope
 from app.logbook.service import (
     LogSessionRequest,
@@ -43,27 +45,42 @@ router = APIRouter(prefix="/api", tags=["logs"])
 HTTP_NOT_FOUND = 404
 HTTP_UNPROCESSABLE_ENTITY = 422
 
-MIN_REPS = 0
 MIN_RPE = 1
 MAX_RPE = 10
 
 DEFAULT_LOAD_KIND = "absolute"
+DEFAULT_QUANTITY_KIND = QuantityKind.REPETITIONS.value
 
 
 class LogSetBody(BaseModel):
     """One actual set performed, referencing the catalog Exercise.
 
-    The load is captured as a typed Load (ADR-0010): ``load_kind`` is the kind the
-    user picked and ``load_value`` its value field (a number for ``absolute`` /
-    ``percent_1rm``, a ``low-high`` pair for ``range``, the added kilograms for
-    ``bodyweight``, free text for ``qualitative``). The picked kind is authoritative,
-    so the persisted set carries meaning, not a free-text string to be re-guessed."""
+    The amount is captured as a typed Quantity (ADR-0032): ``quantity_kind`` is the
+    kind the user picked and ``quantity_value`` its value field (a rep count for
+    ``repetitions``, a distance for ``distance``, a time for ``duration``), defaulting
+    to the repetitions kind the log form has always sent. The load is captured as a
+    typed Load (ADR-0010): ``load_kind`` is the kind the user picked and ``load_value``
+    its value field (a number for ``absolute`` / ``percent_1rm``, a ``low-high`` pair
+    for ``range``, the added kilograms for ``bodyweight``, free text for
+    ``qualitative``). Each picked kind is authoritative, so the persisted set carries
+    meaning at the write boundary, not a free-text string to be re-guessed."""
 
     exercise_id: int
-    reps: int = Field(ge=MIN_REPS)
+    quantity_kind: str = DEFAULT_QUANTITY_KIND
+    quantity_value: str | None = None
     load_kind: str = DEFAULT_LOAD_KIND
     load_value: str | None = None
     perceived_difficulty: int | None = Field(default=None, ge=MIN_RPE, le=MAX_RPE)
+
+    @field_validator("quantity_kind")
+    @classmethod
+    def _known_quantity_kind(cls, value: str) -> str:
+        try:
+            QuantityKind(value)
+        except ValueError as exc:
+            allowed = ", ".join(kind.value for kind in QuantityKind)
+            raise ValueError(f"quantity_kind must be one of: {allowed}") from exc
+        return value
 
     @field_validator("load_kind")
     @classmethod
@@ -77,9 +94,10 @@ class LogSetBody(BaseModel):
 
     def to_draft(self) -> LoggedSetDraft:
         parsed = load_from_input(self.load_kind, self.load_value)
+        quantity = quantity_from_input(self.quantity_kind, self.quantity_value)
         return LoggedSetDraft(
             exercise_id=self.exercise_id,
-            reps=self.reps,
+            quantity=quantity.to_dict() if quantity is not None else None,
             load=parsed.to_dict() if parsed is not None else None,
             perceived_difficulty=self.perceived_difficulty,
         )
@@ -122,7 +140,7 @@ def _serialize(view: LoggedSessionView) -> dict:
         "logged_sets": [
             {
                 "position": s.position,
-                "reps": s.reps,
+                "quantity": s.quantity,
                 "load": s.load,
                 "perceived_difficulty": s.perceived_difficulty,
                 "exercise_id": s.exercise_id,

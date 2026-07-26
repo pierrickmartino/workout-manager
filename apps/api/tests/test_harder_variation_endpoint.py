@@ -10,6 +10,8 @@ overrides so the flow runs offline and deterministically."""
 
 from __future__ import annotations
 
+from tests.quantities import reps_quantity
+
 from datetime import date
 
 from fastapi.testclient import TestClient
@@ -114,7 +116,7 @@ def _seed_bodyweight_ceiling(exercises, sessions, logged, user):
             logged_sets=[
                 LoggedSetDraft(
                     exercise_id=pullup.id,
-                    reps=5,
+                    quantity=reps_quantity(5),
                     load=parse_load("bodyweight").to_dict(),
                     perceived_difficulty=6,
                 )
