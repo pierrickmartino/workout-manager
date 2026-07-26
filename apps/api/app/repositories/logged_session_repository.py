@@ -3,8 +3,8 @@
 Writes take a ``LoggedSessionDraft`` (the performed Session id and date plus an
 ordered list of ``LoggedSetDraft``, each referencing a catalog Exercise by id).
 Reads return a ``LoggedSessionView`` — the logged session joined to its ordered
-sets (each with its Exercise's name) and the prescribing Session's training type
-— so consumers never touch the ORM. Reads are scoped to the owning user, and
+sets (each with its Exercise's name) and its own denormalized training type
+(ADR-0031) — so consumers never touch the ORM. Reads are scoped to the owning user, and
 ``list_for_user`` returns the user's history newest-first. SQLModel-backed and
 in-memory implementations honor the same contract."""
 
@@ -16,7 +16,7 @@ from typing import Protocol
 
 from sqlmodel import Session, select
 
-from app.db.models import Exercise, LoggedSession, LoggedSet, WorkoutSession
+from app.db.models import Exercise, LoggedSession, LoggedSet
 from app.repositories.exercise_repository import ExerciseRepository
 from app.repositories.session_repository import SessionRepository
 
@@ -40,7 +40,13 @@ class LoggedSetDraft:
 
 @dataclass(frozen=True)
 class LoggedSessionDraft:
-    """A performance to record: which Session, on what date, and the sets done.
+    """A performance to record: which Session (if any), on what date, and the sets done.
+
+    ``session_id`` is the prescribing Session, or ``None`` for a plan-less record
+    (ADR-0031). ``training_type`` is always populated on a written record — the service
+    copies it from the Session for a plan-backed log and takes it from the request for a
+    plan-less one; it defaults to ``""`` only so the many existing test drafts need not
+    restate it, never on the production path.
 
     ``completion_outcome`` is the client-declared Completion Outcome (ADR-0013) —
     ``"completed"`` | ``"incomplete"``, or ``None`` when the record does not declare
@@ -48,8 +54,9 @@ class LoggedSessionDraft:
     the recorded Session Duration (ADR-0014) — actual training time in whole seconds,
     or ``None`` when unrecorded (the static form measures none)."""
 
-    session_id: int
+    session_id: int | None
     performed_on: date
+    training_type: str = ""
     completion_outcome: str | None = None
     duration_seconds: int | None = None
     logged_sets: list[LoggedSetDraft] = field(default_factory=list)
@@ -80,11 +87,14 @@ class LoggedSetView:
 
 @dataclass(frozen=True)
 class LoggedSessionView:
-    """A Logged Session with its ordered sets and the parent's training type."""
+    """A Logged Session with its ordered sets and its own training type (ADR-0031).
+
+    ``session_id`` is ``None`` for a plan-less record; ``training_type`` is read off the
+    record itself, not joined from a parent Session that may not exist."""
 
     id: int
     clerk_user_id: str
-    session_id: int
+    session_id: int | None
     training_type: str
     performed_on: date
     logged_sets: list[LoggedSetView]
@@ -132,10 +142,6 @@ class SqlLoggedSessionRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def _training_type(self, session_id: int) -> str:
-        workout = self._session.get(WorkoutSession, session_id)
-        return workout.training_type if workout is not None else ""
-
     def _view(self, logged: LoggedSession) -> LoggedSessionView:
         sets = self._session.exec(
             select(LoggedSet)
@@ -147,7 +153,7 @@ class SqlLoggedSessionRepository:
             id=logged.id,
             clerk_user_id=logged.clerk_user_id,
             session_id=logged.session_id,
-            training_type=self._training_type(logged.session_id),
+            training_type=logged.training_type,
             performed_on=logged.performed_on,
             logged_sets=views,
             completion_outcome=logged.completion_outcome,
@@ -160,6 +166,7 @@ class SqlLoggedSessionRepository:
         logged = LoggedSession(
             clerk_user_id=clerk_user_id,
             session_id=draft.session_id,
+            training_type=draft.training_type,
             performed_on=draft.performed_on,
             completion_outcome=draft.completion_outcome,
             duration_seconds=draft.duration_seconds,
@@ -204,15 +211,13 @@ class InMemoryLoggedSessionRepository:
     def __init__(
         self, sessions: SessionRepository, exercises: ExerciseRepository
     ) -> None:
-        self._sessions = sessions
+        # ``sessions`` is retained for call-site symmetry with the SQL repo's wiring;
+        # training type is now read off the record (ADR-0031), so it is no longer
+        # consulted to resolve one — only ``exercises`` is needed, to name logged sets.
         self._exercises = exercises
         self._logged: dict[int, LoggedSession] = {}
         self._sets: dict[int, list[LoggedSet]] = {}
         self._next_id = 1
-
-    def _training_type(self, session_id: int, clerk_user_id: str) -> str:
-        session_view = self._sessions.get(session_id, clerk_user_id)
-        return session_view.training_type if session_view is not None else ""
 
     def _view(self, logged: LoggedSession) -> LoggedSessionView:
         sets = self._sets.get(logged.id, [])
@@ -224,7 +229,7 @@ class InMemoryLoggedSessionRepository:
             id=logged.id,
             clerk_user_id=logged.clerk_user_id,
             session_id=logged.session_id,
-            training_type=self._training_type(logged.session_id, logged.clerk_user_id),
+            training_type=logged.training_type,
             performed_on=logged.performed_on,
             logged_sets=views,
             completion_outcome=logged.completion_outcome,
@@ -238,6 +243,7 @@ class InMemoryLoggedSessionRepository:
             id=self._next_id,
             clerk_user_id=clerk_user_id,
             session_id=draft.session_id,
+            training_type=draft.training_type,
             performed_on=draft.performed_on,
             completion_outcome=draft.completion_outcome,
             duration_seconds=draft.duration_seconds,

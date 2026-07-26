@@ -139,6 +139,31 @@ def test_projection_is_scoped_to_the_owning_user():
     assert progress.total_sets == 3
 
 
+def test_plan_less_session_earns_xp_and_counts_toward_the_streak():
+    # Arrange — a plan-less run (no Session, its own training type) alongside a plan-backed
+    # session in the same week (ADR-0031): both are training-type-blind record projections
+    sessions, logged = _build()
+    _log(sessions, logged, "hybrid", date(2026, 7, 8), 3)  # plan-backed, this week
+    logged.create(
+        "hybrid",
+        LoggedSessionDraft(
+            session_id=None,
+            training_type="cardio",
+            performed_on=date(2026, 7, 1),  # last week
+            logged_sets=[LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5))],
+        ),
+    )
+
+    # Act
+    progress = profile_progress("hybrid", logged=logged, today=TODAY)
+
+    # Assert — the plan-less run counts exactly like a plan-backed one
+    assert progress.total_sessions == 2
+    assert progress.total_sets == 4
+    assert progress.streak == 2
+    assert progress.xp == 2 * SESSION_XP + 4 * PER_SET_XP
+
+
 def _achievement(progress, achievement_id):
     return next(a for a in progress.achievements if a.id == achievement_id)
 

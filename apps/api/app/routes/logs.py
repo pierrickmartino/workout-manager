@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.auth.dependencies import get_current_user
 from app.domain.completion import parse_completion_outcome
@@ -20,6 +20,7 @@ from app.domain.load import LoadKind, load_from_input
 from app.domain.quantity import QuantityKind, quantity_from_input
 from app.envelope import success_envelope
 from app.logbook.service import (
+    LogKindError,
     LogSessionRequest,
     SessionNotOwnedError,
     UnknownExerciseError,
@@ -183,6 +184,68 @@ def create_log(
             status_code=HTTP_NOT_FOUND, detail="Session not found"
         ) from exc
     except UnknownExerciseError as exc:
+        raise HTTPException(
+            status_code=HTTP_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+    return success_envelope(_serialize(view))
+
+
+class LogAdhocBody(BaseModel):
+    """Validated request to record a plan-less performance (ADR-0031).
+
+    ``training_type`` is *required* and rides onto the record — a plan-less log has no
+    Session to read it from (``cardio`` / ``strength`` / … as the client's picker
+    offers). A Session id and a ``completion_outcome`` are *forbidden*: this route
+    records no plan-backed work, so ``extra="forbid"`` rejects either as a boundary
+    violation (``422``). An ad-hoc record therefore cannot gate a Protocol and has no
+    Completion Outcome, by construction.
+
+    ``duration_seconds`` is the optional recorded Session Duration (ADR-0014); the
+    distance/duration Quantity kinds are a later slice, so a set here still carries the
+    default repetitions Quantity like the plan-backed form."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    performed_on: date
+    training_type: str = Field(min_length=1)
+    logged_sets: list[LogSetBody] = Field(min_length=1)
+    duration_seconds: int | None = Field(default=None, ge=0)
+
+
+@router.post("/logs")
+def create_adhoc_log(
+    payload: LogAdhocBody,
+    clerk_user_id: str = Depends(get_current_user),
+    sessions: SessionRepository = Depends(get_session_repository),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+    profiles: ProfileRepository = Depends(get_profile_repository),
+) -> dict:
+    """Record a plan-less Logged Session — no Session id in the path (ADR-0031).
+
+    Funnels into the same ``log_session`` service as the plan-backed route, so the
+    catalog-validity guard and the Performed-Body-Weight snapshot are shared; only the
+    Session-ownership guard is skipped (there is no Session). Boundary violations
+    surface as ``422``."""
+
+    request = LogSessionRequest(
+        session_id=None,
+        training_type=payload.training_type,
+        performed_on=payload.performed_on,
+        completion_outcome=None,
+        duration_seconds=payload.duration_seconds,
+        logged_sets=[s.to_draft() for s in payload.logged_sets],
+    )
+    try:
+        view = log_session(
+            request,
+            clerk_user_id,
+            sessions=sessions,
+            exercises=exercises,
+            logged=logged,
+            profiles=profiles,
+        )
+    except (LogKindError, UnknownExerciseError) as exc:
         raise HTTPException(
             status_code=HTTP_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc

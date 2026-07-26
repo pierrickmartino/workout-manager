@@ -1,4 +1,4 @@
-import { apiGet, type Envelope } from "./api";
+import { apiGet, apiSend, type Envelope } from "./api";
 
 import type { ExerciseSearchResult } from "./exercises-types";
 
@@ -20,4 +20,15 @@ export async function searchExercises(
   query: string,
 ): Promise<Envelope<ExerciseSearchResult[]>> {
   return apiGet(`/api/exercises?query=${encodeURIComponent(query)}`);
+}
+
+// Resolve a movement name to a catalog Exercise, creating a `user_entered` one on a
+// miss (ADR-0033). This is the search-and-create picker the plan-less log uses to
+// obtain an `exercise_id` for a movement the catalog may not yet hold; dedup is by
+// normalized name, so an existing entry comes back untouched. Boundary guards (blank
+// or over-long name) surface as an envelope error.
+export async function resolveExercise(
+  name: string,
+): Promise<Envelope<ExerciseSearchResult>> {
+  return apiSend("/api/exercises", "POST", { name });
 }
