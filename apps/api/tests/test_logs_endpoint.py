@@ -637,6 +637,111 @@ def test_a_distance_set_contributes_nothing_to_a_strength_read_path():
     assert data["total_sets"] == 1
 
 
+def test_plan_less_log_records_a_hold_as_a_duration_set():
+    # Arrange — a 90-second plank and a 5-minute hold logged plan-less as duration sets
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_holds")
+    plank = _create_exercise(client, headers, "Plank")
+    body = _adhoc_body(
+        plank,
+        training_type="mobility",
+        logged_sets=[
+            {
+                "exercise_id": plank,
+                "quantity_kind": "duration",
+                "quantity_value": "90",
+                "load_kind": "bodyweight",
+                "load_value": "0",
+            },
+            {
+                "exercise_id": plank,
+                "quantity_kind": "duration",
+                "quantity_value": "5:00",
+                "load_kind": "bodyweight",
+                "load_value": "0",
+            },
+        ],
+    )
+
+    # Act
+    logged = client.post("/api/logs", headers=headers, json=body)
+    history = client.get("/api/logs", headers=headers)
+
+    # Assert — each hold is stored canonically in seconds with its text kept verbatim,
+    # and both round-trip in history exactly as entered
+    assert logged.status_code == 200
+    sets = logged.json()["data"]["logged_sets"]
+    assert sets[0]["quantity"] == quantity_from_input("duration", "90").to_dict()
+    assert sets[0]["quantity"]["seconds"] == 90
+    assert sets[0]["quantity"]["text"] == "90"
+    assert sets[1]["quantity"]["seconds"] == 300
+    assert sets[1]["quantity"]["text"] == "5:00"
+    assert history.json()["data"][0]["logged_sets"] == sets
+
+
+def test_plan_less_log_records_a_distance_unknown_treadmill_session():
+    # Arrange — 45 minutes of zone-2 on a treadmill, distance unknown: a pure duration set
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_treadmill")
+    treadmill = _create_exercise(client, headers, "Treadmill")
+    body = _adhoc_body(
+        treadmill,
+        logged_sets=[
+            {
+                "exercise_id": treadmill,
+                "quantity_kind": "duration",
+                "quantity_value": "45:00",
+                "load_kind": "qualitative",
+                "load_value": None,
+            }
+        ],
+    )
+
+    # Act
+    logged = client.post("/api/logs", headers=headers, json=body)
+
+    # Assert — no distance is required; the effort records purely as canonical seconds,
+    # carrying no metres and therefore no derivable pace
+    assert logged.status_code == 200
+    quantity = logged.json()["data"]["logged_sets"][0]["quantity"]
+    assert quantity["kind"] == "duration"
+    assert quantity["seconds"] == 2700
+    assert quantity["text"] == "45:00"
+    assert "metres" not in quantity
+
+
+def test_a_duration_set_contributes_nothing_to_a_strength_read_path():
+    # Arrange — a duration-only hold logged against an Exercise, then its RECORDS read
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_exclude_duration")
+    plank = _create_exercise(client, headers, "Plank")
+    body = _adhoc_body(
+        plank,
+        training_type="mobility",
+        logged_sets=[
+            {
+                "exercise_id": plank,
+                "quantity_kind": "duration",
+                "quantity_value": "5:00",
+                "load_kind": "bodyweight",
+                "load_value": "0",
+            }
+        ],
+    )
+    client.post("/api/logs", headers=headers, json=body)
+
+    # Act — read the per-Exercise records header (Estimated 1RM / Personal Record)
+    records = client.get(f"/api/exercises/{plank}/records", headers=headers)
+
+    # Assert — a hold has no rep count and no absolute Load, so it strikes no Estimated
+    # 1RM / Personal Record and adds no tonnage, yet the strength read path does not error
+    assert records.status_code == 200
+    data = records.json()["data"]
+    assert data["personal_record"] is None
+    assert data["pr_milestones"] == []
+    assert data["total_sets"] == 1
+
+
 def test_logging_rejects_an_empty_set_list():
     # Arrange
     client, ctx = build_client()

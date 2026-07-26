@@ -6,6 +6,7 @@
 
 import {
   distanceInput,
+  durationInput,
   repetitionsInput,
   type DistanceUnit,
   type QuantityKind,
@@ -19,9 +20,9 @@ const DEFAULT_LOAD_KIND = "absolute";
 const DEFAULT_DISTANCE_UNIT: DistanceUnit = "km";
 
 // One row of the ad-hoc form: the picked catalog Exercise, the kind of amount performed
-// (a rep count or a distance, ADR-0032), and the load done. The amount field is raw — a
-// blank row is one the user didn't perform and is skipped. `kind` defaults to
-// `repetitions`, the amount the log form has always collected.
+// (a rep count, a distance, or a duration, ADR-0032), and the load done. The amount
+// field is raw — a blank row is one the user didn't perform and is skipped. `kind`
+// defaults to `repetitions`, the amount the log form has always collected.
 export interface AdhocSetFields {
   exerciseId: number;
   kind?: QuantityKind;
@@ -31,6 +32,10 @@ export interface AdhocSetFields {
   // companion time from which pace becomes derivable.
   distance?: string;
   unit?: DistanceUnit;
+  // The `duration` field carries the companion time of a `distance` row (from which pace
+  // becomes derivable) and, for a `duration` row, the amount itself — a positive time
+  // (`mm:ss`, `hh:mm:ss`, or bare seconds). A row has one kind, so the field means one
+  // thing at a time.
   duration?: string;
   loadKind?: string;
   loadValue?: string;
@@ -62,6 +67,14 @@ function readField(form: FormData, name: string): string {
   return typeof value === "string" ? value : "";
 }
 
+// The amount kinds a form row may pick, defaulting to `repetitions` — the amount the log
+// form has always collected — for a blank or unrecognized value (ADR-0032).
+const AMOUNT_KINDS = new Set<string>(["repetitions", "distance", "duration"]);
+
+function normalizeKind(kind: string): QuantityKind {
+  return (AMOUNT_KINDS.has(kind) ? kind : "repetitions") as QuantityKind;
+}
+
 // Read the dynamic multi-row ad-hoc form into typed rows. Fields are indexed by row
 // (`set-<i>-movement`, `set-<i>-kind`, `set-<i>-reps`, …) with a `set_count` header; a
 // row that names no movement was never filled in and is dropped. Pure and browser-safe
@@ -79,7 +92,7 @@ export function readAdhocFormRows(form: FormData): AdhocFormRow[] {
     rows.push({
       movementName,
       fields: {
-        kind: (kind === "distance" ? "distance" : "repetitions") as QuantityKind,
+        kind: normalizeKind(kind),
         reps: readField(form, `set-${index}-reps`),
         distance: readField(form, `set-${index}-distance`),
         unit: (readField(form, `set-${index}-unit`) || DEFAULT_DISTANCE_UNIT) as DistanceUnit,
@@ -132,16 +145,55 @@ function distanceAmount(
   return distanceInput(raw, row.unit ?? DEFAULT_DISTANCE_UNIT, row.duration ?? "");
 }
 
+// Parse a time value into total seconds — colon-separated `mm:ss` / `hh:mm:ss` summed in
+// base-60, or a bare number of seconds — or null for any non-numeric segment. Mirrors the
+// backend's canonicalisation so the boundary rejects here exactly what it would there.
+function parseDurationSeconds(raw: string): number | null {
+  let seconds = 0;
+  for (const segment of raw.split(":")) {
+    const value = Number(segment);
+    if (segment.trim() === "" || !Number.isFinite(value) || value < 0) return null;
+    seconds = seconds * 60 + value;
+  }
+  return seconds;
+}
+
+// The amount fields for a duration row, or null when it was left un-performed (no time)
+// or malformed (a duration is a positive time). The entered text rides through verbatim;
+// the backend canonicalises to seconds. A duration carries no distance, so no pace.
+function durationAmount(
+  row: AdhocSetFields,
+): Pick<LogSetInput, "quantity_kind" | "quantity_value"> | null {
+  const raw = (row.duration ?? "").trim();
+  if (raw === "") return null;
+
+  const seconds = parseDurationSeconds(raw);
+  if (seconds === null || seconds <= 0) return null;
+  return durationInput(raw);
+}
+
+// Dispatch to the mapper for the row's picked kind, defaulting to repetitions. Each
+// returns the typed amount fields (distance also carries unit and companion time), or
+// null when the row was left un-performed or malformed. The return type is the union of
+// the three mappers, so the distance fields survive into the built set.
+function amountFor(row: AdhocSetFields) {
+  switch (row.kind ?? "repetitions") {
+    case "distance":
+      return distanceAmount(row);
+    case "duration":
+      return durationAmount(row);
+    default:
+      return repetitionsAmount(row);
+  }
+}
+
 // Build one logged-set payload from a row, or null when the row was left un-performed
 // or is malformed. Mirrors the plan-backed form: the picked kinds ride through so the
 // backend types the amount and load at the write boundary.
 function toSet(row: AdhocSetFields): LogSetInput | null {
   if (!Number.isInteger(row.exerciseId)) return null;
 
-  const amount =
-    (row.kind ?? "repetitions") === "distance"
-      ? distanceAmount(row)
-      : repetitionsAmount(row);
+  const amount = amountFor(row);
   if (amount === null) return null;
 
   return {

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   distanceInput,
+  durationInput,
   formatPace,
   formatQuantity,
   NO_QUANTITY,
@@ -28,6 +29,14 @@ test("formatQuantity shows a distance's display text with its unit", () => {
 
   // Act / Assert — the UI reads the display-ready text, never re-deriving from metres
   assert.equal(formatQuantity(quantity), "5 km");
+});
+
+test("formatQuantity shows a duration's display text verbatim", () => {
+  // Arrange — a 5-minute hold: seconds is canonical, text keeps what was entered
+  const quantity: Quantity = { kind: "duration", text: "5:00", seconds: 300 };
+
+  // Act / Assert — the UI reads the stored text, never re-deriving from seconds
+  assert.equal(formatQuantity(quantity), "5:00");
 });
 
 test("formatQuantity falls back to an em dash when no amount was recorded", () => {
@@ -110,6 +119,31 @@ test("formatPace is null when pace is not derivable", () => {
   assert.equal(formatPace(untimed), null);
   assert.equal(formatPace(reps), null);
   assert.equal(formatPace(null), null);
+});
+
+test("formatPace is null for a duration set — pace needs a distance it lacks", () => {
+  // Arrange — a 5-minute hold carries a time but no distance
+  const hold: Quantity = { kind: "duration", text: "5:00", seconds: 300 };
+
+  // Act / Assert — a duration is timed, non-locomotion work: no distance, no pace
+  assert.equal(formatPace(hold), null);
+});
+
+test("durationInput builds the duration request fields from a time value", () => {
+  // Act — a 5-minute hold entered as mm:ss; the picked kind types the amount
+  const input = durationInput("5:00");
+
+  // Assert — the kind is authoritative and the value rides through verbatim for the
+  // backend to canonicalise to seconds (no distance, so no unit or companion time)
+  assert.deepEqual(input, { quantity_kind: "duration", quantity_value: "5:00" });
+});
+
+test("durationInput carries a bare-seconds value through verbatim", () => {
+  // Act — a 90-second plank entered as a raw seconds count
+  const input = durationInput("90");
+
+  // Assert — the text the user typed rides through unchanged
+  assert.equal(input.quantity_value, "90");
 });
 
 test("repetitionsInput builds the repetitions request fields from a rep count", () => {
