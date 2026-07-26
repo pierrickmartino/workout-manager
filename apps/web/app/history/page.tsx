@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { fetchHistory, type LoggedSession, type LoggedSet } from "@/lib/logs";
 import { formatLoad } from "@/lib/load";
-import { formatQuantity } from "@/lib/quantity";
+import { formatPace, formatQuantity } from "@/lib/quantity";
 import { PageHeader } from "@/components/pulse/page-header";
 import { Alert } from "@/components/pulse/alert";
 import { Card } from "@/components/ui/card";
@@ -119,13 +119,21 @@ function SetHead({
 }
 
 function LoggedSetRow({ loggedSet }: { loggedSet: LoggedSet }) {
+  // Pace is a read-time projection (ADR-0032), shown only for a distance set that
+  // carries a time — never a stored figure, and absent for a distance-only set.
+  const pace = formatPace(loggedSet.quantity);
   return (
     <div className="grid grid-cols-[1fr_3rem_4rem_3rem] items-center gap-2 rounded-sm border border-border bg-base/40 px-3 py-2.5">
       <span className="truncate font-sans text-[13px] text-text-primary">
         {loggedSet.exercise_name}
       </span>
-      <span className="text-right font-display text-sm font-semibold text-text-primary">
-        {formatQuantity(loggedSet.quantity)}
+      <span className="flex flex-col items-end">
+        <span className="font-display text-sm font-semibold text-text-primary">
+          {formatQuantity(loggedSet.quantity)}
+        </span>
+        {pace ? (
+          <span className="font-mono text-[10px] text-text-muted">{pace}</span>
+        ) : null}
       </span>
       <span className="text-right font-mono text-[13px] text-text-secondary">
         {formatLoad(loggedSet.load)}

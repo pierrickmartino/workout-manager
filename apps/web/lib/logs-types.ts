@@ -47,6 +47,11 @@ export interface LogSetInput {
   exercise_id: number;
   quantity_kind: QuantityKind;
   quantity_value: string | null;
+  // A `distance` Quantity's display unit (km or miles) and optional companion time.
+  // Both are absent for the repetitions kind the log form has always sent; the backend
+  // canonicalises distance to metres and derives pace from the time (ADR-0032).
+  quantity_unit?: string;
+  quantity_duration?: string | null;
   load_kind: LoadKind;
   load_value: string | null;
   perceived_difficulty: number | null;

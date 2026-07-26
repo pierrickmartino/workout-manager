@@ -51,6 +51,7 @@ MAX_RPE = 10
 
 DEFAULT_LOAD_KIND = "absolute"
 DEFAULT_QUANTITY_KIND = QuantityKind.REPETITIONS.value
+DEFAULT_QUANTITY_UNIT = "km"
 
 
 class LogSetBody(BaseModel):
@@ -69,6 +70,12 @@ class LogSetBody(BaseModel):
     exercise_id: int
     quantity_kind: str = DEFAULT_QUANTITY_KIND
     quantity_value: str | None = None
+    # A ``distance`` Quantity's display unit (km or miles), canonicalised to metres on
+    # the way in, and its optional companion time from which pace becomes derivable.
+    # Both are inert for the other kinds — the repetitions the log form has always sent
+    # carry neither (ADR-0032).
+    quantity_unit: str = DEFAULT_QUANTITY_UNIT
+    quantity_duration: str | None = None
     load_kind: str = DEFAULT_LOAD_KIND
     load_value: str | None = None
     perceived_difficulty: int | None = Field(default=None, ge=MIN_RPE, le=MAX_RPE)
@@ -95,7 +102,12 @@ class LogSetBody(BaseModel):
 
     def to_draft(self) -> LoggedSetDraft:
         parsed = load_from_input(self.load_kind, self.load_value)
-        quantity = quantity_from_input(self.quantity_kind, self.quantity_value)
+        quantity = quantity_from_input(
+            self.quantity_kind,
+            self.quantity_value,
+            unit=self.quantity_unit,
+            duration=self.quantity_duration,
+        )
         return LoggedSetDraft(
             exercise_id=self.exercise_id,
             quantity=quantity.to_dict() if quantity is not None else None,

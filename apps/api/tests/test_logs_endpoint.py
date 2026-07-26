@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from app.auth.dependencies import get_jwks
 from app.config import Settings, get_settings
 from app.domain.load import load_from_input
+from app.domain.quantity import quantity_from_input
 from app.generation.generator import GenerationRequest
 from app.generation.schema import GeneratedExercisePrescription, GeneratedSession
 from app.main import create_app
@@ -469,6 +470,171 @@ def test_plan_less_log_with_an_unknown_exercise_is_rejected():
     # Assert
     assert response.status_code == 422
     assert response.json()["success"] is False
+
+
+def test_plan_less_log_records_a_timed_distance_run():
+    # Arrange — the run that motivated all this: 10 km in 52:00, logged plan-less
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_distance")
+    running = _create_exercise(client, headers, "Running")
+    body = _adhoc_body(
+        running,
+        logged_sets=[
+            {
+                "exercise_id": running,
+                "quantity_kind": "distance",
+                "quantity_value": "10",
+                "quantity_unit": "km",
+                "quantity_duration": "52:00",
+                "load_kind": "qualitative",
+                "load_value": None,
+            }
+        ],
+    )
+
+    # Act
+    logged = client.post("/api/logs", headers=headers, json=body)
+    history = client.get("/api/logs", headers=headers)
+
+    # Assert — the distance is stored canonically in metres with its companion time,
+    # and the display text is preserved verbatim ("10 km", exactly as entered)
+    assert logged.status_code == 200
+    quantity = logged.json()["data"]["logged_sets"][0]["quantity"]
+    assert quantity == quantity_from_input(
+        "distance", "10", unit="km", duration="52:00"
+    ).to_dict()
+    assert quantity["text"] == "10 km"
+    assert quantity["metres"] == 10000
+    assert quantity["duration_s"] == 3120
+
+    # And it round-trips in history unchanged
+    assert history.json()["data"][0]["logged_sets"][0]["quantity"] == quantity
+
+
+def test_plan_less_log_stores_a_miles_distance_canonically_in_metres():
+    # Arrange — a 3 mile run; miles convert to metres on the way in
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_miles")
+    running = _create_exercise(client, headers, "Running")
+    body = _adhoc_body(
+        running,
+        logged_sets=[
+            {
+                "exercise_id": running,
+                "quantity_kind": "distance",
+                "quantity_value": "3",
+                "quantity_unit": "mi",
+                "load_kind": "qualitative",
+                "load_value": None,
+            }
+        ],
+    )
+
+    # Act
+    logged = client.post("/api/logs", headers=headers, json=body)
+
+    # Assert — stored in canonical metres, but the text still reads as the user typed it
+    assert logged.status_code == 200
+    quantity = logged.json()["data"]["logged_sets"][0]["quantity"]
+    assert quantity["metres"] == 1609.344 * 3
+    assert quantity["text"] == "3 mi"
+
+
+def test_plan_less_log_records_an_interval_session_as_many_distance_sets():
+    # Arrange — a 6 × 800 m interval session: six distance sets in one Logged Session
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_intervals")
+    running = _create_exercise(client, headers, "Running")
+    rep = {
+        "exercise_id": running,
+        "quantity_kind": "distance",
+        "quantity_value": "0.8",
+        "quantity_unit": "km",
+        "load_kind": "qualitative",
+        "load_value": None,
+    }
+    body = _adhoc_body(running, logged_sets=[dict(rep) for _ in range(6)])
+
+    # Act
+    logged = client.post("/api/logs", headers=headers, json=body)
+
+    # Assert — all six reps land as one session's heterogeneous-free distance sets
+    assert logged.status_code == 200
+    sets = logged.json()["data"]["logged_sets"]
+    assert len(sets) == 6
+    assert all(s["quantity"]["metres"] == 800 for s in sets)
+
+
+def test_plan_less_log_records_a_mixed_run_then_strength_session():
+    # Arrange — a run then some squats: one Logged Session with heterogeneous kinds
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_mixed")
+    running = _create_exercise(client, headers, "Running")
+    squat = _create_exercise(client, headers, "Back Squat")
+    body = _adhoc_body(
+        running,
+        training_type="strength",
+        logged_sets=[
+            {
+                "exercise_id": running,
+                "quantity_kind": "distance",
+                "quantity_value": "5",
+                "quantity_unit": "km",
+                "load_kind": "qualitative",
+                "load_value": None,
+            },
+            {
+                "exercise_id": squat,
+                "quantity_kind": "repetitions",
+                "quantity_value": "5",
+                "load_kind": "absolute",
+                "load_value": "100",
+            },
+        ],
+    )
+
+    # Act
+    logged = client.post("/api/logs", headers=headers, json=body)
+
+    # Assert — the two kinds coexist in one record, each typed by its own picked kind
+    assert logged.status_code == 200
+    sets = logged.json()["data"]["logged_sets"]
+    assert sets[0]["quantity"]["kind"] == "distance"
+    assert sets[0]["quantity"]["metres"] == 5000
+    assert sets[1]["quantity"] == reps_quantity(5)
+    assert sets[1]["load"] == load_from_input("absolute", "100").to_dict()
+
+
+def test_a_distance_set_contributes_nothing_to_a_strength_read_path():
+    # Arrange — a distance-only run logged against an Exercise, then its RECORDS read
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_exclude")
+    running = _create_exercise(client, headers, "Running")
+    body = _adhoc_body(
+        running,
+        logged_sets=[
+            {
+                "exercise_id": running,
+                "quantity_kind": "distance",
+                "quantity_value": "5",
+                "quantity_unit": "km",
+                "load_kind": "qualitative",
+                "load_value": None,
+            }
+        ],
+    )
+    client.post("/api/logs", headers=headers, json=body)
+
+    # Act — read the per-Exercise records header (Estimated 1RM / Personal Record)
+    records = client.get(f"/api/exercises/{running}/records", headers=headers)
+
+    # Assert — a run has no absolute Load and no rep count, so it strikes no Estimated
+    # 1RM / Personal Record, yet the strength read path does not error on it
+    assert records.status_code == 200
+    data = records.json()["data"]
+    assert data["personal_record"] is None
+    assert data["pr_milestones"] == []
+    assert data["total_sets"] == 1
 
 
 def test_logging_rejects_an_empty_set_list():

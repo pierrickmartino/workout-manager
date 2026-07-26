@@ -6,6 +6,16 @@
 
 export type QuantityKind = "repetitions" | "distance" | "duration";
 
+// The distance kind's display unit — kilometres or miles. The value is entered in
+// either and canonicalised to metres at the write boundary (ADR-0032); the unit label
+// rides through only so the display text reads as the user typed it.
+export type DistanceUnit = "km" | "mi";
+
+const METRES_PER_MILE = 1609.344;
+const METRES_PER_KM = 1000;
+const SECONDS_PER_MINUTE = 60;
+const DISTANCE_KIND: QuantityKind = "distance";
+
 // The wire shape the API serializes for a typed Quantity. Only the payload fields the
 // `kind` carries are present; `text` is always there and is what the UI displays.
 export interface Quantity {
@@ -46,4 +56,54 @@ export function repetitionsInput(reps: number): {
   quantity_value: string;
 } {
   return { quantity_kind: REPETITIONS_KIND, quantity_value: String(reps) };
+}
+
+// The per-set request fields for a distance Quantity: the picked kind, the entered
+// value and its unit (km or miles, canonicalised to metres by the backend), and the
+// optional companion time from which pace becomes derivable. A blank time is sent as
+// null, not an empty string, so pace stays underivable for a distance-only set.
+export function distanceInput(
+  value: string,
+  unit: DistanceUnit,
+  duration: string,
+): {
+  quantity_kind: QuantityKind;
+  quantity_value: string;
+  quantity_unit: DistanceUnit;
+  quantity_duration: string | null;
+} {
+  const time = duration.trim();
+  return {
+    quantity_kind: DISTANCE_KIND,
+    quantity_value: value,
+    quantity_unit: unit,
+    quantity_duration: time === "" ? null : time,
+  };
+}
+
+// The whole seconds of a canonical seconds figure, formatted as `m:ss` (the display
+// form pace and split times share). A partial second rounds to the nearest second.
+function formatMinutesSeconds(totalSeconds: number): string {
+  const rounded = Math.round(totalSeconds);
+  const minutes = Math.floor(rounded / SECONDS_PER_MINUTE);
+  const seconds = rounded % SECONDS_PER_MINUTE;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+// Project pace from a timed distance Quantity — a read-time derivation over the two
+// measured numbers (metres and duration_s), never a stored figure (ADR-0032). Returns
+// null unless the amount is a `distance` carrying a positive metres *and* a companion
+// time; the pace unit follows the entered unit so it reads as the run was logged.
+export function formatPace(quantity: Quantity | null | undefined): string | null {
+  if (!quantity || quantity.kind !== DISTANCE_KIND) return null;
+
+  const { metres, duration_s } = quantity;
+  if (metres == null || metres <= 0 || duration_s == null) return null;
+
+  const inMiles = (quantity.text ?? "").trimEnd().endsWith("mi");
+  const metresPerUnit = inMiles ? METRES_PER_MILE : METRES_PER_KM;
+  const unitLabel = inMiles ? "mi" : "km";
+
+  const secondsPerUnit = duration_s / (metres / metresPerUnit);
+  return `${formatMinutesSeconds(secondsPerUnit)} /${unitLabel}`;
 }
