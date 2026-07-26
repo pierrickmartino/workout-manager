@@ -64,3 +64,13 @@ export interface LogSessionInput {
   duration_seconds?: number | null;
   logged_sets: LogSetInput[];
 }
+
+// The request the user submits to record a plan-less performance (ADR-0031) — an
+// ad-hoc log posted to `/api/logs` with no Session behind it. The `training_type`
+// rides on the record (there is no Session to read it from); a Completion Outcome is
+// deliberately absent — an ad-hoc record gates no Protocol and declares none.
+export interface LogAdhocInput {
+  performed_on: string;
+  training_type: string;
+  logged_sets: LogSetInput[];
+}

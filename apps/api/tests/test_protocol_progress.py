@@ -94,6 +94,29 @@ def test_next_session_is_the_first_one_for_a_brand_new_protocol():
     assert progress.completed_count == 0
 
 
+def test_a_plan_less_session_does_not_advance_the_protocol():
+    # Arrange — a brand-new Protocol and a plan-less ad-hoc record (no session_id)
+    exercises, protocols, logged = _build()
+    view = adopt(_three_week_protocol(), "user_adhoc", PARAMS,
+                 exercises=exercises, protocols=protocols)
+    logged.create(
+        "user_adhoc",
+        LoggedSessionDraft(
+            session_id=None,
+            training_type="cardio",
+            performed_on=date(2026, 1, 1),
+            logged_sets=[],
+        ),
+    )
+
+    # Act
+    progress = protocol_progress("user_adhoc", view.id, protocols=protocols, logged=logged)
+
+    # Assert — with no Session id it gates nothing: Week-1 is still next (ADR-0031)
+    assert progress.next_session.week == 1
+    assert progress.completed_count == 0
+
+
 def test_next_session_advances_past_performed_sessions():
     # Arrange — perform Week 1
     exercises, protocols, logged = _build()

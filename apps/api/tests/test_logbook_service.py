@@ -16,6 +16,7 @@ import pytest
 
 from app.domain.exercise import Provenance
 from app.logbook.service import (
+    LogKindError,
     LogSessionRequest,
     SessionNotOwnedError,
     UnknownExerciseError,
@@ -134,6 +135,88 @@ def test_log_session_without_a_profile_weight_records_no_body_weight():
 
     # Assert — no mass is invented; the set stays outside strength records
     assert view.logged_sets[0].body_weight_kg is None
+
+
+def test_log_session_records_a_plan_less_performance_with_its_own_training_type():
+    # Arrange — an ad-hoc run, prescribed by no Session (ADR-0031)
+    sessions, exercises, logged, profiles = _wire()
+    running = exercises.find_or_create("Running", provenance=Provenance.AI_GENERATED)
+    request = LogSessionRequest(
+        session_id=None,
+        training_type="cardio",
+        performed_on=date(2026, 6, 20),
+        logged_sets=[LoggedSetDraft(exercise_id=running.id, quantity=reps_quantity(30))],
+    )
+
+    # Act
+    view = log_session(
+        request, "user_owner", sessions=sessions, exercises=exercises, logged=logged, profiles=profiles
+    )
+
+    # Assert — it stands alone and carries its own training type
+    assert view.session_id is None
+    assert view.training_type == "cardio"
+    assert view.completion_outcome is None
+    assert logged.get(view.id, "user_owner") is not None
+
+
+def test_log_session_rejects_a_plan_less_log_without_a_training_type():
+    # Arrange — a plan-less request that names no training type is ill-formed
+    sessions, exercises, logged, profiles = _wire()
+    running = exercises.find_or_create("Running", provenance=Provenance.AI_GENERATED)
+    request = LogSessionRequest(
+        session_id=None,
+        training_type=None,
+        performed_on=date(2026, 6, 20),
+        logged_sets=[LoggedSetDraft(exercise_id=running.id, quantity=reps_quantity(30))],
+    )
+
+    # Act / Assert — the boundary rule rejects it and nothing is persisted
+    with pytest.raises(LogKindError):
+        log_session(
+            request, "user_owner", sessions=sessions, exercises=exercises, logged=logged, profiles=profiles
+        )
+    assert logged.list_for_user("user_owner") == []
+
+
+def test_log_session_rejects_a_plan_less_log_declaring_a_completion_outcome():
+    # Arrange — an ad-hoc record gates no Protocol, so it cannot declare an outcome
+    sessions, exercises, logged, profiles = _wire()
+    running = exercises.find_or_create("Running", provenance=Provenance.AI_GENERATED)
+    request = LogSessionRequest(
+        session_id=None,
+        training_type="cardio",
+        completion_outcome="completed",
+        performed_on=date(2026, 6, 20),
+        logged_sets=[LoggedSetDraft(exercise_id=running.id, quantity=reps_quantity(30))],
+    )
+
+    # Act / Assert
+    with pytest.raises(LogKindError):
+        log_session(
+            request, "user_owner", sessions=sessions, exercises=exercises, logged=logged, profiles=profiles
+        )
+    assert logged.list_for_user("user_owner") == []
+
+
+def test_plan_backed_log_copies_training_type_from_the_session_ignoring_the_request():
+    # Arrange — a plan-backed request that tries to override the Session's training type
+    sessions, exercises, logged, profiles = _wire()
+    session_view, squat = _owned_session(sessions, exercises)  # training_type="strength"
+    request = LogSessionRequest(
+        session_id=session_view.id,
+        training_type="cardio",  # ignored: the Session is authoritative
+        performed_on=date(2026, 6, 20),
+        logged_sets=[LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(5))],
+    )
+
+    # Act
+    view = log_session(
+        request, "user_owner", sessions=sessions, exercises=exercises, logged=logged, profiles=profiles
+    )
+
+    # Assert — the Session's type wins
+    assert view.training_type == "strength"
 
 
 def test_log_session_rejects_logging_another_users_session():

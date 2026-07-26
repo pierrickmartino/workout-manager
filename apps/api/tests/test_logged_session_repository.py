@@ -79,6 +79,7 @@ def _session_with_two_exercises(sessions, exercises):
 def _log_draft(session_id, squat, press) -> LoggedSessionDraft:
     return LoggedSessionDraft(
         session_id=session_id,
+        training_type="strength",
         performed_on=date(2026, 6, 20),
         logged_sets=[
             LoggedSetDraft(
@@ -112,6 +113,29 @@ def test_logged_session_round_trips_with_its_sets(repos):
         "Overhead Press",
     ]
     assert view.training_type == "strength"
+
+
+def test_plan_less_record_round_trips_with_no_session_and_its_own_training_type(repos):
+    # Arrange — a record of an ad-hoc movement, prescribed by no Session (ADR-0031)
+    logged, sessions, exercises = repos
+    running = exercises.find_or_create("Running", provenance=Provenance.CURATED)
+
+    # Act
+    view = logged.create(
+        "user_owner",
+        LoggedSessionDraft(
+            session_id=None,
+            training_type="cardio",
+            performed_on=date(2026, 6, 20),
+            logged_sets=[LoggedSetDraft(exercise_id=running.id, quantity=reps_quantity(30))],
+        ),
+    )
+
+    # Assert — it stands alone: no Session behind it, training type read off the record
+    assert view.session_id is None
+    assert view.training_type == "cardio"
+    assert logged.get(view.id, "user_owner").session_id is None
+    assert repetitions_of(view.logged_sets[0].quantity) == 30
 
 
 def test_same_session_can_be_logged_multiple_times_separately(repos):

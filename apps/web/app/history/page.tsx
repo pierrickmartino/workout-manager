@@ -31,7 +31,17 @@ export default async function HistoryPage() {
       <PageHeader
         overline="PULSE // STATS"
         title="Training history"
-        action={<Badge variant="muted">{history.length} LOGGED</Badge>}
+        action={
+          <div className="flex items-center gap-3">
+            <Link
+              href="/logs/new"
+              className="label-mono text-[11px] text-cyan hover:underline"
+            >
+              + Log a movement
+            </Link>
+            <Badge variant="muted">{history.length} LOGGED</Badge>
+          </div>
+        }
       />
 
       {history.length === 0 ? (
@@ -44,6 +54,12 @@ export default async function HistoryPage() {
             className="label-mono text-[11px] text-cyan hover:underline"
           >
             Generate a workout →
+          </Link>
+          <Link
+            href="/logs/new"
+            className="label-mono text-[11px] text-cyan hover:underline"
+          >
+            Or log something you did →
           </Link>
         </Card>
       ) : (

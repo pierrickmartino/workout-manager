@@ -228,7 +228,17 @@ class LoggedSession(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     clerk_user_id: str = Field(index=True)
-    session_id: int = Field(foreign_key="workout_session.id", index=True)
+    # The prescribing Session, or NULL for a plan-less record (ADR-0031). A record of
+    # performed work is first-class whether or not a plan ever described it; a plan-less
+    # log carries no Session id and so structurally cannot advance a Protocol.
+    session_id: int | None = Field(
+        default=None, foreign_key="workout_session.id", index=True
+    )
+    # This performance's training type (ADR-0031), always populated. A plan-backed
+    # record copies it from its Session at log time; a plan-less record carries its own.
+    # Denormalized onto the record so reads take it off the row, never joining back to a
+    # parent that may not exist (the join-based ``_training_type`` helpers are retired).
+    training_type: str
     performed_on: date
     # Completion Outcome (ADR-0013): ``completed`` | ``incomplete``, the client's
     # declared verdict on whether every prescribed set was attempted. Nullable — a
