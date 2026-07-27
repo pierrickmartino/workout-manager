@@ -131,6 +131,12 @@ class LoggedSessionRepository(Protocol):
         its own — so a correction can never re-parent a performance."""
         ...
 
+    def delete(self, logged_session_id: int, clerk_user_id: str) -> bool:
+        """Apply a Log Correction delete (ADR-0034): remove the owner's Logged Session
+        and its Logged Sets. Returns ``True`` when a record was deleted, ``False`` when
+        it is missing or owned by another user. Owner-scoped, cascading its sets."""
+        ...
+
     def list_for_user(self, clerk_user_id: str) -> list[LoggedSessionView]:
         """Return the user's Logged Sessions, most recently performed first."""
         ...
@@ -245,6 +251,21 @@ class SqlLoggedSessionRepository:
         self._session.refresh(logged)
         return self._view(logged)
 
+    def delete(self, logged_session_id: int, clerk_user_id: str) -> bool:
+        logged = self._session.get(LoggedSession, logged_session_id)
+        if logged is None or logged.clerk_user_id != clerk_user_id:
+            return False
+
+        # Cascade the Logged Sets, then the record itself, in one transaction.
+        sets = self._session.exec(
+            select(LoggedSet).where(LoggedSet.logged_session_id == logged.id)
+        ).all()
+        for logged_set in sets:
+            self._session.delete(logged_set)
+        self._session.delete(logged)
+        self._session.commit()
+        return True
+
     def list_for_user(self, clerk_user_id: str) -> list[LoggedSessionView]:
         rows = self._session.exec(
             select(LoggedSession)
@@ -348,6 +369,14 @@ class InMemoryLoggedSessionRepository:
             for position, logged_set in enumerate(draft.logged_sets)
         ]
         return self._view(logged)
+
+    def delete(self, logged_session_id: int, clerk_user_id: str) -> bool:
+        logged = self._logged.get(logged_session_id)
+        if logged is None or logged.clerk_user_id != clerk_user_id:
+            return False
+        del self._logged[logged_session_id]
+        self._sets.pop(logged_session_id, None)
+        return True
 
     def list_for_user(self, clerk_user_id: str) -> list[LoggedSessionView]:
         owned = [

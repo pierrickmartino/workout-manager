@@ -29,6 +29,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from datetime import date
 
+from app.domain.contiguity import CorrectionOperation, evaluate_contiguity
 from app.domain.log_kind import resolve_training_type
 from app.logbook.service import UnknownExerciseError
 from app.repositories.exercise_repository import ExerciseRepository
@@ -38,10 +39,16 @@ from app.repositories.logged_session_repository import (
     LoggedSessionView,
     LoggedSetDraft,
 )
+from app.repositories.protocol_repository import ProtocolRepository
 
 
 class LogNotFoundError(Exception):
     """The Logged Session being corrected is missing or owned by another user."""
+
+
+class ContiguityError(Exception):
+    """A correction is refused because it would break the gap-free performed sequence
+    (ADR-0034): a tail-first delete/flip whose Session sits before a performed one."""
 
 
 @dataclass(frozen=True)
@@ -127,9 +134,67 @@ def correct_session(
     return updated
 
 
+def _parent_protocol_order(
+    session_id: int | None,
+    clerk_user_id: str,
+    protocols: ProtocolRepository,
+) -> list[int]:
+    """The parent Protocol's Session ids in position order, for the contiguity gate.
+
+    Empty when the record is plan-less (``session_id is None``) or the Session belongs
+    to no Protocol (a standalone generated Session) — either way there is no later
+    position a delete could un-settle. Mirrors how ``current_protocol`` iterates the
+    user's Protocols; the gate needs only the ordering, not the prescriptions."""
+
+    if session_id is None:
+        return []
+    for protocol in protocols.list_for_user(clerk_user_id):
+        order = [session.session_id for session in protocol.sessions]
+        if session_id in order:
+            return order
+    return []
+
+
+def delete_session(
+    log_id: int,
+    clerk_user_id: str,
+    *,
+    protocols: ProtocolRepository,
+    logged: LoggedSessionRepository,
+) -> None:
+    """Delete a Logged Session, or raise before removing anything (ADR-0034).
+
+    Resolves ownership (``LogNotFoundError`` → ``404``), then runs the pure contiguity
+    gate over the user's history and the parent Protocol's ordering: a delete that would
+    remove a mid-Protocol Session while a later-positioned Session is performed is refused
+    (``ContiguityError`` → ``409``, tail-first). Otherwise the record and its Logged Sets
+    are removed; the read-time projections (advancement, XP, PRs, Streak, Achievements,
+    analytics) recompute from the record for free on the next read. No AI, no HTTP.
+    """
+
+    existing = logged.get(log_id, clerk_user_id)
+    if existing is None:
+        raise LogNotFoundError(f"Log {log_id} is not available to delete.")
+
+    history = logged.list_for_user(clerk_user_id)
+    order = _parent_protocol_order(existing.session_id, clerk_user_id, protocols)
+    verdict = evaluate_contiguity(
+        target=existing,
+        operation=CorrectionOperation.DELETE,
+        history=history,
+        protocol_session_order=order,
+    )
+    if not verdict.allowed:
+        raise ContiguityError(verdict.reason)
+
+    logged.delete(log_id, clerk_user_id)
+
+
 __all__ = [
     "LogNotFoundError",
+    "ContiguityError",
     "UnknownExerciseError",
     "CorrectSessionRequest",
     "correct_session",
+    "delete_session",
 ]
