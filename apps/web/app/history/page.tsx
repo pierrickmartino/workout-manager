@@ -3,6 +3,7 @@ import Link from "next/link";
 import { fetchHistory, type LoggedSession, type LoggedSet } from "@/lib/logs";
 import { fetchHome } from "@/lib/home";
 import { evaluateDeletion } from "@/lib/log-deletion";
+import { evaluateUncomplete } from "@/lib/log-outcome";
 import { formatLoad } from "@/lib/load";
 import { formatPace, formatQuantity } from "@/lib/quantity";
 import { PageHeader } from "@/components/pulse/page-header";
@@ -10,11 +11,15 @@ import { Alert } from "@/components/pulse/alert";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DeleteLogControl } from "@/components/DeleteLogControl";
+import { OutcomeToggle } from "@/components/OutcomeToggle";
 
 // Lists the user's completed Logged Sessions — the record side of the plan/record
 // split — newest first, each with its Logged Sets and perceived difficulty.
 export default async function HistoryPage() {
-  const [envelope, homeEnvelope] = await Promise.all([fetchHistory(), fetchHome()]);
+  const [envelope, homeEnvelope] = await Promise.all([
+    fetchHistory(),
+    fetchHome(),
+  ]);
 
   if (!envelope.success || !envelope.data) {
     return (
@@ -78,13 +83,24 @@ export default async function HistoryPage() {
       ) : (
         <ol className="flex list-none flex-col gap-4 p-0">
           {history.map((entry) => {
-            const verdict = evaluateDeletion(entry, history, protocolSessionOrders);
+            const verdict = evaluateDeletion(
+              entry,
+              history,
+              protocolSessionOrders,
+            );
+            const uncomplete = evaluateUncomplete(
+              entry,
+              history,
+              protocolSessionOrders,
+            );
             return (
               <li key={entry.id}>
                 <LoggedSessionCard
                   entry={entry}
                   deleteDisabled={!verdict.allowed}
                   deleteReason={verdict.reason}
+                  uncompleteDisabled={!uncomplete.allowed}
+                  uncompleteReason={uncomplete.reason}
                 />
               </li>
             );
@@ -99,10 +115,14 @@ function LoggedSessionCard({
   entry,
   deleteDisabled,
   deleteReason,
+  uncompleteDisabled,
+  uncompleteReason,
 }: {
   entry: LoggedSession;
   deleteDisabled: boolean;
   deleteReason: string | null;
+  uncompleteDisabled: boolean;
+  uncompleteReason: string | null;
 }) {
   return (
     <Card className="flex flex-col gap-4 p-5">
@@ -111,6 +131,16 @@ function LoggedSessionCard({
           {entry.training_type} session
         </h2>
         <div className="flex items-start gap-3">
+          {/* A Completion Outcome rides only on a plan-backed record (ADR-0031); an
+              ad-hoc record gates no Protocol, so it shows no outcome toggle. */}
+          {entry.session_id !== null ? (
+            <OutcomeToggle
+              logId={entry.id}
+              outcome={entry.completion_outcome}
+              uncompleteDisabled={uncompleteDisabled}
+              uncompleteReason={uncompleteReason}
+            />
+          ) : null}
           <Link
             href={`/history/${entry.id}/edit`}
             className="label-mono text-[10px] text-cyan hover:underline"

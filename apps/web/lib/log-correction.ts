@@ -14,7 +14,12 @@ import {
   type QuantityKind,
 } from "./quantity.ts";
 import type { Load } from "./load.ts";
-import type { LogCorrectionInput, LoggedSession, LogSetInput } from "./logs-types";
+import type {
+  CompletionOutcome,
+  LogCorrectionInput,
+  LoggedSession,
+  LogSetInput,
+} from "./logs-types";
 import { TRAINING_TYPES } from "./sessions-types.ts";
 
 const VALID_TRAINING_TYPES = new Set<string>(TRAINING_TYPES);
@@ -52,6 +57,10 @@ export interface CorrectionFormFields {
   trainingType: string;
   durationSeconds: number | null;
   sets: CorrectionSetFields[];
+  // The corrected Completion Outcome (ADR-0013), or omitted/`null` to leave the record's
+  // unchanged. Only the outcome-toggle path sets it; the contents-edit form leaves it out
+  // so a save preserves the record's outcome server-side.
+  completionOutcome?: CompletionOutcome | null;
 }
 
 export type CorrectionResult =
@@ -78,8 +87,16 @@ function trimNumber(value: number): string {
 // (read off the display text's suffix) and its companion time so pace stays derivable.
 function quantityToFields(
   quantity: Quantity | null,
-): Pick<CorrectionSetFields, "kind" | "reps" | "distance" | "unit" | "duration"> {
-  const blank = { reps: "", distance: "", unit: DEFAULT_DISTANCE_UNIT, duration: "" };
+): Pick<
+  CorrectionSetFields,
+  "kind" | "reps" | "distance" | "unit" | "duration"
+> {
+  const blank = {
+    reps: "",
+    distance: "",
+    unit: DEFAULT_DISTANCE_UNIT,
+    duration: "",
+  };
   if (quantity === null) return { kind: "repetitions", ...blank };
 
   if (quantity.kind === "distance") {
@@ -115,7 +132,10 @@ function loadToFields(
   if (load === null) return { loadKind: DEFAULT_LOAD_KIND, loadValue: "" };
   switch (load.kind) {
     case "absolute":
-      return { loadKind: "absolute", loadValue: load.kg != null ? String(load.kg) : "" };
+      return {
+        loadKind: "absolute",
+        loadValue: load.kg != null ? String(load.kg) : "",
+      };
     case "percent_1rm":
       return {
         loadKind: "percent_1rm",
@@ -179,7 +199,8 @@ function parseDurationSeconds(raw: string): number | null {
   let seconds = 0;
   for (const segment of raw.split(":")) {
     const value = Number(segment);
-    if (segment.trim() === "" || !Number.isFinite(value) || value < 0) return null;
+    if (segment.trim() === "" || !Number.isFinite(value) || value < 0)
+      return null;
     seconds = seconds * 60 + value;
   }
   return seconds;
@@ -198,7 +219,11 @@ function amountFor(
     const raw = row.distance.trim();
     const value = Number(raw);
     if (raw === "" || !Number.isFinite(value) || value <= 0) return null;
-    return distanceInput(raw, row.unit ?? DEFAULT_DISTANCE_UNIT, row.duration ?? "");
+    return distanceInput(
+      raw,
+      row.unit ?? DEFAULT_DISTANCE_UNIT,
+      row.duration ?? "",
+    );
   }
   if (row.kind === "duration") {
     const raw = row.duration.trim();
@@ -253,7 +278,8 @@ export function buildCorrectionRequest(
   if (loggedSets.length === 0) {
     return {
       ok: false,
-      error: "Keep at least one set — enter its amount, or delete the record instead.",
+      error:
+        "Keep at least one set — enter its amount, or delete the record instead.",
     };
   }
 
@@ -267,5 +293,23 @@ export function buildCorrectionRequest(
   if (isPlanLess) {
     request.training_type = trainingType;
   }
+  if (fields.completionOutcome != null) {
+    request.completion_outcome = fields.completionOutcome;
+  }
   return { ok: true, request };
+}
+
+// Build a `LogCorrectionInput` that flips only a plan-backed record's Completion Outcome
+// (ADR-0034), re-sending the record's current contents unchanged so the full-replace PUT
+// preserves the reps, load, date, and duration. The History outcome toggle uses this: the
+// server re-vets a flip to Incomplete through the contiguity gate (409 on a gap), and
+// recomputes advancement / Next Session and every read-time projection on the next read.
+export function buildOutcomeCorrection(
+  record: LoggedSession,
+  outcome: CompletionOutcome,
+): CorrectionResult {
+  return buildCorrectionRequest({
+    ...correctionFieldsFromRecord(record),
+    completionOutcome: outcome,
+  });
 }

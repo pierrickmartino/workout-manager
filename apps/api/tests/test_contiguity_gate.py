@@ -165,6 +165,145 @@ def test_delete_of_an_incomplete_mid_protocol_log_is_allowed():
     assert verdict.allowed is True
 
 
+def test_flip_to_incomplete_of_a_mid_protocol_session_with_a_later_performed_one_is_refused():
+    # Arrange — Sessions 10 and 11 performed (contiguous prefix {10, 11}); the target is
+    # the mid-Protocol Session 10, currently Completed.
+    order = [10, 11, 12]
+    target = _Log(id=1, session_id=10, completion_outcome="completed")
+    history = [target, _Log(id=2, session_id=11)]
+
+    # Act — un-complete the mid-Protocol performance
+    verdict = evaluate_contiguity(
+        target=target,
+        operation=CorrectionOperation.FLIP_TO_INCOMPLETE,
+        history=history,
+        protocol_session_order=order,
+    )
+
+    # Assert — refused: flipping it to Incomplete would leave a hole a later DEPLOY could
+    # reorder, exactly as a delete would
+    assert verdict.allowed is False
+    assert verdict.reason is not None
+
+
+def test_flip_to_incomplete_of_a_mid_protocol_session_with_no_later_performed_one_is_allowed():
+    # Arrange — only Session 10 is performed
+    order = [10, 11, 12]
+    target = _Log(id=1, session_id=10, completion_outcome="completed")
+    history = [target]
+
+    # Act
+    verdict = evaluate_contiguity(
+        target=target,
+        operation=CorrectionOperation.FLIP_TO_INCOMPLETE,
+        history=history,
+        protocol_session_order=order,
+    )
+
+    # Assert — allowed: no later Session is performed, so no hole opens
+    assert verdict.allowed is True
+
+
+def test_flip_to_incomplete_of_the_last_performed_session_is_allowed():
+    # Arrange — the whole prefix {10, 11, 12} is performed; the target is the last one
+    order = [10, 11, 12]
+    target = _Log(id=3, session_id=12, completion_outcome="completed")
+    history = [_Log(id=1, session_id=10), _Log(id=2, session_id=11), target]
+
+    # Act — redo the Session you just mis-declared: un-complete the most recent one
+    verdict = evaluate_contiguity(
+        target=target,
+        operation=CorrectionOperation.FLIP_TO_INCOMPLETE,
+        history=history,
+        protocol_session_order=order,
+    )
+
+    # Assert — allowed: un-completing the tail keeps the prefix contiguous
+    assert verdict.allowed is True
+
+
+def test_flip_to_incomplete_is_allowed_when_another_log_keeps_the_session_performed():
+    # Arrange — Session 10 was performed twice; a later Session 11 is also performed.
+    # Un-completing one of the two logs of Session 10 leaves it performed, so no hole opens.
+    order = [10, 11]
+    target = _Log(id=1, session_id=10, completion_outcome="completed")
+    history = [
+        target,
+        _Log(id=2, session_id=10, completion_outcome="completed"),
+        _Log(id=3, session_id=11),
+    ]
+
+    # Act
+    verdict = evaluate_contiguity(
+        target=target,
+        operation=CorrectionOperation.FLIP_TO_INCOMPLETE,
+        history=history,
+        protocol_session_order=order,
+    )
+
+    # Assert — the Session is still performed by its other log; nothing is removed
+    assert verdict.allowed is True
+
+
+def test_flip_to_incomplete_of_a_standalone_session_not_in_any_protocol_is_allowed():
+    # Arrange — a plan-backed record whose Session belongs to no Protocol
+    target = _Log(id=1, session_id=99, completion_outcome="completed")
+    history = [target]
+
+    # Act
+    verdict = evaluate_contiguity(
+        target=target,
+        operation=CorrectionOperation.FLIP_TO_INCOMPLETE,
+        history=history,
+        protocol_session_order=[],
+    )
+
+    # Assert — no Protocol position, so no later Session can be un-settled
+    assert verdict.allowed is True
+
+
+def test_flip_to_completed_of_a_mid_protocol_session_is_always_allowed():
+    # Arrange — the fill direction: Session 10 is currently Incomplete while later
+    # Sessions 11 and 12 are performed. Marking it Completed only *fills* the performed
+    # set — it never removes a Session, so it can never open a hole (ADR-0034).
+    order = [10, 11, 12]
+    target = _Log(id=1, session_id=10, completion_outcome="incomplete")
+    history = [
+        target,
+        _Log(id=2, session_id=11),
+        _Log(id=3, session_id=12),
+    ]
+
+    # Act
+    verdict = evaluate_contiguity(
+        target=target,
+        operation=CorrectionOperation.FLIP_TO_COMPLETED,
+        history=history,
+        protocol_session_order=order,
+    )
+
+    # Assert — allowed: filling the set never breaks contiguity
+    assert verdict.allowed is True
+
+
+def test_flip_to_completed_of_the_last_position_is_allowed():
+    # Arrange — the plain fill: the only Session, currently Incomplete, becomes Completed
+    order = [10, 11]
+    target = _Log(id=1, session_id=10, completion_outcome="incomplete")
+    history = [target]
+
+    # Act
+    verdict = evaluate_contiguity(
+        target=target,
+        operation=CorrectionOperation.FLIP_TO_COMPLETED,
+        history=history,
+        protocol_session_order=order,
+    )
+
+    # Assert
+    assert verdict.allowed is True
+
+
 def test_data_only_correction_is_always_allowed_even_mid_protocol():
     # Arrange — the everyday "I entered 60 kg, meant 70 kg" on a mid-Protocol Session
     # whose later Sessions are performed. A data fix removes no Session (user story 22).

@@ -3,8 +3,8 @@ sequence gap-free.
 
 Protocol advancement is a read-time projection (ADR-0013/0030): the performed set is
 the set of Session ids with an advancing Logged Session, and the Next Session is the
-first position not in it. Deleting a mid-Protocol performance — or, in a later slice,
-flipping it to Incomplete — removes its Session from that set, punching a *hole*.
+first position not in it. Deleting a mid-Protocol performance — or flipping it to
+Incomplete — removes its Session from that set, punching a *hole*.
 Advancement self-heals (the Session simply becomes Next again), but ``reenumerate_tail``
 (ADR-0020) assumes the performed Sessions are a **contiguous prefix** it passes through
 untouched; a later DEPLOY over a holed set would place a performed Session at a new
@@ -14,8 +14,9 @@ hole, Log Correction refuses the operations that create one.
 The rule, in one line: a correction is refused **iff it would remove the target's
 Session from the performed set *and* a later-positioned Session in the same Protocol is
 currently performed** ("undo those first" — tail-first correction). Every purely-data
-correction is allowed, and so is any delete of a plan-less, standalone, or last-performed
-record — none can leave a gap.
+correction is allowed; the fill direction (Incomplete→Completed) only adds to the set,
+so it is always allowed; and so is any delete or un-complete of a plan-less, standalone,
+or last-performed record — none can leave a gap.
 
 Pure — no I/O, no ORM, mirroring the pure projection tier of ``app/protocols/progress.py``.
 The service reads the history once and hands it in, together with the parent Protocol's
@@ -38,11 +39,15 @@ class CorrectionOperation(Enum):
 
     ``DATA_ONLY`` — fixing sets, load, reps, date, or duration; never removes a Session,
     so it is always permitted. ``DELETE`` — removes the record, so it removes the
-    Session when no other advancing performance of it remains. (The outcome→Incomplete
-    flip arrives in a later slice.)"""
+    Session when no other advancing performance of it remains. ``FLIP_TO_INCOMPLETE`` —
+    the target keeps its place in history but stops advancing, removing its Session the
+    same way a delete does. ``FLIP_TO_COMPLETED`` — the reverse: the target starts
+    advancing, which only *fills* the performed set and can never open a hole."""
 
     DATA_ONLY = "data_only"
     DELETE = "delete"
+    FLIP_TO_INCOMPLETE = "flip_to_incomplete"
+    FLIP_TO_COMPLETED = "flip_to_completed"
 
 
 class PerformedLog(Protocol):
@@ -63,10 +68,21 @@ class ContiguityVerdict:
     reason: str | None = None
 
 
-_TAIL_FIRST_REASON = (
+# The tail-first refusal, worded for the operation that would open the hole. Both point
+# the user at the same fix: settle the later Sessions first.
+_DELETE_TAIL_FIRST_REASON = (
     "Undo the later sessions you performed in this protocol first — deleting this one "
     "would leave a gap in your performed sequence."
 )
+_FLIP_TAIL_FIRST_REASON = (
+    "Undo the later sessions you performed in this protocol first — un-completing this "
+    "one would leave a gap in your performed sequence."
+)
+
+_TAIL_FIRST_REASONS = {
+    CorrectionOperation.DELETE: _DELETE_TAIL_FIRST_REASON,
+    CorrectionOperation.FLIP_TO_INCOMPLETE: _FLIP_TAIL_FIRST_REASON,
+}
 
 
 def _advances(log: PerformedLog) -> bool:
@@ -86,6 +102,31 @@ def _performed_sessions(history: Sequence[PerformedLog]) -> set[int]:
         for log in history
         if log.session_id is not None and _advances(log)
     }
+
+
+def _performed_after(
+    history: Sequence[PerformedLog],
+    target: PerformedLog,
+    operation: CorrectionOperation,
+) -> set[int]:
+    """The performed set once ``operation`` is applied to ``target``, without mutating
+    anything.
+
+    A ``DELETE`` drops the target from the history it is computed over. A flip keeps the
+    target in place but overrides whether it advances — ``FLIP_TO_COMPLETED`` makes it
+    advance, ``FLIP_TO_INCOMPLETE`` makes it stop — so the same read model that projects
+    the Next Session decides the post-correction performed set."""
+
+    if operation is CorrectionOperation.DELETE:
+        return _performed_sessions([log for log in history if log.id != target.id])
+
+    target_advances_after = operation is CorrectionOperation.FLIP_TO_COMPLETED
+    performed: set[int] = set()
+    for log in history:
+        advances = target_advances_after if log.id == target.id else _advances(log)
+        if log.session_id is not None and advances:
+            performed.add(log.session_id)
+    return performed
 
 
 def evaluate_contiguity(
@@ -111,13 +152,12 @@ def evaluate_contiguity(
         return ContiguityVerdict(allowed=True)
 
     performed_before = _performed_sessions(history)
-    performed_after = _performed_sessions(
-        [log for log in history if log.id != target.id]
-    )
+    performed_after = _performed_after(history, target, operation)
 
     # No hole unless the operation actually removes the target's Session from the
-    # performed set. It stays put when the target never contributed (an already-Incomplete
-    # log was never in the set) or when another advancing log keeps the Session performed.
+    # performed set. It stays put for the fill direction (FLIP_TO_COMPLETED only adds),
+    # when the target never contributed (an already-Incomplete log was never in the set),
+    # or when another advancing log keeps the Session performed.
     removes_session = (
         target.session_id in performed_before
         and target.session_id not in performed_after
@@ -135,7 +175,9 @@ def evaluate_contiguity(
         for session_id in protocol_session_order[target_position + 1 :]
     )
     if later_performed:
-        return ContiguityVerdict(allowed=False, reason=_TAIL_FIRST_REASON)
+        return ContiguityVerdict(
+            allowed=False, reason=_TAIL_FIRST_REASONS[operation]
+        )
     return ContiguityVerdict(allowed=True)
 
 

@@ -972,6 +972,146 @@ def test_correction_recomputes_personal_record_on_the_next_read():
     assert after > before
 
 
+# --- PUT /api/logs/{id} Completion Outcome correction (ADR-0034) --------------------
+
+
+def test_correcting_a_plan_backed_log_to_incomplete_moves_the_next_session_back():
+    # Arrange — seed a two-Session Protocol, perform its first Session (Completed).
+    # Next Session is the second, and one Session is complete.
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_uncomplete")
+    protocol, squat = _seed_protocol(client, "user_uncomplete")
+    first = _perform_protocol_session(client, "user_uncomplete", protocol, 0, squat)
+    before = client.get(f"/api/protocols/{protocol.id}", headers=headers).json()["data"]
+    assert before["next_session"]["session_id"] == protocol.sessions[1].session_id
+    assert before["completed_count"] == 1
+
+    # Act — correct that last-performed log to Incomplete (permitted, no later performed)
+    response = client.put(
+        f"/api/logs/{first.id}",
+        headers=headers,
+        json=_correction_body(squat.id, completion_outcome="incomplete"),
+    )
+
+    # Assert — 200 with the flipped outcome; advancement recomputes read-time: Session 1
+    # is Next again and the completed count drops to zero (ADR-0034)
+    assert response.status_code == 200
+    assert response.json()["data"]["completion_outcome"] == "incomplete"
+    after = client.get(f"/api/protocols/{protocol.id}", headers=headers).json()["data"]
+    assert after["next_session"]["session_id"] == protocol.sessions[0].session_id
+    assert after["completed_count"] == 0
+
+
+def test_correcting_a_mid_protocol_log_to_incomplete_is_conflict():
+    # Arrange — perform both Sessions of a two-Session Protocol (contiguous prefix)
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_uncomplete_conflict")
+    protocol, squat = _seed_protocol(client, "user_uncomplete_conflict")
+    first = _perform_protocol_session(client, "user_uncomplete_conflict", protocol, 0, squat)
+    _perform_protocol_session(client, "user_uncomplete_conflict", protocol, 1, squat)
+
+    # Act — try to un-complete the mid-Protocol (first) performance
+    response = client.put(
+        f"/api/logs/{first.id}",
+        headers=headers,
+        json=_correction_body(squat.id, completion_outcome="incomplete"),
+    )
+
+    # Assert — refused with 409 and a tail-first message; the outcome is untouched
+    assert response.status_code == 409
+    body = response.json()
+    assert body["success"] is False
+    assert body["error"]
+    assert client.logged.get(first.id, "user_uncomplete_conflict").completion_outcome == "completed"
+
+
+def test_correcting_a_log_from_incomplete_to_completed_succeeds():
+    # Arrange — a mid-Protocol Session logged Incomplete while a later one is Completed
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_fill")
+    protocol, squat = _seed_protocol(client, "user_fill")
+    first = _perform_protocol_session(client, "user_fill", protocol, 0, squat)
+    # Make the first Incomplete directly, then perform the second Completed
+    client.logged.update(
+        first.id,
+        "user_fill",
+        _incomplete_draft(protocol, squat, 0),
+    )
+    _perform_protocol_session(client, "user_fill", protocol, 1, squat)
+
+    # Act — mark the first Completed (the fill direction only adds to the performed set)
+    response = client.put(
+        f"/api/logs/{first.id}",
+        headers=headers,
+        json=_correction_body(squat.id, completion_outcome="completed"),
+    )
+
+    # Assert — 200; the fill is never gated
+    assert response.status_code == 200
+    assert response.json()["data"]["completion_outcome"] == "completed"
+
+
+def test_correcting_a_plan_less_log_supplying_an_outcome_is_rejected():
+    # Arrange — an ad-hoc, plan-less record (ADR-0031): it gates no Protocol
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_adhoc_outcome")
+    running = _create_exercise(client, headers, "Running")
+    created = client.post(
+        "/api/logs", headers=headers, json=_adhoc_body(running)
+    ).json()["data"]
+
+    # Act — a Completion Outcome has no place on a plan-less correction (boundary rule)
+    response = client.put(
+        f"/api/logs/{created['id']}",
+        headers=headers,
+        json=_correction_body(running, training_type="cardio", completion_outcome="incomplete"),
+    )
+
+    # Assert
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+
+
+def test_correcting_a_log_with_an_unknown_outcome_is_rejected():
+    # Arrange
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_bad_correct_outcome")
+    session = _generate_session(client, headers)
+    exercise_id = session["prescriptions"][0]["exercise_id"]
+    created = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=_log_body(session)
+    ).json()["data"]
+
+    # Act — "failed" is not a domain outcome (ADR-0013 rejects the collision term)
+    response = client.put(
+        f"/api/logs/{created['id']}",
+        headers=headers,
+        json=_correction_body(exercise_id, completion_outcome="failed"),
+    )
+
+    # Assert
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+
+
+def _incomplete_draft(protocol, squat, index):
+    """A LoggedSessionDraft re-declaring the Protocol's Session at ``index`` as Incomplete."""
+    from datetime import date
+
+    from app.repositories.logged_session_repository import (
+        LoggedSessionDraft,
+        LoggedSetDraft,
+    )
+
+    return LoggedSessionDraft(
+        session_id=protocol.sessions[index].session_id,
+        training_type="strength",
+        performed_on=date(2026, 6, 20 + index),
+        completion_outcome="incomplete",
+        logged_sets=[LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(5))],
+    )
+
+
 # --- DELETE /api/logs/{id} (ADR-0034, contiguity gate) ------------------------------
 
 
