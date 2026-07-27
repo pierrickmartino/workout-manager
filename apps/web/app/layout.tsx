@@ -60,7 +60,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ClerkProvider>
+    // `dynamic` is required by the strict-dynamic CSP: it lets Clerk read the
+    // per-request nonce (emitted by `contentSecurityPolicy` in proxy.ts) at
+    // request time so its injected scripts carry the nonce (ADR-0036, #257).
+    <ClerkProvider dynamic>
       <html
         lang="en"
         className={`${spaceGrotesk.variable} ${jetbrainsMono.variable}`}
