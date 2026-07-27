@@ -288,3 +288,59 @@ def test_history_is_scoped_to_the_user(repos):
 
     # Act / Assert — a different user sees an empty history
     assert logged.list_for_user("user_other") == []
+
+
+def test_update_replaces_the_editable_fields_and_the_whole_set_list(repos):
+    # Arrange — a plan-backed record to correct after the fact (ADR-0034)
+    logged, sessions, exercises = repos
+    session_view, squat, press = _session_with_two_exercises(sessions, exercises)
+    view = logged.create("user_owner", _log_draft(session_view.id, squat, press))
+
+    # Act — full-replace: a single corrected set, a new date and duration
+    updated = logged.update(
+        view.id,
+        "user_owner",
+        LoggedSessionDraft(
+            session_id=session_view.id,
+            training_type="strength",
+            performed_on=date(2026, 7, 1),
+            duration_seconds=1800,
+            logged_sets=[
+                LoggedSetDraft(
+                    exercise_id=squat.id, quantity=reps_quantity(6), load="72kg"
+                )
+            ],
+        ),
+    )
+
+    # Assert — the record is updated in place, same id, sets replaced wholesale
+    assert updated.id == view.id
+    assert updated.performed_on == date(2026, 7, 1)
+    assert updated.duration_seconds == 1800
+    assert [repetitions_of(s.quantity) for s in updated.logged_sets] == [6]
+    assert [s.load for s in updated.logged_sets] == ["72kg"]
+    # And a fresh read reflects the correction, not the original two sets
+    reread = logged.get(view.id, "user_owner")
+    assert [repetitions_of(s.quantity) for s in reread.logged_sets] == [6]
+
+
+def test_update_is_owner_scoped_and_returns_none_for_another_user(repos):
+    # Arrange — one user's record
+    logged, sessions, exercises = repos
+    session_view, squat, press = _session_with_two_exercises(sessions, exercises)
+    view = logged.create("user_owner", _log_draft(session_view.id, squat, press))
+
+    # Act — a different user attempts the update
+    result = logged.update(
+        view.id,
+        "user_other",
+        LoggedSessionDraft(
+            session_id=session_view.id,
+            performed_on=date(2026, 7, 1),
+            logged_sets=[LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(6))],
+        ),
+    )
+
+    # Assert — the update is refused and the record is untouched
+    assert result is None
+    assert [repetitions_of(s.quantity) for s in logged.get(view.id, "user_owner").logged_sets] == [5, 10]
