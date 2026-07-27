@@ -22,12 +22,14 @@ from app.repositories.deps import (
     get_exercise_repository,
     get_logged_session_repository,
     get_profile_repository,
+    get_protocol_repository,
     get_session_generator,
     get_session_repository,
 )
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.logged_session_repository import InMemoryLoggedSessionRepository
 from app.repositories.profile_repository import InMemoryProfileRepository
+from app.repositories.protocol_repository import InMemoryProtocolRepository
 from app.repositories.session_repository import InMemorySessionRepository
 from tests.conftest import ISSUER, make_signing_context
 
@@ -56,15 +58,23 @@ def build_client(ctx=None):
     exercises = InMemoryExerciseRepository()
     sessions = InMemorySessionRepository(exercises)
     logged = InMemoryLoggedSessionRepository(sessions, exercises)
+    protocols = InMemoryProtocolRepository(exercises)
     app = create_app()
     app.dependency_overrides[get_jwks] = lambda: ctx.jwks
     app.dependency_overrides[get_settings] = lambda: Settings(clerk_issuer=ISSUER)
     app.dependency_overrides[get_exercise_repository] = lambda: exercises
     app.dependency_overrides[get_session_repository] = lambda: sessions
     app.dependency_overrides[get_logged_session_repository] = lambda: logged
+    app.dependency_overrides[get_protocol_repository] = lambda: protocols
     app.dependency_overrides[get_session_generator] = lambda: FakeGenerator()
     app.dependency_overrides[get_profile_repository] = lambda: InMemoryProfileRepository()
-    return TestClient(app), ctx
+    client = TestClient(app)
+    # Exposed so a test can seed a Protocol + performed history directly, without
+    # driving the heavier generation endpoints, to exercise the contiguity 409.
+    client.exercises = exercises
+    client.logged = logged
+    client.protocols = protocols
+    return client, ctx
 
 
 def _auth(ctx, sub):
@@ -960,3 +970,151 @@ def test_correction_recomputes_personal_record_on_the_next_read():
     assert after is not None
     assert before is not None
     assert after > before
+
+
+# --- DELETE /api/logs/{id} (ADR-0034, contiguity gate) ------------------------------
+
+
+def _seed_protocol(client, owner: str):
+    """Seed a two-Session Protocol owned by ``owner`` directly into the in-memory repos
+    and return (protocol_view, squat_exercise)."""
+    from app.domain.exercise import Provenance
+    from app.repositories.protocol_repository import (
+        ProtocolDraft,
+        ProtocolSessionDraft,
+    )
+    from app.repositories.session_repository import PrescriptionDraft
+
+    squat = client.exercises.find_or_create(
+        "Back Squat", provenance=Provenance.AI_GENERATED
+    )
+    protocol = client.protocols.create(
+        owner,
+        ProtocolDraft(
+            training_type="strength",
+            objective="build",
+            sessions_per_week=2,
+            weeks=1,
+            duration_minutes=45,
+            sessions=[
+                ProtocolSessionDraft(
+                    week=1,
+                    day=day,
+                    prescriptions=[
+                        PrescriptionDraft(exercise_id=squat.id, sets=5, reps="5")
+                    ],
+                )
+                for day in (1, 2)
+            ],
+        ),
+    )
+    return protocol, squat
+
+
+def _perform_protocol_session(client, owner, protocol, index, squat):
+    from datetime import date
+
+    from app.repositories.logged_session_repository import (
+        LoggedSessionDraft,
+        LoggedSetDraft,
+    )
+
+    return client.logged.create(
+        owner,
+        LoggedSessionDraft(
+            session_id=protocol.sessions[index].session_id,
+            training_type="strength",
+            performed_on=date(2026, 6, 20 + index),
+            completion_outcome="completed",
+            logged_sets=[LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(5))],
+        ),
+    )
+
+
+def test_deleting_a_log_removes_it_and_returns_the_envelope():
+    # Arrange — a standalone logged performance
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_delete")
+    session = _generate_session(client, headers)
+    created = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=_log_body(session)
+    ).json()["data"]
+
+    # Act
+    response = client.delete(f"/api/logs/{created['id']}", headers=headers)
+
+    # Assert — 200 envelope, and it is gone from history
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+    history = client.get("/api/logs", headers=headers).json()["data"]
+    assert history == []
+
+
+def test_deleting_a_log_you_do_not_own_is_not_found():
+    # Arrange — user_owner logs a performance
+    client, ctx = build_client()
+    owner = _auth(ctx, "user_owner")
+    session = _generate_session(client, owner)
+    created = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=owner, json=_log_body(session)
+    ).json()["data"]
+
+    # Act — a stranger tries to delete it
+    response = client.delete(
+        f"/api/logs/{created['id']}", headers=_auth(ctx, "user_stranger")
+    )
+
+    # Assert — 404, and the owner's record is untouched
+    assert response.status_code == 404
+    assert response.json()["success"] is False
+    assert len(client.get("/api/logs", headers=owner).json()["data"]) == 1
+
+
+def test_deleting_a_mid_protocol_session_with_a_later_performed_one_is_conflict():
+    # Arrange — seed a two-Session Protocol and perform both (contiguous prefix)
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_contig")
+    protocol, squat = _seed_protocol(client, "user_contig")
+    first = _perform_protocol_session(client, "user_contig", protocol, 0, squat)
+    _perform_protocol_session(client, "user_contig", protocol, 1, squat)
+
+    # Act — try to delete the mid-Protocol (first) performance
+    response = client.delete(f"/api/logs/{first.id}", headers=headers)
+
+    # Assert — refused with 409 and a tail-first message; the record survives
+    assert response.status_code == 409
+    body = response.json()
+    assert body["success"] is False
+    assert body["error"]
+    assert client.logged.get(first.id, "user_contig") is not None
+
+
+def test_deleting_a_plan_backed_log_re_surfaces_it_as_the_next_session():
+    # Arrange — seed a Protocol, perform its first Session; Next Session is the second
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_next")
+    protocol, squat = _seed_protocol(client, "user_next")
+    first = _perform_protocol_session(client, "user_next", protocol, 0, squat)
+    before = client.get(f"/api/protocols/{protocol.id}", headers=headers).json()["data"]
+    assert before["next_session"]["session_id"] == protocol.sessions[1].session_id
+
+    # Act — delete the first performance (last-performed, so permitted)
+    response = client.delete(f"/api/logs/{first.id}", headers=headers)
+
+    # Assert — the read-time projection recomputes: Session 1 is Next again (ADR-0034)
+    assert response.status_code == 200
+    after = client.get(f"/api/protocols/{protocol.id}", headers=headers).json()["data"]
+    assert after["next_session"]["session_id"] == protocol.sessions[0].session_id
+    assert after["completed_count"] == 0
+
+
+def test_deleting_a_log_requires_authentication():
+    # Arrange
+    client, _ = build_client()
+
+    # Act
+    response = client.delete("/api/logs/1")
+
+    # Assert
+    assert response.status_code == 401
+    assert response.json()["success"] is False

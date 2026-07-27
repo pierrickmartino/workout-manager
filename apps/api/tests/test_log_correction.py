@@ -19,9 +19,11 @@ from tests.quantities import reps_quantity
 from app.domain.exercise import Provenance
 from app.domain.quantity import repetitions_of
 from app.logbook.correction import (
+    ContiguityError,
     CorrectSessionRequest,
     LogNotFoundError,
     correct_session,
+    delete_session,
 )
 from app.logbook.service import (
     LogKindError,
@@ -32,7 +34,13 @@ from app.logbook.service import (
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.logged_session_repository import (
     InMemoryLoggedSessionRepository,
+    LoggedSessionDraft,
     LoggedSetDraft,
+)
+from app.repositories.protocol_repository import (
+    InMemoryProtocolRepository,
+    ProtocolDraft,
+    ProtocolSessionDraft,
 )
 from app.repositories.profile_repository import (
     InMemoryProfileRepository,
@@ -323,3 +331,162 @@ def test_correction_of_a_massless_record_stays_massless():
 
     # Assert — record-ineligible stays record-ineligible (ADR-0026 honest silence)
     assert updated.logged_sets[0].body_weight_kg is None
+
+
+# --- Delete (ADR-0034, contiguity gate) ---------------------------------------------
+
+
+def _protocol_with_three_sessions(protocols, exercises, owner="user_owner"):
+    """Adopt a three-Session Protocol and return (protocol_view, squat)."""
+    squat = exercises.find_or_create("Back Squat", provenance=Provenance.AI_GENERATED)
+    protocol = protocols.create(
+        owner,
+        ProtocolDraft(
+            training_type="strength",
+            objective="build",
+            sessions_per_week=3,
+            weeks=1,
+            duration_minutes=45,
+            sessions=[
+                ProtocolSessionDraft(
+                    week=1,
+                    day=day,
+                    prescriptions=[
+                        PrescriptionDraft(exercise_id=squat.id, sets=5, reps="5")
+                    ],
+                )
+                for day in (1, 2, 3)
+            ],
+        ),
+    )
+    return protocol, squat
+
+
+def _perform(logged, protocol, index, squat, owner="user_owner", outcome="completed"):
+    """Record a performance of the Protocol's Session at ``index`` and return its view."""
+    return logged.create(
+        owner,
+        LoggedSessionDraft(
+            session_id=protocol.sessions[index].session_id,
+            training_type="strength",
+            performed_on=date(2026, 6, 20 + index),
+            completion_outcome=outcome,
+            logged_sets=[LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(5))],
+        ),
+    )
+
+
+def _wire_with_protocols():
+    exercises = InMemoryExerciseRepository()
+    protocols = InMemoryProtocolRepository(exercises)
+    sessions = InMemorySessionRepository(exercises)
+    logged = InMemoryLoggedSessionRepository(sessions, exercises)
+    return protocols, exercises, sessions, logged
+
+
+def test_delete_of_the_last_performed_session_succeeds():
+    # Arrange — a Protocol whose first two Sessions are performed (contiguous prefix)
+    protocols, exercises, _, logged = _wire_with_protocols()
+    protocol, squat = _protocol_with_three_sessions(protocols, exercises)
+    _perform(logged, protocol, 0, squat)
+    last = _perform(logged, protocol, 1, squat)
+
+    # Act — delete the most recent performance (redo the Session you just botched)
+    delete_session(last.id, "user_owner", protocols=protocols, logged=logged)
+
+    # Assert — the record is gone; the prefix stays contiguous
+    assert logged.get(last.id, "user_owner") is None
+    assert len(logged.list_for_user("user_owner")) == 1
+
+
+def test_delete_of_a_mid_protocol_session_with_a_later_performed_one_is_refused():
+    # Arrange — Sessions 1 and 2 performed; the target is the mid-Protocol Session 1
+    protocols, exercises, _, logged = _wire_with_protocols()
+    protocol, squat = _protocol_with_three_sessions(protocols, exercises)
+    first = _perform(logged, protocol, 0, squat)
+    _perform(logged, protocol, 1, squat)
+
+    # Act / Assert — refused: a later Session is performed, so deleting opens a hole
+    with pytest.raises(ContiguityError):
+        delete_session(first.id, "user_owner", protocols=protocols, logged=logged)
+
+    # And nothing was removed
+    assert logged.get(first.id, "user_owner") is not None
+
+
+def test_delete_of_a_mid_protocol_session_with_no_later_performed_one_succeeds():
+    # Arrange — only the first Session is performed
+    protocols, exercises, _, logged = _wire_with_protocols()
+    protocol, squat = _protocol_with_three_sessions(protocols, exercises)
+    first = _perform(logged, protocol, 0, squat)
+
+    # Act — no later Session is performed, so no hole opens
+    delete_session(first.id, "user_owner", protocols=protocols, logged=logged)
+
+    # Assert
+    assert logged.get(first.id, "user_owner") is None
+
+
+def test_delete_of_a_plan_less_record_succeeds():
+    # Arrange — an ad-hoc, standalone record (ADR-0031): never gates a Protocol
+    protocols, exercises, _, logged = _wire_with_protocols()
+    running = exercises.find_or_create("Running", provenance=Provenance.CURATED)
+    record = logged.create(
+        "user_owner",
+        LoggedSessionDraft(
+            session_id=None,
+            training_type="cardio",
+            performed_on=date(2026, 6, 20),
+            logged_sets=[LoggedSetDraft(exercise_id=running.id, quantity=reps_quantity(30))],
+        ),
+    )
+
+    # Act
+    delete_session(record.id, "user_owner", protocols=protocols, logged=logged)
+
+    # Assert
+    assert logged.get(record.id, "user_owner") is None
+
+
+def test_delete_of_a_standalone_session_not_in_any_protocol_succeeds():
+    # Arrange — the user owns a Protocol, but the target performance is of a standalone
+    # Session that belongs to no Protocol: it has no position to un-settle.
+    protocols, exercises, sessions, logged = _wire_with_protocols()
+    _protocol_with_three_sessions(protocols, exercises)  # an unrelated owned Protocol
+    squat = exercises.find_or_create("Deadlift", provenance=Provenance.AI_GENERATED)
+    standalone = sessions.create(
+        "user_owner",
+        SessionDraft(
+            training_type="strength",
+            duration_minutes=30,
+            prescriptions=[PrescriptionDraft(exercise_id=squat.id, sets=3, reps="5")],
+        ),
+    )
+    record = logged.create(
+        "user_owner",
+        LoggedSessionDraft(
+            session_id=standalone.id,
+            training_type="strength",
+            performed_on=date(2026, 6, 25),
+            completion_outcome="completed",
+            logged_sets=[LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(5))],
+        ),
+    )
+
+    # Act — the target's Session is in no Protocol ordering, so the gate allows it
+    delete_session(record.id, "user_owner", protocols=protocols, logged=logged)
+
+    # Assert
+    assert logged.get(record.id, "user_owner") is None
+
+
+def test_delete_of_another_users_log_raises_not_found():
+    # Arrange — user_owner's record
+    protocols, exercises, _, logged = _wire_with_protocols()
+    protocol, squat = _protocol_with_three_sessions(protocols, exercises)
+    record = _perform(logged, protocol, 0, squat)
+
+    # Act / Assert — a stranger cannot delete it (surfaces as 404 at the route)
+    with pytest.raises(LogNotFoundError):
+        delete_session(record.id, "user_stranger", protocols=protocols, logged=logged)
+    assert logged.get(record.id, "user_owner") is not None

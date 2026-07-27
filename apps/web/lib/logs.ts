@@ -49,3 +49,14 @@ export async function correctSession(
 ): Promise<Envelope<LoggedSession>> {
   return apiSend(`/api/logs/${logId}`, "PUT", input);
 }
+
+// Delete a mis-logged Logged Session (ADR-0034). DELETEs `/api/logs/{id}`; the backend
+// resolves ownership (`404` when not yours) and runs the contiguity gate — a delete that
+// would leave a gap in the performed sequence is refused with `409`. On success every
+// read-time projection recomputes on the next read (a plan-backed delete re-surfaces that
+// Session as the Next Session on Home). Returns the deleted id in the standard envelope.
+export async function deleteSession(
+  logId: number,
+): Promise<Envelope<{ id: number }>> {
+  return apiSend(`/api/logs/${logId}`, "DELETE");
+}

@@ -344,3 +344,40 @@ def test_update_is_owner_scoped_and_returns_none_for_another_user(repos):
     # Assert — the update is refused and the record is untouched
     assert result is None
     assert [repetitions_of(s.quantity) for s in logged.get(view.id, "user_owner").logged_sets] == [5, 10]
+
+
+def test_delete_removes_an_owned_record_and_its_sets(repos):
+    # Arrange — a plan-backed record with two sets (ADR-0034)
+    logged, sessions, exercises = repos
+    session_view, squat, press = _session_with_two_exercises(sessions, exercises)
+    view = logged.create("user_owner", _log_draft(session_view.id, squat, press))
+
+    # Act — delete it
+    deleted = logged.delete(view.id, "user_owner")
+
+    # Assert — the record is gone from get and from history; its sets cascade away
+    assert deleted is True
+    assert logged.get(view.id, "user_owner") is None
+    assert logged.list_for_user("user_owner") == []
+
+
+def test_delete_is_owner_scoped_and_leaves_another_users_record(repos):
+    # Arrange — one user's record
+    logged, sessions, exercises = repos
+    session_view, squat, press = _session_with_two_exercises(sessions, exercises)
+    view = logged.create("user_owner", _log_draft(session_view.id, squat, press))
+
+    # Act — a different user attempts the delete
+    deleted = logged.delete(view.id, "user_other")
+
+    # Assert — refused, and the owner's record is untouched
+    assert deleted is False
+    assert logged.get(view.id, "user_owner") is not None
+
+
+def test_delete_returns_false_for_an_unknown_log(repos):
+    # Arrange
+    logged, _, _ = repos
+
+    # Act / Assert — nothing to delete
+    assert logged.delete(987654, "user_any") is False

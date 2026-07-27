@@ -48,12 +48,13 @@ export async function apiGet<T>(path: string): Promise<Envelope<T>> {
   return (await response.json()) as Envelope<T>;
 }
 
-// Write to a backend endpoint (POST or PUT). `Content-Type: application/json` and the
-// JSON-stringified body are attached only when a `body` is passed; a bodyless call
-// (the `substitute` POST) sends neither, byte-for-byte as before (ADR-0022).
+// Write to a backend endpoint (POST, PUT, or DELETE). `Content-Type: application/json`
+// and the JSON-stringified body are attached only when a `body` is passed; a bodyless
+// call (the `substitute` POST, a `DELETE`) sends neither, byte-for-byte as before
+// (ADR-0022).
 export async function apiSend<T>(
   path: string,
-  method: "POST" | "PUT",
+  method: "POST" | "PUT" | "DELETE",
   body?: unknown,
 ): Promise<Envelope<T>> {
   const headers = await authHeaders();

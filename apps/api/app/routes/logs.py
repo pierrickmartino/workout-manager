@@ -20,9 +20,11 @@ from app.domain.load import LoadKind, load_from_input
 from app.domain.quantity import QuantityKind, quantity_from_input
 from app.envelope import success_envelope
 from app.logbook.correction import (
+    ContiguityError,
     CorrectSessionRequest,
     LogNotFoundError,
     correct_session,
+    delete_session,
 )
 from app.logbook.service import (
     LogKindError,
@@ -35,6 +37,7 @@ from app.repositories.deps import (
     get_exercise_repository,
     get_logged_session_repository,
     get_profile_repository,
+    get_protocol_repository,
     get_session_repository,
 )
 from app.repositories.exercise_repository import ExerciseRepository
@@ -44,11 +47,13 @@ from app.repositories.logged_session_repository import (
     LoggedSetDraft,
 )
 from app.repositories.profile_repository import ProfileRepository
+from app.repositories.protocol_repository import ProtocolRepository
 from app.repositories.session_repository import SessionRepository
 
 router = APIRouter(prefix="/api", tags=["logs"])
 
 HTTP_NOT_FOUND = 404
+HTTP_CONFLICT = 409
 HTTP_UNPROCESSABLE_ENTITY = 422
 
 MIN_RPE = 1
@@ -325,6 +330,32 @@ def correct_log(
             status_code=HTTP_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
     return success_envelope(_serialize(view))
+
+
+@router.delete("/logs/{log_id}")
+def delete_log(
+    log_id: int,
+    clerk_user_id: str = Depends(get_current_user),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+    protocols: ProtocolRepository = Depends(get_protocol_repository),
+) -> dict:
+    """Delete a Logged Session in place (ADR-0034).
+
+    Delegates to ``delete_session``, which resolves ownership and runs the pure
+    contiguity gate over the user's history and the parent Protocol's ordering. A log
+    that is not the caller's surfaces as ``404``; a delete that would leave a gap in the
+    performed sequence (a mid-Protocol Session with a later-positioned one performed) is
+    refused as ``409`` with a tail-first message. On success the read-time projections
+    (advancement / Next Session, XP, PRs, Streak, Achievements, analytics) recompute from
+    the record on the next read."""
+
+    try:
+        delete_session(log_id, clerk_user_id, protocols=protocols, logged=logged)
+    except LogNotFoundError as exc:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Log not found") from exc
+    except ContiguityError as exc:
+        raise HTTPException(status_code=HTTP_CONFLICT, detail=str(exc)) from exc
+    return success_envelope({"id": log_id})
 
 
 @router.get("/logs")
