@@ -82,6 +82,10 @@ _Avoid_: Failed, partial, abandoned (as the domain term); status
 The elapsed active time of a Logged Session — measured from when the user starts training to their last recorded activity, deliberately excluding any prolonged idle gap so the figure reflects time actually training, not wall-clock time with the phone locked. Known only when the performance was tracked live; absent when a performance is logged after the fact. It is the honest basis a future average-workout-time figure would build on.
 _Avoid_: Elapsed time, workout length, wall-clock time
 
+**Log Correction**:
+The act of a user editing or deleting one of their own Logged Sessions after the fact — fixing its Logged Sets, date, duration, or (plan-less only) training type, or removing a mis-logged performance entirely. Touches only the *record*, never a plan: XP, Personal Records, Streak, Achievements, and Protocol advancement are read-time projections that simply recompute, and the performance's Performed Body Weight is carried forward from the record, never re-read from the now-changed Profile. It is the first act that mutates the record (Progression and the Builder's tail-edit touch the plan). Refused only when it would un-settle a Session that a later performed Session depends on, so the performed sequence stays gap-free.
+_Avoid_: Edit history, amend, revise, log update
+
 ## Profile
 
 **Fitness Profile**:
