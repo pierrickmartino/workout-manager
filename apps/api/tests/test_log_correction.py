@@ -490,3 +490,114 @@ def test_delete_of_another_users_log_raises_not_found():
     with pytest.raises(LogNotFoundError):
         delete_session(record.id, "user_stranger", protocols=protocols, logged=logged)
     assert logged.get(record.id, "user_owner") is not None
+
+
+# --- Completion Outcome correction (ADR-0034, contiguity gate) -----------------------
+
+
+def _correct_outcome(logged, exercises, protocols, record, squat, outcome):
+    """Correct only ``record``'s Completion Outcome, re-sending its one squat set."""
+    return correct_session(
+        CorrectSessionRequest(
+            log_id=record.id,
+            performed_on=record.performed_on,
+            completion_outcome=outcome,
+            logged_sets=[LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(5))],
+        ),
+        "user_owner",
+        exercises=exercises,
+        logged=logged,
+        protocols=protocols,
+    )
+
+
+def test_flip_to_incomplete_of_the_last_performed_session_succeeds():
+    # Arrange — a Protocol whose first two Sessions are Completed (contiguous prefix)
+    protocols, exercises, _, logged = _wire_with_protocols()
+    protocol, squat = _protocol_with_three_sessions(protocols, exercises)
+    _perform(logged, protocol, 0, squat)
+    last = _perform(logged, protocol, 1, squat)
+
+    # Act — un-complete the most recent performance (redo the Session you mis-declared)
+    updated = _correct_outcome(logged, exercises, protocols, last, squat, "incomplete")
+
+    # Assert — the outcome flips; the record stays put, its Session and id preserved
+    assert updated.id == last.id
+    assert updated.completion_outcome == "incomplete"
+    assert updated.session_id == protocol.sessions[1].session_id
+
+
+def test_flip_to_incomplete_of_a_mid_protocol_session_with_a_later_performed_one_is_refused():
+    # Arrange — Sessions 1 and 2 Completed; the target is the mid-Protocol Session 1
+    protocols, exercises, _, logged = _wire_with_protocols()
+    protocol, squat = _protocol_with_three_sessions(protocols, exercises)
+    first = _perform(logged, protocol, 0, squat)
+    _perform(logged, protocol, 1, squat)
+
+    # Act / Assert — refused: un-completing it would open a hole (later Session performed)
+    with pytest.raises(ContiguityError):
+        _correct_outcome(logged, exercises, protocols, first, squat, "incomplete")
+
+    # And nothing changed — the outcome is still Completed
+    assert logged.get(first.id, "user_owner").completion_outcome == "completed"
+
+
+def test_flip_to_completed_is_allowed_even_when_a_later_session_is_performed():
+    # Arrange — a mid-Protocol Session logged Incomplete while a later one is Completed.
+    # Marking it Completed only fills the performed set, so it is never gated.
+    protocols, exercises, _, logged = _wire_with_protocols()
+    protocol, squat = _protocol_with_three_sessions(protocols, exercises)
+    first = _perform(logged, protocol, 0, squat, outcome="incomplete")
+    _perform(logged, protocol, 1, squat)
+
+    # Act
+    updated = _correct_outcome(logged, exercises, protocols, first, squat, "completed")
+
+    # Assert — the fill direction succeeds
+    assert updated.completion_outcome == "completed"
+
+
+def test_data_only_correction_preserves_the_outcome_when_none_is_supplied():
+    # Arrange — a Completed performance; a contents-only correction sends no outcome
+    protocols, exercises, _, logged = _wire_with_protocols()
+    protocol, squat = _protocol_with_three_sessions(protocols, exercises)
+    record = _perform(logged, protocol, 0, squat)
+
+    # Act — correct the reps only, leaving completion_outcome unset (None)
+    updated = correct_session(
+        CorrectSessionRequest(
+            log_id=record.id,
+            performed_on=record.performed_on,
+            logged_sets=[LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(6))],
+        ),
+        "user_owner",
+        exercises=exercises,
+        logged=logged,
+        protocols=protocols,
+    )
+
+    # Assert — the record's own outcome is preserved (Slice 1 behavior, now with the gate)
+    assert updated.completion_outcome == "completed"
+
+
+def test_plan_less_correction_supplying_an_outcome_is_rejected():
+    # Arrange — an ad-hoc, plan-less record gates no Protocol and declares no outcome
+    sessions, exercises, logged, profiles = _wire()
+    protocols = InMemoryProtocolRepository(exercises)
+    view, running = _log_plan_less(exercises, logged, profiles)
+
+    # Act / Assert — supplying a Completion Outcome violates the boundary rule (422)
+    with pytest.raises(LogKindError):
+        correct_session(
+            CorrectSessionRequest(
+                log_id=view.id,
+                performed_on=date(2026, 7, 1),
+                training_type="cardio",
+                completion_outcome="incomplete",
+                logged_sets=[LoggedSetDraft(exercise_id=running.id, quantity=reps_quantity(20))],
+            ),
+            "user_owner",
+            exercises=exercises,
+            logged=logged,
+            protocols=protocols,
+        )

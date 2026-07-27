@@ -282,15 +282,28 @@ class LogCorrectionBody(BaseModel):
     wholesale. ``performed_on`` and ``duration_seconds`` are edited directly.
 
     ``training_type`` rides only on a plan-less correction — a plan-backed record keeps
-    the type derived from its Session, so the value is ignored there. A Completion
-    Outcome is *absent* by construction: this slice preserves the record's unchanged.
-    Any body weight is ignored too — the Performed Body Weight is carried forward from
-    the record, never re-read (ADR-0034)."""
+    the type derived from its Session, so the value is ignored there.
+
+    ``completion_outcome`` corrects the Completion Outcome of a plan-backed record
+    (ADR-0013): ``"completed"`` | ``"incomplete"``. Absent means "leave it unchanged" —
+    the record's own outcome is preserved. Supplying one on a plan-less record is a
+    boundary violation (``422``); flipping a plan-backed record to Incomplete is gated by
+    contiguity (``409`` when it would leave a gap). Any body weight is ignored — the
+    Performed Body Weight is carried forward from the record, never re-read (ADR-0034)."""
 
     performed_on: date
     logged_sets: list[LogSetBody] = Field(min_length=1)
     training_type: str | None = None
+    completion_outcome: str | None = None
     duration_seconds: int | None = Field(default=None, ge=0)
+
+    @field_validator("completion_outcome")
+    @classmethod
+    def _known_outcome(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        # Normalize and reject anything outside the vocabulary at the boundary.
+        return parse_completion_outcome(value).value
 
 
 @router.put("/logs/{log_id}")
@@ -300,19 +313,24 @@ def correct_log(
     clerk_user_id: str = Depends(get_current_user),
     exercises: ExerciseRepository = Depends(get_exercise_repository),
     logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+    protocols: ProtocolRepository = Depends(get_protocol_repository),
 ) -> dict:
     """Correct a Logged Session in place (ADR-0034).
 
     Delegates to the ``correct_session`` service, which resolves ownership, reads the
     plan-backed / plan-less boundary rule off the *existing* record (so no route split),
-    guards catalog validity, and carries the Performed Body Weight forward. A log that
+    guards catalog validity, carries the Performed Body Weight forward, and — when the
+    Completion Outcome is corrected to Incomplete — runs the contiguity gate. A log that
     is not the caller's surfaces as ``404``; a boundary-rule or catalog violation as
-    ``422``."""
+    ``422``; an outcome flip that would leave a gap in the performed sequence as ``409``
+    with a tail-first message. On success every read-time projection (advancement / Next
+    Session, XP, PRs, Streak, Achievements) recomputes from the record on the next read."""
 
     request = CorrectSessionRequest(
         log_id=log_id,
         performed_on=payload.performed_on,
         training_type=payload.training_type,
+        completion_outcome=payload.completion_outcome,
         duration_seconds=payload.duration_seconds,
         logged_sets=[s.to_draft() for s in payload.logged_sets],
     )
@@ -322,9 +340,12 @@ def correct_log(
             clerk_user_id,
             exercises=exercises,
             logged=logged,
+            protocols=protocols,
         )
     except LogNotFoundError as exc:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Log not found") from exc
+    except ContiguityError as exc:
+        raise HTTPException(status_code=HTTP_CONFLICT, detail=str(exc)) from exc
     except (LogKindError, UnknownExerciseError) as exc:
         raise HTTPException(
             status_code=HTTP_UNPROCESSABLE_ENTITY, detail=str(exc)

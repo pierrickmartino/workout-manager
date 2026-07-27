@@ -3,12 +3,15 @@ import assert from "node:assert/strict";
 
 import {
   buildCorrectionRequest,
+  buildOutcomeCorrection,
   correctionFieldsFromRecord,
   type CorrectionFormFields,
 } from "./log-correction.ts";
 import type { LoggedSession } from "./logs-types";
 
-function planBackedRecord(overrides: Partial<LoggedSession> = {}): LoggedSession {
+function planBackedRecord(
+  overrides: Partial<LoggedSession> = {},
+): LoggedSession {
   return {
     id: 42,
     clerk_user_id: "user_owner",
@@ -113,7 +116,12 @@ test("pre-fills and requires a training type for a plan-less record", () => {
     logged_sets: [
       {
         position: 0,
-        quantity: { kind: "distance", text: "5 km", metres: 5000, duration_s: 1500 },
+        quantity: {
+          kind: "distance",
+          text: "5 km",
+          metres: 5000,
+          duration_s: 1500,
+        },
         load: { kind: "bodyweight", text: "bodyweight" },
         perceived_difficulty: null,
         exercise_id: 9,
@@ -203,4 +211,48 @@ test("rejects a correction that would leave zero sets", () => {
   assert.equal(result.ok, false);
   if (result.ok) return;
   assert.match(result.error, /at least one set/i);
+});
+
+test("an edit correction never sends a Completion Outcome (the server preserves it)", () => {
+  // Arrange — a plan-backed record pre-filled straight into the build step
+  const record = planBackedRecord();
+
+  // Act — build the correction from the record's unchanged fields
+  const result = buildCorrectionRequest(correctionFieldsFromRecord(record));
+
+  // Assert — the payload omits completion_outcome, so the server keeps the record's
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal("completion_outcome" in result.request, false);
+});
+
+test("builds an outcome correction that carries the flipped outcome and the record's contents", () => {
+  // Arrange — a plan-backed Completed record to un-complete
+  const record = planBackedRecord({ completion_outcome: "completed" });
+
+  // Act — flip its outcome to Incomplete, preserving its sets and date
+  const result = buildOutcomeCorrection(record, "incomplete");
+
+  // Assert — the PUT carries the new outcome plus the record's unchanged contents; a
+  // plan-backed correction still omits the training type (derived server-side)
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.completion_outcome, "incomplete");
+  assert.equal(result.request.performed_on, "2026-06-20");
+  assert.equal(result.request.logged_sets.length, 1);
+  assert.equal(result.request.logged_sets[0].exercise_id, 3);
+  assert.equal("training_type" in result.request, false);
+});
+
+test("builds an outcome correction for the fill direction (Incomplete to Completed)", () => {
+  // Arrange — a plan-backed Incomplete record to mark Completed
+  const record = planBackedRecord({ completion_outcome: "incomplete" });
+
+  // Act
+  const result = buildOutcomeCorrection(record, "completed");
+
+  // Assert
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.completion_outcome, "completed");
 });

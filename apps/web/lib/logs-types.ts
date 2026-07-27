@@ -86,12 +86,14 @@ export interface LogAdhocInput {
 // (ADR-0034), sent as `PUT /api/logs/{id}`. Full-replace: `logged_sets` carries the
 // entire desired set list (at least one). `training_type` rides only on a plan-less
 // correction — a plan-backed record keeps the type derived from its Session, so it is
-// omitted there. A Completion Outcome is never sent: this slice preserves the record's
-// unchanged. Body weight is never sent either — the Performed Body Weight is carried
-// forward from the record on the server, never re-read.
+// omitted there. `completion_outcome` corrects a plan-backed record's Completion Outcome
+// (ADR-0013); omitted means "leave it unchanged" — the contents-only edit path preserves
+// the record's. Body weight is never sent — the Performed Body Weight is carried forward
+// from the record on the server, never re-read.
 export interface LogCorrectionInput {
   performed_on: string;
   training_type?: string;
+  completion_outcome?: CompletionOutcome;
   duration_seconds?: number | null;
   logged_sets: LogSetInput[];
 }

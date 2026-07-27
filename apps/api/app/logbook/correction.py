@@ -29,6 +29,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from datetime import date
 
+from app.domain.completion import CompletionOutcome
 from app.domain.contiguity import CorrectionOperation, evaluate_contiguity
 from app.domain.log_kind import resolve_training_type
 from app.logbook.service import UnknownExerciseError
@@ -58,12 +59,18 @@ class CorrectSessionRequest:
     ``log_id`` names the record to edit. ``training_type`` rides only on a plan-less
     correction (there is no Session to derive it from) and is required there; on a
     plan-backed record it is ignored (the Session's type, carried on the record, wins),
-    so a caller need not restate it. The Completion Outcome and ``session_id`` are not
-    part of the request — they are preserved from the existing record."""
+    so a caller need not restate it.
+
+    ``completion_outcome`` corrects the Completion Outcome of a *plan-backed* record
+    (ADR-0013): ``"completed"`` | ``"incomplete"``. ``None`` means "leave it unchanged"
+    — the record's own outcome is preserved (a contents-only correction). A plan-less
+    record must never supply one (it gates no Protocol); doing so is a boundary violation.
+    ``session_id`` is not part of the request — it is immutable and preserved."""
 
     log_id: int
     performed_on: date
     training_type: str | None = None
+    completion_outcome: str | None = None
     duration_seconds: int | None = None
     logged_sets: list[LoggedSetDraft] = field(default_factory=list)
 
@@ -86,12 +93,19 @@ def correct_session(
     *,
     exercises: ExerciseRepository,
     logged: LoggedSessionRepository,
+    protocols: ProtocolRepository | None = None,
 ) -> LoggedSessionView:
     """Apply a Log Correction, or raise before persisting.
 
     Raises ``LogNotFoundError`` when the log is not the caller's, ``LogKindError`` when
-    the plan-less boundary rule is violated (a missing training type), and
-    ``UnknownExerciseError`` when any replacement set references an unknown Exercise.
+    the plan-less boundary rule is violated (a missing training type, or a Completion
+    Outcome on a plan-less record), ``UnknownExerciseError`` when any replacement set
+    references an unknown Exercise, and ``ContiguityError`` when correcting the
+    Completion Outcome to Incomplete would leave a gap in the performed sequence.
+
+    ``protocols`` is only consulted when a Completion Outcome correction flips a
+    plan-backed record to Incomplete — the one hole-creating outcome change (ADR-0034),
+    which the pure contiguity gate must vet. The route always supplies it.
     """
 
     existing = logged.get(request.log_id, clerk_user_id)
@@ -100,14 +114,22 @@ def correct_session(
 
     # The boundary rule is read off the record: session_id decides plan-backed vs
     # plan-less, and the record's own training type is authoritative for a plan-backed
-    # correction (as the Session's is at create). The Completion Outcome is preserved,
-    # so passing the record's satisfies the plan-less "no outcome" rule (it is None
-    # there by construction).
+    # correction (as the Session's is at create). The *request's* Completion Outcome is
+    # passed through so the plan-less "no outcome" rule rejects one supplied on an
+    # ad-hoc record (LogKindError → 422); on a plan-backed record it is ignored here.
     training_type = resolve_training_type(
         session_id=existing.session_id,
         request_training_type=request.training_type,
-        completion_outcome=existing.completion_outcome,
+        completion_outcome=request.completion_outcome,
         session_training_type=existing.training_type,
+    )
+
+    # An absent outcome preserves the record's; a supplied one is the correction. Only a
+    # plan-backed record can reach a non-None outcome (the plan-less case raised above).
+    new_outcome = (
+        request.completion_outcome
+        if request.completion_outcome is not None
+        else existing.completion_outcome
     )
 
     for logged_set in request.logged_sets:
@@ -116,12 +138,20 @@ def correct_session(
                 f"Exercise {logged_set.exercise_id} is not in the catalog."
             )
 
+    _guard_outcome_change(
+        existing=existing,
+        new_outcome=new_outcome,
+        clerk_user_id=clerk_user_id,
+        protocols=protocols,
+        logged=logged,
+    )
+
     body_weight = _carried_body_weight(existing)
     draft = LoggedSessionDraft(
         session_id=existing.session_id,
         training_type=training_type,
         performed_on=request.performed_on,
-        completion_outcome=existing.completion_outcome,
+        completion_outcome=new_outcome,
         duration_seconds=request.duration_seconds,
         logged_sets=[
             replace(logged_set, body_weight_kg=body_weight)
@@ -134,19 +164,56 @@ def correct_session(
     return updated
 
 
+def _guard_outcome_change(
+    *,
+    existing: LoggedSessionView,
+    new_outcome: str | None,
+    clerk_user_id: str,
+    protocols: ProtocolRepository | None,
+    logged: LoggedSessionRepository,
+) -> None:
+    """Run the contiguity gate when a Completion Outcome correction flips a plan-backed
+    record to Incomplete — the only outcome change that can punch a hole (ADR-0034).
+
+    The reverse (Incomplete→Completed) only *fills* the performed set, so it is always
+    allowed and never consulted here. A plan-less record carries no outcome and reaches
+    this with an unchanged (None) value, so it too is a no-op."""
+
+    incomplete = CompletionOutcome.INCOMPLETE.value
+    flips_to_incomplete = (
+        existing.session_id is not None
+        and new_outcome != existing.completion_outcome
+        and new_outcome == incomplete
+    )
+    if not flips_to_incomplete:
+        return
+
+    history = logged.list_for_user(clerk_user_id)
+    order = _parent_protocol_order(existing.session_id, clerk_user_id, protocols)
+    verdict = evaluate_contiguity(
+        target=existing,
+        operation=CorrectionOperation.FLIP_TO_INCOMPLETE,
+        history=history,
+        protocol_session_order=order,
+    )
+    if not verdict.allowed:
+        raise ContiguityError(verdict.reason)
+
+
 def _parent_protocol_order(
     session_id: int | None,
     clerk_user_id: str,
-    protocols: ProtocolRepository,
+    protocols: ProtocolRepository | None,
 ) -> list[int]:
     """The parent Protocol's Session ids in position order, for the contiguity gate.
 
-    Empty when the record is plan-less (``session_id is None``) or the Session belongs
-    to no Protocol (a standalone generated Session) — either way there is no later
-    position a delete could un-settle. Mirrors how ``current_protocol`` iterates the
-    user's Protocols; the gate needs only the ordering, not the prescriptions."""
+    Empty when the record is plan-less (``session_id is None``), no repository was
+    supplied, or the Session belongs to no Protocol (a standalone generated Session) —
+    in each case there is no later position a delete or flip could un-settle. Mirrors how
+    ``current_protocol`` iterates the user's Protocols; the gate needs only the ordering,
+    not the prescriptions."""
 
-    if session_id is None:
+    if session_id is None or protocols is None:
         return []
     for protocol in protocols.list_for_user(clerk_user_id):
         order = [session.session_id for session in protocol.sessions]
