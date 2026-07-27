@@ -758,3 +758,205 @@ def test_logging_rejects_an_empty_set_list():
     # Assert
     assert response.status_code == 422
     assert response.json()["success"] is False
+
+
+def _correction_body(exercise_id, **overrides):
+    """A PUT body correcting a Logged Session's contents (ADR-0034)."""
+    body = {
+        "performed_on": "2026-07-01",
+        "duration_seconds": 1500,
+        "logged_sets": [
+            {
+                "exercise_id": exercise_id,
+                "quantity_kind": "repetitions",
+                "quantity_value": "6",
+                "load_kind": "absolute",
+                "load_value": "72",
+                "perceived_difficulty": 7,
+            }
+        ],
+    }
+    body.update(overrides)
+    return body
+
+
+def test_correcting_a_log_updates_it_and_preserves_the_outcome():
+    # Arrange — log a plan-backed performance the client declared Completed
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_correct")
+    session = _generate_session(client, headers)
+    exercise_id = session["prescriptions"][0]["exercise_id"]
+    created = client.post(
+        f"/api/sessions/{session['id']}/logs",
+        headers=headers,
+        json=_log_body(session, completion_outcome="completed"),
+    ).json()["data"]
+
+    # Act — correct its contents through PUT /api/logs/{id}
+    response = client.put(
+        f"/api/logs/{created['id']}",
+        headers=headers,
+        json=_correction_body(exercise_id),
+    )
+
+    # Assert — the record is updated in place; the outcome and Session are preserved
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["id"] == created["id"]
+    assert data["session_id"] == session["id"]
+    assert data["performed_on"] == "2026-07-01"
+    assert data["duration_seconds"] == 1500
+    assert data["completion_outcome"] == "completed"
+    assert data["logged_sets"][0]["quantity"] == reps_quantity(6)
+    assert data["logged_sets"][0]["load"] == load_from_input("absolute", "72").to_dict()
+
+
+def test_correcting_a_log_you_do_not_own_is_not_found():
+    # Arrange — user_owner logs a performance
+    client, ctx = build_client()
+    owner = _auth(ctx, "user_owner")
+    session = _generate_session(client, owner)
+    exercise_id = session["prescriptions"][0]["exercise_id"]
+    created = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=owner, json=_log_body(session)
+    ).json()["data"]
+
+    # Act — a different user tries to correct it
+    stranger = _auth(ctx, "user_stranger")
+    response = client.put(
+        f"/api/logs/{created['id']}", headers=stranger, json=_correction_body(exercise_id)
+    )
+
+    # Assert
+    assert response.status_code == 404
+    assert response.json()["success"] is False
+
+
+def test_correcting_a_log_with_an_unknown_exercise_is_rejected():
+    # Arrange
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_bad_exercise")
+    session = _generate_session(client, headers)
+    created = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=_log_body(session)
+    ).json()["data"]
+
+    # Act — a set naming an Exercise not in the catalog
+    response = client.put(
+        f"/api/logs/{created['id']}", headers=headers, json=_correction_body(9999)
+    )
+
+    # Assert
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+
+
+def test_correcting_a_plan_less_log_without_a_training_type_is_rejected():
+    # Arrange — an ad-hoc, plan-less record (ADR-0031)
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_adhoc_correct")
+    running = _create_exercise(client, headers, "Running")
+    created = client.post(
+        "/api/logs", headers=headers, json=_adhoc_body(running)
+    ).json()["data"]
+
+    # Act — correct it but blank out the training type (boundary-rule violation)
+    response = client.put(
+        f"/api/logs/{created['id']}",
+        headers=headers,
+        json=_correction_body(running, training_type="   "),
+    )
+
+    # Assert
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+
+
+def test_correcting_a_plan_less_log_can_change_its_training_type():
+    # Arrange
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_adhoc_retype")
+    running = _create_exercise(client, headers, "Running")
+    created = client.post(
+        "/api/logs", headers=headers, json=_adhoc_body(running)
+    ).json()["data"]
+
+    # Act
+    response = client.put(
+        f"/api/logs/{created['id']}",
+        headers=headers,
+        json=_correction_body(running, training_type="mobility"),
+    )
+
+    # Assert — the plan-less record takes the request's training type
+    assert response.status_code == 200
+    assert response.json()["data"]["training_type"] == "mobility"
+
+
+def test_correcting_a_log_with_zero_sets_is_rejected():
+    # Arrange
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_zero_sets")
+    session = _generate_session(client, headers)
+    created = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=_log_body(session)
+    ).json()["data"]
+
+    # Act — a session always keeps at least one set
+    response = client.put(
+        f"/api/logs/{created['id']}",
+        headers=headers,
+        json={"performed_on": "2026-07-01", "logged_sets": []},
+    )
+
+    # Assert
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+
+
+def test_correction_recomputes_personal_record_on_the_next_read():
+    # Arrange — log a light single, note the Personal Record it projects
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_pr_recompute")
+    session = _generate_session(client, headers)
+    exercise_id = session["prescriptions"][0]["exercise_id"]
+    created = client.post(
+        f"/api/sessions/{session['id']}/logs",
+        headers=headers,
+        json=_log_body(session, logged_sets=[
+            {
+                "exercise_id": exercise_id,
+                "quantity_kind": "repetitions",
+                "quantity_value": "5",
+                "load_kind": "absolute",
+                "load_value": "60",
+            }
+        ]),
+    ).json()["data"]
+    before = client.get(
+        f"/api/exercises/{exercise_id}/records", headers=headers
+    ).json()["data"]["personal_record"]
+
+    # Act — correct the load far heavier
+    client.put(
+        f"/api/logs/{created['id']}",
+        headers=headers,
+        json=_correction_body(exercise_id, logged_sets=[
+            {
+                "exercise_id": exercise_id,
+                "quantity_kind": "repetitions",
+                "quantity_value": "5",
+                "load_kind": "absolute",
+                "load_value": "120",
+            }
+        ]),
+    )
+    after = client.get(
+        f"/api/exercises/{exercise_id}/records", headers=headers
+    ).json()["data"]["personal_record"]
+
+    # Assert — the read-time projection reflects the corrected record (ADR-0034):
+    # `personal_record` is the highest Estimated 1RM in kg, which rises with the load.
+    assert after is not None
+    assert before is not None
+    assert after > before

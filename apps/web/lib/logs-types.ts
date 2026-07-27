@@ -27,7 +27,9 @@ export interface LoggedSet {
 export interface LoggedSession {
   id: number;
   clerk_user_id: string;
-  session_id: number;
+  // The prescribing Session's id, or null for a plan-less, standalone record (ADR-0031)
+  // — the record then reads its own `training_type` rather than a parent Session's.
+  session_id: number | null;
   training_type: string;
   performed_on: string;
   // The declared Completion Outcome, or null when the record does not declare one.
@@ -77,5 +79,19 @@ export interface LogSessionInput {
 export interface LogAdhocInput {
   performed_on: string;
   training_type: string;
+  logged_sets: LogSetInput[];
+}
+
+// The request the user submits to correct a Logged Session's contents after the fact
+// (ADR-0034), sent as `PUT /api/logs/{id}`. Full-replace: `logged_sets` carries the
+// entire desired set list (at least one). `training_type` rides only on a plan-less
+// correction — a plan-backed record keeps the type derived from its Session, so it is
+// omitted there. A Completion Outcome is never sent: this slice preserves the record's
+// unchanged. Body weight is never sent either — the Performed Body Weight is carried
+// forward from the record on the server, never re-read.
+export interface LogCorrectionInput {
+  performed_on: string;
+  training_type?: string;
+  duration_seconds?: number | null;
   logged_sets: LogSetInput[];
 }

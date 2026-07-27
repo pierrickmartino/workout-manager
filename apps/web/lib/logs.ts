@@ -1,6 +1,11 @@
 import { apiGet, apiSend, type Envelope } from "./api";
 
-import type { LoggedSession, LogAdhocInput, LogSessionInput } from "./logs-types";
+import type {
+  LoggedSession,
+  LogAdhocInput,
+  LogCorrectionInput,
+  LogSessionInput,
+} from "./logs-types";
 
 // Re-export the server-free types so server-side callers can keep importing them
 // from "@/lib/logs". Client Components must import them directly from
@@ -31,4 +36,16 @@ export async function logAdhocSession(
 
 export async function fetchHistory(): Promise<Envelope<LoggedSession[]>> {
   return apiGet("/api/logs");
+}
+
+// Correct a Logged Session's contents after the fact (ADR-0034). PUTs the full-replace
+// payload to `/api/logs/{id}`; the backend resolves ownership (`404` when not yours),
+// reads the plan-backed/plan-less boundary rule off the record, guards catalog validity
+// (`422`), and carries the Performed Body Weight forward. Every read-time projection
+// (XP, Personal Records, Streak, Achievements, analytics) recomputes on the next read.
+export async function correctSession(
+  logId: number,
+  input: LogCorrectionInput,
+): Promise<Envelope<LoggedSession>> {
+  return apiSend(`/api/logs/${logId}`, "PUT", input);
 }

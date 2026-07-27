@@ -19,6 +19,11 @@ from app.domain.completion import parse_completion_outcome
 from app.domain.load import LoadKind, load_from_input
 from app.domain.quantity import QuantityKind, quantity_from_input
 from app.envelope import success_envelope
+from app.logbook.correction import (
+    CorrectSessionRequest,
+    LogNotFoundError,
+    correct_session,
+)
 from app.logbook.service import (
     LogKindError,
     LogSessionRequest,
@@ -257,6 +262,64 @@ def create_adhoc_log(
             logged=logged,
             profiles=profiles,
         )
+    except (LogKindError, UnknownExerciseError) as exc:
+        raise HTTPException(
+            status_code=HTTP_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+    return success_envelope(_serialize(view))
+
+
+class LogCorrectionBody(BaseModel):
+    """Validated request to correct a Logged Session's contents (ADR-0034).
+
+    Full-replace semantics: ``logged_sets`` carries the *entire* desired set list (at
+    least one — a session always keeps a set) and the server replaces the record's sets
+    wholesale. ``performed_on`` and ``duration_seconds`` are edited directly.
+
+    ``training_type`` rides only on a plan-less correction — a plan-backed record keeps
+    the type derived from its Session, so the value is ignored there. A Completion
+    Outcome is *absent* by construction: this slice preserves the record's unchanged.
+    Any body weight is ignored too — the Performed Body Weight is carried forward from
+    the record, never re-read (ADR-0034)."""
+
+    performed_on: date
+    logged_sets: list[LogSetBody] = Field(min_length=1)
+    training_type: str | None = None
+    duration_seconds: int | None = Field(default=None, ge=0)
+
+
+@router.put("/logs/{log_id}")
+def correct_log(
+    log_id: int,
+    payload: LogCorrectionBody,
+    clerk_user_id: str = Depends(get_current_user),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+) -> dict:
+    """Correct a Logged Session in place (ADR-0034).
+
+    Delegates to the ``correct_session`` service, which resolves ownership, reads the
+    plan-backed / plan-less boundary rule off the *existing* record (so no route split),
+    guards catalog validity, and carries the Performed Body Weight forward. A log that
+    is not the caller's surfaces as ``404``; a boundary-rule or catalog violation as
+    ``422``."""
+
+    request = CorrectSessionRequest(
+        log_id=log_id,
+        performed_on=payload.performed_on,
+        training_type=payload.training_type,
+        duration_seconds=payload.duration_seconds,
+        logged_sets=[s.to_draft() for s in payload.logged_sets],
+    )
+    try:
+        view = correct_session(
+            request,
+            clerk_user_id,
+            exercises=exercises,
+            logged=logged,
+        )
+    except LogNotFoundError as exc:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Log not found") from exc
     except (LogKindError, UnknownExerciseError) as exc:
         raise HTTPException(
             status_code=HTTP_UNPROCESSABLE_ENTITY, detail=str(exc)

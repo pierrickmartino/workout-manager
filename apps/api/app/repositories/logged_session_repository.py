@@ -120,6 +120,17 @@ class LoggedSessionRepository(Protocol):
         owned by another user."""
         ...
 
+    def update(
+        self, logged_session_id: int, clerk_user_id: str, draft: LoggedSessionDraft
+    ) -> LoggedSessionView | None:
+        """Apply a Log Correction (ADR-0034): replace the owner's Logged Session's
+        editable fields (training type, ``performed_on``, Completion Outcome,
+        ``duration_seconds``) and its *entire* set list in place, returning the
+        updated view. Returns ``None`` when the record is missing or owned by another
+        user. ``session_id`` is immutable — the draft's is ignored, the record keeps
+        its own — so a correction can never re-parent a performance."""
+        ...
+
     def list_for_user(self, clerk_user_id: str) -> list[LoggedSessionView]:
         """Return the user's Logged Sessions, most recently performed first."""
         ...
@@ -198,6 +209,42 @@ class SqlLoggedSessionRepository:
             return None
         return self._view(logged)
 
+    def update(
+        self, logged_session_id: int, clerk_user_id: str, draft: LoggedSessionDraft
+    ) -> LoggedSessionView | None:
+        logged = self._session.get(LoggedSession, logged_session_id)
+        if logged is None or logged.clerk_user_id != clerk_user_id:
+            return None
+
+        # session_id is immutable (ADR-0034): keep the record's own, ignore the draft's.
+        logged.training_type = draft.training_type
+        logged.performed_on = draft.performed_on
+        logged.completion_outcome = draft.completion_outcome
+        logged.duration_seconds = draft.duration_seconds
+        self._session.add(logged)
+
+        # Full-replace the set list: drop the record's existing sets, then re-insert.
+        existing = self._session.exec(
+            select(LoggedSet).where(LoggedSet.logged_session_id == logged.id)
+        ).all()
+        for stale in existing:
+            self._session.delete(stale)
+        for position, logged_set in enumerate(draft.logged_sets):
+            self._session.add(
+                LoggedSet(
+                    logged_session_id=logged.id,
+                    exercise_id=logged_set.exercise_id,
+                    position=position,
+                    quantity=logged_set.quantity,
+                    load=logged_set.load,
+                    perceived_difficulty=logged_set.perceived_difficulty,
+                    body_weight_kg=logged_set.body_weight_kg,
+                )
+            )
+        self._session.commit()
+        self._session.refresh(logged)
+        return self._view(logged)
+
     def list_for_user(self, clerk_user_id: str) -> list[LoggedSessionView]:
         rows = self._session.exec(
             select(LoggedSession)
@@ -271,6 +318,35 @@ class InMemoryLoggedSessionRepository:
         logged = self._logged.get(logged_session_id)
         if logged is None or logged.clerk_user_id != clerk_user_id:
             return None
+        return self._view(logged)
+
+    def update(
+        self, logged_session_id: int, clerk_user_id: str, draft: LoggedSessionDraft
+    ) -> LoggedSessionView | None:
+        logged = self._logged.get(logged_session_id)
+        if logged is None or logged.clerk_user_id != clerk_user_id:
+            return None
+
+        # session_id is immutable (ADR-0034): keep the record's own, ignore the draft's.
+        logged.training_type = draft.training_type
+        logged.performed_on = draft.performed_on
+        logged.completion_outcome = draft.completion_outcome
+        logged.duration_seconds = draft.duration_seconds
+
+        # Full-replace the set list wholesale.
+        self._sets[logged.id] = [
+            LoggedSet(
+                id=position + 1,
+                logged_session_id=logged.id,
+                exercise_id=logged_set.exercise_id,
+                position=position,
+                quantity=logged_set.quantity,
+                load=logged_set.load,
+                perceived_difficulty=logged_set.perceived_difficulty,
+                body_weight_kg=logged_set.body_weight_kg,
+            )
+            for position, logged_set in enumerate(draft.logged_sets)
+        ]
         return self._view(logged)
 
     def list_for_user(self, clerk_user_id: str) -> list[LoggedSessionView]:

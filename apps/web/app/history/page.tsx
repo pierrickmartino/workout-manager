@@ -82,9 +82,17 @@ function LoggedSessionCard({ entry }: { entry: LoggedSession }) {
         <h2 className="font-display text-lg font-semibold capitalize text-text-primary">
           {entry.training_type} session
         </h2>
-        <span className="label-mono text-[10px] text-text-muted">
-          {entry.performed_on}
-        </span>
+        <div className="flex items-center gap-3">
+          <Link
+            href={`/history/${entry.id}/edit`}
+            className="label-mono text-[10px] text-cyan hover:underline"
+          >
+            Edit
+          </Link>
+          <span className="label-mono text-[10px] text-text-muted">
+            {entry.performed_on}
+          </span>
+        </div>
       </div>
 
       <div className="flex flex-col gap-1.5">
