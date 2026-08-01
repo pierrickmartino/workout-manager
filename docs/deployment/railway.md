@@ -76,7 +76,7 @@ Create a service from the repo (it may have been auto-created in Step 1).
 - **Root Directory:** `apps/api`
 - **Builder:** Dockerfile (auto-detected — `apps/api/Dockerfile`). The Dockerfile's
   `CMD ["./docker-entrypoint.sh"]` runs `alembic upgrade head` and then
-  `uvicorn app.main:app --host 0.0.0.0 --port 8000`. Leave the start command
+  `uvicorn app.main:app --host :: --port 8000`. Leave the start command
   **empty** so this entrypoint runs.
 
 **Networking**
@@ -84,7 +84,14 @@ Create a service from the repo (it may have been auto-created in Step 1).
   so only the `web` service ever calls the API, over the private network. Keeping
   `api` private removes an attack surface and avoids exposing it to the internet.
 - The service listens on `8000`; other services reach it at
-  `api.railway.internal:8000` (see [Step 5](#step-5-networking-recap)).
+  `<api-service-name>.railway.internal:8000` (see [Step 5](#step-5-networking-recap)).
+
+> ⚠️ **Railway's private network is IPv6-only.** The entrypoint binds `::`
+> (the IPv6 wildcard) precisely so the API is reachable privately — binding
+> `0.0.0.0` (IPv4 only) makes it **unreachable** over the private network, and
+> the `web` service's fetch fails. On Linux the `::` socket also accepts IPv4
+> (v4-mapped), so Docker Compose service-to-service still works. Do not change
+> this back to `0.0.0.0`.
 
 **Health check**
 - **Health Check Path:** `/health` (defined in `apps/api/app/main.py`). This
@@ -186,9 +193,19 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
 # Runtime-only secret — never in the client bundle.
 CLERK_SECRET_KEY=sk_live_...
 
-# Private URL of the api service — server-side calls only.
-API_URL=http://api.railway.internal:8000
+# Private URL of the api service — server-side calls only. Reference the api
+# service's own private domain so the hostname is always correct regardless of
+# what you named the service (a hardcoded `api.railway.internal` fails with
+# `ENOTFOUND` if the service isn't literally named `api`).
+API_URL=http://${{<api-service-name>.RAILWAY_PRIVATE_DOMAIN}}:8000
 ```
+
+> ⚠️ **`ENOTFOUND ...railway.internal` = wrong hostname.** Use the
+> `${{<api-service-name>.RAILWAY_PRIVATE_DOMAIN}}` reference (substitute the api
+> service's actual Railway name) rather than a hardcoded string — Railway resolves
+> it to the real private domain. This must be paired with the API binding `::`
+> (Step 2): the reference fixes *name resolution*, the IPv6 bind fixes
+> *reachability*. Both are required.
 
 > ⚠️ **`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is build-time.** `apps/web/Dockerfile`
 > declares `ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `npm run build` inlines it
@@ -202,11 +219,15 @@ API_URL=http://api.railway.internal:8000
 
 ## Step 5 — Networking recap
 
-- Railway private networking gives every service a `*.railway.internal` DNS name.
-  `web` → `api` is `http://api.railway.internal:8000`. If you renamed the API
-  service, use `http://<service-name>.railway.internal:8000`.
-- `api` binds `0.0.0.0:8000` (from the entrypoint), so it's reachable on the
-  private network without a public domain.
+- Railway private networking gives every service a `*.railway.internal` DNS name
+  based on the **service's name**, and the network is **IPv6-only**. Reference the
+  target's own domain — `web` → `api` is
+  `http://${{<api-service-name>.RAILWAY_PRIVATE_DOMAIN}}:8000` — so a renamed
+  service never breaks the link (a hardcoded `api.railway.internal` fails with
+  `ENOTFOUND` unless the service is literally named `api`).
+- `api` binds `::` (IPv6 wildcard) from the entrypoint, so it's reachable on the
+  IPv6 private network without a public domain. A `0.0.0.0` (IPv4-only) bind would
+  resolve but refuse the connection.
 - Public surface = **`web` only**. `api`, `worker`, `db`, `redis` stay private.
 
 ---
@@ -248,7 +269,9 @@ correct and needs no code change.
 |---|---|
 | API crashes on boot / DB errors | `DATABASE_URL` missing the `+psycopg` scheme (Step 2). |
 | Clerk fails only in the browser | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` unset at build, or changed without a rebuild (Step 4). |
-| `web` can't reach `api` | Wrong `API_URL` internal host, or a public domain accidentally added to `api`. |
+| `web` page crashes; log shows `fetch failed` / `getaddrinfo ENOTFOUND …railway.internal` | `API_URL` hostname wrong — use `${{<api-service-name>.RAILWAY_PRIVATE_DOMAIN}}`, not a hardcoded `api.railway.internal` (Step 4). |
+| `web` resolves `api` but the fetch still fails (connection refused/timeout) | API bound `0.0.0.0` (IPv4) instead of `::`; Railway's private network is IPv6-only (Step 2). |
+| `web` throws `Clerk: auth() was called but Clerk can't detect usage of clerkMiddleware()` on a data page | Usually a **cascade** from an uncaught API `fetch` failure re-rendering through the Clerk-wrapped root layout — fix `API_URL` first (rows above). Only if it persists with a working API is it a genuine middleware/matcher issue. |
 | `worker` crashes at boot: `Redis URL must specify one of the following schemes` | Two possible causes, often together: (a) start command missing the `sh -c '…'` wrapper, so `$REDIS_URL` is passed literally instead of expanded (Step 3); (b) `REDIS_URL` itself empty/unresolved — reference `${{Redis.REDIS_URL}}`, not `REDIS_PRIVATE_URL` (which doesn't exist). Fix both; verify the resolved value on the Variables tab. |
 | Jobs enqueue but never run | `api` and `worker` pointed at different Redis instances (Step 3). |
 | JWT verification fails | `CLERK_ISSUER` / `CLERK_JWKS_URL` mismatch with the Clerk instance. |
