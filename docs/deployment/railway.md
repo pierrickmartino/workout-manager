@@ -126,18 +126,25 @@ Add a **second service from the same repo**, pointed at the **same directory** a
 - **Builder:** Dockerfile.
 
 **Start command (override)** — bypass the migrating entrypoint and run the RQ
-worker on the `generation` queue (matches `docker-compose.yml`):
+worker on the `generation` queue. Use the **exact** `sh -c` form from
+`docker-compose.yml` (line 74):
 
 ```
-rq worker --url "$REDIS_URL" generation
+sh -c 'rq worker --url "$REDIS_URL" generation'
 ```
 
-> ⚠️ This command passes `--url "$REDIS_URL"` verbatim, so the worker crashes at
-> boot if `REDIS_URL` is empty or malformed — Railway runs the start command in a
-> shell, and an unset/empty variable expands to `""`, which the redis client
-> rejects with `Redis URL must specify one of the following schemes`. Make sure
-> `REDIS_URL=${{Redis.REDIS_URL}}` below resolves to a real `redis://…` value on
-> this service's **Variables** tab before deploying.
+> ⚠️ **The `sh -c '…'` wrapper is mandatory — do not drop it.** Railway does
+> **not** run a custom start command through a shell; it tokenizes and execs it
+> directly. Without the wrapper, `$REDIS_URL` is passed to the redis client as the
+> **literal string `$REDIS_URL`** (never expanded), which has no `redis://` scheme
+> and crashes the worker at boot with `Redis URL must specify one of the following
+> schemes` — the same error you'd get from an empty value. Wrapping in `sh -c`
+> forces a real shell to expand the variable at runtime, exactly as Compose does.
+>
+> Two independent things must both be true: `REDIS_URL` must be **set**
+> (`${{Redis.REDIS_URL}}`, next section — verify it shows a real `redis://…` value
+> on the **Variables** tab) **and** **expanded** (this `sh -c` wrapper). Fixing one
+> without the other still crashes.
 
 **Networking**
 - No public domain, no health check path (it's not an HTTP service).
@@ -242,7 +249,7 @@ correct and needs no code change.
 | API crashes on boot / DB errors | `DATABASE_URL` missing the `+psycopg` scheme (Step 2). |
 | Clerk fails only in the browser | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` unset at build, or changed without a rebuild (Step 4). |
 | `web` can't reach `api` | Wrong `API_URL` internal host, or a public domain accidentally added to `api`. |
-| `worker` crashes at boot: `Redis URL must specify one of the following schemes` | `REDIS_URL` empty/unresolved — reference `${{Redis.REDIS_URL}}`, not `REDIS_PRIVATE_URL` (which doesn't exist). Check the resolved value on the Variables tab. |
+| `worker` crashes at boot: `Redis URL must specify one of the following schemes` | Two possible causes, often together: (a) start command missing the `sh -c '…'` wrapper, so `$REDIS_URL` is passed literally instead of expanded (Step 3); (b) `REDIS_URL` itself empty/unresolved — reference `${{Redis.REDIS_URL}}`, not `REDIS_PRIVATE_URL` (which doesn't exist). Fix both; verify the resolved value on the Variables tab. |
 | Jobs enqueue but never run | `api` and `worker` pointed at different Redis instances (Step 3). |
 | JWT verification fails | `CLERK_ISSUER` / `CLERK_JWKS_URL` mismatch with the Clerk instance. |
 
