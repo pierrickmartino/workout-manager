@@ -54,9 +54,17 @@ from other services with `${{Postgres.*}}` / `${{Redis.*}}` variables (next
 steps) — never paste raw credentials, and never give either a public domain.
 
 Each Postgres plugin exposes `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`,
-`PGDATABASE`, and a ready-made `DATABASE_URL` / `DATABASE_PRIVATE_URL`. Redis
-exposes `REDIS_URL` / `REDIS_PRIVATE_URL`. Prefer the **private** variants so
-traffic stays on the internal network and off the metered public proxy.
+`PGDATABASE`, `RAILWAY_PRIVATE_DOMAIN`, and a ready-made `DATABASE_URL`
+(internal) plus `DATABASE_PUBLIC_URL`. Redis exposes `REDIS_URL` (internal)
+plus `REDIS_PUBLIC_URL`.
+
+> ⚠️ **Use the exact variable names above.** `REDIS_URL` and `DATABASE_URL` are
+> *already* the private/internal URLs on Railway — there is **no**
+> `REDIS_PRIVATE_URL` or `DATABASE_PRIVATE_URL`. Referencing a non-existent
+> variable resolves to an **empty string**, which crashes the `worker` at boot
+> with `Redis URL must specify one of the following schemes` (see
+> [troubleshooting](#if-somethings-wrong)). Prefer these internal variants so
+> traffic stays off the metered public proxy.
 
 ---
 
@@ -90,7 +98,7 @@ plugin's URL verbatim:
 ```
 DATABASE_URL=postgresql+psycopg://${{Postgres.PGUSER}}:${{Postgres.PGPASSWORD}}@${{Postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/${{Postgres.PGDATABASE}}
 
-REDIS_URL=${{Redis.REDIS_PRIVATE_URL}}
+REDIS_URL=${{Redis.REDIS_URL}}
 
 CLERK_ISSUER=https://<your-app>.clerk.accounts.dev
 CLERK_JWKS_URL=https://<your-app>.clerk.accounts.dev/.well-known/jwks.json
@@ -124,6 +132,13 @@ worker on the `generation` queue (matches `docker-compose.yml`):
 rq worker --url "$REDIS_URL" generation
 ```
 
+> ⚠️ This command passes `--url "$REDIS_URL"` verbatim, so the worker crashes at
+> boot if `REDIS_URL` is empty or malformed — Railway runs the start command in a
+> shell, and an unset/empty variable expands to `""`, which the redis client
+> rejects with `Redis URL must specify one of the following schemes`. Make sure
+> `REDIS_URL=${{Redis.REDIS_URL}}` below resolves to a real `redis://…` value on
+> this service's **Variables** tab before deploying.
+
 **Networking**
 - No public domain, no health check path (it's not an HTTP service).
 
@@ -132,7 +147,7 @@ Redis, and AI variables** as `api` (it does **not** need the Clerk web keys):
 
 ```
 DATABASE_URL=postgresql+psycopg://${{Postgres.PGUSER}}:${{Postgres.PGPASSWORD}}@${{Postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/${{Postgres.PGDATABASE}}
-REDIS_URL=${{Redis.REDIS_PRIVATE_URL}}
+REDIS_URL=${{Redis.REDIS_URL}}
 AI_PROVIDER=anthropic
 ANTHROPIC_API_KEY=sk-ant-...
 # AI_MODEL=
@@ -227,6 +242,7 @@ correct and needs no code change.
 | API crashes on boot / DB errors | `DATABASE_URL` missing the `+psycopg` scheme (Step 2). |
 | Clerk fails only in the browser | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` unset at build, or changed without a rebuild (Step 4). |
 | `web` can't reach `api` | Wrong `API_URL` internal host, or a public domain accidentally added to `api`. |
+| `worker` crashes at boot: `Redis URL must specify one of the following schemes` | `REDIS_URL` empty/unresolved — reference `${{Redis.REDIS_URL}}`, not `REDIS_PRIVATE_URL` (which doesn't exist). Check the resolved value on the Variables tab. |
 | Jobs enqueue but never run | `api` and `worker` pointed at different Redis instances (Step 3). |
 | JWT verification fails | `CLERK_ISSUER` / `CLERK_JWKS_URL` mismatch with the Clerk instance. |
 
