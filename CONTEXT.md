@@ -11,8 +11,8 @@ A user-owned training plan: a fully enumerated set of Sessions spanning a user-c
 _Avoid_: Plan, routine, cycle, Program
 
 **Current Protocol**:
-The one Protocol a user is actively working through — the most recently adopted Protocol that still has an un-performed Session. It is the Protocol the Home screen surfaces the Next Session and the remaining queue from. A user may own several Protocols but has at most one Current Protocol at a time; when none exists, Home falls back to prompting a new generation.
-_Avoid_: Active plan, selected protocol, today's protocol
+The one Protocol a user is actively working through — the most recently adopted Protocol that still has an un-performed Session. It is the Protocol the Home screen surfaces the Next Session and the remaining queue from. A user may own several Protocols but has at most one Current Protocol at a time; when none exists, Home falls back to prompting a new generation. Generating a new Protocol therefore **supersedes** the prior Current Protocol: the new one is now the most-recently-adopted with an un-performed Session, so it becomes Current and the old one is **set aside** — still owned, its records intact, but no longer surfaced and not (in v1) switched back to. A Protocol is never deleted.
+_Avoid_: Active plan, selected protocol, today's protocol, delete/discard/abandon/archive (a superseded Protocol is set aside, never removed)
 
 **Next Session**:
 The next un-performed Session in a self-paced Protocol's ordered sequence — what the user is prompted to do next. There is no calendar; "next" means next in position, never a dated "today". The thing a user initiates from Home is always a Session, never a whole Protocol.
