@@ -344,7 +344,7 @@ export function LiveSessionScreen({
           <Badge variant="cyan">
             {superset
               ? `SUPERSET ${superset.label} · ROUND ${superset.round}/${superset.totalRounds}`
-              : `MODULE ${unit.index}/${unit.total}`}
+              : `EXERCISE ${unit.index}/${unit.total}`}
           </Badge>
         }
       />

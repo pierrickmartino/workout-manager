@@ -16,6 +16,7 @@ import {
   type HarderVariationOffer as HarderVariationOfferView,
 } from "@/lib/harder-variation-view";
 import { toTempoView, type TempoView } from "@/lib/tempo-view";
+import { appendFrom } from "@/lib/back-target";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { DataList } from "@/components/pulse/data-list";
@@ -62,7 +63,7 @@ export default async function SessionPage({
       />
 
       <div className="flex flex-col gap-4">
-        <SectionHeader meta={`${session.prescriptions.length} MODULES`}>
+        <SectionHeader meta={`${session.prescriptions.length} EXERCISES`}>
           PROTOCOL
         </SectionHeader>
         <ol className="flex list-none flex-col gap-3 p-0">
@@ -132,7 +133,10 @@ function PrescriptionCard({
         <div className="flex flex-1 flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-2">
             <Link
-              href={`/exercises/${prescription.exercise_id}`}
+              href={appendFrom(
+                `/exercises/${prescription.exercise_id}`,
+                `/sessions/${sessionId}`,
+              )}
               className="font-display text-[15px] font-semibold text-text-primary transition-colors hover:text-cyan"
             >
               {prescription.exercise_name}

@@ -19,7 +19,7 @@ interface ExerciseLibraryProps {
 const SEARCH_DEBOUNCE_MS = 250;
 
 // The Exercise Library browser (Module I, ADR-0021). The user searches the shared
-// catalog by name and picks a movement to add as a new Prescription (ADD MODULE).
+// catalog by name and picks a movement to add as a new Prescription (ADD EXERCISE).
 // It is pick-only: a movement absent from the catalog is simply not found, never
 // silently created. Provenance is surfaced on each result exactly as the Session
 // view and Exercise Detail do.

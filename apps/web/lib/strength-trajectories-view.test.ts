@@ -22,11 +22,12 @@ test("maps each trajectory to a tile linking to its Exercise Detail chart", () =
   // Act
   const tiles = toStrengthTrajectories([SQUAT]);
 
-  // Assert — the tile carries the Exercise, a deep link, and the charted trend
+  // Assert — the tile carries the Exercise, a deep link (with the Analytics origin
+  // so Exercise Detail's back link returns here), and the charted trend
   assert.equal(tiles.length, 1);
   assert.equal(tiles[0].exerciseId, 7);
   assert.equal(tiles[0].exercise, "Back Squat");
-  assert.equal(tiles[0].href, "/exercises/7");
+  assert.equal(tiles[0].href, "/exercises/7?from=%2Fanalytics%2Fstrength");
 });
 
 test("surfaces the latest top set as a whole-kilogram headline estimate", () => {

@@ -733,7 +733,7 @@ function SessionEditor({
             PLACE {queuedExerciseName}
           </Button>
           <p className="label-mono text-[9px] text-text-muted">
-            Adds {queuedExerciseName} here as a new module — edit it below, then DEPLOY.
+            Adds {queuedExerciseName} here as a new exercise — edit it below, then DEPLOY.
           </p>
         </div>
       )}
@@ -756,7 +756,7 @@ function SessionEditor({
             onClick={() => setLibraryOpen((open) => !open)}
           >
             <Plus className="h-3.5 w-3.5" aria-hidden />
-            {libraryOpen ? "CLOSE LIBRARY" : "ADD MODULE"}
+            {libraryOpen ? "CLOSE LIBRARY" : "ADD EXERCISE"}
           </Button>
         </div>
       )}

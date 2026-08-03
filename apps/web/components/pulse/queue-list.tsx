@@ -56,7 +56,7 @@ export function QueueList({
                   {row.label}
                 </span>
                 <span className="label-mono text-[9px] text-text-muted">
-                  {row.modules} MODULES &middot; {row.durationMinutes}M
+                  {row.modules} EXERCISES &middot; {row.durationMinutes}M
                 </span>
               </div>
               {row.isNext ? <Badge variant="cyan">NEXT</Badge> : null}

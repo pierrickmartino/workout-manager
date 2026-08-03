@@ -2,10 +2,14 @@ import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 import type { ExerciseTab } from "@/lib/exercise-detail-view";
+import { appendFrom } from "@/lib/back-target";
 
 interface ExerciseTabsProps {
   exerciseId: number;
   active: ExerciseTab;
+  // The `?from=` origin to preserve across tab switches, so changing lens never
+  // drops the back target the screen was opened with.
+  from?: string;
 }
 
 const TABS: { tab: ExerciseTab; label: string }[] = [
@@ -21,6 +25,7 @@ const TABS: { tab: ExerciseTab; label: string }[] = [
 export function ExerciseTabs({
   exerciseId,
   active,
+  from,
 }: ExerciseTabsProps): React.JSX.Element {
   return (
     <div
@@ -29,10 +34,12 @@ export function ExerciseTabs({
     >
       {TABS.map(({ tab, label }) => {
         const isActive = tab === active;
-        const href =
+        const href = appendFrom(
           tab === "specs"
             ? `/exercises/${exerciseId}`
-            : `/exercises/${exerciseId}?tab=${tab}`;
+            : `/exercises/${exerciseId}?tab=${tab}`,
+          from,
+        );
         return (
           <Link
             key={tab}

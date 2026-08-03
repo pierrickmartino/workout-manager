@@ -7,6 +7,7 @@ import type {
 } from "@/lib/sessions-types";
 import type { TopSetPoint } from "@/lib/exercise-stats-view";
 import { toExecutionSteps, toMuscleEmphasis } from "@/lib/exercise-detail-view";
+import { appendFrom } from "@/lib/back-target";
 import { toTopSetTrend } from "@/lib/top-set-trend-view";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { DataList } from "@/components/pulse/data-list";
@@ -19,6 +20,10 @@ interface SpecsPanelProps {
   // The Top-Set series from the record side (ADR-0017), transformed into the trend
   // chart here. Empty (a bodyweight / never-logged Exercise) hides the chart entirely.
   topSetSeries: TopSetPoint[];
+  // The `?from=` origin the screen was opened with, carried forward onto the related
+  // Variation/Alternative links so "back" still returns to the true origin (e.g. the
+  // Session) however far the user drills into related movements.
+  from?: string;
 }
 
 // The SPECS lens (ADR-0017): the catalog facts the detail page has always shown —
@@ -29,6 +34,7 @@ interface SpecsPanelProps {
 export function SpecsPanel({
   exercise,
   topSetSeries,
+  from,
 }: SpecsPanelProps): React.JSX.Element {
   const metaRows = [
     ...(exercise.difficulty !== null
@@ -60,8 +66,12 @@ export function SpecsPanel({
       <ExecutionSteps instructions={exercise.instructions} />
 
       <StringList title="PRECAUTIONS" items={exercise.precautions} />
-      <RelatedList title="VARIATIONS" items={exercise.variations} />
-      <RelatedList title="ALTERNATIVES" items={exercise.alternatives} />
+      <RelatedList title="VARIATIONS" items={exercise.variations} from={from} />
+      <RelatedList
+        title="ALTERNATIVES"
+        items={exercise.alternatives}
+        from={from}
+      />
     </div>
   );
 }
@@ -217,9 +227,11 @@ function StringList({ title, items }: { title: string; items: string[] }) {
 function RelatedList({
   title,
   items,
+  from,
 }: {
   title: string;
   items: RelatedExerciseSummary[];
+  from?: string;
 }) {
   if (items.length === 0) return null;
   return (
@@ -229,7 +241,7 @@ function RelatedList({
         {items.map((item) => (
           <Link
             key={item.id}
-            href={`/exercises/${item.id}`}
+            href={appendFrom(`/exercises/${item.id}`, from)}
             className="group flex items-center justify-between gap-3 px-4 py-3.5 transition-colors hover:bg-elevated/50"
           >
             <span className="font-sans text-[14px] text-text-primary">
