@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, ClipboardCheck, Play } from "lucide-react";
@@ -14,6 +15,7 @@ import {
   toHarderVariationOffer,
   type HarderVariationOffer as HarderVariationOfferView,
 } from "@/lib/harder-variation-view";
+import { toTempoView, type TempoView } from "@/lib/tempo-view";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { DataList } from "@/components/pulse/data-list";
@@ -164,9 +166,7 @@ function PrescriptionCard({
           ...(prescription.rest_seconds !== null
             ? [{ label: "Rest", value: `${prescription.rest_seconds}s` }]
             : []),
-          ...(prescription.tempo
-            ? [{ label: "Tempo", value: prescription.tempo }]
-            : []),
+          ...tempoRows(toTempoView(prescription.tempo)),
           ...(prescription.targeted_muscles.length > 0
             ? [
                 {
@@ -187,6 +187,33 @@ function PrescriptionCard({
       <SubstituteButton sessionId={sessionId} position={prescription.position} />
     </Card>
   );
+}
+
+// The Tempo row(s) for the prescription's DataList — a read-time projection of the
+// stored free-form tempo string (CONTEXT: Tempo). A parsed tempo shows its coarse
+// three-state label over the plain-language phase expansion, keeping the cryptic raw
+// code on hover (`title`) and a naturally-spoken `aria-label` for screen readers; an
+// unparseable value is shown verbatim; an absent tempo renders no row at all.
+function tempoRows(view: TempoView): { label: string; value: ReactNode }[] {
+  if (view.kind === "none") return [];
+  if (view.kind === "raw") return [{ label: "Tempo", value: view.raw }];
+  return [
+    {
+      label: "Tempo",
+      value: (
+        <span
+          className="flex flex-col items-end"
+          title={view.raw}
+          aria-label={view.ariaLabel}
+        >
+          <span>{view.label}</span>
+          <span className="text-[11px] font-normal text-text-muted">
+            {view.expansion}
+          </span>
+        </span>
+      ),
+    },
+  ];
 }
 
 export type { WorkoutSession };
