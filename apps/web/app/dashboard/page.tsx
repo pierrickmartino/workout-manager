@@ -1,13 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import {
-  ArrowRight,
-  Dumbbell,
-  History,
-  LineChart,
-  Trophy,
-  Zap,
-} from "lucide-react";
+import { Dumbbell, History, LineChart, Trophy } from "lucide-react";
 
 import {
   GENDER_OPTIONS,
@@ -28,9 +21,9 @@ import { LevelBadge } from "@/components/pulse/level-badge";
 import { Bento, BentoTile } from "@/components/pulse/bento";
 import { NavRow } from "@/components/pulse/nav-row";
 import { DataList } from "@/components/pulse/data-list";
+import { GenerateTrainingLaunchpad } from "@/components/pulse/generate-training-launchpad";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
 
 // The dashboard renders the full Fitness Profile that round-tripped through
 // Postgres on the FastAPI backend. New users (incomplete profile) are sent to
@@ -100,7 +93,7 @@ export default async function DashboardPage() {
           <QueueList protocol={currentProtocol} />
         </>
       ) : (
-        <GenerateTrainingCta />
+        <GenerateTrainingLaunchpad eyebrow="GET STARTED // NO ACTIVE PROTOCOL" />
       )}
 
       {/* Operator status: the account's Level / XP and weekly Streak, projected
@@ -171,46 +164,6 @@ export default async function DashboardPage() {
         <ProfileSummary profile={profile} />
       </div>
     </section>
-  );
-}
-
-// The empty state shown when the user has no Current Protocol: the existing
-// generate-training CTA. The Readiness badge still renders in the page header,
-// so Home stays coherent even without a Protocol (ADR-0008).
-function GenerateTrainingCta(): React.JSX.Element {
-  return (
-    <Card className="flex flex-col gap-5 p-5">
-      <span className="label-mono text-[11px] text-cyan">
-        GET STARTED // NO ACTIVE PROTOCOL
-      </span>
-      <div className="flex flex-col gap-1.5">
-        <h2 className="font-display text-2xl font-bold text-text-primary">
-          Generate training
-        </h2>
-        <p className="label-mono text-[11px] text-text-secondary">
-          AI PROTOCOLS &middot; STANDALONE SESSIONS
-        </p>
-      </div>
-      <div className="flex flex-col gap-2.5">
-        <Link
-          href="/protocols/new"
-          className={buttonVariants({ className: "w-full" })}
-        >
-          <Zap className="h-4 w-4" />
-          Generate a protocol
-        </Link>
-        <Link
-          href="/sessions/new"
-          className={buttonVariants({
-            variant: "secondary",
-            className: "w-full",
-          })}
-        >
-          Generate a workout
-          <ArrowRight className="h-4 w-4" />
-        </Link>
-      </div>
-    </Card>
   );
 }
 

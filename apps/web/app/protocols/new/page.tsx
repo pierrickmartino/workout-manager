@@ -1,11 +1,23 @@
 import { GenerateProtocolForm } from "@/components/GenerateProtocolForm";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
+import { fetchHome } from "@/lib/home";
+import { supersedeWarning } from "@/lib/protocol-supersede";
 
 // Request a multi-week Protocol. Generation runs off the request path (ADR-0005):
 // the form shows progress while a worker builds the plan, then navigates to the
 // adopted Protocol — robust on mobile connections that may drop mid-generation.
-export default function NewProtocolPage() {
+//
+// Generating a new Protocol supersedes the Current one (ADR-0037), so this reads
+// Home to learn whether an in-progress Protocol would be set aside and hands the
+// form a one-off confirmation to fire at generation. A failed Home read simply
+// omits the guard rather than blocking generation.
+export default async function NewProtocolPage() {
+  const home = await fetchHome();
+  const warning = home.success
+    ? supersedeWarning(home.data?.current_protocol ?? null)
+    : null;
+
   return (
     <section className="flex flex-col gap-6">
       <PageHeader overline="PULSE // BUILDER" title="Generate a protocol" />
@@ -13,7 +25,7 @@ export default function NewProtocolPage() {
         Choose your training type, objective, and schedule. We&apos;ll build a
         full multi-week plan with week-to-week progression.
       </p>
-      <GenerateProtocolForm />
+      <GenerateProtocolForm supersedeWarning={warning} />
       <BackLink href="/dashboard">Back to dashboard</BackLink>
     </section>
   );

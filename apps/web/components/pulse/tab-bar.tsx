@@ -21,9 +21,9 @@ const TABS: Tab[] = [
   { label: "HOME", href: "/dashboard", icon: LayoutGrid, match: ["/dashboard"] },
   {
     label: "TRAIN",
-    href: "/sessions/new",
+    href: "/train",
     icon: Zap,
-    match: ["/sessions", "/protocols", "/exercises"],
+    match: ["/train", "/sessions", "/protocols", "/exercises"],
   },
   {
     label: "STATS",

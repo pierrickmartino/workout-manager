@@ -13,12 +13,27 @@ import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
-export function GenerateProtocolForm() {
+interface GenerateProtocolFormProps {
+  // The one-way-door confirmation to show before generating, or `null` when
+  // superseding is silent (no in-progress Current Protocol to set aside, ADR-0037).
+  // Computed server-side from the Home read so the client stays dumb.
+  supersedeWarning?: string | null;
+}
+
+export function GenerateProtocolForm({
+  supersedeWarning = null,
+}: GenerateProtocolFormProps = {}) {
   const { phase, error, start } = useProtocolGeneration();
   const busy = phase === "submitting" || phase === "generating";
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // Guard the supersede at the moment of generation: generating adopts a new
+    // Protocol that becomes Current and sets the old one aside (ADR-0037). Warn only
+    // when there is settled progress to lose; silent otherwise.
+    if (supersedeWarning !== null && !window.confirm(supersedeWarning)) {
+      return;
+    }
     const form = new FormData(event.currentTarget);
     await start({
       training_type: String(form.get("training_type") ?? ""),
