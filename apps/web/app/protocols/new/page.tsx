@@ -2,6 +2,7 @@ import { GenerateProtocolForm } from "@/components/GenerateProtocolForm";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
 import { fetchHome } from "@/lib/home";
+import { fetchProfile } from "@/lib/profile";
 import { supersedeWarning } from "@/lib/protocol-supersede";
 
 // Request a multi-week Protocol. Generation runs off the request path (ADR-0005):
@@ -13,10 +14,15 @@ import { supersedeWarning } from "@/lib/protocol-supersede";
 // form a one-off confirmation to fire at generation. A failed Home read simply
 // omits the guard rather than blocking generation.
 export default async function NewProtocolPage() {
-  const home = await fetchHome();
+  const [home, profile] = await Promise.all([fetchHome(), fetchProfile()]);
   const warning = home.success
     ? supersedeWarning(home.data?.current_protocol ?? null)
     : null;
+  // Pre-fill the equipment field from the saved Default Equipment (ADR-0038); a
+  // failed profile read simply leaves it blank rather than blocking generation.
+  const defaultEquipment = profile.success
+    ? (profile.data?.default_equipment ?? [])
+    : [];
 
   return (
     <section className="flex flex-col gap-6">
@@ -25,7 +31,10 @@ export default async function NewProtocolPage() {
         Choose your training type, objective, and schedule. We&apos;ll build a
         full multi-week plan with week-to-week progression.
       </p>
-      <GenerateProtocolForm supersedeWarning={warning} />
+      <GenerateProtocolForm
+        supersedeWarning={warning}
+        defaultEquipment={defaultEquipment}
+      />
       <BackLink href="/dashboard">Back to dashboard</BackLink>
     </section>
   );

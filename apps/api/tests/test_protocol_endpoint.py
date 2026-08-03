@@ -324,6 +324,56 @@ def test_generation_for_a_non_sensitive_user_leaves_the_constraint_flag_unset():
     assert generator.requests[-1].has_sensitive_constraint is False
 
 
+def test_omitted_equipment_falls_back_to_profile_default_equipment():
+    # Arrange — a user who saved Default Equipment and omits it on the request
+    profiles = InMemoryProfileRepository()
+    profiles.update(
+        "user_default_kit",
+        ProfileUpdate(default_equipment=["dumbbells", "pull-up bar"]),
+    )
+    generator = _RecordingProtocolGenerator(result=_default_protocol())
+    h = build_harness(generator=generator, profiles=profiles)
+
+    # Act — the request states no equipment (null)
+    h.generate_protocol_id("user_default_kit", equipment=None)
+
+    # Assert — the generation ran with the saved Default Equipment
+    assert generator.requests[-1].equipment == ["dumbbells", "pull-up bar"]
+
+
+def test_explicit_empty_equipment_is_honored_as_bodyweight_over_the_default():
+    # Arrange — a user with saved defaults who clears the field for a bodyweight plan
+    profiles = InMemoryProfileRepository()
+    profiles.update(
+        "user_travelling", ProfileUpdate(default_equipment=["dumbbells"])
+    )
+    generator = _RecordingProtocolGenerator(result=_default_protocol())
+    h = build_harness(generator=generator, profiles=profiles)
+
+    # Act — the request states an empty equipment list
+    h.generate_protocol_id("user_travelling", equipment=[])
+
+    # Assert — empty is honored (bodyweight only), never a fallback to the Default
+    assert generator.requests[-1].equipment == []
+
+
+def test_effective_equipment_is_resolved_before_the_cache_key():
+    # Arrange — two users whose *effective* equipment is identical (["barbell"]):
+    # one inherits it from their Default, the other states it explicitly.
+    profiles = InMemoryProfileRepository()
+    profiles.update("user_inherits", ProfileUpdate(default_equipment=["barbell"]))
+    profiles.update("user_states", ProfileUpdate(default_equipment=[]))
+    generator = _RecordingProtocolGenerator(result=_default_protocol())
+    h = build_harness(generator=generator, profiles=profiles)
+
+    # Act — the first omits equipment (inherits ["barbell"]); the second states it
+    h.generate_protocol_id("user_inherits", equipment=None)
+    h.generate_protocol_id("user_states", equipment=["barbell"])
+
+    # Assert — equal effective equipment shares one cache entry: a single AI call
+    assert generator.calls == 1
+
+
 def test_fetched_protocol_surfaces_the_next_un_performed_session():
     # Arrange — a fresh protocol: Week 1 is next
     h = build_harness()

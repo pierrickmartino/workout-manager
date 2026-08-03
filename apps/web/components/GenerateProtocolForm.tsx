@@ -18,10 +18,14 @@ interface GenerateProtocolFormProps {
   // superseding is silent (no in-progress Current Protocol to set aside, ADR-0037).
   // Computed server-side from the Home read so the client stays dumb.
   supersedeWarning?: string | null;
+  // The user's saved Default Equipment, pre-filled into the equipment field so it is
+  // visible and editable before generating (ADR-0038).
+  defaultEquipment?: readonly string[];
 }
 
 export function GenerateProtocolForm({
   supersedeWarning = null,
+  defaultEquipment = [],
 }: GenerateProtocolFormProps = {}) {
   const { phase, error, start } = useProtocolGeneration();
   const busy = phase === "submitting" || phase === "generating";
@@ -96,7 +100,7 @@ export function GenerateProtocolForm({
         </Field>
       </div>
 
-      <EquipmentField />
+      <EquipmentField initialEquipment={defaultEquipment} />
 
       <Button type="submit" className="w-full">
         <Zap className="h-4 w-4" />

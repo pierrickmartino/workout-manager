@@ -65,6 +65,22 @@ def is_sensitive(profile: _HasSensitiveConstraints) -> bool:
     )
 
 
+def resolve_equipment(
+    request_equipment: list[str] | None, default_equipment: list[str]
+) -> list[str]:
+    """Resolve the Available Equipment for one generation (CONTEXT: Available Equipment).
+
+    A request that states no equipment (``None``) inherits the user's saved
+    Default Equipment. A request that *states* equipment is honored literally —
+    including an explicitly empty list, which is a real bodyweight-only choice, not
+    an absence (ADR-0038). Returns a new list; neither input is mutated.
+    """
+
+    if request_equipment is None:
+        return list(default_equipment)
+    return list(request_equipment)
+
+
 # Fitness Level is a 1–10 score; folding never pushes a type past the ceiling.
 MAX_FITNESS_LEVEL = 10
 

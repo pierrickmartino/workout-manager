@@ -12,7 +12,15 @@ import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
-export function GenerateSessionForm() {
+interface GenerateSessionFormProps {
+  // The user's saved Default Equipment, pre-filled into the equipment field so it is
+  // visible and editable before generating (ADR-0038).
+  defaultEquipment?: readonly string[];
+}
+
+export function GenerateSessionForm({
+  defaultEquipment = [],
+}: GenerateSessionFormProps = {}) {
   const [state, action, pending] = useActionState<GenerateFormState, FormData>(
     submitGenerate,
     { error: null },
@@ -42,7 +50,7 @@ export function GenerateSessionForm() {
         />
       </Field>
 
-      <EquipmentField />
+      <EquipmentField initialEquipment={defaultEquipment} />
 
       <Button type="submit" disabled={pending} className="w-full">
         <Zap className="h-4 w-4" />

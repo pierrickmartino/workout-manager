@@ -4,8 +4,34 @@ import assert from "node:assert/strict";
 import {
   CALISTHENICS_PRESET,
   applyEquipmentPreset,
+  initialEquipmentText,
   parseEquipment,
 } from "./equipment-presets.ts";
+
+test("initial equipment text pre-fills the field from saved Default Equipment", () => {
+  // Arrange — the user's saved Default Equipment
+  const defaultEquipment = ["dumbbells", "pull-up bar"];
+
+  // Act
+  const text = initialEquipmentText(defaultEquipment);
+
+  // Assert — shown comma-separated, ready to edit
+  assert.equal(text, "dumbbells, pull-up bar");
+});
+
+test("initial equipment text round-trips back to the same items", () => {
+  // Arrange / Act — pre-fill, then parse it as the request does
+  const text = initialEquipmentText(["dumbbells", "pull-up bar"]);
+
+  // Assert — reaches the generation request as the saved Default Equipment
+  assert.deepEqual(parseEquipment(text), ["dumbbells", "pull-up bar"]);
+});
+
+test("no saved Default Equipment leaves the field blank (bodyweight)", () => {
+  // Arrange — a user who saved nothing
+  // Act / Assert — blank field, which the request sends as an empty list
+  assert.equal(initialEquipmentText([]), "");
+});
 
 test("applying a preset to a blank field yields the preset items", () => {
   // Arrange — an empty equipment field (blank means bodyweight)

@@ -247,3 +247,45 @@ def test_generation_for_a_non_sensitive_user_leaves_the_flag_unset():
 
     # Assert
     assert generator.requests[-1].has_sensitive_constraint is False
+
+
+def test_omitted_equipment_falls_back_to_profile_default_equipment():
+    # Arrange — a user who saved Default Equipment and omits it on the request
+    profiles = InMemoryProfileRepository()
+    profiles.update(
+        "user_default_kit",
+        ProfileUpdate(default_equipment=["dumbbells", "pull-up bar"]),
+    )
+    generator = RecordingGenerator(result=_default_generation())
+    client, ctx = build_client(generator=generator, profiles=profiles)
+
+    # Act — the request states no equipment (null)
+    response = client.post(
+        "/api/sessions/generate",
+        headers=_auth(ctx, "user_default_kit"),
+        json=_generate_body(equipment=None),
+    )
+
+    # Assert — the generation ran with the saved Default Equipment
+    assert response.status_code == 200
+    assert generator.requests[-1].equipment == ["dumbbells", "pull-up bar"]
+
+
+def test_explicit_empty_equipment_is_honored_as_bodyweight_over_the_default():
+    # Arrange — a user with saved defaults who clears the field for a bodyweight plan
+    profiles = InMemoryProfileRepository()
+    profiles.update(
+        "user_travelling", ProfileUpdate(default_equipment=["dumbbells"])
+    )
+    generator = RecordingGenerator(result=_default_generation())
+    client, ctx = build_client(generator=generator, profiles=profiles)
+
+    # Act — the request states an empty equipment list
+    client.post(
+        "/api/sessions/generate",
+        headers=_auth(ctx, "user_travelling"),
+        json=_generate_body(equipment=[]),
+    )
+
+    # Assert — empty is honored (bodyweight only), never a fallback to the Default
+    assert generator.requests[-1].equipment == []

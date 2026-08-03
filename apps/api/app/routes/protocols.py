@@ -19,7 +19,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
 from app.auth.dependencies import get_current_user
-from app.domain.fitness_profile import is_sensitive
+from app.domain.fitness_profile import is_sensitive, resolve_equipment
 from app.domain.load import LoadKind, load_from_input
 from app.envelope import error_envelope, success_envelope
 from app.generation.orchestrator import GenerationOrchestrator
@@ -85,16 +85,20 @@ class GenerateProtocolRequest(BaseModel):
     )
     duration_minutes: int = Field(ge=MIN_DURATION_MINUTES, le=MAX_DURATION_MINUTES)
     weeks: int = Field(ge=MIN_WEEKS, le=MAX_WEEKS)
-    equipment: list[str] = Field(default_factory=list)
+    # Nullable so an *omitted* request inherits the Profile's Default Equipment,
+    # while an explicitly empty list is honored as bodyweight-only (ADR-0038).
+    equipment: list[str] | None = None
 
-    def to_generation_request(self) -> ProtocolGenerationRequest:
+    def to_generation_request(
+        self, equipment: list[str]
+    ) -> ProtocolGenerationRequest:
         return ProtocolGenerationRequest(
             training_type=self.training_type,
             objective=self.objective,
             sessions_per_week=self.sessions_per_week,
             duration_minutes=self.duration_minutes,
             weeks=self.weeks,
-            equipment=self.equipment,
+            equipment=equipment,
         )
 
 
@@ -138,12 +142,20 @@ def generate(
 
     profile = profiles.get_or_create(clerk_user_id)
     history = logged.list_for_user(clerk_user_id)
+    # Resolve the Available Equipment once — the request's equipment, or the Profile's
+    # Default Equipment when the request omits it (ADR-0038) — before building the
+    # generation request, so both the AI call and the coarse cache key read the same
+    # effective equipment (two requests with equal effective equipment still share the
+    # cache).
+    available_equipment = resolve_equipment(
+        payload.equipment, profile.default_equipment
+    )
     # A user with any Sensitive Constraint is never handed a Superset (ADR-0023): the
     # flag rides on the generation request so the prompt instructs none and the parse
     # boundary degrades any that slip through. It is derived from the stored constraint
     # types (the same gate as the cache bypass), never trusted from the client.
     params = replace(
-        payload.to_generation_request(),
+        payload.to_generation_request(available_equipment),
         has_sensitive_constraint=is_sensitive(profile),
     )
     outcome = orchestrator.submit(
