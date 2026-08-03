@@ -6,8 +6,10 @@ import { fetchExerciseProgress } from "@/lib/progress";
 import { fetchExerciseRecords } from "@/lib/exercise-records";
 import { fetchHome } from "@/lib/home";
 import { toExerciseTab } from "@/lib/exercise-detail-view";
+import { backTarget } from "@/lib/back-target";
 import type { ProtocolProgress } from "@/lib/protocols-types";
 import { PageHeader } from "@/components/pulse/page-header";
+import { BackLink } from "@/components/pulse/back-link";
 import { Alert } from "@/components/pulse/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -27,14 +29,20 @@ export default async function ExercisePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; from?: string }>;
 }) {
   const { id } = await params;
   const exerciseId = Number(id);
   if (!Number.isInteger(exerciseId)) notFound();
 
-  const { tab: rawTab } = await searchParams;
+  const { tab: rawTab, from } = await searchParams;
   const tab = toExerciseTab(rawTab);
+
+  // The Exercise catalog is reachable from many origins (a Session's Exercise, a
+  // Protocol's, the Dashboard's PR card, an Analytics tile, a related movement), so
+  // "back" follows the `?from=` the opening link carried — validated to an internal
+  // path — and falls back to the Dashboard when absent or untrusted (see back-target).
+  const back = backTarget(from);
 
   const envelope = await fetchExercise(exerciseId);
   if (!envelope.success || !envelope.data) {
@@ -62,6 +70,8 @@ export default async function ExercisePage({
 
   return (
     <section className="flex flex-col gap-7">
+      <BackLink href={back.href}>{back.label}</BackLink>
+
       <PageHeader
         overline="PULSE // EXERCISE"
         title={exercise.name}
@@ -78,12 +88,13 @@ export default async function ExercisePage({
 
       {records ? <StatHeader records={records} /> : null}
 
-      <ExerciseTabs exerciseId={exerciseId} active={tab} />
+      <ExerciseTabs exerciseId={exerciseId} active={tab} from={from} />
 
       {tab === "specs" ? (
         <SpecsPanel
           exercise={exercise}
           topSetSeries={records?.top_set_series ?? []}
+          from={from}
         />
       ) : null}
       {tab === "history" ? <HistoryTab exerciseId={exerciseId} /> : null}

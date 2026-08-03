@@ -1,5 +1,6 @@
 import { toTopSetTrend, type TopSetTrend } from "./top-set-trend-view.ts";
 import type { ExerciseTrajectory } from "./strength-analytics-types.ts";
+import { appendFrom } from "./back-target.ts";
 
 // One tile in the ranked strength small-multiples (issue #177 / ADR-0024): a qualifying
 // Exercise, a deep link to its canonical Top-Set chart on Exercise Detail, and the same
@@ -35,7 +36,10 @@ export function toStrengthTrajectories(
     return {
       exerciseId: trajectory.exercise_id,
       exercise: trajectory.exercise,
-      href: `/exercises/${trajectory.exercise_id}`,
+      href: appendFrom(
+        `/exercises/${trajectory.exercise_id}`,
+        "/analytics/strength",
+      ),
       estimate,
       ariaLabel: buildLabel(trajectory.exercise, estimate, trend.delta),
       trend,

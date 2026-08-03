@@ -5,6 +5,7 @@ import { CheckCircle2 } from "lucide-react";
 import { fetchProtocol } from "@/lib/protocols";
 import type { ProtocolProgress, ProtocolSession } from "@/lib/protocols-types";
 import type { ExercisePrescription } from "@/lib/sessions-types";
+import { appendFrom } from "@/lib/back-target";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { SegmentedBar } from "@/components/pulse/segmented-bar";
@@ -63,7 +64,7 @@ export default async function ProtocolPage({
           </span>
         </div>
         <SegmentedBar value={progress} segments={Math.min(total, 14) || 1} />
-        <NextUp protocol={protocol} />
+        <NextUp protocol={protocol} protocolId={protocolId} />
       </Card>
 
       <div className="flex flex-col gap-4">
@@ -75,6 +76,7 @@ export default async function ProtocolPage({
                 session={session}
                 index={index + 1}
                 isNext={session.session_id === protocol.next_session?.session_id}
+                protocolId={protocolId}
               />
             </li>
           ))}
@@ -84,7 +86,13 @@ export default async function ProtocolPage({
   );
 }
 
-function NextUp({ protocol }: { protocol: ProtocolProgress }) {
+function NextUp({
+  protocol,
+  protocolId,
+}: {
+  protocol: ProtocolProgress;
+  protocolId: number;
+}) {
   if (protocol.next_session === null) {
     return (
       <div className="flex items-center gap-2.5 rounded-sm border border-cyan/40 bg-cyan-dim px-3.5 py-3">
@@ -99,7 +107,12 @@ function NextUp({ protocol }: { protocol: ProtocolProgress }) {
   return (
     <div className="flex flex-col gap-3">
       <span className="label-mono text-[10px] text-text-muted">NEXT UP</span>
-      <SessionCard session={next} index={next.day} isNext />
+      <SessionCard
+        session={next}
+        index={next.day}
+        isNext
+        protocolId={protocolId}
+      />
     </div>
   );
 }
@@ -108,10 +121,12 @@ function SessionCard({
   session,
   index,
   isNext,
+  protocolId,
 }: {
   session: ProtocolSession;
   index: number;
   isNext: boolean;
+  protocolId: number;
 }) {
   return (
     <div
@@ -144,7 +159,10 @@ function SessionCard({
       <ul className="flex flex-col gap-1.5 border-t border-border pt-3">
         {session.prescriptions.map((prescription) => (
           <li key={prescription.position}>
-            <PrescriptionRow prescription={prescription} />
+            <PrescriptionRow
+              prescription={prescription}
+              protocolId={protocolId}
+            />
           </li>
         ))}
       </ul>
@@ -154,13 +172,18 @@ function SessionCard({
 
 function PrescriptionRow({
   prescription,
+  protocolId,
 }: {
   prescription: ExercisePrescription;
+  protocolId: number;
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
       <Link
-        href={`/exercises/${prescription.exercise_id}`}
+        href={appendFrom(
+          `/exercises/${prescription.exercise_id}`,
+          `/protocols/${protocolId}`,
+        )}
         className="truncate font-sans text-[13px] text-text-secondary transition-colors hover:text-cyan"
       >
         {prescription.exercise_name}

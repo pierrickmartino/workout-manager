@@ -10,6 +10,7 @@ import {
 } from "@/lib/profile";
 import { READINESS_BADGE, fetchHome } from "@/lib/home";
 import { latestPrLine, operatorStatus } from "@/lib/home-view";
+import { appendFrom } from "@/lib/back-target";
 import { Alert } from "@/components/pulse/alert";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -109,7 +110,7 @@ export default async function DashboardPage() {
             accounts and bodyweight-only trainees (issue #167, ADR-0010). */}
         {latestPr ? (
           <Link
-            href={`/exercises/${latestPr.exerciseId}`}
+            href={appendFrom(`/exercises/${latestPr.exerciseId}`, "/dashboard")}
             className="flex items-center gap-3 rounded-md border border-border bg-surface px-4 py-3 transition-colors hover:border-cyan/40"
           >
             <Trophy className="h-4 w-4 shrink-0 text-cyan" />

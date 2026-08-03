@@ -47,7 +47,7 @@ export function SessionHero({ protocol }: SessionHeroProps): React.JSX.Element {
       <StatRow
         stats={[
           { label: "DURATION", value: `${stats.durationMinutes}m` },
-          { label: "MODULES", value: stats.modules },
+          { label: "EXERCISES", value: stats.modules },
           { label: "SETS", value: stats.sets },
         ]}
       />
