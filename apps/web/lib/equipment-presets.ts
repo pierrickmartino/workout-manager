@@ -34,6 +34,15 @@ export function applyEquipmentPreset(
   return merged.join(", ");
 }
 
+// Pre-fill the free-text equipment field from a user's saved Default Equipment,
+// as the comma-separated form the field renders (#, ADR-0038). It round-trips
+// through `parseEquipment` back to the same items, so what the user sees is exactly
+// what the generation request sends. An empty Default leaves the field blank —
+// which the request sends as an empty list (bodyweight only), not as an absence.
+export function initialEquipmentText(defaultEquipment: readonly string[]): string {
+  return defaultEquipment.join(", ");
+}
+
 // Split a free-text equipment list (comma- or newline-separated) into a clean
 // array, dropping blanks.
 export function parseEquipment(value: string): string[] {

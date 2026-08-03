@@ -17,8 +17,58 @@ from app.domain.fitness_profile import (
     SensitiveConstraintType,
     advance_level,
     is_sensitive,
+    resolve_equipment,
 )
 from app.domain.progression import LOW_EFFORT_MAX
+
+
+# --- resolve_equipment: request Available Equipment over Profile Default ---
+
+
+def test_omitted_request_equipment_falls_back_to_default_equipment():
+    # Arrange — a request that states no equipment inherits the saved Default
+    default_equipment = ["dumbbells", "pull-up bar"]
+
+    # Act
+    available = resolve_equipment(None, default_equipment)
+
+    # Assert
+    assert available == ["dumbbells", "pull-up bar"]
+
+
+def test_explicitly_empty_request_equipment_is_honored_as_bodyweight_only():
+    # Arrange — a user with saved defaults clears the field to request bodyweight
+    default_equipment = ["dumbbells", "pull-up bar"]
+
+    # Act
+    available = resolve_equipment([], default_equipment)
+
+    # Assert — empty is a real choice, never a fallback to the Default
+    assert available == []
+
+
+def test_stated_request_equipment_replaces_the_default():
+    # Arrange — the request names its own kit for this generation
+    default_equipment = ["dumbbells"]
+
+    # Act
+    available = resolve_equipment(["barbell", "rack"], default_equipment)
+
+    # Assert — replace, never merge (CONTEXT: Available Equipment replaces Default)
+    assert available == ["barbell", "rack"]
+
+
+def test_resolve_equipment_does_not_mutate_its_inputs():
+    # Arrange
+    default_equipment = ["dumbbells"]
+    request_equipment = ["barbell"]
+
+    # Act
+    resolve_equipment(request_equipment, default_equipment)
+
+    # Assert — both inputs are left untouched (immutability rule)
+    assert default_equipment == ["dumbbells"]
+    assert request_equipment == ["barbell"]
 
 
 @dataclass
