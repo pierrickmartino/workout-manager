@@ -89,8 +89,16 @@ _Avoid_: Edit history, amend, revise, log update
 ## Profile
 
 **Fitness Profile**:
-The user's current state, used to personalize generation — gender, age, height, weight, Fitness Level (per training type), training habits, default equipment, constraints, and recent-workout context. A mutable snapshot of "now"; metric history (e.g. weight over time) lives in progress records, not in versioned Profile rows. Each generation request may override the Profile's default equipment.
+The user's current state, used to personalize generation — gender, age, height, weight, Fitness Level (per training type), training habits, Default Equipment, constraints, and recent-workout context. A mutable snapshot of "now"; metric history (e.g. weight over time) lives in progress records, not in versioned Profile rows. A generation request may state its own Available Equipment, which replaces the Default Equipment for that generation.
 _Avoid_: Account, user data, settings
+
+**Default Equipment**:
+The kit a user records on their Fitness Profile as normally available — a saved list that serves as the base Available Equipment for their generations. It is a stored preference, not a per-generation choice: a request that states no Available Equipment inherits it.
+_Avoid_: Available Equipment (that is the per-generation set), gear, kit
+
+**Available Equipment**:
+The equipment a single generation actually runs with. A generation request may state its own Available Equipment — which replaces the Default Equipment for that generation — or leave it unstated, in which case the Default Equipment applies. Stating *no* equipment is itself a choice (bodyweight only), distinct from leaving it unstated, so a user with saved Default Equipment can still request a bodyweight-only plan.
+_Avoid_: Default Equipment (that is the saved base), equipment (bare)
 
 **Fitness Level**:
 A 1–10 score of the user's ability, held **per training type** — a user can be Level 8 at strength training and Level 2 at yoga. It is the level dimension of the cache key for that type, and it advances over time as logged progress accumulates.
