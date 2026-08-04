@@ -18,11 +18,17 @@ from app.generation.monitoring.call import GenerationCall
 class GenerationCallRecorder(Protocol):
     """Durably records a metered ``Generation Call`` (the operator's usage log).
 
+    ``record`` returns an optional **trace-id handle** — the backend's durable id for the
+    call. It is the lineage stored on the Generated artifact and carried along the
+    adopt/regeneration chain (#274), so a later fast-follow can push Generation Feedback
+    back to the exact call. A backend with no notion of a trace id (the no-op) returns
+    ``None`` and lineage is simply absent, never an error.
+
     ``flush()`` forces any batched events out. It exists because generation is async on a
     cache miss (ADR-0005): the short-lived RQ job may exit before a backend's background
     batch flushes, so the worker flushes at the end of each job or those events are lost."""
 
-    def record(self, call: GenerationCall) -> None: ...
+    def record(self, call: GenerationCall) -> str | None: ...
 
     def flush(self) -> None: ...
 
@@ -32,9 +38,10 @@ class NoOpGenerationCallRecorder:
 
     Selected by the factory for any deployment without Langfuse and used by the whole
     offline suite, so generation runs exactly as it did before monitoring. It never
-    raises, upholding the best-effort guarantee even on the default path."""
+    raises, upholding the best-effort guarantee even on the default path, and returns no
+    trace-id handle — lineage is simply absent on the unconfigured path (#274)."""
 
-    def record(self, call: GenerationCall) -> None:
+    def record(self, call: GenerationCall) -> str | None:
         return None
 
     def flush(self) -> None:

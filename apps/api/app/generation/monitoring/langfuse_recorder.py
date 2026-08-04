@@ -36,7 +36,12 @@ _LEVEL_ERROR = "ERROR"
 
 
 class LangfuseTrace(Protocol):
-    """The trace handle the low-level client returns — nests one generation."""
+    """The trace handle the low-level client returns — nests one generation.
+
+    ``id`` is the durable trace id the recorder returns as the call's lineage handle
+    (#274); the real low-level ``StatefulTraceClient`` exposes it structurally."""
+
+    id: str
 
     def generation(self, **kwargs: Any) -> Any: ...
 
@@ -59,8 +64,11 @@ class LangfuseGenerationCallRecorder:
     def __init__(self, client: LangfuseClient) -> None:
         self._client = client
 
-    def record(self, call: GenerationCall) -> None:
-        """Map one call to one trace (``user_id`` stamped) with one generation under it."""
+    def record(self, call: GenerationCall) -> str | None:
+        """Map one call to one trace (``user_id`` stamped) with one generation under it.
+
+        Returns the created trace's id — the call's lineage handle carried onto the
+        Generated artifact and along the adopt/regeneration chain (#274)."""
 
         trace = self._client.trace(
             name="generation",
@@ -81,6 +89,7 @@ class LangfuseGenerationCallRecorder:
                 "latency_ms": call.latency_ms,
             },
         )
+        return trace.id
 
     def flush(self) -> None:
         """Force Langfuse's batched events out — called by the RQ worker at job end."""

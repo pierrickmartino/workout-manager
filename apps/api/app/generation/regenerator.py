@@ -16,7 +16,11 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from app.generation.llm.port import StructuredLLM
-from app.generation.monitoring.call import GenerationCallContext, GeneratorKind
+from app.generation.monitoring.call import (
+    GenerationCallContext,
+    GeneratorKind,
+    TraceCapture,
+)
 from app.generation.schema import GeneratedSession
 from app.generation.structured import generate_structured
 from app.generation.superset_degrade import flatten_session_supersets
@@ -113,6 +117,7 @@ class LlmSessionRegenerator:
         self._kind = kind
 
     def regenerate(self, request: RegenerationRequest) -> GeneratedSession:
+        capture = TraceCapture()
         parsed = generate_structured(
             llm=self._llm,
             system=_system_prompt(),
@@ -120,7 +125,7 @@ class LlmSessionRegenerator:
             schema=GeneratedSession,
             max_tokens=MAX_TOKENS,
             subject="generation",
-            context=GenerationCallContext(generator_kind=self._kind),
+            context=GenerationCallContext(generator_kind=self._kind, capture=capture),
         )
         # Regeneration produces flat replacement Prescriptions in v1 — it is not
         # Superset-aware (CONTEXT.md §Regeneration, ADR-0023). The prompt never asks
@@ -129,7 +134,10 @@ class LlmSessionRegenerator:
         # model volunteers is stripped here rather than persisted invalid or colliding
         # with a kept group. This mirrors how the Session/Protocol generators degrade
         # their output before it is adopted.
-        return flatten_session_supersets(parsed)
+        flattened = flatten_session_supersets(parsed)
+        # Stamp the regeneration call's own trace id (#274): post-regeneration feedback
+        # maps to the regeneration, not the superseded call. A new object, never mutated.
+        return flattened.model_copy(update={"trace_id": capture.trace_id})
 
 
 __all__ = [

@@ -84,6 +84,21 @@ def test_persists_a_session_the_user_can_see_with_its_prescriptions():
     assert view.prescriptions[0].recommended_load == parse_load("70% 1RM").to_dict()
 
 
+def test_stamps_the_generation_call_trace_id_onto_the_session():
+    # Arrange — the Generated Session carries its originating call's trace id (#274)
+    exercises, sessions = _build_repos()
+    generated = _two_exercise_generation().model_copy(update={"trace_id": "trace-sess"})
+    generator = FakeGenerator(result=generated)
+
+    # Act
+    view = generate_session(
+        REQUEST, "user_trace", generator=generator, exercises=exercises, sessions=sessions
+    )
+
+    # Assert — the persisted Session carries the lineage (operator-only, off the view)
+    assert sessions.trace_id(view.id, "user_trace") == "trace-sess"
+
+
 def test_ai_invented_exercises_are_stored_with_ai_generated_provenance():
     # Arrange
     exercises, sessions = _build_repos()

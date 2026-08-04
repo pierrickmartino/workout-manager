@@ -94,6 +94,35 @@ def test_adopts_every_week_into_a_user_owned_protocol():
     assert view.sessions[1].prescriptions[0].recommended_load == parse_load("65% 1RM").to_dict()
 
 
+def test_adopt_carries_the_trace_id_onto_the_user_owned_copy():
+    # Arrange — a cached artifact carrying its originating call's trace id (#274)
+    exercises, protocols = _build_repos()
+    generated = _generated_protocol().model_copy(update={"trace_id": "trace-T1"})
+
+    # Act
+    view = adopt(
+        generated, "user_lineage", PARAMS,
+        exercises=exercises, protocols=protocols,
+    )
+
+    # Assert — the adopted copy carries the same trace id (operator-only, off the view)
+    assert protocols.trace_id(view.id, "user_lineage") == "trace-T1"
+
+
+def test_adopt_without_a_trace_id_leaves_lineage_absent():
+    # Arrange — no recorder configured upstream: the artifact carries no trace id
+    exercises, protocols = _build_repos()
+
+    # Act
+    view = adopt(
+        _generated_protocol(), "user_no_trace", PARAMS,
+        exercises=exercises, protocols=protocols,
+    )
+
+    # Assert — lineage is simply absent, not an error
+    assert protocols.trace_id(view.id, "user_no_trace") is None
+
+
 def test_adopted_prescriptions_reuse_the_shared_catalog():
     # Arrange — the same movement appears in both weeks; the catalog dedups it
     exercises, protocols = _build_repos()

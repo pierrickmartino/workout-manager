@@ -105,6 +105,8 @@ def regenerate_session(
         replacements=resolve_prescriptions(
             generated.prescriptions, exercises=exercises
         ),
+        # Re-stamp the Session with the regeneration call's lineage (ADR-0039, #274).
+        trace_id=generated.trace_id,
     )
     if result is None:  # ownership was checked above; defensive only
         raise SessionNotFound(session_id)

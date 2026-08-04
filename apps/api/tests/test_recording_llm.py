@@ -20,6 +20,7 @@ from app.generation.monitoring.call import (
     GenerationCallContext,
     GenerationOutcome,
     GeneratorKind,
+    TraceCapture,
 )
 from app.generation.monitoring.recording_llm import RecordingStructuredLLM
 
@@ -47,20 +48,29 @@ class _FakeProvider:
 
 
 class _FakeRecorder:
-    """Captures recorded calls, or raises to prove best-effort recording."""
+    """Captures recorded calls, or raises to prove best-effort recording.
+
+    ``trace_id`` is the handle ``record`` hands back — the lineage the decorator writes
+    into the context's capture (#274); ``None`` models a backend (the no-op) with none."""
 
     def __init__(
-        self, *, error: Exception | None = None, flush_error: Exception | None = None
+        self,
+        *,
+        trace_id: str | None = None,
+        error: Exception | None = None,
+        flush_error: Exception | None = None,
     ) -> None:
+        self._trace_id = trace_id
         self._error = error
         self._flush_error = flush_error
         self.recorded: list = []
         self.flushes = 0
 
-    def record(self, call) -> None:
+    def record(self, call) -> str | None:
         self.recorded.append(call)
         if self._error is not None:
             raise self._error
+        return self._trace_id
 
     def flush(self) -> None:
         self.flushes += 1
@@ -234,6 +244,89 @@ def test_recorder_failure_is_swallowed_and_result_unaffected():
 
     # Assert
     assert text == "value"
+
+
+def test_writes_returned_trace_id_into_the_context_capture():
+    # Arrange — the caller passes a capture to receive the call's lineage handle
+    provider = _FakeProvider(
+        result=CompletionResult(text="{}", usage=TokenUsage.empty(), model="m")
+    )
+    recorder = _FakeRecorder(trace_id="trace-xyz")
+    llm = _decorator(provider, recorder)
+    capture = TraceCapture()
+
+    # Act
+    llm.complete(
+        system="s",
+        user="u",
+        schema=_Schema,
+        max_tokens=10,
+        context=GenerationCallContext(
+            generator_kind=GeneratorKind.PROTOCOL, capture=capture
+        ),
+    )
+
+    # Assert — the handle rides back out through the capture (complete still returns str)
+    assert capture.trace_id == "trace-xyz"
+
+
+def test_capture_stays_none_when_recorder_reports_no_trace_id():
+    # Arrange — a no-op-style recorder returns no handle
+    provider = _FakeProvider(
+        result=CompletionResult(text="{}", usage=TokenUsage.empty(), model="m")
+    )
+    llm = _decorator(provider, _FakeRecorder(trace_id=None))
+    capture = TraceCapture()
+
+    # Act
+    llm.complete(
+        system="s",
+        user="u",
+        schema=_Schema,
+        max_tokens=10,
+        context=GenerationCallContext(
+            generator_kind=GeneratorKind.PROTOCOL, capture=capture
+        ),
+    )
+
+    # Assert — lineage is simply absent, no error
+    assert capture.trace_id is None
+
+
+def test_capture_stays_none_when_recorder_raises():
+    # Arrange — best-effort: a recorder that raises must not populate the capture
+    provider = _FakeProvider(
+        result=CompletionResult(text="ok", usage=TokenUsage.empty(), model="m")
+    )
+    recorder = _FakeRecorder(trace_id="never", error=RuntimeError("langfuse is down"))
+    llm = _decorator(provider, recorder)
+    capture = TraceCapture()
+
+    # Act — the generation still succeeds and returns its text
+    text = llm.complete(
+        system="s",
+        user="u",
+        schema=_Schema,
+        max_tokens=10,
+        context=GenerationCallContext(
+            generator_kind=GeneratorKind.PROTOCOL, capture=capture
+        ),
+    )
+
+    # Assert — text intact, capture left empty
+    assert text == "ok"
+    assert capture.trace_id is None
+
+
+def test_completes_without_a_capture_on_the_context():
+    # Arrange — most call sites pass no capture; the decorator must not require one
+    provider = _FakeProvider(
+        result=CompletionResult(text="ok", usage=TokenUsage.empty(), model="m")
+    )
+    llm = _decorator(provider, _FakeRecorder(trace_id="trace-1"))
+
+    # Act / Assert — no capture, no crash, text returned
+    assert _complete(llm) == "ok"
 
 
 def test_flush_delegates_to_the_recorder():

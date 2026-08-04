@@ -121,6 +121,18 @@ def test_generator_validates_transport_output():
     assert call["max_tokens"] == 8000
 
 
+def test_generator_stamps_the_call_trace_id_on_the_artifact():
+    # Arrange — the recording decorator hands the generation call a trace-id handle
+    llm = FakeStructuredLLM(text=VALID_PAYLOAD, trace_id="trace-sess")
+    generator = LlmSessionGenerator(llm)
+
+    # Act
+    generated = generator.generate(REQUEST)
+
+    # Assert — the Generated Session carries its originating call's trace id (#274)
+    assert generated.trace_id == "trace-sess"
+
+
 def test_generator_tags_the_transport_call_with_its_generator_kind():
     # The context ripples from the generator to the transport so the recording
     # decorator can attribute the call — the Session generator tags it "session".

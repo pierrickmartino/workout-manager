@@ -65,6 +65,10 @@ class ProtocolDraft:
     # The user-editable Protocol name (ADR-0021). ``None`` for a freshly adopted
     # Protocol — read paths fall back to the derived ``objective · training_type``.
     name: str | None = None
+    # Operational AI-usage lineage (ADR-0039, #274): the originating Generation Call's
+    # trace id, deep-copied from the Generated artifact onto the Protocol and seeded onto
+    # each of its Sessions at creation. ``None`` when no monitoring backend was configured.
+    trace_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -105,6 +109,14 @@ class ProtocolRepository(Interface):
     def get(self, protocol_id: int, clerk_user_id: str) -> ProtocolView | None:
         """Return the owner's Protocol by id, or ``None`` if it is missing or owned
         by another user."""
+        ...
+
+    def trace_id(self, protocol_id: int, clerk_user_id: str) -> str | None:
+        """Return the owner's Protocol's AI-usage trace-id lineage (ADR-0039, #274).
+
+        Operator-only, deliberately kept off ``ProtocolView`` so it never reaches the
+        PWA; the seam a later Generation-Feedback push reads. ``None`` when the Protocol
+        is missing/unowned or carries no trace id."""
         ...
 
     def list_for_user(self, clerk_user_id: str) -> list[ProtocolView]:
@@ -191,6 +203,7 @@ class SqlProtocolRepository:
             weeks=draft.weeks,
             duration_minutes=draft.duration_minutes,
             name=draft.name,
+            trace_id=draft.trace_id,
         )
         self._session.add(protocol)
         self._session.commit()
@@ -207,6 +220,9 @@ class SqlProtocolRepository:
                 day=session_draft.day,
                 position=position,
                 title=session_draft.title,
+                # Seed each Session's lineage with the originating Protocol call (#274);
+                # Regeneration re-stamps the individual Session later.
+                trace_id=draft.trace_id,
             )
             self._session.add(workout)
             self._session.commit()
@@ -235,6 +251,12 @@ class SqlProtocolRepository:
         if protocol is None or protocol.clerk_user_id != clerk_user_id:
             return None
         return self._view(protocol)
+
+    def trace_id(self, protocol_id: int, clerk_user_id: str) -> str | None:
+        protocol = self._session.get(Protocol, protocol_id)
+        if protocol is None or protocol.clerk_user_id != clerk_user_id:
+            return None
+        return protocol.trace_id
 
     def list_for_user(self, clerk_user_id: str) -> list[ProtocolView]:
         protocols = self._session.exec(
@@ -370,6 +392,7 @@ class InMemoryProtocolRepository:
             weeks=draft.weeks,
             duration_minutes=draft.duration_minutes,
             name=draft.name,
+            trace_id=draft.trace_id,
         )
         self._next_protocol_id += 1
         self._protocols[protocol.id] = protocol
@@ -387,6 +410,9 @@ class InMemoryProtocolRepository:
                 day=session_draft.day,
                 position=position,
                 title=session_draft.title,
+                # Seed each Session's lineage with the originating Protocol call (#274);
+                # Regeneration re-stamps the individual Session later.
+                trace_id=draft.trace_id,
             )
             self._next_session_id += 1
             self._sessions[protocol.id].append(workout)
@@ -413,6 +439,12 @@ class InMemoryProtocolRepository:
         if protocol is None or protocol.clerk_user_id != clerk_user_id:
             return None
         return self._view(protocol)
+
+    def trace_id(self, protocol_id: int, clerk_user_id: str) -> str | None:
+        protocol = self._protocols.get(protocol_id)
+        if protocol is None or protocol.clerk_user_id != clerk_user_id:
+            return None
+        return protocol.trace_id
 
     def list_for_user(self, clerk_user_id: str) -> list[ProtocolView]:
         owned = [

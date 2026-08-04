@@ -41,6 +41,24 @@ class GenerationOutcome(str, Enum):
     ERROR = "error"
 
 
+class TraceCapture:
+    """A single-use slot the recording decorator writes a call's trace-id handle into.
+
+    The lineage story (#274) needs the originating call's trace id back at the artifact-
+    building code, but ``complete`` deliberately returns only ``str`` (ADR-0006). So a
+    caller that wants the handle passes a ``TraceCapture`` on the ``context``; the decorator
+    writes the recorder's returned handle into it (or leaves it ``None`` when there is no
+    recorder / a recorder failure). This is the one out-channel that carries the id back
+    without moving the ``parse_*`` boundary — deliberately mutable, unlike the frozen value
+    types around it, because it *is* an out-parameter."""
+
+    def __init__(self) -> None:
+        self.trace_id: str | None = None
+
+    def set(self, trace_id: str | None) -> None:
+        self.trace_id = trace_id
+
+
 @dataclass(frozen=True)
 class GenerationCallContext:
     """The additive, provider-agnostic parameter carried into ``complete``.
@@ -48,10 +66,15 @@ class GenerationCallContext:
     ``generator_kind`` tags which generator made the call; ``clerk_user_id`` attributes it
     to the originating user when there is one and is ``None`` for unattributed calls (e.g.
     catalog enrichment, which invents no user). Passed explicitly per call rather than via
-    hidden global state, so the seam stays testable and predictable."""
+    hidden global state, so the seam stays testable and predictable.
+
+    ``capture`` is an optional out-channel: when a caller wants the call's trace-id handle
+    (to store on the Generated artifact, #274) it passes a ``TraceCapture`` the decorator
+    writes into. Most call sites leave it ``None`` and record nothing back."""
 
     generator_kind: GeneratorKind
     clerk_user_id: str | None = None
+    capture: TraceCapture | None = None
 
 
 @dataclass(frozen=True)
@@ -80,6 +103,7 @@ class GenerationCall:
 __all__ = [
     "GeneratorKind",
     "GenerationOutcome",
+    "TraceCapture",
     "GenerationCallContext",
     "GenerationCall",
 ]

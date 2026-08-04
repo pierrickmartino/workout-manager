@@ -15,7 +15,11 @@ from typing import Protocol
 
 from app.generation.generator import GenerationError
 from app.generation.llm.port import StructuredLLM
-from app.generation.monitoring.call import GenerationCallContext, GeneratorKind
+from app.generation.monitoring.call import (
+    GenerationCallContext,
+    GeneratorKind,
+    TraceCapture,
+)
 from app.generation.schema import GeneratedProtocol
 from app.generation.structured import generate_structured, parse_or_raise
 from app.generation.superset_degrade import degrade_protocol_to_flat
@@ -156,6 +160,7 @@ class LlmProtocolGenerator:
         self._kind = kind
 
     def generate(self, request: ProtocolGenerationRequest) -> GeneratedProtocol:
+        capture = TraceCapture()
         protocol = generate_structured(
             llm=self._llm,
             system=_system_prompt(
@@ -165,7 +170,7 @@ class LlmProtocolGenerator:
             schema=GeneratedProtocol,
             max_tokens=MAX_TOKENS,
             subject="protocol generation",
-            context=GenerationCallContext(generator_kind=self._kind),
+            context=GenerationCallContext(generator_kind=self._kind, capture=capture),
         )
         protocol = degrade_protocol_to_flat(
             protocol, has_sensitive_constraint=request.has_sensitive_constraint
@@ -175,7 +180,9 @@ class LlmProtocolGenerator:
             weeks=request.weeks,
             sessions_per_week=request.sessions_per_week,
         )
-        return protocol
+        # Stamp the originating call's trace id onto the artifact (#274) — a new object,
+        # never a mutation, consistent with the immutability of Generated content.
+        return protocol.model_copy(update={"trace_id": capture.trace_id})
 
 
 __all__ = [
