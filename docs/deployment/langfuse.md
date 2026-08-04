@@ -72,139 +72,16 @@ Self-hosted Langfuse (v3) is its own small stack. Per the issue it runs
 
 ---
 
-## Step 1 — Add Langfuse to `docker-compose.yml`
+## Step 1 — The Langfuse stack in `docker-compose.yml`
 
-Append the Langfuse services and their datastores. This is adapted from the
-official Langfuse self-host compose; the load-bearing part is that
-`langfuse-web` reads `LANGFUSE_INIT_*` so the org, project, and API keys are
-created deterministically on first boot (no click-ops to get keys).
+The Langfuse services and their own datastores are **already defined** in
+[`docker-compose.yml`](../../docker-compose.yml): `langfuse-web`,
+`langfuse-worker`, `langfuse-db` (Postgres), `clickhouse`, `langfuse-redis`, and
+`minio`. `langfuse-web` reads `LANGFUSE_INIT_*` so the org, project, and API
+keys are created deterministically on first boot — no click-ops to get keys.
 
-```yaml
-  # --- Self-hosted Langfuse (ADR-0039). Its own datastore; never the app's. ---
-  langfuse-web:
-    image: langfuse/langfuse:3
-    depends_on:
-      langfuse-db:
-        condition: service_healthy
-    ports:
-      - "${LANGFUSE_PORT:-3001}:3000"   # operator-only UI; keep off public internet
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@langfuse-db:5432/langfuse
-      CLICKHOUSE_URL: http://clickhouse:8123
-      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
-      CLICKHOUSE_USER: clickhouse
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?set in .env}
-      REDIS_HOST: langfuse-redis
-      REDIS_PORT: 6379
-      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
-      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
-      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
-      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_PASSWORD:?set in .env}
-      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
-      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
-      SALT: ${LANGFUSE_SALT:?set in .env}
-      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:?32-byte hex; set in .env}
-      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:?set in .env}
-      NEXTAUTH_URL: http://localhost:${LANGFUSE_PORT:-3001}
-      # Deterministic bootstrap: create org/project + the keys the app will use.
-      LANGFUSE_INIT_ORG_ID: workout-manager
-      LANGFUSE_INIT_PROJECT_ID: workout-manager
-      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:?set in .env}
-      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY:?set in .env}
-
-  langfuse-worker:
-    image: langfuse/langfuse-worker:3
-    depends_on:
-      langfuse-db:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@langfuse-db:5432/langfuse
-      CLICKHOUSE_URL: http://clickhouse:8123
-      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
-      CLICKHOUSE_USER: clickhouse
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?set in .env}
-      REDIS_HOST: langfuse-redis
-      REDIS_PORT: 6379
-      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
-      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
-      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
-      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_PASSWORD:?set in .env}
-      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
-      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
-      SALT: ${LANGFUSE_SALT:?set in .env}
-      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:?set in .env}
-
-  langfuse-db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: langfuse
-    volumes:
-      - langfuse_pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  clickhouse:
-    image: clickhouse/clickhouse-server:24
-    environment:
-      CLICKHOUSE_USER: clickhouse
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?set in .env}
-    volumes:
-      - clickhouse_data:/var/lib/clickhouse
-    healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q localhost:8123/ping || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  langfuse-redis:
-    image: redis:7-alpine
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  minio:
-    image: minio/minio
-    entrypoint: sh
-    command: -c 'mkdir -p /data/langfuse && minio server /data'
-    environment:
-      MINIO_ROOT_USER: minio
-      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:?set in .env}
-    volumes:
-      - minio_data:/data
-```
-
-Add the new named volumes next to the existing `pgdata`:
-
-```yaml
-volumes:
-  pgdata:
-  langfuse_pgdata:
-  clickhouse_data:
-  minio_data:
-```
-
-> ℹ️ Pin these image tags to a specific Langfuse release for reproducible
-> deploys; `:3` tracks the v3 line. Check the
-> [Langfuse self-host docs](https://langfuse.com/self-hosting) for the current
-> recommended compose before a production rollout — the datastore set (Postgres,
-> ClickHouse, Redis, S3) is stable, but individual env keys evolve.
-
----
-
-## Step 2 — Add the environment variables
-
-### 2a. App side — three vars, on `api` **and** `worker`
-
-Add the Langfuse block to **both** the `api` and `worker` services in
-`docker-compose.yml` (the worker generates the majority of calls on a cache
-miss, so it must record too):
+The three app-side variables are also already wired into **both** the `api` and
+`worker` services:
 
 ```yaml
       LANGFUSE_HOST: ${LANGFUSE_HOST:-}
@@ -212,12 +89,24 @@ miss, so it must record too):
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
 ```
 
-Because the app talks to Langfuse over the compose network, `LANGFUSE_HOST`
-points at the `langfuse-web` service, not `localhost`:
+So there is **nothing to edit in compose** — you only populate `.env` (Step 2)
+and boot. The `worker` carries the same three vars because it generates the
+majority of `Generation Call`s on a cache miss (ADR-0005) and records
+independently of `api`.
 
-### 2b. `.env`
+> ℹ️ The image tags track the v3 line (`langfuse/langfuse:3`). Pin them to a
+> specific Langfuse release for reproducible production deploys, and check the
+> [Langfuse self-host docs](https://langfuse.com/self-hosting) before a rollout —
+> the datastore set (Postgres, ClickHouse, Redis, S3) is stable, but individual
+> env keys evolve.
 
-Add to your `.env` (and document them in `.env.example`):
+---
+
+## Step 2 — Fill in `.env`
+
+The compose file leaves every Langfuse value blank/unset by default (so an
+un-configured stack simply runs the no-op recorder). Populate the block
+documented in [`.env.example`](../../.env.example):
 
 ```bash
 # --- Operational AI-usage monitoring: self-hosted Langfuse (ADR-0039) ---

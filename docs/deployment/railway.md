@@ -24,6 +24,13 @@ The `api` and `worker` are **two Railway services built from the same
 directory** (`apps/api`) — same Docker image, different start command. Only `api`
 runs migrations (see [Migration ordering](#migration-ordering)).
 
+> **Optional: AI-usage monitoring.** Self-hosted Langfuse (ADR-0039) is not
+> required to run the app — leave its variables unset and the app records
+> nothing (no-op recorder). To deploy it on Railway too, see
+> [Step 7](#step-7-optional-self-hosted-langfuse-monitoring); the project-side
+> configuration (90-day retention, per-model prices) is the same everywhere and
+> lives in [`langfuse.md`](./langfuse.md).
+
 ### Cost floor
 
 The RQ `worker` must run 24/7, so it sets the price floor. Postgres, Redis, the
@@ -275,6 +282,76 @@ correct and needs no code change.
 | `worker` crashes at boot: `Redis URL must specify one of the following schemes` | Two possible causes, often together: (a) start command missing the `sh -c '…'` wrapper, so `$REDIS_URL` is passed literally instead of expanded (Step 3); (b) `REDIS_URL` itself empty/unresolved — reference `${{Redis.REDIS_URL}}`, not `REDIS_PRIVATE_URL` (which doesn't exist). Fix both; verify the resolved value on the Variables tab. |
 | Jobs enqueue but never run | `api` and `worker` pointed at different Redis instances (Step 3). |
 | JWT verification fails | `CLERK_ISSUER` / `CLERK_JWKS_URL` mismatch with the Clerk instance. |
+
+---
+
+## Step 7 — (Optional) Self-hosted Langfuse monitoring
+
+Operational AI-usage monitoring (ADR-0039). **Skip this entirely** if you don't
+want monitoring — the app runs fine without it (the no-op recorder). When you do
+want it, this stands up Langfuse on Railway and points `api`/`worker` at it. The
+project-side setup — 90-day retention and per-model prices — is identical on any
+host and is documented once in [`langfuse.md`](./langfuse.md); only the
+infrastructure mapping is Railway-specific.
+
+> ⚠️ **Its own datastore.** Langfuse must not share the app's Postgres/Redis
+> plugins — keep the monitoring data separate so retention purges and per-user
+> erasure never touch product data. Add **new** managed stores for Langfuse.
+
+**Add the Langfuse resources** (all private — no public domain except, if you
+must, a locked-down UI):
+
+| Compose service | Railway resource | Public? | Notes |
+|---|---|---|---|
+| `langfuse-db` | **Postgres** plugin (new, separate) | no | Langfuse's transactional store. |
+| `langfuse-redis` | **Redis** plugin (new, separate) | no | Langfuse's queue/cache. |
+| `clickhouse` | **Service** (`clickhouse/clickhouse-server:24`) with a volume | no | Analytics store. |
+| `minio` | **Service** (`minio/minio`) with a volume, or any S3 bucket | no | Event/blob storage. |
+| `langfuse-web` | **Service** (`langfuse/langfuse:3`) | operator-only | UI + ingestion API. |
+| `langfuse-worker` | **Service** (`langfuse/langfuse-worker:3`) | no | Async event processing. |
+
+Deploy these from their public images (Railway: *New → Docker Image*), not from
+this repo. Give `langfuse-web` and `langfuse-worker` the same Langfuse env block
+shown in [`docker-compose.yml`](../../docker-compose.yml), but with Railway
+references replacing the compose hostnames:
+
+```
+DATABASE_URL=postgresql://${{LangfusePostgres.PGUSER}}:${{LangfusePostgres.PGPASSWORD}}@${{LangfusePostgres.RAILWAY_PRIVATE_DOMAIN}}:5432/${{LangfusePostgres.PGDATABASE}}
+CLICKHOUSE_URL=http://${{ClickHouse.RAILWAY_PRIVATE_DOMAIN}}:8123
+CLICKHOUSE_MIGRATION_URL=clickhouse://${{ClickHouse.RAILWAY_PRIVATE_DOMAIN}}:9000
+REDIS_HOST=${{LangfuseRedis.RAILWAY_PRIVATE_DOMAIN}}
+REDIS_PORT=6379
+# ENCRYPTION_KEY must be 32-byte hex (openssl rand -hex 32); SALT/NEXTAUTH_SECRET random.
+# S3/MinIO + LANGFUSE_INIT_* exactly as in docker-compose.yml.
+```
+
+> ℹ️ Langfuse's Postgres URL is a **plain `postgresql://`** — do **not** add the
+> `+psycopg` scheme here. That scheme is only for *this app's* SQLAlchemy
+> `DATABASE_URL` (Step 2); Langfuse is a separate Node app with its own driver.
+
+**Point the app at Langfuse.** Add these three variables to **both** the `api`
+and `worker` services (the worker records the majority of calls — cache-miss
+generations run there):
+
+```
+LANGFUSE_HOST=http://${{<langfuse-web-service-name>.RAILWAY_PRIVATE_DOMAIN}}:3000
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_SECRET_KEY=sk-lf-...
+```
+
+Use the same key pair for the app and for `langfuse-web`'s `LANGFUSE_INIT_*` so
+the project bootstraps with the exact keys the app authenticates with (no manual
+copy-paste). `LANGFUSE_HOST` is the Langfuse service's **private** domain over
+Railway's IPv6 network — never a public URL for health-data prompts.
+
+> ⚠️ **All three vars, on both services, or nothing records.** A missing var on
+> either service silently falls back to the no-op recorder (Step 7 of
+> [`langfuse.md`](./langfuse.md#if-somethings-wrong)).
+
+**Then finish in the Langfuse UI** — [`langfuse.md`](./langfuse.md) Steps 4–6:
+set the **90-day retention window**, add **per-model prices** for
+`claude-opus-4-8` / `gpt-5.5` / `gemini-3.1-pro`, and verify a real generation
+appears with prompt/output, tokens, model, cost, and `user_id`.
 
 ---
 
