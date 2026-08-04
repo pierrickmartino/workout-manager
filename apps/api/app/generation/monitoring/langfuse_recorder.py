@@ -10,7 +10,8 @@ Three properties are load-bearing:
 
 - **``user_id`` stamped on the trace.** Every trace carries Langfuse's first-class
   ``user_id = clerk_user_id`` (``None`` for unattributed calls like catalog enrichment), so a
-  user's traces are addressable for the 90-day retention window and per-user erasure.
+  user's traces are addressable for the 90-day retention window and for ``delete_user_traces``
+  — the per-user erasure that keeps captured health-data prompts from becoming a liability.
 - **Full prompt + output captured.** Self-hosting keeps the (health-influenced) prompts on the
   operator's own infrastructure, so system prompt, user prompt, and model output are recorded
   in full — the reason to adopt Langfuse over a two-integer token table.
@@ -34,6 +35,10 @@ _TOKEN_UNIT = "TOKENS"
 _LEVEL_DEFAULT = "DEFAULT"
 _LEVEL_ERROR = "ERROR"
 
+# Page size for enumerating a user's traces during erasure. Large enough that most users
+# clear in a single page, bounded so a heavy user's listing stays a handful of calls.
+_ERASURE_PAGE_SIZE = 100
+
 
 class LangfuseTrace(Protocol):
     """The trace handle the low-level client returns — nests one generation.
@@ -46,6 +51,33 @@ class LangfuseTrace(Protocol):
     def generation(self, **kwargs: Any) -> Any: ...
 
 
+class LangfuseTracePage(Protocol):
+    """One page of a trace listing — the SDK's ``data`` list + pagination ``meta``.
+
+    Each item exposes an ``id`` (the trace id erasure addresses); ``meta.total_pages``
+    bounds the paging loop so a user's *every* trace is enumerated before deletion."""
+
+    data: list[Any]
+    meta: Any
+
+
+class LangfuseTraceApi(Protocol):
+    """The ``client.api.trace`` sub-resource used for per-user erasure.
+
+    Erasure is list-then-delete: the SDK has no "delete by user" call, so we enumerate a
+    user's traces (filtered by the stamped ``user_id``) and delete them by id."""
+
+    def list(self, *, user_id: str, page: int, limit: int) -> LangfuseTracePage: ...
+
+    def delete_multiple(self, *, trace_ids: list[str]) -> Any: ...
+
+
+class LangfuseApi(Protocol):
+    """The ``client.api`` namespace — only its ``trace`` sub-resource is used here."""
+
+    trace: LangfuseTraceApi
+
+
 class LangfuseClient(Protocol):
     """The slice of the low-level Langfuse SDK this recorder depends on.
 
@@ -53,13 +85,19 @@ class LangfuseClient(Protocol):
     structurally and tests can inject a fake with no SDK installed — the same offline
     discipline as the injected fake LLM."""
 
+    api: LangfuseApi
+
     def trace(self, **kwargs: Any) -> LangfuseTrace: ...
 
     def flush(self) -> None: ...
 
 
 class LangfuseGenerationCallRecorder:
-    """Records a ``Generation Call`` as a flat Langfuse trace + generation."""
+    """Records a ``Generation Call`` as a flat Langfuse trace + generation.
+
+    It also owns the data-lifecycle counterpart of that capture: ``delete_user_traces``
+    erases a user's traces on demand (ADR-0039), keyed on the same stamped ``user_id``.
+    """
 
     def __init__(self, client: LangfuseClient) -> None:
         self._client = client
@@ -96,6 +134,26 @@ class LangfuseGenerationCallRecorder:
 
         self._client.flush()
 
+    def delete_user_traces(self, clerk_user_id: str) -> None:
+        """Erase every trace a user's prompts produced, keyed on the stamped ``user_id``.
+
+        The SDK has no "delete by user" call, so this enumerates the user's traces and
+        deletes them by id. Not best-effort: any failure propagates so un-erased health
+        data is never silently mistaken for erased (ADR-0039)."""
+
+        trace_ids: list[str] = []
+        page_number = 1
+        while True:
+            page = self._client.api.trace.list(
+                user_id=clerk_user_id, page=page_number, limit=_ERASURE_PAGE_SIZE
+            )
+            trace_ids.extend(trace.id for trace in page.data)
+            if page_number >= page.meta.total_pages:
+                break
+            page_number += 1
+        if trace_ids:
+            self._client.api.trace.delete_multiple(trace_ids=trace_ids)
+
     @staticmethod
     def _usage(call: GenerationCall) -> dict[str, Any]:
         """Tokens + unit only. No cost/price field — Langfuse owns pricing."""
@@ -113,4 +171,11 @@ class LangfuseGenerationCallRecorder:
         return _LEVEL_DEFAULT
 
 
-__all__ = ["LangfuseGenerationCallRecorder", "LangfuseClient", "LangfuseTrace"]
+__all__ = [
+    "LangfuseGenerationCallRecorder",
+    "LangfuseClient",
+    "LangfuseApi",
+    "LangfuseTraceApi",
+    "LangfuseTracePage",
+    "LangfuseTrace",
+]

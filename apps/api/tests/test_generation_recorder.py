@@ -46,3 +46,12 @@ def test_flush_does_nothing_and_returns_none():
 
     # Act / Assert — flushing is a no-op that never raises
     assert recorder.flush() is None
+
+
+def test_delete_user_traces_does_nothing_and_returns_none():
+    # Arrange
+    recorder = NoOpGenerationCallRecorder()
+
+    # Act / Assert — per-user erasure is a no-op that never raises on the
+    # unconfigured path (there is nothing captured to erase)
+    assert recorder.delete_user_traces("user_1") is None
