@@ -121,6 +121,32 @@ def test_generator_validates_transport_output():
     assert call["max_tokens"] == 8000
 
 
+def test_generator_tags_the_transport_call_with_its_generator_kind():
+    # The context ripples from the generator to the transport so the recording
+    # decorator can attribute the call — the Session generator tags it "session".
+    from app.generation.monitoring.call import GeneratorKind
+
+    llm = FakeStructuredLLM(text=VALID_PAYLOAD)
+
+    LlmSessionGenerator(llm).generate(REQUEST)
+
+    context = llm.calls[0]["context"]
+    assert context.generator_kind == GeneratorKind.SESSION
+    assert context.clerk_user_id is None  # unattributed for this spine
+
+
+def test_generator_kind_is_caller_overridable():
+    # The same generator can be tagged for a different caller (mirrors the
+    # muscle-emphasis live-vs-enrichment split) without touching generate().
+    from app.generation.monitoring.call import GeneratorKind
+
+    llm = FakeStructuredLLM(text=VALID_PAYLOAD)
+
+    LlmSessionGenerator(llm, kind=GeneratorKind.PROTOCOL).generate(REQUEST)
+
+    assert llm.calls[0]["context"].generator_kind == GeneratorKind.PROTOCOL
+
+
 def test_generator_wraps_malformed_output_as_generation_error():
     # Arrange — the transport returned something that isn't valid JSON
     generator = LlmSessionGenerator(FakeStructuredLLM(text="oops not json"))

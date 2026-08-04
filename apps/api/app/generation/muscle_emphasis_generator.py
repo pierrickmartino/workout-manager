@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from app.generation.llm.port import StructuredLLM
+from app.generation.monitoring.call import GenerationCallContext, GeneratorKind
 from app.generation.schema import GeneratedMuscleEmphasis
 from app.generation.structured import generate_structured
 
@@ -76,8 +77,17 @@ class LlmMuscleEmphasisGenerator:
     validates the raw text at its boundary, so a malformed split raises
     ``GenerationError`` and is never written to the catalog."""
 
-    def __init__(self, llm: StructuredLLM) -> None:
+    def __init__(
+        self,
+        llm: StructuredLLM,
+        *,
+        kind: GeneratorKind = GeneratorKind.MUSCLE_EMPHASIS,
+    ) -> None:
+        # ``kind`` is caller-supplied: the same generator serves the live catalog split
+        # (``MUSCLE_EMPHASIS``, the default) and the human-triggered re-enrichment batch
+        # (``EXERCISE_ENRICHMENT``), which the operator must see as distinct spend.
         self._llm = llm
+        self._kind = kind
 
     def generate(self, request: MuscleEmphasisRequest) -> GeneratedMuscleEmphasis:
         return generate_structured(
@@ -87,6 +97,7 @@ class LlmMuscleEmphasisGenerator:
             schema=GeneratedMuscleEmphasis,
             max_tokens=MAX_TOKENS,
             subject="muscle emphasis generation",
+            context=GenerationCallContext(generator_kind=self._kind),
         )
 
 

@@ -100,11 +100,13 @@ def test_complete_returns_message_content():
         _FakeClient(completion=completion), model="openai/gpt-oss-120b:free"
     )
 
-    # Act
-    text = llm.complete(system="sys", user="usr", schema=_Schema, max_tokens=4000)
+    # Act — inherits the OpenAI wire path, so it yields a CompletionResult too
+    result = llm.complete(system="sys", user="usr", schema=_Schema, max_tokens=4000)
 
-    # Assert
-    assert text == '{"value": "ok"}'
+    # Assert — text and model carried through; usage empty until slice #2
+    assert result.text == '{"value": "ok"}'
+    assert result.model == "openai/gpt-oss-120b:free"
+    assert result.usage.input_tokens is None
 
 
 def test_complete_passes_model_schema_and_max_tokens():
@@ -148,7 +150,7 @@ def test_complete_returns_empty_string_when_content_is_none():
     )
 
     # Act
-    text = llm.complete(system="s", user="u", schema=_Schema, max_tokens=10)
+    result = llm.complete(system="s", user="u", schema=_Schema, max_tokens=10)
 
     # Assert
-    assert text == ""
+    assert result.text == ""

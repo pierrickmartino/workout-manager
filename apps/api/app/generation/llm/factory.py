@@ -10,7 +10,14 @@ a generation. Keys for *unselected* providers may be absent.
 ``anthropic``, ``openai``, ``google``, and ``openrouter`` are wired; any other
 provider documented in ADR-0006 raises ``NotImplementedError`` until it is
 implemented. ``openrouter`` reuses the OpenAI SDK pointed at OpenRouter's base
-URL (no new dependency)."""
+URL (no new dependency).
+
+The factory also wires operational AI-usage monitoring (#270/#271): it wraps the chosen
+provider in the ``RecordingStructuredLLM`` decorator and selects a ``GenerationCallRecorder``
+— today always the **no-op** (the Langfuse-backed recorder is a later slice), so an
+unconfigured deployment and the whole offline suite record nothing and behave exactly as
+before. Both the API DI layer and the RQ worker go through here, so recording is wired in
+one place."""
 
 from __future__ import annotations
 
@@ -27,6 +34,12 @@ from app.generation.llm.providers.openrouter_provider import (
     OpenRouterStructuredLLM,
     build_openrouter_client,
 )
+from app.generation.llm.usage import CompletionProvider
+from app.generation.monitoring.recorder import (
+    GenerationCallRecorder,
+    NoOpGenerationCallRecorder,
+)
+from app.generation.monitoring.recording_llm import RecordingStructuredLLM
 
 # The env var holding each provider's API key, for the fail-fast key check.
 PROVIDER_KEY_FIELDS = {
@@ -56,31 +69,57 @@ def _require_key(settings: Settings, provider: str) -> str:
     return key
 
 
-def build_llm_client(settings: Settings) -> StructuredLLM:
-    """Construct the configured provider's ``StructuredLLM`` (the only SDK seam)."""
+def _build_recorder(settings: Settings) -> GenerationCallRecorder:
+    """Select the AI-usage recorder — today always the no-op (#271).
 
-    provider = settings.ai_provider
-    key = _require_key(settings, provider)
+    The Langfuse-backed recorder (selected by config/keys the way ``build_llm_client``
+    selects a provider) is a later slice; until then every deployment gets the no-op, so
+    generation stays fully offline-testable and behaves exactly as before monitoring."""
+
+    return NoOpGenerationCallRecorder()
+
+
+def _build_provider(settings: Settings, provider: str, key: str) -> CompletionProvider:
+    """Construct the chosen provider's transport (the only place an SDK client is made)."""
+
+    model = settings.resolved_model()
 
     if provider == "anthropic":
-        client = anthropic.Anthropic(api_key=key)
-        return AnthropicStructuredLLM(client, model=settings.resolved_model())
+        return AnthropicStructuredLLM(anthropic.Anthropic(api_key=key), model=model)
 
     if provider == "openai":
-        client = openai.OpenAI(api_key=key)
-        return OpenAIStructuredLLM(client, model=settings.resolved_model())
+        return OpenAIStructuredLLM(openai.OpenAI(api_key=key), model=model)
 
     if provider == "google":
-        client = genai.Client(api_key=key)
-        return GoogleStructuredLLM(client, model=settings.resolved_model())
+        return GoogleStructuredLLM(genai.Client(api_key=key), model=model)
 
     if provider == "openrouter":
-        client = build_openrouter_client(key)
-        return OpenRouterStructuredLLM(client, model=settings.resolved_model())
+        return OpenRouterStructuredLLM(build_openrouter_client(key), model=model)
 
     raise NotImplementedError(
         f"AI_PROVIDER '{provider}' is not yet supported; "
         "wired providers: 'anthropic', 'openai', 'google', 'openrouter'"
+    )
+
+
+def build_llm_client(settings: Settings) -> StructuredLLM:
+    """Construct the configured provider wrapped in the recording decorator.
+
+    The chosen provider is the only SDK seam; the ``RecordingStructuredLLM`` decorator
+    around it is what satisfies the public ``StructuredLLM`` port, capturing every metered
+    call for AI-usage monitoring (#271). ``provider_name`` and ``model`` are passed through
+    so even a *failed* call — where there is no result to read a model from — is recorded
+    with a complete envelope."""
+
+    provider = settings.ai_provider
+    key = _require_key(settings, provider)
+
+    inner = _build_provider(settings, provider, key)
+    return RecordingStructuredLLM(
+        inner,
+        recorder=_build_recorder(settings),
+        provider_name=provider,
+        model=settings.resolved_model(),
     )
 
 

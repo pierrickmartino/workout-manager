@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from app.generation.llm.port import StructuredLLM
+from app.generation.monitoring.call import GenerationCallContext, GeneratorKind
 from app.generation.schema import GeneratedSubstitute
 from app.generation.structured import generate_structured
 
@@ -84,8 +85,11 @@ class LlmSubstituteGenerator:
     validates the raw text at its boundary, so a malformed substitute raises
     ``GenerationError`` and never enters the catalog (ADR-0006)."""
 
-    def __init__(self, llm: StructuredLLM) -> None:
+    def __init__(
+        self, llm: StructuredLLM, *, kind: GeneratorKind = GeneratorKind.SUBSTITUTE
+    ) -> None:
         self._llm = llm
+        self._kind = kind
 
     def generate(self, request: SubstituteRequest) -> GeneratedSubstitute:
         return generate_structured(
@@ -95,6 +99,7 @@ class LlmSubstituteGenerator:
             schema=GeneratedSubstitute,
             max_tokens=MAX_TOKENS,
             subject="substitute generation",
+            context=GenerationCallContext(generator_kind=self._kind),
         )
 
 

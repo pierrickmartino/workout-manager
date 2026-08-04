@@ -51,10 +51,13 @@ def test_complete_assembles_streamed_chunk_text():
     llm = GoogleStructuredLLM(client, model="gemini-3.1-pro")
 
     # Act
-    text = llm.complete(system="sys", user="usr", schema=_Schema, max_tokens=4000)
+    result = llm.complete(system="sys", user="usr", schema=_Schema, max_tokens=4000)
 
-    # Assert — the final assembled text, not chunks
-    assert text == '{"value": "ok"}'
+    # Assert — the final assembled text (not chunks), model carried, usage empty
+    assert result.text == '{"value": "ok"}'
+    assert result.model == "gemini-3.1-pro"
+    assert result.usage.input_tokens is None
+    assert result.usage.output_tokens is None
 
 
 def test_complete_constrains_output_with_schema_and_json_mime():
@@ -114,7 +117,7 @@ def test_complete_skips_chunks_without_text():
     llm = GoogleStructuredLLM(client, model="gemini-3.1-pro")
 
     # Act
-    text = llm.complete(system="s", user="u", schema=_Schema, max_tokens=10)
+    result = llm.complete(system="s", user="u", schema=_Schema, max_tokens=10)
 
     # Assert
-    assert text == '{"value": "ok"}'
+    assert result.text == '{"value": "ok"}'

@@ -14,13 +14,18 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from app.generation.llm.port import GenerationError
+from app.generation.llm.usage import CompletionResult, TokenUsage
 
 
 class OpenAIStructuredLLM:
     """Constrains output to ``schema`` via OpenAI, streamed and schema-enforced.
 
     The ``model`` is fixed per deployment (resolved by the factory from settings);
-    ``max_tokens`` stays per-call so each generator keeps its own budget."""
+    ``max_tokens`` stays per-call so each generator keeps its own budget.
+
+    ``complete`` returns a ``CompletionResult`` (text + usage + model) consumed by the
+    ``RecordingStructuredLLM`` decorator. OpenAI's real usage extraction lands in slice #2;
+    for now it reports :meth:`TokenUsage.empty` (conforming to the type so nothing breaks)."""
 
     def __init__(self, client, *, model: str) -> None:
         self._client = client
@@ -33,7 +38,7 @@ class OpenAIStructuredLLM:
         user: str,
         schema: type[BaseModel],
         max_tokens: int,
-    ) -> str:
+    ) -> CompletionResult:
         try:
             with self._client.chat.completions.stream(
                 model=self._model,
@@ -48,7 +53,8 @@ class OpenAIStructuredLLM:
         except Exception as exc:  # network / API failure
             raise GenerationError(f"generation request failed: {exc}") from exc
 
-        return completion.choices[0].message.content or ""
+        text = completion.choices[0].message.content or ""
+        return CompletionResult(text=text, usage=TokenUsage.empty(), model=self._model)
 
 
 __all__ = ["OpenAIStructuredLLM"]
