@@ -26,6 +26,9 @@ def _call() -> GenerationCall:
         output_tokens=20,
         latency_ms=1.5,
         outcome=GenerationOutcome.SUCCESS,
+        system_prompt="sys",
+        user_prompt="usr",
+        output_text='{"ok": true}',
     )
 
 
@@ -35,3 +38,11 @@ def test_record_does_nothing_and_returns_none():
 
     # Act / Assert — recording is a no-op that never raises
     assert recorder.record(_call()) is None
+
+
+def test_flush_does_nothing_and_returns_none():
+    # Arrange
+    recorder = NoOpGenerationCallRecorder()
+
+    # Act / Assert — flushing is a no-op that never raises
+    assert recorder.flush() is None

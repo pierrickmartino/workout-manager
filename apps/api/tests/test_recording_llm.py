@@ -49,14 +49,23 @@ class _FakeProvider:
 class _FakeRecorder:
     """Captures recorded calls, or raises to prove best-effort recording."""
 
-    def __init__(self, *, error: Exception | None = None) -> None:
+    def __init__(
+        self, *, error: Exception | None = None, flush_error: Exception | None = None
+    ) -> None:
         self._error = error
+        self._flush_error = flush_error
         self.recorded: list = []
+        self.flushes = 0
 
     def record(self, call) -> None:
         self.recorded.append(call)
         if self._error is not None:
             raise self._error
+
+    def flush(self) -> None:
+        self.flushes += 1
+        if self._flush_error is not None:
+            raise self._flush_error
 
 
 _CONTEXT = GenerationCallContext(
@@ -136,6 +145,34 @@ def test_records_one_success_call_with_the_metered_envelope():
     assert call.latency_ms >= 0.0
 
 
+def test_records_prompt_and_output_text_on_success():
+    # Arrange — the recorder must be able to replay exactly what the model saw
+    provider = _FakeProvider(
+        result=CompletionResult(
+            text='{"value": "generated"}',
+            usage=TokenUsage(input_tokens=1, output_tokens=2),
+            model="m",
+        )
+    )
+    recorder = _FakeRecorder()
+    llm = _decorator(provider, recorder)
+
+    # Act
+    llm.complete(
+        system="you are a coach",
+        user="build me a push protocol",
+        schema=_Schema,
+        max_tokens=100,
+        context=_CONTEXT,
+    )
+
+    # Assert — the full prompt (system + user) and the output text are captured
+    call = recorder.recorded[0]
+    assert call.system_prompt == "you are a coach"
+    assert call.user_prompt == "build me a push protocol"
+    assert call.output_text == '{"value": "generated"}'
+
+
 def test_records_unattributed_call_when_no_user_on_context():
     # Arrange — an enrichment call invents no user
     provider = _FakeProvider(
@@ -178,6 +215,10 @@ def test_records_failure_and_reraises_the_original_error():
     assert call.model == "claude-x"
     assert call.input_tokens is None
     assert call.output_tokens is None
+    # The prompt is still captured on failure; there is no output text
+    assert call.system_prompt == "sys"
+    assert call.user_prompt == "usr"
+    assert call.output_text is None
 
 
 def test_recorder_failure_is_swallowed_and_result_unaffected():
@@ -193,6 +234,34 @@ def test_recorder_failure_is_swallowed_and_result_unaffected():
 
     # Assert
     assert text == "value"
+
+
+def test_flush_delegates_to_the_recorder():
+    # Arrange — the worker asks the decorator to flush at the end of a job
+    provider = _FakeProvider(
+        result=CompletionResult(text="{}", usage=TokenUsage.empty(), model="m")
+    )
+    recorder = _FakeRecorder()
+    llm = _decorator(provider, recorder)
+
+    # Act
+    llm.flush()
+
+    # Assert — the flush reached the injected recorder
+    assert recorder.flushes == 1
+
+
+def test_flush_failure_is_swallowed():
+    # Arrange — a flush that raises must never fail the job (best-effort)
+    provider = _FakeProvider(
+        result=CompletionResult(text="{}", usage=TokenUsage.empty(), model="m")
+    )
+    recorder = _FakeRecorder(flush_error=RuntimeError("langfuse is down"))
+    llm = _decorator(provider, recorder)
+
+    # Act / Assert — no exception escapes
+    llm.flush()
+    assert recorder.flushes == 1
 
 
 def test_recorder_failure_on_error_path_still_reraises_generation_error():

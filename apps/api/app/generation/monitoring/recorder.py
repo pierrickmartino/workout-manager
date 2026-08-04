@@ -16,9 +16,15 @@ from app.generation.monitoring.call import GenerationCall
 
 
 class GenerationCallRecorder(Protocol):
-    """Durably records a metered ``Generation Call`` (the operator's usage log)."""
+    """Durably records a metered ``Generation Call`` (the operator's usage log).
+
+    ``flush()`` forces any batched events out. It exists because generation is async on a
+    cache miss (ADR-0005): the short-lived RQ job may exit before a backend's background
+    batch flushes, so the worker flushes at the end of each job or those events are lost."""
 
     def record(self, call: GenerationCall) -> None: ...
+
+    def flush(self) -> None: ...
 
 
 class NoOpGenerationCallRecorder:
@@ -29,6 +35,9 @@ class NoOpGenerationCallRecorder:
     raises, upholding the best-effort guarantee even on the default path."""
 
     def record(self, call: GenerationCall) -> None:
+        return None
+
+    def flush(self) -> None:
         return None
 
 

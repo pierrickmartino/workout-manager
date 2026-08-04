@@ -12,21 +12,24 @@ provider documented in ADR-0006 raises ``NotImplementedError`` until it is
 implemented. ``openrouter`` reuses the OpenAI SDK pointed at OpenRouter's base
 URL (no new dependency).
 
-The factory also wires operational AI-usage monitoring (#270/#271): it wraps the chosen
+The factory also wires operational AI-usage monitoring (#270/#273): it wraps the chosen
 provider in the ``RecordingStructuredLLM`` decorator and selects a ``GenerationCallRecorder``
-— today always the **no-op** (the Langfuse-backed recorder is a later slice), so an
-unconfigured deployment and the whole offline suite record nothing and behave exactly as
-before. Both the API DI layer and the RQ worker go through here, so recording is wired in
-one place."""
+the same way it selects a provider — the **Langfuse-backed recorder** when Langfuse is
+configured (host + both keys present), the **no-op** otherwise. So an unconfigured deployment
+and the whole offline suite record nothing, contact no network, and behave exactly as before.
+The Langfuse SDK is imported lazily (only when configured), so it is never needed to run the
+offline suite. Both the API DI layer and the RQ worker go through here, so recording is wired
+in one place."""
 
 from __future__ import annotations
+
+from collections.abc import Callable
 
 import anthropic
 import openai
 from google import genai
 
 from app.config import DEFAULT_MODELS, Settings
-from app.generation.llm.port import StructuredLLM
 from app.generation.llm.providers.anthropic_provider import AnthropicStructuredLLM
 from app.generation.llm.providers.google_provider import GoogleStructuredLLM
 from app.generation.llm.providers.openai_provider import OpenAIStructuredLLM
@@ -35,6 +38,10 @@ from app.generation.llm.providers.openrouter_provider import (
     build_openrouter_client,
 )
 from app.generation.llm.usage import CompletionProvider
+from app.generation.monitoring.langfuse_recorder import (
+    LangfuseClient,
+    LangfuseGenerationCallRecorder,
+)
 from app.generation.monitoring.recorder import (
     GenerationCallRecorder,
     NoOpGenerationCallRecorder,
@@ -69,14 +76,41 @@ def _require_key(settings: Settings, provider: str) -> str:
     return key
 
 
-def _build_recorder(settings: Settings) -> GenerationCallRecorder:
-    """Select the AI-usage recorder — today always the no-op (#271).
+# How the Langfuse SDK client is constructed — injectable so recorder *selection* is
+# unit-tested with a fake client while production builds the real one.
+LangfuseClientBuilder = Callable[[Settings], LangfuseClient]
 
-    The Langfuse-backed recorder (selected by config/keys the way ``build_llm_client``
-    selects a provider) is a later slice; until then every deployment gets the no-op, so
-    generation stays fully offline-testable and behaves exactly as before monitoring."""
 
-    return NoOpGenerationCallRecorder()
+def _default_langfuse_client(settings: Settings) -> LangfuseClient:
+    """Construct the real low-level Langfuse SDK client (the only place it is imported).
+
+    Imported lazily so the SDK is a hard dependency only for a *configured* deployment; an
+    unconfigured deployment and the offline suite never import it."""
+
+    from langfuse import Langfuse
+
+    return Langfuse(
+        host=settings.langfuse_host,
+        public_key=settings.langfuse_public_key,
+        secret_key=settings.langfuse_secret_key,
+    )
+
+
+def build_recorder(
+    settings: Settings,
+    *,
+    langfuse_client_builder: LangfuseClientBuilder = _default_langfuse_client,
+) -> GenerationCallRecorder:
+    """Select the AI-usage recorder: Langfuse when configured, else the no-op.
+
+    Mirrors how ``build_llm_client`` selects a provider. The Langfuse SDK client is built
+    through ``langfuse_client_builder`` — injectable so the selection is unit-tested with a
+    fake client and the offline suite never touches the SDK. When Langfuse is unconfigured
+    the builder is not consulted at all, so no SDK import or network happens on that path."""
+
+    if not settings.langfuse_configured():
+        return NoOpGenerationCallRecorder()
+    return LangfuseGenerationCallRecorder(langfuse_client_builder(settings))
 
 
 def _build_provider(settings: Settings, provider: str, key: str) -> CompletionProvider:
@@ -102,14 +136,15 @@ def _build_provider(settings: Settings, provider: str, key: str) -> CompletionPr
     )
 
 
-def build_llm_client(settings: Settings) -> StructuredLLM:
+def build_llm_client(settings: Settings) -> RecordingStructuredLLM:
     """Construct the configured provider wrapped in the recording decorator.
 
     The chosen provider is the only SDK seam; the ``RecordingStructuredLLM`` decorator
     around it is what satisfies the public ``StructuredLLM`` port, capturing every metered
-    call for AI-usage monitoring (#271). ``provider_name`` and ``model`` are passed through
+    call for AI-usage monitoring (#270). ``provider_name`` and ``model`` are passed through
     so even a *failed* call — where there is no result to read a model from — is recorded
-    with a complete envelope."""
+    with a complete envelope. The concrete decorator type is returned (not just the
+    ``StructuredLLM`` port) so the RQ worker can ``flush()`` the recorder at job end."""
 
     provider = settings.ai_provider
     key = _require_key(settings, provider)
@@ -117,10 +152,10 @@ def build_llm_client(settings: Settings) -> StructuredLLM:
     inner = _build_provider(settings, provider, key)
     return RecordingStructuredLLM(
         inner,
-        recorder=_build_recorder(settings),
+        recorder=build_recorder(settings),
         provider_name=provider,
         model=settings.resolved_model(),
     )
 
 
-__all__ = ["build_llm_client", "PROVIDER_KEY_FIELDS"]
+__all__ = ["build_llm_client", "build_recorder", "PROVIDER_KEY_FIELDS"]

@@ -4,7 +4,8 @@ Monitoring is *operational*, explicitly outside the product domain — it serves
 operator, never the end user, and earns no term in ``CONTEXT.md``. A ``Generation Call``
 is one metered round-trip to a model provider through the ``StructuredLLM`` seam,
 captured by the ``RecordingStructuredLLM`` decorator and handed to a ``GenerationCallRecorder``
-port (a no-op by default, so the app stays fully offline-testable)."""
+port — a no-op by default (so the app stays fully offline-testable), or the
+``LangfuseGenerationCallRecorder`` when self-hosted Langfuse is configured."""
 
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ from app.generation.monitoring.call import (
     GenerationOutcome,
     GeneratorKind,
 )
+from app.generation.monitoring.langfuse_recorder import LangfuseGenerationCallRecorder
 from app.generation.monitoring.recorder import (
     GenerationCallRecorder,
     NoOpGenerationCallRecorder,
@@ -27,5 +29,6 @@ __all__ = [
     "GenerationCall",
     "GenerationCallRecorder",
     "NoOpGenerationCallRecorder",
+    "LangfuseGenerationCallRecorder",
     "RecordingStructuredLLM",
 ]

@@ -72,6 +72,9 @@ class RecordingStructuredLLM:
                 model=self._model,
                 latency_ms=self._elapsed_ms(started),
                 outcome=GenerationOutcome.ERROR,
+                system=system,
+                user=user,
+                output_text=None,
             )
             raise
 
@@ -81,8 +84,23 @@ class RecordingStructuredLLM:
             model=result.model,
             latency_ms=self._elapsed_ms(started),
             outcome=GenerationOutcome.SUCCESS,
+            system=system,
+            user=user,
+            output_text=result.text,
         )
         return result.text
+
+    def flush(self) -> None:
+        """Force the recorder to flush batched events, best-effort (worker end-of-job).
+
+        Generation is async on a cache miss (ADR-0005), so the RQ job flushes here before
+        its process exits. A flush failure is swallowed-and-logged: like recording, it must
+        never turn a good generation into an error."""
+
+        try:
+            self._recorder.flush()
+        except Exception:  # best-effort — a flush failure never propagates
+            logger.exception("failed to flush generation call recorder")
 
     @staticmethod
     def _elapsed_ms(started: float) -> float:
@@ -96,6 +114,9 @@ class RecordingStructuredLLM:
         model: str,
         latency_ms: float,
         outcome: GenerationOutcome,
+        system: str,
+        user: str,
+        output_text: str | None,
     ) -> None:
         """Assemble the ``GenerationCall`` and hand it to the recorder best-effort.
 
@@ -111,6 +132,9 @@ class RecordingStructuredLLM:
             output_tokens=usage.output_tokens,
             latency_ms=latency_ms,
             outcome=outcome,
+            system_prompt=system,
+            user_prompt=user,
+            output_text=output_text,
         )
         try:
             self._recorder.record(call)

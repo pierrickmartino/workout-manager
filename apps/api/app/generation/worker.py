@@ -55,18 +55,26 @@ def run_generation_job(
     settings = get_settings()
     request = ProtocolGenerationRequest(**request_data)
     cache = GenerationCache(RedisCacheStore(redis.Redis.from_url(settings.redis_url)))
-    generator = LlmProtocolGenerator(build_llm_client(settings))
-    with Session(get_engine()) as session:
-        view = run_generation(
-            request,
-            clerk_user_id,
-            cache_key,
-            cache=cache,
-            generator=generator,
-            exercises=SqlExerciseRepository(session),
-            protocols=SqlProtocolRepository(session),
-        )
-        return view.id
+    llm = build_llm_client(settings)
+    generator = LlmProtocolGenerator(llm)
+    try:
+        with Session(get_engine()) as session:
+            view = run_generation(
+                request,
+                clerk_user_id,
+                cache_key,
+                cache=cache,
+                generator=generator,
+                exercises=SqlExerciseRepository(session),
+                protocols=SqlProtocolRepository(session),
+            )
+            return view.id
+    finally:
+        # Generation is async on a cache miss (ADR-0005): this short-lived job process may
+        # exit before the recorder's background batch flushes, so flush before returning —
+        # on success and failure alike — or worker-generated calls (the majority) are lost.
+        # The flush is best-effort inside the decorator, so it never fails the job.
+        llm.flush()
 
 
 __all__ = ["run_generation_job", "request_payload", "QUEUE_NAME"]

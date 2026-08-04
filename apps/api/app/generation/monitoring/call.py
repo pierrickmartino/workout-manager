@@ -59,9 +59,10 @@ class GenerationCall:
     """One recorded metered provider call — the durable unit of AI-usage monitoring.
 
     Carries the generator kind and originating user from the context, the normalized token
-    counts, the model and provider that served it, the wall-clock latency, and the outcome.
-    Prompt/output text and the Langfuse trace id are captured by a later slice; this spine
-    records the metered envelope every later slice builds on."""
+    counts, the model and provider that served it, the wall-clock latency, the outcome, and
+    the full prompt (system + user) and model output so the operator can replay exactly what
+    the model saw. ``output_text`` is ``None`` on a failed call (there is no output). The
+    Langfuse trace id lineage is captured by a later slice."""
 
     generator_kind: GeneratorKind
     clerk_user_id: str | None
@@ -71,6 +72,9 @@ class GenerationCall:
     output_tokens: int | None
     latency_ms: float
     outcome: GenerationOutcome
+    system_prompt: str
+    user_prompt: str
+    output_text: str | None
 
 
 __all__ = [
