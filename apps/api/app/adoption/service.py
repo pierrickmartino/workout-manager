@@ -56,6 +56,9 @@ def adopt(
         weeks=params.weeks,
         duration_minutes=params.duration_minutes,
         sessions=session_drafts,
+        # Deep-copy the originating call's trace-id lineage onto the user-owned copy
+        # (ADR-0039, #274). Scalar value; the source artifact is never mutated.
+        trace_id=generated.trace_id,
     )
     return protocols.create(clerk_user_id, draft)
 

@@ -150,6 +150,32 @@ def test_protocol_generator_validates_transport_output():
     assert call["max_tokens"] == 32000
 
 
+def test_protocol_generator_stamps_the_call_trace_id_on_the_artifact():
+    # Arrange — the recording decorator hands the generation call a trace-id handle
+    llm = FakeStructuredLLM(
+        text=_enumerated_json(weeks=3, sessions_per_week=2), trace_id="trace-proto"
+    )
+    generator = LlmProtocolGenerator(llm)
+
+    # Act
+    generated = generator.generate(REQUEST)
+
+    # Assert — the artifact carries its originating call's trace id (#274 lineage)
+    assert generated.trace_id == "trace-proto"
+
+
+def test_protocol_generator_leaves_trace_id_absent_without_a_recorder():
+    # Arrange — no recorder configured: the call reports no handle
+    llm = FakeStructuredLLM(text=_enumerated_json(weeks=3, sessions_per_week=2))
+    generator = LlmProtocolGenerator(llm)
+
+    # Act
+    generated = generator.generate(REQUEST)
+
+    # Assert — lineage is simply absent, not an error
+    assert generated.trace_id is None
+
+
 def test_protocol_generator_rejects_under_enumerated_output():
     # Arrange — the transport returned only two of the three requested weeks
     llm = FakeStructuredLLM(text=_enumerated_json(weeks=2, sessions_per_week=2))

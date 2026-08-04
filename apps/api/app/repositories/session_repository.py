@@ -44,6 +44,10 @@ class SessionDraft:
     training_type: str
     duration_minutes: int
     prescriptions: list[PrescriptionDraft] = field(default_factory=list)
+    # Operational AI-usage lineage (ADR-0039, #274): the trace id of the Generation
+    # Call that produced this standalone Session, stamped at creation. ``None`` when no
+    # monitoring backend was configured.
+    trace_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -89,6 +93,14 @@ class SessionRepository(Protocol):
         owned by another user."""
         ...
 
+    def trace_id(self, session_id: int, clerk_user_id: str) -> str | None:
+        """Return the owner's Session's AI-usage trace-id lineage (ADR-0039, #274).
+
+        Operator-only, deliberately kept off ``SessionView`` so it never reaches the
+        PWA; the seam a later Generation-Feedback push reads. ``None`` when the Session
+        is missing/unowned or carries no trace id."""
+        ...
+
     def regenerate(
         self,
         session_id: int,
@@ -96,13 +108,17 @@ class SessionRepository(Protocol):
         *,
         keep_positions: Sequence[int],
         replacements: list[PrescriptionDraft],
+        trace_id: str | None = None,
     ) -> SessionView | None:
         """Replace the owner's Session prescriptions, keeping those at
         ``keep_positions`` (in their original order) and appending ``replacements``
         after them, then re-number positions and mark the Session regenerated.
 
-        Returns the updated Session, or ``None`` if it is missing or owned by
-        another user — regeneration only ever mutates the owner's own copy.
+        ``trace_id`` re-stamps the Session with the regeneration call's lineage
+        (ADR-0039, #274), so post-regeneration feedback maps to the regeneration rather
+        than the superseded call. Returns the updated Session, or ``None`` if it is
+        missing or owned by another user — regeneration only ever mutates the owner's
+        own copy.
         """
         ...
 
@@ -222,6 +238,7 @@ class SqlSessionRepository:
             clerk_user_id=clerk_user_id,
             training_type=draft.training_type,
             duration_minutes=draft.duration_minutes,
+            trace_id=draft.trace_id,
         )
         self._session.add(workout)
         self._session.commit()
@@ -237,6 +254,12 @@ class SqlSessionRepository:
             return None
         return self._view(workout)
 
+    def trace_id(self, session_id: int, clerk_user_id: str) -> str | None:
+        workout = self._session.get(WorkoutSession, session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return None
+        return workout.trace_id
+
     def regenerate(
         self,
         session_id: int,
@@ -244,6 +267,7 @@ class SqlSessionRepository:
         *,
         keep_positions: Sequence[int],
         replacements: list[PrescriptionDraft],
+        trace_id: str | None = None,
     ) -> SessionView | None:
         workout = self._session.get(WorkoutSession, session_id)
         if workout is None or workout.clerk_user_id != clerk_user_id:
@@ -262,6 +286,8 @@ class SqlSessionRepository:
 
         self._add_prescriptions(session_id, new_drafts)
         workout.has_been_regenerated = True
+        # Re-stamp the Session's lineage with the regeneration call (#274).
+        workout.trace_id = trace_id
         self._session.add(workout)
         self._session.commit()
         self._session.refresh(workout)
@@ -341,6 +367,7 @@ class InMemorySessionRepository:
             clerk_user_id=clerk_user_id,
             training_type=draft.training_type,
             duration_minutes=draft.duration_minutes,
+            trace_id=draft.trace_id,
         )
         self._next_id += 1
         self._sessions[workout.id] = workout
@@ -355,6 +382,12 @@ class InMemorySessionRepository:
             return None
         return self._view(workout)
 
+    def trace_id(self, session_id: int, clerk_user_id: str) -> str | None:
+        workout = self._sessions.get(session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return None
+        return workout.trace_id
+
     def regenerate(
         self,
         session_id: int,
@@ -362,6 +395,7 @@ class InMemorySessionRepository:
         *,
         keep_positions: Sequence[int],
         replacements: list[PrescriptionDraft],
+        trace_id: str | None = None,
     ) -> SessionView | None:
         workout = self._sessions.get(session_id)
         if workout is None or workout.clerk_user_id != clerk_user_id:
@@ -371,6 +405,8 @@ class InMemorySessionRepository:
         new_drafts = _regenerated_drafts(current, keep_positions, replacements)
         self._prescriptions[session_id] = self._materialize(session_id, new_drafts)
         workout.has_been_regenerated = True
+        # Re-stamp the Session's lineage with the regeneration call (#274).
+        workout.trace_id = trace_id
         return self._view(workout)
 
     def substitute_prescription(

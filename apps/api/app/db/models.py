@@ -151,6 +151,11 @@ class Protocol(SQLModel, table=True):
     # to a derived ``objective · training_type`` label until the user sets one in the
     # Builder's config panel.
     name: str | None = Field(default=None)
+    # Operational AI-usage lineage (ADR-0039, #274): the trace id of the Generation
+    # Call that produced the Generated Protocol this copy was Adopted from, deep-copied
+    # here at adoption so operator feedback can trace back to the exact call. Nullable —
+    # absent when no monitoring backend was configured. Never mutated after creation.
+    trace_id: str | None = Field(default=None)
     created_at: datetime = Field(default_factory=_utcnow)
 
 
@@ -183,6 +188,14 @@ class WorkoutSession(SQLModel, table=True):
     # set when the user keeps some prescriptions and regenerates the rest, and
     # blocks any further regeneration of this Session.
     has_been_regenerated: bool = Field(default=False)
+
+    # Operational AI-usage lineage (ADR-0039, #274): the trace id of the Generation
+    # Call this Session traces to — seeded at creation (the standalone generation call,
+    # or the originating Protocol generation on Adopt) and re-stamped on Regeneration to
+    # the regeneration's own call, so post-regeneration feedback maps to the regeneration
+    # rather than the superseded call. Nullable (absent with no backend); written only at
+    # creation and on Regeneration, never otherwise mutated.
+    trace_id: str | None = Field(default=None)
 
 
 class ExercisePrescription(SQLModel, table=True):

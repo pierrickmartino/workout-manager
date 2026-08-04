@@ -27,10 +27,15 @@ class _FakeGeneration:
 
 
 class _FakeTrace:
-    """Captures its own kwargs and the single generation nested under it."""
+    """Captures its own kwargs and the single generation nested under it.
 
-    def __init__(self, kwargs: dict) -> None:
+    Carries an ``id`` like the real low-level trace handle, so the recorder can
+    return it as the call's trace-id handle (the lineage the adopt/regeneration
+    chain carries, #274)."""
+
+    def __init__(self, kwargs: dict, trace_id: str) -> None:
         self.kwargs = kwargs
+        self.id = trace_id
         self.generations: list[_FakeGeneration] = []
 
     def generation(self, **kwargs) -> _FakeGeneration:
@@ -47,7 +52,7 @@ class _FakeLangfuseClient:
         self.flushes = 0
 
     def trace(self, **kwargs) -> _FakeTrace:
-        trace = _FakeTrace(kwargs)
+        trace = _FakeTrace(kwargs, trace_id=f"trace-{len(self.traces)}")
         self.traces.append(trace)
         return trace
 
@@ -84,6 +89,19 @@ def test_record_creates_one_flat_trace_with_one_generation():
     # Assert — flat: exactly one trace, carrying exactly one generation
     assert len(client.traces) == 1
     assert len(client.traces[0].generations) == 1
+
+
+def test_record_returns_the_trace_id_handle():
+    # Arrange
+    client = _FakeLangfuseClient()
+    recorder = LangfuseGenerationCallRecorder(client)
+
+    # Act — record hands back the created trace's id, the lineage the Generated
+    # artifact and the adopt/regeneration chain carry (#274).
+    handle = recorder.record(_call())
+
+    # Assert
+    assert handle == client.traces[0].id
 
 
 def test_record_stamps_user_id_on_the_trace():

@@ -114,6 +114,40 @@ def test_create_persists_a_user_owned_protocol(repos):
     assert view.weeks == 2
 
 
+def test_create_persists_the_trace_id_lineage(repos):
+    # Arrange — a draft carrying the originating Generation Call's trace id (#274)
+    protocol_repo, exercises = repos
+    draft = replace(_two_week_draft(exercises), trace_id="trace-abc")
+
+    # Act
+    view = protocol_repo.create("user_trace", draft)
+
+    # Assert — operator-only, read through the accessor (never on the view)
+    assert protocol_repo.trace_id(view.id, "user_trace") == "trace-abc"
+
+
+def test_trace_id_defaults_to_none_without_lineage(repos):
+    # Arrange — no monitoring backend upstream: the draft carries no trace id
+    protocol_repo, exercises = repos
+
+    # Act
+    view = protocol_repo.create("user_no_trace", _two_week_draft(exercises))
+
+    # Assert — lineage simply absent
+    assert protocol_repo.trace_id(view.id, "user_no_trace") is None
+
+
+def test_trace_id_is_owner_scoped(repos):
+    # Arrange — a Protocol with lineage, owned by one user
+    protocol_repo, exercises = repos
+    draft = replace(_two_week_draft(exercises), trace_id="trace-owner")
+    view = protocol_repo.create("user_owns", draft)
+
+    # Act / Assert — never served to another user, nor for a missing id
+    assert protocol_repo.trace_id(view.id, "user_other") is None
+    assert protocol_repo.trace_id(9999, "user_owns") is None
+
+
 def test_protocol_enumerates_every_week_in_position_order(repos):
     # Arrange
     protocol_repo, exercises = repos

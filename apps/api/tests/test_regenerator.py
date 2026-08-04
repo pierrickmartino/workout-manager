@@ -73,6 +73,18 @@ def test_regenerator_validates_transport_replacements():
     assert call["max_tokens"] == 8000
 
 
+def test_regeneration_stamps_the_call_trace_id_on_the_artifact():
+    # Arrange — the recording decorator hands the regeneration call a trace-id handle
+    llm = FakeStructuredLLM(text=VALID_PAYLOAD, trace_id="trace-regen")
+    regenerator = LlmSessionRegenerator(llm)
+
+    # Act
+    generated = regenerator.regenerate(REQUEST)
+
+    # Assert — the artifact carries the regeneration's own trace id (#274 lineage)
+    assert generated.trace_id == "trace-regen"
+
+
 def test_regeneration_prompt_carries_kept_context_and_reason():
     # Arrange
     llm = FakeStructuredLLM(text=VALID_PAYLOAD)

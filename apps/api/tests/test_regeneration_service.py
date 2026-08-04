@@ -116,6 +116,32 @@ def test_regenerates_non_kept_prescriptions_around_the_kept_ones():
     assert view.has_been_regenerated is True
 
 
+def test_regeneration_restamps_the_session_with_the_regeneration_trace_id():
+    # Arrange — the session starts with the originating call's lineage; regeneration
+    # produces an artifact carrying the regeneration's *own* trace id (#274)
+    exercises, sessions, feedback = _build()
+    created = _seed_session(exercises, sessions)
+    feedback.record(
+        "user_a", session_id=created.id, verdict=Verdict.NEGATIVE, reason="knees hurt"
+    )
+    regenerated = _replacement_generation().model_copy(update={"trace_id": "trace-regen"})
+    regenerator = FakeRegenerator(result=regenerated)
+
+    # Act
+    regenerate_session(
+        created.id,
+        "user_a",
+        keep_positions=[0],
+        regenerator=regenerator,
+        feedback=feedback,
+        exercises=exercises,
+        sessions=sessions,
+    )
+
+    # Assert — post-regeneration feedback maps to the regeneration, not the superseded call
+    assert sessions.trace_id(created.id, "user_a") == "trace-regen"
+
+
 def test_regeneration_steers_the_ai_with_kept_context_and_stored_reason():
     # Arrange
     exercises, sessions, feedback = _build()

@@ -5,6 +5,8 @@ Prescriptions joined to their catalog Exercises."""
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -167,6 +169,65 @@ def test_regenerate_keeps_chosen_prescriptions_and_replaces_the_rest(repos):
     ]
     assert [p.position for p in view.prescriptions] == [0, 1]
     assert view.has_been_regenerated is True
+
+
+def test_create_seeds_the_trace_id_lineage(repos):
+    # Arrange — a standalone Session generated with a trace-id handle (#274)
+    session_repo, exercises = repos
+    draft = replace(
+        _draft_with_two_prescriptions(exercises), trace_id="trace-sess"
+    )
+
+    # Act
+    view = session_repo.create("user_trace", draft)
+
+    # Assert — operator-only, read through the accessor (never on the view)
+    assert session_repo.trace_id(view.id, "user_trace") == "trace-sess"
+
+
+def test_trace_id_defaults_to_none_without_lineage(repos):
+    # Arrange — no monitoring backend upstream
+    session_repo, exercises = repos
+
+    # Act
+    view = session_repo.create("user_no_trace", _draft_with_two_prescriptions(exercises))
+
+    # Assert — lineage simply absent
+    assert session_repo.trace_id(view.id, "user_no_trace") is None
+
+
+def test_regenerate_restamps_the_trace_id_with_the_regeneration_call(repos):
+    # Arrange — a Session seeded with its originating call's lineage
+    session_repo, exercises = repos
+    created = session_repo.create(
+        "user_restamp",
+        replace(_draft_with_two_prescriptions(exercises), trace_id="trace-orig"),
+    )
+
+    # Act — regenerate with the regeneration call's own trace id
+    session_repo.regenerate(
+        created.id,
+        "user_restamp",
+        keep_positions=[0],
+        replacements=[_replacement(exercises)],
+        trace_id="trace-regen",
+    )
+
+    # Assert — the Session now traces to the regeneration, not the superseded call
+    assert session_repo.trace_id(created.id, "user_restamp") == "trace-regen"
+
+
+def test_trace_id_is_owner_scoped(repos):
+    # Arrange — a Session with lineage, owned by one user
+    session_repo, exercises = repos
+    view = session_repo.create(
+        "user_owns",
+        replace(_draft_with_two_prescriptions(exercises), trace_id="trace-owner"),
+    )
+
+    # Act / Assert — never served to another user, nor for a missing id
+    assert session_repo.trace_id(view.id, "user_other") is None
+    assert session_repo.trace_id(9999, "user_owns") is None
 
 
 def test_regenerated_session_reads_back_with_the_new_prescriptions(repos):
