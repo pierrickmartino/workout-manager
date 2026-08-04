@@ -25,6 +25,7 @@ from app.envelope import error_envelope, success_envelope
 from app.generation.orchestrator import GenerationOrchestrator
 from app.generation.protocol_generator import ProtocolGenerationRequest
 from app.generation.protocol_service import cache_request_for
+from app.protocols.deploy import DeployStatus, deploy_protocol_tail
 from app.protocols.deploy_validation import (
     MAX_SESSIONS_PER_WEEK,
     MAX_WEEKS,
@@ -34,15 +35,9 @@ from app.protocols.deploy_validation import (
     DeployError,
     DraftPrescription,
     DraftSession,
-    validate_deploy,
 )
 from app.protocols.balance_preview import build_balance_preview
 from app.protocols.progress import progressed_protocol, protocol_progress
-from app.protocols.reenumeration import (
-    EnumeratedSession,
-    TailSession,
-    reenumerate_tail,
-)
 from app.protocols.serialization import (
     serialize_balance_preview,
     serialize_protocol_progress,
@@ -58,8 +53,6 @@ from app.repositories.exercise_repository import ExerciseRepository
 from app.repositories.logged_session_repository import LoggedSessionRepository
 from app.repositories.profile_repository import ProfileRepository
 from app.repositories.protocol_repository import ProtocolRepository
-from app.repositories.protocol_repository import DeploySessionSpec
-from app.repositories.session_repository import PrescriptionDraft
 
 router = APIRouter(prefix="/api", tags=["protocols"])
 
@@ -80,18 +73,14 @@ class GenerateProtocolRequest(BaseModel):
 
     training_type: str = Field(min_length=1)
     objective: str = Field(min_length=1)
-    sessions_per_week: int = Field(
-        ge=MIN_SESSIONS_PER_WEEK, le=MAX_SESSIONS_PER_WEEK
-    )
+    sessions_per_week: int = Field(ge=MIN_SESSIONS_PER_WEEK, le=MAX_SESSIONS_PER_WEEK)
     duration_minutes: int = Field(ge=MIN_DURATION_MINUTES, le=MAX_DURATION_MINUTES)
     weeks: int = Field(ge=MIN_WEEKS, le=MAX_WEEKS)
     # Nullable so an *omitted* request inherits the Profile's Default Equipment,
     # while an explicitly empty list is honored as bodyweight-only (ADR-0038).
     equipment: list[str] | None = None
 
-    def to_generation_request(
-        self, equipment: list[str]
-    ) -> ProtocolGenerationRequest:
+    def to_generation_request(self, equipment: list[str]) -> ProtocolGenerationRequest:
         return ProtocolGenerationRequest(
             training_type=self.training_type,
             objective=self.objective,
@@ -317,17 +306,11 @@ def deploy_protocol(
     valid one is replaced atomically, and the progressed Protocol is returned in the
     standard envelope."""
 
-    progress = protocol_progress(
-        clerk_user_id, protocol_id, protocols=protocols, logged=logged
-    )
-    if progress is None:
-        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Protocol not found")
-
-    performed = set(progress.performed_session_ids)
-    known = {session.session_id for session in progress.protocol.sessions}
-
-    # Resolve each Load once (kind+value → typed dict), reused for both validation and
-    # persistence so the two never diverge.
+    # Deserialize the wire body into the domain ``DeployDraft``, resolving each Load
+    # once at the boundary (kind+value → typed dict, ADR-0010). The whole validate →
+    # re-enumerate → persist pipeline lives behind ``deploy_protocol_tail`` (the Deploy
+    # module), which owns the frozen-prefix rule (ADR-0020) and the Sensitive-Constraint
+    # Superset safety gate (ADR-0023); the route only maps its outcome to a response.
     draft = DeployDraft(
         weeks=payload.weeks,
         sessions_per_week=payload.sessions_per_week,
@@ -354,89 +337,21 @@ def deploy_protocol(
         ],
     )
 
-    # A user with any Sensitive Constraint is never handed a Superset (ADR-0023): the
-    # shared validator hard-rejects one at DEPLOY, the same safety class as the cache
-    # bypass. The flag is derived from the stored constraint types, never trusted from
-    # the client.
-    profile = profiles.get_or_create(clerk_user_id)
-    errors = validate_deploy(
-        draft,
-        performed_session_ids=performed,
-        known_session_ids=known,
-        exercise_exists=lambda exercise_id: exercises.get(exercise_id) is not None,
-        has_sensitive_constraint=is_sensitive(profile),
-    )
-    if errors:
-        return _deploy_error_response(errors)
-
-    # Fold the validated tail back into one enumerated sequence (Module A): the frozen
-    # performed prefix seeds the positions/weeks, the desired tail is re-enumerated
-    # after it, then the tail portion is persisted in place (Module F).
-    prefix = [
-        EnumeratedSession(
-            session_id=session.session_id,
-            position=session.position,
-            week=session.week,
-            day=session.day,
-        )
-        for session in progress.protocol.sessions
-        if session.session_id in performed
-    ]
-    titles = {
-        session.session_id: session.title
-        for session in progress.protocol.sessions
-    }
-    tail = [
-        TailSession(
-            session_id=session.session_id,
-            week=session.week,
-            day=session.day,
-            payload=(
-                titles.get(session.session_id),
-                [
-                    PrescriptionDraft(
-                        exercise_id=prescription.exercise_id,
-                        sets=prescription.sets,
-                        reps=prescription.reps,
-                        rest_seconds=prescription.rest_seconds,
-                        tempo=prescription.tempo,
-                        recommended_load=prescription.recommended_load,
-                        superset_group=prescription.superset_group,
-                        round_rest_seconds=prescription.round_rest_seconds,
-                    )
-                    for prescription in session.prescriptions
-                ],
-            ),
-        )
-        for session in draft.sessions
-    ]
-
-    enumerated = reenumerate_tail(prefix, tail)
-    tail_specs = [
-        DeploySessionSpec(
-            position=session.position,
-            week=session.week,
-            day=session.day,
-            title=session.payload[0],
-            prescriptions=session.payload[1],
-        )
-        for session in enumerated[len(prefix) :]
-    ]
-
-    protocols.deploy_tail(
-        protocol_id,
+    result = deploy_protocol_tail(
         clerk_user_id,
-        performed_session_ids=performed,
-        tail=tail_specs,
-        weeks=payload.weeks,
-        sessions_per_week=payload.sessions_per_week,
-        name=payload.normalized_name(),
+        protocol_id,
+        draft,
+        payload.normalized_name(),
+        protocols=protocols,
+        logged=logged,
+        exercises=exercises,
+        profiles=profiles,
     )
-
-    updated = progressed_protocol(
-        clerk_user_id, protocol_id, protocols=protocols, logged=logged
-    )
-    return success_envelope(serialize_protocol_progress(updated))
+    if result.status is DeployStatus.NOT_FOUND:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Protocol not found")
+    if result.status is DeployStatus.REJECTED:
+        return _deploy_error_response(result.errors)
+    return success_envelope(serialize_protocol_progress(result.view))
 
 
 class SimulatePrescriptionBody(BaseModel):
