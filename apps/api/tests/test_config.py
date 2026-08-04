@@ -53,3 +53,45 @@ def test_unknown_provider_resolution_raises():
     # Act / Assert
     with pytest.raises(ValueError):
         settings.resolved_model()
+
+
+def test_langfuse_is_unconfigured_by_default():
+    # Arrange / Act — no Langfuse env set (the offline default)
+    settings = Settings()
+
+    # Assert — monitoring is optional infrastructure; absent means no-op recorder
+    assert settings.langfuse_configured() is False
+
+
+def test_langfuse_is_configured_only_when_host_and_both_keys_present():
+    # Arrange — self-hosted Langfuse needs a host and both credentials
+    settings = Settings(
+        langfuse_host="https://langfuse.internal",
+        langfuse_public_key="pk-1",
+        langfuse_secret_key="sk-1",
+    )
+
+    # Act / Assert
+    assert settings.langfuse_configured() is True
+
+
+def test_langfuse_is_unconfigured_when_any_field_is_missing():
+    # Assert — a partial configuration is not "configured" (fail closed to no-op)
+    assert (
+        Settings(
+            langfuse_public_key="pk-1", langfuse_secret_key="sk-1"
+        ).langfuse_configured()
+        is False
+    )
+    assert (
+        Settings(
+            langfuse_host="https://langfuse.internal", langfuse_secret_key="sk-1"
+        ).langfuse_configured()
+        is False
+    )
+    assert (
+        Settings(
+            langfuse_host="https://langfuse.internal", langfuse_public_key="pk-1"
+        ).langfuse_configured()
+        is False
+    )

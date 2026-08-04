@@ -29,6 +29,10 @@ dependencies = [
     "anthropic>=0.40",
     "openai>=2.44.0",
     "google-genai>=2.10",
+    # Operational AI-usage monitoring (ADR-0039). Used only by the production
+    # LangfuseGenerationCallRecorder and imported lazily, so the offline suite
+    # (no-op recorder) never touches it.
+    "langfuse>=2.0",
 ]
 
 [project.optional-dependencies]

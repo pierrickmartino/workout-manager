@@ -43,6 +43,23 @@ class Settings(BaseSettings):
     # Optional override of the selected provider's default model (DEFAULT_MODELS).
     ai_model: str = ""
 
+    # Operational AI-usage monitoring via self-hosted Langfuse (ADR-0039). All three
+    # are required together: self-hosting needs a host, and the SDK needs both keys.
+    # When any is absent the factory selects the no-op recorder, so an unconfigured
+    # deployment (and the whole offline suite) records nothing and never networks.
+    langfuse_host: str = ""
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+
+    def langfuse_configured(self) -> bool:
+        """True only when host and both keys are present (else fail closed to no-op)."""
+
+        return bool(
+            self.langfuse_host
+            and self.langfuse_public_key
+            and self.langfuse_secret_key
+        )
+
     def resolved_model(self) -> str:
         """The model to generate with: ``AI_MODEL`` if set, else the provider default.
 

@@ -14,11 +14,12 @@ from __future__ import annotations
 import pytest
 
 from app.config import Settings
-from app.generation.llm.factory import build_llm_client
+from app.generation.llm.factory import build_llm_client, build_recorder
 from app.generation.llm.providers.anthropic_provider import AnthropicStructuredLLM
 from app.generation.llm.providers.google_provider import GoogleStructuredLLM
 from app.generation.llm.providers.openai_provider import OpenAIStructuredLLM
 from app.generation.llm.providers.openrouter_provider import OpenRouterStructuredLLM
+from app.generation.monitoring.langfuse_recorder import LangfuseGenerationCallRecorder
 from app.generation.monitoring.recorder import NoOpGenerationCallRecorder
 from app.generation.monitoring.recording_llm import RecordingStructuredLLM
 
@@ -145,3 +146,42 @@ def test_unknown_provider_fails_fast():
     # Act / Assert
     with pytest.raises(ValueError, match="unknown AI_PROVIDER"):
         build_llm_client(settings)
+
+
+def test_recorder_is_noop_when_langfuse_is_not_configured():
+    # Arrange — the offline default: no Langfuse configured
+    settings = Settings()
+
+    # Act — the SDK-client builder must not even be consulted on the no-op path
+    recorder = build_recorder(
+        settings,
+        langfuse_client_builder=_unused_client_builder,
+    )
+
+    # Assert — records nothing, contacts no network
+    assert isinstance(recorder, NoOpGenerationCallRecorder)
+
+
+def test_recorder_is_langfuse_when_configured():
+    # Arrange — Langfuse fully configured; inject a fake SDK client so no network/SDK
+    settings = Settings(
+        langfuse_host="https://langfuse.internal",
+        langfuse_public_key="pk-1",
+        langfuse_secret_key="sk-1",
+    )
+    seen: list[Settings] = []
+
+    def _fake_builder(s: Settings) -> object:
+        seen.append(s)
+        return object()  # stands in for the low-level Langfuse client
+
+    # Act
+    recorder = build_recorder(settings, langfuse_client_builder=_fake_builder)
+
+    # Assert — the Langfuse-backed recorder, built from the configured settings
+    assert isinstance(recorder, LangfuseGenerationCallRecorder)
+    assert seen == [settings]
+
+
+def _unused_client_builder(settings: Settings) -> object:
+    raise AssertionError("langfuse client must not be built when unconfigured")
