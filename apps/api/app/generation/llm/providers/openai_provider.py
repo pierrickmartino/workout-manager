@@ -17,6 +17,24 @@ from app.generation.llm.port import GenerationError
 from app.generation.llm.usage import CompletionResult, TokenUsage
 
 
+def extract_openai_usage(completion) -> TokenUsage:
+    """Normalize an OpenAI(-compatible) completion's ``usage`` into ``TokenUsage``.
+
+    Maps the SDK's native names — ``prompt_tokens`` (input), ``completion_tokens``
+    (output) — onto the normalized shape. Defensive by ``getattr``: a completion
+    without a ``usage`` (or without a field) yields empty usage rather than raising,
+    so a usage-shape change never breaks generation. Reused unchanged by the
+    OpenRouter provider, which speaks the same wire protocol."""
+
+    usage = getattr(completion, "usage", None)
+    if usage is None:
+        return TokenUsage.empty()
+    return TokenUsage(
+        input_tokens=getattr(usage, "prompt_tokens", None),
+        output_tokens=getattr(usage, "completion_tokens", None),
+    )
+
+
 class OpenAIStructuredLLM:
     """Constrains output to ``schema`` via OpenAI, streamed and schema-enforced.
 
@@ -24,8 +42,8 @@ class OpenAIStructuredLLM:
     ``max_tokens`` stays per-call so each generator keeps its own budget.
 
     ``complete`` returns a ``CompletionResult`` (text + usage + model) consumed by the
-    ``RecordingStructuredLLM`` decorator. OpenAI's real usage extraction lands in slice #2;
-    for now it reports :meth:`TokenUsage.empty` (conforming to the type so nothing breaks)."""
+    ``RecordingStructuredLLM`` decorator, extracting real input/output token counts from
+    the completion's ``usage`` (:func:`extract_openai_usage`)."""
 
     def __init__(self, client, *, model: str) -> None:
         self._client = client
@@ -54,7 +72,9 @@ class OpenAIStructuredLLM:
             raise GenerationError(f"generation request failed: {exc}") from exc
 
         text = completion.choices[0].message.content or ""
-        return CompletionResult(text=text, usage=TokenUsage.empty(), model=self._model)
+        return CompletionResult(
+            text=text, usage=extract_openai_usage(completion), model=self._model
+        )
 
 
-__all__ = ["OpenAIStructuredLLM"]
+__all__ = ["OpenAIStructuredLLM", "extract_openai_usage"]

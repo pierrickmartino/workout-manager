@@ -37,9 +37,16 @@ class _Choice:
         self.message = _Message(content)
 
 
+class _Usage:
+    def __init__(self, *, prompt_tokens: int, completion_tokens: int) -> None:
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+
+
 class _Completion:
-    def __init__(self, choices: list) -> None:
+    def __init__(self, choices: list, usage: object | None = None) -> None:
         self.choices = choices
+        self.usage = usage
 
 
 class _StreamCtx:
@@ -103,10 +110,28 @@ def test_complete_returns_message_content():
     # Act — inherits the OpenAI wire path, so it yields a CompletionResult too
     result = llm.complete(system="sys", user="usr", schema=_Schema, max_tokens=4000)
 
-    # Assert — text and model carried through; usage empty until slice #2
+    # Assert — text and model carried through
     assert result.text == '{"value": "ok"}'
     assert result.model == "openai/gpt-oss-120b:free"
-    assert result.usage.input_tokens is None
+
+
+def test_complete_extracts_real_token_usage_via_inherited_wire_path():
+    # Arrange — an OpenAI-compatible completion carrying OpenRouter's usage; the
+    # provider inherits :func:`extract_openai_usage` and must yield real counts
+    completion = _Completion(
+        [_Choice('{"value": "ok"}')],
+        usage=_Usage(prompt_tokens=210, completion_tokens=57),
+    )
+    llm = OpenRouterStructuredLLM(
+        _FakeClient(completion=completion), model="openai/gpt-oss-120b:free"
+    )
+
+    # Act
+    result = llm.complete(system="sys", user="usr", schema=_Schema, max_tokens=4000)
+
+    # Assert — prompt_tokens -> input, completion_tokens -> output
+    assert result.usage.input_tokens == 210
+    assert result.usage.output_tokens == 57
 
 
 def test_complete_passes_model_schema_and_max_tokens():
