@@ -1,10 +1,13 @@
-"""The ``build_llm_client`` factory (ADR-0006).
+"""The ``build_llm_client`` factory (ADR-0006, #270/#271).
 
 The factory is the single place a concrete SDK client is constructed and the
 single dispatch on ``AI_PROVIDER``. It fails fast when the *selected* provider's
 key is missing, tolerates absent keys for *other* providers, and surfaces a
-clear error for an unknown or not-yet-wired provider. These tests pin that
-dispatch and the fail-fast contract without a network call."""
+clear error for an unknown or not-yet-wired provider. It also wraps the chosen
+provider in the ``RecordingStructuredLLM`` decorator with the no-op recorder, so
+every metered call is captured in one place while an unconfigured deployment
+records nothing. These tests pin that dispatch, the wrapping, and the fail-fast
+contract without a network call."""
 
 from __future__ import annotations
 
@@ -16,18 +19,35 @@ from app.generation.llm.providers.anthropic_provider import AnthropicStructuredL
 from app.generation.llm.providers.google_provider import GoogleStructuredLLM
 from app.generation.llm.providers.openai_provider import OpenAIStructuredLLM
 from app.generation.llm.providers.openrouter_provider import OpenRouterStructuredLLM
+from app.generation.monitoring.recorder import NoOpGenerationCallRecorder
+from app.generation.monitoring.recording_llm import RecordingStructuredLLM
 
 
-def test_anthropic_provider_builds_a_structured_llm():
+def _assert_wraps(client, provider_type, *, provider_name, model):
+    """The factory returns a recording decorator wrapping the provider, no-op recorder."""
+
+    assert isinstance(client, RecordingStructuredLLM)
+    assert isinstance(client._provider, provider_type)
+    assert client._provider._model == model
+    assert client._provider_name == provider_name
+    assert client._model == model
+    assert isinstance(client._recorder, NoOpGenerationCallRecorder)
+
+
+def test_anthropic_provider_builds_a_recording_structured_llm():
     # Arrange — only the selected provider's key is set
     settings = Settings(ai_provider="anthropic", anthropic_api_key="sk-test")
 
     # Act
     client = build_llm_client(settings)
 
-    # Assert — the Anthropic StructuredLLM is returned, resolved to its model
-    assert isinstance(client, AnthropicStructuredLLM)
-    assert client._model == "claude-opus-4-8"
+    # Assert — the Anthropic provider, wrapped and resolved to its model
+    _assert_wraps(
+        client,
+        AnthropicStructuredLLM,
+        provider_name="anthropic",
+        model="claude-opus-4-8",
+    )
 
 
 def test_missing_selected_provider_key_fails_fast():
@@ -44,19 +64,22 @@ def test_absent_keys_for_other_providers_are_tolerated():
     settings = Settings(ai_provider="anthropic", anthropic_api_key="sk-test")
 
     # Act / Assert — does not raise despite the other keys being empty
-    assert isinstance(build_llm_client(settings), AnthropicStructuredLLM)
+    client = build_llm_client(settings)
+    assert isinstance(client, RecordingStructuredLLM)
+    assert isinstance(client._provider, AnthropicStructuredLLM)
 
 
-def test_openai_provider_builds_a_structured_llm():
+def test_openai_provider_builds_a_recording_structured_llm():
     # Arrange — only the selected provider's key is set
     settings = Settings(ai_provider="openai", openai_api_key="sk-openai")
 
     # Act
     client = build_llm_client(settings)
 
-    # Assert — the OpenAI StructuredLLM is returned, resolved to its model
-    assert isinstance(client, OpenAIStructuredLLM)
-    assert client._model == "gpt-5.5"
+    # Assert — the OpenAI provider, wrapped and resolved to its model
+    _assert_wraps(
+        client, OpenAIStructuredLLM, provider_name="openai", model="gpt-5.5"
+    )
 
 
 def test_missing_openai_key_fails_fast():
@@ -68,16 +91,17 @@ def test_missing_openai_key_fails_fast():
         build_llm_client(settings)
 
 
-def test_google_provider_builds_a_structured_llm():
+def test_google_provider_builds_a_recording_structured_llm():
     # Arrange — only the selected provider's key is set
     settings = Settings(ai_provider="google", google_api_key="key-google")
 
     # Act
     client = build_llm_client(settings)
 
-    # Assert — the Google StructuredLLM is returned, resolved to its model
-    assert isinstance(client, GoogleStructuredLLM)
-    assert client._model == "gemini-3.1-pro"
+    # Assert — the Google provider, wrapped and resolved to its model
+    _assert_wraps(
+        client, GoogleStructuredLLM, provider_name="google", model="gemini-3.1-pro"
+    )
 
 
 def test_missing_google_key_fails_fast():
@@ -89,16 +113,20 @@ def test_missing_google_key_fails_fast():
         build_llm_client(settings)
 
 
-def test_openrouter_provider_builds_a_structured_llm():
+def test_openrouter_provider_builds_a_recording_structured_llm():
     # Arrange — only the selected provider's key is set
     settings = Settings(ai_provider="openrouter", openrouter_api_key="key-openrouter")
 
     # Act
     client = build_llm_client(settings)
 
-    # Assert — the OpenRouter StructuredLLM is returned, resolved to its model
-    assert isinstance(client, OpenRouterStructuredLLM)
-    assert client._model == "openai/gpt-oss-120b:free"
+    # Assert — the OpenRouter provider, wrapped and resolved to its model
+    _assert_wraps(
+        client,
+        OpenRouterStructuredLLM,
+        provider_name="openrouter",
+        model="openai/gpt-oss-120b:free",
+    )
 
 
 def test_missing_openrouter_key_fails_fast():

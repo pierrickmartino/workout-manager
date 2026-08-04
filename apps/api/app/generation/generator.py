@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from app.generation.llm.port import GenerationError, StructuredLLM
+from app.generation.monitoring.call import GenerationCallContext, GeneratorKind
 from app.generation.schema import GeneratedSession
 from app.generation.structured import generate_structured, parse_or_raise
 from app.generation.superset_degrade import degrade_session_to_flat
@@ -104,8 +105,11 @@ class LlmSessionGenerator:
     returning, so a malformed generation raises ``GenerationError`` regardless of
     which provider produced it."""
 
-    def __init__(self, llm: StructuredLLM) -> None:
+    def __init__(
+        self, llm: StructuredLLM, *, kind: GeneratorKind = GeneratorKind.SESSION
+    ) -> None:
         self._llm = llm
+        self._kind = kind
 
     def generate(self, request: GenerationRequest) -> GeneratedSession:
         generated = generate_structured(
@@ -117,6 +121,7 @@ class LlmSessionGenerator:
             schema=GeneratedSession,
             max_tokens=MAX_TOKENS,
             subject="generation",
+            context=GenerationCallContext(generator_kind=self._kind),
         )
         return degrade_session_to_flat(
             generated, has_sensitive_constraint=request.has_sensitive_constraint

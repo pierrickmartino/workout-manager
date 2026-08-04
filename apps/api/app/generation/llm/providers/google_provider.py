@@ -13,13 +13,18 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from app.generation.llm.port import GenerationError
+from app.generation.llm.usage import CompletionResult, TokenUsage
 
 
 class GoogleStructuredLLM:
     """Constrains output to ``schema`` via Gemini, streamed and schema-enforced.
 
     The ``model`` is fixed per deployment (resolved by the factory from settings);
-    ``max_tokens`` stays per-call so each generator keeps its own budget."""
+    ``max_tokens`` stays per-call so each generator keeps its own budget.
+
+    ``complete`` returns a ``CompletionResult`` (text + usage + model) consumed by the
+    ``RecordingStructuredLLM`` decorator. Gemini's real usage extraction (``usage_metadata``)
+    lands in slice #2; for now it reports :meth:`TokenUsage.empty`."""
 
     def __init__(self, client, *, model: str) -> None:
         self._client = client
@@ -32,7 +37,7 @@ class GoogleStructuredLLM:
         user: str,
         schema: type[BaseModel],
         max_tokens: int,
-    ) -> str:
+    ) -> CompletionResult:
         try:
             stream = self._client.models.generate_content_stream(
                 model=self._model,
@@ -44,9 +49,11 @@ class GoogleStructuredLLM:
                     "response_schema": schema,
                 },
             )
-            return "".join(chunk.text for chunk in stream if chunk.text)
+            text = "".join(chunk.text for chunk in stream if chunk.text)
         except Exception as exc:  # network / API failure
             raise GenerationError(f"generation request failed: {exc}") from exc
+
+        return CompletionResult(text=text, usage=TokenUsage.empty(), model=self._model)
 
 
 __all__ = ["GoogleStructuredLLM"]

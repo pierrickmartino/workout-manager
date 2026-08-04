@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from app.generation.llm.port import StructuredLLM
+from app.generation.monitoring.call import GenerationCallContext, GeneratorKind
 from app.generation.schema import GeneratedSession
 from app.generation.structured import generate_structured
 from app.generation.superset_degrade import flatten_session_supersets
@@ -105,8 +106,11 @@ class LlmSessionRegenerator:
     output is then forced flat: Regeneration is not Superset-aware in v1 (see
     ``regenerate``)."""
 
-    def __init__(self, llm: StructuredLLM) -> None:
+    def __init__(
+        self, llm: StructuredLLM, *, kind: GeneratorKind = GeneratorKind.REGENERATION
+    ) -> None:
         self._llm = llm
+        self._kind = kind
 
     def regenerate(self, request: RegenerationRequest) -> GeneratedSession:
         parsed = generate_structured(
@@ -116,6 +120,7 @@ class LlmSessionRegenerator:
             schema=GeneratedSession,
             max_tokens=MAX_TOKENS,
             subject="generation",
+            context=GenerationCallContext(generator_kind=self._kind),
         )
         # Regeneration produces flat replacement Prescriptions in v1 — it is not
         # Superset-aware (CONTEXT.md §Regeneration, ADR-0023). The prompt never asks

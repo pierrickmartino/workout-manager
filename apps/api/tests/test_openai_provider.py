@@ -80,10 +80,25 @@ def test_complete_returns_message_content():
     llm = OpenAIStructuredLLM(_FakeClient(completion=completion), model="gpt-5.5")
 
     # Act
-    text = llm.complete(system="sys", user="usr", schema=_Schema, max_tokens=4000)
+    result = llm.complete(system="sys", user="usr", schema=_Schema, max_tokens=4000)
+
+    # Assert — text and model carried through
+    assert result.text == '{"value": "ok"}'
+    assert result.model == "gpt-5.5"
+
+
+def test_complete_reports_empty_usage_until_slice_two():
+    # Arrange — OpenAI usage extraction is deferred to slice #2; it conforms to the
+    # TokenUsage type meanwhile (empty) so the decorator never breaks
+    completion = _Completion([_Choice("{}")])
+    llm = OpenAIStructuredLLM(_FakeClient(completion=completion), model="gpt-5.5")
+
+    # Act
+    result = llm.complete(system="s", user="u", schema=_Schema, max_tokens=10)
 
     # Assert
-    assert text == '{"value": "ok"}'
+    assert result.usage.input_tokens is None
+    assert result.usage.output_tokens is None
 
 
 def test_complete_passes_model_schema_and_max_tokens():
@@ -125,7 +140,7 @@ def test_complete_returns_empty_string_when_content_is_none():
     llm = OpenAIStructuredLLM(_FakeClient(completion=completion), model="gpt-5.5")
 
     # Act
-    text = llm.complete(system="s", user="u", schema=_Schema, max_tokens=10)
+    result = llm.complete(system="s", user="u", schema=_Schema, max_tokens=10)
 
     # Assert
-    assert text == ""
+    assert result.text == ""

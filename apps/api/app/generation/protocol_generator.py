@@ -15,6 +15,7 @@ from typing import Protocol
 
 from app.generation.generator import GenerationError
 from app.generation.llm.port import StructuredLLM
+from app.generation.monitoring.call import GenerationCallContext, GeneratorKind
 from app.generation.schema import GeneratedProtocol
 from app.generation.structured import generate_structured, parse_or_raise
 from app.generation.superset_degrade import degrade_protocol_to_flat
@@ -148,8 +149,11 @@ class LlmProtocolGenerator:
     validates the raw text at its boundary, including the ADR-0001 full-enumeration
     check, so an under-built Protocol raises ``GenerationError`` for any provider."""
 
-    def __init__(self, llm: StructuredLLM) -> None:
+    def __init__(
+        self, llm: StructuredLLM, *, kind: GeneratorKind = GeneratorKind.PROTOCOL
+    ) -> None:
         self._llm = llm
+        self._kind = kind
 
     def generate(self, request: ProtocolGenerationRequest) -> GeneratedProtocol:
         protocol = generate_structured(
@@ -161,6 +165,7 @@ class LlmProtocolGenerator:
             schema=GeneratedProtocol,
             max_tokens=MAX_TOKENS,
             subject="protocol generation",
+            context=GenerationCallContext(generator_kind=self._kind),
         )
         protocol = degrade_protocol_to_flat(
             protocol, has_sensitive_constraint=request.has_sensitive_constraint

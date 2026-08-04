@@ -13,7 +13,7 @@ class FakeStructuredLLM:
     """Returns canned text from ``complete`` or raises a canned error.
 
     Records each call's kwargs so a test can assert what the generator asked the
-    transport for (schema, max_tokens, prompts)."""
+    transport for (schema, max_tokens, prompts, and the monitoring ``context``)."""
 
     def __init__(self, *, text: str | None = None, error: Exception | None = None):
         self._text = text

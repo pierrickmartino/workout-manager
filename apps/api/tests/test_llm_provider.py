@@ -1,12 +1,14 @@
-"""The Anthropic ``StructuredLLM`` provider (ADR-0006).
+"""The Anthropic transport provider (ADR-0006, #270/#271).
 
 The provider is the deep transport module: it hides the Anthropic SDK's
 quirks — client streaming, native ``output_format`` schema enforcement,
 adaptive thinking, content-block text assembly, error wrapping — behind the
-one-method ``complete()`` port. These tests fake the SDK client (mirroring the
+one-method ``complete()``. These tests fake the SDK client (mirroring the
 existing ``_FakeClient`` pattern) so the externally observable behavior is
-pinned without a network call: given a faked response, ``complete()`` returns
-the assembled text; given an SDK error, it raises ``GenerationError``."""
+pinned without a network call: given a faked response, ``complete()`` returns a
+``CompletionResult`` carrying the assembled text, the *real* extracted token
+usage (Anthropic is the default provider), and the model; given an SDK error, it
+raises ``GenerationError``."""
 
 from __future__ import annotations
 
@@ -35,9 +37,17 @@ class _ThinkingBlock:
         self.thinking = text
 
 
+class _Usage:
+    def __init__(self, input_tokens: int, output_tokens: int) -> None:
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+
+
 class _FinalMessage:
-    def __init__(self, content: list) -> None:
+    def __init__(self, content: list, usage=None) -> None:
         self.content = content
+        if usage is not None:
+            self.usage = usage
 
 
 class _StreamCtx:
@@ -75,17 +85,46 @@ class _FakeClient:
 def test_complete_assembles_text_from_content_blocks():
     # Arrange — a final message with a thinking block then two text blocks
     message = _FinalMessage(
-        [_ThinkingBlock("reasoning"), _TextBlock('{"value":'), _TextBlock(' "ok"}')]
+        [_ThinkingBlock("reasoning"), _TextBlock('{"value":'), _TextBlock(' "ok"}')],
+        usage=_Usage(input_tokens=12, output_tokens=34),
     )
     llm = AnthropicStructuredLLM(_FakeClient(message=message), model="claude-opus-4-8")
 
     # Act
-    text = llm.complete(
-        system="sys", user="usr", schema=_Schema, max_tokens=4000
-    )
+    result = llm.complete(system="sys", user="usr", schema=_Schema, max_tokens=4000)
 
-    # Assert — only text blocks are assembled; thinking is dropped
-    assert text == '{"value": "ok"}'
+    # Assert — only text blocks are assembled (thinking dropped); model carried through
+    assert result.text == '{"value": "ok"}'
+    assert result.model == "claude-opus-4-8"
+
+
+def test_complete_extracts_real_token_usage():
+    # Arrange — Anthropic is the default provider and reports real usage
+    message = _FinalMessage(
+        [_TextBlock("{}")], usage=_Usage(input_tokens=100, output_tokens=250)
+    )
+    llm = AnthropicStructuredLLM(_FakeClient(message=message), model="claude-opus-4-8")
+
+    # Act
+    result = llm.complete(system="s", user="u", schema=_Schema, max_tokens=10)
+
+    # Assert — the SDK's usage is normalized onto the result, not discarded
+    assert result.usage.input_tokens == 100
+    assert result.usage.output_tokens == 250
+
+
+def test_complete_reports_empty_usage_when_message_has_no_usage():
+    # Arrange — a message without a usage attribute must not break generation
+    message = _FinalMessage([_TextBlock("{}")])  # no usage
+    llm = AnthropicStructuredLLM(_FakeClient(message=message), model="claude-opus-4-8")
+
+    # Act
+    result = llm.complete(system="s", user="u", schema=_Schema, max_tokens=10)
+
+    # Assert — empty usage (unknown), text still assembled
+    assert result.usage.input_tokens is None
+    assert result.usage.output_tokens is None
+    assert result.text == "{}"
 
 
 def test_complete_passes_model_schema_thinking_and_max_tokens():

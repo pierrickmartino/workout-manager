@@ -113,11 +113,16 @@ def main() -> ReenrichmentSummary:
     from app.config import get_settings
     from app.db.session import get_engine
     from app.generation.llm import build_llm_client
+    from app.generation.monitoring.call import GeneratorKind
     from app.generation.muscle_emphasis_generator import LlmMuscleEmphasisGenerator
     from app.repositories.exercise_repository import SqlExerciseRepository
 
     logging.basicConfig(level=logging.INFO)
-    generator = LlmMuscleEmphasisGenerator(build_llm_client(get_settings()))
+    # Tag this batch as EXERCISE_ENRICHMENT (not the live MUSCLE_EMPHASIS split) so the
+    # operator sees the one-off re-enrichment pass as its own line of AI spend.
+    generator = LlmMuscleEmphasisGenerator(
+        build_llm_client(get_settings()), kind=GeneratorKind.EXERCISE_ENRICHMENT
+    )
     with Session(get_engine()) as session:
         summary = reenrich_muscle_emphasis(
             exercises=SqlExerciseRepository(session),

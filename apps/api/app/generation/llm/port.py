@@ -9,9 +9,14 @@ and are constructed only by ``build_llm_client`` (the factory)."""
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    # Type-only import: ``from __future__ import annotations`` keeps the annotation a
+    # string, so the port carries no runtime dependency on the monitoring concern.
+    from app.generation.monitoring.call import GenerationCallContext
 
 
 class GenerationError(Exception):
@@ -30,6 +35,7 @@ class StructuredLLM(Protocol):
         user: str,
         schema: type[BaseModel],
         max_tokens: int,
+        context: GenerationCallContext,
     ) -> str:
         """Generate output constrained to ``schema`` and return the raw JSON text.
 
@@ -37,6 +43,10 @@ class StructuredLLM(Protocol):
         constrain the response to ``schema`` and returns the assembled text. It
         raises ``GenerationError`` on a transport/SDK failure; the caller's
         ``parse_*`` boundary is the net for malformed or non-conforming text.
+
+        ``context`` is the additive, provider-agnostic parameter (generator kind +
+        nullable ``clerk_user_id``) the recording decorator captures per call; the
+        return type stays ``str`` so the ``parse_*`` boundary does not move (ADR-0006).
         """
         ...
 

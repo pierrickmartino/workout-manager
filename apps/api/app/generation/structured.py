@@ -19,6 +19,7 @@ from typing import TypeVar
 from pydantic import BaseModel, ValidationError
 
 from app.generation.llm.port import GenerationError, StructuredLLM
+from app.generation.monitoring.call import GenerationCallContext
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -46,6 +47,7 @@ def generate_structured(
     schema: type[T],
     max_tokens: int,
     subject: str,
+    context: GenerationCallContext,
 ) -> T:
     """Constrain ``llm`` to ``schema``, then validate the raw output into it.
 
@@ -55,9 +57,19 @@ def generate_structured(
     ``GenerationError`` from ``complete`` itself; malformed text surfaces from the
     parse boundary. Any generation-specific check beyond schema validity (e.g. the
     Protocol full-enumeration guarantee) stays with the caller, run on the result.
+
+    ``context`` (generator kind + nullable ``clerk_user_id``) rides through to
+    ``complete`` for the recording decorator to capture; it never touches the
+    ``parse_*`` boundary, which stays exactly where it was (ADR-0006).
     """
 
-    text = llm.complete(system=system, user=user, schema=schema, max_tokens=max_tokens)
+    text = llm.complete(
+        system=system,
+        user=user,
+        schema=schema,
+        max_tokens=max_tokens,
+        context=context,
+    )
     return parse_or_raise(text, schema, subject=subject)
 
 
