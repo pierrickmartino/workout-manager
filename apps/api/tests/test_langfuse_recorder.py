@@ -44,12 +44,57 @@ class _FakeTrace:
         return gen
 
 
+class _FakePage:
+    """One page of a trace listing — mirrors the SDK's ``data`` + ``meta`` shape."""
+
+    def __init__(self, data: list, total_pages: int) -> None:
+        self.data = data
+        self.meta = type("Meta", (), {"total_pages": total_pages})()
+
+
+class _FakeTraceRef:
+    """A listed trace carrying just its ``id`` — what erasure addresses."""
+
+    def __init__(self, trace_id: str) -> None:
+        self.id = trace_id
+
+
+class _FakeTraceApi:
+    """The ``client.api.trace`` sub-resource: lists a user's traces and deletes them.
+
+    Stores trace ids per ``user_id`` and paginates by ``limit`` so the recorder's
+    paging is exercised for real, then records the ids handed to ``delete_multiple``."""
+
+    def __init__(self) -> None:
+        self.traces_by_user: dict[str, list[str]] = {}
+        self.list_calls: list[dict] = []
+        self.deleted_trace_ids: list[str] = []
+
+    def list(self, *, user_id: str, page: int, limit: int) -> _FakePage:
+        self.list_calls.append({"user_id": user_id, "page": page, "limit": limit})
+        ids = self.traces_by_user.get(user_id, [])
+        total_pages = max(1, -(-len(ids) // limit))  # ceil division, at least one page
+        window = ids[(page - 1) * limit : page * limit]
+        return _FakePage([_FakeTraceRef(i) for i in window], total_pages)
+
+    def delete_multiple(self, *, trace_ids: list[str]) -> None:
+        self.deleted_trace_ids.extend(trace_ids)
+
+
+class _FakeApi:
+    """The ``client.api`` namespace — only its ``trace`` sub-resource is used here."""
+
+    def __init__(self) -> None:
+        self.trace = _FakeTraceApi()
+
+
 class _FakeLangfuseClient:
     """A stand-in for the low-level Langfuse SDK client — records, never networks."""
 
     def __init__(self) -> None:
         self.traces: list[_FakeTrace] = []
         self.flushes = 0
+        self.api = _FakeApi()
 
     def trace(self, **kwargs) -> _FakeTrace:
         trace = _FakeTrace(kwargs, trace_id=f"trace-{len(self.traces)}")
@@ -194,3 +239,60 @@ def test_flush_delegates_to_the_client():
 
     # Assert — the worker's end-of-job flush reaches the SDK client
     assert client.flushes == 1
+
+
+def test_delete_user_traces_deletes_the_users_traces():
+    # Arrange — the user owns two captured traces
+    client = _FakeLangfuseClient()
+    client.api.trace.traces_by_user["user_abc"] = ["trace-a", "trace-b"]
+    recorder = LangfuseGenerationCallRecorder(client)
+
+    # Act
+    recorder.delete_user_traces("user_abc")
+
+    # Assert — exactly the user's traces are handed to the batch deletion
+    assert client.api.trace.deleted_trace_ids == ["trace-a", "trace-b"]
+
+
+def test_delete_user_traces_scopes_the_listing_to_the_user():
+    # Arrange
+    client = _FakeLangfuseClient()
+    client.api.trace.traces_by_user["user_target"] = ["t1"]
+    recorder = LangfuseGenerationCallRecorder(client)
+
+    # Act
+    recorder.delete_user_traces("user_target")
+
+    # Assert — the listing is filtered by the stamped user_id, so only that user's
+    # traces are ever enumerated (and thus erased)
+    assert client.api.trace.list_calls[0]["user_id"] == "user_target"
+
+
+def test_delete_user_traces_pages_through_all_of_the_users_traces():
+    # Arrange — the user owns more traces than fit on one listing page
+    client = _FakeLangfuseClient()
+    heavy = [f"trace-{n}" for n in range(250)]
+    client.api.trace.traces_by_user["user_heavy"] = heavy
+    recorder = LangfuseGenerationCallRecorder(client)
+
+    # Act
+    recorder.delete_user_traces("user_heavy")
+
+    # Assert — erasure spans every page, so no trace is left behind
+    assert client.api.trace.deleted_trace_ids == heavy
+
+
+def test_delete_user_traces_issues_no_deletion_when_the_user_has_none():
+    # Arrange — a user (or unattributed id) with nothing captured
+    client = _FakeLangfuseClient()
+    recorder = LangfuseGenerationCallRecorder(client)
+
+    # Track whether a batch deletion was ever issued
+    calls: list[dict] = []
+    client.api.trace.delete_multiple = lambda **kw: calls.append(kw)  # type: ignore[method-assign]
+
+    # Act
+    recorder.delete_user_traces("user_empty")
+
+    # Assert — no traces means no delete call at all, not an empty-batch deletion
+    assert calls == []

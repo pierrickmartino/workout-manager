@@ -26,11 +26,21 @@ class GenerationCallRecorder(Protocol):
 
     ``flush()`` forces any batched events out. It exists because generation is async on a
     cache miss (ADR-0005): the short-lived RQ job may exit before a backend's background
-    batch flushes, so the worker flushes at the end of each job or those events are lost."""
+    batch flushes, so the worker flushes at the end of each job or those events are lost.
+
+    ``delete_user_traces(clerk_user_id)`` erases every ``Generation Call`` a user's prompts
+    produced, keyed on the ``user_id`` stamped on each trace. It is the lifecycle capability
+    that keeps holding readable health-data prompts from becoming an unbounded liability
+    (ADR-0039): invokable on demand today, and ready for a future account-deletion flow.
+    Unlike ``record``/``flush`` it is **not** best-effort — an erasure failure must surface
+    to the caller, never be swallowed, so un-erased health data is never mistaken for erased.
+    """
 
     def record(self, call: GenerationCall) -> str | None: ...
 
     def flush(self) -> None: ...
+
+    def delete_user_traces(self, clerk_user_id: str) -> None: ...
 
 
 class NoOpGenerationCallRecorder:
@@ -45,6 +55,11 @@ class NoOpGenerationCallRecorder:
         return None
 
     def flush(self) -> None:
+        return None
+
+    def delete_user_traces(self, clerk_user_id: str) -> None:
+        # Nothing was captured on the unconfigured path, so there is nothing to
+        # erase; a no-op that never raises upholds the port's erasure contract.
         return None
 
 
