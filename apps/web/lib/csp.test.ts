@@ -62,9 +62,12 @@ test("never contributes a script-src — it defers to Clerk strict mode, so no '
   // it (nonce + 'strict-dynamic'). Any script-src we set risks weakening it.
   const scriptSrc = buildContentSecurityPolicy().directives["script-src"];
 
-  // Assert — absent entirely, and (defensively) never carries 'unsafe-inline'.
-  assert.equal(scriptSrc, undefined);
+  // Assert — (defensively) never carries 'unsafe-inline', and absent entirely.
+  // The defensive `includes` check runs first: `assert.equal(scriptSrc, undefined)`
+  // asserts `scriptSrc is undefined`, which narrows the value to `never` for the
+  // rest of the block and would make a later `.includes` fail to type-check.
   assert.ok(!(scriptSrc ?? []).includes("'unsafe-inline'"));
+  assert.equal(scriptSrc, undefined);
 });
 
 test("sets the hardening floor: default-src self, object-src none, base-uri self, frame-ancestors none, form-action self", () => {
