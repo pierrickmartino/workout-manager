@@ -22,9 +22,16 @@ class _Schema(BaseModel):
     value: str
 
 
+class _UsageMetadata:
+    def __init__(self, *, prompt_token_count: int, candidates_token_count: int) -> None:
+        self.prompt_token_count = prompt_token_count
+        self.candidates_token_count = candidates_token_count
+
+
 class _Chunk:
-    def __init__(self, text: str | None) -> None:
+    def __init__(self, text: str | None, usage_metadata: object | None = None) -> None:
         self.text = text
+        self.usage_metadata = usage_metadata
 
 
 class _Models:
@@ -53,9 +60,47 @@ def test_complete_assembles_streamed_chunk_text():
     # Act
     result = llm.complete(system="sys", user="usr", schema=_Schema, max_tokens=4000)
 
-    # Assert — the final assembled text (not chunks), model carried, usage empty
+    # Assert — the final assembled text (not chunks), model carried
     assert result.text == '{"value": "ok"}'
     assert result.model == "gemini-3.1-pro"
+
+
+def test_complete_extracts_real_token_usage_from_stream_metadata():
+    # Arrange — Gemini reports usage on the stream's final chunk (cumulative
+    # usage_metadata); the provider must capture and normalize it
+    client = _FakeClient(
+        chunks=[
+            _Chunk('{"value":'),
+            _Chunk(
+                ' "ok"}',
+                usage_metadata=_UsageMetadata(
+                    prompt_token_count=150, candidates_token_count=42
+                ),
+            ),
+        ]
+    )
+    llm = GoogleStructuredLLM(client, model="gemini-3.1-pro")
+
+    # Act
+    result = llm.complete(system="sys", user="usr", schema=_Schema, max_tokens=4000)
+
+    # Assert — prompt_token_count -> input, candidates_token_count -> output,
+    # text unchanged
+    assert result.usage.input_tokens == 150
+    assert result.usage.output_tokens == 42
+    assert result.text == '{"value": "ok"}'
+
+
+def test_complete_reports_empty_usage_when_stream_omits_metadata():
+    # Arrange — no chunk carries usage_metadata; the extractor is defensive
+    # (missing metadata -> empty) so a usage-shape change never breaks generation
+    client = _FakeClient(chunks=[_Chunk('{"value": "ok"}')])
+    llm = GoogleStructuredLLM(client, model="gemini-3.1-pro")
+
+    # Act
+    result = llm.complete(system="s", user="u", schema=_Schema, max_tokens=10)
+
+    # Assert
     assert result.usage.input_tokens is None
     assert result.usage.output_tokens is None
 
@@ -66,9 +111,7 @@ def test_complete_constrains_output_with_schema_and_json_mime():
     llm = GoogleStructuredLLM(client, model="gemini-test-model")
 
     # Act
-    llm.complete(
-        system="the-system", user="the-user", schema=_Schema, max_tokens=1234
-    )
+    llm.complete(system="the-system", user="the-user", schema=_Schema, max_tokens=1234)
 
     # Assert — model + user prompt, and the config carries native schema
     # enforcement (response_schema) plus the JSON mime type, the system
@@ -111,9 +154,7 @@ def test_complete_wraps_mid_stream_errors_as_generation_error():
 def test_complete_skips_chunks_without_text():
     # Arrange — Gemini may emit chunks whose ``.text`` is None (e.g. a
     # non-text part); the boundary parse_* net should see a string, not None
-    client = _FakeClient(
-        chunks=[_Chunk('{"value":'), _Chunk(None), _Chunk(' "ok"}')]
-    )
+    client = _FakeClient(chunks=[_Chunk('{"value":'), _Chunk(None), _Chunk(' "ok"}')])
     llm = GoogleStructuredLLM(client, model="gemini-3.1-pro")
 
     # Act

@@ -32,9 +32,16 @@ class _Choice:
         self.message = _Message(content)
 
 
+class _Usage:
+    def __init__(self, *, prompt_tokens: int, completion_tokens: int) -> None:
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+
+
 class _Completion:
-    def __init__(self, choices: list) -> None:
+    def __init__(self, choices: list, usage: object | None = None) -> None:
         self.choices = choices
+        self.usage = usage
 
 
 class _StreamCtx:
@@ -87,9 +94,26 @@ def test_complete_returns_message_content():
     assert result.model == "gpt-5.5"
 
 
-def test_complete_reports_empty_usage_until_slice_two():
-    # Arrange — OpenAI usage extraction is deferred to slice #2; it conforms to the
-    # TokenUsage type meanwhile (empty) so the decorator never breaks
+def test_complete_extracts_real_token_usage():
+    # Arrange — a completion carrying the OpenAI SDK's native usage shape
+    completion = _Completion(
+        [_Choice('{"value": "ok"}')],
+        usage=_Usage(prompt_tokens=321, completion_tokens=88),
+    )
+    llm = OpenAIStructuredLLM(_FakeClient(completion=completion), model="gpt-5.5")
+
+    # Act
+    result = llm.complete(system="sys", user="usr", schema=_Schema, max_tokens=4000)
+
+    # Assert — prompt_tokens -> input, completion_tokens -> output, text unchanged
+    assert result.usage.input_tokens == 321
+    assert result.usage.output_tokens == 88
+    assert result.text == '{"value": "ok"}'
+
+
+def test_complete_reports_empty_usage_when_sdk_omits_it():
+    # Arrange — a completion without a usage payload; the extractor is defensive
+    # (missing usage -> empty) so a usage-shape change never breaks generation
     completion = _Completion([_Choice("{}")])
     llm = OpenAIStructuredLLM(_FakeClient(completion=completion), model="gpt-5.5")
 
