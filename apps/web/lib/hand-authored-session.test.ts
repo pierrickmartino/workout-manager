@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 
 import {
   buildAuthorSessionRequest,
+  groupExerciseWithNext,
+  reorderExercise,
+  setExerciseRoundRest,
+  ungroupExercise,
   type AuthorSessionFields,
   type AuthoredExerciseFields,
 } from "./hand-authored-session.ts";
@@ -18,6 +22,8 @@ function exercise(
     tempo: "3-1-1",
     loadKind: "absolute",
     loadValue: "100",
+    supersetGroup: null,
+    roundRestSeconds: null,
     performedSets: [{ reps: "5", loadKind: "absolute", loadValue: "100", perceivedDifficulty: "8" }],
     ...overrides,
   };
@@ -57,6 +63,8 @@ test("maps a plan and its first performance into the author-and-log payload", ()
         tempo: "3-1-1",
         load_kind: "absolute",
         load_value: "100",
+        superset_group: null,
+        round_rest_seconds: null,
       },
     ],
     logged_sets: [
@@ -235,4 +243,138 @@ test("drops an out-of-range perceived difficulty rather than sending it", () => 
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.equal(result.request.logged_sets[0].perceived_difficulty, null);
+});
+
+// --- Supersets on the authored plan (ADR-0023, issue #289) ---
+
+test("carries a saved Superset's group tag and round-rest onto the prescriptions", () => {
+  // Arrange — two grouped exercises sharing a tag and a round-rest; the record is
+  // sets-only, so the grouping travels only on the plan.
+  const input = fields({
+    exercises: [
+      exercise({ exerciseId: 7, supersetGroup: "1", roundRestSeconds: 120 }),
+      exercise({ exerciseId: 9, supersetGroup: "1", roundRestSeconds: 120 }),
+    ],
+  });
+
+  // Act
+  const result = buildAuthorSessionRequest(input, TODAY);
+
+  // Assert — both prescriptions carry the tag and round-rest; logged sets carry neither.
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(
+    result.request.prescriptions.map((p) => p.superset_group),
+    ["1", "1"],
+  );
+  assert.deepEqual(
+    result.request.prescriptions.map((p) => p.round_rest_seconds),
+    [120, 120],
+  );
+  for (const loggedSet of result.request.logged_sets) {
+    assert.equal("superset_group" in loggedSet, false);
+    assert.equal("round_rest_seconds" in loggedSet, false);
+  }
+});
+
+test("a solo exercise carries null superset fields in the payload", () => {
+  const result = buildAuthorSessionRequest(fields(), TODAY);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.prescriptions[0].superset_group, null);
+  assert.equal(result.request.prescriptions[0].round_rest_seconds, null);
+});
+
+test("groupExerciseWithNext groups two consecutive exercises with a seeded round-rest", () => {
+  // Arrange — three solo exercises; the second one's rest (120) seeds the round-rest.
+  const exercises = [
+    exercise({ exerciseId: 1, restSeconds: "90" }),
+    exercise({ exerciseId: 2, restSeconds: "120" }),
+    exercise({ exerciseId: 3, restSeconds: "60" }),
+  ];
+
+  // Act — group the first with the next.
+  const grouped = groupExerciseWithNext(exercises, 0);
+
+  // Assert — the first two share a tag and the seeded round-rest; the third stays solo.
+  assert.equal(grouped[0].supersetGroup, grouped[1].supersetGroup);
+  assert.notEqual(grouped[0].supersetGroup, null);
+  assert.equal(grouped[0].roundRestSeconds, 120);
+  assert.equal(grouped[1].roundRestSeconds, 120);
+  assert.equal(grouped[2].supersetGroup, null);
+});
+
+test("ungroupExercise dissolves the group and clears its round-rest", () => {
+  // Arrange
+  const exercises = [
+    exercise({ exerciseId: 1, supersetGroup: "1", roundRestSeconds: 120 }),
+    exercise({ exerciseId: 2, supersetGroup: "1", roundRestSeconds: 120 }),
+  ];
+
+  // Act
+  const flat = ungroupExercise(exercises, 0);
+
+  // Assert
+  assert.deepEqual(
+    flat.map((e) => e.supersetGroup),
+    [null, null],
+  );
+  assert.deepEqual(
+    flat.map((e) => e.roundRestSeconds),
+    [null, null],
+  );
+});
+
+test("setExerciseRoundRest applies to every member of the group", () => {
+  // Arrange
+  const exercises = [
+    exercise({ exerciseId: 1, supersetGroup: "1", roundRestSeconds: 120 }),
+    exercise({ exerciseId: 2, supersetGroup: "1", roundRestSeconds: 120 }),
+  ];
+
+  // Act — edit the round-rest from the second member.
+  const edited = setExerciseRoundRest(exercises, 1, 75);
+
+  // Assert
+  assert.deepEqual(
+    edited.map((e) => e.roundRestSeconds),
+    [75, 75],
+  );
+});
+
+test("reorderExercise refuses a move that would split a Superset", () => {
+  // Arrange — exercises 1 and 2 grouped and contiguous; a solo 3 sits after them.
+  const exercises = [
+    exercise({ exerciseId: 1, supersetGroup: "1", roundRestSeconds: 120 }),
+    exercise({ exerciseId: 2, supersetGroup: "1", roundRestSeconds: 120 }),
+    exercise({ exerciseId: 3 }),
+  ];
+
+  // Act — try to wedge the solo exercise between the two group members.
+  const result = reorderExercise(exercises, 2, 1);
+
+  // Assert — the move is refused; the group stays contiguous and the order is unchanged.
+  assert.equal(result, exercises);
+});
+
+test("reorderExercise moves a whole Superset without splitting it", () => {
+  // Arrange — a solo exercise, then a grouped pair.
+  const exercises = [
+    exercise({ exerciseId: 3 }),
+    exercise({ exerciseId: 1, supersetGroup: "1", roundRestSeconds: 120 }),
+    exercise({ exerciseId: 2, supersetGroup: "1", roundRestSeconds: 120 }),
+  ];
+
+  // Act — move the group's opener ahead of the solo; its co-member follows to stay
+  // contiguous is not automatic here, but moving the solo down is a clean reorder.
+  const result = reorderExercise(exercises, 0, 2);
+
+  // Assert — the group is still contiguous after the reorder.
+  assert.equal(result[0].supersetGroup, "1");
+  assert.equal(result[1].supersetGroup, "1");
+  assert.equal(result[2].supersetGroup, null);
+  assert.deepEqual(
+    result.map((e) => e.exerciseId),
+    [1, 2, 3],
+  );
 });

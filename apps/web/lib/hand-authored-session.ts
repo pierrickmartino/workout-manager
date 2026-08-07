@@ -6,16 +6,26 @@
 // rules are unit-tested here rather than re-derived inside the server action or the
 // component. The frontend twin of the backend's `author_and_log_session` boundary.
 //
-// No supersets in this slice: the screen authors solo prescriptions, so the payload
-// carries no superset grouping. Create-by-name (ADR-0033, issue #288) is resolved
-// upstream in the picker — a typed movement is minted to a real catalog Exercise before
-// it reaches a draft row — so the payload still carries only real `exercise_id`s and this
-// view-model is unchanged by it.
+// Supersets (ADR-0023, issue #289) ride on the authored *plan*: consecutive exercises can
+// be grouped into a Superset with a group-owned round-rest, reusing the shared
+// `supersets` structural vocabulary — the same grouping/ungrouping/round-rest/contiguity
+// rules the Protocol Builder uses. The record stays sets-only (the agreed fidelity), so
+// the grouping travels only on the prescriptions. Create-by-name (ADR-0033, issue #288) is
+// resolved upstream in the picker, so the payload still carries only real `exercise_id`s.
 
 import { repetitionsInput } from "./quantity.ts";
 import type { LoadKind } from "./load";
 import type { LogSetInput } from "./logs-types";
 import { TRAINING_TYPES } from "./sessions-types.ts";
+import {
+  groupWithNext,
+  reorderKeepingContiguous,
+  supersetLayout,
+  ungroup,
+  editRoundRest as editSupersetRoundRest,
+  type SupersetMember,
+  type SupersetSlot,
+} from "./supersets.ts";
 
 const VALID_TRAINING_TYPES = new Set<string>(TRAINING_TYPES);
 
@@ -38,7 +48,10 @@ export interface PerformedSetFields {
 }
 
 // One exercise in the authored workout: the picked catalog Exercise, its plan
-// (sets/reps/rest/tempo/typed Load), and the sets actually performed.
+// (sets/reps/rest/tempo/typed Load), the Superset overlay, and the sets actually
+// performed. `supersetGroup` is `null` for a flat, solo exercise; members of one Superset
+// share the tag and carry the group-owned `roundRestSeconds` (ADR-0023). These two fields
+// carry the structural state the shared `supersets` operations read and write.
 export interface AuthoredExerciseFields {
   exerciseId: number;
   sets: string;
@@ -47,6 +60,8 @@ export interface AuthoredExerciseFields {
   tempo?: string;
   loadKind?: string;
   loadValue?: string;
+  supersetGroup: string | null;
+  roundRestSeconds: number | null;
   performedSets: PerformedSetFields[];
 }
 
@@ -57,7 +72,9 @@ export interface AuthorSessionFields {
 }
 
 // One authored Exercise Prescription in the payload — the plan side. Mirrors the
-// Builder's deploy prescription shape minus the superset fields this slice omits.
+// Builder's deploy prescription shape: sets/reps/rest/tempo/typed Load plus the Superset
+// overlay (`superset_group`/`round_rest_seconds`, both null on a solo Prescription). The
+// server validates the grouping through the Builder's `validate_deploy` rules.
 export interface AuthorPrescriptionInput {
   exercise_id: number;
   sets: number;
@@ -66,6 +83,8 @@ export interface AuthorPrescriptionInput {
   tempo: string | null;
   load_kind: LoadKind;
   load_value: string | null;
+  superset_group: string | null;
+  round_rest_seconds: number | null;
 }
 
 // The request the user submits to author-and-log a Hand-Authored Session in one POST.
@@ -106,7 +125,9 @@ function loadFields(
 }
 
 // A whole, non-negative integer parsed from raw text, or null when blank or malformed.
-function wholeNonNegative(raw: string): number | null {
+// Exported so the build-and-log screen parses its numeric inputs (e.g. a Superset's
+// round-rest) by the same rule the payload mapper uses, rather than re-deriving it.
+export function wholeNonNegative(raw: string): number | null {
   const trimmed = raw.trim();
   if (trimmed === "") return null;
   const value = Number(trimmed);
@@ -167,6 +188,10 @@ function toPrescription(
       rest_seconds: restSeconds,
       tempo: tempo === "" ? null : tempo,
       ...loadFields(exercise.loadKind, exercise.loadValue),
+      // The Superset overlay rides straight through: grouping is edited on the draft via
+      // the shared `supersets` operations, which keep it contiguous and consistent.
+      superset_group: exercise.supersetGroup,
+      round_rest_seconds: exercise.roundRestSeconds,
     },
   };
 }
@@ -228,3 +253,58 @@ export function buildAuthorSessionRequest(
     },
   };
 }
+
+// --- Superset editing on the authored draft (ADR-0023, issue #289). Thin wrappers over
+// the shared `supersets` structural operations, so the build-and-log screen groups,
+// ungroups, reorders, and sets round-rest by the same rules as the Protocol Builder. Each
+// returns a new list; the input is never mutated.
+
+// Group the exercise at `position` with the next one into a Superset, seeding a new
+// group's round-rest from the next member's own rest (ADR-0023). The generic operation
+// touches only the two overlay fields, preserving every other field and the array's
+// per-row identity the screen keys on.
+export function groupExerciseWithNext<T extends SupersetMember & { restSeconds?: string }>(
+  exercises: T[],
+  position: number,
+): T[] {
+  const seed = wholeNonNegative(exercises[position + 1]?.restSeconds ?? "");
+  return groupWithNext(exercises, position, seed);
+}
+
+// Dissolve the Superset the exercise at `position` belongs to (a no-op on a solo row).
+export function ungroupExercise<T extends SupersetMember>(
+  exercises: T[],
+  position: number,
+): T[] {
+  return ungroup(exercises, position);
+}
+
+// Set the group-owned round-rest of the Superset at `position` on every member.
+export function setExerciseRoundRest<T extends SupersetMember>(
+  exercises: T[],
+  position: number,
+  roundRestSeconds: number | null,
+): T[] {
+  return editSupersetRoundRest(exercises, position, roundRestSeconds);
+}
+
+// Move the exercise at `from` to `to`, refusing any move that would split a Superset so a
+// reorder never leaves a group non-contiguous (ADR-0023).
+export function reorderExercise<T extends SupersetMember>(
+  exercises: T[],
+  from: number,
+  to: number,
+): T[] {
+  return reorderKeepingContiguous(exercises, from, to);
+}
+
+// The per-exercise Superset layout the screen renders (badges, group brackets, round-rest
+// placement, the "group with next" gate). Re-exported so the screen has one import surface
+// for authoring supersets.
+export function authoredSupersetLayout(
+  exercises: readonly SupersetMember[],
+): SupersetSlot[] {
+  return supersetLayout(exercises);
+}
+
+export type { SupersetSlot };
