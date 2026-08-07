@@ -80,6 +80,10 @@ class SessionView:
     duration_minutes: int
     prescriptions: list[PrescriptionView]
     has_been_regenerated: bool = False
+    # Session Provenance (ADR-0040): ``ai_generated`` | ``user_authored``. Defaults to
+    # ``ai_generated`` — every path that builds a Session today is AI. See
+    # ``app.domain.session_provenance.SessionProvenance``.
+    provenance: str = "ai_generated"
 
 
 class SessionRepository(Protocol):
@@ -212,6 +216,7 @@ class SqlSessionRepository:
             duration_minutes=workout.duration_minutes,
             prescriptions=views,
             has_been_regenerated=workout.has_been_regenerated,
+            provenance=workout.provenance,
         )
 
     def _add_prescriptions(
@@ -339,6 +344,7 @@ class InMemorySessionRepository:
             duration_minutes=workout.duration_minutes,
             prescriptions=views,
             has_been_regenerated=workout.has_been_regenerated,
+            provenance=workout.provenance,
         )
 
     def _materialize(

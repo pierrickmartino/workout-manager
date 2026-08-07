@@ -128,6 +128,24 @@ def test_generate_returns_a_session_with_its_prescriptions():
     assert prescription["provenance"] == "ai_generated"
 
 
+def test_generated_session_reads_back_ai_generated_provenance():
+    # Arrange — the standalone generation path produces the Session
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_prov")
+
+    # Act — create it, then fetch it back
+    created = client.post(
+        "/api/sessions/generate", headers=headers, json=_generate_body()
+    ).json()["data"]
+    fetched = client.get(f"/api/sessions/{created['id']}", headers=headers).json()[
+        "data"
+    ]
+
+    # Assert — Session Provenance is stamped ai_generated on create and on read (ADR-0040)
+    assert created["provenance"] == "ai_generated"
+    assert fetched["provenance"] == "ai_generated"
+
+
 def test_generated_session_can_be_fetched_back_by_its_owner():
     # Arrange
     client, ctx = build_client()

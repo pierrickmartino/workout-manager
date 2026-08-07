@@ -176,6 +176,17 @@ class WorkoutSession(SQLModel, table=True):
     duration_minutes: int
     created_at: datetime = Field(default_factory=_utcnow)
 
+    # Session Provenance (CONTEXT.md, ADR-0040): how this plan came to exist —
+    # ``ai_generated`` (the generation pipeline: standalone generation or a Protocol
+    # Session adopted from a Generated Protocol) or ``user_authored`` (a Hand-Authored
+    # Session, built by hand with no AI call). Every existing creation path is AI, so the
+    # default is ``ai_generated`` and the 0023 migration backfills pre-existing rows;
+    # ``user_authored`` arrives with the Hand-Authored Session feature that builds on this
+    # column. Load-bearing, not cosmetic: Generation Feedback and Regeneration are hidden
+    # for ``user_authored`` plans (offering "the AI gave me a bad plan" on a hand-written
+    # plan is nonsensical). See ``app.domain.session_provenance.SessionProvenance``.
+    provenance: str = Field(default="ai_generated")
+
     # Protocol linkage — all null for a standalone Session (Slices 3-4 path).
     protocol_id: int | None = Field(default=None, foreign_key="protocol.id", index=True)
     objective: str | None = Field(default=None)

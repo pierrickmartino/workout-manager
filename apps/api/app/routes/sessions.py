@@ -102,6 +102,7 @@ def _serialize(view: SessionView) -> dict:
         "training_type": view.training_type,
         "duration_minutes": view.duration_minutes,
         "has_been_regenerated": view.has_been_regenerated,
+        "provenance": view.provenance,
         "prescriptions": [
             {
                 "position": p.position,
