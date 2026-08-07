@@ -3,7 +3,10 @@
 import { useState, useTransition } from "react";
 import { Trash2 } from "lucide-react";
 
-import { submitAuthorSession } from "@/app/sessions/log/actions";
+import {
+  resolveAuthoredExercise,
+  submitAuthorSession,
+} from "@/app/sessions/log/actions";
 import {
   buildAuthorSessionRequest,
   type AuthorSessionFields,
@@ -88,7 +91,9 @@ function makeExerciseRow(exercise: PickedExercise): ExerciseRow {
 // The build-and-log screen for a Hand-Authored Session (ADR-0040): assemble a workout
 // from catalog exercises (sets/reps/rest/tempo/typed Load) and record what was actually
 // performed, then submit once to create the plan and its first Logged Session together.
-// No supersets, no create-by-name in this slice — the catalog picker only.
+// The picker is search-and-create (ADR-0033, issue #288): a movement the catalog lacks is
+// minted as a `user_entered` Exercise on confirmation and added like a catalog pick, so a
+// user is never blocked by a catalog gap. No supersets in this slice.
 export function HandAuthoredSessionForm({ today }: HandAuthoredSessionFormProps) {
   const [exercises, setExercises] = useState<ExerciseRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +101,17 @@ export function HandAuthoredSessionForm({ today }: HandAuthoredSessionFormProps)
 
   const addExercise = (exercise: PickedExercise) =>
     setExercises((current) => [...current, makeExerciseRow(exercise)]);
+
+  // Resolve a typed movement to a catalog Exercise (minting a `user_entered` one on a
+  // miss) and add it to the workout. The pure picker view-model has already decided the
+  // name is worth offering; this runs the create and folds the result in. The action
+  // returns a user-safe error whenever it yields no exercise, so it is surfaced verbatim
+  // for the picker to show.
+  const createExercise = async (name: string): Promise<{ error: string | null }> => {
+    const outcome = await resolveAuthoredExercise(name);
+    if (outcome.exercise) addExercise(outcome.exercise);
+    return { error: outcome.error };
+  };
 
   const removeExercise = (key: number) =>
     setExercises((current) => current.filter((row) => row.key !== key));
@@ -230,7 +246,7 @@ export function HandAuthoredSessionForm({ today }: HandAuthoredSessionFormProps)
           />
         ))}
 
-        <ExerciseLibrary onPick={addExercise} />
+        <ExerciseLibrary onPick={addExercise} onCreate={createExercise} />
       </fieldset>
 
       <Button type="submit" disabled={pending} className="w-full">
