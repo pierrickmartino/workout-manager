@@ -2,11 +2,42 @@
 
 import { redirect } from "next/navigation";
 
+import { resolveExercise } from "@/lib/exercises";
 import { authorSession } from "@/lib/sessions";
 import type { AuthorSessionInput } from "@/lib/hand-authored-session";
+import type { PickedExercise } from "@/lib/protocol-builder";
 
 export interface AuthorSessionFormState {
   error: string | null;
+}
+
+export interface ResolveExerciseResult {
+  exercise: PickedExercise | null;
+  error: string | null;
+}
+
+// Resolve a typed movement to a catalog Exercise for the build-and-log picker
+// (ADR-0033, issue #288). On a catalog miss the search-and-create endpoint mints a
+// `user_entered` Exercise; a name that already resolves (curated, AI, or a prior
+// user-entered one) comes back untouched by normalized-name dedup — no duplicate. The
+// Clerk JWT is attached server-side and never reaches the browser. The resolved id then
+// rides into the authored Session exactly like a catalog pick, so the create path still
+// receives only real `exercise_id`s. Blank/over-long names are rejected by the endpoint
+// contract and surfaced back to the picker.
+export async function resolveAuthoredExercise(
+  name: string,
+): Promise<ResolveExerciseResult> {
+  const result = await resolveExercise(name);
+  if (!result.success || !result.data) {
+    return {
+      exercise: null,
+      error: result.error ?? `Could not add “${name}”.`,
+    };
+  }
+  return {
+    exercise: { id: result.data.id, name: result.data.name },
+    error: null,
+  };
 }
 
 // Persist a Hand-Authored Session (ADR-0040): the client has already mapped the

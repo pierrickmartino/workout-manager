@@ -6,9 +6,11 @@
 // rules are unit-tested here rather than re-derived inside the server action or the
 // component. The frontend twin of the backend's `author_and_log_session` boundary.
 //
-// No supersets and no create-by-name in this slice: the screen is a catalog picker over
-// solo prescriptions, so the payload carries neither superset grouping nor movement
-// names — every exercise is already a real catalog id.
+// No supersets in this slice: the screen authors solo prescriptions, so the payload
+// carries no superset grouping. Create-by-name (ADR-0033, issue #288) is resolved
+// upstream in the picker — a typed movement is minted to a real catalog Exercise before
+// it reaches a draft row — so the payload still carries only real `exercise_id`s and this
+// view-model is unchanged by it.
 
 import { repetitionsInput } from "./quantity.ts";
 import type { LoadKind } from "./load";
