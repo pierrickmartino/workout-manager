@@ -36,7 +36,10 @@ from app.repositories.generation_feedback_repository import (
     InMemoryGenerationFeedbackRepository,
 )
 from app.repositories.logged_session_repository import InMemoryLoggedSessionRepository
-from app.repositories.profile_repository import InMemoryProfileRepository
+from app.repositories.profile_repository import (
+    InMemoryProfileRepository,
+    ProfileUpdate,
+)
 from app.repositories.protocol_repository import InMemoryProtocolRepository
 from app.repositories.session_repository import InMemorySessionRepository
 from tests.conftest import ISSUER, make_signing_context
@@ -64,13 +67,14 @@ class FakeRegenerator:
         )
 
 
-def build_client(ctx=None):
+def build_client(ctx=None, profiles=None):
     ctx = ctx or make_signing_context()
     exercises = InMemoryExerciseRepository()
     sessions = InMemorySessionRepository(exercises)
     logged = InMemoryLoggedSessionRepository(sessions, exercises)
     protocols = InMemoryProtocolRepository(exercises)
     feedback = InMemoryGenerationFeedbackRepository()
+    profiles = profiles or InMemoryProfileRepository()
     app = create_app()
     app.dependency_overrides[get_jwks] = lambda: ctx.jwks
     app.dependency_overrides[get_settings] = lambda: Settings(clerk_issuer=ISSUER)
@@ -81,7 +85,7 @@ def build_client(ctx=None):
     app.dependency_overrides[get_session_generator] = lambda: FakeGenerator()
     app.dependency_overrides[get_session_regenerator] = lambda: FakeRegenerator()
     app.dependency_overrides[get_generation_feedback_repository] = lambda: feedback
-    app.dependency_overrides[get_profile_repository] = lambda: InMemoryProfileRepository()
+    app.dependency_overrides[get_profile_repository] = lambda: profiles
     client = TestClient(app)
     client.exercises = exercises
     return client, ctx
@@ -404,6 +408,144 @@ def test_unknown_logged_set_exercise_is_rejected_atomically():
     body = response.json()
     assert any(error["code"] == "unknown_exercise" for error in body["errors"])
     assert client.get("/api/sessions/1", headers=headers).status_code == 404
+    assert _history(client, headers) == []
+
+
+def _grouped_prescription(exercise_id, *, group, round_rest, sets=3):
+    """One authored Prescription carrying Superset grouping (ADR-0023)."""
+    return {
+        "exercise_id": exercise_id,
+        "sets": sets,
+        "reps": "5",
+        "rest_seconds": 90,
+        "load_kind": "absolute",
+        "load_value": "100",
+        "superset_group": group,
+        "round_rest_seconds": round_rest,
+    }
+
+
+def _solo_prescription(exercise_id, sets=3):
+    return {
+        "exercise_id": exercise_id,
+        "sets": sets,
+        "reps": "5",
+        "rest_seconds": 90,
+        "load_kind": "absolute",
+        "load_value": "100",
+    }
+
+
+def test_author_persists_a_superset_and_renders_it_on_the_session_detail():
+    # Arrange — two consecutive exercises grouped into a Superset with a round-rest.
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_superset")
+    squat = _create_exercise(client, headers, "Back Squat")
+    press = _create_exercise(client, headers, "Overhead Press")
+    body = _author_body(
+        squat,
+        prescriptions=[
+            _grouped_prescription(squat, group="1", round_rest=120),
+            _grouped_prescription(press, group="1", round_rest=120),
+        ],
+    )
+
+    # Act
+    response = client.post("/api/sessions", headers=headers, json=body)
+
+    # Assert — the Superset persists on the authored plan and reads back on its detail.
+    assert response.status_code == 200
+    data = response.json()["data"]
+    session = client.get(
+        f"/api/sessions/{data['session_id']}", headers=headers
+    ).json()["data"]
+    prescriptions = session["prescriptions"]
+    assert len(prescriptions) == 2
+    assert [p["superset_group"] for p in prescriptions] == ["1", "1"]
+    assert [p["round_rest_seconds"] for p in prescriptions] == [120, 120]
+
+    # The Logged Session record stays sets-only — no plan overlay leaks onto the record.
+    for logged_set in data["logged_sets"]:
+        assert "superset_group" not in logged_set
+        assert "round_rest_seconds" not in logged_set
+
+
+def test_non_contiguous_superset_is_rejected_and_persists_nothing():
+    # Arrange — a group tag split by a solo Exercise sitting between its members.
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_split")
+    squat = _create_exercise(client, headers, "Back Squat")
+    press = _create_exercise(client, headers, "Overhead Press")
+    row = _create_exercise(client, headers, "Barbell Row")
+    body = _author_body(
+        squat,
+        prescriptions=[
+            _grouped_prescription(squat, group="1", round_rest=120),
+            _solo_prescription(press),
+            _grouped_prescription(row, group="1", round_rest=120),
+        ],
+    )
+
+    # Act
+    response = client.post("/api/sessions", headers=headers, json=body)
+
+    # Assert — the shared validator rejects the split group; nothing is written.
+    assert response.status_code == 422
+    body = response.json()
+    assert any(e["code"] == "superset_non_contiguous" for e in body["errors"])
+    assert client.get("/api/sessions/1", headers=headers).status_code == 404
+    assert _history(client, headers) == []
+
+
+def test_singleton_superset_is_rejected_and_persists_nothing():
+    # Arrange — a lone Prescription carrying a group tag (a Superset needs 2+).
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_singleton")
+    squat = _create_exercise(client, headers, "Back Squat")
+    body = _author_body(
+        squat,
+        prescriptions=[_grouped_prescription(squat, group="1", round_rest=120)],
+    )
+
+    # Act
+    response = client.post("/api/sessions", headers=headers, json=body)
+
+    # Assert
+    assert response.status_code == 422
+    body = response.json()
+    assert any(e["code"] == "superset_lone_member" for e in body["errors"])
+    assert client.get("/api/sessions/1", headers=headers).status_code == 404
+    assert _history(client, headers) == []
+
+
+def test_superset_is_suppressed_for_a_sensitive_constraint_user():
+    # Arrange — a user carrying a Sensitive Constraint (injury) authors a structurally
+    # valid Superset. Supersets compress rest and raise intensity, so they are hard-blocked
+    # at the shared validator seam no matter who placed them (ADR-0023).
+    profiles = InMemoryProfileRepository()
+    profiles.update("user_injured", ProfileUpdate(sensitive_constraints=["injury"]))
+    client, ctx = build_client(profiles=profiles)
+    headers = _auth(ctx, "user_injured")
+    squat = _create_exercise(client, headers, "Back Squat")
+    press = _create_exercise(client, headers, "Overhead Press")
+    body = _author_body(
+        squat,
+        prescriptions=[
+            _grouped_prescription(squat, group="1", round_rest=120),
+            _grouped_prescription(press, group="1", round_rest=120),
+        ],
+    )
+
+    # Act
+    response = client.post("/api/sessions", headers=headers, json=body)
+
+    # Assert
+    assert response.status_code == 422
+    body = response.json()
+    assert any(
+        e["code"] == "superset_forbidden_under_sensitive_constraint"
+        for e in body["errors"]
+    )
     assert _history(client, headers) == []
 
 

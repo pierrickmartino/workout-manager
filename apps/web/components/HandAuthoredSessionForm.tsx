@@ -1,17 +1,25 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Link2, Trash2, Unlink } from "lucide-react";
 
 import {
   resolveAuthoredExercise,
   submitAuthorSession,
 } from "@/app/sessions/log/actions";
 import {
+  authoredSupersetLayout,
   buildAuthorSessionRequest,
+  groupExerciseWithNext,
+  reorderExercise,
+  setExerciseRoundRest,
+  ungroupExercise,
+  wholeNonNegative,
   type AuthorSessionFields,
   type AuthoredExerciseFields,
+  type SupersetSlot,
 } from "@/lib/hand-authored-session";
+import { dissolveSingletonGroups } from "@/lib/supersets";
 import { LOAD_KIND_OPTIONS } from "@/lib/load";
 import type { PickedExercise } from "@/lib/protocol-builder";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
@@ -38,9 +46,10 @@ interface PerformedSetRow {
   perceivedDifficulty: string;
 }
 
-// One exercise in the draft: the picked catalog Exercise, its authored plan, and the
-// sets performed. Held in component state and mapped to the payload by the pure
-// `buildAuthorSessionRequest` view-model on submit.
+// One exercise in the draft: the picked catalog Exercise, its authored plan, its Superset
+// overlay, and the sets performed. Held in component state and mapped to the payload by the
+// pure `buildAuthorSessionRequest` view-model on submit. `supersetGroup`/`roundRestSeconds`
+// are the two structural fields the shared `supersets` operations read and write.
 interface ExerciseRow {
   key: number;
   exerciseId: number;
@@ -51,6 +60,8 @@ interface ExerciseRow {
   tempo: string;
   loadKind: string;
   loadValue: string;
+  supersetGroup: string | null;
+  roundRestSeconds: number | null;
   performedSets: PerformedSetRow[];
 }
 
@@ -84,16 +95,50 @@ function makeExerciseRow(exercise: PickedExercise): ExerciseRow {
     tempo: "",
     loadKind: DEFAULT_LOAD_KIND,
     loadValue: "",
+    supersetGroup: null,
+    roundRestSeconds: null,
     performedSets: [makePerformedSet()],
   };
+}
+
+// A contiguous run of exercises to render together: a bordered Superset container wrapping
+// its members, or a single solo exercise. Derived from the per-row Superset layout so the
+// render brackets each group into one visible box (ADR-0023).
+type RenderRun =
+  | { kind: "solo"; index: number }
+  | { kind: "group"; group: string; indices: number[] };
+
+function renderRuns(layout: SupersetSlot[]): RenderRun[] {
+  const runs: RenderRun[] = [];
+  let index = 0;
+  while (index < layout.length) {
+    const slot = layout[index];
+    if (slot.group === null) {
+      runs.push({ kind: "solo", index });
+      index += 1;
+      continue;
+    }
+    // Consume the whole contiguous group run (contiguity is an enforced invariant, so a
+    // group's members always sit together).
+    const indices: number[] = [];
+    const group = slot.group;
+    while (index < layout.length && layout[index].group === group) {
+      indices.push(index);
+      index += 1;
+    }
+    runs.push({ kind: "group", group, indices });
+  }
+  return runs;
 }
 
 // The build-and-log screen for a Hand-Authored Session (ADR-0040): assemble a workout
 // from catalog exercises (sets/reps/rest/tempo/typed Load) and record what was actually
 // performed, then submit once to create the plan and its first Logged Session together.
 // The picker is search-and-create (ADR-0033, issue #288): a movement the catalog lacks is
-// minted as a `user_entered` Exercise on confirmation and added like a catalog pick, so a
-// user is never blocked by a catalog gap. No supersets in this slice.
+// minted as a `user_entered` Exercise on confirmation and added like a catalog pick.
+// Consecutive exercises can be grouped into a Superset with a round-rest (ADR-0023, issue
+// #289), reusing the shared `supersets` vocabulary — grouping rides on the authored plan
+// while the record stays sets-only.
 export function HandAuthoredSessionForm({ today }: HandAuthoredSessionFormProps) {
   const [exercises, setExercises] = useState<ExerciseRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -113,13 +158,41 @@ export function HandAuthoredSessionForm({ today }: HandAuthoredSessionFormProps)
     return { error: outcome.error };
   };
 
+  // Removing a member can leave a Superset with a single member, which is not a valid
+  // group (ADR-0023); dissolve any such leftover so the draft never renders — or submits —
+  // a broken one-member "superset".
   const removeExercise = (key: number) =>
-    setExercises((current) => current.filter((row) => row.key !== key));
+    setExercises((current) =>
+      dissolveSingletonGroups(current.filter((row) => row.key !== key)),
+    );
 
   const updateExercise = (key: number, patch: Partial<ExerciseRow>) =>
     setExercises((current) =>
       current.map((row) => (row.key === key ? { ...row, ...patch } : row)),
     );
+
+  // Superset editing reuses the shared structural operations (ADR-0023): grouping,
+  // ungrouping, round-rest, and a contiguity-preserving reorder — all keyed by list
+  // position, so they stay aligned to the rendered order.
+  const handleGroupWithNext = (index: number) =>
+    setExercises((current) => groupExerciseWithNext(current, index));
+
+  const ungroupAt = (index: number) =>
+    setExercises((current) => ungroupExercise(current, index));
+
+  const setRoundRest = (index: number, roundRestSeconds: number | null) =>
+    setExercises((current) =>
+      setExerciseRoundRest(current, index, roundRestSeconds),
+    );
+
+  const moveExercise = (from: number, to: number) =>
+    setExercises((current) => reorderExercise(current, from, to));
+
+  // Whether moving `from` → `to` actually reorders: `reorderExercise` returns the input
+  // unchanged when a move would split a Superset (or is a no-op), so an identity result
+  // means the move is illegal. Used to disable a move control rather than let it dead-click.
+  const canMove = (from: number, to: number) =>
+    reorderExercise(exercises, from, to) !== exercises;
 
   const addPerformedSet = (key: number) =>
     setExercises((current) =>
@@ -176,6 +249,8 @@ export function HandAuthoredSessionForm({ today }: HandAuthoredSessionFormProps)
           tempo: row.tempo,
           loadKind: row.loadKind,
           loadValue: row.loadValue,
+          supersetGroup: row.supersetGroup,
+          roundRestSeconds: row.roundRestSeconds,
           performedSets: row.performedSets.map((set) => ({
             reps: set.reps,
             loadKind: set.loadKind,
@@ -198,6 +273,9 @@ export function HandAuthoredSessionForm({ today }: HandAuthoredSessionFormProps)
       if (outcome?.error) setError(outcome.error);
     });
   };
+
+  const layout = authoredSupersetLayout(exercises);
+  const runs = renderRuns(layout);
 
   return (
     <form action={submit} className="flex flex-col gap-6">
@@ -232,19 +310,65 @@ export function HandAuthoredSessionForm({ today }: HandAuthoredSessionFormProps)
           </p>
         ) : null}
 
-        {exercises.map((row) => (
-          <ExerciseCard
-            key={row.key}
-            row={row}
-            onRemove={() => removeExercise(row.key)}
-            onChange={(patch) => updateExercise(row.key, patch)}
-            onAddSet={() => addPerformedSet(row.key)}
-            onChangeSet={(setKey, patch) =>
-              updatePerformedSet(row.key, setKey, patch)
-            }
-            onRemoveSet={(setKey) => removePerformedSet(row.key, setKey)}
-          />
-        ))}
+        {runs.map((run) => {
+          if (run.kind === "solo") {
+            const index = run.index;
+            const row = exercises[index];
+            return (
+              <ExerciseCard
+                key={row.key}
+                row={row}
+                slot={layout[index]}
+                canMoveUp={index > 0 && canMove(index, index - 1)}
+                canMoveDown={index < exercises.length - 1 && canMove(index, index + 1)}
+                onRemove={() => removeExercise(row.key)}
+                onChange={(patch) => updateExercise(row.key, patch)}
+                onAddSet={() => addPerformedSet(row.key)}
+                onChangeSet={(setKey, patch) =>
+                  updatePerformedSet(row.key, setKey, patch)
+                }
+                onRemoveSet={(setKey) => removePerformedSet(row.key, setKey)}
+                onGroupWithNext={() => handleGroupWithNext(index)}
+                onMoveUp={() => moveExercise(index, index - 1)}
+                onMoveDown={() => moveExercise(index, index + 1)}
+              />
+            );
+          }
+
+          const opener = run.indices[0];
+          const closer = run.indices[run.indices.length - 1];
+          return (
+            <SupersetContainer
+              key={`superset-${run.group}`}
+              roundRestSeconds={exercises[closer].roundRestSeconds}
+              onChangeRoundRest={(value) => setRoundRest(opener, value)}
+              onUngroup={() => ungroupAt(opener)}
+            >
+              {run.indices.map((index) => {
+                const row = exercises[index];
+                return (
+                  <ExerciseCard
+                    key={row.key}
+                    row={row}
+                    slot={layout[index]}
+                    canMoveUp={index > 0 && canMove(index, index - 1)}
+                    canMoveDown={index < exercises.length - 1 && canMove(index, index + 1)}
+                    onRemove={() => removeExercise(row.key)}
+                    onChange={(patch) => updateExercise(row.key, patch)}
+                    onAddSet={() => addPerformedSet(row.key)}
+                    onChangeSet={(setKey, patch) =>
+                      updatePerformedSet(row.key, setKey, patch)
+                    }
+                    onRemoveSet={(setKey) => removePerformedSet(row.key, setKey)}
+                    onGroupWithNext={() => handleGroupWithNext(index)}
+                    onMoveUp={() => moveExercise(index, index - 1)}
+                    onMoveDown={() => moveExercise(index, index + 1)}
+                  />
+                );
+              })}
+            </SupersetContainer>
+          );
+        })}
 
         <ExerciseLibrary onPick={addExercise} onCreate={createExercise} />
       </fieldset>
@@ -256,37 +380,135 @@ export function HandAuthoredSessionForm({ today }: HandAuthoredSessionFormProps)
   );
 }
 
+// The bordered container that brackets a Superset's members into one visible group, with
+// the group-owned round-rest and an ungroup control (ADR-0023). The round-rest belongs to
+// the group, not any one member, so it lives here once — never on the individual rows.
+function SupersetContainer({
+  roundRestSeconds,
+  onChangeRoundRest,
+  onUngroup,
+  children,
+}: {
+  roundRestSeconds: number | null;
+  onChangeRoundRest: (value: number | null) => void;
+  onUngroup: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-cyan/40 bg-cyan/[0.03] p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="label-mono text-[10px] text-cyan">SUPERSET</span>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={onUngroup}
+          aria-label="Ungroup superset"
+        >
+          <Unlink className="h-4 w-4" />
+          Ungroup
+        </Button>
+      </div>
+
+      {children}
+
+      <label className="flex flex-col gap-1.5">
+        <span className="label-mono text-[9px] text-text-muted">
+          Round rest (sec)
+        </span>
+        <Input
+          type="number"
+          min={0}
+          value={roundRestSeconds === null ? "" : String(roundRestSeconds)}
+          placeholder="120"
+          onChange={(event) => {
+            const raw = event.target.value.trim();
+            const parsed = raw === "" ? null : Number(raw);
+            onChangeRoundRest(
+              parsed !== null && Number.isInteger(parsed) && parsed >= 0
+                ? parsed
+                : null,
+            );
+          }}
+          aria-label="Round rest seconds for this superset"
+        />
+      </label>
+    </div>
+  );
+}
+
 interface ExerciseCardProps {
   row: ExerciseRow;
+  slot: SupersetSlot;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
   onRemove: () => void;
   onChange: (patch: Partial<ExerciseRow>) => void;
   onAddSet: () => void;
   onChangeSet: (setKey: number, patch: Partial<PerformedSetRow>) => void;
   onRemoveSet: (setKey: number) => void;
+  onGroupWithNext: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
 }
 
 function ExerciseCard({
   row,
+  slot,
+  canMoveUp,
+  canMoveDown,
   onRemove,
   onChange,
   onAddSet,
   onChangeSet,
   onRemoveSet,
+  onGroupWithNext,
+  onMoveUp,
+  onMoveDown,
 }: ExerciseCardProps) {
   return (
     <Card className="flex flex-col gap-4 p-4">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="font-display text-base font-bold text-text-primary">
-          {row.exerciseName}
-        </h3>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={onRemove}
-          aria-label={`Remove ${row.exerciseName}`}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          {slot.memberLabel ? (
+            <span
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm bg-cyan/15 font-mono text-[11px] font-bold text-cyan"
+              aria-label={`Superset member ${slot.memberLabel}`}
+            >
+              {slot.memberLabel}
+            </span>
+          ) : null}
+          <h3 className="font-display text-base font-bold text-text-primary">
+            {row.exerciseName}
+          </h3>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onMoveUp}
+            disabled={!canMoveUp}
+            aria-label={`Move ${row.exerciseName} up`}
+          >
+            <ArrowUp className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onMoveDown}
+            disabled={!canMoveDown}
+            aria-label={`Move ${row.exerciseName} down`}
+          >
+            <ArrowDown className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onRemove}
+            aria-label={`Remove ${row.exerciseName}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* The authored plan: sets/reps/rest/tempo and a typed Load (ADR-0010). */}
@@ -308,16 +530,20 @@ function ExerciseCard({
             aria-label={`Reps for ${row.exerciseName}`}
           />
         </FieldLabel>
-        <FieldLabel label="Rest (sec)">
-          <Input
-            type="number"
-            min={0}
-            value={row.restSeconds}
-            placeholder="90"
-            onChange={(event) => onChange({ restSeconds: event.target.value })}
-            aria-label={`Rest seconds for ${row.exerciseName}`}
-          />
-        </FieldLabel>
+        {/* A grouped member rests once per round at the group level, so its own rest is
+            dormant while grouped — hidden here and restored on ungroup (ADR-0023). */}
+        {slot.group === null ? (
+          <FieldLabel label="Rest (sec)">
+            <Input
+              type="number"
+              min={0}
+              value={row.restSeconds}
+              placeholder="90"
+              onChange={(event) => onChange({ restSeconds: event.target.value })}
+              aria-label={`Rest seconds for ${row.exerciseName}`}
+            />
+          </FieldLabel>
+        ) : null}
         <FieldLabel label="Tempo">
           <Input
             value={row.tempo}
@@ -415,6 +641,21 @@ function ExerciseCard({
           + Add a performed set
         </Button>
       </div>
+
+      {/* Group this exercise with the next into a Superset (ADR-0023). Shown only when a
+          next exercise exists to group with, and it is not already the same group. */}
+      {slot.canGroupWithNext ? (
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={onGroupWithNext}
+          className="w-full"
+          aria-label={`Group ${row.exerciseName} with the next exercise into a superset`}
+        >
+          <Link2 className="h-4 w-4" />
+          Group with next
+        </Button>
+      ) : null}
     </Card>
   );
 }

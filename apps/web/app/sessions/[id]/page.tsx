@@ -16,6 +16,7 @@ import {
   type HarderVariationOffer as HarderVariationOfferView,
 } from "@/lib/harder-variation-view";
 import { toTempoView, type TempoView } from "@/lib/tempo-view";
+import { supersetLayout, type SupersetSlot } from "@/lib/supersets";
 import { appendFrom } from "@/lib/back-target";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -41,6 +42,16 @@ export default async function SessionPage({
   }
 
   const session = envelope.data;
+
+  // The per-prescription Superset layout (ADR-0023): a saved Superset (from a
+  // Hand-Authored Session or an AI plan) renders as a lettered, round-rest-bearing group
+  // here. Derived from the ordered prescriptions' group tags via the shared vocabulary.
+  const supersetSlots = supersetLayout(
+    session.prescriptions.map((prescription) => ({
+      supersetGroup: prescription.superset_group ?? null,
+      roundRestSeconds: prescription.round_rest_seconds ?? null,
+    })),
+  );
 
   // Read the harder-Variation offer per prescription (#202). The endpoint returns
   // `null` for anything not at a pure-bodyweight rep ceiling, so most resolve to no
@@ -71,6 +82,7 @@ export default async function SessionPage({
             <li key={prescription.position}>
               <PrescriptionCard
                 prescription={prescription}
+                superset={supersetSlots[index]}
                 sessionId={session.id}
                 index={index + 1}
                 harderVariation={offers[index]}
@@ -115,15 +127,20 @@ export default async function SessionPage({
 
 function PrescriptionCard({
   prescription,
+  superset,
   sessionId,
   index,
   harderVariation,
 }: {
   prescription: ExercisePrescription;
+  superset: SupersetSlot | undefined;
   sessionId: number;
   index: number;
   harderVariation: HarderVariationOfferView;
 }) {
+  // A grouped Prescription rests once per round at the group level, so its own rest is
+  // dormant and the round-rest is shown once, on the group's last member (ADR-0023).
+  const isGrouped = superset !== undefined && superset.group !== null;
   return (
     <Card className="flex flex-col gap-4 p-4">
       <div className="flex items-start gap-3">
@@ -141,6 +158,11 @@ function PrescriptionCard({
             >
               {prescription.exercise_name}
             </Link>
+            {isGrouped ? (
+              <Badge variant="cyan" title="Performed round-major within a superset">
+                SUPERSET {superset.memberLabel}
+              </Badge>
+            ) : null}
             {prescription.provenance === "ai_generated" ? (
               <Badge
                 variant="magenta"
@@ -167,8 +189,15 @@ function PrescriptionCard({
           ...(prescription.recommended_load
             ? [{ label: "Load", value: prescription.recommended_load.text }]
             : []),
-          ...(prescription.rest_seconds !== null
+          // A solo Prescription shows its own rest; a grouped one shows the group-owned
+          // round-rest once (on the last member), its individual rest being dormant.
+          ...(!isGrouped && prescription.rest_seconds !== null
             ? [{ label: "Rest", value: `${prescription.rest_seconds}s` }]
+            : []),
+          ...(isGrouped &&
+          superset.isLastMember &&
+          superset.roundRestSeconds !== null
+            ? [{ label: "Round rest", value: `${superset.roundRestSeconds}s` }]
             : []),
           ...tempoRows(toTempoView(prescription.tempo)),
           ...(prescription.targeted_muscles.length > 0

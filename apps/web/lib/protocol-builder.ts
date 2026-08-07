@@ -9,6 +9,22 @@
 
 import type { Load, LoadKind } from "./load.ts";
 import type { ProtocolProgress } from "./protocols-types.ts";
+import {
+  dissolveSingletonGroups,
+  editRoundRest,
+  groupSpan,
+  groupWithNext as supersetGroupWithNext,
+  moveItem,
+  reorderKeepingContiguous,
+  supersetsAreContiguous,
+  ungroup,
+} from "./supersets.ts";
+
+// The per-row Superset layout view-model lives in the shared `supersets` module now
+// (ADR-0023); re-exported here so the Builder's components keep importing it from
+// `protocol-builder` unchanged.
+export { supersetLayout } from "./supersets.ts";
+export type { SupersetSlot } from "./supersets.ts";
 
 // One Prescription in the draft. `loadKind`/`loadValue` mirror the log form's Load
 // kind-picker (ADR-0010) so building and logging speak one Load language; they are
@@ -297,11 +313,10 @@ export function builderReducer(
 
     case "REORDER_PRESCRIPTION":
       // A reorder must never leave a Superset non-contiguous (ADR-0023): if moving
-      // this Prescription would split a group, refuse the move.
-      return mapSessionPrescriptions(state, event.sessionId, (prescriptions) => {
-        const moved = movePrescription(prescriptions, event.from, event.to);
-        return supersetsAreContiguous(moved) ? moved : prescriptions;
-      });
+      // this Prescription would split a group, the shared helper refuses the move.
+      return mapSessionPrescriptions(state, event.sessionId, (prescriptions) =>
+        reorderKeepingContiguous(prescriptions, event.from, event.to),
+      );
 
     case "GROUP_WITH_NEXT":
       return mapSessionPrescriptions(state, event.sessionId, (prescriptions) =>
@@ -422,98 +437,18 @@ function newPrescription(exercise: PickedExercise): DraftPrescription {
   };
 }
 
-// Move the Prescription at `from` to index `to`, shifting the rest, and return a new
-// array. An out-of-range index leaves the order unchanged.
-function movePrescription(
-  prescriptions: DraftPrescription[],
-  from: number,
-  to: number,
-): DraftPrescription[] {
-  const last = prescriptions.length - 1;
-  if (from < 0 || from > last || to < 0 || to > last || from === to) {
-    return prescriptions;
-  }
-  const reordered = [...prescriptions];
-  const [moved] = reordered.splice(from, 1);
-  reordered.splice(to, 0, moved);
-  return reordered;
-}
-
-// A fresh Superset tag for a Session: one past the largest numeric tag already in use,
-// so a new group never collides with an existing one. Tags originate here (the reducer
-// is the only author this slice), so a simple numeric scheme suffices.
-function freshSupersetTag(prescriptions: DraftPrescription[]): string {
-  const used = prescriptions
-    .map((prescription) => prescription.supersetGroup)
-    .filter((group): group is string => group !== null)
-    .map((group) => Number.parseInt(group, 10))
-    .filter((value) => Number.isInteger(value));
-  return String(used.length > 0 ? Math.max(...used) + 1 : 1);
-}
-
-// Group the Prescription at `position` with the next one into one Superset, unifying
-// any groups they already belong to (ADR-0023). The unified group takes the first
-// member's tag (else the next's, else a fresh tag) and one round-rest: an existing
-// group's round-rest is kept, otherwise it seeds from the last member's own rest. An
-// out-of-range `position` (no next Prescription) leaves the list untouched.
+// Group the Prescription at `position` with the next one into one Superset (ADR-0023),
+// seeding a new group's round-rest from the last member's own rest. Thin wrapper over the
+// shared `groupWithNext` so the Builder's keyboard and drag paths share the one grouping
+// rule with the Hand-Authored screen; `next.restSeconds` is the Builder-specific seed.
 function groupWithNext(
   prescriptions: DraftPrescription[],
   position: number,
 ): DraftPrescription[] {
-  const first = prescriptions[position];
-  const next = prescriptions[position + 1];
-  if (!first || !next) return prescriptions;
-
-  const tag = first.supersetGroup ?? next.supersetGroup ?? freshSupersetTag(prescriptions);
-  const absorbed = new Set<string>();
-  if (first.supersetGroup) absorbed.add(first.supersetGroup);
-  if (next.supersetGroup) absorbed.add(next.supersetGroup);
-
-  const existingRoundRest =
-    (first.supersetGroup ? first.roundRestSeconds : null) ??
-    (next.supersetGroup ? next.roundRestSeconds : null);
-  const roundRest = existingRoundRest ?? next.restSeconds;
-
-  return prescriptions.map((prescription, index) => {
-    const joins =
-      index === position ||
-      index === position + 1 ||
-      (prescription.supersetGroup !== null && absorbed.has(prescription.supersetGroup));
-    if (!joins) return prescription;
-    return { ...prescription, supersetGroup: tag, roundRestSeconds: roundRest };
-  });
-}
-
-// Dissolve the Superset the Prescription at `position` belongs to: clear the tag and
-// round-rest on every member, so each member's own (dormant) rest is live again. A
-// Prescription that is not in a group leaves the list untouched.
-function ungroup(
-  prescriptions: DraftPrescription[],
-  position: number,
-): DraftPrescription[] {
-  const tag = prescriptions[position]?.supersetGroup ?? null;
-  if (tag === null) return prescriptions;
-  return prescriptions.map((prescription) =>
-    prescription.supersetGroup === tag
-      ? { ...prescription, supersetGroup: null, roundRestSeconds: null }
-      : prescription,
-  );
-}
-
-// Set the group-owned round-rest of the Superset at `position` on every member, so the
-// value stays consistent no matter which member the edit came from. A no-op when the
-// Prescription is not grouped.
-function editRoundRest(
-  prescriptions: DraftPrescription[],
-  position: number,
-  roundRestSeconds: number | null,
-): DraftPrescription[] {
-  const tag = prescriptions[position]?.supersetGroup ?? null;
-  if (tag === null) return prescriptions;
-  return prescriptions.map((prescription) =>
-    prescription.supersetGroup === tag
-      ? { ...prescription, roundRestSeconds }
-      : prescription,
+  return supersetGroupWithNext(
+    prescriptions,
+    position,
+    prescriptions[position + 1]?.restSeconds ?? null,
   );
 }
 
@@ -533,26 +468,6 @@ function detachFromGroup(
       : prescription,
   );
   return dissolveSingletonGroups(detached);
-}
-
-// Clear the tag and round-rest of any Superset left with fewer than two members — a
-// lone tag is not a valid group (ADR-0023). Returns a new array; solo Prescriptions
-// and healthy groups pass through untouched.
-function dissolveSingletonGroups(
-  prescriptions: DraftPrescription[],
-): DraftPrescription[] {
-  const counts = new Map<string, number>();
-  for (const prescription of prescriptions) {
-    const group = prescription.supersetGroup;
-    if (group !== null) counts.set(group, (counts.get(group) ?? 0) + 1);
-  }
-  return prescriptions.map((prescription) => {
-    const group = prescription.supersetGroup;
-    if (group !== null && (counts.get(group) ?? 0) < 2) {
-      return { ...prescription, supersetGroup: null, roundRestSeconds: null };
-    }
-    return prescription;
-  });
 }
 
 // Drop the Prescription at `from` onto the row at `to`, forming or joining a Superset
@@ -578,31 +493,11 @@ function groupByDrag(
     return prescriptions;
   }
   const detached = detachFromGroup(prescriptions, from);
-  const moved = movePrescription(detached, from, to);
+  const moved = moveItem(detached, from, to);
   // After the move the dragged row sits at `to`; the drop target is the neighbour it
   // landed against — below it when dragging down, above it when dragging up.
   const anchor = from < to ? to - 1 : to;
   return groupWithNext(moved, anchor);
-}
-
-// Whether every Superset occupies an unbroken run of positions — the invariant the
-// reducer maintains on reorder and the deploy gate re-checks (ADR-0023).
-function supersetsAreContiguous(prescriptions: DraftPrescription[]): boolean {
-  const bounds = new Map<string, { first: number; last: number; count: number }>();
-  prescriptions.forEach((prescription, index) => {
-    const group = prescription.supersetGroup;
-    if (group === null) return;
-    const bound = bounds.get(group);
-    if (!bound) bounds.set(group, { first: index, last: index, count: 1 });
-    else {
-      bound.last = index;
-      bound.count += 1;
-    }
-  });
-  for (const { first, last, count } of bounds.values()) {
-    if (last - first + 1 !== count) return false;
-  }
-  return true;
 }
 
 // --- The manipulation layer's two pure modules (#217, ADR-0023). A drag-intent
@@ -654,23 +549,6 @@ function parseBoxId(id: string): string | null {
   if (!id.startsWith(BOX_DROP_PREFIX)) return null;
   const tag = id.slice(BOX_DROP_PREFIX.length);
   return tag.length > 0 ? tag : null;
-}
-
-// The first/last positions a Superset occupies, or `null` if the tag is absent — used
-// to tell a within-box reorder from a member being dragged outside its own container.
-function groupSpan(
-  prescriptions: DraftPrescription[],
-  group: string,
-): { first: number; last: number } | null {
-  let first = -1;
-  let last = -1;
-  prescriptions.forEach((prescription, index) => {
-    if (prescription.supersetGroup === group) {
-      if (first < 0) first = index;
-      last = index;
-    }
-  });
-  return first < 0 ? null : { first, last };
 }
 
 // Map a raw drag-end (dragged row id, drop-target id) to a semantic DropIntent, or
@@ -733,7 +611,7 @@ export interface DragFeedback {
 // derived from `classifyDrag` so the escalating visuals can never promise an outcome the
 // resolver won't produce (#217/#218). The insertion line sits at the target slot: below
 // the hovered row when dragging downward, at it when dragging upward — matching where
-// `movePrescription` lands the row.
+// `moveItem` lands the row.
 export function dragFeedback(
   activeId: string,
   overId: string | null,
@@ -766,7 +644,7 @@ export function dragFeedback(
 
 // The boundary index where the insertion line is drawn for a move from `from` to `to`:
 // dragging downward the row lands just after the target (`to + 1`), upward it lands at
-// the target (`to`) — the same slot `movePrescription` splices it into.
+// the target (`to`) — the same slot `moveItem` splices it into.
 function insertionGapFor(from: number, to: number): number {
   return from < to ? to + 1 : to;
 }
@@ -886,14 +764,14 @@ function moveKeepingContiguous(
   from: number,
   to: number,
 ): DraftPrescription[] {
-  const moved = movePrescription(prescriptions, from, to);
+  const moved = moveItem(prescriptions, from, to);
   if (moved === prescriptions || supersetsAreContiguous(moved)) return moved;
   // The dragged row (now at `to`) wedged into a group's run; both neighbours share it.
   const straddled = moved[to - 1]?.supersetGroup ?? moved[to + 1]?.supersetGroup ?? null;
   if (straddled === null) return moved;
   const span = groupSpan(moved, straddled);
   if (!span) return moved;
-  return movePrescription(moved, to, from < to ? span.last : span.first);
+  return moveItem(moved, to, from < to ? span.last : span.first);
 }
 
 // Add the Prescription at `from` to the existing Superset `group`: detach it from any
@@ -914,81 +792,12 @@ function joinGroup(
   const detached = detachFromGroup(prescriptions, from);
   const span = groupSpan(detached, group);
   if (!span) return prescriptions;
-  const moved = movePrescription(detached, from, span.last);
+  const moved = moveItem(detached, from, span.last);
   return moved.map((prescription, index) =>
     index === span.last
       ? { ...prescription, supersetGroup: group, roundRestSeconds: roundRest }
       : prescription,
   );
-}
-
-// One Prescription's Superset display facts, aligned to the Session's Prescription
-// list — what the Builder renders per row (ADR-0023). Solo Prescriptions carry a null
-// `memberLabel`; a grouped member gets its A/B/C badge, whether it opens or closes the
-// group (so the Builder brackets the group into one visible container, #215), and the
-// group's round-rest. `groupSize` is the container-grouping fact the box needs: how many
-// members the container wraps — `0` for a solo Prescription, so it renders outside any
-// container. `canGroupWithNext` gates the "group with next" control.
-export interface SupersetSlot {
-  group: string | null;
-  memberLabel: string | null;
-  isFirstMember: boolean;
-  isLastMember: boolean;
-  groupSize: number;
-  roundRestSeconds: number | null;
-  canGroupWithNext: boolean;
-}
-
-// Derive the per-Prescription Superset layout for a Session. Members of a group are
-// lettered A, B, C… in order; the group's first/last members are flagged so the UI can
-// bracket it and place the single round-rest field on its last member.
-export function supersetLayout(
-  prescriptions: DraftPrescription[],
-): SupersetSlot[] {
-  const totals = new Map<string, number>();
-  for (const prescription of prescriptions) {
-    if (prescription.supersetGroup !== null) {
-      totals.set(
-        prescription.supersetGroup,
-        (totals.get(prescription.supersetGroup) ?? 0) + 1,
-      );
-    }
-  }
-
-  const ordinals = new Map<string, number>();
-  return prescriptions.map((prescription, index) => {
-    const group = prescription.supersetGroup;
-    const next = prescriptions[index + 1];
-    // A Prescription can start/extend a group with its neighbour when one exists and
-    // is not already in the *same* group.
-    const canGroupWithNext =
-      next !== undefined && (group === null || next.supersetGroup !== group);
-
-    if (group === null) {
-      return {
-        group: null,
-        memberLabel: null,
-        isFirstMember: false,
-        isLastMember: false,
-        groupSize: 0,
-        roundRestSeconds: null,
-        canGroupWithNext,
-      };
-    }
-
-    const ordinal = ordinals.get(group) ?? 0;
-    ordinals.set(group, ordinal + 1);
-    const total = totals.get(group) ?? 1;
-    return {
-      group,
-      memberLabel: String.fromCharCode(65 + ordinal),
-      isFirstMember: ordinal === 0,
-      isLastMember: ordinal === total - 1,
-      groupSize: total,
-      roundRestSeconds: prescription.roundRestSeconds,
-      canGroupWithNext,
-    };
-  });
 }
 
 // Replace an un-performed Session's whole Prescription list via `change`, returning a

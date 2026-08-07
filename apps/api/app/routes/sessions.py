@@ -127,6 +127,11 @@ def _serialize(view: SessionView) -> dict:
                 "rest_seconds": p.rest_seconds,
                 "tempo": p.tempo,
                 "recommended_load": p.recommended_load,
+                # Superset overlay (ADR-0023): the shared group tag and group-owned
+                # round-rest, both null on a flat, solo Prescription. Exposed on the read
+                # so a saved Superset renders on the Session detail.
+                "superset_group": p.superset_group,
+                "round_rest_seconds": p.round_rest_seconds,
                 "exercise_id": p.exercise_id,
                 "exercise_name": p.exercise_name,
                 "exercise_description": p.exercise_description,
@@ -152,8 +157,12 @@ class AuthorPrescriptionBody(BaseModel):
     Carries the sets/reps/rest/tempo and a typed Load (ADR-0010): ``load_kind`` is the
     kind the user picked and ``load_value`` its value field (a number for ``absolute`` /
     ``percent_1rm``, a ``low-high`` pair for ``range``, added kilograms for
-    ``bodyweight``, free text for ``qualitative``). No Superset fields in this slice —
-    catalog picker only (issue #287)."""
+    ``bodyweight``, free text for ``qualitative``). ``superset_group`` /
+    ``round_rest_seconds`` overlay Supersets (ADR-0023, issue #289): both ``None`` for a
+    flat, solo Prescription; members of one Superset share the group tag and carry the
+    group-owned round-rest. The grouping is validated through the Builder's
+    ``validate_deploy`` rules in the service, so a non-contiguous or singleton "superset"
+    is rejected whole with nothing persisted."""
 
     exercise_id: int
     sets: int
@@ -162,6 +171,8 @@ class AuthorPrescriptionBody(BaseModel):
     tempo: str | None = None
     load_kind: str = DEFAULT_LOAD_KIND
     load_value: str | None = None
+    superset_group: str | None = None
+    round_rest_seconds: int | None = None
 
     @field_validator("load_kind")
     @classmethod
@@ -182,6 +193,8 @@ class AuthorPrescriptionBody(BaseModel):
             rest_seconds=self.rest_seconds,
             tempo=self.tempo,
             recommended_load=parsed.to_dict() if parsed is not None else None,
+            superset_group=self.superset_group,
+            round_rest_seconds=self.round_rest_seconds,
         )
 
 
