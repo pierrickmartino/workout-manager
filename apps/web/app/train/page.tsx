@@ -12,9 +12,13 @@ export default function TrainPage() {
     <section className="flex flex-col gap-6">
       <PageHeader overline="PULSE // TRAIN" title="Start new training" />
       <p className="font-mono text-[13px] leading-relaxed text-text-muted">
-        Generate a full multi-week protocol, or a single standalone workout.
+        Generate a full multi-week protocol or a single standalone workout — or log a
+        past workout you did yourself, no AI.
       </p>
-      <GenerateTrainingLaunchpad eyebrow="TRAIN // START SOMETHING NEW" />
+      <GenerateTrainingLaunchpad
+        eyebrow="TRAIN // START SOMETHING NEW"
+        showLogPastWorkout
+      />
       <BackLink href="/dashboard">Back to dashboard</BackLink>
     </section>
   );

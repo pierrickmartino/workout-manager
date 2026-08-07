@@ -44,6 +44,12 @@ class SessionDraft:
     training_type: str
     duration_minutes: int
     prescriptions: list[PrescriptionDraft] = field(default_factory=list)
+    # Session Provenance (ADR-0040): how this plan came to exist — ``ai_generated``
+    # (the generation pipeline) or ``user_authored`` (a Hand-Authored Session, built by
+    # hand with no AI). Defaults to ``ai_generated`` so every existing generation path is
+    # unchanged; the Hand-Authored create path stamps ``user_authored``. See
+    # ``app.domain.session_provenance.SessionProvenance``.
+    provenance: str = "ai_generated"
     # Operational AI-usage lineage (ADR-0039, #274): the trace id of the Generation
     # Call that produced this standalone Session, stamped at creation. ``None`` when no
     # monitoring backend was configured.
@@ -243,6 +249,7 @@ class SqlSessionRepository:
             clerk_user_id=clerk_user_id,
             training_type=draft.training_type,
             duration_minutes=draft.duration_minutes,
+            provenance=draft.provenance,
             trace_id=draft.trace_id,
         )
         self._session.add(workout)
@@ -373,6 +380,7 @@ class InMemorySessionRepository:
             clerk_user_id=clerk_user_id,
             training_type=draft.training_type,
             duration_minutes=draft.duration_minutes,
+            provenance=draft.provenance,
             trace_id=draft.trace_id,
         )
         self._next_id += 1
