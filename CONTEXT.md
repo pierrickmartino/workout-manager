@@ -19,8 +19,16 @@ The next un-performed Session in a self-paced Protocol's ordered sequence — wh
 _Avoid_: Today's session, today's protocol, scheduled session
 
 **Session**:
-A single prescribed workout, composed of Exercise Prescriptions. One unified concept: a Session may belong to a Protocol (carrying a Week/Day position) or stand alone (generated on its own with no parent or position). It is a *plan*, not a record of execution. Logging and feedback work identically whether or not it belongs to a Protocol.
+A single prescribed workout, composed of Exercise Prescriptions. One unified concept: a Session may belong to a Protocol (carrying a Week/Day position) or stand alone (generated or hand-authored on its own, with no parent or position). It is a *plan*, not a record of execution. Logging and feedback work identically whether or not it belongs to a Protocol.
 _Avoid_: Workout, training (when referring to the plan)
+
+**Hand-Authored Session**:
+A Session a user builds by hand with **no AI call** — choosing its Exercise Prescriptions, sets, reps, rest, tempo, Load, and Supersets directly — to record training done outside any generated plan. It is a first-class standalone Session (no Protocol parent) that **persists as a reusable plan** and is logged, re-logged, and corrected exactly like a generated one. Distinct from a plan-less Logged Session, which records sets with *no plan at all* behind them: a Hand-Authored Session *is* a plan, merely not an AI-authored one. Its Session Provenance is `user_authored`.
+_Avoid_: Custom workout, manual workout, Workout, my routine
+
+**Session Provenance**:
+How a Session's plan came to exist: `ai_generated` (produced by the generation pipeline) or `user_authored` (built by hand, no AI — a Hand-Authored Session). Carried on every Session so plan-quality affordances that assume the AI wrote it — Generation Feedback and Regeneration — are never offered on a `user_authored` plan. Parallel to an Exercise's Provenance and named the same way, but a distinct axis on a distinct concept (the plan, not the movement).
+_Avoid_: Origin, source, generated flag
 
 **Exercise**:
 A movement definition in the shared, global catalog — name, description, ordered Execution Steps, targeted muscles (split into Primary and Secondary), difficulty, required equipment, variations, alternatives, precautions. One Exercise (e.g. "Barbell Back Squat") is shared across all users; AI-invented movements are stored once and enriched once for everyone. Distinct from the prescription of its sets/reps.
