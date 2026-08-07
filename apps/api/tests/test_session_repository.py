@@ -137,6 +137,33 @@ def test_a_new_session_has_not_been_regenerated(repos):
     assert view.has_been_regenerated is False
 
 
+def test_create_defaults_provenance_to_ai_generated(repos):
+    # Arrange / Act — a draft that does not name a provenance (the generation path).
+    session_repo, exercises = repos
+    view = session_repo.create("user_ai", _draft_with_two_prescriptions(exercises))
+
+    # Assert — every existing creation path is AI (ADR-0040).
+    assert view.provenance == "ai_generated"
+
+
+def test_create_persists_user_authored_provenance(repos):
+    # Arrange — the Hand-Authored create path stamps user_authored (ADR-0040).
+    session_repo, exercises = repos
+    draft = _draft_with_two_prescriptions(exercises)
+    authored = SessionDraft(
+        training_type=draft.training_type,
+        duration_minutes=draft.duration_minutes,
+        prescriptions=draft.prescriptions,
+        provenance="user_authored",
+    )
+
+    # Act
+    view = session_repo.create("user_hand", authored)
+
+    # Assert
+    assert view.provenance == "user_authored"
+
+
 def _replacement(exercises) -> PrescriptionDraft:
     goblet = exercises.find_or_create(
         "Goblet Squat", provenance=Provenance.AI_GENERATED, targeted_muscles=["quads"]

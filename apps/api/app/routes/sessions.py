@@ -10,13 +10,23 @@ responses use the standard envelope."""
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, Body, Depends, HTTPException
-from pydantic import BaseModel, Field
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field, field_validator
 
 from app.auth.dependencies import get_current_user
+from app.authoring.service import (
+    AuthoredSessionInvalid,
+    AuthorSessionRequest,
+    author_and_log_session,
+)
 from app.domain.feedback import parse_verdict
 from app.domain.fitness_profile import is_sensitive, resolve_equipment
-from app.envelope import success_envelope
+from app.domain.load import LoadKind, load_from_input
+from app.domain.session_provenance import SessionProvenance
+from app.envelope import error_envelope, success_envelope
 from app.generation.generator import (
     GenerationError,
     GenerationRequest,
@@ -54,7 +64,13 @@ from app.repositories.generation_feedback_repository import (
     GenerationFeedbackView,
 )
 from app.repositories.profile_repository import ProfileRepository
-from app.repositories.session_repository import SessionRepository, SessionView
+from app.repositories.session_repository import (
+    PrescriptionDraft,
+    SessionRepository,
+    SessionView,
+)
+from app.protocols.deploy_validation import DeployError
+from app.routes.logs import LogSetBody, serialize_logged_session
 from app.substitution.service import (
     HarderVariationSuggestion,
     PrescriptionNotFound,
@@ -121,6 +137,123 @@ def _serialize(view: SessionView) -> dict:
             for p in view.prescriptions
         ],
     }
+
+
+DEFAULT_LOAD_KIND = "absolute"
+# A Hand-Authored plan carries a nominal length only; the record's actual training time
+# is not measured for a log-after-the-fact performance (ADR-0014), so this is a neutral
+# placeholder used when the build-and-log screen sends none.
+DEFAULT_AUTHORED_DURATION_MINUTES = 30
+
+
+class AuthorPrescriptionBody(BaseModel):
+    """One authored Exercise Prescription — the *plan* side of a Hand-Authored Session.
+
+    Carries the sets/reps/rest/tempo and a typed Load (ADR-0010): ``load_kind`` is the
+    kind the user picked and ``load_value`` its value field (a number for ``absolute`` /
+    ``percent_1rm``, a ``low-high`` pair for ``range``, added kilograms for
+    ``bodyweight``, free text for ``qualitative``). No Superset fields in this slice —
+    catalog picker only (issue #287)."""
+
+    exercise_id: int
+    sets: int
+    reps: str
+    rest_seconds: int | None = None
+    tempo: str | None = None
+    load_kind: str = DEFAULT_LOAD_KIND
+    load_value: str | None = None
+
+    @field_validator("load_kind")
+    @classmethod
+    def _known_load_kind(cls, value: str) -> str:
+        try:
+            LoadKind(value)
+        except ValueError as exc:
+            allowed = ", ".join(kind.value for kind in LoadKind)
+            raise ValueError(f"load_kind must be one of: {allowed}") from exc
+        return value
+
+    def to_draft(self) -> PrescriptionDraft:
+        parsed = load_from_input(self.load_kind, self.load_value)
+        return PrescriptionDraft(
+            exercise_id=self.exercise_id,
+            sets=self.sets,
+            reps=self.reps,
+            rest_seconds=self.rest_seconds,
+            tempo=self.tempo,
+            recommended_load=parsed.to_dict() if parsed is not None else None,
+        )
+
+
+class AuthorSessionBody(BaseModel):
+    """Validated request to author-and-log a Hand-Authored Session (ADR-0040).
+
+    ``prescriptions`` are the authored plan and ``logged_sets`` the first performance
+    (the log form's ``LogSetBody`` shape, reused). ``performed_on`` defaults to today on
+    the client and is rejected when in the future. ``duration_minutes`` is the plan's
+    nominal length — optional, since the build-and-log screen collects only performed
+    work; a neutral default stands in when it is absent. Emptiness and catalog validity
+    are checked in the service so a rejected request surfaces a structured ``422`` and
+    persists nothing."""
+
+    performed_on: date
+    training_type: str = Field(min_length=1)
+    duration_minutes: int | None = None
+    prescriptions: list[AuthorPrescriptionBody] = Field(default_factory=list)
+    logged_sets: list[LogSetBody] = Field(default_factory=list)
+
+
+def _authored_error_response(errors: list[DeployError]) -> JSONResponse:
+    """A structured ``422`` naming every offending item, so the client can fix and retry
+    in one pass. Mirrors the DEPLOY endpoint's error shape; persists nothing."""
+
+    body = error_envelope(errors[0].message)
+    body["errors"] = [
+        {"code": error.code, "message": error.message, "position": error.position}
+        for error in errors
+    ]
+    return JSONResponse(status_code=HTTP_UNPROCESSABLE_ENTITY, content=body)
+
+
+@router.post("/sessions")
+def author_session(
+    payload: AuthorSessionBody,
+    clerk_user_id: str = Depends(get_current_user),
+    sessions: SessionRepository = Depends(get_session_repository),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+    profiles: ProfileRepository = Depends(get_profile_repository),
+) -> object:
+    """Author a ``user_authored`` standalone Session and log its first performance in one
+    submit (ADR-0040).
+
+    Delegates to ``author_and_log_session``, which validates the whole request before any
+    write — the performed date is not in the future, the plan passes the Builder's deploy
+    rules, and every performed set references a real catalog Exercise — then creates the
+    plan and records its first Logged Session by reusing ``log_session``. A rejected
+    request returns a structured ``422`` naming the offending item(s) and persists
+    nothing. On success the standard envelope carries the new Logged Session, so the
+    client can jump to it in History."""
+
+    request = AuthorSessionRequest(
+        performed_on=payload.performed_on,
+        training_type=payload.training_type,
+        duration_minutes=payload.duration_minutes or DEFAULT_AUTHORED_DURATION_MINUTES,
+        prescriptions=[prescription.to_draft() for prescription in payload.prescriptions],
+        logged_sets=[logged_set.to_draft() for logged_set in payload.logged_sets],
+    )
+    try:
+        view = author_and_log_session(
+            request,
+            clerk_user_id,
+            sessions=sessions,
+            exercises=exercises,
+            logged=logged,
+            profiles=profiles,
+        )
+    except AuthoredSessionInvalid as exc:
+        return _authored_error_response(exc.errors)
+    return success_envelope(serialize_logged_session(view))
 
 
 @router.post("/sessions/generate")
@@ -227,8 +360,17 @@ def record_feedback(
         ) from exc
 
     # Feedback is recorded only on the user's own Session.
-    if sessions.get(session_id, clerk_user_id) is None:
+    session_view = sessions.get(session_id, clerk_user_id)
+    if session_view is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Session not found")
+
+    # Generation Feedback is an AI-only affordance (ADR-0040): "the AI gave me a bad plan"
+    # is nonsensical on a plan the user wrote by hand, so a user_authored Session rejects it.
+    if session_view.provenance == SessionProvenance.USER_AUTHORED.value:
+        raise HTTPException(
+            status_code=HTTP_CONFLICT,
+            detail="Generation feedback isn't available for a hand-authored session.",
+        )
 
     view = feedback.record(
         clerk_user_id,
@@ -258,6 +400,18 @@ def regenerate(
     exercises: ExerciseRepository = Depends(get_exercise_repository),
     sessions: SessionRepository = Depends(get_session_repository),
 ) -> dict:
+    # Regeneration is an AI-only affordance (ADR-0040): a hand-authored plan was never
+    # generated, so the AI can't redo it. Reject a user_authored Session before the
+    # regeneration service runs; a missing/unowned Session still 404s from the service.
+    session_view = sessions.get(session_id, clerk_user_id)
+    if (
+        session_view is not None
+        and session_view.provenance == SessionProvenance.USER_AUTHORED.value
+    ):
+        raise HTTPException(
+            status_code=HTTP_CONFLICT,
+            detail="A hand-authored session can't be regenerated.",
+        )
     try:
         view = regenerate_session(
             session_id,

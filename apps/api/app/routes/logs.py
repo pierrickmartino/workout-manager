@@ -151,7 +151,11 @@ class LogSessionBody(BaseModel):
         return parse_completion_outcome(value).value
 
 
-def _serialize(view: LoggedSessionView) -> dict:
+def serialize_logged_session(view: LoggedSessionView) -> dict:
+    """Serialize a Logged Session to the envelope's ``data`` shape.
+
+    Public so sibling routes that also return a Logged Session (the Hand-Authored Session
+    create path, ADR-0040) share one serializer instead of re-deriving the shape."""
     return {
         "id": view.id,
         "clerk_user_id": view.clerk_user_id,
@@ -209,7 +213,7 @@ def create_log(
         raise HTTPException(
             status_code=HTTP_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
-    return success_envelope(_serialize(view))
+    return success_envelope(serialize_logged_session(view))
 
 
 class LogAdhocBody(BaseModel):
@@ -271,7 +275,7 @@ def create_adhoc_log(
         raise HTTPException(
             status_code=HTTP_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
-    return success_envelope(_serialize(view))
+    return success_envelope(serialize_logged_session(view))
 
 
 class LogCorrectionBody(BaseModel):
@@ -350,7 +354,7 @@ def correct_log(
         raise HTTPException(
             status_code=HTTP_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
-    return success_envelope(_serialize(view))
+    return success_envelope(serialize_logged_session(view))
 
 
 @router.delete("/logs/{log_id}")
@@ -385,4 +389,4 @@ def read_history(
     logged: LoggedSessionRepository = Depends(get_logged_session_repository),
 ) -> dict:
     history = logged.list_for_user(clerk_user_id)
-    return success_envelope([_serialize(view) for view in history])
+    return success_envelope([serialize_logged_session(view) for view in history])

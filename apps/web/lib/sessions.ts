@@ -1,5 +1,7 @@
 import { apiGet, apiSend, type Envelope } from "./api";
 
+import type { AuthorSessionInput } from "./hand-authored-session";
+import type { LoggedSession } from "./logs-types";
 import type {
   ExerciseDetail,
   GenerateSessionInput,
@@ -20,6 +22,16 @@ export async function generateSession(
   input: GenerateSessionInput,
 ): Promise<Envelope<WorkoutSession>> {
   return apiSend("/api/sessions/generate", "POST", input);
+}
+
+// Author-and-log a Hand-Authored Session (ADR-0040, issue #287): one POST creates a
+// standalone `user_authored` Session (the plan) and records its first Logged Session
+// (the record) atomically. The response is the created Logged Session, so the caller can
+// jump to it in History. A rejected request comes back as an envelope error.
+export async function authorSession(
+  input: AuthorSessionInput,
+): Promise<Envelope<LoggedSession>> {
+  return apiSend("/api/sessions", "POST", input);
 }
 
 export async function fetchSession(
