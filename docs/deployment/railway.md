@@ -27,7 +27,7 @@ runs migrations (see [Migration ordering](#migration-ordering)).
 > **Optional: AI-usage monitoring.** Self-hosted Langfuse (ADR-0039) is not
 > required to run the app — leave its variables unset and the app records
 > nothing (no-op recorder). To deploy it on Railway too, see
-> [Step 7](#step-7-optional-self-hosted-langfuse-monitoring); the project-side
+> [Step 7](#step-7--optional-self-hosted-langfuse-monitoring); the project-side
 > configuration (90-day retention, per-model prices) is the same everywhere and
 > lives in [`langfuse.md`](./langfuse.md).
 
@@ -289,69 +289,132 @@ correct and needs no code change.
 
 Operational AI-usage monitoring (ADR-0039). **Skip this entirely** if you don't
 want monitoring — the app runs fine without it (the no-op recorder). When you do
-want it, this stands up Langfuse on Railway and points `api`/`worker` at it. The
-project-side setup — 90-day retention and per-model prices — is identical on any
-host and is documented once in [`langfuse.md`](./langfuse.md); only the
-infrastructure mapping is Railway-specific.
+want it, deploy Langfuse and point `api`/`worker` at it.
 
-> ⚠️ **Its own datastore.** Langfuse must not share the app's Postgres/Redis
-> plugins — keep the monitoring data separate so retention purges and per-user
-> erasure never touch product data. Add **new** managed stores for Langfuse.
+> **Do not hand-build the six services.** Langfuse v3 is a stack of its own —
+> Postgres, ClickHouse, Redis, and S3-compatible blob storage behind
+> `langfuse-web` + `langfuse-worker` — and wiring them by hand on Railway is
+> error-prone (the internal service references have to match every renamed
+> service exactly). Use Langfuse's **official one-click Railway template**
+> instead; it provisions the whole stack with the internal wiring, volumes, and
+> IPv6 binding already correct. The steps below are for that template.
+>
+> The [`docker-compose.yml`](../../docker-compose.yml) stack in this repo is the
+> source of truth for a **local / non-Railway** deployment; the two paths differ
+> in exactly one way that matters (see the callout in Step 7.3): compose
+> bootstraps the API keys via `LANGFUSE_INIT_*`, while the Railway template has
+> you create them in the UI.
 
-**Add the Langfuse resources** (all private — no public domain except, if you
-must, a locked-down UI):
+### 7.1 — Deploy the Langfuse template
 
-| Compose service | Railway resource | Public? | Notes |
-|---|---|---|---|
-| `langfuse-db` | **Postgres** plugin (new, separate) | no | Langfuse's transactional store. |
-| `langfuse-redis` | **Redis** plugin (new, separate) | no | Langfuse's queue/cache. |
-| `clickhouse` | **Service** (`clickhouse/clickhouse-server:24`) with a volume | no | Analytics store. |
-| `minio` | **Service** (`minio/minio`) with a volume, or any S3 bucket | no | Event/blob storage. |
-| `langfuse-web` | **Service** (`langfuse/langfuse:3`) | operator-only | UI + ingestion API. |
-| `langfuse-worker` | **Service** (`langfuse/langfuse-worker:3`) | no | Async event processing. |
+1. Open Langfuse's official Railway guide —
+   <https://langfuse.com/self-hosting/deployment/railway> — and click its
+   **Deploy on Railway** button (the current template is
+   [railway.com/deploy/YJ_Ivb](https://railway.com/deploy/YJ_Ivb), "Langfuse v3
+   — Production-Ready Bundle"). Deploy it into a **new Railway project**, kept
+   separate from the app project.
+2. The template provisions the full stack — `langfuse-web`, `langfuse-worker`,
+   Postgres, ClickHouse, Redis, and blob storage (MinIO) — each with its own
+   volume and all cross-service variables pre-wired. It generates `SALT`,
+   `ENCRYPTION_KEY`, and `NEXTAUTH_SECRET` for you.
 
-Deploy these from their public images (Railway: *New → Docker Image*), not from
-this repo. Give `langfuse-web` and `langfuse-worker` the same Langfuse env block
-shown in [`docker-compose.yml`](../../docker-compose.yml), but with Railway
-references replacing the compose hostnames:
+> ⚠️ **This satisfies the "its own datastore" rule for free.** The template's
+> Postgres/Redis/ClickHouse are brand-new and separate from the app's plugins,
+> so the 90-day retention purge and per-user erasure never touch product data.
+> Do **not** repoint the template at the app's `Postgres`/`Redis`.
 
-```
-DATABASE_URL=postgresql://${{LangfusePostgres.PGUSER}}:${{LangfusePostgres.PGPASSWORD}}@${{LangfusePostgres.RAILWAY_PRIVATE_DOMAIN}}:5432/${{LangfusePostgres.PGDATABASE}}
-CLICKHOUSE_URL=http://${{ClickHouse.RAILWAY_PRIVATE_DOMAIN}}:8123
-CLICKHOUSE_MIGRATION_URL=clickhouse://${{ClickHouse.RAILWAY_PRIVATE_DOMAIN}}:9000
-REDIS_HOST=${{LangfuseRedis.RAILWAY_PRIVATE_DOMAIN}}
-REDIS_PORT=6379
-# ENCRYPTION_KEY must be 32-byte hex (openssl rand -hex 32); SALT/NEXTAUTH_SECRET random.
-# S3/MinIO + LANGFUSE_INIT_* exactly as in docker-compose.yml.
-```
+### 7.2 — Create your admin account
 
-> ℹ️ Langfuse's Postgres URL is a **plain `postgresql://`** — do **not** add the
-> `+psycopg` scheme here. That scheme is only for *this app's* SQLAlchemy
-> `DATABASE_URL` (Step 2); Langfuse is a separate Node app with its own driver.
+The template exposes `langfuse-web` on a Railway domain so you can reach the UI:
 
-**Point the app at Langfuse.** Add these three variables to **both** the `api`
+1. Confirm `AUTH_DISABLE_SIGNUP` is `false` on the `langfuse-web` service (the
+   template's default for first boot).
+2. Open the `langfuse-web` public domain and **create your operator account** —
+   the first account is the instance admin.
+3. **Lock signup back down:** set `AUTH_DISABLE_SIGNUP=true` on `langfuse-web`
+   and redeploy, so no one else can self-register on your instance.
+
+> Keep this public domain if the app talks to Langfuse across projects (the
+> common case — see Step 7.4); the browser UI and the app's ingestion calls both
+> go through it, protected by Langfuse's login and the app's secret key. Only
+> remove the public domain if you put Langfuse in the **same** project as the app
+> and rely on private networking for both.
+
+### 7.3 — Create the project and API keys
+
+In the Langfuse UI: create an **Organization** and a **Project** (name it
+`workout-manager`), then **Project → Settings → API Keys → Create**. Copy the
+generated pair:
+
+- **Public key** — `pk-lf-…`
+- **Secret key** — `sk-lf-…` (shown once; copy it now)
+
+> ⚠️ **Railway ≠ compose here.** This repo's `docker-compose.yml` bootstraps the
+> keys automatically via `LANGFUSE_INIT_PROJECT_PUBLIC_KEY` /
+> `LANGFUSE_INIT_PROJECT_SECRET_KEY`. The Railway template does **not** — you
+> create the project and keys in the UI (above) and paste them into the app in
+> Step 7.4. Don't go looking for `LANGFUSE_INIT_*` in the template.
+
+### 7.4 — Point the app at Langfuse
+
+Back in the **app** project, add these three variables to **both** the `api`
 and `worker` services (the worker records the majority of calls — cache-miss
-generations run there):
+generations run there, ADR-0005), using the keys from Step 7.3:
 
 ```
-LANGFUSE_HOST=http://${{<langfuse-web-service-name>.RAILWAY_PRIVATE_DOMAIN}}:3000
 LANGFUSE_PUBLIC_KEY=pk-lf-...
 LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_HOST=https://<your-langfuse-web-public-domain>
 ```
 
-Use the same key pair for the app and for `langfuse-web`'s `LANGFUSE_INIT_*` so
-the project bootstraps with the exact keys the app authenticates with (no manual
-copy-paste). `LANGFUSE_HOST` is the Langfuse service's **private** domain over
-Railway's IPv6 network — never a public URL for health-data prompts.
+**Which host value to use** depends on whether the two projects can talk over a
+private network:
 
-> ⚠️ **All three vars, on both services, or nothing records.** A missing var on
-> either service silently falls back to the no-op recorder (Step 7 of
+- **Different Railway projects (the common case):** private networking does not
+  span projects, so use the `langfuse-web` **public HTTPS domain**
+  (`https://…up.railway.app` or your custom domain). Traffic is server-to-server
+  from `api`/`worker` and authenticated by the secret key; TLS protects it in
+  transit. If you removed the public domain in Step 7.2, re-add one (behind
+  Langfuse login) or move Langfuse into the app project to use private DNS.
+- **Same Railway project:** you may instead use the private domain,
+  `http://${{<langfuse-web-service-name>.RAILWAY_PRIVATE_DOMAIN}}:3000`.
+
+> ⚠️ **The name inside `${{ … }}` must be the exact Railway service name.**
+> Railway resolves `${{ServiceName.VAR}}` by the service's *actual* name,
+> character-for-character. If your Langfuse web service is shown as `langfuse-web`,
+> the reference is `${{langfuse-web.RAILWAY_PRIVATE_DOMAIN}}` — not some other
+> label. A name that doesn't match resolves to an **empty string** and the app
+> silently falls back to the no-op recorder. (This was the bug in an earlier
+> draft of this doc: a table service named `langfuse-db` cannot be referenced as
+> `${{LangfusePostgres.…}}`.)
+
+> ⚠️ **All three vars, on both services, or nothing records.** A single missing
+> var on either `api` or `worker` makes `langfuse_configured()` return false and
+> the app uses the no-op recorder — **no traces and no error**. Verify the
+> resolved values on each service's **Variables** tab (see the failure table in
 > [`langfuse.md`](./langfuse.md#if-somethings-wrong)).
 
-**Then finish in the Langfuse UI** — [`langfuse.md`](./langfuse.md) Steps 4–6:
-set the **90-day retention window**, add **per-model prices** for
-`claude-opus-4-8` / `gpt-5.5` / `gemini-3.1-pro`, and verify a real generation
-appears with prompt/output, tokens, model, cost, and `user_id`.
+Redeploy `api` and `worker` so they pick up the new variables.
+
+### 7.5 — Configure the project and verify
+
+The remaining setup is host-independent and lives in
+[`langfuse.md`](./langfuse.md) — do **Steps 4–6** there:
+
+- **Step 4:** set the **90-day retention window** (Project → Settings → Data
+  Retention).
+- **Step 5:** add **per-model prices** for `claude-opus-4-8`, `gpt-5.5`, and
+  `gemini-3.1-pro` (exact model-name match; unit `TOKENS`, keys `input`/`output`).
+- **Step 6:** trigger a cache-miss generation and confirm one flat trace appears
+  in Langfuse with prompt/output, tokens, model, **cost**, and `user_id`.
+
+### Cost note
+
+Monitoring is **not** in the app's ~$5–15/mo floor. The Langfuse template adds
+ClickHouse (memory-hungry), MinIO, Redis, Postgres, and two Langfuse services —
+budget a meaningful increment (commonly **~$20–40+/mo** depending on retention
+and trace volume) on top of the app. This is the price of keeping health-data
+prompts on your own infrastructure rather than Langfuse Cloud.
 
 ---
 
