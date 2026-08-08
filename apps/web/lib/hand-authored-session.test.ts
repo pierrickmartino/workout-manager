@@ -247,6 +247,197 @@ test("drops an out-of-range perceived difficulty rather than sending it", () => 
   assert.equal(result.request.logged_sets[0].perceived_difficulty, null);
 });
 
+// --- Per-exercise Amount kind: Duration (ADR-0032, ADR-0040, issue #300) ---
+
+// A duration exercise: its target is a free-text hold time and each performed set carries
+// a time rather than a rep count. Reuses the base helper and overlays the duration shape.
+function durationExercise(
+  overrides: Partial<AuthoredExerciseFields> = {},
+): AuthoredExerciseFields {
+  return exercise({
+    kind: "duration",
+    reps: "45s",
+    loadKind: "",
+    loadValue: "",
+    performedSets: [{ duration: "0:45" }],
+    ...overrides,
+  });
+}
+
+test("records a duration exercise's performed sets as duration Quantities", () => {
+  // Arrange — a Dead hang held 45s per set, entered as mm:ss and bare seconds.
+  const input = fields({
+    exercises: [
+      durationExercise({
+        performedSets: [{ duration: "0:45" }, { duration: "45" }],
+      }),
+    ],
+  });
+
+  // Act
+  const result = buildAuthorSessionRequest(input, TODAY);
+
+  // Assert — the plan target rides through as free text; each set is a duration Quantity.
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.prescriptions[0].reps, "45s");
+  assert.deepEqual(
+    result.request.logged_sets.map((set) => [set.quantity_kind, set.quantity_value]),
+    [
+      ["duration", "0:45"],
+      ["duration", "45"],
+    ],
+  );
+});
+
+test("defaults a duration exercise's Load to bodyweight on both plan and record", () => {
+  // Arrange — no load entered; the kind, not the field, chooses the default.
+  const input = fields({ exercises: [durationExercise()] });
+
+  // Act
+  const result = buildAuthorSessionRequest(input, TODAY);
+
+  // Assert
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.prescriptions[0].load_kind, "bodyweight");
+  assert.equal(result.request.logged_sets[0].load_kind, "bodyweight");
+});
+
+test("keeps the absolute Load default for a reps exercise", () => {
+  // Arrange — a plain reps exercise with no load kind entered.
+  const input = fields({
+    exercises: [exercise({ loadKind: "", loadValue: "", performedSets: [{ reps: "5" }] })],
+  });
+
+  // Act
+  const result = buildAuthorSessionRequest(input, TODAY);
+
+  // Assert — reps keeps the existing absolute default; duration never leaks in.
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.prescriptions[0].load_kind, "absolute");
+  assert.equal(result.request.logged_sets[0].load_kind, "absolute");
+});
+
+test("respects an explicit Load override on a duration exercise", () => {
+  // Arrange — a weighted Dead hang: bodyweight-plus stays expressible via an override.
+  const input = fields({
+    exercises: [
+      durationExercise({
+        loadKind: "bodyweight",
+        loadValue: "20",
+        performedSets: [{ duration: "0:30", loadKind: "bodyweight", loadValue: "20" }],
+      }),
+    ],
+  });
+
+  // Act
+  const result = buildAuthorSessionRequest(input, TODAY);
+
+  // Assert — the entered load kind and value ride through, not the default.
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.prescriptions[0].load_value, "20");
+  assert.equal(result.request.logged_sets[0].load_kind, "bodyweight");
+  assert.equal(result.request.logged_sets[0].load_value, "20");
+});
+
+test("a duration exercise with a blank target errors without mentioning reps", () => {
+  // Arrange — the plan needs a target for every kind, but the wording follows the kind.
+  const input = fields({ exercises: [durationExercise({ reps: "  " })] });
+
+  // Act
+  const result = buildAuthorSessionRequest(input, TODAY);
+
+  // Assert — required-target still enforced; the message never says "rep".
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /target/i);
+  assert.doesNotMatch(result.error, /rep/i);
+});
+
+test("skips a blank performed set on a duration exercise", () => {
+  // Arrange — the middle set row was never filled in.
+  const input = fields({
+    exercises: [
+      durationExercise({
+        performedSets: [{ duration: "0:45" }, { duration: "" }, { duration: "1:00" }],
+      }),
+    ],
+  });
+
+  // Act
+  const result = buildAuthorSessionRequest(input, TODAY);
+
+  // Assert — only the two performed rows survive.
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.logged_sets.length, 2);
+});
+
+test("rejects a malformed duration on a performed set", () => {
+  // Arrange — a non-numeric hold time is a clear mistake, not a skip.
+  const input = fields({
+    exercises: [durationExercise({ performedSets: [{ duration: "a while" }] })],
+  });
+
+  // Act
+  const result = buildAuthorSessionRequest(input, TODAY);
+
+  // Assert
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /time/i);
+});
+
+test("rejects a non-positive duration on a performed set", () => {
+  // Arrange — a zero-second hold is meaningless.
+  const input = fields({
+    exercises: [durationExercise({ performedSets: [{ duration: "0" }] })],
+  });
+
+  // Act / Assert
+  const result = buildAuthorSessionRequest(input, TODAY);
+  assert.equal(result.ok, false);
+});
+
+test("an all-blank duration form yields the kind-neutral no-set error", () => {
+  // Arrange — a valid duration plan, but no set was recorded.
+  const input = fields({
+    exercises: [durationExercise({ performedSets: [{ duration: "" }] })],
+  });
+
+  // Act
+  const result = buildAuthorSessionRequest(input, TODAY);
+
+  // Assert — the error is amount-neutral, never demanding "reps".
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /amount for at least one set/i);
+});
+
+test("a mixed session records a duration hold alongside a rep set", () => {
+  // Arrange — a Dead hang (duration) and Back Squat (reps) in one workout.
+  const input = fields({
+    exercises: [
+      durationExercise({ exerciseId: 5 }),
+      exercise({ exerciseId: 9, performedSets: [{ reps: "5" }] }),
+    ],
+  });
+
+  // Act
+  const result = buildAuthorSessionRequest(input, TODAY);
+
+  // Assert — each set is typed by its own exercise's kind.
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(
+    result.request.logged_sets.map((set) => set.quantity_kind),
+    ["duration", "repetitions"],
+  );
+});
+
 // --- Supersets on the authored plan (ADR-0023, issue #289) ---
 
 test("carries a saved Superset's group tag and round-rest onto the prescriptions", () => {

@@ -13,7 +13,12 @@
 // the grouping travels only on the prescriptions. Create-by-name (ADR-0033, issue #288) is
 // resolved upstream in the picker, so the payload still carries only real `exercise_id`s.
 
-import { repetitionsInput } from "./quantity.ts";
+import {
+  durationInput,
+  parseDurationSeconds,
+  repetitionsInput,
+  type QuantityKind,
+} from "./quantity.ts";
 import type { LoadKind } from "./load";
 import type { LogSetInput } from "./logs-types";
 import { TRAINING_TYPES } from "./sessions-types.ts";
@@ -30,19 +35,24 @@ import {
 
 const VALID_TRAINING_TYPES = new Set<string>(TRAINING_TYPES);
 
-const DEFAULT_LOAD_KIND: LoadKind = "absolute";
+// The amount kind defaults to `repetitions` — the amount the form has always collected —
+// so an ordinary strength movement is unchanged and needs no extra clicks (ADR-0032).
+const DEFAULT_AMOUNT_KIND: QuantityKind = "repetitions";
 
 const MIN_PERCEIVED_DIFFICULTY = 1;
 const MAX_PERCEIVED_DIFFICULTY = 10;
 
-// One performed set the user recorded for an exercise: the reps done, the load, and an
-// optional perceived difficulty (the 1–10 scale the log forms label "RPE"). The amount
-// is raw — a set with no reps is one the user did not perform and is skipped.
-// Distance/duration Quantities are an ad-hoc-log concern; a structured workout records
-// repetitions, sent with its typed kind so the backend types the amount at the write
-// boundary (ADR-0032).
+// One performed set the user recorded for an exercise: the amount done (a rep count or, on
+// a duration exercise, a held time), the load, and an optional perceived difficulty (the
+// 1–10 scale the log forms label "RPE"). The amount is raw — a set with no amount is one
+// the user did not perform and is skipped. Which field carries the amount follows the
+// exercise's Amount kind, not the set: a structured exercise's sets are homogeneous
+// (ADR-0032, ADR-0040), so `reps` and `duration` are never both meaningful at once.
 export interface PerformedSetFields {
   reps?: string;
+  // The held time of a `duration` exercise's set (`mm:ss`, `hh:mm:ss`, or bare seconds),
+  // sent verbatim as a `duration` Quantity; the backend canonicalises to seconds.
+  duration?: string;
   loadKind?: string;
   loadValue?: string;
   perceivedDifficulty?: string;
@@ -55,7 +65,15 @@ export interface PerformedSetFields {
 // carry the structural state the shared `supersets` operations read and write.
 export interface AuthoredExerciseFields {
   exerciseId: number;
+  // The per-exercise Amount kind (ADR-0032), defaulting to `repetitions`. Chosen once for
+  // the whole exercise — a movement's sets are homogeneous — it governs both the plan-side
+  // target field and the shape of every performed set beneath it. This deliberately differs
+  // from the ad-hoc log, which picks a kind per set (issue #299/#300).
+  kind?: QuantityKind;
   sets: string;
+  // The plan-side target, kept free text for every kind (ADR-0032 defers typing the plan
+  // side): a rep target ("8-12") for reps, a hold time ("45s") for duration. Only its
+  // label, placeholder, and required-target wording follow the kind — never a schema change.
   reps: string;
   restSeconds?: string;
   tempo?: string;
@@ -112,17 +130,82 @@ function localToday(): string {
   return `${year}-${month}-${day}`;
 }
 
-// The load fields shared by plan and record: the picked kind (defaulting to absolute) and
-// its value, or null when none was entered.
+// The Amount kind an exercise carries, defaulting to `repetitions` for a blank/absent value.
+function amountKind(kind: QuantityKind | undefined): QuantityKind {
+  return kind ?? DEFAULT_AMOUNT_KIND;
+}
+
+// The Load kind an exercise defaults to for its Amount kind: `absolute` for reps (the
+// existing default), `bodyweight` for a hold — a Dead hang or plank is usually bodyweight,
+// removing the "Weight (kg)" friction of the reported case (ADR-0032, issue #299/#300).
+// Still a default only: an explicit pick (a weighted hang) overrides it. Exported so the
+// form applies the same rule on a kind switch as the payload mapper applies on build.
+export function defaultLoadKindForAmount(kind: QuantityKind): LoadKind {
+  return kind === "repetitions" ? "absolute" : "bodyweight";
+}
+
+// The load fields shared by plan and record: the picked kind (falling back to the Amount
+// kind's default) and its value, or null when none was entered.
 function loadFields(
   loadKind: string | undefined,
   loadValue: string | undefined,
+  kind: QuantityKind,
 ): { load_kind: LoadKind; load_value: string | null } {
   const value = (loadValue ?? "").trim();
   return {
-    load_kind: ((loadKind || DEFAULT_LOAD_KIND) as LoadKind),
+    load_kind: ((loadKind || defaultLoadKindForAmount(kind)) as LoadKind),
     load_value: value === "" ? null : value,
   };
+}
+
+// A performed set built from a row: a typed amount, or one of two non-set outcomes — the
+// row was left blank (skip it silently) or its amount is malformed (reject the whole form
+// with a clear message). Reps skip on both blank and malformed (regression: unchanged);
+// duration distinguishes a blank hold (skip) from a garbled time (reject), so a mistake is
+// never silently dropped (issue #300).
+type AmountResult =
+  | { status: "amount"; fields: Pick<LogSetInput, "quantity_kind" | "quantity_value"> }
+  | { status: "skip" }
+  | { status: "error"; error: string };
+
+// A performed set after mapping: the built payload, a silent skip, or a form-level error.
+type PerformedSetResult =
+  | { status: "set"; set: LogSetInput }
+  | { status: "skip" }
+  | { status: "error"; error: string };
+
+// The reps amount for a performed set, or a skip when the row is blank or malformed — the
+// behavior repetition-based logging has always had (a whole, non-negative count).
+function repetitionsPerformedAmount(set: PerformedSetFields): AmountResult {
+  const reps = wholeNonNegative(set.reps ?? "");
+  if (reps === null) return { status: "skip" };
+  return { status: "amount", fields: repetitionsInput(reps) };
+}
+
+// The duration amount for a performed set: a blank hold is skipped, a malformed or
+// non-positive time is rejected outright, and a valid time rides through verbatim as a
+// `duration` Quantity (the backend canonicalises to seconds).
+function durationPerformedAmount(set: PerformedSetFields): AmountResult {
+  const raw = (set.duration ?? "").trim();
+  if (raw === "") return { status: "skip" };
+
+  const seconds = parseDurationSeconds(raw);
+  if (seconds === null || seconds <= 0) {
+    return {
+      status: "error",
+      error: "Enter a valid hold time (like 45 or 1:30) for each duration set, or leave it blank.",
+    };
+  }
+  return { status: "amount", fields: durationInput(raw) };
+}
+
+// Dispatch to the amount mapper for the exercise's Amount kind. Reuses the shared quantity
+// request builders (`repetitionsInput` / `durationInput`), the same ones the ad-hoc log
+// uses, so the two forms type the amount identically (ADR-0032).
+function performedAmount(kind: QuantityKind, set: PerformedSetFields): AmountResult {
+  return kind === "duration"
+    ? durationPerformedAmount(set)
+    : repetitionsPerformedAmount(set);
 }
 
 // A whole, non-negative integer parsed from raw text, or null when blank or malformed.
@@ -136,15 +219,17 @@ export function wholeNonNegative(raw: string): number | null {
   return value;
 }
 
-// Build one performed logged-set payload from a row, or null when it was left
-// un-performed (no reps) or malformed. The reps ride through as a typed repetitions
-// Quantity; the load kind+value and an in-range perceived difficulty ride alongside.
+// Build one performed logged-set payload from a row, dispatching on the exercise's Amount
+// kind. Returns the built set, a skip (the row was left un-performed), or an error (the
+// amount is malformed). The typed amount rides as a Quantity; the load kind+value (with
+// the kind's default) and an in-range perceived difficulty ride alongside.
 function toLoggedSet(
   exerciseId: number,
+  kind: QuantityKind,
   set: PerformedSetFields,
-): LogSetInput | null {
-  const reps = wholeNonNegative(set.reps ?? "");
-  if (reps === null) return null;
+): PerformedSetResult {
+  const amount = performedAmount(kind, set);
+  if (amount.status !== "amount") return amount;
 
   const raw = (set.perceivedDifficulty ?? "").trim();
   const perceived = raw === "" ? null : Number(raw);
@@ -155,17 +240,30 @@ function toLoggedSet(
       perceived <= MAX_PERCEIVED_DIFFICULTY);
 
   return {
-    exercise_id: exerciseId,
-    ...repetitionsInput(reps),
-    ...loadFields(set.loadKind, set.loadValue),
-    perceived_difficulty: inRange ? perceived : null,
+    status: "set",
+    set: {
+      exercise_id: exerciseId,
+      ...amount.fields,
+      ...loadFields(set.loadKind, set.loadValue, kind),
+      perceived_difficulty: inRange ? perceived : null,
+    },
   };
 }
 
+// The required-target error for an exercise whose plan is missing a target, worded for the
+// Amount kind so a duration exercise never errors about a "rep target" (issue #300).
+function missingTargetError(kind: QuantityKind): string {
+  return kind === "duration"
+    ? "Each exercise needs a target hold time."
+    : "Each exercise needs a rep target.";
+}
+
 // Build the authored prescription for one exercise, or an error string naming what is
-// wrong with its plan (invalid sets count or a blank rep target).
+// wrong with its plan (invalid sets count or a blank target). The target stays required
+// and free text for every kind (ADR-0032); only its wording follows the Amount kind.
 function toPrescription(
   exercise: AuthoredExerciseFields,
+  kind: QuantityKind,
 ): { ok: true; prescription: AuthorPrescriptionInput } | { ok: false; error: string } {
   const sets = wholeNonNegative(exercise.sets);
   if (sets === null || sets < 1) {
@@ -174,7 +272,7 @@ function toPrescription(
 
   const reps = exercise.reps.trim();
   if (reps === "") {
-    return { ok: false, error: "Each exercise needs a rep target." };
+    return { ok: false, error: missingTargetError(kind) };
   }
 
   const tempo = (exercise.tempo ?? "").trim();
@@ -188,7 +286,7 @@ function toPrescription(
       reps,
       rest_seconds: restSeconds,
       tempo: tempo === "" ? null : tempo,
-      ...loadFields(exercise.loadKind, exercise.loadValue),
+      ...loadFields(exercise.loadKind, exercise.loadValue, kind),
       // The Superset overlay rides straight through: grouping is edited on the draft via
       // the shared `supersets` operations, which keep it contiguous and consistent.
       superset_group: exercise.supersetGroup,
@@ -230,18 +328,20 @@ export function buildAuthorSessionRequest(
       return { ok: false, error: "Pick every exercise from the catalog." };
     }
 
-    const built = toPrescription(exercise);
+    const kind = amountKind(exercise.kind);
+    const built = toPrescription(exercise, kind);
     if (!built.ok) return built;
     prescriptions.push(built.prescription);
 
     for (const set of exercise.performedSets) {
-      const loggedSet = toLoggedSet(exercise.exerciseId, set);
-      if (loggedSet !== null) loggedSets.push(loggedSet);
+      const outcome = toLoggedSet(exercise.exerciseId, kind, set);
+      if (outcome.status === "error") return { ok: false, error: outcome.error };
+      if (outcome.status === "set") loggedSets.push(outcome.set);
     }
   }
 
   if (loggedSets.length === 0) {
-    return { ok: false, error: "Record the reps for at least one set you performed." };
+    return { ok: false, error: "Record an amount for at least one set you performed." };
   }
 
   return {

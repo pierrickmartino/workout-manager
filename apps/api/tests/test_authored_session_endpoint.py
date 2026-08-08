@@ -311,6 +311,53 @@ def test_typed_load_and_quantity_round_trip():
     assert session["prescriptions"][0]["recommended_load"]["kind"] == "bodyweight"
 
 
+def test_duration_performed_set_round_trips_as_a_duration_quantity():
+    # Arrange — a Dead hang held 0:45 per set, authored as a duration exercise (issue #300).
+    # The plan target stays free text (ADR-0032, no schema change); the record carries a
+    # typed `duration` Quantity, which the author-and-log path already accepts end to end.
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_hold")
+    exercise_id = _create_exercise(client, headers, "Dead Hang")
+    body = _author_body(
+        exercise_id,
+        prescriptions=[
+            {
+                "exercise_id": exercise_id,
+                "sets": 3,
+                "reps": "45s",
+                "load_kind": "bodyweight",
+                "load_value": None,
+            }
+        ],
+        logged_sets=[
+            {
+                "exercise_id": exercise_id,
+                "quantity_kind": "duration",
+                "quantity_value": "0:45",
+                "load_kind": "bodyweight",
+                "load_value": None,
+                "perceived_difficulty": 7,
+            }
+        ],
+    )
+
+    # Act
+    response = client.post("/api/sessions", headers=headers, json=body)
+
+    # Assert — the set persists as a duration Quantity canonicalised to 45 seconds, with
+    # the entered text preserved verbatim...
+    assert response.status_code == 200
+    quantity = response.json()["data"]["logged_sets"][0]["quantity"]
+    assert quantity["kind"] == "duration"
+    assert quantity["seconds"] == 45
+    assert quantity["text"] == "0:45"
+
+    # ...and reads back the same way through the existing history route.
+    history = _history(client, headers)
+    assert history[0]["logged_sets"][0]["quantity"]["kind"] == "duration"
+    assert history[0]["logged_sets"][0]["quantity"]["seconds"] == 45
+
+
 def test_today_is_accepted():
     # Arrange
     client, ctx = build_client()
