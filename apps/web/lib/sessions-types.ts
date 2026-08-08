@@ -57,6 +57,11 @@ export interface WorkoutSession {
   training_type: string;
   duration_minutes: number;
   has_been_regenerated: boolean;
+  // Session Provenance (ADR-0040): how the plan came to exist — `ai_generated` or
+  // `user_authored`. Gates the AI-only affordances (Generation Feedback, Regeneration)
+  // via `aiAffordanceVisibility`. Optional here because the plain Session read always
+  // carries it while the live hydration read omits it (mirror of `previous_performance`).
+  provenance?: string;
   prescriptions: ExercisePrescription[];
 }
 
