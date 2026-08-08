@@ -31,7 +31,7 @@ How a Session's plan came to exist: `ai_generated` (produced by the generation p
 _Avoid_: Origin, source, generated flag
 
 **Exercise**:
-A movement definition in the shared, global catalog — name, description, ordered Execution Steps, targeted muscles (split into Primary and Secondary), difficulty, required equipment, variations, alternatives, precautions. One Exercise (e.g. "Barbell Back Squat") is shared across all users; AI-invented movements are stored once and enriched once for everyone. Distinct from the prescription of its sets/reps.
+A movement definition in the shared, global catalog — name, description, ordered Execution Steps, targeted muscles (split into Primary and Secondary), difficulty, required equipment, variations, alternatives, precautions, and an optional Exercise Image. One Exercise (e.g. "Barbell Back Squat") is shared across all users; AI-invented movements are stored once and enriched once for everyone. Distinct from the prescription of its sets/reps.
 _Avoid_: Movement, Exercise Prescription (when referring to the definition)
 
 **Execution Steps**:
@@ -59,8 +59,20 @@ The prescribed speed of a repetition's phases on an Exercise Prescription, writt
 _Avoid_: Cadence, rep speed, rep timing
 
 **Provenance**:
-How a catalog Exercise came to exist and how far it can be trusted: `curated` (reviewed by a human, trusted), `ai_generated` (invented by the AI, unvalidated), or `user_entered` (typed by a user when logging an ad-hoc movement with no AI call — the least-validated tier, born with only a name). Carried on every Exercise so unvalidated content can be flagged, audited, and later enriched, merged, or corrected — important given the domain's caution around injury, rehab, and postpartum cases.
+How a catalog Exercise came to exist and how far it can be trusted: `curated` (reviewed by a human, trusted), `ai_generated` (invented by the AI, unvalidated), or `user_entered` (typed by a user when logging an ad-hoc movement with no AI call — the least-validated tier, born with only a name). It is **immutable origin**: Enrichment fills a movement's fields but never changes its Provenance, so AI-filled content on a `user_entered` movement stays `user_entered` and never masquerades as human-reviewed. Carried on every Exercise so unvalidated content can be flagged, audited, and later enriched, merged, or corrected — important given the domain's caution around injury, rehab, and postpartum cases. A different axis from Catalog Completeness, which is *content presence*, not *trust*.
 _Avoid_: Source, origin, verified flag
+
+**Catalog Completeness**:
+Whether a catalog Exercise meets the shared quality bar, expressed as a **read-time projection** over its populated fields — never a stored flag — in three states: **Stub** (name only), **Listable** (has a description, a non-empty targeted-muscle list, and at least one Execution Step), and **Enriched** (additionally carries the Primary/Secondary split, difficulty, precautions, and an Exercise Image). Measured **provenance-blind** — a `curated`, `ai_generated`, or `user_entered` Exercise is held to the same yardstick, so even a curated seed can read as sub-bar. A distinct axis from Provenance, which is *origin and trust*, not *content presence* (ADR-0041).
+_Avoid_: Quality score, completeness flag/column, verified (that is Provenance), rating
+
+**Enrichment**:
+The act of lifting a catalog Exercise toward the quality bar — filling its description, targeted muscles, and (at the Enriched tier) the Primary/Secondary split and difficulty. Runs **out-of-band, never on the write path** (creation stays AI-free, ADR-0002): asynchronously when a Stub is first minted, and by a human-triggered batch that backfills the existing catalog. It **never changes Provenance** and **never writes precautions or an Exercise Image** — those are curator-only, because a fabricated safety note or a wrong illustration is actively dangerous, not merely low-quality (ADR-0041).
+_Avoid_: Enrich-on-write, backfill (bare — that is one trigger), promotion (it never promotes Provenance)
+
+**Exercise Image**:
+An optional illustrative picture for a catalog Exercise, shown on Exercise Detail. **Curated-source only and never AI-fabricated** — anatomically misleading generated imagery is a safety hazard in an injury/rehab-cautious domain — and part of the Enriched (gold) tier, so its absence never holds a movement below the Listable bar. User uploads are deferred (ADR-0041).
+_Avoid_: Photo, thumbnail, media, AI-generated image
 
 **Variation**:
 A catalog Exercise that is the *same* movement pattern as another, scaled in difficulty or execution (knee push-up is a Variation of push-up). Modeled as a typed relationship between Exercises.
