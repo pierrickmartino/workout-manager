@@ -23,7 +23,7 @@ import {
 } from "@/lib/hand-authored-session";
 import { dissolveSingletonGroups } from "@/lib/supersets";
 import { LOAD_KIND_OPTIONS } from "@/lib/load";
-import type { QuantityKind } from "@/lib/quantity";
+import type { DistanceUnit, QuantityKind } from "@/lib/quantity";
 import type { PickedExercise } from "@/lib/protocol-builder";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
 import { ExerciseLibrary } from "@/components/ExerciseLibrary";
@@ -51,6 +51,9 @@ interface HandAuthoredSessionFormProps {
 interface PerformedSetRow {
   key: number;
   reps: string;
+  // On a distance exercise, the distance covered; the `duration` field then carries the
+  // optional companion time. On a duration exercise, `duration` is the held time itself.
+  distance: string;
   duration: string;
   loadKind: string;
   loadValue: string;
@@ -65,9 +68,12 @@ interface ExerciseRow {
   key: number;
   exerciseId: number;
   exerciseName: string;
-  // The per-exercise Amount kind (ADR-0032): Reps (default) or Duration. It governs the
-  // plan-side target field's wording and the shape of every performed-set input below.
+  // The per-exercise Amount kind (ADR-0032): Reps (default), Duration, or Distance. It
+  // governs the plan-side target field's wording and the shape of every performed-set input.
   kind: QuantityKind;
+  // The distance unit every set of a distance exercise reads in (km/mi), chosen once for
+  // the exercise (issue #301). Carried for all kinds but only meaningful for distance.
+  unit: DistanceUnit;
   sets: string;
   reps: string;
   restSeconds: string;
@@ -80,14 +86,22 @@ interface ExerciseRow {
 }
 
 const DEFAULT_AMOUNT_KIND: QuantityKind = "repetitions";
+const DEFAULT_DISTANCE_UNIT: DistanceUnit = "km";
 const DEFAULT_TRAINING_TYPE = "strength";
 
 // The Amount kinds this build-and-log screen offers, paired with a human label. Reps is
-// the default; Duration records a timed hold (ADR-0032, issue #300). Distance is a later
-// slice of the parent feature (#299) and is intentionally not offered yet.
+// the default; Duration records a timed hold and Distance a run/row/ride in km or miles
+// (ADR-0032, issues #300/#301).
 const AMOUNT_KIND_OPTIONS: ReadonlyArray<{ value: QuantityKind; label: string }> = [
   { value: "repetitions", label: "Reps" },
   { value: "duration", label: "Duration" },
+  { value: "distance", label: "Distance" },
+];
+
+// The distance units a distance exercise can read in, chosen once for the exercise (#301).
+const DISTANCE_UNIT_OPTIONS: ReadonlyArray<{ value: DistanceUnit; label: string }> = [
+  { value: "km", label: "km" },
+  { value: "mi", label: "mi" },
 ];
 
 let nextKey = 0;
@@ -103,6 +117,7 @@ function makePerformedSet(): PerformedSetRow {
   return {
     key: makeKey(),
     reps: "",
+    distance: "",
     duration: "",
     loadKind: "",
     loadValue: "",
@@ -116,6 +131,7 @@ function makeExerciseRow(exercise: PickedExercise): ExerciseRow {
     exerciseId: exercise.id,
     exerciseName: exercise.name,
     kind: DEFAULT_AMOUNT_KIND,
+    unit: DEFAULT_DISTANCE_UNIT,
     sets: "3",
     reps: "",
     restSeconds: "",
@@ -285,6 +301,7 @@ export function HandAuthoredSessionForm({
         (row): AuthoredExerciseFields => ({
           exerciseId: row.exerciseId,
           kind: row.kind,
+          unit: row.unit,
           sets: row.sets,
           reps: row.reps,
           restSeconds: row.restSeconds,
@@ -295,6 +312,7 @@ export function HandAuthoredSessionForm({
           roundRestSeconds: row.roundRestSeconds,
           performedSets: row.performedSets.map((set) => ({
             reps: set.reps,
+            distance: set.distance,
             duration: set.duration,
             loadKind: set.loadKind,
             loadValue: set.loadValue,
@@ -522,10 +540,12 @@ function ExerciseCard({
   onMoveDown,
 }: ExerciseCardProps) {
   // The plan-side target stays one free-text field (ADR-0032); only its wording follows
-  // the Amount kind, so a timed hold reads as a hold rather than a "rep target".
+  // the Amount kind, so a timed hold reads as a hold and a run as a distance rather than a
+  // "rep target".
   const isDuration = row.kind === "duration";
-  const targetLabel = isDuration ? "Hold (time)" : "Reps";
-  const targetPlaceholder = isDuration ? "45s" : "8-12";
+  const isDistance = row.kind === "distance";
+  const targetLabel = isDuration ? "Hold (time)" : isDistance ? "Distance" : "Reps";
+  const targetPlaceholder = isDuration ? "45s" : isDistance ? "5 km" : "8-12";
   return (
     <Card className="flex flex-col gap-4 p-4">
       <div className="flex items-center justify-between gap-2">
@@ -593,6 +613,25 @@ function ExerciseCard({
             ))}
           </Select>
         </FieldLabel>
+        {/* A distance exercise reads in one unit, chosen once here and applied to every set
+            (ADR-0032, issue #301). Hidden for the other kinds, which carry no unit. */}
+        {isDistance ? (
+          <FieldLabel label="Unit">
+            <Select
+              value={row.unit}
+              onChange={(event) =>
+                onChange({ unit: event.target.value as DistanceUnit })
+              }
+              aria-label={`Distance unit for ${row.exerciseName}`}
+            >
+              {DISTANCE_UNIT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </FieldLabel>
+        ) : null}
         <FieldLabel label="Sets">
           <Input
             type="number"
@@ -663,7 +702,33 @@ function ExerciseCard({
             key={set.key}
             className="grid grid-cols-[1fr_1.5fr_4rem_auto] items-end gap-2"
           >
-            {isDuration ? (
+            {isDistance ? (
+              <FieldLabel label={`Set ${index + 1} distance (${row.unit})`}>
+                {/* Distance value plus an optional companion time; a time makes pace a
+                    derivable read (ADR-0032, issue #301). */}
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={set.distance}
+                    placeholder="5"
+                    onChange={(event) =>
+                      onChangeSet(set.key, { distance: event.target.value })
+                    }
+                    aria-label={`Set ${index + 1} distance for ${row.exerciseName}`}
+                  />
+                  <Input
+                    value={set.duration}
+                    placeholder="mm:ss"
+                    onChange={(event) =>
+                      onChangeSet(set.key, { duration: event.target.value })
+                    }
+                    aria-label={`Set ${index + 1} time for ${row.exerciseName}`}
+                  />
+                </div>
+              </FieldLabel>
+            ) : isDuration ? (
               <FieldLabel label={`Set ${index + 1} hold`}>
                 <Input
                   value={set.duration}
