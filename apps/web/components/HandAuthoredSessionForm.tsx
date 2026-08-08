@@ -10,6 +10,7 @@ import {
 import {
   authoredSupersetLayout,
   buildAuthorSessionRequest,
+  defaultLoadKindForAmount,
   groupExerciseWithNext,
   reorderExercise,
   setExerciseRoundRest,
@@ -22,6 +23,7 @@ import {
 } from "@/lib/hand-authored-session";
 import { dissolveSingletonGroups } from "@/lib/supersets";
 import { LOAD_KIND_OPTIONS } from "@/lib/load";
+import type { QuantityKind } from "@/lib/quantity";
 import type { PickedExercise } from "@/lib/protocol-builder";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
 import { ExerciseLibrary } from "@/components/ExerciseLibrary";
@@ -43,10 +45,13 @@ interface HandAuthoredSessionFormProps {
 }
 
 // One performed set the user is recording under an exercise, with a stable key so React
-// can track rows across add/remove without re-keying the array.
+// can track rows across add/remove without re-keying the array. Both amount fields are
+// held; which one is meaningful (and rendered) follows the exercise's Amount kind, since a
+// structured exercise's sets are homogeneous (ADR-0032, issue #300).
 interface PerformedSetRow {
   key: number;
   reps: string;
+  duration: string;
   loadKind: string;
   loadValue: string;
   perceivedDifficulty: string;
@@ -60,6 +65,9 @@ interface ExerciseRow {
   key: number;
   exerciseId: number;
   exerciseName: string;
+  // The per-exercise Amount kind (ADR-0032): Reps (default) or Duration. It governs the
+  // plan-side target field's wording and the shape of every performed-set input below.
+  kind: QuantityKind;
   sets: string;
   reps: string;
   restSeconds: string;
@@ -71,8 +79,16 @@ interface ExerciseRow {
   performedSets: PerformedSetRow[];
 }
 
-const DEFAULT_LOAD_KIND = "absolute";
+const DEFAULT_AMOUNT_KIND: QuantityKind = "repetitions";
 const DEFAULT_TRAINING_TYPE = "strength";
+
+// The Amount kinds this build-and-log screen offers, paired with a human label. Reps is
+// the default; Duration records a timed hold (ADR-0032, issue #300). Distance is a later
+// slice of the parent feature (#299) and is intentionally not offered yet.
+const AMOUNT_KIND_OPTIONS: ReadonlyArray<{ value: QuantityKind; label: string }> = [
+  { value: "repetitions", label: "Reps" },
+  { value: "duration", label: "Duration" },
+];
 
 let nextKey = 0;
 function makeKey(): number {
@@ -80,11 +96,15 @@ function makeKey(): number {
   return nextKey;
 }
 
+// A performed-set row starts with a blank load kind so the payload mapper derives it from
+// the exercise's Amount kind (absolute for reps, bodyweight for a hold) — one source of
+// truth for the default, still overridable on the plan side.
 function makePerformedSet(): PerformedSetRow {
   return {
     key: makeKey(),
     reps: "",
-    loadKind: DEFAULT_LOAD_KIND,
+    duration: "",
+    loadKind: "",
     loadValue: "",
     perceivedDifficulty: "",
   };
@@ -95,11 +115,12 @@ function makeExerciseRow(exercise: PickedExercise): ExerciseRow {
     key: makeKey(),
     exerciseId: exercise.id,
     exerciseName: exercise.name,
+    kind: DEFAULT_AMOUNT_KIND,
     sets: "3",
     reps: "",
     restSeconds: "",
     tempo: "",
-    loadKind: DEFAULT_LOAD_KIND,
+    loadKind: defaultLoadKindForAmount(DEFAULT_AMOUNT_KIND),
     loadValue: "",
     supersetGroup: null,
     roundRestSeconds: null,
@@ -263,6 +284,7 @@ export function HandAuthoredSessionForm({
       exercises: effectiveExercises.map(
         (row): AuthoredExerciseFields => ({
           exerciseId: row.exerciseId,
+          kind: row.kind,
           sets: row.sets,
           reps: row.reps,
           restSeconds: row.restSeconds,
@@ -273,6 +295,7 @@ export function HandAuthoredSessionForm({
           roundRestSeconds: row.roundRestSeconds,
           performedSets: row.performedSets.map((set) => ({
             reps: set.reps,
+            duration: set.duration,
             loadKind: set.loadKind,
             loadValue: set.loadValue,
             perceivedDifficulty: set.perceivedDifficulty,
@@ -498,6 +521,11 @@ function ExerciseCard({
   onMoveUp,
   onMoveDown,
 }: ExerciseCardProps) {
+  // The plan-side target stays one free-text field (ADR-0032); only its wording follows
+  // the Amount kind, so a timed hold reads as a hold rather than a "rep target".
+  const isDuration = row.kind === "duration";
+  const targetLabel = isDuration ? "Hold (time)" : "Reps";
+  const targetPlaceholder = isDuration ? "45s" : "8-12";
   return (
     <Card className="flex flex-col gap-4 p-4">
       <div className="flex items-center justify-between gap-2">
@@ -544,8 +572,27 @@ function ExerciseCard({
         </div>
       </div>
 
-      {/* The authored plan: sets/reps/rest/tempo and a typed Load (ADR-0010). */}
+      {/* The authored plan: an Amount kind, then sets/target/rest/tempo and a typed Load
+          (ADR-0010, ADR-0032). The Amount kind governs the target field and the sets below. */}
       <div className="grid grid-cols-2 gap-2.5">
+        <FieldLabel label="Amount">
+          <Select
+            value={row.kind}
+            onChange={(event) => {
+              // Picking Duration/Reps re-defaults the plan's Load kind for that Amount
+              // (bodyweight for a hold, absolute for reps) — still overridable below.
+              const kind = event.target.value as QuantityKind;
+              onChange({ kind, loadKind: defaultLoadKindForAmount(kind) });
+            }}
+            aria-label={`Amount kind for ${row.exerciseName}`}
+          >
+            {AMOUNT_KIND_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+        </FieldLabel>
         <FieldLabel label="Sets">
           <Input
             type="number"
@@ -555,12 +602,12 @@ function ExerciseCard({
             aria-label={`Sets for ${row.exerciseName}`}
           />
         </FieldLabel>
-        <FieldLabel label="Reps">
+        <FieldLabel label={targetLabel}>
           <Input
             value={row.reps}
-            placeholder="8-12"
+            placeholder={targetPlaceholder}
             onChange={(event) => onChange({ reps: event.target.value })}
-            aria-label={`Reps for ${row.exerciseName}`}
+            aria-label={`${targetLabel} for ${row.exerciseName}`}
           />
         </FieldLabel>
         {/* A grouped member rests once per round at the group level, so its own rest is
@@ -616,17 +663,30 @@ function ExerciseCard({
             key={set.key}
             className="grid grid-cols-[1fr_1.5fr_4rem_auto] items-end gap-2"
           >
-            <FieldLabel label={`Set ${index + 1} reps`}>
-              <Input
-                type="number"
-                min={0}
-                value={set.reps}
-                onChange={(event) =>
-                  onChangeSet(set.key, { reps: event.target.value })
-                }
-                aria-label={`Set ${index + 1} reps for ${row.exerciseName}`}
-              />
-            </FieldLabel>
+            {isDuration ? (
+              <FieldLabel label={`Set ${index + 1} hold`}>
+                <Input
+                  value={set.duration}
+                  placeholder="0:45"
+                  onChange={(event) =>
+                    onChangeSet(set.key, { duration: event.target.value })
+                  }
+                  aria-label={`Set ${index + 1} hold time for ${row.exerciseName}`}
+                />
+              </FieldLabel>
+            ) : (
+              <FieldLabel label={`Set ${index + 1} reps`}>
+                <Input
+                  type="number"
+                  min={0}
+                  value={set.reps}
+                  onChange={(event) =>
+                    onChangeSet(set.key, { reps: event.target.value })
+                  }
+                  aria-label={`Set ${index + 1} reps for ${row.exerciseName}`}
+                />
+              </FieldLabel>
+            )}
             <FieldLabel label="Load">
               <Input
                 value={set.loadValue}

@@ -82,6 +82,21 @@ export function distanceInput(
   };
 }
 
+// Parse a time value into total seconds — colon-separated `mm:ss` / `hh:mm:ss` summed in
+// base-60, or a bare number of seconds — or null for any empty, negative, or non-numeric
+// segment. Mirrors the backend's canonicalisation (`_parse_time_to_seconds`) so a form
+// boundary rejects here exactly what the write boundary would reject there. Shared by
+// every surface that validates a duration input (the ad-hoc log and the Hand-Authored form).
+export function parseDurationSeconds(raw: string): number | null {
+  let seconds = 0;
+  for (const segment of raw.split(":")) {
+    const value = Number(segment);
+    if (segment.trim() === "" || !Number.isFinite(value) || value < 0) return null;
+    seconds = seconds * SECONDS_PER_MINUTE + value;
+  }
+  return seconds;
+}
+
 // The per-set request fields for a duration Quantity — timed, non-locomotion work (a
 // hold, a distance-unknown treadmill session). The picked kind and the entered time
 // ride through verbatim; the backend canonicalises to seconds. No unit or companion

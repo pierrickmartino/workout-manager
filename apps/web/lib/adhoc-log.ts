@@ -7,6 +7,7 @@
 import {
   distanceInput,
   durationInput,
+  parseDurationSeconds,
   repetitionsInput,
   type DistanceUnit,
   type QuantityKind,
@@ -143,19 +144,6 @@ function distanceAmount(
   const value = Number(raw);
   if (!Number.isFinite(value) || value <= 0) return null;
   return distanceInput(raw, row.unit ?? DEFAULT_DISTANCE_UNIT, row.duration ?? "");
-}
-
-// Parse a time value into total seconds — colon-separated `mm:ss` / `hh:mm:ss` summed in
-// base-60, or a bare number of seconds — or null for any non-numeric segment. Mirrors the
-// backend's canonicalisation so the boundary rejects here exactly what it would there.
-function parseDurationSeconds(raw: string): number | null {
-  let seconds = 0;
-  for (const segment of raw.split(":")) {
-    const value = Number(segment);
-    if (segment.trim() === "" || !Number.isFinite(value) || value < 0) return null;
-    seconds = seconds * 60 + value;
-  }
-  return seconds;
 }
 
 // The amount fields for a duration row, or null when it was left un-performed (no time)
