@@ -13,6 +13,7 @@ import {
   groupExerciseWithNext,
   reorderExercise,
   setExerciseRoundRest,
+  suppressAuthoredSupersets,
   ungroupExercise,
   wholeNonNegative,
   type AuthorSessionFields,
@@ -34,6 +35,11 @@ import { Button } from "@/components/ui/button";
 
 interface HandAuthoredSessionFormProps {
   today: string;
+  // Whether the user carries a Sensitive Constraint (ADR-0023, issue #290). When true the
+  // screen pauses Supersets: no grouping control is offered, any grouping in the draft is
+  // unlinked (staged, not committed), and an explanatory banner is shown — the same posture
+  // the Builder takes. A non-medical Preference / Limitation never sets this.
+  hasSensitiveConstraint?: boolean;
 }
 
 // One performed set the user is recording under an exercise, with a stable key so React
@@ -139,10 +145,22 @@ function renderRuns(layout: SupersetSlot[]): RenderRun[] {
 // Consecutive exercises can be grouped into a Superset with a round-rest (ADR-0023, issue
 // #289), reusing the shared `supersets` vocabulary — grouping rides on the authored plan
 // while the record stays sets-only.
-export function HandAuthoredSessionForm({ today }: HandAuthoredSessionFormProps) {
+export function HandAuthoredSessionForm({
+  today,
+  hasSensitiveConstraint = false,
+}: HandAuthoredSessionFormProps) {
   const [exercises, setExercises] = useState<ExerciseRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // A Sensitive-Constraint user is never handed a Superset (ADR-0023): the draft the
+  // screen renders and submits is flattened, so any grouping is unlinked (staged, not
+  // committed) and — with the group controls hidden below — none can be formed. An
+  // unconstrained user sees the draft unchanged. `suppressAuthoredSupersets` returns the
+  // same list when there is nothing to unlink, so row identity (and React keys) hold.
+  const effectiveExercises = hasSensitiveConstraint
+    ? suppressAuthoredSupersets(exercises)
+    : exercises;
 
   const addExercise = (exercise: PickedExercise) =>
     setExercises((current) => [...current, makeExerciseRow(exercise)]);
@@ -192,7 +210,7 @@ export function HandAuthoredSessionForm({ today }: HandAuthoredSessionFormProps)
   // unchanged when a move would split a Superset (or is a no-op), so an identity result
   // means the move is illegal. Used to disable a move control rather than let it dead-click.
   const canMove = (from: number, to: number) =>
-    reorderExercise(exercises, from, to) !== exercises;
+    reorderExercise(effectiveExercises, from, to) !== effectiveExercises;
 
   const addPerformedSet = (key: number) =>
     setExercises((current) =>
@@ -240,7 +258,9 @@ export function HandAuthoredSessionForm({ today }: HandAuthoredSessionFormProps)
     const fields: AuthorSessionFields = {
       performedOn: String(formData.get("performed_on") ?? ""),
       trainingType: String(formData.get("training_type") ?? ""),
-      exercises: exercises.map(
+      // Submit the suppression-aware draft, so a Sensitive-Constraint user never sends
+      // grouping even if a stray group reached state; the endpoint stays the backstop.
+      exercises: effectiveExercises.map(
         (row): AuthoredExerciseFields => ({
           exerciseId: row.exerciseId,
           sets: row.sets,
@@ -274,12 +294,20 @@ export function HandAuthoredSessionForm({ today }: HandAuthoredSessionFormProps)
     });
   };
 
-  const layout = authoredSupersetLayout(exercises);
+  const layout = authoredSupersetLayout(effectiveExercises, hasSensitiveConstraint);
   const runs = renderRuns(layout);
 
   return (
     <form action={submit} className="flex flex-col gap-6">
       {error ? <Alert tone="error">{error}</Alert> : null}
+
+      {hasSensitiveConstraint ? (
+        <Alert tone="info">
+          Supersets are paused while a sensitive constraint (injury, rehabilitation,
+          postpartum, or a flagged medical limitation) is active. Any existing
+          Supersets have been unlinked; your workout saves as individual exercises.
+        </Alert>
+      ) : null}
 
       <Field label="Date performed">
         <Input
@@ -313,14 +341,16 @@ export function HandAuthoredSessionForm({ today }: HandAuthoredSessionFormProps)
         {runs.map((run) => {
           if (run.kind === "solo") {
             const index = run.index;
-            const row = exercises[index];
+            const row = effectiveExercises[index];
             return (
               <ExerciseCard
                 key={row.key}
                 row={row}
                 slot={layout[index]}
                 canMoveUp={index > 0 && canMove(index, index - 1)}
-                canMoveDown={index < exercises.length - 1 && canMove(index, index + 1)}
+                canMoveDown={
+                  index < effectiveExercises.length - 1 && canMove(index, index + 1)
+                }
                 onRemove={() => removeExercise(row.key)}
                 onChange={(patch) => updateExercise(row.key, patch)}
                 onAddSet={() => addPerformedSet(row.key)}
@@ -340,19 +370,22 @@ export function HandAuthoredSessionForm({ today }: HandAuthoredSessionFormProps)
           return (
             <SupersetContainer
               key={`superset-${run.group}`}
-              roundRestSeconds={exercises[closer].roundRestSeconds}
+              roundRestSeconds={effectiveExercises[closer].roundRestSeconds}
               onChangeRoundRest={(value) => setRoundRest(opener, value)}
               onUngroup={() => ungroupAt(opener)}
             >
               {run.indices.map((index) => {
-                const row = exercises[index];
+                const row = effectiveExercises[index];
                 return (
                   <ExerciseCard
                     key={row.key}
                     row={row}
                     slot={layout[index]}
                     canMoveUp={index > 0 && canMove(index, index - 1)}
-                    canMoveDown={index < exercises.length - 1 && canMove(index, index + 1)}
+                    canMoveDown={
+                      index < effectiveExercises.length - 1 &&
+                      canMove(index, index + 1)
+                    }
                     onRemove={() => removeExercise(row.key)}
                     onChange={(patch) => updateExercise(row.key, patch)}
                     onAddSet={() => addPerformedSet(row.key)}

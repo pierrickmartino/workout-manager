@@ -141,6 +141,20 @@ export function ungroup<T extends SupersetMember>(
   );
 }
 
+// Dissolve *every* Superset in a list at once — clear the tag and round-rest on all
+// grouped items so each returns to solo, its own (dormant) rest live again. The wholesale
+// twin of `ungroup`, used by a safety suppression that pauses grouping outright (ADR-0023):
+// a Sensitive-Constraint user is never handed a Superset. A flat list is returned as-is
+// (referentially unchanged); solo items pass through untouched. The input is never mutated.
+export function flattenSupersets<T extends SupersetMember>(items: T[]): T[] {
+  if (items.every((item) => item.supersetGroup === null)) return items;
+  return items.map((item) =>
+    item.supersetGroup === null
+      ? item
+      : { ...item, supersetGroup: null, roundRestSeconds: null },
+  );
+}
+
 // Set the group-owned round-rest of the Superset at `position` on every member, so the
 // value stays consistent no matter which member the edit came from. A no-op when the item
 // is not grouped.

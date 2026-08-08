@@ -87,9 +87,11 @@ def validate_deploy(
 ) -> list[DeployError]:
     """Return every reason ``draft`` cannot be deployed, or ``[]`` when it is safe.
 
-    ``has_sensitive_constraint`` is threaded to the shared Superset validator (ADR-0023)
-    so the seam is wired from the start; the safety-suppression behaviour it drives
-    lands in a later slice.
+    ``has_sensitive_constraint`` is threaded to the shared Superset validator (ADR-0023):
+    a user with any Sensitive Constraint is never handed a Superset, so any group present
+    is hard-rejected as ``superset_forbidden_under_sensitive_constraint``. This is the
+    server-side backstop for both the Builder and the Hand-Authored build-and-log screen
+    (issue #290), whose clients pause grouping up front.
     """
 
     errors: list[DeployError] = []

@@ -2,10 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  authoredSupersetLayout,
   buildAuthorSessionRequest,
   groupExerciseWithNext,
   reorderExercise,
   setExerciseRoundRest,
+  suppressAuthoredSupersets,
   ungroupExercise,
   type AuthorSessionFields,
   type AuthoredExerciseFields,
@@ -376,5 +378,77 @@ test("reorderExercise moves a whole Superset without splitting it", () => {
   assert.deepEqual(
     result.map((e) => e.exerciseId),
     [1, 2, 3],
+  );
+});
+
+// --- Sensitive-Constraint superset suppression (ADR-0023, issue #290) ---
+
+test("suppressAuthoredSupersets unlinks every Superset, restoring each exercise to solo", () => {
+  // Arrange — a grouped pair (sharing a tag and round-rest) followed by a solo.
+  const exercises = [
+    exercise({ exerciseId: 1, supersetGroup: "1", roundRestSeconds: 120 }),
+    exercise({ exerciseId: 2, supersetGroup: "1", roundRestSeconds: 120 }),
+    exercise({ exerciseId: 3 }),
+  ];
+
+  // Act — the staged, not-committed unlink a Sensitive-Constraint screen applies.
+  const flat = suppressAuthoredSupersets(exercises);
+
+  // Assert — no exercise carries a group tag or round-rest anymore.
+  assert.deepEqual(
+    flat.map((e) => e.supersetGroup),
+    [null, null, null],
+  );
+  assert.deepEqual(
+    flat.map((e) => e.roundRestSeconds),
+    [null, null, null],
+  );
+  // The non-structural fields (and the exercises' own rest) are untouched.
+  assert.deepEqual(
+    flat.map((e) => e.restSeconds),
+    ["90", "90", "90"],
+  );
+});
+
+test("suppressAuthoredSupersets leaves an already-flat draft unchanged and unmutated", () => {
+  // Arrange — every exercise is solo already.
+  const exercises = [exercise({ exerciseId: 1 }), exercise({ exerciseId: 2 })];
+
+  // Act
+  const flat = suppressAuthoredSupersets(exercises);
+
+  // Assert — nothing to unlink; the original list is never mutated.
+  assert.deepEqual(
+    flat.map((e) => e.supersetGroup),
+    [null, null],
+  );
+  assert.deepEqual(exercises, [exercise({ exerciseId: 1 }), exercise({ exerciseId: 2 })]);
+});
+
+test("authoredSupersetLayout closes every group-with-next gate when suppressed", () => {
+  // Arrange — two consecutive solos: normally the first could group with the next.
+  const exercises = [exercise({ exerciseId: 1 }), exercise({ exerciseId: 2 })];
+
+  // Act — the suppressed layout the screen renders for a Sensitive-Constraint user.
+  const layout = authoredSupersetLayout(exercises, true);
+
+  // Assert — no exercise offers the "group with next" affordance.
+  assert.deepEqual(
+    layout.map((slot) => slot.canGroupWithNext),
+    [false, false],
+  );
+});
+
+test("authoredSupersetLayout still gates grouping normally when not suppressed", () => {
+  // Arrange — two consecutive solos.
+  const exercises = [exercise({ exerciseId: 1 }), exercise({ exerciseId: 2 })];
+
+  // Act — the default (non-suppressed) layout.
+  const layout = authoredSupersetLayout(exercises);
+
+  // Assert — the first can group with the next; the last has no next to group with.
+  assert.deepEqual(
+    layout.map((slot) => slot.canGroupWithNext),
+    [true, false],
   );
 });

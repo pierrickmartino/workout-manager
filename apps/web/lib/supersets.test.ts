@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   dissolveSingletonGroups,
   editRoundRest,
+  flattenSupersets,
   freshSupersetTag,
   groupWithNext,
   moveItem,
@@ -106,6 +107,39 @@ test("ungroup dissolves the whole group and clears its round-rest", () => {
 test("ungroup is a no-op on a solo row", () => {
   const items = [row("a"), row("b")];
   assert.equal(ungroup(items, 0), items);
+});
+
+test("flattenSupersets dissolves every group, restoring each row to solo", () => {
+  // Arrange — two separate groups plus a solo row.
+  const items = [
+    row("a", "1", 120),
+    row("b", "1", 120),
+    row("c", "2", 90),
+    row("d", "2", 90),
+    row("e"),
+  ];
+
+  // Act
+  const flat = flattenSupersets(items);
+
+  // Assert — no row carries a tag or round-rest anymore; names are preserved in order.
+  assert.deepEqual(
+    flat.map((item) => item.supersetGroup),
+    [null, null, null, null, null],
+  );
+  assert.deepEqual(
+    flat.map((item) => item.roundRestSeconds),
+    [null, null, null, null, null],
+  );
+  assert.deepEqual(
+    flat.map((item) => item.name),
+    ["a", "b", "c", "d", "e"],
+  );
+});
+
+test("flattenSupersets returns the same array reference for an already-flat list", () => {
+  const items = [row("a"), row("b")];
+  assert.equal(flattenSupersets(items), items);
 });
 
 test("editRoundRest applies to every member of the group", () => {
