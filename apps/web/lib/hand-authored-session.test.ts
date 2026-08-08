@@ -438,6 +438,246 @@ test("a mixed session records a duration hold alongside a rep set", () => {
   );
 });
 
+// --- Per-exercise Amount kind: Distance (ADR-0032, ADR-0040, issue #301) ---
+
+// A distance exercise: its target is a free-text distance and each performed set carries a
+// distance value (in the exercise's chosen unit) plus an optional companion time. Reuses
+// the base helper and overlays the distance shape (unit chosen once for the exercise).
+function distanceExercise(
+  overrides: Partial<AuthoredExerciseFields> = {},
+): AuthoredExerciseFields {
+  return exercise({
+    kind: "distance",
+    unit: "km",
+    reps: "5 km",
+    loadKind: "",
+    loadValue: "",
+    performedSets: [{ distance: "5", duration: "25:00" }],
+    ...overrides,
+  });
+}
+
+test("records a distance exercise's performed sets as distance Quantities carrying unit and time", () => {
+  // Arrange — a 5 km run with a companion time, entered in the exercise's chosen unit.
+  const input = fields({
+    exercises: [
+      distanceExercise({
+        unit: "km",
+        performedSets: [{ distance: "5", duration: "25:00" }],
+      }),
+    ],
+  });
+
+  // Act
+  const result = buildAuthorSessionRequest(input, TODAY);
+
+  // Assert — the set is a distance Quantity carrying its value, the exercise's unit, and
+  // the companion time from which pace becomes derivable at read time.
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.prescriptions[0].reps, "5 km");
+  assert.deepEqual(result.request.logged_sets[0], {
+    exercise_id: 7,
+    quantity_kind: "distance",
+    quantity_value: "5",
+    quantity_unit: "km",
+    quantity_duration: "25:00",
+    load_kind: "bodyweight",
+    load_value: null,
+    perceived_difficulty: null,
+  });
+});
+
+test("carries the exercise's chosen unit onto every distance set", () => {
+  // Arrange — a run logged in miles; the unit is picked once for the exercise, not per set.
+  const input = fields({
+    exercises: [
+      distanceExercise({
+        unit: "mi",
+        performedSets: [{ distance: "3.1" }, { distance: "6.2" }],
+      }),
+    ],
+  });
+
+  // Act
+  const result = buildAuthorSessionRequest(input, TODAY);
+
+  // Assert — both sets read in the exercise's unit.
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(
+    result.request.logged_sets.map((set) => set.quantity_unit),
+    ["mi", "mi"],
+  );
+});
+
+test("defaults a distance exercise's unit to km when none is chosen", () => {
+  // Arrange — an exercise marked distance but with no unit set on the field.
+  const input = fields({
+    exercises: [distanceExercise({ unit: undefined, performedSets: [{ distance: "5" }] })],
+  });
+
+  // Act
+  const result = buildAuthorSessionRequest(input, TODAY);
+
+  // Assert
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.logged_sets[0].quantity_unit, "km");
+});
+
+test("a distance set with a companion time yields a derivable pace read", () => {
+  // Arrange — a timed run: the distance and a companion time both ride through, so pace
+  // stays derivable at read time (the backend canonicalises distance to metres).
+  const input = fields({
+    exercises: [distanceExercise({ performedSets: [{ distance: "5", duration: "25:00" }] })],
+  });
+
+  // Act
+  const result = buildAuthorSessionRequest(input, TODAY);
+
+  // Assert — the companion time rides through, keeping pace a derivable read-time projection.
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.logged_sets[0].quantity_duration, "25:00");
+});
+
+test("a distance-only set leaves pace underivable with a null companion time", () => {
+  // Arrange — a run logged without a time; pace stays underivable (never stored).
+  const input = fields({
+    exercises: [distanceExercise({ performedSets: [{ distance: "5" }] })],
+  });
+
+  // Act
+  const result = buildAuthorSessionRequest(input, TODAY);
+
+  // Assert — the companion time is null, not an empty string.
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.logged_sets[0].quantity_duration, null);
+});
+
+test("defaults a distance exercise's Load to bodyweight on both plan and record", () => {
+  // Arrange — no load entered; the kind, not the field, chooses the default (a run is
+  // bodyweight-borne), consistent with the Duration default.
+  const input = fields({ exercises: [distanceExercise()] });
+
+  // Act
+  const result = buildAuthorSessionRequest(input, TODAY);
+
+  // Assert
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.prescriptions[0].load_kind, "bodyweight");
+  assert.equal(result.request.logged_sets[0].load_kind, "bodyweight");
+});
+
+test("respects an explicit Load override on a distance exercise", () => {
+  // Arrange — a weighted-vest run: the bodyweight default stays overridable.
+  const input = fields({
+    exercises: [
+      distanceExercise({
+        loadKind: "bodyweight",
+        loadValue: "10",
+        performedSets: [{ distance: "5", loadKind: "bodyweight", loadValue: "10" }],
+      }),
+    ],
+  });
+
+  // Act
+  const result = buildAuthorSessionRequest(input, TODAY);
+
+  // Assert — the entered load rides through, not the default.
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.prescriptions[0].load_value, "10");
+  assert.equal(result.request.logged_sets[0].load_value, "10");
+});
+
+test("skips a blank performed set on a distance exercise", () => {
+  // Arrange — the middle set row was never filled in.
+  const input = fields({
+    exercises: [
+      distanceExercise({
+        performedSets: [{ distance: "5" }, { distance: "" }, { distance: "3" }],
+      }),
+    ],
+  });
+
+  // Act
+  const result = buildAuthorSessionRequest(input, TODAY);
+
+  // Assert — only the two performed rows survive.
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.logged_sets.length, 2);
+});
+
+test("rejects a malformed distance on a performed set", () => {
+  // Arrange — a non-numeric distance is a clear mistake, not a skip.
+  const input = fields({
+    exercises: [distanceExercise({ performedSets: [{ distance: "five" }] })],
+  });
+
+  // Act
+  const result = buildAuthorSessionRequest(input, TODAY);
+
+  // Assert
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /distance/i);
+});
+
+test("rejects a non-positive distance on a performed set", () => {
+  // Arrange — a zero-distance run is meaningless.
+  const input = fields({
+    exercises: [distanceExercise({ performedSets: [{ distance: "0" }] })],
+  });
+
+  // Act / Assert
+  const result = buildAuthorSessionRequest(input, TODAY);
+  assert.equal(result.ok, false);
+});
+
+test("a distance exercise with a blank target errors without mentioning reps", () => {
+  // Arrange — the plan needs a target for every kind, but the wording follows the kind.
+  const input = fields({ exercises: [distanceExercise({ reps: "  " })] });
+
+  // Act
+  const result = buildAuthorSessionRequest(input, TODAY);
+
+  // Assert — required-target still enforced; the message never says "rep".
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.match(result.error, /target/i);
+  assert.doesNotMatch(result.error, /rep/i);
+});
+
+test("a workout mixing Reps, Duration, and Distance across exercises saves correctly", () => {
+  // Arrange — squats (reps), a Dead hang (duration), and a run (distance) in one workout.
+  const input = fields({
+    exercises: [
+      exercise({ exerciseId: 9, performedSets: [{ reps: "5" }] }),
+      durationExercise({ exerciseId: 5 }),
+      distanceExercise({ exerciseId: 3, performedSets: [{ distance: "5", duration: "25:00" }] }),
+    ],
+  });
+
+  // Act
+  const result = buildAuthorSessionRequest(input, TODAY);
+
+  // Assert — each set is typed by its own exercise's kind; all three are representable.
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(
+    result.request.logged_sets.map((set) => set.quantity_kind),
+    ["repetitions", "duration", "distance"],
+  );
+  const distanceSet = result.request.logged_sets[2];
+  assert.equal(distanceSet.quantity_unit, "km");
+  assert.equal(distanceSet.quantity_duration, "25:00");
+});
+
 // --- Supersets on the authored plan (ADR-0023, issue #289) ---
 
 test("carries a saved Superset's group tag and round-rest onto the prescriptions", () => {

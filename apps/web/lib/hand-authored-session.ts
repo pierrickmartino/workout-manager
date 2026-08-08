@@ -14,9 +14,11 @@
 // resolved upstream in the picker, so the payload still carries only real `exercise_id`s.
 
 import {
+  distanceInput,
   durationInput,
   parseDurationSeconds,
   repetitionsInput,
+  type DistanceUnit,
   type QuantityKind,
 } from "./quantity.ts";
 import type { LoadKind } from "./load";
@@ -39,6 +41,10 @@ const VALID_TRAINING_TYPES = new Set<string>(TRAINING_TYPES);
 // so an ordinary strength movement is unchanged and needs no extra clicks (ADR-0032).
 const DEFAULT_AMOUNT_KIND: QuantityKind = "repetitions";
 
+// A distance exercise's unit is chosen once for the whole exercise (a run is logged in km
+// or miles, not a mix), defaulting to km — the same default the ad-hoc log uses (ADR-0032).
+const DEFAULT_DISTANCE_UNIT: DistanceUnit = "km";
+
 const MIN_PERCEIVED_DIFFICULTY = 1;
 const MAX_PERCEIVED_DIFFICULTY = 10;
 
@@ -50,8 +56,13 @@ const MAX_PERCEIVED_DIFFICULTY = 10;
 // (ADR-0032, ADR-0040), so `reps` and `duration` are never both meaningful at once.
 export interface PerformedSetFields {
   reps?: string;
-  // The held time of a `duration` exercise's set (`mm:ss`, `hh:mm:ss`, or bare seconds),
-  // sent verbatim as a `duration` Quantity; the backend canonicalises to seconds.
+  // The distance covered on a `distance` exercise's set, a positive value in the exercise's
+  // chosen unit (km/mi), sent as a `distance` Quantity the backend canonicalises to metres.
+  distance?: string;
+  // On a `duration` exercise, the held time (`mm:ss`, `hh:mm:ss`, or bare seconds), sent
+  // verbatim as a `duration` Quantity. On a `distance` exercise, the *optional* companion
+  // time from which pace becomes a derivable read — one field, one meaning per kind, as in
+  // the ad-hoc log (issue #301). The backend canonicalises either to seconds.
   duration?: string;
   loadKind?: string;
   loadValue?: string;
@@ -70,6 +81,9 @@ export interface AuthoredExerciseFields {
   // target field and the shape of every performed set beneath it. This deliberately differs
   // from the ad-hoc log, which picks a kind per set (issue #299/#300).
   kind?: QuantityKind;
+  // The distance unit (km/mi, default km) a `distance` exercise's sets are all read in —
+  // chosen once for the exercise, not per set (issue #301). Ignored by other kinds.
+  unit?: DistanceUnit;
   sets: string;
   // The plan-side target, kept free text for every kind (ADR-0032 defers typing the plan
   // side): a rep target ("8-12") for reps, a hold time ("45s") for duration. Only its
@@ -136,10 +150,11 @@ function amountKind(kind: QuantityKind | undefined): QuantityKind {
 }
 
 // The Load kind an exercise defaults to for its Amount kind: `absolute` for reps (the
-// existing default), `bodyweight` for a hold — a Dead hang or plank is usually bodyweight,
-// removing the "Weight (kg)" friction of the reported case (ADR-0032, issue #299/#300).
-// Still a default only: an explicit pick (a weighted hang) overrides it. Exported so the
-// form applies the same rule on a kind switch as the payload mapper applies on build.
+// existing default), `bodyweight` for a hold or a run — a Dead hang, plank, or run is
+// usually bodyweight-borne, removing the "Weight (kg)" friction of the reported case
+// (ADR-0032, issue #299/#300/#301). Still a default only: an explicit pick (a weighted hang,
+// a weighted-vest run) overrides it. Exported so the form applies the same rule on a kind
+// switch as the payload mapper applies on build.
 export function defaultLoadKindForAmount(kind: QuantityKind): LoadKind {
   return kind === "repetitions" ? "absolute" : "bodyweight";
 }
@@ -161,10 +176,17 @@ function loadFields(
 // A performed set built from a row: a typed amount, or one of two non-set outcomes — the
 // row was left blank (skip it silently) or its amount is malformed (reject the whole form
 // with a clear message). Reps skip on both blank and malformed (regression: unchanged);
-// duration distinguishes a blank hold (skip) from a garbled time (reject), so a mistake is
-// never silently dropped (issue #300).
+// duration and distance distinguish a blank row (skip) from a garbled amount (reject), so a
+// mistake is never silently dropped (issues #300/#301). The `fields` widen to the distance
+// shape (unit + optional companion time); other kinds simply omit those keys.
 type AmountResult =
-  | { status: "amount"; fields: Pick<LogSetInput, "quantity_kind" | "quantity_value"> }
+  | {
+      status: "amount";
+      fields: Pick<
+        LogSetInput,
+        "quantity_kind" | "quantity_value" | "quantity_unit" | "quantity_duration"
+      >;
+    }
   | { status: "skip" }
   | { status: "error"; error: string };
 
@@ -199,13 +221,45 @@ function durationPerformedAmount(set: PerformedSetFields): AmountResult {
   return { status: "amount", fields: durationInput(raw) };
 }
 
+// The distance amount for a performed set: a blank distance is skipped, a malformed or
+// non-positive value is rejected outright, and a valid distance rides through as a
+// `distance` Quantity carrying the exercise's unit (canonicalised to metres by the backend)
+// and the optional companion time from which pace becomes a derivable read (issue #301). A
+// blank time is sent as null, so pace stays underivable for a distance-only set.
+function distancePerformedAmount(
+  set: PerformedSetFields,
+  unit: DistanceUnit,
+): AmountResult {
+  const raw = (set.distance ?? "").trim();
+  if (raw === "") return { status: "skip" };
+
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) {
+    return {
+      status: "error",
+      error: "Enter a valid distance (like 5 or 3.1) for each distance set, or leave it blank.",
+    };
+  }
+  return { status: "amount", fields: distanceInput(raw, unit, set.duration ?? "") };
+}
+
 // Dispatch to the amount mapper for the exercise's Amount kind. Reuses the shared quantity
-// request builders (`repetitionsInput` / `durationInput`), the same ones the ad-hoc log
-// uses, so the two forms type the amount identically (ADR-0032).
-function performedAmount(kind: QuantityKind, set: PerformedSetFields): AmountResult {
-  return kind === "duration"
-    ? durationPerformedAmount(set)
-    : repetitionsPerformedAmount(set);
+// request builders (`repetitionsInput` / `distanceInput` / `durationInput`), the same ones
+// the ad-hoc log uses, so the two forms type the amount identically (ADR-0032). Distance
+// also needs the exercise's chosen unit — the one field that lives on the exercise, not the set.
+function performedAmount(
+  kind: QuantityKind,
+  unit: DistanceUnit,
+  set: PerformedSetFields,
+): AmountResult {
+  switch (kind) {
+    case "duration":
+      return durationPerformedAmount(set);
+    case "distance":
+      return distancePerformedAmount(set, unit);
+    default:
+      return repetitionsPerformedAmount(set);
+  }
 }
 
 // A whole, non-negative integer parsed from raw text, or null when blank or malformed.
@@ -226,9 +280,10 @@ export function wholeNonNegative(raw: string): number | null {
 function toLoggedSet(
   exerciseId: number,
   kind: QuantityKind,
+  unit: DistanceUnit,
   set: PerformedSetFields,
 ): PerformedSetResult {
-  const amount = performedAmount(kind, set);
+  const amount = performedAmount(kind, unit, set);
   if (amount.status !== "amount") return amount;
 
   const raw = (set.perceivedDifficulty ?? "").trim();
@@ -251,11 +306,17 @@ function toLoggedSet(
 }
 
 // The required-target error for an exercise whose plan is missing a target, worded for the
-// Amount kind so a duration exercise never errors about a "rep target" (issue #300).
+// Amount kind so a duration/distance exercise never errors about a "rep target" (issues
+// #300/#301).
 function missingTargetError(kind: QuantityKind): string {
-  return kind === "duration"
-    ? "Each exercise needs a target hold time."
-    : "Each exercise needs a rep target.";
+  switch (kind) {
+    case "duration":
+      return "Each exercise needs a target hold time.";
+    case "distance":
+      return "Each exercise needs a target distance.";
+    default:
+      return "Each exercise needs a rep target.";
+  }
 }
 
 // Build the authored prescription for one exercise, or an error string naming what is
@@ -329,12 +390,13 @@ export function buildAuthorSessionRequest(
     }
 
     const kind = amountKind(exercise.kind);
+    const unit = exercise.unit ?? DEFAULT_DISTANCE_UNIT;
     const built = toPrescription(exercise, kind);
     if (!built.ok) return built;
     prescriptions.push(built.prescription);
 
     for (const set of exercise.performedSets) {
-      const outcome = toLoggedSet(exercise.exerciseId, kind, set);
+      const outcome = toLoggedSet(exercise.exerciseId, kind, unit, set);
       if (outcome.status === "error") return { ok: false, error: outcome.error };
       if (outcome.status === "set") loggedSets.push(outcome.set);
     }
