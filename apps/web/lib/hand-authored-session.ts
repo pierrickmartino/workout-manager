@@ -18,6 +18,7 @@ import type { LoadKind } from "./load";
 import type { LogSetInput } from "./logs-types";
 import { TRAINING_TYPES } from "./sessions-types.ts";
 import {
+  flattenSupersets,
   groupWithNext,
   reorderKeepingContiguous,
   supersetLayout,
@@ -301,10 +302,31 @@ export function reorderExercise<T extends SupersetMember>(
 // The per-exercise Superset layout the screen renders (badges, group brackets, round-rest
 // placement, the "group with next" gate). Re-exported so the screen has one import surface
 // for authoring supersets.
+//
+// When `suppressed`, the screen belongs to a Sensitive-Constraint user who is never handed
+// a Superset (ADR-0023, issue #290): every "group with next" gate is closed so no grouping
+// affordance is offered. Paired with `suppressAuthoredSupersets`, which keeps the draft
+// itself flat, this leaves the screen with nothing to group and no way to start one.
 export function authoredSupersetLayout(
   exercises: readonly SupersetMember[],
+  suppressed = false,
 ): SupersetSlot[] {
-  return supersetLayout(exercises);
+  const layout = supersetLayout(exercises);
+  if (!suppressed) return layout;
+  return layout.map((slot) => ({ ...slot, canGroupWithNext: false }));
+}
+
+// Strip every Superset from the authored draft — the staged, not-committed unlink a
+// Sensitive-Constraint user's build-and-log screen applies (ADR-0023, issue #290), the
+// twin of the Builder's `initBuilderDraft` auto-unlink. Supersets compress rest and raise
+// intensity, exactly the load those users must not be handed, so grouping is paused: the
+// screen offers no group control (`authoredSupersetLayout(_, true)`) and any grouping that
+// slipped into the draft is flattened here. The `POST /api/sessions` endpoint stays the
+// backstop. Returns a new list only when something changed; the input is never mutated.
+export function suppressAuthoredSupersets<T extends SupersetMember>(
+  exercises: T[],
+): T[] {
+  return flattenSupersets(exercises);
 }
 
 export type { SupersetSlot };
