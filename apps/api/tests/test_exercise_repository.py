@@ -216,6 +216,89 @@ def test_set_muscle_emphasis_on_an_unknown_id_returns_none(repo):
     )
 
 
+def test_list_all_returns_every_row_regardless_of_provenance(repo):
+    # Arrange — a catalog spanning all three Provenance tiers
+    ai = repo.find_or_create("Wall Sit", provenance=Provenance.AI_GENERATED)
+    curated = repo.find_or_create("Back Squat", provenance=Provenance.CURATED)
+    user = repo.find_or_create("Jefferson Curl", provenance=Provenance.USER_ENTERED)
+
+    # Act — the Stub-enrichment backfill walks the whole catalog (issue #308)
+    rows = repo.list_all()
+
+    # Assert — every row, no tier filtered out
+    assert {row.id for row in rows} == {ai.id, curated.id, user.id}
+
+
+def test_set_enrichment_writes_the_enrichable_fields(repo):
+    # Arrange — a name-only Stub
+    exercise = repo.find_or_create("Cossack Squat", provenance=Provenance.USER_ENTERED)
+
+    # Act — the backfill fills the fields that lift a Stub to Listable (ADR-0041)
+    updated = repo.set_enrichment(
+        exercise.id,
+        description="A deep lateral lunge.",
+        targeted_muscles=["quads", "glutes"],
+        instructions=["Step wide.", "Sink low."],
+        difficulty=3,
+    )
+
+    # Assert — the enrichable set is written and persists
+    assert updated is not None
+    assert updated.description == "A deep lateral lunge."
+    assert updated.targeted_muscles == ["quads", "glutes"]
+    assert updated.instructions == ["Step wide.", "Sink low."]
+    assert updated.difficulty == 3
+    refetched = repo.get(exercise.id)
+    assert refetched.description == "A deep lateral lunge."
+    assert refetched.difficulty == 3
+
+
+def test_set_enrichment_preserves_pre_existing_provenance_precautions_image_split(repo):
+    # Arrange — a row that already carries curator-only and Enriched-tier content, so
+    # the test proves set_enrichment *preserves* those values, not merely that a fresh
+    # row's defaults stay empty.
+    exercise = repo.find_or_create(
+        "Cossack Squat",
+        provenance=Provenance.USER_ENTERED,
+        primary_muscles=["quads"],
+        secondary_muscles=["glutes"],
+        precautions=["Warm up the hips."],
+        image="cossack-squat.png",
+    )
+
+    # Act
+    repo.set_enrichment(
+        exercise.id,
+        description="A deep lateral lunge.",
+        targeted_muscles=["quads", "glutes"],
+        instructions=["Step wide."],
+        difficulty=3,
+    )
+
+    # Assert — enrichment touches only the enrichable set: trust and the pre-existing
+    # curator-only / Enriched-tier fields are all left exactly as they were
+    stored = repo.get(exercise.id)
+    assert stored.provenance == Provenance.USER_ENTERED.value
+    assert stored.precautions == ["Warm up the hips."]
+    assert stored.image == "cossack-squat.png"
+    assert stored.primary_muscles == ["quads"]
+    assert stored.secondary_muscles == ["glutes"]
+
+
+def test_set_enrichment_on_an_unknown_id_returns_none(repo):
+    # Assert — no row to update, no exception
+    assert (
+        repo.set_enrichment(
+            9999,
+            description="x",
+            targeted_muscles=[],
+            instructions=[],
+            difficulty=None,
+        )
+        is None
+    )
+
+
 def test_losing_concurrent_insert_returns_the_winning_row():
     # Arrange — two requests race to create the same new Exercise. SQLite's
     # in-memory engine shares one DB across sessions on the thread, so we can
