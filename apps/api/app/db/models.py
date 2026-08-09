@@ -110,6 +110,12 @@ class Exercise(SQLModel, table=True):
     precautions: list[str] = Field(
         default_factory=list, sa_column=Column(JSON, nullable=False)
     )
+    # An optional Exercise Image: a single curated-source illustration reference
+    # (a URL / asset key) shown on Exercise Detail. Curator-only and never
+    # AI-fabricated — a misleading generated picture is a safety hazard in an
+    # injury/rehab-cautious domain — and part of the Enriched (gold) tier, so its
+    # absence never holds a movement below the Listable bar (ADR-0041).
+    image: str | None = Field(default=None)
 
 
 class ExerciseRelationship(SQLModel, table=True):

@@ -138,6 +138,11 @@ def _serialize(exercise: Exercise, related: list[RelatedExercise]) -> dict:
         "instructions": list(exercise.instructions),
         "difficulty": exercise.difficulty,
         "precautions": list(exercise.precautions),
+        # The optional Exercise Image (ADR-0041): a curated-source illustration
+        # reference, ``null`` when the movement carries none. Its absence never
+        # degrades the Detail response — a movement with no picture is still
+        # fully usable.
+        "image": exercise.image,
         "variations": [
             _summary(r) for r in related if r.kind == RelationKind.VARIATION
         ],

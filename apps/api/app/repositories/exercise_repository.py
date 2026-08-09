@@ -47,6 +47,7 @@ class ExerciseRepository(Protocol):
         instructions: Sequence[str] = (),
         difficulty: int | None = None,
         precautions: Sequence[str] = (),
+        image: str | None = None,
     ) -> Exercise:
         """Return the catalog Exercise for ``name``'s normalized form, creating it
         with ``provenance`` and the given details if it does not yet exist."""
@@ -101,6 +102,7 @@ def _new_exercise(
     instructions: Sequence[str],
     difficulty: int | None,
     precautions: Sequence[str],
+    image: str | None,
 ) -> Exercise:
     return Exercise(
         name=name,
@@ -114,6 +116,7 @@ def _new_exercise(
         instructions=list(instructions),
         difficulty=difficulty,
         precautions=list(precautions),
+        image=image,
     )
 
 
@@ -145,6 +148,7 @@ class SqlExerciseRepository:
         instructions: Sequence[str] = (),
         difficulty: int | None = None,
         precautions: Sequence[str] = (),
+        image: str | None = None,
     ) -> Exercise:
         key = normalize_name(name)
         existing = self._lookup(key)
@@ -162,6 +166,7 @@ class SqlExerciseRepository:
             instructions,
             difficulty,
             precautions,
+            image,
         )
         self._session.add(exercise)
         try:
@@ -246,6 +251,7 @@ class InMemoryExerciseRepository:
         instructions: Sequence[str] = (),
         difficulty: int | None = None,
         precautions: Sequence[str] = (),
+        image: str | None = None,
     ) -> Exercise:
         key = normalize_name(name)
         existing = self._by_key.get(key)
@@ -263,6 +269,7 @@ class InMemoryExerciseRepository:
             instructions,
             difficulty,
             precautions,
+            image,
         )
         exercise.id = self._next_id
         self._next_id += 1
