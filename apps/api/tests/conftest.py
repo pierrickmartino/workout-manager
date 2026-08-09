@@ -14,6 +14,20 @@ ISSUER = "https://example.clerk.accounts.dev"
 KID = "test-key-1"
 
 
+class NullEnrichmentQueue:
+    """A no-op ``EnrichmentQueue`` for tests that exercise ``POST /api/exercises``
+    without caring about the async-on-create Enrichment trigger (issue #309).
+
+    The real ``get_enrichment_queue`` builds an RQ queue over Redis; a genuine create
+    would try to enqueue and hit a refused connection offline. Any offline harness
+    that mints a movement through the endpoint (the log picker, hand-authoring)
+    overrides ``get_enrichment_queue`` with this so the create path stays Redis-free.
+    Tests that assert the enqueue decision use a recording spy instead."""
+
+    def enqueue(self, exercise_id: int) -> None:
+        return None
+
+
 @dataclass
 class SigningContext:
     private_key: rsa.RSAPrivateKey

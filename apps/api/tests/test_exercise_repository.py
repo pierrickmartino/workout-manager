@@ -17,6 +17,75 @@ from app.repositories.exercise_repository import (
 )
 
 
+def test_resolve_or_create_reports_a_fresh_create(repo):
+    # Act — a genuine normalized-name miss mints a new Stub
+    resolved = repo.resolve_or_create("Jefferson Curl", provenance=Provenance.USER_ENTERED)
+
+    # Assert — the created flag is the async-enrichment trigger (issue #309): a real
+    # create is reported so the endpoint knows to enqueue an Enrichment job for it.
+    assert resolved.created is True
+    assert resolved.exercise.id is not None
+    assert resolved.exercise.name == "Jefferson Curl"
+    assert resolved.exercise.provenance == Provenance.USER_ENTERED.value
+
+
+def test_resolve_or_create_reports_a_dedup_hit(repo):
+    # Arrange — the movement already exists (a prior curated seed)
+    seeded = repo.find_or_create("Running", provenance=Provenance.CURATED)
+
+    # Act — a normalized-name hit resolves to the existing row
+    resolved = repo.resolve_or_create("  running ", provenance=Provenance.USER_ENTERED)
+
+    # Assert — created is False (a dedup hit must enqueue nothing, ADR-0002) and the
+    # existing entry's Provenance is untouched by the resolve
+    assert resolved.created is False
+    assert resolved.exercise.id == seeded.id
+    assert resolved.exercise.provenance == Provenance.CURATED.value
+
+
+def test_resolve_or_create_and_find_or_create_agree_on_the_row(repo):
+    # Arrange — find_or_create still returns the same row resolve_or_create would
+    first = repo.resolve_or_create("Box Jump", provenance=Provenance.USER_ENTERED)
+
+    # Act — a second resolve is a dedup hit onto the same catalog entry
+    second = repo.find_or_create("box jump", provenance=Provenance.USER_ENTERED)
+
+    # Assert — one catalog entry, reused
+    assert second.id == first.exercise.id
+
+
+def test_losing_concurrent_resolve_reports_no_create():
+    # Arrange — two requests race to create the same new Exercise; the loser must
+    # report created=False so it never enqueues a duplicate Enrichment job for a row
+    # the winner already created (and already enqueued).
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as winner_session, Session(engine) as loser_session:
+        winner = SqlExerciseRepository(winner_session).find_or_create(
+            "Clean", provenance=Provenance.AI_GENERATED
+        )
+
+        loser = SqlExerciseRepository(loser_session)
+        real_lookup = loser._lookup
+        calls = {"count": 0}
+
+        def racing_lookup(key: str):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                return None  # not yet visible at lookup time
+            return real_lookup(key)
+
+        loser._lookup = racing_lookup  # type: ignore[method-assign]
+
+        # Act — the loser collides on the unique index, rolls back, and resolves to
+        # the winner's row.
+        resolved = loser.resolve_or_create("Clean", provenance=Provenance.AI_GENERATED)
+
+        # Assert — same row, and reported as a dedup hit (no create), not a mint.
+        assert resolved.created is False
+        assert resolved.exercise.id == winner.id
+
+
 @pytest.fixture(params=["in_memory", "sql"])
 def repo(request):
     if request.param == "in_memory":

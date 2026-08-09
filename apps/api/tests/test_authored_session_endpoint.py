@@ -22,6 +22,7 @@ from app.generation.regenerator import RegenerationRequest
 from app.generation.schema import GeneratedExercisePrescription, GeneratedSession
 from app.main import create_app
 from app.repositories.deps import (
+    get_enrichment_queue,
     get_exercise_repository,
     get_generation_feedback_repository,
     get_logged_session_repository,
@@ -42,7 +43,7 @@ from app.repositories.profile_repository import (
 )
 from app.repositories.protocol_repository import InMemoryProtocolRepository
 from app.repositories.session_repository import InMemorySessionRepository
-from tests.conftest import ISSUER, make_signing_context
+from tests.conftest import ISSUER, NullEnrichmentQueue, make_signing_context
 
 
 class FakeGenerator:
@@ -86,6 +87,10 @@ def build_client(ctx=None, profiles=None):
     app.dependency_overrides[get_session_regenerator] = lambda: FakeRegenerator()
     app.dependency_overrides[get_generation_feedback_repository] = lambda: feedback
     app.dependency_overrides[get_profile_repository] = lambda: profiles
+    # Hand-authoring a Session resolves any brand-new movement through POST
+    # /api/exercises, which now enqueues an async Enrichment job (issue #309, user
+    # story 25); keep the offline harness Redis-free with a no-op queue.
+    app.dependency_overrides[get_enrichment_queue] = lambda: NullEnrichmentQueue()
     client = TestClient(app)
     client.exercises = exercises
     return client, ctx

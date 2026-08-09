@@ -21,6 +21,22 @@ from app.domain.exercise import Provenance, normalize_name, rank_exercise_matche
 
 
 @dataclass(frozen=True)
+class ResolvedExercise:
+    """The outcome of a resolve-or-create: the catalog Exercise and whether it was
+    freshly minted this call.
+
+    ``created`` is the async-enrichment trigger (issue #309, ADR-0041): only a
+    genuine normalized-name miss mints a new Stub, and only that case should enqueue
+    an Enrichment job — a dedup hit (``created`` is ``False``) enqueues nothing and
+    leaves the existing entry's Provenance untouched (ADR-0002). The losing side of
+    a concurrent insert also reports ``created`` ``False``: the winner minted the
+    row (and enqueued its job), so the loser must not re-enqueue."""
+
+    exercise: Exercise
+    created: bool
+
+
+@dataclass(frozen=True)
 class ExerciseSearchPage:
     """One page of Exercise Library results plus the full match count.
 
@@ -34,6 +50,30 @@ class ExerciseSearchPage:
 
 
 class ExerciseRepository(Protocol):
+    def resolve_or_create(
+        self,
+        name: str,
+        *,
+        provenance: Provenance,
+        description: str | None = None,
+        targeted_muscles: Sequence[str] = (),
+        primary_muscles: Sequence[str] = (),
+        secondary_muscles: Sequence[str] = (),
+        required_equipment: Sequence[str] = (),
+        instructions: Sequence[str] = (),
+        difficulty: int | None = None,
+        precautions: Sequence[str] = (),
+        image: str | None = None,
+    ) -> ResolvedExercise:
+        """Resolve ``name`` to a catalog Exercise, reporting whether it was created.
+
+        Same normalized-name dedup as ``find_or_create`` (ADR-0002), but returns a
+        ``ResolvedExercise`` whose ``created`` flag distinguishes a genuine miss (a
+        new Stub was minted) from a dedup hit (an existing entry was returned
+        untouched). The async-on-create Enrichment trigger (issue #309) enqueues only
+        when ``created`` is ``True``."""
+        ...
+
     def find_or_create(
         self,
         name: str,
@@ -50,7 +90,10 @@ class ExerciseRepository(Protocol):
         image: str | None = None,
     ) -> Exercise:
         """Return the catalog Exercise for ``name``'s normalized form, creating it
-        with ``provenance`` and the given details if it does not yet exist."""
+        with ``provenance`` and the given details if it does not yet exist.
+
+        A convenience wrapper over ``resolve_or_create`` for the many callers that do
+        not need to know whether the row was freshly minted."""
         ...
 
     def get(self, exercise_id: int) -> Exercise | None:
@@ -163,7 +206,7 @@ class SqlExerciseRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def find_or_create(
+    def resolve_or_create(
         self,
         name: str,
         *,
@@ -177,11 +220,11 @@ class SqlExerciseRepository:
         difficulty: int | None = None,
         precautions: Sequence[str] = (),
         image: str | None = None,
-    ) -> Exercise:
+    ) -> ResolvedExercise:
         key = normalize_name(name)
         existing = self._lookup(key)
         if existing is not None:
-            return existing
+            return ResolvedExercise(exercise=existing, created=False)
 
         exercise = _new_exercise(
             name,
@@ -202,15 +245,46 @@ class SqlExerciseRepository:
         except IntegrityError:
             # A concurrent request inserted the same normalized_name between our
             # lookup and commit, colliding on the unique index. Roll back our
-            # losing insert and return the row the winner created — find_or_create
-            # stays idempotent under concurrency (ADR-0002 dedup).
+            # losing insert and return the row the winner created — resolve stays
+            # idempotent under concurrency (ADR-0002 dedup). The winner minted the
+            # row (and enqueued its Enrichment job), so the loser reports created
+            # False and never re-enqueues (issue #309).
             self._session.rollback()
             winner = self._lookup(key)
             if winner is None:  # a different integrity violation; surface it
                 raise
-            return winner
+            return ResolvedExercise(exercise=winner, created=False)
         self._session.refresh(exercise)
-        return exercise
+        return ResolvedExercise(exercise=exercise, created=True)
+
+    def find_or_create(
+        self,
+        name: str,
+        *,
+        provenance: Provenance,
+        description: str | None = None,
+        targeted_muscles: Sequence[str] = (),
+        primary_muscles: Sequence[str] = (),
+        secondary_muscles: Sequence[str] = (),
+        required_equipment: Sequence[str] = (),
+        instructions: Sequence[str] = (),
+        difficulty: int | None = None,
+        precautions: Sequence[str] = (),
+        image: str | None = None,
+    ) -> Exercise:
+        return self.resolve_or_create(
+            name,
+            provenance=provenance,
+            description=description,
+            targeted_muscles=targeted_muscles,
+            primary_muscles=primary_muscles,
+            secondary_muscles=secondary_muscles,
+            required_equipment=required_equipment,
+            instructions=instructions,
+            difficulty=difficulty,
+            precautions=precautions,
+            image=image,
+        ).exercise
 
     def _lookup(self, normalized_name: str) -> Exercise | None:
         return self._session.exec(
@@ -290,7 +364,7 @@ class InMemoryExerciseRepository:
         self._by_id: dict[int, Exercise] = {}
         self._next_id = 1
 
-    def find_or_create(
+    def resolve_or_create(
         self,
         name: str,
         *,
@@ -304,11 +378,11 @@ class InMemoryExerciseRepository:
         difficulty: int | None = None,
         precautions: Sequence[str] = (),
         image: str | None = None,
-    ) -> Exercise:
+    ) -> ResolvedExercise:
         key = normalize_name(name)
         existing = self._by_key.get(key)
         if existing is not None:
-            return existing
+            return ResolvedExercise(exercise=existing, created=False)
 
         exercise = _new_exercise(
             name,
@@ -327,7 +401,36 @@ class InMemoryExerciseRepository:
         self._next_id += 1
         self._by_key[key] = exercise
         self._by_id[exercise.id] = exercise
-        return exercise
+        return ResolvedExercise(exercise=exercise, created=True)
+
+    def find_or_create(
+        self,
+        name: str,
+        *,
+        provenance: Provenance,
+        description: str | None = None,
+        targeted_muscles: Sequence[str] = (),
+        primary_muscles: Sequence[str] = (),
+        secondary_muscles: Sequence[str] = (),
+        required_equipment: Sequence[str] = (),
+        instructions: Sequence[str] = (),
+        difficulty: int | None = None,
+        precautions: Sequence[str] = (),
+        image: str | None = None,
+    ) -> Exercise:
+        return self.resolve_or_create(
+            name,
+            provenance=provenance,
+            description=description,
+            targeted_muscles=targeted_muscles,
+            primary_muscles=primary_muscles,
+            secondary_muscles=secondary_muscles,
+            required_equipment=required_equipment,
+            instructions=instructions,
+            difficulty=difficulty,
+            precautions=precautions,
+            image=image,
+        ).exercise
 
     def get(self, exercise_id: int) -> Exercise | None:
         return self._by_id.get(exercise_id)
@@ -391,6 +494,7 @@ class InMemoryExerciseRepository:
 __all__ = [
     "ExerciseRepository",
     "ExerciseSearchPage",
+    "ResolvedExercise",
     "SqlExerciseRepository",
     "InMemoryExerciseRepository",
 ]
