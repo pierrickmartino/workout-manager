@@ -76,6 +76,34 @@ class ExerciseRepository(Protocol):
         curated content (ADR-0016)."""
         ...
 
+    def list_all(self) -> list[Exercise]:
+        """Return every catalog Exercise, regardless of Provenance.
+
+        The Stub-enrichment backfill (issue #308) walks the whole catalog through
+        this and classifies each row with the **provenance-blind** Catalog
+        Completeness projection (ADR-0041), so a sub-bar ``curated`` seed is lifted
+        alongside a ``user_entered`` or ``ai_generated`` Stub."""
+        ...
+
+    def set_enrichment(
+        self,
+        exercise_id: int,
+        *,
+        description: str | None,
+        targeted_muscles: Sequence[str],
+        instructions: Sequence[str],
+        difficulty: int | None,
+    ) -> Exercise | None:
+        """Write the enrichable field set (ADR-0041) on one Exercise.
+
+        Updates *only* ``description`` / ``targeted_muscles`` / ``instructions`` /
+        ``difficulty`` — the fields that lift a Stub to Listable. Provenance,
+        precautions, the Exercise Image, and the Primary/Secondary split are left
+        untouched: enrichment never promotes trust and never writes curator-only or
+        Enriched-tier content. Returns the updated Exercise, or ``None`` if no row
+        has ``exercise_id``."""
+        ...
+
     def set_muscle_emphasis(
         self,
         exercise_id: int,
@@ -214,6 +242,30 @@ class SqlExerciseRepository:
             ).all()
         )
 
+    def list_all(self) -> list[Exercise]:
+        return list(self._session.exec(select(Exercise)).all())
+
+    def set_enrichment(
+        self,
+        exercise_id: int,
+        *,
+        description: str | None,
+        targeted_muscles: Sequence[str],
+        instructions: Sequence[str],
+        difficulty: int | None,
+    ) -> Exercise | None:
+        exercise = self._session.get(Exercise, exercise_id)
+        if exercise is None:
+            return None
+        exercise.description = description
+        exercise.targeted_muscles = list(targeted_muscles)
+        exercise.instructions = list(instructions)
+        exercise.difficulty = difficulty
+        self._session.add(exercise)
+        self._session.commit()
+        self._session.refresh(exercise)
+        return exercise
+
     def set_muscle_emphasis(
         self,
         exercise_id: int,
@@ -299,6 +351,27 @@ class InMemoryExerciseRepository:
             for exercise in self._by_id.values()
             if exercise.provenance == provenance.value
         ]
+
+    def list_all(self) -> list[Exercise]:
+        return list(self._by_id.values())
+
+    def set_enrichment(
+        self,
+        exercise_id: int,
+        *,
+        description: str | None,
+        targeted_muscles: Sequence[str],
+        instructions: Sequence[str],
+        difficulty: int | None,
+    ) -> Exercise | None:
+        exercise = self._by_id.get(exercise_id)
+        if exercise is None:
+            return None
+        exercise.description = description
+        exercise.targeted_muscles = list(targeted_muscles)
+        exercise.instructions = list(instructions)
+        exercise.difficulty = difficulty
+        return exercise
 
     def set_muscle_emphasis(
         self,

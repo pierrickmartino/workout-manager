@@ -113,6 +113,29 @@ class GeneratedMuscleEmphasis(BaseModel):
     secondary_muscles: list[str] = Field(default_factory=list)
 
 
+class GeneratedEnrichment(BaseModel):
+    """The AI's fill for one *existing* Stub catalog Exercise (ADR-0041).
+
+    The enrichment backfill (issue #308) feeds the model a name-only movement and
+    asks it to supply the fields that lift a Stub to at least **Listable**: a
+    description, the flat ``targeted_muscles`` union, ordered Execution Steps, and a
+    1–10 difficulty. It deliberately produces **no precautions and no image** — a
+    fabricated safety note or a wrong illustration is actively dangerous, so both
+    stay curator-only — and **no Primary/Secondary split**, which is Enriched-tier
+    and would pressure invented primacy (ADR-0016). Malformed output is rejected at
+    the ``generate_structured`` boundary and nothing is written."""
+
+    description: str | None = None
+    # ``instructions`` is an ordered list of Execution Steps (ADR-0015): one entry
+    # per discrete step, in performance order — never a prose blob re-guessed on
+    # every read.
+    instructions: list[str] = Field(default_factory=list)
+    difficulty: int | None = None
+    # The flat, durable union the F3 Muscle Group roll-up reads (ADR-0011). The pass
+    # never writes a Primary/Secondary split — that stays Enriched-tier.
+    targeted_muscles: list[str] = Field(default_factory=list)
+
+
 class GeneratedProtocolSession(BaseModel):
     """One Session inside a Generated Protocol, fixed to a Week/Day position.
 
