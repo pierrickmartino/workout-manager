@@ -13,4 +13,8 @@ export interface ExerciseSearchResult {
   required_equipment: string[];
   difficulty: number | null;
   provenance: string;
+  // Catalog Completeness (ADR-0041): the read-time Stub | Listable | Enriched tier,
+  // a content-presence axis distinct from `provenance` (trust). Surfaced beside the
+  // Provenance marker on each Library result.
+  completeness: string;
 }

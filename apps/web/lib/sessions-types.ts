@@ -99,6 +99,10 @@ export interface ExerciseDetail {
   instructions: string[];
   difficulty: number | null;
   precautions: string[];
+  // Catalog Completeness (ADR-0041): the read-time Stub | Listable | Enriched tier,
+  // a content-presence axis distinct from `provenance` (trust). Shown beside the
+  // Provenance marker in the Detail header.
+  completeness: string;
   variations: RelatedExerciseSummary[];
   alternatives: RelatedExerciseSummary[];
 }
