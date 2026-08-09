@@ -128,6 +128,66 @@ def test_exercise_detail_serializes_a_missing_image_as_null():
     assert data["image"] is None
 
 
+def test_exercise_detail_reports_enriched_for_a_full_gold_movement():
+    # Arrange — a curated movement carrying every field the gold bar reads
+    client, ctx, exercises, _ = build_client()
+    squat = exercises.find_or_create(
+        "Back Squat",
+        provenance=Provenance.CURATED,
+        description="A barbell squat.",
+        targeted_muscles=["quads", "glutes"],
+        primary_muscles=["quads"],
+        secondary_muscles=["glutes"],
+        instructions=["Brace your core."],
+        difficulty=6,
+        precautions=["keep a neutral spine"],
+        image="https://cdn.example.com/curated/back-squat.svg",
+    )
+
+    # Act
+    response = client.get(f"/api/exercises/{squat.id}", headers=_auth(ctx))
+
+    # Assert — the detail payload carries the read-time completeness tier (ADR-0041)
+    assert response.status_code == 200
+    assert response.json()["data"]["completeness"] == "enriched"
+
+
+def test_exercise_detail_reports_listable_when_a_gold_field_is_missing():
+    # Arrange — described, with muscles and a step, but no Exercise Image
+    client, ctx, exercises, _ = build_client()
+    lunge = exercises.find_or_create(
+        "Walking Lunge",
+        provenance=Provenance.CURATED,
+        description="A split-stance stride.",
+        targeted_muscles=["quads", "glutes"],
+        primary_muscles=["quads"],
+        secondary_muscles=["glutes"],
+        instructions=["Step forward and lower."],
+        difficulty=4,
+        precautions=["keep the front knee tracking the toes"],
+    )
+
+    # Act
+    response = client.get(f"/api/exercises/{lunge.id}", headers=_auth(ctx))
+
+    # Assert — a single missing gold field (the image) keeps it Listable, not Enriched
+    assert response.status_code == 200
+    assert response.json()["data"]["completeness"] == "listable"
+
+
+def test_exercise_detail_reports_stub_for_a_curated_but_thin_movement():
+    # Arrange — a curated (trusted) movement with nothing but a name
+    client, ctx, exercises, _ = build_client()
+    thin = exercises.find_or_create("Jefferson Curl", provenance=Provenance.CURATED)
+
+    # Act
+    response = client.get(f"/api/exercises/{thin.id}", headers=_auth(ctx))
+
+    # Assert — completeness is provenance-blind: curated does not lift a Stub
+    assert response.status_code == 200
+    assert response.json()["data"]["completeness"] == "stub"
+
+
 def test_exercise_detail_omits_primacy_for_a_flat_muscle_list():
     # Arrange — a curated Exercise with only a flat targeted-muscle list, no split
     client, ctx, exercises, _ = build_client()

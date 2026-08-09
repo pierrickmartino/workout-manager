@@ -83,6 +83,101 @@ def rank_exercise_matches(matches: list[_RankableT]) -> list[_RankableT]:
     )
 
 
+class CatalogCompleteness(str, Enum):
+    """Whether a catalog Exercise meets the shared quality bar (ADR-0041).
+
+    A **read-time projection** over which content fields are populated — never a
+    stored column — in three tiers: ``STUB`` (name only), ``LISTABLE`` (a
+    description, a non-empty flat targeted-muscle list, and at least one Execution
+    Step), and ``ENRICHED`` (Listable plus the Primary/Secondary emphasis split,
+    difficulty, precautions, and an Exercise Image). Measured **provenance-blind**:
+    trust (Provenance) and content-presence (Completeness) are separate axes, so a
+    curated seed missing fields still reads sub-bar.
+    """
+
+    STUB = "stub"
+    LISTABLE = "listable"
+    ENRICHED = "enriched"
+
+
+class _Completable(Protocol):
+    """The content fields the Catalog Completeness bar reads on an Exercise.
+
+    Deliberately narrower than the full catalog row: the projection depends only on
+    field *presence*, never on Provenance, so it stays a pure, provenance-blind
+    read."""
+
+    description: str | None
+    targeted_muscles: list[str]
+    instructions: list[str]
+    primary_muscles: list[str]
+    secondary_muscles: list[str]
+    difficulty: int | None
+    precautions: list[str]
+    image: str | None
+
+
+def _has_text(value: str | None) -> bool:
+    """A string field counts as present only when it carries non-blank content — a
+    whitespace-only value is an empty column, not real content."""
+
+    return bool(value and value.strip())
+
+
+def _has_emphasis_split(exercise: _Completable) -> bool:
+    """Whether the Exercise asserts a Primary/Secondary emphasis split (ADR-0016).
+
+    Any asserted emphasis — a primary or a secondary — is a populated split, so a
+    true isolation movement with only a primary still qualifies. This mirrors the
+    muscle-emphasis re-enrichment pass's "already split" predicate, keeping one
+    notion of "has a split" across the codebase. An empty split is "no asserted
+    primacy", never "all primary"."""
+
+    return bool(exercise.primary_muscles) or bool(exercise.secondary_muscles)
+
+
+def _is_listable(exercise: _Completable) -> bool:
+    """The minimum bar: a description, a non-empty flat targeted-muscle list, and at
+    least one Execution Step. The emphasis split is deliberately *not* required here —
+    that is Enriched-tier only (ADR-0041), so the minimum never pressures fabricated
+    primacy (ADR-0016)."""
+
+    return (
+        _has_text(exercise.description)
+        and bool(exercise.targeted_muscles)
+        and bool(exercise.instructions)
+    )
+
+
+def _is_enriched(exercise: _Completable) -> bool:
+    """The gold bar: Listable plus the Primary/Secondary split, difficulty,
+    precautions, and an Exercise Image. Missing any one gold field leaves the
+    movement Listable, never Enriched."""
+
+    return (
+        _is_listable(exercise)
+        and _has_emphasis_split(exercise)
+        and exercise.difficulty is not None
+        and bool(exercise.precautions)
+        and _has_text(exercise.image)
+    )
+
+
+def catalog_completeness(exercise: _Completable) -> CatalogCompleteness:
+    """Project a catalog Exercise's populated fields onto its Completeness tier.
+
+    Pure and read-time (ADR-0041): computed from field presence alone, with no
+    stored column and no write hook, and **provenance-blind** — the projection never
+    reads Provenance, so a ``curated``, ``ai_generated``, or ``user_entered`` movement
+    is held to the same yardstick. Tiers are checked strongest-first."""
+
+    if _is_enriched(exercise):
+        return CatalogCompleteness.ENRICHED
+    if _is_listable(exercise):
+        return CatalogCompleteness.LISTABLE
+    return CatalogCompleteness.STUB
+
+
 def parse_instruction_steps(instructions: str | None) -> list[str]:
     """Split authored execution prose into ordered Execution Steps (ADR-0015).
 
