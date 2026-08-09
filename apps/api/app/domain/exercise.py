@@ -124,14 +124,21 @@ def _has_text(value: str | None) -> bool:
     return bool(value and value.strip())
 
 
-def _has_emphasis_split(exercise: _Completable) -> bool:
+class _Splittable(Protocol):
+    """The two fields that carry a Primary/Secondary emphasis split."""
+
+    primary_muscles: list[str]
+    secondary_muscles: list[str]
+
+
+def has_emphasis_split(exercise: _Splittable) -> bool:
     """Whether the Exercise asserts a Primary/Secondary emphasis split (ADR-0016).
 
     Any asserted emphasis — a primary or a secondary — is a populated split, so a
-    true isolation movement with only a primary still qualifies. This mirrors the
-    muscle-emphasis re-enrichment pass's "already split" predicate, keeping one
-    notion of "has a split" across the codebase. An empty split is "no asserted
-    primacy", never "all primary"."""
+    true isolation movement with only a primary still qualifies. An empty split is
+    "no asserted primacy", never "all primary". The single source of truth for "has
+    a split": both the Catalog Completeness projection and the muscle-emphasis
+    re-enrichment pass read through here, so one notion holds across the codebase."""
 
     return bool(exercise.primary_muscles) or bool(exercise.secondary_muscles)
 
@@ -156,7 +163,7 @@ def _is_enriched(exercise: _Completable) -> bool:
 
     return (
         _is_listable(exercise)
-        and _has_emphasis_split(exercise)
+        and has_emphasis_split(exercise)
         and exercise.difficulty is not None
         and bool(exercise.precautions)
         and _has_text(exercise.image)
