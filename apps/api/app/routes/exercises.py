@@ -8,6 +8,8 @@ authentication like the rest of the API. Responses use the standard envelope."""
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 
@@ -16,7 +18,9 @@ from app.db.models import Exercise
 from app.domain.exercise import Provenance, catalog_completeness, normalize_name
 from app.domain.substitution import RelationKind
 from app.envelope import success_envelope
+from app.generation.enrichment_queue import EnrichmentQueue
 from app.repositories.deps import (
+    get_enrichment_queue,
     get_exercise_relationship_repository,
     get_exercise_repository,
 )
@@ -25,6 +29,8 @@ from app.repositories.exercise_relationship_repository import (
     RelatedExercise,
 )
 from app.repositories.exercise_repository import ExerciseRepository
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["exercises"])
 
@@ -108,6 +114,7 @@ def create_exercise(
     payload: CreateExerciseBody,
     _: str = Depends(get_current_user),
     exercises: ExerciseRepository = Depends(get_exercise_repository),
+    enrichment_queue: EnrichmentQueue = Depends(get_enrichment_queue),
 ) -> dict:
     """Resolve ``name`` to a catalog Exercise, creating a ``user_entered`` one on a miss.
 
@@ -115,12 +122,39 @@ def create_exercise(
     prior user-entered one — is returned as-is with its Provenance untouched; only a
     genuine miss mints a new, name-only ``user_entered`` movement. This is the sole
     place a user's typed movement enters the catalog; the log write stays id-only and
-    never mints (ADR-0031/0033). Responses use the standard envelope."""
+    never mints (ADR-0031/0033). Because both the plan-less log picker and the
+    hand-authoring flow resolve names here before referencing Exercises by id, this
+    one hook covers both paths (user story 25).
 
-    exercise = exercises.find_or_create(
+    On a genuine create the new Stub is enriched out-of-band: an Enrichment job is
+    enqueued so a worker fills its description and muscles later (issue #309,
+    ADR-0041), while the synchronous write above stays a pure name-only insert with
+    no AI call (ADR-0002). A dedup hit enqueues nothing — an existing movement is not
+    re-enriched by this path. Responses use the standard envelope."""
+
+    resolved = exercises.resolve_or_create(
         payload.name, provenance=Provenance.USER_ENTERED
     )
-    return success_envelope(_search_result(exercise))
+    if resolved.created:
+        _enqueue_enrichment(enrichment_queue, resolved.exercise.id)
+    return success_envelope(_search_result(resolved.exercise))
+
+
+def _enqueue_enrichment(enrichment_queue: EnrichmentQueue, exercise_id: int) -> None:
+    """Best-effort enqueue of the async Enrichment job for a newly minted Stub.
+
+    The movement is already committed by the time we get here, so a queue failure
+    (e.g. Redis unreachable) must not fail the create — frictionless creation is never
+    blocked (ADR-0002, user story 1). We log and move on; the Stub simply stays
+    un-enriched until the idempotent-friendly backfill lifts it later, rather than the
+    user seeing an error for a movement that exists."""
+
+    try:
+        enrichment_queue.enqueue(exercise_id)
+    except Exception:  # the enqueue is fire-and-forget; never fail the create on it
+        logger.warning(
+            "failed to enqueue enrichment for exercise %s", exercise_id, exc_info=True
+        )
 
 
 def _summary(related: RelatedExercise) -> dict:

@@ -35,15 +35,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from app.domain.exercise import (
-    CatalogCompleteness,
-    catalog_completeness,
-)
-from app.generation.exercise_enrichment_generator import (
-    EnrichmentRequest,
-    ExerciseEnrichmentGenerator,
-)
-from app.generation.schema import GeneratedEnrichment
+from app.generation.exercise_enrichment import EnrichOutcome, enrich_exercise
+from app.generation.exercise_enrichment_generator import ExerciseEnrichmentGenerator
 from app.repositories.exercise_repository import ExerciseRepository
 
 logger = logging.getLogger(__name__)
@@ -65,46 +58,14 @@ class EnrichmentSummary:
     skipped_unfillable: int = 0
 
 
-@dataclass(frozen=True)
-class _ProspectiveRow:
-    """The content fields of the row *as it would be* after a fill is written.
-
-    A structural stand-in for ``catalog_completeness`` (its ``_Completable`` protocol
-    is duck-typed), so the pass can ask "would this fill lift the row?" through the
-    one projection without constructing a DB model or re-stating the Listable rule."""
-
-    description: str | None
-    targeted_muscles: list[str]
-    instructions: list[str]
-    primary_muscles: list[str]
-    secondary_muscles: list[str]
-    difficulty: int | None
-    precautions: list[str]
-    image: str | None
-
-
-def _would_lift(exercise, fill: GeneratedEnrichment) -> bool:
-    """Whether applying ``fill`` to ``exercise`` would clear at least the Listable bar.
-
-    Reuses the one Catalog Completeness projection (ADR-0041) rather than re-stating
-    the Listable rule here, so the pass and the read endpoints can never drift: it
-    projects the *prospective* row — the enrichable fields the fill would write over,
-    with the untouched gold-tier fields carried across — and asks whether that lands
-    above ``STUB``. A fill the model returned empty for a too-vague name therefore
-    reads as not-a-lift and is discarded by the caller."""
-
-    prospective = _ProspectiveRow(
-        description=fill.description,
-        targeted_muscles=list(fill.targeted_muscles),
-        instructions=list(fill.instructions),
-        difficulty=fill.difficulty,
-        # Enrichment never touches these, so the projection reads the row's own values.
-        primary_muscles=exercise.primary_muscles,
-        secondary_muscles=exercise.secondary_muscles,
-        precautions=exercise.precautions,
-        image=exercise.image,
-    )
-    return catalog_completeness(prospective) is not CatalogCompleteness.STUB
+# Each per-row outcome maps to the summary counter it increments, so the batch tally
+# stays a thin fold over the shared single-row step (``enrich_exercise``).
+_OUTCOME_COUNTERS = {
+    EnrichOutcome.ENRICHED: "enriched",
+    EnrichOutcome.SKIPPED_ALREADY_COMPLETE: "skipped_already_complete",
+    EnrichOutcome.SKIPPED_NOTHING_TO_WORK_FROM: "skipped_nothing_to_work_from",
+    EnrichOutcome.SKIPPED_UNFILLABLE: "skipped_unfillable",
+}
 
 
 def backfill_stub_exercises(
@@ -114,54 +75,20 @@ def backfill_stub_exercises(
 ) -> EnrichmentSummary:
     """Lift Stub catalog Exercises up to at least Listable.
 
-    Walks the whole catalog, enriches each row the Catalog Completeness projection
-    reports as a Stub through the ``generator``, and writes back only the enrichable
-    field set — leaving Provenance, precautions, the image, and the emphasis split
-    untouched. A fill too thin to actually clear the Listable bar is discarded
-    unwritten rather than counted as a lift. Returns an ``EnrichmentSummary`` of what
-    was enriched and skipped.
+    Walks the whole catalog and runs the shared single-row step (``enrich_exercise``)
+    on each row — the same step the async-on-create worker uses (issue #309), so the
+    two triggers never drift — tallying the per-row outcomes into an
+    ``EnrichmentSummary`` of what was enriched and skipped.
     """
 
-    enriched = 0
-    skipped_already_complete = 0
-    skipped_nothing_to_work_from = 0
-    skipped_unfillable = 0
-
+    counts = {counter: 0 for counter in _OUTCOME_COUNTERS.values()}
     for exercise in exercises.list_all():
-        if catalog_completeness(exercise) is not CatalogCompleteness.STUB:
-            skipped_already_complete += 1
-            continue
-        if not exercise.name.strip():
-            skipped_nothing_to_work_from += 1
-            continue
-
-        fill = generator.generate(
-            EnrichmentRequest(
-                exercise_name=exercise.name,
-                description=exercise.description,
-            )
+        outcome = enrich_exercise(
+            exercise, exercises=exercises, generator=generator
         )
-        if not _would_lift(exercise, fill):
-            # An honest empty/too-thin fill: writing it would blank the row without
-            # lifting it. Discard rather than fabricate or over-count (ADR-0041).
-            skipped_unfillable += 1
-            continue
+        counts[_OUTCOME_COUNTERS[outcome]] += 1
 
-        exercises.set_enrichment(
-            exercise.id,
-            description=fill.description,
-            targeted_muscles=fill.targeted_muscles,
-            instructions=fill.instructions,
-            difficulty=fill.difficulty,
-        )
-        enriched += 1
-
-    return EnrichmentSummary(
-        enriched=enriched,
-        skipped_already_complete=skipped_already_complete,
-        skipped_nothing_to_work_from=skipped_nothing_to_work_from,
-        skipped_unfillable=skipped_unfillable,
-    )
+    return EnrichmentSummary(**counts)
 
 
 def main() -> EnrichmentSummary:

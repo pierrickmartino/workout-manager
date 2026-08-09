@@ -13,6 +13,7 @@ from sqlmodel import Session
 from app.config import Settings, get_settings
 from app.db.session import get_session
 from app.generation.cache import GenerationCache, RedisCacheStore
+from app.generation.enrichment_queue import EnrichmentQueue, RqEnrichmentQueue
 from app.generation.job_queue import JobQueue, RqJobQueue
 from app.generation.llm import build_llm_client
 from app.generation.orchestrator import GenerationOrchestrator
@@ -130,6 +131,16 @@ def get_job_queue(
 ) -> JobQueue:
     connection = redis.Redis.from_url(settings.redis_url)
     return RqJobQueue(Queue(QUEUE_NAME, connection=connection))
+
+
+def get_enrichment_queue(
+    settings: Settings = Depends(get_settings),
+) -> EnrichmentQueue:
+    # The async-on-create Stub-enrichment queue (issue #309) shares the one
+    # ``generation`` RQ queue with Protocol generation, so both ride a single Redis
+    # (ADR-0005).
+    connection = redis.Redis.from_url(settings.redis_url)
+    return RqEnrichmentQueue(Queue(QUEUE_NAME, connection=connection))
 
 
 def get_generation_orchestrator(

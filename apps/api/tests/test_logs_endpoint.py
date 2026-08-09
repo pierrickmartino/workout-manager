@@ -19,6 +19,7 @@ from app.generation.generator import GenerationRequest
 from app.generation.schema import GeneratedExercisePrescription, GeneratedSession
 from app.main import create_app
 from app.repositories.deps import (
+    get_enrichment_queue,
     get_exercise_repository,
     get_logged_session_repository,
     get_profile_repository,
@@ -31,7 +32,7 @@ from app.repositories.logged_session_repository import InMemoryLoggedSessionRepo
 from app.repositories.profile_repository import InMemoryProfileRepository
 from app.repositories.protocol_repository import InMemoryProtocolRepository
 from app.repositories.session_repository import InMemorySessionRepository
-from tests.conftest import ISSUER, make_signing_context
+from tests.conftest import ISSUER, NullEnrichmentQueue, make_signing_context
 
 
 class FakeGenerator:
@@ -68,6 +69,9 @@ def build_client(ctx=None):
     app.dependency_overrides[get_protocol_repository] = lambda: protocols
     app.dependency_overrides[get_session_generator] = lambda: FakeGenerator()
     app.dependency_overrides[get_profile_repository] = lambda: InMemoryProfileRepository()
+    # The picker's create-on-miss (POST /api/exercises) now enqueues an async
+    # Enrichment job (issue #309); keep the offline harness Redis-free with a no-op.
+    app.dependency_overrides[get_enrichment_queue] = lambda: NullEnrichmentQueue()
     client = TestClient(app)
     # Exposed so a test can seed a Protocol + performed history directly, without
     # driving the heavier generation endpoints, to exercise the contiguity 409.
