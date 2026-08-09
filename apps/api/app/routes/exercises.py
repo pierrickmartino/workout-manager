@@ -13,7 +13,7 @@ from pydantic import BaseModel, field_validator
 
 from app.auth.dependencies import get_current_user
 from app.db.models import Exercise
-from app.domain.exercise import Provenance, normalize_name
+from app.domain.exercise import Provenance, catalog_completeness, normalize_name
 from app.domain.substitution import RelationKind
 from app.envelope import success_envelope
 from app.repositories.deps import (
@@ -43,7 +43,8 @@ MAX_NAME_LENGTH = 100
 def _search_result(exercise: Exercise) -> dict:
     """The pick-only Library projection of a catalog Exercise: just enough to choose
     a movement and know if it is unvalidated. Provenance is surfaced exactly as the
-    Session view and Exercise Detail do (ADR-0021)."""
+    Session view and Exercise Detail do (ADR-0021), alongside the Catalog
+    Completeness tier (content presence) as a separate axis (ADR-0041)."""
 
     return {
         "id": exercise.id,
@@ -52,6 +53,10 @@ def _search_result(exercise: Exercise) -> dict:
         "required_equipment": list(exercise.required_equipment),
         "difficulty": exercise.difficulty,
         "provenance": exercise.provenance,
+        # Catalog Completeness (ADR-0041): a read-time projection of which content
+        # fields are populated — Stub | Listable | Enriched — never a stored column.
+        # A distinct axis from Provenance/trust, shown beside it in the Library.
+        "completeness": catalog_completeness(exercise).value,
     }
 
 
@@ -143,6 +148,10 @@ def _serialize(exercise: Exercise, related: list[RelatedExercise]) -> dict:
         # degrades the Detail response — a movement with no picture is still
         # fully usable.
         "image": exercise.image,
+        # Catalog Completeness (ADR-0041): the read-time Stub | Listable | Enriched
+        # tier, computed provenance-blind from the fields above, surfaced beside the
+        # Provenance/trust marker on Exercise Detail. Never a stored column.
+        "completeness": catalog_completeness(exercise).value,
         "variations": [
             _summary(r) for r in related if r.kind == RelationKind.VARIATION
         ],

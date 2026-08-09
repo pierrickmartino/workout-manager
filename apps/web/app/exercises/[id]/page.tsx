@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ExerciseTabs } from "@/components/exercise/exercise-tabs";
 import { StatHeader } from "@/components/exercise/stat-header";
+import { CompletenessBadge } from "@/components/exercise/completeness-badge";
 import { SpecsPanel } from "@/components/exercise/specs-panel";
 import { HistoryPanel } from "@/components/exercise/history-panel";
 import { RecordsPanel } from "@/components/exercise/records-panel";
@@ -76,13 +77,16 @@ export default async function ExercisePage({
         overline="PULSE // EXERCISE"
         title={exercise.name}
         action={
-          exercise.provenance === "ai_generated" ? (
-            <Badge variant="magenta" title="AI-generated, not yet reviewed">
-              AI-GEN
-            </Badge>
-          ) : (
-            <Badge variant="cyan">CURATED</Badge>
-          )
+          <div className="flex items-center gap-1.5">
+            {exercise.provenance === "ai_generated" ? (
+              <Badge variant="magenta" title="AI-generated, not yet reviewed">
+                AI-GEN
+              </Badge>
+            ) : (
+              <Badge variant="cyan">CURATED</Badge>
+            )}
+            <CompletenessBadge completeness={exercise.completeness} />
+          </div>
         }
       />
 

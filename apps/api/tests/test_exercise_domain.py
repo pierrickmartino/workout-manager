@@ -9,7 +9,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.domain.exercise import (
+    CatalogCompleteness,
     Provenance,
+    catalog_completeness,
     normalize_name,
     parse_instruction_steps,
     rank_exercise_matches,
@@ -23,6 +25,50 @@ class _Match:
 
     provenance: str
     normalized_name: str
+
+
+@dataclass(frozen=True)
+class _Fields:
+    """A minimal Exercise-like stand-in for the Catalog Completeness projection:
+    only the content fields the bar reads, so the pure projection can be pinned
+    without a database row. Defaults model a name-only Stub; each test populates
+    exactly the fields under scrutiny."""
+
+    description: str | None = None
+    targeted_muscles: tuple[str, ...] = ()
+    instructions: tuple[str, ...] = ()
+    primary_muscles: tuple[str, ...] = ()
+    secondary_muscles: tuple[str, ...] = ()
+    difficulty: int | None = None
+    precautions: tuple[str, ...] = ()
+    image: str | None = None
+
+
+def _listable_fields(**overrides) -> _Fields:
+    """The exact minimum Listable set — description + a flat targeted-muscle list +
+    one Execution Step — with the emphasis split, difficulty, precautions, and image
+    deliberately absent. Overrides layer the gold-tier fields on top."""
+
+    base = {
+        "description": "A hinge from the hips.",
+        "targeted_muscles": ("hamstrings", "glutes"),
+        "instructions": ("Hinge at the hips.",),
+    }
+    return _Fields(**{**base, **overrides})
+
+
+def _enriched_fields(**overrides) -> _Fields:
+    """A full gold set: the Listable minimum plus every Enriched-tier field — the
+    Primary/Secondary split, difficulty, precautions, and an Exercise Image."""
+
+    gold = {
+        "primary_muscles": ("hamstrings",),
+        "secondary_muscles": ("glutes",),
+        "difficulty": 5,
+        "precautions": ("keep a neutral spine",),
+        "image": "https://cdn.example.com/curated/rdl.svg",
+    }
+    return _listable_fields(**{**gold, **overrides})
 
 
 def test_normalize_lowercases_and_trims():
@@ -182,3 +228,126 @@ def test_rank_returns_a_new_list_and_leaves_the_input_untouched():
     # Assert — pure: the caller's list is not reordered in place
     assert ranked is not matches
     assert matches == original
+
+
+# Catalog Completeness (ADR-0041): a read-time projection — never a stored column —
+# mapping which content fields are populated to Stub → Listable → Enriched. Measured
+# provenance-blind: trust (Provenance) and content-presence (Completeness) are
+# separate axes, so a curated-but-thin movement still reads sub-bar.
+
+
+def test_completeness_values_match_the_domain_vocabulary():
+    # Assert — the exact stored strings surfaced to the client, per the glossary
+    assert CatalogCompleteness.STUB.value == "stub"
+    assert CatalogCompleteness.LISTABLE.value == "listable"
+    assert CatalogCompleteness.ENRICHED.value == "enriched"
+
+
+def test_name_only_exercise_is_a_stub():
+    # Arrange — nothing but a name (every content field empty)
+    # Act & Assert — the frictionless name-only movement reads as a Stub
+    assert catalog_completeness(_Fields()) == CatalogCompleteness.STUB
+
+
+def test_minimum_fields_are_listable():
+    # Arrange — description + a flat targeted-muscle list + one Execution Step
+    # Act & Assert — exactly the Listable bar, no gold fields needed
+    assert catalog_completeness(_listable_fields()) == CatalogCompleteness.LISTABLE
+
+
+def test_listable_does_not_require_the_emphasis_split():
+    # Arrange — the minimum set carries only a flat union, no Primary/Secondary split
+    fields = _listable_fields()
+
+    # Assert — the emphasis split stays Enriched-tier only (ADR-0016): a flat list is
+    # honest, and requiring a split at the minimum would pressure fabricated primacy
+    assert not fields.primary_muscles and not fields.secondary_muscles
+    assert catalog_completeness(fields) == CatalogCompleteness.LISTABLE
+
+
+def test_missing_description_stays_below_listable():
+    # Arrange — muscles and a step, but no description
+    fields = _listable_fields(description=None)
+
+    # Assert — a missing Listable field drops it back to a Stub
+    assert catalog_completeness(fields) == CatalogCompleteness.STUB
+
+
+def test_blank_description_does_not_count():
+    # Arrange — a whitespace-only description is not a real description
+    fields = _listable_fields(description="   ")
+
+    # Assert — presence means content, not just a non-null column
+    assert catalog_completeness(fields) == CatalogCompleteness.STUB
+
+
+def test_missing_targeted_muscles_stays_below_listable():
+    # Arrange — a described movement with a step but no targeted muscles
+    fields = _listable_fields(targeted_muscles=())
+
+    # Assert — the flat targeted-muscle list is a hard Listable requirement
+    assert catalog_completeness(fields) == CatalogCompleteness.STUB
+
+
+def test_missing_execution_steps_stays_below_listable():
+    # Arrange — described, with muscles, but no Execution Step
+    fields = _listable_fields(instructions=())
+
+    # Assert — at least one Execution Step is required for Listable
+    assert catalog_completeness(fields) == CatalogCompleteness.STUB
+
+
+def test_full_gold_set_is_enriched():
+    # Arrange — the Listable minimum plus every Enriched-tier field
+    # Act & Assert — the gold bar: split + difficulty + precautions + image
+    assert catalog_completeness(_enriched_fields()) == CatalogCompleteness.ENRICHED
+
+
+def test_a_lone_primary_emphasis_counts_as_a_split():
+    # Arrange — an isolation movement asserts a primary but no secondary emphasis
+    fields = _enriched_fields(primary_muscles=("biceps",), secondary_muscles=())
+
+    # Assert — any asserted emphasis is a populated split (mirrors the re-enrichment
+    # pass's "already split" test), so this is still Enriched
+    assert catalog_completeness(fields) == CatalogCompleteness.ENRICHED
+
+
+def test_missing_emphasis_split_stays_listable():
+    # Arrange — every gold field but the Primary/Secondary split
+    fields = _enriched_fields(primary_muscles=(), secondary_muscles=())
+
+    # Assert — a missing gold field keeps a fully-described movement at Listable
+    assert catalog_completeness(fields) == CatalogCompleteness.LISTABLE
+
+
+def test_missing_difficulty_stays_listable():
+    # Arrange — gold but for difficulty
+    fields = _enriched_fields(difficulty=None)
+
+    # Assert — Listable, not Enriched
+    assert catalog_completeness(fields) == CatalogCompleteness.LISTABLE
+
+
+def test_missing_precautions_stays_listable():
+    # Arrange — gold but for precautions
+    fields = _enriched_fields(precautions=())
+
+    # Assert — Listable, not Enriched
+    assert catalog_completeness(fields) == CatalogCompleteness.LISTABLE
+
+
+def test_missing_image_stays_listable():
+    # Arrange — gold but for the Exercise Image
+    fields = _enriched_fields(image=None)
+
+    # Assert — the image is a gold-tier requirement; its absence caps at Listable
+    assert catalog_completeness(fields) == CatalogCompleteness.LISTABLE
+
+
+def test_projection_is_provenance_blind():
+    # Arrange — the projection reads only content fields; it never sees Provenance,
+    # so a curated-but-thin movement (name only) is held to the same yardstick
+    curated_but_thin = _Fields(description=None)
+
+    # Assert — trust does not lift content: a curated Stub still reads sub-bar
+    assert catalog_completeness(curated_but_thin) == CatalogCompleteness.STUB

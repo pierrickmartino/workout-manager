@@ -70,6 +70,28 @@ def test_search_returns_matches_with_the_library_fields_and_meta():
     assert body["meta"]["total"] == 1
 
 
+def test_search_surfaces_the_completeness_tier_per_item():
+    # Arrange — two matches at different Completeness tiers: a Stub and a Listable
+    client, ctx, exercises = build_client()
+    exercises.find_or_create("Squat Stub", provenance=Provenance.CURATED)
+    exercises.find_or_create(
+        "Squat Listable",
+        provenance=Provenance.CURATED,
+        description="A knee-dominant sit.",
+        targeted_muscles=["quads"],
+        instructions=["Sit down and stand up."],
+    )
+
+    # Act
+    response = client.get("/api/exercises?query=squat", headers=_auth(ctx))
+
+    # Assert — every item carries its read-time completeness tier (ADR-0041),
+    # reflecting the underlying fields
+    assert response.status_code == 200
+    tiers = {r["name"]: r["completeness"] for r in response.json()["data"]}
+    assert tiers == {"Squat Stub": "stub", "Squat Listable": "listable"}
+
+
 def test_search_ranks_curated_before_ai_generated():
     # Arrange — a matching AI-invented movement and a curated one
     client, ctx, exercises = build_client()

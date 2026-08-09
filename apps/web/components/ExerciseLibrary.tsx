@@ -10,6 +10,7 @@ import type { PickedExercise } from "@/lib/protocol-builder";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CompletenessBadge } from "@/components/exercise/completeness-badge";
 
 interface ExerciseLibraryProps {
   onPick: (exercise: PickedExercise) => void;
@@ -172,6 +173,7 @@ function ExerciseResultRow({ exercise, onAdd }: ExerciseResultRowProps) {
             {exercise.name}
           </span>
           <ProvenanceBadge provenance={exercise.provenance} />
+          <CompletenessBadge completeness={exercise.completeness} />
         </div>
         {exercise.targeted_muscles.length > 0 ? (
           <span className="truncate label-mono text-[9px] text-text-muted">
