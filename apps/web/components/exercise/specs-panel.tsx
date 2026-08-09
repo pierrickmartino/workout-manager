@@ -47,6 +47,8 @@ export function SpecsPanel({
 
   return (
     <div className="flex flex-col gap-7">
+      <ExerciseImage src={exercise.image} name={exercise.name} />
+
       {exercise.description ? (
         <p className="font-sans text-[15px] leading-relaxed text-text-secondary">
           {exercise.description}
@@ -73,6 +75,31 @@ export function SpecsPanel({
         from={from}
       />
     </div>
+  );
+}
+
+// The optional Exercise Image (ADR-0041): a single curated-source illustration for
+// the movement. Curator-only and never AI-fabricated, and part of the Enriched tier —
+// so a movement with no image simply renders nothing here and stays fully usable; the
+// picture never blocks or degrades the page. A plain <img> (not next/image) since the
+// asset is an external curated reference and no remote-image host is configured.
+function ExerciseImage({
+  src,
+  name,
+}: {
+  src: string | null;
+  name: string;
+}) {
+  if (!src) return null;
+  return (
+    <Card className="overflow-hidden p-0">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt={`Illustration of ${name}`}
+        className="max-h-80 w-full object-contain"
+      />
+    </Card>
   );
 }
 
