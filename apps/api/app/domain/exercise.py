@@ -42,6 +42,17 @@ _PROVENANCE_RANK: dict[str, int] = {
 }
 
 
+def provenance_rank(provenance: str) -> int:
+    """Trust rank of a Provenance value: curated (0) < AI-generated (1) < user-typed (2).
+
+    The single source of the curated-first ordering both the Exercise Library search
+    (``rank_exercise_matches``) and the Catalog browse (``rank_browse_results``, ADR-0042)
+    sort on. Any unknown value falls into the AI-generated tier, preserving the
+    pre-ADR-0033 "non-curated → 1"."""
+
+    return _PROVENANCE_RANK.get(provenance, 1)
+
+
 def normalize_name(name: str) -> str:
     """Canonical key for catalog dedup.
 
@@ -77,7 +88,7 @@ def rank_exercise_matches(matches: list[_RankableT]) -> list[_RankableT]:
     return sorted(
         matches,
         key=lambda match: (
-            _PROVENANCE_RANK.get(match.provenance, 1),
+            provenance_rank(match.provenance),
             match.normalized_name,
         ),
     )

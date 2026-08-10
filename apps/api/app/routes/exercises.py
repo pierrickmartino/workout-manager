@@ -16,6 +16,12 @@ from pydantic import BaseModel, field_validator
 from app.auth.dependencies import get_current_user
 from app.db.models import Exercise
 from app.domain.exercise import Provenance, catalog_completeness, normalize_name
+from app.domain.exercise_browse import (
+    distinct_equipment,
+    parse_difficulty_band,
+    parse_muscle_group,
+)
+from app.domain.exercise_usage import last_performed
 from app.domain.substitution import RelationKind
 from app.envelope import success_envelope
 from app.generation.enrichment_queue import EnrichmentQueue
@@ -23,12 +29,14 @@ from app.repositories.deps import (
     get_enrichment_queue,
     get_exercise_relationship_repository,
     get_exercise_repository,
+    get_logged_session_repository,
 )
 from app.repositories.exercise_relationship_repository import (
     ExerciseRelationshipRepository,
     RelatedExercise,
 )
 from app.repositories.exercise_repository import ExerciseRepository
+from app.repositories.logged_session_repository import LoggedSessionRepository
 
 logger = logging.getLogger(__name__)
 
@@ -67,25 +75,88 @@ def _search_result(exercise: Exercise) -> dict:
 
 
 @router.get("/exercises")
-def search_exercises(
+def browse_exercises(
     query: str = Query(default="", description="Name substring to match."),
+    muscle_group: list[str] = Query(
+        default=[], description="Curated Muscle Group facet (repeatable)."
+    ),
+    equipment: list[str] = Query(
+        default=[], description="Required-equipment facet (repeatable)."
+    ),
+    difficulty: list[str] = Query(
+        default=[], description="Difficulty band facet: beginner|intermediate|advanced."
+    ),
     limit: int = Query(default=DEFAULT_SEARCH_LIMIT, ge=1, le=MAX_SEARCH_LIMIT),
     offset: int = Query(default=0, ge=0),
     _: str = Depends(get_current_user),
     exercises: ExerciseRepository = Depends(get_exercise_repository),
 ) -> dict:
-    """Search the shared catalog by normalized name for the Exercise Library.
+    """List the shared Catalog for the Exercise Library and the Browse surface.
 
-    Returns each match's id, name, targeted muscles, required equipment, difficulty,
-    and provenance — ranked curated-first then by name and paginated. Pick-only: a
-    query with no match returns an empty result and never creates a catalog
-    Exercise (ADR-0002/0021). Responses use the standard envelope with pagination
-    meta."""
+    A **blank** ``query`` lists the whole Catalog (ADR-0042); a non-blank one substring-
+    matches by normalized name (the pick-only Exercise Library path, ADR-0021). The three
+    optional facets — ``muscle_group`` (curated six buckets), ``equipment``, and
+    ``difficulty`` band — narrow the list (AND across facets, OR within each), which is
+    ranked curated → completeness → name and paginated. Unrecognized facet values are
+    dropped rather than erroring the whole read. Read-only: browsing never creates a
+    catalog Exercise. Responses use the standard envelope with pagination meta."""
 
-    page = exercises.search(query, limit=limit, offset=offset)
+    muscle_groups = [
+        group for raw in muscle_group if (group := parse_muscle_group(raw)) is not None
+    ]
+    difficulty_bands = [
+        band for raw in difficulty if (band := parse_difficulty_band(raw)) is not None
+    ]
+    page = exercises.browse(
+        query=query,
+        muscle_groups=muscle_groups,
+        equipment=equipment,
+        difficulty_bands=difficulty_bands,
+        limit=limit,
+        offset=offset,
+    )
     return success_envelope(
         [_search_result(exercise) for exercise in page.items],
         meta={"total": page.total, "limit": limit, "offset": offset},
+    )
+
+
+@router.get("/exercises/facets")
+def exercise_facets(
+    _: str = Depends(get_current_user),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+) -> dict:
+    """Return the option lists that drive the Browse facets (ADR-0042).
+
+    Only ``equipment`` needs the server — it is the Catalog's distinct required-equipment
+    labels (deduped case-insensitively, sorted), since equipment is free-form. The Muscle
+    Group buckets and difficulty bands are fixed and live as frontend constants, so they
+    are not restated here. Declared before ``/exercises/{exercise_id}`` so the literal
+    path is never mistaken for an id."""
+
+    return success_envelope({"equipment": distinct_equipment(exercises.list_all())})
+
+
+@router.get("/exercises/usage")
+def exercise_usage(
+    user: str = Depends(get_current_user),
+    logged_sessions: LoggedSessionRepository = Depends(get_logged_session_repository),
+) -> dict:
+    """Return the caller's per-Exercise last-performed map for the Browse markers (ADR-0042).
+
+    A read-time projection over the user's Logged Sessions (``last_performed``): one entry
+    per Exercise the user has ever performed, with the most recent ``performed_on`` as an
+    ISO date. The Browse rows read it into a strictly descriptive TRAINED / NEW marker —
+    an Exercise absent from the map is NEW. Kept separate from the Catalog read so that
+    read stays user-agnostic and the Library picker's per-keystroke cost is unchanged.
+    Declared before ``/exercises/{exercise_id}`` so the literal path wins."""
+
+    usage = last_performed(logged_sessions.list_for_user(user))
+    return success_envelope(
+        [
+            {"exercise_id": exercise_id, "last_performed_on": performed_on.isoformat()}
+            for exercise_id, performed_on in usage.items()
+        ]
     )
 
 

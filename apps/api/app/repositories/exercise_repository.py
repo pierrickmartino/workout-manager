@@ -18,6 +18,13 @@ from sqlmodel import Session, select
 
 from app.db.models import Exercise
 from app.domain.exercise import Provenance, normalize_name, rank_exercise_matches
+from app.domain.exercise_browse import (
+    DifficultyBand,
+    matches_filters,
+    normalize_equipment,
+    rank_browse_results,
+)
+from app.domain.muscle_groups import MuscleGroup
 
 
 @dataclass(frozen=True)
@@ -111,6 +118,26 @@ class ExerciseRepository(Protocol):
         Read-only — the Exercise Library never creates a catalog entry (ADR-0021)."""
         ...
 
+    def browse(
+        self,
+        *,
+        query: str,
+        muscle_groups: Sequence[MuscleGroup],
+        equipment: Sequence[str],
+        difficulty_bands: Sequence[DifficultyBand],
+        limit: int,
+        offset: int,
+    ) -> ExerciseSearchPage:
+        """List the whole Catalog for the Browse surface, filtered and paged (ADR-0042).
+
+        A **blank** ``query`` lists the whole Catalog; a non-blank one substring-matches
+        by normalized name. The result is then narrowed by the three facets — curated
+        Muscle Group, required equipment, and difficulty band (all AND'd, OR within each)
+        — ranked curated → completeness → name, and sliced by ``limit``/``offset`` with
+        the full filtered count in ``total``. Read-only: browse never creates a catalog
+        entry."""
+        ...
+
     def list_by_provenance(self, provenance: Provenance) -> list[Exercise]:
         """Return every catalog Exercise carrying ``provenance``.
 
@@ -199,6 +226,37 @@ def _page(matches: list[Exercise], limit: int, offset: int) -> ExerciseSearchPag
     drift. ``total`` is the full match count before the slice."""
 
     ranked = rank_exercise_matches(matches)
+    return ExerciseSearchPage(items=ranked[offset : offset + limit], total=len(ranked))
+
+
+def _browse_page(
+    candidates: list[Exercise],
+    *,
+    muscle_groups: Sequence[MuscleGroup],
+    equipment: Sequence[str],
+    difficulty_bands: Sequence[DifficultyBand],
+    limit: int,
+    offset: int,
+) -> ExerciseSearchPage:
+    """Filter, rank, and slice browse candidates (ADR-0042).
+
+    Shared by the SQL and in-memory repositories so both apply one facet predicate, one
+    ordering, and one slice rule and never drift — the browse twin of ``_page``. Filtering
+    and ranking happen here, *after* the name/list-all candidate set is gathered, so the
+    ``total`` and the page reflect the filtered set. Equipment is normalized once here so
+    the pure predicate compares on the same key on both sides."""
+
+    groups = set(muscle_groups)
+    kit = {normalize_equipment(item) for item in equipment}
+    bands = set(difficulty_bands)
+    filtered = [
+        exercise
+        for exercise in candidates
+        if matches_filters(
+            exercise, muscle_groups=groups, equipment=kit, difficulty_bands=bands
+        )
+    ]
+    ranked = rank_browse_results(filtered)
     return ExerciseSearchPage(items=ranked[offset : offset + limit], total=len(ranked))
 
 
@@ -308,6 +366,30 @@ class SqlExerciseRepository:
             ).all()
         )
         return _page(matches, limit, offset)
+
+    def browse(
+        self,
+        *,
+        query: str,
+        muscle_groups: Sequence[MuscleGroup],
+        equipment: Sequence[str],
+        difficulty_bands: Sequence[DifficultyBand],
+        limit: int,
+        offset: int,
+    ) -> ExerciseSearchPage:
+        normalized = normalize_name(query)
+        statement = select(Exercise)
+        if normalized:
+            statement = statement.where(Exercise.normalized_name.contains(normalized))
+        candidates = list(self._session.exec(statement).all())
+        return _browse_page(
+            candidates,
+            muscle_groups=muscle_groups,
+            equipment=equipment,
+            difficulty_bands=difficulty_bands,
+            limit=limit,
+            offset=offset,
+        )
 
     def list_by_provenance(self, provenance: Provenance) -> list[Exercise]:
         return list(
@@ -447,6 +529,31 @@ class InMemoryExerciseRepository:
             if normalized in exercise.normalized_name
         ]
         return _page(matches, limit, offset)
+
+    def browse(
+        self,
+        *,
+        query: str,
+        muscle_groups: Sequence[MuscleGroup],
+        equipment: Sequence[str],
+        difficulty_bands: Sequence[DifficultyBand],
+        limit: int,
+        offset: int,
+    ) -> ExerciseSearchPage:
+        normalized = normalize_name(query)
+        candidates = [
+            exercise
+            for exercise in self._by_id.values()
+            if not normalized or normalized in exercise.normalized_name
+        ]
+        return _browse_page(
+            candidates,
+            muscle_groups=muscle_groups,
+            equipment=equipment,
+            difficulty_bands=difficulty_bands,
+            limit=limit,
+            offset=offset,
+        )
 
     def list_by_provenance(self, provenance: Provenance) -> list[Exercise]:
         return [
