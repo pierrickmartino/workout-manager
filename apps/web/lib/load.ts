@@ -32,6 +32,42 @@ export function formatLoad(load: Load | null | undefined): string {
   return load?.text ?? NO_LOAD;
 }
 
+// Reverse a typed Load into a picker's `loadKind` + `loadValue` (ADR-0010) — the raw field
+// the picker sends for the kind: kilograms for absolute, the percent for `percent_1rm`, the
+// added kilograms for bodyweight (blank for pure bodyweight), the `low-high` pair for a
+// range, the free text for qualitative. No Load → a blank absolute field. The single source
+// of truth shared by the Log Correction pre-fill and the Capture seed, so the two reverse
+// mappings never drift.
+export function loadToFields(
+  load: Load | null,
+): { loadKind: LoadKind; loadValue: string } {
+  if (load === null) return { loadKind: "absolute", loadValue: "" };
+  switch (load.kind) {
+    case "absolute":
+      return { loadKind: "absolute", loadValue: load.kg != null ? String(load.kg) : "" };
+    case "percent_1rm":
+      return {
+        loadKind: "percent_1rm",
+        loadValue: load.percent != null ? String(load.percent) : "",
+      };
+    case "bodyweight":
+      return {
+        loadKind: "bodyweight",
+        loadValue: load.added_kg != null ? String(load.added_kg) : "",
+      };
+    case "range":
+      return {
+        loadKind: "range",
+        loadValue:
+          load.low_kg != null && load.high_kg != null
+            ? `${load.low_kg}-${load.high_kg}`
+            : "",
+      };
+    default:
+      return { loadKind: "qualitative", loadValue: load.text ?? "" };
+  }
+}
+
 // The kinds offered by the log form's picker, paired with a human label.
 export const LOAD_KIND_OPTIONS: ReadonlyArray<{ value: LoadKind; label: string }> = [
   { value: "absolute", label: "Weight (kg)" },

@@ -28,6 +28,7 @@ function planBackedRecord(
         perceived_difficulty: 8,
         exercise_id: 3,
         exercise_name: "Back Squat",
+        body_weight_kg: null,
       },
     ],
     ...overrides,
@@ -126,6 +127,7 @@ test("pre-fills and requires a training type for a plan-less record", () => {
         perceived_difficulty: null,
         exercise_id: 9,
         exercise_name: "Running",
+        body_weight_kg: null,
       },
     ],
   });

@@ -134,6 +134,26 @@ export type AuthorSessionResult =
   | { ok: true; request: AuthorSessionInput }
   | { ok: false; error: string };
 
+// The request the user submits to author a standalone plan **without logging** (Capture,
+// ADR-0044) — the plan half only, no `performed_on` and no `logged_sets`. Capture promotes
+// an existing plan-less record into a reusable plan: the record already exists, so the plan
+// is created alone and no second performance is logged.
+export interface AuthorPlanInput {
+  training_type: string;
+  prescriptions: AuthorPrescriptionInput[];
+}
+
+export type AuthorPlanResult =
+  | { ok: true; request: AuthorPlanInput }
+  | { ok: false; error: string };
+
+// The plan-side fields a plan-only build reads — the builder's exercise rows with their
+// performed sets ignored (Capture authors a plan, not a record).
+export interface AuthorPlanFields {
+  trainingType: string;
+  exercises: AuthoredExerciseFields[];
+}
+
 // Today's local date as `YYYY-MM-DD`, the same shape a date input emits, so the two
 // compare lexically. Injected as a default so the mapper stays pure and testable.
 function localToday(): string {
@@ -414,6 +434,43 @@ export function buildAuthorSessionRequest(
       prescriptions,
       logged_sets: loggedSets,
     },
+  };
+}
+
+// Assemble the plan-only author request from the builder's fields (Capture, ADR-0044),
+// validating only the *plan* at the boundary: a known training type, at least one exercise,
+// and every exercise with a valid plan (sets ≥ 1, a non-blank target). Performed sets are
+// ignored — Capture creates a reusable plan, never a record — so unlike
+// `buildAuthorSessionRequest` there is no date check and no "at least one performed set"
+// rule. Returns the payload on success or a single user-facing error on the first problem;
+// nothing is sent on a rejection. The plan-side validation (`toPrescription`) is shared with
+// the author-and-log path, so the two agree on "what a valid authored plan is".
+export function buildAuthorPlanRequest(
+  fields: AuthorPlanFields,
+): AuthorPlanResult {
+  const trainingType = fields.trainingType.trim();
+  if (!VALID_TRAINING_TYPES.has(trainingType)) {
+    return { ok: false, error: "Pick a training type." };
+  }
+
+  if (fields.exercises.length === 0) {
+    return { ok: false, error: "Add at least one exercise." };
+  }
+
+  const prescriptions: AuthorPrescriptionInput[] = [];
+  for (const exercise of fields.exercises) {
+    if (!Number.isInteger(exercise.exerciseId)) {
+      return { ok: false, error: "Pick every exercise from the catalog." };
+    }
+
+    const built = toPrescription(exercise, amountKind(exercise.kind));
+    if (!built.ok) return built;
+    prescriptions.push(built.prescription);
+  }
+
+  return {
+    ok: true,
+    request: { training_type: trainingType, prescriptions },
   };
 }
 

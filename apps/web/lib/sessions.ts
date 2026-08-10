@@ -1,6 +1,9 @@
 import { apiGet, apiSend, type Envelope } from "./api";
 
-import type { AuthorSessionInput } from "./hand-authored-session";
+import type {
+  AuthorPlanInput,
+  AuthorSessionInput,
+} from "./hand-authored-session";
 import type { LoggedSession } from "./logs-types";
 import type {
   ExerciseDetail,
@@ -38,6 +41,17 @@ export async function fetchSession(
   id: number,
 ): Promise<Envelope<WorkoutSession>> {
   return apiGet(`/api/sessions/${id}`);
+}
+
+// Author a standalone plan **without logging** — the submit target of Capture (ADR-0044).
+// Posts the finalized prescriptions to `/api/sessions/plan`; the backend creates a
+// `user_authored` standalone Session and records no performance (the source record already
+// exists). The response is the new standalone Session, so the caller can jump to it. A
+// rejected plan comes back as an envelope error.
+export async function authorPlan(
+  input: AuthorPlanInput,
+): Promise<Envelope<WorkoutSession>> {
+  return apiSend("/api/sessions/plan", "POST", input);
 }
 
 // Duplicate the user's own Session into a new standalone Session (ADR-0043): a deep

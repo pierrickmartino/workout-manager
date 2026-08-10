@@ -49,6 +49,14 @@ export function quantityReps(quantity: Quantity | null | undefined): number | nu
   return quantity && quantity.kind === "repetitions" ? quantity.count ?? null : null;
 }
 
+// The unit a stored distance Quantity was entered in, recovered from its display text's
+// suffix (`"5 mi"` → miles, else km) — the reverse of how `distanceInput` writes the text.
+// Shared by the Log Correction pre-fill and the Capture seed so both read the unit the same
+// way, rather than each re-deriving the suffix check.
+export function distanceUnitFromText(text: string | undefined): DistanceUnit {
+  return (text ?? "").trimEnd().endsWith("mi") ? "mi" : "km";
+}
+
 // The per-set request fields for a repetitions Quantity, built from the reps the log
 // form collected. Mirrors how the load picker sends `load_kind` + `load_value`: the
 // backend types the amount from the picked kind, never re-guessing the raw value.

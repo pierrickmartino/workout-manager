@@ -7,13 +7,14 @@
 
 import {
   distanceInput,
+  distanceUnitFromText,
   durationInput,
   repetitionsInput,
   type DistanceUnit,
   type Quantity,
   type QuantityKind,
 } from "./quantity.ts";
-import type { Load } from "./load.ts";
+import { loadToFields as reverseLoadFields } from "./load.ts";
 import type {
   CompletionOutcome,
   LogCorrectionInput,
@@ -100,9 +101,8 @@ function quantityToFields(
   if (quantity === null) return { kind: "repetitions", ...blank };
 
   if (quantity.kind === "distance") {
-    const inMiles = (quantity.text ?? "").trimEnd().endsWith("mi");
-    const unit: DistanceUnit = inMiles ? "mi" : "km";
-    const metresPerUnit = inMiles ? METRES_PER_MILE : METRES_PER_KM;
+    const unit: DistanceUnit = distanceUnitFromText(quantity.text);
+    const metresPerUnit = unit === "mi" ? METRES_PER_MILE : METRES_PER_KM;
     const metres = quantity.metres ?? 0;
     return {
       kind: "distance",
@@ -121,47 +121,10 @@ function quantityToFields(
   return { kind: "repetitions", ...blank, reps: String(quantity.count ?? "") };
 }
 
-// Reverse a typed Load into the form's `loadKind` + `loadValue` (ADR-0010). The value
-// is the raw field the picker sends for the kind: kilograms for absolute, the percent
-// for `percent_1rm`, the added kilograms for bodyweight (blank for pure bodyweight),
-// the `low-high` pair for a range, the free text for qualitative. No load → a blank
-// absolute field.
-function loadToFields(
-  load: Load | null,
-): Pick<CorrectionSetFields, "loadKind" | "loadValue"> {
-  if (load === null) return { loadKind: DEFAULT_LOAD_KIND, loadValue: "" };
-  switch (load.kind) {
-    case "absolute":
-      return {
-        loadKind: "absolute",
-        loadValue: load.kg != null ? String(load.kg) : "",
-      };
-    case "percent_1rm":
-      return {
-        loadKind: "percent_1rm",
-        loadValue: load.percent != null ? String(load.percent) : "",
-      };
-    case "bodyweight":
-      return {
-        loadKind: "bodyweight",
-        loadValue: load.added_kg != null ? String(load.added_kg) : "",
-      };
-    case "range":
-      return {
-        loadKind: "range",
-        loadValue:
-          load.low_kg != null && load.high_kg != null
-            ? `${load.low_kg}-${load.high_kg}`
-            : "",
-      };
-    default:
-      return { loadKind: "qualitative", loadValue: load.text ?? "" };
-  }
-}
-
 // Pre-fill the correction form from the record's current values (ADR-0034). Each set is
 // reversed into raw fields so the form binds them directly and a save with no edits
-// re-sends the record unchanged.
+// re-sends the record unchanged. The typed Load reverse-map is the shared `loadToFields`
+// (lib/load.ts), so the correction pre-fill and the Capture seed never drift.
 export function correctionFieldsFromRecord(
   record: LoggedSession,
 ): CorrectionFormFields {
@@ -174,7 +137,7 @@ export function correctionFieldsFromRecord(
       exerciseId: loggedSet.exercise_id,
       exerciseName: loggedSet.exercise_name,
       ...quantityToFields(loggedSet.quantity),
-      ...loadToFields(loggedSet.load),
+      ...reverseLoadFields(loggedSet.load),
       perceivedDifficulty: loggedSet.perceived_difficulty,
     })),
   };
