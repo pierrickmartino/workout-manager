@@ -12,6 +12,7 @@ standalone Sessions)."""
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import date
 
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
@@ -21,6 +22,11 @@ from app.domain.exercise import Provenance
 from app.repositories.exercise_repository import (
     InMemoryExerciseRepository,
     SqlExerciseRepository,
+)
+from app.repositories.logged_session_repository import (
+    InMemoryLoggedSessionRepository,
+    LoggedSessionDraft,
+    LoggedSetDraft,
 )
 from app.repositories.session_repository import (
     InMemorySessionRepository,
@@ -237,6 +243,89 @@ def test_duplicate_returns_none_for_an_unknown_session(repos):
 
     # Assert
     assert session_repo.duplicate(987654, "user_any") is None
+
+
+def test_duplicate_is_unlimited(repos):
+    # Arrange — Duplicate is unlimited (ADR-0043), unlike Regeneration
+    session_repo, exercises = repos
+    source = session_repo.create("user_many", _draft_with_two_prescriptions(exercises))
+
+    # Act — copy the source twice, and copy one of the copies
+    first = session_repo.duplicate(source.id, "user_many")
+    second = session_repo.duplicate(source.id, "user_many")
+    third = session_repo.duplicate(first.id, "user_many")
+
+    # Assert — none refused; every copy is a distinct, readable Session
+    ids = {source.id, first.id, second.id, third.id}
+    assert len(ids) == 4
+    assert all(session_repo.get(i, "user_many") is not None for i in ids)
+
+
+def test_duplicate_copies_no_logged_sessions(repos):
+    # Arrange — a source Session with a performance logged against it. Duplicate copies
+    # the plan, never the record: the copy is born with an empty logbook (ADR-0043).
+    session_repo, exercises = repos
+    source = session_repo.create("user_logs", _draft_with_two_prescriptions(exercises))
+    logs = InMemoryLoggedSessionRepository(session_repo, exercises)
+    squat_id = source.prescriptions[0].exercise_id
+    logs.create(
+        "user_logs",
+        LoggedSessionDraft(
+            session_id=source.id,
+            performed_on=date(2026, 8, 1),
+            training_type="strength",
+            logged_sets=[LoggedSetDraft(exercise_id=squat_id)],
+        ),
+    )
+
+    # Act
+    copy = session_repo.duplicate(source.id, "user_logs")
+
+    # Assert — no Logged Session points at the copy; the source keeps its own
+    session_ids = [view.session_id for view in logs.list_for_user("user_logs")]
+    assert copy.id not in session_ids
+    assert source.id in session_ids
+
+
+def test_duplicate_keeps_the_title_on_the_in_memory_path():
+    # The in-memory fake is the test seam; seed a titled, Protocol-member source
+    # directly because ``create`` only builds untitled standalone Sessions. This locks
+    # the in-memory branch's verbatim ``title`` copy (the SQL branch is covered above).
+    exercises = InMemoryExerciseRepository()
+    repo = InMemorySessionRepository(exercises)
+    squat = exercises.find_or_create("Back Squat", provenance=Provenance.AI_GENERATED)
+    source = WorkoutSession(
+        id=1,
+        clerk_user_id="user_proto",
+        training_type="strength",
+        duration_minutes=60,
+        provenance="ai_generated",
+        protocol_id=7,
+        objective="hypertrophy",
+        week=2,
+        day=1,
+        position=3,
+        title="Push Day",
+    )
+    repo._sessions[source.id] = source
+    repo._prescriptions[source.id] = [
+        ExercisePrescription(
+            id=1, session_id=source.id, exercise_id=squat.id, position=0, sets=5, reps="5"
+        )
+    ]
+    repo._next_id = 2
+
+    # Act
+    view = repo.duplicate(source.id, "user_proto")
+
+    # Assert — standalone (Protocol position dropped), name carried verbatim
+    assert view is not None
+    copy = repo._sessions[view.id]
+    assert copy.id != source.id
+    assert copy.protocol_id is None
+    assert copy.week is None and copy.day is None and copy.position is None
+    assert copy.objective is None
+    assert copy.title == "Push Day"
 
 
 def test_duplicate_lifts_a_protocol_member_out_as_a_named_standalone():
