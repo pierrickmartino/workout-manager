@@ -12,13 +12,16 @@
 // here. Distinct from `correctionFieldsFromRecord`, which reverses a record into its own
 // *edit* fields; this reverses a record into a new *plan*'s seed.
 
-import type { DistanceUnit, Quantity, QuantityKind } from "./quantity.ts";
-import type { Load, LoadKind } from "./load";
+import {
+  distanceUnitFromText,
+  type DistanceUnit,
+  type QuantityKind,
+} from "./quantity.ts";
+import { loadToFields, type Load, type LoadKind } from "./load.ts";
 import type { LoggedSession, LoggedSet } from "./logs-types";
 
 const DEFAULT_AMOUNT_KIND: QuantityKind = "repetitions";
 const DEFAULT_DISTANCE_UNIT: DistanceUnit = "km";
-const DEFAULT_LOAD_KIND: LoadKind = "absolute";
 
 // One seeded exercise for the builder — the plan half only, since Capture authors a plan.
 // The fields mirror an exercise row's plan inputs; `reps` is the free-text plan target for
@@ -56,12 +59,6 @@ function contiguousRuns(sets: LoggedSet[]): LoggedSet[][] {
     }
   }
   return runs;
-}
-
-// The unit a distance amount was read in, recovered from its display text's suffix (the
-// same read `correctionFieldsFromRecord` uses); defaults to km.
-function unitFromText(text: string | undefined): DistanceUnit {
-  return (text ?? "").trimEnd().endsWith("mi") ? "mi" : "km";
 }
 
 // The plan target for a run, worded for its Amount kind. Repetitions collapse to the
@@ -112,44 +109,15 @@ function heaviestLoad(run: LoggedSet[]): Load | null {
   return best?.load ?? null;
 }
 
-// Reverse a typed Load into the builder's `loadKind` + `loadValue` — the raw field the
-// picker sends for the kind (kilograms for absolute, the percent for `percent_1rm`, the
-// added kilograms for bodyweight, the `low-high` pair for a range, the free text for
-// qualitative). No Load → a blank absolute field. Mirrors the correction form's reverse
-// mapping so a Captured plan pre-fills its Load exactly as the edit form would.
-function loadToSeed(load: Load | null): { loadKind: LoadKind; loadValue: string } {
-  if (load === null) return { loadKind: DEFAULT_LOAD_KIND, loadValue: "" };
-  switch (load.kind) {
-    case "absolute":
-      return { loadKind: "absolute", loadValue: load.kg != null ? String(load.kg) : "" };
-    case "percent_1rm":
-      return {
-        loadKind: "percent_1rm",
-        loadValue: load.percent != null ? String(load.percent) : "",
-      };
-    case "bodyweight":
-      return {
-        loadKind: "bodyweight",
-        loadValue: load.added_kg != null ? String(load.added_kg) : "",
-      };
-    case "range":
-      return {
-        loadKind: "range",
-        loadValue:
-          load.low_kg != null && load.high_kg != null
-            ? `${load.low_kg}-${load.high_kg}`
-            : "",
-      };
-    default:
-      return { loadKind: "qualitative", loadValue: load.text ?? "" };
-  }
-}
-
 function seedExercise(run: LoggedSet[]): CaptureSeedExercise {
   const first = run[0];
   const kind: QuantityKind = first.quantity?.kind ?? DEFAULT_AMOUNT_KIND;
   const unit =
-    kind === "distance" ? unitFromText(first.quantity?.text) : DEFAULT_DISTANCE_UNIT;
+    kind === "distance"
+      ? distanceUnitFromText(first.quantity?.text)
+      : DEFAULT_DISTANCE_UNIT;
+  // The heaviest performed Load is reversed into the picker's fields by the shared
+  // `loadToFields` (lib/load.ts) — the same reverse-map the correction pre-fill uses.
   return {
     exerciseId: first.exercise_id,
     exerciseName: first.exercise_name,
@@ -157,7 +125,7 @@ function seedExercise(run: LoggedSet[]): CaptureSeedExercise {
     unit,
     sets: String(run.length),
     reps: targetFor(kind, run),
-    ...loadToSeed(heaviestLoad(run)),
+    ...loadToFields(heaviestLoad(run)),
   };
 }
 

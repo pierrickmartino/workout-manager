@@ -26,6 +26,7 @@ function loggedSet(overrides: Partial<LoggedSet> & Pick<LoggedSet, "position">):
     perceived_difficulty: null,
     exercise_id: 1,
     exercise_name: "Back Squat",
+    body_weight_kg: null,
     ...overrides,
   };
 }

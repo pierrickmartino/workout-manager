@@ -20,6 +20,10 @@ export interface LoggedSet {
   perceived_difficulty: number | null;
   exercise_id: number;
   exercise_name: string;
+  // The Performed Body Weight (ADR-0026) — the performer's mass snapshotted onto the set,
+  // or null when none was on file at log time (never guessed). Fixes a bodyweight set's
+  // strength estimate to what actually happened; surfaced on the record detail.
+  body_weight_kg: number | null;
 }
 
 // A record of the user performing a Session on a date. One Session can have many
