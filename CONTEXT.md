@@ -154,6 +154,10 @@ _Avoid_: Template, cached protocol (loosely), Generated Program
 The act of taking a Generated Protocol or Generated Session and deep-copying it into a user-owned Protocol or Session that the user logs against, gives feedback on, swaps exercises in, and regenerates. Mutations only ever touch the user's copy.
 _Avoid_: Assign, instantiate, clone
 
+**Duplicate**:
+The act of a user deep-copying a **Session they already own** into a new **standalone** Session — a reusable *plan*, never a record. Copies the source's Exercise Prescriptions, Supersets, and per-set sets/reps/rest/tempo/Load faithfully, and carries the source's **Session Provenance and `trace_id` lineage forward unchanged** (an `ai_generated` Session stays `ai_generated`, so Generation Feedback and Regeneration remain available on the copy; a `user_authored` one stays `user_authored`). The copy carries **no Logged Sessions** (plan/record separation) and **no Protocol position** — a Protocol-member Session's Week/Day/position are dropped so the copy stands alone. The source is untouched; mutating either copy never affects the other. Unlimited. Distinct from **Adopt** (which copies an *immutable Generated* artifact, not a user's own Session), **Deploy** (which commits a Builder tail-edit into a Protocol), and **Substitution** (which swaps one Exercise).
+_Avoid_: Clone, copy (bare), Adopt (that is the Generated-artifact copy), template
+
 **Sensitive Constraint**:
 A profile condition that demands extra caution — injury, rehabilitation, postpartum, or a flagged medical limitation. A user with any Sensitive Constraint is never served a shared/cached Generated Protocol; the system always generates fresh so postnatal/rehab caution can be applied.
 _Avoid_: Restriction, limitation (generic)
