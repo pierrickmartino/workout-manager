@@ -1,6 +1,10 @@
+import Link from "next/link";
+import { LibraryBig } from "lucide-react";
+
 import { GenerateTrainingLaunchpad } from "@/components/pulse/generate-training-launchpad";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
+import { buttonVariants } from "@/components/ui/button";
 
 // The TRAIN tab's landing page: the two ways to start new training — a full
 // multi-week Protocol or a standalone workout. Previously the TRAIN tab jumped
@@ -19,6 +23,22 @@ export default function TrainPage() {
         eyebrow="TRAIN // START SOMETHING NEW"
         showLogPastWorkout
       />
+
+      {/* Discovery, distinct from generation: browse the whole shared Catalog to find
+          movements, without starting a plan (ADR-0042). */}
+      <div className="flex flex-col gap-2">
+        <span className="label-mono text-[11px] text-text-muted">
+          TRAIN // EXPLORE
+        </span>
+        <Link
+          href="/exercises"
+          className={buttonVariants({ variant: "secondary", className: "w-full" })}
+        >
+          <LibraryBig className="h-4 w-4" />
+          Browse the exercise catalog
+        </Link>
+      </div>
+
       <BackLink href="/dashboard">Back to dashboard</BackLink>
     </section>
   );
