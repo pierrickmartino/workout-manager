@@ -1,11 +1,39 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
-import { substitutePrescription } from "@/lib/sessions";
+import { duplicateSession, substitutePrescription } from "@/lib/sessions";
+import { toDuplicateResult } from "@/lib/duplicate-session";
 
 export interface SubstituteFormState {
   error: string | null;
+}
+
+export interface DuplicateFormState {
+  error: string | null;
+}
+
+// Duplicate this Session into a new standalone plan (ADR-0043). On success we redirect
+// to the new copy so the user lands on the plan they can tweak and log; on failure —
+// e.g. the source is not the user's own Session (404) — the error is returned for the
+// button to surface. Duplicate is unlimited, so there is no spent state. `redirect`
+// throws to navigate, so it runs after the write and outside any try/catch.
+export async function submitDuplicate(
+  _prevState: DuplicateFormState,
+  form: FormData,
+): Promise<DuplicateFormState> {
+  const sessionId = Number(form.get("session_id"));
+  if (!Number.isInteger(sessionId)) {
+    return { error: "Could not determine which session to duplicate." };
+  }
+
+  const result = toDuplicateResult(await duplicateSession(sessionId));
+  if (!result.ok) {
+    return { error: result.error };
+  }
+
+  redirect(result.href);
 }
 
 // Swap one prescribed Exercise on the user's own Session copy. On success the

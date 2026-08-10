@@ -40,6 +40,17 @@ export async function fetchSession(
   return apiGet(`/api/sessions/${id}`);
 }
 
+// Duplicate the user's own Session into a new standalone Session (ADR-0043): a deep
+// copy of the plan — prescriptions, Supersets, Provenance, and lineage — with no
+// records and no Protocol position, so the copy stands alone. The response is the new
+// standalone Session; the backend returns 404 for a non-owner. Bodyless POST, so the
+// seam sends no `Content-Type` (ADR-0022). Unlimited.
+export async function duplicateSession(
+  id: number,
+): Promise<Envelope<WorkoutSession>> {
+  return apiSend(`/api/sessions/${id}/duplicate`, "POST");
+}
+
 // Hydration read for the Live Session screen (issue #90 — F2·S5): the owner's
 // Session with recommended loads progression-adjusted (ADR-0004) and each Exercise
 // carrying its previous performance to beat. The backend returns 404 for
