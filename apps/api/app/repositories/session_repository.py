@@ -103,6 +103,20 @@ class SessionRepository(Protocol):
         owned by another user."""
         ...
 
+    def duplicate(self, session_id: int, clerk_user_id: str) -> SessionView | None:
+        """Deep-copy the owner's Session into a new **standalone** Session (Duplicate,
+        ADR-0043).
+
+        Carries the source's training parameters, Session Provenance, ``trace_id``
+        lineage, and name (``title``) verbatim, plus every Exercise Prescription with
+        its sets/reps/rest/tempo/Load and Superset grouping — but **no Logged Sessions**
+        and **no Protocol position** (``protocol_id``/week/day/position are dropped), so
+        the copy stands alone. The copy is a distinct Session with a **fresh regeneration
+        budget** (``has_been_regenerated`` starts ``False``). The source is read, never
+        mutated. Returns the new Session, or ``None`` if the source is missing or owned
+        by another user — Duplicate only ever copies the owner's own plan."""
+        ...
+
     def trace_id(self, session_id: int, clerk_user_id: str) -> str | None:
         """Return the owner's Session's AI-usage trace-id lineage (ADR-0039, #274).
 
@@ -266,6 +280,35 @@ class SqlSessionRepository:
             return None
         return self._view(workout)
 
+    def duplicate(self, session_id: int, clerk_user_id: str) -> SessionView | None:
+        source = self._session.get(WorkoutSession, session_id)
+        if source is None or source.clerk_user_id != clerk_user_id:
+            return None
+
+        prescriptions = self._session.exec(
+            select(ExercisePrescription)
+            .where(ExercisePrescription.session_id == session_id)
+            .order_by(ExercisePrescription.position)
+        ).all()
+
+        # A standalone copy: Provenance, lineage and name carried verbatim; Protocol
+        # linkage and the regeneration guard deliberately not copied (ADR-0043).
+        copy = WorkoutSession(
+            clerk_user_id=clerk_user_id,
+            training_type=source.training_type,
+            duration_minutes=source.duration_minutes,
+            provenance=source.provenance,
+            trace_id=source.trace_id,
+            title=source.title,
+        )
+        self._session.add(copy)
+        self._session.commit()
+        self._session.refresh(copy)
+
+        self._add_prescriptions(copy.id, [_draft_from(p) for p in prescriptions])
+        self._session.commit()
+        return self._view(copy)
+
     def trace_id(self, session_id: int, clerk_user_id: str) -> str | None:
         workout = self._session.get(WorkoutSession, session_id)
         if workout is None or workout.clerk_user_id != clerk_user_id:
@@ -395,6 +438,32 @@ class InMemorySessionRepository:
         if workout is None or workout.clerk_user_id != clerk_user_id:
             return None
         return self._view(workout)
+
+    def duplicate(self, session_id: int, clerk_user_id: str) -> SessionView | None:
+        source = self._sessions.get(session_id)
+        if source is None or source.clerk_user_id != clerk_user_id:
+            return None
+
+        prescriptions = sorted(
+            self._prescriptions.get(session_id, []), key=lambda p: p.position
+        )
+        # A standalone copy: Provenance, lineage and name carried verbatim; Protocol
+        # linkage and the regeneration guard deliberately not copied (ADR-0043).
+        copy = WorkoutSession(
+            id=self._next_id,
+            clerk_user_id=clerk_user_id,
+            training_type=source.training_type,
+            duration_minutes=source.duration_minutes,
+            provenance=source.provenance,
+            trace_id=source.trace_id,
+            title=source.title,
+        )
+        self._next_id += 1
+        self._sessions[copy.id] = copy
+        self._prescriptions[copy.id] = self._materialize(
+            copy.id, [_draft_from(p) for p in prescriptions]
+        )
+        return self._view(copy)
 
     def trace_id(self, session_id: int, clerk_user_id: str) -> str | None:
         workout = self._sessions.get(session_id)
