@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowRight, ClipboardCheck, Play } from "lucide-react";
 
 import { SubstituteButton } from "@/components/SubstituteButton";
+import { DuplicateButton } from "@/components/DuplicateButton";
 import { HarderVariationOffer } from "@/components/HarderVariationOffer";
 import {
   fetchHarderVariation,
@@ -110,6 +111,7 @@ export default async function SessionPage({
           <ClipboardCheck className="h-4 w-4" />
           Log this session
         </Link>
+        <DuplicateButton sessionId={session.id} />
         <Link
           href="/sessions/new"
           className={buttonVariants({
