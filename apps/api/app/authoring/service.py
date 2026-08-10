@@ -40,6 +40,7 @@ from app.repositories.session_repository import (
     PrescriptionDraft,
     SessionDraft,
     SessionRepository,
+    SessionView,
 )
 
 # The single Session a Hand-Authored request authors is validated through the Protocol
@@ -62,6 +63,23 @@ class AuthoredSessionInvalid(Exception):
 
 
 @dataclass(frozen=True)
+class AuthorPlanRequest:
+    """A request to author a standalone plan with **no performance logged** (Capture,
+    ADR-0044).
+
+    The plan half of a Hand-Authored Session — ``prescriptions`` only, with no
+    ``logged_sets`` and no ``performed_on``. Capture promotes an existing plan-less record
+    into a reusable plan: the record already exists, so authoring must create the plan
+    alone and never log a second performance (which would inflate every read-time
+    projection — XP, Streak, records). ``duration_minutes`` is the plan's nominal length.
+    """
+
+    training_type: str
+    duration_minutes: int
+    prescriptions: list[PrescriptionDraft] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class AuthorSessionRequest:
     """A request to author-and-log a Hand-Authored Session in one submit.
 
@@ -79,9 +97,10 @@ class AuthorSessionRequest:
     logged_sets: list[LoggedSetDraft] = field(default_factory=list)
 
 
-def _authored_deploy_draft(request: AuthorSessionRequest) -> DeployDraft:
-    """Wrap the authored prescriptions as the one-Session tail the Protocol validator
-    expects — a standalone Session is one Session in one "week"."""
+def _deploy_draft(prescriptions: list[PrescriptionDraft]) -> DeployDraft:
+    """Wrap authored prescriptions as the one-Session tail the Protocol validator expects —
+    a standalone Session is one Session in one "week". Shared by the author-and-log path
+    and the plan-only Capture path (ADR-0044), which validate the same plan shape."""
 
     return DeployDraft(
         weeks=_AUTHORED_WEEKS,
@@ -102,7 +121,7 @@ def _authored_deploy_draft(request: AuthorSessionRequest) -> DeployDraft:
                         superset_group=prescription.superset_group,
                         round_rest_seconds=prescription.round_rest_seconds,
                     )
-                    for prescription in request.prescriptions
+                    for prescription in prescriptions
                 ],
             )
         ],
@@ -139,7 +158,7 @@ def _validation_errors(
 
     errors.extend(
         validate_deploy(
-            _authored_deploy_draft(request),
+            _deploy_draft(request.prescriptions),
             performed_session_ids=set(),
             known_session_ids=set(),
             exercise_exists=exercise_exists,
@@ -236,8 +255,55 @@ def author_and_log_session(
     )
 
 
+def author_plan(
+    request: AuthorPlanRequest,
+    clerk_user_id: str,
+    *,
+    sessions: SessionRepository,
+    exercises: ExerciseRepository,
+    profiles: ProfileRepository,
+) -> SessionView:
+    """Author a ``user_authored`` standalone Session (the plan) **without logging**
+    (Capture, ADR-0044).
+
+    Validates the plan through the Builder's ``validate_deploy`` rules (empty session,
+    unknown Exercise, invalid sets/reps, Superset structure — with the Sensitive-Constraint
+    suppression posture threaded, ADR-0023); on any problem raises ``AuthoredSessionInvalid``
+    with nothing written. Then creates **only** the plan — no Logged Session — so Capture
+    never fabricates a second performance of a workout the source record already captured,
+    and no read-time projection is inflated. Returns the created Session view.
+    """
+
+    profile = profiles.get_or_create(clerk_user_id)
+
+    def exercise_exists(exercise_id: int) -> bool:
+        return exercises.get(exercise_id) is not None
+
+    errors = validate_deploy(
+        _deploy_draft(request.prescriptions),
+        performed_session_ids=set(),
+        known_session_ids=set(),
+        exercise_exists=exercise_exists,
+        has_sensitive_constraint=is_sensitive(profile),
+    )
+    if errors:
+        raise AuthoredSessionInvalid(errors)
+
+    return sessions.create(
+        clerk_user_id,
+        SessionDraft(
+            training_type=request.training_type,
+            duration_minutes=request.duration_minutes,
+            prescriptions=request.prescriptions,
+            provenance=SessionProvenance.USER_AUTHORED.value,
+        ),
+    )
+
+
 __all__ = [
     "AuthoredSessionInvalid",
+    "AuthorPlanRequest",
     "AuthorSessionRequest",
     "author_and_log_session",
+    "author_plan",
 ]

@@ -5,10 +5,12 @@ import { ArrowDown, ArrowUp, Link2, Trash2, Unlink } from "lucide-react";
 
 import {
   resolveAuthoredExercise,
+  submitAuthorPlan,
   submitAuthorSession,
 } from "@/app/sessions/log/actions";
 import {
   authoredSupersetLayout,
+  buildAuthorPlanRequest,
   buildAuthorSessionRequest,
   defaultLoadKindForAmount,
   groupExerciseWithNext,
@@ -21,6 +23,7 @@ import {
   type AuthoredExerciseFields,
   type SupersetSlot,
 } from "@/lib/hand-authored-session";
+import type { CaptureSeed, CaptureSeedExercise } from "@/lib/capture-seed";
 import { dissolveSingletonGroups } from "@/lib/supersets";
 import { LOAD_KIND_OPTIONS } from "@/lib/load";
 import type { DistanceUnit, QuantityKind } from "@/lib/quantity";
@@ -35,6 +38,12 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 
+// The two ways this screen is used. `authorAndLog` (the default, `/sessions/log`) authors a
+// plan **and** logs a first performance in one submit. `planOnly` (Capture, ADR-0044,
+// `/history/[id]/capture`) authors only the plan from a record's seed — the record already
+// exists, so it hides the performed-sets half and the date, and never logs a second time.
+type HandAuthoredSessionMode = "authorAndLog" | "planOnly";
+
 interface HandAuthoredSessionFormProps {
   today: string;
   // Whether the user carries a Sensitive Constraint (ADR-0023, issue #290). When true the
@@ -42,6 +51,13 @@ interface HandAuthoredSessionFormProps {
   // unlinked (staged, not committed), and an explanatory banner is shown — the same posture
   // the Builder takes. A non-medical Preference / Limitation never sets this.
   hasSensitiveConstraint?: boolean;
+  // Which flow this is (default `authorAndLog`). `planOnly` is Capture: plan-only submit,
+  // no performed-sets inputs, no date.
+  mode?: HandAuthoredSessionMode;
+  // The Capture pre-fill (ADR-0044): the record's contents folded into exercise rows. Only
+  // meaningful in `planOnly` mode; the exercises seed the draft and the training type its
+  // default.
+  seed?: CaptureSeed;
 }
 
 // One performed set the user is recording under an exercise, with a stable key so React
@@ -144,6 +160,29 @@ function makeExerciseRow(exercise: PickedExercise): ExerciseRow {
   };
 }
 
+// A draft row seeded from a Captured record's exercise (ADR-0044): the plan fields the fold
+// could recover (Amount kind, unit, sets, target, Load) are filled; rest, tempo, and
+// Supersets stay blank — the record never captured them — for the user to complete. The
+// performed-sets half is hidden in plan-only mode, so its placeholder row is inert.
+function seededExerciseRow(seed: CaptureSeedExercise): ExerciseRow {
+  return {
+    key: makeKey(),
+    exerciseId: seed.exerciseId,
+    exerciseName: seed.exerciseName,
+    kind: seed.kind,
+    unit: seed.unit,
+    sets: seed.sets,
+    reps: seed.reps,
+    restSeconds: "",
+    tempo: "",
+    loadKind: seed.loadKind,
+    loadValue: seed.loadValue,
+    supersetGroup: null,
+    roundRestSeconds: null,
+    performedSets: [makePerformedSet()],
+  };
+}
+
 // A contiguous run of exercises to render together: a bordered Superset container wrapping
 // its members, or a single solo exercise. Derived from the per-row Superset layout so the
 // render brackets each group into one visible box (ADR-0023).
@@ -185,8 +224,13 @@ function renderRuns(layout: SupersetSlot[]): RenderRun[] {
 export function HandAuthoredSessionForm({
   today,
   hasSensitiveConstraint = false,
+  mode = "authorAndLog",
+  seed,
 }: HandAuthoredSessionFormProps) {
-  const [exercises, setExercises] = useState<ExerciseRow[]>([]);
+  const planOnly = mode === "planOnly";
+  const [exercises, setExercises] = useState<ExerciseRow[]>(() =>
+    seed ? seed.exercises.map(seededExerciseRow) : [],
+  );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -291,35 +335,58 @@ export function HandAuthoredSessionForm({
       ),
     );
 
+  // Submit the suppression-aware draft, so a Sensitive-Constraint user never sends grouping
+  // even if a stray group reached state; the endpoint stays the backstop. The performed sets
+  // ride along for the author-and-log path and are simply ignored by the plan-only build.
+  const toAuthoredFields = (row: ExerciseRow): AuthoredExerciseFields => ({
+    exerciseId: row.exerciseId,
+    kind: row.kind,
+    unit: row.unit,
+    sets: row.sets,
+    reps: row.reps,
+    restSeconds: row.restSeconds,
+    tempo: row.tempo,
+    loadKind: row.loadKind,
+    loadValue: row.loadValue,
+    supersetGroup: row.supersetGroup,
+    roundRestSeconds: row.roundRestSeconds,
+    performedSets: row.performedSets.map((set) => ({
+      reps: set.reps,
+      distance: set.distance,
+      duration: set.duration,
+      loadKind: set.loadKind,
+      loadValue: set.loadValue,
+      perceivedDifficulty: set.perceivedDifficulty,
+    })),
+  });
+
   const submit = (formData: FormData) => {
+    const trainingType = String(formData.get("training_type") ?? "");
+    const authoredExercises = effectiveExercises.map(toAuthoredFields);
+
+    // Capture (ADR-0044): author only the plan — no date, no performed sets, no second log.
+    if (planOnly) {
+      const result = buildAuthorPlanRequest({
+        trainingType,
+        exercises: authoredExercises,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setError(null);
+      startTransition(async () => {
+        const outcome = await submitAuthorPlan(result.request);
+        // A successful submit redirects server-side; only a failure returns here.
+        if (outcome?.error) setError(outcome.error);
+      });
+      return;
+    }
+
     const fields: AuthorSessionFields = {
       performedOn: String(formData.get("performed_on") ?? ""),
-      trainingType: String(formData.get("training_type") ?? ""),
-      // Submit the suppression-aware draft, so a Sensitive-Constraint user never sends
-      // grouping even if a stray group reached state; the endpoint stays the backstop.
-      exercises: effectiveExercises.map(
-        (row): AuthoredExerciseFields => ({
-          exerciseId: row.exerciseId,
-          kind: row.kind,
-          unit: row.unit,
-          sets: row.sets,
-          reps: row.reps,
-          restSeconds: row.restSeconds,
-          tempo: row.tempo,
-          loadKind: row.loadKind,
-          loadValue: row.loadValue,
-          supersetGroup: row.supersetGroup,
-          roundRestSeconds: row.roundRestSeconds,
-          performedSets: row.performedSets.map((set) => ({
-            reps: set.reps,
-            distance: set.distance,
-            duration: set.duration,
-            loadKind: set.loadKind,
-            loadValue: set.loadValue,
-            perceivedDifficulty: set.perceivedDifficulty,
-          })),
-        }),
-      ),
+      trainingType,
+      exercises: authoredExercises,
     };
 
     const result = buildAuthorSessionRequest(fields, today);
@@ -350,18 +417,25 @@ export function HandAuthoredSessionForm({
         </Alert>
       ) : null}
 
-      <Field label="Date performed">
-        <Input
-          name="performed_on"
-          type="date"
-          defaultValue={today}
-          max={today}
-          required
-        />
-      </Field>
+      {/* Capture authors a plan, not a record, so it collects no performed-on date
+          (ADR-0044); the author-and-log flow keeps it. */}
+      {planOnly ? null : (
+        <Field label="Date performed">
+          <Input
+            name="performed_on"
+            type="date"
+            defaultValue={today}
+            max={today}
+            required
+          />
+        </Field>
+      )}
 
       <Field label="Training type">
-        <Select name="training_type" defaultValue={DEFAULT_TRAINING_TYPE}>
+        <Select
+          name="training_type"
+          defaultValue={seed?.trainingType ?? DEFAULT_TRAINING_TYPE}
+        >
           {TRAINING_TYPES.map((trainingType) => (
             <option key={trainingType} value={trainingType}>
               {trainingType}
@@ -392,6 +466,7 @@ export function HandAuthoredSessionForm({
                 canMoveDown={
                   index < effectiveExercises.length - 1 && canMove(index, index + 1)
                 }
+                showPerformedSets={!planOnly}
                 onRemove={() => removeExercise(row.key)}
                 onChange={(patch) => updateExercise(row.key, patch)}
                 onAddSet={() => addPerformedSet(row.key)}
@@ -427,6 +502,7 @@ export function HandAuthoredSessionForm({
                       index < effectiveExercises.length - 1 &&
                       canMove(index, index + 1)
                     }
+                    showPerformedSets={!planOnly}
                     onRemove={() => removeExercise(row.key)}
                     onChange={(patch) => updateExercise(row.key, patch)}
                     onAddSet={() => addPerformedSet(row.key)}
@@ -448,7 +524,11 @@ export function HandAuthoredSessionForm({
       </fieldset>
 
       <Button type="submit" disabled={pending} className="w-full">
-        {pending ? "Saving…" : "Save workout"}
+        {pending
+          ? "Saving…"
+          : planOnly
+            ? "Save reusable session"
+            : "Save workout"}
       </Button>
     </form>
   );
@@ -515,6 +595,9 @@ interface ExerciseCardProps {
   slot: SupersetSlot;
   canMoveUp: boolean;
   canMoveDown: boolean;
+  // Whether to render the "SETS PERFORMED" half. False in plan-only mode (Capture): the
+  // record already exists, so the builder authors only the plan (ADR-0044).
+  showPerformedSets: boolean;
   onRemove: () => void;
   onChange: (patch: Partial<ExerciseRow>) => void;
   onAddSet: () => void;
@@ -530,6 +613,7 @@ function ExerciseCard({
   slot,
   canMoveUp,
   canMoveDown,
+  showPerformedSets,
   onRemove,
   onChange,
   onAddSet,
@@ -694,7 +778,9 @@ function ExerciseCard({
         </FieldLabel>
       </div>
 
-      {/* The record: what was actually performed, set by set. */}
+      {/* The record: what was actually performed, set by set. Hidden in plan-only mode
+          (Capture), where the builder authors a plan and logs nothing (ADR-0044). */}
+      {showPerformedSets ? (
       <div className="flex flex-col gap-2.5">
         <SectionHeader>SETS PERFORMED</SectionHeader>
         {row.performedSets.map((set, index) => (
@@ -799,6 +885,7 @@ function ExerciseCard({
           + Add a performed set
         </Button>
       </div>
+      ) : null}
 
       {/* Group this exercise with the next into a Superset (ADR-0023). Shown only when a
           next exercise exists to group with, and it is not already the same group. */}

@@ -3,8 +3,11 @@
 import { redirect } from "next/navigation";
 
 import { resolveExercise } from "@/lib/exercises";
-import { authorSession } from "@/lib/sessions";
-import type { AuthorSessionInput } from "@/lib/hand-authored-session";
+import { authorPlan, authorSession } from "@/lib/sessions";
+import type {
+  AuthorPlanInput,
+  AuthorSessionInput,
+} from "@/lib/hand-authored-session";
 import type { PickedExercise } from "@/lib/protocol-builder";
 
 export interface AuthorSessionFormState {
@@ -55,4 +58,20 @@ export async function submitAuthorSession(
   }
 
   redirect("/history");
+}
+
+// Capture a plan-less record into a reusable plan (ADR-0044): the client has finalized the
+// pre-filled builder into the plan-only payload through `buildAuthorPlanRequest`, so this is
+// a thin transport-and-redirect shell. It authors **only** the plan — no second performance
+// is logged — and on success lands the user on the new standalone Session to run or tweak.
+// On failure the boundary's message is surfaced back to the form.
+export async function submitAuthorPlan(
+  input: AuthorPlanInput,
+): Promise<AuthorSessionFormState> {
+  const result = await authorPlan(input);
+  if (!result.success || !result.data) {
+    return { error: result.error ?? "Could not save this as a reusable session." };
+  }
+
+  redirect(`/sessions/${result.data.id}`);
 }

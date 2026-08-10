@@ -390,3 +390,23 @@ def read_history(
 ) -> dict:
     history = logged.list_for_user(clerk_user_id)
     return success_envelope([serialize_logged_session(view) for view in history])
+
+
+@router.get("/logs/{log_id}")
+def read_log(
+    log_id: int,
+    clerk_user_id: str = Depends(get_current_user),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+) -> dict:
+    """Return one of the caller's Logged Sessions in full — the record detail.
+
+    Owner-scoped like every other logbook read: a log that is missing or owned by another
+    user surfaces as ``404``, so the detail page can never open another user's record. The
+    single-record read the history list has always been able to serve, now given its own
+    route so the Logged Session gets a stable, linkable home (the record side's counterpart
+    to ``GET /api/sessions/{id}`` on the plan side)."""
+
+    view = logged.get(log_id, clerk_user_id)
+    if view is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Log not found")
+    return success_envelope(serialize_logged_session(view))

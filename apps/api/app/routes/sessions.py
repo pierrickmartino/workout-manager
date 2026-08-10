@@ -19,8 +19,10 @@ from pydantic import BaseModel, Field, field_validator
 from app.auth.dependencies import get_current_user
 from app.authoring.service import (
     AuthoredSessionInvalid,
+    AuthorPlanRequest,
     AuthorSessionRequest,
     author_and_log_session,
+    author_plan,
 )
 from app.domain.feedback import parse_verdict
 from app.domain.fitness_profile import is_sensitive, resolve_equipment
@@ -267,6 +269,56 @@ def author_session(
     except AuthoredSessionInvalid as exc:
         return _authored_error_response(exc.errors)
     return success_envelope(serialize_logged_session(view))
+
+
+class AuthorPlanBody(BaseModel):
+    """Validated request to author a standalone plan **without logging** (Capture, ADR-0044).
+
+    The plan half of a Hand-Authored Session — ``prescriptions`` only, no performed sets and
+    no date. Capture promotes an existing plan-less record into a reusable plan, so it
+    creates the plan alone and never logs a second performance. ``duration_minutes`` is the
+    plan's nominal length; a neutral default stands in when the client sends none. Emptiness
+    and catalog validity are checked in the service, so a rejected request surfaces a
+    structured ``422`` and persists nothing."""
+
+    training_type: str = Field(min_length=1)
+    duration_minutes: int | None = None
+    prescriptions: list[AuthorPrescriptionBody] = Field(default_factory=list)
+
+
+@router.post("/sessions/plan")
+def author_plan_only(
+    payload: AuthorPlanBody,
+    clerk_user_id: str = Depends(get_current_user),
+    sessions: SessionRepository = Depends(get_session_repository),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    profiles: ProfileRepository = Depends(get_profile_repository),
+) -> object:
+    """Author a ``user_authored`` standalone plan without logging (Capture, ADR-0044).
+
+    The submit target of Capture's pre-filled builder: it creates **only** the plan — the
+    source record already exists, so no performance is logged and no read-time projection
+    (XP, Streak, Personal Records, Achievements) is inflated. Delegates to ``author_plan``,
+    which validates the plan through the Builder's deploy rules before any write. A rejected
+    request returns a structured ``422`` naming the offending item(s) and persists nothing;
+    on success the envelope carries the new standalone Session so the client can jump to it."""
+
+    request = AuthorPlanRequest(
+        training_type=payload.training_type,
+        duration_minutes=payload.duration_minutes or DEFAULT_AUTHORED_DURATION_MINUTES,
+        prescriptions=[prescription.to_draft() for prescription in payload.prescriptions],
+    )
+    try:
+        view = author_plan(
+            request,
+            clerk_user_id,
+            sessions=sessions,
+            exercises=exercises,
+            profiles=profiles,
+        )
+    except AuthoredSessionInvalid as exc:
+        return _authored_error_response(exc.errors)
+    return success_envelope(_serialize(view))
 
 
 @router.post("/sessions/generate")
