@@ -30,8 +30,12 @@ _Avoid_: Custom workout, manual workout, Workout, my routine
 How a Session's plan came to exist: `ai_generated` (produced by the generation pipeline) or `user_authored` (built by hand, no AI — a Hand-Authored Session). Carried on every Session so plan-quality affordances that assume the AI wrote it — Generation Feedback and Regeneration — are never offered on a `user_authored` plan. Parallel to an Exercise's Provenance and named the same way, but a distinct axis on a distinct concept (the plan, not the movement).
 _Avoid_: Origin, source, generated flag
 
+**Catalog**:
+The shared, global set of all Exercises — one movement definition per normalized name (ADR-0002), owned by no user and reused across everyone: an AI-invented or user-typed movement is stored once for all. Its entries span every Provenance (curated / AI-generated / user-entered) and every Catalog Completeness tier (Stub / Listable / Enriched), and membership is never deleted. Users **Browse the Catalog** to discover Exercises and open Exercise Detail — a read-only act that never edits it. Distinct from a Protocol or Session, which are user-owned plans that *reference* Catalog Exercises.
+_Avoid_: Library (that is the pick-mode widget over the Catalog, not the Catalog itself), database, exercise list, movement list
+
 **Exercise**:
-A movement definition in the shared, global catalog — name, description, ordered Execution Steps, targeted muscles (split into Primary and Secondary), difficulty, required equipment, variations, alternatives, precautions, and an optional Exercise Image. One Exercise (e.g. "Barbell Back Squat") is shared across all users; AI-invented movements are stored once and enriched once for everyone. Distinct from the prescription of its sets/reps.
+A movement definition in the shared, global Catalog — name, description, ordered Execution Steps, targeted muscles (split into Primary and Secondary), difficulty, required equipment, variations, alternatives, precautions, and an optional Exercise Image. One Exercise (e.g. "Barbell Back Squat") is shared across all users; AI-invented movements are stored once and enriched once for everyone. Distinct from the prescription of its sets/reps.
 _Avoid_: Movement, Exercise Prescription (when referring to the definition)
 
 **Execution Steps**:
