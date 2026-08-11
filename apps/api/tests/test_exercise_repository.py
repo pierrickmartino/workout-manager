@@ -7,7 +7,8 @@ Provenance."""
 from __future__ import annotations
 
 import pytest
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import Session, SQLModel, select
+from tests.conftest import make_fk_engine
 
 from app.db.models import Exercise
 from app.domain.exercise import Provenance
@@ -58,7 +59,7 @@ def test_losing_concurrent_resolve_reports_no_create():
     # Arrange — two requests race to create the same new Exercise; the loser must
     # report created=False so it never enqueues a duplicate Enrichment job for a row
     # the winner already created (and already enqueued).
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    engine = make_fk_engine()
     SQLModel.metadata.create_all(engine)
     with Session(engine) as winner_session, Session(engine) as loser_session:
         winner = SqlExerciseRepository(winner_session).find_or_create(
@@ -91,7 +92,7 @@ def repo(request):
     if request.param == "in_memory":
         yield InMemoryExerciseRepository()
         return
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    engine = make_fk_engine()
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         yield SqlExerciseRepository(session)
@@ -372,7 +373,7 @@ def test_losing_concurrent_insert_returns_the_winning_row():
     # Arrange — two requests race to create the same new Exercise. SQLite's
     # in-memory engine shares one DB across sessions on the thread, so we can
     # drive both sides of the race over the same engine.
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    engine = make_fk_engine()
     SQLModel.metadata.create_all(engine)
     with Session(engine) as winner_session, Session(engine) as loser_session:
         # The winning request commits "Clean" first.
