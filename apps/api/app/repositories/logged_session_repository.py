@@ -256,12 +256,18 @@ class SqlLoggedSessionRepository:
         if logged is None or logged.clerk_user_id != clerk_user_id:
             return False
 
-        # Cascade the Logged Sets, then the record itself, in one transaction.
+        # Cascade the Logged Sets, then the record itself, in one transaction. The FK
+        # ``logged_set.logged_session_id -> logged_session.id`` has no ORM relationship, so
+        # the unit-of-work has no dependency edge forcing child-before-parent delete
+        # ordering; without the explicit ``flush`` below it may emit the parent DELETE
+        # first and a FK-enforcing database (Postgres) rejects it. Flushing the child
+        # deletes sends them ahead of the parent's within the same transaction.
         sets = self._session.exec(
             select(LoggedSet).where(LoggedSet.logged_session_id == logged.id)
         ).all()
         for logged_set in sets:
             self._session.delete(logged_set)
+        self._session.flush()
         self._session.delete(logged)
         self._session.commit()
         return True

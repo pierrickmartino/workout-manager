@@ -9,13 +9,14 @@ training type — consumers never touch the ORM."""
 
 from __future__ import annotations
 
+from tests.conftest import make_fk_engine
 from tests.quantities import reps_quantity
 from app.domain.quantity import repetitions_of
 
 from datetime import date
 
 import pytest
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel
 
 from app.domain.exercise import Provenance
 from app.repositories.exercise_repository import (
@@ -44,7 +45,9 @@ def repos(request):
         sessions = InMemorySessionRepository(exercises)
         yield InMemoryLoggedSessionRepository(sessions, exercises), sessions, exercises
         return
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    # Enforce foreign keys (SQLite ignores them by default) so a cascade-order bug in
+    # delete surfaces here the way it does on Postgres, instead of hiding until production.
+    engine = make_fk_engine()
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         yield (
