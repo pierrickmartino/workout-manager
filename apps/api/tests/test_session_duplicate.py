@@ -15,9 +15,10 @@ from dataclasses import replace
 from datetime import date
 
 import pytest
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel
+from tests.conftest import make_fk_engine
 
-from app.db.models import ExercisePrescription, WorkoutSession
+from app.db.models import ExercisePrescription, Protocol, WorkoutSession
 from app.domain.exercise import Provenance
 from app.repositories.exercise_repository import (
     InMemoryExerciseRepository,
@@ -42,7 +43,7 @@ def repos(request):
         exercises = InMemoryExerciseRepository()
         yield InMemorySessionRepository(exercises), exercises
         return
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    engine = make_fk_engine()
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         yield SqlSessionRepository(session), SqlExerciseRepository(session)
@@ -331,7 +332,7 @@ def test_duplicate_keeps_the_title_on_the_in_memory_path():
 def test_duplicate_lifts_a_protocol_member_out_as_a_named_standalone():
     # Arrange — a Protocol-member, titled Session, seeded directly because ``create``
     # only builds standalone Sessions. SQL-backed so we can read the copy's raw row.
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    engine = make_fk_engine()
     SQLModel.metadata.create_all(engine)
     with Session(engine) as sql:
         exercises = SqlExerciseRepository(sql)
@@ -339,12 +340,24 @@ def test_duplicate_lifts_a_protocol_member_out_as_a_named_standalone():
         squat = exercises.find_or_create(
             "Back Squat", provenance=Provenance.AI_GENERATED
         )
+        # The Protocol the member Session belongs to must exist for the FK to hold.
+        protocol = Protocol(
+            clerk_user_id="user_proto",
+            training_type="strength",
+            objective="hypertrophy",
+            sessions_per_week=3,
+            weeks=4,
+            duration_minutes=60,
+        )
+        sql.add(protocol)
+        sql.commit()
+        sql.refresh(protocol)
         source = WorkoutSession(
             clerk_user_id="user_proto",
             training_type="strength",
             duration_minutes=60,
             provenance="ai_generated",
-            protocol_id=7,
+            protocol_id=protocol.id,
             objective="hypertrophy",
             week=2,
             day=1,
