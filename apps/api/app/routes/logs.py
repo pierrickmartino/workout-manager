@@ -25,6 +25,7 @@ from app.logbook.correction import (
     LogNotFoundError,
     correct_session,
     delete_session,
+    history_correction_verdicts,
 )
 from app.logbook.service import (
     LogKindError,
@@ -387,9 +388,31 @@ def delete_log(
 def read_history(
     clerk_user_id: str = Depends(get_current_user),
     logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+    protocols: ProtocolRepository = Depends(get_protocol_repository),
 ) -> dict:
+    """Return the caller's Logged history, most recent first, each record annotated with
+    whether it may be deleted / un-completed without breaking the gap-free performed
+    sequence (ADR-0034).
+
+    The ``deletable`` / ``uncompletable`` flags ride only on this list read: the server
+    owns the one contiguity gate, so the History screen can disable a control the server
+    would reject with a ``409`` instead of surprising the user with a bare rejection (user
+    story 27). A faithful client-side mirror is impossible — it would need every Protocol's
+    Session ordering, while Home surfaces only the current one — so the verdicts are
+    computed here over the same history."""
+
     history = logged.list_for_user(clerk_user_id)
-    return success_envelope([serialize_logged_session(view) for view in history])
+    verdicts = history_correction_verdicts(
+        history, clerk_user_id, protocols=protocols
+    )
+    records = []
+    for view in history:
+        record = serialize_logged_session(view)
+        verdict = verdicts[view.id]
+        record["deletable"] = verdict.deletable
+        record["uncompletable"] = verdict.uncompletable
+        records.append(record)
+    return success_envelope(records)
 
 
 @router.get("/logs/{log_id}")

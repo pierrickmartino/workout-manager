@@ -42,6 +42,13 @@ export interface LoggedSession {
   // performance was not live-tracked (e.g. logged after the fact through the form).
   duration_seconds: number | null;
   logged_sets: LoggedSet[];
+  // Whether this record may be deleted / un-completed without breaking the gap-free
+  // performed sequence (ADR-0034), computed server-side by the one contiguity gate. Present
+  // only on the History list read (`GET /api/logs`); the single-record and write responses
+  // omit them (they host no correction control). The History screen disables the control
+  // when a flag is `false`, so the server's `409` is never a surprise (user story 27).
+  deletable?: boolean;
+  uncompletable?: boolean;
 }
 
 // A set the user submits to record. The amount is captured as a typed Quantity
