@@ -1262,3 +1262,51 @@ def test_deleting_a_log_requires_authentication():
     # Assert
     assert response.status_code == 401
     assert response.json()["success"] is False
+
+
+def test_history_flags_a_mid_protocol_record_as_not_deletable():
+    # Arrange — a two-Session Protocol with both Sessions performed (a contiguous prefix).
+    # The mid-Protocol record cannot be deleted (a later Session is performed), while the
+    # last-performed one can — the same verdict the server's contiguity gate would return
+    # on a DELETE, surfaced on the read so the History screen can disable the control
+    # before the user clicks it (ADR-0034, user story 27).
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_flags")
+    protocol, squat = _seed_protocol(client, "user_flags")
+    first = _perform_protocol_session(client, "user_flags", protocol, 0, squat)
+    second = _perform_protocol_session(client, "user_flags", protocol, 1, squat)
+
+    # Act
+    history = client.get("/api/logs", headers=headers).json()["data"]
+    by_id = {record["id"]: record for record in history}
+
+    # Assert — the mid-Protocol record is refused; the tail one is allowed. The verdict
+    # matches what an actual DELETE returns (409 vs 200).
+    assert by_id[first.id]["deletable"] is False
+    assert by_id[first.id]["uncompletable"] is False
+    assert by_id[second.id]["deletable"] is True
+    assert by_id[second.id]["uncompletable"] is True
+    assert (
+        client.delete(f"/api/logs/{first.id}", headers=headers).status_code == 409
+    )
+    assert (
+        client.delete(f"/api/logs/{second.id}", headers=headers).status_code == 200
+    )
+
+
+def test_history_flags_a_plan_less_record_as_freely_correctable():
+    # Arrange — an ad-hoc (plan-less) record gates no Protocol, so it is always correctable.
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_flags_adhoc")
+    running = _create_exercise(client, headers, "Running")
+    created = client.post(
+        "/api/logs", headers=headers, json=_adhoc_body(running)
+    ).json()["data"]
+
+    # Act
+    history = client.get("/api/logs", headers=headers).json()["data"]
+
+    # Assert
+    record = next(r for r in history if r["id"] == created["id"])
+    assert record["deletable"] is True
+    assert record["uncompletable"] is True

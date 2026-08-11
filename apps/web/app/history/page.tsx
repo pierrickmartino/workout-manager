@@ -1,9 +1,10 @@
 import Link from "next/link";
 
 import { fetchHistory, type LoggedSession } from "@/lib/logs";
-import { fetchHome } from "@/lib/home";
-import { evaluateDeletion } from "@/lib/log-deletion";
-import { evaluateUncomplete } from "@/lib/log-outcome";
+import {
+  DELETE_TAIL_FIRST_REASON,
+  UNCOMPLETE_TAIL_FIRST_REASON,
+} from "@/lib/log-correction-reasons";
 import { PageHeader } from "@/components/pulse/page-header";
 import { Alert } from "@/components/pulse/alert";
 import { Card } from "@/components/ui/card";
@@ -15,10 +16,7 @@ import { LoggedSetTable } from "@/components/LoggedSetTable";
 // Lists the user's completed Logged Sessions — the record side of the plan/record
 // split — newest first, each with its Logged Sets and perceived difficulty.
 export default async function HistoryPage() {
-  const [envelope, homeEnvelope] = await Promise.all([
-    fetchHistory(),
-    fetchHome(),
-  ]);
+  const envelope = await fetchHistory();
 
   if (!envelope.success || !envelope.data) {
     return (
@@ -32,16 +30,6 @@ export default async function HistoryPage() {
   }
 
   const history = envelope.data;
-
-  // The parent Protocol's Session ordering, for the client mirror of the contiguity
-  // gate (ADR-0034). Home surfaces the Current Protocol's Sessions in position order;
-  // that covers the everyday case a delete could break (the server stays authoritative
-  // for any other Protocol, returning 409). An array per Protocol keeps the mirror's
-  // shape ready to widen if more orderings become available.
-  const protocolSessionOrders =
-    homeEnvelope.success && homeEnvelope.data?.current_protocol
-      ? [homeEnvelope.data.current_protocol.sessions.map((s) => s.session_id)]
-      : [];
 
   return (
     <section className="flex flex-col gap-6">
@@ -82,24 +70,23 @@ export default async function HistoryPage() {
       ) : (
         <ol className="flex list-none flex-col gap-4 p-0">
           {history.map((entry) => {
-            const verdict = evaluateDeletion(
-              entry,
-              history,
-              protocolSessionOrders,
-            );
-            const uncomplete = evaluateUncomplete(
-              entry,
-              history,
-              protocolSessionOrders,
-            );
+            // The server (the one contiguity gate, ADR-0034) decides whether each record
+            // may be deleted / un-completed and rides the verdict on the record, so the
+            // control is disabled before the user clicks into a `409` (user story 27). An
+            // absent flag (older payloads) leaves the control enabled — the server stays
+            // authoritative and still rejects.
+            const deleteDisabled = entry.deletable === false;
+            const uncompleteDisabled = entry.uncompletable === false;
             return (
               <li key={entry.id}>
                 <LoggedSessionCard
                   entry={entry}
-                  deleteDisabled={!verdict.allowed}
-                  deleteReason={verdict.reason}
-                  uncompleteDisabled={!uncomplete.allowed}
-                  uncompleteReason={uncomplete.reason}
+                  deleteDisabled={deleteDisabled}
+                  deleteReason={deleteDisabled ? DELETE_TAIL_FIRST_REASON : null}
+                  uncompleteDisabled={uncompleteDisabled}
+                  uncompleteReason={
+                    uncompleteDisabled ? UNCOMPLETE_TAIL_FIRST_REASON : null
+                  }
                 />
               </li>
             );
