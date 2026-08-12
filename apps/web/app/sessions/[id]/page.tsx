@@ -111,7 +111,13 @@ export default async function SessionPage({
           <ClipboardCheck className="h-4 w-4" />
           Log this session
         </Link>
-        <DuplicateButton sessionId={session.id} />
+        {/* Duplicate is withheld on a Protocol member (ADR-0043 consequence, Q2): lifting
+            one workout out of a plan the user is working through has no value here. It
+            stays on standalone Sessions, where forking a separate editable copy is the
+            actual intent. */}
+        {session.is_protocol_member ? null : (
+          <DuplicateButton sessionId={session.id} />
+        )}
         <Link
           href="/sessions/new"
           className={buttonVariants({

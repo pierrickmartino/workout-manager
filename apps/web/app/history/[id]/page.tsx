@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Copy, PenLine } from "lucide-react";
+import { Copy, PenLine, Repeat } from "lucide-react";
 
 import { fetchLog } from "@/lib/logs";
 import { loggedSessionDetail } from "@/lib/logged-session-detail";
@@ -9,7 +9,6 @@ import { BackLink } from "@/components/pulse/back-link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LoggedSetTable } from "@/components/LoggedSetTable";
-import { DuplicateButton } from "@/components/DuplicateButton";
 
 interface LogDetailPageProps {
   params: Promise<{ id: string }>;
@@ -80,19 +79,26 @@ export default async function LogDetailPage({ params }: LogDetailPageProps) {
       </Card>
 
       {/* The reuse action — mutually exclusive by the plan/record split. A plan-backed
-          record Duplicates its plan (ADR-0043); an ad-hoc one is Captured into a new
-          reusable plan (ADR-0044). */}
+          record Repeats its existing plan (Q9) — Start or Log it again, no copy spawned;
+          an ad-hoc one is Captured into a new reusable plan (ADR-0044). Forking a separate
+          editable copy (Duplicate) lives on the Session view, not here. */}
       <Card className="flex flex-col gap-3 p-5">
         <h2 className="font-display text-sm font-semibold text-text-primary">
           Reuse this workout
         </h2>
-        {detail.canDuplicate && detail.sourceSessionId !== null ? (
+        {detail.canRepeat && detail.repeatHref !== null ? (
           <>
             <p className="font-mono text-[12px] leading-relaxed text-text-muted">
-              Copy the plan behind this session into a new standalone workout you can tweak
-              and run again.
+              Run this same workout again — you&apos;ll land on its plan, ready to start a
+              live session or log it after the fact. No copy is made.
             </p>
-            <DuplicateButton sessionId={detail.sourceSessionId} />
+            <Link
+              href={detail.repeatHref}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-cyan/40 bg-cyan/[0.06] px-4 py-2.5 font-mono text-[13px] text-cyan hover:bg-cyan/[0.12]"
+            >
+              <Repeat className="h-4 w-4" />
+              Repeat
+            </Link>
           </>
         ) : (
           <>

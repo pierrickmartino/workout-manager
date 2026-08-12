@@ -5,8 +5,9 @@ import { loggedSessionDetail } from "./logged-session-detail.ts";
 import type { LoggedSession } from "./logs-types.ts";
 
 // `loggedSessionDetail` decides what the record detail page offers, keyed off the plan/record
-// boundary: a plan-backed record duplicates its plan and links back to it; a plan-less record
-// offers Capture into a new reusable plan (ADR-0043/0044). The two are mutually exclusive.
+// boundary: a plan-backed record Repeats its existing plan and links back to it (Q9); a
+// plan-less record offers Capture into a new reusable plan (ADR-0044). The two are mutually
+// exclusive.
 
 function record(overrides: Partial<LoggedSession>): LoggedSession {
   return {
@@ -22,14 +23,14 @@ function record(overrides: Partial<LoggedSession>): LoggedSession {
   };
 }
 
-test("a plan-backed record duplicates its plan and links back to it", () => {
+test("a plan-backed record repeats its existing plan and links back to it", () => {
   // Arrange
   const detail = loggedSessionDetail(record({ id: 7, session_id: 42 }));
 
-  // Assert — Duplicate is offered, Capture is not; the source plan is linked
+  // Assert — Repeat is offered (points at the existing plan), Capture is not
   assert.equal(detail.isPlanBacked, true);
-  assert.equal(detail.canDuplicate, true);
-  assert.equal(detail.sourceSessionId, 42);
+  assert.equal(detail.canRepeat, true);
+  assert.equal(detail.repeatHref, "/sessions/42");
   assert.equal(detail.sourceSessionHref, "/sessions/42");
   assert.equal(detail.canCapture, false);
 });
@@ -38,13 +39,13 @@ test("a plan-less record offers Capture and has no source plan", () => {
   // Arrange
   const detail = loggedSessionDetail(record({ id: 7, session_id: null }));
 
-  // Assert — Capture is offered, Duplicate is not; no plan to link
+  // Assert — Capture is offered, Repeat is not; no plan to link or repeat
   assert.equal(detail.isPlanBacked, false);
   assert.equal(detail.canCapture, true);
   assert.equal(detail.captureHref, "/history/7/capture");
-  assert.equal(detail.canDuplicate, false);
+  assert.equal(detail.canRepeat, false);
   assert.equal(detail.sourceSessionHref, null);
-  assert.equal(detail.sourceSessionId, null);
+  assert.equal(detail.repeatHref, null);
 });
 
 test("always points at the record's own correction form", () => {

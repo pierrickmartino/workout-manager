@@ -67,3 +67,10 @@ the Builder/Deploy path (ADR-0020); Duplicate deliberately does not overlap that
 - **Editing the duplicated plan's structure later is out of v1 scope**, exactly as for a
   Hand-Authored Session (ADR-0040): "reusable" means *log it again*, and Structural edits
   remain a Protocol-scoped Builder concern.
+- **The Duplicate *control* is withheld on a Protocol-member Session** (the Session view reads
+  `is_protocol_member` off the Session read). Lifting one workout *out* of a plan the user is
+  actively working through has no value at that surface — the intent there is to *do* the Next
+  Session, not fork it — so Duplicate is offered only on standalone Sessions (and the record
+  side offers **Repeat**, reusing the existing plan without a copy). This withholds an
+  *affordance*, not the *capability*: the `POST /api/sessions/{id}/duplicate` endpoint is
+  unchanged and still lifts a Protocol member out standalone when called.
