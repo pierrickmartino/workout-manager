@@ -115,9 +115,7 @@ def test_require_admin_honours_a_configured_claim_key_and_value():
     # …while the old default claim no longer grants access
     denied = client.get(
         "/admin-only",
-        headers={
-            "Authorization": f"Bearer {ctx.mint(extra_claims={'role': 'admin'})}"
-        },
+        headers={"Authorization": f"Bearer {ctx.mint(extra_claims={'role': 'admin'})}"},
     )
 
     # Assert — the gate reads the claim path from Settings, not a hardcoded key
