@@ -90,6 +90,12 @@ class SessionView:
     # ``ai_generated`` — every path that builds a Session today is AI. See
     # ``app.domain.session_provenance.SessionProvenance``.
     provenance: str = "ai_generated"
+    # Whether this Session belongs to a Protocol (it carries a ``protocol_id``) rather
+    # than standing alone. The Session view uses it to withhold the Duplicate control on a
+    # Protocol member — lifting one workout out of a plan the user is working through has
+    # no value there (Q2); Duplicate stays on standalone Sessions and the endpoint is
+    # unchanged. A read-time fact off the linkage, never a stored flag.
+    is_protocol_member: bool = False
 
 
 class SessionRepository(Protocol):
@@ -237,6 +243,7 @@ class SqlSessionRepository:
             prescriptions=views,
             has_been_regenerated=workout.has_been_regenerated,
             provenance=workout.provenance,
+            is_protocol_member=workout.protocol_id is not None,
         )
 
     def _add_prescriptions(
@@ -395,6 +402,7 @@ class InMemorySessionRepository:
             prescriptions=views,
             has_been_regenerated=workout.has_been_regenerated,
             provenance=workout.provenance,
+            is_protocol_member=workout.protocol_id is not None,
         )
 
     def _materialize(

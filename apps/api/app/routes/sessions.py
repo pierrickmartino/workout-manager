@@ -121,6 +121,9 @@ def _serialize(view: SessionView) -> dict:
         "duration_minutes": view.duration_minutes,
         "has_been_regenerated": view.has_been_regenerated,
         "provenance": view.provenance,
+        # Withhold the Duplicate control on a Protocol member (ADR-0043 consequence, Q2):
+        # the web Session view reads this to hide the button; the endpoint stays reachable.
+        "is_protocol_member": view.is_protocol_member,
         "prescriptions": [
             {
                 "position": p.position,

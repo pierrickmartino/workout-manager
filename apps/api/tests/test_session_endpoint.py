@@ -163,6 +163,20 @@ def test_generated_session_can_be_fetched_back_by_its_owner():
     assert len(fetched.json()["data"]["prescriptions"]) == 1
 
 
+def test_read_serializes_is_protocol_member_false_for_a_standalone_session():
+    # A generated Session stands alone, so the read carries is_protocol_member=False and
+    # the web Session view keeps the Duplicate control (Q2, ADR-0043 consequence).
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_flag")
+    created = client.post(
+        "/api/sessions/generate", headers=headers, json=_generate_body()
+    ).json()["data"]
+
+    fetched = client.get(f"/api/sessions/{created['id']}", headers=headers).json()["data"]
+
+    assert fetched["is_protocol_member"] is False
+
+
 def test_another_user_cannot_fetch_someone_elses_session():
     # Arrange
     client, ctx = build_client()
