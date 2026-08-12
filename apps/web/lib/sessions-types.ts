@@ -62,6 +62,12 @@ export interface WorkoutSession {
   // via `aiAffordanceVisibility`. Optional here because the plain Session read always
   // carries it while the live hydration read omits it (mirror of `previous_performance`).
   provenance?: string;
+  // Whether this Session belongs to a Protocol (ADR-0043 consequence, Q2). The Session
+  // view withholds the Duplicate control on a Protocol member — lifting one workout out of
+  // a plan the user is working through has no value there; Duplicate stays on standalone
+  // Sessions. Optional because the live hydration read omits it (mirror of `provenance`);
+  // the plain Session read always carries it, so the detail page reads it there.
+  is_protocol_member?: boolean;
   prescriptions: ExercisePrescription[];
 }
 

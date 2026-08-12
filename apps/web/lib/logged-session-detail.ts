@@ -4,9 +4,11 @@
 // page stays a thin renderer.
 //
 // The cardinal split drives it: a **plan-backed** record (it has a `session_id`) reuses its
-// plan through Duplicate (ADR-0043) and links back to that plan; a **plan-less** (ad-hoc)
-// record has no plan, so it offers Capture (ADR-0044) — promote it into a new reusable plan
-// — instead. The two are mutually exclusive.
+// plan by **Repeat** (Q9) — jumping back to that existing plan to Start/Log it again, with
+// no new copy spawned; a **plan-less** (ad-hoc) record has no plan, so it offers Capture
+// (ADR-0044) — promote it into a new reusable plan — instead. The two are mutually
+// exclusive. (Duplicate — forking a *separate* editable copy — lives on the Session view,
+// not here; Repeat is the record-side "do this workout again".)
 
 import type { LoggedSession } from "./logs-types";
 
@@ -17,10 +19,12 @@ export interface LoggedSessionDetailView {
   isPlanBacked: boolean;
   // The source plan to link back to (`/sessions/{id}`), or null for a plan-less record.
   sourceSessionHref: string | null;
-  // A plan-backed record can Duplicate its source plan (ADR-0043).
-  canDuplicate: boolean;
-  // The source plan's id, for the Duplicate control; null when plan-less.
-  sourceSessionId: number | null;
+  // A plan-backed record can Repeat its source plan (Q9): reuse the existing plan (Start or
+  // Log it again) rather than spawning a copy. False for a plan-less record.
+  canRepeat: boolean;
+  // Where Repeat goes — the existing source plan page (`/sessions/{id}`), which offers Start
+  // and Log. Null when plan-less (nothing to repeat).
+  repeatHref: string | null;
   // A plan-less record can be Captured into a new reusable plan (ADR-0044).
   canCapture: boolean;
   // Where the Capture action goes — the pre-filled, plan-only builder.
@@ -46,17 +50,18 @@ function durationLabel(totalSeconds: number | null): string | null {
   return `${minutes}:${paddedSeconds}`;
 }
 
-// Derive the detail page's capabilities for one record. Duplicate and Capture are mutually
-// exclusive — a record either has a plan to duplicate or is ad-hoc and can be captured.
+// Derive the detail page's capabilities for one record. Repeat and Capture are mutually
+// exclusive — a record either has a plan to repeat or is ad-hoc and can be captured.
 export function loggedSessionDetail(
   record: LoggedSession,
 ): LoggedSessionDetailView {
   const isPlanBacked = record.session_id !== null;
+  const sourceSessionHref = isPlanBacked ? `/sessions/${record.session_id}` : null;
   return {
     isPlanBacked,
-    sourceSessionHref: isPlanBacked ? `/sessions/${record.session_id}` : null,
-    canDuplicate: isPlanBacked,
-    sourceSessionId: record.session_id,
+    sourceSessionHref,
+    canRepeat: isPlanBacked,
+    repeatHref: sourceSessionHref,
     canCapture: !isPlanBacked,
     captureHref: `/history/${record.id}/capture`,
     editHref: `/history/${record.id}/edit`,
