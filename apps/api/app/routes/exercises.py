@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, field_validator
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_admin
 from app.db.models import Exercise
 from app.domain.exercise import Provenance, catalog_completeness, normalize_name
 from app.domain.exercise_browse import (
@@ -24,8 +24,10 @@ from app.domain.exercise_browse import (
 from app.domain.exercise_usage import last_performed
 from app.domain.substitution import RelationKind
 from app.envelope import success_envelope
+from app.generation.backfill_queue import BackfillQueue
 from app.generation.enrichment_queue import EnrichmentQueue
 from app.repositories.deps import (
+    get_backfill_queue,
     get_enrichment_queue,
     get_exercise_relationship_repository,
     get_exercise_repository,
@@ -43,6 +45,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["exercises"])
 
 HTTP_NOT_FOUND = 404
+HTTP_ACCEPTED = 202
 
 # The Exercise Library page bounds: a sensible default page and a cap so one search
 # never returns an unbounded slice of the catalog.
@@ -226,6 +229,73 @@ def _enqueue_enrichment(enrichment_queue: EnrichmentQueue, exercise_id: int) -> 
         logger.warning(
             "failed to enqueue enrichment for exercise %s", exercise_id, exc_info=True
         )
+
+
+def _backfill_payload(
+    *, status: str, job_id: str | None, summary: dict | None, error: str | None
+) -> dict:
+    """The uniform envelope the operator polls for a backfill run (ADR-0046).
+
+    ``status=pending`` carries a ``job_id`` to poll; ``status=complete`` fills in the
+    ``summary`` counts (enriched / skipped_*); ``status=failed`` carries a user-safe
+    ``error``. Mirrors the Protocol-generation job envelope, with a summary in place of
+    a ``protocol_id``."""
+
+    return {
+        "status": status,
+        "job_id": job_id,
+        "summary": summary,
+        "error": error,
+    }
+
+
+@router.post("/exercises/enrichment-backfill")
+def trigger_enrichment_backfill(
+    response: Response,
+    _operator: str = Depends(require_admin),
+    backfill_queue: BackfillQueue = Depends(get_backfill_queue),
+) -> dict:
+    """Enqueue a Stub-enrichment backfill sweep over the whole catalog (ADR-0046).
+
+    An **operator-only** maintenance trigger (``require_admin``): it hands the sweep to
+    the background worker and returns a ``202`` with a ``job_id`` to poll — nothing
+    blocks on the AI here, since a real catalog is one LLM call per fillable Stub. The
+    sweep runs under one fixed job id, so a double-trigger while a run is still in
+    flight returns that same in-flight handle rather than starting a second overlapping
+    sweep. The lift itself is the shared, idempotent-friendly backfill (ADR-0041):
+    Stubs rise to Listable, and rows already at or above the bar cost no AI call."""
+
+    job_id = backfill_queue.enqueue()
+    response.status_code = HTTP_ACCEPTED
+    return success_envelope(
+        _backfill_payload(status="pending", job_id=job_id, summary=None, error=None)
+    )
+
+
+@router.get("/exercises/enrichment-backfill/jobs/{job_id}")
+def read_enrichment_backfill_job(
+    job_id: str,
+    _operator: str = Depends(require_admin),
+    backfill_queue: BackfillQueue = Depends(get_backfill_queue),
+) -> dict:
+    """Poll a Stub-enrichment backfill run (ADR-0046), operator-only.
+
+    Returns ``pending`` until the worker finishes, then ``complete`` with the summary
+    counts (enriched / skipped_already_complete / skipped_nothing_to_work_from /
+    skipped_unfillable), or ``failed`` with a user-safe message. An unknown id is 404.
+    """
+
+    state = backfill_queue.get_state(job_id)
+    if state is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Job not found")
+    return success_envelope(
+        _backfill_payload(
+            status=state.status.value,
+            job_id=job_id,
+            summary=state.summary,
+            error=state.error,
+        )
+    )
 
 
 def _summary(related: RelatedExercise) -> dict:

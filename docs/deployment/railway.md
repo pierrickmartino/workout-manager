@@ -429,3 +429,6 @@ prompts on your own infrastructure rather than Langfuse Cloud.
 - **Secrets hygiene:** keep the default compose credentials (`postgres/postgres`)
   out of production — the managed Postgres generates its own. Never deploy the
   bundled `db` / `redis` compose services alongside the managed plugins.
+- **Catalog maintenance:** to lift an existing backlog of name-only **Stub**
+  Exercises up to the shared quality bar, run the Stub-enrichment backfill — see
+  [`enrichment-backfill.md`](./enrichment-backfill.md) (admin endpoint or CLI).
