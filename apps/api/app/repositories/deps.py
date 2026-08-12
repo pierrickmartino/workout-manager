@@ -13,6 +13,7 @@ from sqlmodel import Session
 from app.config import Settings, get_settings
 from app.db.session import get_session
 from app.generation.cache import GenerationCache, RedisCacheStore
+from app.generation.backfill_queue import BackfillQueue, RqBackfillQueue
 from app.generation.enrichment_queue import EnrichmentQueue, RqEnrichmentQueue
 from app.generation.job_queue import JobQueue, RqJobQueue
 from app.generation.llm import build_llm_client
@@ -141,6 +142,16 @@ def get_enrichment_queue(
     # (ADR-0005).
     connection = redis.Redis.from_url(settings.redis_url)
     return RqEnrichmentQueue(Queue(QUEUE_NAME, connection=connection))
+
+
+def get_backfill_queue(
+    settings: Settings = Depends(get_settings),
+) -> BackfillQueue:
+    # The admin-triggered Stub-enrichment backfill (ADR-0046) rides the same one
+    # ``generation`` RQ queue as Protocol generation and on-create enrichment, so the
+    # whole app shares a single Redis (ADR-0005).
+    connection = redis.Redis.from_url(settings.redis_url)
+    return RqBackfillQueue(Queue(QUEUE_NAME, connection=connection))
 
 
 def get_generation_orchestrator(

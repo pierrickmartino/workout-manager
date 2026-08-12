@@ -26,6 +26,7 @@ from app.config import get_settings
 from app.db.session import get_engine
 from app.generation.cache import GenerationCache, RedisCacheStore
 from app.generation.exercise_enrichment import enrich_exercise
+from app.generation.exercise_enrichment_backfill import backfill_stub_exercises
 from app.generation.exercise_enrichment_generator import (
     LlmExerciseEnrichmentGenerator,
 )
@@ -112,9 +113,40 @@ def run_enrichment_job(exercise_id: int) -> None:
         llm.flush()
 
 
+def run_backfill_job() -> dict:
+    """Run one full Stub-enrichment backfill sweep and return its summary counts.
+
+    The admin-triggered counterpart to the CLI ``main`` (ADR-0046): enqueued by the
+    backfill endpoint so the whole-catalog sweep runs off the request path. Like
+    ``run_generation_job`` it is an I/O composition root — it constructs its own DB
+    session and LLM transport and runs the shared ``backfill_stub_exercises`` pass, the
+    same pass the CLI uses (issue #308), so the two triggers never drift. Returns the
+    ``EnrichmentSummary`` as a plain dict, which RQ stores as the job result for the
+    poll endpoint to read back.
+    """
+
+    settings = get_settings()
+    llm = build_llm_client(settings)
+    generator = LlmExerciseEnrichmentGenerator(llm)
+    try:
+        with Session(get_engine()) as session:
+            summary = backfill_stub_exercises(
+                exercises=SqlExerciseRepository(session),
+                generator=generator,
+            )
+            return asdict(summary)
+    finally:
+        # The backfill is the majority of this job's Generation Calls; flush before
+        # returning (success or failure) or the short-lived job process may exit before
+        # the recorder's background batch flushes. Best-effort in the decorator, so it
+        # never fails the job.
+        llm.flush()
+
+
 __all__ = [
     "run_generation_job",
     "run_enrichment_job",
+    "run_backfill_job",
     "request_payload",
     "QUEUE_NAME",
 ]
