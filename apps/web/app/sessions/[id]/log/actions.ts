@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { logSession, type LogSetInput } from "@/lib/logs";
+import type { CompletionOutcome } from "@/lib/logs-types";
 import { repetitionsInput } from "@/lib/quantity";
 
 export interface LogFormState {
@@ -16,8 +17,17 @@ function strings(form: FormData, name: string): string[] {
   return form.getAll(name).map((value) => (typeof value === "string" ? value.trim() : ""));
 }
 
-// Build the per-set payload from the row-aligned form fields, skipping rows the
-// user left without reps (exercises they didn't perform).
+// The client submits only Done (attempted) rows — a skipped set disables its inputs, so they
+// never reach here (Model B, Q10). Read the derived Completion Outcome back off the form,
+// falling back to `completed` for any missing/unknown value so the action never fabricates an
+// outcome the form did not send.
+function completionOutcome(form: FormData): CompletionOutcome {
+  return form.get("completion_outcome") === "incomplete" ? "incomplete" : "completed";
+}
+
+// Build the per-set payload from the row-aligned form fields. Every submitted row is an
+// attempted set, so a blank reps field logs as 0 reps (a set ground out to failure is still
+// attempted, CONTEXT 'Completion Outcome') rather than being dropped.
 function loggedSets(form: FormData): LogSetInput[] {
   const exerciseIds = strings(form, "exercise_id");
   const reps = strings(form, "reps");
@@ -27,9 +37,7 @@ function loggedSets(form: FormData): LogSetInput[] {
 
   const sets: LogSetInput[] = [];
   for (let row = 0; row < exerciseIds.length; row += 1) {
-    if (reps[row] === "") continue;
-
-    const repsValue = Number(reps[row]);
+    const repsValue = reps[row] === "" ? 0 : Number(reps[row]);
     if (!Number.isInteger(repsValue) || repsValue < 0) continue;
 
     const exerciseId = Number(exerciseIds[row]);
@@ -71,15 +79,15 @@ export async function submitLog(
 
   const sets = loggedSets(form);
   if (sets.length === 0) {
-    return { error: "Enter the reps for at least one exercise you performed." };
+    return { error: "Mark at least one set as done to log this session." };
   }
 
-  // The static form logs a performance after the fact, with no live per-set
-  // tracking to derive from, so it declares the Completion Outcome `completed`
-  // (ADR-0013) — the honest default that advances the Protocol.
+  // The Completion Outcome is now derived per-set (Q8, ADR-0045): the form marks each
+  // prescribed set done or skipped, and reports Incomplete when any prescribed set was left
+  // un-attempted — no longer the old always-`completed` declaration.
   const result = await logSession(sessionId, {
     performed_on: performedOn,
-    completion_outcome: "completed",
+    completion_outcome: completionOutcome(form),
     logged_sets: sets,
   });
   if (!result.success || !result.data) {
