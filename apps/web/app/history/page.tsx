@@ -110,13 +110,26 @@ function LoggedSessionCard({
   uncompleteDisabled: boolean;
   uncompleteReason: string | null;
 }) {
+  // Shared pill styling for the Open / Edit link actions, so the whole cluster reads as
+  // one row of tappable pills alongside the outcome toggle and delete controls.
+  const pillClass =
+    "label-mono inline-flex items-center rounded-md border border-border bg-elevated px-3 py-1.5 text-[10px] text-text-primary transition-colors hover:border-cyan hover:text-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan/60 motion-reduce:transition-none";
+
   return (
     <Card className="flex flex-col gap-4 p-5">
-      <div className="flex items-start justify-between gap-3">
-        <h2 className="font-display text-lg font-semibold capitalize text-text-primary">
-          {entry.training_type} session
-        </h2>
-        <div className="flex items-start gap-3">
+      {/* Title and date first, each on its own line (date nowrap so it never breaks in
+          two), then the actions on a dedicated wrapping row of their own — so the two
+          never collide or interleave on a narrow phone. */}
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <h2 className="font-display text-lg font-semibold capitalize text-text-primary">
+            {entry.training_type} session
+          </h2>
+          <span className="label-mono whitespace-nowrap text-[10px] text-text-muted">
+            {entry.performed_on}
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           {/* A Completion Outcome rides only on a plan-backed record (ADR-0031); an
               ad-hoc record gates no Protocol, so it shows no outcome toggle. */}
           {entry.session_id !== null ? (
@@ -127,16 +140,10 @@ function LoggedSessionCard({
               uncompleteReason={uncompleteReason}
             />
           ) : null}
-          <Link
-            href={`/history/${entry.id}`}
-            className="label-mono text-[10px] text-cyan hover:underline"
-          >
+          <Link href={`/history/${entry.id}`} className={pillClass}>
             Open
           </Link>
-          <Link
-            href={`/history/${entry.id}/edit`}
-            className="label-mono text-[10px] text-cyan hover:underline"
-          >
+          <Link href={`/history/${entry.id}/edit`} className={pillClass}>
             Edit
           </Link>
           <DeleteLogControl
@@ -144,9 +151,6 @@ function LoggedSessionCard({
             disabled={deleteDisabled}
             reason={deleteReason}
           />
-          <span className="label-mono text-[10px] text-text-muted">
-            {entry.performed_on}
-          </span>
         </div>
       </div>
 

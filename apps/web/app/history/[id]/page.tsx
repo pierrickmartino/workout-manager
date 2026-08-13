@@ -40,7 +40,7 @@ export default async function LogDetailPage({ params }: LogDetailPageProps) {
         overline="PULSE // STATS"
         title={`${record.training_type} session`}
         action={
-          <span className="label-mono text-[11px] text-text-muted">
+          <span className="label-mono whitespace-nowrap text-[11px] text-text-muted">
             {record.performed_on}
           </span>
         }
