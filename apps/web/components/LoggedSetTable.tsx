@@ -1,95 +1,127 @@
+import { cn } from "@/lib/utils";
 import { formatLoad } from "@/lib/load";
-import { formatPace, formatQuantity } from "@/lib/quantity";
+import { formatPace, formatQuantity, type Quantity } from "@/lib/quantity";
 import type { LoggedSet } from "@/lib/logs-types";
 
 interface LoggedSetTableProps {
   sets: LoggedSet[];
-  // Whether to show the Performed Body Weight column (ADR-0026). The record detail shows it;
+  // Whether to show the Performed Body Weight stat (ADR-0026). The record detail shows it;
   // the compact History card omits it. Off by default.
   showBodyWeight?: boolean;
 }
 
-// The compact table of a Logged Session's performed sets — exercise, amount (with a pace
-// projection for a timed distance set), load, optionally the Performed Body Weight, and RPE.
-// Shared by the History list card and the record detail page so the record renders
-// identically wherever it is shown; the amount and load display go through the typed
-// formatters, never re-derived.
+// The stacked list of a Logged Session's performed sets. Each set is its own card: the
+// exercise name on its own line (full, never truncated) above a flex-wrap row of labelled
+// stats — the amount (with a pace projection for a timed distance set), load, optionally the
+// Performed Body Weight, and RPE. Replaces the old fixed-column table that overflowed and
+// truncated names on narrow phones. Shared by the History list card and the record detail
+// page so the record renders identically wherever it is shown; every amount/load display
+// still goes through the typed formatters, never re-derived.
 export function LoggedSetTable({ sets, showBodyWeight = false }: LoggedSetTableProps) {
-  const gridCols = showBodyWeight
-    ? "grid-cols-[1fr_3rem_4rem_4rem_3rem]"
-    : "grid-cols-[1fr_3rem_4rem_3rem]";
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className={`grid ${gridCols} gap-2 px-1`}>
-        <SetHead>Exercise</SetHead>
-        <SetHead className="text-right">Reps</SetHead>
-        <SetHead className="text-right">Load</SetHead>
-        {showBodyWeight ? <SetHead className="text-right">BW</SetHead> : null}
-        <SetHead className="text-right">RPE</SetHead>
-      </div>
+    <ul className="flex list-none flex-col gap-2.5 p-0">
       {sets.map((loggedSet) => (
         <LoggedSetRow
           key={loggedSet.position}
           loggedSet={loggedSet}
-          gridCols={gridCols}
           showBodyWeight={showBodyWeight}
         />
       ))}
-    </div>
+    </ul>
   );
 }
 
-function SetHead({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <span className={`label-mono text-[9px] text-text-muted ${className ?? ""}`}>
-      {children}
-    </span>
-  );
+// The stat label for a set's amount, keyed off its typed Quantity kind (ADR-0032): a rep
+// count reads "Reps", a run "Distance", a timed hold "Duration". A missing amount falls
+// back to "Reps" (the kind the log form has always sent).
+function quantityLabel(quantity: Quantity | null): string {
+  switch (quantity?.kind) {
+    case "distance":
+      return "Distance";
+    case "duration":
+      return "Duration";
+    default:
+      return "Reps";
+  }
 }
 
 function LoggedSetRow({
   loggedSet,
-  gridCols,
   showBodyWeight,
 }: {
   loggedSet: LoggedSet;
-  gridCols: string;
   showBodyWeight: boolean;
 }) {
   // Pace is a read-time projection (ADR-0032), shown only for a distance set that
   // carries a time — never a stored figure, and absent for a distance-only set.
   const pace = formatPace(loggedSet.quantity);
+  const load = loggedSet.load;
+  // A non-numeric load ("Bodyweight", a qualitative cue) can run long, so it renders in
+  // the softer sub style and is allowed to wrap; an absolute weight stays on one line.
+  const loadIsText =
+    load != null && (load.kind === "bodyweight" || load.kind === "qualitative");
+  const hasRpe = loggedSet.perceived_difficulty != null;
+
   return (
-    <div
-      className={`grid ${gridCols} items-center gap-2 rounded-sm border border-border bg-base/40 px-3 py-2.5`}
-    >
-      <span className="truncate font-sans text-[13px] text-text-primary">
+    <li className="rounded-sm border border-border bg-base/40 px-4 py-3">
+      <p className="mb-3 break-words font-display text-sm font-semibold leading-snug text-text-primary">
         {loggedSet.exercise_name}
-      </span>
-      <span className="flex flex-col items-end">
-        <span className="font-display text-sm font-semibold text-text-primary">
-          {formatQuantity(loggedSet.quantity)}
-        </span>
+      </p>
+      <div className="flex flex-wrap gap-x-5 gap-y-2.5">
+        <Stat
+          label={quantityLabel(loggedSet.quantity)}
+          value={formatQuantity(loggedSet.quantity)}
+        />
         {pace ? (
-          <span className="font-mono text-[10px] text-text-muted">{pace}</span>
+          <Stat label="Pace" value={pace} valueClassName="font-normal text-text-muted" />
         ) : null}
-      </span>
-      <span className="text-right font-mono text-[13px] text-text-secondary">
-        {formatLoad(loggedSet.load)}
-      </span>
-      {showBodyWeight ? (
-        <span className="text-right font-mono text-[13px] text-text-secondary">
-          {loggedSet.body_weight_kg != null ? `${loggedSet.body_weight_kg} kg` : "—"}
-        </span>
-      ) : null}
-      <span className="text-right font-mono text-[13px] text-cyan">
-        {loggedSet.perceived_difficulty ?? "—"}
+        <Stat
+          label="Load"
+          value={formatLoad(load)}
+          valueClassName={
+            loadIsText ? "whitespace-normal break-words font-normal text-text-muted" : undefined
+          }
+        />
+        {showBodyWeight ? (
+          <Stat
+            label="BW"
+            value={
+              loggedSet.body_weight_kg != null ? `${loggedSet.body_weight_kg} kg` : "—"
+            }
+          />
+        ) : null}
+        <Stat
+          label="RPE"
+          value={hasRpe ? String(loggedSet.perceived_difficulty) : "—"}
+          valueClassName={hasRpe ? "text-cyan" : "font-normal text-text-muted"}
+        />
+      </div>
+    </li>
+  );
+}
+
+// One labelled stat: a tiny uppercase mono label stacked over its value. The value is mono
+// and nowrap by default (short numbers stay intact); callers override for wrapping text
+// (a long qualitative load) or the cyan RPE accent.
+function Stat({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <span className="label-mono text-[9px] text-text-muted">{label}</span>
+      <span
+        className={cn(
+          "whitespace-nowrap font-mono text-[13px] font-semibold text-text-primary",
+          valueClassName,
+        )}
+      >
+        {value}
       </span>
     </div>
   );
