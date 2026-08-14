@@ -47,7 +47,6 @@ export default async function ExercisesPage({
 
   return (
     <section className="flex flex-col gap-6">
-      <BackLink href="/train">Back to train</BackLink>
       <PageHeader overline="PULSE // CATALOG" title="Browse exercises" />
       <p className="font-mono text-[13px] leading-relaxed text-text-muted">
         Explore the whole exercise catalog. Filter by muscle group, equipment, or
@@ -69,6 +68,8 @@ export default async function ExercisesPage({
           Could not load the catalog: {pageEnvelope.error ?? "unknown error"}
         </Alert>
       )}
+
+      <BackLink href="/train">Back to train</BackLink>
     </section>
   );
 }

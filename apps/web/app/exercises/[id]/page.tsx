@@ -71,8 +71,6 @@ export default async function ExercisePage({
 
   return (
     <section className="flex flex-col gap-7">
-      <BackLink href={back.href}>{back.label}</BackLink>
-
       <PageHeader
         overline="PULSE // EXERCISE"
         title={exercise.name}
@@ -114,6 +112,8 @@ export default async function ExercisePage({
         exerciseName={exercise.name}
         currentProtocol={currentProtocol}
       />
+
+      <BackLink href={back.href}>{back.label}</BackLink>
     </section>
   );
 }
