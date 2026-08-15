@@ -22,6 +22,8 @@ from sqlalchemy import Column
 from sqlalchemy.types import JSON
 from sqlmodel import Field, SQLModel
 
+from app.domain.appearance import DEFAULT_MODE
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -61,6 +63,23 @@ class Profile(SQLModel, table=True):
     sensitive_constraints: list[str] = Field(
         default_factory=list, sa_column=Column(JSON, nullable=False)
     )
+
+
+class AppearancePreference(SQLModel, table=True):
+    """One user's Appearance Preference: their chosen Mode, keyed by Clerk user id.
+
+    A deliberately *separate* store from ``Profile`` (ADR-0047) so appearance
+    never enters generation or the cache key — one row per user, holding only the
+    Mode. ``mode`` is the raw value of ``app.domain.appearance.Mode``
+    (``light`` | ``dark`` | ``system``); absence of a row means the default Dark,
+    so this table only ever holds a *deliberate* choice and existing users are
+    never silently light-flipped on deploy."""
+
+    __tablename__ = "appearance_preference"
+
+    id: int | None = Field(default=None, primary_key=True)
+    clerk_user_id: str = Field(index=True, unique=True)
+    mode: str = Field(default=DEFAULT_MODE.value)
 
 
 class Exercise(SQLModel, table=True):
