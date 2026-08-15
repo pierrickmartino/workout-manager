@@ -1,10 +1,26 @@
 @import "tailwindcss";
 
 /*
-  PULSE design system — dark "tactical command-center" fitness theme.
-  Tokens transcribed from docs/design/pulse.pen. Declaring them inside @theme
-  makes Tailwind emit matching utilities (bg-surface, text-muted, font-mono,
-  rounded-md, …) and exposes them as CSS variables for hand-authored styles.
+  PULSE design system — a "tactical command-center" fitness theme.
+
+  A rendered Theme is always Active Skin × Mode (CONTEXT "Theme"), so colour
+  tokens resolve from a `[data-skin][data-mode]` selector layer rather than a
+  single hardcoded block (ADR-0047/0048). The root layout stamps those two
+  attributes on <html> via `resolveTheme` (lib/theme.ts); components keep
+  consuming the *semantic* utilities (bg-surface, text-cyan…), so re-theming is
+  swapping token values under a selector, never editing components.
+
+  Structure:
+    - @theme declares every token so Tailwind emits the matching utilities and
+      seeds :root. Its colours are the PULSE **dark** values, so an element with
+      no attributes still renders today's look byte-for-byte.
+    - [data-skin="pulse"][data-mode="light"] re-declares the colour tokens for
+      the PULSE **light** variant; utilities read the variables, so they inherit
+      whichever value wins the cascade.
+    - System Mode stamps no `data-mode`; a prefers-color-scheme fallback then
+      applies the light variant on a light device (dark stays the :root default).
+  Non-colour tokens (fonts, radii, spacing) are Mode-invariant and live only in
+  @theme. Colours transcribed from docs/design/pulse.pen.
 */
 @theme {
   /* Surfaces */
@@ -46,13 +62,88 @@
   --spacing-shell: 26rem;
 }
 
+/*
+  PULSE — light variant.
+
+  The polarity flip of the dark palette: surfaces climb from a near-white page
+  up through white cards, text darkens onto near-black, and the bright dark-mode
+  accents are re-saturated so they carry enough contrast on light surfaces (with
+  `on-accent` flipping to white for text laid over an accent fill). The token
+  *names* are unchanged, so every component re-themes for free.
+*/
+@layer theme {
+  [data-skin="pulse"][data-mode="light"] {
+    /* Surfaces — near-white page, white cards, subtle grey elevation */
+    --color-base: #ffffff;
+    --color-surface: #fafafa;
+    --color-elevated: #f4f4f5;
+
+    /* Borders */
+    --color-border: #e4e4e7;
+    --color-border-lite: #d4d4d8;
+
+    /* Text — near-black primary down to a mid-grey muted */
+    --color-text-primary: #18181b;
+    --color-text-secondary: #52525b;
+    --color-text-muted: #71717a;
+
+    /* Accents — darker/richer so they read on light surfaces */
+    --color-cyan: #0891a5;
+    --color-cyan-dim: #0891a51f;
+    --color-blue: #2563eb;
+    --color-violet: #7c3aed;
+    --color-violet-dim: #7c3aed1f;
+    --color-magenta: #db2777;
+    --color-magenta-dim: #db27771f;
+    --color-on-accent: #ffffff;
+  }
+
+  /* System Mode: no `data-mode` is stamped, so follow the device. Dark is the
+     :root default; only the light branch needs stating. Values mirror the light
+     variant above (kept explicit — CSS can't share a block across @media). */
+  @media (prefers-color-scheme: light) {
+    [data-skin="pulse"]:not([data-mode]) {
+      --color-base: #ffffff;
+      --color-surface: #fafafa;
+      --color-elevated: #f4f4f5;
+
+      --color-border: #e4e4e7;
+      --color-border-lite: #d4d4d8;
+
+      --color-text-primary: #18181b;
+      --color-text-secondary: #52525b;
+      --color-text-muted: #71717a;
+
+      --color-cyan: #0891a5;
+      --color-cyan-dim: #0891a51f;
+      --color-blue: #2563eb;
+      --color-violet: #7c3aed;
+      --color-violet-dim: #7c3aed1f;
+      --color-magenta: #db2777;
+      --color-magenta-dim: #db27771f;
+      --color-on-accent: #ffffff;
+    }
+  }
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
   }
 
-  html {
+  /* Ambient color-scheme follows the resolved Mode so native controls (form
+     fields, scrollbars) match. System Mode stamps no data-mode and widens to
+     `light dark` so the device decides, in step with the token fallback above. */
+  [data-skin="pulse"][data-mode="dark"] {
     color-scheme: dark;
+  }
+
+  [data-skin="pulse"][data-mode="light"] {
+    color-scheme: light;
+  }
+
+  [data-skin="pulse"]:not([data-mode]) {
+    color-scheme: light dark;
   }
 
   body {
@@ -62,11 +153,11 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  /* Native controls inherit the dark theme instead of the OS light default. */
+  /* Native controls inherit the app polarity via the ambient color-scheme. */
   input,
   select,
   textarea {
-    color-scheme: dark;
+    color-scheme: inherit;
   }
 
   /* Themed selection + focus ring baseline. */
