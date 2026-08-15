@@ -11,6 +11,7 @@ import {
 import { TabBar } from "@/components/pulse/tab-bar";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import { buttonVariants } from "@/components/ui/button";
+import { DEFAULT_MODE, DEFAULT_SKIN, resolveTheme } from "@/lib/theme";
 
 import "./globals.css";
 
@@ -59,6 +60,12 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // The rendered Theme is Active Skin × Mode (ADR-0047/0048). Both default here
+  // to preserve today's all-dark PULSE look; the Mode slice (#330) and Active
+  // Skin slice (#331) will feed real values through this same seam. globals.css
+  // keys its token variants off exactly these attributes.
+  const themeAttributes = resolveTheme(DEFAULT_SKIN, DEFAULT_MODE);
+
   return (
     // `dynamic` is required by the strict-dynamic CSP: it lets Clerk read the
     // per-request nonce (emitted by `contentSecurityPolicy` in proxy.ts) at
@@ -67,6 +74,7 @@ export default function RootLayout({
       <html
         lang="en"
         className={`${spaceGrotesk.variable} ${jetbrainsMono.variable}`}
+        {...themeAttributes}
       >
         <body className="min-h-screen bg-base text-text-primary antialiased">
           {/* Slim branded top bar — the web analogue of the app status bar. */}
