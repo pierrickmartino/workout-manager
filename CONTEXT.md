@@ -235,3 +235,25 @@ _Avoid_: Feedback (bare), RPE (loosely)
 **Regeneration**:
 Replacing the non-kept Exercise Prescriptions of a single Session with fresh AI output, conditioned on the kept Prescriptions and the negative Generation Feedback reason. Operates only on a Session (never a whole Protocol), on the user's own copy, and is limited to once per Session in v1. Produces **flat** replacement Prescriptions — Regeneration is **not Superset-aware** in v1: the prompt never asks for grouping, the path does not validate it, and the regenerate splice appends replacements without re-namespacing group tags, so any Superset the model volunteers is stripped rather than persisted invalid or colliding with a kept group (ADR-0023).
 _Avoid_: Regenerate protocol, retry, redo
+
+## Appearance & Theming
+
+**Theme**:
+The rendered appearance of the app for one user at one moment — always the *composition* of the app-wide **Skin** and that user's own **Mode**, never a single stored choice. There is no "the theme": what a user sees is a global palette (the Active Skin) expressed at their chosen surface polarity (their Mode).
+_Avoid_: Style, look, colour scheme (as the concept name)
+
+**Skin**:
+A named palette family — the coordinated set of colours the whole app draws with. Skins come from a **fixed, curated catalog** (never user- or AI-authored) and each one defines **both a light and a dark variant**, so a Skin composes with any Mode. Exactly one Skin is live app-wide at a time (the Active Skin); an ordinary user never chooses a Skin. Distinct from Mode, which is the light/dark polarity chosen *within* a Skin.
+_Avoid_: Theme (bare), palette (loosely), colour scheme
+
+**Mode**:
+A user's chosen surface polarity — **Light**, **Dark**, or **System** — applied on top of whichever Skin is active. Held per user and the **only** appearance choice an ordinary user makes; System defers to the device's own light/dark preference rather than a fixed polarity. Distinct from Skin, the palette family a Mode is expressed within.
+_Avoid_: Theme, dark mode (as the concept name), colour scheme
+
+**Active Skin**:
+The single Skin currently published for the whole app — what every user's Mode renders within until it changes. Exactly one exists at any moment, defaulting to the original **PULSE** Skin. Only an **admin** changes it, and only by **publishing**: a Skin is previewed privately first, then deliberately made the Active Skin for everyone, restyling the app on each user's *next visit* rather than mid-action. The admin who publishes is the **admin** — never the "Operator", which would collide with Operator Level.
+_Avoid_: Current theme, global theme, default skin (that is only the Active Skin's starting value)
+
+**Appearance Preference**:
+A user's own appearance choice — their **Mode** — kept deliberately **separate from the Fitness Profile**. The Fitness Profile is what the AI conditions a generation on; an Appearance Preference steers nothing about the plan and must never leak into generation or its cache key. The one place a user's Mode lives.
+_Avoid_: Settings, profile (that is the generation-input Fitness Profile), theme
