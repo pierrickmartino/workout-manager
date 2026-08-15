@@ -2,7 +2,9 @@ import Link from "next/link";
 import { User } from "lucide-react";
 
 import { fetchProfileProgress } from "@/lib/profile-progress";
+import { resolveUserMode } from "@/lib/appearance";
 import { toAchievementCards } from "@/lib/achievements-view";
+import { AppearanceModePicker } from "@/components/AppearanceModePicker";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { NavRow } from "@/components/pulse/nav-row";
@@ -27,7 +29,10 @@ const SUMMARY_COUNT = 4;
 // Achievements onto this same spine — a compact wall with a "see all" affordance to the
 // full catalog.
 export default async function ProfilePage() {
-  const envelope = await fetchProfileProgress();
+  const [envelope, mode] = await Promise.all([
+    fetchProfileProgress(),
+    resolveUserMode(),
+  ]);
 
   if (!envelope.success || !envelope.data) {
     return (
@@ -80,6 +85,13 @@ export default async function ProfilePage() {
           ACHIEVEMENTS · {unlockedCount}/{cards.length}
         </SectionHeader>
         <AchievementWall cards={cards.slice(0, SUMMARY_COUNT)} />
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <SectionHeader>APPEARANCE</SectionHeader>
+        <Card className="p-4">
+          <AppearanceModePicker currentMode={mode} />
+        </Card>
       </div>
 
       <div className="flex flex-col gap-4">

@@ -56,6 +56,10 @@ from app.repositories.metric_entry_repository import (
     MetricEntryRepository,
     SqlMetricEntryRepository,
 )
+from app.repositories.appearance_preference_repository import (
+    AppearancePreferenceRepository,
+    SqlAppearancePreferenceRepository,
+)
 from app.repositories.profile_repository import (
     ProfileRepository,
     SqlProfileRepository,
@@ -70,6 +74,12 @@ def get_profile_repository(
     session: Session = Depends(get_session),
 ) -> ProfileRepository:
     return SqlProfileRepository(session)
+
+
+def get_appearance_preference_repository(
+    session: Session = Depends(get_session),
+) -> AppearancePreferenceRepository:
+    return SqlAppearancePreferenceRepository(session)
 
 
 def get_exercise_repository(
