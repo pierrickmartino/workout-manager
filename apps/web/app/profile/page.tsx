@@ -3,8 +3,12 @@ import { User } from "lucide-react";
 
 import { fetchProfileProgress } from "@/lib/profile-progress";
 import { resolveUserMode } from "@/lib/appearance";
+import { resolveActiveSkin } from "@/lib/active-skin";
+import { resolveIsAdmin } from "@/lib/admin";
 import { toAchievementCards } from "@/lib/achievements-view";
+import { buildAppearanceView } from "@/lib/appearance-view";
 import { AppearanceModePicker } from "@/components/AppearanceModePicker";
+import { AppearanceSkinPublisher } from "@/components/AppearanceSkinPublisher";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { NavRow } from "@/components/pulse/nav-row";
@@ -29,9 +33,14 @@ const SUMMARY_COUNT = 4;
 // Achievements onto this same spine — a compact wall with a "see all" affordance to the
 // full catalog.
 export default async function ProfilePage() {
-  const [envelope, mode] = await Promise.all([
+  // Resolve everything the page needs in parallel. `resolveActiveSkin` /
+  // `resolveIsAdmin` share this request's cache with the root layout, so the extra
+  // reads are effectively free; the Skin controls are rendered only for an admin.
+  const [envelope, mode, activeSkin, isAdmin] = await Promise.all([
     fetchProfileProgress(),
     resolveUserMode(),
+    resolveActiveSkin(),
+    resolveIsAdmin(),
   ]);
 
   if (!envelope.success || !envelope.data) {
@@ -49,6 +58,12 @@ export default async function ProfilePage() {
     envelope.data;
   const cards = toAchievementCards(achievements);
   const unlockedCount = cards.filter((card) => card.unlocked).length;
+
+  // The per-role Appearance decision runs through the one tested view-model: an
+  // admin gets a `skinControl` (so the Skin catalog is rendered), a non-admin does
+  // not. The interactive Mode/Skin slices are rebuilt client-side by the pickers as
+  // their local selection changes; this call is the role gate.
+  const appearance = buildAppearanceView({ mode, isAdmin, activeSkin });
 
   return (
     <section className="flex flex-col gap-6">
@@ -92,6 +107,17 @@ export default async function ProfilePage() {
         <Card className="p-4">
           <AppearanceModePicker currentMode={mode} />
         </Card>
+        {/* The Skin catalog is an admin-only control (ADR-0048): an ordinary user
+            picks their Mode and nothing more. `skinControl` is present only for an
+            admin (decided server-side from the Clerk role claim); the backend
+            independently gates the publish regardless of what is rendered here. */}
+        {appearance.skinControl ? (
+          <Card className="p-4">
+            <AppearanceSkinPublisher
+              activeSkin={appearance.skinControl.activeSkin}
+            />
+          </Card>
+        ) : null}
       </div>
 
       <div className="flex flex-col gap-4">

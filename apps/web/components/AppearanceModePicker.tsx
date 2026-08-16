@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 
 import { updateAppearanceMode } from "@/app/profile/appearance-actions";
-import { buildAppearanceView } from "@/lib/appearance-view";
+import { buildModeOptions } from "@/lib/appearance-view";
 import type { Mode } from "@/lib/theme";
 import { Alert } from "@/components/pulse/alert";
 import { cn } from "@/lib/utils";
@@ -15,7 +15,7 @@ interface AppearanceModePickerProps {
 
 // The Profile Appearance control: a segmented Light / Dark / System picker backed
 // by a thin server action (updateAppearanceMode → PUT /api/appearance). The
-// options and which one is active come from the pure `buildAppearanceView` mapper,
+// options and which one is active come from the pure `buildModeOptions` mapper,
 // so this component stays thin. Selection is optimistic — it moves the instant you
 // tap so the choice feels immediate — while the action persists and revalidates
 // the root layout to re-stamp the app's Mode; a failed save reverts the selection
@@ -27,7 +27,7 @@ export function AppearanceModePicker({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const { modeOptions } = buildAppearanceView(selected);
+  const modeOptions = buildModeOptions(selected);
 
   function choose(mode: Mode): void {
     if (mode === selected) return;
