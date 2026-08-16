@@ -10,6 +10,7 @@ from fastapi import Depends
 from rq import Queue
 from sqlmodel import Session
 
+from app.active_skin.cache import ActiveSkinCache
 from app.config import Settings, get_settings
 from app.db.session import get_session
 from app.generation.cache import GenerationCache, RedisCacheStore
@@ -56,6 +57,10 @@ from app.repositories.metric_entry_repository import (
     MetricEntryRepository,
     SqlMetricEntryRepository,
 )
+from app.repositories.active_skin_repository import (
+    ActiveSkinRepository,
+    SqlActiveSkinRepository,
+)
 from app.repositories.appearance_preference_repository import (
     AppearancePreferenceRepository,
     SqlAppearancePreferenceRepository,
@@ -80,6 +85,24 @@ def get_appearance_preference_repository(
     session: Session = Depends(get_session),
 ) -> AppearancePreferenceRepository:
     return SqlAppearancePreferenceRepository(session)
+
+
+def get_active_skin_repository(
+    session: Session = Depends(get_session),
+) -> ActiveSkinRepository:
+    return SqlActiveSkinRepository(session)
+
+
+# The Active Skin read-through cache is a *process-wide singleton* (ADR-0048): the
+# whole app shares one Active Skin, so the GET path and the PUT path must share one
+# cache instance for a publish's invalidate to be seen by subsequent reads in this
+# worker. Constructed once at import, not per request. Tests override this provider
+# with a fresh cache for isolation, mirroring how they override the repositories.
+_active_skin_cache = ActiveSkinCache()
+
+
+def get_active_skin_cache() -> ActiveSkinCache:
+    return _active_skin_cache
 
 
 def get_exercise_repository(

@@ -11,8 +11,9 @@ import {
 import { TabBar } from "@/components/pulse/tab-bar";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import { buttonVariants } from "@/components/ui/button";
+import { resolveActiveSkin } from "@/lib/active-skin";
 import { resolveUserMode } from "@/lib/appearance";
-import { DEFAULT_SKIN, resolveTheme } from "@/lib/theme";
+import { resolveTheme } from "@/lib/theme";
 
 import "./globals.css";
 
@@ -61,14 +62,17 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // The rendered Theme is Active Skin × Mode (ADR-0047/0048). The user's Mode is
-  // read server-side here so first paint is already correct — no flash of the
-  // wrong appearance — and `System` is stamped as no `data-mode` so the
-  // prefers-color-scheme fallback follows the device. The Skin still defaults
-  // (the Active Skin slice #331 feeds real values through this same seam).
-  // globals.css keys its token variants off exactly these attributes.
-  const mode = await resolveUserMode();
-  const themeAttributes = resolveTheme(DEFAULT_SKIN, mode);
+  // The rendered Theme is Active Skin × Mode (ADR-0047/0048), both resolved
+  // server-side here so first paint is already correct — no flash of the wrong
+  // appearance. The app-wide Active Skin and the user's own Mode are read in
+  // parallel; `System` Mode is stamped as no `data-mode` so the
+  // prefers-color-scheme fallback follows the device. globals.css keys its token
+  // variants off exactly these `data-skin` / `data-mode` attributes.
+  const [activeSkin, mode] = await Promise.all([
+    resolveActiveSkin(),
+    resolveUserMode(),
+  ]);
+  const themeAttributes = resolveTheme(activeSkin, mode);
 
   return (
     // `dynamic` is required by the strict-dynamic CSP: it lets Clerk read the

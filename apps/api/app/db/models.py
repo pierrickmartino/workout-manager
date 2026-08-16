@@ -82,6 +82,24 @@ class AppearancePreference(SQLModel, table=True):
     mode: str = Field(default=DEFAULT_MODE.value)
 
 
+class AppSetting(SQLModel, table=True):
+    """A single global app-setting: one ``key`` → ``value`` row for the whole app.
+
+    The store behind the **Active Skin** (ADR-0048) — the codebase's first global,
+    mutable app-state singleton. Unlike every other table this is *not* keyed by
+    ``clerk_user_id``: a setting like the Active Skin is app-wide, one logical row
+    per key (``active_skin``), changed only by an admin publishing. Kept a generic
+    key/value shape so a future global setting reuses the same store rather than
+    growing another one-row table. The 0026 migration seeds ``active_skin=pulse``
+    (ADR-0048); absence of the row still defaults to PULSE in the repository."""
+
+    __tablename__ = "app_setting"
+
+    id: int | None = Field(default=None, primary_key=True)
+    key: str = Field(index=True, unique=True)
+    value: str
+
+
 class Exercise(SQLModel, table=True):
     """A movement definition in the shared, global catalog.
 
@@ -254,7 +272,9 @@ class ExercisePrescription(SQLModel, table=True):
     # Typed Load (ADR-0010): a ``{kind, text, ...payload}`` value object, never a
     # bare string — so downstream analytics read the meaning instead of re-guessing
     # the free-text. See ``app.domain.load.ParsedLoad``.
-    recommended_load: dict | None = Field(default=None, sa_column=Column(JSON, nullable=True))
+    recommended_load: dict | None = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
     # Superset grouping (ADR-0023) — both NULL for a flat, solo Prescription. Members
     # of one Superset share ``superset_group`` (an ordered, contiguous run) and carry
     # the group-owned ``round_rest_seconds`` (denormalized onto each member so it is

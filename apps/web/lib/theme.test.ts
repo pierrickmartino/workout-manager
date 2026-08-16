@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import {
   DEFAULT_MODE,
   DEFAULT_SKIN,
+  KNOWN_SKINS,
+  isSkin,
   resolveTheme,
   type ThemeAttributes,
 } from "./theme.ts";
@@ -46,6 +48,22 @@ test("carries the Active Skin through unchanged", () => {
   assert.equal(attrs["data-skin"], "pulse");
 });
 
+test("composes a non-PULSE Active Skin with a Mode", () => {
+  // Arrange / Act — the Aurora seed Skin at Light Mode (Active Skin × Mode)
+  const attrs = resolveTheme("aurora", "light");
+
+  // Assert — the published Skin is stamped alongside the user's Mode
+  assert.deepEqual(attrs, { "data-skin": "aurora", "data-mode": "light" });
+});
+
+test("System Mode under a non-PULSE Skin still omits data-mode", () => {
+  // Arrange / Act
+  const attrs = resolveTheme("aurora", "system");
+
+  // Assert — only the Skin is stamped; the device resolves the polarity
+  assert.deepEqual(attrs, { "data-skin": "aurora" });
+});
+
 test("defaults preserve today's all-dark PULSE experience", () => {
   // Assert — the shipped defaults are the PULSE Skin at Dark Mode
   assert.equal(DEFAULT_SKIN, "pulse");
@@ -53,4 +71,26 @@ test("defaults preserve today's all-dark PULSE experience", () => {
 
   const attrs: ThemeAttributes = resolveTheme(DEFAULT_SKIN, DEFAULT_MODE);
   assert.deepEqual(attrs, { "data-skin": "pulse", "data-mode": "dark" });
+});
+
+// `isSkin` / `KNOWN_SKINS` are the frontend half of the canonical Skin id list
+// (the backend catalog in app/domain/skin.py is the other). They narrow the bare
+// `string` an Active Skin arrives as on the wire before it is stamped.
+
+test("KNOWN_SKINS carries the whole catalog including the default", () => {
+  // Assert — the default Skin is a member, and the second seed Skin ships too
+  assert.ok(KNOWN_SKINS.includes(DEFAULT_SKIN));
+  assert.ok(KNOWN_SKINS.includes("aurora"));
+  assert.ok(KNOWN_SKINS.length >= 2);
+});
+
+test("isSkin accepts a catalog id", () => {
+  assert.equal(isSkin("pulse"), true);
+  assert.equal(isSkin("aurora"), true);
+});
+
+test("isSkin rejects an unknown id so it can fall back to the default", () => {
+  // A fabricated or typo'd id (or empty string) must not be stamped as data-skin
+  assert.equal(isSkin("neon-disco"), false);
+  assert.equal(isSkin(""), false);
 });
