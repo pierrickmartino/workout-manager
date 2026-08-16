@@ -140,6 +140,22 @@ def repetitions_of(stored: dict | None) -> int | None:
     return Quantity.from_dict(stored).repetitions
 
 
+def metres_of(stored: dict | None) -> float | None:
+    """The distance in metres carried by a *stored* Quantity dict, or ``None``.
+
+    The endurance sibling of :func:`repetitions_of` (ADR-0032/0049): the one accessor
+    the Weekly Distance read path reaches a logged set's distance through. It rebuilds
+    the Quantity from its JSON-column form and returns the canonical ``metres`` for a
+    ``distance`` amount; a rep count, a timeless duration, or a load-less ``None`` column
+    degrades to ``None`` at this single call site instead of each caller re-deciding.
+    """
+
+    if stored is None:
+        return None
+    quantity = Quantity.from_dict(stored)
+    return quantity.metres if quantity.kind is QuantityKind.DISTANCE else None
+
+
 def quantity_from_input(
     kind: str,
     value: str | None,
@@ -204,4 +220,5 @@ __all__ = [
     "Quantity",
     "quantity_from_input",
     "repetitions_of",
+    "metres_of",
 ]

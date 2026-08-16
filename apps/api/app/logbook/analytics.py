@@ -40,6 +40,12 @@ from app.domain.personal_records import (
     detect_personal_records,
     logged_set_records,
 )
+from app.domain.distance import (
+    DistanceSet,
+    DistanceWeek,
+    distance_series,
+    has_distance,
+)
 from app.domain.volume import VolumePoint, VolumeSet, volume_series
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
@@ -53,15 +59,20 @@ RECENT_RECORDS_LIMIT = 8
 
 
 class AnalyticsRange(Enum):
-    """The window the Analytics screen is scoped to: a rolling span of days."""
+    """The window the Analytics screen is scoped to: a rolling span of days.
 
-    SEVEN_DAY = "7d"
+    The floor is 30 days: the Weekly Distance chart (ADR-0049) draws one bar per week,
+    so a 7-day window would be a single bar — useless — and the whole screen realigned
+    to ``30/90/150`` rather than carry a second selector just for that chart.
+    """
+
     THIRTY_DAY = "30d"
     NINETY_DAY = "90d"
+    ONE_FIFTY_DAY = "150d"
 
     @property
     def days(self) -> int:
-        return {"7d": 7, "30d": 30, "90d": 90}[self.value]
+        return {"30d": 30, "90d": 90, "150d": 150}[self.value]
 
 
 @dataclass(frozen=True)
@@ -86,10 +97,19 @@ class AnalyticsOverview:
     total volume against the immediately preceding equal-length window, or ``None`` when
     there is no prior volume to compare against.
 
+    ``distance_weeks`` is the Weekly Distance line for the window (ADR-0049): one bar per
+    Monday-anchored week, in kilometres, summed from ``distance``-kind Quantities and
+    empty when no distance was logged in-window. ``distance_delta`` is the window's total
+    distance against the immediately preceding equal-length window, or ``None`` when there
+    is no prior distance. ``has_distance`` is the **all-time** gate the screen reads to
+    decide whether to render the chart at all — true when the user has *ever* logged
+    distance work, independent of the window. There is deliberately no distance coverage
+    figure: a ``distance`` Quantity carries exact metres, so nothing sits uncovered.
+
     ``coverage`` is the neutral Muscle Group Coverage signal (ADR-0025): each of the six
     real Muscle Groups read trained / not-trained over a **fixed 8-week window that does
     not follow ``range``** — coverage reads its own recent slice so a well-rotated user is
-    never rebuked at the 7-day scale. Always all six groups in canonical order, ungated.
+    never rebuked at the shortest scale. Always all six groups in canonical order, ungated.
     Its ``unclassified_present`` flag discloses any in-window work that rolls up outside the
     six real groups, so the "of 6" figure stays honest (issue #189).
     """
@@ -104,6 +124,9 @@ class AnalyticsOverview:
     volume_points: tuple[VolumePoint, ...]
     volume_coverage: float
     volume_delta: float | None
+    distance_weeks: tuple[DistanceWeek, ...]
+    distance_delta: float | None
+    has_distance: bool
     coverage: RecentCoverage
 
 
@@ -159,6 +182,11 @@ def analytics_overview(
         estimated_1rm_by_exercise=best_1rm_by_exercise,
     )
 
+    # Weekly Distance (ADR-0049): the endurance twin of volume, over the same history.
+    # The engine slices its own window and preceding one; the gate reads all-time.
+    distance_sets = _distance_sets(history)
+    distance = distance_series(distance_sets, days=window.days, today=today)
+
     return AnalyticsOverview(
         range=window.value,
         sessions=len(in_window),
@@ -172,6 +200,9 @@ def analytics_overview(
         volume_points=series.points,
         volume_coverage=series.coverage_pct,
         volume_delta=series.delta_pct,
+        distance_weeks=distance.weeks,
+        distance_delta=distance.delta_pct,
+        has_distance=has_distance(distance_sets),
         # Coverage reads its own fixed 8-week slice of the full history — deliberately the
         # range-independent window (ADR-0025), not the range-scoped ``in_window`` set.
         coverage=recent_coverage(
@@ -195,6 +226,24 @@ def _volume_sets(history: list[LoggedSessionView]) -> list[VolumeSet]:
             load=logged_set.load,
             performed_on=session.performed_on,
             exercise_id=logged_set.exercise_id,
+        )
+        for session in history
+        for logged_set in session.logged_sets
+    ]
+
+
+def _distance_sets(history: list[LoggedSessionView]) -> list[DistanceSet]:
+    """Flatten Logged Sessions into dated Logged Sets for the distance engine.
+
+    The engine needs only each set's typed Quantity (its distance metres) and the date
+    it was performed on — the session's ``performed_on``. A non-``distance`` amount
+    yields ``None`` metres and falls out, so no filtering is needed here.
+    """
+
+    return [
+        DistanceSet(
+            quantity=logged_set.quantity,
+            performed_on=session.performed_on,
         )
         for session in history
         for logged_set in session.logged_sets

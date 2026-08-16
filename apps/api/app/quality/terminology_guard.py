@@ -132,6 +132,24 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
         ),
     ),
     BannedTerm(
+        name="mileage",
+        pattern=re.compile(r"mileage|Mileage"),
+        guidance=(
+            "The weekly-distance projection is 'Distance', reported in kilometres "
+            "(CONTEXT 'Distance', ADR-0049). The app is metric-canonical; 'mileage' "
+            "smuggles in an imperial unit. Use Distance / kilometres."
+        ),
+    ),
+    BannedTerm(
+        name="stored pace",
+        pattern=re.compile(r"stored_pace|storedPace|pace_column"),
+        guidance=(
+            "Pace is a read-time projection over a distance Quantity's metres and "
+            "companion duration, never stored (ADR-0032, CONTEXT 'Quantity'). A "
+            "stored-pace field reinvents the derived value that ADR eliminated."
+        ),
+    ),
+    BannedTerm(
         name="hand-rolled LoggedSetRecord",
         # Only the *construction* form — ``LoggedSetRecord(`` — is banned. Type
         # annotations (``list[LoggedSetRecord]``) and imports carry no paren and stay

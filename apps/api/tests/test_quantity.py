@@ -14,6 +14,7 @@ import pytest
 from app.domain.quantity import (
     Quantity,
     QuantityKind,
+    metres_of,
     quantity_from_input,
 )
 
@@ -91,6 +92,26 @@ def test_repetitions_accessor_is_none_for_non_repetition_kinds():
     # Assert — the strength read paths degrade to None, no "is this a run?" branch
     assert distance.repetitions is None
     assert duration.repetitions is None
+
+
+def test_metres_of_reads_the_distance_of_a_stored_distance_quantity():
+    # Arrange — a 5 km run stored in its JSON-column form
+    stored = quantity_from_input("distance", "5", unit="km").to_dict()
+
+    # Act / Assert — the weekly-distance read path reads canonical metres back out
+    assert metres_of(stored) == 5000.0
+
+
+def test_metres_of_is_none_for_a_non_distance_or_absent_quantity():
+    # Arrange — a rep count, a timed hold, and a load-less (None) amount
+    reps = quantity_from_input("repetitions", "8").to_dict()
+    duration = quantity_from_input("duration", "5:00").to_dict()
+
+    # Assert — only a distance amount carries metres; everything else degrades to
+    # None at this single call site, mirroring ``repetitions_of``
+    assert metres_of(reps) is None
+    assert metres_of(duration) is None
+    assert metres_of(None) is None
 
 
 def test_a_timed_distance_reports_pace_as_derivable():

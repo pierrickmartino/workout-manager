@@ -1,13 +1,15 @@
 """Analytics route: the honest count read model the Analytics screen renders from.
 
-``GET /api/analytics?range=7d|30d|90d`` returns the standard envelope with the
+``GET /api/analytics?range=30d|90d|150d`` returns the standard envelope with the
 range-scoped counts — sessions, active days, total sets — the set-count muscle
 distribution, the last 8 Personal Records all-time (``recent_records``), the
-range-scoped ``new_prs`` count, and the daily total-**volume** series with its
-coverage percentage and equal-window delta, all computed by ``logbook/analytics.py``
-over the user's Logged Sessions. The counts come straight from the *record* side with
-no conversion; the records are Estimated-1RM PRs derived read-time from Logged Sets,
-and volume is the coverage-honest kg total from typed Loads (ADR-0010).
+range-scoped ``new_prs`` count, the daily total-**volume** series with its coverage
+percentage and equal-window delta, and the weekly **distance** series with its own
+equal-window delta and all-time ``has_distance`` gate (ADR-0049), all computed by
+``logbook/analytics.py`` over the user's Logged Sessions. The counts come straight
+from the *record* side with no conversion; the records are Estimated-1RM PRs derived
+read-time from Logged Sets, volume is the coverage-honest kg total from typed Loads
+(ADR-0010), and distance is the exact-metres weekly total from typed Quantities.
 The window ends on the server's current date; an unknown range is rejected by
 validation and surfaced in the same error envelope. Reads are scoped to the owning
 user."""
@@ -62,6 +64,17 @@ def _serialize(overview: AnalyticsOverview) -> dict:
             "coverage": overview.volume_coverage,
             "delta": overview.volume_delta,
         },
+        # Weekly Distance (ADR-0049): one bar per Monday-anchored week in kilometres,
+        # its own equal-window delta, and the all-time gate the screen shows the chart
+        # on. No coverage figure — a distance Quantity carries exact metres.
+        "distance": {
+            "weeks": [
+                {"week": week.week_start.isoformat(), "km": week.kilometres}
+                for week in overview.distance_weeks
+            ],
+            "delta": overview.distance_delta,
+            "has_distance": overview.has_distance,
+        },
         # Muscle Group Coverage (ADR-0025): the six real groups each trained / not-trained
         # over the labeled, range-independent 8-week window, in canonical order.
         # ``unclassified_present`` discloses any in-window work that rolls up outside the six
@@ -80,7 +93,7 @@ def _serialize(overview: AnalyticsOverview) -> dict:
 
 @router.get("/analytics")
 def read_analytics(
-    range: AnalyticsRange = Query(default=AnalyticsRange.SEVEN_DAY),
+    range: AnalyticsRange = Query(default=AnalyticsRange.THIRTY_DAY),
     clerk_user_id: str = Depends(get_current_user),
     logged: LoggedSessionRepository = Depends(get_logged_session_repository),
     profiles: ProfileRepository = Depends(get_profile_repository),
