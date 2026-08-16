@@ -2,16 +2,20 @@
 // to import from both Server and Client Components. The server-only data access
 // (Clerk auth + fetch) lives in `lib/analytics.ts`.
 
-// The rolling window the Analytics screen is scoped to.
-export type AnalyticsRange = "7d" | "30d" | "90d";
+// The rolling window the Analytics screen is scoped to. The floor is 30 days: the
+// Weekly Distance chart (ADR-0049) draws one bar per week, so a 7-day window would be
+// a single bar — the whole screen realigned to 30/90/150 rather than carry a second
+// selector just for that chart.
+export type AnalyticsRange = "30d" | "90d" | "150d";
 
-export const ANALYTICS_RANGES: AnalyticsRange[] = ["7d", "30d", "90d"];
+export const ANALYTICS_RANGES: AnalyticsRange[] = ["30d", "90d", "150d"];
 
-// Narrow an untrusted query value to a valid range, defaulting to "7d".
+// Narrow an untrusted query value to a valid range, defaulting to "30d". An old
+// bookmarked ?range=7d link falls through to the default here rather than breaking.
 export function toAnalyticsRange(value: string | undefined): AnalyticsRange {
   return ANALYTICS_RANGES.includes(value as AnalyticsRange)
     ? (value as AnalyticsRange)
-    : "7d";
+    : "30d";
 }
 
 // One curated Muscle Group's share of the window's set count (F3 Slice 2). `group`
@@ -58,6 +62,26 @@ export interface VolumeSeries {
   delta: number | null;
 }
 
+// One week's total distance (ADR-0049): the ISO `week` (its Monday) and the `km`
+// covered that week, summed from `distance`-kind Quantities. One bar on the Weekly
+// Distance chart; the series is ascending by week.
+export interface DistanceWeek {
+  week: string;
+  km: number;
+}
+
+// The Weekly Distance series (ADR-0049): the endurance twin of `VolumeSeries`. The
+// weekly `weeks` bars, the `delta` percent against the immediately preceding
+// equal-length window (`null` when there is no prior distance), and `has_distance` —
+// the **all-time** gate the screen reads to decide whether to render the chart at all.
+// There is deliberately no coverage figure: a `distance` Quantity carries exact metres,
+// so nothing sits in an uncovered remainder the way bodyweight/%-1RM sets do for volume.
+export interface DistanceSeries {
+  weeks: DistanceWeek[];
+  delta: number | null;
+  has_distance: boolean;
+}
+
 // One real Muscle Group's recent presence (issue #188 / ADR-0025): the display `group`
 // label (Legs / Chest / Back / Shoulders / Arms / Core — never Unclassified) and whether
 // it was `covered` — trained at least once — in the coverage window. Presence, not a
@@ -83,10 +107,10 @@ export interface RecentCoverage {
 // The honest read model for one range window (F3 Slice 1–5): sessions, active days,
 // total sets, and the set-count muscle distribution drawn straight from the record
 // side, the last 8 Personal Records all-time (`recent_records`, decoupled from the
-// window so it is rarely empty), the range-scoped `new_prs` count, and the daily
-// total-`volume` series with disclosed coverage and an equal-window delta.
-// `muscle_distribution`, `recent_records`, and `volume.points` are empty when nothing
-// qualifies.
+// window so it is rarely empty), the range-scoped `new_prs` count, the daily
+// total-`volume` series with disclosed coverage and an equal-window delta, and the
+// weekly `distance` series (gated on all-time distance work). `muscle_distribution`,
+// `recent_records`, `volume.points`, and `distance.weeks` are empty when nothing qualifies.
 export interface AnalyticsOverview {
   range: AnalyticsRange;
   sessions: number;
@@ -96,5 +120,6 @@ export interface AnalyticsOverview {
   recent_records: PersonalRecordEntry[];
   new_prs: number;
   volume: VolumeSeries;
+  distance: DistanceSeries;
   coverage: RecentCoverage;
 }

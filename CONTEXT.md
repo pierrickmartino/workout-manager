@@ -202,6 +202,12 @@ _Avoid_: Balance, distribution (those are the proportional split, not presence),
 The emphasis split of an Exercise's targeted muscles: the Primary muscles are the prime movers a movement is chosen to train; the Secondary muscles assist. Their union is the Exercise's full targeted-muscle list — the durable set the Muscle Group roll-up reads — so the split is an *emphasis annotation* layered on top, not a replacement. Present only where the AI enrichment actually asserted it (or a curator did); an Exercise with no asserted split has no Primary/Secondary distinction and is shown as a flat muscle list rather than one with a fabricated primacy. Distinct from Muscle Group, which is the coarse six-bucket roll-up.
 _Avoid_: Prime/assisting mover (as the stored term), main muscle
 
+## Endurance
+
+**Distance**:
+A **read-time projection** of the endurance axis: the total kilometres a stretch of the user's record covered, summed from the metres of every **`distance`-kind Quantity** on their Logged Sets and bucketed **by week** (the shared Monday week-start the Streak and Muscle-Group balance use). It is the endurance counterpart to Volume's kg tonnage — computed from the *record* at read time, never a stored ledger (ADR-0018/0049) — but, because a `distance` Quantity already carries exact metres, it converts **without partiality**: there is no coverage caveat as tonnage has. Surfaced on the Analytics screen as the **Weekly Distance** chart, shown only to a user whose history contains distance work. A set logged by time alone (a `duration` Quantity) carries no distance and simply does not appear; **combined across all distance work in v1**, with no per-activity split — a running / cycling / rowing breakdown would need an activity taxonomy the domain does not yet have (ADR-0049).
+_Avoid_: Mileage (imperial; the app is metric-canonical), volume (that is kg tonnage), pace (a separate distance÷duration projection), cardio (the activity, not this figure)
+
 ## Gamification
 
 **XP**:
