@@ -6,6 +6,7 @@ import { Plus, Search } from "lucide-react";
 import { searchExerciseLibrary } from "@/app/protocols/[id]/edit/actions";
 import type { ExerciseSearchResult } from "@/lib/exercises-types";
 import { createOffer } from "@/lib/exercise-picker";
+import { formatMuscleSummary } from "@/lib/exercise-muscle-summary";
 import type { PickedExercise } from "@/lib/protocol-builder";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -168,7 +169,7 @@ function ExerciseResultRow({ exercise, onAdd }: ExerciseResultRowProps) {
   return (
     <div className="flex items-center gap-2 rounded-sm border border-border bg-base p-2">
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <span className="truncate font-sans text-[13px] text-text-primary">
             {exercise.name}
           </span>
@@ -177,7 +178,7 @@ function ExerciseResultRow({ exercise, onAdd }: ExerciseResultRowProps) {
         </div>
         {exercise.targeted_muscles.length > 0 ? (
           <span className="truncate label-mono text-[9px] text-text-muted">
-            {exercise.targeted_muscles.join(" · ").toUpperCase()}
+            {formatMuscleSummary(exercise.targeted_muscles)}
           </span>
         ) : null}
       </div>

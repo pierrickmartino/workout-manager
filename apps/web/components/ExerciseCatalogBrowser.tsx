@@ -17,6 +17,7 @@ import {
   toggleFacetValue,
 } from "@/lib/exercise-browse-query";
 import { buildUsageMap, usageMarker } from "@/lib/exercise-usage-view";
+import { formatMuscleSummary } from "@/lib/exercise-muscle-summary";
 import type { ExerciseSearchResult } from "@/lib/exercises-types";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -323,7 +324,7 @@ function CatalogRow({ exercise, lastPerformedOn, referenceIso }: CatalogRowProps
         </div>
         {exercise.targeted_muscles.length > 0 ? (
           <span className="truncate label-mono text-[9px] text-text-muted">
-            {exercise.targeted_muscles.join(" · ").toUpperCase()}
+            {formatMuscleSummary(exercise.targeted_muscles)}
           </span>
         ) : null}
       </div>
