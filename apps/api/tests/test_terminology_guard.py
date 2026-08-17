@@ -239,6 +239,41 @@ def test_type_annotations_naming_the_record_are_not_flagged(tmp_path: Path) -> N
     assert find_violations(repo_root=tmp_path) == []
 
 
+def test_flags_the_amount_label_for_the_quantity_picker(tmp_path: Path) -> None:
+    # Arrange — the amount picker's user-facing label must read "Quantity", not "Amount"
+    # (CONTEXT 'Quantity' lists 'amount' under _Avoid_; ADR-0032/0050, issue #345). The
+    # tripwire is scoped to the quoted display-label form so it catches the regression.
+    _write(
+        tmp_path,
+        "apps/web/components/HandAuthoredSessionForm.tsx",
+        '<FieldLabel label="Amount">\n',
+    )
+
+    # Act
+    findings = find_violations(repo_root=tmp_path)
+
+    # Assert
+    assert len(findings) == 1
+    assert findings[0].term == "amount (Quantity label)"
+    assert findings[0].match == '"Amount"'
+
+
+def test_ignores_amount_in_identifiers_and_prose(tmp_path: Path) -> None:
+    # Arrange — the tripwire is scoped to the domain label, not every occurrence of the
+    # English word (issue #345): internal identifiers and comments that legitimately name
+    # the amount axis must not trip it.
+    _write(
+        tmp_path,
+        "apps/web/lib/hand-authored-session.ts",
+        "const DEFAULT_AMOUNT_KIND = 'repetitions';\n"
+        "// the exercise's Amount kind governs the target field\n"
+        "function performedAmount() {}\n",
+    )
+
+    # Act / Assert — none of these is the display label
+    assert find_violations(repo_root=tmp_path) == []
+
+
 def test_registry_has_no_duplicate_term_names() -> None:
     # A duplicate name would make find_stray_program's lookup ambiguous.
     names = [term.name for term in BANNED_TERMS]

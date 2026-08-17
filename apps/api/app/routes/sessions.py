@@ -27,6 +27,7 @@ from app.authoring.service import (
 from app.domain.feedback import parse_verdict
 from app.domain.fitness_profile import is_sensitive, resolve_equipment
 from app.domain.load import LoadKind, load_from_input
+from app.domain.quantity import QuantityKind, prescribed_quantity_from_input
 from app.domain.session_provenance import SessionProvenance
 from app.envelope import error_envelope, success_envelope
 from app.generation.generator import (
@@ -172,7 +173,15 @@ class AuthorPrescriptionBody(BaseModel):
     flat, solo Prescription; members of one Superset share the group tag and carry the
     group-owned round-rest. The grouping is validated through the Builder's
     ``validate_deploy`` rules in the service, so a non-contiguous or singleton "superset"
-    is rejected whole with nothing persisted."""
+    is rejected whole with nothing persisted.
+
+    ``quantity_kind`` / ``quantity_unit`` carry the amount picker's choice (ADR-0050,
+    issue #345): the kind the user picked for this exercise (``repetitions`` / ``distance``
+    / ``duration``) and, for a distance, its unit. They type the plan's Prescribed Quantity
+    at the write boundary so a "Distance / 5 km" the user authored is *saved* a distance
+    rather than dropped to a free-text target that loses its input on reuse. Both are
+    optional: an older client that omits them still types the plan by inferring the kind
+    from the free-text ``reps`` target, exactly as the backfill migration does."""
 
     exercise_id: int
     sets: int
@@ -181,6 +190,8 @@ class AuthorPrescriptionBody(BaseModel):
     tempo: str | None = None
     load_kind: str = DEFAULT_LOAD_KIND
     load_value: str | None = None
+    quantity_kind: str | None = None
+    quantity_unit: str | None = None
     superset_group: str | None = None
     round_rest_seconds: int | None = None
 
@@ -194,8 +205,31 @@ class AuthorPrescriptionBody(BaseModel):
             raise ValueError(f"load_kind must be one of: {allowed}") from exc
         return value
 
+    @field_validator("quantity_kind")
+    @classmethod
+    def _known_quantity_kind(cls, value: str | None) -> str | None:
+        # A blank/absent pick is tolerated — the free-text target's prose is inferred
+        # instead; an explicit but unknown kind is a client bug, rejected at the boundary.
+        if value is None or value == "":
+            return value
+        try:
+            QuantityKind(value)
+        except ValueError as exc:
+            allowed = ", ".join(kind.value for kind in QuantityKind)
+            raise ValueError(f"quantity_kind must be one of: {allowed}") from exc
+        return value
+
     def to_draft(self) -> PrescriptionDraft:
         parsed = load_from_input(self.load_kind, self.load_value)
+        # Type the plan's Prescribed Quantity at the write boundary (ADR-0050): the picked
+        # kind is authoritative, falling back to inference over the free-text target when the
+        # pick is absent or can't type the target — the same shared primitive generation and
+        # the backfill use, so an authored plan is born typed like any other.
+        prescribed_quantity = prescribed_quantity_from_input(
+            self.quantity_kind,
+            self.reps,
+            unit=self.quantity_unit or "km",
+        )
         return PrescriptionDraft(
             exercise_id=self.exercise_id,
             sets=self.sets,
@@ -203,6 +237,7 @@ class AuthorPrescriptionBody(BaseModel):
             rest_seconds=self.rest_seconds,
             tempo=self.tempo,
             recommended_load=parsed.to_dict() if parsed is not None else None,
+            prescribed_quantity=prescribed_quantity.to_dict(),
             superset_group=self.superset_group,
             round_rest_seconds=self.round_rest_seconds,
         )

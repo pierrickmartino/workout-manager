@@ -363,6 +363,125 @@ def test_duration_performed_set_round_trips_as_a_duration_quantity():
     assert history[0]["logged_sets"][0]["quantity"]["seconds"] == 45
 
 
+def _authored_prescribed_quantity(client, headers, exercise_id, **prescription):
+    """Author a one-exercise Session with the given prescription and return the persisted
+    Prescribed Quantity read back off the Session detail (#345)."""
+
+    body = _author_body(
+        exercise_id,
+        prescriptions=[{"exercise_id": exercise_id, "sets": 1, **prescription}],
+        logged_sets=[
+            {
+                "exercise_id": exercise_id,
+                "quantity_kind": "repetitions",
+                "quantity_value": "5",
+                "load_kind": "absolute",
+                "load_value": "100",
+            }
+        ],
+    )
+    response = client.post("/api/sessions", headers=headers, json=body)
+    assert response.status_code == 200, response.json()
+    session_id = response.json()["data"]["session_id"]
+    session = client.get(f"/api/sessions/{session_id}", headers=headers).json()["data"]
+    return session["prescriptions"][0]["prescribed_quantity"]
+
+
+def test_authored_distance_prescription_persists_a_typed_distance_quantity():
+    # Arrange — a "Distance / 5 km" exercise: the picked kind and unit must be saved onto
+    # the plan (#345), not dropped, so reusing/logging it later shows a distance input (#343).
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_pq_distance")
+    exercise_id = _create_exercise(client, headers, "Easy Run")
+
+    # Act
+    quantity = _authored_prescribed_quantity(
+        client,
+        headers,
+        exercise_id,
+        reps="5 km",
+        load_kind="bodyweight",
+        load_value=None,
+        quantity_kind="distance",
+        quantity_unit="km",
+    )
+
+    # Assert — a typed distance canonicalised to metres, target text preserved verbatim.
+    assert quantity["kind"] == "distance"
+    assert quantity["metres"] == 5000.0
+    assert quantity["text"] == "5 km"
+
+
+def test_authored_distance_with_a_bare_target_still_honors_the_picked_kind():
+    # Arrange — the user picks Distance but types a unit-less "5"; the pick must win so the
+    # plan is a distance, not a rep count (text inference alone would read "5" as reps).
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_pq_bare")
+    exercise_id = _create_exercise(client, headers, "Row Intervals")
+
+    # Act — the exercise's unit picker supplies miles
+    quantity = _authored_prescribed_quantity(
+        client,
+        headers,
+        exercise_id,
+        reps="5",
+        load_kind="bodyweight",
+        load_value=None,
+        quantity_kind="distance",
+        quantity_unit="mi",
+    )
+
+    # Assert — a distance in the picked unit, canonicalised to metres
+    assert quantity["kind"] == "distance"
+    assert quantity["metres"] == 5 * 1609.344
+
+
+def test_authored_duration_prescription_persists_a_typed_duration_quantity():
+    # Arrange — a timed hold authored as a duration exercise: the kind is saved onto the plan.
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_pq_duration")
+    exercise_id = _create_exercise(client, headers, "Plank Hold")
+
+    # Act
+    quantity = _authored_prescribed_quantity(
+        client,
+        headers,
+        exercise_id,
+        reps="45s",
+        load_kind="bodyweight",
+        load_value=None,
+        quantity_kind="duration",
+    )
+
+    # Assert — a typed duration canonicalised to seconds
+    assert quantity["kind"] == "duration"
+    assert quantity["seconds"] == 45.0
+
+
+def test_authored_reps_prescription_is_born_typed_as_repetitions():
+    # Arrange — a plain strength exercise: the default reps pick still types the plan so an
+    # authored plan is born typed like a generated/backfilled one (nothing about strength
+    # logging changes).
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_pq_reps")
+    exercise_id = _create_exercise(client, headers, "Back Squat Strength")
+
+    # Act
+    quantity = _authored_prescribed_quantity(
+        client,
+        headers,
+        exercise_id,
+        reps="8-12",
+        load_kind="absolute",
+        load_value="100",
+        quantity_kind="repetitions",
+    )
+
+    # Assert — repetitions with no count (a range), target text verbatim
+    assert quantity["kind"] == "repetitions"
+    assert quantity["text"] == "8-12"
+
+
 def test_today_is_accepted():
     # Arrange
     client, ctx = build_client()

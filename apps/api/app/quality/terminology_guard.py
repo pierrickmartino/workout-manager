@@ -150,6 +150,20 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
         ),
     ),
     BannedTerm(
+        name="amount (Quantity label)",
+        # Only the quoted display-label form (``label="Amount"``, ``const x = "Amount"``)
+        # is banned — the user-facing word for the amount axis is "Quantity" (issue #345).
+        # Scoped to the label string so internal identifiers (``DEFAULT_AMOUNT_KIND``,
+        # ``performedAmount``) and prose that name the amount axis stay legal.
+        pattern=re.compile(r"[\"']Amount[\"']"),
+        guidance=(
+            "The amount picker's user-facing label is 'Quantity', not 'Amount' (CONTEXT "
+            "'Quantity' lists 'amount' under _Avoid_; ADR-0032/0050). Rename the display "
+            "label to 'Quantity'. Internal identifiers naming the amount axis are fine — "
+            "only the quoted label string is banned."
+        ),
+    ),
+    BannedTerm(
         name="hand-rolled LoggedSetRecord",
         # Only the *construction* form — ``LoggedSetRecord(`` — is banned. Type
         # annotations (``list[LoggedSetRecord]``) and imports carry no paren and stay

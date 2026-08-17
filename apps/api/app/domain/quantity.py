@@ -311,11 +311,43 @@ def quantity_from_text(text: str | None) -> Quantity:
     return Quantity(kind=QuantityKind.REPETITIONS, text=original, count=count)
 
 
+def prescribed_quantity_from_input(
+    kind: str | None,
+    value: str | None,
+    *,
+    unit: str = "km",
+) -> Quantity:
+    """Type a plan's Prescribed Quantity from a picked kind plus a free-text target (ADR-0050).
+
+    The plan-side write boundary the Hand-Authored builder feeds (#345): the picked
+    ``kind`` is authoritative. When a usable kind + value is supplied it is built through
+    :func:`quantity_from_input` — the same builder the log form's kind picker uses — so a
+    ``distance`` the user chose is stored a distance even when its target reads ``"5"``
+    with no unit. When no kind/value is given, or the value cannot be typed under the
+    picked kind (a rep range picked as a distance), it falls through to
+    :func:`quantity_from_text` over the same target — the shared #341 inference the
+    generation fallback and the backfill migration also use.
+
+    Unlike :func:`quantity_from_input` it **always** returns a Quantity (``repetitions``
+    is the safe default), so an authored plan is born typed just like a generated or
+    backfilled one. A plan prescribes only the distance, never the time to cover it — the
+    companion time is entered at log time (#343) — so there is no companion-duration input
+    here.
+    """
+
+    if kind and value:
+        built = quantity_from_input(kind, value, unit=unit)
+        if built is not None:
+            return built
+    return quantity_from_text(value)
+
+
 __all__ = [
     "QuantityKind",
     "Quantity",
     "quantity_from_input",
     "quantity_from_text",
+    "prescribed_quantity_from_input",
     "repetitions_of",
     "metres_of",
 ]

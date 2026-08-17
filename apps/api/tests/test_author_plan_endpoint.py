@@ -58,6 +58,40 @@ def test_authors_a_standalone_user_authored_plan_without_logging():
     assert history == []
 
 
+def test_capture_carries_the_prescribed_quantity_kind_forward():
+    # Arrange — Capture a running Session: the picked distance kind + unit must ride onto
+    # the authored plan (#345), so the reusable plan stays a running plan, not free text.
+    client, ctx = build_client()
+    headers = _auth(ctx, "distance_capturer")
+    exercise_id = _create_exercise(client, headers, "Tempo Run")
+
+    # Act
+    response = client.post(
+        "/api/sessions/plan",
+        headers=headers,
+        json=_plan_body(
+            exercise_id,
+            prescriptions=[
+                {
+                    "exercise_id": exercise_id,
+                    "sets": 1,
+                    "reps": "5 km",
+                    "load_kind": "bodyweight",
+                    "load_value": None,
+                    "quantity_kind": "distance",
+                    "quantity_unit": "km",
+                }
+            ],
+        ),
+    )
+
+    # Assert — the plan is born typed as a distance in canonical metres
+    assert response.status_code == 200, response.json()
+    quantity = response.json()["data"]["prescriptions"][0]["prescribed_quantity"]
+    assert quantity["kind"] == "distance"
+    assert quantity["metres"] == 5000.0
+
+
 def test_empty_prescriptions_is_rejected_without_persisting():
     # Arrange
     client, ctx = build_client()
