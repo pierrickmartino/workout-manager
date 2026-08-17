@@ -132,6 +132,11 @@ def _serialize(view: SessionView) -> dict:
                 "rest_seconds": p.rest_seconds,
                 "tempo": p.tempo,
                 "recommended_load": p.recommended_load,
+                # Typed Prescribed Quantity (ADR-0050): the ``{kind, text, ...payload}``
+                # Quantity dict, or null when the prescription carries no typed amount.
+                # The web client reads this to render the log input by kind; the free-text
+                # ``reps`` above still renders the prescribed line for back-compat.
+                "prescribed_quantity": p.prescribed_quantity,
                 # Superset overlay (ADR-0023): the shared group tag and group-owned
                 # round-rest, both null on a flat, solo Prescription. Exposed on the read
                 # so a saved Superset renders on the Session detail.

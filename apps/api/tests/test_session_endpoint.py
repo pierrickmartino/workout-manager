@@ -9,7 +9,9 @@ from fastapi.testclient import TestClient
 
 from app.auth.dependencies import get_jwks
 from app.config import Settings, get_settings
+from app.domain.exercise import Provenance
 from app.domain.load import parse_load
+from app.domain.quantity import quantity_from_text
 from app.generation.generator import GenerationError, GenerationRequest
 from app.generation.schema import GeneratedExercisePrescription, GeneratedSession
 from app.main import create_app
@@ -24,7 +26,11 @@ from app.repositories.profile_repository import (
     InMemoryProfileRepository,
     ProfileUpdate,
 )
-from app.repositories.session_repository import InMemorySessionRepository
+from app.repositories.session_repository import (
+    InMemorySessionRepository,
+    PrescriptionDraft,
+    SessionDraft,
+)
 from tests.conftest import ISSUER, make_signing_context
 
 
@@ -57,10 +63,10 @@ def _default_generation() -> GeneratedSession:
     )
 
 
-def build_client(generator=None, ctx=None, profiles=None):
+def build_client(generator=None, ctx=None, profiles=None, sessions=None, exercises=None):
     ctx = ctx or make_signing_context()
-    exercises = InMemoryExerciseRepository()
-    sessions = InMemorySessionRepository(exercises)
+    exercises = exercises or InMemoryExerciseRepository()
+    sessions = sessions or InMemorySessionRepository(exercises)
     generator = generator or FakeGenerator(result=_default_generation())
     profiles = profiles or InMemoryProfileRepository()
     app = create_app()
@@ -161,6 +167,58 @@ def test_generated_session_can_be_fetched_back_by_its_owner():
     assert fetched.status_code == 200
     assert fetched.json()["data"]["id"] == created["id"]
     assert len(fetched.json()["data"]["prescriptions"]) == 1
+
+
+def test_read_exposes_prescribed_quantity_key_null_when_unset():
+    # The typed Prescribed Quantity is additive (ADR-0050): the session-detail response
+    # always carries the key, and a Session generated before any write path populates it
+    # reads back null — no consumer is required to change, the free-text reps still renders.
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_pq_null")
+    created = client.post(
+        "/api/sessions/generate", headers=headers, json=_generate_body()
+    ).json()["data"]
+
+    fetched = client.get(f"/api/sessions/{created['id']}", headers=headers).json()["data"]
+
+    prescription = fetched["prescriptions"][0]
+    assert "prescribed_quantity" in prescription
+    assert prescription["prescribed_quantity"] is None
+
+
+def test_read_serializes_typed_prescribed_quantity_to_the_client():
+    # A prescription carrying a typed Prescribed Quantity (as the backfill produces for a
+    # legacy "7 KM" target) surfaces that Quantity verbatim on the session-detail read, so
+    # the web client can render the log input by kind (ADR-0050).
+    exercises = InMemoryExerciseRepository()
+    run = exercises.find_or_create("Outdoor Run", provenance=Provenance.CURATED)
+    sessions = InMemorySessionRepository(exercises)
+    quantity = quantity_from_text("7 KM")
+    sessions.create(
+        "user_pq_typed",
+        SessionDraft(
+            training_type="cardio",
+            duration_minutes=40,
+            prescriptions=[
+                PrescriptionDraft(
+                    exercise_id=run.id,
+                    sets=1,
+                    reps="7 KM",
+                    prescribed_quantity=quantity.to_dict(),
+                )
+            ],
+        ),
+    )
+    client, ctx = build_client(sessions=sessions, exercises=exercises)
+
+    fetched = client.get(
+        "/api/sessions/1", headers=_auth(ctx, "user_pq_typed")
+    ).json()["data"]
+
+    prescription = fetched["prescriptions"][0]
+    assert prescription["prescribed_quantity"] == quantity.to_dict()
+    # The free-text target is retained for display alongside the typed Quantity.
+    assert prescription["reps"] == "7 KM"
 
 
 def test_read_serializes_is_protocol_member_false_for_a_standalone_session():

@@ -33,6 +33,10 @@ class PrescriptionDraft:
     rest_seconds: int | None = None
     tempo: str | None = None
     recommended_load: dict | None = None
+    # Typed Prescribed Quantity (ADR-0050): a stored ``Quantity`` dict, ``None`` for a
+    # prescription that carries no typed amount yet. Additive and carried through create,
+    # Duplicate, and Regeneration so a backfilled cardio target survives a copy.
+    prescribed_quantity: dict | None = None
     superset_group: str | None = None
     round_rest_seconds: int | None = None
 
@@ -66,6 +70,10 @@ class PrescriptionView:
     rest_seconds: int | None
     tempo: str | None
     recommended_load: dict | None
+    # Typed Prescribed Quantity (ADR-0050): the stored ``Quantity`` dict, ``None`` when the
+    # prescription has no typed amount. Surfaced on the read so the session-detail response
+    # carries it to the web client.
+    prescribed_quantity: dict | None
     superset_group: str | None
     round_rest_seconds: int | None
     exercise_id: int
@@ -179,6 +187,7 @@ def _draft_from(prescription: ExercisePrescription) -> PrescriptionDraft:
         rest_seconds=prescription.rest_seconds,
         tempo=prescription.tempo,
         recommended_load=prescription.recommended_load,
+        prescribed_quantity=prescription.prescribed_quantity,
         superset_group=prescription.superset_group,
         round_rest_seconds=prescription.round_rest_seconds,
     )
@@ -210,6 +219,7 @@ def _prescription_view(
         rest_seconds=prescription.rest_seconds,
         tempo=prescription.tempo,
         recommended_load=prescription.recommended_load,
+        prescribed_quantity=prescription.prescribed_quantity,
         superset_group=prescription.superset_group,
         round_rest_seconds=prescription.round_rest_seconds,
         exercise_id=exercise.id,
@@ -260,6 +270,7 @@ class SqlSessionRepository:
                     rest_seconds=prescription.rest_seconds,
                     tempo=prescription.tempo,
                     recommended_load=prescription.recommended_load,
+                    prescribed_quantity=prescription.prescribed_quantity,
                     superset_group=prescription.superset_group,
                     round_rest_seconds=prescription.round_rest_seconds,
                 )
@@ -419,6 +430,7 @@ class InMemorySessionRepository:
                 rest_seconds=prescription.rest_seconds,
                 tempo=prescription.tempo,
                 recommended_load=prescription.recommended_load,
+                prescribed_quantity=prescription.prescribed_quantity,
                 superset_group=prescription.superset_group,
                 round_rest_seconds=prescription.round_rest_seconds,
             )
@@ -528,6 +540,7 @@ class InMemorySessionRepository:
                 rest_seconds=p.rest_seconds,
                 tempo=p.tempo,
                 recommended_load=p.recommended_load,
+                prescribed_quantity=p.prescribed_quantity,
                 superset_group=p.superset_group,
                 round_rest_seconds=p.round_rest_seconds,
             )
