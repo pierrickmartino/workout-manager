@@ -53,6 +53,25 @@ test("maps the plan to the payload, ignoring performed sets entirely", () => {
   assert.equal(prescription.load_value, "60");
 });
 
+test("carries the picked Quantity kind and unit onto the captured plan", () => {
+  // Arrange — Capture folds a distance record into a distance-kind exercise; the pick must
+  // ride onto the plan-only payload (#345) so the reusable plan stays a running plan.
+  const fields = {
+    trainingType: "cardio",
+    exercises: [exercise({ kind: "distance", unit: "mi", reps: "5 mi", loadKind: "bodyweight" })],
+  };
+
+  // Act
+  const result = buildAuthorPlanRequest(fields);
+
+  // Assert
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  const prescription = result.request.prescriptions[0];
+  assert.equal(prescription.quantity_kind, "distance");
+  assert.equal(prescription.quantity_unit, "mi");
+});
+
 test("rejects an unknown training type", () => {
   const result = buildAuthorPlanRequest({
     trainingType: "not-a-type",

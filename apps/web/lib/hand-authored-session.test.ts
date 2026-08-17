@@ -65,6 +65,8 @@ test("maps a plan and its first performance into the author-and-log payload", ()
         tempo: "3-1-1",
         load_kind: "absolute",
         load_value: "100",
+        quantity_kind: "repetitions",
+        quantity_unit: "km",
         superset_group: null,
         round_rest_seconds: null,
       },
@@ -277,10 +279,12 @@ test("records a duration exercise's performed sets as duration Quantities", () =
   // Act
   const result = buildAuthorSessionRequest(input, TODAY);
 
-  // Assert — the plan target rides through as free text; each set is a duration Quantity.
+  // Assert — the plan target rides through as free text; the picked duration kind is
+  // persisted onto the plan (#345); each set is a duration Quantity.
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.equal(result.request.prescriptions[0].reps, "45s");
+  assert.equal(result.request.prescriptions[0].quantity_kind, "duration");
   assert.deepEqual(
     result.request.logged_sets.map((set) => [set.quantity_kind, set.quantity_value]),
     [
@@ -476,6 +480,10 @@ test("records a distance exercise's performed sets as distance Quantities carryi
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.equal(result.request.prescriptions[0].reps, "5 km");
+  // The picked distance kind and unit are persisted onto the plan (#345), so reusing or
+  // logging the Session later presents the distance input.
+  assert.equal(result.request.prescriptions[0].quantity_kind, "distance");
+  assert.equal(result.request.prescriptions[0].quantity_unit, "km");
   assert.deepEqual(result.request.logged_sets[0], {
     exercise_id: 7,
     quantity_kind: "distance",

@@ -99,6 +99,51 @@ def test_duplicate_creates_a_new_standalone_copy():
     assert copy["has_been_regenerated"] is False
 
 
+class FakeRunGenerator:
+    """Emits a running prescription so the source Session carries a typed *distance*
+    Prescribed Quantity to prove Duplicate carries the kind forward faithfully (#345)."""
+
+    def generate(self, request: GenerationRequest) -> GeneratedSession:
+        return GeneratedSession(
+            prescriptions=[
+                GeneratedExercisePrescription(
+                    exercise_name="Easy Run", sets=1, reps="7 KM"
+                ),
+            ]
+        )
+
+
+def test_duplicate_carries_the_prescribed_quantity_kind_forward():
+    # Arrange — a source running Session whose prescription is a typed distance.
+    ctx = make_signing_context()
+    exercises = InMemoryExerciseRepository()
+    sessions = InMemorySessionRepository(exercises)
+    profiles = InMemoryProfileRepository()
+    app = create_app()
+    app.dependency_overrides[get_jwks] = lambda: ctx.jwks
+    app.dependency_overrides[get_settings] = lambda: Settings(clerk_issuer=ISSUER)
+    app.dependency_overrides[get_exercise_repository] = lambda: exercises
+    app.dependency_overrides[get_session_repository] = lambda: sessions
+    app.dependency_overrides[get_session_generator] = lambda: FakeRunGenerator()
+    app.dependency_overrides[get_profile_repository] = lambda: profiles
+    client = TestClient(app)
+    headers = _auth(ctx, "runner_dup")
+    source = _create_session(client, headers)
+    source_quantity = source["prescriptions"][0]["prescribed_quantity"]
+    assert source_quantity["kind"] == "distance"  # guard: the source really is a run
+
+    # Act
+    response = client.post(
+        f"/api/sessions/{source['id']}/duplicate", headers=headers
+    )
+
+    # Assert — the copy's prescription carries the same typed distance, not a dropped target
+    assert response.status_code == 200
+    copy_quantity = response.json()["data"]["prescriptions"][0]["prescribed_quantity"]
+    assert copy_quantity == source_quantity
+    assert copy_quantity["kind"] == "distance"
+
+
 def test_duplicate_404s_for_another_users_session():
     # Arrange — a non-owner can never copy another user's plan
     client, ctx = build_client()

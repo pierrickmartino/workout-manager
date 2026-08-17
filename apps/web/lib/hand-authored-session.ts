@@ -116,6 +116,14 @@ export interface AuthorPrescriptionInput {
   tempo: string | null;
   load_kind: LoadKind;
   load_value: string | null;
+  // The picked Quantity kind (and, for a distance, its unit) travels onto the plan so the
+  // authored kind is *persisted*, not dropped on save (ADR-0050, issue #345): the backend
+  // types the Prescribed Quantity from these, so a "Distance / 5 km" the user authored is
+  // saved a distance and presents the distance input when the Session is reused or logged.
+  // The free-text `reps` target stays the source the backend infers from when a kind can't
+  // type it, and continues to render the prescribed line.
+  quantity_kind: QuantityKind;
+  quantity_unit: DistanceUnit;
   superset_group: string | null;
   round_rest_seconds: number | null;
 }
@@ -368,6 +376,12 @@ function toPrescription(
       rest_seconds: restSeconds,
       tempo: tempo === "" ? null : tempo,
       ...loadFields(exercise.loadKind, exercise.loadValue, kind),
+      // The picked Quantity kind and unit travel onto the plan so the choice is persisted,
+      // not dropped on save (ADR-0050, issue #345): the backend types the Prescribed
+      // Quantity from these. The unit is only meaningful for a distance but rides for every
+      // kind, defaulting to km — the same default the log form and ad-hoc paths use.
+      quantity_kind: kind,
+      quantity_unit: exercise.unit ?? DEFAULT_DISTANCE_UNIT,
       // The Superset overlay rides straight through: grouping is edited on the draft via
       // the shared `supersets` operations, which keep it contiguous and consistent.
       superset_group: exercise.supersetGroup,

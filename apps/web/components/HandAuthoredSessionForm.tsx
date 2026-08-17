@@ -679,16 +679,16 @@ function ExerciseCard({
       {/* The authored plan: an Amount kind, then sets/target/rest/tempo and a typed Load
           (ADR-0010, ADR-0032). The Amount kind governs the target field and the sets below. */}
       <div className="grid grid-cols-2 gap-2.5">
-        <FieldLabel label="Amount">
+        <FieldLabel label="Quantity">
           <Select
             value={row.kind}
             onChange={(event) => {
-              // Picking Duration/Reps re-defaults the plan's Load kind for that Amount
+              // Picking Duration/Reps re-defaults the plan's Load kind for that Quantity
               // (bodyweight for a hold, absolute for reps) — still overridable below.
               const kind = event.target.value as QuantityKind;
               onChange({ kind, loadKind: defaultLoadKindForAmount(kind) });
             }}
-            aria-label={`Amount kind for ${row.exerciseName}`}
+            aria-label={`Quantity kind for ${row.exerciseName}`}
           >
             {AMOUNT_KIND_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>

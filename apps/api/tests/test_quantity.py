@@ -15,6 +15,7 @@ from app.domain.quantity import (
     Quantity,
     QuantityKind,
     metres_of,
+    prescribed_quantity_from_input,
     quantity_from_input,
     quantity_from_text,
 )
@@ -298,3 +299,119 @@ def test_text_inference_of_a_typed_distance_round_trips_through_storage():
     # Act / Assert — it survives the JSON-column round-trip the record side uses
     assert Quantity.from_dict(inferred.to_dict()) == inferred
     assert metres_of(inferred.to_dict()) == 7000.0
+
+
+# ---------------------------------------------------------------------------
+# prescribed_quantity_from_input — the plan-side write boundary (ADR-0050 / #345)
+#
+# The Hand-Authored builder's boundary: it is *told* the picked kind (and, for a
+# distance, the unit) and hands over the single free-text plan target. The picked
+# kind is authoritative — built through ``quantity_from_input`` so a "Distance" the
+# user chose is stored a distance even when the target reads "5" with no unit — and
+# it falls through to ``quantity_from_text`` (the shared #341 inference) when no
+# usable kind/value is given or the target can't be typed under the picked kind.
+# Unlike ``quantity_from_input`` it *always* returns a Quantity, so an authored plan
+# is born typed just like a generated or backfilled one.
+# ---------------------------------------------------------------------------
+
+
+def test_prescribed_kind_wins_over_a_bare_target():
+    # Arrange / Act — a distance picked with a unit-less "5" target, and a duration
+    # picked with a bare "45": the picked kind, not text inference, decides.
+    distance = prescribed_quantity_from_input("distance", "5", unit="km")
+    duration = prescribed_quantity_from_input("duration", "45")
+
+    # Assert — the pick is honored (text inference alone would read both as reps)
+    assert distance.kind is QuantityKind.DISTANCE
+    assert distance.metres == pytest.approx(5000.0)
+    assert duration.kind is QuantityKind.DURATION
+    assert duration.seconds == pytest.approx(45.0)
+
+
+def test_prescribed_distance_honors_the_picked_unit():
+    # Act — the same "5" target reads as miles when the exercise's unit is miles
+    quantity = prescribed_quantity_from_input("distance", "5", unit="mi")
+
+    # Assert — canonicalised through the picked unit, not the km default
+    assert quantity.kind is QuantityKind.DISTANCE
+    assert quantity.metres == pytest.approx(5000.0 * 1609.344 / 1000)
+
+
+def test_prescribed_distance_carries_an_optional_companion_time():
+    # Act — a distance target with a companion time makes pace derivable
+    quantity = prescribed_quantity_from_input(
+        "distance", "5", unit="km", duration="25:00"
+    )
+
+    # Assert
+    assert quantity.kind is QuantityKind.DISTANCE
+    assert quantity.has_pace is True
+
+
+@pytest.mark.parametrize(
+    ("kind", "target", "expected_kind"),
+    [
+        # A unit-suffixed target the numeric builder can't parse falls through to text
+        # inference, which reads the same kind off the prose.
+        ("distance", "5 km", QuantityKind.DISTANCE),
+        ("duration", "45s", QuantityKind.DURATION),
+        # A rep range under the repetitions pick is text-inferred (still repetitions).
+        ("repetitions", "8-12", QuantityKind.REPETITIONS),
+    ],
+)
+def test_prescribed_free_text_target_falls_back_to_inference(kind, target, expected_kind):
+    # Act — the picked kind matches the prose, so the fallback resolves it correctly
+    quantity = prescribed_quantity_from_input(kind, target, unit="km")
+
+    # Assert — the target's verbatim text survives for lossless display
+    assert quantity.kind is expected_kind
+    assert quantity.text == target
+
+
+def test_a_target_nonsensical_for_its_kind_degrades_to_repetitions():
+    # Arrange / Act — "8-12" can't be a distance; rather than crash, it degrades to the
+    # safe default through the shared text inference (graceful, like a bad generation).
+    quantity = prescribed_quantity_from_input("distance", "8-12", unit="km")
+
+    # Assert
+    assert quantity.kind is QuantityKind.REPETITIONS
+    assert quantity.count is None
+
+
+@pytest.mark.parametrize(
+    ("kind", "target", "expected_kind"),
+    [
+        (None, "7 km", QuantityKind.DISTANCE),
+        ("", "30 min", QuantityKind.DURATION),
+        (None, "8-12", QuantityKind.REPETITIONS),
+    ],
+)
+def test_a_missing_pick_infers_the_kind_from_the_target(kind, target, expected_kind):
+    # Act — an absent kind (an older client) still types the plan from the target prose,
+    # exactly as the backfill migration does.
+    quantity = prescribed_quantity_from_input(kind, target, unit="km")
+
+    # Assert
+    assert quantity.kind is expected_kind
+
+
+def test_prescribed_quantity_is_never_none():
+    # Act — even blank/garbage always yields a Quantity, so an authored plan is born typed
+    blank = prescribed_quantity_from_input("repetitions", "")
+    garbage = prescribed_quantity_from_input("distance", "???", unit="km")
+
+    # Assert — repetitions is the safe default; nothing raises and nothing is None
+    assert blank.kind is QuantityKind.REPETITIONS
+    assert garbage.kind is QuantityKind.REPETITIONS
+
+
+def test_fallback_text_overrides_the_value_for_inference():
+    # Arrange / Act — a caller (e.g. generation) can infer from a *different* prose than
+    # the value it tried to build: an unbuildable value with a rep-range fallback text.
+    quantity = prescribed_quantity_from_input(
+        "distance", "notanumber", unit="km", fallback_text="8-12"
+    )
+
+    # Assert — the fallback prose, not the value, drives the inference
+    assert quantity.kind is QuantityKind.REPETITIONS
+    assert quantity.text == "8-12"
