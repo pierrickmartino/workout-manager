@@ -20,6 +20,11 @@ const VALID_TRAINING_TYPES = new Set<string>(TRAINING_TYPES);
 const DEFAULT_LOAD_KIND = "absolute";
 const DEFAULT_DISTANCE_UNIT: DistanceUnit = "km";
 
+// The upper bound on rows read from one submission — a real ad-hoc log never approaches it.
+// The client sends the row count in a hidden field, so the reader clamps to this ceiling: a
+// forged, absurdly large `set_count` is bounded to fixed work instead of an unbounded loop.
+const MAX_SET_ROWS = 500;
+
 // One row of the ad-hoc form: the picked catalog Exercise, the kind of amount performed
 // (a rep count, a distance, or a duration, ADR-0032), and the load done. The amount
 // field is raw — a blank row is one the user didn't perform and is skipped. `kind`
@@ -85,7 +90,8 @@ export function readAdhocFormRows(form: FormData): AdhocFormRow[] {
   if (!Number.isInteger(count) || count <= 0) return [];
 
   const rows: AdhocFormRow[] = [];
-  for (let index = 0; index < count; index += 1) {
+  const bounded = Math.min(count, MAX_SET_ROWS);
+  for (let index = 0; index < bounded; index += 1) {
     const movementName = readField(form, `set-${index}-movement`).trim();
     if (movementName === "") continue;
 

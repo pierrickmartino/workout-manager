@@ -13,6 +13,7 @@ import {
   type LogPrescriptionGroup,
   type LogSetRow,
 } from "@/lib/log-session-form";
+import type { DistanceUnit } from "@/lib/quantity";
 import type { ExercisePrescription } from "@/lib/sessions-types";
 import { Field } from "@/components/pulse/field";
 import { Alert } from "@/components/pulse/alert";
@@ -31,13 +32,18 @@ interface LogSessionFormProps {
 }
 
 // Records a performance of a Session at per-set fidelity (Q1/Q4). Each prescription expands
-// to one row per prescribed set, pre-filled with the prescribed reps/load; each row carries a
-// Done toggle (Model B, Q10) — an un-done set is skipped, dropping it from the record and
-// leaving its prescribed set un-attempted. Supersets ride through as a cosmetic badge (Q5),
-// never touching the flat record. The Completion Outcome is derived live and shown before
-// submit (Q8/Q11), replacing the old always-"completed" declaration. The session id and the
-// derived outcome ride in hidden fields so the server action targets the right Session and
-// records the honest outcome.
+// to one row per prescribed set, pre-filled with the prescribed quantity/load; each row carries
+// a Done toggle (Model B, Q10) — an un-done set is skipped, dropping it from the record and
+// leaving its prescribed set un-attempted. The set is kind-aware (ADR-0050): a distance
+// prescription seeds a distance field (+ optional companion time), a duration prescription a
+// hold time, a repetitions prescription the numeric reps as before — so a reused run logs
+// through its own plan. Supersets ride through as a cosmetic badge (Q5), never touching the
+// flat record. The Completion Outcome is derived live and shown before submit (Q8/Q11).
+//
+// Rows submit as indexed fields (`set-<i>-…`) under a `set_count` header — the same shape the
+// heterogeneous ad-hoc log uses — because a hybrid run-then-squats Session mixes kinds and
+// the old row-parallel arrays would misalign. The pure `readLogFormRows`/`buildLoggedSets`
+// (lib/log-session-form) read and type the payload; the server action is a thin caller.
 export function LogSessionForm({
   sessionId,
   prescriptions,
@@ -59,6 +65,19 @@ export function LogSessionForm({
       outcome: deriveCompletionOutcome(prescribed, rows),
       skipped: skippedSetCount(prescribed, rows),
     };
+  }, [groups]);
+
+  // The flat 0-based index each row submits under (`set-<index>-…`), and the total row count
+  // the reader iterates. Rows are numbered across every group in render order, so a hybrid
+  // Session's mixed-kind rows never collide.
+  const { rowOffsets, rowCount } = useMemo(() => {
+    const offsets: number[] = [];
+    let running = 0;
+    for (const group of groups) {
+      offsets.push(running);
+      running += group.rows.length;
+    }
+    return { rowOffsets: offsets, rowCount: running };
   }, [groups]);
 
   function updateRow(
@@ -87,16 +106,21 @@ export function LogSessionForm({
         const last = group.rows[group.rows.length - 1];
         const nextSetNumber =
           group.rows.reduce((max, row) => Math.max(max, row.setNumber), 0) + 1;
-        // An added set seeds from the group's last row (its load kind/value), starts blank on
-        // reps, and is Done — it is extra performed work, never a prescribed-set skip.
+        // An added set seeds from the group's last row (its kind, unit, load), starts blank on
+        // the quantity, and is Done — it is extra performed work, never a prescribed-set skip.
         const added: LogSetRow = {
           key: `${position}-add-${nextSetNumber}-${group.rows.length}`,
           prescriptionPosition: position,
           exerciseId: group.exerciseId,
           setNumber: nextSetNumber,
+          kind: group.kind,
           reps: "",
+          distance: "",
+          unit: last?.unit ?? "km",
+          duration: "",
           loadKind: last?.loadKind ?? "absolute",
           loadValue: last?.loadValue ?? "",
+          showLoad: last?.showLoad ?? group.kind === "repetitions",
           rpe: "",
           done: true,
         };
@@ -121,6 +145,8 @@ export function LogSessionForm({
       {/* The Completion Outcome is derived client-side from the Done toggles (Q8), sent as the
           honest verdict; the server validates it and defaults to completed if absent. */}
       <input type="hidden" name="completion_outcome" value={outcome} />
+      {/* Rows submit as indexed `set-<i>-…` fields; the reader walks 0…set_count-1. */}
+      <input type="hidden" name="set_count" value={rowCount} />
 
       {state.error ? <Alert tone="error">{state.error}</Alert> : null}
 
@@ -137,7 +163,7 @@ export function LogSessionForm({
       <fieldset className="flex flex-col gap-4 border-0 p-0">
         <SectionHeader>SETS PERFORMED</SectionHeader>
 
-        {groups.map((group) => (
+        {groups.map((group, groupIndex) => (
           <div
             key={group.position}
             className="flex flex-col gap-3 rounded-md border border-border bg-surface p-4"
@@ -155,16 +181,17 @@ export function LogSessionForm({
                 </Badge>
               ) : null}
               <span className="label-mono ml-auto text-[9px] text-text-muted">
-                {group.prescribedSets} × {group.repsHint} PRESCRIBED
+                {group.prescribedSets} × {group.hint} PRESCRIBED
               </span>
             </div>
 
             <ol className="flex list-none flex-col gap-2.5 p-0">
-              {group.rows.map((row) => (
+              {group.rows.map((row, rowIndex) => (
                 <li key={row.key}>
                   <SetRow
+                    index={rowOffsets[groupIndex] + rowIndex}
                     row={row}
-                    repsHint={group.repsHint}
+                    hint={group.hint}
                     canRemove={group.rows.length > 1}
                     onToggleDone={() =>
                       updateRow(group.position, row.key, { done: !row.done })
@@ -211,23 +238,28 @@ export function LogSessionForm({
   );
 }
 
-// One editable set-row. A Done row submits its `name`d inputs; an un-done (skipped) row
-// disables them so they never reach the record (Model B, Q10) and dims to read as skipped.
+// One editable set-row. A Done row submits its indexed inputs; an un-done (skipped) row
+// disables its quantity/load inputs so they never reach the record (Model B, Q10) and dims to
+// read as skipped. The always-submitted `done`/`exercise_id`/`kind` hidden fields let the
+// reader index every row and drop the skipped ones.
 function SetRow({
+  index,
   row,
-  repsHint,
+  hint,
   canRemove,
   onToggleDone,
   onChange,
   onRemove,
 }: {
+  index: number;
   row: LogSetRow;
-  repsHint: string;
+  hint: string;
   canRemove: boolean;
   onToggleDone: () => void;
   onChange: (patch: Partial<LogSetRow>) => void;
   onRemove: () => void;
 }) {
+  const prefix = `set-${index}`;
   const disabled = !row.done;
   return (
     <div
@@ -264,30 +296,24 @@ function SetRow({
         ) : null}
       </div>
 
-      {/* A skipped row keeps its values on screen but submits nothing — disabled controls are
-          omitted from the FormData, so alignment across the row-parallel arrays holds. */}
-      {row.done ? (
-        <input type="hidden" name="exercise_id" value={row.exerciseId} />
-      ) : null}
+      {/* Always submitted, never disabled: the reader indexes every row by these and drops
+          the ones whose `done` is not "true", keeping the indexed fields aligned. */}
+      <input type="hidden" name={`${prefix}-done`} value={row.done ? "true" : "false"} />
+      <input type="hidden" name={`${prefix}-exercise_id`} value={row.exerciseId} />
+      <input type="hidden" name={`${prefix}-kind`} value={row.kind} />
 
       <div className="grid grid-cols-2 gap-2.5">
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">Reps</span>
-          <Input
-            name="reps"
-            type="number"
-            min={0}
-            value={row.reps}
-            placeholder={repsHint}
-            disabled={disabled}
-            onChange={(event) => onChange({ reps: event.target.value })}
-            aria-label={`Reps for set ${row.setNumber}`}
-          />
-        </label>
+        <QuantityField
+          prefix={prefix}
+          row={row}
+          hint={hint}
+          disabled={disabled}
+          onChange={onChange}
+        />
         <label className="flex flex-col gap-1.5">
           <span className="label-mono text-[9px] text-text-muted">RPE</span>
           <Select
-            name="rpe"
+            name={`${prefix}-rpe`}
             value={row.rpe}
             disabled={disabled}
             onChange={(event) => onChange({ rpe: event.target.value })}
@@ -303,39 +329,170 @@ function SetRow({
         </label>
       </div>
 
-      {/* Load is a typed value (ADR-0010): pick the kind, then give the value that kind
-          carries. Seeded from the prescribed load, both editable per set. */}
-      <div className="grid grid-cols-[7rem_1fr] gap-2.5">
+      {/* Load is the orthogonal "how hard" axis (ADR-0010/0050): shown by default for reps,
+          omitted for a plain run/hold, and opt-in for a loaded carry. */}
+      {row.showLoad ? (
+        <LoadFields
+          prefix={prefix}
+          row={row}
+          disabled={disabled}
+          onChange={onChange}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => onChange({ showLoad: true })}
+          disabled={disabled}
+          className="inline-flex items-center gap-1.5 self-start font-mono text-[12px] text-cyan hover:underline disabled:opacity-50"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add load
+        </button>
+      )}
+    </div>
+  );
+}
+
+// The quantity input matching the row's kind (ADR-0050): a distance value + unit + optional
+// companion time, a single hold time, or the existing numeric reps.
+function QuantityField({
+  prefix,
+  row,
+  hint,
+  disabled,
+  onChange,
+}: {
+  prefix: string;
+  row: LogSetRow;
+  hint: string;
+  disabled: boolean;
+  onChange: (patch: Partial<LogSetRow>) => void;
+}) {
+  if (row.kind === "distance") {
+    return (
+      <div className="col-span-2 grid grid-cols-[1fr_5rem_1fr] gap-2.5">
         <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">Load kind</span>
+          <span className="label-mono text-[9px] text-text-muted">Distance</span>
+          <Input
+            name={`${prefix}-distance`}
+            type="number"
+            min={0}
+            step="any"
+            value={row.distance}
+            placeholder="5"
+            disabled={disabled}
+            onChange={(event) => onChange({ distance: event.target.value })}
+            aria-label={`Distance for set ${row.setNumber}`}
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="label-mono text-[9px] text-text-muted">Unit</span>
           <Select
-            name="load_kind"
-            value={row.loadKind}
+            name={`${prefix}-unit`}
+            value={row.unit}
             disabled={disabled}
             onChange={(event) =>
-              onChange({ loadKind: event.target.value as LogSetRow["loadKind"] })
+              onChange({ unit: event.target.value as DistanceUnit })
             }
-            aria-label={`Load kind for set ${row.setNumber}`}
+            aria-label={`Distance unit for set ${row.setNumber}`}
           >
-            {LOAD_KIND_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
+            <option value="km">km</option>
+            <option value="mi">mi</option>
           </Select>
         </label>
         <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">Load</span>
+          {/* Time is optional (ADR-0032): given, pace becomes a derivable read. */}
+          <span className="label-mono text-[9px] text-text-muted">Time (opt.)</span>
           <Input
-            name="load_value"
-            placeholder="70"
-            value={row.loadValue}
+            name={`${prefix}-duration`}
+            placeholder="mm:ss"
+            value={row.duration}
             disabled={disabled}
-            onChange={(event) => onChange({ loadValue: event.target.value })}
-            aria-label={`Load for set ${row.setNumber}`}
+            onChange={(event) => onChange({ duration: event.target.value })}
+            aria-label={`Time for set ${row.setNumber}`}
           />
         </label>
       </div>
+    );
+  }
+
+  if (row.kind === "duration") {
+    return (
+      <label className="col-span-2 flex flex-col gap-1.5">
+        <span className="label-mono text-[9px] text-text-muted">Time</span>
+        <Input
+          name={`${prefix}-duration`}
+          placeholder="mm:ss"
+          value={row.duration}
+          disabled={disabled}
+          onChange={(event) => onChange({ duration: event.target.value })}
+          aria-label={`Hold time for set ${row.setNumber}`}
+        />
+      </label>
+    );
+  }
+
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="label-mono text-[9px] text-text-muted">Reps</span>
+      <Input
+        name={`${prefix}-reps`}
+        type="number"
+        min={0}
+        value={row.reps}
+        placeholder={hint}
+        disabled={disabled}
+        onChange={(event) => onChange({ reps: event.target.value })}
+        aria-label={`Reps for set ${row.setNumber}`}
+      />
+    </label>
+  );
+}
+
+// The typed-Load block (ADR-0010): pick the kind, then give the value that kind carries.
+// Seeded from the prescribed load, both editable per set.
+function LoadFields({
+  prefix,
+  row,
+  disabled,
+  onChange,
+}: {
+  prefix: string;
+  row: LogSetRow;
+  disabled: boolean;
+  onChange: (patch: Partial<LogSetRow>) => void;
+}) {
+  return (
+    <div className="grid grid-cols-[7rem_1fr] gap-2.5">
+      <label className="flex flex-col gap-1.5">
+        <span className="label-mono text-[9px] text-text-muted">Load kind</span>
+        <Select
+          name={`${prefix}-load_kind`}
+          value={row.loadKind}
+          disabled={disabled}
+          onChange={(event) =>
+            onChange({ loadKind: event.target.value as LogSetRow["loadKind"] })
+          }
+          aria-label={`Load kind for set ${row.setNumber}`}
+        >
+          {LOAD_KIND_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </Select>
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="label-mono text-[9px] text-text-muted">Load</span>
+        <Input
+          name={`${prefix}-load_value`}
+          placeholder="70"
+          value={row.loadValue}
+          disabled={disabled}
+          onChange={(event) => onChange({ loadValue: event.target.value })}
+          aria-label={`Load for set ${row.setNumber}`}
+        />
+      </label>
     </div>
   );
 }

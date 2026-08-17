@@ -3,6 +3,7 @@
 // server-only data access (Clerk auth + fetch) lives in `lib/sessions.ts`.
 
 import type { Load } from "./load";
+import type { Quantity } from "./quantity";
 import type { SuggestedVariation } from "./harder-variation-view";
 
 // Training types a Session can be generated for. Mirrors the Fitness Level
@@ -33,6 +34,13 @@ export interface ExercisePrescription {
   rest_seconds: number | null;
   tempo: string | null;
   recommended_load: Load | null;
+  // The typed Prescribed Quantity (ADR-0050): the plan's "how much" axis — a rep count, a
+  // distance, or a duration — mirroring the record side's `LoggedSet.quantity`. The
+  // log-session view-model reads its `kind` to render the matching input; `null` on a
+  // prescription that carries no typed amount (a pre-backfill/legacy read), where the form
+  // falls back to the free-text `reps` as a repetitions hint. Optional here like
+  // `previous_performance`: the plain Session read carries it, other read paths need not.
+  prescribed_quantity?: Quantity | null;
   // Superset overlay (ADR-0023): the group tag members of one Superset share and the
   // group-owned round-rest. Both null on a flat, solo Prescription. Optional here like
   // `previous_performance` — the Protocol/Builder read always carries them (the server

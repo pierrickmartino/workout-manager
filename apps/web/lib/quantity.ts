@@ -14,6 +14,9 @@ export type DistanceUnit = "km" | "mi";
 const METRES_PER_MILE = 1609.344;
 const METRES_PER_KM = 1000;
 const SECONDS_PER_MINUTE = 60;
+// Decimal places a canonical distance is rounded to when read back into a display value —
+// enough to round-trip a typed value (e.g. 3.1 mi) without surfacing binary-float noise.
+const DISTANCE_DECIMALS = 3;
 const DISTANCE_KIND: QuantityKind = "distance";
 const DURATION_KIND: QuantityKind = "duration";
 
@@ -55,6 +58,21 @@ export function quantityReps(quantity: Quantity | null | undefined): number | nu
 // way, rather than each re-deriving the suffix check.
 export function distanceUnitFromText(text: string | undefined): DistanceUnit {
   return (text ?? "").trimEnd().endsWith("mi") ? "mi" : "km";
+}
+
+// The display value a canonical distance (metres) reads as in the given unit — the
+// reverse of how `distanceInput`/the backend canonicalise a typed distance to metres.
+// Used to pre-fill the log form's distance field from a Prescribed Quantity ("7 KM" →
+// metres 7000 → "7"). Rounds to trim binary-float noise (3.1 mi round-trips to "3.1",
+// not "3.0999…") and strips trailing zeros; a missing or non-positive distance reads as
+// blank so the field is simply empty rather than "0".
+export function distanceValueFromMetres(
+  metres: number | null | undefined,
+  unit: DistanceUnit,
+): string {
+  if (metres == null || !Number.isFinite(metres) || metres <= 0) return "";
+  const metresPerUnit = unit === "mi" ? METRES_PER_MILE : METRES_PER_KM;
+  return String(Number((metres / metresPerUnit).toFixed(DISTANCE_DECIMALS)));
 }
 
 // The per-set request fields for a repetitions Quantity, built from the reps the log
@@ -116,9 +134,11 @@ export function durationInput(value: string): {
   return { quantity_kind: DURATION_KIND, quantity_value: value };
 }
 
-// The whole seconds of a canonical seconds figure, formatted as `m:ss` (the display
-// form pace and split times share). A partial second rounds to the nearest second.
-function formatMinutesSeconds(totalSeconds: number): string {
+// A canonical seconds figure formatted as `m:ss` — the unambiguous clock form pace, split
+// times, and a seeded hold-time field share. A partial second rounds to the nearest second.
+// Exported so the log form seeds a `duration` set's time field in the same `mm:ss` shape its
+// placeholder promises, rather than a bare-seconds value the format would contradict.
+export function formatSecondsAsClock(totalSeconds: number): string {
   const rounded = Math.round(totalSeconds);
   const minutes = Math.floor(rounded / SECONDS_PER_MINUTE);
   const seconds = rounded % SECONDS_PER_MINUTE;
@@ -140,5 +160,5 @@ export function formatPace(quantity: Quantity | null | undefined): string | null
   const unitLabel = inMiles ? "mi" : "km";
 
   const secondsPerUnit = duration_s / (metres / metresPerUnit);
-  return `${formatMinutesSeconds(secondsPerUnit)} /${unitLabel}`;
+  return `${formatSecondsAsClock(secondsPerUnit)} /${unitLabel}`;
 }
