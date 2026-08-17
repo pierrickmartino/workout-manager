@@ -112,7 +112,7 @@ test("an admin additionally gets the Skin list and preview/publish state", () =>
   assert.ok(view.skinControl);
   assert.deepEqual(
     view.skinControl?.options.map((option) => option.value),
-    ["pulse", "aurora"],
+    ["pulse", "aurora", "vercel"],
   );
   assert.ok(view.modeOptions.length > 0);
 });

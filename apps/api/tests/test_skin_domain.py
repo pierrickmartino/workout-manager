@@ -67,6 +67,14 @@ def test_a_second_skin_ships_so_a_publish_is_observable():
     assert len(skin_ids()) >= 2
 
 
+def test_vercel_skin_ships_in_the_catalog():
+    # Assert — the Vercel-inspired Skin is a curated catalog member, so an admin
+    # can publish it and the PUT gate accepts its id (its token values live in
+    # the frontend's globals.css under [data-skin="vercel"]).
+    assert "vercel" in skin_ids()
+    assert is_known_skin("vercel") is True
+
+
 def test_skin_ids_are_unique():
     ids = skin_ids()
     assert len(ids) == len(set(ids))
