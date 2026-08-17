@@ -269,6 +269,17 @@ class ExercisePrescription(SQLModel, table=True):
     reps: str
     rest_seconds: int | None = Field(default=None)
     tempo: str | None = Field(default=None)
+    # Typed Prescribed Quantity (ADR-0050): a ``{kind, text, ...payload}`` value object
+    # matching ``app.domain.quantity.Quantity`` — the plan side's amount axis, mirroring
+    # ``LoggedSet.quantity`` on the record side. A ``repetitions`` kind carries the target
+    # count; a ``distance`` or ``duration`` kind types a prescribed run or timed hold, so a
+    # cardio Prescription is loggable through its own plan. The free-text ``reps`` above is
+    # retained for display/back-compat; this typed Quantity is the source of truth for
+    # rendering the log input. Additive and nullable: existing rows read ``None`` until the
+    # backfill (0027) types them, and no write path is required to populate it yet.
+    prescribed_quantity: dict | None = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
     # Typed Load (ADR-0010): a ``{kind, text, ...payload}`` value object, never a
     # bare string — so downstream analytics read the meaning instead of re-guessing
     # the free-text. See ``app.domain.load.ParsedLoad``.
