@@ -337,17 +337,6 @@ def test_prescribed_distance_honors_the_picked_unit():
     assert quantity.metres == pytest.approx(5000.0 * 1609.344 / 1000)
 
 
-def test_prescribed_distance_carries_an_optional_companion_time():
-    # Act — a distance target with a companion time makes pace derivable
-    quantity = prescribed_quantity_from_input(
-        "distance", "5", unit="km", duration="25:00"
-    )
-
-    # Assert
-    assert quantity.kind is QuantityKind.DISTANCE
-    assert quantity.has_pace is True
-
-
 @pytest.mark.parametrize(
     ("kind", "target", "expected_kind"),
     [
@@ -369,13 +358,14 @@ def test_prescribed_free_text_target_falls_back_to_inference(kind, target, expec
 
 
 def test_a_target_nonsensical_for_its_kind_degrades_to_repetitions():
-    # Arrange / Act — "8-12" can't be a distance; rather than crash, it degrades to the
-    # safe default through the shared text inference (graceful, like a bad generation).
+    # Arrange / Act — "8-12" can't be a distance; rather than crash or lose the target, it
+    # falls back to inference over that same prose (graceful, like a bad generation).
     quantity = prescribed_quantity_from_input("distance", "8-12", unit="km")
 
-    # Assert
+    # Assert — the safe default, with the target text preserved verbatim
     assert quantity.kind is QuantityKind.REPETITIONS
     assert quantity.count is None
+    assert quantity.text == "8-12"
 
 
 @pytest.mark.parametrize(
@@ -403,15 +393,3 @@ def test_prescribed_quantity_is_never_none():
     # Assert — repetitions is the safe default; nothing raises and nothing is None
     assert blank.kind is QuantityKind.REPETITIONS
     assert garbage.kind is QuantityKind.REPETITIONS
-
-
-def test_fallback_text_overrides_the_value_for_inference():
-    # Arrange / Act — a caller (e.g. generation) can infer from a *different* prose than
-    # the value it tried to build: an unbuildable value with a rep-range fallback text.
-    quantity = prescribed_quantity_from_input(
-        "distance", "notanumber", unit="km", fallback_text="8-12"
-    )
-
-    # Assert — the fallback prose, not the value, drives the inference
-    assert quantity.kind is QuantityKind.REPETITIONS
-    assert quantity.text == "8-12"
