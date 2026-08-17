@@ -43,7 +43,7 @@ The ordered sequence of instructions for performing an Exercise — an enumerate
 _Avoid_: Instructions (as free text), how-to, description
 
 **Exercise Prescription**:
-The prescription of one Exercise inside a Session — the sets, repetitions, rest, tempo, and recommended load the user is told to perform. References a catalog Exercise. Distinct from the Exercise definition.
+The prescription of one Exercise inside a Session — the sets, prescribed **Quantity** (a typed reps / distance / duration target, not a bare rep count — ADR-0050), rest, tempo, and recommended **Load** the user is told to perform. References a catalog Exercise. Distinct from the Exercise definition.
 _Avoid_: Exercise (when referring to the prescribed sets/reps)
 
 **Superset**:
