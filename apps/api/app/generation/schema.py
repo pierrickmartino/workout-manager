@@ -34,16 +34,18 @@ class GeneratedQuantity(BaseModel):
     :func:`quantity_from_input`, the write-boundary builder the log form already
     feeds, so generation and the picker share one canonicalisation.
 
-    ``kind`` is a plain string, not an enum, on purpose: an out-of-vocabulary kind
-    must degrade through the shared text-inference fallback at the
-    :attr:`GeneratedExercisePrescription.typed_quantity` boundary, never fail the
-    whole generation. ``coerce_numbers_to_str`` tolerates a model that emits a bare
-    number for ``value`` instead of a string."""
+    Every field is optional, and ``kind`` is a plain string rather than an enum, on
+    purpose: a structurally-incomplete emission (a missing ``value``, an absent
+    ``kind``) or an out-of-vocabulary kind must degrade through the shared
+    text-inference fallback at the
+    :attr:`GeneratedExercisePrescription.typed_quantity` boundary, never raise a
+    ``ValidationError`` that fails the whole generation. ``coerce_numbers_to_str``
+    tolerates a model that emits a bare number for ``value`` instead of a string."""
 
     model_config = ConfigDict(coerce_numbers_to_str=True)
 
-    kind: str
-    value: str
+    kind: str | None = None
+    value: str | None = None
     unit: str | None = None
     duration: str | None = None
 
@@ -94,16 +96,17 @@ class GeneratedExercisePrescription(BaseModel):
     def typed_quantity(self) -> dict:
         """The prescription's typed Prescribed Quantity as a stored ``Quantity`` dict.
 
-        The plan-side sibling of :attr:`typed_load`. When the model declares a typed
-        ``quantity`` (kind + value), it is built once through the shared write-boundary
-        builder :func:`quantity_from_input` — the same path the log form's kind picker
-        feeds. When the model emits only a bare free-text ``reps`` amount, or a
-        kind/value the builder can't type (an unrecognised kind, a blank value), it
+        The plan-side sibling of :attr:`typed_load`. When the model declares a usable
+        typed ``quantity`` (a ``kind`` and a ``value``), it is built once through the
+        shared write-boundary builder :func:`quantity_from_input` — the same path the
+        log form's kind picker feeds. When the model emits only a bare free-text
+        ``reps`` amount, a structurally-incomplete quantity (a missing ``kind`` or
+        ``value``), or a kind/value the builder can't type (an unrecognised kind), it
         falls through to :func:`quantity_from_text` (#341) — the same inference the
         one-time backfill uses. Either way a typed Quantity is produced, so a malformed
         generation degrades gracefully instead of leaving the prescription untyped."""
 
-        if self.quantity is not None:
+        if self.quantity is not None and self.quantity.kind and self.quantity.value:
             built = quantity_from_input(
                 self.quantity.kind,
                 self.quantity.value,

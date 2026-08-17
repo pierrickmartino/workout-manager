@@ -504,6 +504,46 @@ def test_invalid_kind_degrades_to_the_text_inference_fallback():
     assert quantity == {"kind": "duration", "text": "30 min", "seconds": 1800.0}
 
 
+def test_quantity_object_missing_its_value_degrades_instead_of_erroring():
+    # Arrange — a structurally-incomplete typed quantity: kind but no value. The
+    # nested object must not raise a ValidationError that fails the whole generation;
+    # it degrades through the #341 inference over the free-text reps (AC#2).
+    payload = """
+    {
+      "prescriptions": [
+        {"exercise_name": "Long Run", "sets": 1, "reps": "8 km",
+         "quantity": {"kind": "distance"}}
+      ]
+    }
+    """
+
+    # Act — must not raise
+    generated = parse_generated_session(payload)
+
+    # Assert — fell through to inference over "8 km" → a distance
+    quantity = generated.prescriptions[0].typed_quantity
+    assert quantity == {"kind": "distance", "text": "8 km", "metres": 8000.0}
+
+
+def test_quantity_object_missing_its_kind_degrades_instead_of_erroring():
+    # Arrange — the mirror case: a value but no kind. Again, degrade, do not crash.
+    payload = """
+    {
+      "prescriptions": [
+        {"exercise_name": "Plank", "sets": 3, "reps": "45s",
+         "quantity": {"value": "45"}}
+      ]
+    }
+    """
+
+    # Act
+    generated = parse_generated_session(payload)
+
+    # Assert — inference over "45s" → a duration
+    quantity = generated.prescriptions[0].typed_quantity
+    assert quantity == {"kind": "duration", "text": "45s", "seconds": 45.0}
+
+
 def test_strength_reps_prescription_types_as_repetitions_by_default():
     # Arrange — an ordinary strength prescription with no typed `quantity`
     payload = """
