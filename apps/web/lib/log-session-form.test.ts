@@ -3,13 +3,18 @@ import assert from "node:assert/strict";
 
 import {
   buildLogForm,
+  buildLogSet,
+  buildLoggedSets,
   deriveCompletionOutcome,
   prescribedByPosition,
   prescribedRowCount,
+  readLogFormRows,
   seededReps,
   skippedSetCount,
+  type LogRowFields,
 } from "./log-session-form.ts";
 import type { ExercisePrescription } from "./sessions-types.ts";
+import type { Quantity } from "./quantity.ts";
 
 // `log-session-form` expands a Session's prescriptions into the per-set rows the static log
 // form records, and derives the Completion Outcome from what the user marked done. The old
@@ -60,7 +65,7 @@ test("seeds reps from a clean integer, and leaves a range blank with a hint", ()
   // field is blank and the prescribed reps ride as the placeholder hint
   assert.equal(groups[0].rows[0].reps, "5");
   assert.equal(groups[1].rows[0].reps, "");
-  assert.equal(groups[1].repsHint, "8-12");
+  assert.equal(groups[1].hint, "8-12");
 });
 
 test("seeds the load kind and value from the prescribed Load", () => {
@@ -153,4 +158,257 @@ test("counts a whole skipped exercise's prescribed sets as un-attempted", () => 
   // Act / Assert — three prescribed sets left un-attempted
   assert.equal(deriveCompletionOutcome(prescribed, rows), "incomplete");
   assert.equal(skippedSetCount(prescribed, rows), 3);
+});
+
+// --- Kind-aware seeding (ADR-0050, issue #343): buildLogForm reads the typed Prescribed
+// Quantity and seeds each row with the matching kind/value/unit, so a reused run lands on a
+// distance field pre-filled with the prescribed distance.
+
+const distanceQuantity: Quantity = { kind: "distance", text: "7 KM", metres: 7000 };
+const durationQuantity: Quantity = { kind: "duration", text: "45s", seconds: 45 };
+
+test("seeds a distance row with the prescribed value, unit, and blank companion time", () => {
+  // Arrange — a "1 × 7 KM" running prescription
+  const [group] = buildLogForm([
+    prescription({ sets: 1, reps: "7 KM", prescribed_quantity: distanceQuantity }),
+  ]);
+
+  // Assert — the row is a distance kind, the field pre-filled with 7 km, no time yet
+  assert.equal(group.kind, "distance");
+  assert.equal(group.rows[0].kind, "distance");
+  assert.equal(group.rows[0].distance, "7");
+  assert.equal(group.rows[0].unit, "km");
+  assert.equal(group.rows[0].duration, "");
+  assert.equal(group.rows[0].reps, "");
+});
+
+test("seeds a miles distance value from canonical metres without float noise", () => {
+  // Arrange — 3.1 miles prescribed, stored canonically in metres
+  const milesQuantity: Quantity = {
+    kind: "distance",
+    text: "3.1 mi",
+    metres: 3.1 * 1609.344,
+  };
+  const [group] = buildLogForm([
+    prescription({ sets: 1, reps: "3.1 mi", prescribed_quantity: milesQuantity }),
+  ]);
+
+  // Assert — reads back as "3.1 mi", not "3.0999…"
+  assert.equal(group.rows[0].distance, "3.1");
+  assert.equal(group.rows[0].unit, "mi");
+});
+
+test("seeds a duration row's hold time from canonical seconds", () => {
+  // Arrange — a 45-second plank hold prescribed
+  const [group] = buildLogForm([
+    prescription({ sets: 1, reps: "45s", prescribed_quantity: durationQuantity }),
+  ]);
+
+  // Assert — a duration kind seeded with the hold time in mm:ss (matching the field's
+  // placeholder); the verbatim "45s" stays the hint
+  assert.equal(group.kind, "duration");
+  assert.equal(group.rows[0].kind, "duration");
+  assert.equal(group.rows[0].duration, "0:45");
+  assert.equal(group.hint, "45s");
+});
+
+test("seeds a minutes-long hold as mm:ss (90s → 1:30)", () => {
+  const [group] = buildLogForm([
+    prescription({
+      sets: 1,
+      reps: "1:30",
+      prescribed_quantity: { kind: "duration", text: "1:30", seconds: 90 },
+    }),
+  ]);
+  assert.equal(group.rows[0].duration, "1:30");
+});
+
+test("leaves a repetitions prescription unchanged when no typed Quantity is present", () => {
+  // Arrange — a legacy/strength prescription with no prescribed_quantity
+  const [group] = buildLogForm([prescription({ sets: 1, reps: "8" })]);
+
+  // Assert — reps kind, reps seeded as before, distance/duration empty
+  assert.equal(group.kind, "repetitions");
+  assert.equal(group.rows[0].reps, "8");
+  assert.equal(group.rows[0].distance, "");
+  assert.equal(group.rows[0].duration, "");
+});
+
+test("hides the Load block by default for distance/duration but keeps it for reps", () => {
+  const groups = buildLogForm([
+    prescription({ position: 0, sets: 1, reps: "7 KM", prescribed_quantity: distanceQuantity }),
+    prescription({ position: 1, sets: 1, reps: "45s", prescribed_quantity: durationQuantity }),
+    prescription({ position: 2, sets: 1, reps: "8" }),
+  ]);
+
+  assert.equal(groups[0].rows[0].showLoad, false);
+  assert.equal(groups[1].rows[0].showLoad, false);
+  assert.equal(groups[2].rows[0].showLoad, true);
+});
+
+test("keeps the Load block for a loaded carry — a distance set with a prescribed load", () => {
+  // Arrange — a weighted-carry run: distance kind, but a load is explicitly prescribed
+  const [group] = buildLogForm([
+    prescription({
+      sets: 1,
+      reps: "1 KM",
+      prescribed_quantity: { kind: "distance", text: "1 KM", metres: 1000 },
+      recommended_load: { kind: "absolute", text: "20kg", kg: 20 },
+    }),
+  ]);
+
+  // Assert — Load stays visible and seeded, since the plan asked for it
+  assert.equal(group.rows[0].showLoad, true);
+  assert.equal(group.rows[0].loadKind, "absolute");
+  assert.equal(group.rows[0].loadValue, "20");
+});
+
+// --- Per-set payload building (ADR-0050): buildLogSet/buildLoggedSets dispatch by kind to the
+// shared quantity request builders, the same seam hand-authored-session tests cover.
+
+function row(overrides: Partial<LogRowFields> = {}): LogRowFields {
+  return {
+    exerciseId: 1,
+    kind: "repetitions",
+    reps: "",
+    distance: "",
+    unit: "km",
+    duration: "",
+    loadKind: "absolute",
+    loadValue: "",
+    rpe: "",
+    ...overrides,
+  };
+}
+
+test("a repetitions row logs its reps as a repetitions Quantity", () => {
+  const result = buildLogSet(row({ reps: "8", loadValue: "60" }));
+  assert.equal(result.status, "set");
+  if (result.status !== "set") return;
+  assert.equal(result.set.quantity_kind, "repetitions");
+  assert.equal(result.set.quantity_value, "8");
+  assert.equal(result.set.load_value, "60");
+  assert.equal(result.set.quantity_unit, undefined);
+});
+
+test("a blank Done reps row logs as 0 reps, not a skip (regression: attempted to failure)", () => {
+  const result = buildLogSet(row({ reps: "" }));
+  assert.equal(result.status, "set");
+  if (result.status !== "set") return;
+  assert.equal(result.set.quantity_value, "0");
+});
+
+test("a malformed reps value is dropped silently", () => {
+  assert.equal(buildLogSet(row({ reps: "-3" })).status, "skip");
+  assert.equal(buildLogSet(row({ reps: "5.5" })).status, "skip");
+});
+
+test("a distance row logs a distance Quantity with unit and optional companion time", () => {
+  const result = buildLogSet(
+    row({ kind: "distance", distance: "6.8", unit: "km", duration: "30:00" }),
+  );
+  assert.equal(result.status, "set");
+  if (result.status !== "set") return;
+  assert.equal(result.set.quantity_kind, "distance");
+  assert.equal(result.set.quantity_value, "6.8");
+  assert.equal(result.set.quantity_unit, "km");
+  assert.equal(result.set.quantity_duration, "30:00");
+});
+
+test("a distance-only run (no time) logs fine and sends no companion time", () => {
+  const result = buildLogSet(row({ kind: "distance", distance: "7", unit: "km", duration: "" }));
+  assert.equal(result.status, "set");
+  if (result.status !== "set") return;
+  assert.equal(result.set.quantity_value, "7");
+  assert.equal(result.set.quantity_duration, null);
+});
+
+test("a garbled distance is rejected with a clear message, but a blank one is skipped", () => {
+  // Garbled (the user typed nonsense) → reject the whole submission with a clear message
+  const garbled = buildLogSet(row({ kind: "distance", distance: "abc" }));
+  assert.equal(garbled.status, "error");
+  if (garbled.status === "error") assert.match(garbled.error, /valid distance/);
+  assert.equal(buildLogSet(row({ kind: "distance", distance: "0" })).status, "error");
+  assert.equal(buildLogSet(row({ kind: "distance", distance: "-3" })).status, "error");
+
+  // Blank → not performed → skip, so an added-but-unfilled distance row never blocks the log
+  assert.equal(buildLogSet(row({ kind: "distance", distance: "" })).status, "skip");
+});
+
+test("a duration row logs a duration Quantity; a garbled time errors, a blank one skips", () => {
+  const ok = buildLogSet(row({ kind: "duration", duration: "1:30" }));
+  assert.equal(ok.status, "set");
+  if (ok.status === "set") {
+    assert.equal(ok.set.quantity_kind, "duration");
+    assert.equal(ok.set.quantity_value, "1:30");
+  }
+
+  const garbled = buildLogSet(row({ kind: "duration", duration: "nope" }));
+  assert.equal(garbled.status, "error");
+  if (garbled.status === "error") assert.match(garbled.error, /valid hold time/);
+
+  // Blank → not performed → skip
+  assert.equal(buildLogSet(row({ kind: "duration", duration: "" })).status, "skip");
+});
+
+test("Load is omitted (null) by default for a distance set and passed through when present", () => {
+  const noLoad = buildLogSet(row({ kind: "distance", distance: "5" }));
+  assert.equal(noLoad.status, "set");
+  if (noLoad.status === "set") assert.equal(noLoad.set.load_value, null);
+
+  const carried = buildLogSet(
+    row({ kind: "distance", distance: "5", loadKind: "absolute", loadValue: "20" }),
+  );
+  assert.equal(carried.status, "set");
+  if (carried.status === "set") {
+    assert.equal(carried.set.load_kind, "absolute");
+    assert.equal(carried.set.load_value, "20");
+  }
+});
+
+test("buildLoggedSets rejects the whole submission on the first malformed distance", () => {
+  const rows: LogRowFields[] = [
+    row({ reps: "8" }),
+    row({ kind: "distance", distance: "nope" }),
+  ];
+  const built = buildLoggedSets(rows);
+  assert.equal(built.ok, false);
+  if (!built.ok) assert.match(built.error, /valid distance/);
+});
+
+test("buildLoggedSets builds a hybrid run-then-squats Session, dropping skipped-only rows", () => {
+  const rows: LogRowFields[] = [
+    row({ exerciseId: 1, kind: "distance", distance: "5", unit: "km" }),
+    row({ exerciseId: 2, kind: "repetitions", reps: "10" }),
+  ];
+  const built = buildLoggedSets(rows);
+  assert.equal(built.ok, true);
+  if (!built.ok) return;
+  assert.equal(built.sets.length, 2);
+  assert.equal(built.sets[0].quantity_kind, "distance");
+  assert.equal(built.sets[1].quantity_kind, "repetitions");
+});
+
+// --- Form-row reading (indexed fields): readLogFormRows drops un-done rows and reads each
+// row's kind-specific fields by index, so a heterogeneous submission never misaligns.
+
+test("readLogFormRows reads indexed rows and drops the ones not marked done", () => {
+  const form = new FormData();
+  form.set("set_count", "2");
+  form.set("set-0-done", "true");
+  form.set("set-0-exercise_id", "1");
+  form.set("set-0-kind", "distance");
+  form.set("set-0-distance", "5");
+  form.set("set-0-unit", "km");
+  // Row 1 was skipped (not done) — it must not reach the payload
+  form.set("set-1-done", "false");
+  form.set("set-1-exercise_id", "2");
+  form.set("set-1-kind", "repetitions");
+  form.set("set-1-reps", "10");
+
+  const rows = readLogFormRows(form);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].exerciseId, 1);
+  assert.equal(rows[0].kind, "distance");
+  assert.equal(rows[0].distance, "5");
 });
