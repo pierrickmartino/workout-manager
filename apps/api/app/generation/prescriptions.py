@@ -5,8 +5,9 @@ standalone Session generation (``generation/service``), Session Regeneration
 (``generation/regeneration_service``), and Protocol Adoption (``adoption/service``).
 Each generated prescription's Exercise is resolved through the shared catalog
 (``find_or_create`` with ``ai_generated`` provenance and normalized-name dedup,
-ADR-0002), and the prescription's scalars — including the typed Load (ADR-0010) and
-any Superset overlay (ADR-0023) — are carried onto a ``PrescriptionDraft``.
+ADR-0002), and the prescription's scalars — including the typed Load (ADR-0010), the
+typed Prescribed Quantity (ADR-0050), and any Superset overlay (ADR-0023) — are
+carried onto a ``PrescriptionDraft``.
 
 Pure orchestration over the Exercise catalog: it resolves and maps, it never
 persists and never mutates its input. Every field the schema carries is carried
@@ -34,8 +35,8 @@ def resolve_prescriptions(
 
     Returns one ``PrescriptionDraft`` per input, in order. Each referenced Exercise
     is resolved through the shared catalog — created ``ai_generated`` on a miss,
-    reused on a normalized-name hit (ADR-0002) — and the typed Load and the Superset
-    overlay are carried across unchanged.
+    reused on a normalized-name hit (ADR-0002) — and the typed Load, the typed
+    Prescribed Quantity, and the Superset overlay are carried across unchanged.
     """
 
     drafts: list[PrescriptionDraft] = []
@@ -55,6 +56,7 @@ def resolve_prescriptions(
                 rest_seconds=item.rest_seconds,
                 tempo=item.tempo,
                 recommended_load=item.typed_load,
+                prescribed_quantity=item.typed_quantity,
                 superset_group=item.superset_group,
                 round_rest_seconds=item.round_rest_seconds,
             )

@@ -9,10 +9,11 @@ turns "did the AI return well-formed data?" into a guarantee."""
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.json_schema import SkipJsonSchema
 
 from app.domain.load import parse_load
+from app.domain.quantity import quantity_from_input, quantity_from_text
 
 # Operator lineage stamped on an artifact *after* validation (#274): the generation
 # call's trace id. ``SkipJsonSchema`` keeps it out of the JSON schema the model is
@@ -22,6 +23,31 @@ from app.domain.load import parse_load
 TraceId = SkipJsonSchema[str | None]
 
 
+class GeneratedQuantity(BaseModel):
+    """The typed Prescribed Quantity the model declares directly (ADR-0050, #344).
+
+    The plan-side sibling of ``recommended_load``: where that names the free-text
+    load, this names the amount axis up front — a ``kind`` (``repetitions`` /
+    ``distance`` / ``duration``), the ``value`` for that kind, a distance ``unit``
+    (``km`` / ``mi``), and an optional companion ``duration`` (a ``mm:ss`` run time
+    from which pace becomes derivable). It maps exactly onto
+    :func:`quantity_from_input`, the write-boundary builder the log form already
+    feeds, so generation and the picker share one canonicalisation.
+
+    ``kind`` is a plain string, not an enum, on purpose: an out-of-vocabulary kind
+    must degrade through the shared text-inference fallback at the
+    :attr:`GeneratedExercisePrescription.typed_quantity` boundary, never fail the
+    whole generation. ``coerce_numbers_to_str`` tolerates a model that emits a bare
+    number for ``value`` instead of a string."""
+
+    model_config = ConfigDict(coerce_numbers_to_str=True)
+
+    kind: str
+    value: str
+    unit: str | None = None
+    duration: str | None = None
+
+
 class GeneratedExercisePrescription(BaseModel):
     """One prescribed Exercise: the catalog definition plus its prescription.
 
@@ -29,7 +55,8 @@ class GeneratedExercisePrescription(BaseModel):
     in (``"70kg"``, ``"bodyweight"``, ``"70% 1RM"``). ``typed_load`` is the
     generation-ingestion boundary (ADR-0010): it runs :func:`parse_load` once so
     everything downstream persists and reads a typed ``{kind, text, ...}`` Load
-    instead of re-guessing the string forever."""
+    instead of re-guessing the string forever. ``typed_quantity`` is the analogous
+    boundary for the amount axis (ADR-0050)."""
 
     exercise_name: str
     exercise_description: str | None = None
@@ -40,6 +67,11 @@ class GeneratedExercisePrescription(BaseModel):
     rest_seconds: int | None = None
     tempo: str | None = None
     recommended_load: str | None = None
+    # Typed Prescribed Quantity (ADR-0050): the model declares the amount's kind +
+    # value directly. ``None`` when the model emits only the free-text ``reps`` amount
+    # (a legacy/bare generation) — ``typed_quantity`` then infers the kind from that
+    # prose via the shared #341 fallback, so the prescription is always born typed.
+    quantity: GeneratedQuantity | None = None
     # Superset grouping (ADR-0023): both ``None`` for a flat, solo Prescription.
     # Members of one generated Superset share ``superset_group`` and each carries the
     # group-owned ``round_rest_seconds`` (denormalized per member so it survives
@@ -57,6 +89,30 @@ class GeneratedExercisePrescription(BaseModel):
         if self.recommended_load is None:
             return None
         return parse_load(self.recommended_load).to_dict()
+
+    @property
+    def typed_quantity(self) -> dict:
+        """The prescription's typed Prescribed Quantity as a stored ``Quantity`` dict.
+
+        The plan-side sibling of :attr:`typed_load`. When the model declares a typed
+        ``quantity`` (kind + value), it is built once through the shared write-boundary
+        builder :func:`quantity_from_input` — the same path the log form's kind picker
+        feeds. When the model emits only a bare free-text ``reps`` amount, or a
+        kind/value the builder can't type (an unrecognised kind, a blank value), it
+        falls through to :func:`quantity_from_text` (#341) — the same inference the
+        one-time backfill uses. Either way a typed Quantity is produced, so a malformed
+        generation degrades gracefully instead of leaving the prescription untyped."""
+
+        if self.quantity is not None:
+            built = quantity_from_input(
+                self.quantity.kind,
+                self.quantity.value,
+                unit=self.quantity.unit or "km",
+                duration=self.quantity.duration,
+            )
+            if built is not None:
+                return built.to_dict()
+        return quantity_from_text(self.reps).to_dict()
 
 
 class GeneratedSession(BaseModel):

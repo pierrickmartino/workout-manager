@@ -395,3 +395,169 @@ def test_a_valid_group_is_kept_when_another_group_degrades():
         None,
         None,
     ]
+
+
+# --- Typed Prescribed Quantity: schema emission + parse-boundary fallback (ADR-0050) ---
+# #344: the model may declare a prescription's amount kind directly (a `quantity`
+# object of kind + value), the plan-side sibling of `recommended_load`/`typed_load`.
+# A valid typed emission becomes the canonical Prescribed Quantity; a bare free-text
+# amount or an unrecognised kind degrades through the shared #341 text inference
+# rather than failing the generation.
+
+
+def test_parses_a_typed_distance_quantity_the_model_emitted():
+    # Arrange — the model declares a distance run up front (kind + value + unit)
+    payload = """
+    {
+      "prescriptions": [
+        {"exercise_name": "Easy Run", "sets": 1, "reps": "7 KM",
+         "quantity": {"kind": "distance", "value": "7", "unit": "km"}}
+      ]
+    }
+    """
+
+    # Act
+    generated = parse_generated_session(payload)
+
+    # Assert — the typed Quantity canonicalises to metres from the declared kind
+    quantity = generated.prescriptions[0].typed_quantity
+    assert quantity == {"kind": "distance", "text": "7 km", "metres": 7000.0}
+
+
+def test_parses_a_typed_duration_quantity_the_model_emitted():
+    # Arrange — a timed hold declared as a duration in mm:ss
+    payload = """
+    {
+      "prescriptions": [
+        {"exercise_name": "Plank", "sets": 3, "reps": "0:30",
+         "quantity": {"kind": "duration", "value": "0:30"}}
+      ]
+    }
+    """
+
+    # Act
+    generated = parse_generated_session(payload)
+
+    # Assert — canonical seconds from the declared kind
+    quantity = generated.prescriptions[0].typed_quantity
+    assert quantity == {"kind": "duration", "text": "0:30", "seconds": 30.0}
+
+
+def test_distance_quantity_carries_an_optional_companion_time():
+    # Arrange — a distance with a target pace expressed as a companion run time
+    payload = """
+    {
+      "prescriptions": [
+        {"exercise_name": "Tempo Run", "sets": 1, "reps": "5 km",
+         "quantity": {"kind": "distance", "value": "5", "unit": "km",
+                      "duration": "25:00"}}
+      ]
+    }
+    """
+
+    # Act
+    generated = parse_generated_session(payload)
+
+    # Assert — pace becomes derivable because the companion time is carried
+    quantity = generated.prescriptions[0].typed_quantity
+    assert quantity["kind"] == "distance"
+    assert quantity["metres"] == 5000.0
+    assert quantity["duration_s"] == 1500.0
+
+
+def test_bare_amount_string_falls_back_through_text_inference():
+    # Arrange — a legacy/malformed generation emits only the free-text amount, no
+    # typed `quantity` object at all.
+    payload = """
+    {
+      "prescriptions": [
+        {"exercise_name": "Long Run", "sets": 1, "reps": "10 km"}
+      ]
+    }
+    """
+
+    # Act — must not raise; the #341 inference reads the kind off the prose
+    generated = parse_generated_session(payload)
+
+    # Assert — inferred as a distance, canonical metres, text preserved verbatim
+    quantity = generated.prescriptions[0].typed_quantity
+    assert quantity == {"kind": "distance", "text": "10 km", "metres": 10000.0}
+
+
+def test_invalid_kind_degrades_to_the_text_inference_fallback():
+    # Arrange — the model emits an out-of-vocabulary kind; it must not fail the
+    # whole generation, it degrades to the inference over the free-text reps.
+    payload = """
+    {
+      "prescriptions": [
+        {"exercise_name": "Row", "sets": 1, "reps": "30 min",
+         "quantity": {"kind": "velocity", "value": "9000"}}
+      ]
+    }
+    """
+
+    # Act — no crash at the parse boundary
+    generated = parse_generated_session(payload)
+
+    # Assert — falls through to inference over "30 min" → a duration
+    quantity = generated.prescriptions[0].typed_quantity
+    assert quantity == {"kind": "duration", "text": "30 min", "seconds": 1800.0}
+
+
+def test_strength_reps_prescription_types_as_repetitions_by_default():
+    # Arrange — an ordinary strength prescription with no typed `quantity`
+    payload = """
+    {
+      "prescriptions": [
+        {"exercise_name": "Back Squat", "sets": 5, "reps": "5"}
+      ]
+    }
+    """
+
+    # Act
+    generated = parse_generated_session(payload)
+
+    # Assert — the safe default: repetitions carrying the bare count
+    quantity = generated.prescriptions[0].typed_quantity
+    assert quantity == {"kind": "repetitions", "text": "5", "count": 5}
+
+
+def test_a_range_reps_prescription_types_as_repetitions_without_a_count():
+    # Arrange — "8-12" is a range: repetitions, but no single canonical count
+    payload = """
+    {
+      "prescriptions": [
+        {"exercise_name": "Curl", "sets": 3, "reps": "8-12"}
+      ]
+    }
+    """
+
+    # Act
+    generated = parse_generated_session(payload)
+
+    # Assert
+    quantity = generated.prescriptions[0].typed_quantity
+    assert quantity == {"kind": "repetitions", "text": "8-12"}
+
+
+def test_system_prompt_instructs_the_model_to_declare_a_typed_quantity():
+    # Arrange / Act — the transport records the exact prompt it was asked to run
+    llm = FakeStructuredLLM(text=VALID_PAYLOAD)
+    LlmSessionGenerator(llm).generate(REQUEST)
+
+    # Assert — the model is told to declare a typed quantity kind
+    system = llm.calls[0]["system"].lower()
+    assert "quantity.kind" in system
+    assert "distance" in system and "duration" in system
+
+
+def test_sensitive_request_prompt_still_instructs_a_typed_quantity():
+    # Arrange / Act — the Sensitive-Constraint user is served a fresh generation
+    # (never cached), so the typed-quantity emission must fire on this path too, or
+    # cardio prescribed under Extra Caution would not be born typed (#344).
+    llm = FakeStructuredLLM(text=VALID_PAYLOAD)
+    LlmSessionGenerator(llm).generate(SENSITIVE_REQUEST)
+
+    # Assert
+    system = llm.calls[0]["system"].lower()
+    assert "quantity.kind" in system
