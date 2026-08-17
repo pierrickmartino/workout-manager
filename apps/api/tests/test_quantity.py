@@ -16,6 +16,7 @@ from app.domain.quantity import (
     QuantityKind,
     metres_of,
     quantity_from_input,
+    quantity_from_text,
 )
 
 
@@ -187,3 +188,113 @@ def test_an_unknown_kind_is_tolerated_at_the_boundary():
     # Arrange / Act — a kind the picker never should send
     # Assert — no KeyError/ValueError leaks; the boundary declines with None
     assert quantity_from_input("tempo", "120") is None
+
+
+# ---------------------------------------------------------------------------
+# quantity_from_text — free-text inference (ADR-0050 / #341)
+#
+# The one shared primitive that *infers* a Quantity's kind from a prescription's
+# free-text amount, reused by both the generation fallback and the backfill
+# migration. Unlike ``quantity_from_input`` (which is *told* the kind), this reads
+# the kind off the prose and always returns a Quantity — repetitions is the safe
+# default, so a bad amount degrades rather than crashing the log form. Prior art:
+# the ``quantity_from_input`` table above.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "metres"),
+    [
+        ("7 km", 7000.0),
+        ("7km", 7000.0),
+        ("7 KM", 7000.0),
+        ("6.8 km", 6800.0),
+        ("10 kilometres", 10000.0),
+        ("5 kilometers", 5000.0),
+        ("3 mi", 4828.032),
+        ("3 miles", 4828.032),
+        ("1 mile", 1609.344),
+    ],
+)
+def test_text_inference_resolves_distance_to_canonical_metres(text, metres):
+    # Act — a distance prescription written any of the ways a plan might carry it
+    quantity = quantity_from_text(text)
+
+    # Assert — a distance kind whose canonical payload is metres, km/mi and case alike
+    assert quantity.kind is QuantityKind.DISTANCE
+    assert quantity.metres == pytest.approx(metres)
+    assert quantity.count is None
+    assert quantity.seconds is None
+
+
+@pytest.mark.parametrize(
+    ("text", "seconds"),
+    [
+        ("30 min", 1800.0),
+        ("30 mins", 1800.0),
+        ("30 minutes", 1800.0),
+        ("0:30", 30.0),
+        ("90s", 90.0),
+        ("90 sec", 90.0),
+        ("45 secs", 45.0),
+        ("45 seconds", 45.0),
+        ("5:00", 300.0),
+        ("1:05:30", 3930.0),
+        ("1 hour", 3600.0),
+        ("2 hrs", 7200.0),
+    ],
+)
+def test_text_inference_resolves_duration_to_canonical_seconds(text, seconds):
+    # Act — a duration prescription in min/sec words or an mm:ss / hh:mm:ss clock
+    quantity = quantity_from_text(text)
+
+    # Assert — a duration kind whose canonical payload is seconds
+    assert quantity.kind is QuantityKind.DURATION
+    assert quantity.seconds == pytest.approx(seconds)
+    assert quantity.metres is None
+
+
+@pytest.mark.parametrize(
+    ("text", "count"),
+    [
+        ("8", 8),
+        ("12", 12),
+        ("8-12", None),
+        ("8–12", None),
+        ("AMRAP", None),
+        ("amrap", None),
+        ("to failure", None),
+        ("", None),
+        ("   ", None),
+        ("???", None),
+    ],
+)
+def test_text_inference_defaults_unrecognised_amounts_to_repetitions(text, count):
+    # Act — a bare rep count, a range, AMRAP, or anything the parser can't place
+    quantity = quantity_from_text(text)
+
+    # Assert — repetitions is the safe default; a clean integer keeps its count,
+    # a range/AMRAP/garbage carries no count but never crashes
+    assert quantity.kind is QuantityKind.REPETITIONS
+    assert quantity.count == count
+    assert quantity.metres is None
+    assert quantity.seconds is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["7 KM", "6.8 km", "30 min", "0:30", "8-12", "AMRAP", "to failure"],
+)
+def test_text_inference_carries_the_original_text_through_verbatim(text):
+    # Assert — the prescription's prose survives unchanged for lossless display
+    # (issue #340: "1 × 7 KM" keeps reading naturally), whatever kind it resolves to
+    assert quantity_from_text(text).text == text
+
+
+def test_text_inference_of_a_typed_distance_round_trips_through_storage():
+    # Arrange — an inferred distance is a real Quantity, storable like any other
+    inferred = quantity_from_text("7 km")
+
+    # Act / Assert — it survives the JSON-column round-trip the record side uses
+    assert Quantity.from_dict(inferred.to_dict()) == inferred
+    assert metres_of(inferred.to_dict()) == 7000.0
