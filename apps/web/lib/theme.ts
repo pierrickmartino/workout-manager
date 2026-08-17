@@ -12,13 +12,14 @@
 // A named palette family from the fixed, curated catalog (CONTEXT "Skin"). This
 // union is the frontend half of the single canonical Skin id list — it mirrors the
 // backend catalog in app/domain/skin.py, and the two must not drift on which Skins
-// exist. `aurora` is the minimal second seed Skin (ADR-0048 / #331).
-export type Skin = "pulse" | "aurora";
+// exist. `aurora` is the minimal second seed Skin (ADR-0048 / #331); `vercel` is a
+// minimalist, high-contrast palette inspired by Vercel's Geist design language.
+export type Skin = "pulse" | "aurora" | "vercel";
 
 // The catalog as a runtime set, so an id arriving from the API (untyped `string`
 // on the wire) can be narrowed to a `Skin` before it is stamped. Kept in lockstep
 // with the `Skin` union above.
-export const KNOWN_SKINS = ["pulse", "aurora"] as const;
+export const KNOWN_SKINS = ["pulse", "aurora", "vercel"] as const;
 
 // Narrow an arbitrary string to a catalog `Skin`. The backend validates a
 // published id against its catalog, so the wire value is normally valid; this is a

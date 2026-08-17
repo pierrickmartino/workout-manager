@@ -87,6 +87,20 @@ test("KNOWN_SKINS carries the whole catalog including the default", () => {
 test("isSkin accepts a catalog id", () => {
   assert.equal(isSkin("pulse"), true);
   assert.equal(isSkin("aurora"), true);
+  assert.equal(isSkin("vercel"), true);
+});
+
+test("KNOWN_SKINS carries the Vercel-inspired Skin", () => {
+  // Assert — the third catalog Skin ships so an admin can publish it
+  assert.ok(KNOWN_SKINS.includes("vercel"));
+});
+
+test("composes the Vercel Skin with a Mode", () => {
+  // Arrange / Act — the Vercel Skin at Dark Mode (Active Skin × Mode)
+  const attrs = resolveTheme("vercel", "dark");
+
+  // Assert — the published Skin is stamped alongside the user's Mode
+  assert.deepEqual(attrs, { "data-skin": "vercel", "data-mode": "dark" });
 });
 
 test("isSkin rejects an unknown id so it can fall back to the default", () => {

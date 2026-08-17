@@ -214,6 +214,95 @@
       --color-on-accent: #ffffff;
     }
   }
+
+  /*
+    VERCEL — a minimalist, high-contrast Skin inspired by Vercel's Geist design
+    language (ADR-0048). Its signature is a *true-black* page under a strict
+    grayscale surface/border/text ramp, with the accents inspired by the Geist
+    brand gradient (cyan / blue / purple / pink) — each hue adapted per variant
+    for contrast — so the lead accent (bg-cyan buttons, active states) reads as
+    the Vercel teal. The token *names* are identical to PULSE, so every component
+    re-themes for free. Because :root carries the PULSE dark values, Vercel
+    restates the full token set for both its dark base and its light variant.
+  */
+  [data-skin="vercel"][data-mode="dark"],
+  [data-skin="vercel"]:not([data-mode]) {
+    /* Surfaces — true-black page climbing through near-black cards */
+    --color-base: #000000;
+    --color-surface: #0a0a0a;
+    --color-elevated: #161616;
+
+    /* Borders — the low-contrast Geist grays */
+    --color-border: #242424;
+    --color-border-lite: #363636;
+
+    /* Text — Geist foreground down through its gray ramp */
+    --color-text-primary: #ededed;
+    --color-text-secondary: #a1a1a1;
+    --color-text-muted: #6e6e6e;
+
+    /* Accents — the Geist brand gradient, brightened to read on true black */
+    --color-cyan: #50e3c2;
+    --color-cyan-dim: #50e3c21f;
+    --color-blue: #3291ff;
+    --color-violet: #a06bf5;
+    --color-violet-dim: #a06bf51f;
+    --color-magenta: #ff4da6;
+    --color-magenta-dim: #ff4da61f;
+    --color-on-accent: #00110d;
+  }
+
+  [data-skin="vercel"][data-mode="light"] {
+    /* Surfaces — pure-white page, faint gray elevation (Geist light) */
+    --color-base: #ffffff;
+    --color-surface: #fafafa;
+    --color-elevated: #f2f2f2;
+
+    /* Borders — the pale Geist light grays */
+    --color-border: #eaeaea;
+    --color-border-lite: #d4d4d4;
+
+    /* Text — Geist near-black down to a mid gray */
+    --color-text-primary: #171717;
+    --color-text-secondary: #666666;
+    --color-text-muted: #8f8f8f;
+
+    /* Accents — brand hues deepened so they carry on white */
+    --color-cyan: #0d9488;
+    --color-cyan-dim: #0d94881f;
+    --color-blue: #0070f3;
+    --color-violet: #7928ca;
+    --color-violet-dim: #7928ca1f;
+    --color-magenta: #d6006f;
+    --color-magenta-dim: #d6006f1f;
+    --color-on-accent: #ffffff;
+  }
+
+  /* Vercel System Mode: no `data-mode`, so follow the device. The true-black base
+     above already covers dark devices; only the light branch needs stating here. */
+  @media (prefers-color-scheme: light) {
+    [data-skin="vercel"]:not([data-mode]) {
+      --color-base: #ffffff;
+      --color-surface: #fafafa;
+      --color-elevated: #f2f2f2;
+
+      --color-border: #eaeaea;
+      --color-border-lite: #d4d4d4;
+
+      --color-text-primary: #171717;
+      --color-text-secondary: #666666;
+      --color-text-muted: #8f8f8f;
+
+      --color-cyan: #0d9488;
+      --color-cyan-dim: #0d94881f;
+      --color-blue: #0070f3;
+      --color-violet: #7928ca;
+      --color-violet-dim: #7928ca1f;
+      --color-magenta: #d6006f;
+      --color-magenta-dim: #d6006f1f;
+      --color-on-accent: #ffffff;
+    }
+  }
 }
 
 @layer base {
@@ -247,6 +336,20 @@
   }
 
   [data-skin="aurora"]:not([data-mode]) {
+    color-scheme: light dark;
+  }
+
+  /* Vercel mirrors the same ambient color-scheme mapping so native controls track
+     the resolved Mode under whichever Skin is active. */
+  [data-skin="vercel"][data-mode="dark"] {
+    color-scheme: dark;
+  }
+
+  [data-skin="vercel"][data-mode="light"] {
+    color-scheme: light;
+  }
+
+  [data-skin="vercel"]:not([data-mode]) {
     color-scheme: light dark;
   }
 

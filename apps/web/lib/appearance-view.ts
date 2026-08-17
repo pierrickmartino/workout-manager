@@ -72,6 +72,11 @@ export const SKIN_OPTIONS = [
     caption: "Tactical command center — the original",
   },
   { value: "aurora", label: "Aurora", caption: "Soft luminous palette" },
+  {
+    value: "vercel",
+    label: "Vercel",
+    caption: "Minimal true-black, Geist-inspired",
+  },
 ] as const satisfies readonly Omit<
   AppearanceSkinOption,
   "isActive" | "isPreviewing"
