@@ -218,10 +218,10 @@
   /*
     VERCEL — a minimalist, high-contrast Skin inspired by Vercel's Geist design
     language (ADR-0048). Its signature is a *true-black* page under a strict
-    grayscale surface/border/text ramp, with the accents drawn straight from the
-    Geist brand gradient — cyan #50e3c2, blue #0070f3, purple #7928ca, pink
-    #ff0080 — so the lead accent (bg-cyan buttons, active states) reads as the
-    Vercel teal. The token *names* are identical to PULSE, so every component
+    grayscale surface/border/text ramp, with the accents inspired by the Geist
+    brand gradient (cyan / blue / purple / pink) — each hue adapted per variant
+    for contrast — so the lead accent (bg-cyan buttons, active states) reads as
+    the Vercel teal. The token *names* are identical to PULSE, so every component
     re-themes for free. Because :root carries the PULSE dark values, Vercel
     restates the full token set for both its dark base and its light variant.
   */

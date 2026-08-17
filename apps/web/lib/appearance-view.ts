@@ -75,7 +75,7 @@ export const SKIN_OPTIONS = [
   {
     value: "vercel",
     label: "Vercel",
-    caption: "Minimal black-and-white, Geist-inspired",
+    caption: "Minimal true-black, Geist-inspired",
   },
 ] as const satisfies readonly Omit<
   AppearanceSkinOption,
