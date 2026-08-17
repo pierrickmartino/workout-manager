@@ -13,6 +13,11 @@ export interface CorrectLogFormState {
   error: string | null;
 }
 
+// The upper bound on rows read from one correction submission — a real record never
+// approaches it. The client sends the row count in a hidden field, so the reader clamps to
+// this ceiling: a forged, absurdly large `set_count` is bounded to fixed work.
+const MAX_SET_ROWS = 500;
+
 function readField(form: FormData, name: string): string {
   const value = form.get(name);
   return typeof value === "string" ? value : "";
@@ -36,7 +41,8 @@ function readSets(form: FormData): CorrectionSetFields[] {
   if (!Number.isInteger(count) || count <= 0) return [];
 
   const sets: CorrectionSetFields[] = [];
-  for (let index = 0; index < count; index += 1) {
+  const bounded = Math.min(count, MAX_SET_ROWS);
+  for (let index = 0; index < bounded; index += 1) {
     sets.push({
       exerciseId: Number(readField(form, `set-${index}-exercise_id`)),
       exerciseName: readField(form, `set-${index}-exercise_name`),

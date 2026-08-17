@@ -412,3 +412,24 @@ test("readLogFormRows reads indexed rows and drops the ones not marked done", ()
   assert.equal(rows[0].kind, "distance");
   assert.equal(rows[0].distance, "5");
 });
+
+test("readLogFormRows clamps a forged oversized set_count to a bounded number of rows", () => {
+  // Arrange — a hostile submission claiming an absurd row count, with a Done row well past
+  // the ceiling. The reader must bound its loop rather than walk billions of indices.
+  const form = new FormData();
+  form.set("set_count", "1000000000");
+  form.set("set-0-done", "true");
+  form.set("set-0-exercise_id", "1");
+  form.set("set-0-kind", "repetitions");
+  form.set("set-0-reps", "5");
+  // A row beyond the cap (index 600 > 500) is never read.
+  form.set("set-600-done", "true");
+  form.set("set-600-exercise_id", "2");
+  form.set("set-600-kind", "repetitions");
+  form.set("set-600-reps", "8");
+
+  const rows = readLogFormRows(form);
+  // Only the in-bounds Done row is returned; the loop stopped at the ceiling.
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].exerciseId, 1);
+});

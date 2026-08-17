@@ -38,6 +38,12 @@ import type { ExercisePrescription } from "./sessions-types";
 const MIN_ROWS = 1;
 const INTEGER = /^\d+$/;
 
+// The upper bound on rows `readLogFormRows` will walk for one submission — a real Session,
+// even a very long circuit, never comes close. The client sends the row count in a hidden
+// field, so the reader clamps to this ceiling before looping: a forged, absurdly large
+// `set_count` is bounded to a fixed amount of work rather than driving an unbounded loop.
+const MAX_SET_ROWS = 500;
+
 // A `distance` set's unit falls back to km when none can be read — the same default the
 // ad-hoc and Hand-Authored logs use (ADR-0032).
 const DEFAULT_DISTANCE_UNIT: DistanceUnit = "km";
@@ -436,7 +442,8 @@ export function readLogFormRows(form: FormData): LogRowFields[] {
   if (!Number.isInteger(count) || count <= 0) return [];
 
   const rows: LogRowFields[] = [];
-  for (let index = 0; index < count; index += 1) {
+  const bounded = Math.min(count, MAX_SET_ROWS);
+  for (let index = 0; index < bounded; index += 1) {
     if (readField(form, `set-${index}-done`) !== "true") continue;
     rows.push({
       exerciseId: Number(readField(form, `set-${index}-exercise_id`)),
