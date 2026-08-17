@@ -66,9 +66,29 @@ def _system_prompt(*, has_sensitive_constraint: bool = False) -> str:
         "training Session as a set of Exercise Prescriptions. For each prescription "
         "give the exercise name, a short description, targeted muscles, required "
         "equipment, and the sets, reps, rest (seconds), tempo, and recommended load. "
+        + _quantity_guidance()
         + _superset_guidance(has_sensitive_constraint)
         + " Only prescribe exercises that fit the requested training type, duration, "
         "and the available equipment. Respond strictly in the required JSON schema."
+    )
+
+
+def _quantity_guidance() -> str:
+    """Instruct the model to declare a typed Prescribed Quantity (ADR-0050).
+
+    A run or a timed hold is not a rep count: the model states the amount's kind up
+    front so the plan is born typed and logs correctly, rather than hiding a
+    distance/duration inside the free-text ``reps`` string. A malformed emission still
+    degrades through the parse-boundary text inference, so this guidance improves the
+    plan, it is not load-bearing for correctness."""
+
+    return (
+        "For each prescription also declare a typed quantity: set quantity.kind to "
+        "'distance' for a run (with quantity.value the number and quantity.unit 'km' "
+        "or 'mi', and optionally quantity.duration as a mm:ss target time), "
+        "'duration' for a timed hold or timed effort (with quantity.value as mm:ss or "
+        "seconds), or 'repetitions' for an ordinary rep-counted set (with "
+        "quantity.value the count). Keep reps human-readable and consistent with it. "
     )
 
 

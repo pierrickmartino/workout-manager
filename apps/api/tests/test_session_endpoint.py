@@ -169,12 +169,13 @@ def test_generated_session_can_be_fetched_back_by_its_owner():
     assert len(fetched.json()["data"]["prescriptions"]) == 1
 
 
-def test_read_exposes_prescribed_quantity_key_null_when_unset():
-    # The typed Prescribed Quantity is additive (ADR-0050): the session-detail response
-    # always carries the key, and a Session generated before any write path populates it
-    # reads back null — no consumer is required to change, the free-text reps still renders.
+def test_generated_session_is_born_with_a_typed_prescribed_quantity():
+    # #344: generation now emits a typed Prescribed Quantity through resolve_prescriptions,
+    # so a freshly generated strength Session is born typed (a "5" reps target becomes a
+    # repetitions Quantity) rather than reading back null — the plan-side write boundary
+    # types it at creation, not only the backfill.
     client, ctx = build_client()
-    headers = _auth(ctx, "user_pq_null")
+    headers = _auth(ctx, "user_pq_generated")
     created = client.post(
         "/api/sessions/generate", headers=headers, json=_generate_body()
     ).json()["data"]
@@ -182,8 +183,11 @@ def test_read_exposes_prescribed_quantity_key_null_when_unset():
     fetched = client.get(f"/api/sessions/{created['id']}", headers=headers).json()["data"]
 
     prescription = fetched["prescriptions"][0]
-    assert "prescribed_quantity" in prescription
-    assert prescription["prescribed_quantity"] is None
+    assert prescription["prescribed_quantity"] == {
+        "kind": "repetitions",
+        "text": "5",
+        "count": 5,
+    }
 
 
 def test_read_serializes_typed_prescribed_quantity_to_the_client():
