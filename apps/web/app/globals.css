@@ -217,13 +217,16 @@
 
   /*
     VERCEL — a minimalist, high-contrast Skin inspired by Vercel's Geist design
-    language (ADR-0048). Its signature is a *true-black* page under a strict
-    grayscale surface/border/text ramp, with the accents inspired by the Geist
-    brand gradient (cyan / blue / purple / pink) — each hue adapted per variant
-    for contrast — so the lead accent (bg-cyan buttons, active states) reads as
-    the Vercel teal. The token *names* are identical to PULSE, so every component
-    re-themes for free. Because :root carries the PULSE dark values, Vercel
-    restates the full token set for both its dark base and its light variant.
+    language (ADR-0048). Its signature is a stark monochrome shell — a *true-black*
+    page (or pure white in light) under a strict grayscale surface/border/text ramp
+    — carried by a single iconic accent: **Vercel blue (#0070f3)**. That blue is
+    deliberately loaded onto the *lead* accent token (`cyan`: bg-cyan buttons,
+    active states, labels, the focus ring) so the whole app visibly shifts off
+    PULSE's teal and reads as Vercel at a glance; purple/pink round out the Geist
+    gradient for the few components that use the secondary accents. The token
+    *names* are identical to PULSE, so every component re-themes for free. Because
+    :root carries the PULSE dark values, Vercel restates the full token set for
+    both its dark base and its light variant.
   */
   [data-skin="vercel"][data-mode="dark"],
   [data-skin="vercel"]:not([data-mode]) {
@@ -241,15 +244,17 @@
     --color-text-secondary: #a1a1a1;
     --color-text-muted: #6e6e6e;
 
-    /* Accents — the Geist brand gradient, brightened to read on true black */
-    --color-cyan: #50e3c2;
-    --color-cyan-dim: #50e3c21f;
-    --color-blue: #3291ff;
+    /* Accents — Vercel blue leads (cyan token), with a lighter sky blue plus the
+       Geist purple/pink for the secondary slots. on-accent is white for text on
+       the blue fill. */
+    --color-cyan: #0070f3;
+    --color-cyan-dim: #0070f31f;
+    --color-blue: #66b2ff;
     --color-violet: #a06bf5;
     --color-violet-dim: #a06bf51f;
     --color-magenta: #ff4da6;
     --color-magenta-dim: #ff4da61f;
-    --color-on-accent: #00110d;
+    --color-on-accent: #ffffff;
   }
 
   [data-skin="vercel"][data-mode="light"] {
@@ -267,10 +272,12 @@
     --color-text-secondary: #666666;
     --color-text-muted: #8f8f8f;
 
-    /* Accents — brand hues deepened so they carry on white */
-    --color-cyan: #0d9488;
-    --color-cyan-dim: #0d94881f;
-    --color-blue: #0070f3;
+    /* Accents — Vercel blue leads (cyan token) on white; a deeper blue plus the
+       Geist purple/pink fill the secondary slots. on-accent is white for text on
+       the blue fill. */
+    --color-cyan: #0070f3;
+    --color-cyan-dim: #0070f31f;
+    --color-blue: #0761d1;
     --color-violet: #7928ca;
     --color-violet-dim: #7928ca1f;
     --color-magenta: #d6006f;
@@ -293,9 +300,9 @@
       --color-text-secondary: #666666;
       --color-text-muted: #8f8f8f;
 
-      --color-cyan: #0d9488;
-      --color-cyan-dim: #0d94881f;
-      --color-blue: #0070f3;
+      --color-cyan: #0070f3;
+      --color-cyan-dim: #0070f31f;
+      --color-blue: #0761d1;
       --color-violet: #7928ca;
       --color-violet-dim: #7928ca1f;
       --color-magenta: #d6006f;
