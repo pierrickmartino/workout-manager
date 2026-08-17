@@ -26,6 +26,7 @@ is a later feature.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import Enum
 
@@ -40,8 +41,53 @@ class QuantityKind(str, Enum):
 
 _METRES_PER_KM = 1000.0
 _METRES_PER_MILE = 1609.344
-_MILE_UNITS = frozenset({"mi", "mile", "miles"})
 _SECONDS_PER_MINUTE = 60
+_SECONDS_PER_HOUR = 3600
+
+# Free-text inference (``quantity_from_text``): the unit words a prescription's
+# prose might name, each mapped to its canonical multiplier. Distance canonicalises
+# to metres, duration to seconds. Keyed lower-case; the matcher lower-cases first so
+# "KM" and "Min" resolve too.
+_DISTANCE_UNIT_METRES: dict[str, float] = {
+    "km": _METRES_PER_KM,
+    "kilometer": _METRES_PER_KM,
+    "kilometers": _METRES_PER_KM,
+    "kilometre": _METRES_PER_KM,
+    "kilometres": _METRES_PER_KM,
+    "mi": _METRES_PER_MILE,
+    "mile": _METRES_PER_MILE,
+    "miles": _METRES_PER_MILE,
+}
+_DURATION_UNIT_SECONDS: dict[str, float] = {
+    "s": 1.0,
+    "sec": 1.0,
+    "secs": 1.0,
+    "second": 1.0,
+    "seconds": 1.0,
+    "min": float(_SECONDS_PER_MINUTE),
+    "mins": float(_SECONDS_PER_MINUTE),
+    "minute": float(_SECONDS_PER_MINUTE),
+    "minutes": float(_SECONDS_PER_MINUTE),
+    "h": float(_SECONDS_PER_HOUR),
+    "hr": float(_SECONDS_PER_HOUR),
+    "hrs": float(_SECONDS_PER_HOUR),
+    "hour": float(_SECONDS_PER_HOUR),
+    "hours": float(_SECONDS_PER_HOUR),
+}
+
+# The mile synonyms ``_build`` (``quantity_from_input``) recognises are derived from
+# the distance table above, so the two entry points share one source of truth for
+# what counts as a mile — add a synonym once and both paths pick it up.
+_MILE_UNITS = frozenset(
+    unit for unit, metres in _DISTANCE_UNIT_METRES.items() if metres == _METRES_PER_MILE
+)
+
+# A number (int or decimal) followed by an optional-space unit word — "7km",
+# "6.8 km", "30 min", "90s". The clock form (mm:ss / hh:mm:ss) and a bare integer
+# are matched separately.
+_NUMBER_UNIT = re.compile(r"^(\d+(?:\.\d+)?)\s*([a-zA-Z]+)$")
+_CLOCK_TIME = re.compile(r"^\d+(?::\d+)+$")
+_BARE_INTEGER = re.compile(r"^\d+$")
 
 
 def _parse_time_to_seconds(raw: str) -> float:
@@ -215,10 +261,61 @@ def _build(kind: str, raw: str, unit: str, duration: str | None) -> Quantity | N
     return None
 
 
+def quantity_from_text(text: str | None) -> Quantity:
+    """Infer a typed Quantity from a prescription's free-text amount (ADR-0050).
+
+    The sibling of :func:`quantity_from_input`, which is *told* the kind by the log
+    form. This one reads the kind off the prose — the one shared primitive reused by
+    both the generation fallback (a model that emits a bare amount string) and the
+    one-time backfill migration (existing free-text ``reps``). It **always** returns a
+    Quantity: ``repetitions`` is the safe default, so a malformed or legacy amount
+    degrades gracefully rather than crashing the log form.
+
+    - ``"7 km"`` / ``"7km"`` / ``"7 KM"`` / ``"3 mi"`` → a ``distance`` (canonical metres);
+    - ``"30 min"`` / ``"0:30"`` / ``"90s"`` → a ``duration`` (canonical seconds);
+    - ``"8"`` (a clean count), ``"8-12"`` (a range), ``"AMRAP"``, or anything
+      unrecognised → ``repetitions``, the safe default.
+
+    The original ``text`` is carried through verbatim, so display loses nothing.
+    """
+
+    original = text or ""
+    raw = original.strip()
+
+    if _CLOCK_TIME.match(raw):
+        return Quantity(
+            kind=QuantityKind.DURATION,
+            text=original,
+            seconds=_parse_time_to_seconds(raw),
+        )
+
+    match = _NUMBER_UNIT.match(raw)
+    if match:
+        number, unit = match.group(1), match.group(2).lower()
+        if unit in _DISTANCE_UNIT_METRES:
+            return Quantity(
+                kind=QuantityKind.DISTANCE,
+                text=original,
+                metres=float(number) * _DISTANCE_UNIT_METRES[unit],
+            )
+        if unit in _DURATION_UNIT_SECONDS:
+            return Quantity(
+                kind=QuantityKind.DURATION,
+                text=original,
+                seconds=float(number) * _DURATION_UNIT_SECONDS[unit],
+            )
+
+    # Everything else is the safe default: a bare integer keeps its count; a range,
+    # AMRAP, or unparseable prose is repetitions with no count — never a crash.
+    count = int(raw) if _BARE_INTEGER.match(raw) else None
+    return Quantity(kind=QuantityKind.REPETITIONS, text=original, count=count)
+
+
 __all__ = [
     "QuantityKind",
     "Quantity",
     "quantity_from_input",
+    "quantity_from_text",
     "repetitions_of",
     "metres_of",
 ]
