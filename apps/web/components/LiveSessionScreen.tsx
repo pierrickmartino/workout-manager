@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useReducer, useState, useTransition } from "react";
 import {
   AlertTriangle,
-  Check,
+  ArrowDown,
   Clock,
   Flag,
   Minus,
@@ -28,11 +28,13 @@ import {
   currentUnit,
   currentSuperset,
   nextExercise,
-  restCue,
-  type LiveSet,
+  onDeckExercise,
+  groupUnits,
+  liveSetDomId,
   type LiveSessionState,
 } from "@/lib/live-session";
 import { mapFinishToLog } from "@/lib/live-session-mapper";
+import { LiveSessionSets } from "@/components/live-session-sets";
 import {
   readLiveSessionSlot,
   writeLiveSessionSlot,
@@ -48,7 +50,7 @@ import {
   adjustRestTargetEnd,
   REST_ADJUST_STEP_SECONDS,
 } from "@/lib/live-timer";
-import { LOAD_KIND_OPTIONS, type LoadKind } from "@/lib/load";
+import type { LoadKind } from "@/lib/load";
 import type { WorkoutSession } from "@/lib/sessions-types";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -57,11 +59,7 @@ import { BackLink } from "@/components/pulse/back-link";
 import { Alert } from "@/components/pulse/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { Button, buttonVariants } from "@/components/ui/button";
-
-const RPE_VALUES = Array.from({ length: 10 }, (_, index) => index + 1);
 
 interface LiveSessionScreenProps {
   session: WorkoutSession;
@@ -111,6 +109,12 @@ export function LiveSessionScreen({
   // like the elapsed timer it survives a phone lock. Purely client-side: rest is
   // never written to the record.
   const [restEndAt, setRestEndAt] = useState<number | null>(null);
+  // Completed units the user has manually re-expanded to review. A completed unit
+  // collapses to its one-line summary by default; its `unitIndex` here forces it back
+  // open. Current and upcoming units are always expanded and never appear here.
+  const [expandedUnits, setExpandedUnits] = useState<ReadonlySet<number>>(
+    () => new Set(),
+  );
 
   // Resolve what arriving at this live route does, from the single persisted slot
   // (ADR-0012). Runs once on the first foreground — the idle guard (ADR-0014) is
@@ -217,15 +221,40 @@ export function LiveSessionScreen({
   const percent = progressPercent(state);
   const unit = currentUnit(state);
   const superset = currentSuperset(state);
-  // The on-deck set — what the user performs when the rest ends. The rest card cues
-  // it directly, and the persistent "Next up" line mirrors it *while resting* so the
-  // two never disagree at a Superset round boundary (where the forward look-ahead
-  // names the exercise after the on-deck one). When not resting, "Next up" keeps its
-  // forward look-ahead, preserving the useful mid-round "co-member is next" cue.
-  const cue = restCue(state);
-  const upcoming = isResting ? (cue?.exerciseName ?? null) : nextExercise(state);
+  // The sticky bar's two distinct look-aheads: "Next up" names the *on-deck* exercise
+  // (the current-set pointer's) and its jump control scrolls straight to that set;
+  // "Then" names the *following* distinct exercise. Splitting them removes the old
+  // dual meaning of "Next up" (on-deck while resting, look-ahead otherwise).
+  const onDeck = onDeckExercise(state);
+  const following = nextExercise(state);
+  const units = groupUnits(state);
+  // The DOM id of the current on-deck set row — the jump target. Null once every set
+  // is attempted (the pointer has run off the end), when there is nothing to jump to.
+  const currentDomId =
+    state.currentIndex < state.sets.length
+      ? liveSetDomId(state.sets[state.currentIndex])
+      : null;
   const completedCount = state.sets.filter((s) => s.status === "completed").length;
   const elapsed = formatElapsed(elapsedSeconds(state.startedAt, now));
+
+  // Scroll the current on-deck set into view — the sticky "Next up" line's action, so
+  // the user can glance at the pinned timer and jump back to their place in one tap.
+  function scrollToCurrent() {
+    if (!currentDomId) return;
+    document
+      .getElementById(currentDomId)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  // Re-expand a collapsed completed unit to review its logged sets (which stay
+  // read-only). Expansion lasts the rest of the performance — there is no re-collapse.
+  function expandUnit(unitIndex: number) {
+    setExpandedUnits((prev) => {
+      const next = new Set(prev);
+      next.add(unitIndex);
+      return next;
+    });
+  }
 
   function handleCompleteSet(
     index: number,
@@ -349,122 +378,114 @@ export function LiveSessionScreen({
         }
       />
 
-      <Card className="flex flex-col gap-3 p-4">
-        <div className="flex items-center justify-between">
-          <span className="label-mono text-[11px] text-text-muted">
-            PROGRESS
-          </span>
-          <span
-            className="flex items-center gap-1.5 font-mono text-[13px] font-bold text-text-primary"
-            aria-label="Elapsed time"
-          >
-            <Clock className="h-3.5 w-3.5 text-text-muted" aria-hidden />
-            {elapsed}
-          </span>
-        </div>
+      {/* The always-on bar: timer + overall progress + a "Next up" jump stay pinned
+          beneath the app header while the set list scrolls, so the user never scrolls
+          up to check the time or back down to find their place. While a rest is
+          running it swaps the elapsed timer for the rest countdown and its controls
+          (the moment the user is most likely looking away from the list). */}
+      <div className="sticky top-14 z-20 -mx-6 flex flex-col gap-2.5 border-b border-border bg-base/95 px-6 py-3 backdrop-blur">
+        {isResting ? (
+          <div className="flex items-center justify-between gap-3">
+            <span className="label-mono flex items-center gap-1.5 text-[11px] text-text-muted">
+              <Timer className="h-3.5 w-3.5" aria-hidden />
+              REST
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => adjustRest(-REST_ADJUST_STEP_SECONDS)}
+                aria-label={`Subtract ${REST_ADJUST_STEP_SECONDS} seconds of rest`}
+              >
+                <Minus className="h-3.5 w-3.5" />
+                {REST_ADJUST_STEP_SECONDS}
+              </Button>
+              <span
+                className="min-w-[3.5rem] text-center font-mono text-[20px] font-bold leading-none text-cyan"
+                aria-label="Rest remaining"
+              >
+                {formatElapsed(restRemaining)}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => adjustRest(REST_ADJUST_STEP_SECONDS)}
+                aria-label={`Add ${REST_ADJUST_STEP_SECONDS} seconds of rest`}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                {REST_ADJUST_STEP_SECONDS}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setRestEndAt(null)}
+                aria-label="Skip rest"
+              >
+                <SkipForward className="h-3.5 w-3.5" />
+                Skip
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <span className="label-mono text-[11px] text-text-muted">
+              PROGRESS
+            </span>
+            <span
+              className="flex items-center gap-1.5 font-mono text-[13px] font-bold text-text-primary"
+              aria-label="Elapsed time"
+            >
+              <Clock className="h-3.5 w-3.5 text-text-muted" aria-hidden />
+              {elapsed}
+            </span>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <SegmentedBar value={percent / 100} className="flex-1" />
           <span className="ml-3 font-mono text-[13px] font-bold text-cyan">
             {percent}%
           </span>
         </div>
-        <p className="font-mono text-[12px] text-text-secondary">
-          {upcoming ? (
-            <>
-              Next up: <span className="text-text-primary">{upcoming}</span>
-            </>
-          ) : (
-            "Final exercise"
-          )}
-        </p>
-      </Card>
+        {onDeck ? (
+          <button
+            type="button"
+            onClick={scrollToCurrent}
+            className="flex items-center justify-between gap-2 rounded-sm border border-border bg-surface px-3 py-2 text-left transition-colors hover:border-cyan"
+            aria-label={`Jump to current exercise, ${onDeck}`}
+          >
+            <span className="font-mono text-[12px] text-text-secondary">
+              Next up: <span className="text-text-primary">{onDeck}</span>
+            </span>
+            <ArrowDown className="h-3.5 w-3.5 shrink-0 text-cyan" aria-hidden />
+          </button>
+        ) : null}
+      </div>
 
       {finishState.error ? (
         <Alert tone="error">{finishState.error}</Alert>
       ) : null}
 
-      {isResting ? (
-        <Card className="flex flex-col gap-3 border-cyan p-4">
-          <div className="flex items-center justify-between">
-            <span className="label-mono flex items-center gap-1.5 text-[11px] text-text-muted">
-              <Timer className="h-3.5 w-3.5" aria-hidden />
-              REST
-            </span>
-            <span
-              className="font-mono text-[28px] font-bold leading-none text-cyan"
-              aria-label="Rest remaining"
-            >
-              {formatElapsed(restRemaining)}
-            </span>
-          </div>
-          {cue ? (
-            <p
-              className="font-mono text-[12px] text-text-secondary"
-              aria-label="Up next"
-            >
-              Up next:{" "}
-              <span className="text-text-primary">{cue.exerciseName}</span>
-              <span className="text-text-muted">
-                {" · "}
-                {cue.supersetLabel
-                  ? `superset ${cue.supersetLabel} · round ${cue.setNumber}/${cue.setCount}`
-                  : `set ${cue.setNumber}/${cue.setCount}`}
-              </span>
-            </p>
-          ) : null}
-          <div className="grid grid-cols-3 gap-2.5">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => adjustRest(-REST_ADJUST_STEP_SECONDS)}
-              aria-label={`Subtract ${REST_ADJUST_STEP_SECONDS} seconds of rest`}
-            >
-              <Minus className="h-3.5 w-3.5" />
-              {REST_ADJUST_STEP_SECONDS}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setRestEndAt(null)}
-              aria-label="Skip rest"
-            >
-              <SkipForward className="h-3.5 w-3.5" />
-              Skip
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => adjustRest(REST_ADJUST_STEP_SECONDS)}
-              aria-label={`Add ${REST_ADJUST_STEP_SECONDS} seconds of rest`}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              {REST_ADJUST_STEP_SECONDS}
-            </Button>
-          </div>
-        </Card>
+      {following ? (
+        <p className="font-mono text-[12px] text-text-secondary">
+          Then: <span className="text-text-primary">{following}</span>
+        </p>
       ) : null}
 
       <div className="flex flex-col gap-3">
         <SectionHeader meta={`${completedCount}/${state.sets.length} SETS`}>
           SETS
         </SectionHeader>
-        <ol className="flex list-none flex-col gap-3 p-0">
-          {state.sets.map((set, index) => (
-            <li key={`${set.modulePosition}-${set.setNumber}`}>
-              <SetRow
-                set={set}
-                isCurrent={index === state.currentIndex}
-                onComplete={(reps, loadKind, loadValue, rpe) =>
-                  handleCompleteSet(index, reps, loadKind, loadValue, rpe)
-                }
-                onSkip={() => dispatch({ type: "ADVANCE" })}
-              />
-            </li>
-          ))}
-        </ol>
+        <LiveSessionSets
+          units={units}
+          currentIndex={state.currentIndex}
+          expandedUnits={expandedUnits}
+          onExpandUnit={expandUnit}
+          onCompleteSet={handleCompleteSet}
+          onSkipSet={() => dispatch({ type: "ADVANCE" })}
+        />
       </div>
 
       <Button
@@ -618,166 +639,5 @@ function IdleEndedSummary({
       </Link>
       <BackLink href={`/sessions/${session.id}`}>Back to session</BackLink>
     </section>
-  );
-}
-
-interface SetRowProps {
-  set: LiveSet;
-  isCurrent: boolean;
-  onComplete: (
-    reps: number,
-    loadKind: LoadKind,
-    loadValue: string,
-    rpe: number | null,
-  ) => void;
-  onSkip: () => void;
-}
-
-// One prescribed set. Its edited reps/load/RPE live as local input state, seeded
-// from the prescription pre-fill; "Complete" folds those values into a
-// COMPLETE_SET event (the engine's only editing path). "Skip" leaves the set
-// un-attempted (ADVANCE) — finishing with any skipped set records the performance
-// Incomplete (ADR-0013).
-function SetRow({ set, isCurrent, onComplete, onSkip }: SetRowProps) {
-  const [reps, setReps] = useState(String(set.reps));
-  const [loadKind, setLoadKind] = useState<LoadKind>(set.loadKind);
-  const [loadValue, setLoadValue] = useState(set.loadValue);
-  const [rpe, setRpe] = useState(set.rpe === null ? "" : String(set.rpe));
-
-  const completed = set.status === "completed";
-  const label = `${set.exerciseName}, set ${set.setNumber}`;
-
-  function handleComplete() {
-    const repsValue = Number.parseInt(reps, 10);
-    const rpeValue = rpe === "" ? null : Number.parseInt(rpe, 10);
-    onComplete(
-      Number.isInteger(repsValue) && repsValue >= 0 ? repsValue : 0,
-      loadKind,
-      loadValue.trim(),
-      rpeValue !== null && Number.isInteger(rpeValue) ? rpeValue : null,
-    );
-  }
-
-  return (
-    <Card
-      className={
-        completed
-          ? "flex flex-col gap-3 border-cyan/40 bg-surface p-4 opacity-80"
-          : isCurrent
-            ? "flex flex-col gap-3 border-cyan p-4"
-            : "flex flex-col gap-3 p-4"
-      }
-    >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-base font-mono text-[12px] font-bold text-cyan">
-            {set.setNumber}/{set.moduleSetCount}
-          </span>
-          <span className="font-display text-[15px] font-semibold text-text-primary">
-            {set.exerciseName}
-          </span>
-        </div>
-        {completed ? (
-          <Badge variant="cyan">
-            <Check className="h-3 w-3" aria-hidden />
-            DONE
-          </Badge>
-        ) : null}
-      </div>
-
-      <p className="font-mono text-[11px] text-text-muted">
-        Prescribed: {set.prescribedReps} reps · {set.prescribedLoadText}
-      </p>
-
-      {set.previous ? (
-        <p className="font-mono text-[11px] text-cyan/80">
-          Previous: {set.previous.reps} reps · {set.previous.loadText}
-        </p>
-      ) : null}
-
-      <div className="grid grid-cols-2 gap-2.5">
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">Reps</span>
-          <Input
-            type="number"
-            min={0}
-            value={reps}
-            onChange={(event) => setReps(event.target.value)}
-            disabled={completed}
-            aria-label={`Reps for ${label}`}
-          />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">RPE</span>
-          <Select
-            value={rpe}
-            onChange={(event) => setRpe(event.target.value)}
-            disabled={completed}
-            aria-label={`RPE for ${label}`}
-          >
-            <option value="">—</option>
-            {RPE_VALUES.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </Select>
-        </label>
-      </div>
-
-      <div className="grid grid-cols-[7rem_1fr] gap-2.5">
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">
-            Load kind
-          </span>
-          <Select
-            value={loadKind}
-            onChange={(event) => setLoadKind(event.target.value as LoadKind)}
-            disabled={completed}
-            aria-label={`Load kind for ${label}`}
-          >
-            {LOAD_KIND_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">Load</span>
-          <Input
-            value={loadValue}
-            onChange={(event) => setLoadValue(event.target.value)}
-            disabled={completed}
-            placeholder="70"
-            aria-label={`Load for ${label}`}
-          />
-        </label>
-      </div>
-
-      {!completed ? (
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleComplete}
-          >
-            <Check className="h-3.5 w-3.5" />
-            Complete set
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onSkip}
-            aria-label={`Skip ${label}`}
-          >
-            <SkipForward className="h-3.5 w-3.5" />
-            Skip
-          </Button>
-        </div>
-      ) : null}
-    </Card>
   );
 }
