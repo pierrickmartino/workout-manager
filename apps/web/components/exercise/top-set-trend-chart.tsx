@@ -11,16 +11,8 @@ import {
   type TooltipProps,
 } from "recharts";
 
+import { useChartTheme } from "@/lib/use-chart-theme";
 import type { TopSetTrendRow } from "@/lib/top-set-trend-view";
-
-// The operator-theme palette, resolved to concrete values because Recharts styles SVG
-// fill directly rather than through Tailwind classes. Kept in sync with the tokens in
-// globals.css. The most recent session's bar wears the cyan accent; the earlier bars
-// sit back in a dim cyan so the trend reads toward "now".
-const CYAN = "#29e7e0";
-const CYAN_DIM = "#164e4b";
-const MUTED = "#71717a";
-const BORDER = "#27272a";
 
 interface TopSetTrendChartProps {
   rows: TopSetTrendRow[];
@@ -36,10 +28,16 @@ interface TopSetTrendChartProps {
 // draw; the SPECS panel (a Server Component) transforms the API series into `rows` and
 // hands them down. The most-recent bar is highlighted so the eye lands on the latest
 // state. Callers render this only for a non-empty series, so there is no empty branch.
+//
+// Recharts paints SVG fill with concrete strings, so the colours resolve from the
+// live theme via `useChartTheme` (ADR-0050) — the chart tracks the Active Skin ×
+// Mode. The most recent session's bar wears the lead cyan accent; the earlier bars
+// sit back in the translucent `cyan-dim` token so the trend reads toward "now".
 export function TopSetTrendChart({
   rows,
   heightClass = "h-48",
 }: TopSetTrendChartProps) {
+  const { cyan, cyanDim, muted, border } = useChartTheme();
   return (
     <div className={`${heightClass} w-full`}>
       <ResponsiveContainer width="100%" height="100%">
@@ -49,13 +47,13 @@ export function TopSetTrendChart({
         >
           <XAxis
             dataKey="label"
-            tick={{ fill: MUTED, fontSize: 11 }}
+            tick={{ fill: muted, fontSize: 11 }}
             tickLine={false}
-            axisLine={{ stroke: BORDER }}
+            axisLine={{ stroke: border }}
             minTickGap={8}
           />
           <YAxis
-            tick={{ fill: MUTED, fontSize: 11 }}
+            tick={{ fill: muted, fontSize: 11 }}
             tickLine={false}
             axisLine={false}
             width={48}
@@ -63,7 +61,7 @@ export function TopSetTrendChart({
             tickFormatter={(value: number) => `${Math.round(value)}`}
           />
           <Tooltip
-            cursor={{ fill: "rgba(41, 231, 224, 0.06)" }}
+            cursor={{ fill: cyanDim }}
             content={<TrendTooltip />}
           />
           <Bar
@@ -72,7 +70,7 @@ export function TopSetTrendChart({
             isAnimationActive={false}
           >
             {rows.map((row) => (
-              <Cell key={row.date} fill={row.isLatest ? CYAN : CYAN_DIM} />
+              <Cell key={row.date} fill={row.isLatest ? cyan : cyanDim} />
             ))}
           </Bar>
         </BarChart>

@@ -1,10 +1,20 @@
-"""Skin catalog: the fixed, code-defined registry of palette families (ADR-0048).
+"""Skin catalog: the fixed, code-defined registry of Skins — visual identities
+(colour + typography + shape) — first added in ADR-0048, widened by ADR-0050.
 
-A **Skin** is a named palette family — the coordinated colour set the whole app
-draws with (CONTEXT "Skin"). Skins come from a *fixed, curated catalog* (never
-user- or AI-authored); each one must define **both** a light and a dark variant,
-and each variant must cover the full required token set, so a Skin composes with
-any Mode. This module owns two domain facts of the Active Skin slice:
+A **Skin** is a named *visual identity* — the coordinated colour, typography, and
+shape the whole app draws with (CONTEXT "Skin"; ADR-0050). Skins come from a
+*fixed, curated catalog* (never user- or AI-authored). A Skin's tokens fall into
+two groups:
+
+- **colour**, which is polarity-dependent: each Skin must define **both** a light
+  and a dark variant, each covering the full ``REQUIRED_TOKENS`` colour set, so a
+  Skin composes with any Mode; and
+- **shared** (fonts + shape), which is *Mode-invariant*: one ``SHARED_TOKENS``
+  group per Skin — a typeface never flips between Light and Dark, so it is modelled
+  once rather than duplicated across both variants (ADR-0050 supersedes the
+  colour-only scope of ADR-0048).
+
+This module owns two domain facts of the Active Skin slice:
 
 - the catalog itself (the id registry the frontend's ``Skin`` union mirrors — the
   single canonical list of which Skins exist, so backend and frontend can't
@@ -13,9 +23,10 @@ any Mode. This module owns two domain facts of the Active Skin slice:
   gate ``PUT /api/active-skin`` validates a published id against, so an unknown
   id can never become the Active Skin (it fails closed).
 
-No I/O — the concrete token *values* live in the frontend's ``globals.css`` under
-a ``[data-skin][data-mode]`` selector; this catalog is the structural contract
-those blocks must satisfy, not the colours themselves."""
+No I/O — the concrete token *values* live in the frontend's ``globals.css``
+(colour under ``[data-skin][data-mode]``, fonts and shape under ``html[data-skin]``);
+this catalog is the structural contract those blocks must satisfy, not the values
+themselves."""
 
 from __future__ import annotations
 
@@ -62,18 +73,43 @@ REQUIRED_TOKENS: frozenset[str] = frozenset(
 )
 
 
+# The **Mode-invariant** identity tokens every Skin must define once (ADR-0050):
+# the three font roles and the four radius steps. A typeface and a corner radius do
+# not change between Light and Dark, so — unlike ``REQUIRED_TOKENS`` — these are not
+# authored per variant; they are a single per-Skin group. Their concrete *values*
+# live in ``globals.css`` under ``html[data-skin="…"]`` (no ``data-mode`` qualifier).
+# Disjoint from ``REQUIRED_TOKENS`` by construction: colour is per-variant, identity
+# is shared.
+SHARED_TOKENS: frozenset[str] = frozenset(
+    {
+        # Typography
+        "font-display",
+        "font-sans",
+        "font-mono",
+        # Shape (a single "roundness" character, expressed as the four radius steps)
+        "radius-sm",
+        "radius-md",
+        "radius-lg",
+        "radius-xl",
+    }
+)
+
+
 @dataclass(frozen=True)
 class Skin:
-    """One palette family in the catalog: an id and the tokens each variant covers.
+    """One visual identity in the catalog: an id, the colour tokens each variant
+    covers, and the Mode-invariant shared (font + shape) tokens.
 
-    ``variants`` maps a ``Variant`` to the set of token names that variant
-    defines. A well-formed Skin carries both ``LIGHT`` and ``DARK``, each a
-    superset of ``REQUIRED_TOKENS`` — ``validate_catalog`` is what enforces that,
-    so the structure can also express a *broken* Skin (a missing variant, a
-    short token set) for the invariant to reject."""
+    ``variants`` maps a ``Variant`` to the colour token names that variant defines;
+    ``shared`` is the single Mode-invariant identity group. A well-formed Skin
+    carries both ``LIGHT`` and ``DARK`` (each a superset of ``REQUIRED_TOKENS``) and
+    a ``shared`` group that is a superset of ``SHARED_TOKENS`` — ``validate_catalog``
+    is what enforces that, so the structure can also express a *broken* Skin (a
+    missing variant, a short colour or shared set) for the invariant to reject."""
 
     id: str
     variants: Mapping[Variant, frozenset[str]] = field(default_factory=dict)
+    shared: frozenset[str] = frozenset()
 
 
 def _covered(tokens: frozenset[str]) -> frozenset[str]:
@@ -83,9 +119,10 @@ def _covered(tokens: frozenset[str]) -> frozenset[str]:
 def validate_catalog(catalog: tuple[Skin, ...]) -> None:
     """Assert the catalog's invariant, raising ``ValueError`` on any violation.
 
-    Every Skin must define both a light and a dark variant, each covering the
-    required token set, and ids must be unique. Called once over ``SKIN_CATALOG``
-    at import time so a structurally-incomplete Skin can never ship."""
+    Every Skin must define both a light and a dark colour variant (each covering
+    ``REQUIRED_TOKENS``) and the full ``SHARED_TOKENS`` identity group, and ids must
+    be unique. Called once over ``SKIN_CATALOG`` at import time so a
+    structurally-incomplete Skin can never ship."""
 
     seen: set[str] = set()
     for skin in catalog:
@@ -105,12 +142,21 @@ def validate_catalog(catalog: tuple[Skin, ...]) -> None:
                     f"tokens: {sorted(missing)}"
                 )
 
+        missing_shared = SHARED_TOKENS - skin.shared
+        if missing_shared:
+            raise ValueError(
+                f"Skin {skin.id!r} omits required shared tokens: "
+                f"{sorted(missing_shared)}"
+            )
+
 
 def _full_skin(skin_id: str) -> Skin:
-    """A catalog Skin whose light and dark variants both cover the full token set.
+    """A catalog Skin whose colour variants both cover the full token set and whose
+    shared group covers the full identity set.
 
     The shipped Skins all satisfy the invariant, so they are declared through this
-    helper; the token *values* are authored in ``globals.css`` per variant."""
+    helper; the token *values* are authored in ``globals.css`` — colour per variant,
+    fonts and radii once per ``html[data-skin]``."""
 
     return Skin(
         id=skin_id,
@@ -118,6 +164,7 @@ def _full_skin(skin_id: str) -> Skin:
             Variant.LIGHT: REQUIRED_TOKENS,
             Variant.DARK: REQUIRED_TOKENS,
         },
+        shared=SHARED_TOKENS,
     )
 
 
@@ -163,6 +210,7 @@ validate_catalog(SKIN_CATALOG)
 __all__ = [
     "Variant",
     "REQUIRED_TOKENS",
+    "SHARED_TOKENS",
     "Skin",
     "SKIN_CATALOG",
     "DEFAULT_ACTIVE_SKIN",

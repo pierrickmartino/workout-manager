@@ -245,12 +245,12 @@ _Avoid_: Regenerate protocol, retry, redo
 ## Appearance & Theming
 
 **Theme**:
-The rendered appearance of the app for one user at one moment — always the *composition* of the app-wide **Skin** and that user's own **Mode**, never a single stored choice. There is no "the theme": what a user sees is a global palette (the Active Skin) expressed at their chosen surface polarity (their Mode).
+The rendered appearance of the app for one user at one moment — always the *composition* of the app-wide **Skin** and that user's own **Mode**, never a single stored choice. There is no "the theme": what a user sees is a global visual identity (the Active Skin) expressed at their chosen surface polarity (their Mode).
 _Avoid_: Style, look, colour scheme (as the concept name)
 
 **Skin**:
-A named palette family — the coordinated set of colours the whole app draws with. Skins come from a **fixed, curated catalog** (never user- or AI-authored) and each one defines **both a light and a dark variant**, so a Skin composes with any Mode. Exactly one Skin is live app-wide at a time (the Active Skin); an ordinary user never chooses a Skin. Distinct from Mode, which is the light/dark polarity chosen *within* a Skin.
-_Avoid_: Theme (bare), palette (loosely), colour scheme
+A named **visual identity** — the coordinated **colour, typography, and shape** the whole app draws with (ADR-0050). Skins come from a **fixed, curated catalog** (never user- or AI-authored). A Skin's **colour** is polarity-dependent, so each Skin defines **both a light and a dark variant** and composes with any Mode; its **typography** (typefaces) and **shape** (corner roundness) are Mode-invariant, defined once per Skin. Exactly one Skin is live app-wide at a time (the Active Skin); an ordinary user never chooses a Skin. Distinct from Mode, which is the light/dark polarity chosen *within* a Skin.
+_Avoid_: Theme (bare), palette / colour scheme (a Skin is more than its colours; palette names only the colour group)
 
 **Mode**:
 A user's chosen surface polarity — **Light**, **Dark**, or **System** — applied on top of whichever Skin is active. Held per user and the **only** appearance choice an ordinary user makes; System defers to the device's own light/dark preference rather than a fixed polarity. Distinct from Skin, the palette family a Mode is expressed within.

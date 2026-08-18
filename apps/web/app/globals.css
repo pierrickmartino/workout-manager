@@ -12,15 +12,25 @@
 
   Structure:
     - @theme declares every token so Tailwind emits the matching utilities and
-      seeds :root. Its colours are the PULSE **dark** values, so an element with
-      no attributes still renders today's look byte-for-byte.
+      seeds :root. Its colours are the PULSE **dark** values, and its fonts/radii
+      are the PULSE identity, so an element with no attributes still renders
+      today's look byte-for-byte.
     - [data-skin="pulse"][data-mode="light"] re-declares the colour tokens for
       the PULSE **light** variant; utilities read the variables, so they inherit
       whichever value wins the cascade.
     - System Mode stamps no `data-mode`; a prefers-color-scheme fallback then
       applies the light variant on a light device (dark stays the :root default).
-  Non-colour tokens (fonts, radii, spacing) are Mode-invariant and live only in
-  @theme. Colours transcribed from docs/design/pulse.pen.
+
+  A Skin is a full visual identity — colour **and** typography **and** shape
+  (ADR-0050). Two token groups, by how they compose with Mode:
+    - **Colour** is polarity-dependent, so it lives under `[data-skin][data-mode]`
+      (a light and a dark block per Skin), as above.
+    - **Fonts + radii** are Mode-invariant (a typeface never flips light/dark), so
+      each non-default Skin states them once under `html[data-skin="…"]` — no
+      `data-mode` qualifier. The `html` element carries the specificity to beat the
+      @theme `:root` defaults without needing to repeat per Mode. PULSE inherits the
+      @theme defaults, so only Aurora and Vercel restate this group.
+  Colours transcribed from docs/design/pulse.pen.
 */
 @theme {
   /* Surfaces */
@@ -309,6 +319,50 @@
       --color-magenta-dim: #d6006f1f;
       --color-on-accent: #ffffff;
     }
+  }
+
+  /*
+    Per-Skin identity — typography + shape (ADR-0050).
+
+    These tokens are Mode-invariant, so each Skin states them once (no `data-mode`).
+    Scoped to `html[data-skin="…"]` so they outrank the @theme `:root` defaults
+    (PULSE) without repeating per Light/Dark. PULSE needs no block — it *is* the
+    default. The font `var(--font-*)` handles are wired from next/font in
+    app/layout.tsx; each falls back to a same-category system stack so a font that
+    fails to load still renders in the right shape.
+
+    AURORA — a softer humanist identity: Bricolage Grotesque display over Inter
+    body, IBM Plex Mono for data, and a **soft** roundness (generous, near-pill).
+  */
+  html[data-skin="aurora"] {
+    /* Typography */
+    --font-display: var(--font-bricolage), "Bricolage Grotesque", system-ui, sans-serif;
+    --font-sans: var(--font-inter), "Inter", system-ui, sans-serif;
+    --font-mono: var(--font-ibm-plex-mono), "IBM Plex Mono", ui-monospace, monospace;
+
+    /* Shape — soft */
+    --radius-sm: 10px;
+    --radius-md: 14px;
+    --radius-lg: 18px;
+    --radius-xl: 24px;
+  }
+
+  /*
+    VERCEL — the Geist identity: Geist Sans for both display and body, Geist Mono
+    for data, and a **sharp** roundness (crisp, near-square corners) to match
+    Geist's precise, minimal feel.
+  */
+  html[data-skin="vercel"] {
+    /* Typography */
+    --font-display: var(--font-geist), "Geist", system-ui, sans-serif;
+    --font-sans: var(--font-geist), "Geist", system-ui, sans-serif;
+    --font-mono: var(--font-geist-mono), "Geist Mono", ui-monospace, monospace;
+
+    /* Shape — sharp */
+    --radius-sm: 2px;
+    --radius-md: 3px;
+    --radius-lg: 4px;
+    --radius-xl: 6px;
   }
 }
 

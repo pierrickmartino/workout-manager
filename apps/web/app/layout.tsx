@@ -1,5 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
+import {
+  Space_Grotesk,
+  JetBrains_Mono,
+  Bricolage_Grotesque,
+  Inter,
+  IBM_Plex_Mono,
+  Geist,
+  Geist_Mono,
+} from "next/font/google";
 import {
   ClerkProvider,
   SignInButton,
@@ -17,9 +25,15 @@ import { resolveTheme } from "@/lib/theme";
 
 import "./globals.css";
 
-// Space Grotesk for display/body and JetBrains Mono for labels & data — the two
-// typefaces specified by pulse.pen. next/font self-hosts them and exposes each
-// as a CSS variable consumed by the @theme font tokens in globals.css.
+// Every Skin's typefaces are self-hosted by next/font at build time and exposed as
+// CSS variables (ADR-0050). globals.css maps each Skin's `--font-*` tokens onto the
+// relevant handle: PULSE → Space Grotesk / JetBrains Mono (the @theme default),
+// Aurora → Bricolage Grotesque / Inter / IBM Plex Mono, Vercel → Geist / Geist Mono.
+// Bundling all of them up front is what lets an admin publish a Skin and have its
+// fonts apply on the next visit with no runtime fetch — the fixed-catalog trade-off.
+
+// PULSE — Space Grotesk for display/body, JetBrains Mono for labels & data
+// (the two typefaces specified by pulse.pen; the shipped default identity).
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
   variable: "--font-space-grotesk",
@@ -31,6 +45,53 @@ const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
   display: "swap",
 });
+
+// Aurora — a softer humanist identity.
+const bricolageGrotesque = Bricolage_Grotesque({
+  subsets: ["latin"],
+  variable: "--font-bricolage",
+  display: "swap",
+});
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+// IBM Plex Mono is not a variable font, so next/font requires explicit weights.
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-ibm-plex-mono",
+  display: "swap",
+});
+
+// Vercel — the Geist identity (Geist Sans across display + body, Geist Mono data).
+const geist = Geist({
+  subsets: ["latin"],
+  variable: "--font-geist",
+  display: "swap",
+});
+
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  variable: "--font-geist-mono",
+  display: "swap",
+});
+
+// Every Skin's font variables are attached to <html> so whichever Skin is active
+// resolves its `--font-*` handles. Unused handles cost only their font payload,
+// which next/font lazy-loads per glyph coverage.
+const fontVariables = [
+  spaceGrotesk.variable,
+  jetbrainsMono.variable,
+  bricolageGrotesque.variable,
+  inter.variable,
+  ibmPlexMono.variable,
+  geist.variable,
+  geistMono.variable,
+].join(" ");
 
 export const metadata: Metadata = {
   title: "PULSE // Workout Manager",
@@ -81,7 +142,7 @@ export default async function RootLayout({
     <ClerkProvider dynamic>
       <html
         lang="en"
-        className={`${spaceGrotesk.variable} ${jetbrainsMono.variable}`}
+        className={fontVariables}
         {...themeAttributes}
       >
         <body className="min-h-screen bg-base text-text-primary antialiased">
