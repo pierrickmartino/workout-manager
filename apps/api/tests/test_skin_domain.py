@@ -15,6 +15,7 @@ import pytest
 from app.domain.skin import (
     DEFAULT_ACTIVE_SKIN,
     REQUIRED_TOKENS,
+    SHARED_TOKENS,
     SKIN_CATALOG,
     Skin,
     Variant,
@@ -31,6 +32,17 @@ def _complete_variants() -> dict[Variant, frozenset[str]]:
         Variant.LIGHT: frozenset(REQUIRED_TOKENS),
         Variant.DARK: frozenset(REQUIRED_TOKENS),
     }
+
+
+def _complete_skin(skin_id: str) -> Skin:
+    """A hand-built Skin that satisfies the whole invariant: both colour variants
+    plus the Mode-invariant shared (font + shape) token group (ADR-0050)."""
+
+    return Skin(
+        id=skin_id,
+        variants=_complete_variants(),
+        shared=frozenset(SHARED_TOKENS),
+    )
 
 
 # --- the shipped catalog holds ---------------------------------------------
@@ -53,6 +65,30 @@ def test_every_shipped_variant_covers_the_required_token_set():
     for skin in SKIN_CATALOG:
         for tokens in skin.variants.values():
             assert REQUIRED_TOKENS <= tokens
+
+
+def test_every_shipped_skin_covers_the_shared_token_set():
+    # Assert — a Skin is a full visual identity (ADR-0050): every one carries the
+    # Mode-invariant font + shape tokens, so no Skin renders in a bare fallback font.
+    for skin in SKIN_CATALOG:
+        assert SHARED_TOKENS <= skin.shared
+
+
+def test_shared_tokens_carry_fonts_and_radii_but_no_colour():
+    # Assert — the shared group is exactly the Mode-invariant identity tokens: the
+    # three font roles and the four radius steps. Colours stay per-variant, never here.
+    assert SHARED_TOKENS == frozenset(
+        {
+            "font-display",
+            "font-sans",
+            "font-mono",
+            "radius-sm",
+            "radius-md",
+            "radius-lg",
+            "radius-xl",
+        }
+    )
+    assert SHARED_TOKENS.isdisjoint(REQUIRED_TOKENS)
 
 
 def test_pulse_is_the_default_active_skin_and_is_in_the_catalog():
@@ -100,9 +136,14 @@ def test_the_empty_string_is_not_known():
 
 
 def test_validator_rejects_a_skin_missing_the_dark_variant():
-    # Arrange — a Skin that only ships a light variant can't honour Dark Mode
+    # Arrange — a Skin that only ships a light variant can't honour Dark Mode (its
+    # shared token group is complete, so the missing variant is the sole defect)
     broken = (
-        Skin(id="halfling", variants={Variant.LIGHT: frozenset(REQUIRED_TOKENS)}),
+        Skin(
+            id="halfling",
+            variants={Variant.LIGHT: frozenset(REQUIRED_TOKENS)},
+            shared=frozenset(SHARED_TOKENS),
+        ),
     )
 
     # Act / Assert
@@ -111,12 +152,30 @@ def test_validator_rejects_a_skin_missing_the_dark_variant():
 
 
 def test_validator_rejects_a_variant_missing_a_required_token():
-    # Arrange — a variant that omits one token leaves a component unstyled
+    # Arrange — a variant that omits one token leaves a component unstyled (the
+    # shared group is complete, so the short variant is the sole defect)
     short = frozenset(REQUIRED_TOKENS - {"cyan"})
     broken = (
         Skin(
             id="gappy",
             variants={Variant.LIGHT: short, Variant.DARK: frozenset(REQUIRED_TOKENS)},
+            shared=frozenset(SHARED_TOKENS),
+        ),
+    )
+
+    # Act / Assert
+    with pytest.raises(ValueError):
+        validate_catalog(broken)
+
+
+def test_validator_rejects_a_skin_missing_a_shared_token():
+    # Arrange — a Skin with complete colour variants but a short shared group would
+    # fall back to the base font/radius, so it isn't the full identity it claims
+    broken = (
+        Skin(
+            id="typeless",
+            variants=_complete_variants(),
+            shared=frozenset(SHARED_TOKENS - {"font-display"}),
         ),
     )
 
@@ -127,10 +186,7 @@ def test_validator_rejects_a_variant_missing_a_required_token():
 
 def test_validator_rejects_duplicate_skin_ids():
     # Arrange — two Skins claiming the same id would make the id ambiguous
-    dupe = (
-        Skin(id="twin", variants=_complete_variants()),
-        Skin(id="twin", variants=_complete_variants()),
-    )
+    dupe = (_complete_skin("twin"), _complete_skin("twin"))
 
     # Act / Assert
     with pytest.raises(ValueError):
@@ -139,10 +195,7 @@ def test_validator_rejects_duplicate_skin_ids():
 
 def test_validator_accepts_a_well_formed_catalog():
     # Arrange — a hand-built, complete catalog
-    good = (
-        Skin(id="alpha", variants=_complete_variants()),
-        Skin(id="beta", variants=_complete_variants()),
-    )
+    good = (_complete_skin("alpha"), _complete_skin("beta"))
 
     # Act / Assert — no raise
     validate_catalog(good)

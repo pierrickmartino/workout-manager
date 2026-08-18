@@ -64,18 +64,24 @@ export interface AppearanceSkinControl {
 // The display catalog of Skins in order. Kept in lockstep with the canonical
 // `KNOWN_SKINS` id list from lib/theme (a drift is caught by a unit test), so this
 // is the one place a Skin's human copy is authored while the id set stays single-
-// sourced. The token *values* live in globals.css under `[data-skin][data-mode]`.
+// sourced. A Skin is a full visual identity — colour, typography, and shape
+// (ADR-0050); the token *values* live in globals.css (colour under
+// `[data-skin][data-mode]`, fonts and radii under `html[data-skin]`).
 export const SKIN_OPTIONS = [
   {
     value: "pulse",
     label: "PULSE",
-    caption: "Tactical command center — the original",
+    caption: "Tactical command center — Space Grotesk, the original",
   },
-  { value: "aurora", label: "Aurora", caption: "Soft luminous palette" },
+  {
+    value: "aurora",
+    label: "Aurora",
+    caption: "Luminous colour, humanist type, rounded",
+  },
   {
     value: "vercel",
     label: "Vercel",
-    caption: "Minimal true-black, Geist-inspired",
+    caption: "Minimal true-black, Geist type, sharp corners",
   },
 ] as const satisfies readonly Omit<
   AppearanceSkinOption,

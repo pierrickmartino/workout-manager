@@ -10,49 +10,48 @@ import {
   type TooltipProps,
 } from "recharts";
 
+import { useChartTheme } from "@/lib/use-chart-theme";
 import type { VolumeChartRow } from "@/lib/volume-view";
-
-// The operator-theme palette, resolved to concrete values because Recharts styles
-// SVG stroke/fill directly rather than through Tailwind classes. Kept in sync with
-// the tokens in globals.css (cyan accent, muted ticks, border axis).
-const CYAN = "#29e7e0";
-const MUTED = "#71717a";
-const BORDER = "#27272a";
 
 // The total-volume line chart (F3 Slice 5). A Client Component because Recharts needs
 // the browser to measure and draw; the Analytics page (a Server Component) transforms
 // the API series into `rows` and hands them down. One point per logged day, so the
 // line reads as a sparse time series rather than a fabricated continuous curve.
+//
+// Recharts paints SVG stroke/fill with concrete strings, so the colours are resolved
+// from the live theme via `useChartTheme` (ADR-0050) — the line tracks the Active
+// Skin × Mode (cyan lead accent) instead of a frozen hex.
 export function VolumeChart({ rows }: { rows: VolumeChartRow[] }) {
+  const { cyan, muted, border } = useChartTheme();
   return (
     <div className="h-56 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
           <XAxis
             dataKey="label"
-            tick={{ fill: MUTED, fontSize: 11 }}
+            tick={{ fill: muted, fontSize: 11 }}
             tickLine={false}
-            axisLine={{ stroke: BORDER }}
+            axisLine={{ stroke: border }}
             minTickGap={16}
           />
           <YAxis
-            tick={{ fill: MUTED, fontSize: 11 }}
+            tick={{ fill: muted, fontSize: 11 }}
             tickLine={false}
             axisLine={false}
             width={48}
             tickFormatter={(value: number) => `${Math.round(value)}`}
           />
           <Tooltip
-            cursor={{ stroke: BORDER }}
+            cursor={{ stroke: border }}
             content={<VolumeTooltip />}
           />
           <Line
             type="monotone"
             dataKey="volume"
-            stroke={CYAN}
+            stroke={cyan}
             strokeWidth={2}
-            dot={{ r: 2, fill: CYAN, strokeWidth: 0 }}
-            activeDot={{ r: 4, fill: CYAN, strokeWidth: 0 }}
+            dot={{ r: 2, fill: cyan, strokeWidth: 0 }}
+            activeDot={{ r: 4, fill: cyan, strokeWidth: 0 }}
             isAnimationActive={false}
           />
         </LineChart>
