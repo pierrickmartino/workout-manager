@@ -482,6 +482,117 @@ export function restCue(state: LiveSessionState): RestCue | null {
   };
 }
 
+// The exercise the current-set pointer sits on — the on-deck movement the sticky
+// "Next up" line names and its jump control scrolls to. Null once the pointer has
+// run off the end (every set attempted), so the bar drops "Next up" and prompts
+// Finish instead of naming an already-done set.
+export function onDeckExercise(state: LiveSessionState): string | null {
+  if (state.currentIndex >= state.sets.length) return null;
+  return state.sets[state.currentIndex].exerciseName;
+}
+
+// A stable, unique DOM id for one set row, so the sticky "Next up" control can
+// scroll straight to the current on-deck set. `modulePosition`+`setNumber` is unique
+// across a Session — solo sets differ by setNumber, Superset members by position.
+export function liveSetDomId(set: LiveSet): string {
+  return `live-set-${set.modulePosition}-${set.setNumber}`;
+}
+
+// One rendered set carrying its absolute index into `state.sets`. The screen groups
+// sets for display but still dispatches COMPLETE_SET/ADVANCE by that absolute index.
+export interface LiveUnitSet {
+  set: LiveSet;
+  index: number;
+}
+
+// A unit as the live screen renders it: a solo Prescription's sets, or a whole
+// Superset (ADR-0023). A fully-completed unit collapses to its one-line `summary`;
+// the current and upcoming units stay expanded (`containsCurrent` keeps the pointer's
+// unit open even at the moment it is being finished).
+export interface LiveUnit {
+  unitIndex: number;
+  // The Superset display letter (A, B…) when this unit is a Superset, else null.
+  supersetLabel: string | null;
+  // The distinct Exercise names in this unit, in first-appearance order: one for a
+  // solo unit, the members for a Superset.
+  exerciseNames: string[];
+  sets: LiveUnitSet[];
+  // Every set in the unit has been attempted (completed) — the collapse trigger. A
+  // skipped set stays `pending`, so a unit with any left-behind set is never complete.
+  isComplete: boolean;
+  // The current-set pointer sits on a set in this unit — keeps it expanded.
+  containsCurrent: boolean;
+  // The collapsed one-liner: "Back Squat — 3 sets" or
+  // "Superset A · Bench Press + Barbell Row — 3 rounds".
+  summary: string;
+}
+
+// English pluralization for a whole-number count and a singular noun.
+function pluralize(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+// The distinct Exercise names in a unit's sets, in first-appearance order.
+function unitExerciseNames(sets: readonly LiveUnitSet[]): string[] {
+  const names: string[] = [];
+  for (const { set } of sets) {
+    if (!names.includes(set.exerciseName)) names.push(set.exerciseName);
+  }
+  return names;
+}
+
+// The collapsed summary for a completed unit. A solo unit reads as its name and its
+// set count; a Superset reads as its label, members, and round count (rounds =
+// prescribed sets per member, carried on each set as `moduleSetCount`).
+function unitSummary(
+  supersetLabel: string | null,
+  exerciseNames: readonly string[],
+  sets: readonly LiveUnitSet[],
+): string {
+  if (supersetLabel === null) {
+    return `${exerciseNames[0]} — ${pluralize(sets.length, "set")}`;
+  }
+  const rounds = Math.max(...sets.map(({ set }) => set.moduleSetCount));
+  return `Superset ${supersetLabel} · ${exerciseNames.join(" + ")} — ${pluralize(rounds, "round")}`;
+}
+
+// Group the flat set list back into units for display (ADR-0023): a maximal run of
+// sets sharing a `unitIndex` is one unit. Each unit carries its sets (with absolute
+// indices), whether it is fully completed (the collapse trigger), whether it holds
+// the current-set pointer, and its collapsed one-line summary. Pure — no I/O.
+export function groupUnits(state: LiveSessionState): LiveUnit[] {
+  const units: LiveUnit[] = [];
+  const byUnit = new Map<number, LiveUnitSet[]>();
+  const order: number[] = [];
+
+  state.sets.forEach((set, index) => {
+    const existing = byUnit.get(set.unitIndex);
+    if (existing) {
+      existing.push({ set, index });
+    } else {
+      byUnit.set(set.unitIndex, [{ set, index }]);
+      order.push(set.unitIndex);
+    }
+  });
+
+  for (const unitIndex of order) {
+    const sets = byUnit.get(unitIndex)!;
+    const supersetLabel = sets[0].set.supersetLabel;
+    const exerciseNames = unitExerciseNames(sets);
+    units.push({
+      unitIndex,
+      supersetLabel,
+      exerciseNames,
+      sets,
+      isComplete: sets.every(({ set }) => set.status === "completed"),
+      containsCurrent: sets.some(({ index }) => index === state.currentIndex),
+      summary: unitSummary(supersetLabel, exerciseNames, sets),
+    });
+  }
+
+  return units;
+}
+
 // A preview of the next exercise to come — the first upcoming set (in performed
 // order) whose Exercise differs from the current one. Inside a Superset this
 // naturally surfaces the co-member (the very next set is another Exercise); for a
