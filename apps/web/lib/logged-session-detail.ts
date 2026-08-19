@@ -11,6 +11,7 @@
 // not here; Repeat is the record-side "do this workout again".)
 
 import type { LoggedSession } from "./logs-types";
+import { sessionReuse } from "./session-reuse.ts";
 
 const SECONDS_PER_MINUTE = 60;
 
@@ -50,20 +51,18 @@ function durationLabel(totalSeconds: number | null): string | null {
   return `${minutes}:${paddedSeconds}`;
 }
 
-// Derive the detail page's capabilities for one record. Repeat and Capture are mutually
-// exclusive — a record either has a plan to repeat or is ad-hoc and can be captured.
+// Derive the detail page's capabilities for one record. The reuse affordance (Repeat vs.
+// Capture, and their hrefs) comes from the shared `sessionReuse` seam, so this page and the
+// History row can never disagree; the detail page adds its own edit link, duration, and the
+// "View the plan" link (the source plan, which is exactly where Repeat goes).
 export function loggedSessionDetail(
   record: LoggedSession,
 ): LoggedSessionDetailView {
-  const isPlanBacked = record.session_id !== null;
-  const sourceSessionHref = isPlanBacked ? `/sessions/${record.session_id}` : null;
+  const reuse = sessionReuse(record);
   return {
-    isPlanBacked,
-    sourceSessionHref,
-    canRepeat: isPlanBacked,
-    repeatHref: sourceSessionHref,
-    canCapture: !isPlanBacked,
-    captureHref: `/history/${record.id}/capture`,
+    ...reuse,
+    // The "View the plan →" link points at the same source plan Repeat goes to.
+    sourceSessionHref: reuse.repeatHref,
     editHref: `/history/${record.id}/edit`,
     durationLabel: durationLabel(record.duration_seconds),
   };

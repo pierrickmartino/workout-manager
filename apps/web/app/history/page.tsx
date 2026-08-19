@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { Copy, Repeat } from "lucide-react";
 
 import { fetchHistory, type LoggedSession } from "@/lib/logs";
+import { sessionReuse } from "@/lib/session-reuse";
 import {
   DELETE_TAIL_FIRST_REASON,
   UNCOMPLETE_TAIL_FIRST_REASON,
@@ -114,6 +116,15 @@ function LoggedSessionCard({
   // one row of tappable pills alongside the outcome toggle and delete controls.
   const pillClass =
     "label-mono inline-flex items-center rounded-md border border-border bg-elevated px-3 py-1.5 text-[10px] text-text-primary transition-colors hover:border-cyan hover:text-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan/60 motion-reduce:transition-none";
+  // The reuse shortcut wears the cyan accent (matching the record detail page's reuse action)
+  // so it reads as the highlighted "do this again" affordance, not just another link.
+  const reusePillClass =
+    "label-mono inline-flex items-center gap-1.5 rounded-md border border-cyan/40 bg-cyan/[0.06] px-3 py-1.5 text-[10px] text-cyan transition-colors hover:bg-cyan/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan/60 motion-reduce:transition-none";
+
+  // One reuse affordance per record, from the shared seam — so the row and the detail page can
+  // never disagree (ADR-0031/0044). Plan-backed → Repeat its existing plan (no copy); plan-less
+  // → Capture into a new reusable plan. Present regardless of Completion Outcome.
+  const reuse = sessionReuse(entry);
 
   return (
     <Card className="flex flex-col gap-4 p-5">
@@ -143,6 +154,17 @@ function LoggedSessionCard({
           <Link href={`/history/${entry.id}`} className={pillClass}>
             Open
           </Link>
+          {reuse.canRepeat && reuse.repeatHref !== null ? (
+            <Link href={reuse.repeatHref} className={reusePillClass}>
+              <Repeat className="h-3 w-3" />
+              Repeat
+            </Link>
+          ) : (
+            <Link href={reuse.captureHref} className={reusePillClass}>
+              <Copy className="h-3 w-3" />
+              Capture
+            </Link>
+          )}
           <Link href={`/history/${entry.id}/edit`} className={pillClass}>
             Edit
           </Link>
