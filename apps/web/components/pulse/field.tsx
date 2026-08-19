@@ -32,3 +32,20 @@ export function Field({
     </Wrapper>
   );
 }
+
+interface FieldLabelProps {
+  label: string;
+  children: React.ReactNode;
+}
+
+// A compact inline label wrapper for dense grids (the Hand-Authored build-and-log editor and
+// the Insert "Add exercise" editor): a mono micro-label above the control, tighter than the
+// fuller `Field` block. Shared so the two prescription editors read identically.
+export function FieldLabel({ label, children }: FieldLabelProps): React.JSX.Element {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="label-mono text-[9px] text-text-muted">{label}</span>
+      {children}
+    </label>
+  );
+}

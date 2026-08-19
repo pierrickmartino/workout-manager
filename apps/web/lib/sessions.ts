@@ -2,6 +2,7 @@ import { apiGet, apiSend, type Envelope } from "./api";
 
 import type {
   AuthorPlanInput,
+  AuthorPrescriptionInput,
   AuthorSessionInput,
 } from "./hand-authored-session";
 import type { LoggedSession } from "./logs-types";
@@ -41,6 +42,20 @@ export async function fetchSession(
   id: number,
 ): Promise<Envelope<WorkoutSession>> {
   return apiGet(`/api/sessions/${id}`);
+}
+
+// Append one hand-authored Exercise Prescription to the user's own standalone Session
+// (Insert, ADR-0051, issue #360): the client has mapped the "Add exercise" editor into the
+// single-prescription payload through `buildInsertPrescriptionRequest`, so this is a thin
+// transport shell. The backend validates through `validate_deploy`, appends the prescription
+// last (no AI call), and returns the updated Session — its Provenance unchanged and its
+// Logged Sessions frozen. A Protocol-member target or a validation failure comes back as an
+// envelope error (nothing persisted); a non-owner Session 404s.
+export async function insertPrescription(
+  sessionId: number,
+  input: AuthorPrescriptionInput,
+): Promise<Envelope<WorkoutSession>> {
+  return apiSend(`/api/sessions/${sessionId}/prescriptions`, "POST", input);
 }
 
 // Author a standalone plan **without logging** — the submit target of Capture (ADR-0044).

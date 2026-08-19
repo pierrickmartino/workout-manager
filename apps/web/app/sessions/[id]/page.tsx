@@ -5,6 +5,7 @@ import { ArrowRight, ClipboardCheck, Play } from "lucide-react";
 
 import { SubstituteButton } from "@/components/SubstituteButton";
 import { DuplicateButton } from "@/components/DuplicateButton";
+import { AddExerciseButton } from "@/components/AddExerciseButton";
 import { HarderVariationOffer } from "@/components/HarderVariationOffer";
 import {
   fetchHarderVariation,
@@ -91,6 +92,13 @@ export default async function SessionPage({
             </li>
           ))}
         </ol>
+        {/* Insert (ADR-0051, issue #360): hand-author one new movement onto the end of a
+            standalone Session. Withheld on a Protocol-member Session — adding inside a Protocol
+            stays the Builder's tail-gated Deploy path (standalone-only, ADR-0051), mirroring how
+            Duplicate is withheld there. */}
+        {session.is_protocol_member ? null : (
+          <AddExerciseButton sessionId={session.id} />
+        )}
       </div>
 
       <div className="flex flex-col gap-2.5">

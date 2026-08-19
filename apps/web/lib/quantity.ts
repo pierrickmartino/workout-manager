@@ -38,6 +38,22 @@ export const NO_QUANTITY = "—";
 // write boundary so the persisted set fixes its meaning instead of re-guessing it.
 export const REPETITIONS_KIND: QuantityKind = "repetitions";
 
+// The Amount kinds an authoring picker offers, paired with a human label (ADR-0032). Reps is
+// the default. Shared by every surface that authors a prescription's kind — the Hand-Authored
+// build-and-log screen and the Insert "Add exercise" editor — so the two never drift.
+export const AMOUNT_KIND_OPTIONS: ReadonlyArray<{ value: QuantityKind; label: string }> = [
+  { value: "repetitions", label: "Reps" },
+  { value: "duration", label: "Duration" },
+  { value: "distance", label: "Distance" },
+];
+
+// The distance units a distance prescription can read in, chosen once for the exercise (#301).
+// Shared by the same authoring surfaces so the unit list stays one source of truth.
+export const DISTANCE_UNIT_OPTIONS: ReadonlyArray<{ value: DistanceUnit; label: string }> = [
+  { value: "km", label: "km" },
+  { value: "mi", label: "mi" },
+];
+
 // Render a typed Quantity for display, falling back to the em dash when absent. The
 // stored `text` is authoritative — it preserves exactly what was logged ("5", "5 km",
 // "5:00") — so the UI never re-derives it.
