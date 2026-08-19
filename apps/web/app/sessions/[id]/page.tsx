@@ -6,6 +6,7 @@ import { ArrowRight, ClipboardCheck, Play } from "lucide-react";
 import { SubstituteButton } from "@/components/SubstituteButton";
 import { DuplicateButton } from "@/components/DuplicateButton";
 import { AddExerciseButton } from "@/components/AddExerciseButton";
+import { RemoveExerciseButton } from "@/components/RemoveExerciseButton";
 import { HarderVariationOffer } from "@/components/HarderVariationOffer";
 import {
   fetchHarderVariation,
@@ -19,6 +20,7 @@ import {
 } from "@/lib/harder-variation-view";
 import { toTempoView, type TempoView } from "@/lib/tempo-view";
 import { supersetLayout, type SupersetSlot } from "@/lib/supersets";
+import { removeAffordances } from "@/lib/remove-prescription";
 import { appendFrom } from "@/lib/back-target";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -55,6 +57,14 @@ export default async function SessionPage({
     })),
   );
 
+  // The per-row Remove affordance (ADR-0052): standalone-only (withheld on a Protocol
+  // member), disabled on the last remaining movement, and flagging a two-member Superset
+  // so the confirm warns that removing one member dissolves its partner (Q4/Q8/Q9).
+  const removeAffordanceList = removeAffordances(
+    session.prescriptions,
+    session.is_protocol_member ?? false,
+  );
+
   // Read the harder-Variation offer per prescription (#202). The endpoint returns
   // `null` for anything not at a pure-bodyweight rep ceiling, so most resolve to no
   // offer; a failed read simply shows none. Fetched in parallel to keep the page fast.
@@ -88,6 +98,9 @@ export default async function SessionPage({
                 sessionId={session.id}
                 index={index + 1}
                 harderVariation={offers[index]}
+                showRemove={removeAffordanceList[index].showRemove}
+                canRemove={removeAffordanceList[index].canRemove}
+                dissolvesSuperset={removeAffordanceList[index].dissolvesSuperset}
               />
             </li>
           ))}
@@ -147,12 +160,18 @@ function PrescriptionCard({
   sessionId,
   index,
   harderVariation,
+  showRemove,
+  canRemove,
+  dissolvesSuperset,
 }: {
   prescription: ExercisePrescription;
   superset: SupersetSlot | undefined;
   sessionId: number;
   index: number;
   harderVariation: HarderVariationOfferView;
+  showRemove: boolean;
+  canRemove: boolean;
+  dissolvesSuperset: boolean;
 }) {
   // A grouped Prescription rests once per round at the group level, so its own rest is
   // dormant and the round-rest is shown once, on the group's last member (ADR-0023).
@@ -233,7 +252,21 @@ function PrescriptionCard({
         offer={harderVariation}
       />
 
-      <SubstituteButton sessionId={sessionId} position={prescription.position} />
+      <div className="flex flex-wrap items-center gap-3">
+        <SubstituteButton sessionId={sessionId} position={prescription.position} />
+        {/* Remove (ADR-0052): withdraw this movement from a standalone Session — Insert's
+            symmetric partner. Withheld on a Protocol member (removing inside a Protocol
+            stays Deploy's job), and disabled on the last remaining movement (a Session must
+            keep at least one). */}
+        {showRemove ? (
+          <RemoveExerciseButton
+            sessionId={sessionId}
+            position={prescription.position}
+            canRemove={canRemove}
+            dissolvesSuperset={dissolvesSuperset}
+          />
+        ) : null}
+      </div>
     </Card>
   );
 }
