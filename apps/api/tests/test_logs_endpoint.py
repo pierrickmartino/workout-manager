@@ -78,6 +78,9 @@ def build_client(ctx=None):
     client.exercises = exercises
     client.logged = logged
     client.protocols = protocols
+    # Exposed so a test can seed a Protocol-member Session directly (``create`` only
+    # builds standalone ones) to exercise Insert's standalone-only 422 at the boundary.
+    client.sessions = sessions
     return client, ctx
 
 

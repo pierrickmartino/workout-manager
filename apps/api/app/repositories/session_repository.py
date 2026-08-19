@@ -178,6 +178,24 @@ class SessionRepository(Protocol):
         """
         ...
 
+    def append_prescription(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        prescription: PrescriptionDraft,
+    ) -> SessionView | None:
+        """Append one Exercise Prescription at the end of the owner's Session (Insert,
+        ADR-0051).
+
+        The prescription lands after every existing one, at the next position; nothing
+        else is touched — existing prescriptions keep their order, and the Session's
+        Provenance and regeneration guard are left exactly as they were (a hand-added
+        movement is an edit, not a re-origination). Returns the updated Session, or
+        ``None`` if it is missing or owned by another user — Insert only ever edits the
+        owner's own copy. The standalone-only and validation guards live in the service.
+        """
+        ...
+
 
 def _draft_from(prescription: ExercisePrescription) -> PrescriptionDraft:
     return PrescriptionDraft(
@@ -207,6 +225,27 @@ def _regenerated_drafts(
         if p.position in keep
     ]
     return kept + list(replacements)
+
+
+def _prescription_model(
+    session_id: int, position: int, draft: PrescriptionDraft
+) -> ExercisePrescription:
+    """Build one persistable prescription row at ``position`` from a draft — the single
+    field mapping shared by the full-list create and the single-row Insert append."""
+
+    return ExercisePrescription(
+        session_id=session_id,
+        exercise_id=draft.exercise_id,
+        position=position,
+        sets=draft.sets,
+        reps=draft.reps,
+        rest_seconds=draft.rest_seconds,
+        tempo=draft.tempo,
+        recommended_load=draft.recommended_load,
+        prescribed_quantity=draft.prescribed_quantity,
+        superset_group=draft.superset_group,
+        round_rest_seconds=draft.round_rest_seconds,
+    )
 
 
 def _prescription_view(
@@ -261,19 +300,7 @@ class SqlSessionRepository:
     ) -> None:
         for position, prescription in enumerate(prescriptions):
             self._session.add(
-                ExercisePrescription(
-                    session_id=session_id,
-                    exercise_id=prescription.exercise_id,
-                    position=position,
-                    sets=prescription.sets,
-                    reps=prescription.reps,
-                    rest_seconds=prescription.rest_seconds,
-                    tempo=prescription.tempo,
-                    recommended_load=prescription.recommended_load,
-                    prescribed_quantity=prescription.prescribed_quantity,
-                    superset_group=prescription.superset_group,
-                    round_rest_seconds=prescription.round_rest_seconds,
-                )
+                _prescription_model(session_id, position, prescription)
             )
 
     def create(self, clerk_user_id: str, draft: SessionDraft) -> SessionView:
@@ -388,6 +415,28 @@ class SqlSessionRepository:
 
         prescription.exercise_id = new_exercise_id
         self._session.add(prescription)
+        self._session.commit()
+        return self._view(workout)
+
+    def append_prescription(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        prescription: PrescriptionDraft,
+    ) -> SessionView | None:
+        workout = self._session.get(WorkoutSession, session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return None
+
+        current = self._session.exec(
+            select(ExercisePrescription).where(
+                ExercisePrescription.session_id == session_id
+            )
+        ).all()
+        next_position = max((p.position for p in current), default=-1) + 1
+        self._session.add(
+            _prescription_model(session_id, next_position, prescription)
+        )
         self._session.commit()
         return self._view(workout)
 
@@ -546,6 +595,23 @@ class InMemorySessionRepository:
             )
             for p in current
         ]
+        return self._view(workout)
+
+    def append_prescription(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        prescription: PrescriptionDraft,
+    ) -> SessionView | None:
+        workout = self._sessions.get(session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return None
+
+        current = self._prescriptions.get(session_id, [])
+        next_position = max((p.position for p in current), default=-1) + 1
+        appended = _prescription_model(session_id, next_position, prescription)
+        appended.id = len(current) + 1
+        self._prescriptions[session_id] = [*current, appended]
         return self._view(workout)
 
 

@@ -62,6 +62,16 @@ class AuthoredSessionInvalid(Exception):
         super().__init__(errors[0].message if errors else "Invalid session.")
 
 
+class InsertTargetNotFound(Exception):
+    """The Session an Insert targets is missing or owned by another user (ADR-0051).
+
+    Distinct from ``AuthoredSessionInvalid`` — this is a not-found, not a validation
+    failure — so the boundary can map it to a ``404`` rather than a structured ``422``.
+    Insert only ever edits the owner's own plan, so a non-owner sees the same not-found
+    as a missing Session.
+    """
+
+
 @dataclass(frozen=True)
 class AuthorPlanRequest:
     """A request to author a standalone plan with **no performance logged** (Capture,
@@ -300,10 +310,80 @@ def author_plan(
     )
 
 
+def insert_prescription(
+    session_id: int,
+    clerk_user_id: str,
+    prescription: PrescriptionDraft,
+    *,
+    sessions: SessionRepository,
+    exercises: ExerciseRepository,
+    profiles: ProfileRepository,
+) -> SessionView:
+    """Append one hand-authored Exercise Prescription to the owner's standalone Session
+    (Insert, ADR-0051).
+
+    Validates the whole add before any write — the target must be the owner's own
+    **standalone** Session (a Protocol member stays on the Builder's tail-gated Deploy
+    path, ADR-0020/0021), and the new prescription must pass the Builder's
+    ``validate_deploy`` rules (unknown Exercise, invalid sets/reps, Superset structure —
+    with the Sensitive-Constraint posture threaded, ADR-0023). On any problem raises
+    ``AuthoredSessionInvalid`` with nothing persisted, naming the offending item; a
+    missing or unowned Session raises ``InsertTargetNotFound``.
+
+    On success the prescription is appended at the end and the updated Session returned.
+    Session Provenance is left untouched — inserting into an ``ai_generated`` Session
+    keeps it ``ai_generated`` (ADR-0041) — and every existing Logged Session of the
+    Session is frozen record, never reached by this plan edit (ADR-0001/0034).
+    """
+
+    session = sessions.get(session_id, clerk_user_id)
+    if session is None:
+        raise InsertTargetNotFound()
+
+    # Standalone-only: adding a movement inside a Protocol stays Deploy's job, so a
+    # performed Session in an ordered sequence is never rewritten (ADR-0051).
+    if session.is_protocol_member:
+        raise AuthoredSessionInvalid(
+            [
+                DeployError(
+                    code="protocol_member",
+                    message=(
+                        "Insert is available on standalone sessions only; add a "
+                        "movement inside a protocol through the builder."
+                    ),
+                )
+            ]
+        )
+
+    profile = profiles.get_or_create(clerk_user_id)
+
+    def exercise_exists(exercise_id: int) -> bool:
+        return exercises.get(exercise_id) is not None
+
+    errors = validate_deploy(
+        _deploy_draft([prescription]),
+        performed_session_ids=set(),
+        known_session_ids=set(),
+        exercise_exists=exercise_exists,
+        has_sensitive_constraint=is_sensitive(profile),
+    )
+    if errors:
+        raise AuthoredSessionInvalid(errors)
+
+    # Validation passed, so the append cannot fail on ownership (already checked); the
+    # ``None`` guard keeps the type contract without a second not-found path.
+    updated = sessions.append_prescription(session_id, clerk_user_id, prescription)
+    if updated is None:
+        raise InsertTargetNotFound()
+    return updated
+
+
 __all__ = [
     "AuthoredSessionInvalid",
+    "InsertTargetNotFound",
     "AuthorPlanRequest",
     "AuthorSessionRequest",
     "author_and_log_session",
     "author_plan",
+    "insert_prescription",
 ]

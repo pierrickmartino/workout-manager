@@ -21,8 +21,10 @@ from app.authoring.service import (
     AuthoredSessionInvalid,
     AuthorPlanRequest,
     AuthorSessionRequest,
+    InsertTargetNotFound,
     author_and_log_session,
     author_plan,
+    insert_prescription,
 )
 from app.domain.feedback import parse_verdict
 from app.domain.fitness_profile import is_sensitive, resolve_equipment
@@ -359,6 +361,46 @@ def author_plan_only(
             exercises=exercises,
             profiles=profiles,
         )
+    except AuthoredSessionInvalid as exc:
+        return _authored_error_response(exc.errors)
+    return success_envelope(_serialize(view))
+
+
+@router.post("/sessions/{session_id}/prescriptions")
+def insert_prescription_into_session(
+    session_id: int,
+    payload: AuthorPrescriptionBody,
+    clerk_user_id: str = Depends(get_current_user),
+    sessions: SessionRepository = Depends(get_session_repository),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    profiles: ProfileRepository = Depends(get_profile_repository),
+) -> object:
+    """Append one hand-authored Exercise Prescription to the owner's standalone Session
+    (Insert, ADR-0051).
+
+    The submit target of the Session detail's "Add exercise" affordance: it appends a
+    single prescription — exercise id + sets + typed Quantity + rest + tempo + typed
+    Load — at the end of the Session, with no AI call. Delegates to
+    ``insert_prescription``, which validates the whole add before any write. A
+    Protocol-member target, an unknown Exercise, or a ``validate_deploy`` failure returns
+    a structured ``422`` naming the offending item and persists nothing; a missing or
+    unowned Session ``404``s so a non-owner can never edit another user's plan. On
+    success the envelope carries the updated Session with the new prescription last —
+    its Session Provenance unchanged and its Logged Sessions frozen (ADR-0001/0041)."""
+
+    try:
+        view = insert_prescription(
+            session_id,
+            clerk_user_id,
+            payload.to_draft(),
+            sessions=sessions,
+            exercises=exercises,
+            profiles=profiles,
+        )
+    except InsertTargetNotFound as exc:
+        raise HTTPException(
+            status_code=HTTP_NOT_FOUND, detail="Session not found"
+        ) from exc
     except AuthoredSessionInvalid as exc:
         return _authored_error_response(exc.errors)
     return success_envelope(_serialize(view))
