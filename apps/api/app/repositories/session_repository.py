@@ -10,12 +10,13 @@ another. SQLModel-backed and in-memory implementations honor the same contract."
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Protocol
 
 from sqlmodel import Session, select
 
 from app.db.models import Exercise, ExercisePrescription, WorkoutSession
+from app.domain.superset import MIN_SUPERSET_MEMBERS
 from app.repositories.exercise_repository import ExerciseRepository
 
 
@@ -196,6 +197,26 @@ class SessionRepository(Protocol):
         """
         ...
 
+    def remove_prescription(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        position: int,
+    ) -> SessionView | None:
+        """Withdraw the Exercise Prescription at ``position`` from the owner's Session
+        (Remove, ADR-0052).
+
+        The surviving prescriptions are re-numbered into a contiguous ``0..n-1`` run, and
+        any Superset group left with a single survivor is dissolved to a valid solo
+        prescription (its ``superset_group``/``round_rest_seconds`` cleared) — a lone
+        tagged member is not a Superset (ADR-0023). The Session's Provenance and
+        regeneration guard are left exactly as they were (removing a movement is an edit,
+        not a re-origination). Returns the updated Session, or ``None`` if the Session is
+        missing/unowned or has no prescription at ``position`` — Remove only ever edits
+        the owner's own copy. The standalone-only and empty-guard live in the service.
+        """
+        ...
+
 
 def _draft_from(prescription: ExercisePrescription) -> PrescriptionDraft:
     return PrescriptionDraft(
@@ -225,6 +246,38 @@ def _regenerated_drafts(
         if p.position in keep
     ]
     return kept + list(replacements)
+
+
+def _removed_drafts(
+    current: list[ExercisePrescription], position: int
+) -> list[PrescriptionDraft]:
+    """Surviving prescriptions after removing the one at ``position`` (Remove, ADR-0052),
+    ordered by position with any Superset group left with a single survivor dissolved to
+    a solo prescription. ``_add_prescriptions`` re-numbers the result to a contiguous
+    ``0..n-1`` run on write, so a removed middle position leaves no gap."""
+
+    survivors = [
+        p for p in sorted(current, key=lambda p: p.position) if p.position != position
+    ]
+    group_counts: dict[str, int] = {}
+    for prescription in survivors:
+        if prescription.superset_group is not None:
+            group_counts[prescription.superset_group] = (
+                group_counts.get(prescription.superset_group, 0) + 1
+            )
+
+    drafts: list[PrescriptionDraft] = []
+    for prescription in survivors:
+        draft = _draft_from(prescription)
+        # A group left with a single survivor is no longer a Superset (ADR-0023): dissolve
+        # it to a valid solo prescription rather than persist a lone tagged member (Q5).
+        if (
+            prescription.superset_group is not None
+            and group_counts[prescription.superset_group] < MIN_SUPERSET_MEMBERS
+        ):
+            draft = replace(draft, superset_group=None, round_rest_seconds=None)
+        drafts.append(draft)
+    return drafts
 
 
 def _prescription_model(
@@ -440,6 +493,36 @@ class SqlSessionRepository:
         self._session.commit()
         return self._view(workout)
 
+    def remove_prescription(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        position: int,
+    ) -> SessionView | None:
+        workout = self._session.get(WorkoutSession, session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return None
+
+        current = self._session.exec(
+            select(ExercisePrescription).where(
+                ExercisePrescription.session_id == session_id
+            )
+        ).all()
+        if not any(p.position == position for p in current):
+            return None
+
+        # Compute the survivors (dissolving any lone Superset member) before touching the
+        # rows, then rewrite the list — the same delete-all/re-add shape ``regenerate``
+        # uses, so ``_add_prescriptions`` re-numbers the survivors to a contiguous run.
+        survivors = _removed_drafts(list(current), position)
+        for prescription in current:
+            self._session.delete(prescription)
+        self._session.commit()
+
+        self._add_prescriptions(session_id, survivors)
+        self._session.commit()
+        return self._view(workout)
+
 
 class InMemorySessionRepository:
     def __init__(self, exercises: ExerciseRepository) -> None:
@@ -612,6 +695,26 @@ class InMemorySessionRepository:
         appended = _prescription_model(session_id, next_position, prescription)
         appended.id = len(current) + 1
         self._prescriptions[session_id] = [*current, appended]
+        return self._view(workout)
+
+    def remove_prescription(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        position: int,
+    ) -> SessionView | None:
+        workout = self._sessions.get(session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return None
+
+        current = self._prescriptions.get(session_id, [])
+        if not any(p.position == position for p in current):
+            return None
+
+        # Rebuild the list from the survivors (with any lone Superset member dissolved);
+        # ``_materialize`` re-numbers them to a contiguous ``0..n-1`` run.
+        survivors = _removed_drafts(current, position)
+        self._prescriptions[session_id] = self._materialize(session_id, survivors)
         return self._view(workout)
 
 

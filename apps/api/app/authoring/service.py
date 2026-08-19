@@ -72,6 +72,16 @@ class InsertTargetNotFound(Exception):
     """
 
 
+class RemoveTargetNotFound(Exception):
+    """The prescription a Remove targets is missing (ADR-0052).
+
+    Raised when the Session is missing/unowned **or** has no prescription at the given
+    position — a non-owner and a bad position both look like a not-found, so the boundary
+    maps this to a ``404`` rather than a structured ``422``. Distinct from
+    ``AuthoredSessionInvalid``, which carries the scope and empty-guard rejections.
+    """
+
+
 @dataclass(frozen=True)
 class AuthorPlanRequest:
     """A request to author a standalone plan with **no performance logged** (Capture,
@@ -378,12 +388,82 @@ def insert_prescription(
     return updated
 
 
+def remove_prescription(
+    session_id: int,
+    clerk_user_id: str,
+    position: int,
+    *,
+    sessions: SessionRepository,
+) -> SessionView:
+    """Withdraw one Exercise Prescription from the owner's standalone Session (Remove,
+    ADR-0052) — Insert's symmetric partner.
+
+    Guards the whole remove before any write, in precedence order: a missing/unowned
+    Session raises ``RemoveTargetNotFound``; a Protocol member is refused whole (removing
+    inside a Protocol stays the Builder's tail-gated Deploy path, ADR-0020/0021); a
+    position with no prescription raises ``RemoveTargetNotFound``; and the **last**
+    remaining prescription cannot be removed — a Session must keep at least one movement
+    (Q4), refused whole as ``would_empty_session``. Only then does the repository drop the
+    prescription, re-number the survivors contiguously, and dissolve any Superset left
+    with a single member (Q5).
+
+    Touches the plan only — every existing Logged Session is frozen record (ADR-0001/0034)
+    — and leaves Session Provenance untouched: removing from an ``ai_generated`` Session
+    keeps it ``ai_generated`` (ADR-0041), so Generation Feedback and Regeneration stay
+    available. Returns the updated Session.
+    """
+
+    session = sessions.get(session_id, clerk_user_id)
+    if session is None:
+        raise RemoveTargetNotFound()
+
+    # Standalone-only: removing a movement inside a Protocol stays Deploy's job, so a
+    # performed Session in an ordered sequence is never rewritten (ADR-0052).
+    if session.is_protocol_member:
+        raise AuthoredSessionInvalid(
+            [
+                DeployError(
+                    code="protocol_member",
+                    message=(
+                        "Remove is available on standalone sessions only; remove a "
+                        "movement inside a protocol through the builder."
+                    ),
+                )
+            ]
+        )
+
+    if position not in {p.position for p in session.prescriptions}:
+        raise RemoveTargetNotFound()
+
+    # Empty-guard (Q4): a Session must keep at least one movement, so the last remaining
+    # prescription cannot be removed — refused whole, mirroring the empty-session rule the
+    # create/Insert paths already enforce (``validate_deploy``).
+    if len(session.prescriptions) <= 1:
+        raise AuthoredSessionInvalid(
+            [
+                DeployError(
+                    code="would_empty_session",
+                    message="A session must keep at least one movement.",
+                )
+            ]
+        )
+
+    # Guards passed, so the drop cannot fail on ownership or position; the ``None`` guard
+    # keeps the type contract without a second not-found path.
+    updated = sessions.remove_prescription(session_id, clerk_user_id, position)
+    if updated is None:
+        raise RemoveTargetNotFound()
+    return updated
+
+
 __all__ = [
     "AuthoredSessionInvalid",
     "InsertTargetNotFound",
+    "RemoveTargetNotFound",
     "AuthorPlanRequest",
     "AuthorSessionRequest",
     "author_and_log_session",
     "author_plan",
     "insert_prescription",
+    "remove_prescription",
 ]
