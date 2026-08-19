@@ -258,3 +258,136 @@ test("builds an outcome correction for the fill direction (Incomplete to Complet
   if (!result.ok) return;
   assert.equal(result.request.completion_outcome, "completed");
 });
+
+// --- Add a movement (record side, issue #358) --------------------------------------
+
+test("an appended set row round-trips into the correction payload", () => {
+  // Arrange — the record's own set, plus a freshly added row (its movement already
+  // resolved to a catalog Exercise id by the action, like the ad-hoc log flow)
+  const fields: CorrectionFormFields = {
+    ...correctionFieldsFromRecord(planBackedRecord()),
+    sets: [
+      ...correctionFieldsFromRecord(planBackedRecord()).sets,
+      {
+        exerciseId: 11,
+        exerciseName: "Plank",
+        kind: "duration",
+        reps: "",
+        distance: "",
+        unit: "km",
+        duration: "1:30",
+        loadKind: "bodyweight",
+        loadValue: "",
+        perceivedDifficulty: 6,
+      },
+    ],
+  };
+
+  // Act
+  const result = buildCorrectionRequest(fields);
+
+  // Assert — the full-replace payload carries both the original and the appended set
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.logged_sets.length, 2);
+  assert.deepEqual(result.request.logged_sets[1], {
+    exercise_id: 11,
+    quantity_kind: "duration",
+    quantity_value: "1:30",
+    load_kind: "bodyweight",
+    load_value: null,
+    perceived_difficulty: 6,
+  });
+});
+
+test("an appended off-plan movement on a plan-backed record builds a valid request", () => {
+  // Arrange — a plan-backed (session_id) record; the added set names a movement the
+  // plan never prescribed (a different Exercise id than the record's own set)
+  const fields: CorrectionFormFields = {
+    ...correctionFieldsFromRecord(planBackedRecord()),
+    sets: [
+      ...correctionFieldsFromRecord(planBackedRecord()).sets,
+      {
+        exerciseId: 21,
+        exerciseName: "Bicep Curl",
+        kind: "repetitions",
+        reps: "12",
+        distance: "",
+        unit: "km",
+        duration: "",
+        loadKind: "absolute",
+        loadValue: "15",
+        perceivedDifficulty: null,
+      },
+    ],
+  };
+
+  // Act
+  const result = buildCorrectionRequest(fields);
+
+  // Assert — the off-plan set persists as an ordinary set; a plan-backed correction
+  // still omits the training type (the server derives it from the Session)
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.logged_sets.length, 2);
+  assert.equal(result.request.logged_sets[1].exercise_id, 21);
+  assert.equal(result.request.logged_sets[1].quantity_value, "12");
+  assert.equal("training_type" in result.request, false);
+});
+
+test("a save with no additions reproduces the record's existing payload byte-for-byte", () => {
+  // Arrange — pre-fill straight from the record, adding nothing
+  const record = planBackedRecord();
+
+  // Act
+  const result = buildCorrectionRequest(correctionFieldsFromRecord(record));
+
+  // Assert — the payload is exactly the record's contents, with no new fields
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.request, {
+    performed_on: "2026-06-20",
+    duration_seconds: 1200,
+    logged_sets: [
+      {
+        exercise_id: 3,
+        quantity_kind: "repetitions",
+        quantity_value: "5",
+        load_kind: "absolute",
+        load_value: "60",
+        perceived_difficulty: 8,
+      },
+    ],
+  });
+});
+
+test("a blank appended row is dropped (matches the cleared-row behavior)", () => {
+  // Arrange — the record's own set plus an added row left un-performed (no amount)
+  const fields: CorrectionFormFields = {
+    ...correctionFieldsFromRecord(planBackedRecord()),
+    sets: [
+      ...correctionFieldsFromRecord(planBackedRecord()).sets,
+      {
+        exerciseId: 11,
+        exerciseName: "Plank",
+        kind: "repetitions",
+        reps: "   ",
+        distance: "",
+        unit: "km",
+        duration: "",
+        loadKind: "absolute",
+        loadValue: "",
+        perceivedDifficulty: null,
+      },
+    ],
+  };
+
+  // Act
+  const result = buildCorrectionRequest(fields);
+
+  // Assert — the empty appended row never reaches the payload; the record's set remains
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.logged_sets.length, 1);
+  assert.equal(result.request.logged_sets[0].exercise_id, 3);
+});
