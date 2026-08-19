@@ -26,11 +26,16 @@ import {
 import type { CaptureSeed, CaptureSeedExercise } from "@/lib/capture-seed";
 import { dissolveSingletonGroups } from "@/lib/supersets";
 import { LOAD_KIND_OPTIONS } from "@/lib/load";
-import type { DistanceUnit, QuantityKind } from "@/lib/quantity";
+import {
+  AMOUNT_KIND_OPTIONS,
+  DISTANCE_UNIT_OPTIONS,
+  type DistanceUnit,
+  type QuantityKind,
+} from "@/lib/quantity";
 import type { PickedExercise } from "@/lib/protocol-builder";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
 import { ExerciseLibrary } from "@/components/ExerciseLibrary";
-import { Field } from "@/components/pulse/field";
+import { Field, FieldLabel } from "@/components/pulse/field";
 import { Alert } from "@/components/pulse/alert";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { Card } from "@/components/ui/card";
@@ -104,21 +109,6 @@ interface ExerciseRow {
 const DEFAULT_AMOUNT_KIND: QuantityKind = "repetitions";
 const DEFAULT_DISTANCE_UNIT: DistanceUnit = "km";
 const DEFAULT_TRAINING_TYPE = "strength";
-
-// The Amount kinds this build-and-log screen offers, paired with a human label. Reps is
-// the default; Duration records a timed hold and Distance a run/row/ride in km or miles
-// (ADR-0032, issues #300/#301).
-const AMOUNT_KIND_OPTIONS: ReadonlyArray<{ value: QuantityKind; label: string }> = [
-  { value: "repetitions", label: "Reps" },
-  { value: "duration", label: "Duration" },
-  { value: "distance", label: "Distance" },
-];
-
-// The distance units a distance exercise can read in, chosen once for the exercise (#301).
-const DISTANCE_UNIT_OPTIONS: ReadonlyArray<{ value: DistanceUnit; label: string }> = [
-  { value: "km", label: "km" },
-  { value: "mi", label: "mi" },
-];
 
 let nextKey = 0;
 function makeKey(): number {
@@ -902,22 +892,5 @@ function ExerciseCard({
         </Button>
       ) : null}
     </Card>
-  );
-}
-
-// A compact inline label wrapper for the grid fields; the pulse `Field` renders a fuller
-// block, so this keeps the dense sets/reps grid tight.
-function FieldLabel({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="label-mono text-[9px] text-text-muted">{label}</span>
-      {children}
-    </label>
   );
 }

@@ -3,8 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { duplicateSession, substitutePrescription } from "@/lib/sessions";
+import {
+  duplicateSession,
+  insertPrescription,
+  substitutePrescription,
+} from "@/lib/sessions";
 import { toDuplicateResult } from "@/lib/duplicate-session";
+import type { AuthorPrescriptionInput } from "@/lib/hand-authored-session";
 
 export interface SubstituteFormState {
   error: string | null;
@@ -12,6 +17,30 @@ export interface SubstituteFormState {
 
 export interface DuplicateFormState {
   error: string | null;
+}
+
+export interface InsertPrescriptionFormState {
+  error: string | null;
+}
+
+// Append one hand-authored Exercise Prescription to the user's own standalone Session
+// (Insert, ADR-0051, issue #360). The client has already mapped the "Add exercise" editor
+// into the payload through the pure `buildInsertPrescriptionRequest` view-model, so this is a
+// thin transport-and-revalidate shell. On success the Session page is revalidated so the new
+// movement renders at the end in place (and shows up in the next Repeat/Start/Log); on failure
+// — a Protocol-member target, an unknown exercise, or a `validate_deploy` rejection — the
+// server's message is returned for the editor to surface, and nothing is persisted.
+export async function submitInsertPrescription(
+  sessionId: number,
+  input: AuthorPrescriptionInput,
+): Promise<InsertPrescriptionFormState> {
+  const result = await insertPrescription(sessionId, input);
+  if (!result.success || !result.data) {
+    return { error: result.error ?? "Could not add this exercise." };
+  }
+
+  revalidatePath(`/sessions/${sessionId}`);
+  return { error: null };
 }
 
 // Duplicate this Session into a new standalone plan (ADR-0043). On success we redirect
