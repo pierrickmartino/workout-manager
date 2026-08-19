@@ -58,6 +58,23 @@ export async function insertPrescription(
   return apiSend(`/api/sessions/${sessionId}/prescriptions`, "POST", input);
 }
 
+// Remove one Exercise Prescription from the user's own standalone Session (Remove,
+// ADR-0052, Insert's symmetric partner): a bodyless DELETE at the prescription's position,
+// so the seam sends no `Content-Type` (ADR-0022). The backend drops the prescription with
+// no AI call, re-numbers the survivors contiguous, dissolves any Superset left with a
+// single member, and returns the updated Session — its Provenance unchanged and its Logged
+// Sessions frozen. A Protocol-member target or the last-remaining prescription comes back
+// as an envelope error (nothing persisted); a non-owner Session or a missing position 404s.
+export async function removePrescription(
+  sessionId: number,
+  position: number,
+): Promise<Envelope<WorkoutSession>> {
+  return apiSend(
+    `/api/sessions/${sessionId}/prescriptions/${position}`,
+    "DELETE",
+  );
+}
+
 // Author a standalone plan **without logging** — the submit target of Capture (ADR-0044).
 // Posts the finalized prescriptions to `/api/sessions/plan`; the backend creates a
 // `user_authored` standalone Session and records no performance (the source record already

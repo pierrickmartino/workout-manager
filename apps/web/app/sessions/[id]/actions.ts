@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import {
   duplicateSession,
   insertPrescription,
+  removePrescription,
   substitutePrescription,
 } from "@/lib/sessions";
 import { toDuplicateResult } from "@/lib/duplicate-session";
@@ -23,6 +24,10 @@ export interface InsertPrescriptionFormState {
   error: string | null;
 }
 
+export interface RemovePrescriptionFormState {
+  error: string | null;
+}
+
 // Append one hand-authored Exercise Prescription to the user's own standalone Session
 // (Insert, ADR-0051, issue #360). The client has already mapped the "Add exercise" editor
 // into the payload through the pure `buildInsertPrescriptionRequest` view-model, so this is a
@@ -37,6 +42,25 @@ export async function submitInsertPrescription(
   const result = await insertPrescription(sessionId, input);
   if (!result.success || !result.data) {
     return { error: result.error ?? "Could not add this exercise." };
+  }
+
+  revalidatePath(`/sessions/${sessionId}`);
+  return { error: null };
+}
+
+// Remove one Exercise Prescription from the user's own standalone Session (Remove,
+// ADR-0052, Insert's symmetric partner). A thin transport-and-revalidate shell over the
+// DELETE seam. On success the Session page is revalidated so the movement disappears and
+// the survivors re-number in place (and drop out of the next Repeat/Start/Log); on failure
+// — a Protocol-member target, the last-remaining prescription, or a missing position — the
+// server's message is returned for the row to surface, and nothing is persisted.
+export async function submitRemovePrescription(
+  sessionId: number,
+  position: number,
+): Promise<RemovePrescriptionFormState> {
+  const result = await removePrescription(sessionId, position);
+  if (!result.success || !result.data) {
+    return { error: result.error ?? "Could not remove this exercise." };
   }
 
   revalidatePath(`/sessions/${sessionId}`);

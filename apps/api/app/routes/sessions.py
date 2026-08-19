@@ -22,9 +22,11 @@ from app.authoring.service import (
     AuthorPlanRequest,
     AuthorSessionRequest,
     InsertTargetNotFound,
+    RemoveTargetNotFound,
     author_and_log_session,
     author_plan,
     insert_prescription,
+    remove_prescription,
 )
 from app.domain.feedback import parse_verdict
 from app.domain.fitness_profile import is_sensitive, resolve_equipment
@@ -400,6 +402,41 @@ def insert_prescription_into_session(
     except InsertTargetNotFound as exc:
         raise HTTPException(
             status_code=HTTP_NOT_FOUND, detail="Session not found"
+        ) from exc
+    except AuthoredSessionInvalid as exc:
+        return _authored_error_response(exc.errors)
+    return success_envelope(_serialize(view))
+
+
+@router.delete("/sessions/{session_id}/prescriptions/{position}")
+def remove_prescription_from_session(
+    session_id: int,
+    position: int,
+    clerk_user_id: str = Depends(get_current_user),
+    sessions: SessionRepository = Depends(get_session_repository),
+) -> object:
+    """Withdraw one Exercise Prescription from the owner's standalone Session (Remove,
+    ADR-0052) — Insert's symmetric partner.
+
+    The submit target of the Session detail's per-row "Remove" affordance. Delegates to
+    ``remove_prescription``, which guards the whole remove before any write. A
+    Protocol-member target or a last-remaining prescription returns a structured ``422``
+    naming the offending guard and persists nothing; a missing/unowned Session or a
+    position with no prescription ``404``s, so a non-owner can never edit another user's
+    plan. On success the envelope carries the updated Session with the survivors
+    re-numbered contiguous — Session Provenance unchanged and Logged Sessions frozen
+    (ADR-0001/0041)."""
+
+    try:
+        view = remove_prescription(
+            session_id,
+            clerk_user_id,
+            position,
+            sessions=sessions,
+        )
+    except RemoveTargetNotFound as exc:
+        raise HTTPException(
+            status_code=HTTP_NOT_FOUND, detail="Prescription not found"
         ) from exc
     except AuthoredSessionInvalid as exc:
         return _authored_error_response(exc.errors)
