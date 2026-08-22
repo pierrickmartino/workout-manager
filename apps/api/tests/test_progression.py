@@ -15,7 +15,9 @@ from app.domain.progression import (
     next_load,
     next_prescription,
     parse_rep_range,
+    pin_offer,
 )
+from app.domain.quantity import Quantity, QuantityKind
 from tests.quantities import reps_quantity
 
 
@@ -454,3 +456,116 @@ def test_parse_rep_range_accepts_sane_targets(text, expected):
 )
 def test_parse_rep_range_rejects_nonsensical_targets(text):
     assert parse_rep_range(text) is None
+
+
+# --- pin_offer: the Pin offer predicate + proposed pre-fill range (issue #370) ------
+# A pure-bodyweight Prescription qualifies to be *offered* a Pin only when every
+# working Logged Set beat the *top* of the rep range — strictly above the ceiling on
+# all sets, so a single fluke can't ossify the target. Unlike Progression's own step,
+# it is NOT gated on perceived effort: the human confirmation dialog replaces the
+# low-RPE gate. When offered, ``pin_offer`` returns the range to pre-fill, keeping the
+# prescription's existing shape (single→single, range→range) and derived from the reps
+# performed; when not offered it returns ``None``.
+
+
+def _bodyweight_sets(reps_and_effort):
+    """Build Logged Sets from ``(reps, perceived_difficulty)`` pairs."""
+
+    return [
+        _LoggedSet(reps=reps, perceived_difficulty=effort)
+        for reps, effort in reps_and_effort
+    ]
+
+
+@pytest.mark.parametrize(
+    "reps, load, performed, proposed",
+    [
+        # Range target, every set strictly above the 12 ceiling → offered; the
+        # pre-fill spans the performed floor..ceiling, keeping the range shape.
+        ("8-12", "bodyweight", [(13, 6), (14, 6), (15, 6)], "13-15"),
+        # Single-number target stays single, collapsing to the reliable floor performed.
+        ("5", "bodyweight", [(8, 6), (8, 6), (9, 6)], "8"),
+        # Effort is ignored: a high-RPE grind that still beat the ceiling is offered.
+        ("8-12", "bodyweight", [(13, 10), (14, 10)], "13-14"),
+        # Every set the same, above the ceiling: a range collapses to a "n-n" range.
+        ("8-12", "bodyweight", [(15, 6), (15, 6)], "15-15"),
+        # Single target: the proposed single is the min performed, not the max spike.
+        ("10", "bodyweight", [(12, 6), (20, 6)], "12"),
+        # "bw" shorthand is still pure bodyweight (parse_load reads it) → offered.
+        ("8-12", "bw", [(13, 6), (14, 6)], "13-14"),
+    ],
+)
+def test_pin_offer_is_made_with_a_proposed_range(reps, load, performed, proposed):
+    # Arrange
+    prescription = _Prescription(reps=reps, recommended_load=load)
+    sets = _bodyweight_sets(performed)
+
+    # Act
+    offer = pin_offer(prescription, sets)
+
+    # Assert — offered, with the pre-fill derived from performed reps
+    assert offer is not None
+    assert offer.proposed_reps == proposed
+
+
+@pytest.mark.parametrize(
+    "reps, load, performed",
+    [
+        # A set at the ceiling (not strictly above) disqualifies the whole session.
+        ("8-12", "bodyweight", [(13, 6), (12, 6)]),
+        # A set below the ceiling disqualifies it too.
+        ("8-12", "bodyweight", [(13, 6), (10, 6)]),
+        # Met the floor only (nothing above the ceiling) → not "more than the plan".
+        ("8-12", "bodyweight", [(8, 6), (9, 6)]),
+        # Single target hit exactly (at its ceiling, not above) → not offered.
+        ("5", "bodyweight", [(5, 6), (5, 6)]),
+        # Non-bodyweight (absolute) load: reps are not the progression axis.
+        ("8-12", "40 kg", [(13, 6), (14, 6)]),
+        # Weighted bodyweight (added load): the added kilograms are the axis, not reps.
+        ("8-12", "bodyweight + 10 kg", [(13, 6), (14, 6)]),
+        # A %-1RM load is not bodyweight → not offered.
+        ("8-12", "70% 1RM", [(13, 6), (14, 6)]),
+        # A qualitative load is not bodyweight → not offered.
+        ("8-12", "moderate", [(13, 6)]),
+        # An unparseable rep target has no ceiling to beat → not offered.
+        ("AMRAP", "bodyweight", [(20, 6)]),
+        # No logged sets: nothing was performed, so nothing to offer.
+        ("8-12", "bodyweight", []),
+    ],
+)
+def test_pin_offer_is_withheld(reps, load, performed):
+    # Arrange
+    prescription = _Prescription(reps=reps, recommended_load=load)
+    sets = _bodyweight_sets(performed)
+
+    # Act / Assert — no offer for anything that isn't "beat the ceiling on every set"
+    assert pin_offer(prescription, sets) is None
+
+
+def test_pin_offer_is_withheld_when_a_null_load_cannot_be_typed():
+    # Arrange — a Prescription with no recommended load has nothing to type as bodyweight
+    prescription = _Prescription(reps="8-12", recommended_load=None)
+    sets = _bodyweight_sets([(13, 6), (14, 6)])
+
+    # Act / Assert
+    assert pin_offer(prescription, sets) is None
+
+
+def test_pin_offer_is_withheld_when_a_set_carries_no_reps():
+    # Arrange — a duration set (a hold) has no rep count, so it can't be "above the
+    # ceiling"; its presence disqualifies the session even beside rep sets that beat it
+    @dataclass
+    class _HoldSet:
+        perceived_difficulty: int | None = 6
+
+        @property
+        def quantity(self) -> dict:
+            return Quantity(
+                kind=QuantityKind.DURATION, text="60s", seconds=60.0
+            ).to_dict()
+
+    prescription = _Prescription(reps="8-12", recommended_load="bodyweight")
+    sets = [_LoggedSet(reps=13, perceived_difficulty=6), _HoldSet()]
+
+    # Act / Assert
+    assert pin_offer(prescription, sets) is None
