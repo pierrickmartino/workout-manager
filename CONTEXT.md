@@ -22,6 +22,10 @@ _Avoid_: Today's session, today's protocol, scheduled session
 A single prescribed workout, composed of Exercise Prescriptions. One unified concept: a Session may belong to a Protocol (carrying a Week/Day position) or stand alone (generated or hand-authored on its own, with no parent or position). It is a *plan*, not a record of execution. Logging and feedback work identically whether or not it belongs to a Protocol.
 _Avoid_: Workout, training (when referring to the plan)
 
+**Training Type**:
+The kind of training a Session is, drawn from a small curated set — **strength**, **cardio**, **hiit**, **yoga**, or **mobility**. It is the dimension a **Fitness Level** is held per (a user can be Level 8 at strength and Level 2 at yoga), and it is carried on both the *plan* (a Session) and the *record* — every **Logged Session** declares its own, so History and Analytics can slice by it without reaching back to a plan, and a plan-less Logged Session (which has no plan behind it) still names one. The set is curated and fixed, never AI- or user-invented; a plan-less record's Training Type is the one such field a **Log Correction** may change. Distinct from **Muscle Group** (the coarse anatomical roll-up) and from the endurance / Quantity-kind axis; there is no finer activity taxonomy (running vs. cycling) in v1.
+_Avoid_: Modality, discipline, category, workout type, session type
+
 **Hand-Authored Session**:
 A Session a user builds by hand with **no AI call** — choosing its Exercise Prescriptions, sets, reps, rest, tempo, Load, and Supersets directly — to record training done outside any generated plan. It is a first-class standalone Session (no Protocol parent) that **persists as a reusable plan** and is logged, re-logged, and corrected exactly like a generated one. Distinct from a plan-less Logged Session, which records sets with *no plan at all* behind them: a Hand-Authored Session *is* a plan, merely not an AI-authored one. Its Session Provenance is `user_authored`.
 _Avoid_: Custom workout, manual workout, Workout, my routine
