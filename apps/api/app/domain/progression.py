@@ -99,6 +99,27 @@ def _parse_rep_target(reps: str) -> tuple[int, int] | None:
     return None
 
 
+def parse_rep_range(text: str) -> tuple[int, int] | None:
+    """Validate a user-supplied rep target and return its ``(floor, ceiling)``, or ``None``.
+
+    The boundary check for a Pinned Target (ADR-0053): a single number (``"12"`` →
+    ``(12, 12)``) or a range (``"10-14"`` → ``(10, 14)``) is accepted only when it is a
+    sane, non-empty range — both bounds at least one rep and ``floor <= ceiling``. A
+    reversed range (``"14-10"``), a zero/negative bound, or free text (``"AMRAP"``)
+    returns ``None`` so a nonsensical target can never be pinned. Reuses the same rep
+    grammar :func:`_parse_rep_target` reads, then layers the ordering/positivity rule the
+    stored progression target never had to enforce.
+    """
+
+    parsed = _parse_rep_target(text)
+    if parsed is None:
+        return None
+    floor, ceiling = parsed
+    if floor < 1 or floor > ceiling:
+        return None
+    return floor, ceiling
+
+
 def _format_load(value: float, suffix: str) -> str:
     number = int(value) if value == int(value) else value
     return f"{number}{suffix}"

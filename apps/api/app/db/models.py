@@ -294,6 +294,15 @@ class ExercisePrescription(SQLModel, table=True):
     # intact on ungroup. Additive and nullable: existing flat Protocols read unchanged.
     superset_group: str | None = Field(default=None)
     round_rest_seconds: int | None = Field(default=None)
+    # Pinned rep target (ADR-0053, #369): a user-set bodyweight rep range that suspends
+    # read-time Progression for this one Prescription. NULL is the default and means
+    # automatic Progression governs the rep target; a non-NULL value (e.g. ``"10-14"``)
+    # is the *user-set marker* the ``progress.py`` overlay surfaces verbatim, skipping
+    # ``next_prescription`` for this movement until it is un-pinned (the column cleared).
+    # Additive and nullable: every existing Prescription reads NULL and behaves exactly
+    # as before. Only the user's own copy is ever written — never a shared/cached
+    # Generated artifact (ADR-0003).
+    pinned_reps: str | None = Field(default=None)
 
 
 class LoggedSession(SQLModel, table=True):

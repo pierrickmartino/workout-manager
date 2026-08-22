@@ -40,6 +40,11 @@ class PrescriptionDraft:
     prescribed_quantity: dict | None = None
     superset_group: str | None = None
     round_rest_seconds: int | None = None
+    # Pinned rep target (ADR-0053, #369): the user-set bodyweight rep range that
+    # suspends read-time Progression for this Prescription, or ``None`` when unpinned.
+    # Carried through create/Duplicate/Regeneration-keep like the other prescription
+    # fields so a Pin survives a copy of the user's own plan.
+    pinned_reps: str | None = None
 
 
 @dataclass(frozen=True)
@@ -77,6 +82,10 @@ class PrescriptionView:
     prescribed_quantity: dict | None
     superset_group: str | None
     round_rest_seconds: int | None
+    # Pinned rep target (ADR-0053, #369): the user-set bodyweight rep range, or ``None``
+    # when unpinned. Its presence is the marker the Progression overlay reads to surface
+    # the pinned range verbatim and skip ``next_prescription`` for this movement.
+    pinned_reps: str | None
     exercise_id: int
     exercise_name: str
     exercise_description: str | None
@@ -179,6 +188,44 @@ class SessionRepository(Protocol):
         """
         ...
 
+    def pin_prescription(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        position: int,
+        new_target: str,
+    ) -> SessionView | None:
+        """Pin ``new_target`` as the rep range on the prescription at ``position``
+        (Pin, ADR-0053).
+
+        Writes the user-set pinned rep target onto the owner's own copy — its presence
+        is the marker that suspends read-time Progression for this movement (the
+        ``progress.py`` overlay surfaces it verbatim and stops stepping it). Nothing
+        else on the prescription or the Session is touched: sets, the base ``reps``
+        target, Load, Superset grouping, Session Provenance and the regeneration guard
+        are all left exactly as they were. Returns the updated Session, or ``None`` if
+        it is missing/unowned or has no prescription at ``position``. The plan/record
+        performed-Session guard and the range validation live in the pinning service.
+        """
+        ...
+
+    def clear_pin(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        position: int,
+    ) -> SessionView | None:
+        """Clear any pinned rep target from the prescription at ``position`` — Pin's
+        inverse (un-pin, ADR-0053).
+
+        Sets the pinned marker back to ``None`` so automatic Progression resumes from
+        the latest logs with no lingering effect and no recomputation of history.
+        Idempotent on an already-unpinned prescription. Returns the updated Session, or
+        ``None`` if it is missing/unowned or has no prescription at ``position`` — it
+        only ever mutates the owner's own copy.
+        """
+        ...
+
     def append_prescription(
         self,
         session_id: int,
@@ -229,6 +276,7 @@ def _draft_from(prescription: ExercisePrescription) -> PrescriptionDraft:
         prescribed_quantity=prescription.prescribed_quantity,
         superset_group=prescription.superset_group,
         round_rest_seconds=prescription.round_rest_seconds,
+        pinned_reps=prescription.pinned_reps,
     )
 
 
@@ -298,6 +346,7 @@ def _prescription_model(
         prescribed_quantity=draft.prescribed_quantity,
         superset_group=draft.superset_group,
         round_rest_seconds=draft.round_rest_seconds,
+        pinned_reps=draft.pinned_reps,
     )
 
 
@@ -314,6 +363,7 @@ def _prescription_view(
         prescribed_quantity=prescription.prescribed_quantity,
         superset_group=prescription.superset_group,
         round_rest_seconds=prescription.round_rest_seconds,
+        pinned_reps=prescription.pinned_reps,
         exercise_id=exercise.id,
         exercise_name=exercise.name,
         exercise_description=exercise.description,
@@ -471,6 +521,51 @@ class SqlSessionRepository:
         self._session.commit()
         return self._view(workout)
 
+    def _set_pin(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        position: int,
+        pinned_reps: str | None,
+    ) -> SessionView | None:
+        """Write (or clear) the pinned rep target on one owned prescription — the single
+        owner-scoped mutation shared by ``pin_prescription`` and ``clear_pin``."""
+
+        workout = self._session.get(WorkoutSession, session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return None
+
+        prescription = self._session.exec(
+            select(ExercisePrescription).where(
+                ExercisePrescription.session_id == session_id,
+                ExercisePrescription.position == position,
+            )
+        ).first()
+        if prescription is None:
+            return None
+
+        prescription.pinned_reps = pinned_reps
+        self._session.add(prescription)
+        self._session.commit()
+        return self._view(workout)
+
+    def pin_prescription(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        position: int,
+        new_target: str,
+    ) -> SessionView | None:
+        return self._set_pin(session_id, clerk_user_id, position, new_target)
+
+    def clear_pin(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        position: int,
+    ) -> SessionView | None:
+        return self._set_pin(session_id, clerk_user_id, position, None)
+
     def append_prescription(
         self,
         session_id: int,
@@ -565,6 +660,7 @@ class InMemorySessionRepository:
                 prescribed_quantity=prescription.prescribed_quantity,
                 superset_group=prescription.superset_group,
                 round_rest_seconds=prescription.round_rest_seconds,
+                pinned_reps=prescription.pinned_reps,
             )
             for position, prescription in enumerate(prescriptions)
         ]
@@ -675,10 +771,68 @@ class InMemorySessionRepository:
                 prescribed_quantity=p.prescribed_quantity,
                 superset_group=p.superset_group,
                 round_rest_seconds=p.round_rest_seconds,
+                pinned_reps=p.pinned_reps,
             )
             for p in current
         ]
         return self._view(workout)
+
+    def _set_pin(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        position: int,
+        pinned_reps: str | None,
+    ) -> SessionView | None:
+        """Write (or clear) the pinned rep target on one owned prescription — the single
+        owner-scoped mutation shared by ``pin_prescription`` and ``clear_pin``."""
+
+        workout = self._sessions.get(session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return None
+
+        current = self._prescriptions.get(session_id, [])
+        if not any(p.position == position for p in current):
+            return None
+
+        # Rebuild the list with only the targeted prescription's pin changed; every other
+        # field (sets/reps/load/superset) is preserved immutably.
+        self._prescriptions[session_id] = [
+            ExercisePrescription(
+                id=p.id,
+                session_id=p.session_id,
+                exercise_id=p.exercise_id,
+                position=p.position,
+                sets=p.sets,
+                reps=p.reps,
+                rest_seconds=p.rest_seconds,
+                tempo=p.tempo,
+                recommended_load=p.recommended_load,
+                prescribed_quantity=p.prescribed_quantity,
+                superset_group=p.superset_group,
+                round_rest_seconds=p.round_rest_seconds,
+                pinned_reps=pinned_reps if p.position == position else p.pinned_reps,
+            )
+            for p in current
+        ]
+        return self._view(workout)
+
+    def pin_prescription(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        position: int,
+        new_target: str,
+    ) -> SessionView | None:
+        return self._set_pin(session_id, clerk_user_id, position, new_target)
+
+    def clear_pin(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        position: int,
+    ) -> SessionView | None:
+        return self._set_pin(session_id, clerk_user_id, position, None)
 
     def append_prescription(
         self,

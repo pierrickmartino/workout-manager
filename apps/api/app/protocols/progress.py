@@ -175,7 +175,17 @@ def progressed_prescription(
     target (ADR-0026); %-1RM, ranges and qualitative loads are left untouched. The
     stored load is a typed ``{kind, text, ...}`` dict, so the stepped load text is
     re-typed through :func:`parse_load` to keep the view a typed Load end to end.
+
+    A **Pinned** Prescription is skipped (ADR-0053): when the user has pinned a rep
+    target, its presence suspends read-time Progression for this movement — the stored
+    pinned range is surfaced verbatim as the rep target and ``next_prescription`` is not
+    applied, so the very logs that earned the Pin can never step it a second time (the
+    double-count trap). Un-pinning clears the marker and the overlay resumes stepping
+    with no lingering effect and no recomputation of history.
     """
+
+    if prescription.pinned_reps is not None:
+        return replace(prescription, reps=prescription.pinned_reps)
 
     load = prescription.recommended_load
     result = next_prescription(
