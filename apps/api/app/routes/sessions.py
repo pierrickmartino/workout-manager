@@ -78,6 +78,15 @@ from app.repositories.session_repository import (
 )
 from app.protocols.deploy_validation import DeployError
 from app.routes.logs import LogSetBody, serialize_logged_session
+from app.pinning.service import (
+    InvalidPinTarget,
+    PinTargetNotBodyweight,
+    SessionAlreadyPerformed,
+    clear_pin,
+    pin_prescription,
+)
+from app.pinning.service import PrescriptionNotFound as PinPrescriptionNotFound
+from app.pinning.service import SessionNotFound as PinSessionNotFound
 from app.substitution.service import (
     HarderVariationSuggestion,
     PrescriptionNotFound,
@@ -147,6 +156,10 @@ def _serialize(view: SessionView) -> dict:
                 # so a saved Superset renders on the Session detail.
                 "superset_group": p.superset_group,
                 "round_rest_seconds": p.round_rest_seconds,
+                # Pinned rep target (ADR-0053): the user-set range that suspends read-time
+                # Progression for this movement, or null when unpinned. The client reads it
+                # to show the pin state and its editable value.
+                "pinned_reps": p.pinned_reps,
                 "exercise_id": p.exercise_id,
                 "exercise_name": p.exercise_name,
                 "exercise_description": p.exercise_description,
@@ -750,3 +763,96 @@ def read_harder_variation(
             status_code=HTTP_NOT_FOUND, detail="Prescription not found"
         ) from exc
     return success_envelope(_serialize_suggestion(suggestion))
+
+
+class PinBody(BaseModel):
+    """The new bodyweight rep target to Pin (ADR-0053). ``reps`` is the range text — a
+    single number (``"12"``) or a floor–ceiling range (``"10-14"``); the service validates
+    it (non-empty, ``floor <= ceiling``) and re-emits it in that shape."""
+
+    reps: str = Field(min_length=1)
+
+
+@router.post("/sessions/{session_id}/prescriptions/{position}/pin")
+def pin(
+    session_id: int,
+    position: int,
+    body: PinBody,
+    clerk_user_id: str = Depends(get_current_user),
+    sessions: SessionRepository = Depends(get_session_repository),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+) -> dict:
+    """Pin a user-set rep target onto the prescription at ``position`` (ADR-0053).
+
+    From this write on, automatic read-time Progression stops adjusting that Prescription —
+    the plan surfaces the pinned range verbatim — until it is un-pinned. Mirrors the
+    ``substitute`` handler's error surface: ``404`` for a missing/non-owned prescription,
+    ``409`` for an illegal target (a performed Session, or an invalid range). On success the
+    serialized Session view is returned via the envelope; Session Provenance is unchanged.
+    """
+
+    try:
+        view = pin_prescription(
+            session_id,
+            clerk_user_id,
+            position,
+            body.reps,
+            sessions=sessions,
+            logged=logged,
+        )
+    except (PinSessionNotFound, PinPrescriptionNotFound) as exc:
+        raise HTTPException(
+            status_code=HTTP_NOT_FOUND, detail="Prescription not found"
+        ) from exc
+    except SessionAlreadyPerformed as exc:
+        raise HTTPException(
+            status_code=HTTP_CONFLICT,
+            detail="A performed session's plan can't be pinned.",
+        ) from exc
+    except PinTargetNotBodyweight as exc:
+        raise HTTPException(
+            status_code=HTTP_CONFLICT,
+            detail="Only a bodyweight movement's rep target can be pinned.",
+        ) from exc
+    except InvalidPinTarget as exc:
+        raise HTTPException(
+            status_code=HTTP_CONFLICT,
+            detail="That rep target is not a valid range.",
+        ) from exc
+    return success_envelope(_serialize(view))
+
+
+@router.delete("/sessions/{session_id}/prescriptions/{position}/pin")
+def unpin(
+    session_id: int,
+    position: int,
+    clerk_user_id: str = Depends(get_current_user),
+    sessions: SessionRepository = Depends(get_session_repository),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+) -> dict:
+    """Un-pin the prescription at ``position`` — Pin's inverse (ADR-0053).
+
+    Clears the pinned marker so automatic Progression resumes from the latest logs with no
+    lingering effect. Same error surface as ``pin``: ``404`` for a missing/non-owned
+    prescription, ``409`` for a performed Session. On success the serialized Session view is
+    returned via the envelope.
+    """
+
+    try:
+        view = clear_pin(
+            session_id,
+            clerk_user_id,
+            position,
+            sessions=sessions,
+            logged=logged,
+        )
+    except (PinSessionNotFound, PinPrescriptionNotFound) as exc:
+        raise HTTPException(
+            status_code=HTTP_NOT_FOUND, detail="Prescription not found"
+        ) from exc
+    except SessionAlreadyPerformed as exc:
+        raise HTTPException(
+            status_code=HTTP_CONFLICT,
+            detail="A performed session's plan can't be pinned.",
+        ) from exc
+    return success_envelope(_serialize(view))

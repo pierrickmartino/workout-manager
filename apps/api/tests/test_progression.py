@@ -8,10 +8,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import pytest
+
 from app.domain.progression import (
     ProgressionKind,
     next_load,
     next_prescription,
+    parse_rep_range,
 )
 from tests.quantities import reps_quantity
 
@@ -416,3 +419,38 @@ def test_weighted_bodyweight_reps_hit_at_high_effort_holds_the_added_load():
     # Assert — hard sets hold; only easy ones earn more added load
     assert result.kind is ProgressionKind.HOLD
     assert result.recommended_load == "bodyweight + 10 kg"
+
+
+# --- Pinned-target range validation (parse_rep_range, ADR-0053) --------------------
+# The boundary check for a user-chosen Pinned Target: a sane, non-empty range with
+# floor <= ceiling is accepted (single stays single, range stays a range); anything
+# reversed, non-positive, or free text is rejected so a nonsensical pin can't be saved.
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("12", (12, 12)),       # a single number is a degenerate range
+        ("10-14", (10, 14)),    # a floor..ceiling range
+        ("8-8", (8, 8)),        # floor == ceiling is allowed
+        (" 10 - 14 ", (10, 14)),  # surrounding/interior whitespace tolerated
+    ],
+)
+def test_parse_rep_range_accepts_sane_targets(text, expected):
+    assert parse_rep_range(text) == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "14-10",   # reversed: floor > ceiling
+        "0",       # zero reps is not a target
+        "0-5",     # a zero floor
+        "-3",      # negative
+        "AMRAP",   # free text
+        "",        # empty
+        "8-12-15",  # malformed
+    ],
+)
+def test_parse_rep_range_rejects_nonsensical_targets(text):
+    assert parse_rep_range(text) is None

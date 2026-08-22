@@ -35,6 +35,10 @@ def serialize_session(
                 # Superset overlay (ADR-0023): both null on a flat, solo Prescription.
                 "superset_group": p.superset_group,
                 "round_rest_seconds": p.round_rest_seconds,
+                # Pinned rep target (ADR-0053): the user-set range that suspended
+                # Progression here (the overlaid ``reps`` above already reflects it), or
+                # null when unpinned. Surfaced so the client can mark the movement pinned.
+                "pinned_reps": p.pinned_reps,
                 "exercise_id": p.exercise_id,
                 "exercise_name": p.exercise_name,
                 "exercise_description": p.exercise_description,
