@@ -25,6 +25,15 @@ export interface Load {
 // The em dash the UI shows when no Load was prescribed or logged.
 export const NO_LOAD = "—";
 
+// Whether a Load is **pure bodyweight** — the one axis Progression steps by reps (ADR-0026),
+// and so the only movement a rep Pin governs (ADR-0053). The web mirror of the backend
+// `_is_pure_bodyweight`: the BODYWEIGHT kind carrying no added load. A weighted-bodyweight
+// (added-load), loaded, %-1RM, or load-less movement progresses on Load, not reps. `added_kg`
+// is omitted on the wire for pure bodyweight, so a nullish check is the "no added load" test.
+export function isPureBodyweight(load: Load | null | undefined): boolean {
+  return load?.kind === "bodyweight" && load.added_kg == null;
+}
+
 // Render a typed Load for display, falling back to the em dash when absent. The
 // stored `text` is authoritative — it preserves exactly what was prescribed or
 // logged ("70kg", "bodyweight", "70% 1RM"), so the UI never re-derives it.

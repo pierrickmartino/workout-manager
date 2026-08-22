@@ -6,10 +6,13 @@ import { redirect } from "next/navigation";
 import {
   duplicateSession,
   insertPrescription,
+  pinPrescription,
   removePrescription,
   substitutePrescription,
+  unpinPrescription,
 } from "@/lib/sessions";
 import { toDuplicateResult } from "@/lib/duplicate-session";
+import { normalizePinTarget } from "@/lib/log-session-form";
 import type { AuthorPrescriptionInput } from "@/lib/hand-authored-session";
 
 export interface SubstituteFormState {
@@ -25,6 +28,10 @@ export interface InsertPrescriptionFormState {
 }
 
 export interface RemovePrescriptionFormState {
+  error: string | null;
+}
+
+export interface PinFormState {
   error: string | null;
 }
 
@@ -105,6 +112,61 @@ export async function submitSubstitute(
   const result = await substitutePrescription(sessionId, position);
   if (!result.success || !result.data) {
     return { error: result.error ?? "Could not substitute this exercise." };
+  }
+
+  revalidatePath(`/sessions/${sessionId}`);
+  return { error: null };
+}
+
+// Pin a user-set bodyweight rep target onto this prescription's next un-performed occurrence
+// (ADR-0053, #371). The range is validated here through the same `normalizePinTarget` rule the
+// backend enforces, so a nonsensical edit is caught before the request; the pin route then
+// suspends automatic Progression for the movement until it is un-pinned. On success the Session
+// page is revalidated so the plan reflects the pinned target. A performed Session (settled record)
+// or a non-owned/absent prescription comes back as the server's message for the control to surface.
+export async function submitPin(
+  _prevState: PinFormState,
+  form: FormData,
+): Promise<PinFormState> {
+  const sessionId = Number(form.get("session_id"));
+  const position = Number(form.get("position"));
+  if (!Number.isInteger(sessionId) || !Number.isInteger(position)) {
+    return { error: "Could not determine which movement to pin." };
+  }
+
+  const reps =
+    typeof form.get("reps") === "string" ? String(form.get("reps")) : "";
+  const normalized = normalizePinTarget(reps);
+  if (normalized === null) {
+    return { error: "Enter a valid rep target, like 12 or 10-14." };
+  }
+
+  const result = await pinPrescription(sessionId, position, normalized);
+  if (!result.success || !result.data) {
+    return { error: result.error ?? "Could not pin this rep target." };
+  }
+
+  revalidatePath(`/sessions/${sessionId}`);
+  return { error: null };
+}
+
+// Un-pin this prescription — Pin's inverse (ADR-0053, #371): clears the Pinned Target so
+// automatic Progression resumes from the latest logs. On success the Session page is revalidated
+// so the plan drops back to the engine-stepped target. A performed Session or missing prescription
+// comes back as the server's message.
+export async function submitUnpin(
+  _prevState: PinFormState,
+  form: FormData,
+): Promise<PinFormState> {
+  const sessionId = Number(form.get("session_id"));
+  const position = Number(form.get("position"));
+  if (!Number.isInteger(sessionId) || !Number.isInteger(position)) {
+    return { error: "Could not determine which movement to un-pin." };
+  }
+
+  const result = await unpinPrescription(sessionId, position);
+  if (!result.success || !result.data) {
+    return { error: result.error ?? "Could not un-pin this movement." };
   }
 
   revalidatePath(`/sessions/${sessionId}`);

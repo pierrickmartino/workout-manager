@@ -145,3 +145,35 @@ export async function fetchHarderVariation(
     `/api/sessions/${sessionId}/prescriptions/${position}/harder-variation`,
   );
 }
+
+// Pin a user-set bodyweight rep target onto the prescription at `position` in the user's own
+// Session (ADR-0053, #369). From this write on, automatic read-time Progression stops adjusting
+// that movement — the plan surfaces the pinned range verbatim — until it is un-pinned. `reps` is
+// the range text ("12" or "10-14"); the backend validates it and refuses a performed Session (409)
+// or a non-owned/absent prescription (404). On success the updated Session view comes back, its
+// Provenance unchanged. Sibling of `substitutePrescription` in shape and error surface.
+export async function pinPrescription(
+  sessionId: number,
+  position: number,
+  reps: string,
+): Promise<Envelope<WorkoutSession>> {
+  return apiSend(
+    `/api/sessions/${sessionId}/prescriptions/${position}/pin`,
+    "POST",
+    { reps },
+  );
+}
+
+// Un-pin the prescription at `position` — Pin's inverse (ADR-0053, #369). Clears the pinned
+// marker so automatic Progression resumes from the latest logs with no lingering effect. A
+// bodyless DELETE, so the seam sends no `Content-Type` (ADR-0022). Same 404/409 surface as
+// `pinPrescription`; on success the updated Session view comes back.
+export async function unpinPrescription(
+  sessionId: number,
+  position: number,
+): Promise<Envelope<WorkoutSession>> {
+  return apiSend(
+    `/api/sessions/${sessionId}/prescriptions/${position}/pin`,
+    "DELETE",
+  );
+}
