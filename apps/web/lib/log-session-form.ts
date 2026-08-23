@@ -17,7 +17,12 @@
 // attempted.
 
 import type { CompletionOutcome, LogSetInput } from "./logs-types";
-import { loadToFields, type LoadKind } from "./load.ts";
+import { isPureBodyweight, loadToFields, type LoadKind } from "./load.ts";
+import {
+  toHarderVariationOffer,
+  type HarderVariationOffer,
+  type SuggestedVariation,
+} from "./harder-variation-view.ts";
 import {
   distanceInput,
   distanceValueFromMetres,
@@ -458,4 +463,188 @@ export function readLogFormRows(form: FormData): LogRowFields[] {
     });
   }
   return rows;
+}
+
+// --- Pin offer + dialog (ADR-0053, #368/#371). After a bodyweight Session is logged and every
+// working set beat the top of the prescribed rep range on a movement, the log view-model offers
+// a confirm dialog to Pin a user-set rep target — pre-filled from the reps performed, editable
+// before saving, and paired with the alternative of stepping up to a harder Variation (#202).
+//
+// This is the web mirror of the domain rule `pin_offer` (app/domain/progression.py, #370): the
+// **single source of truth is the domain rule**, and this decides the same predicate on the data
+// the form already holds (the just-logged rows plus the prescription). No I/O and no storage —
+// just the decision and the range to pre-fill; the confirm calls the pin route, and the plan view
+// then reflects the Pinned Target.
+
+// A prescribed / target rep range parsed into its bounds — a single number ("5") yields
+// `{5, 5}`, a range ("8-12") yields `{8, 12}`, free text ("AMRAP") yields null. Mirrors the
+// domain `_parse_rep_target` grammar (whitespace-tolerant, `\d+` bounds) so the offer judges the
+// ceiling by the same rule the engine does.
+export interface RepTarget {
+  floor: number;
+  ceiling: number;
+}
+
+const RANGE_REPS = /^\s*(\d+)\s*-\s*(\d+)\s*$/;
+const SINGLE_REPS = /^\s*(\d+)\s*$/;
+
+export function parseRepTarget(reps: string): RepTarget | null {
+  const range = RANGE_REPS.exec(reps);
+  if (range !== null) {
+    return { floor: Number(range[1]), ceiling: Number(range[2]) };
+  }
+  const single = SINGLE_REPS.exec(reps);
+  if (single !== null) {
+    const value = Number(single[1]);
+    return { floor: value, ceiling: value };
+  }
+  return null;
+}
+
+// The Pin offer: the proposed range to pre-fill the confirm dialog, kept in the prescription's
+// existing shape (a single number stays single, a range stays a range) and derived from the reps
+// performed. `pinOffer` returns one when a movement qualifies, or null when it does not — the
+// predicate is simply `pinOffer(...) !== null`.
+export interface PinProposal {
+  proposedReps: string;
+}
+
+// Decide whether a just-logged movement qualifies to be offered a Pin, and the range to pre-fill.
+// Mirrors the domain `pin_offer` (#370): a Prescription qualifies when it is **pure bodyweight**
+// and **every** working set's reps are strictly **greater than the rep-range ceiling** — "more
+// than the plan asked," on all sets, so a single fluke can't ossify the standing target.
+//
+// `performedReps` is the reps of every working set the user logged for the movement; a `null`
+// entry is a set with no rep count (a hold/run, or a garbled entry) and holds the offer back,
+// mirroring how the domain treats a non-rep set. Deliberately **not** gated on perceived effort —
+// the human confirmation in the dialog replaces Progression's low-RPE gate, so a hard session
+// that still beat the ceiling is offered. The proposed pre-fill keeps the target's shape: the
+// floor is the minimum reps performed (the target hit on every set); a range carries that up to
+// the maximum performed as its new ceiling, while a single-number target collapses to the floor.
+export function pinOffer(
+  prescription: Pick<ExercisePrescription, "reps" | "recommended_load">,
+  performedReps: readonly (number | null)[],
+): PinProposal | null {
+  const load = prescription.recommended_load;
+  if (load == null || performedReps.length === 0) return null;
+
+  const target = parseRepTarget(prescription.reps);
+  if (target === null) return null;
+
+  if (!isPureBodyweight(load)) return null;
+
+  const allAboveCeiling = performedReps.every(
+    (reps) => reps !== null && reps > target.ceiling,
+  );
+  if (!allAboveCeiling) return null;
+
+  const performed = performedReps.filter((reps): reps is number => reps !== null);
+  const floor = Math.min(...performed);
+  const top = Math.max(...performed);
+  const single = target.floor === target.ceiling;
+  return { proposedReps: single ? String(floor) : `${floor}-${top}` };
+}
+
+// The reps of a movement's working (Done) sets, read off the log form's live rows — the data the
+// offer decides on. A skipped (un-done) row is dropped (it was not performed); a non-repetitions
+// set contributes `null` (no rep count, holds the offer back); a Done blank-reps set reads as 0
+// (a set ground out to failure is still attempted, so it counts — and 0 is never above a
+// ceiling), and a garbled reps value reads as `null` rather than a fabricated number.
+export function performedRepsForGroup(
+  group: Pick<LogPrescriptionGroup, "rows">,
+): (number | null)[] {
+  return group.rows
+    .filter((row) => row.done)
+    .map((row) => performedRepValue(row));
+}
+
+function performedRepValue(row: Pick<LogSetRow, "kind" | "reps">): number | null {
+  if (row.kind !== "repetitions") return null;
+  const raw = row.reps.trim();
+  if (raw === "") return 0;
+  return INTEGER.test(raw) ? Number(raw) : null;
+}
+
+// Validate and normalize a user-edited Pin target before it is saved — the web mirror of the
+// domain `parse_rep_range` boundary check (ADR-0053): a single number or a range is accepted only
+// when it is a sane, non-empty range (both bounds at least one rep and `floor <= ceiling`), and
+// re-emitted in that shape. A reversed range, a zero/negative bound, or free text returns null so
+// a nonsensical target can never be pinned. Keeping this here lets the dialog gate the Save button
+// on the same rule the backend enforces, so an invalid edit never round-trips to a 409.
+export function normalizePinTarget(text: string): string | null {
+  const target = parseRepTarget(text);
+  if (target === null) return null;
+  const { floor, ceiling } = target;
+  if (floor < 1 || floor > ceiling) return null;
+  return floor === ceiling ? String(floor) : `${floor}-${ceiling}`;
+}
+
+// The Pin confirm dialog's view-model: the editable proposed target plus the ready-to-render copy,
+// and — beside "raise reps" — the harder-Variation alternative (#202), so the correct calisthenics
+// path is never hidden. `harderVariation` is the backend's suggestion for this movement (or null
+// when none is on file), shaped through the shared `toHarderVariationOffer` so the dialog and the
+// plan-view offer read the same. Components stay thin: this owns the decision and the strings.
+export interface PinDialogModel {
+  position: number;
+  exerciseName: string;
+  proposedReps: string;
+  title: string;
+  body: string;
+  confirmLabel: string;
+  dismissLabel: string;
+  harderVariation: HarderVariationOffer;
+}
+
+export function buildPinDialog(input: {
+  prescription: ExercisePrescription;
+  performedReps: readonly (number | null)[];
+  harderVariation?: SuggestedVariation | null;
+}): PinDialogModel | null {
+  const { prescription, performedReps, harderVariation } = input;
+  const offer = pinOffer(prescription, performedReps);
+  if (offer === null) return null;
+
+  const name = prescription.exercise_name;
+  return {
+    position: prescription.position,
+    exerciseName: name,
+    proposedReps: offer.proposedReps,
+    title: `You beat your target on ${name}`,
+    body: "Pin this as your new rep target so your plan reflects it — or step up to a harder movement instead.",
+    confirmLabel: "Pin new target",
+    dismissLabel: "Not now",
+    harderVariation: toHarderVariationOffer(harderVariation),
+  };
+}
+
+// A movement that qualified for a Pin offer after the log, carrying its numeric performed reps.
+export interface PinCandidate {
+  prescription: ExercisePrescription;
+  performedReps: number[];
+}
+
+// Walk the just-logged form and return every movement that qualifies to be offered a Pin, pairing
+// each qualifying Prescription with the reps performed. The offer decision is `pinOffer`; the
+// harder-Variation alternative is looked up per candidate (a network read the thin component owns)
+// and fed to `buildPinDialog`. Groups and prescriptions are aligned by position, so a Superset or
+// a re-ordered plan never mismatches.
+export function collectPinCandidates(
+  prescriptions: readonly ExercisePrescription[],
+  groups: readonly LogPrescriptionGroup[],
+): PinCandidate[] {
+  const byPosition = new Map(
+    prescriptions.map((prescription) => [prescription.position, prescription]),
+  );
+  const candidates: PinCandidate[] = [];
+  for (const group of groups) {
+    const prescription = byPosition.get(group.position);
+    if (prescription === undefined) continue;
+    const performedReps = performedRepsForGroup(group);
+    if (pinOffer(prescription, performedReps) === null) continue;
+    candidates.push({
+      prescription,
+      performedReps: performedReps.filter((reps): reps is number => reps !== null),
+    });
+  }
+  return candidates;
 }

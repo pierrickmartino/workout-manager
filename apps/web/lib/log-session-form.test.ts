@@ -5,15 +5,24 @@ import {
   buildLogForm,
   buildLogSet,
   buildLoggedSets,
+  buildPinDialog,
+  collectPinCandidates,
   deriveCompletionOutcome,
+  normalizePinTarget,
+  parseRepTarget,
+  performedRepsForGroup,
+  pinOffer,
   prescribedByPosition,
   prescribedRowCount,
   readLogFormRows,
   seededReps,
   skippedSetCount,
+  type LogPrescriptionGroup,
   type LogRowFields,
+  type LogSetRow,
 } from "./log-session-form.ts";
 import type { ExercisePrescription } from "./sessions-types.ts";
+import type { Load } from "./load.ts";
 import type { Quantity } from "./quantity.ts";
 
 // `log-session-form` expands a Session's prescriptions into the per-set rows the static log
@@ -432,4 +441,212 @@ test("readLogFormRows clamps a forged oversized set_count to a bounded number of
   // Only the in-bounds Done row is returned; the loop stopped at the ceiling.
   assert.equal(rows.length, 1);
   assert.equal(rows[0].exerciseId, 1);
+});
+
+// --- Pin offer + dialog (ADR-0053, #368/#371): after a bodyweight log where every working
+// set beat the top of the prescribed rep range, the log view-model offers a confirm dialog to
+// Pin a new rep target, pre-filled and editable, paired with the harder-Variation alternative.
+// This mirrors the domain `pin_offer` rule (app/domain/progression.py, #370) on the data the
+// form already holds; the tests pin the offer/no-offer decision, the pre-fill + edit, and the
+// harder-Variation alternative.
+
+const BODYWEIGHT: Load = { kind: "bodyweight", text: "Bodyweight" };
+const WEIGHTED_BODYWEIGHT: Load = { kind: "bodyweight", text: "+10kg", added_kg: 10 };
+const ABSOLUTE: Load = { kind: "absolute", text: "60kg", kg: 60 };
+
+test("parseRepTarget reads a single number, a range, and rejects free text", () => {
+  assert.deepEqual(parseRepTarget("5"), { floor: 5, ceiling: 5 });
+  assert.deepEqual(parseRepTarget("8-12"), { floor: 8, ceiling: 12 });
+  assert.deepEqual(parseRepTarget("  10 - 14 "), { floor: 10, ceiling: 14 });
+  assert.equal(parseRepTarget("AMRAP"), null);
+  assert.equal(parseRepTarget(""), null);
+});
+
+test("pinOffer is offered for a pure-bodyweight movement beaten on every set", () => {
+  // Arrange — a pure-bodyweight "8-12" prescription, every working set above the ceiling
+  const proposal = pinOffer(
+    { reps: "8-12", recommended_load: BODYWEIGHT },
+    [13, 14, 15],
+  );
+
+  // Assert — offered, with the range kept in the prescription's shape (floor..max performed)
+  assert.notEqual(proposal, null);
+  assert.equal(proposal?.proposedReps, "13-15");
+});
+
+test("pinOffer keeps a single-number target single, derived from the min reps performed", () => {
+  const proposal = pinOffer(
+    { reps: "5", recommended_load: BODYWEIGHT },
+    [7, 8, 9],
+  );
+  assert.equal(proposal?.proposedReps, "7");
+});
+
+test("pinOffer is withheld when a set only meets the ceiling (not strictly above)", () => {
+  // One set lands exactly on the ceiling of 12 → "more than the plan" is not unambiguous
+  assert.equal(
+    pinOffer({ reps: "8-12", recommended_load: BODYWEIGHT }, [13, 12, 14]),
+    null,
+  );
+});
+
+test("pinOffer is withheld for a met-floor-only session", () => {
+  // Every set at the floor, none above the ceiling
+  assert.equal(
+    pinOffer({ reps: "8-12", recommended_load: BODYWEIGHT }, [8, 9, 10]),
+    null,
+  );
+});
+
+test("pinOffer is withheld for a non-bodyweight (loaded) movement", () => {
+  // Load is the progression axis here, not reps — never offered a rep Pin
+  assert.equal(
+    pinOffer({ reps: "8-12", recommended_load: ABSOLUTE }, [13, 14, 15]),
+    null,
+  );
+});
+
+test("pinOffer is withheld for a weighted-bodyweight (added-load) movement", () => {
+  // Added load is the axis for a weighted bodyweight movement, so no rep Pin
+  assert.equal(
+    pinOffer({ reps: "8-12", recommended_load: WEIGHTED_BODYWEIGHT }, [13, 14, 15]),
+    null,
+  );
+});
+
+test("pinOffer is withheld when the prescription carries no load or free-text reps", () => {
+  assert.equal(pinOffer({ reps: "8-12", recommended_load: null }, [13, 14]), null);
+  assert.equal(
+    pinOffer({ reps: "AMRAP", recommended_load: BODYWEIGHT }, [13, 14]),
+    null,
+  );
+});
+
+test("pinOffer is withheld with no working sets, or a set with no rep count", () => {
+  // No sets → nothing to judge
+  assert.equal(pinOffer({ reps: "8-12", recommended_load: BODYWEIGHT }, []), null);
+  // A set with no rep count (a hold/run, or a garbled entry) holds the offer back
+  assert.equal(
+    pinOffer({ reps: "8-12", recommended_load: BODYWEIGHT }, [13, null, 14]),
+    null,
+  );
+});
+
+test("performedRepsForGroup reads the Done rows' reps and ignores skipped rows and effort", () => {
+  // Arrange — a pure-bodyweight group; set the reps and mark one row skipped, all with high RPE
+  const [group] = buildLogForm([
+    prescription({ sets: 3, reps: "8-12", recommended_load: BODYWEIGHT }),
+  ]);
+  const rows = group.rows.map((row, index) => ({
+    ...row,
+    reps: String(13 + index),
+    rpe: "10",
+    done: index !== 2,
+  }));
+  const withRows: LogPrescriptionGroup = { ...group, rows };
+
+  // Assert — only the two Done rows' reps, effort ignored entirely
+  assert.deepEqual(performedRepsForGroup(withRows), [13, 14]);
+});
+
+test("performedRepsForGroup maps a blank Done reps set to 0 and a non-rep set to null", () => {
+  const blank: LogSetRow = {
+    key: "k",
+    prescriptionPosition: 0,
+    exerciseId: 1,
+    setNumber: 1,
+    kind: "repetitions",
+    reps: "",
+    distance: "",
+    unit: "km",
+    duration: "",
+    loadKind: "bodyweight",
+    loadValue: "",
+    showLoad: true,
+    rpe: "",
+    done: true,
+  };
+  const hold: LogSetRow = { ...blank, key: "h", kind: "duration", duration: "0:45" };
+  // performedRepsForGroup reads only the rows, so a `{ rows }` slice is all it needs.
+  assert.deepEqual(performedRepsForGroup({ rows: [blank, hold] }), [0, null]);
+});
+
+test("normalizePinTarget accepts a sane range/single and rejects a nonsensical one", () => {
+  assert.equal(normalizePinTarget("12"), "12");
+  assert.equal(normalizePinTarget("10-14"), "10-14");
+  assert.equal(normalizePinTarget("  10 - 14 "), "10-14");
+  assert.equal(normalizePinTarget("5-5"), "5");
+  // Reversed range, zero/negative bound, or free text → not a valid Pinned Target
+  assert.equal(normalizePinTarget("14-10"), null);
+  assert.equal(normalizePinTarget("0"), null);
+  assert.equal(normalizePinTarget("0-5"), null);
+  assert.equal(normalizePinTarget("AMRAP"), null);
+});
+
+test("buildPinDialog returns null for a movement that does not qualify", () => {
+  const dialog = buildPinDialog({
+    prescription: prescription({ reps: "8-12", recommended_load: ABSOLUTE }),
+    performedReps: [13, 14, 15],
+  });
+  assert.equal(dialog, null);
+});
+
+test("buildPinDialog pre-fills the proposed range and names the movement", () => {
+  const dialog = buildPinDialog({
+    prescription: prescription({
+      position: 2,
+      reps: "8-12",
+      recommended_load: BODYWEIGHT,
+      exercise_name: "Pull-up",
+    }),
+    performedReps: [13, 14, 15],
+  });
+
+  assert.notEqual(dialog, null);
+  assert.equal(dialog?.position, 2);
+  assert.equal(dialog?.proposedReps, "13-15");
+  assert.match(dialog?.exerciseName ?? "", /Pull-up/);
+  assert.match(dialog?.title ?? "", /Pull-up/);
+});
+
+test("buildPinDialog pairs the harder-Variation alternative when one is on file", () => {
+  const dialog = buildPinDialog({
+    prescription: prescription({ reps: "8-12", recommended_load: BODYWEIGHT }),
+    performedReps: [13, 14, 15],
+    harderVariation: { exercise_id: 42, name: "Archer Pull-up" },
+  });
+
+  assert.equal(dialog?.harderVariation.kind, "offer");
+  if (dialog?.harderVariation.kind === "offer") {
+    assert.equal(dialog.harderVariation.exerciseId, 42);
+    assert.match(dialog.harderVariation.acceptLabel, /Archer Pull-up/);
+  }
+});
+
+test("buildPinDialog shows no harder-Variation alternative when none is on file", () => {
+  const dialog = buildPinDialog({
+    prescription: prescription({ reps: "8-12", recommended_load: BODYWEIGHT }),
+    performedReps: [13, 14, 15],
+    harderVariation: null,
+  });
+  assert.equal(dialog?.harderVariation.kind, "none");
+});
+
+test("collectPinCandidates finds the qualifying movement among several logged", () => {
+  // Arrange — a bodyweight movement beaten on every set, and a loaded one that never qualifies
+  const prescriptions = [
+    prescription({ position: 0, exercise_id: 1, sets: 2, reps: "8-12", recommended_load: BODYWEIGHT, exercise_name: "Pull-up" }),
+    prescription({ position: 1, exercise_id: 2, sets: 2, reps: "8-12", recommended_load: ABSOLUTE, exercise_name: "Row" }),
+  ];
+  const groups = buildLogForm(prescriptions).map((group) => ({
+    ...group,
+    rows: group.rows.map((row) => ({ ...row, reps: "15" })),
+  }));
+
+  const candidates = collectPinCandidates(prescriptions, groups);
+
+  // Assert — only the bodyweight movement qualifies, carrying its numeric performed reps
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].prescription.position, 0);
+  assert.deepEqual(candidates[0].performedReps, [15, 15]);
 });

@@ -47,6 +47,11 @@ export interface ExercisePrescription {
   // serializes them on every Prescription), while pre-Superset read paths need not.
   superset_group?: string | null;
   round_rest_seconds?: number | null;
+  // The Pinned Target (ADR-0053): the user-set rep range committed onto this Prescription's
+  // next un-performed occurrence, which suspends automatic read-time Progression for the
+  // movement until un-pinned. `null`/absent when unpinned — its presence is the "user-set"
+  // marker the plan view reads to surface the pinned range and offer the un-pin control.
+  pinned_reps?: string | null;
   exercise_id: number;
   exercise_name: string;
   exercise_description: string | null;
