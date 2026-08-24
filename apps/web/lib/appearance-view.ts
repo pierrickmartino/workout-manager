@@ -36,6 +36,36 @@ export function buildModeOptions(currentMode: Mode): AppearanceModeOption[] {
   }));
 }
 
+// ── Keep Screen Awake slice (everyone) ───────────────────────────────────────
+
+// The user's Keep Screen Awake control: whether the preference is `enabled`, plus
+// the human `label` and a short `caption`. CONTEXT "Keep Screen Awake" — the user's
+// Interface Preference for holding the device screen on while a Live Session is
+// underway. The copy names the *preference*, never the browser wake-lock API that
+// backs it (a term CONTEXT tells us to avoid for the user-facing choice).
+export interface AppearanceKeepAwakeControl {
+  enabled: boolean;
+  label: string;
+  caption: string;
+}
+
+// The Keep Screen Awake copy, authored once so the toggle and its tests can never
+// drift on the user-facing wording.
+export const KEEP_SCREEN_AWAKE_COPY = {
+  label: "Keep Screen Awake",
+  caption: "Hold the screen on during a Live Session",
+} as const satisfies Omit<AppearanceKeepAwakeControl, "enabled">;
+
+// Map the user's stored Keep Screen Awake preference to the toggle's view-model,
+// marking it `enabled` exactly when the preference is on. Pure: same input, same
+// output, no I/O — so the toggle component stays a thin shell (mirrors
+// `buildModeOptions`).
+export function buildKeepScreenAwakeControl(
+  keepScreenAwake: boolean,
+): AppearanceKeepAwakeControl {
+  return { ...KEEP_SCREEN_AWAKE_COPY, enabled: keepScreenAwake };
+}
+
 // ── Skin slice (admins only) ─────────────────────────────────────────────────
 
 // One Skin the admin can review: its `value` (catalog id), the human `label` and

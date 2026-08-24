@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   buildAppearanceView,
+  buildKeepScreenAwakeControl,
   buildSkinControl,
   MODE_OPTIONS,
   SKIN_OPTIONS,
@@ -81,6 +82,43 @@ test("MODE_OPTIONS is the single source of the Mode catalog order", () => {
     MODE_OPTIONS.map((option) => option.value),
     ["light", "dark", "system"],
   );
+});
+
+// ── Keep Screen Awake slice: everyone (buildKeepScreenAwakeControl) ──────────
+
+test("reflects an enabled Keep Screen Awake preference as on", () => {
+  // Arrange / Act
+  const control = buildKeepScreenAwakeControl(true);
+
+  // Assert
+  assert.equal(control.enabled, true);
+});
+
+test("reflects a disabled Keep Screen Awake preference as off", () => {
+  // Arrange / Act
+  const control = buildKeepScreenAwakeControl(false);
+
+  // Assert
+  assert.equal(control.enabled, false);
+});
+
+test("carries a human label and caption for the Keep Screen Awake control", () => {
+  // Arrange / Act — the copy is stable regardless of the stored value
+  for (const value of [true, false]) {
+    const control = buildKeepScreenAwakeControl(value);
+
+    // Assert — renderable copy, no empty strings
+    assert.ok(control.label.length > 0);
+    assert.ok(control.caption.length > 0);
+  }
+});
+
+test("names the preference Keep Screen Awake, not the browser wake-lock API", () => {
+  // Arrange / Act
+  const control = buildKeepScreenAwakeControl(true);
+
+  // Assert — the label is the user's preference, per CONTEXT "Keep Screen Awake"
+  assert.equal(control.label, "Keep Screen Awake");
 });
 
 // ── Per-role branch: admin gets the Skin slice, a non-admin does not ─────────
