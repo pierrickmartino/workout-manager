@@ -75,6 +75,46 @@ class AnalyticsRange(Enum):
         return {"30d": 30, "90d": 90, "150d": 150}[self.value]
 
 
+# The Analytics windows in ascending span order — the range selector's fixed order and
+# the sequence History Depth unlocks them in (ADR-0056).
+RANGE_ORDER: tuple[AnalyticsRange, ...] = (
+    AnalyticsRange.THIRTY_DAY,
+    AnalyticsRange.NINETY_DAY,
+    AnalyticsRange.ONE_FIFTY_DAY,
+)
+
+
+def history_depth_days(history: list[LoggedSessionView], today: date) -> int:
+    """History Depth: the span in days from the earliest Logged Session to ``today``.
+
+    Zero when the user has logged nothing — only the floor window is ever offered then.
+    A read-time signal over the record, never stored (like Streak and XP).
+    """
+
+    if not history:
+        return 0
+    earliest = min(session.performed_on for session in history)
+    return (today - earliest).days
+
+
+def available_ranges(depth_days: int) -> tuple[AnalyticsRange, ...]:
+    """The Analytics windows worth offering at a given History Depth (ADR-0056).
+
+    The shortest window (the floor) is always offered; each longer one only once History
+    Depth reaches **past** the next-shorter window, so a window is never offered when its
+    graph would merely repeat the shorter one's ("if the graphs are the same, there is no
+    interest"). Contiguous by construction: the first window whose threshold isn't met
+    stops the unlock.
+    """
+
+    offered = [RANGE_ORDER[0]]
+    for shorter, window in zip(RANGE_ORDER, RANGE_ORDER[1:]):
+        if depth_days <= shorter.days:
+            break
+        offered.append(window)
+    return tuple(offered)
+
+
 @dataclass(frozen=True)
 class AnalyticsOverview:
     """The count read model for one range window: honest, conversion-free totals.
@@ -112,9 +152,17 @@ class AnalyticsOverview:
     never rebuked at the shortest scale. Always all six groups in canonical order, ungated.
     Its ``unclassified_present`` flag discloses any in-window work that rolls up outside the
     six real groups, so the "of 6" figure stays honest (issue #189).
+
+    ``available_ranges`` is the ordered tuple of window values (``"30d"`` first) the range
+    selector may offer at the user's current History Depth (ADR-0056): a longer window
+    appears only once its extra span would show data the shorter one misses. ``range`` is
+    the window actually served — the requested one when it is available, else clamped down
+    to the deepest available window, so an out-of-depth request is never served a graph
+    identical to a shorter window's.
     """
 
     range: str
+    available_ranges: tuple[str, ...]
     sessions: int
     active_days: int
     total_sets: int
@@ -150,8 +198,16 @@ def analytics_overview(
     Exercise's best Estimated 1RM, taken from the Personal Records detected below.
     """
 
-    start = today - timedelta(days=window.days - 1)
     history = logged.list_for_user(clerk_user_id)
+
+    # Gate the window by History Depth (ADR-0056): a requested window deeper than the
+    # user's history is clamped down to the deepest available one, so the "same graph"
+    # a shallow history would produce is never actually served. The floor is always
+    # available, so ``offered`` is never empty.
+    offered = available_ranges(history_depth_days(history, today))
+    window = window if window in offered else offered[-1]
+
+    start = today - timedelta(days=window.days - 1)
     in_window = [
         session for session in history if start <= session.performed_on <= today
     ]
@@ -189,6 +245,7 @@ def analytics_overview(
 
     return AnalyticsOverview(
         range=window.value,
+        available_ranges=tuple(offered_range.value for offered_range in offered),
         sessions=len(in_window),
         active_days=len({session.performed_on for session in in_window}),
         total_sets=sum(len(session.logged_sets) for session in in_window),
@@ -254,5 +311,8 @@ __all__ = [
     "AnalyticsRange",
     "AnalyticsOverview",
     "analytics_overview",
+    "available_ranges",
+    "history_depth_days",
+    "RANGE_ORDER",
     "RECENT_RECORDS_LIMIT",
 ]

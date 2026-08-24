@@ -46,6 +46,9 @@ MAX_TIMELINE_LIMIT = 50
 def _serialize(overview: AnalyticsOverview) -> dict:
     return {
         "range": overview.range,
+        # The windows the range selector may offer at the user's History Depth, and the
+        # served window is the requested one clamped into that set (ADR-0056).
+        "available_ranges": list(overview.available_ranges),
         "sessions": overview.sessions,
         "active_days": overview.active_days,
         "total_sets": overview.total_sets,

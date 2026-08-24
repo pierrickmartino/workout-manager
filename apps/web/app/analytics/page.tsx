@@ -2,13 +2,13 @@ import Link from "next/link";
 import { Dumbbell, History, LineChart, Trophy } from "lucide-react";
 
 import {
-  ANALYTICS_RANGES,
   fetchAnalytics,
   toAnalyticsRange,
   type AnalyticsRange,
   type VolumeSeries,
   type DistanceSeries,
 } from "@/lib/analytics";
+import { RANGE_LABELS, toRangeOptions } from "@/lib/analytics-range-view";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { NavRow } from "@/components/pulse/nav-row";
@@ -47,8 +47,8 @@ export default async function AnalyticsPage({
   searchParams: Promise<{ range?: string }>;
 }) {
   const { range: rawRange } = await searchParams;
-  const range = toAnalyticsRange(rawRange);
-  const envelope = await fetchAnalytics(range);
+  const requestedRange = toAnalyticsRange(rawRange);
+  const envelope = await fetchAnalytics(requestedRange);
 
   if (!envelope.success || !envelope.data) {
     return (
@@ -62,6 +62,10 @@ export default async function AnalyticsPage({
   }
 
   const overview = envelope.data;
+  // The window actually served — the requested one clamped into what History Depth makes
+  // available (ADR-0056) — drives both the active toggle button and the trend captions,
+  // so an out-of-depth request highlights and describes the window it was served.
+  const range = overview.range;
   const hasHistory = overview.sessions > 0;
   const muscleBars = toMuscleBars(overview.muscle_distribution);
   const coverageView = toCoverageView(overview.coverage);
@@ -80,7 +84,7 @@ export default async function AnalyticsPage({
     <section className="flex flex-col gap-6">
       <PageHeader overline="PULSE // STATS" title="Analytics" />
 
-      <RangeToggle active={range} />
+      <RangeToggle active={range} available={overview.available_ranges} />
 
       {hasHistory ? (
         <>
@@ -315,35 +319,55 @@ function RecentRecords({
   );
 }
 
-const RANGE_LABELS: Record<AnalyticsRange, string> = {
-  "30d": "30D",
-  "90d": "90D",
-  "150d": "150D",
-};
+// The 30D / 90D / 150D window selector, gated by History Depth (ADR-0056). Server-rendered
+// as links so the screen needs no client JavaScript; the active window is scoped via
+// ?range=. A window the user's history isn't deep enough to make worthwhile is rendered
+// disabled (never a link) rather than hidden, with a hint below naming what unlocks it —
+// so a longer window is never offered when its graph would merely repeat a shorter one's.
+function RangeToggle({
+  active,
+  available,
+}: {
+  active: AnalyticsRange;
+  available: AnalyticsRange[];
+}) {
+  const options = toRangeOptions(active, available);
+  const nextLocked = options.find((option) => !option.available);
 
-// The 7D / 30D / 90D window selector. Server-rendered as links so the screen
-// needs no client JavaScript; the active window is scoped via ?range=.
-function RangeToggle({ active }: { active: AnalyticsRange }) {
   return (
-    <div className="flex items-center gap-1 rounded-md border border-border bg-surface p-1">
-      {ANALYTICS_RANGES.map((range) => {
-        const isActive = range === active;
-        return (
-          <Link
-            key={range}
-            href={`/analytics?range=${range}`}
-            aria-current={isActive ? "page" : undefined}
-            className={cn(
-              "flex-1 rounded-sm py-1.5 text-center label-mono text-[11px] font-semibold transition-colors",
-              isActive
-                ? "bg-cyan/15 text-cyan"
-                : "text-text-muted hover:text-text-secondary",
-            )}
-          >
-            {RANGE_LABELS[range]}
-          </Link>
-        );
-      })}
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-1 rounded-md border border-border bg-surface p-1">
+        {options.map((option) =>
+          option.available ? (
+            <Link
+              key={option.range}
+              href={`/analytics?range=${option.range}`}
+              aria-current={option.active ? "page" : undefined}
+              className={cn(
+                "flex-1 rounded-sm py-1.5 text-center label-mono text-[11px] font-semibold transition-colors",
+                option.active
+                  ? "bg-cyan/15 text-cyan"
+                  : "text-text-muted hover:text-text-secondary",
+              )}
+            >
+              {option.label}
+            </Link>
+          ) : (
+            <span
+              key={option.range}
+              aria-disabled="true"
+              aria-label={option.hint ?? undefined}
+              title={option.hint ?? undefined}
+              className="flex-1 cursor-not-allowed rounded-sm py-1.5 text-center label-mono text-[11px] font-semibold text-text-muted/40"
+            >
+              {option.label}
+            </span>
+          ),
+        )}
+      </div>
+      {nextLocked ? (
+        <p className="label-mono text-[11px] text-text-muted">{nextLocked.hint}</p>
+      ) : null}
     </div>
   );
 }

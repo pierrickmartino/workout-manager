@@ -254,6 +254,7 @@ def test_analytics_empty_state_is_zero_counts_not_an_error():
     assert body["success"] is True
     assert body["data"] == {
         "range": "30d",
+        "available_ranges": ["30d"],
         "sessions": 0,
         "active_days": 0,
         "total_sets": 0,
@@ -275,6 +276,39 @@ def test_analytics_empty_state_is_zero_counts_not_an_error():
             "unclassified_present": False,
         },
     }
+
+
+def test_analytics_offers_only_the_floor_and_clamps_an_out_of_depth_request():
+    # Arrange — a shallow (10-day) history and a stale ?range=150d request
+    client, ctx, sessions, logged = build_client()
+    _perform(sessions, logged, "user_shallow", date.today(), 1)
+    _perform(sessions, logged, "user_shallow", date.today() - timedelta(days=10), 1)
+
+    # Act
+    response = client.get("/api/analytics?range=150d", headers=_auth(ctx, "user_shallow"))
+
+    # Assert — only the floor window is offered, and the redundant 150D request is
+    # clamped down rather than served an identical graph
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["available_ranges"] == ["30d"]
+    assert data["range"] == "30d"
+
+
+def test_analytics_offers_every_window_for_a_deep_history():
+    # Arrange — history 120 days deep; every window reveals something new
+    client, ctx, sessions, logged = build_client()
+    _perform(sessions, logged, "user_deep", date.today(), 1)
+    _perform(sessions, logged, "user_deep", date.today() - timedelta(days=120), 1)
+
+    # Act
+    response = client.get("/api/analytics?range=90d", headers=_auth(ctx, "user_deep"))
+
+    # Assert — all three windows offered, and the in-depth request is served as asked
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["available_ranges"] == ["30d", "90d", "150d"]
+    assert data["range"] == "90d"
 
 
 def test_analytics_defaults_to_the_thirty_day_window():

@@ -703,3 +703,125 @@ def test_overview_gate_stays_closed_for_a_pure_strength_user():
     # Assert — no distance work ever, so the chart is gated off and empty
     assert overview.has_distance is False
     assert overview.distance_weeks == ()
+
+
+# --- History Depth: which windows the range selector may offer (ADR-0056) -------------
+
+
+def _log_reps(sessions, logged, user, performed_on):
+    """Log one bare rep set on ``performed_on`` — the minimal history for depth tests."""
+
+    _log(
+        sessions,
+        logged,
+        user,
+        performed_on,
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5))],
+    )
+
+
+def test_history_below_thirty_days_deep_offers_only_the_floor_window():
+    # Arrange — a user whose entire history is 10 days deep: 90D and 150D would only
+    # repeat the 30D graph, so neither is worth offering
+    _, sessions, logged = _build()
+    _log_reps(sessions, logged, "user_shallow", TODAY)
+    _log_reps(sessions, logged, "user_shallow", TODAY - timedelta(days=10))
+
+    # Act
+    overview = analytics_overview(
+        "user_shallow", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert
+    assert overview.available_ranges == ("30d",)
+
+
+def test_history_past_thirty_days_unlocks_the_ninety_day_window():
+    # Arrange — history 45 days deep: past 30, not past 90
+    _, sessions, logged = _build()
+    _log_reps(sessions, logged, "user_mid", TODAY)
+    _log_reps(sessions, logged, "user_mid", TODAY - timedelta(days=45))
+
+    # Act
+    overview = analytics_overview(
+        "user_mid", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — 90D now reveals data 30D misses, but 150D would still repeat 90D
+    assert overview.available_ranges == ("30d", "90d")
+
+
+def test_history_past_ninety_days_unlocks_every_window():
+    # Arrange — history 120 days deep
+    _, sessions, logged = _build()
+    _log_reps(sessions, logged, "user_deep", TODAY)
+    _log_reps(sessions, logged, "user_deep", TODAY - timedelta(days=120))
+
+    # Act
+    overview = analytics_overview(
+        "user_deep", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — every step up reveals something the shorter window doesn't
+    assert overview.available_ranges == ("30d", "90d", "150d")
+
+
+def test_history_exactly_thirty_days_deep_keeps_the_ninety_day_window_locked():
+    # Arrange — the oldest session is exactly 30 days ago, so it still sits inside the
+    # 30D window; 90D would repeat it. Unlock is strict — only *past* the shorter window.
+    _, sessions, logged = _build()
+    _log_reps(sessions, logged, "user_edge", TODAY)
+    _log_reps(sessions, logged, "user_edge", TODAY - timedelta(days=30))
+
+    # Act
+    overview = analytics_overview(
+        "user_edge", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert
+    assert overview.available_ranges == ("30d",)
+
+
+def test_a_user_with_no_history_is_offered_only_the_floor_window():
+    # Arrange — no Logged Sessions at all
+    _, _, logged = _build()
+
+    # Act
+    overview = analytics_overview(
+        "user_none", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — the honest floor, never an empty selector
+    assert overview.available_ranges == ("30d",)
+
+
+def test_an_out_of_depth_requested_window_is_clamped_to_the_deepest_available():
+    # Arrange — a shallow (10-day) history but a request for the 150D window, as a stale
+    # bookmark or hand-edited URL would produce
+    _, sessions, logged = _build()
+    _log_reps(sessions, logged, "user_clamp", TODAY)
+    _log_reps(sessions, logged, "user_clamp", TODAY - timedelta(days=10))
+
+    # Act
+    overview = analytics_overview(
+        "user_clamp", AnalyticsRange.ONE_FIFTY_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — clamped to the only available window rather than served a redundant graph
+    assert overview.range == "30d"
+    assert overview.available_ranges == ("30d",)
+
+
+def test_an_in_depth_requested_window_is_served_untouched():
+    # Arrange — a 120-day-deep history and a legitimate 90D request
+    _, sessions, logged = _build()
+    _log_reps(sessions, logged, "user_ok", TODAY)
+    _log_reps(sessions, logged, "user_ok", TODAY - timedelta(days=120))
+
+    # Act
+    overview = analytics_overview(
+        "user_ok", AnalyticsRange.NINETY_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — an in-depth request is honoured as asked
+    assert overview.range == "90d"
