@@ -4,25 +4,38 @@ import { apiGet, apiSend, type Envelope } from "./api";
 
 import { DEFAULT_MODE, type Mode } from "./theme";
 
-// Server-side data access for the Appearance Preference (the per-user Mode). The
-// transport seam (lib/api.ts) attaches the Clerk JWT — it never reaches the
-// browser; the FastAPI backend verifies it via JWKS and scopes the read/write to
-// the owning user. The Appearance Preference is stored apart from the Fitness
-// Profile (ADR-0047), hence its own data-access module.
+// Server-side data access for the per-user Interface Preference (Mode + Keep
+// Screen Awake). The transport seam (lib/api.ts) attaches the Clerk JWT — it never
+// reaches the browser; the FastAPI backend verifies it via JWKS and scopes the
+// read/write to the owning user. The Interface Preference is stored apart from the
+// Fitness Profile (ADR-0047), hence its own data-access module. The physical
+// `/api/appearance` path stays even though the concept generalised past appearance
+// (ADR-0055).
 
-// The wire shape of GET/PUT /api/appearance's `data`: just the stored Mode.
+// The wire shape of GET/PUT /api/appearance's `data`: the stored Mode plus whether
+// to Keep Screen Awake during a Live Session (defaults on, ADR-0055).
 export interface Appearance {
   mode: Mode;
+  keep_screen_awake: boolean;
 }
 
 export async function fetchAppearance(): Promise<Envelope<Appearance>> {
   return apiGet("/api/appearance");
 }
 
+// Each save sends only its own facet: the backend PUT merges it onto the user's
+// current preference, so persisting the Mode never disturbs Keep Screen Awake and
+// vice versa (ADR-0055).
 export async function saveAppearanceMode(
   mode: Mode,
 ): Promise<Envelope<Appearance>> {
   return apiSend("/api/appearance", "PUT", { mode });
+}
+
+export async function saveKeepScreenAwake(
+  keepScreenAwake: boolean,
+): Promise<Envelope<Appearance>> {
+  return apiSend("/api/appearance", "PUT", { keep_screen_awake: keepScreenAwake });
 }
 
 // Resolve the Mode to render the app in, for the root layout's first paint. This
