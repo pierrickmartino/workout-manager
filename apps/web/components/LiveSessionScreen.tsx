@@ -34,6 +34,8 @@ import {
   type LiveSessionState,
 } from "@/lib/live-session";
 import { mapFinishToLog } from "@/lib/live-session-mapper";
+import { useWakeLock } from "@/lib/use-wake-lock";
+import type { Phase } from "@/lib/wake-lock";
 import { LiveSessionSets } from "@/components/live-session-sets";
 import {
   readLiveSessionSlot,
@@ -67,13 +69,18 @@ interface LiveSessionScreenProps {
   // The user's default rest-timer duration in whole seconds (issue #121), or null
   // when unset — then each set's rest falls back to the prescription's own value.
   defaultRestSeconds: number | null;
+  // The user's Keep Screen Awake preference (issue #386 — ADR-0055), read server-side
+  // from the Interface Preference. When on, the screen holds a best-effort Screen Wake
+  // Lock through the `live` phase; off means no lock is ever acquired.
+  keepScreenAwake: boolean;
 }
 
-// The screen's lifecycle, decided on the first foreground from the persisted slot
-// (issue #91 — F2·S6): `deciding` until the entry is resolved, then the running
-// performance, a summary for an idle auto-ended session, or a block when a
-// different unfinished session must be resumed or ended first.
-type Phase = "deciding" | "live" | "summary" | "blocked";
+// The screen's lifecycle phase is defined alongside the wake-lock decision it drives
+// (lib/wake-lock), so the pure rule and this screen share one vocabulary. Decided on
+// the first foreground from the persisted slot (issue #91 — F2·S6): `deciding` until
+// the entry is resolved, then the running performance, a summary for an idle
+// auto-ended session, or a block when a different unfinished session must be resumed
+// or ended first.
 
 // Runs a Session live and records it per set (issue #86 — F2·S1), surviving refresh
 // and phone-lock via a single `localStorage` slot with resume, idle auto-end, and
@@ -85,6 +92,7 @@ export function LiveSessionScreen({
   session,
   today,
   defaultRestSeconds,
+  keepScreenAwake,
 }: LiveSessionScreenProps) {
   const [state, dispatch] = useReducer(
     liveSessionReducer,
@@ -157,6 +165,12 @@ export function LiveSessionScreen({
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Keep the screen on while the performance is live (issue #386 — ADR-0055). The
+  // hook holds a best-effort Screen Wake Lock only in the `live` phase and only when
+  // the preference is on; it re-acquires across a hide/show cycle and no-ops silently
+  // where unsupported. It never touches the idle/duration model (ADR-0014).
+  useWakeLock(phase, keepScreenAwake);
 
   // Finalize an idle-expired performance as Incomplete (ADR-0014): record the
   // completed sets (idle-excluded duration) and show a summary instead of resuming.

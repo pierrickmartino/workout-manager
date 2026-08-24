@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { LiveSessionScreen } from "@/components/LiveSessionScreen";
 import { fetchLiveSession } from "@/lib/sessions";
 import { fetchProfile } from "@/lib/profile";
+import { resolveAppearance } from "@/lib/appearance";
 
 // Runs a user-owned Session live, recording it per set (issue #86 — F2·S1). The
 // Session is fetched through the live hydration read (issue #90 — F2·S5), so the
@@ -29,6 +30,13 @@ export default async function LiveSessionPage({
   const profile = await fetchProfile();
   const defaultRestSeconds = profile.data?.default_rest_seconds ?? null;
 
+  // The user's Keep Screen Awake preference (issue #386 — ADR-0055), from the same
+  // Interface Preference the root layout reads for Mode. `resolveAppearance`
+  // get-or-defaults (on) and never throws, so a signed-out/unreachable read simply
+  // ships the default rather than blocking the workout — the same pattern as
+  // `defaultRestSeconds` above.
+  const { keep_screen_awake: keepScreenAwake } = await resolveAppearance();
+
   const session = envelope.data;
   const today = new Date().toISOString().slice(0, 10);
 
@@ -37,6 +45,7 @@ export default async function LiveSessionPage({
       session={session}
       today={today}
       defaultRestSeconds={defaultRestSeconds}
+      keepScreenAwake={keepScreenAwake}
     />
   );
 }
