@@ -101,6 +101,17 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
         ),
     ),
     BannedTerm(
+        name="activity heatmap",
+        pattern=re.compile(r"activity_heatmap|activityHeatmap|/activity-heatmap\b"),
+        guidance=(
+            "The Profile daily-activity mosaic is the 'Training Heatmap' (CONTEXT "
+            "'Training Heatmap', ADR-0054): 'activity' is vague, and the projection is "
+            "strictly descriptive — it derives no daily streak / don't-break-the-chain "
+            "mechanic (the weekly Streak stays the sole consecutiveness metric). Use "
+            "'Training Heatmap'."
+        ),
+    ),
+    BannedTerm(
         name="personal best",
         pattern=re.compile(r"personal_best|personalBest"),
         guidance=(

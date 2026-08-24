@@ -2,6 +2,8 @@ import Link from "next/link";
 import { User } from "lucide-react";
 
 import { fetchProfileProgress } from "@/lib/profile-progress";
+import { fetchTrainingHeatmap } from "@/lib/heatmap";
+import { toHeatmapGrid } from "@/lib/heatmap-view";
 import { resolveUserMode } from "@/lib/appearance";
 import { resolveActiveSkin } from "@/lib/active-skin";
 import { resolveIsAdmin } from "@/lib/admin";
@@ -15,6 +17,7 @@ import { NavRow } from "@/components/pulse/nav-row";
 import { SignOutRow } from "@/components/pulse/sign-out-row";
 import { LevelBadge } from "@/components/pulse/level-badge";
 import { AchievementWall } from "@/components/pulse/achievement-wall";
+import { TrainingHeatmap } from "@/components/pulse/training-heatmap";
 import { Bento, BentoTile } from "@/components/pulse/bento";
 import { Alert } from "@/components/pulse/alert";
 import { Card } from "@/components/ui/card";
@@ -36,12 +39,14 @@ export default async function ProfilePage() {
   // Resolve everything the page needs in parallel. `resolveActiveSkin` /
   // `resolveIsAdmin` share this request's cache with the root layout, so the extra
   // reads are effectively free; the Skin controls are rendered only for an admin.
-  const [envelope, mode, activeSkin, isAdmin] = await Promise.all([
-    fetchProfileProgress(),
-    resolveUserMode(),
-    resolveActiveSkin(),
-    resolveIsAdmin(),
-  ]);
+  const [envelope, heatmapEnvelope, mode, activeSkin, isAdmin] =
+    await Promise.all([
+      fetchProfileProgress(),
+      fetchTrainingHeatmap(),
+      resolveUserMode(),
+      resolveActiveSkin(),
+      resolveIsAdmin(),
+    ]);
 
   if (!envelope.success || !envelope.data) {
     return (
@@ -57,6 +62,12 @@ export default async function ProfilePage() {
   const { xp, level, streak, total_sessions, total_sets, achievements } =
     envelope.data;
   const cards = toAchievementCards(achievements);
+  // The Heatmap is a secondary read on its own endpoint (ADR-0054); a failure there must
+  // not blank the whole Profile, so it simply omits the mosaic when it can't load.
+  const heatmapGrid =
+    heatmapEnvelope.success && heatmapEnvelope.data
+      ? toHeatmapGrid(heatmapEnvelope.data)
+      : null;
   const unlockedCount = cards.filter((card) => card.unlocked).length;
 
   // The per-role Appearance decision runs through the one tested view-model: an
@@ -83,6 +94,13 @@ export default async function ProfilePage() {
           <BentoTile label="TOTAL SETS" value={total_sets} span="full" />
         </Bento>
       </div>
+
+      {heatmapGrid ? (
+        <div className="flex flex-col gap-4">
+          <SectionHeader>TRAINING HEATMAP</SectionHeader>
+          <TrainingHeatmap grid={heatmapGrid} />
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-4">
         <SectionHeader
