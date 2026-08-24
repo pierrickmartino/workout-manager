@@ -6,6 +6,7 @@ import {
   liveSessionReducer,
   currentUnit,
   currentSuperset,
+  groupUnits,
   nextExercise,
   restCue,
   completionOutcome,
@@ -287,6 +288,33 @@ test("Completion Outcome is Incomplete when a grouped set is left un-attempted",
 
   // Assert — one prescribed set un-attempted → Incomplete, exactly as for a flat Session
   assert.equal(completionOutcome(state), "incomplete");
+});
+
+test("the live hydration read shape (Superset overlay + previous_performance) groups into one Superset unit", () => {
+  // Arrange — the payload the server's live hydration read now emits: each grouped
+  // Prescription carries BOTH the Superset overlay (`superset_group`/`round_rest_seconds`)
+  // and its own `previous_performance`. The bug was the server dropping the overlay from
+  // this read, so the engine saw only solo movements the moment the user Started.
+  const hydrated: WorkoutSession = {
+    ...GROUPED,
+    prescriptions: GROUPED.prescriptions.map((p) => ({
+      ...p,
+      previous_performance: [],
+    })),
+  };
+
+  // Act
+  const units = groupUnits(initLiveSession(hydrated));
+
+  // Assert — Bench+Row collapse into ONE Superset unit (label A), then the solo Plank:
+  // two units, never three. Dropping the overlay would have split the pair into solos.
+  assert.deepEqual(
+    units.map((u) => ({ label: u.supersetLabel, names: u.exerciseNames })),
+    [
+      { label: "A", names: ["Bench Press", "Barbell Row"] },
+      { label: null, names: ["Plank"] },
+    ],
+  );
 });
 
 test("a mid-performance grouped Session round-trips through the localStorage slot unchanged", () => {

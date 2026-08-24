@@ -50,6 +50,7 @@ from app.generation.service import generate_session
 from app.generation.substitute_generator import SubstituteGenerator
 from app.live.hydration import hydrate_session
 from app.live.serialization import serialize_hydrated_session
+from app.session_serialization import serialize_prescription
 from app.repositories.deps import (
     get_exercise_relationship_repository,
     get_exercise_repository,
@@ -138,37 +139,10 @@ def _serialize(view: SessionView) -> dict:
         # Withhold the Duplicate control on a Protocol member (ADR-0043 consequence, Q2):
         # the web Session view reads this to hide the button; the endpoint stays reachable.
         "is_protocol_member": view.is_protocol_member,
-        "prescriptions": [
-            {
-                "position": p.position,
-                "sets": p.sets,
-                "reps": p.reps,
-                "rest_seconds": p.rest_seconds,
-                "tempo": p.tempo,
-                "recommended_load": p.recommended_load,
-                # Typed Prescribed Quantity (ADR-0050): the ``{kind, text, ...payload}``
-                # Quantity dict, or null when the prescription carries no typed amount.
-                # The web client reads this to render the log input by kind; the free-text
-                # ``reps`` above still renders the prescribed line for back-compat.
-                "prescribed_quantity": p.prescribed_quantity,
-                # Superset overlay (ADR-0023): the shared group tag and group-owned
-                # round-rest, both null on a flat, solo Prescription. Exposed on the read
-                # so a saved Superset renders on the Session detail.
-                "superset_group": p.superset_group,
-                "round_rest_seconds": p.round_rest_seconds,
-                # Pinned rep target (ADR-0053): the user-set range that suspends read-time
-                # Progression for this movement, or null when unpinned. The client reads it
-                # to show the pin state and its editable value.
-                "pinned_reps": p.pinned_reps,
-                "exercise_id": p.exercise_id,
-                "exercise_name": p.exercise_name,
-                "exercise_description": p.exercise_description,
-                "targeted_muscles": p.targeted_muscles,
-                "required_equipment": p.required_equipment,
-                "provenance": p.provenance,
-            }
-            for p in view.prescriptions
-        ],
+        # Each Prescription through the shared canonical serializer, so the plain read
+        # and the Live Session hydration read (``app.live.serialization``) can never
+        # disagree on a Prescription's fields (ADR-0023 Superset overlay included).
+        "prescriptions": [serialize_prescription(p) for p in view.prescriptions],
     }
 
 
