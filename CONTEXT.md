@@ -232,6 +232,12 @@ _Avoid_: Prime/assisting mover (as the stored term), main muscle
 A **read-time projection** of the endurance axis: the total kilometres a stretch of the user's record covered, summed from the metres of every **`distance`-kind Quantity** on their Logged Sets and bucketed **by week** (the shared Monday week-start the Streak and Muscle-Group balance use). It is the endurance counterpart to Volume's kg tonnage — computed from the *record* at read time, never a stored ledger (ADR-0018/0049) — but, because a `distance` Quantity already carries exact metres, it converts **without partiality**: there is no coverage caveat as tonnage has. Surfaced on the Analytics screen as the **Weekly Distance** chart, shown only to a user whose history contains distance work. A set logged by time alone (a `duration` Quantity) carries no distance and simply does not appear; **combined across all distance work in v1**, with no per-activity split — a running / cycling / rowing breakdown would need an activity taxonomy the domain does not yet have (ADR-0049).
 _Avoid_: Mileage (imperial; the app is metric-canonical), volume (that is kg tonnage), pace (a separate distance÷duration projection), cardio (the activity, not this figure)
 
+## Analytics
+
+**History Depth**:
+The span from a user's **earliest Logged Session** to now — a **read-time** signal, never stored, that gates which Analytics **windows** (30D / 90D / 150D) the range selector offers. A longer window is offered only once History Depth reaches **past** the next-shorter one, so a window is never shown when its graph would merely repeat the shorter window's ("if the graphs are the same, there is no interest"): 90D needs depth past 30 days, 150D past 90 days, and 30D is the always-available floor (ADR-0049). Measured as the oldest-session age — the same record-derived species as Streak and XP — so a user with no history is offered only the 30D floor. The gate is enforced server-side: an out-of-depth requested window is **clamped** to the deepest available one rather than served a redundant graph (ADR-0056).
+_Avoid_: History length, data range, retention, window depth, coverage (that is Muscle Group Coverage)
+
 ## Gamification
 
 **XP**:
