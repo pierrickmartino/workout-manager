@@ -113,6 +113,12 @@ export interface RecentCoverage {
 // `recent_records`, `volume.points`, and `distance.weeks` are empty when nothing qualifies.
 export interface AnalyticsOverview {
   range: AnalyticsRange;
+  // The windows the range selector may offer at the user's History Depth (ADR-0056): a
+  // longer window appears only once its extra span would show data the shorter one
+  // misses. Always contains at least "30d"; `range` is the served window, clamped into
+  // this set, so an out-of-depth request is never served a graph identical to a
+  // shorter window's.
+  available_ranges: AnalyticsRange[];
   sessions: number;
   active_days: number;
   total_sets: number;
