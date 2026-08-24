@@ -288,6 +288,14 @@ _Avoid_: Theme, dark mode (as the concept name), colour scheme
 The single Skin currently published for the whole app — what every user's Mode renders within until it changes. Exactly one exists at any moment, defaulting to the original **PULSE** Skin. Only an **admin** changes it, and only by **publishing**: a Skin is previewed privately first, then deliberately made the Active Skin for everyone, restyling the app on each user's *next visit* rather than mid-action. The admin who publishes is the **admin** — never the "Operator", which would collide with Operator Level.
 _Avoid_: Current theme, global theme, default skin (that is only the Active Skin's starting value)
 
+**Interface Preference**:
+A user's own per-account UI choice — read-time state that steers how the app **behaves or presents** for them, never what the AI generates — kept deliberately **separate from the Fitness Profile**. The Fitness Profile is what the AI conditions a generation on; an Interface Preference steers nothing about the plan and must never leak into generation or its cache key. Server-synced so the choice follows the user across devices (ADR-0047, ADR-0055). Its members are the user's **Mode** (the appearance facet — an **Appearance Preference**) and whether to **Keep Screen Awake** during a Live Session.
+_Avoid_: Settings, profile (that is the generation-input Fitness Profile)
+
 **Appearance Preference**:
-A user's own appearance choice — their **Mode** — kept deliberately **separate from the Fitness Profile**. The Fitness Profile is what the AI conditions a generation on; an Appearance Preference steers nothing about the plan and must never leak into generation or its cache key. The one place a user's Mode lives.
+The **appearance** facet of a user's **Interface Preference** — specifically their **Mode**. Named separately because appearance is the facet ADR-0047 first carved out of the Fitness Profile; like any Interface Preference it steers nothing about the plan and never reaches generation or its cache key.
 _Avoid_: Settings, profile (that is the generation-input Fitness Profile), theme
+
+**Keep Screen Awake**:
+A user's **Interface Preference** for whether the device screen is held on while a **Live Session** is underway — a best-effort, **client-only** screen wake lock, defaulting **on** (ADR-0055). Purely ephemeral UI behaviour (ADR-0012): it is never part of the record, never reaches generation, and does **not** change idle auto-end (ADR-0014), which still measures from last activity.
+_Avoid_: No-sleep, wake lock (that is the browser API behind it, not the user's preference)
