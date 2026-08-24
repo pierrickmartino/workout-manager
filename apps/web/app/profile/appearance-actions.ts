@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { saveAppearanceMode } from "@/lib/appearance";
+import { saveAppearanceMode, saveKeepScreenAwake } from "@/lib/appearance";
 import type { Mode } from "@/lib/theme";
 
 // The thin server action behind the Profile Appearance picker. It persists the
@@ -25,5 +25,24 @@ export async function updateAppearanceMode(
   // Re-render everything under the root layout so the stamped `data-mode` (and
   // thus the whole app's polarity) reflects the new choice immediately.
   revalidatePath("/", "layout");
+  return { error: null };
+}
+
+// The thin server action behind the Profile Keep Screen Awake toggle. It persists
+// the choice via PUT /api/appearance (the same Interface Preference store as Mode,
+// ADR-0055) and returns whether it stuck; the toggle is optimistic and reverts on an
+// error. Unlike Mode, Keep Screen Awake stamps nothing on the layout — it is read at
+// Live Session time (ADR-0055) — so the whole-layout revalidation Mode needs is
+// unwarranted; we revalidate just the Profile route so a soft navigation back to it
+// re-reads the now-persisted value rather than serving the stale cached prop.
+export async function updateKeepScreenAwake(
+  keepScreenAwake: boolean,
+): Promise<AppearanceActionResult> {
+  const result = await saveKeepScreenAwake(keepScreenAwake);
+  if (!result.success) {
+    return { error: result.error ?? "Could not save your Keep Screen Awake setting." };
+  }
+
+  revalidatePath("/profile");
   return { error: null };
 }

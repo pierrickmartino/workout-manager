@@ -4,12 +4,13 @@ import { User } from "lucide-react";
 import { fetchProfileProgress } from "@/lib/profile-progress";
 import { fetchTrainingHeatmap } from "@/lib/heatmap";
 import { toHeatmapGrid } from "@/lib/heatmap-view";
-import { resolveUserMode } from "@/lib/appearance";
+import { resolveAppearance } from "@/lib/appearance";
 import { resolveActiveSkin } from "@/lib/active-skin";
 import { resolveIsAdmin } from "@/lib/admin";
 import { toAchievementCards } from "@/lib/achievements-view";
 import { buildAppearanceView } from "@/lib/appearance-view";
 import { AppearanceModePicker } from "@/components/AppearanceModePicker";
+import { AppearanceKeepAwakeToggle } from "@/components/AppearanceKeepAwakeToggle";
 import { AppearanceSkinPublisher } from "@/components/AppearanceSkinPublisher";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -39,14 +40,15 @@ export default async function ProfilePage() {
   // Resolve everything the page needs in parallel. `resolveActiveSkin` /
   // `resolveIsAdmin` share this request's cache with the root layout, so the extra
   // reads are effectively free; the Skin controls are rendered only for an admin.
-  const [envelope, heatmapEnvelope, mode, activeSkin, isAdmin] =
+  const [envelope, heatmapEnvelope, appearancePref, activeSkin, isAdmin] =
     await Promise.all([
       fetchProfileProgress(),
       fetchTrainingHeatmap(),
-      resolveUserMode(),
+      resolveAppearance(),
       resolveActiveSkin(),
       resolveIsAdmin(),
     ]);
+  const { mode, keep_screen_awake: keepScreenAwake } = appearancePref;
 
   if (!envelope.success || !envelope.data) {
     return (
@@ -122,8 +124,15 @@ export default async function ProfilePage() {
 
       <div className="flex flex-col gap-4">
         <SectionHeader>APPEARANCE</SectionHeader>
+        {/* Both Interface Preferences (ADR-0055) live together: the Mode picker
+            and, beneath a divider, the Keep Screen Awake toggle. */}
         <Card className="p-4">
-          <AppearanceModePicker currentMode={mode} />
+          <div className="flex flex-col gap-4">
+            <AppearanceModePicker currentMode={mode} />
+            <div className="border-t border-border pt-4">
+              <AppearanceKeepAwakeToggle keepScreenAwake={keepScreenAwake} />
+            </div>
+          </div>
         </Card>
         {/* The Skin catalog is an admin-only control (ADR-0048): an ordinary user
             picks their Mode and nothing more. `skinControl` is present only for an
