@@ -2,9 +2,9 @@
 repository, and the response envelope wired through FastAPI. JWKS and the
 repository are injected via dependency overrides so the test runs offline.
 
-The Appearance Preference is the per-user Mode, stored apart from the Fitness
-Profile (ADR-0047). Prior art: tests/test_profile_endpoint.py (near-identical
-shape)."""
+The store holds the per-user Interface Preference — Mode + Keep Screen Awake
+(ADR-0055) — kept apart from the Fitness Profile (ADR-0047). Prior art:
+tests/test_profile_endpoint.py (near-identical shape)."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def build_client(repo=None, ctx=None):
     return TestClient(app), ctx, repo
 
 
-def test_get_defaults_to_dark_when_no_record_exists():
+def test_get_defaults_to_dark_and_awake_when_no_record_exists():
     # Arrange — a brand-new user who has made no Appearance choice
     client, ctx, _ = build_client()
     headers = {"Authorization": f"Bearer {ctx.mint(sub='user_default')}"}
@@ -38,11 +38,13 @@ def test_get_defaults_to_dark_when_no_record_exists():
     # Act
     response = client.get("/api/appearance", headers=headers)
 
-    # Assert — the shipped default preserves today's all-dark look (ADR-0047)
+    # Assert — the shipped defaults: today's all-dark look (ADR-0047) and Keep
+    # Screen Awake on (ADR-0055)
     assert response.status_code == 200
     body = response.json()
     assert body["success"] is True
     assert body["data"]["mode"] == "dark"
+    assert body["data"]["keep_screen_awake"] is True
 
 
 def test_put_chosen_mode_round_trips_through_get():
@@ -133,9 +135,63 @@ def test_appearance_is_scoped_per_user():
     alice = {"Authorization": f"Bearer {ctx.mint(sub='user_alice')}"}
     bob = {"Authorization": f"Bearer {ctx.mint(sub='user_bob')}"}
 
-    # Act — Alice picks Light; Bob never chooses
-    client.put("/api/appearance", headers=alice, json={"mode": "light"})
+    # Act — Alice picks Light + Keep Screen Awake off; Bob never chooses
+    client.put(
+        "/api/appearance",
+        headers=alice,
+        json={"mode": "light", "keep_screen_awake": False},
+    )
 
-    # Assert — Bob still sees the default, unaffected by Alice
-    assert client.get("/api/appearance", headers=alice).json()["data"]["mode"] == "light"
-    assert client.get("/api/appearance", headers=bob).json()["data"]["mode"] == "dark"
+    # Assert — Bob still sees the shipped defaults, unaffected by Alice
+    alice_data = client.get("/api/appearance", headers=alice).json()["data"]
+    bob_data = client.get("/api/appearance", headers=bob).json()["data"]
+    assert alice_data == {"mode": "light", "keep_screen_awake": False}
+    assert bob_data == {"mode": "dark", "keep_screen_awake": True}
+
+
+def test_put_keep_screen_awake_off_round_trips_through_get():
+    # Arrange
+    client, ctx, _ = build_client()
+    headers = {"Authorization": f"Bearer {ctx.mint(sub='user_awake')}"}
+
+    # Act — the battery-conscious user turns Keep Screen Awake off, then reloads
+    put = client.put(
+        "/api/appearance", headers=headers, json={"keep_screen_awake": False}
+    )
+    fetched = client.get("/api/appearance", headers=headers)
+
+    # Assert — the choice persisted end to end; Mode is left at its default
+    assert put.status_code == 200
+    assert put.json()["data"] == {"mode": "dark", "keep_screen_awake": False}
+    assert fetched.json()["data"] == {"mode": "dark", "keep_screen_awake": False}
+
+
+def test_mode_and_keep_screen_awake_are_independently_settable():
+    # Arrange — a user turns Keep Screen Awake off (Mode untouched)
+    client, ctx, _ = build_client()
+    headers = {"Authorization": f"Bearer {ctx.mint(sub='user_facets')}"}
+    client.put("/api/appearance", headers=headers, json={"keep_screen_awake": False})
+
+    # Act — later picks Light, sending only the Mode facet
+    client.put("/api/appearance", headers=headers, json={"mode": "light"})
+    reloaded = client.get("/api/appearance", headers=headers).json()["data"]
+
+    # Assert — each facet saved independently; neither reset the other
+    assert reloaded == {"mode": "light", "keep_screen_awake": False}
+
+
+def test_put_rejects_an_ill_typed_keep_screen_awake_and_does_not_persist_it():
+    # Arrange
+    client, ctx, _ = build_client()
+    headers = {"Authorization": f"Bearer {ctx.mint(sub='user_badawake')}"}
+
+    # Act — a non-boolean is a boundary validation error
+    response = client.put(
+        "/api/appearance", headers=headers, json={"keep_screen_awake": "sometimes"}
+    )
+
+    # Assert — 422 and nothing persisted, so the user keeps the shipped defaults
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+    reloaded = client.get("/api/appearance", headers=headers).json()["data"]
+    assert reloaded == {"mode": "dark", "keep_screen_awake": True}

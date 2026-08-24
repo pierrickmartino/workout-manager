@@ -1,4 +1,4 @@
-"""Repository layer for the Appearance Preference (per-user Mode).
+"""Repository layer for the Interface Preference (per-user Mode + Keep Screen Awake).
 
 Mirrors ``ProfileRepository`` exactly: routes depend on the
 ``AppearancePreferenceRepository`` interface, never on the ORM directly (the
@@ -6,9 +6,13 @@ project's repository-pattern rule). Two implementations are provided — a
 SQLModel-backed one for production and an in-memory fake for tests and local
 wiring.
 
-Kept a distinct seam from the Profile repository (ADR-0047) so appearance and
-the Fitness Profile never share a store, and appearance can never leak into
-generation or the cache key."""
+The whole Interface Preference (Mode + Keep Screen Awake) is read and upserted as
+one value (ADR-0055) rather than a method pair per facet. The physical
+``appearance_*`` name stays as an incidental legacy detail even though the concept
+generalised past *appearance* (ADR-0055). Kept a distinct seam from the Profile
+repository (ADR-0047) so the Interface Preference and the Fitness Profile never
+share a store, and a UI preference can never leak into generation or the cache
+key."""
 
 from __future__ import annotations
 
@@ -17,19 +21,26 @@ from typing import Protocol
 from sqlmodel import Session, select
 
 from app.db.models import AppearancePreference
-from app.domain.appearance import DEFAULT_MODE, Mode
+from app.domain.appearance import (
+    DEFAULT_INTERFACE_PREFERENCE,
+    InterfacePreference,
+    Mode,
+)
 
 
 class AppearancePreferenceRepository(Protocol):
-    def get_mode(self, clerk_user_id: str) -> Mode:
-        """Return the user's chosen Mode, or the default Dark when no row exists.
+    def get_preference(self, clerk_user_id: str) -> InterfacePreference:
+        """Return the user's whole Interface Preference, or the shipped defaults.
 
         A get-or-default read: absence of a record is not an error, it is the
-        shipped default, so an existing user who never chose is served Dark."""
+        shipped default (Dark + Keep-Screen-Awake on), so an existing user who
+        never chose is served ``DEFAULT_INTERFACE_PREFERENCE``."""
         ...
 
-    def set_mode(self, clerk_user_id: str, mode: Mode) -> Mode:
-        """Upsert the user's Mode and return it (creating the row if absent)."""
+    def set_preference(
+        self, clerk_user_id: str, preference: InterfacePreference
+    ) -> InterfacePreference:
+        """Upsert the user's whole Interface Preference and return it stored."""
         ...
 
 
@@ -44,35 +55,46 @@ class SqlAppearancePreferenceRepository:
             )
         ).first()
 
-    def get_mode(self, clerk_user_id: str) -> Mode:
+    def get_preference(self, clerk_user_id: str) -> InterfacePreference:
         existing = self._find(clerk_user_id)
         if existing is None:
-            return DEFAULT_MODE
-        return Mode(existing.mode)
+            return DEFAULT_INTERFACE_PREFERENCE
+        return InterfacePreference(
+            mode=Mode(existing.mode),
+            keep_screen_awake=existing.keep_screen_awake,
+        )
 
-    def set_mode(self, clerk_user_id: str, mode: Mode) -> Mode:
-        preference = self._find(clerk_user_id)
-        if preference is None:
-            preference = AppearancePreference(clerk_user_id=clerk_user_id)
-            self._session.add(preference)
+    def set_preference(
+        self, clerk_user_id: str, preference: InterfacePreference
+    ) -> InterfacePreference:
+        row = self._find(clerk_user_id)
+        if row is None:
+            row = AppearancePreference(clerk_user_id=clerk_user_id)
+            self._session.add(row)
 
-        preference.mode = mode.value
-        self._session.add(preference)
+        row.mode = preference.mode.value
+        row.keep_screen_awake = preference.keep_screen_awake
+        self._session.add(row)
         self._session.commit()
-        self._session.refresh(preference)
-        return Mode(preference.mode)
+        self._session.refresh(row)
+        return InterfacePreference(
+            mode=Mode(row.mode),
+            keep_screen_awake=row.keep_screen_awake,
+        )
 
 
 class InMemoryAppearancePreferenceRepository:
     def __init__(self) -> None:
-        self._by_user: dict[str, Mode] = {}
+        self._by_user: dict[str, InterfacePreference] = {}
 
-    def get_mode(self, clerk_user_id: str) -> Mode:
-        return self._by_user.get(clerk_user_id, DEFAULT_MODE)
+    def get_preference(self, clerk_user_id: str) -> InterfacePreference:
+        return self._by_user.get(clerk_user_id, DEFAULT_INTERFACE_PREFERENCE)
 
-    def set_mode(self, clerk_user_id: str, mode: Mode) -> Mode:
-        self._by_user[clerk_user_id] = mode
-        return mode
+    def set_preference(
+        self, clerk_user_id: str, preference: InterfacePreference
+    ) -> InterfacePreference:
+        self._by_user[clerk_user_id] = preference
+        return preference
 
 
 __all__ = [

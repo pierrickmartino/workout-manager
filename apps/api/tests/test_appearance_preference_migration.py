@@ -21,6 +21,8 @@ from app.config import get_settings
 API_ROOT = Path(__file__).resolve().parents[1]
 BEFORE_APPEARANCE = "0024_exercise_image"
 AFTER_APPEARANCE = "0025_appearance_preference"
+BEFORE_KEEP_AWAKE = "0028_pin_rep_target"
+AFTER_KEEP_AWAKE = "0029_keep_screen_awake"
 
 
 @pytest.fixture()
@@ -44,6 +46,14 @@ def _table_names(url: str) -> set[str]:
     engine = create_engine(url)
     try:
         return set(inspect(engine).get_table_names())
+    finally:
+        engine.dispose()
+
+
+def _column_names(url: str, table: str) -> set[str]:
+    engine = create_engine(url)
+    try:
+        return {col["name"] for col in inspect(engine).get_columns(table)}
     finally:
         engine.dispose()
 
@@ -95,3 +105,63 @@ def test_downgrade_drops_the_appearance_table(sqlite_url):
     tables = _table_names(sqlite_url)
     assert "appearance_preference" not in tables
     assert "profile" in tables
+
+
+def test_keep_screen_awake_column_backfills_existing_rows_to_on(sqlite_url):
+    # Arrange — schema at 0028, before Keep Screen Awake, with an existing user's
+    # Mode-only Appearance Preference row already stored
+    config = _alembic_config()
+    command.upgrade(config, BEFORE_KEEP_AWAKE)
+    assert "keep_screen_awake" not in _column_names(
+        sqlite_url, "appearance_preference"
+    )
+    engine = create_engine(sqlite_url)
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO appearance_preference (clerk_user_id, mode) "
+                    "VALUES ('user_existing', 'light')"
+                )
+            )
+    finally:
+        engine.dispose()
+
+    # Act — add the behavioural facet (ADR-0055)
+    command.upgrade(config, AFTER_KEEP_AWAKE)
+
+    # Assert — the column arrives and the returning user's row is backfilled to the
+    # on-by-default value, their Mode choice undisturbed (ADR-0047)
+    assert "keep_screen_awake" in _column_names(
+        sqlite_url, "appearance_preference"
+    )
+    engine = create_engine(sqlite_url)
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT mode, keep_screen_awake FROM appearance_preference "
+                    "WHERE clerk_user_id = 'user_existing'"
+                )
+            ).one()
+    finally:
+        engine.dispose()
+    assert row.mode == "light"
+    assert bool(row.keep_screen_awake) is True
+
+
+def test_downgrade_drops_the_keep_screen_awake_column(sqlite_url):
+    # Arrange — fully migrated with the new column present
+    config = _alembic_config()
+    command.upgrade(config, AFTER_KEEP_AWAKE)
+    assert "keep_screen_awake" in _column_names(
+        sqlite_url, "appearance_preference"
+    )
+
+    # Act — reverse just this migration
+    command.downgrade(config, BEFORE_KEEP_AWAKE)
+
+    # Assert — the column is gone but the Mode column (and the table) remain
+    columns = _column_names(sqlite_url, "appearance_preference")
+    assert "keep_screen_awake" not in columns
+    assert "mode" in columns

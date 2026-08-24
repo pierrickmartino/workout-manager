@@ -22,7 +22,7 @@ from sqlalchemy import Column
 from sqlalchemy.types import JSON
 from sqlmodel import Field, SQLModel
 
-from app.domain.appearance import DEFAULT_MODE
+from app.domain.appearance import DEFAULT_KEEP_SCREEN_AWAKE, DEFAULT_MODE
 
 
 def _utcnow() -> datetime:
@@ -66,20 +66,24 @@ class Profile(SQLModel, table=True):
 
 
 class AppearancePreference(SQLModel, table=True):
-    """One user's Appearance Preference: their chosen Mode, keyed by Clerk user id.
+    """One user's Interface Preference: their Mode + Keep Screen Awake, keyed by user.
 
-    A deliberately *separate* store from ``Profile`` (ADR-0047) so appearance
-    never enters generation or the cache key — one row per user, holding only the
-    Mode. ``mode`` is the raw value of ``app.domain.appearance.Mode``
-    (``light`` | ``dark`` | ``system``); absence of a row means the default Dark,
-    so this table only ever holds a *deliberate* choice and existing users are
-    never silently light-flipped on deploy."""
+    A deliberately *separate* store from ``Profile`` (ADR-0047) so an Interface
+    Preference never enters generation or the cache key — one row per user. The
+    physical ``appearance_*`` name stays as an incidental legacy detail even though
+    the concept generalised to an *Interface Preference* (ADR-0055): a rename buys
+    nothing functional. ``mode`` is the raw value of ``app.domain.appearance.Mode``
+    (``light`` | ``dark`` | ``system``); ``keep_screen_awake`` is the behavioural
+    facet. Absence of a row means the shipped defaults (Dark + Keep-Screen-Awake
+    on), so this table only ever holds a *deliberate* choice and existing users are
+    never disturbed on deploy."""
 
     __tablename__ = "appearance_preference"
 
     id: int | None = Field(default=None, primary_key=True)
     clerk_user_id: str = Field(index=True, unique=True)
     mode: str = Field(default=DEFAULT_MODE.value)
+    keep_screen_awake: bool = Field(default=DEFAULT_KEEP_SCREEN_AWAKE)
 
 
 class AppSetting(SQLModel, table=True):
