@@ -111,3 +111,58 @@ test("no cells at all yields an empty grid rather than throwing", () => {
   assert.deepEqual(grid.columns, []);
   assert.equal(grid.legend.length, 5);
 });
+
+// Build a single-cell payload so the per-cell label is easy to assert in isolation.
+function oneCell(overrides: Partial<HeatmapCell>): TrainingHeatmap {
+  const cell: HeatmapCell = {
+    date: "2026-03-04",
+    column: 0,
+    row: 0,
+    session_count: 0,
+    set_count: 0,
+    level: 0,
+    ...overrides,
+  };
+  return { cells: [cell], scale: SCALE };
+}
+
+test("a populated cell reads date · session count · set count", () => {
+  // Arrange / Act
+  const grid = toHeatmapGrid(oneCell({ session_count: 2, set_count: 14, level: 3 }));
+
+  // Assert — the exact fact wording, plural sessions and sets
+  assert.equal(grid.columns[0].cells[0].label, "Mar 4 · 2 sessions · 14 sets");
+});
+
+test("an empty cell reads a neutral 'no training logged' fact", () => {
+  // Arrange / Act — no session, no set
+  const grid = toHeatmapGrid(oneCell({ session_count: 0, set_count: 0, level: 0 }));
+
+  // Assert — plainly neutral, never "missed" or a streak phrase
+  assert.equal(grid.columns[0].cells[0].label, "Mar 4 · no training logged");
+});
+
+test("a single session and single set are labelled in the singular", () => {
+  // Arrange / Act
+  const grid = toHeatmapGrid(oneCell({ session_count: 1, set_count: 1, level: 1 }));
+
+  // Assert — "1 session", "1 set", not "1 sessions"/"1 sets"
+  assert.equal(grid.columns[0].cells[0].label, "Mar 4 · 1 session · 1 set");
+});
+
+test("counts above one are labelled in the plural", () => {
+  // Arrange / Act
+  const grid = toHeatmapGrid(oneCell({ session_count: 3, set_count: 21, level: 4 }));
+
+  // Assert
+  assert.equal(grid.columns[0].cells[0].label, "Mar 4 · 3 sessions · 21 sets");
+});
+
+test("the cell label never carries a streak / 'in a row' phrase", () => {
+  // Arrange / Act — the descriptive-only boundary (ADR-0054) at the label layer
+  const grid = toHeatmapGrid(oneCell({ session_count: 2, set_count: 8, level: 2 }));
+
+  // Assert
+  const { label } = grid.columns[0].cells[0];
+  assert.doesNotMatch(label, /streak|in a row|day(s)? in a row|chain|missed/i);
+});

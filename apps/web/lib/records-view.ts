@@ -1,5 +1,6 @@
 import type { PersonalRecordEntry } from "./analytics-types";
 import { formatRecordAchievement } from "./record-achievement.ts";
+import { formatShortDate } from "./date-format.ts";
 
 // A Personal Record prepared for the Recent Records feed: the Exercise name, its
 // achievement headline, the gain-over-prior-PR, and a short human date. `estimate` is
@@ -12,19 +13,6 @@ export interface RecordRow {
   estimate: string;
   gain: string;
   date: string;
-}
-
-const MONTHS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
-// Format an ISO `yyyy-mm-dd` date as a short "Mon D" label. Parsed from the string
-// parts so it is timezone-safe — never shifted a day by a Date constructor's local
-// offset — and deterministic across environments.
-function formatRecordDate(iso: string): string {
-  const [, month, day] = iso.split("-").map(Number);
-  return `${MONTHS[month - 1]} ${day}`;
 }
 
 // The "See all records" teaser that links the account-wide Recent Records feed (the
@@ -55,6 +43,6 @@ export function toRecordRows(records: readonly PersonalRecordEntry[]): RecordRow
     exercise: record.exercise,
     estimate: formatRecordAchievement(record),
     gain: record.gain > 0 ? `+${Math.round(record.gain)} kg` : "First PR",
-    date: formatRecordDate(record.date),
+    date: formatShortDate(record.date),
   }));
 }
