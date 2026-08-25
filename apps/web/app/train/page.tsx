@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LibraryBig } from "lucide-react";
+import { LibraryBig, ListChecks } from "lucide-react";
 
 import { GenerateTrainingLaunchpad } from "@/components/pulse/generate-training-launchpad";
 import { PageHeader } from "@/components/pulse/page-header";
@@ -23,6 +23,22 @@ export default function TrainPage() {
         eyebrow="TRAIN // START SOMETHING NEW"
         showLogPastWorkout
       />
+
+      {/* The user's own saved standalone Sessions — reopen one to run again (CONTEXT: My
+          Sessions, issue #397). Distinct from generation (starting something new) and from
+          Browse the Catalog (movement discovery). */}
+      <div className="flex flex-col gap-2">
+        <span className="label-mono text-[11px] text-text-muted">
+          TRAIN // MY LIBRARY
+        </span>
+        <Link
+          href="/sessions"
+          className={buttonVariants({ variant: "secondary", className: "w-full" })}
+        >
+          <ListChecks className="h-4 w-4" />
+          My sessions
+        </Link>
+      </div>
 
       {/* Discovery, distinct from generation: browse the whole shared Catalog to find
           movements, without starting a plan (ADR-0042). */}
