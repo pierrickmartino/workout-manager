@@ -81,6 +81,14 @@ export interface WorkoutSession {
   // Sessions. Optional because the live hydration read omits it (mirror of `provenance`);
   // the plain Session read always carries it, so the detail page reads it there.
   is_protocol_member?: boolean;
+  // The user-given Session Name (issue #394): the raw stored value, `null`/absent when the
+  // Session is unnamed (so the rename editor opens empty). The plain Session read carries it;
+  // the live hydration read omits it, so it is optional here (mirror of `provenance`).
+  name?: string | null;
+  // The never-blank display label the server resolves from the shared fallback — the Session
+  // Name when set, else `training_type · date`. The `sessionName` view-model reads it as the
+  // fallback so an unnamed Session is never rendered blank.
+  display_name?: string;
   prescriptions: ExercisePrescription[];
 }
 

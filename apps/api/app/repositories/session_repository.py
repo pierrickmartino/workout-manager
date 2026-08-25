@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from typing import Protocol
 
 from sqlmodel import Session, select
@@ -104,6 +105,17 @@ class SessionView:
     duration_minutes: int
     prescriptions: list[PrescriptionView]
     has_been_regenerated: bool = False
+    # The user-given Session Name (issue #394), or ``None`` for a born-unnamed Session.
+    # Read paths resolve a never-blank display label from it through
+    # ``app.domain.session_naming.session_label`` (name → fallback ``training_type · date``).
+    name: str | None = None
+    # When the Session was created — the date component of the derived fallback label.
+    # Defaulted (tz-aware, matching ``models._utcnow``) so pre-existing SessionView
+    # constructions (e.g. Live-serialization tests) stay valid; every repository read
+    # populates it from the stored row.
+    created_at: datetime = field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
     # Session Provenance (ADR-0040): ``ai_generated`` | ``user_authored``. Defaults to
     # ``ai_generated`` — every path that builds a Session today is AI. See
     # ``app.domain.session_provenance.SessionProvenance``.
@@ -132,13 +144,29 @@ class SessionRepository(Protocol):
         ADR-0043).
 
         Carries the source's training parameters, Session Provenance, ``trace_id``
-        lineage, and name (``title``) verbatim, plus every Exercise Prescription with
+        lineage, the Session ``name`` and Protocol ``title`` verbatim, plus every
+        Exercise Prescription with
         its sets/reps/rest/tempo/Load and Superset grouping — but **no Logged Sessions**
         and **no Protocol position** (``protocol_id``/week/day/position are dropped), so
         the copy stands alone. The copy is a distinct Session with a **fresh regeneration
         budget** (``has_been_regenerated`` starts ``False``). The source is read, never
         mutated. Returns the new Session, or ``None`` if the source is missing or owned
         by another user — Duplicate only ever copies the owner's own plan."""
+        ...
+
+    def set_name(
+        self, session_id: int, clerk_user_id: str, name: str | None
+    ) -> SessionView | None:
+        """Set, edit, or clear the owner's Session Name (rename, issue #394).
+
+        Writes the user-given **Session Name** onto the owner's own standalone Session;
+        ``None`` clears it back to born-unnamed, so the read falls back to the derived
+        ``training_type · date`` label. Touches the plan only — no Logged Session is
+        rewritten or reordered — and nothing else on the Session (prescriptions,
+        Provenance, regeneration guard) is changed. Returns the updated Session, or
+        ``None`` if it is missing or owned by another user, so a non-owner can never
+        rename another user's plan. Caller normalizes the incoming name (trim /
+        empty→``None``); the standalone-only guard lives in the route."""
         ...
 
     def trace_id(self, session_id: int, clerk_user_id: str) -> str | None:
@@ -396,6 +424,8 @@ class SqlSessionRepository:
             has_been_regenerated=workout.has_been_regenerated,
             provenance=workout.provenance,
             is_protocol_member=workout.protocol_id is not None,
+            name=workout.name,
+            created_at=workout.created_at,
         )
 
     def _add_prescriptions(
@@ -448,6 +478,7 @@ class SqlSessionRepository:
             provenance=source.provenance,
             trace_id=source.trace_id,
             title=source.title,
+            name=source.name,
         )
         self._session.add(copy)
         self._session.commit()
@@ -456,6 +487,19 @@ class SqlSessionRepository:
         self._add_prescriptions(copy.id, [_draft_from(p) for p in prescriptions])
         self._session.commit()
         return self._view(copy)
+
+    def set_name(
+        self, session_id: int, clerk_user_id: str, name: str | None
+    ) -> SessionView | None:
+        workout = self._session.get(WorkoutSession, session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return None
+
+        workout.name = name
+        self._session.add(workout)
+        self._session.commit()
+        self._session.refresh(workout)
+        return self._view(workout)
 
     def trace_id(self, session_id: int, clerk_user_id: str) -> str | None:
         workout = self._session.get(WorkoutSession, session_id)
@@ -641,6 +685,8 @@ class InMemorySessionRepository:
             has_been_regenerated=workout.has_been_regenerated,
             provenance=workout.provenance,
             is_protocol_member=workout.protocol_id is not None,
+            name=workout.name,
+            created_at=workout.created_at,
         )
 
     def _materialize(
@@ -705,6 +751,7 @@ class InMemorySessionRepository:
             provenance=source.provenance,
             trace_id=source.trace_id,
             title=source.title,
+            name=source.name,
         )
         self._next_id += 1
         self._sessions[copy.id] = copy
@@ -712,6 +759,16 @@ class InMemorySessionRepository:
             copy.id, [_draft_from(p) for p in prescriptions]
         )
         return self._view(copy)
+
+    def set_name(
+        self, session_id: int, clerk_user_id: str, name: str | None
+    ) -> SessionView | None:
+        workout = self._sessions.get(session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return None
+
+        workout.name = name
+        return self._view(workout)
 
     def trace_id(self, session_id: int, clerk_user_id: str) -> str | None:
         workout = self._sessions.get(session_id)

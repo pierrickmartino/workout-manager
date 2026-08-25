@@ -5,6 +5,7 @@ import { ArrowRight, ClipboardCheck, Play } from "lucide-react";
 
 import { SubstituteButton } from "@/components/SubstituteButton";
 import { DuplicateButton } from "@/components/DuplicateButton";
+import { RenameSessionControl } from "@/components/RenameSessionControl";
 import { AddExerciseButton } from "@/components/AddExerciseButton";
 import { RemoveExerciseButton } from "@/components/RemoveExerciseButton";
 import { HarderVariationOffer } from "@/components/HarderVariationOffer";
@@ -23,6 +24,7 @@ import { displayReps, pinControlModel, type PinControlModel } from "@/lib/pin-vi
 import { toTempoView, type TempoView } from "@/lib/tempo-view";
 import { supersetLayout, type SupersetSlot } from "@/lib/supersets";
 import { removeAffordances } from "@/lib/remove-prescription";
+import { sessionNameView } from "@/lib/session-name";
 import { appendFrom } from "@/lib/back-target";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -56,6 +58,11 @@ export default async function SessionPage({
   }
 
   const session = envelope.data;
+
+  // The Session Name view (issue #394): the header shows the user-given name when set, else
+  // the derived `training_type · date` fallback so an unnamed Session is never blank. The
+  // rename control is withheld on a Protocol member below (Session Name is standalone-only).
+  const nameView = sessionNameView(session);
 
   // The per-prescription Superset layout (ADR-0023): a saved Superset (from a
   // Hand-Authored Session or an AI plan) renders as a lettered, round-rest-bearing group
@@ -91,9 +98,28 @@ export default async function SessionPage({
     <section className="flex flex-col gap-7">
       <PageHeader
         overline="PULSE // SESSION"
-        title={<span className="capitalize">{session.training_type}</span>}
-        action={<Badge variant="cyan">{session.duration_minutes} MIN</Badge>}
+        title={nameView.displayName}
+        action={
+          <div className="flex items-center gap-2">
+            <Badge variant="magenta" className="capitalize">
+              {session.training_type}
+            </Badge>
+            <Badge variant="cyan">{session.duration_minutes} MIN</Badge>
+          </div>
+        }
       />
+
+      {/* Rename (issue #394): name, rename, or clear the Session Name on a standalone Session.
+          Withheld on a Protocol member — a Session inside a Protocol carries a Week/Day `title`,
+          a different concept, and renaming it is refused server-side (mirrors Duplicate/Insert). */}
+      {session.is_protocol_member ? null : (
+        <RenameSessionControl
+          sessionId={session.id}
+          displayName={nameView.displayName}
+          isUserNamed={nameView.isUserNamed}
+          editValue={nameView.editValue}
+        />
+      )}
 
       <div className="flex flex-col gap-4">
         <SectionHeader meta={`${session.prescriptions.length} EXERCISES`}>
