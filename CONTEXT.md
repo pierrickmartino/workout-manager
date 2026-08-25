@@ -190,6 +190,36 @@ _Avoid_: Redo, re-run (bare), Duplicate (that forks a copy), Clone, Adopt
 A profile condition that demands extra caution — injury, rehabilitation, postpartum, or a flagged medical limitation. A user with any Sensitive Constraint is never served a shared/cached Generated Protocol; the system always generates fresh so postnatal/rehab caution can be applied.
 _Avoid_: Restriction, limitation (generic)
 
+## Session Library & Sharing
+
+**My Sessions**:
+The user's personal library of their **own standalone Sessions** — the destination, reached from **Train**, where saved workouts are **searched** (case-insensitive over **Session Name** and **Training Type** in v1), filtered by **Favorite**, and reopened to run again. A read surface over the user's owned standalone Sessions only — never Protocol-member Sessions or Protocols — and it lists *plans*, never records. Distinct from **Browse the Catalog** (movement discovery, not the user's plans) and from **History** (the record side).
+_Avoid_: Library (that is the Catalog pick-mode widget), My workouts, Saved workouts, Session list
+
+**Session Name**:
+A **user-given name** on a standalone Session, editable at any time (the act the user calls "rename"). **Nullable and never backfilled**: a generated or adopted Session is born unnamed and read paths fall back to a derived label (Training Type + date), the same pattern as a Protocol's name. Touches the *plan* only — renaming never reaches a Logged Session — and is carried **verbatim** across **Duplicate** and **Redeem**, so two identically named Sessions may coexist (identity is by id, not name).
+_Avoid_: Title (that is the internal Protocol-member label), label, caption
+
+**Favorite**:
+A **stored, per-user** marker flagging one of a user's own standalone Sessions as a favourite, used to **filter My Sessions**. A user *preference* — the same species as a **Pinned Target** or an **Interface Preference**, which the domain deliberately stores — **not** a read-time projection: the no-stored-ledger rule (ADR-0018) governs *derived* facts (XP, Streak, PRs), never user choices. Per-user and **per-copy**: never carried across **Duplicate** or **Redeem**, so a redeemed copy starts un-favorited for its new owner.
+_Avoid_: Star, bookmark, like, saved (bare), pin (that is Pinned Target)
+
+**Author**:
+The **human who first created** a Session's plan — surfaced on the Session as its author ("by <name>"). A distinct axis from both the **Owner** (the user who currently holds the row, `clerk_user_id`, which **transfers on Redeem**) and **Session Provenance** (`ai_generated` vs `user_authored` — *how* the plan was made, not *who* made it). **Immutable origin**: preserved across **Duplicate** and **Redeem** and through any re-share chain, so even a heavily edited copy still credits its original creator — the same non-re-attribution as Provenance and `trace_id` lineage. Backfills to the owner for pre-existing rows; a missing display name falls back to a generic label.
+_Avoid_: Owner (that is the current holder), Creator (loosely), Operator (collides with Operator Level), Provenance (that is the AI-vs-human axis)
+
+**Share**:
+The act of a user publishing a **Share Link** to one of their own **standalone Sessions** so another user can take a copy. The **first act in the domain that crosses the user-ownership boundary**, and it does so **by copy, never by reference** (ADR-0057): the sharer hands out a Share Link and the recipient's **Redeem** deep-copies the plan into their own library — the sharer's Session and the recipient's copy are thereafter **independent**, honouring "mutating a plan never affects other users". Offered on standalone Sessions only. Distinct from **Adopt** (copies an immutable *Generated* artifact) and **Duplicate** (copies the user's *own* Session, for themselves).
+_Avoid_: Send, Publish (that is making a Skin the Active Skin), Invite, Collaborate, Gift
+
+**Share Link**:
+The **revocable, reusable** token a **Share** produces. Anyone holding it may **Redeem** it — each Redeem yielding **one fresh copy** — until the sharer **revokes** it; revocation stops *future* Redeems but **cannot un-share** copies already taken (they are independent, by the copy model). **No auto-expiry in v1.** The copy is taken from the source Session's state at **redeem time**, so edits the sharer makes before a given Redeem flow through to that copy.
+_Avoid_: Invite link, Share code (it is a link), Token (bare), Deep link
+
+**Redeem**:
+The recipient's act of turning a **Share Link** into a **new standalone Session they own** — the cross-user cousin of **Duplicate**. Deep-copies the source's Exercise Prescriptions, Supersets, and per-set sets/reps/rest/tempo/Load faithfully, carries **Session Provenance** and `trace_id` **lineage** forward unchanged (ADR-0043 semantics) and the **Session Name** verbatim, and **preserves the Author** as the original creator; the copy carries **no Logged Sessions** and **no Favorite** (both are per-owner). The new owner may then rename, favourite, edit, log, and **re-share** their copy freely. A user with a **Sensitive Constraint** may still Redeem — receiving a plan marked *built for another user and not tailored to your constraints*, never auto-promoted into generation or a Current Protocol (ADR-0058). Distinct from **Adopt** (Generated artifact), **Duplicate** (own Session), and **Capture** (record→plan).
+_Avoid_: Accept, Import, Claim, Adopt (that is the Generated-artifact copy), Duplicate (that is the own-Session copy)
+
 ## Readiness
 
 **Readiness**:
