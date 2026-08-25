@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Protocol
 
 from sqlmodel import Session, select
@@ -110,9 +110,12 @@ class SessionView:
     # ``app.domain.session_naming.session_label`` (name → fallback ``training_type · date``).
     name: str | None = None
     # When the Session was created — the date component of the derived fallback label.
-    # Defaulted so pre-existing SessionView constructions (e.g. Live-serialization tests)
-    # stay valid; every repository read populates it from the stored row.
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    # Defaulted (tz-aware, matching ``models._utcnow``) so pre-existing SessionView
+    # constructions (e.g. Live-serialization tests) stay valid; every repository read
+    # populates it from the stored row.
+    created_at: datetime = field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
     # Session Provenance (ADR-0040): ``ai_generated`` | ``user_authored``. Defaults to
     # ``ai_generated`` — every path that builds a Session today is AI. See
     # ``app.domain.session_provenance.SessionProvenance``.

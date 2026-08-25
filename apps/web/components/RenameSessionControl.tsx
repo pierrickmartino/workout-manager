@@ -82,14 +82,21 @@ export function RenameSessionControl({
           {pending ? "Saving…" : "Save name"}
         </Button>
         {/* Clearing the field and saving removes the name; this shortcut does the same in
-            one tap when a name is already set, so the read falls back to the derived label. */}
+            one tap when a name is already set, so the read falls back to the derived label.
+            The submitted FormData is read from the live DOM, so empty the field's DOM value
+            synchronously here — a `setName("")` alone wouldn't have re-rendered the controlled
+            input before the native submit serializes it. */}
         {isUserNamed ? (
           <Button
             type="submit"
             variant="secondary"
             size="sm"
             disabled={pending}
-            onClick={() => setName("")}
+            onClick={(event) => {
+              const field = event.currentTarget.form?.elements.namedItem("name");
+              if (field instanceof HTMLInputElement) field.value = "";
+              setName("");
+            }}
           >
             Clear name
           </Button>
