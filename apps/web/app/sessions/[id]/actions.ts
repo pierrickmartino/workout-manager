@@ -5,11 +5,13 @@ import { redirect } from "next/navigation";
 
 import {
   duplicateSession,
+  favoriteSession,
   insertPrescription,
   pinPrescription,
   removePrescription,
   renameSession,
   substitutePrescription,
+  unfavoriteSession,
   unpinPrescription,
 } from "@/lib/sessions";
 import { toDuplicateResult } from "@/lib/duplicate-session";
@@ -38,6 +40,37 @@ export interface PinFormState {
 
 export interface RenameFormState {
   error: string | null;
+}
+
+export interface FavoriteFormState {
+  error: string | null;
+}
+
+// Mark or unmark the user's own standalone Session as a Favorite (CONTEXT: Favorite, issue
+// #396). A thin transport-and-revalidate shell: the hidden `favorite` field carries the desired
+// next state ("true" to mark, anything else to unmark), so the toggle sends the opposite of the
+// current state. On success the Session page is revalidated so the toggle reflects the new marker
+// in place; on failure — a non-owned Session (404) or a Protocol member (409, Favorite is
+// standalone-only) — the server's message is returned for the control to surface, nothing changed.
+export async function submitFavorite(
+  _prevState: FavoriteFormState,
+  form: FormData,
+): Promise<FavoriteFormState> {
+  const sessionId = Number(form.get("session_id"));
+  if (!Number.isInteger(sessionId)) {
+    return { error: "Could not determine which session to favorite." };
+  }
+
+  const favorite = form.get("favorite") === "true";
+  const result = favorite
+    ? await favoriteSession(sessionId)
+    : await unfavoriteSession(sessionId);
+  if (!result.success || !result.data) {
+    return { error: result.error ?? "Could not update this favorite." };
+  }
+
+  revalidatePath(`/sessions/${sessionId}`);
+  return { error: null };
 }
 
 // Set, edit, or clear the user-given Session Name on the user's own standalone Session

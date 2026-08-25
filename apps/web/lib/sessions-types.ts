@@ -94,6 +94,12 @@ export interface WorkoutSession {
   // Session read always carries it; the live hydration read omits it, so it is optional here
   // (mirror of `provenance`). The `sessionAuthorView` mapper applies the generic fallback.
   author?: SessionAuthor;
+  // Favorite (CONTEXT: Favorite, issue #396): the owner's stored, per-user, per-copy marker,
+  // surfaced on the standalone Session read as a toggle. `true`/`false` on a standalone Session;
+  // `null` when withheld on a Protocol member (Favorite is standalone-only), and absent on read
+  // paths that omit it (live hydration). The `sessionFavoriteView` mapper owns the "show the
+  // toggle only when the marker is a boolean" decision so the page stays thin.
+  is_favorite?: boolean | null;
   prescriptions: ExercisePrescription[];
 }
 

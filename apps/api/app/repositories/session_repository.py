@@ -19,6 +19,11 @@ from sqlmodel import Session, select
 from app.db.models import Exercise, ExercisePrescription, WorkoutSession
 from app.domain.superset import MIN_SUPERSET_MEMBERS
 from app.repositories.exercise_repository import ExerciseRepository
+from app.repositories.favorite_repository import (
+    FavoriteRepository,
+    InMemoryFavoriteRepository,
+    SqlFavoriteRepository,
+)
 from app.repositories.profile_repository import (
     ProfileRepository,
     SqlProfileRepository,
@@ -139,6 +144,14 @@ class SessionView:
     # no value there (Q2); Duplicate stays on standalone Sessions and the endpoint is
     # unchanged. A read-time fact off the linkage, never a stored flag.
     is_protocol_member: bool = False
+    # The viewing owner's Favorite marker on this Session (CONTEXT: Favorite, issue #396) —
+    # a **stored, per-user, per-copy** preference resolved through the ``FavoriteRepository``
+    # seam for the owner of this read (every ``_view`` is built for the owner). ``False`` for
+    # an un-favorited Session, and for the many reads whose repository carries no favorite
+    # store. A born-absent marker: a duplicated/redeemed copy has no row and reads ``False``.
+    # Defaulted so pre-existing SessionView constructions (e.g. Live-serialization tests) stay
+    # valid; the route withholds it on a Protocol member (Favorite is standalone-only).
+    is_favorite: bool = False
 
 
 class SessionRepository(Protocol):
@@ -180,6 +193,23 @@ class SessionRepository(Protocol):
         ``None`` if it is missing or owned by another user, so a non-owner can never
         rename another user's plan. Caller normalizes the incoming name (trim /
         empty→``None``); the standalone-only guard lives in the route."""
+        ...
+
+    def set_favorite(
+        self, session_id: int, clerk_user_id: str, favorite: bool
+    ) -> SessionView | None:
+        """Mark or unmark the owner's standalone Session as a Favorite (CONTEXT: Favorite,
+        issue #396).
+
+        Writes the user's **stored, per-user, per-copy** Favorite marker on their own Session —
+        ``favorite=True`` marks it, ``favorite=False`` unmarks it, both idempotent. The marker
+        is a *preference*, never a derived projection (ADR-0018 governs derived facts): it
+        touches nothing on the Session itself (prescriptions, Provenance, Author, regeneration
+        guard) and no Logged Session. Returns the updated Session — its ``is_favorite`` now
+        reflecting the write — or ``None`` if it is missing or owned by another user, so a
+        non-owner can never favorite another user's plan (their view is unaffected). The
+        marker is per (user, session): a duplicated/redeemed copy has no row and stays
+        un-favorited. The standalone-only guard lives in the route."""
         ...
 
     def trace_id(self, session_id: int, clerk_user_id: str) -> str | None:
@@ -436,6 +466,10 @@ class SqlSessionRepository:
         # Author display resolves through the same ProfileRepository seam the in-memory repo
         # uses (CONTEXT: Author, #395), built over this DB session so the read stays one query.
         self._profiles = SqlProfileRepository(session)
+        # The Favorite marker resolves through the FavoriteRepository seam (CONTEXT: Favorite,
+        # #396), built over this same DB session — the owner's ``is_favorite`` for the read and
+        # the write target of ``set_favorite``.
+        self._favorites: FavoriteRepository = SqlFavoriteRepository(session)
 
     def _view(self, workout: WorkoutSession) -> SessionView:
         prescriptions = self._session.exec(
@@ -461,6 +495,11 @@ class SqlSessionRepository:
             author_clerk_user_id=workout.author_clerk_user_id,
             author_display_name=_author_display_name(
                 self._profiles, workout.author_clerk_user_id
+            ),
+            # The owner's Favorite marker (CONTEXT: Favorite, #396). Every ``_view`` is built
+            # for the owner, so the viewer is ``workout.clerk_user_id``.
+            is_favorite=self._favorites.is_favorite(
+                workout.clerk_user_id, workout.id
             ),
         )
 
@@ -541,6 +580,18 @@ class SqlSessionRepository:
         self._session.add(workout)
         self._session.commit()
         self._session.refresh(workout)
+        return self._view(workout)
+
+    def set_favorite(
+        self, session_id: int, clerk_user_id: str, favorite: bool
+    ) -> SessionView | None:
+        workout = self._session.get(WorkoutSession, session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return None
+
+        # The Favorite marker lives in its own store keyed by (user, session), not on the
+        # Session row — so nothing on the Session itself is touched.
+        self._favorites.set_favorite(clerk_user_id, session_id, favorite)
         return self._view(workout)
 
     def trace_id(self, session_id: int, clerk_user_id: str) -> str | None:
@@ -710,6 +761,7 @@ class InMemorySessionRepository:
         self,
         exercises: ExerciseRepository,
         profiles: ProfileRepository | None = None,
+        favorites: FavoriteRepository | None = None,
     ) -> None:
         self._exercises = exercises
         # Optional Profile source used only to resolve the Author's display name for the
@@ -717,6 +769,10 @@ class InMemorySessionRepository:
         # Author, where the display resolves to ``None`` and the serializer's generic
         # fallback stands in; production and the endpoint tests wire the shared profile repo.
         self._profiles = profiles
+        # The Favorite store (CONTEXT: Favorite, #396). Defaults to a private in-memory one so
+        # ``set_favorite`` and the ``is_favorite`` read always work; endpoint tests can pass a
+        # shared instance to assert per-user isolation across two callers.
+        self._favorites: FavoriteRepository = favorites or InMemoryFavoriteRepository()
         self._sessions: dict[int, WorkoutSession] = {}
         self._prescriptions: dict[int, list[ExercisePrescription]] = {}
         self._next_id = 1
@@ -741,6 +797,10 @@ class InMemorySessionRepository:
             author_clerk_user_id=workout.author_clerk_user_id,
             author_display_name=_author_display_name(
                 self._profiles, workout.author_clerk_user_id
+            ),
+            # The owner's Favorite marker (CONTEXT: Favorite, #396) — the viewer is the owner.
+            is_favorite=self._favorites.is_favorite(
+                workout.clerk_user_id, workout.id
             ),
         )
 
@@ -828,6 +888,16 @@ class InMemorySessionRepository:
             return None
 
         workout.name = name
+        return self._view(workout)
+
+    def set_favorite(
+        self, session_id: int, clerk_user_id: str, favorite: bool
+    ) -> SessionView | None:
+        workout = self._sessions.get(session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return None
+
+        self._favorites.set_favorite(clerk_user_id, session_id, favorite)
         return self._view(workout)
 
     def trace_id(self, session_id: int, clerk_user_id: str) -> str | None:

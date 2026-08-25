@@ -6,6 +6,7 @@ import { ArrowRight, ClipboardCheck, Play } from "lucide-react";
 import { SubstituteButton } from "@/components/SubstituteButton";
 import { DuplicateButton } from "@/components/DuplicateButton";
 import { RenameSessionControl } from "@/components/RenameSessionControl";
+import { FavoriteSessionControl } from "@/components/FavoriteSessionControl";
 import { AddExerciseButton } from "@/components/AddExerciseButton";
 import { RemoveExerciseButton } from "@/components/RemoveExerciseButton";
 import { HarderVariationOffer } from "@/components/HarderVariationOffer";
@@ -26,6 +27,7 @@ import { supersetLayout, type SupersetSlot } from "@/lib/supersets";
 import { removeAffordances } from "@/lib/remove-prescription";
 import { sessionNameView } from "@/lib/session-name";
 import { sessionAuthorView } from "@/lib/session-author";
+import { sessionFavoriteView } from "@/lib/session-favorite";
 import { appendFrom } from "@/lib/back-target";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -69,6 +71,12 @@ export default async function SessionPage({
   // created this plan. Rendered under the title as quiet secondary text — deliberately distinct
   // from the per-movement AI-GENERATED Provenance badges (who made it vs. how it was made).
   const authorView = sessionAuthorView(session);
+
+  // The Favorite toggle state (CONTEXT: Favorite, issue #396): whether this standalone Session is
+  // favorited, and whether to show the toggle at all. Withheld on a Protocol member (the server
+  // sends `null`), where `show` is false — Favorite is a standalone-only concept, like the Session
+  // Name — so the control is hidden alongside Rename below.
+  const favoriteView = sessionFavoriteView(session);
 
   // The per-prescription Superset layout (ADR-0023): a saved Superset (from a
   // Hand-Authored Session or an AI plan) renders as a lettered, round-rest-bearing group
@@ -127,17 +135,29 @@ export default async function SessionPage({
         {authorView.byline}
       </p>
 
-      {/* Rename (issue #394): name, rename, or clear the Session Name on a standalone Session.
-          Withheld on a Protocol member — a Session inside a Protocol carries a Week/Day `title`,
-          a different concept, and renaming it is refused server-side (mirrors Duplicate/Insert). */}
-      {session.is_protocol_member ? null : (
-        <RenameSessionControl
-          sessionId={session.id}
-          displayName={nameView.displayName}
-          isUserNamed={nameView.isUserNamed}
-          editValue={nameView.editValue}
-        />
-      )}
+      {/* Standalone-only header controls. Both Rename and Favorite are withheld on a Protocol
+          member — a Session inside a Protocol carries a Week/Day `title` and is server-refused for
+          both (mirrors Duplicate/Insert). */}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Rename (issue #394): name, rename, or clear the Session Name on a standalone Session. */}
+        {session.is_protocol_member ? null : (
+          <RenameSessionControl
+            sessionId={session.id}
+            displayName={nameView.displayName}
+            isUserNamed={nameView.isUserNamed}
+            editValue={nameView.editValue}
+          />
+        )}
+        {/* Favorite (issue #396): mark/unmark this standalone Session as a Favorite — a stored,
+            per-user, per-copy preference used to filter My Sessions. Hidden here on a Protocol
+            member (`favoriteView.show` is false, the server withholds the marker). */}
+        {favoriteView.show ? (
+          <FavoriteSessionControl
+            sessionId={session.id}
+            isFavorite={favoriteView.isFavorite}
+          />
+        ) : null}
+      </div>
 
       <div className="flex flex-col gap-4">
         <SectionHeader meta={`${session.prescriptions.length} EXERCISES`}>

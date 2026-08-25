@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Column
+from sqlalchemy import Column, UniqueConstraint
 from sqlalchemy.types import JSON
 from sqlmodel import Field, SQLModel
 
@@ -329,6 +329,31 @@ class ExercisePrescription(SQLModel, table=True):
     # as before. Only the user's own copy is ever written — never a shared/cached
     # Generated artifact (ADR-0003).
     pinned_reps: str | None = Field(default=None)
+
+
+class SessionFavorite(SQLModel, table=True):
+    """A user's Favorite marker on one standalone Session (CONTEXT: Favorite, issue #396).
+
+    A **stored, per-user, per-copy** preference — the same species as a Pinned Target or an
+    Interface Preference, deliberately stored rather than derived: the no-stored-ledger rule
+    (ADR-0018) governs *derived* facts (XP, Streak, Personal Records), never user *choices*.
+    Modeled as a per-user relationship keyed by ``(clerk_user_id, session_id)`` so the marker
+    is **private to the user** and **never carried across Duplicate/Redeem**: a duplicated or
+    redeemed copy is a new ``session_id`` with no row here, so it simply starts un-favorited
+    for its new owner. Presence of a row means favorited; absence means not. The unique
+    constraint keeps the mark idempotent — a user favorites a Session once, not many times."""
+
+    __tablename__ = "session_favorite"
+    __table_args__ = (
+        UniqueConstraint(
+            "clerk_user_id", "session_id", name="uq_session_favorite_user_session"
+        ),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    clerk_user_id: str = Field(index=True)
+    session_id: int = Field(foreign_key="workout_session.id", index=True)
+    created_at: datetime = Field(default_factory=_utcnow)
 
 
 class LoggedSession(SQLModel, table=True):
