@@ -242,6 +242,15 @@ class WorkoutSession(SQLModel, table=True):
     position: int | None = Field(default=None)
     title: str | None = Field(default=None)
 
+    # The user-given Session Name on a standalone Session (CONTEXT: Session Name, issue
+    # #394) — the act the user calls "rename". Nullable and never backfilled: a generated
+    # or adopted Session is born unnamed and read paths fall back to a derived
+    # ``training_type · date`` label (``app.domain.session_naming.session_label``), the same
+    # pattern as a Protocol's ``name``. Distinct from ``title`` (a Protocol member's
+    # descriptive Week/Day label). Touches the plan only — renaming never reaches a Logged
+    # Session — and is carried verbatim across Duplicate and Redeem.
+    name: str | None = Field(default=None)
+
     # Regeneration is limited to once per Session in v1 (Slice 10): the flag is
     # set when the user keeps some prescriptions and regenerates the rest, and
     # blocks any further regeneration of this Session.

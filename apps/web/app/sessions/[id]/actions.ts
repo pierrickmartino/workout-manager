@@ -8,6 +8,7 @@ import {
   insertPrescription,
   pinPrescription,
   removePrescription,
+  renameSession,
   substitutePrescription,
   unpinPrescription,
 } from "@/lib/sessions";
@@ -33,6 +34,36 @@ export interface RemovePrescriptionFormState {
 
 export interface PinFormState {
   error: string | null;
+}
+
+export interface RenameFormState {
+  error: string | null;
+}
+
+// Set, edit, or clear the user-given Session Name on the user's own standalone Session
+// (rename, issue #394). A thin transport-and-revalidate shell: an empty/whitespace name is
+// sent as `null` to clear it (the read then falls back to the derived label). On success the
+// Session page is revalidated so the header reflects the new name in place; on failure — a
+// non-owned Session (404) or a Protocol member (409, Session Name is standalone-only) — the
+// server's message is returned for the control to surface, and nothing is persisted.
+export async function submitRename(
+  _prevState: RenameFormState,
+  form: FormData,
+): Promise<RenameFormState> {
+  const sessionId = Number(form.get("session_id"));
+  if (!Number.isInteger(sessionId)) {
+    return { error: "Could not determine which session to rename." };
+  }
+
+  const raw = typeof form.get("name") === "string" ? String(form.get("name")) : "";
+  const trimmed = raw.trim();
+  const result = await renameSession(sessionId, trimmed === "" ? null : trimmed);
+  if (!result.success || !result.data) {
+    return { error: result.error ?? "Could not rename this session." };
+  }
+
+  revalidatePath(`/sessions/${sessionId}`);
+  return { error: null };
 }
 
 // Append one hand-authored Exercise Prescription to the user's own standalone Session

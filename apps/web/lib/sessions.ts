@@ -97,6 +97,20 @@ export async function duplicateSession(
   return apiSend(`/api/sessions/${id}/duplicate`, "POST");
 }
 
+// Rename the user's own standalone Session (issue #394): set, edit, or clear its
+// user-given Session Name. `name` is the new name, or `null` to clear it back to
+// born-unnamed (the read then falls back to the derived `training_type · date` label).
+// Renaming touches the plan only — no Logged Session is rewritten (ADR-0001). The backend
+// returns 404 for a non-owner and 409 for a Protocol-member Session (Session Name is
+// standalone-only); on success the updated Session view comes back with its new
+// `name`/`display_name`.
+export async function renameSession(
+  id: number,
+  name: string | null,
+): Promise<Envelope<WorkoutSession>> {
+  return apiSend(`/api/sessions/${id}/name`, "PUT", { name });
+}
+
 // Hydration read for the Live Session screen (issue #90 — F2·S5): the owner's
 // Session with recommended loads progression-adjusted (ADR-0004) and each Exercise
 // carrying its previous performance to beat. The backend returns 404 for

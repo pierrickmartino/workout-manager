@@ -32,6 +32,7 @@ from app.domain.feedback import parse_verdict
 from app.domain.fitness_profile import is_sensitive, resolve_equipment
 from app.domain.load import LoadKind, load_from_input
 from app.domain.quantity import QuantityKind, prescribed_quantity_from_input
+from app.domain.session_naming import session_label
 from app.domain.session_provenance import SessionProvenance
 from app.envelope import error_envelope, success_envelope
 from app.generation.generator import (
@@ -136,6 +137,13 @@ def _serialize(view: SessionView) -> dict:
         "duration_minutes": view.duration_minutes,
         "has_been_regenerated": view.has_been_regenerated,
         "provenance": view.provenance,
+        # The user-given Session Name (issue #394): the raw stored value (``null`` when
+        # unnamed, so the rename editor opens empty) plus the never-blank ``display_name``
+        # the shared fallback resolves — the name, else ``training_type · date``.
+        "name": view.name,
+        "display_name": session_label(
+            view.name, view.training_type, view.created_at
+        ),
         # Withhold the Duplicate control on a Protocol member (ADR-0043 consequence, Q2):
         # the web Session view reads this to hide the button; the endpoint stays reachable.
         "is_protocol_member": view.is_protocol_member,
@@ -493,6 +501,58 @@ def duplicate_session(
     does not own the source, so a non-owner can never copy another user's plan."""
 
     view = sessions.duplicate(session_id, clerk_user_id)
+    if view is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Session not found")
+    return success_envelope(_serialize(view))
+
+
+MAX_SESSION_NAME_LENGTH = 120
+
+
+class RenameSessionRequest(BaseModel):
+    """The new Session Name, or ``null``/blank to clear it back to born-unnamed.
+
+    ``name`` is validated at the boundary (length-capped) and normalized before the
+    write: surrounding whitespace is trimmed and an empty/whitespace-only value becomes
+    ``None`` (the clear), so the stored name is never a blank string that would defeat
+    the derived-label fallback."""
+
+    name: str | None = Field(default=None, max_length=MAX_SESSION_NAME_LENGTH)
+
+    def normalized_name(self) -> str | None:
+        if self.name is None or not self.name.strip():
+            return None
+        return self.name.strip()
+
+
+@router.put("/sessions/{session_id}/name")
+def rename_session(
+    session_id: int,
+    payload: RenameSessionRequest,
+    clerk_user_id: str = Depends(get_current_user),
+    sessions: SessionRepository = Depends(get_session_repository),
+) -> dict:
+    """Set, edit, or clear the owner's Session Name (rename, issue #394).
+
+    The submit target of the standalone Session's rename control. Renaming touches the
+    *plan* only — no Logged Session is rewritten or reordered (ADR-0001) — and an
+    empty/whitespace name clears it, so the read falls back to the derived
+    ``training_type · date`` label. Offered on **standalone Sessions only**: a
+    Protocol-member Session is rejected with ``409`` (its Week/Day ``title`` is a
+    different concept). ``404`` for anyone who does not own the Session, so a non-owner
+    can never rename another user's plan. On success the envelope carries the updated
+    Session with its new ``name``/``display_name``."""
+
+    session_view = sessions.get(session_id, clerk_user_id)
+    if session_view is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Session not found")
+    if session_view.is_protocol_member:
+        raise HTTPException(
+            status_code=HTTP_CONFLICT,
+            detail="A session inside a protocol can't be renamed.",
+        )
+
+    view = sessions.set_name(session_id, clerk_user_id, payload.normalized_name())
     if view is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Session not found")
     return success_envelope(_serialize(view))
