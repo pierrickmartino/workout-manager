@@ -74,6 +74,19 @@ def test_create_persists_a_user_owned_standalone_session(repos):
     assert view.duration_minutes == 45
 
 
+def test_created_session_attributes_its_author_to_the_creator(repos):
+    # A self-authored/generated Session credits the user who created it (CONTEXT: Author,
+    # #395): the Author reference is stamped with the creating user at creation, distinct
+    # from Provenance and equal to the owner until a later Redeem transfers ownership.
+    session_repo, exercises = repos
+
+    # Act
+    view = session_repo.create("user_author", _draft_with_two_prescriptions(exercises))
+
+    # Assert
+    assert view.author_clerk_user_id == "user_author"
+
+
 def test_created_session_carries_its_prescriptions_in_order(repos):
     # Arrange
     session_repo, exercises = repos

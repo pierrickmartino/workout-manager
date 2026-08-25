@@ -25,6 +25,7 @@ import { toTempoView, type TempoView } from "@/lib/tempo-view";
 import { supersetLayout, type SupersetSlot } from "@/lib/supersets";
 import { removeAffordances } from "@/lib/remove-prescription";
 import { sessionNameView } from "@/lib/session-name";
+import { sessionAuthorView } from "@/lib/session-author";
 import { appendFrom } from "@/lib/back-target";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -63,6 +64,11 @@ export default async function SessionPage({
   // the derived `training_type · date` fallback so an unnamed Session is never blank. The
   // rename control is withheld on a Protocol member below (Session Name is standalone-only).
   const nameView = sessionNameView(session);
+
+  // The Author byline (CONTEXT: Author, issue #395): "by <name>", crediting the human who first
+  // created this plan. Rendered under the title as quiet secondary text — deliberately distinct
+  // from the per-movement AI-GENERATED Provenance badges (who made it vs. how it was made).
+  const authorView = sessionAuthorView(session);
 
   // The per-prescription Superset layout (ADR-0023): a saved Superset (from a
   // Hand-Authored Session or an AI plan) renders as a lettered, round-rest-bearing group
@@ -108,6 +114,18 @@ export default async function SessionPage({
           </div>
         }
       />
+
+      {/* Author (issue #395): credit the human who first created this plan, "by <name>". Quiet
+          secondary text so it reads as attribution, kept visually distinct from the magenta
+          AI-GENERATED Provenance badges on each movement (who made it vs. how it was made). A
+          generic-label fallback (unnamed author) is shown muted/italic to read as a placeholder. */}
+      <p
+        className={`-mt-4 font-sans text-[13px] ${
+          authorView.isNamed ? "text-text-secondary" : "text-text-muted italic"
+        }`}
+      >
+        {authorView.byline}
+      </p>
 
       {/* Rename (issue #394): name, rename, or clear the Session Name on a standalone Session.
           Withheld on a Protocol member — a Session inside a Protocol carries a Week/Day `title`,

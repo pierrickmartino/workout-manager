@@ -66,9 +66,11 @@ def _default_generation() -> GeneratedSession:
 def build_client(generator=None, ctx=None, profiles=None, sessions=None, exercises=None):
     ctx = ctx or make_signing_context()
     exercises = exercises or InMemoryExerciseRepository()
-    sessions = sessions or InMemorySessionRepository(exercises)
-    generator = generator or FakeGenerator(result=_default_generation())
     profiles = profiles or InMemoryProfileRepository()
+    # Wire the shared profile store into the session repo so the read resolves the Author's
+    # display name (CONTEXT: Author, #395); without it the serializer's generic fallback stands in.
+    sessions = sessions or InMemorySessionRepository(exercises, profiles)
+    generator = generator or FakeGenerator(result=_default_generation())
     app = create_app()
     app.dependency_overrides[get_jwks] = lambda: ctx.jwks
     app.dependency_overrides[get_settings] = lambda: Settings(clerk_issuer=ISSUER)
@@ -150,6 +152,41 @@ def test_generated_session_reads_back_ai_generated_provenance():
     # Assert — Session Provenance is stamped ai_generated on create and on read (ADR-0040)
     assert created["provenance"] == "ai_generated"
     assert fetched["provenance"] == "ai_generated"
+
+
+def test_generated_session_credits_its_author_by_display_name():
+    # Arrange — the creating user has a Profile display name
+    profiles = InMemoryProfileRepository()
+    profiles.update("user_author", ProfileUpdate(display_name="Alex Rivera"))
+    client, ctx = build_client(profiles=profiles)
+    headers = _auth(ctx, "user_author")
+
+    # Act — create, then read it back
+    created = client.post(
+        "/api/sessions/generate", headers=headers, json=_generate_body()
+    ).json()["data"]
+    fetched = client.get(f"/api/sessions/{created['id']}", headers=headers).json()["data"]
+
+    # Assert — Author is surfaced on the read: the creator's display name, a distinct axis
+    # from Session Provenance (how it was made, not who made it)
+    assert fetched["author"] == {"display_name": "Alex Rivera"}
+    assert fetched["provenance"] == "ai_generated"
+
+
+def test_author_display_name_is_null_when_the_creator_has_no_profile_name():
+    # Arrange — the creating user has no Profile display name on file
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_nameless")
+
+    # Act
+    created = client.post(
+        "/api/sessions/generate", headers=headers, json=_generate_body()
+    ).json()["data"]
+    fetched = client.get(f"/api/sessions/{created['id']}", headers=headers).json()["data"]
+
+    # Assert — the server surfaces the raw name (null here) without fabricating one; the web
+    # mapper resolves the never-blank generic label at render time (its own unit test)
+    assert fetched["author"] == {"display_name": None}
 
 
 def test_generated_session_can_be_fetched_back_by_its_owner():

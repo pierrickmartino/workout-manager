@@ -46,6 +46,15 @@ class ProfileRepository(Protocol):
         and return the updated profile."""
         ...
 
+    def display_name(self, clerk_user_id: str) -> str | None:
+        """Return the user's Profile display name, or ``None`` if unset or no profile.
+
+        A read-only lookup (never creates a profile) used to resolve a Session's **Author**
+        display for the read (CONTEXT: Author, #395). Returns the raw stored value; the web
+        ``sessionAuthorView`` mapper applies the never-blank generic fallback at render time,
+        so the fallback rule lives in one place."""
+        ...
+
 
 def _apply_update(profile: Profile, update: ProfileUpdate) -> None:
     profile.display_name = update.display_name
@@ -94,6 +103,10 @@ class SqlProfileRepository:
         self._session.refresh(profile)
         return profile
 
+    def display_name(self, clerk_user_id: str) -> str | None:
+        profile = self._find(clerk_user_id)
+        return profile.display_name if profile is not None else None
+
 
 class InMemoryProfileRepository:
     def __init__(self) -> None:
@@ -117,6 +130,10 @@ class InMemoryProfileRepository:
         _apply_update(profile, update)
         self._by_user[clerk_user_id] = profile
         return profile
+
+    def display_name(self, clerk_user_id: str) -> str | None:
+        profile = self._by_user.get(clerk_user_id)
+        return profile.display_name if profile is not None else None
 
 
 __all__ = [
