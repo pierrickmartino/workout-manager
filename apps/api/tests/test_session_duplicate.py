@@ -105,6 +105,23 @@ def _replacement(exercises) -> PrescriptionDraft:
     return PrescriptionDraft(exercise_id=goblet.id, sets=3, reps="10")
 
 
+def _restamp_author(session_repo, session_id: int, author_clerk_user_id: str) -> None:
+    """Re-stamp a stored Session's Author to simulate a foreign original creator.
+
+    ``create`` always attributes a Session to its owner, so to exercise Duplicate's
+    non-re-attribution (a copy of a redeemed plan keeps the *original* Author) the test
+    seeds a differing Author directly on the stored row — through the in-memory dict or the
+    SQL row, whichever backs the parametrized repo."""
+
+    if isinstance(session_repo, InMemorySessionRepository):
+        session_repo._sessions[session_id].author_clerk_user_id = author_clerk_user_id
+        return
+    workout = session_repo._session.get(WorkoutSession, session_id)
+    workout.author_clerk_user_id = author_clerk_user_id
+    session_repo._session.add(workout)
+    session_repo._session.commit()
+
+
 def test_duplicate_copies_the_prescriptions_in_order(repos):
     # Arrange
     session_repo, exercises = repos
@@ -195,6 +212,23 @@ def test_duplicate_carries_the_trace_id_lineage_forward(repos):
 
     # Assert — the copy traces to the same call (operator-only accessor, ADR-0043/#274)
     assert session_repo.trace_id(copy.id, "user_trace") == "trace-orig"
+
+
+def test_duplicate_preserves_the_source_author(repos):
+    # Arrange — a source Session whose Author is a *different* human than the duplicating
+    # user (as a redeemed/re-shared copy would be). Author is immutable origin, so Duplicate
+    # must carry it forward, never re-attribute it to whoever ran the copy (CONTEXT: Author,
+    # ADR-0043). Seeded via ``create`` then re-stamped, since ``create`` attributes to owner.
+    session_repo, exercises = repos
+    source = session_repo.create("user_dup", _draft_with_two_prescriptions(exercises))
+    _restamp_author(session_repo, source.id, "original_author")
+
+    # Act
+    copy = session_repo.duplicate(source.id, "user_dup")
+
+    # Assert — the copy is owned by the duplicating user but still credits the original creator
+    assert copy.clerk_user_id == "user_dup"
+    assert copy.author_clerk_user_id == "original_author"
 
 
 def test_duplicate_preserves_superset_grouping(repos):

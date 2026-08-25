@@ -144,6 +144,15 @@ def _serialize(view: SessionView) -> dict:
         "display_name": session_label(
             view.name, view.training_type, view.created_at
         ),
+        # Author (CONTEXT: Author, #395): who first created this plan, surfaced as "by
+        # <name>" on the Session view and visually distinct from Session Provenance (how it
+        # was made). ``display_name`` is the creator's *raw* Profile name (``null`` when they
+        # never set one); the web ``sessionAuthorView`` mapper resolves the never-blank
+        # generic fallback and styles the placeholder — one fallback, owned by the renderer.
+        # The raw Author reference (``author_clerk_user_id``) stays server-side and off the
+        # wire: the client only needs the credit name, and withholding the id avoids exposing
+        # the original author's Clerk id to a different owner once Redeem transfers ownership.
+        "author": {"display_name": view.author_display_name},
         # Withhold the Duplicate control on a Protocol member (ADR-0043 consequence, Q2):
         # the web Session view reads this to hide the button; the endpoint stays reachable.
         "is_protocol_member": view.is_protocol_member,

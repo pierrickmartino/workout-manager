@@ -251,6 +251,19 @@ class WorkoutSession(SQLModel, table=True):
     # Session — and is carried verbatim across Duplicate and Redeem.
     name: str | None = Field(default=None)
 
+    # Author (CONTEXT: Author, issue #395): a reference to the **human who first created**
+    # this plan, held as the creator's ``clerk_user_id``. A distinct axis from both the
+    # **Owner** (``clerk_user_id`` above, which will transfer on Redeem) and **Session
+    # Provenance** (``ai_generated`` / ``user_authored`` — *how* the plan was made, not
+    # *who*). **Immutable origin**: stamped once with the creating user at every creation
+    # path and carried verbatim across Duplicate (and, later, Redeem), so even a heavily
+    # edited copy still credits its original creator — the same non-re-attribution as
+    # Provenance and ``trace_id`` lineage. Nullable in the schema so the 0031 migration can
+    # backfill pre-existing rows to their owner (after which no Session is authorless); a
+    # missing display name resolves to a generic label at render time (the web
+    # ``sessionAuthorView`` mapper), never blank.
+    author_clerk_user_id: str | None = Field(default=None)
+
     # Regeneration is limited to once per Session in v1 (Slice 10): the flag is
     # set when the user keeps some prescriptions and regenerates the rest, and
     # blocks any further regeneration of this Session.

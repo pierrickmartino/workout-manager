@@ -19,6 +19,10 @@ from sqlmodel import Session, select
 from app.db.models import Exercise, ExercisePrescription, WorkoutSession
 from app.domain.superset import MIN_SUPERSET_MEMBERS
 from app.repositories.exercise_repository import ExerciseRepository
+from app.repositories.profile_repository import (
+    ProfileRepository,
+    SqlProfileRepository,
+)
 
 
 @dataclass(frozen=True)
@@ -120,6 +124,15 @@ class SessionView:
     # ``ai_generated`` — every path that builds a Session today is AI. See
     # ``app.domain.session_provenance.SessionProvenance``.
     provenance: str = "ai_generated"
+    # Author (CONTEXT: Author, #395): a reference (the creator's ``clerk_user_id``) to the
+    # human who first created this plan — distinct from the Owner and from Provenance, and
+    # immutable origin (preserved through Duplicate). ``author_display_name`` is that
+    # creator's raw Profile display name joined at read time, ``None`` when they have no
+    # profile or no name; the web ``sessionAuthorView`` mapper resolves the never-blank
+    # generic fallback. Both default so pre-existing SessionView constructions (e.g.
+    # Live-serialization tests) stay valid.
+    author_clerk_user_id: str | None = None
+    author_display_name: str | None = None
     # Whether this Session belongs to a Protocol (it carries a ``protocol_id``) rather
     # than standing alone. The Session view uses it to withhold the Duplicate control on a
     # Protocol member — lifting one workout out of a plan the user is working through has
@@ -401,9 +414,28 @@ def _prescription_view(
     )
 
 
+def _author_display_name(
+    profiles: ProfileRepository | None, author_clerk_user_id: str | None
+) -> str | None:
+    """The Author's raw Profile display name for the read, or ``None`` (CONTEXT: Author, #395).
+
+    ``None`` when the Session has no Author reference (a defensive pre-backfill case), no
+    profile source is wired (an Author-agnostic in-memory test), or the author has no display
+    name on file. The web mapper applies the never-blank generic fallback. A read-only lookup
+    through the one ``ProfileRepository.display_name`` seam — shared by both repository
+    implementations, never a profile write."""
+
+    if author_clerk_user_id is None or profiles is None:
+        return None
+    return profiles.display_name(author_clerk_user_id)
+
+
 class SqlSessionRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
+        # Author display resolves through the same ProfileRepository seam the in-memory repo
+        # uses (CONTEXT: Author, #395), built over this DB session so the read stays one query.
+        self._profiles = SqlProfileRepository(session)
 
     def _view(self, workout: WorkoutSession) -> SessionView:
         prescriptions = self._session.exec(
@@ -426,6 +458,10 @@ class SqlSessionRepository:
             is_protocol_member=workout.protocol_id is not None,
             name=workout.name,
             created_at=workout.created_at,
+            author_clerk_user_id=workout.author_clerk_user_id,
+            author_display_name=_author_display_name(
+                self._profiles, workout.author_clerk_user_id
+            ),
         )
 
     def _add_prescriptions(
@@ -443,6 +479,9 @@ class SqlSessionRepository:
             duration_minutes=draft.duration_minutes,
             provenance=draft.provenance,
             trace_id=draft.trace_id,
+            # Author is stamped with the creating user at creation (CONTEXT: Author, #395):
+            # a self-authored/generated Session attributes to whoever created it.
+            author_clerk_user_id=clerk_user_id,
         )
         self._session.add(workout)
         self._session.commit()
@@ -469,8 +508,10 @@ class SqlSessionRepository:
             .order_by(ExercisePrescription.position)
         ).all()
 
-        # A standalone copy: Provenance, lineage and name carried verbatim; Protocol
-        # linkage and the regeneration guard deliberately not copied (ADR-0043).
+        # A standalone copy: Provenance, lineage, name and Author carried verbatim; Protocol
+        # linkage and the regeneration guard deliberately not copied (ADR-0043). Author is
+        # preserved from the source, NOT re-attributed to the duplicating user (CONTEXT:
+        # Author immutable origin, #395) — the same non-re-attribution as Provenance/lineage.
         copy = WorkoutSession(
             clerk_user_id=clerk_user_id,
             training_type=source.training_type,
@@ -479,6 +520,7 @@ class SqlSessionRepository:
             trace_id=source.trace_id,
             title=source.title,
             name=source.name,
+            author_clerk_user_id=source.author_clerk_user_id,
         )
         self._session.add(copy)
         self._session.commit()
@@ -664,8 +706,17 @@ class SqlSessionRepository:
 
 
 class InMemorySessionRepository:
-    def __init__(self, exercises: ExerciseRepository) -> None:
+    def __init__(
+        self,
+        exercises: ExerciseRepository,
+        profiles: ProfileRepository | None = None,
+    ) -> None:
         self._exercises = exercises
+        # Optional Profile source used only to resolve the Author's display name for the
+        # read (CONTEXT: Author, #395). Left ``None`` in the many tests that don't exercise
+        # Author, where the display resolves to ``None`` and the serializer's generic
+        # fallback stands in; production and the endpoint tests wire the shared profile repo.
+        self._profiles = profiles
         self._sessions: dict[int, WorkoutSession] = {}
         self._prescriptions: dict[int, list[ExercisePrescription]] = {}
         self._next_id = 1
@@ -687,6 +738,10 @@ class InMemorySessionRepository:
             is_protocol_member=workout.protocol_id is not None,
             name=workout.name,
             created_at=workout.created_at,
+            author_clerk_user_id=workout.author_clerk_user_id,
+            author_display_name=_author_display_name(
+                self._profiles, workout.author_clerk_user_id
+            ),
         )
 
     def _materialize(
@@ -719,6 +774,8 @@ class InMemorySessionRepository:
             duration_minutes=draft.duration_minutes,
             provenance=draft.provenance,
             trace_id=draft.trace_id,
+            # Author stamped with the creating user at creation (CONTEXT: Author, #395).
+            author_clerk_user_id=clerk_user_id,
         )
         self._next_id += 1
         self._sessions[workout.id] = workout
@@ -741,8 +798,10 @@ class InMemorySessionRepository:
         prescriptions = sorted(
             self._prescriptions.get(session_id, []), key=lambda p: p.position
         )
-        # A standalone copy: Provenance, lineage and name carried verbatim; Protocol
-        # linkage and the regeneration guard deliberately not copied (ADR-0043).
+        # A standalone copy: Provenance, lineage, name and Author carried verbatim; Protocol
+        # linkage and the regeneration guard deliberately not copied (ADR-0043). Author is
+        # preserved from the source, NOT re-attributed to the duplicating user (CONTEXT:
+        # Author immutable origin, #395).
         copy = WorkoutSession(
             id=self._next_id,
             clerk_user_id=clerk_user_id,
@@ -752,6 +811,7 @@ class InMemorySessionRepository:
             trace_id=source.trace_id,
             title=source.title,
             name=source.name,
+            author_clerk_user_id=source.author_clerk_user_id,
         )
         self._next_id += 1
         self._sessions[copy.id] = copy

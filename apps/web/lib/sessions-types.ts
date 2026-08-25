@@ -89,7 +89,20 @@ export interface WorkoutSession {
   // Name when set, else `training_type · date`. The `sessionName` view-model reads it as the
   // fallback so an unnamed Session is never rendered blank.
   display_name?: string;
+  // Author (CONTEXT: Author, issue #395): who first created this plan, surfaced as "by <name>"
+  // on the Session view — a distinct axis from Session Provenance (how it was made). The plain
+  // Session read always carries it; the live hydration read omits it, so it is optional here
+  // (mirror of `provenance`). The `sessionAuthorView` mapper applies the generic fallback.
+  author?: SessionAuthor;
   prescriptions: ExercisePrescription[];
+}
+
+// A Session's Author (CONTEXT: Author, issue #395): who first created the plan. `display_name` is
+// that creator's *raw* Profile name — `null`/absent when they never set one — which the
+// `sessionAuthorView` mapper resolves to a never-blank byline (the generic fallback then). The
+// underlying Author reference (the creator's user id) stays server-side and off the wire.
+export interface SessionAuthor {
+  display_name?: string | null;
 }
 
 // The harder-Variation offer read for one Prescription (#202): the catalog
