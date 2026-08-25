@@ -111,6 +111,27 @@ export async function renameSession(
   return apiSend(`/api/sessions/${id}/name`, "PUT", { name });
 }
 
+// Mark the user's own standalone Session as a Favorite (CONTEXT: Favorite, issue #396): a
+// stored, per-user, per-copy marker, private to the user and never carried across Duplicate.
+// Bodyless POST, so the seam sends no `Content-Type` (ADR-0022). The backend returns 404 for a
+// non-owner and 409 for a Protocol-member Session (Favorite is standalone-only); on success the
+// updated Session view comes back with `is_favorite: true`. Idempotent.
+export async function favoriteSession(
+  id: number,
+): Promise<Envelope<WorkoutSession>> {
+  return apiSend(`/api/sessions/${id}/favorite`, "POST");
+}
+
+// Un-favorite the user's own standalone Session — the mark's inverse (issue #396). Clears the
+// owner's Favorite marker. A bodyless DELETE, so the seam sends no `Content-Type` (ADR-0022).
+// Same 404/409 surface as `favoriteSession`; on success the updated Session view comes back with
+// `is_favorite: false`. Idempotent.
+export async function unfavoriteSession(
+  id: number,
+): Promise<Envelope<WorkoutSession>> {
+  return apiSend(`/api/sessions/${id}/favorite`, "DELETE");
+}
+
 // Hydration read for the Live Session screen (issue #90 — F2·S5): the owner's
 // Session with recommended loads progression-adjusted (ADR-0004) and each Exercise
 // carrying its previous performance to beat. The backend returns 404 for

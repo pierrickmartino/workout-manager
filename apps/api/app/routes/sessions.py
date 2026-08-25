@@ -156,6 +156,12 @@ def _serialize(view: SessionView) -> dict:
         # Withhold the Duplicate control on a Protocol member (ADR-0043 consequence, Q2):
         # the web Session view reads this to hide the button; the endpoint stays reachable.
         "is_protocol_member": view.is_protocol_member,
+        # The owner's Favorite marker (CONTEXT: Favorite, issue #396): a stored, per-user,
+        # per-copy preference, surfaced on the standalone Session read as a toggle. Withheld on
+        # a Protocol member (``null``) — Favorite is a standalone-only concept — so the web
+        # ``sessionFavoriteView`` mapper hides the toggle there, mirroring how Rename/Duplicate
+        # are withheld inside a Protocol.
+        "is_favorite": None if view.is_protocol_member else view.is_favorite,
         # Each Prescription through the shared canonical serializer, so the plain read
         # and the Live Session hydration read (``app.live.serialization``) can never
         # disagree on a Prescription's fields (ADR-0023 Superset overlay included).
@@ -565,6 +571,65 @@ def rename_session(
     if view is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Session not found")
     return success_envelope(_serialize(view))
+
+
+def _set_favorite(
+    session_id: int, clerk_user_id: str, favorite: bool, sessions: SessionRepository
+) -> dict:
+    """Mark or unmark the owner's standalone Session as a Favorite (CONTEXT: Favorite, #396).
+
+    The shared body of the mark (POST) and unmark (DELETE) endpoints. Scoped to the
+    authenticated owner: a missing or non-owned Session ``404``s, so a non-owner can never
+    favorite (or read the marker on) another user's plan. Offered on **standalone Sessions
+    only** — a Protocol-member Session is rejected with ``409`` (Favorite is a standalone
+    concept, like the Session Name), mirroring rename. On success the envelope carries the
+    updated Session with its new ``is_favorite`` state."""
+
+    session_view = sessions.get(session_id, clerk_user_id)
+    if session_view is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Session not found")
+    if session_view.is_protocol_member:
+        raise HTTPException(
+            status_code=HTTP_CONFLICT,
+            detail="A session inside a protocol can't be favorited.",
+        )
+
+    view = sessions.set_favorite(session_id, clerk_user_id, favorite)
+    if view is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Session not found")
+    return success_envelope(_serialize(view))
+
+
+@router.post("/sessions/{session_id}/favorite")
+def favorite_session(
+    session_id: int,
+    clerk_user_id: str = Depends(get_current_user),
+    sessions: SessionRepository = Depends(get_session_repository),
+) -> dict:
+    """Mark the owner's standalone Session as a Favorite (CONTEXT: Favorite, issue #396).
+
+    The submit target of the standalone Session's Favorite toggle. Writes a stored, per-user,
+    per-copy marker — private to the user, and never carried across Duplicate/Redeem (a copy
+    is a new Session with no marker). Idempotent: marking an already-favorited Session is a
+    no-op. Bodyless POST. ``404`` for a non-owner, ``409`` on a Protocol member (Favorite is
+    standalone-only)."""
+
+    return _set_favorite(session_id, clerk_user_id, True, sessions)
+
+
+@router.delete("/sessions/{session_id}/favorite")
+def unfavorite_session(
+    session_id: int,
+    clerk_user_id: str = Depends(get_current_user),
+    sessions: SessionRepository = Depends(get_session_repository),
+) -> dict:
+    """Unmark the owner's standalone Session as a Favorite — the mark's inverse (issue #396).
+
+    Clears the owner's Favorite marker. Idempotent: unmarking an un-favorited Session is a
+    no-op. Bodyless DELETE, so the seam sends no ``Content-Type`` (ADR-0022). Same surface as
+    the mark: ``404`` for a non-owner, ``409`` on a Protocol member."""
+
+    return _set_favorite(session_id, clerk_user_id, False, sessions)
 
 
 @router.get("/sessions/{session_id}/live")
