@@ -356,6 +356,40 @@ class SessionFavorite(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
+class ShareLink(SQLModel, table=True):
+    """A revocable, reusable Share Link to one of a user's standalone Sessions (ADR-0057).
+
+    The token a **Share** produces (CONTEXT: Share Link): an **unguessable** ``token``
+    referencing the sharer's standalone ``session_id``, held alongside the sharer
+    (``clerk_user_id``) so revocation stays owner-scoped. Anyone holding the token may
+    **Redeem** it — each Redeem yielding one fresh, independent deep-copy — until the
+    sharer **revokes** it. Revocation is modeled as a nullable ``revoked_at`` stamp
+    (``NULL`` means active): it stops *future* Redeems but never reaches copies already
+    taken, which are independent Sessions their recipients own (the copy model, ADR-0057).
+
+    **No auto-expiry in v1** — a link is valid until revoked. There is no ``UNIQUE`` on
+    ``session_id``: a Session may accumulate revoked links over its history, and at most
+    one *active* link is kept by the create path returning the existing active row rather
+    than minting a duplicate. The token is unique so a redeem/preview lookup is exact."""
+
+    __tablename__ = "share_link"
+
+    id: int | None = Field(default=None, primary_key=True)
+    # The unguessable token carried in the Share Link — unique so preview/redeem resolve it
+    # exactly, indexed for that lookup. Minted from a cryptographic RNG at create time.
+    token: str = Field(index=True, unique=True)
+    # The shared standalone Session this link hands out copies of.
+    session_id: int = Field(foreign_key="workout_session.id", index=True)
+    # The sharer (the Session's Owner at share time) — the scope revocation is keyed to, so a
+    # non-owner can never create or revoke a link for someone else's Session.
+    clerk_user_id: str = Field(index=True)
+    # Revocation stamp: ``NULL`` while the link is active (redeemable), set to the revoke time
+    # once the sharer revokes it. Revocation stops future Redeems only (ADR-0057); already-taken
+    # copies are untouched. Not an auto-expiry — there is none in v1.
+    revoked_at: datetime | None = Field(default=None)
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
 class LoggedSession(SQLModel, table=True):
     """The record of a user performing a Session on a date.
 

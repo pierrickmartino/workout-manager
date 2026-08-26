@@ -111,6 +111,27 @@ export interface SessionAuthor {
   display_name?: string | null;
 }
 
+// A Share Link the sharer produces on their standalone Session (ADR-0057, issue #398): the
+// unguessable `token` is the whole capability the recipient redeems, `session_id` ties it back
+// to the shared Session, and `is_revoked` reflects its live/off state. The client builds the
+// shareable URL from the token (`shareLinkView`); the token itself is never a URL.
+export interface ShareLink {
+  token: string;
+  session_id: number;
+  is_revoked: boolean;
+}
+
+// The recipient's pre-Redeem preview of a Share Link (ADR-0057, issue #398): the linked
+// Session's validity plus only its name label, Training Type, and Author credit — nothing else
+// (no prescriptions, no owner). `valid` is false for a revoked or unknown link, where the
+// descriptive fields are all null. The `sharePreviewView` mapper turns this into the display model.
+export interface SharePreview {
+  valid: boolean;
+  display_name: string | null;
+  training_type: string | null;
+  author: SessionAuthor;
+}
+
 // The harder-Variation offer read for one Prescription (#202): the catalog
 // Exercise to advance to at the pure-bodyweight rep ceiling, or `null` when there
 // is none on file and the prescription holds. The client feeds `suggested_variation`

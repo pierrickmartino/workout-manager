@@ -7,6 +7,7 @@ import { SubstituteButton } from "@/components/SubstituteButton";
 import { DuplicateButton } from "@/components/DuplicateButton";
 import { RenameSessionControl } from "@/components/RenameSessionControl";
 import { FavoriteSessionControl } from "@/components/FavoriteSessionControl";
+import { ShareSessionControl } from "@/components/ShareSessionControl";
 import { AddExerciseButton } from "@/components/AddExerciseButton";
 import { RemoveExerciseButton } from "@/components/RemoveExerciseButton";
 import { HarderVariationOffer } from "@/components/HarderVariationOffer";
@@ -157,6 +158,12 @@ export default async function SessionPage({
             isFavorite={favoriteView.isFavorite}
           />
         ) : null}
+        {/* Share (ADR-0057, issue #398): publish a revocable Share Link another user can Redeem
+            into their own independent copy. Standalone-only — withheld on a Protocol member (a
+            Share Link is offered on standalone Sessions only), alongside Rename/Favorite. */}
+        {session.is_protocol_member ? null : (
+          <ShareSessionControl sessionId={session.id} />
+        )}
       </div>
 
       <div className="flex flex-col gap-4">

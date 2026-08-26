@@ -11,6 +11,8 @@ import type {
   ExerciseDetail,
   GenerateSessionInput,
   HarderVariationResponse,
+  ShareLink,
+  SharePreview,
   WorkoutSession,
 } from "./sessions-types";
 
@@ -146,6 +148,48 @@ export async function unfavoriteSession(
   id: number,
 ): Promise<Envelope<WorkoutSession>> {
   return apiSend(`/api/sessions/${id}/favorite`, "DELETE");
+}
+
+// Publish (or re-publish) a Share Link on the user's own standalone Session (Share, ADR-0057,
+// issue #398): a revocable, reusable token another user redeems into their own copy. Bodyless
+// POST, so the seam sends no `Content-Type` (ADR-0022). Idempotent while a link is live — the
+// backend returns the same active token. 404 for a non-owner, 409 for a Protocol member (a Share
+// Link is standalone-only). On success the envelope carries the token and the shared Session id.
+export async function createShareLink(
+  id: number,
+): Promise<Envelope<ShareLink>> {
+  return apiSend(`/api/sessions/${id}/share`, "POST");
+}
+
+// Revoke the user's own Share Link for this Session — the sharer's off-switch (ADR-0057, issue
+// #398). Stops future Redeems only; copies already taken are independent and untouched. A bodyless
+// DELETE (no `Content-Type`, ADR-0022). Idempotent. 404 for a non-owner; on success the envelope
+// reports the Session id and the now-revoked state.
+export async function revokeShareLink(
+  id: number,
+): Promise<Envelope<{ session_id: number; is_revoked: boolean }>> {
+  return apiSend(`/api/sessions/${id}/share`, "DELETE");
+}
+
+// Preview a Share Link without redeeming (ADR-0057, issue #398): the linked Session's Name,
+// Training Type, Author and validity — nothing more. Always succeeds (validity is a field): a
+// revoked or unknown token comes back `valid: false` with null details. The recipient is
+// identified by their JWT; the token is the capability.
+export async function previewShare(
+  token: string,
+): Promise<Envelope<SharePreview>> {
+  return apiGet(`/api/shares/${encodeURIComponent(token)}`);
+}
+
+// Redeem a Share Link into a new standalone Session the caller owns (Redeem, ADR-0057, issue
+// #398): a redeem-time deep-copy of the shared plan — Author preserved, Name/Provenance/lineage
+// carried, no records, no Protocol position, not favorited. Bodyless POST. The response is the
+// new Session (the same shape as the plain read), so the caller lands on their own copy. A
+// revoked or unknown link comes back as an envelope error (404).
+export async function redeemShare(
+  token: string,
+): Promise<Envelope<WorkoutSession>> {
+  return apiSend(`/api/shares/${encodeURIComponent(token)}/redeem`, "POST");
 }
 
 // Hydration read for the Live Session screen (issue #90 — F2·S5): the owner's

@@ -51,7 +51,7 @@ from app.generation.service import generate_session
 from app.generation.substitute_generator import SubstituteGenerator
 from app.live.hydration import hydrate_session
 from app.live.serialization import serialize_hydrated_session
-from app.session_serialization import serialize_prescription
+from app.session_serialization import serialize_session
 from app.repositories.deps import (
     get_exercise_relationship_repository,
     get_exercise_repository,
@@ -130,44 +130,10 @@ class GenerateSessionRequest(BaseModel):
         )
 
 
-def _serialize(view: SessionView) -> dict:
-    return {
-        "id": view.id,
-        "clerk_user_id": view.clerk_user_id,
-        "training_type": view.training_type,
-        "duration_minutes": view.duration_minutes,
-        "has_been_regenerated": view.has_been_regenerated,
-        "provenance": view.provenance,
-        # The user-given Session Name (issue #394): the raw stored value (``null`` when
-        # unnamed, so the rename editor opens empty) plus the never-blank ``display_name``
-        # the shared fallback resolves — the name, else ``training_type · date``.
-        "name": view.name,
-        "display_name": session_label(
-            view.name, view.training_type, view.created_at
-        ),
-        # Author (CONTEXT: Author, #395): who first created this plan, surfaced as "by
-        # <name>" on the Session view and visually distinct from Session Provenance (how it
-        # was made). ``display_name`` is the creator's *raw* Profile name (``null`` when they
-        # never set one); the web ``sessionAuthorView`` mapper resolves the never-blank
-        # generic fallback and styles the placeholder — one fallback, owned by the renderer.
-        # The raw Author reference (``author_clerk_user_id``) stays server-side and off the
-        # wire: the client only needs the credit name, and withholding the id avoids exposing
-        # the original author's Clerk id to a different owner once Redeem transfers ownership.
-        "author": {"display_name": view.author_display_name},
-        # Withhold the Duplicate control on a Protocol member (ADR-0043 consequence, Q2):
-        # the web Session view reads this to hide the button; the endpoint stays reachable.
-        "is_protocol_member": view.is_protocol_member,
-        # The owner's Favorite marker (CONTEXT: Favorite, issue #396): a stored, per-user,
-        # per-copy preference, surfaced on the standalone Session read as a toggle. Withheld on
-        # a Protocol member (``null``) — Favorite is a standalone-only concept — so the web
-        # ``sessionFavoriteView`` mapper hides the toggle there, mirroring how Rename/Duplicate
-        # are withheld inside a Protocol.
-        "is_favorite": None if view.is_protocol_member else view.is_favorite,
-        # Each Prescription through the shared canonical serializer, so the plain read
-        # and the Live Session hydration read (``app.live.serialization``) can never
-        # disagree on a Prescription's fields (ADR-0023 Superset overlay included).
-        "prescriptions": [serialize_prescription(p) for p in view.prescriptions],
-    }
+# The canonical standalone-Session JSON shape now lives in ``app.session_serialization`` so
+# the Redeem read (``routes/shares.py``) returns byte-for-byte the same shape (ADR-0057). Kept
+# under the local name every handler below already calls.
+_serialize = serialize_session
 
 
 DEFAULT_LOAD_KIND = "absolute"
