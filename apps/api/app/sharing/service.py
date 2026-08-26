@@ -20,7 +20,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.domain.received_share import RedeemCaveat, redeem_caveat
 from app.domain.session_naming import session_label
+from app.repositories.profile_repository import ProfileRepository
 from app.repositories.session_repository import SessionRepository, SessionView
 from app.repositories.share_link_repository import (
     ShareLinkRepository,
@@ -57,6 +59,19 @@ class SharePreview:
     display_name: str | None = None
     training_type: str | None = None
     author_display_name: str | None = None
+
+
+@dataclass(frozen=True)
+class RedeemOutcome:
+    """The result of a Redeem: the new copy plus its Received-Share caveat (ADR-0058).
+
+    ``session`` is the independent copy the redeemer now owns (the same ``SessionView`` the
+    plain read returns); ``caveat`` is the pure ADR-0058 decision — flagged for a redeemer with
+    a Sensitive Constraint, empty otherwise. The caveat only *flags* the copy: it never blocks
+    the Redeem and never mutates the plan."""
+
+    session: SessionView
+    caveat: RedeemCaveat
 
 
 def create_share_link(
@@ -139,13 +154,19 @@ def redeem_share(
     *,
     sessions: SessionRepository,
     share_links: ShareLinkRepository,
-) -> SessionView:
+    profiles: ProfileRepository,
+) -> RedeemOutcome:
     """Redeem a valid Share Link into a new standalone Session owned by the redeemer.
 
     Resolves the token to its active link and deep-copies the shared Session at redeem time
     (:meth:`SessionRepository.redeem`). Raises :class:`ShareLinkInvalid` for a revoked or
     unknown token — the one path this failure surfaces — and (defensively) if the source
-    Session no longer exists. Returns the new ``SessionView``."""
+    Session no longer exists.
+
+    Layers the ADR-0058 Received-Share caveat onto the copy: reads the redeemer's profile and
+    runs the pure :func:`redeem_caveat` rule, flagging the copy when the redeemer has a Sensitive
+    Constraint. The caveat never blocks the Redeem — it is computed *after* the copy is made and
+    only decorates the response. Returns a :class:`RedeemOutcome` (copy + caveat)."""
 
     link = share_links.resolve_active(token)
     if link is None:
@@ -154,7 +175,9 @@ def redeem_share(
     copy = sessions.redeem(link.session_id, redeemer_clerk_user_id)
     if copy is None:
         raise ShareLinkInvalid
-    return copy
+
+    redeemer = profiles.get_or_create(redeemer_clerk_user_id)
+    return RedeemOutcome(session=copy, caveat=redeem_caveat(redeemer))
 
 
 __all__ = [
@@ -162,6 +185,7 @@ __all__ = [
     "ShareTargetNotStandalone",
     "ShareLinkInvalid",
     "SharePreview",
+    "RedeemOutcome",
     "create_share_link",
     "revoke_share_link",
     "preview_share",

@@ -336,3 +336,63 @@ def test_redeeming_ones_own_link_yields_a_distinct_copy():
 
     assert copy["id"] != session["id"]
     assert copy["clerk_user_id"] == "sharer"
+
+
+# --- Recipient: redeem — the ADR-0058 Received-Share safety caveat ----------------------
+
+
+def _set_sensitive(client, headers, constraints):
+    """Give the authenticated recipient a Sensitive Constraint via the Profile endpoint."""
+    return client.put(
+        "/api/profile", headers=headers, json={"sensitive_constraints": constraints}
+    )
+
+
+def test_redeem_flags_the_caveat_for_a_sensitive_constraint_redeemer():
+    client, ctx, _ = build_client()
+    sharer = _auth(ctx, "sharer")
+    recipient = _auth(ctx, "injured_recipient")
+    session = _create_session(client, sharer)
+    token = _share(client, sharer, session["id"]).json()["data"]["token"]
+    _set_sensitive(client, recipient, ["injury"])  # recipient is in rehab/injury
+
+    copy = client.post(f"/api/shares/{token}/redeem", headers=recipient).json()["data"]
+
+    # The Redeem still succeeds (never blocked) but the response flags the caveat with the
+    # mandatory "built for another user" message (ADR-0058).
+    assert copy["caveat"]["applies"] is True
+    assert copy["caveat"]["message"]
+    assert "another user" in copy["caveat"]["message"]
+
+
+def test_redeem_flags_no_caveat_for_an_unconstrained_redeemer():
+    client, ctx, _ = build_client()
+    sharer = _auth(ctx, "sharer")
+    session = _create_session(client, sharer)
+    token = _share(client, sharer, session["id"]).json()["data"]["token"]
+
+    copy = client.post(
+        f"/api/shares/{token}/redeem", headers=_auth(ctx, "recipient")
+    ).json()["data"]
+
+    # An unconstrained redeemer receives an ordinary copy: the caveat is present but not flagged.
+    assert copy["caveat"]["applies"] is False
+    assert copy["caveat"]["message"] is None
+
+
+def test_a_sensitive_constraint_redeem_lands_as_an_ordinary_saved_session():
+    # ADR-0058: a received Share never auto-enters the active flow — it is an ordinary owned,
+    # standalone Session (not a Protocol member), never silently made the Current Protocol.
+    client, ctx, _ = build_client()
+    sharer = _auth(ctx, "sharer")
+    recipient = _auth(ctx, "injured_recipient")
+    session = _create_session(client, sharer)
+    token = _share(client, sharer, session["id"]).json()["data"]["token"]
+    _set_sensitive(client, recipient, ["postpartum"])
+
+    copy = client.post(f"/api/shares/{token}/redeem", headers=recipient).json()["data"]
+
+    assert copy["is_protocol_member"] is False
+    # It reads back as a plain owned Session in the recipient's library.
+    read = client.get(f"/api/sessions/{copy['id']}", headers=recipient)
+    assert read.status_code == 200
