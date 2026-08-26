@@ -1,5 +1,5 @@
 import type { Envelope } from "./api";
-import { GENERIC_AUTHOR_LABEL } from "./session-author.ts";
+import { resolveAuthorCredit } from "./session-author.ts";
 import type { SharePreview, WorkoutSession } from "./sessions-types";
 
 // The honest fallback when a Redeem fails without a backend-supplied reason.
@@ -30,8 +30,9 @@ export function toSharePreviewView(
   if (!preview || !preview.valid) {
     return { valid: false };
   }
-  const rawName = preview.author?.display_name?.trim() ?? "";
-  const authorName = rawName.length > 0 ? rawName : GENERIC_AUTHOR_LABEL;
+  // Reuse the one Author-credit fallback the Session view owns (`session-author`), so an author
+  // with no Profile name reads "by Anonymous" here exactly as on the plan — never a forked fallback.
+  const { displayName: authorName } = resolveAuthorCredit(preview.author);
   return {
     valid: true,
     // The server already resolves the never-blank name label (name → `training_type · date`).

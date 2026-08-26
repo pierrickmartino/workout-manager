@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.domain.session_naming import session_label
-from app.repositories.session_repository import SessionRepository
+from app.repositories.session_repository import SessionRepository, SessionView
 from app.repositories.share_link_repository import (
     ShareLinkRepository,
     ShareLinkView,
@@ -139,7 +139,7 @@ def redeem_share(
     *,
     sessions: SessionRepository,
     share_links: ShareLinkRepository,
-):
+) -> SessionView:
     """Redeem a valid Share Link into a new standalone Session owned by the redeemer.
 
     Resolves the token to its active link and deep-copies the shared Session at redeem time
