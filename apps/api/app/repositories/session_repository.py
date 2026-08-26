@@ -18,6 +18,7 @@ from sqlmodel import Session, select
 
 from app.db.models import Exercise, ExercisePrescription, WorkoutSession
 from app.domain.session_library import matches_session_search
+from app.domain.share_redeem import SharedSessionSource, redeem_copy
 from app.domain.superset import MIN_SUPERSET_MEMBERS
 from app.repositories.exercise_repository import ExerciseRepository
 from app.repositories.favorite_repository import (
@@ -263,6 +264,34 @@ class SessionRepository(Protocol):
         budget** (``has_been_regenerated`` starts ``False``). The source is read, never
         mutated. Returns the new Session, or ``None`` if the source is missing or owned
         by another user — Duplicate only ever copies the owner's own plan."""
+        ...
+
+    def get_shared(self, session_id: int) -> SessionView | None:
+        """Read a Session **without** owner-scoping — the deliberate cross-user seam (ADR-0057).
+
+        Every other read is scoped to one ``clerk_user_id``; this one is not, because a
+        recipient previewing a **Share Link** is not the Session's Owner. It is used only by
+        the sharing path (preview, and as the source of a Redeem copy) and returns just the
+        plan (name, Training Type, Author, prescriptions) — never another user's records or
+        Favorite state. ``None`` when no Session has that id."""
+        ...
+
+    def redeem(
+        self, source_session_id: int, redeemer_clerk_user_id: str
+    ) -> SessionView | None:
+        """Deep-copy a **shared** Session into a new standalone Session owned by the redeemer
+        (Redeem, ADR-0057) — the cross-user cousin of :meth:`duplicate`.
+
+        Reads ``source_session_id`` **without** owner-scoping (the redeemer is not the Owner)
+        and writes an independent copy owned by ``redeemer_clerk_user_id``, applying the pure
+        redeem-copy rule (``app.domain.share_redeem``): the new **Owner** is the redeemer, the
+        **Author** is preserved as the original creator, and the **Session Name**, **Session
+        Provenance** and ``trace_id`` **lineage** carry forward unchanged. Every Exercise
+        Prescription (sets/reps/rest/tempo/Load/Superset/Pin) is copied faithfully from the
+        source's **redeem-time** state; the copy carries **no Logged Sessions**, **no Protocol
+        position**, a **fresh regeneration budget**, and **no Favorite** (a new id with no
+        marker). The source is read, never mutated; the two copies are thereafter independent.
+        Returns the new Session, or ``None`` if the source no longer exists."""
         ...
 
     def set_name(
@@ -699,6 +728,60 @@ class SqlSessionRepository:
         self._session.commit()
         return self._view(copy)
 
+    def get_shared(self, session_id: int) -> SessionView | None:
+        # The one read that is NOT owner-scoped (ADR-0057): a recipient previewing a Share
+        # Link is not the Owner. Returns the plan only; records/Favorite are never surfaced.
+        workout = self._session.get(WorkoutSession, session_id)
+        if workout is None:
+            return None
+        return self._view(workout)
+
+    def redeem(
+        self, source_session_id: int, redeemer_clerk_user_id: str
+    ) -> SessionView | None:
+        # Cross-user read: the redeemer is not the Owner, so no owner filter here (ADR-0057).
+        source = self._session.get(WorkoutSession, source_session_id)
+        if source is None:
+            return None
+
+        prescriptions = self._session.exec(
+            select(ExercisePrescription)
+            .where(ExercisePrescription.session_id == source_session_id)
+            .order_by(ExercisePrescription.position)
+        ).all()
+
+        # The redeem-copy rule (pure): new Owner = redeemer; Author, Name, Provenance and
+        # trace_id lineage carried forward. Protocol linkage and the regeneration guard are
+        # deliberately dropped so the copy stands alone with a fresh budget; Logged Sessions
+        # and the Favorite marker are per-owner and simply never copied.
+        attrs = redeem_copy(
+            SharedSessionSource(
+                training_type=source.training_type,
+                duration_minutes=source.duration_minutes,
+                provenance=source.provenance,
+                name=source.name,
+                author_clerk_user_id=source.author_clerk_user_id,
+                trace_id=source.trace_id,
+            ),
+            redeemer_clerk_user_id,
+        )
+        copy = WorkoutSession(
+            clerk_user_id=attrs.clerk_user_id,
+            training_type=attrs.training_type,
+            duration_minutes=attrs.duration_minutes,
+            provenance=attrs.provenance,
+            trace_id=attrs.trace_id,
+            name=attrs.name,
+            author_clerk_user_id=attrs.author_clerk_user_id,
+        )
+        self._session.add(copy)
+        self._session.commit()
+        self._session.refresh(copy)
+
+        self._add_prescriptions(copy.id, [_draft_from(p) for p in prescriptions])
+        self._session.commit()
+        return self._view(copy)
+
     def set_name(
         self, session_id: int, clerk_user_id: str, name: str | None
     ) -> SessionView | None:
@@ -1046,6 +1129,55 @@ class InMemorySessionRepository:
             title=source.title,
             name=source.name,
             author_clerk_user_id=source.author_clerk_user_id,
+        )
+        self._next_id += 1
+        self._sessions[copy.id] = copy
+        self._prescriptions[copy.id] = self._materialize(
+            copy.id, [_draft_from(p) for p in prescriptions]
+        )
+        return self._view(copy)
+
+    def get_shared(self, session_id: int) -> SessionView | None:
+        # Not owner-scoped (ADR-0057): the previewing recipient is not the Owner.
+        workout = self._sessions.get(session_id)
+        if workout is None:
+            return None
+        return self._view(workout)
+
+    def redeem(
+        self, source_session_id: int, redeemer_clerk_user_id: str
+    ) -> SessionView | None:
+        # Cross-user read: no owner filter — the redeemer is not the Owner (ADR-0057).
+        source = self._sessions.get(source_session_id)
+        if source is None:
+            return None
+
+        prescriptions = sorted(
+            self._prescriptions.get(source_session_id, []), key=lambda p: p.position
+        )
+        # The redeem-copy rule (pure): new Owner = redeemer; Author, Name, Provenance and
+        # trace_id lineage carried forward; Protocol linkage and the regeneration guard dropped
+        # so the copy stands alone; records and the Favorite marker are per-owner, never copied.
+        attrs = redeem_copy(
+            SharedSessionSource(
+                training_type=source.training_type,
+                duration_minutes=source.duration_minutes,
+                provenance=source.provenance,
+                name=source.name,
+                author_clerk_user_id=source.author_clerk_user_id,
+                trace_id=source.trace_id,
+            ),
+            redeemer_clerk_user_id,
+        )
+        copy = WorkoutSession(
+            id=self._next_id,
+            clerk_user_id=attrs.clerk_user_id,
+            training_type=attrs.training_type,
+            duration_minutes=attrs.duration_minutes,
+            provenance=attrs.provenance,
+            trace_id=attrs.trace_id,
+            name=attrs.name,
+            author_clerk_user_id=attrs.author_clerk_user_id,
         )
         self._next_id += 1
         self._sessions[copy.id] = copy

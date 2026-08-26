@@ -21,6 +21,7 @@ from app.routes.protocols import router as protocols_router
 from app.routes.progress import router as progress_router
 from app.routes.records import router as records_router
 from app.routes.sessions import router as sessions_router
+from app.routes.shares import router as shares_router
 
 HTTP_UNPROCESSABLE_ENTITY = 422
 
@@ -62,6 +63,7 @@ def create_app() -> FastAPI:
     app.include_router(appearance_router)
     app.include_router(active_skin_router)
     app.include_router(sessions_router)
+    app.include_router(shares_router)
     app.include_router(logs_router)
     app.include_router(protocols_router)
     app.include_router(exercises_router)

@@ -73,6 +73,10 @@ from app.repositories.session_repository import (
     SessionRepository,
     SqlSessionRepository,
 )
+from app.repositories.share_link_repository import (
+    ShareLinkRepository,
+    SqlShareLinkRepository,
+)
 
 
 def get_profile_repository(
@@ -127,6 +131,12 @@ def get_logged_session_repository(
     session: Session = Depends(get_session),
 ) -> LoggedSessionRepository:
     return SqlLoggedSessionRepository(session)
+
+
+def get_share_link_repository(
+    session: Session = Depends(get_session),
+) -> ShareLinkRepository:
+    return SqlShareLinkRepository(session)
 
 
 def get_protocol_repository(

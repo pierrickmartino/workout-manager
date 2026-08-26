@@ -15,7 +15,8 @@ other field a Prescription carries lives here.
 
 from __future__ import annotations
 
-from app.repositories.session_repository import PrescriptionView
+from app.domain.session_naming import session_label
+from app.repositories.session_repository import PrescriptionView, SessionView
 
 
 def serialize_prescription(view: PrescriptionView) -> dict:
@@ -56,4 +57,38 @@ def serialize_prescription(view: PrescriptionView) -> dict:
     }
 
 
-__all__ = ["serialize_prescription"]
+def serialize_session(view: SessionView) -> dict:
+    """The canonical JSON dict for a standalone Session read.
+
+    The one shape the plain Session read (``routes/sessions.py``) and the Redeem read
+    (``routes/shares.py``) both return, so a redeemed copy and a freshly-read Session can
+    never disagree on their fields. Carries the training parameters, the never-blank
+    ``display_name`` (Session Name → derived ``training_type · date`` fallback, issue #394),
+    the **Author** credit name (issue #395), the standalone-only markers (``is_protocol_member``
+    withholding the Duplicate control, ``is_favorite`` withheld as ``null`` on a Protocol member,
+    issue #396), and every Exercise Prescription through :func:`serialize_prescription`.
+
+    The raw Author reference (``author_clerk_user_id``) is deliberately kept server-side —
+    the client needs only the credit name, and withholding the id avoids exposing the original
+    author's Clerk id to a different owner once Redeem transfers ownership (ADR-0057).
+    """
+
+    return {
+        "id": view.id,
+        "clerk_user_id": view.clerk_user_id,
+        "training_type": view.training_type,
+        "duration_minutes": view.duration_minutes,
+        "has_been_regenerated": view.has_been_regenerated,
+        "provenance": view.provenance,
+        "name": view.name,
+        "display_name": session_label(
+            view.name, view.training_type, view.created_at
+        ),
+        "author": {"display_name": view.author_display_name},
+        "is_protocol_member": view.is_protocol_member,
+        "is_favorite": None if view.is_protocol_member else view.is_favorite,
+        "prescriptions": [serialize_prescription(p) for p in view.prescriptions],
+    }
+
+
+__all__ = ["serialize_prescription", "serialize_session"]

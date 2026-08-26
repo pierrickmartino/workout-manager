@@ -1,20 +1,28 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import {
+  createShareLink,
   duplicateSession,
   favoriteSession,
   insertPrescription,
   pinPrescription,
   removePrescription,
   renameSession,
+  revokeShareLink,
   substitutePrescription,
   unfavoriteSession,
   unpinPrescription,
 } from "@/lib/sessions";
 import { toDuplicateResult } from "@/lib/duplicate-session";
+import {
+  SHARE_FALLBACK_ERROR,
+  toShareLinkResult,
+  type ShareLinkResult,
+} from "@/lib/share-link";
 import { normalizePinTarget } from "@/lib/log-session-form";
 import type { AuthorPrescriptionInput } from "@/lib/hand-authored-session";
 
@@ -158,6 +166,50 @@ export async function submitDuplicate(
   }
 
   redirect(result.href);
+}
+
+// The result the revoke share action returns to the control.
+export interface RevokeShareResult {
+  ok: boolean;
+  error: string | null;
+}
+
+// Derive the app's own origin from the request headers, so the Share Link URL is absolute and
+// built server-side (where the tested `toShareLinkResult` mapper turns the token into a URL). The
+// forwarded proto is honored behind a proxy; host is always present on a real request.
+async function requestOrigin(): Promise<string> {
+  const headerList = await headers();
+  const host = headerList.get("host") ?? "";
+  const proto = headerList.get("x-forwarded-proto") ?? "https";
+  return `${proto}://${host}`;
+}
+
+// Publish (or re-publish) a Share Link on the user's own standalone Session (Share, ADR-0057,
+// issue #398). Produces the token server-side and returns the shareable recipient URL for the
+// control to display and copy; idempotent while a link is live, so re-sharing yields the same URL.
+// A non-owned Session (404) or a Protocol member (409, standalone-only) comes back as an error.
+export async function submitShare(sessionId: number): Promise<ShareLinkResult> {
+  if (!Number.isInteger(sessionId)) {
+    return { ok: false, error: SHARE_FALLBACK_ERROR };
+  }
+  const origin = await requestOrigin();
+  return toShareLinkResult(await createShareLink(sessionId), origin);
+}
+
+// Revoke the user's own Share Link for this Session — the off-switch (ADR-0057, issue #398). Stops
+// future Redeems only; copies already taken are independent and untouched. On success the control
+// drops back to the "Share" state; a non-owned Session (404) comes back as an error.
+export async function submitRevokeShare(
+  sessionId: number,
+): Promise<RevokeShareResult> {
+  if (!Number.isInteger(sessionId)) {
+    return { ok: false, error: "Could not determine which session to unshare." };
+  }
+  const result = await revokeShareLink(sessionId);
+  if (!result.success || !result.data) {
+    return { ok: false, error: result.error ?? "Could not revoke this share link." };
+  }
+  return { ok: true, error: null };
 }
 
 // Swap one prescribed Exercise on the user's own Session copy. On success the
