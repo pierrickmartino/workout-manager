@@ -6,6 +6,7 @@ import type {
   AuthorSessionInput,
 } from "./hand-authored-session";
 import type { LoggedSession } from "./logs-types";
+import type { SessionSummary } from "./session-library";
 import type {
   ExerciseDetail,
   GenerateSessionInput,
@@ -42,6 +43,21 @@ export async function fetchSession(
   id: number,
 ): Promise<Envelope<WorkoutSession>> {
   return apiGet(`/api/sessions/${id}`);
+}
+
+// The generous first-page size the My Sessions library fetches (issue #397): the whole
+// personal library in one read so search + favorites filtering run entirely in-browser (like
+// History), bounded by the server's own list cap. A library larger than this would need
+// pagination UI — out of scope for v1's personal library.
+const LIBRARY_PAGE_LIMIT = 100;
+
+// List the user's own standalone Sessions for the My Sessions library (CONTEXT: My Sessions,
+// issue #397). The backend is owner-scoped and standalone-only — a Protocol-member Session and
+// every other user's Session are excluded — and returns the thin per-row projection
+// (name/fallback, Training Type, Author, favorite state). The page fetches the whole first
+// page and does the search + favorites filtering client-side via `session-library`.
+export async function fetchSessions(): Promise<Envelope<SessionSummary[]>> {
+  return apiGet(`/api/sessions?limit=${LIBRARY_PAGE_LIMIT}`);
 }
 
 // Append one hand-authored Exercise Prescription to the user's own standalone Session

@@ -193,7 +193,7 @@ _Avoid_: Restriction, limitation (generic)
 ## Session Library & Sharing
 
 **My Sessions**:
-The user's personal library of their **own standalone Sessions** — the destination, reached from **Train**, where saved workouts are **searched** (case-insensitive over **Session Name** and **Training Type** in v1), filtered by **Favorite**, and reopened to run again. A read surface over the user's owned standalone Sessions only — never Protocol-member Sessions or Protocols — and it lists *plans*, never records. Distinct from **Browse the Catalog** (movement discovery, not the user's plans) and from **History** (the record side).
+The user's personal library of their **own standalone Sessions** — the destination, reached from **Train**, where saved workouts are **searched** (case-insensitive over **Session Name**, the derived fallback label — so an unnamed Session, and any Session's creation date, is still findable — and **Training Type** in v1), filtered by **Favorite**, and reopened to run again. A read surface over the user's owned standalone Sessions only — never Protocol-member Sessions or Protocols — and it lists *plans*, never records. Distinct from **Browse the Catalog** (movement discovery, not the user's plans) and from **History** (the record side).
 _Avoid_: Library (that is the Catalog pick-mode widget), My workouts, Saved workouts, Session list
 
 **Session Name**:

@@ -17,6 +17,7 @@ from typing import Protocol
 from sqlmodel import Session, select
 
 from app.db.models import Exercise, ExercisePrescription, WorkoutSession
+from app.domain.session_library import matches_session_search
 from app.domain.superset import MIN_SUPERSET_MEMBERS
 from app.repositories.exercise_repository import ExerciseRepository
 from app.repositories.favorite_repository import (
@@ -154,6 +155,69 @@ class SessionView:
     is_favorite: bool = False
 
 
+@dataclass(frozen=True)
+class SessionSummaryView:
+    """A standalone Session as one row in the **My Sessions** library (issue #397).
+
+    A deliberately thin projection — just what the list renders and searches over —
+    so listing the user's library never joins every Session's prescriptions. Carries
+    the raw ``name`` (``None`` when unnamed) and ``created_at`` so the route resolves
+    the never-blank display label through ``session_label`` exactly as the detail read
+    does; ``training_type`` and ``author_display_name`` feed the row's Training Type and
+    Author, and ``is_favorite`` is the owner's Favorite marker (the favorites-only
+    filter, CONTEXT: My Sessions / Favorite)."""
+
+    id: int
+    training_type: str
+    name: str | None
+    created_at: datetime
+    author_display_name: str | None
+    is_favorite: bool
+
+
+@dataclass(frozen=True)
+class SessionListPage:
+    """One page of My Sessions results plus the full match count (issue #397).
+
+    ``items`` is the search/favorite-filtered, newest-first, limit/offset-sliced slice
+    the route returns; ``total`` is how many of the caller's standalone Sessions matched
+    in all, so the route can report pagination ``meta`` — the same shape as
+    ``ExerciseSearchPage``."""
+
+    items: list[SessionSummaryView]
+    total: int
+
+
+def _session_list_page(
+    summaries: list[SessionSummaryView],
+    *,
+    query: str,
+    favorites_only: bool,
+    limit: int,
+    offset: int,
+) -> SessionListPage:
+    """Filter, sort, and paginate the caller's standalone-Session summaries (issue #397).
+
+    The favorites-only flag and the search query **combine** (AND): a Session survives
+    only when it is favorited (if the flag is set) *and* matches the search (via the
+    shared ``matches_session_search`` predicate, so an empty query keeps everything).
+    Survivors are ordered newest-first — by ``created_at`` then ``id`` for a stable order
+    across equal timestamps — before the limit/offset slice, and ``total`` counts every
+    survivor across all pages. Owner-scoping and standalone-only exclusion are applied by
+    the caller before building ``summaries``."""
+
+    matched = [
+        summary
+        for summary in summaries
+        if (not favorites_only or summary.is_favorite)
+        and matches_session_search(
+            summary.name, summary.training_type, summary.created_at, query
+        )
+    ]
+    ordered = sorted(matched, key=lambda s: (s.created_at, s.id), reverse=True)
+    return SessionListPage(items=ordered[offset : offset + limit], total=len(ordered))
+
+
 class SessionRepository(Protocol):
     def create(self, clerk_user_id: str, draft: SessionDraft) -> SessionView:
         """Persist ``draft`` as a Session owned by ``clerk_user_id`` and return
@@ -163,6 +227,27 @@ class SessionRepository(Protocol):
     def get(self, session_id: int, clerk_user_id: str) -> SessionView | None:
         """Return the owner's Session by id, or ``None`` if it is missing or
         owned by another user."""
+        ...
+
+    def list_standalone(
+        self,
+        clerk_user_id: str,
+        *,
+        query: str = "",
+        favorites_only: bool = False,
+        limit: int,
+        offset: int,
+    ) -> SessionListPage:
+        """List the caller's **standalone** Sessions for My Sessions (issue #397).
+
+        Scoped to ``clerk_user_id`` and to standalone Sessions only — a Protocol-member
+        Session (one carrying a ``protocol_id``) and every other user's Session are
+        excluded, so the library is never another user's plans nor a plan the user is
+        working through inside a Protocol. ``query`` searches Session Name, the derived
+        fallback label, and Training Type case-insensitively (blank matches all);
+        ``favorites_only`` narrows to the owner's Favorites; the two **combine**. Results
+        come back newest-first and limit/offset-paginated as a ``SessionListPage`` whose
+        ``total`` counts every match across pages. A read: listing never creates."""
         ...
 
     def duplicate(self, session_id: int, clerk_user_id: str) -> SessionView | None:
@@ -536,6 +621,51 @@ class SqlSessionRepository:
             return None
         return self._view(workout)
 
+    def _summary(self, workout: WorkoutSession) -> SessionSummaryView:
+        """The thin My Sessions row for one owned Session (issue #397): Author and the
+        Favorite marker resolve through the same seams ``_view`` uses, but no prescriptions
+        are joined — the library never needs them."""
+
+        return SessionSummaryView(
+            id=workout.id,
+            training_type=workout.training_type,
+            name=workout.name,
+            created_at=workout.created_at,
+            author_display_name=_author_display_name(
+                self._profiles, workout.author_clerk_user_id
+            ),
+            is_favorite=self._favorites.is_favorite(
+                workout.clerk_user_id, workout.id
+            ),
+        )
+
+    def list_standalone(
+        self,
+        clerk_user_id: str,
+        *,
+        query: str = "",
+        favorites_only: bool = False,
+        limit: int,
+        offset: int,
+    ) -> SessionListPage:
+        # Owner-scoped and standalone-only (``protocol_id IS NULL``) in SQL, so a
+        # Protocol-member or another user's Session never enters the candidate set; the
+        # search/favorite filter, newest-first sort, and pagination are the shared rule.
+        workouts = self._session.exec(
+            select(WorkoutSession).where(
+                WorkoutSession.clerk_user_id == clerk_user_id,
+                WorkoutSession.protocol_id.is_(None),
+            )
+        ).all()
+        summaries = [self._summary(workout) for workout in workouts]
+        return _session_list_page(
+            summaries,
+            query=query,
+            favorites_only=favorites_only,
+            limit=limit,
+            offset=offset,
+        )
+
     def duplicate(self, session_id: int, clerk_user_id: str) -> SessionView | None:
         source = self._session.get(WorkoutSession, session_id)
         if source is None or source.clerk_user_id != clerk_user_id:
@@ -850,6 +980,50 @@ class InMemorySessionRepository:
             return None
         return self._view(workout)
 
+    def _summary(self, workout: WorkoutSession) -> SessionSummaryView:
+        """The thin My Sessions row for one owned Session (issue #397) — Author and the
+        Favorite marker resolve through the same seams ``_view`` uses, no prescriptions."""
+
+        return SessionSummaryView(
+            id=workout.id,
+            training_type=workout.training_type,
+            name=workout.name,
+            created_at=workout.created_at,
+            author_display_name=_author_display_name(
+                self._profiles, workout.author_clerk_user_id
+            ),
+            is_favorite=self._favorites.is_favorite(
+                workout.clerk_user_id, workout.id
+            ),
+        )
+
+    def list_standalone(
+        self,
+        clerk_user_id: str,
+        *,
+        query: str = "",
+        favorites_only: bool = False,
+        limit: int,
+        offset: int,
+    ) -> SessionListPage:
+        # Owner-scoped and standalone-only (no ``protocol_id``): a Protocol-member or
+        # another user's Session never enters the candidate set. The shared paginator
+        # applies the combined search/favorite filter, newest-first sort, and slice.
+        workouts = [
+            workout
+            for workout in self._sessions.values()
+            if workout.clerk_user_id == clerk_user_id
+            and workout.protocol_id is None
+        ]
+        summaries = [self._summary(workout) for workout in workouts]
+        return _session_list_page(
+            summaries,
+            query=query,
+            favorites_only=favorites_only,
+            limit=limit,
+            offset=offset,
+        )
+
     def duplicate(self, session_id: int, clerk_user_id: str) -> SessionView | None:
         source = self._sessions.get(session_id)
         if source is None or source.clerk_user_id != clerk_user_id:
@@ -1064,6 +1238,8 @@ __all__ = [
     "SessionDraft",
     "PrescriptionView",
     "SessionView",
+    "SessionSummaryView",
+    "SessionListPage",
     "SessionRepository",
     "SqlSessionRepository",
     "InMemorySessionRepository",

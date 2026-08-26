@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
@@ -76,6 +76,7 @@ from app.repositories.profile_repository import ProfileRepository
 from app.repositories.session_repository import (
     PrescriptionDraft,
     SessionRepository,
+    SessionSummaryView,
     SessionView,
 )
 from app.protocols.deploy_validation import DeployError
@@ -488,6 +489,71 @@ def generate(
             detail="The workout could not be generated. Please try again.",
         ) from exc
     return success_envelope(_serialize(view))
+
+
+# The My Sessions library page bounds (issue #397): a sensible default page and a cap so
+# one read never returns an unbounded slice of a user's library, mirroring the Exercise
+# Library's ``DEFAULT_SEARCH_LIMIT`` / ``MAX_SEARCH_LIMIT``.
+DEFAULT_LIST_LIMIT = 20
+MAX_LIST_LIMIT = 100
+
+
+def _serialize_summary(summary: SessionSummaryView) -> dict:
+    """One My Sessions row (issue #397): the same name/fallback and Author shapes the
+    detail read uses, kept thin (no prescriptions). ``created_at`` is sent as its calendar
+    date — the exact string the derived fallback label embeds — so the web view-model can
+    reproduce the fallback for client-side search with parity to the server."""
+
+    return {
+        "id": summary.id,
+        "training_type": summary.training_type,
+        # The raw Session Name (``null`` when unnamed) plus the never-blank display label the
+        # shared fallback resolves — identical to the detail read's ``_serialize``.
+        "name": summary.name,
+        "display_name": session_label(
+            summary.name, summary.training_type, summary.created_at
+        ),
+        "created_at": summary.created_at.date().isoformat(),
+        # Author surfaced as the raw credit name (``null`` when unset); the web
+        # ``sessionAuthorView`` mapper resolves the never-blank generic fallback.
+        "author": {"display_name": summary.author_display_name},
+        # The owner's Favorite marker, driving the favorites-only filter's rendering.
+        "is_favorite": summary.is_favorite,
+    }
+
+
+@router.get("/sessions")
+def list_sessions(
+    query: str = Query(default="", description="Search over name, fallback label, type."),
+    favorites: bool = Query(default=False, description="Narrow to Favorites only."),
+    limit: int = Query(default=DEFAULT_LIST_LIMIT, ge=1, le=MAX_LIST_LIMIT),
+    offset: int = Query(default=0, ge=0),
+    clerk_user_id: str = Depends(get_current_user),
+    sessions: SessionRepository = Depends(get_session_repository),
+) -> dict:
+    """List the caller's own **standalone** Sessions for My Sessions (issue #397).
+
+    The read behind the My Sessions library (CONTEXT: My Sessions): scoped to the
+    authenticated user and to standalone Sessions only — a Protocol-member Session and
+    every other user's Session are excluded. ``query`` searches Session Name, the derived
+    ``training_type · date`` fallback label, and Training Type case-insensitively (a blank
+    or whitespace-only query returns the full list); ``favorites`` narrows to the owner's
+    Favorites; the two **combine**. Results are newest-first and paginated through the
+    envelope ``meta`` (``total`` counts every match across pages). Read-only — listing
+    never creates a Session. Declared before ``/sessions/{session_id}`` so the literal path
+    is never mistaken for an id."""
+
+    page = sessions.list_standalone(
+        clerk_user_id,
+        query=query,
+        favorites_only=favorites,
+        limit=limit,
+        offset=offset,
+    )
+    return success_envelope(
+        [_serialize_summary(summary) for summary in page.items],
+        meta={"total": page.total, "limit": limit, "offset": offset},
+    )
 
 
 @router.get("/sessions/{session_id}")
