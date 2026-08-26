@@ -100,7 +100,22 @@ export interface WorkoutSession {
   // paths that omit it (live hydration). The `sessionFavoriteView` mapper owns the "show the
   // toggle only when the marker is a boolean" decision so the page stays thin.
   is_favorite?: boolean | null;
+  // Received-Share safety caveat (ADR-0058, issue #399): present **only** on the Redeem
+  // response, never on a plain Session read. `applies` is true when the redeemer has a
+  // Sensitive Constraint — the copy was built for another user and is not tailored to their
+  // constraints; `message` carries the mandatory wording then, and is null otherwise. The
+  // `toRedeemResult` mapper turns it into the recipient's render state.
+  caveat?: RedeemCaveat;
   prescriptions: ExercisePrescription[];
+}
+
+// The Received-Share caveat carried on a Redeem response (ADR-0058, issue #399). A received
+// Share is never auto-promoted into a Current Protocol or fed to generation; when the redeemer
+// has a Sensitive Constraint this flags that the plan was built for another user, so the
+// recipient UI can surface the notice prominently. Absent/`applies: false` for everyone else.
+export interface RedeemCaveat {
+  applies: boolean;
+  message: string | null;
 }
 
 // A Session's Author (CONTEXT: Author, issue #395): who first created the plan. `display_name` is

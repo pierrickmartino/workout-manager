@@ -24,15 +24,18 @@ from app.auth.dependencies import get_current_user
 from app.envelope import success_envelope
 from app.session_serialization import serialize_session
 from app.repositories.deps import (
+    get_profile_repository,
     get_session_repository,
     get_share_link_repository,
 )
+from app.repositories.profile_repository import ProfileRepository
 from app.repositories.session_repository import SessionRepository
 from app.repositories.share_link_repository import (
     ShareLinkRepository,
     ShareLinkView,
 )
 from app.sharing.service import (
+    RedeemOutcome,
     ShareLinkInvalid,
     SharePreview,
     ShareTargetNotFound,
@@ -71,6 +74,24 @@ def _serialize_preview(preview: SharePreview) -> dict:
         "display_name": preview.display_name,
         "training_type": preview.training_type,
         "author": {"display_name": preview.author_display_name},
+    }
+
+
+def _serialize_redeem(outcome: RedeemOutcome) -> dict:
+    """The Redeem response: the new copy's Session shape plus the Received-Share caveat (ADR-0058).
+
+    The copy is serialized through the one canonical Session serializer (so a redeemed copy and a
+    freshly-read Session never disagree on fields), and the ADR-0058 caveat is layered on as a
+    top-level ``caveat`` object: ``{applies, message}``. ``applies`` is ``true`` only for a
+    redeemer with a Sensitive Constraint, and ``message`` carries the mandatory "built for another
+    user" wording then, ``null`` otherwise. It flags the copy without ever mutating the plan."""
+
+    return {
+        **serialize_session(outcome.session),
+        "caveat": {
+            "applies": outcome.caveat.applies,
+            "message": outcome.caveat.message,
+        },
     }
 
 
@@ -154,6 +175,7 @@ def redeem_link(
     clerk_user_id: str = Depends(get_current_user),
     sessions: SessionRepository = Depends(get_session_repository),
     share_links: ShareLinkRepository = Depends(get_share_link_repository),
+    profiles: ProfileRepository = Depends(get_profile_repository),
 ) -> dict:
     """Redeem a Share Link into a new standalone Session the caller owns (Redeem, ADR-0057).
 
@@ -162,16 +184,27 @@ def redeem_link(
     **Session Name carried**, **Provenance + trace_id carried**, **no Logged Sessions**, **no
     Protocol position**, **Favorite not carried**. Each Redeem yields a fresh copy; redeeming
     one's own link is allowed. A revoked or unknown link fails cleanly (``404`` through the
-    envelope). Bodyless POST. On success the envelope carries the new Session — the same shape
-    the plain Session read returns — so the client lands the recipient on their new copy."""
+    envelope). Bodyless POST.
+
+    Layers the ADR-0058 Received-Share safety caveat: a redeemer **with** a Sensitive Constraint
+    still Redeems successfully, but the response's ``caveat`` flags that the copy was built for
+    another user and is not tailored to their constraints; an unconstrained redeemer gets no
+    caveat. The caveat never blocks the Redeem and the copy lands as an ordinary saved Session —
+    it is never auto-promoted into a Current Protocol or fed to generation. On success the
+    envelope carries the new Session (the same shape the plain read returns) plus the caveat, so
+    the client lands the recipient on their new copy."""
 
     try:
-        view = redeem_share(
-            token, clerk_user_id, sessions=sessions, share_links=share_links
+        outcome = redeem_share(
+            token,
+            clerk_user_id,
+            sessions=sessions,
+            share_links=share_links,
+            profiles=profiles,
         )
     except ShareLinkInvalid as exc:
         raise HTTPException(
             status_code=HTTP_NOT_FOUND,
             detail="This share link is no longer valid.",
         ) from exc
-    return success_envelope(serialize_session(view))
+    return success_envelope(_serialize_redeem(outcome))

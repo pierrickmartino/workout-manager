@@ -47,11 +47,15 @@ SENSITIVE_CONSTRAINT_TYPES: frozenset[str] = frozenset(
 )
 
 
-class _HasSensitiveConstraints(Protocol):
+class HasSensitiveConstraints(Protocol):
+    """The one structural contract the Sensitive-Constraint gate reads: the stored constraint
+    types. Shared so every derivation of "sensitive" (the generation cache-bypass here and the
+    ADR-0058 Received-Share caveat) types against the same shape and can never drift."""
+
     sensitive_constraints: list[str]
 
 
-def is_sensitive(profile: _HasSensitiveConstraints) -> bool:
+def is_sensitive(profile: HasSensitiveConstraints) -> bool:
     """Whether ``profile`` carries any Sensitive Constraint.
 
     Derived from the stored constraint types: ``True`` if at least one stored

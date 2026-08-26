@@ -1,9 +1,15 @@
 import type { Envelope } from "./api";
 import { resolveAuthorCredit } from "./session-author.ts";
-import type { SharePreview, WorkoutSession } from "./sessions-types";
+import type { RedeemCaveat, SharePreview, WorkoutSession } from "./sessions-types";
 
 // The honest fallback when a Redeem fails without a backend-supplied reason.
 export const REDEEM_FALLBACK_ERROR = "Could not redeem this share link.";
+
+// The frontend fallback caveat text (ADR-0058), used only if a flagged redeem somehow arrives
+// without the backend's message. The safety hold keys on `applies` alone, so a constrained
+// redeemer is never silently redirected into the plan even if the message is missing.
+export const RECEIVED_SHARE_CAVEAT_FALLBACK =
+  "This session was built for another user and isn't tailored to your constraints.";
 
 // The recipient's pre-Redeem display model (ADR-0057). A valid link resolves to the linked
 // Session's name, Training Type, and an Author byline; an invalid one (revoked or unknown token,
@@ -42,16 +48,23 @@ export function toSharePreviewView(
   };
 }
 
-// The thin result the redeem server action acts on: on success, the new copy's id and the href to
-// land the recipient on (their own Session, never the source); on failure, an honest error. A
-// discriminated union so the caller cannot read `href` off a failure. Mirrors `toDuplicateResult`.
+// The "no caveat" default an unconstrained (or caveat-less) redeem collapses to, so the caller
+// never has to reason about an absent `caveat` field — it is always a resolved decision.
+const NO_CAVEAT: RedeemCaveat = { applies: false, message: null };
+
+// The thin result the redeem server action acts on: on success, the new copy's id, the href to
+// land the recipient on (their own Session, never the source), and the ADR-0058 Received-Share
+// caveat; on failure, an honest error. A discriminated union so the caller cannot read `href`
+// off a failure. Mirrors `toDuplicateResult`, plus the caveat.
 export type RedeemResult =
-  | { ok: true; sessionId: number; href: string }
+  | { ok: true; sessionId: number; href: string; caveat: RedeemCaveat }
   | { ok: false; error: string };
 
 // Interpret the backend's redeem envelope. On success, point at the recipient's new standalone
-// copy; on failure — a revoked/unknown link (404), or a malformed success with no data — surface
-// the backend error or the generic fallback.
+// copy and carry the Received-Share caveat (ADR-0058) — flagged when the redeemer has a Sensitive
+// Constraint, so the recipient UI can surface the "built for another user" notice; on failure — a
+// revoked/unknown link (404), or a malformed success with no data — surface the backend error or
+// the generic fallback. A missing `caveat` collapses to the no-caveat default.
 export function toRedeemResult(
   envelope: Envelope<WorkoutSession>,
 ): RedeemResult {
@@ -62,5 +75,32 @@ export function toRedeemResult(
     ok: true,
     sessionId: envelope.data.id,
     href: `/sessions/${envelope.data.id}`,
+    caveat: envelope.data.caveat ?? NO_CAVEAT,
   };
+}
+
+// How a successful Redeem lands the recipient (ADR-0058). An unflagged redeem redirects straight
+// to the saved copy; a flagged one (a redeemer with a Sensitive Constraint) is *held* so the
+// caveat can be shown prominently, with the same href to open the copy deliberately — a received
+// Share never auto-enters the active flow. A discriminated union so a caller cannot read the
+// caveat message off a redirect landing.
+export type RedeemLanding =
+  | { kind: "redirect"; href: string }
+  | { kind: "caveat"; message: string; href: string };
+
+// Decide the landing from a successful redeem result. Keyed on `caveat.applies` **alone** — the
+// safety hold must never depend on the message being non-empty, or a flagged redeem with a missing
+// message would slip through to an auto-redirect (the exact silent auto-promotion ADR-0058
+// forbids). The message falls back to the canonical wording if the backend omitted it.
+export function redeemLanding(
+  result: Extract<RedeemResult, { ok: true }>,
+): RedeemLanding {
+  if (result.caveat.applies) {
+    return {
+      kind: "caveat",
+      message: result.caveat.message ?? RECEIVED_SHARE_CAVEAT_FALLBACK,
+      href: result.href,
+    };
+  }
+  return { kind: "redirect", href: result.href };
 }
