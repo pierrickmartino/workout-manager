@@ -5,10 +5,13 @@ import {
   buildAppearanceView,
   buildKeepScreenAwakeControl,
   buildSkinControl,
+  buildWeightUnitControl,
   MODE_OPTIONS,
   SKIN_OPTIONS,
+  WEIGHT_UNIT_OPTIONS,
 } from "./appearance-view.ts";
 import { DEFAULT_MODE, KNOWN_SKINS, type Mode } from "./theme.ts";
+import { KNOWN_WEIGHT_UNITS, type WeightUnit } from "./weight-unit.ts";
 
 // `buildAppearanceView` is the pure, per-role mapper the Profile Appearance section
 // renders from. Given the user's Mode plus their admin context it produces the
@@ -119,6 +122,75 @@ test("names the preference Keep Screen Awake, not the browser wake-lock API", ()
 
   // Assert — the label is the user's preference, per CONTEXT "Keep Screen Awake"
   assert.equal(control.label, "Keep Screen Awake");
+});
+
+// ── Weight Unit slice: everyone (buildWeightUnitControl) ─────────────────────
+
+test("offers exactly kg and lb, in a stable catalog order", () => {
+  // Arrange / Act
+  const control = buildWeightUnitControl("kg");
+
+  // Assert — the two closed units, kg first (the default), then lb
+  assert.deepEqual(
+    control.options.map((option) => option.value),
+    ["kg", "lb"],
+  );
+});
+
+test("marks exactly the current Weight Unit as selected", () => {
+  // Arrange / Act — a pounds user
+  const control = buildWeightUnitControl("lb");
+
+  // Assert — lb is selected, kg is not
+  const selected = control.options.filter((option) => option.selected);
+  assert.equal(selected.length, 1);
+  assert.equal(selected[0].value, "lb");
+});
+
+test("every Weight Unit can be the selected one", () => {
+  // Arrange — drive the mapper across both units
+  const units: WeightUnit[] = ["kg", "lb"];
+
+  for (const unit of units) {
+    // Act
+    const control = buildWeightUnitControl(unit);
+
+    // Assert — the selected option is always exactly the input unit
+    const selectedValues = control.options
+      .filter((option) => option.selected)
+      .map((option) => option.value);
+    assert.deepEqual(selectedValues, [unit]);
+  }
+});
+
+test("carries a human label and caption for the Weight Unit control", () => {
+  // Arrange / Act — the copy is stable regardless of the stored value
+  for (const unit of ["kg", "lb"] as WeightUnit[]) {
+    const control = buildWeightUnitControl(unit);
+
+    // Assert — renderable copy, no empty strings
+    assert.ok(control.label.length > 0);
+    assert.ok(control.caption.length > 0);
+    for (const option of control.options) {
+      assert.ok(option.label.length > 0);
+    }
+  }
+});
+
+test("names the preference Weight Unit, per CONTEXT", () => {
+  // Arrange / Act
+  const control = buildWeightUnitControl("kg");
+
+  // Assert — the label is the user's preference (CONTEXT "Weight Unit")
+  assert.equal(control.label, "Weight Unit");
+});
+
+test("WEIGHT_UNIT_OPTIONS is the single source of the unit catalog and cannot drift from KNOWN_WEIGHT_UNITS", () => {
+  // Assert — the display catalog covers exactly the canonical unit ids, in order
+  assert.deepEqual(
+    WEIGHT_UNIT_OPTIONS.map((option) => option.value),
+    [...KNOWN_WEIGHT_UNITS],
+  );
 });
 
 // ── Per-role branch: admin gets the Skin slice, a non-admin does not ─────────

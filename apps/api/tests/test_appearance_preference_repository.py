@@ -14,7 +14,7 @@ import pytest
 from sqlmodel import Session, SQLModel
 from tests.conftest import make_fk_engine
 
-from app.domain.appearance import InterfacePreference, Mode
+from app.domain.appearance import InterfacePreference, Mode, WeightUnit
 from app.repositories.appearance_preference_repository import (
     InMemoryAppearancePreferenceRepository,
     SqlAppearancePreferenceRepository,
@@ -32,13 +32,43 @@ def repo(request):
         yield SqlAppearancePreferenceRepository(session)
 
 
-def test_get_defaults_to_dark_and_awake_when_no_record_exists(repo):
+def test_get_defaults_to_dark_awake_and_kg_when_no_record_exists(repo):
     # Act — a user who has made no Interface Preference choice
     preference = repo.get_preference("user_default")
 
     # Assert — the shipped defaults: Dark look (ADR-0047) + Keep Screen Awake on
+    # + kilograms (CONTEXT "Weight Unit")
     assert preference == InterfacePreference(
-        mode=Mode.DARK, keep_screen_awake=True
+        mode=Mode.DARK, keep_screen_awake=True, weight_unit=WeightUnit.KG
+    )
+
+
+def test_set_then_get_round_trips_the_weight_unit(repo):
+    # Arrange / Act — a pounds user
+    chosen = InterfacePreference(
+        mode=Mode.DARK, keep_screen_awake=True, weight_unit=WeightUnit.LB
+    )
+    repo.set_preference("user_lb", chosen)
+
+    # Assert — the whole preference, Weight Unit included, round-trips
+    assert repo.get_preference("user_lb") == chosen
+
+
+def test_weight_unit_is_stored_independently_of_the_other_facets(repo):
+    # Arrange — start from a stored preference in pounds
+    stored = repo.set_preference(
+        "user_units",
+        InterfacePreference(
+            mode=Mode.LIGHT, keep_screen_awake=False, weight_unit=WeightUnit.LB
+        ),
+    )
+
+    # Act — flip only Mode, leaving Weight Unit (and Keep Screen Awake) as-is
+    repo.set_preference("user_units", replace(stored, mode=Mode.DARK))
+
+    # Assert — the pounds choice survives a Mode change
+    assert repo.get_preference("user_units") == InterfacePreference(
+        mode=Mode.DARK, keep_screen_awake=False, weight_unit=WeightUnit.LB
     )
 
 

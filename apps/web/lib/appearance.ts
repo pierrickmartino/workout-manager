@@ -3,6 +3,7 @@ import { cache } from "react";
 import { apiGet, apiSend, type Envelope } from "./api";
 
 import { DEFAULT_MODE, type Mode } from "./theme";
+import { DEFAULT_WEIGHT_UNIT, type WeightUnit } from "./weight-unit";
 
 // Keep Screen Awake ships **on** (ADR-0055 / CONTEXT "Keep Screen Awake"): the
 // backend get-or-defaults to `true`, and this mirrors it for the offline/signed-out
@@ -17,11 +18,13 @@ export const DEFAULT_KEEP_SCREEN_AWAKE = true;
 // `/api/appearance` path stays even though the concept generalised past appearance
 // (ADR-0055).
 
-// The wire shape of GET/PUT /api/appearance's `data`: the stored Mode plus whether
-// to Keep Screen Awake during a Live Session (defaults on, ADR-0055).
+// The wire shape of GET/PUT /api/appearance's `data`: the stored Mode, whether to
+// Keep Screen Awake during a Live Session (defaults on, ADR-0055), and the Weight
+// Unit a Load is entered and displayed in (defaults kg, CONTEXT "Weight Unit").
 export interface Appearance {
   mode: Mode;
   keep_screen_awake: boolean;
+  weight_unit: WeightUnit;
 }
 
 export async function fetchAppearance(): Promise<Envelope<Appearance>> {
@@ -43,11 +46,19 @@ export async function saveKeepScreenAwake(
   return apiSend("/api/appearance", "PUT", { keep_screen_awake: keepScreenAwake });
 }
 
+export async function saveWeightUnit(
+  weightUnit: WeightUnit,
+): Promise<Envelope<Appearance>> {
+  return apiSend("/api/appearance", "PUT", { weight_unit: weightUnit });
+}
+
 // The shipped Interface Preference for a signed-out visitor or a briefly
-// unreachable backend: today's all-dark look with Keep Screen Awake on.
+// unreachable backend: today's all-dark look with Keep Screen Awake on and weights
+// in kilograms.
 const DEFAULT_APPEARANCE: Appearance = {
   mode: DEFAULT_MODE,
   keep_screen_awake: DEFAULT_KEEP_SCREEN_AWAKE,
+  weight_unit: DEFAULT_WEIGHT_UNIT,
 };
 
 // Resolve the user's whole Interface Preference (Mode + Keep Screen Awake) for a

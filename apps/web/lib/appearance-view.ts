@@ -1,4 +1,5 @@
 import type { Mode, Skin } from "./theme";
+import type { WeightUnit } from "./weight-unit";
 
 // The pure, per-role view-model for the Profile Appearance section. *Everyone* gets
 // the same three Mode options (CONTEXT "Mode"). An **admin** additionally gets the
@@ -64,6 +65,57 @@ export function buildKeepScreenAwakeControl(
   keepScreenAwake: boolean,
 ): AppearanceKeepAwakeControl {
   return { ...KEEP_SCREEN_AWAKE_COPY, enabled: keepScreenAwake };
+}
+
+// ── Weight Unit slice (everyone) ─────────────────────────────────────────────
+
+// One Weight Unit the toggle can offer: the stored `value`, its human `label`, and
+// whether it is the currently `selected` unit.
+export interface WeightUnitOption {
+  value: WeightUnit;
+  label: string;
+  selected: boolean;
+}
+
+// The user's Weight Unit control: the human `label` and `caption` plus the two
+// unit `options`. CONTEXT "Weight Unit" — the user's Interface Preference for the
+// unit a Load and Performed Body Weight are entered and displayed in. It steers
+// display only; storage stays canonical kilograms, so the choice never reaches
+// generation or the cache key.
+export interface AppearanceWeightUnitControl {
+  label: string;
+  caption: string;
+  options: WeightUnitOption[];
+}
+
+// The fixed catalog of Weight Units in display order (kg first — the default).
+// Declared once so the toggle order and the view-model can never drift; the
+// `value`s are exactly the backend's closed `WeightUnit` enum (kg | lb).
+export const WEIGHT_UNIT_OPTIONS = [
+  { value: "kg", label: "kg" },
+  { value: "lb", label: "lb" },
+] as const satisfies readonly Omit<WeightUnitOption, "selected">[];
+
+// The Weight Unit copy, authored once so the toggle and its tests can never drift on
+// the user-facing wording.
+export const WEIGHT_UNIT_COPY = {
+  label: "Weight Unit",
+  caption: "Enter and display weights in your unit",
+} as const satisfies Omit<AppearanceWeightUnitControl, "options">;
+
+// Map the user's stored Weight Unit to the toggle's view-model, marking exactly the
+// current unit as `selected`. Pure: same input, same output, no I/O — so the toggle
+// component stays a thin shell (mirrors `buildModeOptions`).
+export function buildWeightUnitControl(
+  currentUnit: WeightUnit,
+): AppearanceWeightUnitControl {
+  return {
+    ...WEIGHT_UNIT_COPY,
+    options: WEIGHT_UNIT_OPTIONS.map((option) => ({
+      ...option,
+      selected: option.value === currentUnit,
+    })),
+  };
 }
 
 // ── Skin slice (admins only) ─────────────────────────────────────────────────

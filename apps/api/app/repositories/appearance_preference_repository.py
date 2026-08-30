@@ -25,6 +25,7 @@ from app.domain.appearance import (
     DEFAULT_INTERFACE_PREFERENCE,
     InterfacePreference,
     Mode,
+    WeightUnit,
 )
 
 
@@ -55,14 +56,25 @@ class SqlAppearancePreferenceRepository:
             )
         ).first()
 
+    @staticmethod
+    def _to_domain(row: AppearancePreference) -> InterfacePreference:
+        """Map a stored row to the whole domain Interface Preference.
+
+        The one place raw column values are re-typed into the domain value, so
+        every facet is read back the same way and adding the next one is a single
+        edit here rather than in both ``get`` and ``set``."""
+
+        return InterfacePreference(
+            mode=Mode(row.mode),
+            keep_screen_awake=row.keep_screen_awake,
+            weight_unit=WeightUnit(row.weight_unit),
+        )
+
     def get_preference(self, clerk_user_id: str) -> InterfacePreference:
         existing = self._find(clerk_user_id)
         if existing is None:
             return DEFAULT_INTERFACE_PREFERENCE
-        return InterfacePreference(
-            mode=Mode(existing.mode),
-            keep_screen_awake=existing.keep_screen_awake,
-        )
+        return self._to_domain(existing)
 
     def set_preference(
         self, clerk_user_id: str, preference: InterfacePreference
@@ -74,13 +86,11 @@ class SqlAppearancePreferenceRepository:
 
         row.mode = preference.mode.value
         row.keep_screen_awake = preference.keep_screen_awake
+        row.weight_unit = preference.weight_unit.value
         self._session.add(row)
         self._session.commit()
         self._session.refresh(row)
-        return InterfacePreference(
-            mode=Mode(row.mode),
-            keep_screen_awake=row.keep_screen_awake,
-        )
+        return self._to_domain(row)
 
 
 class InMemoryAppearancePreferenceRepository:
