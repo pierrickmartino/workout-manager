@@ -220,6 +220,10 @@ _Avoid_: Invite link, Share code (it is a link), Token (bare), Deep link
 The recipient's act of turning a **Share Link** into a **new standalone Session they own** — the cross-user cousin of **Duplicate**. Deep-copies the source's Exercise Prescriptions, Supersets, and per-set sets/reps/rest/tempo/Load faithfully, carries **Session Provenance** and `trace_id` **lineage** forward unchanged (ADR-0043 semantics) and the **Session Name** verbatim, and **preserves the Author** as the original creator; the copy carries **no Logged Sessions** and **no Favorite** (both are per-owner). The new owner may then rename, favourite, edit, log, and **re-share** their copy freely. A user with a **Sensitive Constraint** may still Redeem — receiving a plan marked *built for another user and not tailored to your constraints*, never auto-promoted into generation or a Current Protocol (ADR-0058). Distinct from **Adopt** (Generated artifact), **Duplicate** (own Session), and **Capture** (record→plan).
 _Avoid_: Accept, Import, Claim, Adopt (that is the Generated-artifact copy), Duplicate (that is the own-Session copy)
 
+**Export**:
+The act of a user taking a **portable copy of their own data** off the platform — their owned **Protocols** and standalone **Sessions** (plans), their **Logged Sessions** and **Logged Sets** (records), body metrics, and the **Catalog** Exercises those reference — as a faithful **JSON** file and an analysis-friendly **CSV** (one row per **Logged Set**). A read-only, user-scoped act: it never includes the shared **Generated** cache or another user's data, and values are emitted in **canonical kilograms** regardless of the user's **Weight Unit**. Distinct from **Share**, which hands one plan to another user by copy — Export is whole-account portability, for the user themselves.
+_Avoid_: Download (bare), backup, dump, Share (that is the cross-user plan copy)
+
 ## Readiness
 
 **Readiness**:
@@ -335,3 +339,7 @@ _Avoid_: Settings, profile (that is the generation-input Fitness Profile), theme
 **Keep Screen Awake**:
 A user's **Interface Preference** for whether the device screen is held on while a **Live Session** is underway — a best-effort, **client-only** screen wake lock, defaulting **on** (ADR-0055). Purely ephemeral UI behaviour (ADR-0012): it is never part of the record, never reaches generation, and does **not** change idle auto-end (ADR-0014), which still measures from last activity.
 _Avoid_: No-sleep, wake lock (that is the browser API behind it, not the user's preference)
+
+**Weight Unit**:
+A user's **Interface Preference** — **kg** or **lb** — steering only how a **Load**'s and a **Performed Body Weight**'s kilogram value is *entered and displayed*, never what is stored or generated. Canonical storage stays kilograms; the pound rendering is a **read-time projection** over the numeric value, computed per *reader* (a **Redeem**ed or **Share**d Session shows the recipient's unit, not the author's) — so, like **Mode** and **Keep Screen Awake**, it never reaches generation or the cache key (ADR-0047/0055). Defaults to **kg**. Governs **weight only**: **Distance** is separately metric-canonical (ADR-0049) and is not affected.
+_Avoid_: Units (bare), imperial/metric (that is a whole measurement system, and Distance is separately metric-canonical), lb/kg flag, measurement system
