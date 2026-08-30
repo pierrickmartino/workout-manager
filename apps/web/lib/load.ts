@@ -34,11 +34,56 @@ export function isPureBodyweight(load: Load | null | undefined): boolean {
   return load?.kind === "bodyweight" && load.added_kg == null;
 }
 
-// Render a typed Load for display, falling back to the em dash when absent. The
-// stored `text` is authoritative — it preserves exactly what was prescribed or
-// logged ("70kg", "bodyweight", "70% 1RM"), so the UI never re-derives it.
+// The weight unit label. Isolated as one token so the pound projection (#416) has a single
+// place to swap it; every kg display below routes through it rather than inlining "kg".
+const KG_UNIT = "kg";
+
+// Render a raw kilogram number to its display digits: a whole number drops its trailing
+// ".0" (JS `70.0` prints "70"), a fraction keeps its decimals (72.5 → "72.5"). Mirrors the
+// backend `_format_number`. Kept separate from the unit label so the pound projection (#416)
+// can convert the number before the unit is chosen.
+function formatWeightNumber(value: number): string {
+  return String(value);
+}
+
+// A kilogram figure with its unit — the canonical "70 kg" / "72.5 kg" the app has always
+// shown. This is the one numeric→string weight seam: every weight display computes through
+// here from a number instead of echoing stored text, so the pound projection (#416) has a
+// single place to swap the unit.
+export function formatKg(value: number): string {
+  return `${formatWeightNumber(value)} ${KG_UNIT}`;
+}
+
+// Render a typed Load for display, falling back to the em dash when absent. The weight-bearing
+// kinds are computed from their numeric kilogram fields — `absolute` from `kg`, weighted
+// `bodyweight` from `added_kg`, `range` from its bounds — so the shown string is derived from
+// numbers, not the stored `text`; that is the seam the pound projection (#416) needs. Pure
+// bodyweight (no added load), `percent_1rm`, and `qualitative` carry no kg number, so their
+// preserved `text` stays authoritative. A weight-bearing kind missing its number falls back to
+// `text` rather than rendering a broken string.
 export function formatLoad(load: Load | null | undefined): string {
-  return load?.text ?? NO_LOAD;
+  if (load == null) return NO_LOAD;
+  switch (load.kind) {
+    case "absolute":
+      return load.kg != null ? formatKg(load.kg) : load.text ?? NO_LOAD;
+    case "bodyweight":
+      return load.added_kg != null
+        ? `bodyweight + ${formatKg(load.added_kg)}`
+        : load.text ?? NO_LOAD;
+    case "range":
+      return load.low_kg != null && load.high_kg != null
+        ? `${formatWeightNumber(load.low_kg)}-${formatWeightNumber(load.high_kg)} ${KG_UNIT}`
+        : load.text ?? NO_LOAD;
+    default:
+      return load.text ?? NO_LOAD;
+  }
+}
+
+// Render a Performed Body Weight (ADR-0026) for display — the captured mass as a kilogram
+// figure, or the em dash when none was on file (never guessed). Shares the `formatKg` seam so
+// the body-weight stat tracks the same unit projection as every other weight (#416).
+export function formatBodyWeight(kg: number | null | undefined): string {
+  return kg != null ? formatKg(kg) : NO_LOAD;
 }
 
 // Reverse a typed Load into a picker's `loadKind` + `loadValue` (ADR-0010) — the raw field

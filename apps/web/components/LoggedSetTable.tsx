@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { formatLoad } from "@/lib/load";
+import { formatBodyWeight, formatLoad } from "@/lib/load";
 import { formatPace, formatQuantity, type Quantity } from "@/lib/quantity";
 import type { LoggedSet } from "@/lib/logs-types";
 
@@ -83,12 +83,7 @@ function LoggedSetRow({
           }
         />
         {showBodyWeight ? (
-          <Stat
-            label="BW"
-            value={
-              loggedSet.body_weight_kg != null ? `${loggedSet.body_weight_kg} kg` : "—"
-            }
-          />
+          <Stat label="BW" value={formatBodyWeight(loggedSet.body_weight_kg)} />
         ) : null}
         <Stat
           label="RPE"
