@@ -25,6 +25,7 @@ from app.domain.appearance import (
     DEFAULT_INTERFACE_PREFERENCE,
     InterfacePreference,
     Mode,
+    WeightUnit,
 )
 
 
@@ -62,6 +63,7 @@ class SqlAppearancePreferenceRepository:
         return InterfacePreference(
             mode=Mode(existing.mode),
             keep_screen_awake=existing.keep_screen_awake,
+            weight_unit=WeightUnit(existing.weight_unit),
         )
 
     def set_preference(
@@ -74,12 +76,14 @@ class SqlAppearancePreferenceRepository:
 
         row.mode = preference.mode.value
         row.keep_screen_awake = preference.keep_screen_awake
+        row.weight_unit = preference.weight_unit.value
         self._session.add(row)
         self._session.commit()
         self._session.refresh(row)
         return InterfacePreference(
             mode=Mode(row.mode),
             keep_screen_awake=row.keep_screen_awake,
+            weight_unit=WeightUnit(row.weight_unit),
         )
 
 

@@ -22,7 +22,11 @@ from sqlalchemy import Column, UniqueConstraint
 from sqlalchemy.types import JSON
 from sqlmodel import Field, SQLModel
 
-from app.domain.appearance import DEFAULT_KEEP_SCREEN_AWAKE, DEFAULT_MODE
+from app.domain.appearance import (
+    DEFAULT_KEEP_SCREEN_AWAKE,
+    DEFAULT_MODE,
+    DEFAULT_WEIGHT_UNIT,
+)
 
 
 def _utcnow() -> datetime:
@@ -66,7 +70,7 @@ class Profile(SQLModel, table=True):
 
 
 class AppearancePreference(SQLModel, table=True):
-    """One user's Interface Preference: their Mode + Keep Screen Awake, keyed by user.
+    """One user's Interface Preference: Mode + Keep Screen Awake + Weight Unit, keyed by user.
 
     A deliberately *separate* store from ``Profile`` (ADR-0047) so an Interface
     Preference never enters generation or the cache key — one row per user. The
@@ -74,9 +78,11 @@ class AppearancePreference(SQLModel, table=True):
     the concept generalised to an *Interface Preference* (ADR-0055): a rename buys
     nothing functional. ``mode`` is the raw value of ``app.domain.appearance.Mode``
     (``light`` | ``dark`` | ``system``); ``keep_screen_awake`` is the behavioural
-    facet. Absence of a row means the shipped defaults (Dark + Keep-Screen-Awake
-    on), so this table only ever holds a *deliberate* choice and existing users are
-    never disturbed on deploy."""
+    facet; ``weight_unit`` is the raw value of ``app.domain.appearance.WeightUnit``
+    (``kg`` | ``lb``), steering only how a Load is entered and displayed, never what
+    is stored. Absence of a row means the shipped defaults (Dark + Keep-Screen-Awake
+    on + kilograms), so this table only ever holds a *deliberate* choice and existing
+    users are never disturbed on deploy."""
 
     __tablename__ = "appearance_preference"
 
@@ -84,6 +90,7 @@ class AppearancePreference(SQLModel, table=True):
     clerk_user_id: str = Field(index=True, unique=True)
     mode: str = Field(default=DEFAULT_MODE.value)
     keep_screen_awake: bool = Field(default=DEFAULT_KEEP_SCREEN_AWAKE)
+    weight_unit: str = Field(default=DEFAULT_WEIGHT_UNIT.value)
 
 
 class AppSetting(SQLModel, table=True):

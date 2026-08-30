@@ -23,6 +23,8 @@ BEFORE_APPEARANCE = "0024_exercise_image"
 AFTER_APPEARANCE = "0025_appearance_preference"
 BEFORE_KEEP_AWAKE = "0028_pin_rep_target"
 AFTER_KEEP_AWAKE = "0029_keep_screen_awake"
+BEFORE_WEIGHT_UNIT = "0033_share_link"
+AFTER_WEIGHT_UNIT = "0034_weight_unit"
 
 
 @pytest.fixture()
@@ -165,3 +167,60 @@ def test_downgrade_drops_the_keep_screen_awake_column(sqlite_url):
     columns = _column_names(sqlite_url, "appearance_preference")
     assert "keep_screen_awake" not in columns
     assert "mode" in columns
+
+
+def test_weight_unit_column_backfills_existing_rows_to_kg(sqlite_url):
+    # Arrange — schema at 0033, before Weight Unit, with an existing user's
+    # Mode + Keep-Screen-Awake row already stored
+    config = _alembic_config()
+    command.upgrade(config, BEFORE_WEIGHT_UNIT)
+    assert "weight_unit" not in _column_names(sqlite_url, "appearance_preference")
+    engine = create_engine(sqlite_url)
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO appearance_preference "
+                    "(clerk_user_id, mode, keep_screen_awake) "
+                    "VALUES ('user_existing', 'light', 0)"
+                )
+            )
+    finally:
+        engine.dispose()
+
+    # Act — add the Weight Unit facet (CONTEXT "Weight Unit")
+    command.upgrade(config, AFTER_WEIGHT_UNIT)
+
+    # Assert — the column arrives and the returning user's row is backfilled to the
+    # canonical kilograms, their other facets undisturbed (ADR-0047)
+    assert "weight_unit" in _column_names(sqlite_url, "appearance_preference")
+    engine = create_engine(sqlite_url)
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT mode, keep_screen_awake, weight_unit "
+                    "FROM appearance_preference WHERE clerk_user_id = 'user_existing'"
+                )
+            ).one()
+    finally:
+        engine.dispose()
+    assert row.mode == "light"
+    assert bool(row.keep_screen_awake) is False
+    assert row.weight_unit == "kg"
+
+
+def test_downgrade_drops_the_weight_unit_column(sqlite_url):
+    # Arrange — fully migrated with the new column present
+    config = _alembic_config()
+    command.upgrade(config, AFTER_WEIGHT_UNIT)
+    assert "weight_unit" in _column_names(sqlite_url, "appearance_preference")
+
+    # Act — reverse just this migration
+    command.downgrade(config, BEFORE_WEIGHT_UNIT)
+
+    # Assert — the column is gone but the columns it sat beside (and the table) remain
+    columns = _column_names(sqlite_url, "appearance_preference")
+    assert "weight_unit" not in columns
+    assert "mode" in columns
+    assert "keep_screen_awake" in columns

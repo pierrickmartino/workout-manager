@@ -11,6 +11,7 @@ import { toAchievementCards } from "@/lib/achievements-view";
 import { buildAppearanceView } from "@/lib/appearance-view";
 import { AppearanceModePicker } from "@/components/AppearanceModePicker";
 import { AppearanceKeepAwakeToggle } from "@/components/AppearanceKeepAwakeToggle";
+import { AppearanceWeightUnitToggle } from "@/components/AppearanceWeightUnitToggle";
 import { AppearanceSkinPublisher } from "@/components/AppearanceSkinPublisher";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -48,7 +49,11 @@ export default async function ProfilePage() {
       resolveActiveSkin(),
       resolveIsAdmin(),
     ]);
-  const { mode, keep_screen_awake: keepScreenAwake } = appearancePref;
+  const {
+    mode,
+    keep_screen_awake: keepScreenAwake,
+    weight_unit: weightUnit,
+  } = appearancePref;
 
   if (!envelope.success || !envelope.data) {
     return (
@@ -124,13 +129,16 @@ export default async function ProfilePage() {
 
       <div className="flex flex-col gap-4">
         <SectionHeader>APPEARANCE</SectionHeader>
-        {/* Both Interface Preferences (ADR-0055) live together: the Mode picker
-            and, beneath a divider, the Keep Screen Awake toggle. */}
+        {/* The Interface Preferences (ADR-0055) live together: the Mode picker and,
+            beneath dividers, the Keep Screen Awake and Weight Unit toggles. */}
         <Card className="p-4">
           <div className="flex flex-col gap-4">
             <AppearanceModePicker currentMode={mode} />
             <div className="border-t border-border pt-4">
               <AppearanceKeepAwakeToggle keepScreenAwake={keepScreenAwake} />
+            </div>
+            <div className="border-t border-border pt-4">
+              <AppearanceWeightUnitToggle weightUnit={weightUnit} />
             </div>
           </div>
         </Card>
