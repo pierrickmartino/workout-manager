@@ -18,11 +18,13 @@ import type { WeightUnit } from "./weight-unit";
 // it happens only when a figure is rendered.
 export const KG_PER_LB = 0.45359237;
 
-// The display digits a projected pound figure is rounded to at the boundary: at most two
-// decimals. Keeps a lb entry's typical granularity (whole and half pounds) stable across a
-// round-trip while clearing the floating-point noise the kg→lb conversion introduces.
-// Rounding lives ONLY here — stored kilograms stay exact, and the kg display path never
-// rounds, so it is byte-for-byte identical to what the app has always shown (#415).
+// The display digits a projected figure is rounded to at the boundary: at most two decimals,
+// trailing zeros dropped. Keeps typical gym granularity (whole and half pounds, 0.25 kg
+// micro-plates) stable across a round-trip while clearing the floating-point residue the
+// kg↔lb conversion leaves — so a kg reader viewing a session authored in pounds never sees a
+// value like "70.30681735 kg". Rounding lives ONLY here, at the display boundary; stored
+// kilograms stay exact, and real kg entries (which are ≤2 decimals) render byte-for-byte as
+// the app has always shown them (#415).
 const DISPLAY_DECIMALS = 2;
 
 // The unit's short display label — the catalog values ("kg" / "lb") are already the
@@ -46,10 +48,10 @@ export function unitToKg(value: number, unit: WeightUnit): number {
   return unit === "lb" ? value * KG_PER_LB : value;
 }
 
-// Round a projected pound figure to at most `DISPLAY_DECIMALS` decimals, dropping trailing
-// zeros (`132.277…` → "132.28", `155.0` → "155"). The multiply/round then `String` guards
-// against a floating-point artefact at the last place. The single rounding point in the
-// module — reached only for pounds.
+// Round a projected figure to at most `DISPLAY_DECIMALS` decimals, dropping trailing zeros
+// (`132.277…` → "132.28", `70.0` → "70", `72.5` → "72.5"). The multiply/round then `String`
+// re-parse guards against a floating-point artefact at the last place. The single rounding
+// point in the module.
 function roundForDisplay(value: number): string {
   const rounded = Math.round(value * 10 ** DISPLAY_DECIMALS) / 10 ** DISPLAY_DECIMALS;
   return String(rounded);
@@ -57,10 +59,11 @@ function roundForDisplay(value: number): string {
 
 // A weight figure's display digits in the reader's unit, without the unit label — for a
 // range's bounds ("10-20"), an input pre-fill, or anywhere the label is placed separately.
-// Kilograms render exactly (`String`), byte-for-byte as the app has always shown them (#415);
-// pounds project through the exact factor and round at the display boundary.
+// Projects through the exact factor, then rounds at the display boundary for both units so a
+// reader never sees the conversion's floating-point residue (real kg entries are ≤2 decimals,
+// so their display is unchanged, #415).
 export function formatWeightNumber(kg: number, unit: WeightUnit): string {
-  return unit === "lb" ? roundForDisplay(kgToUnit(kg, "lb")) : String(kg);
+  return roundForDisplay(kgToUnit(kg, unit));
 }
 
 // A weight figure with its unit label — "70 kg" / "155 lb". The canonical numeric→string

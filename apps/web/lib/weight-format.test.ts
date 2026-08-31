@@ -73,6 +73,15 @@ test("formatWeightNumber rounds a projected figure to at most two decimals", () 
   assert.equal(formatWeightNumber(60, "lb"), "132.28");
 });
 
+test("formatWeightNumber cleans a lb-sourced value's float noise for a kg reader", () => {
+  // Arrange — a value entered as 155 lb is stored as an exact but messy kilogram figure.
+  const storedKg = unitToKg(155, "lb"); // 70.30681735
+
+  // Act / Assert — a kg reader (e.g. of a shared/redeemed session) sees a clean "70.31 kg",
+  // never the raw conversion residue "70.30681735 kg" (#417 C1/C5).
+  assert.equal(formatWeightNumber(storedKg, "kg"), "70.31");
+});
+
 test("formatWeight appends the unit label", () => {
   assert.equal(formatWeight(70, "kg"), "70 kg");
   assert.equal(formatWeight(unitToKg(155, "lb"), "lb"), "155 lb");
