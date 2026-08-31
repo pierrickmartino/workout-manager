@@ -15,6 +15,7 @@ import {
   substitutePrescription,
 } from "@/lib/sessions";
 import type { SuggestedVariation } from "@/lib/harder-variation-view";
+import { resolveAppearance } from "@/lib/appearance";
 
 export interface LogFormState {
   error: string | null;
@@ -54,7 +55,10 @@ export async function submitLog(
   // (`readLogFormRows` / `buildLoggedSets`, ADR-0050): the action stays a thin caller and the
   // "which kind, reject-or-skip?" rules are unit-tested. A malformed distance/duration
   // rejects the whole submission with a clear message; a malformed reps set drops silently.
-  const built = buildLoggedSets(readLogFormRows(form));
+  // The Load values arrive in the user's Weight Unit; resolve it server-side so each entered
+  // Load is stored as canonical kilograms (#417). A signed-out/unreachable read defaults to kg.
+  const { weight_unit: unit } = await resolveAppearance();
+  const built = buildLoggedSets(readLogFormRows(form), unit);
   if (!built.ok) {
     return { error: built.error };
   }

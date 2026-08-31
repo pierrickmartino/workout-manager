@@ -40,7 +40,7 @@ test("pre-fills the form from a plan-backed record's current values", () => {
   const record = planBackedRecord();
 
   // Act
-  const fields = correctionFieldsFromRecord(record);
+  const fields = correctionFieldsFromRecord(record, "kg");
 
   // Assert — date, duration, parent Session, and the set round-trip into the form
   assert.equal(fields.performedOn, "2026-06-20");
@@ -86,7 +86,7 @@ test("builds a PUT payload from edited plan-backed fields, omitting training typ
   };
 
   // Act
-  const result = buildCorrectionRequest(fields);
+  const result = buildCorrectionRequest(fields, "kg");
 
   // Assert — a plan-backed correction never sends a training type (server derives it)
   assert.equal(result.ok, true);
@@ -133,8 +133,8 @@ test("pre-fills and requires a training type for a plan-less record", () => {
   });
 
   // Act — pre-fill, then build unchanged
-  const fields = correctionFieldsFromRecord(record);
-  const result = buildCorrectionRequest(fields);
+  const fields = correctionFieldsFromRecord(record, "kg");
+  const result = buildCorrectionRequest(fields, "kg");
 
   // Assert — the distance round-trips (metres → km + pace time) and the type is sent
   assert.equal(fields.sessionId, null);
@@ -175,7 +175,7 @@ test("rejects a plan-less correction with an unknown training type", () => {
   };
 
   // Act
-  const result = buildCorrectionRequest(fields);
+  const result = buildCorrectionRequest(fields, "kg");
 
   // Assert
   assert.equal(result.ok, false);
@@ -207,7 +207,7 @@ test("rejects a correction that would leave zero sets", () => {
   };
 
   // Act
-  const result = buildCorrectionRequest(fields);
+  const result = buildCorrectionRequest(fields, "kg");
 
   // Assert — a session always keeps at least one set
   assert.equal(result.ok, false);
@@ -220,7 +220,7 @@ test("an edit correction never sends a Completion Outcome (the server preserves 
   const record = planBackedRecord();
 
   // Act — build the correction from the record's unchanged fields
-  const result = buildCorrectionRequest(correctionFieldsFromRecord(record));
+  const result = buildCorrectionRequest(correctionFieldsFromRecord(record, "kg"), "kg");
 
   // Assert — the payload omits completion_outcome, so the server keeps the record's
   assert.equal(result.ok, true);
@@ -265,9 +265,9 @@ test("an appended set row round-trips into the correction payload", () => {
   // Arrange — the record's own set, plus a freshly added row (its movement already
   // resolved to a catalog Exercise id by the action, like the ad-hoc log flow)
   const fields: CorrectionFormFields = {
-    ...correctionFieldsFromRecord(planBackedRecord()),
+    ...correctionFieldsFromRecord(planBackedRecord(), "kg"),
     sets: [
-      ...correctionFieldsFromRecord(planBackedRecord()).sets,
+      ...correctionFieldsFromRecord(planBackedRecord(), "kg").sets,
       {
         exerciseId: 11,
         exerciseName: "Plank",
@@ -284,7 +284,7 @@ test("an appended set row round-trips into the correction payload", () => {
   };
 
   // Act
-  const result = buildCorrectionRequest(fields);
+  const result = buildCorrectionRequest(fields, "kg");
 
   // Assert — the full-replace payload carries both the original and the appended set
   assert.equal(result.ok, true);
@@ -304,9 +304,9 @@ test("an appended off-plan movement on a plan-backed record builds a valid reque
   // Arrange — a plan-backed (session_id) record; the added set names a movement the
   // plan never prescribed (a different Exercise id than the record's own set)
   const fields: CorrectionFormFields = {
-    ...correctionFieldsFromRecord(planBackedRecord()),
+    ...correctionFieldsFromRecord(planBackedRecord(), "kg"),
     sets: [
-      ...correctionFieldsFromRecord(planBackedRecord()).sets,
+      ...correctionFieldsFromRecord(planBackedRecord(), "kg").sets,
       {
         exerciseId: 21,
         exerciseName: "Bicep Curl",
@@ -323,7 +323,7 @@ test("an appended off-plan movement on a plan-backed record builds a valid reque
   };
 
   // Act
-  const result = buildCorrectionRequest(fields);
+  const result = buildCorrectionRequest(fields, "kg");
 
   // Assert — the off-plan set persists as an ordinary set; a plan-backed correction
   // still omits the training type (the server derives it from the Session)
@@ -340,7 +340,7 @@ test("a save with no additions reproduces the record's existing payload byte-for
   const record = planBackedRecord();
 
   // Act
-  const result = buildCorrectionRequest(correctionFieldsFromRecord(record));
+  const result = buildCorrectionRequest(correctionFieldsFromRecord(record, "kg"), "kg");
 
   // Assert — the payload is exactly the record's contents, with no new fields
   assert.equal(result.ok, true);
@@ -364,9 +364,9 @@ test("a save with no additions reproduces the record's existing payload byte-for
 test("a blank appended row is dropped (matches the cleared-row behavior)", () => {
   // Arrange — the record's own set plus an added row left un-performed (no amount)
   const fields: CorrectionFormFields = {
-    ...correctionFieldsFromRecord(planBackedRecord()),
+    ...correctionFieldsFromRecord(planBackedRecord(), "kg"),
     sets: [
-      ...correctionFieldsFromRecord(planBackedRecord()).sets,
+      ...correctionFieldsFromRecord(planBackedRecord(), "kg").sets,
       {
         exerciseId: 11,
         exerciseName: "Plank",
@@ -383,7 +383,7 @@ test("a blank appended row is dropped (matches the cleared-row behavior)", () =>
   };
 
   // Act
-  const result = buildCorrectionRequest(fields);
+  const result = buildCorrectionRequest(fields, "kg");
 
   // Assert — the empty appended row never reaches the payload; the record's set remains
   assert.equal(result.ok, true);

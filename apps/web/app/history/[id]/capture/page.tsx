@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { fetchLog } from "@/lib/logs";
 import { fetchProfile } from "@/lib/profile";
 import { captureSeedFromRecord } from "@/lib/capture-seed";
+import { resolveAppearance } from "@/lib/appearance";
 import { HandAuthoredSessionForm } from "@/components/HandAuthoredSessionForm";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
@@ -34,10 +35,13 @@ export default async function CaptureLogPage({ params }: CaptureLogPageProps) {
   // The Sensitive-Constraint gate (ADR-0023): a constrained user builds with Supersets
   // paused. An absent profile defaults to allowing them; the plan-only endpoint stays the
   // server-side backstop.
-  const profileEnvelope = await fetchProfile();
+  const [profileEnvelope, appearance] = await Promise.all([
+    fetchProfile(),
+    resolveAppearance(),
+  ]);
   const hasSensitiveConstraint = profileEnvelope.data?.is_sensitive ?? false;
 
-  const seed = captureSeedFromRecord(record);
+  const seed = captureSeedFromRecord(record, appearance.weight_unit);
 
   return (
     <section className="flex flex-col gap-6">
@@ -53,6 +57,7 @@ export default async function CaptureLogPage({ params }: CaptureLogPageProps) {
         hasSensitiveConstraint={hasSensitiveConstraint}
         mode="planOnly"
         seed={seed}
+        unit={appearance.weight_unit}
       />
 
       <BackLink href={`/history/${logId}`}>Back to session</BackLink>

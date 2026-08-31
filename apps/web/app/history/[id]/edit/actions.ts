@@ -9,6 +9,7 @@ import {
 import type { DistanceUnit, QuantityKind } from "@/lib/quantity";
 import { resolveExercise } from "@/lib/exercises";
 import { correctSession } from "@/lib/logs";
+import { resolveAppearance } from "@/lib/appearance";
 
 export interface CorrectLogFormState {
   error: string | null;
@@ -150,13 +151,19 @@ export async function submitCorrection(
     });
   }
 
-  const built = buildCorrectionRequest({
-    performedOn: readField(form, "performed_on"),
-    sessionId: sessionRaw === "" ? null : Number(sessionRaw),
-    trainingType: readField(form, "training_type"),
-    durationSeconds: durationRaw === "" ? null : Number(durationRaw),
-    sets,
-  });
+  // Load values arrive in the user's Weight Unit; resolve it server-side so each edited Load
+  // is stored as canonical kilograms (#417). A signed-out/unreachable read defaults to kg.
+  const { weight_unit: unit } = await resolveAppearance();
+  const built = buildCorrectionRequest(
+    {
+      performedOn: readField(form, "performed_on"),
+      sessionId: sessionRaw === "" ? null : Number(sessionRaw),
+      trainingType: readField(form, "training_type"),
+      durationSeconds: durationRaw === "" ? null : Number(durationRaw),
+      sets,
+    },
+    unit,
+  );
   if (!built.ok) {
     return { error: built.error };
   }

@@ -18,6 +18,7 @@ import {
   type QuantityKind,
 } from "./quantity.ts";
 import { loadToFields, type Load, type LoadKind } from "./load.ts";
+import type { WeightUnit } from "./weight-unit";
 import type { LoggedSession, LoggedSet } from "./logs-types";
 
 const DEFAULT_AMOUNT_KIND: QuantityKind = "repetitions";
@@ -109,7 +110,7 @@ function heaviestLoad(run: LoggedSet[]): Load | null {
   return best?.load ?? null;
 }
 
-function seedExercise(run: LoggedSet[]): CaptureSeedExercise {
+function seedExercise(run: LoggedSet[], weightUnit: WeightUnit): CaptureSeedExercise {
   const first = run[0];
   const kind: QuantityKind = first.quantity?.kind ?? DEFAULT_AMOUNT_KIND;
   const unit =
@@ -117,7 +118,9 @@ function seedExercise(run: LoggedSet[]): CaptureSeedExercise {
       ? distanceUnitFromText(first.quantity?.text)
       : DEFAULT_DISTANCE_UNIT;
   // The heaviest performed Load is reversed into the picker's fields by the shared
-  // `loadToFields` (lib/load.ts) — the same reverse-map the correction pre-fill uses.
+  // `loadToFields` (lib/load.ts) — the same reverse-map the correction pre-fill uses — in the
+  // reader's Weight Unit, so the builder shows what they'd type; the build step converts the
+  // entry back to kilograms on save (#417).
   return {
     exerciseId: first.exercise_id,
     exerciseName: first.exercise_name,
@@ -125,7 +128,7 @@ function seedExercise(run: LoggedSet[]): CaptureSeedExercise {
     unit,
     sets: String(run.length),
     reps: targetFor(kind, run),
-    ...loadToFields(heaviestLoad(run)),
+    ...loadToFields(heaviestLoad(run), weightUnit),
   };
 }
 
@@ -133,9 +136,14 @@ function seedExercise(run: LoggedSet[]): CaptureSeedExercise {
 // seeded exercise per contiguous same-Exercise run of its logged sets. The source record is
 // never read for anything but its performed contents — Capture spawns a plan alongside it,
 // never converts it.
-export function captureSeedFromRecord(record: LoggedSession): CaptureSeed {
+export function captureSeedFromRecord(
+  record: LoggedSession,
+  unit: WeightUnit,
+): CaptureSeed {
   return {
     trainingType: record.training_type,
-    exercises: contiguousRuns(record.logged_sets).map(seedExercise),
+    exercises: contiguousRuns(record.logged_sets).map((run) =>
+      seedExercise(run, unit),
+    ),
   };
 }

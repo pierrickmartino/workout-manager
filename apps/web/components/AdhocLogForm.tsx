@@ -3,7 +3,8 @@
 import { useActionState, useState } from "react";
 
 import { submitAdhocLog, type AdhocLogFormState } from "@/app/logs/new/actions";
-import { LOAD_KIND_OPTIONS } from "@/lib/load";
+import { loadKindOptions } from "@/lib/load";
+import type { WeightUnit } from "@/lib/weight-unit";
 import type { QuantityKind } from "@/lib/quantity";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
 import { Field } from "@/components/pulse/field";
@@ -15,6 +16,9 @@ import { Button } from "@/components/ui/button";
 
 interface AdhocLogFormProps {
   today: string;
+  // The reader's Weight Unit (#417): each Load is entered in this unit and the picker names it;
+  // the log action converts the entry back to canonical kilograms.
+  unit: WeightUnit;
 }
 
 interface SetRow {
@@ -34,7 +38,7 @@ function makeRow(kind: QuantityKind): SetRow {
 // hold or a distance-unknown timed effort). Heterogeneous rows coexist in one Logged
 // Session — a 6 × 800 m interval session is six distance rows, a run then squats is a
 // distance row and a rep row. No Session, no Completion Outcome — a plan-less record.
-export function AdhocLogForm({ today }: AdhocLogFormProps) {
+export function AdhocLogForm({ today, unit }: AdhocLogFormProps) {
   const [state, action, pending] = useActionState<AdhocLogFormState, FormData>(
     submitAdhocLog,
     { error: null },
@@ -87,6 +91,7 @@ export function AdhocLogForm({ today }: AdhocLogFormProps) {
             key={row.id}
             index={index}
             kind={row.kind}
+            unit={unit}
             onKindChange={(kind) => setRowKind(row.id, kind)}
             onRemove={rows.length > 1 ? () => removeRow(row.id) : undefined}
           />
@@ -107,11 +112,12 @@ export function AdhocLogForm({ today }: AdhocLogFormProps) {
 interface SetRowFieldsProps {
   index: number;
   kind: QuantityKind;
+  unit: WeightUnit;
   onKindChange: (kind: QuantityKind) => void;
   onRemove?: () => void;
 }
 
-function SetRowFields({ index, kind, onKindChange, onRemove }: SetRowFieldsProps) {
+function SetRowFields({ index, kind, unit, onKindChange, onRemove }: SetRowFieldsProps) {
   const prefix = `set-${index}`;
 
   return (
@@ -170,7 +176,7 @@ function SetRowFields({ index, kind, onKindChange, onRemove }: SetRowFieldsProps
             defaultValue="bodyweight"
             aria-label={`Load kind, set ${index + 1}`}
           >
-            {LOAD_KIND_OPTIONS.map((option) => (
+            {loadKindOptions(unit).map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>

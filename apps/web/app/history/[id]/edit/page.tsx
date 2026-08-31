@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { fetchHistory } from "@/lib/logs";
 import { correctionFieldsFromRecord } from "@/lib/log-correction";
+import { resolveAppearance } from "@/lib/appearance";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
 import { Alert } from "@/components/pulse/alert";
@@ -20,7 +21,10 @@ export default async function EditLogPage({ params }: EditLogPageProps) {
   const logId = Number(id);
   if (!Number.isInteger(logId)) notFound();
 
-  const envelope = await fetchHistory();
+  const [envelope, appearance] = await Promise.all([
+    fetchHistory(),
+    resolveAppearance(),
+  ]);
   if (!envelope.success || !envelope.data) {
     return (
       <section className="flex flex-col gap-6">
@@ -51,8 +55,9 @@ export default async function EditLogPage({ params }: EditLogPageProps) {
 
       <CorrectLogForm
         logId={record.id}
-        fields={correctionFieldsFromRecord(record)}
+        fields={correctionFieldsFromRecord(record, appearance.weight_unit)}
         today={today}
+        unit={appearance.weight_unit}
       />
 
       <BackLink href="/history">Back to history</BackLink>

@@ -5,6 +5,8 @@
 
 import type { PersonalRecordEntry } from "./analytics-types";
 import { formatRecordAchievement } from "./record-achievement.ts";
+import type { WeightUnit } from "./weight-unit";
+import { formatWholeWeight } from "./weight-format.ts";
 
 // The API's per-exercise stat-header read model (ADR-0017): the Personal Record
 // (highest Estimated 1RM in kg, or `null` when the Exercise has no absolute-Load
@@ -51,9 +53,9 @@ export interface StatTile {
 // never shown as `0 kg` (ADR-0017). The tile is always labelled PERSONAL RECORD — never
 // "personal best" for the raw heaviest load, which CONTEXT.md forbids. Pure and
 // server-free.
-export function toStatTiles(records: ExerciseRecords): StatTile[] {
+export function toStatTiles(records: ExerciseRecords, unit: WeightUnit): StatTile[] {
   const tiles: StatTile[] = [];
-  const personalRecord = personalRecordTile(records);
+  const personalRecord = personalRecordTile(records, unit);
   if (personalRecord !== null) {
     tiles.push(personalRecord);
   }
@@ -66,16 +68,22 @@ export function toStatTiles(records: ExerciseRecords): StatTile[] {
 // current record, since milestones strictly increase — supplies a bodyweight record's
 // set descriptor. Records with no milestone at all (a movement that can set none) yield
 // no tile, so it is hidden rather than zeroed.
-function personalRecordTile(records: ExerciseRecords): StatTile | null {
+function personalRecordTile(
+  records: ExerciseRecords,
+  unit: WeightUnit,
+): StatTile | null {
   if (records.personal_record !== null) {
     return {
       label: "PERSONAL RECORD",
-      value: `${Math.round(records.personal_record)} kg`,
+      value: formatWholeWeight(records.personal_record, unit),
     };
   }
   const currentRecord = records.pr_milestones[0];
   if (currentRecord) {
-    return { label: "PERSONAL RECORD", value: formatRecordAchievement(currentRecord) };
+    return {
+      label: "PERSONAL RECORD",
+      value: formatRecordAchievement(currentRecord, unit),
+    };
   }
   return null;
 }

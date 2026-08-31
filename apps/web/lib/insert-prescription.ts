@@ -18,7 +18,8 @@ import {
   wholeNonNegative,
   type AuthorPrescriptionInput,
 } from "./hand-authored-session.ts";
-import type { LoadKind } from "./load";
+import { loadValueToKg, type LoadKind } from "./load.ts";
+import type { WeightUnit } from "./weight-unit";
 import type { DistanceUnit, QuantityKind } from "./quantity";
 
 // The "Add exercise" editor's fields for the one prescription being appended. `exerciseId` is
@@ -71,6 +72,7 @@ function missingTargetError(kind: QuantityKind): string {
 // still reject (client-side validation is UX).
 export function buildInsertPrescriptionRequest(
   fields: InsertPrescriptionFields,
+  unit: WeightUnit,
 ): InsertPrescriptionResult {
   if (fields.exerciseId === null || !Number.isInteger(fields.exerciseId)) {
     return { ok: false, error: "Pick an exercise to add." };
@@ -88,7 +90,10 @@ export function buildInsertPrescriptionRequest(
 
   const tempo = fields.tempo.trim();
   const restSeconds = wholeNonNegative(fields.restSeconds);
-  const loadValue = fields.loadValue.trim();
+  const loadKind = (fields.loadKind || defaultLoadKindForAmount(fields.kind)) as LoadKind;
+  // The Load was authored in the reader's Weight Unit; convert it to canonical kilograms for
+  // storage (#417). Blank stays "no load recorded" → null.
+  const loadValue = loadValueToKg(loadKind, fields.loadValue.trim(), unit);
 
   return {
     ok: true,
@@ -98,7 +103,7 @@ export function buildInsertPrescriptionRequest(
       reps,
       rest_seconds: restSeconds,
       tempo: tempo === "" ? null : tempo,
-      load_kind: (fields.loadKind || defaultLoadKindForAmount(fields.kind)) as LoadKind,
+      load_kind: loadKind,
       load_value: loadValue === "" ? null : loadValue,
       // The picked Quantity kind and unit travel onto the plan so the choice is persisted, not
       // dropped on save (ADR-0050): the backend types the Prescribed Quantity from these. The

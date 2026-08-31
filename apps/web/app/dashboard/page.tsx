@@ -10,6 +10,7 @@ import {
 } from "@/lib/profile";
 import { READINESS_BADGE, fetchHome } from "@/lib/home";
 import { latestPrLine, operatorStatus } from "@/lib/home-view";
+import { resolveAppearance } from "@/lib/appearance";
 import { appendFrom } from "@/lib/back-target";
 import { Alert } from "@/components/pulse/alert";
 import { PageHeader } from "@/components/pulse/page-header";
@@ -30,9 +31,10 @@ import { Badge } from "@/components/ui/badge";
 // Postgres on the FastAPI backend. New users (incomplete profile) are sent to
 // onboarding first.
 export default async function DashboardPage() {
-  const [profileEnvelope, homeEnvelope] = await Promise.all([
+  const [profileEnvelope, homeEnvelope, appearance] = await Promise.all([
     fetchProfile(),
     fetchHome(),
+    resolveAppearance(),
   ]);
 
   if (!profileEnvelope.success || !profileEnvelope.data) {
@@ -67,7 +69,7 @@ export default async function DashboardPage() {
   const readiness = READINESS_BADGE[homeEnvelope.data.readiness];
   const currentProtocol = homeEnvelope.data.current_protocol;
   const status = operatorStatus(homeEnvelope.data.gamification);
-  const latestPr = latestPrLine(homeEnvelope.data.latest_pr);
+  const latestPr = latestPrLine(homeEnvelope.data.latest_pr, appearance.weight_unit);
 
   return (
     <section className="flex flex-col gap-7">

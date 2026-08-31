@@ -4,6 +4,7 @@ import { Copy, PenLine, Repeat } from "lucide-react";
 
 import { fetchLog } from "@/lib/logs";
 import { loggedSessionDetail } from "@/lib/logged-session-detail";
+import { resolveAppearance } from "@/lib/appearance";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
 import { Card } from "@/components/ui/card";
@@ -28,7 +29,10 @@ export default async function LogDetailPage({ params }: LogDetailPageProps) {
   const logId = Number(id);
   if (!Number.isInteger(logId)) notFound();
 
-  const envelope = await fetchLog(logId);
+  const [envelope, appearance] = await Promise.all([
+    fetchLog(logId),
+    resolveAppearance(),
+  ]);
   if (!envelope.success || !envelope.data) notFound();
 
   const record = envelope.data;
@@ -75,7 +79,11 @@ export default async function LogDetailPage({ params }: LogDetailPageProps) {
           ) : null}
         </div>
 
-        <LoggedSetTable sets={record.logged_sets} showBodyWeight />
+        <LoggedSetTable
+          sets={record.logged_sets}
+          unit={appearance.weight_unit}
+          showBodyWeight
+        />
       </Card>
 
       {/* The reuse action — mutually exclusive by the plan/record split. A plan-backed

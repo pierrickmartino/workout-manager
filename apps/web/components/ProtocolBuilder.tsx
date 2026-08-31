@@ -20,6 +20,7 @@ import {
   type PickedExercise,
 } from "@/lib/protocol-builder";
 import { type LoadKind } from "@/lib/load";
+import type { WeightUnit } from "@/lib/weight-unit";
 import type { BalancePreview, ProtocolProgress } from "@/lib/protocols-types";
 import { toMuscleBars } from "@/lib/muscle-distribution";
 import { cn } from "@/lib/utils";
@@ -44,6 +45,9 @@ interface ProtocolBuilderProps {
   // opens with existing Supersets auto-unlinked in the editable tail and shows a
   // banner; a non-medical Preference / Limitation never sets this.
   hasSensitiveConstraint?: boolean;
+  // The reader's Weight Unit (#417): each Prescription's Load is authored in this unit and
+  // the pickers name it; DEPLOY converts the entries back to canonical kilograms.
+  unit: WeightUnit;
 }
 
 // Shape bounds mirror the server's deploy validation (weeks 1–52, frequency 1–14).
@@ -61,6 +65,7 @@ export function ProtocolBuilder({
   protocol,
   queuedExercise = null,
   hasSensitiveConstraint = false,
+  unit,
 }: ProtocolBuilderProps) {
   // Seed the F6-queued Exercise into the initial draft (ADR-0021) so it is waiting to
   // be placed the moment the builder opens — no mount effect, no flash of an empty
@@ -69,7 +74,10 @@ export function ProtocolBuilder({
     builderReducer,
     protocol,
     (source): BuilderDraft => {
-      const base = initBuilderDraft(source, { hasSensitiveConstraint });
+      const base = initBuilderDraft(source, {
+        hasSensitiveConstraint,
+        weightUnit: unit,
+      });
       if (!queuedExercise) return base;
       return builderReducer(base, {
         type: "SEED_QUEUED_EXERCISE",
@@ -109,7 +117,10 @@ export function ProtocolBuilder({
     setError(null);
     setDeployed(false);
     startTransition(async () => {
-      const result = await submitDeploy(draft.protocolId, toDeployPayload(draft));
+      const result = await submitDeploy(
+        draft.protocolId,
+        toDeployPayload(draft, unit),
+      );
       if (result.error || !result.protocol) {
         setError(result.error ?? "Could not deploy the protocol.");
         return;
@@ -196,6 +207,7 @@ export function ProtocolBuilder({
       {selectedSession ? (
         <SessionEditor
           session={selectedSession}
+          unit={unit}
           queuedExerciseName={draft.queuedExercise?.name ?? null}
           onPlaceQueued={() =>
             dispatch({
@@ -628,6 +640,8 @@ function MatrixCellButton({
 
 interface SessionEditorProps {
   session: DraftSession;
+  // The reader's Weight Unit (#417), forwarded to each Prescription row's Load picker.
+  unit: WeightUnit;
   // The name of the F6-queued Exercise waiting to be placed (ADR-0021), or `null`
   // when nothing is queued. Drives the "place here" affordance on an un-performed
   // Session.
@@ -654,6 +668,7 @@ interface SessionEditorProps {
 // read-only — the frozen prefix (ADR-0020).
 function SessionEditor({
   session,
+  unit,
   queuedExerciseName,
   onPlaceQueued,
   onEditField,
@@ -710,6 +725,7 @@ function SessionEditor({
         prescriptions={session.prescriptions}
         layout={layout}
         locked={locked}
+        unit={unit}
         onEditField={onEditField}
         onEditLoad={onEditLoad}
         onEditRoundRest={onEditRoundRest}

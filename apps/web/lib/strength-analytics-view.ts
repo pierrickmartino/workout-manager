@@ -1,5 +1,6 @@
 import { toRecordRows, type RecordRow } from "./records-view.ts";
 import type { StrengthAnalyticsOverview } from "./strength-analytics-types.ts";
+import type { WeightUnit } from "./weight-unit";
 
 // One page of the Strength Analytics PR timeline, shaped for the screen: the display
 // `rows` (newest-first, reusing the shared record-row formatting), the `isEmpty` gate
@@ -41,9 +42,10 @@ export interface TimelinePage {
 export function toStrengthTimelineView(
   overview: StrengthAnalyticsOverview,
   page: TimelinePage,
+  unit: WeightUnit,
 ): StrengthTimelineView {
   return {
-    rows: toRecordRows(overview.records),
+    rows: toRecordRows(overview.records, unit),
     isEmpty: !overview.has_qualifying_strength,
     hasPreviousPage: page.offset > 0,
     hasNextPage: page.offset + overview.records.length < page.total,

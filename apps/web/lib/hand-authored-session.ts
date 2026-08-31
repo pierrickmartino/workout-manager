@@ -21,7 +21,8 @@ import {
   type DistanceUnit,
   type QuantityKind,
 } from "./quantity.ts";
-import type { LoadKind } from "./load";
+import { loadValueToKg, type LoadKind } from "./load.ts";
+import type { WeightUnit } from "./weight-unit";
 import type { LogSetInput } from "./logs-types";
 import { TRAINING_TYPES } from "./sessions-types.ts";
 import {
@@ -193,10 +194,14 @@ function loadFields(
   loadKind: string | undefined,
   loadValue: string | undefined,
   kind: QuantityKind,
+  weightUnit: WeightUnit,
 ): { load_kind: LoadKind; load_value: string | null } {
-  const value = (loadValue ?? "").trim();
+  const resolvedKind = (loadKind || defaultLoadKindForAmount(kind)) as LoadKind;
+  // The value was entered in the reader's Weight Unit; convert it to canonical kilograms for
+  // storage (#417). Blank stays "no load recorded" → null.
+  const value = loadValueToKg(resolvedKind, (loadValue ?? "").trim(), weightUnit);
   return {
-    load_kind: ((loadKind || defaultLoadKindForAmount(kind)) as LoadKind),
+    load_kind: resolvedKind,
     load_value: value === "" ? null : value,
   };
 }
@@ -310,6 +315,7 @@ function toLoggedSet(
   kind: QuantityKind,
   unit: DistanceUnit,
   set: PerformedSetFields,
+  weightUnit: WeightUnit,
 ): PerformedSetResult {
   const amount = performedAmount(kind, unit, set);
   if (amount.status !== "amount") return amount;
@@ -327,7 +333,7 @@ function toLoggedSet(
     set: {
       exercise_id: exerciseId,
       ...amount.fields,
-      ...loadFields(set.loadKind, set.loadValue, kind),
+      ...loadFields(set.loadKind, set.loadValue, kind, weightUnit),
       perceived_difficulty: inRange ? perceived : null,
     },
   };
@@ -353,6 +359,7 @@ function missingTargetError(kind: QuantityKind): string {
 function toPrescription(
   exercise: AuthoredExerciseFields,
   kind: QuantityKind,
+  weightUnit: WeightUnit,
 ): { ok: true; prescription: AuthorPrescriptionInput } | { ok: false; error: string } {
   const sets = wholeNonNegative(exercise.sets);
   if (sets === null || sets < 1) {
@@ -375,7 +382,7 @@ function toPrescription(
       reps,
       rest_seconds: restSeconds,
       tempo: tempo === "" ? null : tempo,
-      ...loadFields(exercise.loadKind, exercise.loadValue, kind),
+      ...loadFields(exercise.loadKind, exercise.loadValue, kind, weightUnit),
       // The picked Quantity kind and unit travel onto the plan so the choice is persisted,
       // not dropped on save (ADR-0050, issue #345): the backend types the Prescribed
       // Quantity from these. The unit is only meaningful for a distance but rides for every
@@ -397,6 +404,7 @@ function toPrescription(
 // rejection.
 export function buildAuthorSessionRequest(
   fields: AuthorSessionFields,
+  weightUnit: WeightUnit,
   today: string = localToday(),
 ): AuthorSessionResult {
   const performedOn = fields.performedOn.trim();
@@ -425,12 +433,12 @@ export function buildAuthorSessionRequest(
 
     const kind = amountKind(exercise.kind);
     const unit = exercise.unit ?? DEFAULT_DISTANCE_UNIT;
-    const built = toPrescription(exercise, kind);
+    const built = toPrescription(exercise, kind, weightUnit);
     if (!built.ok) return built;
     prescriptions.push(built.prescription);
 
     for (const set of exercise.performedSets) {
-      const outcome = toLoggedSet(exercise.exerciseId, kind, unit, set);
+      const outcome = toLoggedSet(exercise.exerciseId, kind, unit, set, weightUnit);
       if (outcome.status === "error") return { ok: false, error: outcome.error };
       if (outcome.status === "set") loggedSets.push(outcome.set);
     }
@@ -461,6 +469,7 @@ export function buildAuthorSessionRequest(
 // the author-and-log path, so the two agree on "what a valid authored plan is".
 export function buildAuthorPlanRequest(
   fields: AuthorPlanFields,
+  weightUnit: WeightUnit,
 ): AuthorPlanResult {
   const trainingType = fields.trainingType.trim();
   if (!VALID_TRAINING_TYPES.has(trainingType)) {
@@ -477,7 +486,7 @@ export function buildAuthorPlanRequest(
       return { ok: false, error: "Pick every exercise from the catalog." };
     }
 
-    const built = toPrescription(exercise, amountKind(exercise.kind));
+    const built = toPrescription(exercise, amountKind(exercise.kind), weightUnit);
     if (!built.ok) return built;
     prescriptions.push(built.prescription);
   }

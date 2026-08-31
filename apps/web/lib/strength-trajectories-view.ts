@@ -1,6 +1,8 @@
 import { toTopSetTrend, type TopSetTrend } from "./top-set-trend-view.ts";
 import type { ExerciseTrajectory } from "./strength-analytics-types.ts";
 import { appendFrom } from "./back-target.ts";
+import type { WeightUnit } from "./weight-unit";
+import { weightUnitLabel } from "./weight-format.ts";
 
 // One tile in the ranked strength small-multiples (issue #177 / ADR-0024): a qualifying
 // Exercise, a deep link to its canonical Top-Set chart on Exercise Detail, and the same
@@ -26,13 +28,16 @@ export interface StrengthTrajectoryTile {
 // Pure and server-free, so it is safe from either a Server or Client Component.
 export function toStrengthTrajectories(
   trajectories: readonly ExerciseTrajectory[],
+  unit: WeightUnit,
 ): StrengthTrajectoryTile[] {
   return trajectories.map((trajectory) => {
-    const trend = toTopSetTrend(trajectory.series);
+    const trend = toTopSetTrend(trajectory.series, unit);
     // A trajectory is only built for a qualifying Exercise, so its series — and therefore
-    // `trend.rows` — always holds at least one session; the latest is the last row.
+    // `trend.rows` — always holds at least one session; the latest is the last row. The
+    // row estimate is already projected into the reader's unit, so the headline just rounds
+    // it and appends the unit label (#417).
     const latest = trend.rows[trend.rows.length - 1];
-    const estimate = `${Math.round(latest.estimate)} kg`;
+    const estimate = `${Math.round(latest.estimate)} ${weightUnitLabel(unit)}`;
     return {
       exerciseId: trajectory.exercise_id,
       exercise: trajectory.exercise,

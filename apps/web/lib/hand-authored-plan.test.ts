@@ -38,7 +38,7 @@ test("maps the plan to the payload, ignoring performed sets entirely", () => {
   };
 
   // Act
-  const result = buildAuthorPlanRequest(fields);
+  const result = buildAuthorPlanRequest(fields, "kg");
 
   // Assert — only prescriptions; no logged_sets field exists on the plan-only payload
   assert.equal(result.ok, true);
@@ -62,7 +62,7 @@ test("carries the picked Quantity kind and unit onto the captured plan", () => {
   };
 
   // Act
-  const result = buildAuthorPlanRequest(fields);
+  const result = buildAuthorPlanRequest(fields, "kg");
 
   // Assert
   assert.equal(result.ok, true);
@@ -76,12 +76,12 @@ test("rejects an unknown training type", () => {
   const result = buildAuthorPlanRequest({
     trainingType: "not-a-type",
     exercises: [exercise()],
-  });
+  }, "kg");
   assert.deepEqual(result, { ok: false, error: "Pick a training type." });
 });
 
 test("rejects a plan with no exercises", () => {
-  const result = buildAuthorPlanRequest({ trainingType: "strength", exercises: [] });
+  const result = buildAuthorPlanRequest({ trainingType: "strength", exercises: [] }, "kg");
   assert.deepEqual(result, { ok: false, error: "Add at least one exercise." });
 });
 
@@ -89,7 +89,7 @@ test("rejects an exercise missing its target, worded for the amount kind", () =>
   const result = buildAuthorPlanRequest({
     trainingType: "strength",
     exercises: [exercise({ reps: "" })],
-  });
+  }, "kg");
   assert.equal(result.ok, false);
   if (result.ok) return;
   assert.match(result.error, /rep target/);
@@ -99,7 +99,7 @@ test("rejects an exercise with no sets", () => {
   const result = buildAuthorPlanRequest({
     trainingType: "strength",
     exercises: [exercise({ sets: "0" })],
-  });
+  }, "kg");
   assert.deepEqual(result, {
     ok: false,
     error: "Each exercise needs at least one set.",

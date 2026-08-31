@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { LogSessionForm } from "@/components/LogSessionForm";
 import { fetchSession } from "@/lib/sessions";
+import { resolveAppearance } from "@/lib/appearance";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
 
@@ -17,7 +18,10 @@ export default async function LogSessionPage({
   const sessionId = Number(id);
   if (!Number.isInteger(sessionId)) notFound();
 
-  const envelope = await fetchSession(sessionId);
+  const [envelope, appearance] = await Promise.all([
+    fetchSession(sessionId),
+    resolveAppearance(),
+  ]);
   if (!envelope.success || !envelope.data) {
     notFound();
   }
@@ -41,6 +45,7 @@ export default async function LogSessionPage({
         sessionId={session.id}
         prescriptions={session.prescriptions}
         today={today}
+        unit={appearance.weight_unit}
       />
 
       <BackLink href={`/sessions/${session.id}`}>Back to session</BackLink>

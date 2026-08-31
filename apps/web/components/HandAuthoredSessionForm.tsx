@@ -25,7 +25,9 @@ import {
 } from "@/lib/hand-authored-session";
 import type { CaptureSeed, CaptureSeedExercise } from "@/lib/capture-seed";
 import { dissolveSingletonGroups } from "@/lib/supersets";
-import { LOAD_KIND_OPTIONS } from "@/lib/load";
+import { loadKindOptions } from "@/lib/load";
+import { weightUnitLabel } from "@/lib/weight-format";
+import type { WeightUnit } from "@/lib/weight-unit";
 import {
   AMOUNT_KIND_OPTIONS,
   DISTANCE_UNIT_OPTIONS,
@@ -63,6 +65,9 @@ interface HandAuthoredSessionFormProps {
   // meaningful in `planOnly` mode; the exercises seed the draft and the training type its
   // default.
   seed?: CaptureSeed;
+  // The reader's Weight Unit (#417): each Load is entered in this unit and the picker/
+  // placeholders name it; the build step converts the entry back to canonical kilograms.
+  unit: WeightUnit;
 }
 
 // One performed set the user is recording under an exercise, with a stable key so React
@@ -216,6 +221,7 @@ export function HandAuthoredSessionForm({
   hasSensitiveConstraint = false,
   mode = "authorAndLog",
   seed,
+  unit,
 }: HandAuthoredSessionFormProps) {
   const planOnly = mode === "planOnly";
   const [exercises, setExercises] = useState<ExerciseRow[]>(() =>
@@ -356,10 +362,13 @@ export function HandAuthoredSessionForm({
 
     // Capture (ADR-0044): author only the plan — no date, no performed sets, no second log.
     if (planOnly) {
-      const result = buildAuthorPlanRequest({
-        trainingType,
-        exercises: authoredExercises,
-      });
+      const result = buildAuthorPlanRequest(
+        {
+          trainingType,
+          exercises: authoredExercises,
+        },
+        unit,
+      );
       if (!result.ok) {
         setError(result.error);
         return;
@@ -379,7 +388,7 @@ export function HandAuthoredSessionForm({
       exercises: authoredExercises,
     };
 
-    const result = buildAuthorSessionRequest(fields, today);
+    const result = buildAuthorSessionRequest(fields, unit, today);
     if (!result.ok) {
       setError(result.error);
       return;
@@ -452,6 +461,7 @@ export function HandAuthoredSessionForm({
                 key={row.key}
                 row={row}
                 slot={layout[index]}
+                unit={unit}
                 canMoveUp={index > 0 && canMove(index, index - 1)}
                 canMoveDown={
                   index < effectiveExercises.length - 1 && canMove(index, index + 1)
@@ -487,6 +497,7 @@ export function HandAuthoredSessionForm({
                     key={row.key}
                     row={row}
                     slot={layout[index]}
+                unit={unit}
                     canMoveUp={index > 0 && canMove(index, index - 1)}
                     canMoveDown={
                       index < effectiveExercises.length - 1 &&
@@ -583,6 +594,7 @@ function SupersetContainer({
 interface ExerciseCardProps {
   row: ExerciseRow;
   slot: SupersetSlot;
+  unit: WeightUnit;
   canMoveUp: boolean;
   canMoveDown: boolean;
   // Whether to render the "SETS PERFORMED" half. False in plan-only mode (Capture): the
@@ -601,6 +613,7 @@ interface ExerciseCardProps {
 function ExerciseCard({
   row,
   slot,
+  unit,
   canMoveUp,
   canMoveDown,
   showPerformedSets,
@@ -751,7 +764,7 @@ function ExerciseCard({
             onChange={(event) => onChange({ loadKind: event.target.value })}
             aria-label={`Load kind for ${row.exerciseName}`}
           >
-            {LOAD_KIND_OPTIONS.map((option) => (
+            {loadKindOptions(unit).map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
@@ -761,7 +774,7 @@ function ExerciseCard({
         <FieldLabel label="Load">
           <Input
             value={row.loadValue}
-            placeholder="60 kg"
+            placeholder={`60 ${weightUnitLabel(unit)}`}
             onChange={(event) => onChange({ loadValue: event.target.value })}
             aria-label={`Load for ${row.exerciseName}`}
           />
@@ -831,7 +844,7 @@ function ExerciseCard({
             <FieldLabel label="Load">
               <Input
                 value={set.loadValue}
-                placeholder="60 kg"
+                placeholder={`60 ${weightUnitLabel(unit)}`}
                 onChange={(event) =>
                   onChangeSet(set.key, { loadValue: event.target.value })
                 }

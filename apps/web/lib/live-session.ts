@@ -3,7 +3,8 @@
 // built, holding the sets done so far and which set is current. It has NO
 // server-only imports, so both the Server route and the Client screen can use it.
 
-import { formatLoad, NO_LOAD, type Load, type LoadKind } from "./load.ts";
+import { formatLoad, loadToFields, type Load, type LoadKind } from "./load.ts";
+import type { WeightUnit } from "./weight-unit";
 import type {
   ExercisePrescription,
   PreviousSet,
@@ -158,28 +159,17 @@ function prefillReps(reps: string): number {
 }
 
 // Derive the editable kind+value pair a set row starts from, off the typed Load
-// the plan prescribed (ADR-0010). Only the field the kind carries is surfaced;
-// an absent load pre-fills an empty absolute value.
-function prefillLoad(load: Load | null): { kind: LoadKind; value: string } {
-  if (!load) return { kind: "absolute", value: "" };
-  switch (load.kind) {
-    case "absolute":
-      return { kind: load.kind, value: load.kg !== undefined ? String(load.kg) : "" };
-    case "percent_1rm":
-      return { kind: load.kind, value: load.percent !== undefined ? String(load.percent) : "" };
-    case "bodyweight":
-      return { kind: load.kind, value: load.added_kg !== undefined ? String(load.added_kg) : "" };
-    case "range":
-      return {
-        kind: load.kind,
-        value:
-          load.low_kg !== undefined && load.high_kg !== undefined
-            ? `${load.low_kg}-${load.high_kg}`
-            : "",
-      };
-    case "qualitative":
-      return { kind: load.kind, value: load.text };
-  }
+// the plan prescribed (ADR-0010), expressed in the reader's Weight Unit so the input
+// shows what they would type. Delegates to the shared `loadToFields` reverse-map, so
+// the live pre-fill, the Log Correction pre-fill, and the Capture seed all project the
+// plan's kilograms into the reader's unit the same way (#417). On finish the entered
+// value is converted back to exact kilograms by the finish mapper.
+function prefillLoad(
+  load: Load | null,
+  unit: WeightUnit,
+): { kind: LoadKind; value: string } {
+  const { loadKind, loadValue } = loadToFields(load, unit);
+  return { kind: loadKind, value: loadValue };
 }
 
 // The previous-performance reference for the 1-based ``setNumber`` of a
@@ -188,10 +178,11 @@ function prefillLoad(load: Load | null): { kind: LoadKind; value: string } {
 function previousReference(
   previousPerformance: PreviousSet[] | undefined,
   setNumber: number,
+  unit: WeightUnit,
 ): PreviousReference | null {
   const previous = previousPerformance?.[setNumber - 1];
   if (!previous) return null;
-  return { reps: previous.reps, loadText: formatLoad(previous.load) };
+  return { reps: previous.reps, loadText: formatLoad(previous.load, unit) };
 }
 
 // One countable step of a Session: a solo Exercise Prescription, or a contiguous
@@ -234,8 +225,9 @@ function buildLiveSet(
   supersetLabel: string | null,
   restsAfter: boolean,
   restSeconds: number | null,
+  unit: WeightUnit,
 ): LiveSet {
-  const load = prefillLoad(prescription.recommended_load);
+  const load = prefillLoad(prescription.recommended_load, unit);
   return {
     exerciseId: prescription.exercise_id,
     exerciseName: prescription.exercise_name,
@@ -248,8 +240,10 @@ function buildLiveSet(
     restsAfter,
     restSeconds,
     prescribedReps: prescription.reps,
-    prescribedLoadText: prescription.recommended_load?.text ?? NO_LOAD,
-    previous: previousReference(prescription.previous_performance, setNumber),
+    // The prescribed Load is projected into the reader's unit from its numeric fields
+    // (like every other Load, #417), not echoed from the stored kg `text`.
+    prescribedLoadText: formatLoad(prescription.recommended_load ?? null, unit),
+    previous: previousReference(prescription.previous_performance, setNumber, unit),
     reps: prefillReps(prescription.reps),
     loadKind: load.kind,
     loadValue: load.value,
@@ -263,7 +257,10 @@ function buildLiveSet(
 // module-major (all their sets in a row); a Superset expands round-major — one set
 // of each member per round (`A1, B1, A2, B2…`), resting only at the round boundary
 // (ADR-0023). The result is a not-yet-started Live Session ready for START.
-export function initLiveSession(session: WorkoutSession): LiveSessionState {
+export function initLiveSession(
+  session: WorkoutSession,
+  weightUnit: WeightUnit,
+): LiveSessionState {
   const sets: LiveSet[] = [];
   let supersetOrdinal = 0;
 
@@ -285,6 +282,7 @@ export function initLiveSession(session: WorkoutSession): LiveSessionState {
             null,
             true,
             prescription.rest_seconds ?? null,
+            weightUnit,
           ),
         );
       }
@@ -311,6 +309,7 @@ export function initLiveSession(session: WorkoutSession): LiveSessionState {
             label,
             isRoundBoundary,
             isRoundBoundary ? (member.round_rest_seconds ?? null) : null,
+            weightUnit,
           ),
         );
       });

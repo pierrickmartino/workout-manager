@@ -9,6 +9,7 @@ import type { TopSetPoint } from "@/lib/exercise-stats-view";
 import { toExecutionSteps, toMuscleEmphasis } from "@/lib/exercise-detail-view";
 import { appendFrom } from "@/lib/back-target";
 import { toTopSetTrend } from "@/lib/top-set-trend-view";
+import type { WeightUnit } from "@/lib/weight-unit";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { DataList } from "@/components/pulse/data-list";
 import { TopSetTrendChart } from "@/components/exercise/top-set-trend-chart";
@@ -20,6 +21,8 @@ interface SpecsPanelProps {
   // The Top-Set series from the record side (ADR-0017), transformed into the trend
   // chart here. Empty (a bodyweight / never-logged Exercise) hides the chart entirely.
   topSetSeries: TopSetPoint[];
+  // The reader's Weight Unit, so the Top-Set Trend renders its Estimated 1RM in kg or lb (#417).
+  unit: WeightUnit;
   // The `?from=` origin the screen was opened with, carried forward onto the related
   // Variation/Alternative links so "back" still returns to the true origin (e.g. the
   // Session) however far the user drills into related movements.
@@ -34,6 +37,7 @@ interface SpecsPanelProps {
 export function SpecsPanel({
   exercise,
   topSetSeries,
+  unit,
   from,
 }: SpecsPanelProps): React.JSX.Element {
   const metaRows = [
@@ -61,7 +65,7 @@ export function SpecsPanel({
         </Card>
       ) : null}
 
-      <TopSetTrend series={topSetSeries} />
+      <TopSetTrend series={topSetSeries} unit={unit} />
 
       <MuscleMap exercise={exercise} />
 
@@ -107,8 +111,8 @@ function ExerciseImage({
 // session with a `+N KG` delta pill. Honest degradation lives in `toTopSetTrend`: no
 // qualifying session renders no chart at all, and a single qualifying session renders
 // one bar and no pill — never a fabricated zero bar or a "+0 KG" trend.
-function TopSetTrend({ series }: { series: TopSetPoint[] }) {
-  const trend = toTopSetTrend(series);
+function TopSetTrend({ series, unit }: { series: TopSetPoint[]; unit: WeightUnit }) {
+  const trend = toTopSetTrend(series, unit);
   if (trend.rows.length === 0) return null;
 
   return (
@@ -118,7 +122,7 @@ function TopSetTrend({ series }: { series: TopSetPoint[] }) {
         {trend.delta ? <Badge variant="cyan">{trend.delta}</Badge> : null}
       </div>
       <Card className="p-5">
-        <TopSetTrendChart rows={trend.rows} />
+        <TopSetTrendChart rows={trend.rows} unit={unit} />
       </Card>
     </div>
   );

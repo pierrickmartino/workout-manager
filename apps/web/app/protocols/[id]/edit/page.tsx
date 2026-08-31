@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { fetchProtocol } from "@/lib/protocols";
 import { fetchProfile } from "@/lib/profile";
+import { resolveAppearance } from "@/lib/appearance";
 import type { PickedExercise } from "@/lib/protocol-builder";
 import { ProtocolBuilder } from "@/components/ProtocolBuilder";
 
@@ -30,7 +31,10 @@ export default async function ProtocolBuilderPage({
   // opens the builder with Supersets auto-unlinked and a banner. The derived
   // `is_sensitive` flag comes from the Profile; a failed read defaults to allowing
   // Supersets (DEPLOY remains the server-side backstop).
-  const profileEnvelope = await fetchProfile();
+  const [profileEnvelope, appearance] = await Promise.all([
+    fetchProfile(),
+    resolveAppearance(),
+  ]);
   const hasSensitiveConstraint = profileEnvelope.data?.is_sensitive ?? false;
 
   const { queue, queueName } = await searchParams;
@@ -41,6 +45,7 @@ export default async function ProtocolBuilderPage({
       protocol={envelope.data}
       queuedExercise={queuedExercise}
       hasSensitiveConstraint={hasSensitiveConstraint}
+      unit={appearance.weight_unit}
     />
   );
 }

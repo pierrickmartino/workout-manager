@@ -13,9 +13,14 @@ import {
 
 import { useChartTheme } from "@/lib/use-chart-theme";
 import type { TopSetTrendRow } from "@/lib/top-set-trend-view";
+import type { WeightUnit } from "@/lib/weight-unit";
+import { weightUnitLabel } from "@/lib/weight-format";
 
 interface TopSetTrendChartProps {
   rows: TopSetTrendRow[];
+  // The reader's Weight Unit — the row `estimate`s are already projected to it (raw), so the
+  // tooltip only needs the matching label (#417).
+  unit: WeightUnit;
   // The chart body height. Defaults to the full `h-48` used on Exercise Detail; the
   // Strength Analytics small-multiples pass a shorter class so a grid of them stays
   // compact. Any other styling is unchanged, so the two surfaces read as one chart.
@@ -35,6 +40,7 @@ interface TopSetTrendChartProps {
 // sit back in the translucent `cyan-dim` token so the trend reads toward "now".
 export function TopSetTrendChart({
   rows,
+  unit,
   heightClass = "h-48",
 }: TopSetTrendChartProps) {
   const { cyan, cyanDim, muted, border } = useChartTheme();
@@ -62,7 +68,7 @@ export function TopSetTrendChart({
           />
           <Tooltip
             cursor={{ fill: cyanDim }}
-            content={<TrendTooltip />}
+            content={<TrendTooltip unit={unit} />}
           />
           <Bar
             dataKey="estimate"
@@ -79,9 +85,14 @@ export function TopSetTrendChart({
   );
 }
 
-// A themed tooltip: the session date and its Top Set in whole kilograms, matching the
-// card surfaces rather than Recharts' default white box.
-function TrendTooltip({ active, payload }: TooltipProps<number, string>) {
+// A themed tooltip: the session date and its Top Set as a whole figure in the reader's
+// Weight Unit, matching the card surfaces rather than Recharts' default white box. The
+// row `estimate` is already projected to the reader's unit; only the label is appended.
+function TrendTooltip({
+  active,
+  payload,
+  unit,
+}: TooltipProps<number, string> & { unit: WeightUnit }) {
   if (!active || !payload || payload.length === 0) {
     return null;
   }
@@ -90,7 +101,7 @@ function TrendTooltip({ active, payload }: TooltipProps<number, string>) {
     <div className="rounded-md border border-border bg-elevated px-3 py-2 shadow-lg">
       <p className="label-mono text-[11px] text-text-muted">{row.label}</p>
       <p className="font-display text-sm font-semibold text-text-primary tabular-nums">
-        {Math.round(row.estimate)} kg
+        {Math.round(row.estimate)} {weightUnitLabel(unit)}
       </p>
     </div>
   );

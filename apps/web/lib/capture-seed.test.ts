@@ -49,7 +49,7 @@ test("carries the record's training type onto the seed", () => {
   const source = record([loggedSet({ position: 0 })], "cardio");
 
   // Act
-  const seed = captureSeedFromRecord(source);
+  const seed = captureSeedFromRecord(source, "kg");
 
   // Assert
   assert.equal(seed.trainingType, "cardio");
@@ -64,7 +64,7 @@ test("folds a same-exercise run into one prescription with sets = run length", (
   ]);
 
   // Act
-  const seed = captureSeedFromRecord(source);
+  const seed = captureSeedFromRecord(source, "kg");
 
   // Assert — one exercise, three sets
   assert.equal(seed.exercises.length, 1);
@@ -81,7 +81,7 @@ test("seeds the plan target as the performed rep range, collapsing when uniform"
   ]);
 
   // Act
-  const seed = captureSeedFromRecord(source);
+  const seed = captureSeedFromRecord(source, "kg");
 
   // Assert — the faithful min–max range
   assert.equal(seed.exercises[0].reps, "6-8");
@@ -89,7 +89,7 @@ test("seeds the plan target as the performed rep range, collapsing when uniform"
   // Arrange — a uniform run collapses to a single value
   const uniform = captureSeedFromRecord(
     record([loggedSet({ position: 0, quantity: reps(5) }), loggedSet({ position: 1, quantity: reps(5) })]),
-  );
+  "kg");
   assert.equal(uniform.exercises[0].reps, "5");
 });
 
@@ -102,7 +102,7 @@ test("seeds the recommended load from the run's heaviest performed set", () => {
   ]);
 
   // Act
-  const seed = captureSeedFromRecord(source);
+  const seed = captureSeedFromRecord(source, "kg");
 
   // Assert — the heaviest, reversed into the picker's fields
   assert.equal(seed.exercises[0].loadKind, "absolute");
@@ -118,7 +118,7 @@ test("keeps non-contiguous runs of the same exercise as separate prescriptions",
   ]);
 
   // Act
-  const seed = captureSeedFromRecord(source);
+  const seed = captureSeedFromRecord(source, "kg");
 
   // Assert — three prescriptions, preserving order (never merged)
   assert.equal(seed.exercises.length, 3);
@@ -142,7 +142,7 @@ test("seeds a distance run's kind, unit, and representative target from its text
   ]);
 
   // Act
-  const seed = captureSeedFromRecord(source);
+  const seed = captureSeedFromRecord(source, "kg");
 
   // Assert
   assert.equal(seed.exercises[0].kind, "distance");
@@ -167,7 +167,7 @@ test("ranks a bodyweight run by its added load", () => {
   ]);
 
   // Act
-  const seed = captureSeedFromRecord(source);
+  const seed = captureSeedFromRecord(source, "kg");
 
   // Assert — the +10 kg set wins
   assert.equal(seed.exercises[0].loadKind, "bodyweight");

@@ -22,7 +22,7 @@ const ABSOLUTE: ExerciseRecords = {
 
 test("renders PERSONAL RECORD and TOTAL SETS for an absolute-load exercise", () => {
   // Arrange / Act
-  const tiles = toStatTiles(ABSOLUTE);
+  const tiles = toStatTiles(ABSOLUTE, "kg");
 
   // Assert — both tiles, PR first, formatted in whole kilograms
   assert.deepEqual(tiles, [
@@ -36,7 +36,7 @@ test("rounds a fractional Estimated 1RM to whole kilograms", () => {
   const records: ExerciseRecords = { ...ABSOLUTE, personal_record: 105.4 };
 
   // Act
-  const [pr] = toStatTiles(records);
+  const [pr] = toStatTiles(records, "kg");
 
   // Assert — the eye gets whole kilograms, not a long float
   assert.equal(pr.value, "105 kg");
@@ -55,7 +55,7 @@ test("hides the PERSONAL RECORD tile for a non-absolute exercise with no record"
   };
 
   // Act
-  const tiles = toStatTiles(records);
+  const tiles = toStatTiles(records, "kg");
 
   // Assert — TOTAL SETS alone; no zeroed PR tile
   assert.deepEqual(tiles, [{ label: "TOTAL SETS", value: "8" }]);
@@ -85,7 +85,7 @@ test("shows the PERSONAL RECORD tile for a qualifying bodyweight exercise, as th
   };
 
   // Act
-  const tiles = toStatTiles(records);
+  const tiles = toStatTiles(records, "kg");
 
   // Assert — the PR tile now renders (no longer hidden), showing the set, never kg
   assert.deepEqual(tiles, [
@@ -97,10 +97,22 @@ test("shows the PERSONAL RECORD tile for a qualifying bodyweight exercise, as th
 test("never labels a tile 'personal best' for the raw heaviest load", () => {
   // Act — over both a with-PR and a without-PR exercise
   const labels = [
-    ...toStatTiles(ABSOLUTE),
-    ...toStatTiles({ ...ABSOLUTE, personal_record: null }),
+    ...toStatTiles(ABSOLUTE, "kg"),
+    ...toStatTiles({ ...ABSOLUTE, personal_record: null }, "kg"),
   ].map((tile) => tile.label.toLowerCase());
 
   // Assert — the glossary-banned label never appears
   assert.ok(!labels.some((label) => label.includes("personal best")));
+});
+
+test("toStatTiles renders the Personal Record tile in the reader's pounds", () => {
+  // Arrange — an absolute PR of 100 kg, read by a lb user.
+  const records = { ...ABSOLUTE, personal_record: 100 };
+
+  // Act
+  const [pr] = toStatTiles(records, "lb");
+
+  // Assert — 100 kg ≈ 220 lb, a whole figure in the reader's unit.
+  assert.equal(pr.label, "PERSONAL RECORD");
+  assert.equal(pr.value, "220 lb");
 });

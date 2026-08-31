@@ -1,6 +1,8 @@
 import type { PersonalRecordEntry } from "./analytics-types";
 import { formatRecordAchievement } from "./record-achievement.ts";
 import { formatShortDate } from "./date-format.ts";
+import type { WeightUnit } from "./weight-unit";
+import { weightUnitLabel, wholeWeightInUnit } from "./weight-format.ts";
 
 // A Personal Record prepared for the Recent Records feed: the Exercise name, its
 // achievement headline, the gain-over-prior-PR, and a short human date. `estimate` is
@@ -35,14 +37,21 @@ export function toRecentRecordsTeaser(
     : null;
 }
 
-// Turn the API's Personal Record entries into display rows, preserving the feed's
-// newest-first order. Pure and server-free, so it is safe from either a Server or
-// Client Component.
-export function toRecordRows(records: readonly PersonalRecordEntry[]): RecordRow[] {
+// Turn the API's Personal Record entries into display rows in the reader's Weight Unit,
+// preserving the feed's newest-first order. The achievement headline and the gain-over-prior-PR
+// are both projected to `unit` (the gain is a kilogram delta, which converts linearly, #417).
+// Pure and server-free, so it is safe from either a Server or Client Component.
+export function toRecordRows(
+  records: readonly PersonalRecordEntry[],
+  unit: WeightUnit,
+): RecordRow[] {
   return records.map((record) => ({
     exercise: record.exercise,
-    estimate: formatRecordAchievement(record),
-    gain: record.gain > 0 ? `+${Math.round(record.gain)} kg` : "First PR",
+    estimate: formatRecordAchievement(record, unit),
+    gain:
+      record.gain > 0
+        ? `+${wholeWeightInUnit(record.gain, unit)} ${weightUnitLabel(unit)}`
+        : "First PR",
     date: formatShortDate(record.date),
   }));
 }

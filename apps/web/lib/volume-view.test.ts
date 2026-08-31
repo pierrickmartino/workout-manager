@@ -19,18 +19,27 @@ const POINTS: VolumePoint[] = [
 
 test("maps points to chart rows with a short day label, preserving order", () => {
   // Arrange / Act
-  const rows = toVolumeRows(POINTS);
+  const rows = toVolumeRows(POINTS, "kg");
 
-  // Assert — ISO date kept for the axis, plus a human "Mon D" label and the volume
+  // Assert — ISO date kept for the axis, plus a human "Mon D" label and the kg volume
   assert.deepEqual(rows, [
     { date: "2026-07-04", label: "Jul 4", volume: 400 },
     { date: "2026-07-05", label: "Jul 5", volume: 1000 },
   ]);
 });
 
+test("projects the volume into the reader's pounds", () => {
+  // Arrange / Act — a lb reader sees the tonnage converted from kilograms.
+  const rows = toVolumeRows(POINTS, "lb");
+
+  // Assert — 400 kg ≈ 881.85 lb, 1000 kg ≈ 2204.62 lb (raw for a proportional line).
+  assert.ok(Math.abs(rows[0].volume - 881.849) < 0.01);
+  assert.ok(Math.abs(rows[1].volume - 2204.62) < 0.01);
+});
+
 test("returns no rows for an empty series", () => {
   // Arrange / Act / Assert — the empty state is handled by the caller, not fabricated
-  assert.deepEqual(toVolumeRows([]), []);
+  assert.deepEqual(toVolumeRows([], "kg"), []);
 });
 
 test("formats a positive delta with a leading plus and whole percent", () => {

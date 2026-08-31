@@ -6,7 +6,9 @@
 
 import { completionOutcome, type LiveSessionState } from "./live-session.ts";
 import { durationSeconds } from "./live-timer.ts";
+import { loadValueToKg } from "./load.ts";
 import { repetitionsInput } from "./quantity.ts";
+import type { WeightUnit } from "./weight-unit";
 import type { LogSessionInput, LogSetInput } from "./logs-types";
 
 // Map a finished Live Session to the log request. Returns null when no set was
@@ -18,18 +20,23 @@ import type { LogSessionInput, LogSetInput } from "./logs-types";
 export function mapFinishToLog(
   state: LiveSessionState,
   performedOn: string,
+  unit: WeightUnit,
 ): LogSessionInput | null {
   const loggedSets: LogSetInput[] = state.sets
     .filter((set) => set.status === "completed")
-    .map((set) => ({
-      exercise_id: set.exerciseId,
-      // The live set's reps become a repetitions Quantity via the shared mapper.
-      ...repetitionsInput(set.reps),
-      load_kind: set.loadKind,
-      // An empty value means "no load recorded" — the backend maps it to null.
-      load_value: set.loadValue === "" ? null : set.loadValue,
-      perceived_difficulty: set.rpe,
-    }));
+    .map((set) => {
+      // The load was entered in the reader's Weight Unit; convert it back to canonical,
+      // exact kilograms for storage (#417). A blank value is "no load recorded" → null.
+      const loadValueKg = loadValueToKg(set.loadKind, set.loadValue, unit);
+      return {
+        exercise_id: set.exerciseId,
+        // The live set's reps become a repetitions Quantity via the shared mapper.
+        ...repetitionsInput(set.reps),
+        load_kind: set.loadKind,
+        load_value: loadValueKg === "" ? null : loadValueKg,
+        perceived_difficulty: set.rpe,
+      };
+    });
 
   if (loggedSets.length === 0) return null;
 
