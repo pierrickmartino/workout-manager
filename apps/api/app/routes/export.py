@@ -5,19 +5,23 @@
 metrics, and the **Catalog** Exercises those reference, serializes them to nested JSON in
 canonical kilograms, and returns the result as a **file download** — an ``attachment``
 with a JSON content type, deliberately *outside* the standard response envelope
-(ADR-0062). The scope is strictly the authenticated user: never the shared **Generated**
-cache, never another user's data. The export is **synchronous**, served from the request
-path over the user's own bounded rows — no Redis/RQ job. The JSON is shaped to be
-re-importable later, but no import path is built here."""
+(ADR-0062). A ``format=csv`` query parameter instead returns an analysis-friendly CSV,
+one row per **Logged Set** with plan/session context flattened into stable columns
+(issue #419). The scope is strictly the authenticated user: never the shared
+**Generated** cache, never another user's data. The export is **synchronous**, served
+from the request path over the user's own bounded rows — no Redis/RQ job. The JSON is
+shaped to be re-importable later, but no import path is built here."""
 
 from __future__ import annotations
 
 import json
+from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 
 from app.auth.dependencies import get_current_user
+from app.export.csv_serializer import logged_sets_csv
 from app.export.serializer import export_document, referenced_exercise_ids
 from app.repositories.deps import (
     get_exercise_repository,
@@ -34,13 +38,19 @@ from app.repositories.session_repository import SessionRepository
 
 router = APIRouter(prefix="/api", tags=["export"])
 
-# The attachment name the browser saves the download as. Stable (no timestamp) so the
+# The attachment names the browser saves each download as. Stable (no timestamp) so the
 # download shape is deterministic; the caller renames the file as they wish.
 EXPORT_FILENAME = "workout-manager-export.json"
+EXPORT_CSV_FILENAME = "workout-manager-logged-sets.csv"
 
 
 @router.get("/export")
 def export_user_data(
+    export_format: Literal["json", "csv"] = Query(
+        "json",
+        alias="format",
+        description="Export format: nested JSON (default) or one-row-per-Logged-Set CSV.",
+    ),
     clerk_user_id: str = Depends(get_current_user),
     protocols: ProtocolRepository = Depends(get_protocol_repository),
     sessions: SessionRepository = Depends(get_session_repository),
@@ -48,19 +58,35 @@ def export_user_data(
     metrics: MetricEntryRepository = Depends(get_metric_entry_repository),
     exercises: ExerciseRepository = Depends(get_exercise_repository),
 ) -> Response:
-    """Download the caller's own data as a self-contained JSON file (ADR-0062).
+    """Download the caller's own data as a self-contained file (ADR-0062).
 
     Every read here is owner-scoped to ``clerk_user_id`` through the repositories, so the
     export can only ever contain the caller's plans and records — the shared Generated
-    cache and other users' data are structurally unreachable. The referenced Catalog
-    Exercises are fetched by exactly the ids the plans and records point at, so the file
-    is **self-contained** with no dangling references. The document is returned as an
-    ``attachment`` with the JSON content type, **not** wrapped in the standard envelope —
-    the one deliberate, documented deviation from the envelope seam (ADR-0062)."""
+    cache and other users' data are structurally unreachable. ``format`` is validated at
+    the boundary (``Literal`` → 422 on anything else); ``csv`` flattens the records to one
+    row per Logged Set, while the default ``json`` builds the faithful nested document.
+    Either way the result is an ``attachment`` with its own content type, **not** wrapped
+    in the standard envelope — the one deliberate, documented deviation from the envelope
+    seam (ADR-0062)."""
 
     owned_protocols = protocols.list_for_user(clerk_user_id)
-    owned_sessions = sessions.list_standalone_full(clerk_user_id)
     logged_sessions = logged.list_for_user(clerk_user_id)
+
+    if export_format == "csv":
+        # The CSV grain is the Logged Set (ADR-0062): only the records and the Protocols
+        # that give them plan context are needed — no standalone Sessions, metrics, or
+        # Catalog fetch. Weights ride as canonical kg with a labeled unit column.
+        return Response(
+            content=logged_sets_csv(
+                protocols=owned_protocols, logged_sessions=logged_sessions
+            ),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f'attachment; filename="{EXPORT_CSV_FILENAME}"'
+            },
+        )
+
+    owned_sessions = sessions.list_standalone_full(clerk_user_id)
     owned_metrics = metrics.list_for_user(clerk_user_id)
 
     # Fetch exactly the Exercises the plans and records reference, so the file is
