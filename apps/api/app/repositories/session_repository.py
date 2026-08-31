@@ -251,6 +251,18 @@ class SessionRepository(Protocol):
         ``total`` counts every match across pages. A read: listing never creates."""
         ...
 
+    def list_standalone_full(self, clerk_user_id: str) -> list[SessionView]:
+        """Return the caller's **standalone** Sessions in full, for Export (issue #418).
+
+        The un-paginated, prescription-joined twin of :meth:`list_standalone`: scoped to
+        ``clerk_user_id`` and to standalone Sessions only (``protocol_id IS NULL``), so a
+        Protocol-member Session — which rides inside its Protocol — and every other user's
+        Session are excluded. Each element is a full ``SessionView`` (ordered prescriptions
+        joined to their catalog Exercises), so a faithful copy of the plan can be
+        serialized. Results come back newest-first; empty when the user owns no standalone
+        Session. A read: listing never creates."""
+        ...
+
     def duplicate(self, session_id: int, clerk_user_id: str) -> SessionView | None:
         """Deep-copy the owner's Session into a new **standalone** Session (Duplicate,
         ADR-0043).
@@ -695,6 +707,19 @@ class SqlSessionRepository:
             offset=offset,
         )
 
+    def list_standalone_full(self, clerk_user_id: str) -> list[SessionView]:
+        # Owner-scoped and standalone-only (``protocol_id IS NULL``) in SQL, newest-first;
+        # each row is built into a full view (prescriptions joined) for Export (issue #418).
+        workouts = self._session.exec(
+            select(WorkoutSession)
+            .where(
+                WorkoutSession.clerk_user_id == clerk_user_id,
+                WorkoutSession.protocol_id.is_(None),
+            )
+            .order_by(WorkoutSession.created_at.desc(), WorkoutSession.id.desc())
+        ).all()
+        return [self._view(workout) for workout in workouts]
+
     def duplicate(self, session_id: int, clerk_user_id: str) -> SessionView | None:
         source = self._session.get(WorkoutSession, session_id)
         if source is None or source.clerk_user_id != clerk_user_id:
@@ -1106,6 +1131,17 @@ class InMemorySessionRepository:
             limit=limit,
             offset=offset,
         )
+
+    def list_standalone_full(self, clerk_user_id: str) -> list[SessionView]:
+        # Owner-scoped and standalone-only (no ``protocol_id``), newest-first — the full,
+        # prescription-joined view of each so Export can serialize the plan (issue #418).
+        workouts = [
+            workout
+            for workout in self._sessions.values()
+            if workout.clerk_user_id == clerk_user_id and workout.protocol_id is None
+        ]
+        workouts.sort(key=lambda w: (w.created_at, w.id), reverse=True)
+        return [self._view(workout) for workout in workouts]
 
     def duplicate(self, session_id: int, clerk_user_id: str) -> SessionView | None:
         source = self._sessions.get(session_id)

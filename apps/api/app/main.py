@@ -11,6 +11,7 @@ from app.routes.active_skin import router as active_skin_router
 from app.routes.analytics import router as analytics_router
 from app.routes.appearance import router as appearance_router
 from app.routes.exercises import router as exercises_router
+from app.routes.export import router as export_router
 from app.routes.home import router as home_router
 from app.routes.logs import router as logs_router
 from app.routes.metrics import router as metrics_router
@@ -68,6 +69,7 @@ def create_app() -> FastAPI:
     app.include_router(protocols_router)
     app.include_router(exercises_router)
     app.include_router(metrics_router)
+    app.include_router(export_router)
     app.include_router(progress_router)
     app.include_router(records_router)
     app.include_router(analytics_router)
