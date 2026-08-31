@@ -2,9 +2,13 @@ import { cn } from "@/lib/utils";
 import { formatBodyWeight, formatLoad } from "@/lib/load";
 import { formatPace, formatQuantity, type Quantity } from "@/lib/quantity";
 import type { LoggedSet } from "@/lib/logs-types";
+import type { WeightUnit } from "@/lib/weight-unit";
 
 interface LoggedSetTableProps {
   sets: LoggedSet[];
+  // The reader's Weight Unit, so each set's Load and Performed Body Weight render in kg or
+  // lb (#417) — a Redeemed / Shared record shows the recipient's unit, not the author's.
+  unit: WeightUnit;
   // Whether to show the Performed Body Weight stat (ADR-0026). The record detail shows it;
   // the compact History card omits it. Off by default.
   showBodyWeight?: boolean;
@@ -17,13 +21,18 @@ interface LoggedSetTableProps {
 // truncated names on narrow phones. Shared by the History list card and the record detail
 // page so the record renders identically wherever it is shown; every amount/load display
 // still goes through the typed formatters, never re-derived.
-export function LoggedSetTable({ sets, showBodyWeight = false }: LoggedSetTableProps) {
+export function LoggedSetTable({
+  sets,
+  unit,
+  showBodyWeight = false,
+}: LoggedSetTableProps) {
   return (
     <ul className="flex list-none flex-col gap-2.5 p-0">
       {sets.map((loggedSet) => (
         <LoggedSetRow
           key={loggedSet.position}
           loggedSet={loggedSet}
+          unit={unit}
           showBodyWeight={showBodyWeight}
         />
       ))}
@@ -47,9 +56,11 @@ function quantityLabel(quantity: Quantity | null): string {
 
 function LoggedSetRow({
   loggedSet,
+  unit,
   showBodyWeight,
 }: {
   loggedSet: LoggedSet;
+  unit: WeightUnit;
   showBodyWeight: boolean;
 }) {
   // Pace is a read-time projection (ADR-0032), shown only for a distance set that
@@ -77,13 +88,13 @@ function LoggedSetRow({
         ) : null}
         <Stat
           label="Load"
-          value={formatLoad(load)}
+          value={formatLoad(load, unit)}
           valueClassName={
             loadIsText ? "whitespace-normal break-words font-normal text-text-muted" : undefined
           }
         />
         {showBodyWeight ? (
-          <Stat label="BW" value={formatBodyWeight(loggedSet.body_weight_kg)} />
+          <Stat label="BW" value={formatBodyWeight(loggedSet.body_weight_kg, unit)} />
         ) : null}
         <Stat
           label="RPE"

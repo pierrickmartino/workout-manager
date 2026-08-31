@@ -7,7 +7,8 @@ import {
   type CorrectLogFormState,
 } from "@/app/history/[id]/edit/actions";
 import type { CorrectionFormFields, CorrectionSetFields } from "@/lib/log-correction";
-import { LOAD_KIND_OPTIONS } from "@/lib/load";
+import { loadKindOptions } from "@/lib/load";
+import type { WeightUnit } from "@/lib/weight-unit";
 import type { QuantityKind } from "@/lib/quantity";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
 import { Field } from "@/components/pulse/field";
@@ -23,6 +24,9 @@ interface CorrectLogFormProps {
   logId: number;
   fields: CorrectionFormFields;
   today: string;
+  // The reader's Weight Unit (#417): each Load pre-fills and is entered in this unit, the
+  // picker names it, and the edit action converts the entry back to canonical kilograms.
+  unit: WeightUnit;
 }
 
 // One client-added row (issue #358): a movement the user also performed but never
@@ -102,7 +106,15 @@ function AmountFields({ set, index }: { set: CorrectionSetFields; index: number 
   );
 }
 
-function SetRow({ set, index }: { set: CorrectionSetFields; index: number }) {
+function SetRow({
+  set,
+  index,
+  unit,
+}: {
+  set: CorrectionSetFields;
+  index: number;
+  unit: WeightUnit;
+}) {
   return (
     <div className="flex flex-col gap-3 rounded-md border border-border bg-surface p-4">
       <input type="hidden" name={`set-${index}-exercise_id`} value={set.exerciseId} />
@@ -141,7 +153,7 @@ function SetRow({ set, index }: { set: CorrectionSetFields; index: number }) {
             defaultValue={set.loadKind || "absolute"}
             aria-label={`Load kind for ${set.exerciseName}`}
           >
-            {LOAD_KIND_OPTIONS.map((option) => (
+            {loadKindOptions(unit).map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
@@ -167,7 +179,7 @@ function SetRow({ set, index }: { set: CorrectionSetFields; index: number }) {
 // type is derived from its Session, so it is shown read-only and not sent; a plan-less
 // record's is an editable picker. The hidden `log_id`/`session_id` carry identity the
 // backend treats as authoritative (the Session is never re-parented).
-export function CorrectLogForm({ logId, fields, today }: CorrectLogFormProps) {
+export function CorrectLogForm({ logId, fields, today, unit }: CorrectLogFormProps) {
   const [state, action, pending] = useActionState<CorrectLogFormState, FormData>(
     submitCorrection,
     { error: null },
@@ -245,7 +257,7 @@ export function CorrectLogForm({ logId, fields, today }: CorrectLogFormProps) {
       <fieldset className="flex flex-col gap-3 border-0 p-0">
         <SectionHeader>SETS PERFORMED</SectionHeader>
         {fields.sets.map((set, index) => (
-          <SetRow key={index} set={set} index={index} />
+          <SetRow key={index} set={set} index={index} unit={unit} />
         ))}
 
         {/* Added movements (issue #358): a set performed but never logged, including one
@@ -256,6 +268,7 @@ export function CorrectLogForm({ logId, fields, today }: CorrectLogFormProps) {
             key={row.id}
             index={baseCount + offset}
             kind={row.kind}
+            unit={unit}
             onKindChange={(kind) => setRowKind(row.id, kind)}
             onRemove={() => removeRow(row.id)}
           />
@@ -281,6 +294,7 @@ export function CorrectLogForm({ logId, fields, today }: CorrectLogFormProps) {
 interface AddedSetRowProps {
   index: number;
   kind: QuantityKind;
+  unit: WeightUnit;
   onKindChange: (kind: QuantityKind) => void;
   onRemove: () => void;
 }
@@ -289,7 +303,7 @@ interface AddedSetRowProps {
 // ADR-0033 — the same picker the ad-hoc "Log a movement" flow uses), choose its amount
 // kind, then enter the typed Quantity, typed Load, and perceived difficulty any Logged
 // Set carries. No hidden Exercise id — the action resolves the name; no "off-plan" badge.
-function AddedSetRow({ index, kind, onKindChange, onRemove }: AddedSetRowProps) {
+function AddedSetRow({ index, kind, unit, onKindChange, onRemove }: AddedSetRowProps) {
   const prefix = `set-${index}`;
   const rowLabel = `added set ${index + 1}`;
 
@@ -338,7 +352,7 @@ function AddedSetRow({ index, kind, onKindChange, onRemove }: AddedSetRowProps) 
             defaultValue="bodyweight"
             aria-label={`Load kind, ${rowLabel}`}
           >
-            {LOAD_KIND_OPTIONS.map((option) => (
+            {loadKindOptions(unit).map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>

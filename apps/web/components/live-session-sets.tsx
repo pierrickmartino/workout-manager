@@ -4,7 +4,8 @@ import { useState } from "react";
 import { Check, ChevronDown, SkipForward } from "lucide-react";
 
 import { liveSetDomId, type LiveSet, type LiveUnit } from "@/lib/live-session";
-import { LOAD_KIND_OPTIONS, type LoadKind } from "@/lib/load";
+import { loadKindOptions, type LoadKind } from "@/lib/load";
+import type { WeightUnit } from "@/lib/weight-unit";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,9 @@ export interface LiveSessionSetsProps {
     rpe: number | null,
   ) => void;
   onSkipSet: (index: number) => void;
+  // The reader's Weight Unit (#417): the per-set Load picker names it. Named `weightUnit`
+  // to avoid colliding with the `LiveUnit` values mapped as `unit` below.
+  weightUnit: WeightUnit;
 }
 
 // The grouped, collapsible set list (issue: always-on live timer + collapse). A
@@ -44,6 +48,7 @@ export function LiveSessionSets({
   onExpandUnit,
   onCompleteSet,
   onSkipSet,
+  weightUnit,
 }: LiveSessionSetsProps): React.JSX.Element {
   return (
     <div className="flex flex-col gap-3">
@@ -68,6 +73,7 @@ export function LiveSessionSets({
             currentIndex={currentIndex}
             onCompleteSet={onCompleteSet}
             onSkipSet={onSkipSet}
+            weightUnit={weightUnit}
           />
         );
       })}
@@ -109,6 +115,7 @@ interface ExpandedUnitProps {
   currentIndex: number;
   onCompleteSet: LiveSessionSetsProps["onCompleteSet"];
   onSkipSet: LiveSessionSetsProps["onSkipSet"];
+  weightUnit: WeightUnit;
 }
 
 // An expanded unit: its full set rows, under a lightweight "SUPERSET A" label when
@@ -119,6 +126,7 @@ function ExpandedUnit({
   currentIndex,
   onCompleteSet,
   onSkipSet,
+  weightUnit,
 }: ExpandedUnitProps): React.JSX.Element {
   return (
     <div className="flex flex-col gap-3">
@@ -133,6 +141,7 @@ function ExpandedUnit({
             <SetRow
               set={set}
               isCurrent={index === currentIndex}
+              weightUnit={weightUnit}
               onComplete={(reps, loadKind, loadValue, rpe) =>
                 onCompleteSet(index, reps, loadKind, loadValue, rpe)
               }
@@ -148,6 +157,7 @@ function ExpandedUnit({
 interface SetRowProps {
   set: LiveSet;
   isCurrent: boolean;
+  weightUnit: WeightUnit;
   onComplete: (
     reps: number,
     loadKind: LoadKind,
@@ -162,7 +172,7 @@ interface SetRowProps {
 // COMPLETE_SET event (the engine's only editing path). "Skip" leaves the set
 // un-attempted (ADVANCE) — finishing with any skipped set records the performance
 // Incomplete (ADR-0013).
-function SetRow({ set, isCurrent, onComplete, onSkip }: SetRowProps) {
+function SetRow({ set, isCurrent, weightUnit, onComplete, onSkip }: SetRowProps) {
   const [reps, setReps] = useState(String(set.reps));
   const [loadKind, setLoadKind] = useState<LoadKind>(set.loadKind);
   const [loadValue, setLoadValue] = useState(set.loadValue);
@@ -260,7 +270,7 @@ function SetRow({ set, isCurrent, onComplete, onSkip }: SetRowProps) {
             disabled={completed}
             aria-label={`Load kind for ${label}`}
           >
-            {LOAD_KIND_OPTIONS.map((option) => (
+            {loadKindOptions(weightUnit).map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>

@@ -9,6 +9,7 @@ import {
 } from "@/lib/strength-analytics-view";
 import { toStrengthTrajectories } from "@/lib/strength-trajectories-view";
 import { toMuscleBalance } from "@/lib/muscle-balance-view";
+import { resolveAppearance } from "@/lib/appearance";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { Alert } from "@/components/pulse/alert";
@@ -52,13 +53,18 @@ export default async function StrengthAnalyticsPage({
     );
   }
 
+  const { weight_unit: unit } = await resolveAppearance();
   const total = envelope.meta?.total ?? envelope.data.records.length;
-  const view = toStrengthTimelineView(envelope.data, {
-    limit: TIMELINE_LIMIT,
-    offset,
-    total,
-  });
-  const trajectories = toStrengthTrajectories(envelope.data.trajectories);
+  const view = toStrengthTimelineView(
+    envelope.data,
+    {
+      limit: TIMELINE_LIMIT,
+      offset,
+      total,
+    },
+    unit,
+  );
+  const trajectories = toStrengthTrajectories(envelope.data.trajectories, unit);
   const muscleBalance = toMuscleBalance(envelope.data.muscle_balance);
 
   return (
@@ -69,7 +75,7 @@ export default async function StrengthAnalyticsPage({
         <StrengthEmptyState />
       ) : (
         <>
-          <StrengthTrajectories tiles={trajectories} />
+          <StrengthTrajectories tiles={trajectories} unit={unit} />
           <MuscleBalance view={muscleBalance} />
           <PersonalRecordTimeline view={view} offset={offset} />
         </>

@@ -44,7 +44,7 @@ const START = 1_000_000;
 // An in-progress Live Session for SESSION, started at START with its first set
 // completed at `START` (so last-activity is START unless moved).
 function inProgress(): LiveSessionState {
-  return liveSessionReducer(initLiveSession(SESSION), {
+  return liveSessionReducer(initLiveSession(SESSION, "kg"), {
     type: "START",
     now: START,
   });
@@ -133,7 +133,7 @@ test("resolveLiveEntry blocks a different unfinished session even when it is idl
 
 test("HYDRATE restores a persisted state wholesale, replacing the current one", () => {
   // Arrange — a fresh not-started state, and a persisted mid-performance snapshot
-  const fresh = initLiveSession(SESSION);
+  const fresh = initLiveSession(SESSION, "kg");
   const stored = liveSessionReducer(inProgress(), {
     type: "COMPLETE_SET",
     index: 0,

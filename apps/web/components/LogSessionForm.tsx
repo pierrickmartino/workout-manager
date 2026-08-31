@@ -9,7 +9,8 @@ import {
   submitLog,
   type LogFormState,
 } from "@/app/sessions/[id]/log/actions";
-import { LOAD_KIND_OPTIONS } from "@/lib/load";
+import { loadKindOptions } from "@/lib/load";
+import type { WeightUnit } from "@/lib/weight-unit";
 import {
   buildLogForm,
   buildPinDialog,
@@ -42,6 +43,9 @@ interface LogSessionFormProps {
   sessionId: number;
   prescriptions: ExercisePrescription[];
   today: string;
+  // The reader's Weight Unit (#417): each Load pre-fills and is entered in this unit, the
+  // picker/placeholder name it, and the server action converts the entry back to kilograms.
+  unit: WeightUnit;
 }
 
 // Records a performance of a Session at per-set fidelity (Q1/Q4). Each prescription expands
@@ -61,6 +65,7 @@ export function LogSessionForm({
   sessionId,
   prescriptions,
   today,
+  unit,
 }: LogSessionFormProps) {
   const router = useRouter();
   const [state, action, pending] = useActionState<LogFormState, FormData>(
@@ -68,7 +73,7 @@ export function LogSessionForm({
     { error: null },
   );
   const [groups, setGroups] = useState<LogPrescriptionGroup[]>(() =>
-    buildLogForm(prescriptions),
+    buildLogForm(prescriptions, unit),
   );
 
   // After the log is saved, offer a Pin dialog for every bodyweight movement that beat the top of
@@ -268,6 +273,7 @@ export function LogSessionForm({
                     index={rowOffsets[groupIndex] + rowIndex}
                     row={row}
                     hint={group.hint}
+                    unit={unit}
                     canRemove={group.rows.length > 1}
                     onToggleDone={() =>
                       updateRow(group.position, row.key, { done: !row.done })
@@ -334,6 +340,7 @@ function SetRow({
   index,
   row,
   hint,
+  unit,
   canRemove,
   onToggleDone,
   onChange,
@@ -342,6 +349,7 @@ function SetRow({
   index: number;
   row: LogSetRow;
   hint: string;
+  unit: WeightUnit;
   canRemove: boolean;
   onToggleDone: () => void;
   onChange: (patch: Partial<LogSetRow>) => void;
@@ -423,6 +431,7 @@ function SetRow({
         <LoadFields
           prefix={prefix}
           row={row}
+          unit={unit}
           disabled={disabled}
           onChange={onChange}
         />
@@ -542,11 +551,13 @@ function QuantityField({
 function LoadFields({
   prefix,
   row,
+  unit,
   disabled,
   onChange,
 }: {
   prefix: string;
   row: LogSetRow;
+  unit: WeightUnit;
   disabled: boolean;
   onChange: (patch: Partial<LogSetRow>) => void;
 }) {
@@ -563,7 +574,7 @@ function LoadFields({
           }
           aria-label={`Load kind for set ${row.setNumber}`}
         >
-          {LOAD_KIND_OPTIONS.map((option) => (
+          {loadKindOptions(unit).map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>

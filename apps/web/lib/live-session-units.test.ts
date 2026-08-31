@@ -129,7 +129,7 @@ function complete(state: LiveSessionState, index: number): LiveSessionState {
 
 test("groupUnits partitions a solo Session into one unit per Prescription", () => {
   // Arrange / Act
-  const units = groupUnits(initLiveSession(SOLO));
+  const units = groupUnits(initLiveSession(SOLO, "kg"));
 
   // Assert — two solo units, in order, each carrying all of its own sets.
   assert.equal(units.length, 2);
@@ -143,7 +143,7 @@ test("groupUnits partitions a solo Session into one unit per Prescription", () =
 test("groupUnits carries each set's absolute index into state.sets", () => {
   // Arrange / Act — the screen dispatches COMPLETE_SET by absolute index, so the
   // grouped view must preserve it.
-  const units = groupUnits(initLiveSession(SOLO));
+  const units = groupUnits(initLiveSession(SOLO, "kg"));
 
   // Assert
   assert.deepEqual(
@@ -158,7 +158,7 @@ test("groupUnits carries each set's absolute index into state.sets", () => {
 
 test("groupUnits marks the unit holding the current-set pointer", () => {
   // Arrange — pointer starts on the first set (unit 0).
-  const state = initLiveSession(SOLO);
+  const state = initLiveSession(SOLO, "kg");
 
   // Act
   const units = groupUnits(state);
@@ -170,7 +170,7 @@ test("groupUnits marks the unit holding the current-set pointer", () => {
 
 test("groupUnits flips a unit to complete once all its sets are attempted", () => {
   // Arrange — attempt all three Back Squat sets; the pointer moves into Push-up.
-  let state = initLiveSession(SOLO);
+  let state = initLiveSession(SOLO, "kg");
   state = complete(state, 0);
   state = complete(state, 1);
   state = complete(state, 2);
@@ -187,7 +187,7 @@ test("groupUnits flips a unit to complete once all its sets are attempted", () =
 
 test("groupUnits keeps a unit with a skipped (still-pending) set incomplete", () => {
   // Arrange — skip the first set (ADVANCE leaves it pending), complete the rest.
-  let state = initLiveSession(SOLO);
+  let state = initLiveSession(SOLO, "kg");
   state = liveSessionReducer(state, { type: "ADVANCE" }); // skip set 0
   state = complete(state, 1);
   state = complete(state, 2);
@@ -201,7 +201,7 @@ test("groupUnits keeps a unit with a skipped (still-pending) set incomplete", ()
 
 test("groupUnits summarizes a solo unit as its name and set count", () => {
   // Arrange / Act
-  const units = groupUnits(initLiveSession(SOLO));
+  const units = groupUnits(initLiveSession(SOLO, "kg"));
 
   // Assert
   assert.equal(units[0].summary, "Back Squat — 3 sets");
@@ -216,7 +216,7 @@ test("groupUnits summary uses the singular for a one-set unit", () => {
   };
 
   // Act
-  const units = groupUnits(initLiveSession(single));
+  const units = groupUnits(initLiveSession(single, "kg"));
 
   // Assert
   assert.equal(units[0].summary, "Back Squat — 1 set");
@@ -224,7 +224,7 @@ test("groupUnits summary uses the singular for a one-set unit", () => {
 
 test("groupUnits collapses a whole Superset into one unit", () => {
   // Arrange / Act — Bench+Row interleave as ONE unit, then the solo Plank.
-  const units = groupUnits(initLiveSession(GROUPED));
+  const units = groupUnits(initLiveSession(GROUPED, "kg"));
 
   // Assert
   assert.equal(units.length, 2);
@@ -237,7 +237,7 @@ test("groupUnits collapses a whole Superset into one unit", () => {
 
 test("groupUnits summarizes a Superset by label, members, and round count", () => {
   // Arrange / Act
-  const units = groupUnits(initLiveSession(GROUPED));
+  const units = groupUnits(initLiveSession(GROUPED, "kg"));
 
   // Assert
   assert.equal(units[0].summary, "Superset A · Bench Press + Barbell Row — 3 rounds");
@@ -245,7 +245,7 @@ test("groupUnits summarizes a Superset by label, members, and round count", () =
 
 test("onDeckExercise names the exercise the pointer currently sits on", () => {
   // Arrange
-  const state = initLiveSession(SOLO);
+  const state = initLiveSession(SOLO, "kg");
 
   // Act / Assert — first set on deck.
   assert.equal(onDeckExercise(state), "Back Squat");
@@ -259,7 +259,7 @@ test("onDeckExercise names the exercise the pointer currently sits on", () => {
 
 test("onDeckExercise is null once every set has been attempted", () => {
   // Arrange — complete all five sets; the pointer runs off the end.
-  let state = initLiveSession(SOLO);
+  let state = initLiveSession(SOLO, "kg");
   for (let index = 0; index < 5; index += 1) state = complete(state, index);
 
   // Act / Assert — nothing is on deck; the sticky bar drops "Next up".
@@ -268,7 +268,7 @@ test("onDeckExercise is null once every set has been attempted", () => {
 
 test("liveSetDomId is stable and unique per set row", () => {
   // Arrange
-  const state = initLiveSession(GROUPED);
+  const state = initLiveSession(GROUPED, "kg");
 
   // Act — every row's id is unique across the interleaved Superset + solo tail.
   const ids = state.sets.map(liveSetDomId);

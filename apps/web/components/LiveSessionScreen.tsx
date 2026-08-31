@@ -53,6 +53,7 @@ import {
   REST_ADJUST_STEP_SECONDS,
 } from "@/lib/live-timer";
 import type { LoadKind } from "@/lib/load";
+import type { WeightUnit } from "@/lib/weight-unit";
 import type { WorkoutSession } from "@/lib/sessions-types";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -73,6 +74,10 @@ interface LiveSessionScreenProps {
   // from the Interface Preference. When on, the screen holds a best-effort Screen Wake
   // Lock through the `live` phase; off means no lock is ever acquired.
   keepScreenAwake: boolean;
+  // The user's Weight Unit (issue #417), read server-side from the Interface Preference.
+  // Every prescribed / previous Load pre-fills and displays in this unit, and the entered
+  // Load is converted back to canonical kilograms when the finished Session is recorded.
+  unit: WeightUnit;
 }
 
 // The screen's lifecycle phase is defined alongside the wake-lock decision it drives
@@ -93,11 +98,15 @@ export function LiveSessionScreen({
   today,
   defaultRestSeconds,
   keepScreenAwake,
+  unit: weightUnit,
 }: LiveSessionScreenProps) {
   const [state, dispatch] = useReducer(
     liveSessionReducer,
     session,
-    initLiveSession,
+    // The engine's initializer projects each plan Load into the reader's Weight Unit, so it
+    // is seeded with the unit rather than called bare by `useReducer` (#417). Named
+    // `weightUnit` to avoid colliding with the live header's `unit` (a Session unit).
+    (initial) => initLiveSession(initial, weightUnit),
   );
   const [finishState, setFinishState] = useState<FinishState>({ error: null });
   const [pending, startTransition] = useTransition();
@@ -180,7 +189,7 @@ export function LiveSessionScreen({
     const finished = liveSessionReducer(stored, { type: "FINISH" });
     setSummary(finished);
     setPhase("summary");
-    const payload = mapFinishToLog(finished, today);
+    const payload = mapFinishToLog(finished, today, weightUnit);
     if (!payload) {
       // No completed set to record — nothing to persist, so just drop the slot.
       clearLiveSessionSlot();
@@ -204,7 +213,7 @@ export function LiveSessionScreen({
     const existing = blockedExisting;
     if (!existing) return;
     const finished = liveSessionReducer(existing, { type: "FINISH" });
-    const payload = mapFinishToLog(finished, today);
+    const payload = mapFinishToLog(finished, today, weightUnit);
     startTransition(async () => {
       if (payload) {
         const result = await recordLiveSession(existing.sessionId, payload);
@@ -319,7 +328,7 @@ export function LiveSessionScreen({
 
   function handleFinish() {
     const snapshot = state;
-    const payload = mapFinishToLog(snapshot, today);
+    const payload = mapFinishToLog(snapshot, today, weightUnit);
     // Clear the slot up front: the success path redirects to history and never
     // returns here, so an uncleared slot would otherwise re-offer to "resume" an
     // already-logged session. On failure the snapshot is written back below.
@@ -499,6 +508,7 @@ export function LiveSessionScreen({
           onExpandUnit={expandUnit}
           onCompleteSet={handleCompleteSet}
           onSkipSet={() => dispatch({ type: "ADVANCE" })}
+          weightUnit={weightUnit}
         />
       </div>
 

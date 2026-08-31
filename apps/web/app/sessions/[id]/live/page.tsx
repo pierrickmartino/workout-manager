@@ -35,7 +35,8 @@ export default async function LiveSessionPage({
   // get-or-defaults (on) and never throws, so a signed-out/unreachable read simply
   // ships the default rather than blocking the workout — the same pattern as
   // `defaultRestSeconds` above.
-  const { keep_screen_awake: keepScreenAwake } = await resolveAppearance();
+  const { keep_screen_awake: keepScreenAwake, weight_unit: unit } =
+    await resolveAppearance();
 
   const session = envelope.data;
   const today = new Date().toISOString().slice(0, 10);
@@ -46,6 +47,7 @@ export default async function LiveSessionPage({
       today={today}
       defaultRestSeconds={defaultRestSeconds}
       keepScreenAwake={keepScreenAwake}
+      unit={unit}
     />
   );
 }

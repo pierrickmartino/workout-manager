@@ -102,7 +102,7 @@ function complete(state: LiveSessionState, index: number): LiveSessionState {
 
 test("initLiveSession interleaves a Superset round-major, one set of each member per round", () => {
   // Arrange / Act
-  const state = initLiveSession(GROUPED);
+  const state = initLiveSession(GROUPED, "kg");
 
   // Assert — the Superset expands A1,B1,A2,B2,A3,B3 (round-major), then the solo
   // Plank's two sets follow. Never module-major (all of A, then all of B).
@@ -128,7 +128,7 @@ test("initLiveSession interleaves a Superset round-major, one set of each member
 
 test("rest fires only after the last member of each round, never between members", () => {
   // Arrange / Act
-  const state = initLiveSession(GROUPED);
+  const state = initLiveSession(GROUPED, "kg");
 
   // Assert — within a round the first member (Bench) rests_after=false (straight to
   // the co-member); the last member (Row) rests_after=true at the round boundary.
@@ -141,7 +141,7 @@ test("rest fires only after the last member of each round, never between members
 
 test("a round-boundary rest uses the Superset's round-rest; solo sets use their own rest", () => {
   // Arrange / Act
-  const state = initLiveSession(GROUPED);
+  const state = initLiveSession(GROUPED, "kg");
 
   // Assert — the round-boundary set (Row) carries the group's 120 s round-rest; the
   // co-member has none (no rest between members); the solo Plank carries its own 45 s.
@@ -153,7 +153,7 @@ test("a round-boundary rest uses the Superset's round-rest; solo sets use their 
 
 test("currentUnit counts a Superset as one unit alongside the solo Prescription", () => {
   // Arrange — the Superset (Bench+Row) plus the solo Plank is two units, not three
-  let state = liveSessionReducer(initLiveSession(GROUPED), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(GROUPED, "kg"), { type: "START" });
   assert.deepEqual(currentUnit(state), { index: 1, total: 2 });
 
   // Act — work all the way through the Superset's six interleaved sets
@@ -165,7 +165,7 @@ test("currentUnit counts a Superset as one unit alongside the solo Prescription"
 
 test("currentSuperset reports the round badge for a grouped set, null for a solo set", () => {
   // Arrange — pointer on the first Superset set (Bench, round 1 of 3)
-  let state = liveSessionReducer(initLiveSession(GROUPED), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(GROUPED, "kg"), { type: "START" });
   assert.deepEqual(currentSuperset(state), {
     label: "A",
     round: 1,
@@ -190,7 +190,7 @@ test("currentSuperset reports the round badge for a grouped set, null for a solo
 
 test("nextExercise previews the co-member while on a Superset member", () => {
   // Arrange — on Bench (round 1), the very next set is the co-member Barbell Row
-  const state = liveSessionReducer(initLiveSession(GROUPED), { type: "START" });
+  const state = liveSessionReducer(initLiveSession(GROUPED, "kg"), { type: "START" });
 
   // Act / Assert — the preview naturally surfaces the co-member (no special-casing)
   assert.equal(nextExercise(state), "Barbell Row");
@@ -200,7 +200,7 @@ test("restCue names the on-deck member at a round boundary, not the exercise aft
   // Arrange — complete Bench(A round 1) then Barbell Row(B round 1): the round-1
   // boundary, where the round-rest fires. The pointer has advanced to Bench round 2 —
   // what the user will perform when the rest ends.
-  let state = liveSessionReducer(initLiveSession(GROUPED), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(GROUPED, "kg"), { type: "START" });
   state = complete(state, 0);
   state = complete(state, 1);
 
@@ -220,7 +220,7 @@ test("restCue names the on-deck member at a round boundary, not the exercise aft
 test("restCue drops the round badge once the pointer reaches the solo Prescription", () => {
   // Arrange — work through the whole Superset and the first solo Plank set; the
   // pointer now sits on Plank set 2 of 2.
-  let state = liveSessionReducer(initLiveSession(GROUPED), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(GROUPED, "kg"), { type: "START" });
   for (const index of [0, 1, 2, 3, 4, 5, 6]) state = complete(state, index);
 
   // Act / Assert — a solo on-deck set shows a set indicator and no Superset label
@@ -258,7 +258,7 @@ test("previous-performance stays aligned per member by set ordinal despite inter
   };
 
   // Act
-  const state = initLiveSession(session);
+  const state = initLiveSession(session, "kg");
 
   // Assert — Bench round 1 (idx 0) → Bench's 1st logged set; Row round 1 (idx 1) →
   // Row's 1st; Bench round 3 (idx 4) → Bench's 3rd; Row round 3 (idx 5) → Row has
@@ -271,7 +271,7 @@ test("previous-performance stays aligned per member by set ordinal despite inter
 
 test("Completion Outcome is unchanged for a grouped Session — Completed when every set is attempted", () => {
   // Arrange — attempt all eight expanded sets (six Superset + two solo)
-  let state = liveSessionReducer(initLiveSession(GROUPED), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(GROUPED, "kg"), { type: "START" });
   assert.equal(progressPercent(state), 0);
   for (let index = 0; index < 8; index += 1) state = complete(state, index);
 
@@ -282,7 +282,7 @@ test("Completion Outcome is unchanged for a grouped Session — Completed when e
 
 test("Completion Outcome is Incomplete when a grouped set is left un-attempted", () => {
   // Arrange — skip the first Superset set (ADVANCE), attempt the rest
-  let state = liveSessionReducer(initLiveSession(GROUPED), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(GROUPED, "kg"), { type: "START" });
   state = liveSessionReducer(state, { type: "ADVANCE" }); // skip Bench round 1
   for (let index = 1; index < 8; index += 1) state = complete(state, index);
 
@@ -304,7 +304,7 @@ test("the live hydration read shape (Superset overlay + previous_performance) gr
   };
 
   // Act
-  const units = groupUnits(initLiveSession(hydrated));
+  const units = groupUnits(initLiveSession(hydrated, "kg"));
 
   // Assert — Bench+Row collapse into ONE Superset unit (label A), then the solo Plank:
   // two units, never three. Dropping the overlay would have split the pair into solos.
@@ -325,7 +325,7 @@ test("a mid-performance grouped Session round-trips through the localStorage slo
     setItem: (key, value) => void map.set(key, value),
     removeItem: (key) => void map.delete(key),
   };
-  let state = liveSessionReducer(initLiveSession(GROUPED), {
+  let state = liveSessionReducer(initLiveSession(GROUPED, "kg"), {
     type: "START",
     now: 1_000_000,
   });

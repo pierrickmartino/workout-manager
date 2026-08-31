@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 
 import { fetchHistory } from "@/lib/logs";
+import { resolveAppearance } from "@/lib/appearance";
 import { PageHeader } from "@/components/pulse/page-header";
 import { Alert } from "@/components/pulse/alert";
 import { Card } from "@/components/ui/card";
@@ -12,7 +13,10 @@ import { HistoryBrowser } from "@/components/HistoryBrowser";
 // The Server Component fetches the whole feed once (ADR-0031); the interactive search-by-
 // exercise and Training Type filter run entirely client-side over it in `HistoryBrowser`.
 export default async function HistoryPage() {
-  const envelope = await fetchHistory();
+  const [envelope, appearance] = await Promise.all([
+    fetchHistory(),
+    resolveAppearance(),
+  ]);
 
   if (!envelope.success || !envelope.data) {
     return (
@@ -72,7 +76,7 @@ export default async function HistoryPage() {
   // boundary per the App Router contract.
   return (
     <Suspense fallback={null}>
-      <HistoryBrowser records={history} />
+      <HistoryBrowser records={history} unit={appearance.weight_unit} />
     </Suspense>
   );
 }

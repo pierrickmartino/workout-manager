@@ -30,7 +30,7 @@ function fields(
 
 test("maps a complete prescription to the Insert payload", () => {
   // Act
-  const result = buildInsertPrescriptionRequest(fields());
+  const result = buildInsertPrescriptionRequest(fields(), "kg");
 
   // Assert — every plan field carried, the Superset overlay nulled (solo in v1)
   assert.equal(result.ok, true);
@@ -55,7 +55,7 @@ test("carries the picked Quantity kind and unit onto the plan", () => {
   // so the appended prescription stays a running prescription when the Session is reused/logged.
   const result = buildInsertPrescriptionRequest(
     fields({ kind: "distance", unit: "mi", reps: "5 mi", loadKind: "", loadValue: "" }),
-  );
+  "kg");
 
   // Assert
   assert.equal(result.ok, true);
@@ -70,7 +70,7 @@ test("carries the picked Quantity kind and unit onto the plan", () => {
 test("nulls optional rest, tempo, and load when left blank", () => {
   const result = buildInsertPrescriptionRequest(
     fields({ restSeconds: "", tempo: "", loadValue: "  " }),
-  );
+  "kg");
 
   assert.equal(result.ok, true);
   if (!result.ok) return;
@@ -80,41 +80,41 @@ test("nulls optional rest, tempo, and load when left blank", () => {
 });
 
 test("rejects the add before an exercise is picked, sending nothing", () => {
-  const result = buildInsertPrescriptionRequest(fields({ exerciseId: null }));
+  const result = buildInsertPrescriptionRequest(fields({ exerciseId: null }), "kg");
   assert.deepEqual(result, { ok: false, error: "Pick an exercise to add." });
 });
 
 test("rejects a non-integer exercise id", () => {
-  const result = buildInsertPrescriptionRequest(fields({ exerciseId: 1.5 }));
+  const result = buildInsertPrescriptionRequest(fields({ exerciseId: 1.5 }), "kg");
   assert.deepEqual(result, { ok: false, error: "Pick an exercise to add." });
 });
 
 test("rejects a prescription with no sets", () => {
-  const result = buildInsertPrescriptionRequest(fields({ sets: "0" }));
+  const result = buildInsertPrescriptionRequest(fields({ sets: "0" }), "kg");
   assert.deepEqual(result, { ok: false, error: "Add at least one set." });
 });
 
 test("rejects a prescription with a non-numeric sets count", () => {
-  const result = buildInsertPrescriptionRequest(fields({ sets: "lots" }));
+  const result = buildInsertPrescriptionRequest(fields({ sets: "lots" }), "kg");
   assert.deepEqual(result, { ok: false, error: "Add at least one set." });
 });
 
 test("rejects a missing target, worded for the reps kind", () => {
-  const result = buildInsertPrescriptionRequest(fields({ reps: "   " }));
+  const result = buildInsertPrescriptionRequest(fields({ reps: "   " }), "kg");
   assert.equal(result.ok, false);
   if (result.ok) return;
   assert.match(result.error, /rep target/);
 });
 
 test("rejects a missing target, worded for the duration kind", () => {
-  const result = buildInsertPrescriptionRequest(fields({ kind: "duration", reps: "" }));
+  const result = buildInsertPrescriptionRequest(fields({ kind: "duration", reps: "" }), "kg");
   assert.equal(result.ok, false);
   if (result.ok) return;
   assert.match(result.error, /hold time/);
 });
 
 test("rejects a missing target, worded for the distance kind", () => {
-  const result = buildInsertPrescriptionRequest(fields({ kind: "distance", reps: "" }));
+  const result = buildInsertPrescriptionRequest(fields({ kind: "distance", reps: "" }), "kg");
   assert.equal(result.ok, false);
   if (result.ok) return;
   assert.match(result.error, /distance/);

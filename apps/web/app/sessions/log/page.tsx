@@ -1,5 +1,6 @@
 import { HandAuthoredSessionForm } from "@/components/HandAuthoredSessionForm";
 import { fetchProfile } from "@/lib/profile";
+import { resolveAppearance } from "@/lib/appearance";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
 
@@ -15,7 +16,10 @@ export default async function LogWorkoutPage() {
   // Constraint builds with Supersets paused and a banner. The derived `is_sensitive` flag
   // comes from the Profile; an absent profile (a null-data envelope) defaults to allowing
   // Supersets — the `POST /api/sessions` endpoint remains the server-side backstop.
-  const profileEnvelope = await fetchProfile();
+  const [profileEnvelope, appearance] = await Promise.all([
+    fetchProfile(),
+    resolveAppearance(),
+  ]);
   const hasSensitiveConstraint = profileEnvelope.data?.is_sensitive ?? false;
 
   return (
@@ -29,6 +33,7 @@ export default async function LogWorkoutPage() {
       <HandAuthoredSessionForm
         today={today}
         hasSensitiveConstraint={hasSensitiveConstraint}
+        unit={appearance.weight_unit}
       />
 
       <BackLink href="/train">Back to training</BackLink>

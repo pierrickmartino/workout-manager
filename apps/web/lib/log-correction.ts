@@ -14,7 +14,8 @@ import {
   type Quantity,
   type QuantityKind,
 } from "./quantity.ts";
-import { loadToFields as reverseLoadFields } from "./load.ts";
+import { loadToFields as reverseLoadFields, loadValueToKg } from "./load.ts";
+import type { WeightUnit } from "./weight-unit";
 import type {
   CompletionOutcome,
   LogCorrectionInput,
@@ -127,6 +128,7 @@ function quantityToFields(
 // (lib/load.ts), so the correction pre-fill and the Capture seed never drift.
 export function correctionFieldsFromRecord(
   record: LoggedSession,
+  unit: WeightUnit,
 ): CorrectionFormFields {
   return {
     performedOn: record.performed_on,
@@ -137,7 +139,7 @@ export function correctionFieldsFromRecord(
       exerciseId: loggedSet.exercise_id,
       exerciseName: loggedSet.exercise_name,
       ...quantityToFields(loggedSet.quantity),
-      ...reverseLoadFields(loggedSet.load),
+      ...reverseLoadFields(loggedSet.load, unit),
       perceivedDifficulty: loggedSet.perceived_difficulty,
     })),
   };
@@ -147,10 +149,14 @@ export function correctionFieldsFromRecord(
 // or null when the row records no load.
 function loadFields(
   row: CorrectionSetFields,
+  unit: WeightUnit,
 ): Pick<LogSetInput, "load_kind" | "load_value"> {
-  const loadValue = row.loadValue.trim();
+  const loadKind = row.loadKind || DEFAULT_LOAD_KIND;
+  // The value was edited in the reader's Weight Unit; convert it back to canonical kilograms
+  // for storage (#417). Blank stays "no load recorded" → null.
+  const loadValue = loadValueToKg(loadKind, row.loadValue.trim(), unit);
   return {
-    load_kind: (row.loadKind || DEFAULT_LOAD_KIND) as LogSetInput["load_kind"],
+    load_kind: loadKind as LogSetInput["load_kind"],
     load_value: loadValue === "" ? null : loadValue,
   };
 }
@@ -204,14 +210,14 @@ function amountFor(
 
 // Build one logged-set payload from a row, or null when the row was left un-performed or
 // is malformed. The perceived difficulty rides through so the correction preserves it.
-function toSet(row: CorrectionSetFields): LogSetInput | null {
+function toSet(row: CorrectionSetFields, unit: WeightUnit): LogSetInput | null {
   if (!Number.isInteger(row.exerciseId)) return null;
   const amount = amountFor(row);
   if (amount === null) return null;
   return {
     exercise_id: row.exerciseId,
     ...amount,
-    ...loadFields(row),
+    ...loadFields(row, unit),
     perceived_difficulty: row.perceivedDifficulty,
   };
 }
@@ -223,6 +229,7 @@ function toSet(row: CorrectionSetFields): LogSetInput | null {
 // Outcome is never sent; the server preserves the record's.
 export function buildCorrectionRequest(
   fields: CorrectionFormFields,
+  unit: WeightUnit,
 ): CorrectionResult {
   const performedOn = fields.performedOn.trim();
   if (performedOn === "") {
@@ -236,7 +243,7 @@ export function buildCorrectionRequest(
   }
 
   const loggedSets = fields.sets
-    .map(toSet)
+    .map((row) => toSet(row, unit))
     .filter((set): set is LogSetInput => set !== null);
   if (loggedSets.length === 0) {
     return {
@@ -271,8 +278,14 @@ export function buildOutcomeCorrection(
   record: LoggedSession,
   outcome: CompletionOutcome,
 ): CorrectionResult {
-  return buildCorrectionRequest({
-    ...correctionFieldsFromRecord(record),
-    completionOutcome: outcome,
-  });
+  // This is a pure round-trip of the record's own kilogram contents — the reversed fields
+  // are never shown to the user — so it converts in canonical kilograms end to end, keeping
+  // every stored Load byte-for-byte unchanged regardless of the reader's Weight Unit (#417).
+  return buildCorrectionRequest(
+    {
+      ...correctionFieldsFromRecord(record, "kg"),
+      completionOutcome: outcome,
+    },
+    "kg",
+  );
 }

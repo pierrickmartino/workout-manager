@@ -17,7 +17,13 @@
 // attempted.
 
 import type { CompletionOutcome, LogSetInput } from "./logs-types";
-import { isPureBodyweight, loadToFields, type LoadKind } from "./load.ts";
+import {
+  isPureBodyweight,
+  loadToFields,
+  loadValueToKg,
+  type LoadKind,
+} from "./load.ts";
+import type { WeightUnit } from "./weight-unit";
 import {
   toHarderVariationOffer,
   type HarderVariationOffer,
@@ -184,6 +190,7 @@ export function prescribedRowCount(prescription: ExercisePrescription): number {
 // the cosmetic Superset layout (ADR-0023) alongside. The starting state of the log form.
 export function buildLogForm(
   prescriptions: ExercisePrescription[],
+  unit: WeightUnit,
 ): LogPrescriptionGroup[] {
   const slots = supersetLayout(
     prescriptions.map((prescription) => ({
@@ -193,7 +200,7 @@ export function buildLogForm(
   );
 
   return prescriptions.map((prescription, index) => {
-    const seededLoad = loadToFields(prescription.recommended_load ?? null);
+    const seededLoad = loadToFields(prescription.recommended_load ?? null, unit);
     const seeded = seedQuantity(prescription, prescription.prescribed_quantity);
     // Load rides by default only for repetitions; a distance/duration set hides it unless a
     // load was actually prescribed (a loaded carry), where the user can still see and edit it.
@@ -397,19 +404,22 @@ export type LogSetResult =
 // the load kind+value (blank value → no load recorded) and an in-range RPE ride alongside.
 // Load is passed through whenever a value is present — a distance/duration set omits it by
 // default on screen, but a loaded carry the user entered still reaches the record.
-export function buildLogSet(row: LogRowFields): LogSetResult {
+export function buildLogSet(row: LogRowFields, unit: WeightUnit): LogSetResult {
   if (!Number.isInteger(row.exerciseId)) return { status: "skip" };
 
   const quantity = quantityFor(row);
   if (quantity.status !== "quantity") return quantity;
 
-  const loadValue = row.loadValue.trim();
+  const loadKind = row.loadKind || "absolute";
+  // The load was entered in the reader's Weight Unit; convert it to canonical, exact
+  // kilograms for storage (#417). A blank value stays "no load recorded" → null.
+  const loadValue = loadValueToKg(loadKind, row.loadValue.trim(), unit);
   return {
     status: "set",
     set: {
       exercise_id: row.exerciseId,
       ...quantity.fields,
-      load_kind: (row.loadKind || "absolute") as LogSetInput["load_kind"],
+      load_kind: loadKind as LogSetInput["load_kind"],
       load_value: loadValue === "" ? null : loadValue,
       perceived_difficulty: perceivedDifficulty(row.rpe),
     },
@@ -418,13 +428,15 @@ export function buildLogSet(row: LogRowFields): LogSetResult {
 
 // Build the whole logged-set list from the submitted rows, or the first form-level error. A
 // garbled distance/duration rejects the entire submission so nothing corrupt is saved; a
-// silently-skipped row (malformed reps, non-integer exercise) is simply omitted.
+// silently-skipped row (malformed reps, non-integer exercise) is simply omitted. `unit` is the
+// reader's Weight Unit, so each entered Load is stored as canonical kilograms (#417).
 export function buildLoggedSets(
   rows: readonly LogRowFields[],
+  unit: WeightUnit,
 ): { ok: true; sets: LogSetInput[] } | { ok: false; error: string } {
   const sets: LogSetInput[] = [];
   for (const row of rows) {
-    const result = buildLogSet(row);
+    const result = buildLogSet(row, unit);
     if (result.status === "error") return { ok: false, error: result.error };
     if (result.status === "set") sets.push(result.set);
   }

@@ -290,7 +290,7 @@ test("toDeployPayload emits only the un-performed tail with Load as kind+value",
   });
 
   // Act
-  const payload = toDeployPayload(draft);
+  const payload = toDeployPayload(draft, "kg");
 
   // Assert — the frozen Session 1 is absent; Session 2 carries its edited Load
   assert.equal(payload.weeks, 2);
@@ -345,7 +345,7 @@ test("toDeployPayload carries the edited name so it rides through DEPLOY", () =>
   });
 
   // Act
-  const payload = toDeployPayload(draft);
+  const payload = toDeployPayload(draft, "kg");
 
   // Assert — the name travels in the deploy payload (ADR-0021)
   assert.equal(payload.name, "Summer Split");
@@ -501,7 +501,7 @@ test("a reordered un-performed Session's new order flows through to the deploy p
     from: 0,
     to: 1,
   });
-  const payload = toDeployPayload(draft);
+  const payload = toDeployPayload(draft, "kg");
 
   // Assert — the payload's prescription order (which becomes position on deploy)
   // reflects the reorder
@@ -779,7 +779,7 @@ test("a newly-added Session deploys with a null session_id for the server to ins
   });
 
   // Act
-  const payload = toDeployPayload(filled);
+  const payload = toDeployPayload(filled, "kg");
 
   // Assert — the existing Session keeps its id; the new slot sends session_id null
   assert.deepEqual(
@@ -795,7 +795,7 @@ test("toDeployPayload carries the reshaped weeks and frequency header", () => {
   draft = builderReducer(draft, { type: "SET_SESSIONS_PER_WEEK", sessionsPerWeek: 4 });
 
   // Act
-  const payload = toDeployPayload(draft);
+  const payload = toDeployPayload(draft, "kg");
 
   // Assert
   assert.equal(payload.weeks, 6);
@@ -1208,7 +1208,7 @@ test("toDeployPayload carries the Superset group tag and round-rest", () => {
   );
 
   // Act
-  const payload = toDeployPayload(grouped);
+  const payload = toDeployPayload(grouped, "kg");
 
   // Assert — the grouping rides through DEPLOY on both members
   const prescriptions = payload.sessions[0].prescriptions;
@@ -1591,7 +1591,7 @@ test("a drag-formed Superset rides through toDeployPayload contiguous", () => {
   );
 
   // Act
-  const payload = toDeployPayload(grouped);
+  const payload = toDeployPayload(grouped, "kg");
 
   // Assert — both members carry the shared tag and a round-rest on the deploy tail
   const prescriptions = payload.sessions[0].prescriptions;

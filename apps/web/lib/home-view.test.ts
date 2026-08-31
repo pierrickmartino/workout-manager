@@ -487,7 +487,7 @@ test("latest PR line names the Exercise and its Estimated 1RM, rounded to whole 
   };
 
   // Act
-  const line = latestPrLine(latestPr);
+  const line = latestPrLine(latestPr, "kg");
 
   // Assert: the Exercise, its whole-kg estimate, the linkable id, and the composed
   // "Deadlift — 142 kg est. 1RM" the OPERATOR STATUS line renders.
@@ -511,7 +511,7 @@ test("latest PR line renders a bodyweight record as the set, never a kg headline
   };
 
   // Act
-  const line = latestPrLine(latestPr);
+  const line = latestPrLine(latestPr, "kg");
 
   // Assert: the set that achieved it, with no fabricated kilogram figure (ADR-0026).
   assert.ok(line);
@@ -523,5 +523,25 @@ test("latest PR line renders a bodyweight record as the set, never a kg headline
 test("latest PR line is hidden (null) when the user has no Personal Record", () => {
   // Arrange: a brand-new account or bodyweight-only trainee projects to no PR.
   // Act & Assert: null so the line is hidden, never rendered as "0 kg".
-  assert.equal(latestPrLine(null), null);
+  assert.equal(latestPrLine(null, "kg"), null);
+});
+
+test("latestPrLine renders an absolute PR estimate in the reader's pounds", () => {
+  // Arrange — an absolute Latest PR of 142 kg, read by a lb user.
+  const latestPr = {
+    exercise: "Deadlift",
+    exercise_id: 7,
+    estimated_1rm: 142,
+    reps: 1,
+    is_bodyweight: false,
+    added_kg: null,
+    date: "2026-07-04",
+  };
+
+  // Act
+  const line = latestPrLine(latestPr, "lb");
+
+  // Assert — 142 kg ≈ 313 lb; the "est. 1RM" wording is preserved.
+  assert.equal(line?.estimate, "313 lb est. 1RM");
+  assert.equal(line?.text, "Deadlift — 313 lb est. 1RM");
 });

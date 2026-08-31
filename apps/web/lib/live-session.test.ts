@@ -58,7 +58,7 @@ const SESSION: WorkoutSession = {
 
 test("initLiveSession expands each prescription into one row per prescribed set", () => {
   // Arrange / Act
-  const state = initLiveSession(SESSION);
+  const state = initLiveSession(SESSION, "kg");
 
   // Assert — 3 + 2 = 5 flat, position-ordered set rows, none started yet
   assert.equal(state.sessionId, 42);
@@ -77,7 +77,7 @@ test("initLiveSession expands each prescription into one row per prescribed set"
 
 test("initLiveSession pre-fills reps and load from the prescription", () => {
   // Arrange / Act
-  const state = initLiveSession(SESSION);
+  const state = initLiveSession(SESSION, "kg");
 
   // Assert — the leading rep count is pre-filled; the typed load is carried as
   // an editable kind+value, with its display text kept for the eye.
@@ -114,7 +114,7 @@ test("initLiveSession threads previous performance onto set rows by ordinal", ()
   };
 
   // Act
-  const state = initLiveSession(session);
+  const state = initLiveSession(session, "kg");
 
   // Assert — set 1 and 2 align to the two previous sets; set 3 has none logged,
   // and the push-up (no history) has none at all.
@@ -126,7 +126,7 @@ test("initLiveSession threads previous performance onto set rows by ordinal", ()
 
 test("START moves a not-started session in progress", () => {
   // Arrange
-  const state = initLiveSession(SESSION);
+  const state = initLiveSession(SESSION, "kg");
 
   // Act
   const started = liveSessionReducer(state, { type: "START" });
@@ -139,7 +139,7 @@ test("START moves a not-started session in progress", () => {
 
 test("COMPLETE_SET records the edited reps/load/RPE and marks the set complete", () => {
   // Arrange
-  const state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  const state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
 
   // Act — the user did 10 reps at 72.5 kg, effort 8, on the first set
   const next = liveSessionReducer(state, {
@@ -165,7 +165,7 @@ test("COMPLETE_SET records the edited reps/load/RPE and marks the set complete",
 
 test("completing the last set of a module advances the pointer to the next module", () => {
   // Arrange — complete all three squat sets in order
-  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
   for (const index of [0, 1, 2]) {
     state = liveSessionReducer(state, {
       type: "COMPLETE_SET",
@@ -184,7 +184,7 @@ test("completing the last set of a module advances the pointer to the next modul
 
 test("the current-set pointer skips already-completed sets, whatever the order", () => {
   // Arrange — complete the second set first, then the first
-  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
   state = liveSessionReducer(state, {
     type: "COMPLETE_SET",
     index: 1,
@@ -211,7 +211,7 @@ test("the current-set pointer skips already-completed sets, whatever the order",
 
 test("ADVANCE skips the current set without completing it", () => {
   // Arrange
-  const state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  const state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
 
   // Act
   const advanced = liveSessionReducer(state, { type: "ADVANCE" });
@@ -223,7 +223,7 @@ test("ADVANCE skips the current set without completing it", () => {
 
 test("ADVANCE never runs the pointer past the end", () => {
   // Arrange — a session with a single set, pointer at the last row
-  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
 
   // Act — advance well past the 5 sets
   for (let i = 0; i < 10; i += 1) {
@@ -236,7 +236,7 @@ test("ADVANCE never runs the pointer past the end", () => {
 
 test("FINISH marks the session finished", () => {
   // Arrange
-  const state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  const state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
 
   // Act
   const finished = liveSessionReducer(state, { type: "FINISH" });
@@ -260,7 +260,7 @@ function complete(state: LiveSessionState, index: number): LiveSessionState {
 test("restCue names the on-deck solo set the pointer sits on, with a set indicator and no round badge", () => {
   // Arrange — complete Back Squat set 1; the pointer advances to set 2 of 3, the
   // set the user will perform when the rest ends.
-  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
   state = complete(state, 0);
 
   // Act / Assert — the rest cue describes that on-deck set: exercise, its set N/M,
@@ -276,13 +276,13 @@ test("restCue names the on-deck solo set the pointer sits on, with a set indicat
 test("restCue is null for a Session with no prescribed sets", () => {
   // An empty Session has no on-deck set to cue.
   const empty: WorkoutSession = { ...SESSION, prescriptions: [] };
-  const state = liveSessionReducer(initLiveSession(empty), { type: "START" });
+  const state = liveSessionReducer(initLiveSession(empty, "kg"), { type: "START" });
   assert.equal(restCue(state), null);
 });
 
 test("progressPercent is attempted sets over total prescribed sets", () => {
   // Arrange — 5 prescribed sets total
-  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
   assert.equal(progressPercent(state), 0);
 
   // Act — complete 1, then a 2nd, then a 3rd set
@@ -298,7 +298,7 @@ test("progressPercent is attempted sets over total prescribed sets", () => {
 
 test("progressPercent reaches 100 only when every prescribed set is attempted", () => {
   // Arrange / Act — complete all five sets
-  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
   for (const index of [0, 1, 2, 3, 4]) state = complete(state, index);
 
   // Assert
@@ -307,7 +307,7 @@ test("progressPercent reaches 100 only when every prescribed set is attempted", 
 
 test("currentUnit reports the current unit as x of y (each solo module is one unit)", () => {
   // Arrange — pointer starts on unit 1 of 2 (two solo modules, so unit == module)
-  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
   assert.deepEqual(currentUnit(state), { index: 1, total: 2 });
 
   // Act — finish the squat module (its three sets)
@@ -321,7 +321,7 @@ test("currentUnit reports the current unit as x of y (each solo module is one un
 
 test("currentUnit stays on the last unit once all sets are done", () => {
   // Arrange / Act — everything complete, pointer parked past the end
-  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
   for (const index of [0, 1, 2, 3, 4]) state = complete(state, index);
 
   // Assert — clamped to the final unit, never y+1
@@ -330,7 +330,7 @@ test("currentUnit stays on the last unit once all sets are done", () => {
 
 test("completionOutcome is 'completed' only when every prescribed set is attempted", () => {
   // Arrange — attempt (complete) all five prescribed sets
-  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
   for (const index of [0, 1, 2, 3, 4]) state = complete(state, index);
 
   // Act / Assert — all attempted → Completed (ADR-0013)
@@ -339,7 +339,7 @@ test("completionOutcome is 'completed' only when every prescribed set is attempt
 
 test("completionOutcome is 'incomplete' when a set is skipped (left un-attempted)", () => {
   // Arrange — complete four sets, skip the fifth with ADVANCE (never attempted)
-  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
   for (const index of [0, 1, 2, 3]) state = complete(state, index);
   state = liveSessionReducer(state, { type: "ADVANCE" }); // skip the last set
 
@@ -349,7 +349,7 @@ test("completionOutcome is 'incomplete' when a set is skipped (left un-attempted
 
 test("a zero-rep completed set still counts as attempted (stays Completed)", () => {
   // Arrange — attempt every set, but grind the last one out to zero reps
-  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
   for (const index of [0, 1, 2, 3]) state = complete(state, index);
   state = liveSessionReducer(state, {
     type: "COMPLETE_SET",
@@ -370,14 +370,14 @@ test("a zero-rep completed set still counts as attempted (stays Completed)", () 
 // (ADR-0014). Timestamps are opt-in: an event without `now` leaves them untouched.
 
 test("initLiveSession has no timestamps until the session starts", () => {
-  const state = initLiveSession(SESSION);
+  const state = initLiveSession(SESSION, "kg");
   assert.equal(state.startedAt, null);
   assert.equal(state.lastActivityAt, null);
 });
 
 test("START stamps the start time and seeds last-activity from `now`", () => {
   // Arrange / Act
-  const started = liveSessionReducer(initLiveSession(SESSION), {
+  const started = liveSessionReducer(initLiveSession(SESSION, "kg"), {
     type: "START",
     now: 1_000_000,
   });
@@ -389,7 +389,7 @@ test("START stamps the start time and seeds last-activity from `now`", () => {
 
 test("START without a `now` leaves the timestamps unset", () => {
   // Timing is opt-in — a caller that doesn't track time still gets a valid start.
-  const started = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  const started = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
   assert.equal(started.status, "in_progress");
   assert.equal(started.startedAt, null);
   assert.equal(started.lastActivityAt, null);
@@ -398,7 +398,7 @@ test("START without a `now` leaves the timestamps unset", () => {
 test("COMPLETE_SET moves last-activity to `now`, leaving the start fixed", () => {
   // Arrange
   const start = 1_000_000;
-  let state = liveSessionReducer(initLiveSession(SESSION), {
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), {
     type: "START",
     now: start,
   });
@@ -422,7 +422,7 @@ test("COMPLETE_SET moves last-activity to `now`, leaving the start fixed", () =>
 test("last-activity is the final set's completion, not the idle time after it", () => {
   // Arrange — three sets completed, each later than the last
   const start = 1_000_000;
-  let state = liveSessionReducer(initLiveSession(SESSION), {
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), {
     type: "START",
     now: start,
   });
@@ -451,7 +451,7 @@ test("last-activity is the final set's completion, not the idle time after it", 
 test("COMPLETE_SET without a `now` leaves last-activity where it was", () => {
   // Arrange
   const start = 1_000_000;
-  let state = liveSessionReducer(initLiveSession(SESSION), {
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), {
     type: "START",
     now: start,
   });
@@ -472,7 +472,7 @@ test("COMPLETE_SET without a `now` leaves last-activity where it was", () => {
 
 test("nextExercise previews the exercise of the upcoming module", () => {
   // Arrange — on the squat module, the next module is Push-up
-  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
   assert.equal(nextExercise(state), "Push-up");
 
   // Act — advance into the push-up module (the last one)

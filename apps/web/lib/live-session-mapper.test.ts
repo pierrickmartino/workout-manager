@@ -67,13 +67,13 @@ function complete(
 
 test("maps every completed set to a Logged Set, preserving reps/load/RPE", () => {
   // Arrange — complete two of the three squat sets with distinct records
-  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
   state = complete(state, 0, 5, "70", 7);
   state = complete(state, 1, 4, "72.5", 9);
   state = liveSessionReducer(state, { type: "FINISH" });
 
   // Act
-  const payload = mapFinishToLog(state, "2026-07-06");
+  const payload = mapFinishToLog(state, "2026-07-06", "kg");
 
   // Assert — two Logged Sets for the same exercise, in order
   assert.ok(payload);
@@ -99,12 +99,12 @@ test("maps every completed set to a Logged Set, preserving reps/load/RPE", () =>
 
 test("produces N Logged Sets per exercise from N completed sets", () => {
   // Arrange — complete all three squat sets and both push-up sets
-  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
   for (const index of [0, 1, 2, 3, 4]) state = complete(state, index, 6, "70", 7);
   state = liveSessionReducer(state, { type: "FINISH" });
 
   // Act
-  const payload = mapFinishToLog(state, "2026-07-06");
+  const payload = mapFinishToLog(state, "2026-07-06", "kg");
 
   // Assert — three entries for the squat, two for the push-up (flat, ordered)
   assert.ok(payload);
@@ -116,12 +116,12 @@ test("produces N Logged Sets per exercise from N completed sets", () => {
 
 test("sends 'completed' when every prescribed set was attempted", () => {
   // Arrange — complete all five prescribed sets
-  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
   for (const index of [0, 1, 2, 3, 4]) state = complete(state, index, 5, "70", 7);
   state = liveSessionReducer(state, { type: "FINISH" });
 
   // Act
-  const payload = mapFinishToLog(state, "2026-07-06");
+  const payload = mapFinishToLog(state, "2026-07-06", "kg");
 
   // Assert — the mapper carries the derived Completion Outcome (ADR-0013)
   assert.ok(payload);
@@ -130,12 +130,12 @@ test("sends 'completed' when every prescribed set was attempted", () => {
 
 test("sends 'incomplete' when a prescribed set was left un-attempted", () => {
   // Arrange — complete only some sets, leaving the rest un-attempted
-  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
   state = complete(state, 0, 5, "70", 7);
   state = liveSessionReducer(state, { type: "FINISH" });
 
   // Act
-  const payload = mapFinishToLog(state, "2026-07-06");
+  const payload = mapFinishToLog(state, "2026-07-06", "kg");
 
   // Assert — a partial performance is declared Incomplete
   assert.ok(payload);
@@ -144,12 +144,12 @@ test("sends 'incomplete' when a prescribed set was left un-attempted", () => {
 
 test("only completed sets are logged — skipped/pending sets are dropped", () => {
   // Arrange — complete just the first set, leave the rest un-attempted
-  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
   state = complete(state, 0, 5, "70", 7);
   state = liveSessionReducer(state, { type: "FINISH" });
 
   // Act
-  const payload = mapFinishToLog(state, "2026-07-06");
+  const payload = mapFinishToLog(state, "2026-07-06", "kg");
 
   // Assert — exactly one Logged Set
   assert.ok(payload);
@@ -159,7 +159,7 @@ test("only completed sets are logged — skipped/pending sets are dropped", () =
 
 test("an empty load value maps to a null load, not the empty string", () => {
   // Arrange — complete a push-up set (no prescribed load) without entering one
-  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
   state = liveSessionReducer(state, {
     type: "COMPLETE_SET",
     index: 3,
@@ -171,7 +171,7 @@ test("an empty load value maps to a null load, not the empty string", () => {
   state = liveSessionReducer(state, { type: "FINISH" });
 
   // Act
-  const payload = mapFinishToLog(state, "2026-07-06");
+  const payload = mapFinishToLog(state, "2026-07-06", "kg");
 
   // Assert — the backend reads null as "no load recorded"
   assert.ok(payload);
@@ -182,7 +182,7 @@ test("an empty load value maps to a null load, not the empty string", () => {
 test("records the Session Duration as start → last activity, excluding the idle tail", () => {
   // Arrange — a timed START, two sets completed, then an idle gap before FINISH
   const start = 1_000_000;
-  let state = liveSessionReducer(initLiveSession(SESSION), {
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), {
     type: "START",
     now: start,
   });
@@ -208,7 +208,7 @@ test("records the Session Duration as start → last activity, excluding the idl
   state = liveSessionReducer(state, { type: "FINISH", now: start + 900_000 });
 
   // Act
-  const payload = mapFinishToLog(state, "2026-07-06");
+  const payload = mapFinishToLog(state, "2026-07-06", "kg");
 
   // Assert — duration is start → last activity (300 s), not the wall-clock to finish
   assert.ok(payload);
@@ -217,12 +217,12 @@ test("records the Session Duration as start → last activity, excluding the idl
 
 test("records no duration for an untracked session (the static-form case)", () => {
   // Arrange — completions dispatched without any `now` timestamps
-  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
   state = complete(state, 0, 5, "70", 7);
   state = liveSessionReducer(state, { type: "FINISH" });
 
   // Act
-  const payload = mapFinishToLog(state, "2026-07-06");
+  const payload = mapFinishToLog(state, "2026-07-06", "kg");
 
   // Assert — with no start/activity captured, the recorded duration is null
   assert.ok(payload);
@@ -231,11 +231,11 @@ test("records no duration for an untracked session (the static-form case)", () =
 
 test("finishing with zero completed sets writes nothing (null payload)", () => {
   // Arrange — start and finish without completing any set
-  let state = liveSessionReducer(initLiveSession(SESSION), { type: "START" });
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
   state = liveSessionReducer(state, { type: "FINISH" });
 
   // Act
-  const payload = mapFinishToLog(state, "2026-07-06");
+  const payload = mapFinishToLog(state, "2026-07-06", "kg");
 
   // Assert — no submission at all
   assert.equal(payload, null);

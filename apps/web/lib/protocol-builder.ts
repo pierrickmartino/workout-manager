@@ -7,7 +7,8 @@
 // This slice edits an existing Prescription's fields and Load inside an un-performed
 // Session; structural edits (add/remove/reorder/reshape) arrive in later slices.
 
-import type { Load, LoadKind } from "./load.ts";
+import { loadToFields, loadValueToKg, type Load, type LoadKind } from "./load.ts";
+import type { WeightUnit } from "./weight-unit";
 import type { ProtocolProgress } from "./protocols-types.ts";
 import {
   dissolveSingletonGroups,
@@ -196,32 +197,12 @@ export type BuilderEvent =
 // typed Load the plan stored (ADR-0010). Mirrors `live-session.ts`'s prefill so the
 // Builder and the log form surface a Load identically. An absent Load pre-fills an
 // empty absolute value.
-function prefillLoad(load: Load | null): { kind: LoadKind; value: string } {
-  if (!load) return { kind: "absolute", value: "" };
-  switch (load.kind) {
-    case "absolute":
-      return { kind: load.kind, value: load.kg !== undefined ? String(load.kg) : "" };
-    case "percent_1rm":
-      return {
-        kind: load.kind,
-        value: load.percent !== undefined ? String(load.percent) : "",
-      };
-    case "bodyweight":
-      return {
-        kind: load.kind,
-        value: load.added_kg !== undefined ? String(load.added_kg) : "",
-      };
-    case "range":
-      return {
-        kind: load.kind,
-        value:
-          load.low_kg !== undefined && load.high_kg !== undefined
-            ? `${load.low_kg}-${load.high_kg}`
-            : "",
-      };
-    case "qualitative":
-      return { kind: load.kind, value: load.text };
-  }
+function prefillLoad(
+  load: Load | null,
+  weightUnit: WeightUnit,
+): { kind: LoadKind; value: string } {
+  const { loadKind, loadValue } = loadToFields(load, weightUnit);
+  return { kind: loadKind, value: loadValue };
 }
 
 // How the builder opens for a given user. A Sensitive-Constraint user (injury, rehab,
@@ -229,6 +210,10 @@ function prefillLoad(load: Load | null): { kind: LoadKind; value: string } {
 // opens with grouping paused; a non-medical Preference / Limitation never sets this.
 export interface InitBuilderOptions {
   hasSensitiveConstraint?: boolean;
+  // The reader's Weight Unit (#417): each Prescription's stored Load is reversed into the
+  // picker's fields in this unit, so the builder shows what the user would type. The DEPLOY
+  // payload converts the entry back to canonical kilograms. Defaults to kg.
+  weightUnit?: WeightUnit;
 }
 
 // Read a fetched Protocol into an editable builder draft. Each Session keeps its
@@ -244,6 +229,7 @@ export function initBuilderDraft(
   options: InitBuilderOptions = {},
 ): BuilderDraft {
   const suppress = options.hasSensitiveConstraint ?? false;
+  const weightUnit = options.weightUnit ?? "kg";
   return {
     protocolId: protocol.id,
     name: protocol.name,
@@ -258,7 +244,7 @@ export function initBuilderDraft(
       day: session.day,
       performed: session.performed,
       prescriptions: session.prescriptions.map((prescription) => {
-        const load = prefillLoad(prescription.recommended_load);
+        const load = prefillLoad(prescription.recommended_load, weightUnit);
         // Auto-unlink the editable tail's groups under suppression; the frozen prefix
         // (a performed Session) keeps its settled grouping.
         const paused = suppress && !session.performed;
@@ -942,7 +928,10 @@ export interface DeployPayload {
 // Derive the desired un-performed tail the deploy endpoint validates and replaces.
 // Only un-performed Sessions are sent — the frozen prefix is never part of the
 // payload (ADR-0020).
-export function toDeployPayload(draft: BuilderDraft): DeployPayload {
+export function toDeployPayload(
+  draft: BuilderDraft,
+  unit: WeightUnit,
+): DeployPayload {
   return {
     weeks: draft.weeks,
     sessions_per_week: draft.sessionsPerWeek,
@@ -962,7 +951,13 @@ export function toDeployPayload(draft: BuilderDraft): DeployPayload {
           rest_seconds: prescription.restSeconds,
           tempo: prescription.tempo,
           load_kind: prescription.loadKind,
-          load_value: prescription.loadValue,
+          // The Load was authored in the reader's Weight Unit; convert it to canonical
+          // kilograms for storage (#417).
+          load_value: loadValueToKg(
+            prescription.loadKind,
+            prescription.loadValue,
+            unit,
+          ),
           superset_group: prescription.supersetGroup,
           round_rest_seconds: prescription.roundRestSeconds,
         })),

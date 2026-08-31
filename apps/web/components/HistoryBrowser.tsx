@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { Copy, Repeat } from "lucide-react";
 
 import type { LoggedSession } from "@/lib/logs-types";
+import type { WeightUnit } from "@/lib/weight-unit";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
 import {
   deriveExerciseOptions,
@@ -38,8 +39,11 @@ import { LoggedSetTable } from "@/components/LoggedSetTable";
 // component only wires controls to it.
 export function HistoryBrowser({
   records,
+  unit,
 }: {
   records: LoggedSession[];
+  // The reader's Weight Unit, forwarded to each record's set table (#417).
+  unit: WeightUnit;
 }): React.JSX.Element {
   // Seed once from the URL, then own the state locally (see the replaceState note above).
   const initialParams = useSearchParams();
@@ -199,6 +203,7 @@ export function HistoryBrowser({
               <li key={entry.id}>
                 <LoggedSessionCard
                   entry={entry}
+                  unit={unit}
                   deleteDisabled={deleteDisabled}
                   deleteReason={deleteDisabled ? DELETE_TAIL_FIRST_REASON : null}
                   uncompleteDisabled={uncompleteDisabled}
@@ -217,12 +222,14 @@ export function HistoryBrowser({
 
 function LoggedSessionCard({
   entry,
+  unit,
   deleteDisabled,
   deleteReason,
   uncompleteDisabled,
   uncompleteReason,
 }: {
   entry: LoggedSession;
+  unit: WeightUnit;
   deleteDisabled: boolean;
   deleteReason: string | null;
   uncompleteDisabled: boolean;
@@ -292,7 +299,7 @@ function LoggedSessionCard({
         </div>
       </div>
 
-      <LoggedSetTable sets={entry.logged_sets} />
+      <LoggedSetTable sets={entry.logged_sets} unit={unit} />
     </Card>
   );
 }

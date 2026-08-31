@@ -9,6 +9,9 @@ import { RenameSessionControl } from "@/components/RenameSessionControl";
 import { FavoriteSessionControl } from "@/components/FavoriteSessionControl";
 import { ShareSessionControl } from "@/components/ShareSessionControl";
 import { AddExerciseButton } from "@/components/AddExerciseButton";
+import { resolveAppearance } from "@/lib/appearance";
+import { formatLoad } from "@/lib/load";
+import type { WeightUnit } from "@/lib/weight-unit";
 import { RemoveExerciseButton } from "@/components/RemoveExerciseButton";
 import { HarderVariationOffer } from "@/components/HarderVariationOffer";
 import { PinControl } from "@/components/PinControl";
@@ -56,12 +59,16 @@ export default async function SessionPage({
   const { pin: pinParam, reps: pinReps } = await searchParams;
   const pinPosition = pinParam !== undefined ? Number(pinParam) : null;
 
-  const envelope = await fetchSession(sessionId);
+  const [envelope, appearance] = await Promise.all([
+    fetchSession(sessionId),
+    resolveAppearance(),
+  ]);
   if (!envelope.success || !envelope.data) {
     notFound();
   }
 
   const session = envelope.data;
+  const unit = appearance.weight_unit;
 
   // The Session Name view (issue #394): the header shows the user-given name when set, else
   // the derived `training_type · date` fallback so an unnamed Session is never blank. The
@@ -177,6 +184,7 @@ export default async function SessionPage({
                 prescription={prescription}
                 superset={supersetSlots[index]}
                 sessionId={session.id}
+                unit={unit}
                 index={index + 1}
                 harderVariation={offers[index]}
                 pinModel={pinControlModel(prescription)}
@@ -197,7 +205,7 @@ export default async function SessionPage({
             stays the Builder's tail-gated Deploy path (standalone-only, ADR-0051), mirroring how
             Duplicate is withheld there. */}
         {session.is_protocol_member ? null : (
-          <AddExerciseButton sessionId={session.id} />
+          <AddExerciseButton sessionId={session.id} unit={unit} />
         )}
       </div>
 
@@ -245,6 +253,7 @@ function PrescriptionCard({
   prescription,
   superset,
   sessionId,
+  unit,
   index,
   harderVariation,
   pinModel,
@@ -258,6 +267,7 @@ function PrescriptionCard({
   prescription: ExercisePrescription;
   superset: SupersetSlot | undefined;
   sessionId: number;
+  unit: WeightUnit;
   index: number;
   harderVariation: HarderVariationOfferView;
   // The plan-view Pin state for this movement (ADR-0053): a pinned range surfaced verbatim with
@@ -332,7 +342,7 @@ function PrescriptionCard({
               ),
           },
           ...(prescription.recommended_load
-            ? [{ label: "Load", value: prescription.recommended_load.text }]
+            ? [{ label: "Load", value: formatLoad(prescription.recommended_load, unit) }]
             : []),
           // A solo Prescription shows its own rest; a grouped one shows the group-owned
           // round-rest once (on the last member), its individual rest being dormant.

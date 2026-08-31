@@ -49,7 +49,7 @@ test("shapes the PR timeline into display rows, newest-first order preserved", (
     limit: 20,
     offset: 0,
     total: 2,
-  });
+  }, "kg");
 
   // Assert — each row carries Exercise · Estimated 1RM · gain badge · date, in order
   assert.equal(view.isEmpty, false);
@@ -64,7 +64,7 @@ test("shapes the PR timeline into display rows, newest-first order preserved", (
 
 test("reports an open gate as not-empty when the user has qualifying strength", () => {
   // Arrange / Act
-  const view = toStrengthTimelineView(OPEN, PAGE);
+  const view = toStrengthTimelineView(OPEN, PAGE, "kg");
 
   // Assert
   assert.equal(view.isEmpty, false);
@@ -84,7 +84,7 @@ test("marks a closed gate as empty with no rows for the honest empty state", () 
     limit: 20,
     offset: 0,
     total: 0,
-  });
+  }, "kg");
 
   // Assert — the screen shows its explanatory empty state, never a fabricated row
   assert.equal(view.isEmpty, true);
@@ -105,7 +105,7 @@ test("has no previous page on the first page and a next page when more remain", 
     limit: 1,
     offset: 0,
     total: 3,
-  });
+  }, "kg");
 
   // Assert
   assert.equal(view.hasPreviousPage, false);
@@ -136,7 +136,7 @@ test("has a previous page but no next page on the last page", () => {
     limit: 1,
     offset: 2,
     total: 3,
-  });
+  }, "kg");
 
   // Assert
   assert.equal(view.hasPreviousPage, true);

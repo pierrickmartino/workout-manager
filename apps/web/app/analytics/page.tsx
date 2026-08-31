@@ -33,6 +33,8 @@ import {
   formatCoverageCaption,
 } from "@/lib/volume-view";
 import { toDistanceBars, formatDistanceDelta } from "@/lib/distance-view";
+import { resolveAppearance } from "@/lib/appearance";
+import type { WeightUnit } from "@/lib/weight-unit";
 import { cn } from "@/lib/utils";
 
 // The Analytics screen (F3 Slice 1–4): honest, range-scoped counts drawn straight
@@ -48,7 +50,11 @@ export default async function AnalyticsPage({
 }) {
   const { range: rawRange } = await searchParams;
   const requestedRange = toAnalyticsRange(rawRange);
-  const envelope = await fetchAnalytics(requestedRange);
+  const [envelope, appearance] = await Promise.all([
+    fetchAnalytics(requestedRange),
+    resolveAppearance(),
+  ]);
+  const unit = appearance.weight_unit;
 
   if (!envelope.success || !envelope.data) {
     return (
@@ -69,7 +75,7 @@ export default async function AnalyticsPage({
   const hasHistory = overview.sessions > 0;
   const muscleBars = toMuscleBars(overview.muscle_distribution);
   const coverageView = toCoverageView(overview.coverage);
-  const recordRows = toRecordRows(overview.recent_records);
+  const recordRows = toRecordRows(overview.recent_records, unit);
   // The Strength Analytics screen is offered only to a user with qualifying strength
   // history — the same condition the strength read model gates on
   // (`has_qualifying_strength`): at least one all-time Personal Record. Gating on the
@@ -88,7 +94,7 @@ export default async function AnalyticsPage({
 
       {hasHistory ? (
         <>
-          <TotalVolume volume={overview.volume} range={range} />
+          <TotalVolume volume={overview.volume} range={range} unit={unit} />
           {overview.distance.has_distance ? (
             <WeeklyDistance distance={overview.distance} range={range} />
           ) : null}
@@ -177,11 +183,13 @@ function MuscleDistribution({ bars }: { bars: MuscleBar[] }) {
 function TotalVolume({
   volume,
   range,
+  unit,
 }: {
   volume: VolumeSeries;
   range: AnalyticsRange;
+  unit: WeightUnit;
 }) {
-  const rows = toVolumeRows(volume.points);
+  const rows = toVolumeRows(volume.points, unit);
   const delta = formatVolumeDelta(volume.delta);
 
   return (
@@ -205,7 +213,7 @@ function TotalVolume({
                 </span>
               </div>
             ) : null}
-            <VolumeChart rows={rows} />
+            <VolumeChart rows={rows} unit={unit} />
             <p className="label-mono text-[11px] text-text-muted">
               {formatCoverageCaption(volume.coverage)}
             </p>

@@ -30,7 +30,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-import { LOAD_KIND_OPTIONS, type LoadKind } from "@/lib/load";
+import { loadKindOptions, type LoadKind } from "@/lib/load";
+import type { WeightUnit } from "@/lib/weight-unit";
 import {
   boxDropId,
   chipDropId,
@@ -82,6 +83,8 @@ interface PrescriptionListProps {
   // A performed Session is the frozen prefix (ADR-0020): its rows render read-only and
   // carry no edit/reorder/group affordances and no drag.
   locked: boolean;
+  // The reader's Weight Unit (#417), forwarded to each row's Load picker.
+  unit: WeightUnit;
   onEditField: (
     position: number,
     field: PrescriptionField,
@@ -107,6 +110,7 @@ export function PrescriptionList({
   prescriptions,
   layout,
   locked,
+  unit,
   onEditField,
   onEditLoad,
   onEditRoundRest,
@@ -259,6 +263,7 @@ export function PrescriptionList({
                 position={item.position}
                 prescription={prescriptions[item.position]}
                 slot={layout[item.position]}
+                unit={unit}
                 canMoveUp={item.position > 0}
                 canMoveDown={item.position < lastPosition}
                 draggingId={draggingId}
@@ -283,6 +288,7 @@ export function PrescriptionList({
                 positions={item.positions}
                 prescriptions={prescriptions}
                 layout={layout}
+                unit={unit}
                 lastPosition={lastPosition}
                 joinActive={feedback?.joinGroup === item.group}
                 losingMember={feedback?.losingGroup === item.group}
@@ -429,6 +435,7 @@ interface SupersetContainerProps {
   positions: number[];
   prescriptions: DraftPrescription[];
   layout: SupersetSlot[];
+  unit: WeightUnit;
   lastPosition: number;
   // Escalating drag feedback for this container (#219), all derived from the one
   // `dragFeedback` classifier so the visuals match the drop. `joinActive`: a dragged row
@@ -471,6 +478,7 @@ function SupersetContainer({
   positions,
   prescriptions,
   layout,
+  unit,
   lastPosition,
   joinActive,
   losingMember,
@@ -535,6 +543,7 @@ function SupersetContainer({
               position={position}
               prescription={prescriptions[position]}
               slot={layout[position]}
+              unit={unit}
               canMoveUp={position > 0}
               canMoveDown={position < lastPosition}
               // A member row never shows a link chip (it groups via the box, #218); an
@@ -579,6 +588,7 @@ interface SortablePrescriptionRowProps {
   position: number;
   prescription: DraftPrescription;
   slot: SupersetSlot;
+  unit: WeightUnit;
   canMoveUp: boolean;
   canMoveDown: boolean;
   // The row currently being dragged (`row-<pos>`), or null/absent when idle. A solo row
@@ -618,6 +628,7 @@ function SortablePrescriptionRow({
   position,
   prescription,
   slot,
+  unit,
   canMoveUp,
   canMoveDown,
   draggingId,
@@ -662,6 +673,7 @@ function SortablePrescriptionRow({
       <PrescriptionEditor
         prescription={prescription}
         slot={slot}
+        unit={unit}
         onEditField={(field, value) => onEditField(position, field, value)}
         onEditLoad={(loadKind, loadValue) =>
           onEditLoad(position, loadKind, loadValue)
@@ -875,6 +887,8 @@ function SupersetBadge({ label }: { label: string }) {
 interface PrescriptionEditorProps {
   prescription: DraftPrescription;
   slot: SupersetSlot;
+  // The reader's Weight Unit (#417): the Load picker names it and the value is authored in it.
+  unit: WeightUnit;
   onEditField: (field: PrescriptionField, value: string | number | null) => void;
   onEditLoad: (loadKind: LoadKind, loadValue: string) => void;
 }
@@ -882,6 +896,7 @@ interface PrescriptionEditorProps {
 function PrescriptionEditor({
   prescription,
   slot,
+  unit,
   onEditField,
   onEditLoad,
 }: PrescriptionEditorProps) {
@@ -966,7 +981,7 @@ function PrescriptionEditor({
               onEditLoad(e.target.value as LoadKind, prescription.loadValue)
             }
           >
-            {LOAD_KIND_OPTIONS.map((option) => (
+            {loadKindOptions(unit).map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>

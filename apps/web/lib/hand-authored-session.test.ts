@@ -48,7 +48,7 @@ test("maps a plan and its first performance into the author-and-log payload", ()
   const input = fields();
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert — the authored prescription and the recorded set ride together.
   assert.equal(result.ok, true);
@@ -97,7 +97,7 @@ test("carries a typed Load kind through to both the plan and the record", () => 
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert
   assert.equal(result.ok, true);
@@ -117,7 +117,7 @@ test("records every performed set of an exercise", () => {
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert
   assert.equal(result.ok, true);
@@ -138,7 +138,7 @@ test("skips performed-set rows left blank", () => {
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert — only the two performed rows survive.
   assert.equal(result.ok, true);
@@ -159,7 +159,7 @@ test("defaults an empty load to a null absolute load", () => {
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert
   assert.equal(result.ok, true);
@@ -170,14 +170,14 @@ test("defaults an empty load to a null absolute load", () => {
 });
 
 test("rejects a missing performed-on date", () => {
-  const result = buildAuthorSessionRequest(fields({ performedOn: "" }), TODAY);
+  const result = buildAuthorSessionRequest(fields({ performedOn: "" }), "kg", TODAY);
   assert.equal(result.ok, false);
 });
 
 test("rejects a future performed-on date", () => {
   // Arrange — a date after today.
   const result = buildAuthorSessionRequest(
-    fields({ performedOn: "2026-06-22" }),
+    fields({ performedOn: "2026-06-22" }), "kg",
     TODAY,
   );
 
@@ -188,20 +188,20 @@ test("rejects a future performed-on date", () => {
 });
 
 test("accepts a performed-on date of today", () => {
-  const result = buildAuthorSessionRequest(fields({ performedOn: TODAY }), TODAY);
+  const result = buildAuthorSessionRequest(fields({ performedOn: TODAY }), "kg", TODAY);
   assert.equal(result.ok, true);
 });
 
 test("rejects an unknown training type", () => {
   const result = buildAuthorSessionRequest(
-    fields({ trainingType: "nonsense" }),
+    fields({ trainingType: "nonsense" }), "kg",
     TODAY,
   );
   assert.equal(result.ok, false);
 });
 
 test("rejects a session with no exercises", () => {
-  const result = buildAuthorSessionRequest(fields({ exercises: [] }), TODAY);
+  const result = buildAuthorSessionRequest(fields({ exercises: [] }), "kg", TODAY);
   assert.equal(result.ok, false);
   if (result.ok) return;
   assert.match(result.error, /at least one exercise/i);
@@ -209,13 +209,13 @@ test("rejects a session with no exercises", () => {
 
 test("rejects an exercise with a zero sets count", () => {
   const input = fields({ exercises: [exercise({ sets: "0" })] });
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
   assert.equal(result.ok, false);
 });
 
 test("rejects an exercise with a blank rep target", () => {
   const input = fields({ exercises: [exercise({ reps: "  " })] });
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
   assert.equal(result.ok, false);
 });
 
@@ -226,7 +226,7 @@ test("rejects a session where nothing was performed", () => {
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert
   assert.equal(result.ok, false);
@@ -241,7 +241,7 @@ test("drops an out-of-range perceived difficulty rather than sending it", () => 
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert — the set is still recorded, with no perceived difficulty.
   assert.equal(result.ok, true);
@@ -277,7 +277,7 @@ test("records a duration exercise's performed sets as duration Quantities", () =
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert — the plan target rides through as free text; the picked duration kind is
   // persisted onto the plan (#345); each set is a duration Quantity.
@@ -299,7 +299,7 @@ test("defaults a duration exercise's Load to bodyweight on both plan and record"
   const input = fields({ exercises: [durationExercise()] });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert
   assert.equal(result.ok, true);
@@ -315,7 +315,7 @@ test("keeps the absolute Load default for a reps exercise", () => {
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert — reps keeps the existing absolute default; duration never leaks in.
   assert.equal(result.ok, true);
@@ -337,7 +337,7 @@ test("respects an explicit Load override on a duration exercise", () => {
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert — the entered load kind and value ride through, not the default.
   assert.equal(result.ok, true);
@@ -352,7 +352,7 @@ test("a duration exercise with a blank target errors without mentioning reps", (
   const input = fields({ exercises: [durationExercise({ reps: "  " })] });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert — required-target still enforced; the message never says "rep".
   assert.equal(result.ok, false);
@@ -372,7 +372,7 @@ test("skips a blank performed set on a duration exercise", () => {
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert — only the two performed rows survive.
   assert.equal(result.ok, true);
@@ -387,7 +387,7 @@ test("rejects a malformed duration on a performed set", () => {
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert
   assert.equal(result.ok, false);
@@ -402,7 +402,7 @@ test("rejects a non-positive duration on a performed set", () => {
   });
 
   // Act / Assert
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
   assert.equal(result.ok, false);
 });
 
@@ -413,7 +413,7 @@ test("an all-blank duration form yields the kind-neutral no-set error", () => {
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert — the error is amount-neutral, never demanding "reps".
   assert.equal(result.ok, false);
@@ -431,7 +431,7 @@ test("a mixed session records a duration hold alongside a rep set", () => {
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert — each set is typed by its own exercise's kind.
   assert.equal(result.ok, true);
@@ -473,7 +473,7 @@ test("records a distance exercise's performed sets as distance Quantities carryi
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert — the set is a distance Quantity carrying its value, the exercise's unit, and
   // the companion time from which pace becomes derivable at read time.
@@ -508,7 +508,7 @@ test("carries the exercise's chosen unit onto every distance set", () => {
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert — both sets read in the exercise's unit.
   assert.equal(result.ok, true);
@@ -526,7 +526,7 @@ test("defaults a distance exercise's unit to km when none is chosen", () => {
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert
   assert.equal(result.ok, true);
@@ -542,7 +542,7 @@ test("a distance set with a companion time yields a derivable pace read", () => 
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert — the companion time rides through, keeping pace a derivable read-time projection.
   assert.equal(result.ok, true);
@@ -557,7 +557,7 @@ test("a distance-only set leaves pace underivable with a null companion time", (
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert — the companion time is null, not an empty string.
   assert.equal(result.ok, true);
@@ -571,7 +571,7 @@ test("defaults a distance exercise's Load to bodyweight on both plan and record"
   const input = fields({ exercises: [distanceExercise()] });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert
   assert.equal(result.ok, true);
@@ -593,7 +593,7 @@ test("respects an explicit Load override on a distance exercise", () => {
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert — the entered load rides through, not the default.
   assert.equal(result.ok, true);
@@ -613,7 +613,7 @@ test("skips a blank performed set on a distance exercise", () => {
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert — only the two performed rows survive.
   assert.equal(result.ok, true);
@@ -628,7 +628,7 @@ test("rejects a malformed distance on a performed set", () => {
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert
   assert.equal(result.ok, false);
@@ -643,7 +643,7 @@ test("rejects a non-positive distance on a performed set", () => {
   });
 
   // Act / Assert
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
   assert.equal(result.ok, false);
 });
 
@@ -652,7 +652,7 @@ test("a distance exercise with a blank target errors without mentioning reps", (
   const input = fields({ exercises: [distanceExercise({ reps: "  " })] });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert — required-target still enforced; the message never says "rep".
   assert.equal(result.ok, false);
@@ -672,7 +672,7 @@ test("a workout mixing Reps, Duration, and Distance across exercises saves corre
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert — each set is typed by its own exercise's kind; all three are representable.
   assert.equal(result.ok, true);
@@ -699,7 +699,7 @@ test("carries a saved Superset's group tag and round-rest onto the prescriptions
   });
 
   // Act
-  const result = buildAuthorSessionRequest(input, TODAY);
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
 
   // Assert — both prescriptions carry the tag and round-rest; logged sets carry neither.
   assert.equal(result.ok, true);
@@ -719,7 +719,7 @@ test("carries a saved Superset's group tag and round-rest onto the prescriptions
 });
 
 test("a solo exercise carries null superset fields in the payload", () => {
-  const result = buildAuthorSessionRequest(fields(), TODAY);
+  const result = buildAuthorSessionRequest(fields(), "kg", TODAY);
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.equal(result.request.prescriptions[0].superset_group, null);

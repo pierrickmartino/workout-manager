@@ -1,7 +1,12 @@
 import type { VolumePoint } from "./analytics-types";
+import type { WeightUnit } from "./weight-unit";
+import { kgToUnit } from "./weight-format.ts";
 
 // A daily volume point prepared for the Recharts line: the ISO `date` kept for the
-// axis and keys, a short human `label` for the tick, and the raw `volume` in kg.
+// axis and keys, a short human `label` for the tick, and the raw `volume` projected into
+// the reader's Weight Unit (unrounded, so the line stays proportional; the tooltip carries
+// the unit label). Total volume is a tonnage — a weight surface — so it tracks the reader's
+// unit like every other weight (#417).
 export interface VolumeChartRow {
   date: string;
   label: string;
@@ -23,11 +28,14 @@ function formatDayLabel(iso: string): string {
 
 // Turn the API's daily volume points into chart rows, preserving the series'
 // ascending order. Pure and server-free, so it is safe from a Client Component.
-export function toVolumeRows(points: readonly VolumePoint[]): VolumeChartRow[] {
+export function toVolumeRows(
+  points: readonly VolumePoint[],
+  unit: WeightUnit,
+): VolumeChartRow[] {
   return points.map((point) => ({
     date: point.date,
     label: formatDayLabel(point.date),
-    volume: point.volume_kg,
+    volume: kgToUnit(point.volume_kg, unit),
   }));
 }
 

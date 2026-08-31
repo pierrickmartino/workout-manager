@@ -61,7 +61,7 @@ function fakeStorage(): SlotStorage & { size: () => number } {
 }
 
 function inProgress(): LiveSessionState {
-  return liveSessionReducer(initLiveSession(SESSION), {
+  return liveSessionReducer(initLiveSession(SESSION, "kg"), {
     type: "START",
     now: 1_000_000,
   });

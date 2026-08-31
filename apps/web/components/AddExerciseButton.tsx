@@ -10,7 +10,9 @@ import {
   type InsertPrescriptionFields,
 } from "@/lib/insert-prescription";
 import { defaultLoadKindForAmount } from "@/lib/hand-authored-session";
-import { LOAD_KIND_OPTIONS } from "@/lib/load";
+import { loadKindOptions } from "@/lib/load";
+import { weightUnitLabel } from "@/lib/weight-format";
+import type { WeightUnit } from "@/lib/weight-unit";
 import {
   AMOUNT_KIND_OPTIONS,
   DISTANCE_UNIT_OPTIONS,
@@ -28,6 +30,9 @@ import { Button } from "@/components/ui/button";
 
 interface AddExerciseButtonProps {
   sessionId: number;
+  // The reader's Weight Unit (#417): the Load picker/placeholder name it and the appended
+  // prescription's Load is converted back to canonical kilograms on save.
+  unit: WeightUnit;
 }
 
 // The plan-side editor state for the one prescription being appended — the same fields the
@@ -72,7 +77,7 @@ function freshEditor(): EditorState {
 // Session page revalidates and the new prescription renders last (and shows up in the next
 // Repeat/Start/Log). Rendered only on a standalone Session — never a Protocol member, where
 // adding stays the Builder's tail-gated Deploy path (standalone-only, per ADR-0051).
-export function AddExerciseButton({ sessionId }: AddExerciseButtonProps) {
+export function AddExerciseButton({ sessionId, unit }: AddExerciseButtonProps) {
   const [open, setOpen] = useState(false);
   const [editor, setEditor] = useState<EditorState>(freshEditor);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +121,7 @@ export function AddExerciseButton({ sessionId }: AddExerciseButtonProps) {
       loadValue: editor.loadValue,
     };
 
-    const result = buildInsertPrescriptionRequest(fields);
+    const result = buildInsertPrescriptionRequest(fields, unit);
     if (!result.ok) {
       setError(result.error);
       return;
@@ -261,7 +266,7 @@ export function AddExerciseButton({ sessionId }: AddExerciseButtonProps) {
                 onChange={(event) => patch({ loadKind: event.target.value })}
                 aria-label={`Load kind for ${exerciseName}`}
               >
-                {LOAD_KIND_OPTIONS.map((option) => (
+                {loadKindOptions(unit).map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -271,7 +276,7 @@ export function AddExerciseButton({ sessionId }: AddExerciseButtonProps) {
             <FieldLabel label="Load">
               <Input
                 value={editor.loadValue}
-                placeholder="60 kg"
+                placeholder={`60 ${weightUnitLabel(unit)}`}
                 onChange={(event) => patch({ loadValue: event.target.value })}
                 aria-label={`Load for ${exerciseName}`}
               />
