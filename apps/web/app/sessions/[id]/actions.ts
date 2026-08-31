@@ -17,6 +17,7 @@ import {
   unfavoriteSession,
   unpinPrescription,
 } from "@/lib/sessions";
+import { requestSessionDelete } from "@/app/sessions/delete-request";
 import { toDuplicateResult } from "@/lib/duplicate-session";
 import {
   SHARE_FALLBACK_ERROR,
@@ -52,6 +53,29 @@ export interface RenameFormState {
 
 export interface FavoriteFormState {
   error: string | null;
+}
+
+export interface DeleteFormState {
+  error: string | null;
+}
+
+// Permanently delete the user's own standalone Session from its detail page (Delete, ADR-0063).
+// The Session no longer exists on success, so this redirects to My Sessions rather than
+// revalidating a page that would now 404. On failure — the Session has logged training (409), is a
+// Protocol member (409), or is not the user's (404) — the server's message is returned for the
+// control to surface, and nothing is deleted. `redirect` throws to navigate, so it runs after the
+// write and outside any try/catch. The parse-guard-call body is shared with the library-row
+// action via `requestSessionDelete`; only the on-success step (redirect vs. revalidate) differs.
+export async function submitDeleteSession(
+  _prevState: DeleteFormState,
+  form: FormData,
+): Promise<DeleteFormState> {
+  const error = await requestSessionDelete(form);
+  if (error) {
+    return { error };
+  }
+
+  redirect("/sessions");
 }
 
 // Mark or unmark the user's own standalone Session as a Favorite (CONTEXT: Favorite, issue

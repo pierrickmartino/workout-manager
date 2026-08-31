@@ -10,6 +10,9 @@ import {
   type SessionSummary,
 } from "@/lib/session-library";
 import { GENERIC_AUTHOR_LABEL } from "@/lib/session-author";
+import { loggedCountBadge } from "@/lib/session-delete";
+import { DeleteSessionControl } from "@/components/DeleteSessionControl";
+import { submitDeleteSessionRow } from "@/app/sessions/actions";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
@@ -152,9 +155,19 @@ function SessionRow({
   const authorName =
     session.author.display_name?.trim() || GENERIC_AUTHOR_LABEL;
 
+  // The Logged Count signal (CONTEXT: Logged Count, ADR-0063): the badge label when the Session
+  // has been performed (≥ 1), else `null`. It and the Delete control are mutually exclusive — a
+  // performed row shows the badge (and is undeletable), an unperformed row shows Delete.
+  const loggedBadge = loggedCountBadge(session.logged_count);
+
   return (
-    <Link href={`/sessions/${session.id}`} className="block">
-      <Card className="flex flex-col gap-3 p-5 transition-colors hover:border-cyan/40">
+    <Card className="flex flex-col gap-3 p-5 transition-colors hover:border-cyan/40">
+      {/* The navigation link wraps only the textual content — the Delete control below is
+          interactive and must not nest inside an anchor. */}
+      <Link
+        href={`/sessions/${session.id}`}
+        className="flex flex-col gap-3 focus-visible:outline-none"
+      >
         <div className="flex items-start justify-between gap-3">
           <h2 className="font-display text-lg font-semibold text-text-primary">
             {session.display_name}
@@ -176,7 +189,27 @@ function SessionRow({
             by {authorName}
           </span>
         </div>
-      </Card>
-    </Link>
+      </Link>
+
+      {/* The action row: the Logged Count badge when the Session has been performed (so it is
+          spotted at a glance and its Delete is withheld), else the Delete control. */}
+      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+        {loggedBadge ? (
+          <Badge
+            variant="muted"
+            className="uppercase"
+            title="Logged performances of this session"
+          >
+            {loggedBadge}
+          </Badge>
+        ) : (
+          <DeleteSessionControl
+            sessionId={session.id}
+            action={submitDeleteSessionRow}
+            confirmPrompt="Delete?"
+          />
+        )}
+      </div>
+    </Card>
   );
 }

@@ -115,6 +115,19 @@ export async function duplicateSession(
   return apiSend(`/api/sessions/${id}/duplicate`, "POST");
 }
 
+// Permanently delete the user's own standalone Session (Delete, CONTEXT: Delete, ADR-0063): a
+// hard delete of the plan and its plan-side dependents — Prescriptions, the Favorite marker,
+// Generation Feedback, and Share Links. Offered only on a Session with no logged training. A
+// bodyless DELETE, so the seam sends no `Content-Type` (ADR-0022). The backend re-checks the
+// guard authoritatively: 409 when the Session has any Logged Session (a performed plan is settled
+// record) or is a Protocol member (standalone-only), 404 for a non-owner. On success the envelope
+// carries the deleted id.
+export async function deleteSession(
+  id: number,
+): Promise<Envelope<{ id: number }>> {
+  return apiSend(`/api/sessions/${id}`, "DELETE");
+}
+
 // Rename the user's own standalone Session (issue #394): set, edit, or clear its
 // user-given Session Name. `name` is the new name, or `null` to clear it back to
 // born-unnamed (the read then falls back to the derived `training_type · date` label).

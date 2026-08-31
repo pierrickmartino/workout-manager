@@ -92,6 +92,19 @@ class ShareLinkRepository(Protocol):
         which one it was."""
         ...
 
+    def delete_for_session(self, session_id: int) -> None:
+        """Delete **every** Share Link (active or revoked) for ``session_id`` — the plan-side
+        cleanup a Session **Delete** performs (ADR-0063).
+
+        Distinct from ``revoke`` (which only stamps a link off): the Session itself is being
+        removed, so its links must be gone, not merely inactive. Already-**Redeem**ed copies
+        are independent Sessions and are untouched. Idempotent — a Session with no links is a
+        no-op. Not owner-scoped: the Delete service has already proven ownership of the
+        Session these links reference. The SQL implementation **flushes without committing** so
+        the deletes join the one transaction the terminal Session delete commits — the cascade
+        is atomic (see ADR-0063)."""
+        ...
+
 
 class SqlShareLinkRepository:
     def __init__(self, session: Session) -> None:
@@ -147,6 +160,18 @@ class SqlShareLinkRepository:
             return None
         return _view(link)
 
+    def delete_for_session(self, session_id: int) -> None:
+        # Part of the Session-Delete cascade (ADR-0063): the deletes are only **flushed**, not
+        # committed, so they ride the one transaction the terminal Session delete commits — the
+        # whole cascade lands atomically or not at all (all repositories in a request share one
+        # session). Called only by the Delete service, which owns that terminal commit.
+        links = self._session.exec(
+            select(ShareLink).where(ShareLink.session_id == session_id)
+        ).all()
+        for link in links:
+            self._session.delete(link)
+        self._session.flush()
+
 
 class InMemoryShareLinkRepository:
     def __init__(self) -> None:
@@ -195,6 +220,14 @@ class InMemoryShareLinkRepository:
         if link is None or link.revoked_at is not None:
             return None
         return _view(link)
+
+    def delete_for_session(self, session_id: int) -> None:
+        for token in [
+            token
+            for token, link in self._links.items()
+            if link.session_id == session_id
+        ]:
+            del self._links[token]
 
 
 __all__ = [

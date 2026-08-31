@@ -100,6 +100,13 @@ export interface WorkoutSession {
   // paths that omit it (live hydration). The `sessionFavoriteView` mapper owns the "show the
   // toggle only when the marker is a boolean" decision so the page stays thin.
   is_favorite?: boolean | null;
+  // Logged Count (CONTEXT: Logged Count, ADR-0063): how many Logged Sessions the owner has
+  // recorded against this Session — a read-time projection over the record. Carried on the plain
+  // detail read so the Delete control can decide whether to offer deletion (count 0) or show it
+  // disabled with a hint (count > 0); absent on read paths that omit it (live hydration, the
+  // Redeem response). The `sessionDeleteView` mapper reads its presence as "deletability decidable
+  // here", the same show/hide idiom as `is_favorite`'s boolean-vs-null.
+  logged_count?: number;
   // Received-Share safety caveat (ADR-0058, issue #399): present **only** on the Redeem
   // response, never on a plain Session read. `applies` is true when the redeemer has a
   // Sensitive Constraint — the copy was built for another user and is not tailored to their

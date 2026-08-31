@@ -49,6 +49,17 @@ class GenerationFeedbackRepository(Protocol):
         when they have left none."""
         ...
 
+    def delete_for_session(self, session_id: int) -> None:
+        """Delete every Generation Feedback row for ``session_id`` — the plan-side cleanup a
+        Session **Delete** performs (ADR-0063).
+
+        Removes the verdicts left on a Session that is being deleted, so no feedback outlives
+        the plan it judged. Idempotent — a Session with no feedback is a no-op. Not
+        owner-scoped: the Delete service has already proven ownership of the Session. The SQL
+        implementation **flushes without committing** so the deletes join the one transaction
+        the terminal Session delete commits — the cascade is atomic (see ADR-0063)."""
+        ...
+
 
 def _view(feedback: GenerationFeedback) -> GenerationFeedbackView:
     return GenerationFeedbackView(
@@ -94,6 +105,20 @@ class SqlGenerationFeedbackRepository:
         ).first()
         return _view(feedback) if feedback is not None else None
 
+    def delete_for_session(self, session_id: int) -> None:
+        # Part of the Session-Delete cascade (ADR-0063): the deletes are only **flushed**, not
+        # committed, so they ride the one transaction the terminal Session delete commits — the
+        # whole cascade lands atomically or not at all (all repositories in a request share one
+        # session). Called only by the Delete service, which owns that terminal commit.
+        rows = self._session.exec(
+            select(GenerationFeedback).where(
+                GenerationFeedback.session_id == session_id
+            )
+        ).all()
+        for feedback in rows:
+            self._session.delete(feedback)
+        self._session.flush()
+
 
 class InMemoryGenerationFeedbackRepository:
     def __init__(self) -> None:
@@ -129,6 +154,13 @@ class InMemoryGenerationFeedbackRepository:
             ):
                 return _view(feedback)
         return None
+
+    def delete_for_session(self, session_id: int) -> None:
+        self._records = [
+            feedback
+            for feedback in self._records
+            if feedback.session_id != session_id
+        ]
 
 
 __all__ = [

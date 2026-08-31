@@ -17,11 +17,15 @@ from app.generation.schema import GeneratedExercisePrescription, GeneratedSessio
 from app.main import create_app
 from app.repositories.deps import (
     get_exercise_repository,
+    get_logged_session_repository,
     get_profile_repository,
     get_session_generator,
     get_session_repository,
 )
 from app.repositories.exercise_repository import InMemoryExerciseRepository
+from app.repositories.logged_session_repository import (
+    InMemoryLoggedSessionRepository,
+)
 from app.repositories.profile_repository import (
     InMemoryProfileRepository,
     ProfileUpdate,
@@ -70,12 +74,14 @@ def build_client(generator=None, ctx=None, profiles=None, sessions=None, exercis
     # Wire the shared profile store into the session repo so the read resolves the Author's
     # display name (CONTEXT: Author, #395); without it the serializer's generic fallback stands in.
     sessions = sessions or InMemorySessionRepository(exercises, profiles)
+    logged = InMemoryLoggedSessionRepository(sessions, exercises)
     generator = generator or FakeGenerator(result=_default_generation())
     app = create_app()
     app.dependency_overrides[get_jwks] = lambda: ctx.jwks
     app.dependency_overrides[get_settings] = lambda: Settings(clerk_issuer=ISSUER)
     app.dependency_overrides[get_exercise_repository] = lambda: exercises
     app.dependency_overrides[get_session_repository] = lambda: sessions
+    app.dependency_overrides[get_logged_session_repository] = lambda: logged
     app.dependency_overrides[get_session_generator] = lambda: generator
     app.dependency_overrides[get_profile_repository] = lambda: profiles
     return TestClient(app), ctx

@@ -16,7 +16,12 @@ from typing import Protocol
 
 from sqlmodel import Session, select
 
-from app.db.models import Exercise, ExercisePrescription, WorkoutSession
+from app.db.models import (
+    Exercise,
+    ExercisePrescription,
+    SessionFavorite,
+    WorkoutSession,
+)
 from app.domain.session_library import matches_session_search
 from app.domain.share_redeem import SharedSessionSource, redeem_copy
 from app.domain.superset import MIN_SUPERSET_MEMBERS
@@ -276,6 +281,19 @@ class SessionRepository(Protocol):
         budget** (``has_been_regenerated`` starts ``False``). The source is read, never
         mutated. Returns the new Session, or ``None`` if the source is missing or owned
         by another user — Duplicate only ever copies the owner's own plan."""
+        ...
+
+    def delete(self, session_id: int, clerk_user_id: str) -> bool:
+        """Permanently delete the owner's standalone Session (Delete, ADR-0063).
+
+        Removes the ``WorkoutSession`` row together with the plan-side rows it owns — its
+        Exercise Prescriptions and the owner's Favorite marker — children-first so a
+        foreign-key-enforcing database accepts the parent delete. Returns ``True`` when a
+        Session was deleted, ``False`` when it is missing or owned by another user, so a
+        non-owner can never delete another user's plan. The no-Logged-Session guard and the
+        standalone-only guard live in the Delete service, and its other plan-side
+        dependents (Generation Feedback, Share Links) are cleaned up through their own
+        repositories there — this seam owns only the Session aggregate."""
         ...
 
     def get_shared(self, session_id: int) -> SessionView | None:
@@ -661,6 +679,37 @@ class SqlSessionRepository:
         if workout is None or workout.clerk_user_id != clerk_user_id:
             return None
         return self._view(workout)
+
+    def delete(self, session_id: int, clerk_user_id: str) -> bool:
+        # The **terminal** step of the Session-Delete cascade (ADR-0063): it issues the single
+        # ``commit`` that finalizes the whole cascade. Any Share Link / Generation Feedback the
+        # Delete service flushed earlier rides this one transaction (all repositories in a
+        # request share one session), so the delete lands atomically or, on any failure before
+        # this commit, rolls back whole — never a half-deleted Session.
+        workout = self._session.get(WorkoutSession, session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return False
+
+        # Children first so the FK-enforcing database accepts the parent delete: the Session's
+        # Prescriptions and its Favorite marker rows (favoriting requires ownership, so the
+        # owner holds the only possible row). Deleted directly rather than through the Favorite
+        # seam's ``set_favorite`` so no intermediate commit breaks the one-transaction cascade.
+        prescriptions = self._session.exec(
+            select(ExercisePrescription).where(
+                ExercisePrescription.session_id == session_id
+            )
+        ).all()
+        for prescription in prescriptions:
+            self._session.delete(prescription)
+        favorites = self._session.exec(
+            select(SessionFavorite).where(SessionFavorite.session_id == session_id)
+        ).all()
+        for favorite in favorites:
+            self._session.delete(favorite)
+        self._session.flush()
+        self._session.delete(workout)
+        self._session.commit()
+        return True
 
     def _summary(self, workout: WorkoutSession) -> SessionSummaryView:
         """The thin My Sessions row for one owned Session (issue #397): Author and the
@@ -1087,6 +1136,18 @@ class InMemorySessionRepository:
         if workout is None or workout.clerk_user_id != clerk_user_id:
             return None
         return self._view(workout)
+
+    def delete(self, session_id: int, clerk_user_id: str) -> bool:
+        workout = self._sessions.get(session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return False
+
+        del self._sessions[session_id]
+        self._prescriptions.pop(session_id, None)
+        # Clear the owner's Favorite marker (the only possible row — favoriting requires
+        # ownership), mirroring the SQL repo's cascade of the plan-side rows it owns.
+        self._favorites.set_favorite(clerk_user_id, session_id, False)
+        return True
 
     def _summary(self, workout: WorkoutSession) -> SessionSummaryView:
         """The thin My Sessions row for one owned Session (issue #397) — Author and the

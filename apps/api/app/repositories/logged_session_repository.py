@@ -141,6 +141,26 @@ class LoggedSessionRepository(Protocol):
         """Return the user's Logged Sessions, most recently performed first."""
         ...
 
+    def count_for_session(self, clerk_user_id: str, session_id: int) -> int:
+        """The **Logged Count** for one Session (ADR-0063, CONTEXT: Logged Count).
+
+        How many Logged Sessions the owner has recorded against ``session_id`` — counted
+        across **every Completion Outcome** (an Incomplete performance is still logged
+        training), a read-time projection over the record, never a stored counter. Owner-
+        scoped, so another user's performances of the same Session never leak in. This is
+        the fact the Delete guard reads: a Session is deletable iff this is zero."""
+        ...
+
+    def count_by_session(self, clerk_user_id: str) -> dict[int, int]:
+        """The owner's **Logged Count** per Session, in one read (ADR-0063).
+
+        Maps each ``session_id`` the user has performed to how many Logged Sessions they
+        recorded against it, so the My Sessions list can badge every row without an N+1
+        per-Session count. Plan-less records (``session_id`` is ``None``) carry no Session
+        and are excluded; a Session the user has never performed is simply absent from the
+        map (the caller reads it as zero)."""
+        ...
+
 
 def _set_view(logged_set: LoggedSet, exercise: Exercise) -> LoggedSetView:
     return LoggedSetView(
@@ -280,6 +300,27 @@ class SqlLoggedSessionRepository:
         ).all()
         return [self._view(logged) for logged in rows]
 
+    def count_for_session(self, clerk_user_id: str, session_id: int) -> int:
+        rows = self._session.exec(
+            select(LoggedSession.id).where(
+                LoggedSession.clerk_user_id == clerk_user_id,
+                LoggedSession.session_id == session_id,
+            )
+        ).all()
+        return len(rows)
+
+    def count_by_session(self, clerk_user_id: str) -> dict[int, int]:
+        rows = self._session.exec(
+            select(LoggedSession.session_id).where(
+                LoggedSession.clerk_user_id == clerk_user_id,
+                LoggedSession.session_id.is_not(None),
+            )
+        ).all()
+        counts: dict[int, int] = {}
+        for session_id in rows:
+            counts[session_id] = counts.get(session_id, 0) + 1
+        return counts
+
 
 class InMemoryLoggedSessionRepository:
     def __init__(
@@ -392,6 +433,22 @@ class InMemoryLoggedSessionRepository:
         ]
         owned.sort(key=lambda logged: (logged.performed_on, logged.id), reverse=True)
         return [self._view(logged) for logged in owned]
+
+    def count_for_session(self, clerk_user_id: str, session_id: int) -> int:
+        return sum(
+            1
+            for logged in self._logged.values()
+            if logged.clerk_user_id == clerk_user_id
+            and logged.session_id == session_id
+        )
+
+    def count_by_session(self, clerk_user_id: str) -> dict[int, int]:
+        counts: dict[int, int] = {}
+        for logged in self._logged.values():
+            if logged.clerk_user_id != clerk_user_id or logged.session_id is None:
+                continue
+            counts[logged.session_id] = counts.get(logged.session_id, 0) + 1
+        return counts
 
 
 __all__ = [
