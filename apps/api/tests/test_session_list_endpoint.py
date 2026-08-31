@@ -14,10 +14,14 @@ from app.auth.dependencies import get_jwks
 from app.config import Settings, get_settings
 from app.main import create_app
 from app.repositories.deps import (
+    get_logged_session_repository,
     get_profile_repository,
     get_session_repository,
 )
 from app.repositories.exercise_repository import InMemoryExerciseRepository
+from app.repositories.logged_session_repository import (
+    InMemoryLoggedSessionRepository,
+)
 from app.repositories.profile_repository import (
     InMemoryProfileRepository,
     ProfileUpdate,
@@ -34,10 +38,12 @@ def build_client(ctx=None, profiles=None, sessions=None, exercises=None):
     exercises = exercises or InMemoryExerciseRepository()
     profiles = profiles or InMemoryProfileRepository()
     sessions = sessions or InMemorySessionRepository(exercises, profiles)
+    logged = InMemoryLoggedSessionRepository(sessions, exercises)
     app = create_app()
     app.dependency_overrides[get_jwks] = lambda: ctx.jwks
     app.dependency_overrides[get_settings] = lambda: Settings(clerk_issuer=ISSUER)
     app.dependency_overrides[get_session_repository] = lambda: sessions
+    app.dependency_overrides[get_logged_session_repository] = lambda: logged
     app.dependency_overrides[get_profile_repository] = lambda: profiles
     return TestClient(app), ctx, sessions
 

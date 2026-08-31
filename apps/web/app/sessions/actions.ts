@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
@@ -7,9 +8,35 @@ import {
   generateSession,
   type GenerateSessionInput,
 } from "@/lib/sessions";
+import { requestSessionDelete } from "@/app/sessions/delete-request";
 
 export interface GenerateFormState {
   error: string | null;
+}
+
+export interface DeleteSessionRowState {
+  error: string | null;
+}
+
+// Permanently delete one of the user's own standalone Sessions from the My Sessions library
+// (Delete, ADR-0063). Unlike the detail-page delete, the user stays on My Sessions, so this
+// revalidates `/sessions` to re-render the library with the row gone (its client-side search /
+// favorites filter state is preserved). On failure — the Session has logged training (409), is a
+// Protocol member (409), or is not the user's (404) — the server's message is returned for the
+// row's confirm control to surface, and nothing is deleted. The library only offers this on rows
+// with no logged training; the server guard is the authority on a race. Shares the parse-guard-call
+// body with the detail-page action via `requestSessionDelete`; only the on-success step differs.
+export async function submitDeleteSessionRow(
+  _prevState: DeleteSessionRowState,
+  form: FormData,
+): Promise<DeleteSessionRowState> {
+  const error = await requestSessionDelete(form);
+  if (error) {
+    return { error };
+  }
+
+  revalidatePath("/sessions");
+  return { error: null };
 }
 
 const VALID_TRAINING_TYPES = new Set<string>(TRAINING_TYPES);

@@ -8,6 +8,7 @@ import { DuplicateButton } from "@/components/DuplicateButton";
 import { RenameSessionControl } from "@/components/RenameSessionControl";
 import { FavoriteSessionControl } from "@/components/FavoriteSessionControl";
 import { ShareSessionControl } from "@/components/ShareSessionControl";
+import { DeleteSessionControl } from "@/components/DeleteSessionControl";
 import { AddExerciseButton } from "@/components/AddExerciseButton";
 import { resolveAppearance } from "@/lib/appearance";
 import { formatLoad } from "@/lib/load";
@@ -32,6 +33,8 @@ import { removeAffordances } from "@/lib/remove-prescription";
 import { sessionNameView } from "@/lib/session-name";
 import { sessionAuthorView } from "@/lib/session-author";
 import { sessionFavoriteView } from "@/lib/session-favorite";
+import { sessionDeleteView, DELETE_DISABLED_HINT } from "@/lib/session-delete";
+import { submitDeleteSession } from "@/app/sessions/[id]/actions";
 import { appendFrom } from "@/lib/back-target";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -85,6 +88,12 @@ export default async function SessionPage({
   // sends `null`), where `show` is false — Favorite is a standalone-only concept, like the Session
   // Name — so the control is hidden alongside Rename below.
   const favoriteView = sessionFavoriteView(session);
+
+  // The Delete control state (CONTEXT: Delete, ADR-0063): whether to show Delete at all
+  // (standalone-only, and only when the detail read carried the Logged Count) and whether the
+  // Session may be deleted now (only with no logged training). Shown disabled with a hint when
+  // the Session has been performed — the server 409 is the backstop.
+  const deleteView = sessionDeleteView(session);
 
   // The per-prescription Superset layout (ADR-0023): a saved Superset (from a
   // Hand-Authored Session or an AI plan) renders as a lettered, round-rest-bearing group
@@ -171,6 +180,17 @@ export default async function SessionPage({
         {session.is_protocol_member ? null : (
           <ShareSessionControl sessionId={session.id} />
         )}
+        {/* Delete (CONTEXT: Delete, ADR-0063): permanently remove this standalone Session, offered
+            only when it has no logged training. Shown here disabled with a hint when the Session has
+            been performed (deleteView.canDelete false); hidden entirely on a Protocol member or a
+            read that omits the Logged Count (deleteView.show false), alongside Rename/Favorite/Share. */}
+        {deleteView.show ? (
+          <DeleteSessionControl
+            sessionId={session.id}
+            action={submitDeleteSession}
+            disabledHint={deleteView.canDelete ? null : DELETE_DISABLED_HINT}
+          />
+        ) : null}
       </div>
 
       <div className="flex flex-col gap-4">

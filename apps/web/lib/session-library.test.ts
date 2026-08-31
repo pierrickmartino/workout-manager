@@ -24,6 +24,7 @@ function makeSummary(overrides: Partial<SessionSummary>): SessionSummary {
     created_at: "2026-08-25",
     author: { display_name: "Dana Lin" },
     is_favorite: false,
+    logged_count: 0,
     ...overrides,
   };
 }

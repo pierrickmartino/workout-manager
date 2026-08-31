@@ -57,7 +57,7 @@ def serialize_prescription(view: PrescriptionView) -> dict:
     }
 
 
-def serialize_session(view: SessionView) -> dict:
+def serialize_session(view: SessionView, *, logged_count: int | None = None) -> dict:
     """The canonical JSON dict for a standalone Session read.
 
     The one shape the plain Session read (``routes/sessions.py``) and the Redeem read
@@ -68,12 +68,18 @@ def serialize_session(view: SessionView) -> dict:
     withholding the Duplicate control, ``is_favorite`` withheld as ``null`` on a Protocol member,
     issue #396), and every Exercise Prescription through :func:`serialize_prescription`.
 
+    ``logged_count`` is the read-time **Logged Count** (ADR-0063): how many Logged Sessions the
+    owner has recorded against this Session. Included only when the caller passes it (the plain
+    detail read does; the Redeem read omits it, as deletability is not a concern on a freshly
+    redeemed copy) — its presence is what the Session view reads to decide whether Delete is
+    offered, exactly as ``is_favorite``'s boolean-vs-null gates the Favorite toggle.
+
     The raw Author reference (``author_clerk_user_id``) is deliberately kept server-side —
     the client needs only the credit name, and withholding the id avoids exposing the original
     author's Clerk id to a different owner once Redeem transfers ownership (ADR-0057).
     """
 
-    return {
+    payload = {
         "id": view.id,
         "clerk_user_id": view.clerk_user_id,
         "training_type": view.training_type,
@@ -89,6 +95,9 @@ def serialize_session(view: SessionView) -> dict:
         "is_favorite": None if view.is_protocol_member else view.is_favorite,
         "prescriptions": [serialize_prescription(p) for p in view.prescriptions],
     }
+    if logged_count is not None:
+        payload["logged_count"] = logged_count
+    return payload
 
 
 __all__ = ["serialize_prescription", "serialize_session"]

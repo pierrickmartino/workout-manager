@@ -61,6 +61,7 @@ from app.repositories.deps import (
     get_session_generator,
     get_session_regenerator,
     get_session_repository,
+    get_share_link_repository,
     get_substitute_generator,
 )
 from app.repositories.logged_session_repository import LoggedSessionRepository
@@ -79,6 +80,13 @@ from app.repositories.session_repository import (
     SessionSummaryView,
     SessionView,
 )
+from app.repositories.share_link_repository import ShareLinkRepository
+from app.sessions.service import (
+    SessionHasLoggedSessions,
+    SessionNotStandalone,
+    delete_session,
+)
+from app.sessions.service import SessionNotFound as SessionServiceNotFound
 from app.protocols.deploy_validation import DeployError
 from app.routes.logs import LogSetBody, serialize_logged_session
 from app.pinning.service import (
@@ -464,11 +472,13 @@ DEFAULT_LIST_LIMIT = 20
 MAX_LIST_LIMIT = 100
 
 
-def _serialize_summary(summary: SessionSummaryView) -> dict:
+def _serialize_summary(summary: SessionSummaryView, logged_count: int) -> dict:
     """One My Sessions row (issue #397): the same name/fallback and Author shapes the
     detail read uses, kept thin (no prescriptions). ``created_at`` is sent as its calendar
     date — the exact string the derived fallback label embeds — so the web view-model can
-    reproduce the fallback for client-side search with parity to the server."""
+    reproduce the fallback for client-side search with parity to the server. ``logged_count``
+    is the read-time **Logged Count** (ADR-0063): how many Logged Sessions were recorded
+    against this Session — the counter the row badges, and the fact that gates Delete."""
 
     return {
         "id": summary.id,
@@ -485,6 +495,8 @@ def _serialize_summary(summary: SessionSummaryView) -> dict:
         "author": {"display_name": summary.author_display_name},
         # The owner's Favorite marker, driving the favorites-only filter's rendering.
         "is_favorite": summary.is_favorite,
+        # The Logged Count (ADR-0063): the row badges it when > 0 and hides Delete then.
+        "logged_count": logged_count,
     }
 
 
@@ -496,6 +508,7 @@ def list_sessions(
     offset: int = Query(default=0, ge=0),
     clerk_user_id: str = Depends(get_current_user),
     sessions: SessionRepository = Depends(get_session_repository),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
 ) -> dict:
     """List the caller's own **standalone** Sessions for My Sessions (issue #397).
 
@@ -505,9 +518,10 @@ def list_sessions(
     ``training_type · date`` fallback label, and Training Type case-insensitively (a blank
     or whitespace-only query returns the full list); ``favorites`` narrows to the owner's
     Favorites; the two **combine**. Results are newest-first and paginated through the
-    envelope ``meta`` (``total`` counts every match across pages). Read-only — listing
-    never creates a Session. Declared before ``/sessions/{session_id}`` so the literal path
-    is never mistaken for an id."""
+    envelope ``meta`` (``total`` counts every match across pages). Each row carries its
+    read-time **Logged Count** (ADR-0063), read once for the whole library. Read-only —
+    listing never creates a Session. Declared before ``/sessions/{session_id}`` so the
+    literal path is never mistaken for an id."""
 
     page = sessions.list_standalone(
         clerk_user_id,
@@ -516,8 +530,15 @@ def list_sessions(
         limit=limit,
         offset=offset,
     )
+    # One Logged-Count read for the whole library (ADR-0063), so badging every row never
+    # fans out into a per-Session count query. A Session the user has never performed is
+    # absent from the map and reads as zero.
+    counts = logged.count_by_session(clerk_user_id)
     return success_envelope(
-        [_serialize_summary(summary) for summary in page.items],
+        [
+            _serialize_summary(summary, counts.get(summary.id, 0))
+            for summary in page.items
+        ],
         meta={"total": page.total, "limit": limit, "offset": offset},
     )
 
@@ -527,11 +548,64 @@ def read_session(
     session_id: int,
     clerk_user_id: str = Depends(get_current_user),
     sessions: SessionRepository = Depends(get_session_repository),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
 ) -> dict:
     view = sessions.get(session_id, clerk_user_id)
     if view is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Session not found")
-    return success_envelope(_serialize(view))
+    # The read-time Logged Count (ADR-0063) rides the detail read like Favorite/Author, so
+    # the Session view can offer Delete (count 0) or show it disabled with a hint (count > 0).
+    logged_count = logged.count_for_session(clerk_user_id, session_id)
+    return success_envelope(_serialize(view, logged_count=logged_count))
+
+
+@router.delete("/sessions/{session_id}")
+def delete_session_endpoint(
+    session_id: int,
+    clerk_user_id: str = Depends(get_current_user),
+    sessions: SessionRepository = Depends(get_session_repository),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+    shares: ShareLinkRepository = Depends(get_share_link_repository),
+    feedback: GenerationFeedbackRepository = Depends(
+        get_generation_feedback_repository
+    ),
+) -> dict:
+    """Permanently delete the owner's standalone Session (Delete, ADR-0063).
+
+    The submit target of the My Sessions row's and the Session detail's Delete control.
+    Delegates to :func:`delete_session`, which guards before any write: a Session with any
+    Logged Session is settled record and is refused with ``409`` (the guard is
+    authoritative, so a performance that lands after the client drew the list turns the
+    delete into a conflict rather than a lost record); a Protocol member is refused with
+    ``409`` (standalone-only, like Rename/Favorite/Share); a missing or non-owned Session
+    ``404``s. On success the Session and its plan-side dependents — Prescriptions, the
+    Favorite marker, Generation Feedback, and Share Links — are gone, and the envelope
+    carries the deleted id."""
+
+    try:
+        delete_session(
+            session_id,
+            clerk_user_id,
+            sessions=sessions,
+            logged=logged,
+            shares=shares,
+            feedback=feedback,
+        )
+    except SessionNotStandalone as exc:
+        raise HTTPException(
+            status_code=HTTP_CONFLICT,
+            detail="A session inside a protocol can't be deleted.",
+        ) from exc
+    except SessionHasLoggedSessions as exc:
+        raise HTTPException(
+            status_code=HTTP_CONFLICT,
+            detail="A session with logged training can't be deleted.",
+        ) from exc
+    except SessionServiceNotFound as exc:
+        raise HTTPException(
+            status_code=HTTP_NOT_FOUND, detail="Session not found"
+        ) from exc
+    return success_envelope({"id": session_id})
 
 
 @router.post("/sessions/{session_id}/duplicate")

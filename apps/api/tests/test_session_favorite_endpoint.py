@@ -19,12 +19,16 @@ from app.generation.schema import GeneratedExercisePrescription, GeneratedSessio
 from app.main import create_app
 from app.repositories.deps import (
     get_exercise_repository,
+    get_logged_session_repository,
     get_profile_repository,
     get_session_generator,
     get_session_repository,
 )
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.favorite_repository import InMemoryFavoriteRepository
+from app.repositories.logged_session_repository import (
+    InMemoryLoggedSessionRepository,
+)
 from app.repositories.profile_repository import InMemoryProfileRepository
 from app.repositories.session_repository import InMemorySessionRepository
 from tests.conftest import ISSUER, make_signing_context
@@ -49,11 +53,13 @@ def build_client():
     # between two callers hitting the same Session.
     favorites = InMemoryFavoriteRepository()
     sessions = InMemorySessionRepository(exercises, profiles, favorites)
+    logged = InMemoryLoggedSessionRepository(sessions, exercises)
     app = create_app()
     app.dependency_overrides[get_jwks] = lambda: ctx.jwks
     app.dependency_overrides[get_settings] = lambda: Settings(clerk_issuer=ISSUER)
     app.dependency_overrides[get_exercise_repository] = lambda: exercises
     app.dependency_overrides[get_session_repository] = lambda: sessions
+    app.dependency_overrides[get_logged_session_repository] = lambda: logged
     app.dependency_overrides[get_session_generator] = lambda: FakeGenerator()
     app.dependency_overrides[get_profile_repository] = lambda: profiles
     return TestClient(app), ctx, sessions

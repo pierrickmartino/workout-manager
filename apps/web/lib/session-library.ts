@@ -27,6 +27,11 @@ export interface SessionSummary {
   created_at: string;
   author: { display_name?: string | null };
   is_favorite: boolean;
+  // Logged Count (CONTEXT: Logged Count, ADR-0063): how many Logged Sessions the owner has
+  // recorded against this Session. The row badges it when > 0 (so already-trained Sessions are
+  // spotted at a glance) and offers Delete only when it is 0 (a performed Session is never
+  // deleted). Always present on a list row — the server computes it for every row.
+  logged_count: number;
 }
 
 // The active My Sessions filters: a free-text `query` (blank means "no search constraint")
