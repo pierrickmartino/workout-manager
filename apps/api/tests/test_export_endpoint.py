@@ -8,6 +8,8 @@ content type, deliberately outside the ``{success, data, error}`` envelope)."""
 
 from __future__ import annotations
 
+import csv
+import io
 from datetime import date
 
 from fastapi.testclient import TestClient
@@ -237,3 +239,111 @@ def test_export_of_an_empty_account_is_a_well_formed_empty_document():
     assert body["logged_sessions"] == []
     assert body["metrics"] == []
     assert body["exercises"] == []
+
+
+def _csv_rows(response) -> list[dict]:
+    return list(csv.DictReader(io.StringIO(response.text)))
+
+
+def test_csv_export_is_a_csv_file_download_not_an_envelope():
+    # Arrange
+    repos = Repos()
+    client, ctx = build_client(repos)
+    _seed_user(repos, "user_csv_a", name="A")
+
+    # Act
+    response = client.get(
+        "/api/export", params={"format": "csv"}, headers=_auth(ctx, "user_csv_a")
+    )
+
+    # Assert — a file download: attachment disposition + CSV content type
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    disposition = response.headers["content-disposition"]
+    assert "attachment" in disposition
+    assert "filename=" in disposition
+    assert ".csv" in disposition
+    # NOT the standard envelope — the body is CSV text, not {success, data, error}.
+    assert "success" not in response.text
+    assert response.text.startswith("logged_session_id,")
+
+
+def test_csv_export_is_one_row_per_logged_set_in_canonical_kg():
+    # Arrange — the seeded user has one Logged Session with one absolute-kg set
+    repos = Repos()
+    client, ctx = build_client(repos)
+    _seed_user(repos, "user_csv_b", name="B")
+
+    # Act
+    response = client.get(
+        "/api/export", params={"format": "csv"}, headers=_auth(ctx, "user_csv_b")
+    )
+    rows = _csv_rows(response)
+
+    # Assert — one data row (one Logged Set), weight in canonical kg with a labeled unit
+    assert len(rows) == 1
+    assert rows[0]["weight_kg"] == "100.0"
+    assert rows[0]["weight_unit"] == "kg"
+    assert rows[0]["repetitions"] == "5"
+    assert rows[0]["body_weight_kg"] == "80.0"
+
+
+def test_csv_export_excludes_other_users_data():
+    # Arrange — two users each own a full data set
+    repos = Repos()
+    client, ctx = build_client(repos)
+    _seed_user(repos, "user_csv_owner", name="Owner")
+    _seed_user(repos, "user_csv_other", name="Other")
+
+    # Act — the owner exports CSV
+    response = client.get(
+        "/api/export", params={"format": "csv"}, headers=_auth(ctx, "user_csv_owner")
+    )
+    rows = _csv_rows(response)
+
+    # Assert — only the owner's single set, never the other user's Exercise
+    assert len(rows) == 1
+    assert rows[0]["exercise_name"] == "Back Squat Owner"
+
+
+def test_csv_export_of_an_empty_account_is_a_header_only_csv():
+    # Arrange — a signed-in user who has logged nothing
+    repos = Repos()
+    client, ctx = build_client(repos)
+
+    # Act
+    response = client.get(
+        "/api/export", params={"format": "csv"}, headers=_auth(ctx, "user_csv_empty")
+    )
+
+    # Assert — a well-formed CSV with the header row and no data rows
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert response.text.startswith("logged_session_id,")
+    assert _csv_rows(response) == []
+
+
+def test_csv_export_requires_authentication():
+    # Arrange
+    repos = Repos()
+    client, _ = build_client(repos)
+
+    # Act — no Authorization header
+    response = client.get("/api/export", params={"format": "csv"})
+
+    # Assert
+    assert response.status_code == 401
+
+
+def test_export_rejects_an_unknown_format():
+    # Arrange
+    repos = Repos()
+    client, ctx = build_client(repos)
+
+    # Act — a format the boundary does not accept
+    response = client.get(
+        "/api/export", params={"format": "xml"}, headers=_auth(ctx, "user_bad_fmt")
+    )
+
+    # Assert — validated at the boundary, rejected before any work
+    assert response.status_code == 422
