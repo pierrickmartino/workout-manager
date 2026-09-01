@@ -14,9 +14,16 @@ exercise-progress projection tests, tested directly over hand-built view objects
 
 from __future__ import annotations
 
+from datetime import date
+
 from app.domain.load import parse_load
-from app.protocols.progress import progressed_prescription
-from app.repositories.logged_session_repository import LoggedSetView
+from app.protocols.progress import (
+    exposure_counts_by_exercise,
+    progressed_prescription,
+    progressed_protocol_from,
+)
+from app.repositories.logged_session_repository import LoggedSessionView, LoggedSetView
+from app.repositories.protocol_repository import ProtocolSessionView, ProtocolView
 from app.repositories.session_repository import PrescriptionView
 from tests.quantities import reps_quantity
 
@@ -133,3 +140,165 @@ def test_the_overlay_does_not_mutate_the_prescription_it_projects():
     assert progressed is not prescription
     assert prescription.recommended_load == parse_load("60 kg").to_dict()
     assert progressed.scheme == prescription.scheme
+
+
+# --- Session-Count-Based: the overlay passes the exposure count into the scheme (#431) ---
+# The scheme steps on the *count*, not the reps/effort: the same neutral record either
+# holds or steps purely by which exposure the overlay reports. Here the count is passed
+# directly to ``progressed_prescription``; the end-to-end computation of the count from
+# history is covered in the protocol-view projection test.
+
+
+def _neutral_sets() -> list[LoggedSetView]:
+    """Sets that neither hit the ceiling nor miss the floor for the "5" target — so any
+    step is driven by the exposure count the overlay passes, not the logged record."""
+
+    return [
+        LoggedSetView(
+            position=index,
+            quantity=reps_quantity(5),
+            load=parse_load("60 kg").to_dict(),
+            perceived_difficulty=8,
+            exercise_id=1,
+            exercise_name="Back Squat",
+        )
+        for index in range(3)
+    ]
+
+
+def test_session_count_overlay_steps_the_load_on_the_nth_exposure():
+    # Arrange — a Session-Count movement whose exposure count reached the cadence
+    prescription = _prescription(scheme="session_count")
+
+    # Act — the overlay passes the exposure count straight into the scheme
+    progressed = progressed_prescription(prescription, _neutral_sets(), exposure_count=3)
+
+    # Assert — the count drives the step: the load rises one increment
+    assert progressed.recommended_load == parse_load("62.5 kg").to_dict()
+
+
+def test_session_count_overlay_holds_between_the_nth_exposures():
+    # Arrange — the identical movement and record, but an intervening exposure
+    prescription = _prescription(scheme="session_count")
+
+    # Act
+    progressed = progressed_prescription(prescription, _neutral_sets(), exposure_count=2)
+
+    # Assert — off-cadence, the overlay holds the authored load
+    assert progressed.recommended_load == parse_load("60 kg").to_dict()
+
+
+def test_session_count_overlay_defaults_to_a_zero_count_that_holds():
+    # Arrange — a Session-Count movement projected with no exposure count supplied
+    prescription = _prescription(scheme="session_count")
+
+    # Act — the default count is zero (a never-performed movement)
+    progressed = progressed_prescription(prescription, _neutral_sets())
+
+    # Assert — a zero count never steps, so the load holds
+    assert progressed.recommended_load == parse_load("60 kg").to_dict()
+
+
+# --- exposure_counts_by_exercise: the count the overlay derives from history (#431) ---
+
+
+def _logged_session(session_id: int, exercise_ids: list[int]) -> LoggedSessionView:
+    """A performed Session carrying one neutral set for each listed Exercise."""
+
+    return LoggedSessionView(
+        id=session_id,
+        clerk_user_id="user_sc",
+        session_id=session_id,
+        training_type="strength",
+        performed_on=date(2026, 1, session_id),
+        logged_sets=[
+            LoggedSetView(
+                position=index,
+                quantity=reps_quantity(5),
+                load=parse_load("60 kg").to_dict(),
+                perceived_difficulty=8,
+                exercise_id=exercise_id,
+                exercise_name=f"Exercise {exercise_id}",
+            )
+            for index, exercise_id in enumerate(exercise_ids)
+        ],
+    )
+
+
+def test_exposure_counts_count_each_performed_session_that_includes_the_exercise():
+    # Arrange — Exercise 1 appears in two performed Sessions, Exercise 2 in one
+    history = [
+        _logged_session(1, [1, 2]),
+        _logged_session(2, [1]),
+    ]
+
+    # Act
+    counts = exposure_counts_by_exercise(history)
+
+    # Assert — one tally per performed Session that included the movement
+    assert counts == {1: 2, 2: 1}
+
+
+def test_exposure_counts_count_a_session_once_however_many_sets_it_holds():
+    # Arrange — a single Session logging the same Exercise across three sets
+    history = [_logged_session(1, [1, 1, 1])]
+
+    # Act
+    counts = exposure_counts_by_exercise(history)
+
+    # Assert — an exposure is a performed Session, not a set count
+    assert counts == {1: 1}
+
+
+# --- end to end: the protocol overlay computes the count from history and steps (#431) ---
+
+
+def _session_count_protocol() -> ProtocolView:
+    """A one-Session Protocol whose only movement (Exercise 1) is on Session-Count."""
+
+    upcoming = ProtocolSessionView(
+        session_id=99,
+        position=0,
+        week=1,
+        day=1,
+        title="Upcoming",
+        prescriptions=[_prescription(scheme="session_count")],
+    )
+    return ProtocolView(
+        id=7,
+        clerk_user_id="user_sc",
+        training_type="strength",
+        objective="gain muscle mass",
+        sessions_per_week=1,
+        weeks=1,
+        duration_minutes=45,
+        sessions=[upcoming],
+    )
+
+
+def test_the_protocol_overlay_steps_session_count_off_the_history_derived_count():
+    # Arrange — the movement has been performed in three earlier Sessions (three
+    # exposures), and the upcoming Session (id 99) is still un-performed
+    protocol = _session_count_protocol()
+    history = [_logged_session(sid, [1]) for sid in (1, 2, 3)]
+
+    # Act — the overlay derives the exposure count (3) from history and passes it in
+    progress = progressed_protocol_from(protocol, history)
+
+    # Assert — three exposures hit the cadence, so the upcoming load steps up
+    upcoming = progress.next_session
+    assert upcoming.session_id == 99
+    assert upcoming.prescriptions[0].recommended_load == parse_load("62.5 kg").to_dict()
+
+
+def test_the_protocol_overlay_holds_session_count_between_the_nth_exposures():
+    # Arrange — only two earlier exposures: the cadence has not come round yet
+    protocol = _session_count_protocol()
+    history = [_logged_session(sid, [1]) for sid in (1, 2)]
+
+    # Act
+    progress = progressed_protocol_from(protocol, history)
+
+    # Assert — off-cadence, the upcoming load holds its authored value
+    upcoming = progress.next_session
+    assert upcoming.prescriptions[0].recommended_load == parse_load("60 kg").to_dict()
