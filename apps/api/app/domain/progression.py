@@ -43,6 +43,11 @@ from app.domain.quantity import repetitions_of
 INCREASE_KG = 2.5
 DECREASE_KG = 5.0
 
+# The Greyskull-style Linear deload (ADR-0064): a miss resets the Load *down* by a
+# fixed fraction of its current value (−10%), not the cautious fixed ``DECREASE_KG``.
+# The fraction is the trait that distinguishes it from Double Progression's back-off.
+RESET_FRACTION = 0.9
+
 # Perceived difficulty is an RPE-style 1–10 score; at or below this the effort is
 # "low" enough to justify adding load. Above it, the set counts as hard and the
 # load only holds.
@@ -51,6 +56,8 @@ LOW_EFFORT_MAX = 7
 _LOAD_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)(.*)$", re.DOTALL)
 _RANGE_REPS_RE = re.compile(r"^\s*(\d+)\s*-\s*(\d+)\s*$")
 _SINGLE_REPS_RE = re.compile(r"^\s*(\d+)\s*$")
+# The AMRAP-with-floor grammar Greyskull reads (ADR-0064): ``"5+"`` — five-or-more.
+_AMRAP_FLOOR_RE = re.compile(r"^\s*(\d+)\s*\+\s*$")
 
 
 class _Prescription(Protocol):
@@ -153,12 +160,15 @@ class ProgressionScheme(str, Enum):
     resolves to exactly today's behaviour. ``STATIC`` never auto-steps and holds the
     plan's authored values.
 
-    Two schemes land in this seam; the v1 catalog (Greyskull-style Linear,
-    Session-Count-Based) grows here as later work registers them.
+    ``GREYSKULL`` is the loaded-movement methodology bounded to absolute and
+    bodyweight-added Loads: it steps up per session on hitting the rep floor and
+    deloads by a fixed fraction on a miss. The v1 catalog still grows here — the
+    Session-Count-Based scheme lands as later work registers it.
     """
 
     DOUBLE_PROGRESSION = "double_progression"
     STATIC = "static"
+    GREYSKULL = "greyskull"
 
 
 #: The system-wide default every Prescription inherits when it carries no scheme.
@@ -400,6 +410,20 @@ def _hit_ceiling(logged_sets: list[_LoggedSet], ceiling: int) -> bool:
     )
 
 
+def _met_floor(logged_sets: list[_LoggedSet], floor: int) -> bool:
+    """Whether at least one set demonstrably reached the rep floor — the Greyskull hit.
+
+    A hit needs positive evidence: some rep-bearing set at or above the floor. A
+    session of only non-rep sets (a hold, a run) offers none, so the Load holds rather
+    than stepping up. Distinct from :func:`_hit_ceiling`: Greyskull gates on the floor,
+    not the ceiling, and one set clearing it is enough (the final set is AMRAP)."""
+
+    return any(
+        (reps := repetitions_of(logged.quantity)) is not None and reps >= floor
+        for logged in logged_sets
+    )
+
+
 def _is_pure_bodyweight(load: ParsedLoad) -> bool:
     """Whether a Load is **pure bodyweight** — the reps-only progression axis (ADR-0026).
 
@@ -453,19 +477,130 @@ def _static(
     )
 
 
-# Every scheme applies to the full Load vocabulary: Double Progression is the default
-# every movement inherits (it simply holds a Load with no clean value to move), and
-# Static holds every Load kind by construction. Later, narrower schemes (Greyskull,
-# bounded to absolute + bodyweight-added) will register a restricted set here.
+def _greyskull_floor(reps: str) -> int | None:
+    """Read the rep **floor** a Greyskull session must meet (ADR-0064).
+
+    Greyskull cares only about the floor — the minimum the (AMRAP) final set must reach
+    to count as a hit — so a plain number (``"5"``) or a range (``"5-8"``) yields its
+    lower bound via the shared grammar, and an AMRAP form (``"5+"`` — five-or-more)
+    yields the number before the ``+``. Unlike Double Progression's
+    :func:`_parse_rep_target`, this *reads* the AMRAP notation instead of returning
+    ``None`` and holding on it (ADR-0064: "AMRAP reps become meaningful"). A floorless
+    target (bare ``"AMRAP"``) still returns ``None`` — there is no number to test a hit
+    against — so the scheme holds rather than stepping blind.
+    """
+
+    target = _parse_rep_target(reps)
+    if target is not None:
+        return target[0]
+
+    amrap = _AMRAP_FLOOR_RE.match(reps)
+    if amrap is not None:
+        return int(amrap.group(1))
+    return None
+
+
+def _greyskull(
+    prescription: _Prescription, logged_sets: list[_LoggedSet]
+) -> NextPrescription:
+    """The Greyskull-style Linear step — per-session linear load, reset on failure (ADR-0064).
+
+    Bounded to absolute and bodyweight-*added* Loads (the registry rejects the rest at
+    selection time). Reading only the user's Logged Sets, and never a shared/cached
+    artifact, it steps the weight axis every session a hit lands — the rep floor met on
+    the AMRAP-aware final set, with **no low-effort gate** (its defining departure from
+    Double Progression's cautious ceiling+RPE step) — and, on a miss below the floor,
+    resets the weight *down* by ``RESET_FRACTION`` rather than the fixed
+    ``DECREASE_KG``. Holds unchanged when there is nothing to act on: no Logged Sets, an
+    unreadable rep floor, a pure-bodyweight movement (no kilograms to step), or a Load
+    with no clean numeric value.
+    """
+
+    current = prescription.recommended_load
+    reps = prescription.reps
+    if not logged_sets or current is None:
+        return NextPrescription(ProgressionKind.HOLD, reps, current)
+
+    floor = _greyskull_floor(reps)
+    if floor is None:
+        return NextPrescription(ProgressionKind.HOLD, reps, current)
+
+    # The typed Load fixes which axis moves (ADR-0010): a bodyweight movement steps its
+    # added kilograms; a pure-bodyweight movement has none and is left to hold.
+    load = parse_load(current)
+    if load.kind is LoadKind.BODYWEIGHT:
+        if load.added_kg is None:
+            return NextPrescription(ProgressionKind.HOLD, reps, current)
+        return _greyskull_added(reps, current, load.added_kg, floor, logged_sets)
+
+    parsed = _parse_load(current)
+    if parsed is None:
+        return NextPrescription(ProgressionKind.HOLD, reps, current)
+    value, suffix = parsed
+
+    # Missed reps take precedence: backing off is the cautious direction, decided before
+    # any step-up. The reset is a fraction of the current Load, not a fixed decrease.
+    if _missed_reps(logged_sets, floor):
+        stepped = _format_load(value * RESET_FRACTION, suffix)
+        return NextPrescription(ProgressionKind.LOAD_STEP, reps, stepped)
+
+    if _met_floor(logged_sets, floor):
+        stepped = _format_load(value + INCREASE_KG, suffix)
+        return NextPrescription(ProgressionKind.LOAD_STEP, reps, stepped)
+
+    return NextPrescription(ProgressionKind.HOLD, reps, current)
+
+
+def _greyskull_added(
+    reps: str,
+    current: str,
+    added_kg: float,
+    floor: int,
+    logged_sets: list[_LoggedSet],
+) -> NextPrescription:
+    """Step the *added* kilograms of a bodyweight-added Load under Greyskull (ADR-0064).
+
+    The extra load behaves exactly like an absolute Load: a miss resets it by
+    ``RESET_FRACTION``, a met floor steps it up by ``INCREASE_KG``. A reset that reaches
+    zero collapses back to a bare ``"bodyweight"`` movement (see :func:`_format_added`).
+    """
+
+    if _missed_reps(logged_sets, floor):
+        stepped = _format_added(added_kg * RESET_FRACTION)
+        return NextPrescription(ProgressionKind.ADDED_LOAD_STEP, reps, stepped)
+
+    if _met_floor(logged_sets, floor):
+        stepped = _format_added(added_kg + INCREASE_KG)
+        return NextPrescription(ProgressionKind.ADDED_LOAD_STEP, reps, stepped)
+
+    return NextPrescription(ProgressionKind.HOLD, reps, current)
+
+
+# The two universal schemes apply to the full Load vocabulary: Double Progression is the
+# default every movement inherits (it simply holds a Load with no clean value to move),
+# and Static holds every Load kind by construction.
 _ALL_LOAD_KINDS: frozenset[LoadKind] = frozenset(LoadKind)
+
+# Greyskull is a loaded-movement scheme: it moves a clean kilogram axis, so it is bounded
+# to absolute and bodyweight Loads. The finer "bodyweight-added only, not pure" cut is a
+# distinction LoadKind can't carry, expressed by ``excludes_pure_bodyweight`` below.
+_LOADED_LOAD_KINDS: frozenset[LoadKind] = frozenset(
+    {LoadKind.ABSOLUTE, LoadKind.BODYWEIGHT}
+)
 
 
 @dataclass(frozen=True)
 class _SchemeEntry:
-    """A registered scheme: its pure step function and the Load kinds it applies to."""
+    """A registered scheme: its pure step function and the Loads it applies to.
+
+    ``load_kinds`` is the coarse LoadKind gate. ``excludes_pure_bodyweight`` layers the
+    one refinement LoadKind can't express — a scheme that steps a weight axis (Greyskull)
+    has nothing to move on a *pure* bodyweight movement, so it rejects that even though
+    it accepts a bodyweight-*added* Load of the same kind."""
 
     step: Callable[[_Prescription, list[_LoggedSet]], NextPrescription]
     load_kinds: frozenset[LoadKind]
+    excludes_pure_bodyweight: bool = False
 
 
 # The curated, closed registry — the one place every scheme is collected, and the one
@@ -481,6 +616,9 @@ class _SchemeEntry:
 _REGISTRY: dict[ProgressionScheme, _SchemeEntry] = {
     ProgressionScheme.DOUBLE_PROGRESSION: _SchemeEntry(_double_progression, _ALL_LOAD_KINDS),
     ProgressionScheme.STATIC: _SchemeEntry(_static, _ALL_LOAD_KINDS),
+    ProgressionScheme.GREYSKULL: _SchemeEntry(
+        _greyskull, _LOADED_LOAD_KINDS, excludes_pure_bodyweight=True
+    ),
 }
 
 
@@ -507,10 +645,31 @@ def scheme_applies_to(scheme: ProgressionScheme, load_kind: LoadKind) -> bool:
 
     A pure function over the registry's per-scheme compatible Load kinds (ADR-0064).
     The selection write path uses it to reject an incompatible choice; here it only
-    answers the question, never mutating anything.
+    answers the question, never mutating anything. It is the *coarse* gate:
+    :func:`scheme_applies_to_load` refines it for a scheme that steps a weight axis.
     """
 
     return load_kind in _REGISTRY[scheme].load_kinds
+
+
+def scheme_applies_to_load(scheme: ProgressionScheme, load: ParsedLoad) -> bool:
+    """Whether a scheme applies to a *typed* Load — the full compatibility predicate (ADR-0064).
+
+    Refines :func:`scheme_applies_to` (the coarse LoadKind gate) with the one distinction
+    LoadKind can't carry: a scheme that steps a weight axis (``excludes_pure_bodyweight``)
+    rejects a **pure-bodyweight** Load — a ``BODYWEIGHT`` kind with nothing added, which
+    has no kilograms to move — while still accepting a bodyweight-*added* Load of the
+    same kind. Greyskull (absolute + bodyweight-added only) is the scheme this matters
+    for; the universal schemes never exclude, so the two predicates agree for them. Given
+    the full ParsedLoad, the selection write path prefers this over the LoadKind gate.
+    """
+
+    entry = _REGISTRY[scheme]
+    if load.kind not in entry.load_kinds:
+        return False
+    if entry.excludes_pure_bodyweight and _is_pure_bodyweight(load):
+        return False
+    return True
 
 
 def next_prescription(
