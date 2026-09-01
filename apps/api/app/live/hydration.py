@@ -22,7 +22,11 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from app.domain.quantity import repetitions_of
-from app.protocols.progress import latest_sets_by_exercise, progressed_prescription
+from app.protocols.progress import (
+    exposure_counts_by_exercise,
+    latest_sets_by_exercise,
+    progressed_prescription,
+)
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
     LoggedSetView,
@@ -80,11 +84,15 @@ def hydrate_session(
     if session is None:
         return None
 
-    latest_sets = latest_sets_by_exercise(logged.list_for_user(clerk_user_id))
+    history = logged.list_for_user(clerk_user_id)
+    latest_sets = latest_sets_by_exercise(history)
+    exposure_counts = exposure_counts_by_exercise(history)
 
     prescriptions = [
         progressed_prescription(
-            prescription, latest_sets.get(prescription.exercise_id, [])
+            prescription,
+            latest_sets.get(prescription.exercise_id, []),
+            exposure_counts.get(prescription.exercise_id, 0),
         )
         for prescription in session.prescriptions
     ]

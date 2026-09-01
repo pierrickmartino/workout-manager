@@ -7,19 +7,16 @@ external, so a cached/Generated artifact is never touched — only the user's ow
 copy moves. (``next_load`` is the load-only view of the same rule, kept for callers
 that overlay just the load.)
 
-The rule is a fixed-increment double-progression driven by one signal — every set
-at the top of the prescribed rep range at low perceived effort is strong, any set
-below the bottom is a miss — but *what* it steps depends on the Load kind (ADR-0026):
-
-- **Absolute** (external weight): step the recommended kilograms — up by
-  ``INCREASE_KG`` on strong performance, down by ``DECREASE_KG`` on a miss.
-- **Bodyweight + added load**: step the *added* kilograms with the same increments;
-  a reduction that reaches zero collapses back to a bare ``"bodyweight"`` movement.
-- **Pure bodyweight** (nothing to add): step the *rep target* instead — raise its
-  floor one rep toward the ceiling on strong performance; at the ceiling, where reps
-  can grow no further, raise a ``suggest_harder_variation`` signal rather than growing
-  reps unbound. The movement is never swapped here — that stays a user-initiated
-  Substitution; the signal is only an offer.
+*How* it steps is a selectable **Progression Scheme** (ADR-0064) dispatched through a
+closed registry; the default, Double Progression, is a fixed-increment rule driven by
+one signal — every set at the top of the prescribed rep range at low perceived effort is
+strong, any set below the bottom is a miss. But *what* any scheme steps depends on the
+Load kind (ADR-0026): an **absolute** load steps its kilograms by ``INCREASE_KG``; a
+**bodyweight + added** load steps the *added* kilograms (a reduction to zero collapsing
+to a bare ``"bodyweight"`` movement); a **pure bodyweight** movement steps its *rep
+target*, raising the floor toward the ceiling and, at the ceiling, raising a
+``suggest_harder_variation`` offer rather than growing reps unbound (never an auto-swap —
+that stays a user-initiated Substitution).
 
 Loads are free-text (``"60 kg"``, ``"bodyweight + 10 kg"``, ``"70% 1RM"``); a
 %-1RM, range, or qualitative load — anything with no single clean value to move — is
@@ -52,6 +49,11 @@ RESET_FRACTION = 0.9
 # "low" enough to justify adding load. Above it, the set counts as hard and the
 # load only holds.
 LOW_EFFORT_MAX = 7
+
+# The Session-Count-Based cadence (ADR-0064): the scheme steps unconditionally on
+# every N-th *performed exposure* of the movement — never a clock (ADR-0001), so a
+# layoff can never advance it. A single fixed N in v1 (per-user cadences are deferred).
+SESSION_COUNT_N = 3
 
 _LOAD_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)(.*)$", re.DOTALL)
 _RANGE_REPS_RE = re.compile(r"^\s*(\d+)\s*-\s*(\d+)\s*$")
@@ -161,14 +163,17 @@ class ProgressionScheme(str, Enum):
     plan's authored values.
 
     ``GREYSKULL`` is the loaded-movement methodology bounded to absolute and
-    bodyweight-added Loads: it steps up per session on hitting the rep floor and
-    deloads by a fixed fraction on a miss. The v1 catalog still grows here — the
-    Session-Count-Based scheme lands as later work registers it.
+    bodyweight-added Loads: it steps up per session on hitting the rep floor and deloads
+    by a fixed fraction on a miss. ``SESSION_COUNT`` is the calendar-free reinterpretation
+    of "time-based" (never a clock per ADR-0001): it steps every N-th *performed exposure*
+    of the movement, on the same axis Double Progression uses, with no rep/effort gate and
+    no reset. This completes the closed v1 catalog.
     """
 
     DOUBLE_PROGRESSION = "double_progression"
     STATIC = "static"
     GREYSKULL = "greyskull"
+    SESSION_COUNT = "session_count"
 
 
 #: The system-wide default every Prescription inherits when it carries no scheme.
@@ -271,7 +276,7 @@ def pin_offer(
 
 
 def _double_progression(
-    prescription: _Prescription, logged_sets: list[_LoggedSet]
+    prescription: _Prescription, logged_sets: list[_LoggedSet], exposure_count: int
 ) -> NextPrescription:
     """The Double Progression step — the default scheme, today's engine unchanged (ADR-0064).
 
@@ -280,6 +285,8 @@ def _double_progression(
     Logged Sets, an unparseable rep target, or a load with no clean numeric value.
     For an external-weight load, strong performance (every set at the rep ceiling,
     all at low perceived effort) steps the load up and missed reps step it down.
+
+    ``exposure_count`` is part of the uniform scheme signature (only Session-Count reads it).
     """
 
     current = prescription.recommended_load
@@ -368,8 +375,25 @@ def _next_pure_bodyweight(
     if not (_hit_ceiling(logged_sets, ceiling) and _low_effort(logged_sets)):
         return NextPrescription(ProgressionKind.HOLD, reps, current)
 
-    if floor < ceiling:
-        stepped = f"{floor + 1}-{ceiling}"
+    return _step_reps_up(reps, current, floor, ceiling)
+
+
+def _step_reps_up(
+    reps: str, current: str, floor: int, ceiling: int, steps: int = 1
+) -> NextPrescription:
+    """Raise a pure-bodyweight rep target ``steps`` reps up, honouring the never-auto-swap rule.
+
+    Shared by every scheme that steps the reps axis (Double Progression steps one at a
+    time; Session-Count-Based raises the floor by however many cadences have elapsed), so
+    the ceiling behaviour is decided in one place. While the floor has room, raise it
+    toward the ceiling (clamped so it never passes the ceiling); once the target has
+    reached its ceiling — reps can grow no further (ADR-0026) — hold and raise the
+    harder-Variation offer instead of growing reps unbounded. The movement is never
+    swapped here; the swap stays a user-initiated Substitution.
+    """
+
+    if floor + steps <= ceiling and floor < ceiling:
+        stepped = f"{floor + steps}-{ceiling}"
         return NextPrescription(ProgressionKind.REPS_STEP, stepped, current)
 
     return NextPrescription(
@@ -461,7 +485,7 @@ def _low_effort(logged_sets: list[_LoggedSet]) -> bool:
 
 
 def _static(
-    prescription: _Prescription, logged_sets: list[_LoggedSet]
+    prescription: _Prescription, logged_sets: list[_LoggedSet], exposure_count: int
 ) -> NextPrescription:
     """The Static step — never auto-steps; holds the plan's authored values (ADR-0064).
 
@@ -470,6 +494,8 @@ def _static(
     user drives these numbers by hand, so nothing in the record moves them. The Logged
     Sets are deliberately unread — holding is the whole contract — so any authored
     later-week deloads survive intact rather than being flattened by a step.
+    ``exposure_count`` is part of the uniform scheme signature and is ignored: nothing
+    moves a Static movement.
     """
 
     return NextPrescription(
@@ -501,7 +527,7 @@ def _greyskull_floor(reps: str) -> int | None:
 
 
 def _greyskull(
-    prescription: _Prescription, logged_sets: list[_LoggedSet]
+    prescription: _Prescription, logged_sets: list[_LoggedSet], exposure_count: int
 ) -> NextPrescription:
     """The Greyskull-style Linear step — per-session linear load, reset on failure (ADR-0064).
 
@@ -514,6 +540,8 @@ def _greyskull(
     ``DECREASE_KG``. Holds unchanged when there is nothing to act on: no Logged Sets, an
     unreadable rep floor, a pure-bodyweight movement (no kilograms to step), or a Load
     with no clean numeric value.
+
+    ``exposure_count`` is part of the uniform scheme signature and is ignored here.
     """
 
     current = prescription.recommended_load
@@ -576,9 +604,76 @@ def _greyskull_added(
     return NextPrescription(ProgressionKind.HOLD, reps, current)
 
 
+def _step_axis_up(reps: str, current: str, steps: int) -> NextPrescription:
+    """Step a Prescription ``steps`` increments up the axis Double Progression steps (ADR-0026).
+
+    The cumulative up-step exposure-driven Session-Count rides: the typed Load fixes which
+    axis moves — an external-weight load adds ``steps × INCREASE_KG`` kilograms, a
+    bodyweight-*added* load adds it to the extra kilograms, and a *pure* bodyweight
+    movement raises its rep floor by ``steps`` (via :func:`_step_reps_up`, so the
+    never-auto-swap ceiling behaviour matches Double Progression's). A Load with no single
+    clean value to move holds. Reads no Logged Sets: the caller has decided the increments.
+    """
+
+    load = parse_load(current)
+    if load.kind is LoadKind.BODYWEIGHT:
+        if load.added_kg is None:
+            target = _parse_rep_target(reps)
+            if target is None:
+                return NextPrescription(ProgressionKind.HOLD, reps, current)
+            floor, ceiling = target
+            return _step_reps_up(reps, current, floor, ceiling, steps)
+        stepped = _format_added(load.added_kg + steps * INCREASE_KG)
+        return NextPrescription(ProgressionKind.ADDED_LOAD_STEP, reps, stepped)
+
+    parsed = _parse_load(current)
+    if parsed is None:
+        return NextPrescription(ProgressionKind.HOLD, reps, current)
+    value, suffix = parsed
+    stepped = _format_load(value + steps * INCREASE_KG, suffix)
+    return NextPrescription(ProgressionKind.LOAD_STEP, reps, stepped)
+
+
+def _session_count(
+    prescription: _Prescription, logged_sets: list[_LoggedSet], exposure_count: int
+) -> NextPrescription:
+    """The Session-Count-Based step — a cumulative ramp every N-th exposure (ADR-0064).
+
+    The calendar-free reinterpretation of "time-based" (never a clock, ADR-0001): it reads
+    the count of *performed exposures* of the movement — passed in as ``exposure_count`` so
+    the function stays pure; the overlay computes it from history — and applies **one
+    increment per elapsed cadence** (``exposure_count // SESSION_COUNT_N``) to the Load or
+    rep target. It steps on every N-th exposure and **holds on the intervening ones**, and
+    — the ADR's ``no reset`` — it never steps *down*, because the tally only grows.
+
+    There is **no rep or effort gate**: the Logged Sets do not decide the step (only
+    whether the movement is pure bodyweight is read off the Load), so a hard or missed
+    session neither blocks nor reverses it — only the exposure tally advances it, which is
+    why a training layoff (no new performed exposure) can never move it. Holds when there
+    is no Load to step, or before the first cadence. The step rides the same axis Double
+    Progression uses (:func:`_step_axis_up`): absolute kg, added kg, or pure-bodyweight
+    reps — a Load with no clean value to move holds.
+    """
+
+    current = prescription.recommended_load
+    reps = prescription.reps
+    if current is None:
+        return NextPrescription(ProgressionKind.HOLD, reps, current)
+
+    # One increment per elapsed cadence: the tally holds between multiples of N (so the
+    # Load holds between steps) and only grows (never resets); below the first cadence — a
+    # layoff included — it yields zero increments and holds.
+    cadences = max(exposure_count, 0) // SESSION_COUNT_N
+    if cadences == 0:
+        return NextPrescription(ProgressionKind.HOLD, reps, current)
+
+    return _step_axis_up(reps, current, cadences)
+
+
 # The two universal schemes apply to the full Load vocabulary: Double Progression is the
 # default every movement inherits (it simply holds a Load with no clean value to move),
-# and Static holds every Load kind by construction.
+# and Static holds every Load kind by construction. Session-Count-Based joins them — it
+# steps the same axes Double Progression does and holds a non-clean Load the same way.
 _ALL_LOAD_KINDS: frozenset[LoadKind] = frozenset(LoadKind)
 
 # Greyskull is a loaded-movement scheme: it moves a clean kilogram axis, so it is bounded
@@ -598,7 +693,7 @@ class _SchemeEntry:
     has nothing to move on a *pure* bodyweight movement, so it rejects that even though
     it accepts a bodyweight-*added* Load of the same kind."""
 
-    step: Callable[[_Prescription, list[_LoggedSet]], NextPrescription]
+    step: Callable[[_Prescription, list[_LoggedSet], int], NextPrescription]
     load_kinds: frozenset[LoadKind]
     excludes_pure_bodyweight: bool = False
 
@@ -619,6 +714,7 @@ _REGISTRY: dict[ProgressionScheme, _SchemeEntry] = {
     ProgressionScheme.GREYSKULL: _SchemeEntry(
         _greyskull, _LOADED_LOAD_KINDS, excludes_pure_bodyweight=True
     ),
+    ProgressionScheme.SESSION_COUNT: _SchemeEntry(_session_count, _ALL_LOAD_KINDS),
 }
 
 
@@ -676,6 +772,7 @@ def next_prescription(
     prescription: _Prescription,
     logged_sets: list[_LoggedSet],
     scheme: ProgressionScheme = DEFAULT_SCHEME,
+    exposure_count: int = 0,
 ) -> NextPrescription:
     """Return the deterministically adjusted Prescription for its next outing.
 
@@ -683,9 +780,14 @@ def next_prescription(
     function; an omitted ``scheme`` resolves to Double Progression, so every existing
     caller behaves exactly as before. Each step is a pure function of the Prescription
     and the user's Logged Sets, returning the same :class:`NextPrescription` shape.
+
+    ``exposure_count`` — how many performed Sessions have included this Exercise — is the
+    one extra input Session-Count-Based needs (ADR-0064); passed in explicitly so the
+    domain stays pure, computed by the read-time overlay from the loaded history. It
+    defaults to zero (safe: an un-supplied count never steps a Session-Count movement).
     """
 
-    return _REGISTRY[scheme].step(prescription, logged_sets)
+    return _REGISTRY[scheme].step(prescription, logged_sets, exposure_count)
 
 
 def next_load(prescription: _Prescription, logged_sets: list[_LoggedSet]) -> str | None:
