@@ -145,6 +145,41 @@ def test_duplicate_copies_the_prescriptions_in_order(repos):
     assert [p.position for p in copy.prescriptions] == [0, 1]
 
 
+def test_create_and_duplicate_carry_the_progression_scheme_selection(repos):
+    # Arrange — a Session whose first movement is set to the Static scheme, the second
+    # left on the default (null) selection (ADR-0064, #429)
+    session_repo, exercises = repos
+    squat = exercises.find_or_create(
+        "Back Squat", provenance=Provenance.AI_GENERATED, targeted_muscles=["quads"]
+    )
+    press = exercises.find_or_create(
+        "Overhead Press", provenance=Provenance.AI_GENERATED
+    )
+    source = session_repo.create(
+        "user_scheme",
+        SessionDraft(
+            training_type="strength",
+            duration_minutes=45,
+            prescriptions=[
+                PrescriptionDraft(
+                    exercise_id=squat.id, sets=5, reps="5", scheme="static"
+                ),
+                PrescriptionDraft(exercise_id=press.id, sets=3, reps="8-12"),
+            ],
+        ),
+    )
+
+    # Assert — the stored repository view carries the selection through the round-trip
+    assert [p.scheme for p in source.prescriptions] == ["static", None]
+
+    # Act — Duplicate deep-copies the plan
+    copy = session_repo.duplicate(source.id, "user_scheme")
+
+    # Assert — the chosen scheme travels with the copy, like reps/load/rest/tempo
+    assert copy is not None
+    assert [p.scheme for p in copy.prescriptions] == ["static", None]
+
+
 def test_duplicate_is_a_distinct_standalone_session(repos):
     # Arrange
     session_repo, exercises = repos

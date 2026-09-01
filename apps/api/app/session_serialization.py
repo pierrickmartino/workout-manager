@@ -48,6 +48,9 @@ def serialize_prescription(view: PrescriptionView) -> dict:
         # Pinned rep target (ADR-0053): the user-set range that suspends read-time
         # Progression for this movement, or null when unpinned.
         "pinned_reps": view.pinned_reps,
+        # Progression Scheme selection (ADR-0064): the chosen scheme value, or null for
+        # the default (Double Progression). The read-time overlay dispatches through it.
+        "scheme": view.scheme,
         "exercise_id": view.exercise_id,
         "exercise_name": view.exercise_name,
         "exercise_description": view.exercise_description,

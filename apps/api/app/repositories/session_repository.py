@@ -62,6 +62,11 @@ class PrescriptionDraft:
     # Carried through create/Duplicate/Regeneration-keep like the other prescription
     # fields so a Pin survives a copy of the user's own plan.
     pinned_reps: str | None = None
+    # Progression Scheme selection (ADR-0064, #429): the chosen ``ProgressionScheme``
+    # value, or ``None`` for the default (Double Progression). Carried through
+    # create/Duplicate/Regeneration-keep like the other prescription fields so a chosen
+    # scheme survives a copy of the user's own plan.
+    scheme: str | None = None
 
 
 @dataclass(frozen=True)
@@ -109,6 +114,11 @@ class PrescriptionView:
     targeted_muscles: list[str]
     required_equipment: list[str]
     provenance: str
+    # Progression Scheme selection (ADR-0064, #429): the chosen ``ProgressionScheme``
+    # value, or ``None`` for "no choice" — which the read-time Progression overlay
+    # resolves to the default (Double Progression). Defaulted so the many call sites that
+    # build a view without a scheme keep reading unchanged as the un-chosen default.
+    scheme: str | None = None
 
 
 @dataclass(frozen=True)
@@ -492,6 +502,7 @@ def _draft_from(prescription: ExercisePrescription) -> PrescriptionDraft:
         superset_group=prescription.superset_group,
         round_rest_seconds=prescription.round_rest_seconds,
         pinned_reps=prescription.pinned_reps,
+        scheme=prescription.scheme,
     )
 
 
@@ -562,6 +573,7 @@ def _prescription_model(
         superset_group=draft.superset_group,
         round_rest_seconds=draft.round_rest_seconds,
         pinned_reps=draft.pinned_reps,
+        scheme=draft.scheme,
     )
 
 
@@ -585,6 +597,7 @@ def _prescription_view(
         targeted_muscles=list(exercise.targeted_muscles),
         required_equipment=list(exercise.required_equipment),
         provenance=exercise.provenance,
+        scheme=prescription.scheme,
     )
 
 
@@ -1109,6 +1122,7 @@ class InMemorySessionRepository:
                 superset_group=prescription.superset_group,
                 round_rest_seconds=prescription.round_rest_seconds,
                 pinned_reps=prescription.pinned_reps,
+                scheme=prescription.scheme,
             )
             for position, prescription in enumerate(prescriptions)
         ]
@@ -1362,6 +1376,7 @@ class InMemorySessionRepository:
                 superset_group=p.superset_group,
                 round_rest_seconds=p.round_rest_seconds,
                 pinned_reps=p.pinned_reps,
+                scheme=p.scheme,
             )
             for p in current
         ]
@@ -1402,6 +1417,7 @@ class InMemorySessionRepository:
                 superset_group=p.superset_group,
                 round_rest_seconds=p.round_rest_seconds,
                 pinned_reps=pinned_reps if p.position == position else p.pinned_reps,
+                scheme=p.scheme,
             )
             for p in current
         ]

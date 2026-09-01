@@ -36,7 +36,9 @@ def _exercise(exercise_id: int, name: str) -> Exercise:
     )
 
 
-def _prescription(exercise_id: int, *, load: dict | None = None) -> PrescriptionView:
+def _prescription(
+    exercise_id: int, *, load: dict | None = None, scheme: str | None = None
+) -> PrescriptionView:
     return PrescriptionView(
         position=0,
         sets=5,
@@ -54,6 +56,7 @@ def _prescription(exercise_id: int, *, load: dict | None = None) -> Prescription
         targeted_muscles=[],
         required_equipment=[],
         provenance="curated",
+        scheme=scheme,
     )
 
 
@@ -231,6 +234,35 @@ def test_plans_and_records_are_nested_faithfully():
         "unit": "kg",
         "recorded_on": "2026-01-01",
     }
+
+
+def test_prescription_scheme_selection_is_reflected_in_the_export():
+    # Arrange — a standalone Session whose one movement is set to the Static scheme, and
+    # a protocol movement left on the default (null) selection
+    session = SessionView(
+        id=2,
+        clerk_user_id="user_1",
+        training_type="strength",
+        duration_minutes=45,
+        prescriptions=[_prescription(12, scheme="static")],
+        name="Leg Day",
+        created_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+    )
+    protocol = _protocol(1, 11)
+
+    # Act
+    doc = export_document(
+        user_id="user_1",
+        protocols=[protocol],
+        sessions=[session],
+        logged_sessions=[],
+        metrics=[],
+        exercises=[_exercise(i, f"Ex{i}") for i in (11, 12)],
+    )
+
+    # Assert — the chosen scheme travels with the plan; an unset one exports as null
+    assert doc["sessions"][0]["prescriptions"][0]["scheme"] == "static"
+    assert doc["protocols"][0]["sessions"][0]["prescriptions"][0]["scheme"] is None
 
 
 def test_referenced_ids_dedupe_across_sources():

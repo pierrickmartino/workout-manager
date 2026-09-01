@@ -39,6 +39,10 @@ def serialize_session(
                 # Progression here (the overlaid ``reps`` above already reflects it), or
                 # null when unpinned. Surfaced so the client can mark the movement pinned.
                 "pinned_reps": p.pinned_reps,
+                # Progression Scheme selection (ADR-0064): the chosen scheme value, or
+                # null for the default (Double Progression, which the overlaid numbers
+                # above already reflect). Surfaced so the client can show the selection.
+                "scheme": p.scheme,
                 "exercise_id": p.exercise_id,
                 "exercise_name": p.exercise_name,
                 "exercise_description": p.exercise_description,

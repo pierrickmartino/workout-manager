@@ -336,6 +336,16 @@ class ExercisePrescription(SQLModel, table=True):
     # as before. Only the user's own copy is ever written — never a shared/cached
     # Generated artifact (ADR-0003).
     pinned_reps: str | None = Field(default=None)
+    # Progression Scheme selection (ADR-0064, #429): the ``ProgressionScheme`` value
+    # (e.g. ``"static"``) the read-time Progression overlay dispatches through for this
+    # movement, or NULL for "no choice" — which resolves to the system default (Double
+    # Progression) and reproduces today's behaviour exactly. A stored user *choice*,
+    # permitted by ADR-0018 (which bans stored *derived* ledgers, not choices), the same
+    # species as ``pinned_reps`` and the Favorite marker. Additive and nullable: every
+    # existing row reads NULL. There is no write path yet (that is #432); until then a
+    # scheme travels through create/Duplicate/Substitution like the other Prescription
+    # fields. Only the user's own copy is ever written — never a shared/cached artifact.
+    scheme: str | None = Field(default=None)
 
 
 class SessionFavorite(SQLModel, table=True):

@@ -19,6 +19,7 @@ from app.domain.progression import (
     next_prescription,
     parse_rep_range,
     pin_offer,
+    resolve_scheme,
     scheme_applies_to,
 )
 from app.domain.quantity import Quantity, QuantityKind
@@ -700,6 +701,25 @@ def test_compatibility_predicate_reads_the_registered_load_kinds(monkeypatch):
     # Act / Assert — the predicate answers from the entry's declared Load kinds
     assert scheme_applies_to(ProgressionScheme.STATIC, LoadKind.ABSOLUTE) is True
     assert scheme_applies_to(ProgressionScheme.STATIC, LoadKind.BODYWEIGHT) is False
+
+
+def test_resolve_scheme_maps_a_null_selection_to_the_default():
+    # Assert — an unset stored selection (every existing/generated Prescription) resolves
+    # to Double Progression, so the read path behaves exactly as before ADR-0064.
+    assert resolve_scheme(None) is DEFAULT_SCHEME
+    assert resolve_scheme(None) is ProgressionScheme.DOUBLE_PROGRESSION
+
+
+def test_resolve_scheme_maps_a_stored_value_back_to_its_member():
+    # Assert — a stored selection is the closed enum's own string, so it round-trips
+    assert resolve_scheme("static") is ProgressionScheme.STATIC
+    assert resolve_scheme("double_progression") is ProgressionScheme.DOUBLE_PROGRESSION
+
+
+def test_resolve_scheme_rejects_an_unrecognized_value():
+    # Assert — an unknown selection fails fast rather than silently picking a scheme
+    with pytest.raises(ValueError):
+        resolve_scheme("nonsense")
 
 
 def test_no_scheme_auto_swaps_at_the_pure_bodyweight_ceiling():
