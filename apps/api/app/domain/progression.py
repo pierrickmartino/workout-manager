@@ -29,6 +29,7 @@ left untouched rather than mangled.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
@@ -141,6 +142,30 @@ class ProgressionKind(str, Enum):
     HOLD = "hold"
 
 
+class ProgressionScheme(str, Enum):
+    """The identity of a Progression Scheme — a member of a curated, closed set (ADR-0064).
+
+    A scheme names one deterministic stepping strategy a Prescription can carry. The
+    set is fixed, never user- or AI-authored: an unvalidated stepping rule is a safety
+    risk in an injury/rehab-cautious domain, the same reasoning that keeps the Skin,
+    Muscle Group, and Achievement catalogs closed. ``DOUBLE_PROGRESSION`` is the
+    default — the existing engine, named rather than rewritten — so an unset selection
+    resolves to exactly today's behaviour. ``STATIC`` never auto-steps and holds the
+    plan's authored values.
+
+    Two schemes land in this seam; the v1 catalog (Greyskull-style Linear,
+    Session-Count-Based) grows here as later work registers them.
+    """
+
+    DOUBLE_PROGRESSION = "double_progression"
+    STATIC = "static"
+
+
+#: The system-wide default every Prescription inherits when it carries no scheme.
+#: Resolving to Double Progression keeps existing plans and records unaffected.
+DEFAULT_SCHEME = ProgressionScheme.DOUBLE_PROGRESSION
+
+
 @dataclass(frozen=True)
 class NextPrescription:
     """The adjusted Prescription state for its next outing, tagged by what moved.
@@ -235,10 +260,10 @@ def pin_offer(
     return PinOffer(proposed_reps=proposed)
 
 
-def next_prescription(
+def _double_progression(
     prescription: _Prescription, logged_sets: list[_LoggedSet]
 ) -> NextPrescription:
-    """Return the deterministically adjusted Prescription for its next outing.
+    """The Double Progression step — the default scheme, today's engine unchanged (ADR-0064).
 
     Reads only the user's Logged Sets (reps + perceived effort) and never touches a
     shared/cached artifact. Holds unchanged when there is nothing to act on — no
@@ -409,6 +434,81 @@ def _low_effort(logged_sets: list[_LoggedSet]) -> bool:
         and logged.perceived_difficulty <= LOW_EFFORT_MAX
         for logged in logged_sets
     )
+
+
+def _static(
+    prescription: _Prescription, logged_sets: list[_LoggedSet]
+) -> NextPrescription:
+    """The Static step — never auto-steps; holds the plan's authored values (ADR-0064).
+
+    Returns ``HOLD`` with the Prescription's own ``reps`` and ``recommended_load``
+    unchanged, for *every* Load kind, and never raises the harder-Variation offer: the
+    user drives these numbers by hand, so nothing in the record moves them. The Logged
+    Sets are deliberately unread — holding is the whole contract — so any authored
+    later-week deloads survive intact rather than being flattened by a step.
+    """
+
+    return NextPrescription(
+        ProgressionKind.HOLD, prescription.reps, prescription.recommended_load
+    )
+
+
+# Every scheme applies to the full Load vocabulary: Double Progression is the default
+# every movement inherits (it simply holds a Load with no clean value to move), and
+# Static holds every Load kind by construction. Later, narrower schemes (Greyskull,
+# bounded to absolute + bodyweight-added) will register a restricted set here.
+_ALL_LOAD_KINDS: frozenset[LoadKind] = frozenset(LoadKind)
+
+
+@dataclass(frozen=True)
+class _SchemeEntry:
+    """A registered scheme: its pure step function and the Load kinds it applies to."""
+
+    step: Callable[[_Prescription, list[_LoggedSet]], NextPrescription]
+    load_kinds: frozenset[LoadKind]
+
+
+# The curated, closed registry — the one place every scheme is collected, and the one
+# place the two registry-wide invariants (ADR-0064) hold for *all* schemes at once:
+#   1. Never auto-swap. A scheme returns a :class:`NextPrescription`, whose shape has
+#      no channel to swap a movement; a scheme that drives a pure-bodyweight rep target
+#      to its ceiling raises ``suggest_harder_variation`` rather than growing reps
+#      unbounded (see :func:`_next_pure_bodyweight`). The swap stays a user-initiated
+#      Substitution.
+#   2. Load-kind honesty. Each entry declares its compatible Load kinds; selecting an
+#      incompatible scheme is answered by :func:`scheme_applies_to` (used at selection
+#      time to reject a movement labelled one way but behaving another).
+_REGISTRY: dict[ProgressionScheme, _SchemeEntry] = {
+    ProgressionScheme.DOUBLE_PROGRESSION: _SchemeEntry(_double_progression, _ALL_LOAD_KINDS),
+    ProgressionScheme.STATIC: _SchemeEntry(_static, _ALL_LOAD_KINDS),
+}
+
+
+def scheme_applies_to(scheme: ProgressionScheme, load_kind: LoadKind) -> bool:
+    """Whether a scheme applies to a Prescription's Load kind — the compatibility predicate.
+
+    A pure function over the registry's per-scheme compatible Load kinds (ADR-0064).
+    The selection write path uses it to reject an incompatible choice; here it only
+    answers the question, never mutating anything.
+    """
+
+    return load_kind in _REGISTRY[scheme].load_kinds
+
+
+def next_prescription(
+    prescription: _Prescription,
+    logged_sets: list[_LoggedSet],
+    scheme: ProgressionScheme = DEFAULT_SCHEME,
+) -> NextPrescription:
+    """Return the deterministically adjusted Prescription for its next outing.
+
+    Dispatches through the closed scheme registry to the selected scheme's step
+    function; an omitted ``scheme`` resolves to Double Progression, so every existing
+    caller behaves exactly as before. Each step is a pure function of the Prescription
+    and the user's Logged Sets, returning the same :class:`NextPrescription` shape.
+    """
+
+    return _REGISTRY[scheme].step(prescription, logged_sets)
 
 
 def next_load(prescription: _Prescription, logged_sets: list[_LoggedSet]) -> str | None:
