@@ -1,5 +1,13 @@
 # 0053 — Pin: a stored rep target that suspends read-time Progression
 
+> **Status: superseded by [ADR-0064](./0064-progression-is-a-selectable-scheme-registry.md).**
+> Pin is retired. The scheme registry subsumes it: its "stop auto-progressing this
+> movement" job is the **Static** scheme (which holds every future occurrence at the
+> plan's authored values, so later-week deloads survive — better than Pin's single-
+> occurrence freeze), and its "bank a specific higher rep target" job is a Builder edit.
+> Existing Pinned Targets migrate to `reps = <pinned value>` + `scheme = Static`. The
+> record below is retained for history.
+
 Progression is a **read-time projection** — it recomputes an Exercise Prescription's
 recommended Load or bodyweight rep target from the user's Logged Sets on every read and
 **stores nothing** (ADR-0004). A calisthenics user who beats the top of a prescribed rep
