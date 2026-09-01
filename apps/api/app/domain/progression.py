@@ -768,6 +768,41 @@ def scheme_applies_to_load(scheme: ProgressionScheme, load: ParsedLoad) -> bool:
     return True
 
 
+def scheme_applies_to_optional_load(
+    scheme: ProgressionScheme, load: ParsedLoad | None
+) -> bool:
+    """The compatibility predicate tolerant of a Load-less Prescription (ADR-0064).
+
+    Wraps :func:`scheme_applies_to_load` for the common case, and answers the edge one a
+    typed Load can't: a Prescription with **no** Load has no axis at all, so only a
+    *universal* scheme — one registered for every Load kind — applies; a bounded,
+    weight-axis scheme (Greyskull) has nothing to step and is rejected. The write paths
+    (Deploy and the in-place selection) prefer this so a movement without a resolved Load
+    still gets an honest accept/reject rather than crashing on a missing ParsedLoad.
+    """
+
+    if load is not None:
+        return scheme_applies_to_load(scheme, load)
+    return all(scheme_applies_to(scheme, kind) for kind in LoadKind)
+
+
+def compatible_schemes(load: ParsedLoad) -> list[ProgressionScheme]:
+    """The schemes a movement with this typed Load may be assigned — the selector's
+    offered alternatives (ADR-0064).
+
+    A pure filter of the closed registry through :func:`scheme_applies_to_load`, in the
+    registry's own (catalog) order so the selector renders a stable sequence. The default
+    (Double Progression) and Static are universal, so the list is never empty — clearing a
+    selection always lands back on a legal scheme. Greyskull drops out for any Load with no
+    clean kilogram axis to step (pure bodyweight, %-1RM, range, qualitative), which is
+    exactly the incompatible choice the write path rejects.
+    """
+
+    return [
+        scheme for scheme in _REGISTRY if scheme_applies_to_load(scheme, load)
+    ]
+
+
 def next_prescription(
     prescription: _Prescription,
     logged_sets: list[_LoggedSet],

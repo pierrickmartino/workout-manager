@@ -16,6 +16,8 @@ import type { WeightUnit } from "@/lib/weight-unit";
 import { RemoveExerciseButton } from "@/components/RemoveExerciseButton";
 import { HarderVariationOffer } from "@/components/HarderVariationOffer";
 import { PinControl } from "@/components/PinControl";
+import { SchemeControl } from "@/components/SchemeControl";
+import { schemeControlModel, type SchemeControlModel } from "@/lib/scheme-view";
 import {
   fetchHarderVariation,
   fetchSession,
@@ -213,6 +215,8 @@ export default async function SessionPage({
                 pinInitialReps={
                   pinPosition === prescription.position ? pinReps : undefined
                 }
+                schemeModel={schemeControlModel(prescription)}
+                showScheme={!(session.is_protocol_member ?? false)}
                 showRemove={removeAffordanceList[index].showRemove}
                 canRemove={removeAffordanceList[index].canRemove}
                 dissolvesSuperset={removeAffordanceList[index].dissolvesSuperset}
@@ -280,6 +284,8 @@ function PrescriptionCard({
   displayReps,
   pinAutoOpen,
   pinInitialReps,
+  schemeModel,
+  showScheme,
   showRemove,
   canRemove,
   dissolvesSuperset,
@@ -297,6 +303,11 @@ function PrescriptionCard({
   displayReps: string;
   pinAutoOpen: boolean;
   pinInitialReps: string | undefined;
+  // The plan-view Progression Scheme state for this movement (ADR-0064): the current scheme
+  // and the compatible alternatives to offer. `showScheme` is false on a Protocol member,
+  // whose scheme is chosen on the Builder and committed via Deploy (standalone-only in place).
+  schemeModel: SchemeControlModel;
+  showScheme: boolean;
   showRemove: boolean;
   canRemove: boolean;
   dissolvesSuperset: boolean;
@@ -401,6 +412,17 @@ function PrescriptionCard({
         autoOpen={pinAutoOpen}
         initialReps={pinInitialReps}
       />
+
+      {/* Progression Scheme (ADR-0064, #432): choose how this movement's un-performed tail
+          steps, offering only schemes compatible with its Load. Standalone-only — a Protocol
+          member's scheme is chosen on the Builder and committed via Deploy. */}
+      {showScheme ? (
+        <SchemeControl
+          sessionId={sessionId}
+          position={prescription.position}
+          model={schemeModel}
+        />
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-3">
         <SubstituteButton sessionId={sessionId} position={prescription.position} />

@@ -31,6 +31,7 @@ from app.authoring.service import (
 from app.domain.feedback import parse_verdict
 from app.domain.fitness_profile import is_sensitive, resolve_equipment
 from app.domain.load import LoadKind, load_from_input
+from app.domain.progression import ProgressionScheme
 from app.domain.quantity import QuantityKind, prescribed_quantity_from_input
 from app.domain.session_naming import session_label
 from app.domain.session_provenance import SessionProvenance
@@ -106,6 +107,16 @@ from app.substitution.service import (
     substitute_exercise,
 )
 from app.substitution.service import SessionNotFound as SubstituteSessionNotFound
+from app.scheme_selection.service import (
+    IncompatibleScheme,
+    SchemeNotOnProtocolMember,
+    clear_scheme,
+    set_scheme,
+)
+from app.scheme_selection.service import (
+    PrescriptionNotFound as SchemePrescriptionNotFound,
+)
+from app.scheme_selection.service import SessionNotFound as SchemeSessionNotFound
 
 router = APIRouter(prefix="/api", tags=["sessions"])
 
@@ -1068,5 +1079,96 @@ def unpin(
         raise HTTPException(
             status_code=HTTP_CONFLICT,
             detail="A performed session's plan can't be pinned.",
+        ) from exc
+    return success_envelope(_serialize(view))
+
+
+class SchemeBody(BaseModel):
+    """The Progression Scheme to select on a standalone Session's prescription (ADR-0064).
+
+    ``scheme`` is one of the closed catalog's stored values; membership is validated at
+    the boundary so an unknown value never reaches the service. Its *compatibility* with
+    the movement's Load is the service's job, surfaced as a ``422`` rather than a body
+    error, so an honest "this scheme doesn't apply here" reason reaches the client."""
+
+    scheme: str = Field(min_length=1)
+
+    @field_validator("scheme")
+    @classmethod
+    def _known_scheme(cls, value: str) -> str:
+        try:
+            ProgressionScheme(value)
+        except ValueError as exc:
+            allowed = ", ".join(scheme.value for scheme in ProgressionScheme)
+            raise ValueError(f"scheme must be one of: {allowed}") from exc
+        return value
+
+
+@router.put("/sessions/{session_id}/prescriptions/{position}/scheme")
+def choose_scheme(
+    session_id: int,
+    position: int,
+    body: SchemeBody,
+    clerk_user_id: str = Depends(get_current_user),
+    sessions: SessionRepository = Depends(get_session_repository),
+) -> dict:
+    """Select a Progression Scheme on the prescription at ``position`` in place (ADR-0064).
+
+    The standalone-Session write path for choosing a movement's scheme — a no-AI plan edit,
+    the same posture as Insert / Remove / Substitution. Delegates to ``set_scheme``, which
+    guards before any write: a missing/non-owned Session or absent position ``404``s; a
+    Protocol member ``409``s (its scheme is chosen on the Builder and committed via Deploy);
+    and a scheme incompatible with the movement's Load ``422``s with a clear reason via the
+    error envelope. On success the serialized Session — its chosen scheme now on the target
+    prescription — is returned; the read-time overlay then progresses that movement by it.
+    """
+
+    try:
+        scheme = ProgressionScheme(body.scheme)
+        view = set_scheme(
+            session_id, clerk_user_id, position, scheme, sessions=sessions
+        )
+    except (SchemeSessionNotFound, SchemePrescriptionNotFound) as exc:
+        raise HTTPException(
+            status_code=HTTP_NOT_FOUND, detail="Prescription not found"
+        ) from exc
+    except SchemeNotOnProtocolMember as exc:
+        raise HTTPException(
+            status_code=HTTP_CONFLICT,
+            detail="A protocol member's scheme is chosen through the builder.",
+        ) from exc
+    except IncompatibleScheme as exc:
+        raise HTTPException(
+            status_code=HTTP_UNPROCESSABLE_ENTITY,
+            detail="That progression scheme doesn't apply to this movement's load.",
+        ) from exc
+    return success_envelope(_serialize(view))
+
+
+@router.delete("/sessions/{session_id}/prescriptions/{position}/scheme")
+def clear_scheme_selection(
+    session_id: int,
+    position: int,
+    clerk_user_id: str = Depends(get_current_user),
+    sessions: SessionRepository = Depends(get_session_repository),
+) -> dict:
+    """Clear the Progression Scheme selection at ``position`` — ``choose_scheme``'s inverse.
+
+    Restores the movement to the default (Double Progression) with no effect on past Logged
+    Sessions or strength numbers (ADR-0064). Same error surface as ``choose_scheme`` minus
+    the compatibility check (clearing is always legal): ``404`` for a missing/non-owned
+    prescription, ``409`` on a Protocol member. Bodyless DELETE, so the seam sends no
+    ``Content-Type`` (ADR-0022). Idempotent on an already-default prescription."""
+
+    try:
+        view = clear_scheme(session_id, clerk_user_id, position, sessions=sessions)
+    except (SchemeSessionNotFound, SchemePrescriptionNotFound) as exc:
+        raise HTTPException(
+            status_code=HTTP_NOT_FOUND, detail="Prescription not found"
+        ) from exc
+    except SchemeNotOnProtocolMember as exc:
+        raise HTTPException(
+            status_code=HTTP_CONFLICT,
+            detail="A protocol member's scheme is chosen through the builder.",
         ) from exc
     return success_envelope(_serialize(view))

@@ -17,6 +17,7 @@ from app.domain.progression import (
     SESSION_COUNT_N,
     ProgressionKind,
     ProgressionScheme,
+    compatible_schemes,
     next_load,
     next_prescription,
     parse_rep_range,
@@ -1196,3 +1197,63 @@ def test_session_count_holds_a_pure_bodyweight_with_an_unreadable_rep_target():
     assert result.kind is ProgressionKind.HOLD
     assert result.reps == "AMRAP"
     assert result.recommended_load == "bodyweight"
+
+
+# --- The compatible-schemes listing (ADR-0064, the selector's alternatives) -----------
+
+
+def test_compatible_schemes_for_a_clean_absolute_load_offers_the_whole_catalog():
+    # Arrange — an absolute kilogram load: every scheme, Greyskull included, applies
+    load = parse_load("60 kg")
+
+    # Act
+    schemes = compatible_schemes(load)
+
+    # Assert — the full closed catalog is offered for a clean weight axis
+    assert set(schemes) == set(ProgressionScheme)
+
+
+def test_compatible_schemes_for_a_bodyweight_added_load_offers_the_whole_catalog():
+    # Arrange — a weighted-bodyweight load has a kg axis to step, so Greyskull applies
+    load = parse_load("bodyweight + 10 kg")
+
+    # Act
+    schemes = compatible_schemes(load)
+
+    # Assert
+    assert set(schemes) == set(ProgressionScheme)
+
+
+@pytest.mark.parametrize(
+    "load",
+    [
+        "bodyweight",   # pure bodyweight — no kg axis for Greyskull
+        "bw",           # abbreviated pure bodyweight
+        "70% 1RM",      # non-clean
+        "70-80 kg",     # range
+        "moderate",     # qualitative
+    ],
+)
+def test_compatible_schemes_drops_greyskull_for_non_clean_loads(load):
+    # Assert — the universal schemes always apply; Greyskull is filtered out wherever it
+    # has no clean weight axis to move, exactly as ``scheme_applies_to_load`` decides
+    schemes = compatible_schemes(parse_load(load))
+    assert ProgressionScheme.GREYSKULL not in schemes
+    assert ProgressionScheme.DOUBLE_PROGRESSION in schemes
+    assert ProgressionScheme.STATIC in schemes
+    assert ProgressionScheme.SESSION_COUNT in schemes
+
+
+def test_compatible_schemes_lists_in_the_registry_order():
+    # Assert — a stable, catalog order (not set-random) so the selector renders the same
+    # sequence every time
+    assert compatible_schemes(parse_load("60 kg")) == [
+        scheme for scheme in ProgressionScheme if scheme in compatible_schemes(parse_load("60 kg"))
+    ]
+
+
+def test_the_default_scheme_is_always_compatible_with_every_load():
+    # Assert — Double Progression is the default an unset movement resolves to, so it must
+    # be offered for every Load kind (clearing a selection must always land somewhere legal)
+    for load in ("60 kg", "bodyweight", "70% 1RM", "70-80 kg", "moderate"):
+        assert DEFAULT_SCHEME in compatible_schemes(parse_load(load))

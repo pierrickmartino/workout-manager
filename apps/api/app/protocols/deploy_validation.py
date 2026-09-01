@@ -18,6 +18,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from app.domain.load import ParsedLoad
+from app.domain.progression import (
+    ProgressionScheme,
+    scheme_applies_to_optional_load,
+)
 from app.domain.superset import SupersetMember, validate_supersets
 
 # The shape bounds mirror the generate endpoint's constants (a single source of
@@ -44,6 +49,9 @@ class DraftPrescription:
     # Superset grouping (ADR-0023): both ``None`` for a flat, solo Prescription.
     superset_group: str | None = None
     round_rest_seconds: int | None = None
+    # Progression Scheme selection (ADR-0064): a chosen scheme value, or ``None`` for the
+    # inherited default (Double Progression). Validated for Load-kind compatibility below.
+    scheme: str | None = None
 
 
 @dataclass(frozen=True)
@@ -259,7 +267,59 @@ def _prescription_errors(
             )
         )
 
+    errors.extend(_scheme_errors(prescription, session_id, position))
+
     return errors
+
+
+def _scheme_errors(
+    prescription: DraftPrescription,
+    session_id: int | None,
+    position: int,
+) -> list[DeployError]:
+    """Validate a chosen Progression Scheme against the Prescription's Load (ADR-0064).
+
+    A ``None`` selection is the inherited default (Double Progression) and never an error.
+    A non-null value must be a member of the closed catalog (else ``unknown_scheme``) and
+    must be **compatible** with the Prescription's Load kind — a weight-axis scheme like
+    Greyskull on a pure-bodyweight (or Load-less) movement has nothing to step and is
+    rejected as ``incompatible_scheme`` rather than silently falling back (load-kind
+    honesty). Located to the offending Prescription so the client can fix it in one pass.
+    """
+
+    if prescription.scheme is None:
+        return []
+
+    try:
+        scheme = ProgressionScheme(prescription.scheme)
+    except ValueError:
+        return [
+            DeployError(
+                code="unknown_scheme",
+                message=f"'{prescription.scheme}' is not a known progression scheme.",
+                session_id=session_id,
+                position=position,
+            )
+        ]
+
+    load = (
+        ParsedLoad.from_dict(prescription.recommended_load)
+        if prescription.recommended_load is not None
+        else None
+    )
+    if not scheme_applies_to_optional_load(scheme, load):
+        return [
+            DeployError(
+                code="incompatible_scheme",
+                message=(
+                    f"The {scheme.value} scheme does not apply to this movement's load."
+                ),
+                session_id=session_id,
+                position=position,
+            )
+        ]
+
+    return []
 
 
 __all__ = [

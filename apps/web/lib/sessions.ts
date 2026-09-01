@@ -285,3 +285,35 @@ export async function unpinPrescription(
     "DELETE",
   );
 }
+
+// Select a Progression Scheme on the prescription at `position` in the user's own standalone
+// Session (ADR-0064, #432). A no-AI plan edit, the same posture as Substitution/Insert/Remove:
+// the read-time overlay then progresses that movement by the chosen scheme. `scheme` is a
+// stored catalog value; the backend rejects an incompatible (scheme, Load) with 422, a Protocol
+// member with 409, and a non-owned/absent prescription with 404. On success the updated Session
+// view comes back, its Provenance unchanged.
+export async function chooseScheme(
+  sessionId: number,
+  position: number,
+  scheme: string,
+): Promise<Envelope<WorkoutSession>> {
+  return apiSend(
+    `/api/sessions/${sessionId}/prescriptions/${position}/scheme`,
+    "PUT",
+    { scheme },
+  );
+}
+
+// Clear the Progression Scheme selection at `position` — `chooseScheme`'s inverse (ADR-0064).
+// Restores the movement to the default (Double Progression) with no effect on past records. A
+// bodyless DELETE, so the seam sends no `Content-Type` (ADR-0022). Same 404/409 surface as
+// `chooseScheme` (no compatibility check — clearing is always legal).
+export async function clearScheme(
+  sessionId: number,
+  position: number,
+): Promise<Envelope<WorkoutSession>> {
+  return apiSend(
+    `/api/sessions/${sessionId}/prescriptions/${position}/scheme`,
+    "DELETE",
+  );
+}

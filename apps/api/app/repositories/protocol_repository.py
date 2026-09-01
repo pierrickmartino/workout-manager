@@ -244,6 +244,7 @@ class SqlProtocolRepository:
                         recommended_load=prescription.recommended_load,
                         superset_group=prescription.superset_group,
                         round_rest_seconds=prescription.round_rest_seconds,
+                        scheme=prescription.scheme,
                     )
                 )
             self._session.commit()
@@ -340,6 +341,7 @@ class SqlProtocolRepository:
                         recommended_load=draft.recommended_load,
                         superset_group=draft.superset_group,
                         round_rest_seconds=draft.round_rest_seconds,
+                        scheme=draft.scheme,
                     )
                 )
         self._session.commit()
@@ -438,6 +440,7 @@ class InMemoryProtocolRepository:
                     recommended_load=prescription.recommended_load,
                     superset_group=prescription.superset_group,
                     round_rest_seconds=prescription.round_rest_seconds,
+                    scheme=prescription.scheme,
                 )
                 for p_position, prescription in enumerate(session_draft.prescriptions)
             ]
@@ -524,6 +527,7 @@ class InMemoryProtocolRepository:
                     recommended_load=draft.recommended_load,
                     superset_group=draft.superset_group,
                     round_rest_seconds=draft.round_rest_seconds,
+                    scheme=draft.scheme,
                 )
                 for position, draft in enumerate(spec.prescriptions)
             ]

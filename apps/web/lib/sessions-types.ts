@@ -52,6 +52,13 @@ export interface ExercisePrescription {
   // movement until un-pinned. `null`/absent when unpinned — its presence is the "user-set"
   // marker the plan view reads to surface the pinned range and offer the un-pin control.
   pinned_reps?: string | null;
+  // The chosen Progression Scheme (ADR-0064): the stored scheme value driving how this
+  // movement's un-performed tail steps, or `null`/absent for "no choice" — which the
+  // read-time overlay resolves to the default (Double Progression). Its presence is the
+  // "user override" marker the plan view reads to show the current scheme and offer the
+  // compatible alternatives (`scheme-view`). Optional like `pinned_reps`: the plain
+  // Session and Protocol reads carry it; other read paths need not.
+  scheme?: string | null;
   exercise_id: number;
   exercise_name: string;
   exercise_description: string | null;

@@ -31,6 +31,11 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import { loadKindOptions, type LoadKind } from "@/lib/load";
+import {
+  DEFAULT_SCHEME,
+  compatibleSchemesForInput,
+  currentScheme,
+} from "@/lib/scheme-view";
 import type { WeightUnit } from "@/lib/weight-unit";
 import {
   boxDropId,
@@ -91,6 +96,7 @@ interface PrescriptionListProps {
     value: string | number | null,
   ) => void;
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
+  onSetScheme: (position: number, scheme: string | null) => void;
   onEditRoundRest: (position: number, roundRestSeconds: number | null) => void;
   onReorder: (from: number, to: number) => void;
   onGroupWithNext: (position: number) => void;
@@ -113,6 +119,7 @@ export function PrescriptionList({
   unit,
   onEditField,
   onEditLoad,
+  onSetScheme,
   onEditRoundRest,
   onReorder,
   onGroupWithNext,
@@ -276,6 +283,7 @@ export function PrescriptionList({
                 foreshadow={foreshadow}
                 onEditField={onEditField}
                 onEditLoad={onEditLoad}
+                onSetScheme={onSetScheme}
                 onReorder={onReorder}
                 onGroupWithNext={onGroupWithNext}
                 onUngroup={onUngroup}
@@ -296,6 +304,7 @@ export function PrescriptionList({
                 foreshadow={foreshadow}
                 onEditField={onEditField}
                 onEditLoad={onEditLoad}
+                onSetScheme={onSetScheme}
                 onEditRoundRest={onEditRoundRest}
                 onReorder={onReorder}
                 onGroupWithNext={onGroupWithNext}
@@ -455,6 +464,7 @@ interface SupersetContainerProps {
     value: string | number | null,
   ) => void;
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
+  onSetScheme: (position: number, scheme: string | null) => void;
   onEditRoundRest: (position: number, roundRestSeconds: number | null) => void;
   onReorder: (from: number, to: number) => void;
   onGroupWithNext: (position: number) => void;
@@ -486,6 +496,7 @@ function SupersetContainer({
   foreshadow,
   onEditField,
   onEditLoad,
+  onSetScheme,
   onEditRoundRest,
   onReorder,
   onGroupWithNext,
@@ -553,6 +564,7 @@ function SupersetContainer({
               foreshadow={foreshadow}
               onEditField={onEditField}
               onEditLoad={onEditLoad}
+              onSetScheme={onSetScheme}
               onReorder={onReorder}
               onGroupWithNext={onGroupWithNext}
               onUngroup={onUngroup}
@@ -611,6 +623,7 @@ interface SortablePrescriptionRowProps {
     value: string | number | null,
   ) => void;
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
+  onSetScheme: (position: number, scheme: string | null) => void;
   onReorder: (from: number, to: number) => void;
   onGroupWithNext: (position: number) => void;
   onUngroup: (position: number) => void;
@@ -637,6 +650,7 @@ function SortablePrescriptionRow({
   foreshadow,
   onEditField,
   onEditLoad,
+  onSetScheme,
   onReorder,
   onGroupWithNext,
   onUngroup,
@@ -678,6 +692,7 @@ function SortablePrescriptionRow({
         onEditLoad={(loadKind, loadValue) =>
           onEditLoad(position, loadKind, loadValue)
         }
+        onSetScheme={(scheme) => onSetScheme(position, scheme)}
       />
       {slot.group === null &&
       draggingId != null &&
@@ -891,6 +906,7 @@ interface PrescriptionEditorProps {
   unit: WeightUnit;
   onEditField: (field: PrescriptionField, value: string | number | null) => void;
   onEditLoad: (loadKind: LoadKind, loadValue: string) => void;
+  onSetScheme: (scheme: string | null) => void;
 }
 
 function PrescriptionEditor({
@@ -899,6 +915,7 @@ function PrescriptionEditor({
   unit,
   onEditField,
   onEditLoad,
+  onSetScheme,
 }: PrescriptionEditorProps) {
   const name = prescription.exerciseName;
   // While grouped, a member's own rest is dormant (ADR-0023): the group rests once per
@@ -998,6 +1015,34 @@ function PrescriptionEditor({
           />
         </label>
       </div>
+
+      {/* Progression Scheme (ADR-0064, #432): how this movement's un-performed tail steps.
+          Only schemes compatible with the current Load are offered — Greyskull disappears the
+          moment the Load has no clean kilogram axis — so an incompatible choice can't be
+          staged. Selecting the default clears the stored selection (null ⇒ default). */}
+      <label className="flex flex-col gap-1.5">
+        <span className="label-mono text-[9px] text-text-muted">
+          Progression scheme
+        </span>
+        <Select
+          value={currentScheme(prescription)}
+          aria-label={`Progression scheme for ${name}`}
+          onChange={(e) =>
+            onSetScheme(
+              e.target.value === DEFAULT_SCHEME ? null : e.target.value,
+            )
+          }
+        >
+          {compatibleSchemesForInput(
+            prescription.loadKind,
+            prescription.loadValue,
+          ).map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </Select>
+      </label>
     </div>
   );
 }

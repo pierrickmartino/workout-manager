@@ -233,6 +233,14 @@ export function ProtocolBuilder({
               loadValue,
             })
           }
+          onSetScheme={(position, scheme) =>
+            dispatch({
+              type: "SET_SCHEME",
+              sessionId: selectedSession.sessionId,
+              position,
+              scheme,
+            })
+          }
           onAdd={(exercise) =>
             dispatch({
               type: "ADD_PRESCRIPTION",
@@ -653,6 +661,7 @@ interface SessionEditorProps {
     value: string | number | null,
   ) => void;
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
+  onSetScheme: (position: number, scheme: string | null) => void;
   onAdd: (exercise: PickedExercise) => void;
   onRemove: (position: number) => void;
   onReorder: (from: number, to: number) => void;
@@ -673,6 +682,7 @@ function SessionEditor({
   onPlaceQueued,
   onEditField,
   onEditLoad,
+  onSetScheme,
   onAdd,
   onRemove,
   onReorder,
@@ -728,6 +738,7 @@ function SessionEditor({
         unit={unit}
         onEditField={onEditField}
         onEditLoad={onEditLoad}
+        onSetScheme={onSetScheme}
         onEditRoundRest={onEditRoundRest}
         onReorder={onReorder}
         onGroupWithNext={onGroupWithNext}

@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.auth.dependencies import get_current_user
 from app.domain.fitness_profile import is_sensitive, resolve_equipment
 from app.domain.load import LoadKind, load_from_input
+from app.domain.progression import ProgressionScheme
 from app.envelope import error_envelope, success_envelope
 from app.generation.orchestrator import GenerationOrchestrator
 from app.generation.protocol_generator import ProtocolGenerationRequest
@@ -223,6 +224,11 @@ class DeployPrescriptionBody(BaseModel):
     # the shared Superset validator on the deploy gate.
     superset_group: str | None = None
     round_rest_seconds: int | None = None
+    # Progression Scheme selection (ADR-0064, #432): the chosen scheme value, or ``None``/
+    # blank for the inherited default (Double Progression). The value's membership is
+    # checked here; its Load-kind *compatibility* is the deploy gate's job so a mismatch
+    # surfaces as a located, retry-able ``incompatible_scheme`` rather than a 422 body error.
+    scheme: str | None = None
 
     @field_validator("load_kind")
     @classmethod
@@ -232,6 +238,21 @@ class DeployPrescriptionBody(BaseModel):
         except ValueError as exc:
             allowed = ", ".join(kind.value for kind in LoadKind)
             raise ValueError(f"load_kind must be one of: {allowed}") from exc
+        return value
+
+    @field_validator("scheme")
+    @classmethod
+    def _known_scheme(cls, value: str | None) -> str | None:
+        # A blank/absent selection is the inherited default and normalizes to ``None``; a
+        # present but unknown value is a client bug rejected at the boundary. Compatibility
+        # with this movement's Load is checked later, on the deploy gate.
+        if value is None or value == "":
+            return None
+        try:
+            ProgressionScheme(value)
+        except ValueError as exc:
+            allowed = ", ".join(scheme.value for scheme in ProgressionScheme)
+            raise ValueError(f"scheme must be one of: {allowed}") from exc
         return value
 
     def resolved_load(self) -> dict | None:
@@ -329,6 +350,7 @@ def deploy_protocol(
                         recommended_load=prescription.resolved_load(),
                         superset_group=prescription.superset_group,
                         round_rest_seconds=prescription.round_rest_seconds,
+                        scheme=prescription.scheme,
                     )
                     for prescription in session.prescriptions
                 ],

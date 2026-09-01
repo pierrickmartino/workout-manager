@@ -237,3 +237,143 @@ def test_reports_every_offending_item_at_once():
 
     # Assert — both problems are surfaced, so the user can fix them in one pass
     assert {e.code for e in errors} == {"invalid_sets", "empty_session"}
+
+
+# --- Progression Scheme selection (ADR-0064, #432) ------------------------------------
+
+
+def _load(kind: str, value: str | None = None) -> dict:
+    from app.domain.load import load_from_input
+
+    parsed = load_from_input(kind, value)
+    assert parsed is not None
+    return parsed.to_dict()
+
+
+def test_a_compatible_scheme_selection_passes():
+    # Arrange — Greyskull on an absolute-load Prescription: a clean kilogram axis to step
+    draft = _draft(
+        sessions=[
+            _session(
+                session_id=1,
+                prescriptions=[
+                    _prescription(
+                        scheme="greyskull", recommended_load=_load("absolute", "60")
+                    )
+                ],
+            )
+        ]
+    )
+
+    # Act
+    errors = validate_deploy(
+        draft,
+        performed_session_ids=set(),
+        known_session_ids={1},
+        exercise_exists=_always_exists,
+    )
+
+    # Assert — a compatible choice is not an error
+    assert errors == []
+
+
+def test_a_null_scheme_is_the_default_and_always_valid():
+    # Arrange — no scheme chosen: the movement inherits Double Progression
+    draft = _draft(
+        sessions=[
+            _session(
+                session_id=1,
+                prescriptions=[_prescription(scheme=None, recommended_load=_load("bodyweight"))],
+            )
+        ]
+    )
+
+    # Act
+    errors = validate_deploy(
+        draft,
+        performed_session_ids=set(),
+        known_session_ids={1},
+        exercise_exists=_always_exists,
+    )
+
+    # Assert
+    assert errors == []
+
+
+def test_rejects_greyskull_on_a_pure_bodyweight_movement():
+    # Arrange — Greyskull on a pure-bodyweight Prescription: no kilogram axis to step
+    draft = _draft(
+        sessions=[
+            _session(
+                session_id=3,
+                prescriptions=[
+                    _prescription(
+                        scheme="greyskull", recommended_load=_load("bodyweight")
+                    )
+                ],
+            )
+        ]
+    )
+
+    # Act
+    errors = validate_deploy(
+        draft,
+        performed_session_ids=set(),
+        known_session_ids={3},
+        exercise_exists=_always_exists,
+    )
+
+    # Assert — rejected via the compatibility predicate, located to the Prescription
+    assert [e.code for e in errors] == ["incompatible_scheme"]
+    assert errors[0].session_id == 3
+    assert errors[0].position == 0
+
+
+def test_rejects_a_bounded_scheme_on_a_load_less_prescription():
+    # Arrange — Greyskull on a Prescription with no typed Load: nothing to step
+    draft = _draft(
+        sessions=[
+            _session(
+                session_id=3,
+                prescriptions=[_prescription(scheme="greyskull", recommended_load=None)],
+            )
+        ]
+    )
+
+    # Act
+    errors = validate_deploy(
+        draft,
+        performed_session_ids=set(),
+        known_session_ids={3},
+        exercise_exists=_always_exists,
+    )
+
+    # Assert
+    assert [e.code for e in errors] == ["incompatible_scheme"]
+    assert errors[0].position == 0
+
+
+def test_rejects_an_unrecognized_scheme_value():
+    # Arrange — a scheme string outside the closed catalog
+    draft = _draft(
+        sessions=[
+            _session(
+                session_id=3,
+                prescriptions=[
+                    _prescription(scheme="banana", recommended_load=_load("absolute", "60"))
+                ],
+            )
+        ]
+    )
+
+    # Act
+    errors = validate_deploy(
+        draft,
+        performed_session_ids=set(),
+        known_session_ids={3},
+        exercise_exists=_always_exists,
+    )
+
+    # Assert — an unknown selection can never be honoured, so it is rejected outright
+    assert [e.code for e in errors] == ["unknown_scheme"]
+    assert errors[0].position == 0
