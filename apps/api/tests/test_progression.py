@@ -10,9 +10,10 @@ from dataclasses import dataclass
 
 import pytest
 
-from app.domain.load import LoadKind
+from app.domain.load import LoadKind, parse_load
 from app.domain.progression import (
     DEFAULT_SCHEME,
+    RESET_FRACTION,
     ProgressionKind,
     ProgressionScheme,
     next_load,
@@ -21,6 +22,7 @@ from app.domain.progression import (
     pin_offer,
     resolve_scheme,
     scheme_applies_to,
+    scheme_applies_to_load,
 )
 from app.domain.quantity import Quantity, QuantityKind
 from tests.quantities import reps_quantity
@@ -589,10 +591,12 @@ def test_the_default_scheme_is_double_progression():
 
 
 def test_the_scheme_catalog_is_the_closed_v1_landing_set():
-    # Assert — exactly the two schemes this seam introduces; the set is curated/closed
+    # Assert — the curated/closed set as it stands: the registry seam's two defaults
+    # plus Greyskull-style Linear (#430). Session-Count-Based lands later.
     assert {scheme.value for scheme in ProgressionScheme} == {
         "double_progression",
         "static",
+        "greyskull",
     }
 
 
@@ -679,11 +683,14 @@ def test_static_ignores_a_missed_session_and_still_holds():
     assert result.recommended_load == "60 kg"
 
 
-@pytest.mark.parametrize("scheme", list(ProgressionScheme))
+@pytest.mark.parametrize(
+    "scheme", [ProgressionScheme.DOUBLE_PROGRESSION, ProgressionScheme.STATIC]
+)
 @pytest.mark.parametrize("load_kind", list(LoadKind))
-def test_every_scheme_applies_to_every_load_kind_in_v1(scheme, load_kind):
-    # Assert — both v1 schemes accept the full Load vocabulary (Double Progression is
-    # the universal default; Static holds any kind). Narrower schemes land later.
+def test_the_universal_schemes_apply_to_every_load_kind(scheme, load_kind):
+    # Assert — the two universal schemes accept the full Load vocabulary (Double
+    # Progression is the default; Static holds any kind). Greyskull is bounded and
+    # is covered separately.
     assert scheme_applies_to(scheme, load_kind) is True
 
 
@@ -733,3 +740,206 @@ def test_no_scheme_auto_swaps_at_the_pure_bodyweight_ceiling():
     for scheme in ProgressionScheme:
         result = next_prescription(prescription, sets, scheme)
         assert result.recommended_load == "bodyweight"
+
+
+# --- Greyskull-style Linear scheme (ADR-0064, #430) ---------------------------------
+# A loaded-movement methodology bounded to absolute + bodyweight-added Loads. It steps
+# the Load up by the standard increment *per session* on hitting the rep floor (no
+# low-effort gate, AMRAP-aware final set), and — the trait that distinguishes it from
+# Double Progression's cautious fixed back-off — deloads by RESET_FRACTION on a miss.
+
+GREYSKULL = ProgressionScheme.GREYSKULL
+
+
+def test_greyskull_is_in_the_closed_catalog():
+    # Assert — the scheme is registered under its stored value
+    assert GREYSKULL.value == "greyskull"
+
+
+@pytest.mark.parametrize(
+    "load_kind, expected",
+    [
+        (LoadKind.ABSOLUTE, True),
+        (LoadKind.BODYWEIGHT, True),  # bodyweight-added is the refined case below
+        (LoadKind.PERCENT_1RM, False),
+        (LoadKind.QUALITATIVE, False),
+        (LoadKind.RANGE, False),
+    ],
+)
+def test_greyskull_registers_for_absolute_and_bodyweight_only(load_kind, expected):
+    # Assert — the coarse LoadKind gate: compatible with absolute + bodyweight, and
+    # rejects the non-clean loads (%-1RM, qualitative, range) outright
+    assert scheme_applies_to(GREYSKULL, load_kind) is expected
+
+
+@pytest.mark.parametrize(
+    "load, expected",
+    [
+        ("60 kg", True),                 # absolute
+        ("bodyweight + 10 kg", True),    # bodyweight + added
+        ("bodyweight", False),           # pure bodyweight — no kg axis to step
+        ("bw", False),                   # pure bodyweight, abbreviated
+        ("70% 1RM", False),              # non-clean
+        ("70-80 kg", False),             # non-clean (range)
+        ("moderate", False),             # non-clean (qualitative)
+    ],
+)
+def test_greyskull_compatibility_rejects_pure_bodyweight_and_non_clean_loads(
+    load, expected
+):
+    # Assert — the full typed-Load predicate refines the LoadKind gate with the one
+    # distinction LoadKind can't carry: pure bodyweight (no added kg) is rejected while
+    # bodyweight-added is accepted
+    assert scheme_applies_to_load(GREYSKULL, parse_load(load)) is expected
+
+
+def test_greyskull_steps_the_absolute_load_up_per_session_on_a_hit():
+    # Arrange — every set met the rep floor
+    prescription = _Prescription(reps="5", recommended_load="100 kg")
+    sets = [_LoggedSet(reps=5, perceived_difficulty=6) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets, GREYSKULL)
+
+    # Assert — one standard increment up, per session
+    assert result.kind is ProgressionKind.LOAD_STEP
+    assert result.recommended_load == "102.5 kg"
+
+
+def test_greyskull_steps_up_even_when_the_effort_was_high():
+    # Arrange — the floor was met but every set felt maximal (no low-effort gate)
+    prescription = _Prescription(reps="5", recommended_load="100 kg")
+    sets = [_LoggedSet(reps=5, perceived_difficulty=10) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets, GREYSKULL)
+
+    # Assert — Greyskull steps every session a hit lands, unlike Double Progression's
+    # low-effort gate which would hold here
+    assert result.kind is ProgressionKind.LOAD_STEP
+    assert result.recommended_load == "102.5 kg"
+
+
+def test_greyskull_steps_the_added_bodyweight_load_up_on_a_hit():
+    # Arrange — a weighted bodyweight movement whose floor was met
+    prescription = _Prescription(reps="5", recommended_load="bodyweight + 20 kg")
+    sets = [_LoggedSet(reps=5, perceived_difficulty=8) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets, GREYSKULL)
+
+    # Assert — the *added* kilograms step by the standard increment
+    assert result.kind is ProgressionKind.ADDED_LOAD_STEP
+    assert result.recommended_load == "bodyweight + 22.5 kg"
+
+
+def test_greyskull_reads_an_amrap_target_and_steps_up_when_the_floor_is_beaten():
+    # Arrange — an AMRAP final-set target ("5+" = five-or-more); the set beat the floor
+    prescription = _Prescription(reps="5+", recommended_load="100 kg")
+    sets = [_LoggedSet(reps=9, perceived_difficulty=7) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets, GREYSKULL)
+
+    # Assert — the AMRAP grammar is read (not held on as None); beating the floor is a hit
+    assert result.kind is ProgressionKind.LOAD_STEP
+    assert result.recommended_load == "102.5 kg"
+
+
+def test_greyskull_reads_an_amrap_target_on_an_added_bodyweight_load():
+    # Arrange — AMRAP floor of 5, comfortably beaten, on a weighted bodyweight movement
+    prescription = _Prescription(reps="5+", recommended_load="bodyweight + 20 kg")
+    sets = [_LoggedSet(reps=8, perceived_difficulty=7) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets, GREYSKULL)
+
+    # Assert — a beaten AMRAP floor steps the added load up
+    assert result.kind is ProgressionKind.ADDED_LOAD_STEP
+    assert result.recommended_load == "bodyweight + 22.5 kg"
+
+
+def test_greyskull_deloads_the_absolute_load_by_the_reset_fraction_on_a_miss():
+    # Arrange — a set fell below the rep floor
+    prescription = _Prescription(reps="5", recommended_load="100 kg")
+    sets = [
+        _LoggedSet(reps=5, perceived_difficulty=8),
+        _LoggedSet(reps=3, perceived_difficulty=10),
+    ]
+
+    # Act
+    result = next_prescription(prescription, sets, GREYSKULL)
+
+    # Assert — a fractional reset (−10%), not Double Progression's fixed −5 kg hold
+    assert result.kind is ProgressionKind.LOAD_STEP
+    assert result.recommended_load == "90 kg"
+    assert result.recommended_load == f"{int(100 * RESET_FRACTION)} kg"
+
+
+def test_greyskull_deload_uses_the_fraction_not_the_fixed_decrease():
+    # Arrange — the same miss under Double Progression backs off a fixed 5 kg
+    prescription = _Prescription(reps="5", recommended_load="100 kg")
+    sets = [_LoggedSet(reps=2, perceived_difficulty=10)]
+
+    # Act
+    greyskull = next_prescription(prescription, sets, GREYSKULL)
+    double = next_prescription(
+        prescription, sets, ProgressionScheme.DOUBLE_PROGRESSION
+    )
+
+    # Assert — the two schemes deload differently: fraction vs fixed decrease
+    assert greyskull.recommended_load == "90 kg"
+    assert double.recommended_load == "95 kg"
+
+
+def test_greyskull_deloads_the_added_bodyweight_load_by_the_reset_fraction():
+    # Arrange — a weighted bodyweight movement missed below the floor
+    prescription = _Prescription(reps="5", recommended_load="bodyweight + 20 kg")
+    sets = [_LoggedSet(reps=2, perceived_difficulty=10)]
+
+    # Act
+    result = next_prescription(prescription, sets, GREYSKULL)
+
+    # Assert — the *added* kilograms reset by the fraction (20 → 18)
+    assert result.kind is ProgressionKind.ADDED_LOAD_STEP
+    assert result.recommended_load == "bodyweight + 18 kg"
+
+
+def test_greyskull_holds_with_no_logged_sets():
+    # Arrange — nothing performed yet, so there is no floor evidence to act on
+    prescription = _Prescription(reps="5", recommended_load="100 kg")
+
+    # Act
+    result = next_prescription(prescription, [], GREYSKULL)
+
+    # Assert — the recommendation is unchanged
+    assert result.kind is ProgressionKind.HOLD
+    assert result.recommended_load == "100 kg"
+
+
+def test_greyskull_holds_a_pure_bodyweight_movement_it_cannot_step():
+    # Arrange — pure bodyweight is incompatible; defensively the step must not invent a
+    # kilogram axis if ever dispatched here
+    prescription = _Prescription(reps="5", recommended_load="bodyweight")
+    sets = [_LoggedSet(reps=12, perceived_difficulty=6) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets, GREYSKULL)
+
+    # Assert — held, no reps or load moved
+    assert result.kind is ProgressionKind.HOLD
+    assert result.recommended_load == "bodyweight"
+    assert result.reps == "5"
+
+
+def test_greyskull_holds_a_floorless_amrap_target():
+    # Arrange — a bare "AMRAP" carries no number to test a hit against
+    prescription = _Prescription(reps="AMRAP", recommended_load="100 kg")
+    sets = [_LoggedSet(reps=8, perceived_difficulty=6) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets, GREYSKULL)
+
+    # Assert — with no floor to read, the scheme holds rather than stepping blind
+    assert result.kind is ProgressionKind.HOLD
+    assert result.recommended_load == "100 kg"
