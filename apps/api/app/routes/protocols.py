@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.auth.dependencies import get_current_user
 from app.domain.fitness_profile import is_sensitive, resolve_equipment
 from app.domain.load import LoadKind, load_from_input
-from app.domain.progression import ProgressionScheme
+from app.domain.progression import ProgressionScheme, parse_scheme
 from app.envelope import error_envelope, success_envelope
 from app.generation.orchestrator import GenerationOrchestrator
 from app.generation.protocol_generator import ProtocolGenerationRequest
@@ -248,11 +248,9 @@ class DeployPrescriptionBody(BaseModel):
         # with this movement's Load is checked later, on the deploy gate.
         if value is None or value == "":
             return None
-        try:
-            ProgressionScheme(value)
-        except ValueError as exc:
+        if parse_scheme(value) is None:
             allowed = ", ".join(scheme.value for scheme in ProgressionScheme)
-            raise ValueError(f"scheme must be one of: {allowed}") from exc
+            raise ValueError(f"scheme must be one of: {allowed}")
         return value
 
     def resolved_load(self) -> dict | None:

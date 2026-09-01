@@ -17,10 +17,10 @@ from app.domain.progression import (
     SESSION_COUNT_N,
     ProgressionKind,
     ProgressionScheme,
-    compatible_schemes,
     next_load,
     next_prescription,
     parse_rep_range,
+    parse_scheme,
     pin_offer,
     resolve_scheme,
     scheme_applies_to,
@@ -1199,61 +1199,24 @@ def test_session_count_holds_a_pure_bodyweight_with_an_unreadable_rep_target():
     assert result.recommended_load == "bodyweight"
 
 
-# --- The compatible-schemes listing (ADR-0064, the selector's alternatives) -----------
+# --- parse_scheme: the write-path "known scheme?" check (ADR-0064) --------------------
 
 
-def test_compatible_schemes_for_a_clean_absolute_load_offers_the_whole_catalog():
-    # Arrange — an absolute kilogram load: every scheme, Greyskull included, applies
-    load = parse_load("60 kg")
-
-    # Act
-    schemes = compatible_schemes(load)
-
-    # Assert — the full closed catalog is offered for a clean weight axis
-    assert set(schemes) == set(ProgressionScheme)
+def test_parse_scheme_maps_a_known_value_to_its_member():
+    # Assert — every catalog value round-trips to its enum member
+    for scheme in ProgressionScheme:
+        assert parse_scheme(scheme.value) is scheme
 
 
-def test_compatible_schemes_for_a_bodyweight_added_load_offers_the_whole_catalog():
-    # Arrange — a weighted-bodyweight load has a kg axis to step, so Greyskull applies
-    load = parse_load("bodyweight + 10 kg")
-
-    # Act
-    schemes = compatible_schemes(load)
-
-    # Assert
-    assert set(schemes) == set(ProgressionScheme)
+def test_parse_scheme_returns_none_for_an_unknown_value():
+    # Assert — unlike resolve_scheme, it never invents a default: an unrecognized value is
+    # reported as None so a validator can reject it
+    assert parse_scheme("banana") is None
+    assert parse_scheme("") is None
 
 
-@pytest.mark.parametrize(
-    "load",
-    [
-        "bodyweight",   # pure bodyweight — no kg axis for Greyskull
-        "bw",           # abbreviated pure bodyweight
-        "70% 1RM",      # non-clean
-        "70-80 kg",     # range
-        "moderate",     # qualitative
-    ],
-)
-def test_compatible_schemes_drops_greyskull_for_non_clean_loads(load):
-    # Assert — the universal schemes always apply; Greyskull is filtered out wherever it
-    # has no clean weight axis to move, exactly as ``scheme_applies_to_load`` decides
-    schemes = compatible_schemes(parse_load(load))
-    assert ProgressionScheme.GREYSKULL not in schemes
-    assert ProgressionScheme.DOUBLE_PROGRESSION in schemes
-    assert ProgressionScheme.STATIC in schemes
-    assert ProgressionScheme.SESSION_COUNT in schemes
-
-
-def test_compatible_schemes_lists_in_the_registry_order():
-    # Assert — a stable, catalog order (not set-random) so the selector renders the same
-    # sequence every time
-    assert compatible_schemes(parse_load("60 kg")) == [
-        scheme for scheme in ProgressionScheme if scheme in compatible_schemes(parse_load("60 kg"))
-    ]
-
-
-def test_the_default_scheme_is_always_compatible_with_every_load():
+def test_the_default_scheme_applies_to_every_load():
     # Assert — Double Progression is the default an unset movement resolves to, so it must
-    # be offered for every Load kind (clearing a selection must always land somewhere legal)
+    # be compatible with every Load kind (clearing a selection must always land legally)
     for load in ("60 kg", "bodyweight", "70% 1RM", "70-80 kg", "moderate"):
-        assert DEFAULT_SCHEME in compatible_schemes(parse_load(load))
+        assert scheme_applies_to_load(DEFAULT_SCHEME, parse_load(load))

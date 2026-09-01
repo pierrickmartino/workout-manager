@@ -31,7 +31,7 @@ from app.authoring.service import (
 from app.domain.feedback import parse_verdict
 from app.domain.fitness_profile import is_sensitive, resolve_equipment
 from app.domain.load import LoadKind, load_from_input
-from app.domain.progression import ProgressionScheme
+from app.domain.progression import ProgressionScheme, parse_scheme
 from app.domain.quantity import QuantityKind, prescribed_quantity_from_input
 from app.domain.session_naming import session_label
 from app.domain.session_provenance import SessionProvenance
@@ -1096,11 +1096,9 @@ class SchemeBody(BaseModel):
     @field_validator("scheme")
     @classmethod
     def _known_scheme(cls, value: str) -> str:
-        try:
-            ProgressionScheme(value)
-        except ValueError as exc:
+        if parse_scheme(value) is None:
             allowed = ", ".join(scheme.value for scheme in ProgressionScheme)
-            raise ValueError(f"scheme must be one of: {allowed}") from exc
+            raise ValueError(f"scheme must be one of: {allowed}")
         return value
 
 

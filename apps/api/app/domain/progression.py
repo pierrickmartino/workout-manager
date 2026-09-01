@@ -786,21 +786,21 @@ def scheme_applies_to_optional_load(
     return all(scheme_applies_to(scheme, kind) for kind in LoadKind)
 
 
-def compatible_schemes(load: ParsedLoad) -> list[ProgressionScheme]:
-    """The schemes a movement with this typed Load may be assigned — the selector's
-    offered alternatives (ADR-0064).
+def parse_scheme(value: str) -> ProgressionScheme | None:
+    """Parse a stored scheme value to its catalog member, or ``None`` when it names no
+    member of the closed catalog (ADR-0064).
 
-    A pure filter of the closed registry through :func:`scheme_applies_to_load`, in the
-    registry's own (catalog) order so the selector renders a stable sequence. The default
-    (Double Progression) and Static are universal, so the list is never empty — clearing a
-    selection always lands back on a legal scheme. Greyskull drops out for any Load with no
-    clean kilogram axis to step (pure bodyweight, %-1RM, range, qualitative), which is
-    exactly the incompatible choice the write path rejects.
+    The one place the write paths turn an *incoming* string into a validated scheme:
+    unlike :func:`resolve_scheme` (which defaults a *null* selection to Double Progression
+    on the read path), this answers "is this a known scheme?" without inventing a default,
+    so a validator can reject an unrecognized value. Shared by the Deploy gate and the
+    request-body validators so the "known scheme" check lives in one place.
     """
 
-    return [
-        scheme for scheme in _REGISTRY if scheme_applies_to_load(scheme, load)
-    ]
+    try:
+        return ProgressionScheme(value)
+    except ValueError:
+        return None
 
 
 def next_prescription(

@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 
 from app.domain.load import ParsedLoad
 from app.domain.progression import (
-    ProgressionScheme,
+    parse_scheme,
     scheme_applies_to_optional_load,
 )
 from app.domain.superset import SupersetMember, validate_supersets
@@ -290,9 +290,8 @@ def _scheme_errors(
     if prescription.scheme is None:
         return []
 
-    try:
-        scheme = ProgressionScheme(prescription.scheme)
-    except ValueError:
+    scheme = parse_scheme(prescription.scheme)
+    if scheme is None:
         return [
             DeployError(
                 code="unknown_scheme",
