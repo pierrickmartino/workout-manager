@@ -28,7 +28,7 @@ from dataclasses import dataclass, replace
 
 from app.domain.completion import CompletionOutcome
 from app.domain.load import parse_load
-from app.domain.progression import next_prescription
+from app.domain.progression import next_prescription, resolve_scheme
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
     LoggedSessionView,
@@ -169,19 +169,26 @@ def progressed_prescription(
 ) -> PrescriptionView:
     """Overlay the ADR-0004 Progression adjustment onto a Prescription view.
 
-    Delegates to :func:`next_prescription`, which reads the free-text load and rep
-    target and returns the stepped values: an external-weight load moves its kg, a
-    weighted-bodyweight load its added kg, and a pure-bodyweight movement its rep
-    target (ADR-0026); %-1RM, ranges and qualitative loads are left untouched. The
-    stored load is a typed ``{kind, text, ...}`` dict, so the stepped load text is
-    re-typed through :func:`parse_load` to keep the view a typed Load end to end.
+    Resolves the Prescription's stored **Progression Scheme** (ADR-0064) — a null
+    selection resolves to the default (Double Progression), so an un-chosen movement
+    behaves exactly as today — and dispatches through :func:`next_prescription` to that
+    scheme's step function. The step reads the free-text load and rep target and returns
+    the stepped values: an external-weight load moves its kg, a weighted-bodyweight load
+    its added kg, and a pure-bodyweight movement its rep target (ADR-0026); %-1RM, ranges
+    and qualitative loads are left untouched, and a ``static`` scheme holds every axis.
+    The stored load is a typed ``{kind, text, ...}`` dict, so the stepped load text is
+    re-typed through :func:`parse_load` to keep the view a typed Load end to end. The
+    overlay stays a pure, read-only projection — it returns a fresh view and mutates
+    neither the stored Protocol nor the cached Generated artifact.
 
     A **Pinned** Prescription is skipped (ADR-0053): when the user has pinned a rep
     target, its presence suspends read-time Progression for this movement — the stored
     pinned range is surfaced verbatim as the rep target and ``next_prescription`` is not
     applied, so the very logs that earned the Pin can never step it a second time (the
     double-count trap). Un-pinning clears the marker and the overlay resumes stepping
-    with no lingering effect and no recomputation of history.
+    with no lingering effect and no recomputation of history. (Pin is retired in a later
+    change, #434, when Static replaces its "stop progressing" job; the expand step keeps
+    it working alongside the scheme selection.)
     """
 
     if prescription.pinned_reps is not None:
@@ -194,6 +201,7 @@ def progressed_prescription(
             recommended_load=load["text"] if load else None,
         ),
         sets,
+        resolve_scheme(prescription.scheme),
     )
     adjusted_load = (
         parse_load(result.recommended_load).to_dict()

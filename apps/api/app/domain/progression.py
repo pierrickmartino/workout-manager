@@ -484,6 +484,24 @@ _REGISTRY: dict[ProgressionScheme, _SchemeEntry] = {
 }
 
 
+def resolve_scheme(selection: str | None) -> ProgressionScheme:
+    """Resolve a Prescription's stored scheme selection to a ``ProgressionScheme`` (ADR-0064).
+
+    The one place the read path turns a stored *choice* into a step function's identity.
+    A null selection — the default every existing Prescription carries, and every
+    generated or adopted plan (generation never emits a scheme in v1) — resolves to
+    :data:`DEFAULT_SCHEME` (Double Progression), so an unset movement behaves exactly as
+    it did before a scheme could be chosen. A non-null value is the closed enum's own
+    string, so it maps straight back to its member; an unrecognized value raises rather
+    than silently substituting a scheme, since a stored selection is only ever written
+    through the (future) validated selection path.
+    """
+
+    if selection is None:
+        return DEFAULT_SCHEME
+    return ProgressionScheme(selection)
+
+
 def scheme_applies_to(scheme: ProgressionScheme, load_kind: LoadKind) -> bool:
     """Whether a scheme applies to a Prescription's Load kind — the compatibility predicate.
 

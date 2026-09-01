@@ -72,6 +72,9 @@ def _prescription(view: PrescriptionView) -> dict:
         "superset_group": view.superset_group,
         "round_rest_seconds": view.round_rest_seconds,
         "pinned_reps": view.pinned_reps,
+        # Progression Scheme selection (ADR-0064): the chosen scheme value, or null for
+        # the default — so the plan's meaning (how each movement progresses) is portable.
+        "scheme": view.scheme,
     }
 
 
