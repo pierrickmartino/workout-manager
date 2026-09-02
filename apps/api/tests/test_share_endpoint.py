@@ -261,6 +261,54 @@ def test_redeem_preserves_the_author_and_carries_the_name():
     assert "author_clerk_user_id" not in copy
 
 
+def test_redeem_carries_the_progression_scheme_end_to_end():
+    # The Progression Scheme is a plan property carried on the Redeem copy (ADR-0064, #433),
+    # unlike the per-owner Favorite: the sharer selects Static on a movement, and the
+    # recipient's copy keeps it through Share → Redeem.
+    client, ctx, _ = build_client()
+    sharer = _auth(ctx, "sharer")
+    session = _create_session(client, sharer)
+    # Select Static on the first movement — a no-AI plan edit, valid on any Load kind.
+    chosen = client.put(
+        f"/api/sessions/{session['id']}/prescriptions/0/scheme",
+        headers=sharer,
+        json={"scheme": "static"},
+    )
+    assert chosen.status_code == 200
+    token = _share(client, sharer, session["id"]).json()["data"]["token"]
+
+    copy = client.post(
+        f"/api/shares/{token}/redeem", headers=_auth(ctx, "recipient")
+    ).json()["data"]
+
+    # The chosen scheme copies per-Prescription; the untouched one stays the default (null).
+    assert [p["scheme"] for p in copy["prescriptions"]] == ["static", None]
+
+
+def test_scheme_survives_a_share_redeem_reshare_chain_end_to_end():
+    # Faithful through the chain (ADR-0064, #433): the recipient re-shares their copy and a
+    # downstream user redeems it — the scheme is still there, having copied at every hop.
+    client, ctx, _ = build_client()
+    sharer = _auth(ctx, "sharer")
+    session = _create_session(client, sharer)
+    client.put(
+        f"/api/sessions/{session['id']}/prescriptions/0/scheme",
+        headers=sharer,
+        json={"scheme": "static"},
+    )
+    token = _share(client, sharer, session["id"]).json()["data"]["token"]
+
+    recipient = _auth(ctx, "recipient")
+    copy = client.post(f"/api/shares/{token}/redeem", headers=recipient).json()["data"]
+    # The recipient re-shares their standalone copy; a downstream user redeems that link.
+    reshare_token = _share(client, recipient, copy["id"]).json()["data"]["token"]
+    downstream = client.post(
+        f"/api/shares/{reshare_token}/redeem", headers=_auth(ctx, "downstream")
+    ).json()["data"]
+
+    assert [p["scheme"] for p in downstream["prescriptions"]] == ["static", None]
+
+
 def test_redeem_does_not_carry_favorite():
     client, ctx, _ = build_client()
     sharer = _auth(ctx, "sharer")

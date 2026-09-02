@@ -80,6 +80,26 @@ def _draft(exercises) -> SessionDraft:
     )
 
 
+def _scheme_draft(exercises, schemes: list[str | None]) -> SessionDraft:
+    """A SessionDraft whose i-th movement carries ``schemes[i]`` (``None`` = default),
+    so a test can pin exactly which Prescriptions bear a Progression Scheme selection."""
+    squat = exercises.find_or_create(
+        "Back Squat", provenance=Provenance.AI_GENERATED, targeted_muscles=["quads"]
+    )
+    press = exercises.find_or_create(
+        "Overhead Press", provenance=Provenance.AI_GENERATED
+    )
+    exercise_ids = [squat.id, press.id]
+    return SessionDraft(
+        training_type="strength",
+        duration_minutes=45,
+        prescriptions=[
+            PrescriptionDraft(exercise_id=exercise_ids[i], sets=5, reps="5", scheme=s)
+            for i, s in enumerate(schemes)
+        ],
+    )
+
+
 def test_redeem_copies_prescriptions_faithfully_in_order(repos):
     session_repo, exercises = repos
     source = session_repo.create("sharer", _draft(exercises))
@@ -157,6 +177,33 @@ def test_redeem_of_user_authored_stays_user_authored(repos):
     copy = session_repo.redeem(source.id, "recipient")
 
     assert copy.provenance == "user_authored"
+
+
+def test_redeem_carries_the_progression_scheme_selection(repos):
+    # The Progression Scheme is a plan property (ADR-0064, #433): it travels with the copy
+    # on Redeem, exactly like reps/load/rest/tempo — NOT reset per owner the way Favorite is.
+    session_repo, exercises = repos
+    source = session_repo.create("sharer", _scheme_draft(exercises, ["static", None]))
+
+    copy = session_repo.redeem(source.id, "recipient")
+
+    assert copy is not None
+    # The chosen scheme copies per-Prescription; the unset one stays the default (null).
+    assert [p.scheme for p in copy.prescriptions] == ["static", None]
+
+
+def test_scheme_survives_a_re_redeemed_chain(repos):
+    # Faithful through the chain (ADR-0064, #433): a redeemed copy is itself a valid share
+    # source, and its scheme copies again on a re-share / re-redeem — no drift down the chain.
+    session_repo, exercises = repos
+    source = session_repo.create("sharer", _scheme_draft(exercises, ["static"]))
+
+    first = session_repo.redeem(source.id, "recipient")
+    # The recipient re-shares; a downstream user redeems the recipient's copy.
+    second = session_repo.redeem(first.id, "downstream")
+
+    assert [p.scheme for p in first.prescriptions] == ["static"]
+    assert [p.scheme for p in second.prescriptions] == ["static"]
 
 
 def test_redeem_starts_un_favorited_for_the_new_owner(repos):
