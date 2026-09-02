@@ -247,35 +247,43 @@ export function LiveSessionScreen({
     }
   }
 
-  // Finalize an idle-expired performance as Incomplete (ADR-0014): record the
-  // completed sets (idle-excluded duration) and show a summary instead of resuming.
-  // The slot is cleared only once the record is acknowledged — a failed or unreachable
-  // POST keeps the key-stamped slot so the next foreground retries the auto-end with
-  // the SAME idempotency key (ADR-0060), never losing the sets or double-writing them.
-  function endIdleSession(stored: LiveSessionState) {
-    const stamped = stampWithFreshKey(stored, browserMintKey);
-    const finished = liveSessionReducer(stamped, { type: "FINISH" });
-    setSummary(finished);
-    setPhase("summary");
+  // Record an idle-auto-ended performance (ADR-0014) — shared by the initial auto-end
+  // and the summary's manual Retry, so both resend the SAME idempotency key (the
+  // finished state carries it). The slot is cleared only once the record is
+  // acknowledged; a failed or unreachable POST keeps the key-stamped slot and surfaces
+  // the error, so the user can retry (or the next foreground re-fires the auto-end)
+  // without losing the sets or double-writing them (ADR-0060).
+  function recordIdleFinish(finished: LiveSessionState) {
     const payload = mapFinishToLog(finished, today, weightUnit);
     if (!payload) {
       // No completed set to record — nothing to persist, so just drop the slot.
       clearLiveSessionSlot();
       return;
     }
-    // Persist the key-stamped (still-unfinished) slot before the write, so a failed
-    // auto-end resumes and retries with the same key rather than minting a new one.
-    writeLiveSessionSlot(stamped);
     startTransition(async () => {
       const outcome = decideFinishOutcome(
-        await attemptFinish(() => recordLiveSession(stored.sessionId, payload)),
+        await attemptFinish(() => recordLiveSession(finished.sessionId, payload)),
       );
       if (outcome.kind === "clear") {
         clearLiveSessionSlot();
+        setFinishState({ error: null });
         return;
       }
       setFinishState({ error: outcome.error });
     });
+  }
+
+  // Finalize an idle-expired performance as Incomplete (ADR-0014): key-stamp it, show a
+  // summary instead of resuming, and record the completed sets (idle-excluded duration).
+  function endIdleSession(stored: LiveSessionState) {
+    const stamped = stampWithFreshKey(stored, browserMintKey);
+    const finished = liveSessionReducer(stamped, { type: "FINISH" });
+    setSummary(finished);
+    setPhase("summary");
+    // Persist the key-stamped (still-unfinished) slot before the write, so a failed
+    // auto-end resumes and retries with the same key rather than minting a new one.
+    writeLiveSessionSlot(stamped);
+    recordIdleFinish(finished);
   }
 
   // End the other unfinished session that blocks this one: record it as-is (no work
@@ -470,6 +478,8 @@ export function LiveSessionScreen({
         session={session}
         summary={summary}
         error={finishState.error}
+        pending={pending}
+        onRetry={() => recordIdleFinish(summary)}
       />
     );
   }
@@ -687,15 +697,21 @@ interface IdleEndedSummaryProps {
   session: WorkoutSession;
   summary: LiveSessionState;
   error: string | null;
+  pending: boolean;
+  onRetry: () => void;
 }
 
 // The idle auto-end summary (ADR-0014): the user returned after >30 minutes, so
 // the performance was finalized as Incomplete. The completed sets and the
 // idle-excluded duration are what got recorded — shown here instead of resuming.
+// When the record failed, the sets are still held on the device (ADR-0060): a Retry
+// resends the same idempotency key, so the history link is withheld until it lands.
 function IdleEndedSummary({
   session,
   summary,
   error,
+  pending,
+  onRetry,
 }: IdleEndedSummaryProps): React.JSX.Element {
   const completed = summary.sets.filter((s) => s.status === "completed").length;
   const total = summary.sets.length;
@@ -742,12 +758,22 @@ function IdleEndedSummary({
         </div>
       </Card>
 
-      <Link
-        href="/history"
-        className={buttonVariants({ className: "w-full" })}
-      >
-        View training history
-      </Link>
+      {error ? (
+        // The record didn't land — keep the sets and offer a retry (the same key is
+        // resent, so a duplicate is impossible). Don't route to history yet; it would
+        // imply a save that hasn't happened.
+        <Button type="button" onClick={onRetry} disabled={pending} className="w-full">
+          <Flag className="h-4 w-4" />
+          {pending ? "Saving…" : "Retry saving session"}
+        </Button>
+      ) : (
+        <Link
+          href="/history"
+          className={buttonVariants({ className: "w-full" })}
+        >
+          View training history
+        </Link>
+      )}
       <BackLink href={`/sessions/${session.id}`}>Back to session</BackLink>
     </section>
   );
