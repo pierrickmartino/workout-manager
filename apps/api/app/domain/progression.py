@@ -768,6 +768,41 @@ def scheme_applies_to_load(scheme: ProgressionScheme, load: ParsedLoad) -> bool:
     return True
 
 
+def scheme_applies_to_optional_load(
+    scheme: ProgressionScheme, load: ParsedLoad | None
+) -> bool:
+    """The compatibility predicate tolerant of a Load-less Prescription (ADR-0064).
+
+    Wraps :func:`scheme_applies_to_load` for the common case, and answers the edge one a
+    typed Load can't: a Prescription with **no** Load has no axis at all, so only a
+    *universal* scheme — one registered for every Load kind — applies; a bounded,
+    weight-axis scheme (Greyskull) has nothing to step and is rejected. The write paths
+    (Deploy and the in-place selection) prefer this so a movement without a resolved Load
+    still gets an honest accept/reject rather than crashing on a missing ParsedLoad.
+    """
+
+    if load is not None:
+        return scheme_applies_to_load(scheme, load)
+    return all(scheme_applies_to(scheme, kind) for kind in LoadKind)
+
+
+def parse_scheme(value: str) -> ProgressionScheme | None:
+    """Parse a stored scheme value to its catalog member, or ``None`` when it names no
+    member of the closed catalog (ADR-0064).
+
+    The one place the write paths turn an *incoming* string into a validated scheme:
+    unlike :func:`resolve_scheme` (which defaults a *null* selection to Double Progression
+    on the read path), this answers "is this a known scheme?" without inventing a default,
+    so a validator can reject an unrecognized value. Shared by the Deploy gate and the
+    request-body validators so the "known scheme" check lives in one place.
+    """
+
+    try:
+        return ProgressionScheme(value)
+    except ValueError:
+        return None
+
+
 def next_prescription(
     prescription: _Prescription,
     logged_sets: list[_LoggedSet],

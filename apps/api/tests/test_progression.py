@@ -20,6 +20,7 @@ from app.domain.progression import (
     next_load,
     next_prescription,
     parse_rep_range,
+    parse_scheme,
     pin_offer,
     resolve_scheme,
     scheme_applies_to,
@@ -1196,3 +1197,26 @@ def test_session_count_holds_a_pure_bodyweight_with_an_unreadable_rep_target():
     assert result.kind is ProgressionKind.HOLD
     assert result.reps == "AMRAP"
     assert result.recommended_load == "bodyweight"
+
+
+# --- parse_scheme: the write-path "known scheme?" check (ADR-0064) --------------------
+
+
+def test_parse_scheme_maps_a_known_value_to_its_member():
+    # Assert — every catalog value round-trips to its enum member
+    for scheme in ProgressionScheme:
+        assert parse_scheme(scheme.value) is scheme
+
+
+def test_parse_scheme_returns_none_for_an_unknown_value():
+    # Assert — unlike resolve_scheme, it never invents a default: an unrecognized value is
+    # reported as None so a validator can reject it
+    assert parse_scheme("banana") is None
+    assert parse_scheme("") is None
+
+
+def test_the_default_scheme_applies_to_every_load():
+    # Assert — Double Progression is the default an unset movement resolves to, so it must
+    # be compatible with every Load kind (clearing a selection must always land legally)
+    for load in ("60 kg", "bodyweight", "70% 1RM", "70-80 kg", "moderate"):
+        assert scheme_applies_to_load(DEFAULT_SCHEME, parse_load(load))

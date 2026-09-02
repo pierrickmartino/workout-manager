@@ -5,6 +5,8 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import {
+  chooseScheme,
+  clearScheme,
   createShareLink,
   duplicateSession,
   favoriteSession,
@@ -44,6 +46,10 @@ export interface RemovePrescriptionFormState {
 }
 
 export interface PinFormState {
+  error: string | null;
+}
+
+export interface SchemeFormState {
   error: string | null;
 }
 
@@ -307,6 +313,61 @@ export async function submitUnpin(
   const result = await unpinPrescription(sessionId, position);
   if (!result.success || !result.data) {
     return { error: result.error ?? "Could not un-pin this movement." };
+  }
+
+  revalidatePath(`/sessions/${sessionId}`);
+  return { error: null };
+}
+
+// Select a Progression Scheme on this prescription in place (ADR-0064, #432): a no-AI plan
+// edit, the same posture as Substitution/Insert/Remove. The hidden `scheme` field carries the
+// chosen catalog value; the selector only offers compatible schemes (`scheme-view`), and the
+// backend still guards compatibility, so an incompatible choice comes back as the server's
+// message. On success the Session page is revalidated so the plan reflects the new scheme in
+// place. A Protocol member (409) or a non-owned/absent prescription (404) surfaces the server's
+// message for the control, and nothing is persisted.
+export async function submitChooseScheme(
+  _prevState: SchemeFormState,
+  form: FormData,
+): Promise<SchemeFormState> {
+  const sessionId = Number(form.get("session_id"));
+  const position = Number(form.get("position"));
+  if (!Number.isInteger(sessionId) || !Number.isInteger(position)) {
+    return { error: "Could not determine which movement to update." };
+  }
+
+  const scheme =
+    typeof form.get("scheme") === "string" ? String(form.get("scheme")) : "";
+  if (scheme === "") {
+    return { error: "Choose a progression scheme." };
+  }
+
+  const result = await chooseScheme(sessionId, position, scheme);
+  if (!result.success || !result.data) {
+    return { error: result.error ?? "Could not set this progression scheme." };
+  }
+
+  revalidatePath(`/sessions/${sessionId}`);
+  return { error: null };
+}
+
+// Clear the Progression Scheme selection — `submitChooseScheme`'s inverse (ADR-0064, #432).
+// Restores the movement to the default (Double Progression) with no effect on past records. On
+// success the Session page is revalidated so the plan drops back to the default; a Protocol
+// member (409) or missing prescription (404) surfaces the server's message.
+export async function submitClearScheme(
+  _prevState: SchemeFormState,
+  form: FormData,
+): Promise<SchemeFormState> {
+  const sessionId = Number(form.get("session_id"));
+  const position = Number(form.get("position"));
+  if (!Number.isInteger(sessionId) || !Number.isInteger(position)) {
+    return { error: "Could not determine which movement to update." };
+  }
+
+  const result = await clearScheme(sessionId, position);
+  if (!result.success || !result.data) {
+    return { error: result.error ?? "Could not reset this progression scheme." };
   }
 
   revalidatePath(`/sessions/${sessionId}`);

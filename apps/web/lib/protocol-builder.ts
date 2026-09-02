@@ -46,6 +46,11 @@ export interface DraftPrescription {
   // ungroup.
   supersetGroup: string | null;
   roundRestSeconds: number | null;
+  // The chosen Progression Scheme (ADR-0064, #432): a stored catalog value, or `null` for
+  // the inherited default (Double Progression). Carried through DEPLOY so the deployed plan
+  // progresses this movement by the selection; the selector offers only schemes compatible
+  // with the movement's Load (`scheme-view`), and the deploy gate rejects an incompatible one.
+  scheme: string | null;
 }
 
 // One Session in the draft. `performed` marks the frozen prefix (ADR-0020): a
@@ -115,6 +120,15 @@ export type BuilderEvent =
       position: number;
       loadKind: LoadKind;
       loadValue: string;
+    }
+  | {
+      // Select (or clear, with `null`) the Progression Scheme on the Prescription at
+      // `position` (ADR-0064, #432). Carried through DEPLOY; the selector offers only
+      // Load-compatible schemes, and the deploy gate is the backstop.
+      type: "SET_SCHEME";
+      sessionId: number;
+      position: number;
+      scheme: string | null;
     }
   | {
       type: "ADD_PRESCRIPTION";
@@ -259,6 +273,7 @@ export function initBuilderDraft(
           loadValue: load.value,
           supersetGroup: paused ? null : prescription.superset_group ?? null,
           roundRestSeconds: paused ? null : prescription.round_rest_seconds ?? null,
+          scheme: prescription.scheme ?? null,
         };
       }),
     })),
@@ -284,6 +299,12 @@ export function builderReducer(
         ...prescription,
         loadKind: event.loadKind,
         loadValue: event.loadValue,
+      }));
+
+    case "SET_SCHEME":
+      return mapPrescription(state, event.sessionId, event.position, (prescription) => ({
+        ...prescription,
+        scheme: event.scheme,
       }));
 
     case "ADD_PRESCRIPTION":
@@ -420,6 +441,7 @@ function newPrescription(exercise: PickedExercise): DraftPrescription {
     loadValue: "",
     supersetGroup: null,
     roundRestSeconds: null,
+    scheme: null,
   };
 }
 
@@ -905,6 +927,9 @@ export interface DeployPrescriptionPayload {
   // null on a flat, solo Prescription. The deploy gate validates the grouping.
   superset_group: string | null;
   round_rest_seconds: number | null;
+  // The chosen Progression Scheme (ADR-0064, #432), or null for the inherited default. The
+  // deploy gate validates it against the movement's Load kind.
+  scheme: string | null;
 }
 
 export interface DeploySessionPayload {
@@ -960,6 +985,7 @@ export function toDeployPayload(
           ),
           superset_group: prescription.supersetGroup,
           round_rest_seconds: prescription.roundRestSeconds,
+          scheme: prescription.scheme,
         })),
       })),
   };

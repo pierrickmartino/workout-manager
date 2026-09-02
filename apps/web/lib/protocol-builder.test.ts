@@ -246,6 +246,59 @@ test("EDIT_LOAD replaces a Prescription's Load kind and value", () => {
   assert.equal(next.sessions[0].prescriptions[0].loadValue, "10");
 });
 
+test("SET_SCHEME selects a Progression Scheme on a Prescription and carries it through DEPLOY", () => {
+  // Arrange
+  const draft = initBuilderDraft(protocol());
+
+  // Act — choose Greyskull (compatible with the absolute-load default)
+  const next = builderReducer(draft, {
+    type: "SET_SCHEME",
+    sessionId: 1,
+    position: 0,
+    scheme: "greyskull",
+  });
+
+  // Assert — stored on the draft and emitted in the deploy payload
+  assert.equal(next.sessions[0].prescriptions[0].scheme, "greyskull");
+  const payload = toDeployPayload(next, "kg");
+  assert.equal(payload.sessions[0].prescriptions[0].scheme, "greyskull");
+});
+
+test("SET_SCHEME with null clears the selection back to the default", () => {
+  // Arrange — a movement already carrying a chosen scheme
+  const draft = builderReducer(initBuilderDraft(protocol()), {
+    type: "SET_SCHEME",
+    sessionId: 1,
+    position: 0,
+    scheme: "greyskull",
+  });
+
+  // Act — clear it
+  const next = builderReducer(draft, {
+    type: "SET_SCHEME",
+    sessionId: 1,
+    position: 0,
+    scheme: null,
+  });
+
+  // Assert — null in the draft and the payload (the read side resolves it to the default)
+  assert.equal(next.sessions[0].prescriptions[0].scheme, null);
+  assert.equal(toDeployPayload(next, "kg").sessions[0].prescriptions[0].scheme, null);
+});
+
+test("initBuilderDraft carries an existing Prescription's stored scheme", () => {
+  // Arrange — a Protocol whose movement already carries a scheme selection
+  const source = protocol({
+    sessions: [session({ prescriptions: [prescription({ scheme: "session_count" })] })],
+  });
+
+  // Act
+  const draft = initBuilderDraft(source);
+
+  // Assert
+  assert.equal(draft.sessions[0].prescriptions[0].scheme, "session_count");
+});
+
 test("editing a performed Session is a no-op (frozen prefix)", () => {
   // Arrange — Session 1 is performed
   const draft = initBuilderDraft(

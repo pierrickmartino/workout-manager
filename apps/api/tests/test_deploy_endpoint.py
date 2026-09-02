@@ -631,3 +631,117 @@ def test_another_user_cannot_deploy_to_someone_elses_protocol():
         json=body,
     )
     assert response.status_code == 404
+
+
+# --- Selecting a Progression Scheme through Deploy (ADR-0064, #432) --------------------
+
+
+def _set_scheme_and_load(body: dict, scheme: str, load_value: str) -> None:
+    """Stamp every tail Prescription with a chosen scheme and an absolute Load, so the
+    deployed movements carry the selection and have a kilogram axis to step."""
+
+    for session in body["sessions"]:
+        for prescription in session["prescriptions"]:
+            prescription["scheme"] = scheme
+            prescription["load_kind"] = "absolute"
+            prescription["load_value"] = load_value
+
+
+def test_deploy_sets_a_prescription_scheme_and_progresses_by_it():
+    # Arrange — a fresh kg Protocol; deploy Greyskull onto every un-performed movement
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_scheme")
+    protocol_id = protocol["id"]
+    body = _deploy_body(protocol)
+    _set_scheme_and_load(body, "greyskull", "60")
+
+    # Act — deploy the selection
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_scheme"),
+        json=body,
+    )
+
+    # Assert — the deployed plan carries the chosen scheme on its movements
+    assert response.status_code == 200
+    deployed = h.fetch_protocol("user_scheme", protocol_id).json()["data"]
+    assert deployed["sessions"][0]["prescriptions"][0]["scheme"] == "greyskull"
+
+    # And it progresses by Greyskull, not the default: perform Week 1 hitting the rep
+    # floor at HIGH perceived effort — Double Progression would HOLD (its low-effort gate),
+    # but Greyskull steps +2.5 kg per session on any hit.
+    week_one = deployed["sessions"][0]
+    h.logged.create(
+        "user_scheme",
+        LoggedSessionDraft(
+            session_id=week_one["session_id"],
+            performed_on=date(2026, 1, 1),
+            completion_outcome="completed",
+            logged_sets=[
+                LoggedSetDraft(
+                    exercise_id=week_one["prescriptions"][0]["exercise_id"],
+                    quantity=reps_quantity(5),
+                    load=parse_load("60 kg").to_dict(),
+                    perceived_difficulty=9,
+                )
+            ],
+        ),
+    )
+
+    after = h.fetch_protocol("user_scheme", protocol_id).json()["data"]
+    assert after["next_session"]["week"] == 2
+    assert after["next_session"]["prescriptions"][0]["recommended_load"] == (
+        parse_load("62.5 kg").to_dict()
+    )
+
+
+def test_deploy_rejects_an_incompatible_scheme_and_persists_nothing():
+    # Arrange — a fresh kg Protocol; try to deploy Greyskull onto a pure-bodyweight
+    # movement (no kilogram axis to step), the incompatible (scheme, Load) case
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_bad_scheme")
+    protocol_id = protocol["id"]
+    body = _deploy_body(protocol)
+    for session in body["sessions"]:
+        for prescription in session["prescriptions"]:
+            prescription["scheme"] = "greyskull"
+            prescription["load_kind"] = "bodyweight"
+            prescription["load_value"] = None
+
+    # Act
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_bad_scheme"),
+        json=body,
+    )
+
+    # Assert — rejected via the standard error envelope, located to the Prescription
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["success"] is False
+    offending = next(e for e in payload["errors"] if e["code"] == "incompatible_scheme")
+    assert offending["session_id"] == protocol["sessions"][0]["session_id"]
+    assert offending["position"] == 0
+    # Nothing persisted: the movement still carries no scheme (the inherited default)
+    after = h.fetch_protocol("user_bad_scheme", protocol_id).json()["data"]
+    assert after["sessions"][0]["prescriptions"][0]["scheme"] is None
+
+
+def test_deploy_rejects_an_unknown_scheme_value_at_the_boundary():
+    # Arrange — a scheme string outside the closed catalog is a client bug
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_unknown_scheme")
+    protocol_id = protocol["id"]
+    body = _deploy_body(protocol)
+    _set_scheme_and_load(body, "banana", "60")
+
+    # Act
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_unknown_scheme"),
+        json=body,
+    )
+
+    # Assert — the request body validator rejects it before the deploy gate
+    assert response.status_code == 422
+    assert response.json()["success"] is False

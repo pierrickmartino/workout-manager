@@ -451,6 +451,27 @@ class SessionRepository(Protocol):
         """
         ...
 
+    def set_scheme(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        position: int,
+        scheme: str | None,
+    ) -> SessionView | None:
+        """Set (or clear, with ``None``) the Progression Scheme on the prescription at
+        ``position`` (ADR-0064).
+
+        Writes the user-chosen scheme selection onto the owner's own copy — a plan
+        property the read-time overlay resolves and dispatches on (a ``None`` selection
+        resolves to the default, Double Progression). Nothing else on the prescription or
+        the Session is touched: sets, reps, Load, Superset grouping, Session Provenance and
+        the regeneration guard are all left exactly as they were, and no Logged Session is
+        rewritten. Returns the updated Session, or ``None`` if it is missing/unowned or has
+        no prescription at ``position``. The standalone-only and compatibility guards live
+        in the scheme-selection service.
+        """
+        ...
+
     def append_prescription(
         self,
         session_id: int,
@@ -1003,6 +1024,31 @@ class SqlSessionRepository:
     ) -> SessionView | None:
         return self._set_pin(session_id, clerk_user_id, position, None)
 
+    def set_scheme(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        position: int,
+        scheme: str | None,
+    ) -> SessionView | None:
+        workout = self._session.get(WorkoutSession, session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return None
+
+        prescription = self._session.exec(
+            select(ExercisePrescription).where(
+                ExercisePrescription.session_id == session_id,
+                ExercisePrescription.position == position,
+            )
+        ).first()
+        if prescription is None:
+            return None
+
+        prescription.scheme = scheme
+        self._session.add(prescription)
+        self._session.commit()
+        return self._view(workout)
+
     def append_prescription(
         self,
         session_id: int,
@@ -1439,6 +1485,44 @@ class InMemorySessionRepository:
         position: int,
     ) -> SessionView | None:
         return self._set_pin(session_id, clerk_user_id, position, None)
+
+    def set_scheme(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        position: int,
+        scheme: str | None,
+    ) -> SessionView | None:
+        workout = self._sessions.get(session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return None
+
+        current = self._prescriptions.get(session_id, [])
+        if not any(p.position == position for p in current):
+            return None
+
+        # Rebuild the list with only the targeted prescription's scheme changed; every
+        # other field is preserved immutably, mirroring the pin mutation.
+        self._prescriptions[session_id] = [
+            ExercisePrescription(
+                id=p.id,
+                session_id=p.session_id,
+                exercise_id=p.exercise_id,
+                position=p.position,
+                sets=p.sets,
+                reps=p.reps,
+                rest_seconds=p.rest_seconds,
+                tempo=p.tempo,
+                recommended_load=p.recommended_load,
+                prescribed_quantity=p.prescribed_quantity,
+                superset_group=p.superset_group,
+                round_rest_seconds=p.round_rest_seconds,
+                pinned_reps=p.pinned_reps,
+                scheme=scheme if p.position == position else p.scheme,
+            )
+            for p in current
+        ]
+        return self._view(workout)
 
     def append_prescription(
         self,
