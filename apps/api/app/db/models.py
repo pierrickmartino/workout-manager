@@ -327,32 +327,25 @@ class ExercisePrescription(SQLModel, table=True):
     # intact on ungroup. Additive and nullable: existing flat Protocols read unchanged.
     superset_group: str | None = Field(default=None)
     round_rest_seconds: int | None = Field(default=None)
-    # Pinned rep target (ADR-0053, #369): a user-set bodyweight rep range that suspends
-    # read-time Progression for this one Prescription. NULL is the default and means
-    # automatic Progression governs the rep target; a non-NULL value (e.g. ``"10-14"``)
-    # is the *user-set marker* the ``progress.py`` overlay surfaces verbatim, skipping
-    # ``next_prescription`` for this movement until it is un-pinned (the column cleared).
-    # Additive and nullable: every existing Prescription reads NULL and behaves exactly
-    # as before. Only the user's own copy is ever written — never a shared/cached
-    # Generated artifact (ADR-0003).
-    pinned_reps: str | None = Field(default=None)
-    # Progression Scheme selection (ADR-0064, #429): the ``ProgressionScheme`` value
+    # Progression Scheme selection (ADR-0064): the ``ProgressionScheme`` value
     # (e.g. ``"static"``) the read-time Progression overlay dispatches through for this
     # movement, or NULL for "no choice" — which resolves to the system default (Double
     # Progression) and reproduces today's behaviour exactly. A stored user *choice*,
     # permitted by ADR-0018 (which bans stored *derived* ledgers, not choices), the same
-    # species as ``pinned_reps`` and the Favorite marker. Additive and nullable: every
-    # existing row reads NULL. There is no write path yet (that is #432); until then a
-    # scheme travels through create/Duplicate/Substitution like the other Prescription
-    # fields. Only the user's own copy is ever written — never a shared/cached artifact.
+    # species as the Favorite marker. Additive and nullable: every existing row reads
+    # NULL. A scheme is chosen as a plan edit (#432) and travels through
+    # create/Duplicate/Substitution like the other Prescription fields. Only the user's
+    # own copy is ever written — never a shared/cached artifact. This selection is what
+    # retired the Pinned Target: Static holds a movement's authored values where Pin
+    # once froze them (ADR-0064, supersedes ADR-0053).
     scheme: str | None = Field(default=None)
 
 
 class SessionFavorite(SQLModel, table=True):
     """A user's Favorite marker on one standalone Session (CONTEXT: Favorite, issue #396).
 
-    A **stored, per-user, per-copy** preference — the same species as a Pinned Target or an
-    Interface Preference, deliberately stored rather than derived: the no-stored-ledger rule
+    A **stored, per-user, per-copy** preference — the same species as an Interface
+    Preference, deliberately stored rather than derived: the no-stored-ledger rule
     (ADR-0018) governs *derived* facts (XP, Streak, Personal Records), never user *choices*.
     Modeled as a per-user relationship keyed by ``(clerk_user_id, session_id)`` so the marker
     is **private to the user** and **never carried across Duplicate/Redeem**: a duplicated or

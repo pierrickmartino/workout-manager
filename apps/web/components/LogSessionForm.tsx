@@ -1,40 +1,31 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Plus, Trash2 } from "lucide-react";
 
-import {
-  harderVariationForPin,
-  submitLog,
-  type LogFormState,
-} from "@/app/sessions/[id]/log/actions";
+import { submitLog, type LogFormState } from "@/app/sessions/[id]/log/actions";
 import { loadKindOptions } from "@/lib/load";
 import type { WeightUnit } from "@/lib/weight-unit";
 import {
   buildLogForm,
-  buildPinDialog,
-  collectPinCandidates,
   deriveCompletionOutcome,
   prescribedByPosition,
   skippedSetCount,
   type LogPrescriptionGroup,
   type LogSetRow,
-  type PinCandidate,
-  type PinDialogModel,
 } from "@/lib/log-session-form";
 import type { DistanceUnit } from "@/lib/quantity";
 import type { ExercisePrescription } from "@/lib/sessions-types";
 import { Field } from "@/components/pulse/field";
 import { Alert } from "@/components/pulse/alert";
 import { SectionHeader } from "@/components/pulse/section-header";
-import { PinOfferDialog } from "@/components/PinOfferDialog";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
-// Where the log flow lands once there is no Pin to offer, or the offer is dismissed.
+// Where the log flow lands once the log is saved.
 const AFTER_LOG_HREF = "/history";
 
 const RPE_VALUES = Array.from({ length: 10 }, (_, index) => index + 1);
@@ -76,67 +67,11 @@ export function LogSessionForm({
     buildLogForm(prescriptions, unit),
   );
 
-  // After the log is saved, offer a Pin dialog for every bodyweight movement that beat the top of
-  // its rep range on every working set (ADR-0053, #371). The decision is the view-model's
-  // (`collectPinCandidates`, on the rows the form holds); each qualifying movement is offered in
-  // turn, so a session where two movements were beaten never silently drops one. When nothing
-  // qualifies, the flow proceeds straight to History as before. `offeredRef` seeds the queue once.
-  const [pinQueue, setPinQueue] = useState<PinCandidate[]>([]);
-  const [pinIndex, setPinIndex] = useState(0);
-  const [pinDialog, setPinDialog] = useState<PinDialogModel | null>(null);
-  const offeredRef = useRef(false);
-
-  // Seed the offer queue once the log is saved.
+  // Once the log is saved, leave for History. The save is a server action returning `ok`
+  // rather than redirecting itself, so the client owns the navigation.
   useEffect(() => {
-    if (!state.ok || offeredRef.current) return;
-    offeredRef.current = true;
-
-    const candidates = collectPinCandidates(prescriptions, groups);
-    if (candidates.length === 0) {
-      router.push(AFTER_LOG_HREF);
-      return;
-    }
-    setPinQueue(candidates);
-  }, [state, prescriptions, groups, router]);
-
-  // Build the dialog for the current queue position — reading its harder-Variation alternative so
-  // it can sit beside "raise reps" — and leave for History once every offer is resolved or skipped.
-  useEffect(() => {
-    if (pinQueue.length === 0) return;
-    if (pinIndex >= pinQueue.length) {
-      router.push(AFTER_LOG_HREF);
-      return;
-    }
-
-    let cancelled = false;
-    void (async () => {
-      const candidate = pinQueue[pinIndex];
-      const suggestion = await harderVariationForPin(
-        sessionId,
-        candidate.prescription.position,
-      );
-      if (cancelled) return;
-      const dialog = buildPinDialog({
-        prescription: candidate.prescription,
-        performedReps: candidate.performedReps,
-        harderVariation: suggestion,
-      });
-      if (dialog === null) {
-        setPinIndex((index) => index + 1);
-        return;
-      }
-      setPinDialog(dialog);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [pinQueue, pinIndex, router, sessionId]);
-
-  // Move past the current offer — after it is pinned/advanced, or dismissed — to the next one.
-  const advancePinOffer = () => {
-    setPinDialog(null);
-    setPinIndex((index) => index + 1);
-  };
+    if (state.ok) router.push(AFTER_LOG_HREF);
+  }, [state, router]);
 
   // The derived Completion Outcome and its reason, recomputed from the live Done toggles.
   const { outcome, skipped } = useMemo(() => {
@@ -316,18 +251,6 @@ export function LogSessionForm({
       <Button type="submit" disabled={pending} className="w-full">
         {pending ? "Saving…" : "Save log"}
       </Button>
-
-      {/* The post-log Pin offer (ADR-0053, #371): a confirm dialog to Pin a new bodyweight rep
-          target, pre-filled and editable, paired with the harder-Variation alternative. Shown only
-          for a qualifying log; dismissing (or having nothing to offer) proceeds to History. */}
-      {pinDialog !== null ? (
-        <PinOfferDialog
-          dialog={pinDialog}
-          sessionId={sessionId}
-          onResolved={advancePinOffer}
-          onDismiss={advancePinOffer}
-        />
-      ) : null}
     </form>
   );
 }

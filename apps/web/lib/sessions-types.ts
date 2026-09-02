@@ -47,16 +47,11 @@ export interface ExercisePrescription {
   // serializes them on every Prescription), while pre-Superset read paths need not.
   superset_group?: string | null;
   round_rest_seconds?: number | null;
-  // The Pinned Target (ADR-0053): the user-set rep range committed onto this Prescription's
-  // next un-performed occurrence, which suspends automatic read-time Progression for the
-  // movement until un-pinned. `null`/absent when unpinned — its presence is the "user-set"
-  // marker the plan view reads to surface the pinned range and offer the un-pin control.
-  pinned_reps?: string | null;
   // The chosen Progression Scheme (ADR-0064): the stored scheme value driving how this
   // movement's un-performed tail steps, or `null`/absent for "no choice" — which the
   // read-time overlay resolves to the default (Double Progression). Its presence is the
   // "user override" marker the plan view reads to show the current scheme and offer the
-  // compatible alternatives (`scheme-view`). Optional like `pinned_reps`: the plain
+  // compatible alternatives (`scheme-view`). Optional like `superset_group`: the plain
   // Session and Protocol reads carry it; other read paths need not.
   scheme?: string | null;
   exercise_id: number;

@@ -13,7 +13,7 @@ plan reads and the cross-user Redeem copy) — behind four verbs the route calls
   they own.
 
 Guards are raised as typed errors the route maps to envelope status codes, mirroring the
-other feature services (``app.substitution.service``, ``app.pinning.service``).
+other feature services (``app.substitution.service``, ``app.scheme_selection.service``).
 """
 
 from __future__ import annotations

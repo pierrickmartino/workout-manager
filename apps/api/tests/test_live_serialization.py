@@ -27,7 +27,6 @@ def _prescription(**overrides) -> PrescriptionView:
         prescribed_quantity=None,
         superset_group="1",
         round_rest_seconds=120,
-        pinned_reps=None,
         exercise_id=100,
         exercise_name="Bench Press",
         exercise_description=None,

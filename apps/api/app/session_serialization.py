@@ -24,9 +24,9 @@ def serialize_prescription(view: PrescriptionView) -> dict:
 
     Carries the plan fields (sets/reps/rest/tempo/typed Load), the typed Prescribed
     Quantity (ADR-0050), the Superset overlay (ADR-0023: the shared group tag and the
-    group-owned round-rest, both ``None`` on a solo Prescription), the Pinned rep
-    target (ADR-0053), and the joined catalog Exercise. Read paths add their own
-    extras (the live read appends ``previous_performance``) around this base.
+    group-owned round-rest, both ``None`` on a solo Prescription), the Progression
+    Scheme selection (ADR-0064), and the joined catalog Exercise. Read paths add their
+    own extras (the live read appends ``previous_performance``) around this base.
     """
 
     return {
@@ -45,9 +45,6 @@ def serialize_prescription(view: PrescriptionView) -> dict:
         # so dropping it here silently flattens the Superset on Start.
         "superset_group": view.superset_group,
         "round_rest_seconds": view.round_rest_seconds,
-        # Pinned rep target (ADR-0053): the user-set range that suspends read-time
-        # Progression for this movement, or null when unpinned.
-        "pinned_reps": view.pinned_reps,
         # Progression Scheme selection (ADR-0064): the chosen scheme value, or null for
         # the default (Double Progression). The read-time overlay dispatches through it.
         "scheme": view.scheme,
