@@ -332,6 +332,89 @@ def test_same_session_logged_twice_yields_two_history_entries():
     assert [e["performed_on"] for e in history] == ["2026-06-27", "2026-06-20"]
 
 
+# --- Idempotent finish (ADR-0060, issue #410) ---------------------------------------
+
+
+def test_repeating_a_finish_key_returns_one_logged_session():
+    # Arrange — a finish carrying a client-minted idempotency key
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_idem")
+    session = _generate_session(client, headers)
+    body = _log_body(session, idempotency_key="finish-key-1")
+
+    # Act — the same finish is delivered twice (a dropped connection, then a retry)
+    first = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=body
+    )
+    second = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=body
+    )
+
+    # Assert — both calls succeed and return the same record; history holds exactly one
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["data"]["id"] == first.json()["data"]["id"]
+    history = client.get("/api/logs", headers=headers).json()["data"]
+    assert len(history) == 1
+
+
+def test_distinct_finish_keys_create_two_logged_sessions():
+    # Arrange — two genuinely different finishes, each with its own key
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_idem_distinct")
+    session = _generate_session(client, headers)
+
+    # Act
+    first = client.post(
+        f"/api/sessions/{session['id']}/logs",
+        headers=headers,
+        json=_log_body(session, idempotency_key="finish-key-a"),
+    )
+    second = client.post(
+        f"/api/sessions/{session['id']}/logs",
+        headers=headers,
+        json=_log_body(session, idempotency_key="finish-key-b"),
+    )
+
+    # Assert — distinct keys are distinct records
+    assert first.json()["data"]["id"] != second.json()["data"]["id"]
+    assert len(client.get("/api/logs", headers=headers).json()["data"]) == 2
+
+
+def test_a_finish_without_a_key_still_records():
+    # Arrange — a keyless finish (the static form path) is unaffected
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_idem_keyless")
+    session = _generate_session(client, headers)
+
+    # Act
+    response = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=_log_body(session)
+    )
+
+    # Assert — one insert, as before idempotency existed
+    assert response.status_code == 200
+    assert len(client.get("/api/logs", headers=headers).json()["data"]) == 1
+
+
+def test_repeating_an_ad_hoc_finish_key_returns_one_logged_session():
+    # Arrange — the ad-hoc (plan-less) path is as duplicate-proof as the plan-backed one
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_idem_adhoc")
+    running = _create_exercise(client, headers, "Running")
+    body = _adhoc_body(running, idempotency_key="adhoc-key-1")
+
+    # Act — the same ad-hoc finish, delivered twice
+    first = client.post("/api/logs", headers=headers, json=body)
+    second = client.post("/api/logs", headers=headers, json=body)
+
+    # Assert — identical behaviour to the plan-backed route: one record, returned twice
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["data"]["id"] == first.json()["data"]["id"]
+    assert len(client.get("/api/logs", headers=headers).json()["data"]) == 1
+
+
 def test_user_cannot_log_another_users_session():
     # Arrange — owner generates a Session
     client, ctx = build_client()

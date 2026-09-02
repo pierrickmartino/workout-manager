@@ -52,13 +52,19 @@ class LoggedSessionDraft:
     ``"completed"`` | ``"incomplete"``, or ``None`` when the record does not declare
     one (e.g. a log-after-the-fact through the static form). ``duration_seconds`` is
     the recorded Session Duration (ADR-0014) — actual training time in whole seconds,
-    or ``None`` when unrecorded (the static form measures none)."""
+    or ``None`` when unrecorded (the static form measures none).
+
+    ``idempotency_key`` is the client-minted key that makes the write duplicate-proof
+    (ADR-0060): a retried finish resends the *same* key, and ``create`` upsert-returns the
+    existing record instead of inserting a second one. ``None`` (the default) is a keyless
+    write — the static form path — which always inserts, never dedupes."""
 
     session_id: int | None
     performed_on: date
     training_type: str = ""
     completion_outcome: str | None = None
     duration_seconds: int | None = None
+    idempotency_key: str | None = None
     logged_sets: list[LoggedSetDraft] = field(default_factory=list)
 
 
@@ -110,7 +116,12 @@ class LoggedSessionRepository(Protocol):
         self, clerk_user_id: str, draft: LoggedSessionDraft
     ) -> LoggedSessionView:
         """Persist ``draft`` as a Logged Session owned by ``clerk_user_id`` and
-        return it joined to its sets and the prescribing Session's training type."""
+        return it joined to its sets and the prescribing Session's training type.
+
+        Upsert-return on the idempotency key (ADR-0060): when ``draft.idempotency_key``
+        is a key this owner has already recorded, return that existing record unchanged
+        and insert nothing, so a retried finish yields exactly one Logged Session. A
+        keyless draft (``idempotency_key is None``) always inserts a fresh record."""
         ...
 
     def get(
@@ -197,11 +208,34 @@ class SqlLoggedSessionRepository:
             duration_seconds=logged.duration_seconds,
         )
 
+    def _existing_by_key(
+        self, clerk_user_id: str, idempotency_key: str | None
+    ) -> LoggedSession | None:
+        """The owner's record already carrying ``idempotency_key`` (ADR-0060), or ``None``.
+
+        Owner-scoped so a retry only ever resolves to the caller's own finish; a keyless
+        write (``None``) matches nothing, so it always inserts."""
+        if idempotency_key is None:
+            return None
+        return self._session.exec(
+            select(LoggedSession).where(
+                LoggedSession.clerk_user_id == clerk_user_id,
+                LoggedSession.idempotency_key == idempotency_key,
+            )
+        ).first()
+
     def create(
         self, clerk_user_id: str, draft: LoggedSessionDraft
     ) -> LoggedSessionView:
+        # Upsert-return (ADR-0060): a repeat of an already-recorded finish returns the
+        # existing record and inserts nothing, so a retry never duplicates.
+        existing = self._existing_by_key(clerk_user_id, draft.idempotency_key)
+        if existing is not None:
+            return self._view(existing)
+
         logged = LoggedSession(
             clerk_user_id=clerk_user_id,
+            idempotency_key=draft.idempotency_key,
             session_id=draft.session_id,
             training_type=draft.training_type,
             performed_on=draft.performed_on,
@@ -351,12 +385,35 @@ class InMemoryLoggedSessionRepository:
             duration_seconds=logged.duration_seconds,
         )
 
+    def _existing_by_key(
+        self, clerk_user_id: str, idempotency_key: str | None
+    ) -> LoggedSession | None:
+        """The owner's record already carrying ``idempotency_key`` (ADR-0060), or ``None``.
+
+        Owner-scoped like the SQL repo; a keyless write (``None``) matches nothing."""
+        if idempotency_key is None:
+            return None
+        for logged in self._logged.values():
+            if (
+                logged.clerk_user_id == clerk_user_id
+                and logged.idempotency_key == idempotency_key
+            ):
+                return logged
+        return None
+
     def create(
         self, clerk_user_id: str, draft: LoggedSessionDraft
     ) -> LoggedSessionView:
+        # Upsert-return (ADR-0060): a repeat of an already-recorded finish returns the
+        # existing record and inserts nothing, so a retry never duplicates.
+        existing = self._existing_by_key(clerk_user_id, draft.idempotency_key)
+        if existing is not None:
+            return self._view(existing)
+
         logged = LoggedSession(
             id=self._next_id,
             clerk_user_id=clerk_user_id,
+            idempotency_key=draft.idempotency_key,
             session_id=draft.session_id,
             training_type=draft.training_type,
             performed_on=draft.performed_on,
