@@ -65,6 +65,11 @@ function isLiveSessionState(value: unknown): value is LiveSessionState {
 
   return (
     typeof state.sessionId === "number" &&
+    // The owner's Clerk account id (ADR-0059). Required as a string, so a legacy slot
+    // written before account-scoping (no id) is rejected here — the same "start fresh"
+    // outcome as any structurally invalid slot, rather than a guessed owner. A stored
+    // slot always carries a real id (START stamps it before the first persist).
+    typeof state.accountId === "string" &&
     typeof state.currentIndex === "number" &&
     isLiveStatus(state.status) &&
     isNullableNumber(state.startedAt) &&
@@ -128,4 +133,13 @@ export function writeLiveSessionSlot(state: LiveSessionState): void {
 export function clearLiveSessionSlot(): void {
   const storage = browserStorage();
   if (storage) clearLiveSession(storage);
+}
+
+// Purge every user-scoped local live store before a sign-out (ADR-0059), so a shared
+// browser profile never hands the next signed-in account the previous one's data. In
+// v1 that is the single live slot; as later stores are added (the finish outbox,
+// ADR-0060, and any user-specific caches) this is the one teardown seam that clears
+// them, called before Clerk's `signOut()` completes.
+export function purgeLocalLiveState(): void {
+  clearLiveSessionSlot();
 }

@@ -328,6 +328,7 @@ test("a mid-performance grouped Session round-trips through the localStorage slo
   let state = liveSessionReducer(initLiveSession(GROUPED, "kg"), {
     type: "START",
     now: 1_000_000,
+    accountId: "user_1",
   });
   state = liveSessionReducer(state, {
     type: "COMPLETE_SET",
