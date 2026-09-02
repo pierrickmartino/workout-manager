@@ -412,6 +412,15 @@ class LoggedSession(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     clerk_user_id: str = Field(index=True)
+    # Idempotency key (ADR-0060): the client-minted UUID that identifies one *finish*,
+    # so a write retried after a dropped connection dedupes to a single Logged Session
+    # instead of duplicating it. Nullable-unique: any present key is globally unique so
+    # the create path can upsert-return on it, while multiple NULLs are permitted (both
+    # SQLite and Postgres treat NULLs as distinct) — a historical row, or a request that
+    # mints no key (the static form), stays untouched and still inserts. This is an
+    # identity/transport detail, not a stored sync state (ADR-0060 keeps sync out of the
+    # domain); it never becomes a "pending" flag the read-time-projection rule forbids.
+    idempotency_key: str | None = Field(default=None, index=True, unique=True)
     # The prescribing Session, or NULL for a plan-less record (ADR-0031). A record of
     # performed work is first-class whether or not a plan ever described it; a plan-less
     # log carries no Session id and so structurally cannot advance a Protocol.

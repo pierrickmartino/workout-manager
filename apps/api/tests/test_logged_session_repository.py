@@ -237,6 +237,86 @@ def test_duration_seconds_defaults_to_none_when_unrecorded(repos):
     assert view.duration_seconds is None
 
 
+def test_repeating_a_key_returns_the_same_record_without_a_second_row(repos):
+    # Arrange — a finish carrying a client-minted idempotency key (ADR-0060)
+    logged, sessions, exercises = repos
+    session_view, squat, press = _session_with_two_exercises(sessions, exercises)
+    draft = LoggedSessionDraft(
+        session_id=session_view.id,
+        training_type="strength",
+        performed_on=date(2026, 6, 20),
+        idempotency_key="finish-key-1",
+        logged_sets=[LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(5))],
+    )
+
+    # Act — the same finish is delivered twice (a retry resends the same key)
+    first = logged.create("user_owner", draft)
+    second = logged.create("user_owner", draft)
+
+    # Assert — the repeat upsert-returns the first record; no second row is created
+    assert second.id == first.id
+    assert len(logged.list_for_user("user_owner")) == 1
+
+
+def test_distinct_keys_create_distinct_records(repos):
+    # Arrange — two genuinely different finishes, each with its own key
+    logged, sessions, exercises = repos
+    session_view, squat, press = _session_with_two_exercises(sessions, exercises)
+
+    def _draft(key: str) -> LoggedSessionDraft:
+        return LoggedSessionDraft(
+            session_id=session_view.id,
+            training_type="strength",
+            performed_on=date(2026, 6, 20),
+            idempotency_key=key,
+            logged_sets=[LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(5))],
+        )
+
+    # Act
+    first = logged.create("user_owner", _draft("finish-key-a"))
+    second = logged.create("user_owner", _draft("finish-key-b"))
+
+    # Assert — distinct keys are distinct performances, both recorded
+    assert first.id != second.id
+    assert len(logged.list_for_user("user_owner")) == 2
+
+
+def test_a_keyless_finish_still_inserts_and_never_dedupes(repos):
+    # Arrange — a request that mints no key (the static form path) may repeat freely
+    logged, sessions, exercises = repos
+    session_view, squat, press = _session_with_two_exercises(sessions, exercises)
+    draft = _log_draft(session_view.id, squat, press)  # idempotency_key defaults to None
+
+    # Act — two keyless finishes
+    first = logged.create("user_owner", draft)
+    second = logged.create("user_owner", draft)
+
+    # Assert — multiple NULL keys never collapse into one record
+    assert first.id != second.id
+    assert len(logged.list_for_user("user_owner")) == 2
+
+
+def test_a_repeated_key_is_scoped_to_its_owner(repos):
+    # Arrange — one user's keyed finish
+    logged, sessions, exercises = repos
+    session_view, squat, press = _session_with_two_exercises(sessions, exercises)
+    owner_draft = LoggedSessionDraft(
+        session_id=session_view.id,
+        training_type="strength",
+        performed_on=date(2026, 6, 20),
+        idempotency_key="owner-key",
+        logged_sets=[LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(5))],
+    )
+    first = logged.create("user_owner", owner_draft)
+
+    # Act — the same owner retries the same finish
+    repeat = logged.create("user_owner", owner_draft)
+
+    # Assert — the owner's retry returns their own record, not a new one
+    assert repeat.id == first.id
+    assert logged.get(first.id, "user_owner") is not None
+
+
 def test_get_does_not_leak_another_users_log(repos):
     # Arrange — a Logged Session is user-owned; another user must not read it
     logged, sessions, exercises = repos

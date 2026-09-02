@@ -54,13 +54,18 @@ class LogSessionRequest:
     — ``"completed"`` | ``"incomplete"``, or ``None`` when the record does not
     declare one; it is *forbidden* on a plan-less request. ``duration_seconds`` carries
     the recorded Session Duration (ADR-0014) — actual training time in whole seconds,
-    or ``None`` when unrecorded."""
+    or ``None`` when unrecorded.
+
+    ``idempotency_key`` carries the client-minted key that makes the write duplicate-proof
+    (ADR-0060): the same key on a retry upsert-returns the first record rather than
+    inserting a second. ``None`` is a keyless write, which always inserts."""
 
     session_id: int | None
     performed_on: date
     training_type: str | None = None
     completion_outcome: str | None = None
     duration_seconds: int | None = None
+    idempotency_key: str | None = None
     logged_sets: list[LoggedSetDraft] = field(default_factory=list)
 
 
@@ -118,6 +123,7 @@ def log_session(
         performed_on=request.performed_on,
         completion_outcome=request.completion_outcome,
         duration_seconds=request.duration_seconds,
+        idempotency_key=request.idempotency_key,
         logged_sets=[
             replace(logged_set, body_weight_kg=performed_body_weight)
             for logged_set in request.logged_sets

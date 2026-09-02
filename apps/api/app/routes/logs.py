@@ -142,6 +142,10 @@ class LogSessionBody(BaseModel):
     logged_sets: list[LogSetBody] = Field(min_length=1)
     completion_outcome: str | None = None
     duration_seconds: int | None = Field(default=None, ge=0)
+    # The client-minted idempotency key (ADR-0060) that makes the finish duplicate-proof:
+    # a retry resends the same key and the write upsert-returns the first record. Optional
+    # — a keyless (``None``) finish still records, but is not de-duplicated.
+    idempotency_key: str | None = None
 
     @field_validator("completion_outcome")
     @classmethod
@@ -195,6 +199,7 @@ def create_log(
         performed_on=payload.performed_on,
         completion_outcome=payload.completion_outcome,
         duration_seconds=payload.duration_seconds,
+        idempotency_key=payload.idempotency_key,
         logged_sets=[s.to_draft() for s in payload.logged_sets],
     )
     try:
@@ -237,6 +242,9 @@ class LogAdhocBody(BaseModel):
     training_type: str = Field(min_length=1)
     logged_sets: list[LogSetBody] = Field(min_length=1)
     duration_seconds: int | None = Field(default=None, ge=0)
+    # The client-minted idempotency key (ADR-0060): the ad-hoc finish is as duplicate-proof
+    # as the plan-backed one — a retry resends the same key and upsert-returns the record.
+    idempotency_key: str | None = None
 
 
 @router.post("/logs")
@@ -261,6 +269,7 @@ def create_adhoc_log(
         performed_on=payload.performed_on,
         completion_outcome=None,
         duration_seconds=payload.duration_seconds,
+        idempotency_key=payload.idempotency_key,
         logged_sets=[s.to_draft() for s in payload.logged_sets],
     )
     try:
