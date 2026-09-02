@@ -175,6 +175,25 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
         ),
     ),
     BannedTerm(
+        name="Pin / Pinned Target",
+        # The retired Pin identifiers (ADR-0064): the domain offer (``PinOffer`` /
+        # ``pin_offer``), the stored column/field (``pinned_reps`` / ``pinnedReps``), and
+        # the concept in identifier form (``PinnedTarget`` / ``pinned_target``). Scoped to
+        # these compound identifiers so ordinary prose ("stay pinned", "pin the timer")
+        # and unrelated identifiers (a future "pin to top" UI) never trip the guard.
+        pattern=re.compile(
+            r"pinned_reps|pinnedReps|pin_offer|PinOffer"
+            r"|pinned_target|pinnedTarget|PinnedTarget"
+        ),
+        guidance=(
+            "Pin is retired (ADR-0064, supersedes ADR-0053). Its 'stop auto-progressing "
+            "this movement' job is the Static Progression Scheme (better: it holds every "
+            "future occurrence, not just one), and banking a specific rep target is a "
+            "Builder edit. There is no stored Pinned Target — use a Progression Scheme "
+            "selection (app.domain.progression.ProgressionScheme) instead."
+        ),
+    ),
+    BannedTerm(
         name="hand-rolled LoggedSetRecord",
         # Only the *construction* form — ``LoggedSetRecord(`` — is banned. Type
         # annotations (``list[LoggedSetRecord]``) and imports carry no paren and stay

@@ -1,8 +1,8 @@
 """The Progression Scheme selection is carried through the plan serializers (ADR-0064,
 #429).
 
-A Prescription's chosen scheme has to survive the trip to the PWA the same way ``reps``,
-``recommended_load`` and ``pinned_reps`` do — through both the standalone-Session
+A Prescription's chosen scheme has to survive the trip to the PWA the same way ``reps``
+and ``recommended_load`` do — through both the standalone-Session
 serializer and the Protocol-Session serializer — so the client can show which scheme a
 movement is on. These are pure ``view → dict`` functions, tested directly over hand-built
 views (no repository, no HTTP)."""
@@ -26,7 +26,6 @@ def _prescription(scheme: str | None) -> PrescriptionView:
         prescribed_quantity=None,
         superset_group=None,
         round_rest_seconds=None,
-        pinned_reps=None,
         exercise_id=1,
         exercise_name="Back Squat",
         exercise_description=None,

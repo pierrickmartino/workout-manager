@@ -109,27 +109,6 @@ def _parse_rep_target(reps: str) -> tuple[int, int] | None:
     return None
 
 
-def parse_rep_range(text: str) -> tuple[int, int] | None:
-    """Validate a user-supplied rep target and return its ``(floor, ceiling)``, or ``None``.
-
-    The boundary check for a Pinned Target (ADR-0053): a single number (``"12"`` →
-    ``(12, 12)``) or a range (``"10-14"`` → ``(10, 14)``) is accepted only when it is a
-    sane, non-empty range — both bounds at least one rep and ``floor <= ceiling``. A
-    reversed range (``"14-10"``), a zero/negative bound, or free text (``"AMRAP"``)
-    returns ``None`` so a nonsensical target can never be pinned. Reuses the same rep
-    grammar :func:`_parse_rep_target` reads, then layers the ordering/positivity rule the
-    stored progression target never had to enforce.
-    """
-
-    parsed = _parse_rep_target(text)
-    if parsed is None:
-        return None
-    floor, ceiling = parsed
-    if floor < 1 or floor > ceiling:
-        return None
-    return floor, ceiling
-
-
 def _format_load(value: float, suffix: str) -> str:
     number = int(value) if value == int(value) else value
     return f"{number}{suffix}"
@@ -201,78 +180,6 @@ class NextPrescription:
     reps: str
     recommended_load: str | None
     suggest_harder_variation: bool = False
-
-
-@dataclass(frozen=True)
-class PinOffer:
-    """The offer to Pin a user-chosen bodyweight rep target, with the range to pre-fill.
-
-    Returned by :func:`pin_offer` only when a logged movement *qualifies* to be offered
-    a Pin (ADR-0053). ``proposed_reps`` is the editable target the confirm dialog
-    pre-fills — kept in the prescription's **existing shape** (a single number stays a
-    single number, a floor–ceiling range stays a range) and derived from the reps the
-    user actually performed, so the common case needs no typing.
-    """
-
-    proposed_reps: str
-
-
-def pin_offer(
-    prescription: _Prescription, logged_sets: list[_LoggedSet]
-) -> PinOffer | None:
-    """Decide whether a logged movement qualifies to be offered a Pin (ADR-0053, #370).
-
-    The single source of truth the web offer mirrors, sitting beside the Progression
-    engine it extends. Pure: no I/O, no storage — it computes nothing that is stored,
-    only the decision and the range to pre-fill. Returns a :class:`PinOffer` when the
-    Prescription qualifies, or ``None`` when it does not (the predicate is simply
-    ``pin_offer(...) is not None``).
-
-    A Prescription qualifies when **both** hold:
-
-    - it is **pure bodyweight** — the one axis Progression steps by reps: the same
-      ``LoadKind.BODYWEIGHT`` + no-added-load condition the pure-bodyweight Progression
-      path routes through, shared as :func:`_is_pure_bodyweight`; and
-    - **every** working Logged Set's repetitions are strictly **greater than the rep
-      range ceiling** — "more than the plan asked," on all sets, so a single fluke set
-      can't ossify the standing target.
-
-    Deliberately **not** gated on perceived effort — unlike Progression's own
-    ``_hit_ceiling and _low_effort`` step, the human confirmation in the dialog replaces
-    the low-RPE gate, so a hard session that still beat the ceiling is offered.
-
-    The proposed pre-fill keeps the prescription's existing shape and is derived from
-    the performed reps: the floor is the minimum reps performed (the reliable target hit
-    on every set); a range carries that floor up to the maximum performed as its new
-    ceiling, while a single-number target collapses to the floor alone.
-    """
-
-    current = prescription.recommended_load
-    if current is None or not logged_sets:
-        return None
-
-    target = _parse_rep_target(prescription.reps)
-    if target is None:
-        return None
-    _, ceiling = target
-
-    # Pure bodyweight only (BODYWEIGHT kind with nothing added): a weighted-bodyweight
-    # or non-bodyweight load progresses on a different axis and is never offered a rep Pin.
-    if not _is_pure_bodyweight(parse_load(current)):
-        return None
-
-    if not _all_above_ceiling(logged_sets, ceiling):
-        return None
-
-    performed = [
-        reps
-        for logged in logged_sets
-        if (reps := repetitions_of(logged.quantity)) is not None
-    ]
-    floor, top = min(performed), max(performed)
-    single = target[0] == target[1]
-    proposed = str(floor) if single else f"{floor}-{top}"
-    return PinOffer(proposed_reps=proposed)
 
 
 def _double_progression(
@@ -459,21 +366,6 @@ def _is_pure_bodyweight(load: ParsedLoad) -> bool:
     """
 
     return load.kind is LoadKind.BODYWEIGHT and load.added_kg is None
-
-
-def _all_above_ceiling(logged_sets: list[_LoggedSet], ceiling: int) -> bool:
-    """Whether every set landed **strictly above** the rep ceiling — the Pin trigger.
-
-    Distinct from :func:`_hit_ceiling` (``>= ceiling``): the Pin offer means
-    unambiguously *more* than the plan asked, so a set merely *at* the ceiling does not
-    qualify. A set with no rep count (a hold, a run) has no reps above the ceiling and
-    so holds the offer back, mirroring how :func:`_hit_ceiling` treats a non-rep set.
-    """
-
-    return all(
-        (reps := repetitions_of(logged.quantity)) is not None and reps > ceiling
-        for logged in logged_sets
-    )
 
 
 def _low_effort(logged_sets: list[_LoggedSet]) -> bool:

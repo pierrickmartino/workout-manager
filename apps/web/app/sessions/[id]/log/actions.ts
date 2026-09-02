@@ -1,28 +1,15 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-
 import { logSession } from "@/lib/logs";
 import type { CompletionOutcome } from "@/lib/logs-types";
-import {
-  buildLoggedSets,
-  normalizePinTarget,
-  readLogFormRows,
-} from "@/lib/log-session-form";
-import {
-  fetchHarderVariation,
-  pinPrescription,
-  substitutePrescription,
-} from "@/lib/sessions";
-import type { SuggestedVariation } from "@/lib/harder-variation-view";
+import { buildLoggedSets, readLogFormRows } from "@/lib/log-session-form";
 import { resolveAppearance } from "@/lib/appearance";
 
 export interface LogFormState {
   error: string | null;
-  // Set once the log is saved, so the client can offer the post-log Pin dialog before leaving the
-  // page (ADR-0053, #371). The Pin offer is decided client-side from the rows the form holds
-  // (`collectPinCandidates`), so this action no longer redirects on success — the client navigates
-  // to History itself when there is no Pin to offer, or after the dialog is dismissed.
+  // Set once the log is saved, so the client can navigate away from the form. The action does
+  // not redirect itself — the client pushes to History on success — so the form stays a client
+  // component that can surface an inline error without a full navigation on failure.
   ok?: boolean;
 }
 
@@ -77,67 +64,6 @@ export async function submitLog(
     return { error: result.error ?? "Could not save your log." };
   }
 
-  // Saved. The client decides whether a Pin is offered (from the rows it holds) and navigates.
+  // Saved. The client navigates to History (`ok` flips the form's post-save effect).
   return { error: null, ok: true };
-}
-
-// Read the harder-Variation suggestion for one movement, so the post-log Pin dialog can present
-// stepping up to a harder Variation *beside* raising reps (ADR-0053, #371 / #202). A thin server
-// wrapper over the read seam (the JWT never reaches the browser); returns the suggestion or null
-// when there is none, and null on any read failure so the dialog simply omits the alternative.
-export async function harderVariationForPin(
-  sessionId: number,
-  position: number,
-): Promise<SuggestedVariation | null> {
-  const result = await fetchHarderVariation(sessionId, position);
-  if (!result.success || !result.data) return null;
-  return result.data.suggested_variation;
-}
-
-// The result of a post-log Pin-offer action: an error message to surface inline, or null on
-// success (the caller then advances to the next offer, or leaves for History).
-export interface PinOfferResult {
-  error: string | null;
-}
-
-// Issue the Pin request straight from the post-log offer dialog (ADR-0053, #371): validate the
-// (edited) range with the same `normalizePinTarget` rule the backend enforces, then call the pin
-// route. On success the Session page is revalidated so the plan reflects the Pinned Target when the
-// user next views it. The backend guards apply — a performed Session comes back as its `409`
-// message (settled record), which the dialog surfaces inline rather than silently dropping.
-export async function pinFromOffer(
-  sessionId: number,
-  position: number,
-  reps: string,
-): Promise<PinOfferResult> {
-  const normalized = normalizePinTarget(reps);
-  if (normalized === null) {
-    return { error: "Enter a valid rep target, like 12 or 10-14." };
-  }
-
-  const result = await pinPrescription(sessionId, position, normalized);
-  if (!result.success || !result.data) {
-    return { error: result.error ?? "Could not pin this rep target." };
-  }
-
-  revalidatePath(`/sessions/${sessionId}`);
-  return { error: null };
-}
-
-// Accept the harder-Variation alternative straight from the offer dialog (#202/#209): advance the
-// movement to the suggested Variation through the user-initiated Substitution flow, carrying its
-// `target_exercise_id`. On success the Session page is revalidated so the swap shows; the backend
-// message is surfaced on failure.
-export async function advanceVariationFromOffer(
-  sessionId: number,
-  position: number,
-  targetExerciseId: number,
-): Promise<PinOfferResult> {
-  const result = await substitutePrescription(sessionId, position, targetExerciseId);
-  if (!result.success || !result.data) {
-    return { error: result.error ?? "Could not advance to this Variation." };
-  }
-
-  revalidatePath(`/sessions/${sessionId}`);
-  return { error: null };
 }

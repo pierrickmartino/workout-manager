@@ -15,7 +15,6 @@ import { formatLoad } from "@/lib/load";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { RemoveExerciseButton } from "@/components/RemoveExerciseButton";
 import { HarderVariationOffer } from "@/components/HarderVariationOffer";
-import { PinControl } from "@/components/PinControl";
 import { SchemeControl } from "@/components/SchemeControl";
 import { schemeControlModel, type SchemeControlModel } from "@/lib/scheme-view";
 import {
@@ -28,7 +27,6 @@ import {
   toHarderVariationOffer,
   type HarderVariationOffer as HarderVariationOfferView,
 } from "@/lib/harder-variation-view";
-import { displayReps, pinControlModel, type PinControlModel } from "@/lib/pin-view";
 import { toTempoView, type TempoView } from "@/lib/tempo-view";
 import { supersetLayout, type SupersetSlot } from "@/lib/supersets";
 import { removeAffordances } from "@/lib/remove-prescription";
@@ -49,20 +47,12 @@ import { buttonVariants } from "@/components/ui/button";
 // session is user-owned: the backend returns 404 (→ notFound) for anyone else.
 export default async function SessionPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ pin?: string; reps?: string }>;
 }) {
   const { id } = await params;
   const sessionId = Number(id);
   if (!Number.isInteger(sessionId)) notFound();
-
-  // The Pin offer hand-off from the log flow (ADR-0053, #371): confirming the post-log Pin offer
-  // lands here as `?pin=<position>&reps=<proposed>`, so the matching movement's Pin editor opens
-  // pre-filled with the proposed range. Absent on a normal plan view, where pinning is opt-in.
-  const { pin: pinParam, reps: pinReps } = await searchParams;
-  const pinPosition = pinParam !== undefined ? Number(pinParam) : null;
 
   const [envelope, appearance] = await Promise.all([
     fetchSession(sessionId),
@@ -209,12 +199,6 @@ export default async function SessionPage({
                 unit={unit}
                 index={index + 1}
                 harderVariation={offers[index]}
-                pinModel={pinControlModel(prescription)}
-                displayReps={displayReps(prescription)}
-                pinAutoOpen={pinPosition === prescription.position}
-                pinInitialReps={
-                  pinPosition === prescription.position ? pinReps : undefined
-                }
                 schemeModel={schemeControlModel(prescription)}
                 showScheme={!(session.is_protocol_member ?? false)}
                 showRemove={removeAffordanceList[index].showRemove}
@@ -280,10 +264,6 @@ function PrescriptionCard({
   unit,
   index,
   harderVariation,
-  pinModel,
-  displayReps,
-  pinAutoOpen,
-  pinInitialReps,
   schemeModel,
   showScheme,
   showRemove,
@@ -296,13 +276,6 @@ function PrescriptionCard({
   unit: WeightUnit;
   index: number;
   harderVariation: HarderVariationOfferView;
-  // The plan-view Pin state for this movement (ADR-0053): a pinned range surfaced verbatim with
-  // an un-pin control, a pinnable pure-bodyweight movement, or none. `displayReps` is the reps to
-  // show — the Pinned Target when set, else the prescribed reps.
-  pinModel: PinControlModel;
-  displayReps: string;
-  pinAutoOpen: boolean;
-  pinInitialReps: string | undefined;
   // The plan-view Progression Scheme state for this movement (ADR-0064): the current scheme
   // and the compatible alternatives to offer. `showScheme` is false on a Protocol member,
   // whose scheme is chosen on the Builder and committed via Deploy (standalone-only in place).
@@ -357,20 +330,11 @@ function PrescriptionCard({
       <DataList
         rows={[
           {
+            // The reps the read-time overlay resolved for this movement — the scheme-stepped
+            // target (Static holds the authored value; the default steps it), never a stored
+            // number (ADR-0064).
             label: "Sets × reps",
-            // The Pinned Target is what the user sees (ADR-0053, user story 20): when pinned, the
-            // stored range is surfaced verbatim with a PINNED marker; otherwise the prescribed reps.
-            value:
-              pinModel.kind === "pinned" ? (
-                <span className="flex items-center gap-2">
-                  {`${prescription.sets} × ${displayReps}`}
-                  <Badge variant="cyan" title="Automatic progression is suspended for this movement">
-                    PINNED
-                  </Badge>
-                </span>
-              ) : (
-                `${prescription.sets} × ${displayReps}`
-              ),
+            value: `${prescription.sets} × ${prescription.reps}`,
           },
           ...(prescription.recommended_load
             ? [{ label: "Load", value: formatLoad(prescription.recommended_load, unit) }]
@@ -401,16 +365,6 @@ function PrescriptionCard({
         sessionId={sessionId}
         position={prescription.position}
         offer={harderVariation}
-      />
-
-      {/* Pin (ADR-0053, #371): reflect a Pinned Target with an un-pin control, or offer to pin a
-          rep target on a pure-bodyweight movement. Nothing renders for a non-pinnable movement. */}
-      <PinControl
-        sessionId={sessionId}
-        position={prescription.position}
-        model={pinModel}
-        autoOpen={pinAutoOpen}
-        initialReps={pinInitialReps}
       />
 
       {/* Progression Scheme (ADR-0064, #432): choose how this movement's un-performed tail

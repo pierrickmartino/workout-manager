@@ -49,7 +49,6 @@ def _prescription(
         prescribed_quantity=None,
         superset_group=None,
         round_rest_seconds=None,
-        pinned_reps=None,
         exercise_id=exercise_id,
         exercise_name="X",
         exercise_description=None,

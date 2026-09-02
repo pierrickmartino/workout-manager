@@ -41,7 +41,6 @@ def _prescription(*, scheme: str | None, load: str = "60 kg") -> PrescriptionVie
         prescribed_quantity=None,
         superset_group=None,
         round_rest_seconds=None,
-        pinned_reps=None,
         exercise_id=1,
         exercise_name="Back Squat",
         exercise_description=None,

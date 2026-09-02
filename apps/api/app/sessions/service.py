@@ -3,7 +3,7 @@
 Deleting a Session spans several repositories — it must read the plan, check the *record*
 for any performance, and clean up the plan's dependents — so the orchestration lives here
 rather than in a route or a single repository, mirroring the other multi-repository
-services (``authoring``, ``pinning``, ``substitution``).
+services (``authoring``, ``substitution``, ``scheme_selection``).
 
 The two load-bearing guards live at the top, before any write:
 

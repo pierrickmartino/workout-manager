@@ -39,7 +39,6 @@ def _prescription(position: int, *, load: str | None, scheme: str | None = None)
         prescribed_quantity=None,
         superset_group=None,
         round_rest_seconds=None,
-        pinned_reps=None,
         exercise_id=100 + position,
         exercise_name="Back Squat",
         exercise_description=None,

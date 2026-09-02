@@ -211,18 +211,11 @@ def progressed_prescription(
     stays a pure function of the record. Every other scheme ignores it, so the default of
     zero leaves them (and an un-chosen movement) behaving exactly as before.
 
-    A **Pinned** Prescription is skipped (ADR-0053): when the user has pinned a rep
-    target, its presence suspends read-time Progression for this movement — the stored
-    pinned range is surfaced verbatim as the rep target and ``next_prescription`` is not
-    applied, so the very logs that earned the Pin can never step it a second time (the
-    double-count trap). Un-pinning clears the marker and the overlay resumes stepping
-    with no lingering effect and no recomputation of history. (Pin is retired in a later
-    change, #434, when Static replaces its "stop progressing" job; the expand step keeps
-    it working alongside the scheme selection.)
+    A movement whose stored scheme is Static (ADR-0064) holds its authored ``reps`` and
+    ``recommended_load`` unchanged — the read-time replacement for the retired Pin's
+    "stop auto-progressing this movement" job, and better: it holds *every* future
+    occurrence at the plan's authored values rather than freezing a single one.
     """
-
-    if prescription.pinned_reps is not None:
-        return replace(prescription, reps=prescription.pinned_reps)
 
     load = prescription.recommended_load
     result = next_prescription(
