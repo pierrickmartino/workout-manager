@@ -30,6 +30,17 @@ export function stampFinishKey(
   return { ...state, idempotencyKey: key };
 }
 
+// The one preamble every finish path runs: resolve the performance's key (reuse the
+// stamped one, else mint) and return the key-carrying state. Keeps the `mint` effect
+// injected at a single seam and the three handlers (normal finish, idle auto-end,
+// end-blocking-session) free of a duplicated resolve+stamp pair.
+export function stampWithFreshKey(
+  state: LiveSessionState,
+  mint: () => string,
+): LiveSessionState {
+  return stampFinishKey(state, resolveFinishKey(state.idempotencyKey, mint));
+}
+
 // The result of one finish attempt, as the screen observes it: an acknowledged
 // success, an error the server returned in the envelope, or a thrown/rejected call
 // (offline, a dropped connection — the response never came back at all).

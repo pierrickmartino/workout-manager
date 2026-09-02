@@ -7,6 +7,7 @@ import {
   decideFinishOutcome,
   resolveFinishKey,
   stampFinishKey,
+  stampWithFreshKey,
   FINISH_UNREACHABLE_MESSAGE,
 } from "./live-session-finish.ts";
 import type { WorkoutSession } from "./sessions-types.ts";
@@ -89,6 +90,30 @@ test("stampFinishKey returns a new state carrying the key, never mutating the in
   assert.equal(after.idempotencyKey, "the-key");
   assert.equal(before.idempotencyKey, null);
   assert.notEqual(after, before);
+});
+
+test("stampWithFreshKey mints and stamps a key for an unkeyed performance", () => {
+  // Arrange — a performance with no key yet
+  const before = started(null);
+
+  // Act
+  const after = stampWithFreshKey(before, () => "minted-key");
+
+  // Assert — the minted key is stamped on the copy; the input is untouched
+  assert.equal(after.idempotencyKey, "minted-key");
+  assert.equal(before.idempotencyKey, null);
+});
+
+test("stampWithFreshKey reuses an already-stamped key so a retry resends it", () => {
+  // Arrange — a performance already carrying a key (a prior attempt)
+  const before = started("existing-key");
+  const mint = () => assert.fail("must not mint when a key already exists");
+
+  // Act
+  const after = stampWithFreshKey(before, mint);
+
+  // Assert — the same key rides on the result
+  assert.equal(after.idempotencyKey, "existing-key");
 });
 
 test("decideFinishOutcome clears the slot on an acknowledged success", () => {

@@ -39,8 +39,7 @@ import { mapFinishToLog } from "@/lib/live-session-mapper";
 import {
   browserMintKey,
   decideFinishOutcome,
-  resolveFinishKey,
-  stampFinishKey,
+  stampWithFreshKey,
   type FinishAttempt,
 } from "@/lib/live-session-finish";
 import { useWakeLock } from "@/lib/use-wake-lock";
@@ -254,8 +253,7 @@ export function LiveSessionScreen({
   // POST keeps the key-stamped slot so the next foreground retries the auto-end with
   // the SAME idempotency key (ADR-0060), never losing the sets or double-writing them.
   function endIdleSession(stored: LiveSessionState) {
-    const key = resolveFinishKey(stored.idempotencyKey, browserMintKey);
-    const stamped = stampFinishKey(stored, key);
+    const stamped = stampWithFreshKey(stored, browserMintKey);
     const finished = liveSessionReducer(stamped, { type: "FINISH" });
     setSummary(finished);
     setPhase("summary");
@@ -289,8 +287,7 @@ export function LiveSessionScreen({
   function handleEndExisting() {
     const existing = blockedExisting;
     if (!existing) return;
-    const key = resolveFinishKey(existing.idempotencyKey, browserMintKey);
-    const stamped = stampFinishKey(existing, key);
+    const stamped = stampWithFreshKey(existing, browserMintKey);
     const finished = liveSessionReducer(stamped, { type: "FINISH" });
     const payload = mapFinishToLog(finished, today, weightUnit);
     setBlockedExisting(stamped);
@@ -414,8 +411,7 @@ export function LiveSessionScreen({
     // Session (ADR-0060 — issue #412). The slot is NOT cleared up front: it is released
     // only on an acknowledged success below, so a dropped connection or a lost response
     // keeps the work and its key for a retry rather than losing it or double-writing it.
-    const key = resolveFinishKey(state.idempotencyKey, browserMintKey);
-    const stamped = stampFinishKey(state, key);
+    const stamped = stampWithFreshKey(state, browserMintKey);
     const payload = mapFinishToLog(stamped, today, weightUnit);
     writeLiveSessionSlot(stamped);
     startTransition(async () => {
