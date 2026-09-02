@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useAuth } from "@clerk/nextjs";
 import { useEffect, useReducer, useState, useTransition } from "react";
 import {
   AlertTriangle,
@@ -108,6 +109,11 @@ export function LiveSessionScreen({
     // `weightUnit` to avoid colliding with the live header's `unit` (a Session unit).
     (initial) => initLiveSession(initial, weightUnit),
   );
+  // The signed-in Clerk account (issue #411 — ADR-0059). It scopes the persisted slot
+  // to its owner: START stamps it, and the entry resolution below purges a slot owned
+  // by another account rather than offering a cross-account resume. `isLoaded` gates
+  // the decision so a not-yet-hydrated auth read never purges the user's own slot.
+  const { userId, isLoaded: isAuthLoaded } = useAuth();
   const [finishState, setFinishState] = useState<FinishState>({ error: null });
   const [pending, startTransition] = useTransition();
   // The lifecycle phase, plus the states the non-live phases render from: the
@@ -137,14 +143,37 @@ export function LiveSessionScreen({
   // (ADR-0012). Runs once on the first foreground — the idle guard (ADR-0014) is
   // evaluated here, never on a background timer, so the user experiences "I came
   // back after 40 minutes and it had ended my workout" on return, not while away.
+  // Begin this Session's performance: START stamps the instant Session Duration
+  // measures from (not_started → in_progress) and the owner it belongs to (ADR-0059).
+  // The single call site for every "start this Session fresh" path — a fresh slot, a
+  // purged foreign slot, and ending a blocking session — so the owner is always stamped.
+  function startFresh(accountId: string | null) {
+    dispatch({ type: "START", now: Date.now(), accountId: accountId ?? undefined });
+    setPhase("live");
+  }
+
   useEffect(() => {
-    const entry = resolveLiveEntry(readLiveSessionSlot(), session.id, Date.now());
+    // Wait until Clerk has resolved the current user: the entry decision is
+    // account-scoped (ADR-0059), and deciding against an unknown user would purge the
+    // owner's own valid slot. The `deciding` placeholder holds until then.
+    if (!isAuthLoaded) return;
+    const currentAccountId = userId ?? null;
+    const entry = resolveLiveEntry(
+      readLiveSessionSlot(),
+      session.id,
+      Date.now(),
+      currentAccountId,
+    );
     switch (entry.kind) {
+      case "purge":
+        // The slot belongs to another account (or a legacy id-less slot): discard it
+        // so it is never offered here, then start this Session fresh — the same
+        // outcome as an empty slot (ADR-0059).
+        clearLiveSessionSlot();
+        startFresh(currentAccountId);
+        break;
       case "start_fresh":
-        // A fresh performance: START stamps the instant Session Duration measures
-        // from (not_started → in_progress).
-        dispatch({ type: "START", now: Date.now() });
-        setPhase("live");
+        startFresh(currentAccountId);
         break;
       case "resume":
         // Restore the persisted performance exactly — set table, current set, and
@@ -160,9 +189,10 @@ export function LiveSessionScreen({
         setPhase("blocked");
         break;
     }
-    // Only the initial mount decides the entry; `session.id`/`today` are stable.
+    // The entry is decided once, when auth first resolves; `session.id`/`today` are
+    // stable and `userId` does not change without a remount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isAuthLoaded]);
 
   // Persist every state change while the performance is live, so a refresh or lock
   // resumes exactly here. Non-live phases (summary/blocked) never write.
@@ -224,8 +254,7 @@ export function LiveSessionScreen({
       }
       clearLiveSessionSlot();
       setBlockedExisting(null);
-      dispatch({ type: "START", now: Date.now() });
-      setPhase("live");
+      startFresh(userId ?? null);
     });
   }
 

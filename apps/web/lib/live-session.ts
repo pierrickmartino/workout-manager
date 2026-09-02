@@ -67,6 +67,12 @@ export interface LiveSet {
 
 export interface LiveSessionState {
   sessionId: number;
+  // The owner's Clerk account id (ADR-0059, amending ADR-0035). Stamped on START so
+  // every persisted slot carries who it belongs to; hydration on another account
+  // purges it rather than offering a cross-account resume on a shared browser. Null
+  // in a not-yet-started performance (no owner until START) — such a state is never
+  // persisted, so a stored slot always carries a real id.
+  accountId: string | null;
   sets: LiveSet[];
   currentIndex: number;
   status: LiveStatus;
@@ -79,7 +85,10 @@ export interface LiveSessionState {
 }
 
 export type LiveEvent =
-  | { type: "START"; now?: number }
+  // START stamps the owner (`accountId`, ADR-0059) alongside the timing instant, so
+  // the first persisted write of a fresh performance already carries who it belongs
+  // to. Omitting it (untimed/ownerless START) leaves the owner unchanged.
+  | { type: "START"; now?: number; accountId?: string }
   | {
       type: "COMPLETE_SET";
       index: number;
@@ -110,11 +119,15 @@ export const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 //   finalize it as Incomplete (ADR-0014) and show a summary instead of resuming.
 // - `blocked` — a *different* unfinished performance exists; starting this one is
 //   blocked with a resume-or-end prompt so real work is never discarded (ADR-0012).
+// - `purge` — the slot belongs to a *different* account (or no signed-in account can
+//   claim it); it is discarded and this Session starts fresh, so a shared browser
+//   never offers one account's workout to another (ADR-0059, amending ADR-0035).
 export type LiveEntry =
   | { kind: "start_fresh" }
   | { kind: "resume"; state: LiveSessionState }
   | { kind: "auto_end"; state: LiveSessionState }
-  | { kind: "blocked"; existing: LiveSessionState };
+  | { kind: "blocked"; existing: LiveSessionState }
+  | { kind: "purge" };
 
 // Whether the idle gap between `lastActivityAt` and `now` has run past the cap. An
 // untimed performance (no last-activity) can't be measured, so it never expires.
@@ -123,18 +136,46 @@ function isIdleExpired(lastActivityAt: number | null, now: number): boolean {
   return now - lastActivityAt > IDLE_TIMEOUT_MS;
 }
 
+// Whether a persisted slot belongs to the currently signed-in account (ADR-0059).
+// True only when there is a stored slot, a signed-in user, and the two ids match —
+// so a foreign slot, a legacy id-less slot, and an unauthenticated read all read as
+// "not mine". The ownership boundary the resume path and the Home banner both gate on.
+export function ownsLiveSlot(
+  stored: LiveSessionState | null,
+  currentAccountId: string | null,
+): boolean {
+  return (
+    stored !== null &&
+    currentAccountId !== null &&
+    stored.accountId === currentAccountId
+  );
+}
+
 // Decide what happens when the user arrives at a Session's live route, given the
 // single persisted slot (`stored`, or null when empty), the `requestedSessionId`,
-// and the current wall-clock `now`. This is the engine's resume-vs-auto-end and
+// the current wall-clock `now`, and the signed-in `currentAccountId` (null when no
+// user is loaded). This is the engine's ownership, resume-vs-auto-end, and
 // single-session-enforcement verdict; the screen renders it. Pure — no I/O.
 export function resolveLiveEntry(
   stored: LiveSessionState | null,
   requestedSessionId: number,
   now: number,
+  currentAccountId: string | null,
 ): LiveEntry {
-  // An empty slot, or a slot holding an already-finished performance, has nothing
-  // to resume — begin this Session fresh.
-  if (stored === null || stored.status === "finished") {
+  // An empty slot has nothing to resume — begin this Session fresh.
+  if (stored === null) {
+    return { kind: "start_fresh" };
+  }
+  // A slot owned by a *different* account (or unclaimable — no signed-in user, a
+  // legacy id-less slot) is never offered here: it is purged and this Session starts
+  // fresh, so a shared browser never leaks one account's workout to another (ADR-0059).
+  // Ownership precedes every other verdict — a foreign slot for a different Session
+  // is purged, not treated as a block on the current account.
+  if (!ownsLiveSlot(stored, currentAccountId)) {
+    return { kind: "purge" };
+  }
+  // An owned slot holding an already-finished performance has nothing to resume.
+  if (stored.status === "finished") {
     return { kind: "start_fresh" };
   }
   // An unfinished performance of a *different* Session blocks starting this one:
@@ -318,6 +359,9 @@ export function initLiveSession(
 
   return {
     sessionId: session.id,
+    // Owner is unknown until START stamps the signed-in account (ADR-0059); a
+    // not-yet-started performance is never persisted, so this null never reaches a slot.
+    accountId: null,
     sets,
     currentIndex: 0,
     status: "not_started",
@@ -336,10 +380,13 @@ export function liveSessionReducer(
     case "START":
       if (state.status !== "not_started") return state;
       // A timed START seeds both the start and the first last-activity instant; an
-      // untimed one leaves them null (timing is opt-in).
+      // untimed one leaves them null (timing is opt-in). It also stamps the owner
+      // (ADR-0059), so the first persisted write carries the account it belongs to;
+      // an ownerless START leaves the owner unchanged.
       return {
         ...state,
         status: "in_progress",
+        accountId: event.accountId ?? state.accountId,
         startedAt: event.now ?? null,
         lastActivityAt: event.now ?? null,
       };
