@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { useEffect, useReducer, useState, useTransition } from "react";
 import {
@@ -35,6 +36,12 @@ import {
   type LiveSessionState,
 } from "@/lib/live-session";
 import { mapFinishToLog } from "@/lib/live-session-mapper";
+import {
+  browserMintKey,
+  decideFinishOutcome,
+  stampWithFreshKey,
+  type FinishAttempt,
+} from "@/lib/live-session-finish";
 import { useWakeLock } from "@/lib/use-wake-lock";
 import type { Phase } from "@/lib/wake-lock";
 import { LiveSessionSets } from "@/components/live-session-sets";
@@ -114,6 +121,9 @@ export function LiveSessionScreen({
   // by another account rather than offering a cross-account resume. `isLoaded` gates
   // the decision so a not-yet-hydrated auth read never purges the user's own slot.
   const { userId, isLoaded: isAuthLoaded } = useAuth();
+  // The normal finish records without navigating (ADR-0060), so the screen routes to
+  // history itself once the write is acknowledged and the slot released.
+  const router = useRouter();
   const [finishState, setFinishState] = useState<FinishState>({ error: null });
   const [pending, startTransition] = useTransition();
   // The lifecycle phase, plus the states the non-live phases render from: the
@@ -146,9 +156,17 @@ export function LiveSessionScreen({
   // Begin this Session's performance: START stamps the instant Session Duration
   // measures from (not_started → in_progress) and the owner it belongs to (ADR-0059).
   // The single call site for every "start this Session fresh" path — a fresh slot, a
-  // purged foreign slot, and ending a blocking session — so the owner is always stamped.
+  // purged foreign slot, and ending a blocking session — so the owner and the finish
+  // idempotency key are always stamped. The key is minted here (ADR-0060 — issue #412),
+  // once per performance, so it is already in the first persisted slot; a finish that
+  // fails and is retried resends this same key and the server dedupes it (issue #410).
   function startFresh(accountId: string | null) {
-    dispatch({ type: "START", now: Date.now(), accountId: accountId ?? undefined });
+    dispatch({
+      type: "START",
+      now: Date.now(),
+      accountId: accountId ?? undefined,
+      idempotencyKey: browserMintKey(),
+    });
     setPhase("live");
   }
 
@@ -211,14 +229,31 @@ export function LiveSessionScreen({
   // where unsupported. It never touches the idle/duration model (ADR-0014).
   useWakeLock(phase, keepScreenAwake);
 
-  // Finalize an idle-expired performance as Incomplete (ADR-0014): record the
-  // completed sets (idle-excluded duration) and show a summary instead of resuming.
-  // The slot is cleared only once the record succeeds — a failed POST keeps the
-  // slot so the next foreground retries the auto-end rather than losing the sets.
-  function endIdleSession(stored: LiveSessionState) {
-    const finished = liveSessionReducer(stored, { type: "FINISH" });
-    setSummary(finished);
-    setPhase("summary");
+  // Adapt a finish server-action call into the FinishAttempt the pure decider reads
+  // (lib/live-session-finish): an error envelope is a server-side failure, a
+  // thrown/rejected call (offline, a dropped connection — the response never came back)
+  // is `unreachable`, and a clean return is an acknowledged write. The effect-side shell
+  // around the pure clear-or-retain decision.
+  async function attemptFinish(
+    call: () => Promise<FinishState>,
+  ): Promise<FinishAttempt> {
+    try {
+      const result = await call();
+      return result?.error
+        ? { status: "error", message: result.error }
+        : { status: "acknowledged" };
+    } catch {
+      return { status: "unreachable" };
+    }
+  }
+
+  // Record an idle-auto-ended performance (ADR-0014) — shared by the initial auto-end
+  // and the summary's manual Retry, so both resend the SAME idempotency key (the
+  // finished state carries it). The slot is cleared only once the record is
+  // acknowledged; a failed or unreachable POST keeps the key-stamped slot and surfaces
+  // the error, so the user can retry (or the next foreground re-fires the auto-end)
+  // without losing the sets or double-writing them (ADR-0060).
+  function recordIdleFinish(finished: LiveSessionState) {
     const payload = mapFinishToLog(finished, today, weightUnit);
     if (!payload) {
       // No completed set to record — nothing to persist, so just drop the slot.
@@ -226,29 +261,52 @@ export function LiveSessionScreen({
       return;
     }
     startTransition(async () => {
-      const result = await recordLiveSession(stored.sessionId, payload);
-      if (result?.error) {
-        setFinishState({ error: result.error });
+      const outcome = decideFinishOutcome(
+        await attemptFinish(() => recordLiveSession(finished.sessionId, payload)),
+      );
+      if (outcome.kind === "clear") {
+        clearLiveSessionSlot();
+        setFinishState({ error: null });
         return;
       }
-      clearLiveSessionSlot();
+      setFinishState({ error: outcome.error });
     });
+  }
+
+  // Finalize an idle-expired performance as Incomplete (ADR-0014): key-stamp it, show a
+  // summary instead of resuming, and record the completed sets (idle-excluded duration).
+  function endIdleSession(stored: LiveSessionState) {
+    const stamped = stampWithFreshKey(stored, browserMintKey);
+    const finished = liveSessionReducer(stamped, { type: "FINISH" });
+    setSummary(finished);
+    setPhase("summary");
+    // Persist the key-stamped (still-unfinished) slot before the write, so a failed
+    // auto-end resumes and retries with the same key rather than minting a new one.
+    writeLiveSessionSlot(stamped);
+    recordIdleFinish(finished);
   }
 
   // End the other unfinished session that blocks this one: record it as-is (no work
   // discarded — ADR-0012), then start this Session fresh in place. The slot is
-  // cleared only after a successful record, so a failed POST keeps that session's
-  // work intact and the user stays on the block to retry.
+  // cleared only after an acknowledged record, so a failed or unreachable POST keeps
+  // that session's work intact and the user stays on the block to retry. The finish
+  // carries its idempotency key (ADR-0060), stamped onto the block's state and the
+  // slot so a retry — even after a reload of this prompt — resends the same key.
   function handleEndExisting() {
     const existing = blockedExisting;
     if (!existing) return;
-    const finished = liveSessionReducer(existing, { type: "FINISH" });
+    const stamped = stampWithFreshKey(existing, browserMintKey);
+    const finished = liveSessionReducer(stamped, { type: "FINISH" });
     const payload = mapFinishToLog(finished, today, weightUnit);
+    setBlockedExisting(stamped);
+    if (payload) writeLiveSessionSlot(stamped);
     startTransition(async () => {
       if (payload) {
-        const result = await recordLiveSession(existing.sessionId, payload);
-        if (result?.error) {
-          setFinishState({ error: result.error });
+        const outcome = decideFinishOutcome(
+          await attemptFinish(() => recordLiveSession(existing.sessionId, payload)),
+        );
+        if (outcome.kind === "retain") {
+          setFinishState({ error: outcome.error });
           return;
         }
       }
@@ -356,18 +414,26 @@ export function LiveSessionScreen({
   }
 
   function handleFinish() {
-    const snapshot = state;
-    const payload = mapFinishToLog(snapshot, today, weightUnit);
-    // Clear the slot up front: the success path redirects to history and never
-    // returns here, so an uncleared slot would otherwise re-offer to "resume" an
-    // already-logged session. On failure the snapshot is written back below.
-    clearLiveSessionSlot();
+    // Reuse the key minted at START (or mint one for a slot written before this
+    // shipped) so a retry resends the SAME key and the server dedupes it to one Logged
+    // Session (ADR-0060 — issue #412). The slot is NOT cleared up front: it is released
+    // only on an acknowledged success below, so a dropped connection or a lost response
+    // keeps the work and its key for a retry rather than losing it or double-writing it.
+    const stamped = stampWithFreshKey(state, browserMintKey);
+    const payload = mapFinishToLog(stamped, today, weightUnit);
+    writeLiveSessionSlot(stamped);
     startTransition(async () => {
-      const result = await finishLiveSession(session.id, payload);
-      if (result?.error) {
-        setFinishState({ error: result.error });
-        writeLiveSessionSlot(snapshot);
+      const outcome = decideFinishOutcome(
+        await attemptFinish(() => finishLiveSession(session.id, payload)),
+      );
+      if (outcome.kind === "clear") {
+        // Acknowledged: release the slot, then route to history (the action no longer
+        // redirects, so the slot is provably gone before we navigate).
+        clearLiveSessionSlot();
+        router.push("/history");
+        return;
       }
+      setFinishState({ error: outcome.error });
     });
   }
 
@@ -412,6 +478,8 @@ export function LiveSessionScreen({
         session={session}
         summary={summary}
         error={finishState.error}
+        pending={pending}
+        onRetry={() => recordIdleFinish(summary)}
       />
     );
   }
@@ -629,15 +697,21 @@ interface IdleEndedSummaryProps {
   session: WorkoutSession;
   summary: LiveSessionState;
   error: string | null;
+  pending: boolean;
+  onRetry: () => void;
 }
 
 // The idle auto-end summary (ADR-0014): the user returned after >30 minutes, so
 // the performance was finalized as Incomplete. The completed sets and the
 // idle-excluded duration are what got recorded — shown here instead of resuming.
+// When the record failed, the sets are still held on the device (ADR-0060): a Retry
+// resends the same idempotency key, so the history link is withheld until it lands.
 function IdleEndedSummary({
   session,
   summary,
   error,
+  pending,
+  onRetry,
 }: IdleEndedSummaryProps): React.JSX.Element {
   const completed = summary.sets.filter((s) => s.status === "completed").length;
   const total = summary.sets.length;
@@ -684,12 +758,22 @@ function IdleEndedSummary({
         </div>
       </Card>
 
-      <Link
-        href="/history"
-        className={buttonVariants({ className: "w-full" })}
-      >
-        View training history
-      </Link>
+      {error ? (
+        // The record didn't land — keep the sets and offer a retry (the same key is
+        // resent, so a duplicate is impossible). Don't route to history yet; it would
+        // imply a save that hasn't happened.
+        <Button type="button" onClick={onRetry} disabled={pending} className="w-full">
+          <Flag className="h-4 w-4" />
+          {pending ? "Saving…" : "Retry saving session"}
+        </Button>
+      ) : (
+        <Link
+          href="/history"
+          className={buttonVariants({ className: "w-full" })}
+        >
+          View training history
+        </Link>
+      )}
       <BackLink href={`/sessions/${session.id}`}>Back to session</BackLink>
     </section>
   );

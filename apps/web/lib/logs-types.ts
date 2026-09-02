@@ -80,6 +80,11 @@ export interface LogSessionInput {
   // The recorded Session Duration in whole seconds (ADR-0014). Optional and nullable:
   // the Live Session sends start → last-activity time; the static form omits it.
   duration_seconds?: number | null;
+  // The client-minted idempotency key (ADR-0060) that dedupes a retried finish to one
+  // Logged Session server-side (issue #410): a retry resends the same key and the write
+  // upsert-returns the first record. Optional/nullable — a keyless write still records
+  // (the static log form, which has no retry path of its own).
+  idempotency_key?: string | null;
   logged_sets: LogSetInput[];
 }
 

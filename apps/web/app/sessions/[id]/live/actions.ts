@@ -1,7 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
-
 import { logSession } from "@/lib/logs";
 import type { LogSessionInput } from "@/lib/logs-types";
 
@@ -33,14 +31,16 @@ async function record(
   return { error: null };
 }
 
-// Finish a Live Session and route to history — the normal "Finish session" path.
+// Finish a Live Session — the normal "Finish session" path. Records the performance
+// and returns the outcome *without* navigating: the screen clears the on-device live
+// slot only on this acknowledged success and then routes to history itself (ADR-0060,
+// issue #412). Redirecting here would throw before the client could distinguish a
+// committed write from a dropped one, so the slot must be released client-side.
 export async function finishLiveSession(
   sessionId: number,
   input: LogSessionInput | null,
 ): Promise<FinishState> {
-  const result = await record(sessionId, input);
-  if (result.error) return result;
-  redirect("/history");
+  return record(sessionId, input);
 }
 
 // Record a Live Session without navigating — used when the screen shows its own

@@ -137,6 +137,35 @@ test("START moves a not-started session in progress", () => {
   assert.equal(state.status, "not_started");
 });
 
+test("initLiveSession has no idempotency key until START stamps one", () => {
+  // A not-yet-started performance carries no finish key (ADR-0060) — it is never
+  // persisted, so this null never reaches a slot.
+  assert.equal(initLiveSession(SESSION, "kg").idempotencyKey, null);
+});
+
+test("START stamps the client-minted idempotency key onto the performance", () => {
+  // Arrange
+  const state = initLiveSession(SESSION, "kg");
+
+  // Act — a keyed START carries the finish key the slot and its finish will use
+  const started = liveSessionReducer(state, {
+    type: "START",
+    idempotencyKey: "finish-key-abc",
+  });
+
+  // Assert — stamped on the copy; the original is untouched (immutability)
+  assert.equal(started.idempotencyKey, "finish-key-abc");
+  assert.equal(state.idempotencyKey, null);
+});
+
+test("START without a key leaves the idempotency key unchanged", () => {
+  // A timing-only START (no key) does not clear a key already stamped — each field is
+  // independently opt-in.
+  const seeded = { ...initLiveSession(SESSION, "kg"), idempotencyKey: "keep-me" };
+  const started = liveSessionReducer(seeded, { type: "START", now: 1 });
+  assert.equal(started.idempotencyKey, "keep-me");
+});
+
 test("COMPLETE_SET records the edited reps/load/RPE and marks the set complete", () => {
   // Arrange
   const state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });

@@ -17,6 +17,8 @@ import type { LogSessionInput, LogSetInput } from "./logs-types";
 // payload carries the derived Completion Outcome (ADR-0013) the engine computes
 // from whether every prescribed set was attempted, and the recorded Session Duration
 // (ADR-0014) — start → last activity, excluding the idle tail, or null when untracked.
+// The state's client-minted idempotency key (ADR-0060) rides along, so a retried finish
+// resends the same key and the server dedupes it to one Logged Session (issue #410).
 export function mapFinishToLog(
   state: LiveSessionState,
   performedOn: string,
@@ -44,6 +46,7 @@ export function mapFinishToLog(
     performed_on: performedOn,
     completion_outcome: completionOutcome(state),
     duration_seconds: durationSeconds(state.startedAt, state.lastActivityAt),
+    idempotency_key: state.idempotencyKey,
     logged_sets: loggedSets,
   };
 }
