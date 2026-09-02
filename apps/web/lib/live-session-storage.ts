@@ -36,7 +36,11 @@ export function loadLiveSession(storage: SlotStorage): LiveSessionState | null {
 
   try {
     const parsed: unknown = JSON.parse(raw);
-    return isLiveSessionState(parsed) ? parsed : null;
+    if (!isLiveSessionState(parsed)) return null;
+    // Normalize a slot written before #412 (no finish key) to an explicit null, so the
+    // resumed state is well-typed (`string | null`) and its finish mints a key rather
+    // than reading an `undefined` (ADR-0060). A keyed slot passes through unchanged.
+    return { ...parsed, idempotencyKey: parsed.idempotencyKey ?? null };
   } catch {
     // Malformed JSON — fall back to empty rather than propagating the parse error.
     return null;
@@ -70,6 +74,13 @@ function isLiveSessionState(value: unknown): value is LiveSessionState {
     // outcome as any structurally invalid slot, rather than a guessed owner. A stored
     // slot always carries a real id (START stamps it before the first persist).
     typeof state.accountId === "string" &&
+    // The client-minted finish idempotency key (ADR-0060, issue #412). Unlike the owner
+    // id, an absent/null key must NOT purge the slot: a keyed START stamps a string, but
+    // a slot written before this shipped carries none — it is still valid to resume and
+    // mints a key at finish. So absent (undefined) and null both pass; only a wrong
+    // *type* (a non-string key) is rejected. `loadLiveSession` normalizes absent → null.
+    (state.idempotencyKey === undefined ||
+      isNullableString(state.idempotencyKey)) &&
     typeof state.currentIndex === "number" &&
     isLiveStatus(state.status) &&
     isNullableNumber(state.startedAt) &&

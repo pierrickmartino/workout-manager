@@ -73,6 +73,13 @@ export interface LiveSessionState {
   // in a not-yet-started performance (no owner until START) — such a state is never
   // persisted, so a stored slot always carries a real id.
   accountId: string | null;
+  // The client-minted idempotency key (ADR-0060, issue #412) that makes the finish
+  // duplicate-proof. Stamped on START and carried through the persisted slot, so a
+  // finish that fails and is retried — even after a reload or force-quit — resends the
+  // *same* key and the server (issue #410) upsert-returns the first Logged Session
+  // rather than creating a second. Null until a keyed START; a slot written before this
+  // shipped also reads null and mints a key at finish (see lib/live-session-finish).
+  idempotencyKey: string | null;
   sets: LiveSet[];
   currentIndex: number;
   status: LiveStatus;
@@ -85,10 +92,11 @@ export interface LiveSessionState {
 }
 
 export type LiveEvent =
-  // START stamps the owner (`accountId`, ADR-0059) alongside the timing instant, so
-  // the first persisted write of a fresh performance already carries who it belongs
-  // to. Omitting it (untimed/ownerless START) leaves the owner unchanged.
-  | { type: "START"; now?: number; accountId?: string }
+  // START stamps the owner (`accountId`, ADR-0059) and the client-minted idempotency
+  // key (`idempotencyKey`, ADR-0060 — issue #412) alongside the timing instant, so the
+  // first persisted write of a fresh performance already carries who it belongs to and
+  // the stable key its finish will dedupe on. Omitting a field leaves it unchanged.
+  | { type: "START"; now?: number; accountId?: string; idempotencyKey?: string }
   | {
       type: "COMPLETE_SET";
       index: number;
@@ -362,6 +370,9 @@ export function initLiveSession(
     // Owner is unknown until START stamps the signed-in account (ADR-0059); a
     // not-yet-started performance is never persisted, so this null never reaches a slot.
     accountId: null,
+    // No idempotency key until START mints one (ADR-0060); like the owner, it never
+    // reaches a slot while null (a not-yet-started performance is never persisted).
+    idempotencyKey: null,
     sets,
     currentIndex: 0,
     status: "not_started",
@@ -381,12 +392,13 @@ export function liveSessionReducer(
       if (state.status !== "not_started") return state;
       // A timed START seeds both the start and the first last-activity instant; an
       // untimed one leaves them null (timing is opt-in). It also stamps the owner
-      // (ADR-0059), so the first persisted write carries the account it belongs to;
-      // an ownerless START leaves the owner unchanged.
+      // (ADR-0059) and the finish idempotency key (ADR-0060), so the first persisted
+      // write carries both; a START omitting either leaves that field unchanged.
       return {
         ...state,
         status: "in_progress",
         accountId: event.accountId ?? state.accountId,
+        idempotencyKey: event.idempotencyKey ?? state.idempotencyKey,
         startedAt: event.now ?? null,
         lastActivityAt: event.now ?? null,
       };

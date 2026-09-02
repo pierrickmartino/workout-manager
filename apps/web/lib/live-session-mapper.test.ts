@@ -229,6 +229,39 @@ test("records no duration for an untracked session (the static-form case)", () =
   assert.equal(payload.duration_seconds, null);
 });
 
+test("carries the client-minted idempotency key so a retry dedupes server-side", () => {
+  // Arrange — a keyed START (ADR-0060) stamps the finish idempotency key onto state
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), {
+    type: "START",
+    now: 1_000_000,
+    accountId: "user_1",
+    idempotencyKey: "finish-key-abc",
+  });
+  state = complete(state, 0, 5, "70", 7);
+  state = liveSessionReducer(state, { type: "FINISH" });
+
+  // Act
+  const payload = mapFinishToLog(state, "2026-07-06", "kg");
+
+  // Assert — the key rides on the payload the log endpoint dedupes on (issue #410)
+  assert.ok(payload);
+  assert.equal(payload.idempotency_key, "finish-key-abc");
+});
+
+test("a keyless performance maps to a null idempotency key (a slot written before #412)", () => {
+  // Arrange — START without a key, as a pre-#412 slot resumes
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
+  state = complete(state, 0, 5, "70", 7);
+  state = liveSessionReducer(state, { type: "FINISH" });
+
+  // Act
+  const payload = mapFinishToLog(state, "2026-07-06", "kg");
+
+  // Assert — a keyless write still records (the server accepts a null key)
+  assert.ok(payload);
+  assert.equal(payload.idempotency_key, null);
+});
+
 test("finishing with zero completed sets writes nothing (null payload)", () => {
   // Arrange — start and finish without completing any set
   let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
