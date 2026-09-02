@@ -285,7 +285,8 @@ class SessionRepository(Protocol):
         Carries the source's training parameters, Session Provenance, ``trace_id``
         lineage, the Session ``name`` and Protocol ``title`` verbatim, plus every
         Exercise Prescription with
-        its sets/reps/rest/tempo/Load and Superset grouping — but **no Logged Sessions**
+        its sets/reps/rest/tempo/Load, Superset grouping and Progression Scheme selection
+        (a plan property, carried like the rest — ADR-0064) — but **no Logged Sessions**
         and **no Protocol position** (``protocol_id``/week/day/position are dropped), so
         the copy stands alone. The copy is a distinct Session with a **fresh regeneration
         budget** (``has_been_regenerated`` starts ``False``). The source is read, never
@@ -327,9 +328,11 @@ class SessionRepository(Protocol):
         redeem-copy rule (``app.domain.share_redeem``): the new **Owner** is the redeemer, the
         **Author** is preserved as the original creator, and the **Session Name**, **Session
         Provenance** and ``trace_id`` **lineage** carry forward unchanged. Every Exercise
-        Prescription (sets/reps/rest/tempo/Load/Superset/Pin) is copied faithfully from the
-        source's **redeem-time** state; the copy carries **no Logged Sessions**, **no Protocol
-        position**, a **fresh regeneration budget**, and **no Favorite** (a new id with no
+        Prescription (sets/reps/rest/tempo/Load/Superset/Pin/Progression Scheme) is copied
+        faithfully from the source's **redeem-time** state — the scheme is a plan property that
+        travels with the copy, not a per-owner marker like Favorite (ADR-0064). The copy carries
+        **no Logged Sessions**, **no Protocol position**, a **fresh regeneration budget**, and
+        **no Favorite** (a new id with no
         marker). The source is read, never mutated; the two copies are thereafter independent.
         Returns the new Session, or ``None`` if the source no longer exists."""
         ...
