@@ -21,6 +21,13 @@ from collections.abc import Callable
 from enum import Enum
 
 from app.domain.load import LoadKind, ParsedLoad
+
+# The step constants and the rep-grammar helpers are borrowed from the sibling Progression
+# module on purpose: the preview must quote the very numbers the schemes step by and read the
+# reps by the very same grammar, so single-sourcing them here is what keeps the description
+# from drifting from the behaviour. The underscore-prefixed helpers are private-by-convention
+# within the progression domain; reused here (not re-implemented) so the rep grammar has one
+# home — renaming one is a deliberate, co-located change to both.
 from app.domain.progression import (
     DECREASE_KG,
     INCREASE_KG,

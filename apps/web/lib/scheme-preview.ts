@@ -76,7 +76,9 @@ function axisOf(load: Load | null | undefined): Axis {
   return "none";
 }
 
-// Render a kilogram amount without a trailing ".0" (2.5 → "2.5 kg", 5 → "5 kg").
+// Append the kilogram unit to a step amount. JS number-to-string already drops a trailing
+// ".0" (5 → "5", 2.5 → "2.5"), so this only adds the unit — the twin of the backend
+// `_format_kg`, which strips the ".0" explicitly off a Python float.
 function formatKg(value: number): string {
   return `${value} kg`;
 }
