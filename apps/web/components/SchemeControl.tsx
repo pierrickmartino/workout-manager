@@ -11,8 +11,10 @@ import {
 import {
   DEFAULT_SCHEME,
   schemeLabel,
+  type ProgressionScheme,
   type SchemeControlModel,
 } from "@/lib/scheme-view";
+import { schemePreview } from "@/lib/scheme-preview";
 import { Button } from "@/components/ui/button";
 
 interface SchemeControlProps {
@@ -37,6 +39,10 @@ export function SchemeControl({ sessionId, position, model }: SchemeControlProps
 
   const unchanged = choice === model.current;
   const selectId = `scheme-${sessionId}-${position}`;
+  // Scheme Preview (ADR-0064/0065, #452): a plain-language sentence describing what the *currently
+  // selected* scheme will do next, recomputed from the live `choice` so it updates as the select
+  // changes — before the plan edit is applied. A read-time projection: it stores nothing.
+  const preview = schemePreview(choice as ProgressionScheme, model.reps, model.load);
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -67,6 +73,12 @@ export function SchemeControl({ sessionId, position, model }: SchemeControlProps
           {pending ? "Applying…" : "Apply scheme"}
         </Button>
       </form>
+      <p
+        aria-live="polite"
+        className="max-w-prose font-mono text-[11px] leading-snug text-text-muted"
+      >
+        {preview}
+      </p>
       {model.isOverridden ? (
         <ResetSchemeForm sessionId={sessionId} position={position} />
       ) : (
