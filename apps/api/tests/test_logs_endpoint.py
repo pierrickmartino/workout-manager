@@ -186,6 +186,140 @@ def test_user_logs_a_performance_and_reads_it_back_in_history():
     assert entries[0]["id"] == data["id"]
 
 
+def test_logging_effort_in_rir_echoes_the_typed_value_and_mirrors_rpe():
+    # Arrange — a set logged with effort in the RIR scale (ADR-0066)
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_effort_rir")
+    session = _generate_session(client, headers)
+    body = _log_body(
+        session,
+        logged_sets=[
+            {
+                "exercise_id": session["prescriptions"][0]["exercise_id"],
+                "quantity_value": "5",
+                "load_kind": "absolute",
+                "load_value": "70",
+                "effort_scale": "rir",
+                "effort_value": 3,
+            }
+        ],
+    )
+
+    # Act
+    logged = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=body
+    )
+
+    # Assert — the typed Effort is echoed in the scale it was logged…
+    assert logged.status_code == 200
+    logged_set = logged.json()["data"]["logged_sets"][0]
+    assert logged_set["effort"] == {"scale": "rir", "value": 3}
+    # …and the dual-write mirrors its RPE-equivalent (10 − 3 = 7) into the legacy int
+    assert logged_set["perceived_difficulty"] == 7
+
+
+def test_logging_effort_in_rpe_stores_a_half_step_typed_value():
+    # Arrange — a half-step RPE, a resolution the legacy int cannot hold
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_effort_rpe")
+    session = _generate_session(client, headers)
+    body = _log_body(
+        session,
+        logged_sets=[
+            {
+                "exercise_id": session["prescriptions"][0]["exercise_id"],
+                "quantity_value": "5",
+                "load_kind": "absolute",
+                "load_value": "70",
+                "effort_scale": "rpe",
+                "effort_value": 6.5,
+            }
+        ],
+    )
+
+    # Act
+    logged = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=body
+    )
+
+    # Assert — the half-step survives on the typed value; the mirror rounds to an int
+    assert logged.status_code == 200
+    logged_set = logged.json()["data"]["logged_sets"][0]
+    assert logged_set["effort"] == {"scale": "rpe", "value": 6.5}
+    assert logged_set["perceived_difficulty"] in (6, 7)
+
+
+def test_an_out_of_range_effort_is_rejected_at_the_boundary():
+    # Arrange — RIR 2.5 is not a valid member (RIR is an integer 0–5)
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_effort_bad")
+    session = _generate_session(client, headers)
+    body = _log_body(
+        session,
+        logged_sets=[
+            {
+                "exercise_id": session["prescriptions"][0]["exercise_id"],
+                "quantity_value": "5",
+                "effort_scale": "rir",
+                "effort_value": 2.5,
+            }
+        ],
+    )
+
+    # Act
+    logged = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=body
+    )
+
+    # Assert — a boundary rejection, never a stored guess
+    assert logged.status_code == 422
+    assert logged.json()["success"] is False
+
+
+def test_an_unknown_effort_scale_is_rejected_at_the_boundary():
+    # Arrange — a scale outside the closed RPE/RIR vocabulary
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_effort_scale")
+    session = _generate_session(client, headers)
+    body = _log_body(
+        session,
+        logged_sets=[
+            {
+                "exercise_id": session["prescriptions"][0]["exercise_id"],
+                "quantity_value": "5",
+                "effort_scale": "borg",
+                "effort_value": 15,
+            }
+        ],
+    )
+
+    # Act
+    logged = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=body
+    )
+
+    # Assert
+    assert logged.status_code == 422
+
+
+def test_a_returning_users_legacy_effort_still_serializes_with_no_typed_effort():
+    # Arrange — an rpe-only client sends only perceived_difficulty (no effort fields)
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_effort_legacy")
+    session = _generate_session(client, headers)
+
+    # Act
+    logged = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=_log_body(session)
+    )
+
+    # Assert — the legacy int rides through; no typed Effort is fabricated
+    assert logged.status_code == 200
+    logged_set = logged.json()["data"]["logged_sets"][0]
+    assert logged_set["perceived_difficulty"] == 8
+    assert logged_set["effort"] is None
+
+
 def test_client_declared_completion_outcome_is_persisted_and_serialized():
     # Arrange — the client declares the performance Incomplete (ADR-0013)
     client, ctx = build_client()

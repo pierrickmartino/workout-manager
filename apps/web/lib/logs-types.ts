@@ -2,6 +2,7 @@
 // safe to import from both Server and Client Components. The server-only data
 // access (Clerk auth + fetch) lives in `lib/logs.ts`.
 
+import type { Effort, EffortScale } from "./effort";
 import type { Load, LoadKind } from "./load";
 import type { Quantity, QuantityKind } from "./quantity";
 
@@ -18,6 +19,11 @@ export interface LoggedSet {
   quantity: Quantity | null;
   load: Load | null;
   perceived_difficulty: number | null;
+  // The typed Effort (ADR-0066) the user logged, in either scale (RPE or RIR), or null/absent
+  // when none was recorded — the set then falls back to `perceived_difficulty` read as RPE. The
+  // display projects RPE⇄RIR at read time (`lib/effort.ts`), the effort counterpart of the
+  // kg/lb Weight-Unit projection.
+  effort?: Effort | null;
   exercise_id: number;
   exercise_name: string;
   // The Performed Body Weight (ADR-0026) — the performer's mass snapshotted onto the set,
@@ -72,6 +78,12 @@ export interface LogSetInput {
   load_kind: LoadKind;
   load_value: string | null;
   perceived_difficulty: number | null;
+  // The logged Effort in either scale (ADR-0066): `effort_scale` is the picked scale and
+  // `effort_value` its number. Both omitted means no typed effort (an rpe-only client still
+  // sends `perceived_difficulty`); the backend dual-writes the typed value and mirrors an RPE
+  // value into `perceived_difficulty`.
+  effort_scale?: EffortScale;
+  effort_value?: number | null;
 }
 
 // The request the user submits to record a performance of a Session. The

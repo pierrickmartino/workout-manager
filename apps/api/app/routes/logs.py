@@ -12,10 +12,11 @@ from __future__ import annotations
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.auth.dependencies import get_current_user
 from app.domain.completion import parse_completion_outcome
+from app.domain.effort import EffortScale, effort_from_input
 from app.domain.load import LoadKind, load_from_input
 from app.domain.quantity import QuantityKind, quantity_from_input
 from app.domain.set_type import SetType, parse_set_type
@@ -91,6 +92,15 @@ class LogSetBody(BaseModel):
     load_kind: str = DEFAULT_LOAD_KIND
     load_value: str | None = None
     perceived_difficulty: int | None = Field(default=None, ge=MIN_RPE, le=MAX_RPE)
+    # Logged Effort (ADR-0066): a typed value logged in *either* scale — ``effort_scale`` is
+    # the picked scale (``rpe`` / ``rir``) and ``effort_value`` its number. Both absent means
+    # no effort recorded (the set falls back to ``perceived_difficulty``); a present value with
+    # no scale defaults to RPE, so an rpe-only client logs exactly as before. The value is
+    # validated against its scale's band at the boundary (below) and rejected (422) if invalid.
+    # On write the set dual-writes: ``to_draft`` stores the typed ``effort`` and mirrors an RPE
+    # value into ``perceived_difficulty`` so the gate and any legacy reader both keep working.
+    effort_scale: str | None = None
+    effort_value: float | None = None
     # Set Type annotation (ADR-0065, #449): a chosen ``SetType`` value tagging what this
     # performed set *was*, or ``None``/blank for "unset" (reads as working). Descriptive
     # only — echoed back per Logged Set, never a Progression input. Rides the finish, the
@@ -130,6 +140,29 @@ class LogSetBody(BaseModel):
             raise ValueError(f"set_type must be one of: {allowed}")
         return value
 
+    @field_validator("effort_scale")
+    @classmethod
+    def _known_effort_scale(cls, value: str | None) -> str | None:
+        # A blank/absent scale normalizes to ``None`` (an RPE value can be logged with no
+        # explicit scale); a present but unknown scale is rejected at the boundary.
+        if value is None or value == "":
+            return None
+        if value not in (scale.value for scale in EffortScale):
+            allowed = ", ".join(scale.value for scale in EffortScale)
+            raise ValueError(f"effort_scale must be one of: {allowed}")
+        return value
+
+    @model_validator(mode="after")
+    def _valid_effort(self) -> "LogSetBody":
+        # Validate the scale+value combination once, so an out-of-band value (RPE 11, RIR 2.5,
+        # a non-half-step) is rejected (422) at the boundary rather than stored as a number
+        # whose meaning was guessed. A blank value is no effort and passes.
+        try:
+            effort_from_input(self.effort_scale, self.effort_value)
+        except ValueError as exc:
+            raise ValueError(f"effort: {exc}") from exc
+        return self
+
     def to_draft(self) -> LoggedSetDraft:
         parsed = load_from_input(self.load_kind, self.load_value)
         quantity = quantity_from_input(
@@ -138,11 +171,23 @@ class LogSetBody(BaseModel):
             unit=self.quantity_unit,
             duration=self.quantity_duration,
         )
+        # Dual-write the typed Effort (ADR-0066): when an effort is logged, store the typed
+        # value *and* mirror its RPE-equivalent into the legacy int, so the progression gate
+        # (which prefers the typed value) and any reader still on ``perceived_difficulty`` both
+        # keep working. With no effort logged, the legacy int the client sent rides through.
+        effort = effort_from_input(self.effort_scale, self.effort_value)
+        if effort is not None:
+            effort_dict = effort.to_dict()
+            perceived_difficulty = int(round(effort.as_rpe))
+        else:
+            effort_dict = None
+            perceived_difficulty = self.perceived_difficulty
         return LoggedSetDraft(
             exercise_id=self.exercise_id,
             quantity=quantity.to_dict() if quantity is not None else None,
             load=parsed.to_dict() if parsed is not None else None,
-            perceived_difficulty=self.perceived_difficulty,
+            perceived_difficulty=perceived_difficulty,
+            effort=effort_dict,
             set_type=self.set_type,
         )
 
@@ -195,6 +240,10 @@ def serialize_logged_session(view: LoggedSessionView) -> dict:
                 "quantity": s.quantity,
                 "load": s.load,
                 "perceived_difficulty": s.perceived_difficulty,
+                # Logged Effort (ADR-0066): the stored typed ``{scale, value}`` Effort, or null
+                # when none was recorded. Echoed in the scale the user logged; the web
+                # view-model projects RPE⇄RIR for display (mirroring the kg/lb projection).
+                "effort": s.effort,
                 # Set Type annotation (ADR-0065, #449): the stored ``SetType`` value, or
                 # null for "unset" (reads as working). Descriptive only; the web view-model
                 # renders it as a badge (no badge when unset).

@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
+from app.domain.effort import logged_effort_rpe
 from app.domain.load import LoadKind, ParsedLoad, parse_load
 from app.domain.quantity import repetitions_of
 
@@ -45,9 +46,10 @@ DECREASE_KG = 5.0
 # The fraction is the trait that distinguishes it from Double Progression's back-off.
 RESET_FRACTION = 0.9
 
-# Perceived difficulty is an RPE-style 1–10 score; at or below this the effort is
-# "low" enough to justify adding load. Above it, the set counts as hard and the
-# load only holds.
+# The logged Effort, read as an RPE number (ADR-0066), at or below which the effort is
+# "low" enough to justify adding load. Above it, the set counts as hard and the load only
+# holds. A logged RIR is normalized to its RPE-equivalent (10 − rir) before this compare, so
+# a set logged at "3 RIR" gates identically to one logged at "RPE 7".
 LOW_EFFORT_MAX = 7
 
 # The Session-Count-Based cadence (ADR-0064): the scheme steps unconditionally on
@@ -72,7 +74,14 @@ class _LoggedSet(Protocol):
     # ``repetitions_of``. A set with a non-rep amount (a run, a hold) has ``None`` reps
     # and neither counts as a missed-reps miss nor as having hit the rep ceiling.
     quantity: dict | None
+    # The effort axis (ADR-0066). ``effort`` is the typed ``{scale, value}`` value the gate
+    # reads in preference, normalizing a logged RIR to its RPE-equivalent;
+    # ``perceived_difficulty`` is the retained legacy RPE-style int, read as the fallback so
+    # existing records step exactly as before. ``effort`` is read defensively (a set may
+    # predate the column), so a value object carrying only ``perceived_difficulty`` still
+    # gates correctly.
     perceived_difficulty: int | None
+    effort: dict | None
 
 
 def _parse_load(load: str) -> tuple[float, str] | None:
@@ -369,9 +378,22 @@ def _is_pure_bodyweight(load: ParsedLoad) -> bool:
 
 
 def _low_effort(logged_sets: list[_LoggedSet]) -> bool:
+    """Whether every set was logged at low effort — the gate that lets a load step up.
+
+    Reads each set's effort as an RPE number through the one Effort seam (ADR-0066): a typed
+    ``effort`` wins and a logged RIR is normalized to ``10 − rir``, else the legacy
+    ``perceived_difficulty`` int reads as RPE. A set with no effort recorded at all yields
+    ``None`` and holds the load, exactly as before. ``effort`` is read defensively so a
+    logged-set value object that predates the column still gates on its int."""
+
     return all(
-        logged.perceived_difficulty is not None
-        and logged.perceived_difficulty <= LOW_EFFORT_MAX
+        (
+            rpe := logged_effort_rpe(
+                getattr(logged, "effort", None), logged.perceived_difficulty
+            )
+        )
+        is not None
+        and rpe <= LOW_EFFORT_MAX
         for logged in logged_sets
     )
 

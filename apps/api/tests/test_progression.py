@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 import pytest
 
+from app.domain.effort import Effort, EffortScale
 from app.domain.load import LoadKind, parse_load
 from app.domain.progression import (
     DEFAULT_SCHEME,
@@ -45,6 +46,10 @@ class _LoggedSet:
 
     reps: int
     perceived_difficulty: int | None = None
+    # The typed logged Effort (ADR-0066), when a test exercises the RIR/RPE gate directly.
+    # ``None`` (the common case) falls back to ``perceived_difficulty`` read as RPE, so the
+    # existing tests are untouched.
+    effort: dict | None = None
 
     @property
     def quantity(self) -> dict:
@@ -111,6 +116,55 @@ def test_missing_perceived_effort_holds_rather_than_increases():
 
     # Assert — without evidence the work was easy, the load only holds
     assert result == "60 kg"
+
+
+def test_a_logged_rir_gates_identically_to_the_equivalent_rpe():
+    # Arrange — the same strong session logged in RIR instead of RPE: "3 RIR" ≈ RPE 7, at
+    # the low-effort threshold, so it must earn the same load step as an RPE-logged one.
+    prescription = _Prescription(reps="5", recommended_load="60 kg")
+    rir_sets = [
+        _LoggedSet(reps=5, effort=Effort(EffortScale.RIR, 3).to_dict()) for _ in range(3)
+    ]
+
+    # Act
+    result = next_load(prescription, rir_sets)
+
+    # Assert — 3 RIR normalizes to RPE 7 (≤ 7) and steps the load exactly as RPE 7 does
+    assert result == "62.5 kg"
+
+
+def test_a_logged_low_rir_is_hard_effort_and_holds_the_load():
+    # Arrange — "0 RIR" (nothing left in the tank) normalizes to RPE 10: a grind, not easy
+    prescription = _Prescription(reps="5", recommended_load="60 kg")
+    sets = [
+        _LoggedSet(reps=5, effort=Effort(EffortScale.RIR, 0).to_dict()) for _ in range(3)
+    ]
+
+    # Act
+    result = next_load(prescription, sets)
+
+    # Assert — hard effort holds the load, whichever scale expressed it
+    assert result == "60 kg"
+
+
+def test_typed_effort_takes_precedence_over_the_legacy_int():
+    # Arrange — a dual-written set: the typed RIR 3 (≈ RPE 7, easy) is authoritative even
+    # though a mismatched legacy int of 9 (hard) sits alongside it.
+    prescription = _Prescription(reps="5", recommended_load="60 kg")
+    sets = [
+        _LoggedSet(
+            reps=5,
+            perceived_difficulty=9,
+            effort=Effort(EffortScale.RIR, 3).to_dict(),
+        )
+        for _ in range(3)
+    ]
+
+    # Act
+    result = next_load(prescription, sets)
+
+    # Assert — the gate reads the typed value, so the easy session steps the load up
+    assert result == "62.5 kg"
 
 
 def test_a_rep_range_increases_only_when_the_ceiling_is_reached():

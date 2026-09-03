@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { effortScaleLabel, loggedSetEffort } from "@/lib/effort";
 import { formatBodyWeight, formatLoad } from "@/lib/load";
 import { formatPace, formatQuantity, type Quantity } from "@/lib/quantity";
 import type { LoggedSet } from "@/lib/logs-types";
@@ -71,7 +72,10 @@ function LoggedSetRow({
   // the softer sub style and is allowed to wrap; an absolute weight stays on one line.
   const loadIsText =
     load != null && (load.kind === "bodyweight" || load.kind === "qualitative");
-  const hasRpe = loggedSet.perceived_difficulty != null;
+  // The typed Effort (ADR-0066): prefer the logged typed value, fall back to the legacy int
+  // read as RPE. Displayed in the scale it was logged, labelled to match (RPE / RIR); the
+  // projection helpers can render the other scale for a reader who thinks that way.
+  const effort = loggedSetEffort(loggedSet);
 
   return (
     <li className="rounded-sm border border-border bg-base/40 px-4 py-3">
@@ -97,9 +101,9 @@ function LoggedSetRow({
           <Stat label="BW" value={formatBodyWeight(loggedSet.body_weight_kg, unit)} />
         ) : null}
         <Stat
-          label="RPE"
-          value={hasRpe ? String(loggedSet.perceived_difficulty) : "—"}
-          valueClassName={hasRpe ? "text-cyan" : "font-normal text-text-muted"}
+          label={effort ? effortScaleLabel(effort.scale) : "RPE"}
+          value={effort ? String(effort.value) : "—"}
+          valueClassName={effort ? "text-cyan" : "font-normal text-text-muted"}
         />
       </div>
     </li>
