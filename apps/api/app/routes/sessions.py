@@ -35,6 +35,7 @@ from app.domain.progression import ProgressionScheme, parse_scheme
 from app.domain.quantity import QuantityKind, prescribed_quantity_from_input
 from app.domain.session_naming import session_label
 from app.domain.session_provenance import SessionProvenance
+from app.domain.set_type import SetType, parse_set_type
 from app.envelope import error_envelope, success_envelope
 from app.generation.generator import (
     GenerationError,
@@ -185,6 +186,10 @@ class AuthorPrescriptionBody(BaseModel):
     quantity_unit: str | None = None
     superset_group: str | None = None
     round_rest_seconds: int | None = None
+    # Set Type annotation (ADR-0065, #449): a chosen ``SetType`` value, or ``None``/blank
+    # for "unset" (reads as working). Descriptive only — echoed back on the Prescription,
+    # never a Progression input. Membership is checked at the boundary and never coerced.
+    set_type: str | None = None
 
     @field_validator("load_kind")
     @classmethod
@@ -210,6 +215,18 @@ class AuthorPrescriptionBody(BaseModel):
             raise ValueError(f"quantity_kind must be one of: {allowed}") from exc
         return value
 
+    @field_validator("set_type")
+    @classmethod
+    def _known_set_type(cls, value: str | None) -> str | None:
+        # A blank/absent Set Type is "unset" and normalizes to ``None`` (reads as working);
+        # a present but unknown value is a client bug rejected at the boundary, never coerced.
+        if value is None or value == "":
+            return None
+        if parse_set_type(value) is None:
+            allowed = ", ".join(member.value for member in SetType)
+            raise ValueError(f"set_type must be one of: {allowed}")
+        return value
+
     def to_draft(self) -> PrescriptionDraft:
         parsed = load_from_input(self.load_kind, self.load_value)
         # Type the plan's Prescribed Quantity at the write boundary (ADR-0050): the picked
@@ -231,6 +248,7 @@ class AuthorPrescriptionBody(BaseModel):
             prescribed_quantity=prescribed_quantity.to_dict(),
             superset_group=self.superset_group,
             round_rest_seconds=self.round_rest_seconds,
+            set_type=self.set_type,
         )
 
 

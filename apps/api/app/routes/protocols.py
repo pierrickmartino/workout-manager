@@ -22,6 +22,7 @@ from app.auth.dependencies import get_current_user
 from app.domain.fitness_profile import is_sensitive, resolve_equipment
 from app.domain.load import LoadKind, load_from_input
 from app.domain.progression import ProgressionScheme, parse_scheme
+from app.domain.set_type import SetType, parse_set_type
 from app.envelope import error_envelope, success_envelope
 from app.generation.orchestrator import GenerationOrchestrator
 from app.generation.protocol_generator import ProtocolGenerationRequest
@@ -229,6 +230,11 @@ class DeployPrescriptionBody(BaseModel):
     # checked here; its Load-kind *compatibility* is the deploy gate's job so a mismatch
     # surfaces as a located, retry-able ``incompatible_scheme`` rather than a 422 body error.
     scheme: str | None = None
+    # Set Type annotation (ADR-0065, #449): a chosen ``SetType`` value, or ``None``/blank
+    # for "unset" (reads as working). Membership is checked here; it has no Load or
+    # Progression compatibility rule, so — unlike ``scheme`` — nothing about it is deferred
+    # to the deploy gate. A descriptive label that rides Deploy re-numbered untouched.
+    set_type: str | None = None
 
     @field_validator("load_kind")
     @classmethod
@@ -251,6 +257,18 @@ class DeployPrescriptionBody(BaseModel):
         if parse_scheme(value) is None:
             allowed = ", ".join(scheme.value for scheme in ProgressionScheme)
             raise ValueError(f"scheme must be one of: {allowed}")
+        return value
+
+    @field_validator("set_type")
+    @classmethod
+    def _known_set_type(cls, value: str | None) -> str | None:
+        # A blank/absent Set Type is "unset" and normalizes to ``None`` (reads as working);
+        # a present but unknown value is a client bug rejected at the boundary, never coerced.
+        if value is None or value == "":
+            return None
+        if parse_set_type(value) is None:
+            allowed = ", ".join(member.value for member in SetType)
+            raise ValueError(f"set_type must be one of: {allowed}")
         return value
 
     def resolved_load(self) -> dict | None:
@@ -349,6 +367,7 @@ def deploy_protocol(
                         superset_group=prescription.superset_group,
                         round_rest_seconds=prescription.round_rest_seconds,
                         scheme=prescription.scheme,
+                        set_type=prescription.set_type,
                     )
                     for prescription in session.prescriptions
                 ],

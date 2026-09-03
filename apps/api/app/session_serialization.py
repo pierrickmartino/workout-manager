@@ -48,6 +48,9 @@ def serialize_prescription(view: PrescriptionView) -> dict:
         # Progression Scheme selection (ADR-0064): the chosen scheme value, or null for
         # the default (Double Progression). The read-time overlay dispatches through it.
         "scheme": view.scheme,
+        # Set Type annotation (ADR-0065, #449): the chosen ``SetType`` value, or null for
+        # "unset" — which the web view-model renders as no badge (a neutral working set).
+        "set_type": view.set_type,
         "exercise_id": view.exercise_id,
         "exercise_name": view.exercise_name,
         "exercise_description": view.exercise_description,

@@ -60,6 +60,7 @@ LOGGED_SET_CSV_COLUMNS: tuple[str, ...] = (
     "weight_unit",
     "perceived_difficulty",
     "body_weight_kg",
+    "set_type",
 )
 
 # The canonical unit every ``weight_kg`` value is expressed in, labeled on every row so a
@@ -159,6 +160,9 @@ def _row(
         "weight_unit": _WEIGHT_UNIT,
         "perceived_difficulty": logged_set.perceived_difficulty,
         "body_weight_kg": logged_set.body_weight_kg,
+        # Set Type annotation (ADR-0065): the performed set's Set Type, or blank for unset
+        # (reads as working) — the record's descriptive label, one column per set row.
+        "set_type": logged_set.set_type,
     }
 
 

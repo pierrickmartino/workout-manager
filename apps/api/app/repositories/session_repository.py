@@ -62,6 +62,11 @@ class PrescriptionDraft:
     # create/Duplicate/Regeneration-keep like the other prescription fields so a chosen
     # scheme survives a copy of the user's own plan.
     scheme: str | None = None
+    # Set Type annotation (ADR-0065, #449): the chosen ``SetType`` value, or ``None`` for
+    # "unset" — which reads as ``working``. A descriptive plan property (never a
+    # Progression input) carried through create/Duplicate/Redeem/Share/Substitution like
+    # the other prescription fields, so a tagged movement survives a copy of the plan.
+    set_type: str | None = None
 
 
 @dataclass(frozen=True)
@@ -110,6 +115,11 @@ class PrescriptionView:
     # resolves to the default (Double Progression). Defaulted so the many call sites that
     # build a view without a scheme keep reading unchanged as the un-chosen default.
     scheme: str | None = None
+    # Set Type annotation (ADR-0065, #449): the chosen ``SetType`` value, or ``None`` for
+    # "unset" — which the frontend view-model resolves to no badge (a neutral working set).
+    # Surfaced on the read so the session-detail response carries the tag to the web client.
+    # Defaulted so the many call sites that build a view without one read as unset.
+    set_type: str | None = None
 
 
 @dataclass(frozen=True)
@@ -479,6 +489,7 @@ def _draft_from(prescription: ExercisePrescription) -> PrescriptionDraft:
         superset_group=prescription.superset_group,
         round_rest_seconds=prescription.round_rest_seconds,
         scheme=prescription.scheme,
+        set_type=prescription.set_type,
     )
 
 
@@ -549,6 +560,7 @@ def _prescription_model(
         superset_group=draft.superset_group,
         round_rest_seconds=draft.round_rest_seconds,
         scheme=draft.scheme,
+        set_type=draft.set_type,
     )
 
 
@@ -572,6 +584,7 @@ def _prescription_view(
         required_equipment=list(exercise.required_equipment),
         provenance=exercise.provenance,
         scheme=prescription.scheme,
+        set_type=prescription.set_type,
     )
 
 
@@ -1077,6 +1090,7 @@ class InMemorySessionRepository:
                 superset_group=prescription.superset_group,
                 round_rest_seconds=prescription.round_rest_seconds,
                 scheme=prescription.scheme,
+                set_type=prescription.set_type,
             )
             for position, prescription in enumerate(prescriptions)
         ]
@@ -1330,6 +1344,7 @@ class InMemorySessionRepository:
                 superset_group=p.superset_group,
                 round_rest_seconds=p.round_rest_seconds,
                 scheme=p.scheme,
+                set_type=p.set_type,
             )
             for p in current
         ]
@@ -1367,6 +1382,7 @@ class InMemorySessionRepository:
                 superset_group=p.superset_group,
                 round_rest_seconds=p.round_rest_seconds,
                 scheme=scheme if p.position == position else p.scheme,
+                set_type=p.set_type,
             )
             for p in current
         ]

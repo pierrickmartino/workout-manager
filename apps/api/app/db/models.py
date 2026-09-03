@@ -339,6 +339,14 @@ class ExercisePrescription(SQLModel, table=True):
     # retired the Pinned Target: Static holds a movement's authored values where Pin
     # once froze them (ADR-0064, supersedes ADR-0053).
     scheme: str | None = Field(default=None)
+    # Set Type annotation (ADR-0065, #449): the movement line's ``SetType`` value
+    # (e.g. ``"warm_up"``), or NULL for "unset" — which reads as ``working``
+    # (``app.domain.set_type``). A descriptive, plan-level label, never a Progression
+    # input; schemes keep reading the rep grammar. Additive and nullable: every existing
+    # row reads NULL. It is a plan property like reps/load/rest/tempo/scheme, so it
+    # travels through create/Duplicate/Redeem/Share/Substitution and a Deploy tail edit,
+    # and only the user's own copy is ever written.
+    set_type: str | None = Field(default=None)
 
 
 class SessionFavorite(SQLModel, table=True):
@@ -476,6 +484,12 @@ class LoggedSet(SQLModel, table=True):
     # NULL when no weight was on file — the set is left outside strength records, not
     # given a fabricated mass. Additive/nullable: sets logged before this stay NULL.
     body_weight_kg: float | None = Field(default=None)
+    # Set Type annotation (ADR-0065, #449): the ``SetType`` value tagging what this
+    # performed set *was* (e.g. ``"warm_up"``), or NULL for "unset" — which reads as
+    # ``working`` (``app.domain.set_type``). A record-side, per-set label editable through
+    # Log Correction like any other Logged Set field; descriptive only in v1 (it feeds no
+    # analytics yet). Additive and nullable: every set logged before this reads NULL.
+    set_type: str | None = Field(default=None)
 
 
 class MetricEntry(SQLModel, table=True):
