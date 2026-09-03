@@ -66,6 +66,26 @@ _Avoid_: Reps (bare — that is one kind), work, volume (that is kg tonnage), am
 The prescribed speed of a repetition's phases on an Exercise Prescription, written as the standard 3- or 4-number notation — lowering / pause / lifting (/ pause at top), each figure a count of seconds. Read by the standard **eccentric-first** convention regardless of whether a movement actually begins with the lift (a deadlift or pull-up is not re-inspected per exercise), with a `0` or `X` in a movement phase meaning *explosive* and a `0` in a pause phase meaning *no pause*. The raw code is the stored form; the plain-language phase expansion ("3s lower · 1s pause · 1s lift") and a coarse, curated **three-state label** — **Explosive**, **Controlled**, or **Slow** — are **read-time projections** of it, never stored. The label is a signal, not a score: a deterministic function of the parsed tempo (explosive lift wins, then a slow/paused eccentric, else controlled), the same species as the three-state Readiness signal. A value that does not parse as 3- or 4-token notation falls back to its raw text rather than a fabricated interpretation.
 _Avoid_: Cadence, rep speed, rep timing
 
+**Set Type**:
+A curated, fixed label for what one set *is* — **warm-up**, **working**, **drop**, **failure**, or **AMRAP** — drawn from a closed set (never AI- or user-invented, the same species as Training Type and Progression Scheme). Optional and **descriptive only**: an unset Set Type resolves to **working**, so a plain set needs no choice, and Set Type **never feeds Progression** (schemes still read the rep grammar — an `AMRAP` label is not the `"5+"` rep target, nor Greyskull's AMRAP final set). Carried per Exercise Prescription on the *plan* and per Logged Set on the *record* (ADR-0065). Its one behavioural effect is on read-time analytics: a **warm-up** set is excluded from Volume and from strength records (Estimated 1RM / Personal Record / Top Set), while XP, Completion Outcome, Streak, and Logged Count stay type-neutral.
+_Avoid_: Set kind, set tag, working-set flag, circuit (that is a Superset)
+
+**Effort**:
+How hard a set was or should be, expressed as a **typed value** `{scale, value}` rather than a bare number — the scale is either **RPE** (0–10, higher is harder, half-steps allowed) or **RIR** (reps in reserve, integer 0–5, higher is easier). The same typed-value discipline as Load and Quantity: the scale is stored, never guessed, and the cross-scale rendering (`rpe ≈ 10 − rir`) is a read-time projection computed per reader. Appears on the *record* as the logged Performance Feedback of a Logged Set, and — as **Target Effort** — on the *plan* (ADR-0066).
+_Avoid_: RPE/RIR (bare, as the concept name — those are its two scales), difficulty score, intensity
+
+**Target Effort**:
+The **prescribed** Effort on an Exercise Prescription — the plan's "aim for RPE 8 / leave 2 in reserve" target. A plan value, carried across Duplicate, Redeem, Share, and Substitution and left unset by Capture. Distinct from the *logged* Effort (what the user actually felt, on the record) and, in v1, **descriptive**: it feeds the Scheme Preview and the UI but is **not** a Progression input — stepping stays a function of the record, never the plan (ADR-0066).
+_Avoid_: Prescribed RPE (bare), effort goal, intensity target
+
+**Exercise Note**:
+An optional free-text coaching cue on an Exercise Prescription — a plan-side note about *the movement* ("pause on the chest", "brace hard"). Nullable, length-capped, and HTML-escaped at the write boundary; carried with the Prescription across Duplicate, Redeem, Share, and Substitution, and left unset by Capture (ADR-0065). Distinct from a Set Note, which records what happened on one performed set, and from an Exercise's Execution Steps.
+_Avoid_: Comment, cue (bare), instructions (those are Execution Steps)
+
+**Set Note**:
+An optional free-text note on a **Logged Set** — a record-side remark about one performed set ("felt easy", "left knee twinge"). Nullable, length-capped, HTML-escaped, part of the *record* and editable through Log Correction. Distinct from an Exercise Note, the plan-side cue for the movement; there is no whole-Session note in v1.
+_Avoid_: Comment, log comment, remark
+
 **Provenance**:
 How a catalog Exercise came to exist and how far it can be trusted: `curated` (reviewed by a human, trusted), `ai_generated` (invented by the AI, unvalidated), or `user_entered` (typed by a user when logging an ad-hoc movement with no AI call — the least-validated tier, born with only a name). It is **immutable origin**: Enrichment fills a movement's fields but never changes its Provenance, so AI-filled content on a `user_entered` movement stays `user_entered` and never masquerades as human-reviewed. Carried on every Exercise so unvalidated content can be flagged, audited, and later enriched, merged, or corrected — important given the domain's caution around injury, rehab, and postpartum cases. A different axis from Catalog Completeness, which is *content presence*, not *trust*.
 _Avoid_: Source, origin, verified flag
@@ -155,6 +175,10 @@ _Avoid_: Progress (the records), adaptation
 **Progression Scheme**:
 The named stepping strategy that governs one Exercise Prescription's **Progression** — drawn from a **curated, fixed** set (never user- or AI-authored, the same species as **Training Type**, **Muscle Group**, and the **Skin** catalog). Each scheme is a deterministic, read-time function of the user's Logged Sets; the v1 set is **Double Progression** (the default — rep-ceiling-at-low-effort steps load or bodyweight reps), **Greyskull-style Linear** (per-session load step with an AMRAP set and a deload-on-failure reset; loaded movements only), **Session-Count-Based** (steps unconditionally every N-th performed exposure — the calendar-free reinterpretation of "time-based", never a clock), and **Static** (never auto-steps; holds the plan's authored values). Held **per Prescription** as a stored user *choice* (the same species as **Favorite**, not a derived ledger — ADR-0018), consulted by the read-time overlay; an unset Prescription inherits the global default. Selecting a scheme incompatible with a Prescription's **Load** kind is **rejected** (Greyskull on a pure-bodyweight movement), never silently substituted. Chosen as a **plan** edit (the **Builder** for a Protocol member, in place for a standalone Session — no AI), carried faithfully across **Duplicate**, **Redeem**, and **Share**, and touching no *record*. Reversible: switching or clearing a scheme is a clean restore, and **Static** is the honest home for "stop auto-progressing this movement" (ADR-0064).
 _Avoid_: Progression system/model, progression type, rule, algorithm, periodization
+
+**Scheme Preview**:
+A **read-time projection** that renders a Prescription's chosen Progression Scheme, together with its current reps and Load, as one plain-language sentence — "Do 3×8–12; when every set reaches 12 at RPE ≤ 8, add 2.5 kg next time." Never stored (the same species as Tempo's phase expansion and three-state label), computed per Prescription, and surfaced wherever a scheme is chosen (the Builder, or a standalone Session's in-place edit). It *describes* the scheme's stepping rule; it prescribes nothing and touches no record (ADR-0064/0065).
+_Avoid_: Progression description, explanation, rule text
 
 **Preference / Limitation**:
 A non-medical constraint that steers exercise selection ("no running", "no jumping in the apartment", "avoid overhead but not injured"). Influences generation but does **not** trigger the safety cache bypass. Distinct from a Sensitive Constraint.
@@ -307,8 +331,8 @@ A positive/negative verdict on a generated/adopted Protocol or Session — "did 
 _Avoid_: Feedback (bare), rating
 
 **Performance Feedback**:
-The user's perceived effort/difficulty for a workout they actually did, recorded against a Logged Session or Logged Set. Part of the record; feeds future AI recommendations. Not a judgment of the plan's quality.
-_Avoid_: Feedback (bare), RPE (loosely)
+The user's perceived effort/difficulty for a workout they actually did, recorded against a Logged Session or Logged Set. On a Logged Set it is captured as a typed **Effort** (an RPE or RIR value — ADR-0066). Part of the record; feeds future AI recommendations and the Progression gate. Not a judgment of the plan's quality.
+_Avoid_: Feedback (bare), RPE/RIR (those name the Effort scales, not this whole concept)
 
 **Regeneration**:
 Replacing the non-kept Exercise Prescriptions of a single Session with fresh AI output, conditioned on the kept Prescriptions and the negative Generation Feedback reason. Operates only on a Session (never a whole Protocol), on the user's own copy, and is limited to once per Session in v1. Produces **flat** replacement Prescriptions — Regeneration is **not Superset-aware** in v1: the prompt never asks for grouping, the path does not validate it, and the regenerate splice appends replacements without re-namespacing group tags, so any Superset the model volunteers is stripped rather than persisted invalid or colliding with a kept group (ADR-0023).
