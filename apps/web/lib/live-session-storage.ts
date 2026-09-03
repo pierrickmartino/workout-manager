@@ -6,6 +6,7 @@
 // caller falls back to a fresh start rather than crashing on a corrupt slot.
 
 import { clearOutbox } from "./finish-outbox-store.ts";
+import { clearLastSynced } from "./last-synced-store.ts";
 import type { LiveSessionState, LiveStatus, SetStatus } from "./live-session.ts";
 
 // The one key the single slot lives under. Namespaced to the app so it never
@@ -157,4 +158,7 @@ export function clearLiveSessionSlot(): void {
 export function purgeLocalLiveState(): void {
   clearLiveSessionSlot();
   void clearOutbox();
+  // The last-synced stamp (issue #414) is account-guarded on read, but clear it too so a
+  // shared browser profile leaves nothing of the prior account behind.
+  clearLastSynced();
 }

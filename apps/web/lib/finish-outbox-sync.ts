@@ -21,6 +21,8 @@ import {
   saveOutboxEntry,
   removeOutboxEntry,
 } from "./finish-outbox-store.ts";
+import { notifyOutboxChange } from "./outbox-observer.ts";
+import { recordLastSynced } from "./last-synced-store.ts";
 import { FINISH_UNREACHABLE_MESSAGE } from "./live-session-finish.ts";
 import type { LogSessionInput } from "./logs-types.ts";
 
@@ -46,7 +48,11 @@ export async function enqueueFinish(entry: OutboxEntry): Promise<boolean> {
   const next = enqueue(stored, entry);
   if (next === stored) return true; // dedupe: this finish is already queued (durable)
   await saveOutboxEntry(next[next.length - 1]); // the appended, normalized entry
-  return hasEntry(await loadOutbox(), entry.key);
+  const durable = hasEntry(await loadOutbox(), entry.key);
+  // Let the sync-state UI (issue #414) reflect the newly-queued finish immediately —
+  // "saved on this device — sync pending" — before any delivery is attempted.
+  if (durable) notifyOutboxChange();
+  return durable;
 }
 
 // Drop every entry not owned by `accountId` from the store (ADR-0059) — defense in depth
@@ -61,6 +67,7 @@ export async function purgeForeignFinishes(
   for (const entry of foreign) {
     await removeOutboxEntry(entry.key);
   }
+  notifyOutboxChange();
 }
 
 // Deliver the signed-in account's queued finishes. Purges foreign entries, then attempts
@@ -80,11 +87,16 @@ export async function drainOutbox(
   for (const entry of entriesForAccount(outbox, accountId)) {
     outbox = markSyncing(outbox, entry.key);
     await saveOutboxEntry(requireEntry(outbox, entry.key));
+    // Surface "syncing" to the sync-state UI (issue #414) the moment the attempt begins.
+    notifyOutboxChange();
     try {
       const result = await deliver(entry.sessionId, entry.payload);
       if (result.ok) {
         outbox = markSynced(outbox, entry.key);
         await removeOutboxEntry(entry.key);
+        // A real server acknowledgement — the ONLY place "Last synced …" is stamped
+        // (issue #414), so the UI never claims a synced state for an undelivered finish.
+        recordLastSynced(accountId, Date.now());
       } else {
         outbox = markFailed(outbox, entry.key, result.error ?? SYNC_FAILED_MESSAGE);
         await saveOutboxEntry(requireEntry(outbox, entry.key));
@@ -95,6 +107,8 @@ export async function drainOutbox(
       outbox = markFailed(outbox, entry.key, FINISH_UNREACHABLE_MESSAGE);
       await saveOutboxEntry(requireEntry(outbox, entry.key));
     }
+    // Reflect the resolved outcome — synced (removed), failed, or a reclaimed entry.
+    notifyOutboxChange();
   }
 }
 

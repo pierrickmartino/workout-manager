@@ -7,6 +7,7 @@ import {
   submitSubstitute,
   type SubstituteFormState,
 } from "@/app/sessions/[id]/actions";
+import { useConnectivity } from "@/lib/use-connectivity";
 import { Button } from "@/components/ui/button";
 
 interface SubstituteButtonProps {
@@ -22,15 +23,23 @@ export function SubstituteButton({ sessionId, position }: SubstituteButtonProps)
     submitSubstitute,
     { error: null },
   );
+  // Substitution is an AI (LLM) call: annotate and disable it while offline rather than
+  // let a submit fail after the fact (issue #414).
+  const online = useConnectivity();
 
   return (
     <form action={action} className="flex flex-wrap items-center gap-3">
       <input type="hidden" name="session_id" value={sessionId} />
       <input type="hidden" name="position" value={position} />
-      <Button type="submit" variant="outline" size="sm" disabled={pending}>
+      <Button type="submit" variant="outline" size="sm" disabled={pending || !online}>
         <Repeat2 className="h-3.5 w-3.5" />
         {pending ? "Finding a substitute…" : "Substitute"}
       </Button>
+      {!online ? (
+        <span className="font-mono text-[12px] text-text-muted">
+          Offline — reconnect to substitute
+        </span>
+      ) : null}
       {state.error ? (
         <span role="alert" className="font-mono text-[12px] text-magenta">
           {state.error}
