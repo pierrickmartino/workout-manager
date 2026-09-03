@@ -18,6 +18,7 @@ import { HarderVariationOffer } from "@/components/HarderVariationOffer";
 import { SchemeControl } from "@/components/SchemeControl";
 import { schemeControlModel, type SchemeControlModel } from "@/lib/scheme-view";
 import { prescriptionSetTypeBadge } from "@/lib/set-type-view";
+import { exerciseNoteText } from "@/lib/note-view";
 import {
   fetchHarderVariation,
   fetchSession,
@@ -336,6 +337,20 @@ function PrescriptionCard({
               {prescription.exercise_description}
             </p>
           ) : null}
+          {/* Exercise Note (ADR-0065, #451): the plan-side coaching cue, shown only when the
+              movement carries one — an absent note renders nothing. The note view decodes the
+              stored (escaped) value; React renders it as inert text. */}
+          {(() => {
+            const note = exerciseNoteText(prescription);
+            return note ? (
+              <p
+                className="font-sans text-[13px] italic leading-relaxed text-text-secondary"
+                title="Exercise Note"
+              >
+                “{note}”
+              </p>
+            ) : null;
+          })()}
         </div>
       </div>
 

@@ -357,6 +357,14 @@ class ExercisePrescription(SQLModel, table=True):
     target_effort: dict | None = Field(
         default=None, sa_column=Column(JSON, nullable=True)
     )
+    # Exercise Note (ADR-0065, #451): an optional plan-side coaching cue on this movement
+    # ("pause on the chest"), or NULL for "no note". User-authored free text, length-capped and
+    # **HTML-escaped at the write boundary** (``app.domain.note.parse_note``) so the stored value
+    # is inert wherever it renders (nonce-CSP DOM-XSS posture, ADR-0036). A plan property like
+    # reps/load/scheme/set_type: it travels through create/Duplicate/Redeem/Share/Substitution
+    # and a Deploy tail edit re-numbered untouched, is left unset by Capture, and only the user's
+    # own copy is ever written. Additive and nullable: every existing row reads NULL.
+    note: str | None = Field(default=None)
 
 
 class SessionFavorite(SQLModel, table=True):
@@ -512,6 +520,13 @@ class LoggedSet(SQLModel, table=True):
     # Log Correction like any other Logged Set field; descriptive only in v1 (it feeds no
     # analytics yet). Additive and nullable: every set logged before this reads NULL.
     set_type: str | None = Field(default=None)
+    # Set Note (ADR-0065, #451): an optional record-side remark on this performed set
+    # ("felt easy", "left knee twinge"), or NULL for "no note". User-authored free text,
+    # length-capped and **HTML-escaped at the write boundary** (``app.domain.note.parse_note``)
+    # so the stored value is inert wherever it renders (nonce-CSP DOM-XSS posture, ADR-0036).
+    # Part of the record and editable through Log Correction like any other Logged Set field.
+    # Additive and nullable: every set logged before this reads NULL.
+    note: str | None = Field(default=None)
 
 
 class MetricEntry(SQLModel, table=True):

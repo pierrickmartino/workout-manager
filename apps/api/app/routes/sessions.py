@@ -31,6 +31,7 @@ from app.authoring.service import (
 from app.domain.feedback import parse_verdict
 from app.domain.fitness_profile import is_sensitive, resolve_equipment
 from app.domain.load import LoadKind, load_from_input
+from app.domain.note import parse_note
 from app.domain.progression import ProgressionScheme, parse_scheme
 from app.domain.quantity import QuantityKind, prescribed_quantity_from_input
 from app.domain.session_naming import session_label
@@ -190,6 +191,10 @@ class AuthorPrescriptionBody(BaseModel):
     # for "unset" (reads as working). Descriptive only — echoed back on the Prescription,
     # never a Progression input. Membership is checked at the boundary and never coerced.
     set_type: str | None = None
+    # Exercise Note (ADR-0065, #451): an optional plan-side coaching cue, or ``None``/blank for
+    # "no note". Sanitized at the boundary by ``parse_note`` (below): blank → unset, over-cap →
+    # 422, else stripped + HTML-escaped so the stored value is inert wherever it renders.
+    note: str | None = None
 
     @field_validator("load_kind")
     @classmethod
@@ -227,6 +232,15 @@ class AuthorPrescriptionBody(BaseModel):
             raise ValueError(f"set_type must be one of: {allowed}")
         return value
 
+    @field_validator("note")
+    @classmethod
+    def _sanitize_note(cls, value: str | None) -> str | None:
+        # Sanitize the Exercise Note at the write boundary (ADR-0065): blank → unset (None),
+        # over-cap → 422 (``NoteTooLongError`` is a ``ValueError``), else stripped + HTML-escaped
+        # so it is inert wherever it renders (nonce-CSP DOM-XSS posture, ADR-0036). Escaping here
+        # (not on copy) keeps carry-forward from double-escaping a note that is copied verbatim.
+        return parse_note(value)
+
     def to_draft(self) -> PrescriptionDraft:
         parsed = load_from_input(self.load_kind, self.load_value)
         # Type the plan's Prescribed Quantity at the write boundary (ADR-0050): the picked
@@ -249,6 +263,7 @@ class AuthorPrescriptionBody(BaseModel):
             superset_group=self.superset_group,
             round_rest_seconds=self.round_rest_seconds,
             set_type=self.set_type,
+            note=self.note,
         )
 
 

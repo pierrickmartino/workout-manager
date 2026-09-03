@@ -94,6 +94,10 @@ export interface AuthoredExerciseFields {
   tempo?: string;
   loadKind?: string;
   loadValue?: string;
+  // The Exercise Note (ADR-0065, #451): an optional plan-side coaching cue authored by hand,
+  // as raw text. Blank means no note; the backend length-caps and HTML-escapes it at the write
+  // boundary. Optional so existing callers/tests that omit it author a note-less plan.
+  note?: string;
   supersetGroup: string | null;
   roundRestSeconds: number | null;
   performedSets: PerformedSetFields[];
@@ -125,6 +129,9 @@ export interface AuthorPrescriptionInput {
   // type it, and continues to render the prescribed line.
   quantity_kind: QuantityKind;
   quantity_unit: DistanceUnit;
+  // The Exercise Note (ADR-0065, #451): the plan-side coaching cue, or omitted/null for "no
+  // note". Rides as raw text; the backend length-caps and HTML-escapes it at the write boundary.
+  note?: string | null;
   superset_group: string | null;
   round_rest_seconds: number | null;
 }
@@ -373,6 +380,8 @@ function toPrescription(
 
   const tempo = (exercise.tempo ?? "").trim();
   const restSeconds = wholeNonNegative(exercise.restSeconds ?? "");
+  // The Exercise Note rides as raw text (the backend escapes it); blank authors no note.
+  const note = (exercise.note ?? "").trim();
 
   return {
     ok: true,
@@ -382,6 +391,7 @@ function toPrescription(
       reps,
       rest_seconds: restSeconds,
       tempo: tempo === "" ? null : tempo,
+      note: note === "" ? null : note,
       ...loadFields(exercise.loadKind, exercise.loadValue, kind, weightUnit),
       // The picked Quantity kind and unit travel onto the plan so the choice is persisted,
       // not dropped on save (ADR-0050, issue #345): the backend types the Prescribed

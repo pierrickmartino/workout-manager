@@ -138,6 +138,7 @@ export function LogSessionForm({
           loadValue: last?.loadValue ?? "",
           showLoad: last?.showLoad ?? group.kind === "repetitions",
           rpe: "",
+          note: "",
           done: true,
         };
         return { ...group, rows: [...group.rows, added] };
@@ -369,6 +370,20 @@ function SetRow({
           Add load
         </button>
       )}
+
+      {/* Set Note (ADR-0065, #451): an optional per-set remark. Rides as raw text under
+          `set-<i>-note`; the backend length-caps and HTML-escapes it at the write boundary. */}
+      <label className="flex flex-col gap-1.5">
+        <span className="label-mono text-[9px] text-text-muted">Note</span>
+        <Input
+          name={`${prefix}-note`}
+          value={row.note}
+          disabled={disabled}
+          onChange={(event) => onChange({ note: event.target.value })}
+          placeholder="Optional note (e.g. felt easy)"
+          aria-label={`Note for set ${row.setNumber}`}
+        />
+      </label>
     </div>
   );
 }

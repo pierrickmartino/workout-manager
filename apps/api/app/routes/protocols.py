@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.auth.dependencies import get_current_user
 from app.domain.fitness_profile import is_sensitive, resolve_equipment
 from app.domain.load import LoadKind, load_from_input
+from app.domain.note import parse_note
 from app.domain.progression import ProgressionScheme, parse_scheme
 from app.domain.set_type import SetType, parse_set_type
 from app.envelope import error_envelope, success_envelope
@@ -235,6 +236,10 @@ class DeployPrescriptionBody(BaseModel):
     # Progression compatibility rule, so — unlike ``scheme`` — nothing about it is deferred
     # to the deploy gate. A descriptive label that rides Deploy re-numbered untouched.
     set_type: str | None = None
+    # Exercise Note (ADR-0065, #451): an optional plan-side coaching cue, or ``None``/blank for
+    # "no note". Sanitized at the boundary by ``parse_note`` (below): blank → unset, over-cap →
+    # 422, else stripped + HTML-escaped so the stored value is inert; it rides Deploy untouched.
+    note: str | None = None
 
     @field_validator("load_kind")
     @classmethod
@@ -270,6 +275,14 @@ class DeployPrescriptionBody(BaseModel):
             allowed = ", ".join(member.value for member in SetType)
             raise ValueError(f"set_type must be one of: {allowed}")
         return value
+
+    @field_validator("note")
+    @classmethod
+    def _sanitize_note(cls, value: str | None) -> str | None:
+        # Sanitize the Exercise Note at the write boundary (ADR-0065): blank → unset (None),
+        # over-cap → 422, else stripped + HTML-escaped so it is inert wherever it renders
+        # (ADR-0036). Escaping here (not on copy) keeps a Deploy tail edit from double-escaping.
+        return parse_note(value)
 
     def resolved_load(self) -> dict | None:
         parsed = load_from_input(self.load_kind, self.load_value)
@@ -368,6 +381,7 @@ def deploy_protocol(
                         round_rest_seconds=prescription.round_rest_seconds,
                         scheme=prescription.scheme,
                         set_type=prescription.set_type,
+                        note=prescription.note,
                     )
                     for prescription in session.prescriptions
                 ],

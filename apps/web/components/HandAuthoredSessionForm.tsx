@@ -104,6 +104,9 @@ interface ExerciseRow {
   reps: string;
   restSeconds: string;
   tempo: string;
+  // The Exercise Note (ADR-0065, #451): the plan-side coaching cue, edited inline as raw text.
+  // Blank means no note; the backend length-caps and HTML-escapes it at the write boundary.
+  note: string;
   loadKind: string;
   loadValue: string;
   supersetGroup: string | null;
@@ -147,6 +150,7 @@ function makeExerciseRow(exercise: PickedExercise): ExerciseRow {
     reps: "",
     restSeconds: "",
     tempo: "",
+    note: "",
     loadKind: defaultLoadKindForAmount(DEFAULT_AMOUNT_KIND),
     loadValue: "",
     supersetGroup: null,
@@ -170,6 +174,9 @@ function seededExerciseRow(seed: CaptureSeedExercise): ExerciseRow {
     reps: seed.reps,
     restSeconds: "",
     tempo: "",
+    // Capture leaves the Exercise Note unset (ADR-0065): a plan-less record never carried a
+    // plan cue, so the seed authors none — the same as rest/tempo/Superset above.
+    note: "",
     loadKind: seed.loadKind,
     loadValue: seed.loadValue,
     supersetGroup: null,
@@ -342,6 +349,7 @@ export function HandAuthoredSessionForm({
     reps: row.reps,
     restSeconds: row.restSeconds,
     tempo: row.tempo,
+    note: row.note,
     loadKind: row.loadKind,
     loadValue: row.loadValue,
     supersetGroup: row.supersetGroup,
@@ -777,6 +785,16 @@ function ExerciseCard({
             placeholder={`60 ${weightUnitLabel(unit)}`}
             onChange={(event) => onChange({ loadValue: event.target.value })}
             aria-label={`Load for ${row.exerciseName}`}
+          />
+        </FieldLabel>
+        {/* Exercise Note (ADR-0065, #451): an optional plan-side coaching cue, edited as raw
+            text — the backend length-caps and HTML-escapes it at the write boundary. */}
+        <FieldLabel label="Note">
+          <Input
+            value={row.note}
+            placeholder="Optional cue (e.g. pause on the chest)"
+            onChange={(event) => onChange({ note: event.target.value })}
+            aria-label={`Note for ${row.exerciseName}`}
           />
         </FieldLabel>
       </div>

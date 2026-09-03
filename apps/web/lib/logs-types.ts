@@ -34,6 +34,11 @@ export interface LoggedSet {
   // drop / failure / AMRAP), or null/absent for "unset" — which resolves to working and
   // renders as no badge (`set-type-view`). Descriptive only; it feeds no analytics yet.
   set_type?: string | null;
+  // The Set Note (ADR-0065, #451): the record-side remark on this performed set ("felt easy",
+  // "left knee twinge"), or null/absent for "no note" — which the note view-model (`note-view`)
+  // renders as nothing. Stored HTML-escaped at the write boundary; the view decodes it for
+  // display. Editable through Log Correction like any other Logged Set field.
+  note?: string | null;
 }
 
 // A record of the user performing a Session on a date. One Session can have many
@@ -84,6 +89,10 @@ export interface LogSetInput {
   // value into `perceived_difficulty`.
   effort_scale?: EffortScale;
   effort_value?: number | null;
+  // The Set Note (ADR-0065, #451): an optional record-side remark, or omitted/blank for "no
+  // note". The backend length-caps and HTML-escapes it at the write boundary; a blank note
+  // stores as unset. Rides the finish, the static log form, the ad-hoc log, and Log Correction.
+  note?: string | null;
 }
 
 // The request the user submits to record a performance of a Session. The

@@ -15,6 +15,7 @@ import {
   type QuantityKind,
 } from "./quantity.ts";
 import { loadToFields as reverseLoadFields, loadValueToKg } from "./load.ts";
+import { noteText } from "./note-view.ts";
 import type { WeightUnit } from "./weight-unit";
 import type {
   CompletionOutcome,
@@ -47,6 +48,10 @@ export interface CorrectionSetFields {
   loadKind: string;
   loadValue: string;
   perceivedDifficulty: number | null;
+  // The Set Note (ADR-0065, #451), as editable raw text. Pre-filled decoded from the stored
+  // (escaped) value so the user edits what they typed; blank means "no note". Re-sent raw and
+  // re-escaped once by the backend, so correcting a set never double-escapes or drops its note.
+  note: string;
 }
 
 // The whole correction form: the record's editable header (`performedOn`, its
@@ -141,6 +146,9 @@ export function correctionFieldsFromRecord(
       ...quantityToFields(loggedSet.quantity),
       ...reverseLoadFields(loggedSet.load, unit),
       perceivedDifficulty: loggedSet.perceived_difficulty,
+      // Pre-fill the note decoded from its stored (escaped) form, so the edit field shows the
+      // text the user typed rather than raw entities. `noteText` returns null for no note → "".
+      note: noteText(loggedSet.note) ?? "",
     })),
   };
 }
@@ -214,11 +222,15 @@ function toSet(row: CorrectionSetFields, unit: WeightUnit): LogSetInput | null {
   if (!Number.isInteger(row.exerciseId)) return null;
   const amount = amountFor(row);
   if (amount === null) return null;
+  const note = row.note.trim();
   return {
     exercise_id: row.exerciseId,
     ...amount,
     ...loadFields(row, unit),
     perceived_difficulty: row.perceivedDifficulty,
+    // Re-send the note only when non-blank; the backend re-escapes it once. A cleared field
+    // sends no note, so a correction can also remove a note by blanking it.
+    ...(note !== "" ? { note } : {}),
   };
 }
 

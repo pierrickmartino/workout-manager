@@ -35,6 +35,51 @@ function planBackedRecord(
   };
 }
 
+test("pre-fills a Set Note decoded from its stored escaped form for editing", () => {
+  // The stored note is HTML-escaped; the edit field must show the text the user typed, so a
+  // later re-save re-escapes once rather than double-escaping.
+  const record = planBackedRecord({
+    logged_sets: [
+      {
+        position: 0,
+        quantity: { kind: "repetitions", text: "5", count: 5 },
+        load: { kind: "absolute", text: "60 kg", kg: 60 },
+        perceived_difficulty: 8,
+        exercise_id: 3,
+        exercise_name: "Back Squat",
+        body_weight_kg: null,
+        note: "a &amp; b",
+      },
+    ],
+  });
+
+  const fields = correctionFieldsFromRecord(record, "kg");
+
+  assert.equal(fields.sets[0].note, "a & b");
+})
+
+test("re-sends an edited Set Note as raw text so the backend re-escapes it once", () => {
+  const fields = correctionFieldsFromRecord(planBackedRecord(), "kg");
+  fields.sets[0].note = "left knee twinge";
+
+  const result = buildCorrectionRequest(fields, "kg");
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.logged_sets[0].note, "left knee twinge");
+})
+
+test("a blank Set Note is omitted from the correction payload (a cleared note removes it)", () => {
+  const fields = correctionFieldsFromRecord(planBackedRecord(), "kg");
+  fields.sets[0].note = "   ";
+
+  const result = buildCorrectionRequest(fields, "kg");
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal("note" in result.request.logged_sets[0], false);
+})
+
 test("pre-fills the form from a plan-backed record's current values", () => {
   // Arrange
   const record = planBackedRecord();
@@ -59,6 +104,7 @@ test("pre-fills the form from a plan-backed record's current values", () => {
     loadKind: "absolute",
     loadValue: "60",
     perceivedDifficulty: 8,
+    note: "",
   });
 });
 
@@ -81,6 +127,7 @@ test("builds a PUT payload from edited plan-backed fields, omitting training typ
         loadKind: "absolute",
         loadValue: "70",
         perceivedDifficulty: 7,
+        note: "",
       },
     ],
   };
@@ -170,6 +217,7 @@ test("rejects a plan-less correction with an unknown training type", () => {
         loadKind: "bodyweight",
         loadValue: "",
         perceivedDifficulty: null,
+        note: "",
       },
     ],
   };
@@ -202,6 +250,7 @@ test("rejects a correction that would leave zero sets", () => {
         loadKind: "absolute",
         loadValue: "70",
         perceivedDifficulty: null,
+        note: "",
       },
     ],
   };
@@ -279,6 +328,7 @@ test("an appended set row round-trips into the correction payload", () => {
         loadKind: "bodyweight",
         loadValue: "",
         perceivedDifficulty: 6,
+        note: "",
       },
     ],
   };
@@ -318,6 +368,7 @@ test("an appended off-plan movement on a plan-backed record builds a valid reque
         loadKind: "absolute",
         loadValue: "15",
         perceivedDifficulty: null,
+        note: "",
       },
     ],
   };
@@ -378,6 +429,7 @@ test("a blank appended row is dropped (matches the cleared-row behavior)", () =>
         loadKind: "absolute",
         loadValue: "",
         perceivedDifficulty: null,
+        note: "",
       },
     ],
   };

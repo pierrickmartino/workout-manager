@@ -63,6 +63,7 @@ test("maps a plan and its first performance into the author-and-log payload", ()
         reps: "5",
         rest_seconds: 90,
         tempo: "3-1-1",
+        note: null,
         load_kind: "absolute",
         load_value: "100",
         quantity_kind: "repetitions",
@@ -82,6 +83,27 @@ test("maps a plan and its first performance into the author-and-log payload", ()
       },
     ],
   });
+});
+
+test("authors an Exercise Note onto the plan as raw text (the backend escapes it)", () => {
+  const input = fields({ exercises: [exercise({ note: "  pause on the chest  " })] });
+
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  // Trimmed but not escaped here — the write boundary owns the escaping.
+  assert.equal(result.request.prescriptions[0].note, "pause on the chest");
+});
+
+test("a blank Exercise Note authors no note (null), not an empty string", () => {
+  const input = fields({ exercises: [exercise({ note: "   " })] });
+
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.prescriptions[0].note, null);
 });
 
 test("carries a typed Load kind through to both the plan and the record", () => {

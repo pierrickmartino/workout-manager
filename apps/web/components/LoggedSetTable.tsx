@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import { effortScaleLabel, loggedSetEffort } from "@/lib/effort";
 import { formatBodyWeight, formatLoad } from "@/lib/load";
 import { formatPace, formatQuantity, type Quantity } from "@/lib/quantity";
+import { setNoteText } from "@/lib/note-view";
 import type { LoggedSet } from "@/lib/logs-types";
 import type { WeightUnit } from "@/lib/weight-unit";
 
@@ -76,6 +77,10 @@ function LoggedSetRow({
   // read as RPE. Displayed in the scale it was logged, labelled to match (RPE / RIR); the
   // projection helpers can render the other scale for a reader who thinks that way.
   const effort = loggedSetEffort(loggedSet);
+  // The Set Note (ADR-0065, #451): the record-side remark, shown only when the set carries one
+  // — an absent note renders nothing. The note view decodes the stored (escaped) value; React
+  // renders it as inert text.
+  const note = setNoteText(loggedSet);
 
   return (
     <li className="rounded-sm border border-border bg-base/40 px-4 py-3">
@@ -106,6 +111,14 @@ function LoggedSetRow({
           valueClassName={effort ? "text-cyan" : "font-normal text-text-muted"}
         />
       </div>
+      {note ? (
+        <p
+          className="mt-3 break-words font-sans text-[13px] italic leading-relaxed text-text-secondary"
+          title="Set Note"
+        >
+          “{note}”
+        </p>
+      ) : null}
     </li>
   );
 }

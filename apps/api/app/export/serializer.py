@@ -77,6 +77,9 @@ def _prescription(view: PrescriptionView) -> dict:
         # Set Type annotation (ADR-0065): the movement line's Set Type, or null for unset
         # (reads as working) — the plan's descriptive label, kept portable in the export.
         "set_type": view.set_type,
+        # Exercise Note (ADR-0065): the movement line's coaching cue, or null for no note —
+        # already HTML-escaped at the write boundary, kept portable in the export.
+        "note": view.note,
     }
 
 
@@ -128,6 +131,9 @@ def _logged_set(view: LoggedSetView) -> dict:
         # Set Type annotation (ADR-0065): the performed set's Set Type, or null for unset
         # (reads as working) — the record's descriptive label, kept portable in the export.
         "set_type": view.set_type,
+        # Set Note (ADR-0065): the performed set's remark, or null for no note — already
+        # HTML-escaped at the write boundary, kept portable in the export.
+        "note": view.note,
     }
 
 

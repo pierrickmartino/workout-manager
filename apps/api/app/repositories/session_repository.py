@@ -67,6 +67,11 @@ class PrescriptionDraft:
     # Progression input) carried through create/Duplicate/Redeem/Share/Substitution like
     # the other prescription fields, so a tagged movement survives a copy of the plan.
     set_type: str | None = None
+    # Exercise Note (ADR-0065, #451): the plan-side coaching cue, or ``None`` for "no note".
+    # Already length-capped and HTML-escaped at the write boundary (``app.domain.note``); a
+    # plan property carried through create/Duplicate/Redeem/Share/Substitution like the other
+    # prescription fields, so a movement's cue survives a copy of the plan.
+    note: str | None = None
 
 
 @dataclass(frozen=True)
@@ -120,6 +125,11 @@ class PrescriptionView:
     # Surfaced on the read so the session-detail response carries the tag to the web client.
     # Defaulted so the many call sites that build a view without one read as unset.
     set_type: str | None = None
+    # Exercise Note (ADR-0065, #451): the plan-side coaching cue, or ``None`` for "no note" —
+    # which the frontend renders as nothing. The stored value is already HTML-escaped at the
+    # write boundary. Surfaced on the read so the session-detail response carries it to the web
+    # client. Defaulted so the many call sites that build a view without one read as no note.
+    note: str | None = None
 
 
 @dataclass(frozen=True)
@@ -490,6 +500,7 @@ def _draft_from(prescription: ExercisePrescription) -> PrescriptionDraft:
         round_rest_seconds=prescription.round_rest_seconds,
         scheme=prescription.scheme,
         set_type=prescription.set_type,
+        note=prescription.note,
     )
 
 
@@ -561,6 +572,7 @@ def _prescription_model(
         round_rest_seconds=draft.round_rest_seconds,
         scheme=draft.scheme,
         set_type=draft.set_type,
+        note=draft.note,
     )
 
 
@@ -585,6 +597,7 @@ def _prescription_view(
         provenance=exercise.provenance,
         scheme=prescription.scheme,
         set_type=prescription.set_type,
+        note=prescription.note,
     )
 
 
@@ -1091,6 +1104,7 @@ class InMemorySessionRepository:
                 round_rest_seconds=prescription.round_rest_seconds,
                 scheme=prescription.scheme,
                 set_type=prescription.set_type,
+                note=prescription.note,
             )
             for position, prescription in enumerate(prescriptions)
         ]
@@ -1345,6 +1359,7 @@ class InMemorySessionRepository:
                 round_rest_seconds=p.round_rest_seconds,
                 scheme=p.scheme,
                 set_type=p.set_type,
+                note=p.note,
             )
             for p in current
         ]
@@ -1383,6 +1398,7 @@ class InMemorySessionRepository:
                 round_rest_seconds=p.round_rest_seconds,
                 scheme=scheme if p.position == position else p.scheme,
                 set_type=p.set_type,
+                note=p.note,
             )
             for p in current
         ]

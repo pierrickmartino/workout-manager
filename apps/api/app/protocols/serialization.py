@@ -43,6 +43,10 @@ def serialize_session(
                 # null for "unset" (reads as working). Descriptive only; surfaced so the
                 # client can render the badge on a Protocol member's Prescription.
                 "set_type": p.set_type,
+                # Exercise Note (ADR-0065, #451): the plan-side coaching cue, or null for "no
+                # note". Already HTML-escaped at the write boundary; surfaced so the client can
+                # render the cue on a Protocol member's Prescription (nothing when absent).
+                "note": p.note,
                 "exercise_id": p.exercise_id,
                 "exercise_name": p.exercise_name,
                 "exercise_description": p.exercise_description,

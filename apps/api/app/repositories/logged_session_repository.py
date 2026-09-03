@@ -46,6 +46,11 @@ class LoggedSetDraft:
     # Raw record data like ``load``; descriptive only in v1 (feeds no analytics yet) and
     # editable through Log Correction like any other Logged Set field.
     set_type: str | None = None
+    # Set Note (ADR-0065, #451): an optional record-side remark on this set ("felt easy",
+    # "left knee twinge"), or ``None`` for "no note". Already length-capped and HTML-escaped at
+    # the write boundary (``app.domain.note``); part of the record and editable through Log
+    # Correction like any other Logged Set field.
+    note: str | None = None
 
 
 @dataclass(frozen=True)
@@ -104,6 +109,10 @@ class LoggedSetView:
     # "unset" — which the web view-model resolves to no badge (a neutral working set).
     # Surfaced on the read so the logged-session response carries the tag to the client.
     set_type: str | None = None
+    # Set Note (ADR-0065, #451): the stored record-side remark, or ``None`` for "no note" —
+    # which the frontend renders as nothing. Already HTML-escaped at the write boundary.
+    # Surfaced on the read so the logged-session response carries the note to the client.
+    note: str | None = None
     # The performed Exercise's free-form targeted muscles, denormalized onto the
     # view so read models (e.g. the Analytics muscle distribution) never touch the
     # ORM — mirrors how ``exercise_name`` is carried here.
@@ -203,6 +212,7 @@ def _set_view(logged_set: LoggedSet, exercise: Exercise) -> LoggedSetView:
         effort=logged_set.effort,
         body_weight_kg=logged_set.body_weight_kg,
         set_type=logged_set.set_type,
+        note=logged_set.note,
         targeted_muscles=list(exercise.targeted_muscles),
     )
 
@@ -279,6 +289,7 @@ class SqlLoggedSessionRepository:
                     effort=logged_set.effort,
                     body_weight_kg=logged_set.body_weight_kg,
                     set_type=logged_set.set_type,
+                    note=logged_set.note,
                 )
             )
         self._session.commit()
@@ -324,6 +335,7 @@ class SqlLoggedSessionRepository:
                     effort=logged_set.effort,
                     body_weight_kg=logged_set.body_weight_kg,
                     set_type=logged_set.set_type,
+                    note=logged_set.note,
                 )
             )
         self._session.commit()
@@ -459,6 +471,7 @@ class InMemoryLoggedSessionRepository:
                 effort=logged_set.effort,
                 body_weight_kg=logged_set.body_weight_kg,
                 set_type=logged_set.set_type,
+                note=logged_set.note,
             )
             for position, logged_set in enumerate(draft.logged_sets)
         ]
@@ -498,6 +511,7 @@ class InMemoryLoggedSessionRepository:
                 effort=logged_set.effort,
                 body_weight_kg=logged_set.body_weight_kg,
                 set_type=logged_set.set_type,
+                note=logged_set.note,
             )
             for position, logged_set in enumerate(draft.logged_sets)
         ]
