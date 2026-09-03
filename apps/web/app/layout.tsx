@@ -17,6 +17,7 @@ import {
 } from "@clerk/nextjs";
 
 import { TabBar } from "@/components/pulse/tab-bar";
+import { OutboxSyncRegistrar } from "@/components/OutboxSyncRegistrar";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import { buttonVariants } from "@/components/ui/button";
 import { resolveActiveSkin } from "@/lib/active-skin";
@@ -187,6 +188,9 @@ export default async function RootLayout({
           {/* Bottom navigation is only meaningful once authenticated. */}
           <SignedIn>
             <TabBar />
+            {/* Drains the finish outbox on reconnect / foreground / restart (ADR-0060,
+                issue #413). Signed-in only: the queue is account-scoped. */}
+            <OutboxSyncRegistrar />
           </SignedIn>
 
           {/* Registers the minimal installability service worker (ADR-0028). */}

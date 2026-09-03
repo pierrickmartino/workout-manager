@@ -17,10 +17,10 @@ import {
 } from "lucide-react";
 
 import {
-  finishLiveSession,
   recordLiveSession,
   type FinishState,
 } from "@/app/sessions/[id]/live/actions";
+import { deliverQueuedFinish } from "@/app/actions/outbox";
 import {
   initLiveSession,
   liveSessionReducer,
@@ -40,8 +40,11 @@ import {
   browserMintKey,
   decideFinishOutcome,
   stampWithFreshKey,
+  FINISH_SAVE_FAILED_MESSAGE,
   type FinishAttempt,
 } from "@/lib/live-session-finish";
+import { buildOutboxEntry } from "@/lib/finish-outbox";
+import { drainOutbox, enqueueFinish } from "@/lib/finish-outbox-sync";
 import { useWakeLock } from "@/lib/use-wake-lock";
 import type { Phase } from "@/lib/wake-lock";
 import { LiveSessionSets } from "@/components/live-session-sets";
@@ -414,26 +417,44 @@ export function LiveSessionScreen({
   }
 
   function handleFinish() {
-    // Reuse the key minted at START (or mint one for a slot written before this
-    // shipped) so a retry resends the SAME key and the server dedupes it to one Logged
-    // Session (ADR-0060 — issue #412). The slot is NOT cleared up front: it is released
-    // only on an acknowledged success below, so a dropped connection or a lost response
-    // keeps the work and its key for a retry rather than losing it or double-writing it.
+    // A finish is an immediately-real Logged Session whose delivery is in flight
+    // (ADR-0060 — issue #413): it is queued in the durable IndexedDB outbox, not held in
+    // the live slot. Reuse the key minted at START (or mint one for a slot written before
+    // #412) so every delivery attempt resends the SAME key and the server dedupes it to
+    // one Logged Session (issue #410).
     const stamped = stampWithFreshKey(state, browserMintKey);
     const payload = mapFinishToLog(stamped, today, weightUnit);
+    const owner = stamped.accountId ?? userId ?? null;
+
+    // No completed set — nothing to record. Release the slot and go.
+    if (!payload) {
+      clearLiveSessionSlot();
+      router.push("/history");
+      return;
+    }
+
+    // Persist the key-stamped slot before enqueuing, so an interrupted enqueue still
+    // resumes and retries with the same key rather than losing the work.
     writeLiveSessionSlot(stamped);
+    const entry = owner ? buildOutboxEntry(owner, session.id, payload) : null;
+
     startTransition(async () => {
-      const outcome = decideFinishOutcome(
-        await attemptFinish(() => finishLiveSession(session.id, payload)),
-      );
-      if (outcome.kind === "clear") {
-        // Acknowledged: release the slot, then route to history (the action no longer
-        // redirects, so the slot is provably gone before we navigate).
-        clearLiveSessionSlot();
-        router.push("/history");
+      // Queue durably. Only once the record is safely in the outbox do we release the
+      // live slot — which frees the one-Live-Session invariant so the user can start
+      // their Next Session immediately while this finish is still queued (ADR-0060).
+      const queued = entry !== null && (await enqueueFinish(entry));
+      if (!queued) {
+        // Couldn't persist on device — keep the slot and surface a retry rather than
+        // dropping the record or implying a save that didn't happen.
+        setFinishState({ error: FINISH_SAVE_FAILED_MESSAGE });
         return;
       }
-      setFinishState({ error: outcome.error });
+      clearLiveSessionSlot();
+      // Try to deliver right now; if offline, the entry stays queued and the app-scope
+      // registrar drains it on the next online / foreground / restart. Fire-and-forget —
+      // the finish is already real, so navigate without waiting on the network.
+      void drainOutbox(owner, deliverQueuedFinish);
+      router.push("/history");
     });
   }
 

@@ -5,6 +5,7 @@
 // never trusted — a malformed or stale-shaped slot deserializes to null, so the
 // caller falls back to a fresh start rather than crashing on a corrupt slot.
 
+import { clearOutbox } from "./finish-outbox-store.ts";
 import type { LiveSessionState, LiveStatus, SetStatus } from "./live-session.ts";
 
 // The one key the single slot lives under. Namespaced to the app so it never
@@ -147,10 +148,13 @@ export function clearLiveSessionSlot(): void {
 }
 
 // Purge every user-scoped local live store before a sign-out (ADR-0059), so a shared
-// browser profile never hands the next signed-in account the previous one's data. In
-// v1 that is the single live slot; as later stores are added (the finish outbox,
-// ADR-0060, and any user-specific caches) this is the one teardown seam that clears
-// them, called before Clerk's `signOut()` completes.
+// browser profile never hands the next signed-in account the previous one's data. That
+// is the single live slot (synchronous `localStorage`) and the finish outbox (the
+// IndexedDB queue of undelivered finishes, ADR-0060). The outbox clear is async and
+// fired-and-forgotten so it never blocks the sign-out redirect; account-scoping is the
+// real safety boundary anyway — a next account rejects and purges any foreign entry on
+// hydration (`purgeForeignFinishes`), so a clear that loses the redirect race is covered.
 export function purgeLocalLiveState(): void {
   clearLiveSessionSlot();
+  void clearOutbox();
 }
