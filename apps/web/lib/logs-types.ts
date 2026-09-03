@@ -24,6 +24,10 @@ export interface LoggedSet {
   // or null when none was on file at log time (never guessed). Fixes a bodyweight set's
   // strength estimate to what actually happened; surfaced on the record detail.
   body_weight_kg: number | null;
+  // The Set Type (ADR-0065) tagging what this performed set was (warm-up / working /
+  // drop / failure / AMRAP), or null/absent for "unset" — which resolves to working and
+  // renders as no badge (`set-type-view`). Descriptive only; it feeds no analytics yet.
+  set_type?: string | null;
 }
 
 // A record of the user performing a Session on a date. One Session can have many

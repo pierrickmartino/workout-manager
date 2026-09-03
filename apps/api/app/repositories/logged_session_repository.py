@@ -36,6 +36,11 @@ class LoggedSetDraft:
     load: dict | None = None
     perceived_difficulty: int | None = None
     body_weight_kg: float | None = None
+    # Set Type annotation (ADR-0065, #449): the ``SetType`` value tagging what this set
+    # *was* (e.g. ``"warm_up"``), or ``None`` for "unset" — which reads as ``working``.
+    # Raw record data like ``load``; descriptive only in v1 (feeds no analytics yet) and
+    # editable through Log Correction like any other Logged Set field.
+    set_type: str | None = None
 
 
 @dataclass(frozen=True)
@@ -85,6 +90,10 @@ class LoggedSetView:
     # Performed Body Weight (ADR-0026), carried through so later slices can score a
     # bodyweight set against the mass performed at; ``None`` when none was captured.
     body_weight_kg: float | None = None
+    # Set Type annotation (ADR-0065, #449): the stored ``SetType`` value, or ``None`` for
+    # "unset" — which the web view-model resolves to no badge (a neutral working set).
+    # Surfaced on the read so the logged-session response carries the tag to the client.
+    set_type: str | None = None
     # The performed Exercise's free-form targeted muscles, denormalized onto the
     # view so read models (e.g. the Analytics muscle distribution) never touch the
     # ORM — mirrors how ``exercise_name`` is carried here.
@@ -182,6 +191,7 @@ def _set_view(logged_set: LoggedSet, exercise: Exercise) -> LoggedSetView:
         exercise_id=exercise.id,
         exercise_name=exercise.name,
         body_weight_kg=logged_set.body_weight_kg,
+        set_type=logged_set.set_type,
         targeted_muscles=list(exercise.targeted_muscles),
     )
 
@@ -256,6 +266,7 @@ class SqlLoggedSessionRepository:
                     load=logged_set.load,
                     perceived_difficulty=logged_set.perceived_difficulty,
                     body_weight_kg=logged_set.body_weight_kg,
+                    set_type=logged_set.set_type,
                 )
             )
         self._session.commit()
@@ -299,6 +310,7 @@ class SqlLoggedSessionRepository:
                     load=logged_set.load,
                     perceived_difficulty=logged_set.perceived_difficulty,
                     body_weight_kg=logged_set.body_weight_kg,
+                    set_type=logged_set.set_type,
                 )
             )
         self._session.commit()
@@ -432,6 +444,7 @@ class InMemoryLoggedSessionRepository:
                 load=logged_set.load,
                 perceived_difficulty=logged_set.perceived_difficulty,
                 body_weight_kg=logged_set.body_weight_kg,
+                set_type=logged_set.set_type,
             )
             for position, logged_set in enumerate(draft.logged_sets)
         ]
@@ -469,6 +482,7 @@ class InMemoryLoggedSessionRepository:
                 load=logged_set.load,
                 perceived_difficulty=logged_set.perceived_difficulty,
                 body_weight_kg=logged_set.body_weight_kg,
+                set_type=logged_set.set_type,
             )
             for position, logged_set in enumerate(draft.logged_sets)
         ]

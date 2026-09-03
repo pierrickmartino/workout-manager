@@ -39,6 +39,10 @@ def serialize_session(
                 # null for the default (Double Progression, which the overlaid numbers
                 # above already reflect). Surfaced so the client can show the selection.
                 "scheme": p.scheme,
+                # Set Type annotation (ADR-0065, #449): the chosen ``SetType`` value, or
+                # null for "unset" (reads as working). Descriptive only; surfaced so the
+                # client can render the badge on a Protocol member's Prescription.
+                "set_type": p.set_type,
                 "exercise_id": p.exercise_id,
                 "exercise_name": p.exercise_name,
                 "exercise_description": p.exercise_description,

@@ -52,6 +52,11 @@ class DraftPrescription:
     # Progression Scheme selection (ADR-0064): a chosen scheme value, or ``None`` for the
     # inherited default (Double Progression). Validated for Load-kind compatibility below.
     scheme: str | None = None
+    # Set Type annotation (ADR-0065, #449): a chosen ``SetType`` value, or ``None`` for
+    # "unset" (reads as working). A descriptive label carried through Deploy re-numbered
+    # untouched; it has no compatibility rule (independent of Load and Progression), so it
+    # needs no validation here beyond the membership check at the request boundary.
+    set_type: str | None = None
 
 
 @dataclass(frozen=True)

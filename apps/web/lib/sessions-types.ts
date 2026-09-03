@@ -54,6 +54,12 @@ export interface ExercisePrescription {
   // compatible alternatives (`scheme-view`). Optional like `superset_group`: the plain
   // Session and Protocol reads carry it; other read paths need not.
   scheme?: string | null;
+  // The chosen Set Type (ADR-0065): the movement line's stored `SetType` value
+  // (warm-up / working / drop / failure / AMRAP), or `null`/absent for "unset" — which
+  // resolves to working and renders as no badge (`set-type-view`). Descriptive only; it
+  // feeds no progression. Optional like `scheme`: the plain Session and Protocol reads
+  // carry it, other read paths need not.
+  set_type?: string | null;
   exercise_id: number;
   exercise_name: string;
   exercise_description: string | null;

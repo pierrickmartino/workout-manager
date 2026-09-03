@@ -450,3 +450,34 @@ def test_a_sensitive_constraint_redeem_lands_as_an_ordinary_saved_session():
     # It reads back as a plain owned Session in the recipient's library.
     read = client.get(f"/api/sessions/{copy['id']}", headers=recipient)
     assert read.status_code == 200
+
+
+def test_redeem_carries_forward_a_prescription_set_type():
+    # Arrange — the sharer tags an Inserted movement with a Set Type, then shares the plan
+    # (ADR-0065, #449: Set Type is a plan property carried across Share/Redeem-by-copy).
+    client, ctx, _ = build_client()
+    sharer = _auth(ctx, "sharer_settype")
+    session = _create_session(client, sharer)
+    exercise_id = session["prescriptions"][0]["exercise_id"]
+    tagged = client.post(
+        f"/api/sessions/{session['id']}/prescriptions",
+        headers=sharer,
+        json={
+            "exercise_id": exercise_id,
+            "sets": 2,
+            "reps": "10",
+            "load_kind": "absolute",
+            "load_value": "20",
+            "set_type": "warm_up",
+        },
+    ).json()["data"]
+    assert tagged["prescriptions"][-1]["set_type"] == "warm_up"
+    token = _share(client, sharer, session["id"]).json()["data"]["token"]
+
+    # Act — a recipient redeems the share into their own independent copy
+    copy = client.post(
+        f"/api/shares/{token}/redeem", headers=_auth(ctx, "recipient_settype")
+    ).json()["data"]
+
+    # Assert — the redeemed copy preserves the movement's Set Type
+    assert copy["prescriptions"][-1]["set_type"] == "warm_up"

@@ -17,6 +17,7 @@ import { RemoveExerciseButton } from "@/components/RemoveExerciseButton";
 import { HarderVariationOffer } from "@/components/HarderVariationOffer";
 import { SchemeControl } from "@/components/SchemeControl";
 import { schemeControlModel, type SchemeControlModel } from "@/lib/scheme-view";
+import { prescriptionSetTypeBadge } from "@/lib/set-type-view";
 import {
   fetchHarderVariation,
   fetchSession,
@@ -318,6 +319,17 @@ function PrescriptionCard({
                 AI-GENERATED
               </Badge>
             ) : null}
+            {/* Set Type badge (ADR-0065): a descriptive plan label. Rendered only for a
+                non-default type — an unset (or working) Set Type yields no badge, so a
+                plain movement stays visually quiet. */}
+            {(() => {
+              const badge = prescriptionSetTypeBadge(prescription);
+              return badge ? (
+                <Badge variant="violet" title="Set Type">
+                  {badge.label}
+                </Badge>
+              ) : null;
+            })()}
           </div>
           {prescription.exercise_description ? (
             <p className="font-sans text-[13px] leading-relaxed text-text-secondary">

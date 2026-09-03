@@ -18,6 +18,7 @@ from app.auth.dependencies import get_current_user
 from app.domain.completion import parse_completion_outcome
 from app.domain.load import LoadKind, load_from_input
 from app.domain.quantity import QuantityKind, quantity_from_input
+from app.domain.set_type import SetType, parse_set_type
 from app.envelope import success_envelope
 from app.logbook.correction import (
     ContiguityError,
@@ -90,6 +91,12 @@ class LogSetBody(BaseModel):
     load_kind: str = DEFAULT_LOAD_KIND
     load_value: str | None = None
     perceived_difficulty: int | None = Field(default=None, ge=MIN_RPE, le=MAX_RPE)
+    # Set Type annotation (ADR-0065, #449): a chosen ``SetType`` value tagging what this
+    # performed set *was*, or ``None``/blank for "unset" (reads as working). Descriptive
+    # only — echoed back per Logged Set, never a Progression input. Rides the finish, the
+    # static log form, the ad-hoc log, and Log Correction (all share this body). Membership
+    # is checked at the boundary and never coerced.
+    set_type: str | None = None
 
     @field_validator("quantity_kind")
     @classmethod
@@ -111,6 +118,18 @@ class LogSetBody(BaseModel):
             raise ValueError(f"load_kind must be one of: {allowed}") from exc
         return value
 
+    @field_validator("set_type")
+    @classmethod
+    def _known_set_type(cls, value: str | None) -> str | None:
+        # A blank/absent Set Type is "unset" and normalizes to ``None`` (reads as working);
+        # a present but unknown value is a client bug rejected at the boundary, never coerced.
+        if value is None or value == "":
+            return None
+        if parse_set_type(value) is None:
+            allowed = ", ".join(member.value for member in SetType)
+            raise ValueError(f"set_type must be one of: {allowed}")
+        return value
+
     def to_draft(self) -> LoggedSetDraft:
         parsed = load_from_input(self.load_kind, self.load_value)
         quantity = quantity_from_input(
@@ -124,6 +143,7 @@ class LogSetBody(BaseModel):
             quantity=quantity.to_dict() if quantity is not None else None,
             load=parsed.to_dict() if parsed is not None else None,
             perceived_difficulty=self.perceived_difficulty,
+            set_type=self.set_type,
         )
 
 
@@ -175,6 +195,10 @@ def serialize_logged_session(view: LoggedSessionView) -> dict:
                 "quantity": s.quantity,
                 "load": s.load,
                 "perceived_difficulty": s.perceived_difficulty,
+                # Set Type annotation (ADR-0065, #449): the stored ``SetType`` value, or
+                # null for "unset" (reads as working). Descriptive only; the web view-model
+                # renders it as a badge (no badge when unset).
+                "set_type": s.set_type,
                 "exercise_id": s.exercise_id,
                 "exercise_name": s.exercise_name,
                 "body_weight_kg": s.body_weight_kg,

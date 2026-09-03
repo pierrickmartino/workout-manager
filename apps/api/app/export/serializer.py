@@ -74,6 +74,9 @@ def _prescription(view: PrescriptionView) -> dict:
         # Progression Scheme selection (ADR-0064): the chosen scheme value, or null for
         # the default — so the plan's meaning (how each movement progresses) is portable.
         "scheme": view.scheme,
+        # Set Type annotation (ADR-0065): the movement line's Set Type, or null for unset
+        # (reads as working) — the plan's descriptive label, kept portable in the export.
+        "set_type": view.set_type,
     }
 
 
@@ -122,6 +125,9 @@ def _logged_set(view: LoggedSetView) -> dict:
         "load": view.load,
         "perceived_difficulty": view.perceived_difficulty,
         "body_weight_kg": view.body_weight_kg,
+        # Set Type annotation (ADR-0065): the performed set's Set Type, or null for unset
+        # (reads as working) — the record's descriptive label, kept portable in the export.
+        "set_type": view.set_type,
     }
 
 
