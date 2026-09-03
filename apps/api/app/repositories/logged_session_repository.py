@@ -35,6 +35,11 @@ class LoggedSetDraft:
     quantity: dict | None = None
     load: dict | None = None
     perceived_difficulty: int | None = None
+    # Logged Effort (ADR-0066): the typed ``{scale, value}`` Effort the user actually felt,
+    # in either scale (RPE or RIR). New writes dual-write — the log boundary populates this
+    # and mirrors an RPE value into ``perceived_difficulty`` above — so the progression gate
+    # and any legacy reader both keep working. ``None`` when no effort was recorded.
+    effort: dict | None = None
     body_weight_kg: float | None = None
     # Set Type annotation (ADR-0065, #449): the ``SetType`` value tagging what this set
     # *was* (e.g. ``"warm_up"``), or ``None`` for "unset" — which reads as ``working``.
@@ -87,6 +92,11 @@ class LoggedSetView:
     perceived_difficulty: int | None
     exercise_id: int
     exercise_name: str
+    # Logged Effort (ADR-0066): the stored typed ``{scale, value}`` Effort, or ``None`` when
+    # none was recorded (a returning user's set falls back to ``perceived_difficulty`` read as
+    # RPE). Surfaced on the read so the response echoes the effort in the scale it was logged,
+    # and so the progression overlay reads the typed value off this view.
+    effort: dict | None = None
     # Performed Body Weight (ADR-0026), carried through so later slices can score a
     # bodyweight set against the mass performed at; ``None`` when none was captured.
     body_weight_kg: float | None = None
@@ -190,6 +200,7 @@ def _set_view(logged_set: LoggedSet, exercise: Exercise) -> LoggedSetView:
         perceived_difficulty=logged_set.perceived_difficulty,
         exercise_id=exercise.id,
         exercise_name=exercise.name,
+        effort=logged_set.effort,
         body_weight_kg=logged_set.body_weight_kg,
         set_type=logged_set.set_type,
         targeted_muscles=list(exercise.targeted_muscles),
@@ -265,6 +276,7 @@ class SqlLoggedSessionRepository:
                     quantity=logged_set.quantity,
                     load=logged_set.load,
                     perceived_difficulty=logged_set.perceived_difficulty,
+                    effort=logged_set.effort,
                     body_weight_kg=logged_set.body_weight_kg,
                     set_type=logged_set.set_type,
                 )
@@ -309,6 +321,7 @@ class SqlLoggedSessionRepository:
                     quantity=logged_set.quantity,
                     load=logged_set.load,
                     perceived_difficulty=logged_set.perceived_difficulty,
+                    effort=logged_set.effort,
                     body_weight_kg=logged_set.body_weight_kg,
                     set_type=logged_set.set_type,
                 )
@@ -443,6 +456,7 @@ class InMemoryLoggedSessionRepository:
                 quantity=logged_set.quantity,
                 load=logged_set.load,
                 perceived_difficulty=logged_set.perceived_difficulty,
+                effort=logged_set.effort,
                 body_weight_kg=logged_set.body_weight_kg,
                 set_type=logged_set.set_type,
             )
@@ -481,6 +495,7 @@ class InMemoryLoggedSessionRepository:
                 quantity=logged_set.quantity,
                 load=logged_set.load,
                 perceived_difficulty=logged_set.perceived_difficulty,
+                effort=logged_set.effort,
                 body_weight_kg=logged_set.body_weight_kg,
                 set_type=logged_set.set_type,
             )

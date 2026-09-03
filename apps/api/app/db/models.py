@@ -347,6 +347,16 @@ class ExercisePrescription(SQLModel, table=True):
     # travels through create/Duplicate/Redeem/Share/Substitution and a Deploy tail edit,
     # and only the user's own copy is ever written.
     set_type: str | None = Field(default=None)
+    # Target Effort (ADR-0066): the *prescribed* Effort on this movement — a typed
+    # ``{scale, value}`` value (``app.domain.effort.Effort``) capturing "aim for RPE 8" /
+    # "leave 2 in reserve", or NULL for "unset". A plan value like reps/load/scheme, carried
+    # across Duplicate/Redeem/Share/Substitution and unset by Capture. Descriptive in v1: it
+    # feeds the Scheme Preview and the UI but is **never** a Progression input — stepping
+    # stays a function of the *record*, never the plan. Additive and nullable: every existing
+    # row reads NULL, and only the user's own copy is ever written.
+    target_effort: dict | None = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
 
 
 class SessionFavorite(SQLModel, table=True):
@@ -477,7 +487,19 @@ class LoggedSet(SQLModel, table=True):
     # ``app.domain.load.ParsedLoad``, so a logged bodyweight or %-1RM set carries
     # its meaning and is never silently dropped by a kg-only aggregate.
     load: dict | None = Field(default=None, sa_column=Column(JSON, nullable=True))
+    # Performance Feedback as the legacy RPE-style 1–10 int (ADR-0004). Retained and read
+    # as an ``rpe``-scale Effort for back-compat (ADR-0066): a returning user's records need
+    # no backfill. New writes **dual-write** — they populate ``effort`` below and mirror an
+    # RPE value here — so any reader still on this column keeps working during the transition.
     perceived_difficulty: int | None = Field(default=None)
+    # Logged Effort as a typed value (ADR-0066): a ``{scale, value}`` value object matching
+    # ``app.domain.effort.Effort`` — the user's Performance Feedback in *either* scale (RPE
+    # 0–10 half-steps, or RIR integer 0–5), so it is never a bare number whose scale is
+    # guessed. The Progression low-effort gate reads this in preference to
+    # ``perceived_difficulty``, normalizing a logged RIR to its RPE-equivalent (``10 − rir``)
+    # before the threshold compare. Additive and nullable: every set logged before this reads
+    # NULL and falls back to the legacy int.
+    effort: dict | None = Field(default=None, sa_column=Column(JSON, nullable=True))
     # Performed Body Weight (ADR-0026): the performer's body mass at the moment this
     # set was logged, snapshotted from the Profile once at the write boundary so a
     # bodyweight set's strength estimate is fixed by what happened and never drifts.

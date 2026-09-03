@@ -408,6 +408,11 @@ export function buildLogSet(row: LogRowFields, unit: WeightUnit): LogSetResult {
   // The load was entered in the reader's Weight Unit; convert it to canonical, exact
   // kilograms for storage (#417). A blank value stays "no load recorded" → null.
   const loadValue = loadValueToKg(loadKind, row.loadValue.trim(), unit);
+  // Effort (ADR-0066): the form's RPE input logs the typed value in the `rpe` scale so a new
+  // write dual-writes — the backend stores the typed `effort` and mirrors an RPE value into
+  // `perceived_difficulty`. When no in-range effort was entered, neither field is sent (an
+  // absent effort, not a fabricated one).
+  const effort = perceivedDifficulty(row.rpe);
   return {
     status: "set",
     set: {
@@ -415,7 +420,8 @@ export function buildLogSet(row: LogRowFields, unit: WeightUnit): LogSetResult {
       ...quantity.fields,
       load_kind: loadKind as LogSetInput["load_kind"],
       load_value: loadValue === "" ? null : loadValue,
-      perceived_difficulty: perceivedDifficulty(row.rpe),
+      perceived_difficulty: effort,
+      ...(effort !== null ? { effort_scale: "rpe", effort_value: effort } : {}),
     },
   };
 }
