@@ -18,6 +18,7 @@ import {
 
 import { TabBar } from "@/components/pulse/tab-bar";
 import { OutboxSyncRegistrar } from "@/components/OutboxSyncRegistrar";
+import { SyncStatusBanner } from "@/components/SyncStatusBanner";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import { buttonVariants } from "@/components/ui/button";
 import { resolveActiveSkin } from "@/lib/active-skin";
@@ -191,6 +192,10 @@ export default async function RootLayout({
             {/* Drains the finish outbox on reconnect / foreground / restart (ADR-0060,
                 issue #413). Signed-in only: the queue is account-scoped. */}
             <OutboxSyncRegistrar />
+            {/* The honest connectivity + sync-state surface over that outbox (issue #414):
+                a non-blocking toast that distinguishes offline / saved-locally / syncing /
+                synced / failed, with a manual retry on failure. */}
+            <SyncStatusBanner />
           </SignedIn>
 
           {/* Registers the minimal installability service worker (ADR-0028). */}

@@ -18,7 +18,9 @@ import {
 } from "@/lib/exercise-browse-query";
 import { buildUsageMap, usageMarker } from "@/lib/exercise-usage-view";
 import { formatMuscleSummary } from "@/lib/exercise-muscle-summary";
+import { useConnectivity } from "@/lib/use-connectivity";
 import type { ExerciseSearchResult } from "@/lib/exercises-types";
+import { OfflineNotice } from "@/components/pulse/offline-notice";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,6 +63,10 @@ export function ExerciseCatalogBrowser({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [loadingMore, startLoadMore] = useTransition();
+  // Catalog search hits the server on every query and "load more". While offline, annotate
+  // and disable it rather than fire requests that can only fail (issue #414); reconnecting
+  // re-queries the current filters (below).
+  const online = useConnectivity();
 
   const usageMap = useMemo(() => buildUsageMap(usage), [usage]);
   // Equipment options the user actually owns, offered as a one-tap shortcut; only those
@@ -79,6 +85,9 @@ export function ExerciseCatalogBrowser({
       firstRun.current = false;
       return;
     }
+    // Offline: don't fire a query that can only fail. Re-running when `online` flips back to
+    // true re-queries page one for the current filters, so results catch up on reconnect.
+    if (!online) return;
     const handle = setTimeout(() => {
       startTransition(async () => {
         const page = await fetchCatalogPage(filters, 0);
@@ -88,11 +97,13 @@ export function ExerciseCatalogBrowser({
       });
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(handle);
-    // filtersKey captures every field of `filters`; `filters` is read inside.
+    // filtersKey captures every field of `filters`; `filters` is read inside. `online`
+    // gates firing and re-queries on reconnect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtersKey]);
+  }, [filtersKey, online]);
 
   const loadMore = () => {
+    if (!online) return;
     startLoadMore(async () => {
       const page = await fetchCatalogPage(filters, results.length);
       if (page.error) {
@@ -130,6 +141,12 @@ export function ExerciseCatalogBrowser({
 
   return (
     <div className="flex flex-col gap-5">
+      {!online ? (
+        <OfflineNotice>
+          Searching the Catalog needs a connection — reconnect to search.
+        </OfflineNotice>
+      ) : null}
+
       <label className="flex flex-col gap-1.5">
         <span className="label-mono text-[9px] text-text-muted">SEARCH THE CATALOG</span>
         <div className="relative">
@@ -142,6 +159,7 @@ export function ExerciseCatalogBrowser({
             placeholder="Search a movement…"
             aria-label="Search the Exercise Catalog"
             className="pl-9"
+            disabled={!online}
             onChange={(e) =>
               setFilters((current) => ({ ...current, query: e.target.value }))
             }
@@ -155,6 +173,7 @@ export function ExerciseCatalogBrowser({
             key={group}
             label={group}
             active={filters.muscleGroups.includes(group)}
+            disabled={!online}
             onToggle={() => toggleMuscle(group)}
           />
         ))}
@@ -166,6 +185,7 @@ export function ExerciseCatalogBrowser({
             key={band.value}
             label={band.label}
             active={filters.difficulty.includes(band.value)}
+            disabled={!online}
             onToggle={() => toggleDifficulty(band.value)}
           />
         ))}
@@ -191,6 +211,7 @@ export function ExerciseCatalogBrowser({
               key={item}
               label={item}
               active={filters.equipment.includes(item)}
+              disabled={!online}
               onToggle={() => toggleEquipment(item)}
             />
           ))}
@@ -249,7 +270,7 @@ export function ExerciseCatalogBrowser({
           variant="secondary"
           className="w-full"
           onClick={loadMore}
-          disabled={loadingMore}
+          disabled={loadingMore || !online}
         >
           {loadingMore ? "Loading…" : `Load more (${total - results.length} more)`}
         </Button>
@@ -279,17 +300,19 @@ function FacetGroup({ label, action, children }: FacetGroupProps) {
 interface FacetChipProps {
   label: string;
   active: boolean;
+  disabled?: boolean;
   onToggle: () => void;
 }
 
-function FacetChip({ label, active, onToggle }: FacetChipProps) {
+function FacetChip({ label, active, disabled = false, onToggle }: FacetChipProps) {
   return (
     <button
       type="button"
       onClick={onToggle}
+      disabled={disabled}
       aria-pressed={active}
       className={
-        "rounded-full border px-3 py-1 font-sans text-[12px] transition-colors " +
+        "rounded-full border px-3 py-1 font-sans text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-50 " +
         (active
           ? "border-cyan bg-cyan/10 text-cyan"
           : "border-border bg-surface text-text-secondary hover:border-text-muted")
