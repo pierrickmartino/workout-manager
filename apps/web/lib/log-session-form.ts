@@ -93,6 +93,10 @@ export interface LogSetRow {
   // distance/duration set only when a load is prescribed or the user opted in.
   showLoad: boolean;
   rpe: string;
+  // The Set Note (ADR-0065, #451): the user's optional per-set remark, edited inline in the log
+  // form. Blank means no note; the backend length-caps and HTML-escapes a present note at the
+  // write boundary. Starts empty — a plan never seeds a record's note.
+  note: string;
   // Model B (Q10): a Done set is attempted and is logged; an un-done set is skipped — it is
   // dropped from the record and marks its prescribed set un-attempted. Default true.
   done: boolean;
@@ -215,6 +219,7 @@ export function buildLogForm(
       loadValue: seededLoad.loadValue,
       showLoad,
       rpe: "",
+      note: "",
       done: true,
     }));
     return {
@@ -303,6 +308,8 @@ export interface LogRowFields {
   loadKind: string;
   loadValue: string;
   rpe: string;
+  // The user's optional per-set Set Note (ADR-0065), as typed. Blank means no note.
+  note: string;
 }
 
 // The three log-set request builders return the same quantity-field slice the record
@@ -413,6 +420,10 @@ export function buildLogSet(row: LogRowFields, unit: WeightUnit): LogSetResult {
   // `perceived_difficulty`. When no in-range effort was entered, neither field is sent (an
   // absent effort, not a fabricated one).
   const effort = perceivedDifficulty(row.rpe);
+  // The Set Note (ADR-0065): send it only when non-blank, so an untouched row records no note
+  // (the backend stores a blank note as unset anyway). It rides as raw text; the backend
+  // length-caps and HTML-escapes it at the write boundary.
+  const note = row.note.trim();
   return {
     status: "set",
     set: {
@@ -422,6 +433,7 @@ export function buildLogSet(row: LogRowFields, unit: WeightUnit): LogSetResult {
       load_value: loadValue === "" ? null : loadValue,
       perceived_difficulty: effort,
       ...(effort !== null ? { effort_scale: "rpe", effort_value: effort } : {}),
+      ...(note !== "" ? { note } : {}),
     },
   };
 }
@@ -472,6 +484,7 @@ export function readLogFormRows(form: FormData): LogRowFields[] {
       loadKind: readField(form, `set-${index}-load_kind`),
       loadValue: readField(form, `set-${index}-load_value`),
       rpe: readField(form, `set-${index}-rpe`),
+      note: readField(form, `set-${index}-note`),
     });
   }
   return rows;

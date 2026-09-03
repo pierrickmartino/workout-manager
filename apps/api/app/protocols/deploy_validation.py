@@ -57,6 +57,10 @@ class DraftPrescription:
     # untouched; it has no compatibility rule (independent of Load and Progression), so it
     # needs no validation here beyond the membership check at the request boundary.
     set_type: str | None = None
+    # Exercise Note (ADR-0065, #451): the plan-side coaching cue, or ``None`` for "no note".
+    # Already length-capped and HTML-escaped at the request boundary; carried through Deploy
+    # re-numbered untouched, so it needs no validation here.
+    note: str | None = None
 
 
 @dataclass(frozen=True)

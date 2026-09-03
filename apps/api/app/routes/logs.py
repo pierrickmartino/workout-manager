@@ -18,6 +18,7 @@ from app.auth.dependencies import get_current_user
 from app.domain.completion import parse_completion_outcome
 from app.domain.effort import EffortScale, effort_from_input
 from app.domain.load import LoadKind, load_from_input
+from app.domain.note import parse_note
 from app.domain.quantity import QuantityKind, quantity_from_input
 from app.domain.set_type import SetType, parse_set_type
 from app.envelope import success_envelope
@@ -107,6 +108,11 @@ class LogSetBody(BaseModel):
     # static log form, the ad-hoc log, and Log Correction (all share this body). Membership
     # is checked at the boundary and never coerced.
     set_type: str | None = None
+    # Set Note (ADR-0065, #451): an optional record-side remark on this performed set, or
+    # ``None``/blank for "no note". Sanitized at the boundary by ``parse_note`` (below): blank →
+    # unset, over-cap → 422, else stripped + HTML-escaped so the stored value is inert wherever
+    # it renders. Rides the finish, the static log form, the ad-hoc log, and Log Correction.
+    note: str | None = None
 
     @field_validator("quantity_kind")
     @classmethod
@@ -139,6 +145,15 @@ class LogSetBody(BaseModel):
             allowed = ", ".join(member.value for member in SetType)
             raise ValueError(f"set_type must be one of: {allowed}")
         return value
+
+    @field_validator("note")
+    @classmethod
+    def _sanitize_note(cls, value: str | None) -> str | None:
+        # Sanitize the Set Note at the write boundary (ADR-0065): blank → unset (None), over-cap
+        # → 422 (``NoteTooLongError`` is a ``ValueError``), else stripped + HTML-escaped so it is
+        # inert wherever it renders (ADR-0036). Log Correction re-submits the edited note as raw
+        # text, so escaping once here re-sanitizes a corrected note without double-escaping.
+        return parse_note(value)
 
     @field_validator("effort_scale")
     @classmethod
@@ -189,6 +204,7 @@ class LogSetBody(BaseModel):
             perceived_difficulty=perceived_difficulty,
             effort=effort_dict,
             set_type=self.set_type,
+            note=self.note,
         )
 
 
@@ -248,6 +264,9 @@ def serialize_logged_session(view: LoggedSessionView) -> dict:
                 # null for "unset" (reads as working). Descriptive only; the web view-model
                 # renders it as a badge (no badge when unset).
                 "set_type": s.set_type,
+                # Set Note (ADR-0065, #451): the stored record-side remark, or null for "no
+                # note" (rendered as nothing). Already HTML-escaped at the write boundary.
+                "note": s.note,
                 "exercise_id": s.exercise_id,
                 "exercise_name": s.exercise_name,
                 "body_weight_kg": s.body_weight_kg,

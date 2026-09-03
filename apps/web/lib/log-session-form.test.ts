@@ -279,6 +279,7 @@ function row(overrides: Partial<LogRowFields> = {}): LogRowFields {
     loadKind: "absolute",
     loadValue: "",
     rpe: "",
+    note: "",
     ...overrides,
   };
 }
@@ -303,6 +304,20 @@ test("a blank Done reps row logs as 0 reps, not a skip (regression: attempted to
 test("a malformed reps value is dropped silently", () => {
   assert.equal(buildLogSet(row({ reps: "-3" }), "kg").status, "skip");
   assert.equal(buildLogSet(row({ reps: "5.5" }), "kg").status, "skip");
+});
+
+test("a per-set note rides the built set as raw text (trimmed), left to the backend to escape", () => {
+  const result = buildLogSet(row({ reps: "8", note: "  left knee twinge  " }), "kg");
+  assert.equal(result.status, "set");
+  if (result.status !== "set") return;
+  assert.equal(result.set.note, "left knee twinge");
+});
+
+test("a blank note is omitted from the payload, not sent as an empty string", () => {
+  const result = buildLogSet(row({ reps: "8", note: "   " }), "kg");
+  assert.equal(result.status, "set");
+  if (result.status !== "set") return;
+  assert.equal("note" in result.set, false);
 });
 
 test("a distance row logs a distance Quantity with unit and optional companion time", () => {

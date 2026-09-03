@@ -60,6 +60,12 @@ export interface ExercisePrescription {
   // feeds no progression. Optional like `scheme`: the plain Session and Protocol reads
   // carry it, other read paths need not.
   set_type?: string | null;
+  // The Exercise Note (ADR-0065, #451): the plan-side coaching cue on this movement
+  // ("pause on the chest"), or `null`/absent for "no note" — which the note view-model
+  // (`note-view`) renders as nothing. Stored HTML-escaped at the write boundary; the view
+  // decodes it for display. Optional like `set_type`: the plain Session and Protocol reads
+  // carry it, other read paths need not.
+  note?: string | null;
   exercise_id: number;
   exercise_name: string;
   exercise_description: string | null;

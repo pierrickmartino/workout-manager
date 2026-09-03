@@ -57,6 +57,9 @@ function readRowFields(form: FormData, index: number): CorrectionRowFields {
     loadKind: readField(form, `set-${index}-load_kind`),
     loadValue: readField(form, `set-${index}-load_value`),
     perceivedDifficulty: readRpe(form, `set-${index}-rpe`),
+    // The Set Note (ADR-0065, #451), as edited raw text — the build step re-sends it and the
+    // backend re-escapes it once. Blank means no note (a cleared field removes it).
+    note: readField(form, `set-${index}-note`),
   };
 }
 

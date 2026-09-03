@@ -51,6 +51,9 @@ def serialize_prescription(view: PrescriptionView) -> dict:
         # Set Type annotation (ADR-0065, #449): the chosen ``SetType`` value, or null for
         # "unset" — which the web view-model renders as no badge (a neutral working set).
         "set_type": view.set_type,
+        # Exercise Note (ADR-0065, #451): the plan-side coaching cue, or null for "no note" —
+        # which the web view-model renders as nothing. Already HTML-escaped at the write boundary.
+        "note": view.note,
         "exercise_id": view.exercise_id,
         "exercise_name": view.exercise_name,
         "exercise_description": view.exercise_description,

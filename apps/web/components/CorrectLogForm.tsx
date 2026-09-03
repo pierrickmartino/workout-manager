@@ -170,6 +170,18 @@ function SetRow({
           />
         </label>
       </div>
+
+      {/* Set Note (ADR-0065, #451): editable per-set remark, pre-filled decoded from the record.
+          Rides as raw text under `set-<i>-note`; the backend re-escapes it once on save. */}
+      <label className="flex flex-col gap-1.5">
+        <span className="label-mono text-[9px] text-text-muted">Note</span>
+        <Input
+          name={`set-${index}-note`}
+          defaultValue={set.note}
+          placeholder="Optional note (e.g. left knee twinge)"
+          aria-label={`Note for ${set.exerciseName}`}
+        />
+      </label>
     </div>
   );
 }
@@ -379,6 +391,15 @@ function AddedSetRow({ index, kind, unit, onKindChange, onRemove }: AddedSetRowP
           </Select>
         </label>
       </div>
+      {/* Set Note (ADR-0065, #451): optional per-set remark on the added set, sent raw. */}
+      <label className="flex flex-col gap-1.5">
+        <span className="label-mono text-[9px] text-text-muted">Note</span>
+        <Input
+          name={`${prefix}-note`}
+          placeholder="Optional note"
+          aria-label={`Note, ${rowLabel}`}
+        />
+      </label>
     </div>
   );
 }
