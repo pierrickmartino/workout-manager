@@ -69,15 +69,19 @@ def _session_top_sets(session: LoggedSessionView) -> dict[int, float]:
 
     A set qualifies through the one yardstick (``estimated_1rm_for_set``): an absolute set
     on its kilograms, a bodyweight set once resolved against its Performed Body Weight, both
-    inside the trustworthy rep window. An Exercise absent from the result had no qualifying
-    set that session. The single per-session pass both ``top_set_series`` and
+    inside the trustworthy rep window — and never a ``warm_up`` set, which the yardstick
+    excludes as a record candidate (ADR-0065). An Exercise absent from the result had no
+    qualifying set that session. The single per-session pass both ``top_set_series`` and
     ``rank_qualifying_exercises`` read through, so a session's Top Set means one thing.
     """
 
     best: dict[int, float] = {}
     for logged_set in session.logged_sets:
         estimate = estimated_1rm_for_set(
-            logged_set.load, logged_set.quantity, logged_set.body_weight_kg
+            logged_set.load,
+            logged_set.quantity,
+            logged_set.body_weight_kg,
+            logged_set.set_type,
         )
         if estimate is None:
             continue

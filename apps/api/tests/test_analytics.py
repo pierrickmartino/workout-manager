@@ -825,3 +825,49 @@ def test_an_in_depth_requested_window_is_served_untouched():
 
     # Assert — an in-depth request is honoured as asked
     assert overview.range == "90d"
+
+
+def test_overview_volume_excludes_warm_up_sets_but_not_total_sets_or_prs():
+    # Arrange — a heavy warm-up (would-be 130 kg PR, 130×5 = 650 tonnage) and a working
+    # set (100×5 = 500), same day, same Exercise (ADR-0065 end-to-end)
+    _, sessions, logged = _build()
+    _log(
+        sessions,
+        logged,
+        "user_warm",
+        TODAY,
+        [
+            LoggedSetDraft(
+                exercise_id=SQUAT,
+                quantity=reps_quantity(5),
+                load=_abs_load(130.0),
+                set_type="warm_up",
+            ),
+            LoggedSetDraft(
+                exercise_id=SQUAT,
+                quantity=reps_quantity(5),
+                load=_abs_load(100.0),
+                set_type="working",
+            ),
+        ],
+    )
+
+    # Act
+    overview = analytics_overview(
+        "user_warm", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — Volume counts only the working set's tonnage; the warm-up leaves it.
+    assert [(p.performed_on, p.volume_kg) for p in overview.volume_points] == [
+        (TODAY, 500.0)
+    ]
+    # …coverage is over the working reps alone, not diluted by the warm-up's reps…
+    assert overview.volume_coverage == 100.0
+    # …the PR is the 100 kg working set, never the heavier warm-up (records skip it):
+    # the estimate is the working set's (100 × (1 + 5/30)), below the warm-up's would-be
+    # 130 × (1 + 5/30) — proof the heavier warm-up was not taken as the record.
+    assert overview.new_prs == 1
+    assert overview.recent_records[0].estimated_1rm == 100.0 * (1 + 5 / 30)
+    assert overview.recent_records[0].estimated_1rm < 130.0 * (1 + 5 / 30)
+    # …but Total Sets is type-neutral: both performed sets are still counted.
+    assert overview.total_sets == 2

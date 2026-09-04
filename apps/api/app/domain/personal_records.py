@@ -22,6 +22,7 @@ from typing import Protocol
 from app.domain.load import LoadKind, ParsedLoad, resolve_bodyweight_kg
 from app.domain.one_rep_max import estimate_1rm
 from app.domain.quantity import repetitions_of
+from app.domain.set_type import is_warm_up
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,10 @@ class LoggedSetRecord:
     # none was captured. A bodyweight set scores only against this mass; an absolute
     # set ignores it entirely.
     body_weight_kg: float | None = None
+    # The stored Set Type annotation (ADR-0065), or ``None`` for an unset set that reads
+    # as ``working``. A ``warm_up`` set is never a strength-record candidate — it carries
+    # no Estimated 1RM — so it neither sets nor resets a Personal Record / Top Set.
+    set_type: str | None = None
 
 
 class LoggedSet(Protocol):
@@ -61,6 +66,10 @@ class LoggedSet(Protocol):
     quantity: dict | None
     load: dict | None
     body_weight_kg: float | None
+    # The Set Type annotation (ADR-0065): a ``warm_up`` set is excluded as a record
+    # candidate, so the shared flattening must carry it through the one seam every
+    # Personal-Record surface reads — the same reason ``body_weight_kg`` is declared here.
+    set_type: str | None
 
 
 class LoggedSession(Protocol):
@@ -97,6 +106,7 @@ def logged_set_records(history: Iterable[LoggedSession]) -> list[LoggedSetRecord
             load=logged_set.load,
             performed_on=session.performed_on,
             body_weight_kg=logged_set.body_weight_kg,
+            set_type=logged_set.set_type,
         )
         for session in history
         for logged_set in session.logged_sets
@@ -127,7 +137,10 @@ class PersonalRecord:
 
 
 def estimated_1rm_for_set(
-    load: dict | None, quantity: dict | None, body_weight_kg: float | None = None
+    load: dict | None,
+    quantity: dict | None,
+    body_weight_kg: float | None = None,
+    set_type: str | None = None,
 ) -> float | None:
     """The Estimated 1RM for one set, or ``None`` if it can't set a PR.
 
@@ -143,9 +156,15 @@ def estimated_1rm_for_set(
     through it, so "best Est. 1RM" means the same thing everywhere (ADR-0017). Absolute
     behavior is unchanged: the default ``body_weight_kg`` of ``None`` never affects an
     absolute set.
+
+    A ``warm_up`` Set Type (ADR-0065) is excluded here — the single seam every strength
+    surface qualifies through — so a warm-up carries no Estimated 1RM and can never be a
+    Personal Record, Top Set, or Est.-1RM record candidate, however heavy. An unset
+    ``set_type`` (the default and every legacy row) reads as ``working`` and stays
+    eligible, so no existing record moves.
     """
 
-    if load is None:
+    if load is None or is_warm_up(set_type):
         return None
     reps = repetitions_of(quantity)
     parsed = ParsedLoad.from_dict(load)
@@ -179,7 +198,7 @@ def detect_personal_records(
 
     for record in ordered:
         estimate = estimated_1rm_for_set(
-            record.load, record.quantity, record.body_weight_kg
+            record.load, record.quantity, record.body_weight_kg, record.set_type
         )
         if estimate is None:
             continue

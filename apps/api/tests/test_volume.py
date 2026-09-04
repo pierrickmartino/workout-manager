@@ -313,3 +313,84 @@ def test_empty_history_yields_no_points_zero_coverage_and_no_delta():
     assert series.points == ()
     assert series.coverage_pct == 0.0
     assert series.delta_pct is None
+
+
+def _typed(kg, reps, day, set_type):
+    """A convertible absolute-load VolumeSet carrying a Set Type."""
+
+    return VolumeSet(
+        quantity=_reps(reps), load=_abs(kg), performed_on=day, set_type=set_type
+    )
+
+
+def test_warm_up_sets_do_not_add_to_working_volume():
+    # Arrange — one working set (100×5 = 500) and a light warm-up (40×5 = 200), same day
+    history = [
+        _typed(100.0, 5, TODAY, "working"),
+        _typed(40.0, 5, TODAY, "warm_up"),
+    ]
+
+    # Act
+    series = volume_series(history, days=7, today=TODAY)
+
+    # Assert — warm-up tonnage is not working volume (ADR-0065): only the 500 points
+    assert series.points == (VolumePoint(TODAY, 500.0),)
+
+
+def test_warm_up_sets_are_dropped_from_coverage_not_counted_as_a_miss():
+    # Arrange — a convertible working set and a warm-up, both absolute (both convert)
+    history = [
+        _typed(100.0, 5, TODAY, "working"),
+        _typed(40.0, 8, TODAY, "warm_up"),
+    ]
+
+    # Act
+    series = volume_series(history, days=7, today=TODAY)
+
+    # Assert — the warm-up leaves the projection entirely: coverage is a clean 100% of
+    # the working reps, never diluted by the warm-up's 8 reps as if they were uncovered
+    assert series.coverage_pct == 100.0
+
+
+def test_non_warm_up_types_all_count_toward_volume():
+    # Arrange — working / failure / AMRAP / drop, 100×5 = 500 each, plus one warm-up
+    history = [
+        _typed(100.0, 5, TODAY, "working"),
+        _typed(100.0, 5, TODAY, "failure"),
+        _typed(100.0, 5, TODAY, "amrap"),
+        _typed(100.0, 5, TODAY, "drop"),
+        _typed(100.0, 5, TODAY, "warm_up"),
+    ]
+
+    # Act
+    series = volume_series(history, days=7, today=TODAY)
+
+    # Assert — the four working-analytics types sum (4 × 500); the warm-up is excluded
+    assert series.points == (VolumePoint(TODAY, 2000.0),)
+
+
+def test_legacy_untyped_sets_count_as_working_volume():
+    # Arrange — a set with no Set Type (a pre-Set-Type row) reads as working
+    history = [VolumeSet(quantity=_reps(5), load=_abs(100.0), performed_on=TODAY)]
+
+    # Act
+    series = volume_series(history, days=7, today=TODAY)
+
+    # Assert — legacy rows keep counting everywhere: the figure does not move
+    assert series.points == (VolumePoint(TODAY, 500.0),)
+
+
+def test_warm_up_sets_are_dropped_from_the_delta_baseline():
+    # Arrange — this window: one working set (100×5 = 500). Prior window: a warm-up
+    # (100×8) and a working set (100×5 = 500)
+    history = [
+        _typed(100.0, 5, TODAY, "working"),
+        _typed(100.0, 8, TODAY - timedelta(days=7), "warm_up"),
+        _typed(100.0, 5, TODAY - timedelta(days=7), "working"),
+    ]
+
+    # Act
+    series = volume_series(history, days=7, today=TODAY)
+
+    # Assert — the prior baseline is the working 500, not 500 + warm-up: delta is 0%
+    assert series.delta_pct == 0.0
