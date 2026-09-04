@@ -77,6 +77,9 @@ def _prescription(view: PrescriptionView) -> dict:
         # Set Type annotation (ADR-0065): the movement line's Set Type, or null for unset
         # (reads as working) — the plan's descriptive label, kept portable in the export.
         "set_type": view.set_type,
+        # Target Effort (ADR-0066): the movement line's prescribed Effort, or null for no target —
+        # the plan's descriptive effort aim, kept portable in the export.
+        "target_effort": view.target_effort,
         # Exercise Note (ADR-0065): the movement line's coaching cue, or null for no note —
         # already HTML-escaped at the write boundary, kept portable in the export.
         "note": view.note,

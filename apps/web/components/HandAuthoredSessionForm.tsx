@@ -26,6 +26,12 @@ import {
 import type { CaptureSeed, CaptureSeedExercise } from "@/lib/capture-seed";
 import { dissolveSingletonGroups } from "@/lib/supersets";
 import { loadKindOptions } from "@/lib/load";
+import {
+  DEFAULT_EFFORT_SCALE,
+  KNOWN_EFFORT_SCALES,
+  effortScaleLabel,
+  type EffortScale,
+} from "@/lib/effort";
 import { weightUnitLabel } from "@/lib/weight-format";
 import type { WeightUnit } from "@/lib/weight-unit";
 import {
@@ -107,6 +113,11 @@ interface ExerciseRow {
   // The Exercise Note (ADR-0065, #451): the plan-side coaching cue, edited inline as raw text.
   // Blank means no note; the backend length-caps and HTML-escapes it at the write boundary.
   note: string;
+  // The Target Effort (ADR-0066, #454): the prescribed Effort, edited inline as a scale pick
+  // plus a value. A blank value is no target; the backend validates the value against its
+  // scale's band at the write boundary and rejects an out-of-band one.
+  targetEffortScale: EffortScale;
+  targetEffortValue: string;
   loadKind: string;
   loadValue: string;
   supersetGroup: string | null;
@@ -151,6 +162,8 @@ function makeExerciseRow(exercise: PickedExercise): ExerciseRow {
     restSeconds: "",
     tempo: "",
     note: "",
+    targetEffortScale: DEFAULT_EFFORT_SCALE,
+    targetEffortValue: "",
     loadKind: defaultLoadKindForAmount(DEFAULT_AMOUNT_KIND),
     loadValue: "",
     supersetGroup: null,
@@ -177,6 +190,10 @@ function seededExerciseRow(seed: CaptureSeedExercise): ExerciseRow {
     // Capture leaves the Exercise Note unset (ADR-0065): a plan-less record never carried a
     // plan cue, so the seed authors none — the same as rest/tempo/Superset above.
     note: "",
+    // Capture leaves the Target Effort unset (ADR-0066): a plan-less record never carried a
+    // plan target, so the seed authors none (a blank value is no target).
+    targetEffortScale: DEFAULT_EFFORT_SCALE,
+    targetEffortValue: "",
     loadKind: seed.loadKind,
     loadValue: seed.loadValue,
     supersetGroup: null,
@@ -350,6 +367,8 @@ export function HandAuthoredSessionForm({
     restSeconds: row.restSeconds,
     tempo: row.tempo,
     note: row.note,
+    targetEffortScale: row.targetEffortScale,
+    targetEffortValue: row.targetEffortValue,
     loadKind: row.loadKind,
     loadValue: row.loadValue,
     supersetGroup: row.supersetGroup,
@@ -795,6 +814,33 @@ function ExerciseCard({
             placeholder="Optional cue (e.g. pause on the chest)"
             onChange={(event) => onChange({ note: event.target.value })}
             aria-label={`Note for ${row.exerciseName}`}
+          />
+        </FieldLabel>
+        {/* Target Effort (ADR-0066, #454): an optional prescribed effort in either scale.
+            A blank value authors no target; the backend validates the value's band. */}
+        <FieldLabel label="Target effort scale">
+          <Select
+            value={row.targetEffortScale}
+            onChange={(event) =>
+              onChange({ targetEffortScale: event.target.value as EffortScale })
+            }
+            aria-label={`Target effort scale for ${row.exerciseName}`}
+          >
+            {KNOWN_EFFORT_SCALES.map((scale) => (
+              <option key={scale} value={scale}>
+                {effortScaleLabel(scale)}
+              </option>
+            ))}
+          </Select>
+        </FieldLabel>
+        <FieldLabel label="Target effort">
+          <Input
+            value={row.targetEffortValue}
+            placeholder={row.targetEffortScale === "rir" ? "e.g. 2" : "e.g. 8"}
+            onChange={(event) =>
+              onChange({ targetEffortValue: event.target.value })
+            }
+            aria-label={`Target effort for ${row.exerciseName}`}
           />
         </FieldLabel>
       </div>

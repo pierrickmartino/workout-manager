@@ -126,6 +126,46 @@ def test_deploy_edits_an_un_performed_prescription_in_place():
     assert first["recommended_load"] == parse_load("80 kg").to_dict()
 
 
+def test_deploy_sets_and_echoes_a_target_effort_on_an_un_performed_prescription():
+    # A Deploy tail edit is a plan-edit surface for Target Effort (ADR-0066, #454): a Builder
+    # user prescribes "aim for RPE 8" on a Protocol-member movement through the deploy write,
+    # and it rides back on the progressed Protocol.
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_target")
+    protocol_id = protocol["id"]
+    body = _deploy_body(protocol)
+    body["sessions"][0]["prescriptions"][0]["target_effort_scale"] = "rpe"
+    body["sessions"][0]["prescriptions"][0]["target_effort_value"] = 8
+
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_target"),
+        json=body,
+    )
+
+    assert response.status_code == 200, response.json()
+    first = response.json()["data"]["sessions"][0]["prescriptions"][0]
+    assert first["target_effort"] == {"scale": "rpe", "value": 8}
+
+
+def test_deploy_rejects_an_invalid_target_effort_and_persists_nothing():
+    # An out-of-band target is a 422 at the boundary (ADR-0066), never a coerced number.
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_bad_target")
+    protocol_id = protocol["id"]
+    body = _deploy_body(protocol)
+    body["sessions"][0]["prescriptions"][0]["target_effort_scale"] = "rir"
+    body["sessions"][0]["prescriptions"][0]["target_effort_value"] = 9
+
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_bad_target"),
+        json=body,
+    )
+
+    assert response.status_code == 422
+
+
 def test_deploy_rejects_a_change_to_a_performed_session():
     # Arrange — perform Week 1 so it is frozen, then try to edit it
     h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))

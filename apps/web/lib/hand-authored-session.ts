@@ -98,6 +98,12 @@ export interface AuthoredExerciseFields {
   // as raw text. Blank means no note; the backend length-caps and HTML-escapes it at the write
   // boundary. Optional so existing callers/tests that omit it author a note-less plan.
   note?: string;
+  // The Target Effort (ADR-0066, #454): the prescribed Effort authored by hand — the picked
+  // scale ("rpe" / "rir") and its value as a form string. A blank value is no target (both keys
+  // are omitted from the payload); a present value with no scale defaults to RPE at the backend.
+  // The RPE/RIR band is validated at the write boundary, so an invalid value round-trips a 422.
+  targetEffortScale?: string;
+  targetEffortValue?: string;
   supersetGroup: string | null;
   roundRestSeconds: number | null;
   performedSets: PerformedSetFields[];
@@ -132,6 +138,11 @@ export interface AuthorPrescriptionInput {
   // The Exercise Note (ADR-0065, #451): the plan-side coaching cue, or omitted/null for "no
   // note". Rides as raw text; the backend length-caps and HTML-escapes it at the write boundary.
   note?: string | null;
+  // The Target Effort (ADR-0066, #454): the prescribed Effort in either scale, or both keys
+  // omitted for "no target". The backend validates the value against its scale's band at the
+  // write boundary and rejects (422) an out-of-band one — never coerced.
+  target_effort_scale?: string;
+  target_effort_value?: number;
   superset_group: string | null;
   round_rest_seconds: number | null;
 }
@@ -210,6 +221,26 @@ function loadFields(
   return {
     load_kind: resolvedKind,
     load_value: value === "" ? null : value,
+  };
+}
+
+// The Target Effort fields for the plan (ADR-0066, #454): the picked scale and its value, or an
+// empty object when no target was entered — so a blank value authors *no* target (both keys
+// omitted), never a spurious zero, mirroring how a blank load stays null. The value is parsed to
+// a number; an omitted scale is left out so the backend applies its RPE default, and the RPE/RIR
+// band is validated at the write boundary (an invalid one is a 422, never coerced).
+function targetEffortFields(
+  scale: string | undefined,
+  value: string | undefined,
+): { target_effort_scale?: string; target_effort_value?: number } {
+  const trimmedValue = (value ?? "").trim();
+  if (trimmedValue === "") {
+    return {};
+  }
+  const trimmedScale = (scale ?? "").trim();
+  return {
+    target_effort_value: Number(trimmedValue),
+    ...(trimmedScale === "" ? {} : { target_effort_scale: trimmedScale }),
   };
 }
 
@@ -392,6 +423,10 @@ function toPrescription(
       rest_seconds: restSeconds,
       tempo: tempo === "" ? null : tempo,
       note: note === "" ? null : note,
+      // The Target Effort rides as scale+value; a blank value is no target (both keys omitted,
+      // never a spurious zero), so an un-annotated plan authors no target. The backend validates
+      // the value against its scale's band.
+      ...targetEffortFields(exercise.targetEffortScale, exercise.targetEffortValue),
       ...loadFields(exercise.loadKind, exercise.loadValue, kind, weightUnit),
       // The picked Quantity kind and unit travel onto the plan so the choice is persisted,
       // not dropped on save (ADR-0050, issue #345): the backend types the Prescribed

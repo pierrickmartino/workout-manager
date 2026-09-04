@@ -14,7 +14,7 @@ from datetime import date
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.auth.dependencies import get_current_user
 from app.authoring.service import (
@@ -28,6 +28,7 @@ from app.authoring.service import (
     insert_prescription,
     remove_prescription,
 )
+from app.domain.effort import EffortScale, effort_from_input
 from app.domain.feedback import parse_verdict
 from app.domain.fitness_profile import is_sensitive, resolve_equipment
 from app.domain.load import LoadKind, load_from_input
@@ -191,6 +192,14 @@ class AuthorPrescriptionBody(BaseModel):
     # for "unset" (reads as working). Descriptive only — echoed back on the Prescription,
     # never a Progression input. Membership is checked at the boundary and never coerced.
     set_type: str | None = None
+    # Target Effort (ADR-0066, #454): the *prescribed* Effort on this movement, logged in
+    # *either* scale — ``target_effort_scale`` is the picked scale (``rpe`` / ``rir``) and
+    # ``target_effort_value`` its number. Both absent means no target ("aim as you like"); a
+    # present value with no scale defaults to RPE. The value is validated against its scale's
+    # band at the boundary (below) and rejected (422) if invalid — never coerced. Descriptive in
+    # v1: it feeds the Scheme Preview and the UI but is never a Progression input.
+    target_effort_scale: str | None = None
+    target_effort_value: float | None = None
     # Exercise Note (ADR-0065, #451): an optional plan-side coaching cue, or ``None``/blank for
     # "no note". Sanitized at the boundary by ``parse_note`` (below): blank → unset, over-cap →
     # 422, else stripped + HTML-escaped so the stored value is inert wherever it renders.
@@ -241,6 +250,29 @@ class AuthorPrescriptionBody(BaseModel):
         # (not on copy) keeps carry-forward from double-escaping a note that is copied verbatim.
         return parse_note(value)
 
+    @field_validator("target_effort_scale")
+    @classmethod
+    def _known_target_effort_scale(cls, value: str | None) -> str | None:
+        # A blank/absent scale normalizes to ``None`` (an RPE target can be set with no explicit
+        # scale); a present but unknown scale is rejected at the boundary.
+        if value is None or value == "":
+            return None
+        if value not in (scale.value for scale in EffortScale):
+            allowed = ", ".join(scale.value for scale in EffortScale)
+            raise ValueError(f"target_effort_scale must be one of: {allowed}")
+        return value
+
+    @model_validator(mode="after")
+    def _valid_target_effort(self) -> "AuthorPrescriptionBody":
+        # Validate the scale+value combination once, so an out-of-band target (RPE 11, RIR 2.5,
+        # a non-half-step) is rejected (422) at the boundary rather than stored as a number whose
+        # meaning was guessed. A blank value is no target and passes.
+        try:
+            effort_from_input(self.target_effort_scale, self.target_effort_value)
+        except ValueError as exc:
+            raise ValueError(f"target_effort: {exc}") from exc
+        return self
+
     def to_draft(self) -> PrescriptionDraft:
         parsed = load_from_input(self.load_kind, self.load_value)
         # Type the plan's Prescribed Quantity at the write boundary (ADR-0050): the picked
@@ -263,8 +295,15 @@ class AuthorPrescriptionBody(BaseModel):
             superset_group=self.superset_group,
             round_rest_seconds=self.round_rest_seconds,
             set_type=self.set_type,
+            target_effort=self._resolved_target_effort(),
             note=self.note,
         )
+
+    def _resolved_target_effort(self) -> dict | None:
+        # The typed Target Effort dict for storage, or ``None`` when no target was set — the
+        # plan-side counterpart of ``resolved_load``. Already validated by ``_valid_target_effort``.
+        effort = effort_from_input(self.target_effort_scale, self.target_effort_value)
+        return effort.to_dict() if effort is not None else None
 
 
 class AuthorSessionBody(BaseModel):

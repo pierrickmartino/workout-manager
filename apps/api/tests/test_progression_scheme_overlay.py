@@ -28,8 +28,11 @@ from app.repositories.session_repository import PrescriptionView
 from tests.quantities import reps_quantity
 
 
-def _prescription(*, scheme: str | None, load: str = "60 kg") -> PrescriptionView:
-    """A minimal external-weight Prescription view carrying the given scheme selection."""
+def _prescription(
+    *, scheme: str | None, load: str = "60 kg", target_effort: dict | None = None
+) -> PrescriptionView:
+    """A minimal external-weight Prescription view carrying the given scheme selection and,
+    optionally, a plan-side Target Effort (ADR-0066) — which the progression tier must ignore."""
 
     return PrescriptionView(
         position=0,
@@ -48,6 +51,7 @@ def _prescription(*, scheme: str | None, load: str = "60 kg") -> PrescriptionVie
         required_equipment=[],
         provenance="curated",
         scheme=scheme,
+        target_effort=target_effort,
     )
 
 
@@ -105,6 +109,32 @@ def test_an_explicit_default_scheme_matches_the_null_selections_output():
     assert explicit.reps == unset.reps
     assert explicit.recommended_load == unset.recommended_load
     assert explicit.recommended_load == parse_load("62.5 kg").to_dict()
+
+
+def test_a_target_effort_is_not_a_progression_input_and_never_changes_the_step():
+    # The load-bearing invariant of ADR-0066/#454: Target Effort is *descriptive* — stepping
+    # is a function of the *record* (the logged sets), never the *plan*. The same strong record
+    # projected through the default scheme must step identically whether or not the movement
+    # carries a Target Effort, and whatever that target is. If progression ever consulted the
+    # plan target, one of these branches would diverge.
+    strong = _strong_sets()
+
+    unset = progressed_prescription(_prescription(scheme=None), strong)
+    aim_hard = progressed_prescription(
+        _prescription(scheme=None, target_effort={"scale": "rpe", "value": 9}), strong
+    )
+    aim_easy = progressed_prescription(
+        _prescription(scheme=None, target_effort={"scale": "rir", "value": 4}), strong
+    )
+
+    # Assert — the step is byte-for-byte identical across all three (load steps up to 62.5 kg);
+    # only the retained plan target differs, and it is carried through verbatim, not consulted.
+    assert unset.recommended_load == parse_load("62.5 kg").to_dict()
+    assert aim_hard.recommended_load == unset.recommended_load
+    assert aim_easy.recommended_load == unset.recommended_load
+    assert aim_hard.reps == unset.reps == aim_easy.reps
+    # ...and the target is retained on the projected view (carried through, never consulted).
+    assert aim_hard.target_effort == {"scale": "rpe", "value": 9}
 
 
 def test_a_static_movement_holds_a_missed_session_that_would_back_the_load_off():

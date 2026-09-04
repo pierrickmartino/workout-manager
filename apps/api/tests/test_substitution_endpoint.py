@@ -256,3 +256,42 @@ def test_substitute_preserves_the_prescription_note():
     swapped = response.json()["data"]["prescriptions"][position]
     assert swapped["exercise_name"] == "Push Press"
     assert swapped["note"] == "pause on the chest"
+
+
+def test_substitute_preserves_the_prescription_target_effort():
+    # Arrange — a movement prescribing a Target Effort Inserted onto the plan, then a catalog
+    # Variation of it (ADR-0066, #454: Target Effort is a plan property carried across a
+    # Substitution — a swap must not silently drop the effort target).
+    client, ctx, exercises, relationships = build_client()
+    headers = _auth(ctx, "user_sub_target")
+    session = _create_session(client, headers)
+    press = exercises.find_or_create("Overhead Press", provenance=Provenance.CURATED)
+    push = exercises.find_or_create("Push Press", provenance=Provenance.CURATED)
+    relationships.add(press.id, push.id, RelationKind.VARIATION)
+    inserted = client.post(
+        f"/api/sessions/{session['id']}/prescriptions",
+        headers=headers,
+        json={
+            "exercise_id": press.id,
+            "sets": 3,
+            "reps": "5",
+            "load_kind": "absolute",
+            "load_value": "40",
+            "target_effort_scale": "rpe",
+            "target_effort_value": 8,
+        },
+    ).json()["data"]
+    position = inserted["prescriptions"][-1]["position"]
+    assert inserted["prescriptions"][-1]["target_effort"] == {"scale": "rpe", "value": 8}
+
+    # Act — swap the movement's Exercise in place
+    response = client.post(
+        f"/api/sessions/{session['id']}/prescriptions/{position}/substitute",
+        headers=headers,
+    )
+
+    # Assert — the Exercise changed but the plan's Target Effort rode along untouched
+    assert response.status_code == 200, response.json()
+    swapped = response.json()["data"]["prescriptions"][position]
+    assert swapped["exercise_name"] == "Push Press"
+    assert swapped["target_effort"] == {"scale": "rpe", "value": 8}

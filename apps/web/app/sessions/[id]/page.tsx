@@ -18,6 +18,7 @@ import { HarderVariationOffer } from "@/components/HarderVariationOffer";
 import { SchemeControl } from "@/components/SchemeControl";
 import { schemeControlModel, type SchemeControlModel } from "@/lib/scheme-view";
 import { prescriptionSetTypeBadge } from "@/lib/set-type-view";
+import { targetEffortLabel } from "@/lib/target-effort-view";
 import { exerciseNoteText } from "@/lib/note-view";
 import {
   fetchHarderVariation,
@@ -328,6 +329,17 @@ function PrescriptionCard({
               return badge ? (
                 <Badge variant="violet" title="Set Type">
                   {badge.label}
+                </Badge>
+              ) : null;
+            })()}
+            {/* Target Effort (ADR-0066, #454): the prescribed Effort, shown only when the
+                movement carries one — an unset target renders nothing. Descriptive plan label;
+                the view projects it in its stored scale (the reader can switch scales). */}
+            {(() => {
+              const label = targetEffortLabel(prescription);
+              return label ? (
+                <Badge variant="violet" title="Target Effort">
+                  {label}
                 </Badge>
               ) : null;
             })()}

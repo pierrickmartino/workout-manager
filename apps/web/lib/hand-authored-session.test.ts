@@ -106,6 +106,50 @@ test("a blank Exercise Note authors no note (null), not an empty string", () => 
   assert.equal(result.request.prescriptions[0].note, null);
 });
 
+test("authors a Target Effort onto the plan as scale + numeric value", () => {
+  const input = fields({
+    exercises: [exercise({ targetEffortScale: "rir", targetEffortValue: "2" })],
+  });
+
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  const prescription = result.request.prescriptions[0];
+  assert.equal(prescription.target_effort_scale, "rir");
+  assert.equal(prescription.target_effort_value, 2);
+});
+
+test("a blank Target Effort value authors no target (both keys omitted)", () => {
+  const input = fields({
+    exercises: [exercise({ targetEffortScale: "rpe", targetEffortValue: "   " })],
+  });
+
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  const prescription = result.request.prescriptions[0];
+  // No spurious zero and no dangling scale — the plan simply carries no target.
+  assert.equal("target_effort_value" in prescription, false);
+  assert.equal("target_effort_scale" in prescription, false);
+});
+
+test("a Target Effort value with no picked scale omits the scale for the RPE default", () => {
+  const input = fields({
+    exercises: [exercise({ targetEffortValue: "8" })],
+  });
+
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  const prescription = result.request.prescriptions[0];
+  assert.equal(prescription.target_effort_value, 8);
+  // The scale key is omitted so the backend applies its RPE default (an rpe-only author).
+  assert.equal("target_effort_scale" in prescription, false);
+});
+
 test("carries a typed Load kind through to both the plan and the record", () => {
   // Arrange — a bodyweight-plus load on the plan and the recorded set.
   const input = fields({

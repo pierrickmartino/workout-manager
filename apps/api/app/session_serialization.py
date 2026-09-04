@@ -51,6 +51,10 @@ def serialize_prescription(view: PrescriptionView) -> dict:
         # Set Type annotation (ADR-0065, #449): the chosen ``SetType`` value, or null for
         # "unset" — which the web view-model renders as no badge (a neutral working set).
         "set_type": view.set_type,
+        # Target Effort (ADR-0066, #454): the prescribed Effort dict ({scale, value}), or null for
+        # "no target" — which the web view-model renders as nothing. The client projects it across
+        # the RPE⇄RIR scales at read time; the stored scale is never re-guessed.
+        "target_effort": view.target_effort,
         # Exercise Note (ADR-0065, #451): the plan-side coaching cue, or null for "no note" —
         # which the web view-model renders as nothing. Already HTML-escaped at the write boundary.
         "note": view.note,

@@ -2,6 +2,7 @@
 // so it is safe to import from both Server and Client Components. The
 // server-only data access (Clerk auth + fetch) lives in `lib/sessions.ts`.
 
+import type { Effort } from "./effort";
 import type { Load } from "./load";
 import type { Quantity } from "./quantity";
 import type { SuggestedVariation } from "./harder-variation-view";
@@ -60,6 +61,13 @@ export interface ExercisePrescription {
   // feeds no progression. Optional like `scheme`: the plain Session and Protocol reads
   // carry it, other read paths need not.
   set_type?: string | null;
+  // The Target Effort (ADR-0066, #454): the prescribed Effort on this movement — a typed
+  // `{scale, value}` value ("aim for RPE 8" / "leave 2 in reserve"), or `null`/absent for
+  // "no target" — which the target-effort view-model (`target-effort-view`) renders as
+  // nothing. The stored scale is preserved; the view projects it across RPE⇄RIR at read time.
+  // Descriptive only; it feeds no progression. Optional like `set_type`: the plain Session and
+  // Protocol reads carry it, other read paths need not.
+  target_effort?: Effort | null;
   // The Exercise Note (ADR-0065, #451): the plan-side coaching cue on this movement
   // ("pause on the chest"), or `null`/absent for "no note" — which the note view-model
   // (`note-view`) renders as nothing. Stored HTML-escaped at the write boundary; the view
