@@ -37,6 +37,16 @@ export interface PrescriptionAdvancedFields {
   restSeconds?: number | null;
 }
 
+// Parse a Rest display string — blank for unset, else a seconds count — back to the number the
+// Prescription Summary and the auto-expand predicate reason about. A blank or non-numeric string
+// is "unset" (null); a `0` is a deliberate no-rest value and survives. Kept here, beside the
+// projection that consumes it, so the parse is unit-tested rather than hidden in a component.
+export function restSecondsFromInput(restSeconds: string): number | null {
+  if (restSeconds.trim() === "") return null;
+  const parsed = Number(restSeconds);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 // The Tempo chip, or null when Tempo is unset. A parsed tempo shows its three-state label
 // (`Controlled`) with the tempo view's spoken aria label; an unparseable-but-present tempo falls
 // back to its raw code so a hand-typed value is still surfaced rather than dropped; a blank tempo

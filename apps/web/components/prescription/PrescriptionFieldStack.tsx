@@ -6,7 +6,7 @@ import { ChevronDown } from "lucide-react";
 import { loadKindOptions } from "@/lib/load";
 import {
   prescriptionSummaryChips,
-  shouldAutoExpand,
+  restSecondsFromInput,
 } from "@/lib/prescription-summary";
 import {
   AMOUNT_KIND_OPTIONS,
@@ -73,14 +73,6 @@ function targetPlaceholderFor(kind: QuantityKind): string {
   }
 }
 
-// A Rest display string (blank for unset, else digits) parsed back to the number the Prescription
-// Summary and the auto-expand predicate reason about. A blank or non-numeric string is "unset".
-function restToNumber(restSeconds: string): number | null {
-  if (restSeconds.trim() === "") return null;
-  const parsed = Number(restSeconds);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 export interface PrescriptionFieldStackProps {
   // The movement's name, woven into each field's accessible label so a screen reader hears
   // which exercise a control belongs to.
@@ -122,6 +114,12 @@ export interface PrescriptionFieldStackProps {
   // stands in for the Progression Scheme whether More is open or closed and is never a summary
   // chip (CONTEXT: Prescription Summary). Omitted by surfaces that render no scheme.
   preview?: React.ReactNode;
+  // Whether the surface's opaque `advanced` slot currently holds a non-default value that should
+  // force the card open, so nothing meaningful is hidden on first view (#465). The component can't
+  // read into that slot, so the surface reports it: Hand-Authored sets it for a non-blank Note or
+  // Target Effort; the Builder leaves it false — its scheme selector isn't a hidden value, the
+  // always-visible Scheme Preview line stands in for it.
+  advancedNonDefault?: boolean;
 }
 
 export function PrescriptionFieldStack({
@@ -146,28 +144,28 @@ export function PrescriptionFieldStack({
   onChangeLoadValue,
   advanced,
   preview,
+  advancedNonDefault = false,
 }: PrescriptionFieldStackProps): React.JSX.Element {
   const name = exerciseName;
   const isDistance = kind === "distance";
   const targetLabel = targetLabelFor(kind);
 
-  // The advanced values the Prescription Summary and the auto-expand predicate reason about. A
-  // grouped member's rest belongs to the group (ADR-0023), so it is excluded here — a member's
-  // summary never carries a rest chip.
-  const summaryFields = {
+  // The advanced values the Prescription Summary reasons about. A grouped member's rest belongs to
+  // the group (ADR-0023), so it is excluded here — a member's summary never carries a rest chip.
+  const summaryChips = prescriptionSummaryChips({
     tempo,
-    restSeconds: showRest ? restToNumber(restSeconds) : null,
-  };
-  const summaryChips = prescriptionSummaryChips(summaryFields);
+    restSeconds: showRest ? restSecondsFromInput(restSeconds) : null,
+  });
 
-  // Open/closed is ephemeral React state (#465): seeded once from the auto-expand predicate so a
-  // card with any non-default advanced value opens expanded and a plain set opens collapsed, then
-  // freely toggled. It never persists — a fresh render (reload, remount) re-seeds from the values.
-  const [open, setOpen] = React.useState<boolean>(() =>
-    shouldAutoExpand(summaryFields),
+  // Open/closed is ephemeral React state (#465): seeded once so a card with any non-default
+  // advanced value opens expanded and a plain set opens collapsed, then freely toggled. It never
+  // persists — a fresh render (reload, remount) re-seeds. The seed mirrors `shouldAutoExpand`
+  // (a chip means a non-default summarized value) and adds the surface's advanced-slot signal, so
+  // a Hand-Authored Note or Target Effort — behind More but not yet a chip — still opens the card.
+  const [open, setOpen] = React.useState<boolean>(
+    () => summaryChips.length > 0 || advancedNonDefault,
   );
   const contentId = React.useId();
-  const toggleVerb = open ? "Hide" : "Show";
 
   return (
     <>
@@ -251,7 +249,7 @@ export function PrescriptionFieldStack({
         {!open && summaryChips.length > 0 ? (
           <ul
             className="flex flex-wrap gap-1.5"
-            aria-label={`Advanced values for ${name}`}
+            aria-label={`Prescription summary for ${name}`}
           >
             {summaryChips.map((chip) => (
               <li key={chip.key}>

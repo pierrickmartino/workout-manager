@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   prescriptionSummaryChips,
+  restSecondsFromInput,
   shouldAutoExpand,
 } from "./prescription-summary.ts";
 
@@ -132,4 +133,21 @@ test("undefined advanced fields are treated as the unset default", () => {
   // A surface may omit a field entirely rather than pass null.
   assert.deepEqual(prescriptionSummaryChips({}), []);
   assert.equal(shouldAutoExpand({}), false);
+});
+
+test("restSecondsFromInput reads a blank string as unset", () => {
+  assert.equal(restSecondsFromInput(""), null);
+  assert.equal(restSecondsFromInput("   "), null);
+});
+
+test("restSecondsFromInput reads a numeric string as its seconds count", () => {
+  assert.equal(restSecondsFromInput("90"), 90);
+});
+
+test("restSecondsFromInput keeps a deliberate zero rest", () => {
+  assert.equal(restSecondsFromInput("0"), 0);
+});
+
+test("restSecondsFromInput reads a non-numeric string as unset", () => {
+  assert.equal(restSecondsFromInput("abc"), null);
 });
