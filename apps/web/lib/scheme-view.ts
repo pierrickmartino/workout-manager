@@ -117,15 +117,23 @@ export interface SchemeControlModel {
   current: ProgressionScheme;
   options: SchemeOption[];
   isOverridden: boolean;
+  // The inputs the Scheme Preview reads (#452): the movement's current reps and typed Load. Carried
+  // on the model so the control can re-render the preview sentence live as the select changes,
+  // without another round-trip. The load is normalized to `null` (never `undefined`) for the
+  // preview's Load-kind branch.
+  reps: string;
+  load: Load | null;
 }
 
 export function schemeControlModel(
-  prescription: Pick<ExercisePrescription, "scheme" | "recommended_load">,
+  prescription: Pick<ExercisePrescription, "scheme" | "recommended_load" | "reps">,
 ): SchemeControlModel {
   const current = currentScheme(prescription);
   return {
     current,
     options: compatibleSchemes(prescription.recommended_load),
     isOverridden: current !== DEFAULT_SCHEME,
+    reps: prescription.reps,
+    load: prescription.recommended_load ?? null,
   };
 }

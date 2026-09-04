@@ -36,6 +36,7 @@ import {
   compatibleSchemesForInput,
   currentScheme,
 } from "@/lib/scheme-view";
+import { schemePreviewForInput } from "@/lib/scheme-preview";
 import type { WeightUnit } from "@/lib/weight-unit";
 import {
   boxDropId,
@@ -1042,6 +1043,20 @@ function PrescriptionEditor({
             </option>
           ))}
         </Select>
+        {/* Scheme Preview (ADR-0064/0065, #452): a plain-language sentence describing what the
+            chosen scheme will do next, from this movement's live reps + Load. Recomputes as the
+            scheme, reps, or Load fields change — a read-time projection that stores nothing. */}
+        <span
+          aria-live="polite"
+          className="font-mono text-[11px] leading-snug text-text-muted"
+        >
+          {schemePreviewForInput(
+            currentScheme(prescription),
+            prescription.reps,
+            prescription.loadKind,
+            prescription.loadValue,
+          )}
+        </span>
       </label>
     </div>
   );
