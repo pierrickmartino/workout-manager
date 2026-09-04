@@ -148,6 +148,40 @@ def test_deploy_sets_and_echoes_a_target_effort_on_an_un_performed_prescription(
     assert first["target_effort"] == {"scale": "rpe", "value": 8}
 
 
+def test_deploy_round_trips_set_type_target_effort_and_note_byte_for_byte():
+    # The Builder's tail edit must PRESERVE the three descriptive fields the generation put on a
+    # movement — Set Type, Target Effort, and Exercise Note (#463) — not silently null them. Deploy
+    # an un-performed tail carrying all three and assert each survives byte-for-byte on the
+    # persisted plan (ADR-0065/0066).
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_roundtrip")
+    protocol_id = protocol["id"]
+    body = _deploy_body(protocol)
+    prescription = body["sessions"][0]["prescriptions"][0]
+    prescription["set_type"] = "amrap"
+    prescription["target_effort_scale"] = "rpe"
+    prescription["target_effort_value"] = 8
+    prescription["note"] = "pause on the chest"
+
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_roundtrip"),
+        json=body,
+    )
+
+    # The deploy response carries all three, and a fresh fetch reads the same values back —
+    # nothing was stripped in the round-trip.
+    assert response.status_code == 200, response.json()
+    for source in (
+        response.json()["data"],
+        h.fetch_protocol("user_roundtrip", protocol_id).json()["data"],
+    ):
+        first = source["sessions"][0]["prescriptions"][0]
+        assert first["set_type"] == "amrap"
+        assert first["target_effort"] == {"scale": "rpe", "value": 8}
+        assert first["note"] == "pause on the chest"
+
+
 def test_deploy_rejects_an_invalid_target_effort_and_persists_nothing():
     # An out-of-band target is a 422 at the boundary (ADR-0066), never a coerced number.
     h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))

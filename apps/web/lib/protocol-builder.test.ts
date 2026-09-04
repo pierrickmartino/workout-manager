@@ -299,6 +299,74 @@ test("initBuilderDraft carries an existing Prescription's stored scheme", () => 
   assert.equal(draft.sessions[0].prescriptions[0].scheme, "session_count");
 });
 
+test("toDeployPayload carries Set Type, Target Effort, and Exercise Note through DEPLOY", () => {
+  // Arrange — a movement whose generation put a Set Type, a Target Effort, and a Note on it
+  const source = protocol({
+    sessions: [
+      session({
+        prescriptions: [
+          prescription({
+            set_type: "amrap",
+            target_effort: { scale: "rpe", value: 8 },
+            note: "pause on the chest",
+          }),
+        ],
+      }),
+    ],
+  });
+  const draft = initBuilderDraft(source);
+
+  // Act
+  const payload = toDeployPayload(draft, "kg");
+
+  // Assert — the three fields ride the Deploy payload (Target Effort as scale+value)
+  const emitted = payload.sessions[0].prescriptions[0];
+  assert.equal(emitted.set_type, "amrap");
+  assert.equal(emitted.target_effort_scale, "rpe");
+  assert.equal(emitted.target_effort_value, 8);
+  assert.equal(emitted.note, "pause on the chest");
+});
+
+test("initBuilderDraft carries an existing Prescription's stored Set Type, Target Effort, and Note", () => {
+  // Arrange — a Protocol whose movement already carries all three fields
+  const source = protocol({
+    sessions: [
+      session({
+        prescriptions: [
+          prescription({
+            set_type: "warm_up",
+            target_effort: { scale: "rir", value: 2 },
+            note: "brace hard",
+          }),
+        ],
+      }),
+    ],
+  });
+
+  // Act
+  const draft = initBuilderDraft(source);
+
+  // Assert
+  const drafted = draft.sessions[0].prescriptions[0];
+  assert.equal(drafted.setType, "warm_up");
+  assert.deepEqual(drafted.targetEffort, { scale: "rir", value: 2 });
+  assert.equal(drafted.note, "brace hard");
+});
+
+test("toDeployPayload emits unset Set Type / Target Effort / Note as null for a plain working set", () => {
+  // Arrange — a plain movement (the generation left the three advanced fields unset)
+  const draft = initBuilderDraft(protocol());
+
+  // Act
+  const emitted = toDeployPayload(draft, "kg").sessions[0].prescriptions[0];
+
+  // Assert — nothing is fabricated; each rides as null (the domain default is applied server-side)
+  assert.equal(emitted.set_type, null);
+  assert.equal(emitted.target_effort_scale, null);
+  assert.equal(emitted.target_effort_value, null);
+  assert.equal(emitted.note, null);
+});
+
 test("editing a performed Session is a no-op (frozen prefix)", () => {
   // Arrange — Session 1 is performed
   const draft = initBuilderDraft(

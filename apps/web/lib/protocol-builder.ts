@@ -7,6 +7,7 @@
 // This slice edits an existing Prescription's fields and Load inside an un-performed
 // Session; structural edits (add/remove/reorder/reshape) arrive in later slices.
 
+import type { Effort, EffortScale } from "./effort";
 import { loadToFields, loadValueToKg, type Load, type LoadKind } from "./load.ts";
 import type { WeightUnit } from "./weight-unit";
 import type { ProtocolProgress } from "./protocols-types.ts";
@@ -51,6 +52,17 @@ export interface DraftPrescription {
   // progresses this movement by the selection; the selector offers only schemes compatible
   // with the movement's Load (`scheme-view`), and the deploy gate rejects an incompatible one.
   scheme: string | null;
+  // Three descriptive plan-side fields the generation may put on a movement, carried
+  // untouched through the editor session and DEPLOY so a tail edit never strips them
+  // (#463). All default to their domain fallback when unset: `setType` reads as **working**
+  // (ADR-0065), while `targetEffort` and `note` are simply absent (ADR-0066/0065).
+  //   - `setType`: the stored `SetType` value (warm-up / working / drop / failure / AMRAP),
+  //     or `null` for "unset" (reads as working).
+  //   - `targetEffort`: the typed prescribed Effort (`{scale, value}`), or `null` for no target.
+  //   - `note`: the Exercise Note coaching cue (stored HTML-escaped), or `null` for no note.
+  setType: string | null;
+  targetEffort: Effort | null;
+  note: string | null;
 }
 
 // One Session in the draft. `performed` marks the frozen prefix (ADR-0020): a
@@ -274,6 +286,9 @@ export function initBuilderDraft(
           supersetGroup: paused ? null : prescription.superset_group ?? null,
           roundRestSeconds: paused ? null : prescription.round_rest_seconds ?? null,
           scheme: prescription.scheme ?? null,
+          setType: prescription.set_type ?? null,
+          targetEffort: prescription.target_effort ?? null,
+          note: prescription.note ?? null,
         };
       }),
     })),
@@ -442,6 +457,9 @@ function newPrescription(exercise: PickedExercise): DraftPrescription {
     supersetGroup: null,
     roundRestSeconds: null,
     scheme: null,
+    setType: null,
+    targetEffort: null,
+    note: null,
   };
 }
 
@@ -930,6 +948,14 @@ export interface DeployPrescriptionPayload {
   // The chosen Progression Scheme (ADR-0064, #432), or null for the inherited default. The
   // deploy gate validates it against the movement's Load kind.
   scheme: string | null;
+  // The three descriptive fields the editor now round-trips (#463), so a tail edit preserves
+  // what the generation prescribed instead of nulling it. Set Type and Note ride as-is; the
+  // typed Target Effort is decomposed into the server's `scale`+`value` pair (ADR-0066), both
+  // null when no target is set. The server defaults each absent field to its domain fallback.
+  set_type: string | null;
+  target_effort_scale: EffortScale | null;
+  target_effort_value: number | null;
+  note: string | null;
 }
 
 export interface DeploySessionPayload {
@@ -986,6 +1012,12 @@ export function toDeployPayload(
           superset_group: prescription.supersetGroup,
           round_rest_seconds: prescription.roundRestSeconds,
           scheme: prescription.scheme,
+          set_type: prescription.setType,
+          // Decompose the typed Target Effort into the server's scale+value pair (ADR-0066);
+          // an absent target rides as a null pair, which the server reads as "no target".
+          target_effort_scale: prescription.targetEffort?.scale ?? null,
+          target_effort_value: prescription.targetEffort?.value ?? null,
+          note: prescription.note,
         })),
       })),
   };
