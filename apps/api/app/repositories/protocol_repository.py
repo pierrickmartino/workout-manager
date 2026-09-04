@@ -246,6 +246,7 @@ class SqlProtocolRepository:
                         round_rest_seconds=prescription.round_rest_seconds,
                         scheme=prescription.scheme,
                         set_type=prescription.set_type,
+                        target_effort=prescription.target_effort,
                         note=prescription.note,
                     )
                 )
@@ -345,6 +346,7 @@ class SqlProtocolRepository:
                         round_rest_seconds=draft.round_rest_seconds,
                         scheme=draft.scheme,
                         set_type=draft.set_type,
+                        target_effort=draft.target_effort,
                         note=draft.note,
                     )
                 )
@@ -446,6 +448,7 @@ class InMemoryProtocolRepository:
                     round_rest_seconds=prescription.round_rest_seconds,
                     scheme=prescription.scheme,
                     set_type=prescription.set_type,
+                    target_effort=prescription.target_effort,
                     note=prescription.note,
                 )
                 for p_position, prescription in enumerate(session_draft.prescriptions)
@@ -535,6 +538,7 @@ class InMemoryProtocolRepository:
                     round_rest_seconds=draft.round_rest_seconds,
                     scheme=draft.scheme,
                     set_type=draft.set_type,
+                    target_effort=draft.target_effort,
                     note=draft.note,
                 )
                 for position, draft in enumerate(spec.prescriptions)

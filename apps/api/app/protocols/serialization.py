@@ -43,6 +43,10 @@ def serialize_session(
                 # null for "unset" (reads as working). Descriptive only; surfaced so the
                 # client can render the badge on a Protocol member's Prescription.
                 "set_type": p.set_type,
+                # Target Effort (ADR-0066, #454): the prescribed Effort dict, or null for "no
+                # target". Descriptive only; surfaced so the client can render/edit the target on a
+                # Protocol member's Prescription with an RPE⇄RIR projection.
+                "target_effort": p.target_effort,
                 # Exercise Note (ADR-0065, #451): the plan-side coaching cue, or null for "no
                 # note". Already HTML-escaped at the write boundary; surfaced so the client can
                 # render the cue on a Protocol member's Prescription (nothing when absent).

@@ -512,3 +512,35 @@ def test_redeem_carries_forward_a_prescription_note():
 
     # Assert — the redeemed copy preserves the movement's Exercise Note
     assert copy["prescriptions"][-1]["note"] == "brace hard"
+
+
+def test_redeem_carries_forward_a_prescription_target_effort():
+    # Arrange — the sharer prescribes a Target Effort on an Inserted movement, then shares the
+    # plan (ADR-0066, #454: Target Effort is a plan property carried across Share/Redeem-by-copy).
+    client, ctx, _ = build_client()
+    sharer = _auth(ctx, "sharer_target")
+    session = _create_session(client, sharer)
+    exercise_id = session["prescriptions"][0]["exercise_id"]
+    tagged = client.post(
+        f"/api/sessions/{session['id']}/prescriptions",
+        headers=sharer,
+        json={
+            "exercise_id": exercise_id,
+            "sets": 2,
+            "reps": "10",
+            "load_kind": "absolute",
+            "load_value": "20",
+            "target_effort_scale": "rir",
+            "target_effort_value": 2,
+        },
+    ).json()["data"]
+    assert tagged["prescriptions"][-1]["target_effort"] == {"scale": "rir", "value": 2}
+    token = _share(client, sharer, session["id"]).json()["data"]["token"]
+
+    # Act — a recipient redeems the share into their own independent copy
+    copy = client.post(
+        f"/api/shares/{token}/redeem", headers=_auth(ctx, "recipient_target")
+    ).json()["data"]
+
+    # Assert — the redeemed copy preserves the movement's Target Effort
+    assert copy["prescriptions"][-1]["target_effort"] == {"scale": "rir", "value": 2}

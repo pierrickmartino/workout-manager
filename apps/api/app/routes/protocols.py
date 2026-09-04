@@ -16,9 +16,10 @@ from dataclasses import replace
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.auth.dependencies import get_current_user
+from app.domain.effort import EffortScale, effort_from_input
 from app.domain.fitness_profile import is_sensitive, resolve_equipment
 from app.domain.load import LoadKind, load_from_input
 from app.domain.note import parse_note
@@ -236,6 +237,14 @@ class DeployPrescriptionBody(BaseModel):
     # Progression compatibility rule, so — unlike ``scheme`` — nothing about it is deferred
     # to the deploy gate. A descriptive label that rides Deploy re-numbered untouched.
     set_type: str | None = None
+    # Target Effort (ADR-0066, #454): the *prescribed* Effort on this movement, in *either*
+    # scale — ``target_effort_scale`` (``rpe`` / ``rir``) and ``target_effort_value``. Both
+    # absent means no target; a present value with no scale defaults to RPE. Validated against
+    # its scale's band at the boundary (below) and rejected (422) if invalid — it has no Load or
+    # Progression compatibility rule (descriptive only), so nothing about it is deferred to the
+    # deploy gate; it rides Deploy re-numbered untouched.
+    target_effort_scale: str | None = None
+    target_effort_value: float | None = None
     # Exercise Note (ADR-0065, #451): an optional plan-side coaching cue, or ``None``/blank for
     # "no note". Sanitized at the boundary by ``parse_note`` (below): blank → unset, over-cap →
     # 422, else stripped + HTML-escaped so the stored value is inert; it rides Deploy untouched.
@@ -284,9 +293,37 @@ class DeployPrescriptionBody(BaseModel):
         # (ADR-0036). Escaping here (not on copy) keeps a Deploy tail edit from double-escaping.
         return parse_note(value)
 
+    @field_validator("target_effort_scale")
+    @classmethod
+    def _known_target_effort_scale(cls, value: str | None) -> str | None:
+        # A blank/absent scale normalizes to ``None`` (an RPE target can be set with no explicit
+        # scale); a present but unknown scale is rejected at the boundary.
+        if value is None or value == "":
+            return None
+        if value not in (scale.value for scale in EffortScale):
+            allowed = ", ".join(scale.value for scale in EffortScale)
+            raise ValueError(f"target_effort_scale must be one of: {allowed}")
+        return value
+
+    @model_validator(mode="after")
+    def _valid_target_effort(self) -> "DeployPrescriptionBody":
+        # Validate the scale+value combination once, so an out-of-band target (RPE 11, RIR 2.5,
+        # a non-half-step) is rejected (422) at the boundary rather than stored as a guessed number.
+        try:
+            effort_from_input(self.target_effort_scale, self.target_effort_value)
+        except ValueError as exc:
+            raise ValueError(f"target_effort: {exc}") from exc
+        return self
+
     def resolved_load(self) -> dict | None:
         parsed = load_from_input(self.load_kind, self.load_value)
         return parsed.to_dict() if parsed is not None else None
+
+    def resolved_target_effort(self) -> dict | None:
+        # The typed Target Effort dict for the draft, or ``None`` when no target was set — the
+        # plan-side counterpart of ``resolved_load``. Already validated by ``_valid_target_effort``.
+        effort = effort_from_input(self.target_effort_scale, self.target_effort_value)
+        return effort.to_dict() if effort is not None else None
 
 
 class DeploySessionBody(BaseModel):
@@ -381,6 +418,7 @@ def deploy_protocol(
                         round_rest_seconds=prescription.round_rest_seconds,
                         scheme=prescription.scheme,
                         set_type=prescription.set_type,
+                        target_effort=prescription.resolved_target_effort(),
                         note=prescription.note,
                     )
                     for prescription in session.prescriptions
