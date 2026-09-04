@@ -28,9 +28,9 @@ class _Set:
 
     Built from an ergonomic ``reps`` int, but exposes the typed ``quantity`` the shared
     flattening reads through (ADR-0032). ``body_weight_kg`` is the Performed Body Weight
-    (ADR-0026). Both belong here because the shared flattening reads them: a stub that
-    omitted a read field was how the First Record milestone's dropped-field bug stayed
-    invisible to this suite (ADR-0029).
+    (ADR-0026); ``set_type`` is the Set Type annotation (ADR-0065). All belong here
+    because the shared flattening reads them: a stub that omitted a read field was how the
+    First Record milestone's dropped-field bug stayed invisible to this suite (ADR-0029).
     """
 
     exercise_id: int = SQUAT
@@ -38,6 +38,7 @@ class _Set:
     reps: int = 5
     load: dict | None = None
     body_weight_kg: float | None = None
+    set_type: str | None = None
     targeted_muscles: list[str] = field(default_factory=list)
 
     @property

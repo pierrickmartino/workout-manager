@@ -13,6 +13,7 @@ import pytest
 from app.domain.set_type import (
     DEFAULT_SET_TYPE,
     SetType,
+    is_warm_up,
     parse_set_type,
     resolve_set_type,
 )
@@ -70,3 +71,18 @@ def test_resolve_unknown_falls_back_to_working() -> None:
     # A stored value is only ever written through the validated boundary, but the read
     # path stays total: an unrecognized string reads as working rather than raising.
     assert resolve_set_type("nonsense") is SetType.WORKING
+
+
+def test_is_warm_up_true_only_for_a_warm_up_set() -> None:
+    # The one member with an analytics consequence (ADR-0065): a warm-up leaves
+    # working-set Volume and strength records.
+    assert is_warm_up(SetType.WARM_UP.value) is True
+
+
+@pytest.mark.parametrize(
+    "value", [None, "", "   ", "working", "drop", "failure", "amrap", "nonsense"]
+)
+def test_is_warm_up_false_for_everything_else(value: str | None) -> None:
+    # Unset (→ working), every other member, and an unrecognized value are all
+    # working-set analytics candidates — only ``warm_up`` leaves them.
+    assert is_warm_up(value) is False

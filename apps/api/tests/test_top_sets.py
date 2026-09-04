@@ -15,7 +15,12 @@ from tests.quantities import reps_quantity
 from datetime import date
 
 from app.domain.load import LoadKind, ParsedLoad
-from app.logbook.top_sets import TOP_SET_SERIES_LIMIT, TopSetPoint, top_set_series
+from app.logbook.top_sets import (
+    TOP_SET_SERIES_LIMIT,
+    TopSetPoint,
+    rank_qualifying_exercises,
+    top_set_series,
+)
 from app.repositories.logged_session_repository import (
     LoggedSessionView,
     LoggedSetView,
@@ -45,6 +50,7 @@ def _set(
     reps: int,
     load: dict,
     body_weight_kg: float | None = None,
+    set_type: str | None = None,
 ) -> LoggedSetView:
     return LoggedSetView(
         position=0,
@@ -54,6 +60,7 @@ def _set(
         exercise_id=exercise_id,
         exercise_name="Back Squat" if exercise_id == SQUAT else "Overhead Press",
         body_weight_kg=body_weight_kg,
+        set_type=set_type,
     )
 
 
@@ -189,3 +196,55 @@ def test_top_set_series_rises_when_reps_climb_at_fixed_body_weight():
     # Assert — reps climbing at fixed mass reads as progress: the trajectory moves up
     assert [p.performed_on for p in series] == [date(2026, 1, 1), date(2026, 1, 8)]
     assert series[1].estimated_1rm > series[0].estimated_1rm
+
+
+def test_top_set_series_excludes_warm_up_sets():
+    # Arrange — one session: a heavy warm-up single (would-be 130 kg top) and a lighter
+    # working single (100 kg)
+    history = [
+        _session(
+            date(2026, 1, 1),
+            [
+                _set(SQUAT, 1, _abs(130.0), set_type="warm_up"),
+                _set(SQUAT, 1, _abs(100.0), set_type="working"),
+            ],
+        )
+    ]
+
+    # Act
+    series = top_set_series(history, SQUAT)
+
+    # Assert — the Top Set is the working 100 kg, never the heavier warm-up (ADR-0065)
+    assert [p.estimated_1rm for p in series] == [100.0]
+
+
+def test_top_set_series_omits_a_warm_up_only_session():
+    # Arrange — a session whose only scorable-looking set is a warm-up
+    history = [
+        _session(date(2026, 1, 1), [_set(SQUAT, 1, _abs(120.0), set_type="warm_up")])
+    ]
+
+    # Act
+    series = top_set_series(history, SQUAT)
+
+    # Assert — no qualifying set means no point (no zero-padding, no warm-up point)
+    assert series == []
+
+
+def test_rank_qualifying_exercises_ignores_warm_up_only_exercises():
+    # Arrange — Squat has real working sets; Press appears only as warm-ups
+    history = [
+        _session(
+            date(2026, 1, 1),
+            [
+                _set(SQUAT, 1, _abs(100.0), set_type="working"),
+                _set(PRESS, 1, _abs(60.0), set_type="warm_up"),
+            ],
+        )
+    ]
+
+    # Act
+    trajectories = rank_qualifying_exercises(history)
+
+    # Assert — a warm-up never brings an Exercise into the strength small-multiples
+    assert [t.exercise_id for t in trajectories] == [SQUAT]

@@ -438,3 +438,43 @@ def test_no_nudge_for_an_absolute_load_exercise():
 
     # Assert
     assert view.body_weight_nudge is False
+
+
+def test_a_warm_up_set_sets_no_record_but_still_counts_toward_total_sets():
+    # Arrange — a heavy warm-up single (would-be 120 kg PR) and a lighter working
+    # single (100 kg) of the same Exercise (ADR-0065)
+    _, sessions, logged = _build()
+    s = _session(sessions, "user_w")
+    _log(
+        logged, "user_w", s, date(2026, 1, 1),
+        [
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_absolute(120.0), set_type="warm_up"),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=_absolute(100.0), set_type="working"),
+        ],
+    )
+
+    # Act
+    view = exercise_records("user_w", SQUAT, logged=logged)
+
+    # Assert — the PR / milestones are the working 100 kg, never the heavier warm-up,
+    # but Total Sets is type-neutral and counts both performed sets.
+    assert view.personal_record == 100.0
+    assert [m.estimated_1rm for m in view.pr_milestones] == [100.0]
+    assert view.total_sets == 2
+
+
+def test_no_nudge_for_a_warm_up_only_bodyweight_set():
+    # Arrange — a would-be-qualifying mass-less bodyweight set, but tagged warm-up
+    _, sessions, logged = _build()
+    s = _session(sessions, "user_w2")
+    _log(
+        logged, "user_w2", s, date(2026, 1, 1),
+        [LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(8), load=_bodyweight(), body_weight_kg=None, set_type="warm_up")],
+    )
+
+    # Act
+    view = exercise_records("user_w2", PRESS, logged=logged)
+
+    # Assert — a warm-up is no record candidate, so a body weight would unlock nothing:
+    # the nudge stays silent (ADR-0065).
+    assert view.body_weight_nudge is False

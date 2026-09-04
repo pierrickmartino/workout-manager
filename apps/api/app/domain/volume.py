@@ -22,6 +22,7 @@ from datetime import date, timedelta
 
 from app.domain.load import LoadKind, ParsedLoad
 from app.domain.quantity import repetitions_of
+from app.domain.set_type import is_warm_up
 
 
 @dataclass(frozen=True)
@@ -35,12 +36,16 @@ class VolumeSet:
     converted against that Exercise's Estimated 1RM; it is irrelevant to the other Load
     kinds and defaults to ``0``. ``quantity`` is the typed amount axis (ADR-0032); its
     ``repetitions`` accessor yields the rep count, or ``None`` for a non-rep amount.
+    ``set_type`` is the stored Set Type annotation (ADR-0065), or ``None`` for an unset
+    set that reads as ``working``; a ``warm_up`` set leaves the Volume projection
+    entirely — its tonnage is not working volume — and every other value counts.
     """
 
     quantity: dict | None
     load: dict | None
     performed_on: date
     exercise_id: int = 0
+    set_type: str | None = None
 
 
 @dataclass(frozen=True)
@@ -134,6 +139,11 @@ def volume_series(
     ``estimated_1rm_by_exercise`` (each Exercise's best Estimated 1RM) resolves
     ``percent_1rm`` sets. Where the input is missing the set stays excluded and still
     counts against coverage, never as zero.
+
+    A ``warm_up`` Logged Set (ADR-0065) is dropped *before* any aggregation — points,
+    coverage denominator, and the delta baseline alike — so its tonnage never reads as
+    working volume and it is not mistaken for uncovered working reps. Every other Set
+    Type (working / failure / AMRAP / drop) and every unset (legacy) set stays in.
     """
 
     one_rm = estimated_1rm_by_exercise or {}
@@ -146,7 +156,9 @@ def volume_series(
             estimated_1rm=one_rm.get(s.exercise_id),
         )
 
-    sets = list(history)
+    # Warm-ups leave the working-volume projection entirely (ADR-0065): drop them up
+    # front so they touch neither the daily points, the coverage fraction, nor the delta.
+    sets = [s for s in history if not is_warm_up(s.set_type)]
     start = today - timedelta(days=days - 1)
     prior_start = start - timedelta(days=days)
     prior_end = start - timedelta(days=1)

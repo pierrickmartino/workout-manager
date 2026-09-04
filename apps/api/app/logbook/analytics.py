@@ -272,9 +272,10 @@ def _volume_sets(history: list[LoggedSessionView]) -> list[VolumeSet]:
     """Flatten Logged Sessions into dated Logged Sets for the volume engine.
 
     The engine needs each set's typed Quantity (its rep count), typed Load, the date it
-    was performed on — the session's ``performed_on`` — and its ``exercise_id`` (so a
-    percent-of-1RM set can be converted against that Exercise's Estimated 1RM) to
-    convert and bucket it.
+    was performed on — the session's ``performed_on`` — its ``exercise_id`` (so a
+    percent-of-1RM set can be converted against that Exercise's Estimated 1RM), and its
+    ``set_type`` (so the engine can drop ``warm_up`` sets from working volume, ADR-0065)
+    to convert and bucket it.
     """
 
     return [
@@ -283,6 +284,7 @@ def _volume_sets(history: list[LoggedSessionView]) -> list[VolumeSet]:
             load=logged_set.load,
             performed_on=session.performed_on,
             exercise_id=logged_set.exercise_id,
+            set_type=logged_set.set_type,
         )
         for session in history
         for logged_set in session.logged_sets

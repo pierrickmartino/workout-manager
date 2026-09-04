@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
+
 from app.domain.load import LoadKind, ParsedLoad
 from app.domain.quantity import Quantity, QuantityKind
 from app.domain.personal_records import (
@@ -384,3 +386,69 @@ def test_a_high_rep_bodyweight_set_never_sets_a_record():
 
     # Assert — high-rep endurance work stays unscored, mass or not
     assert records == []
+
+
+# --- Set Type: a warm-up leaves strength records (ADR-0065) ---
+
+
+def _typed_set(exercise_id, name, kg, reps, performed_on, set_type) -> LoggedSetRecord:
+    """An absolute-load Logged Set record carrying a Set Type."""
+
+    return LoggedSetRecord(
+        exercise_id=exercise_id,
+        exercise_name=name,
+        quantity=_reps(reps),
+        load=_absolute(kg),
+        performed_on=performed_on,
+        set_type=set_type,
+    )
+
+
+def test_a_warm_up_set_carries_no_estimated_1rm():
+    # Arrange — an otherwise-eligible absolute single that would score, tagged warm-up
+    load = _absolute(100.0)
+
+    # Act / Assert — a warm-up is never a record candidate (ADR-0065), so the one
+    # yardstick withholds an estimate even though the load and reps qualify
+    assert estimated_1rm_for_set(load, _reps(1), set_type="warm_up") is None
+
+
+@pytest.mark.parametrize("set_type", [None, "working", "failure", "amrap", "drop"])
+def test_every_non_warm_up_type_still_scores(set_type):
+    # Arrange — the same eligible single across unset + every non-warm-up member
+    load = _absolute(100.0)
+
+    # Act
+    estimate = estimated_1rm_for_set(load, _reps(1), set_type=set_type)
+
+    # Assert — only warm-up leaves; the rest stay eligible behind the existing gate
+    assert estimate == 100.0
+
+
+def test_a_warm_up_set_is_not_a_personal_record_candidate():
+    # Arrange — a heavy warm-up single (would-be 120 kg PR) then a lighter working set
+    history = [
+        _typed_set(SQUAT, "Back Squat", 120.0, 1, date(2026, 6, 1), "warm_up"),
+        _typed_set(SQUAT, "Back Squat", 100.0, 1, date(2026, 6, 8), "working"),
+    ]
+
+    # Act
+    records = detect_personal_records(history)
+
+    # Assert — the warm-up neither sets a record nor raises the bar the working set
+    # must beat: the 100 kg working single is the only PR, unshadowed by the warm-up
+    assert len(records) == 1
+    assert records[0].estimated_1rm == 100.0
+    assert records[0].performed_on == date(2026, 6, 8)
+
+
+def test_a_legacy_untyped_set_still_sets_a_record():
+    # Arrange — a set with no Set Type (a pre-Set-Type row) reads as working
+    history = [_set(SQUAT, "Back Squat", 100.0, 1, date(2026, 6, 1))]
+
+    # Act
+    records = detect_personal_records(history)
+
+    # Assert — legacy rows keep setting records exactly as before Set Type
+    assert len(records) == 1
+    assert records[0].estimated_1rm == 100.0
