@@ -180,6 +180,10 @@ _Avoid_: Progression system/model, progression type, rule, algorithm, periodizat
 A **read-time projection** that renders a Prescription's chosen Progression Scheme, together with its current reps and Load, as one plain-language sentence — "Do 3×8–12; when every set reaches 12 at RPE ≤ 8, add 2.5 kg next time." Never stored (the same species as Tempo's phase expansion and three-state label), computed per Prescription, and surfaced wherever a scheme is chosen (the Builder, or a standalone Session's in-place edit). It *describes* the scheme's stepping rule; it prescribes nothing and touches no record (ADR-0064/0065).
 _Avoid_: Progression description, explanation, rule text
 
+**Prescription Summary**:
+A **read-time projection** over an Exercise Prescription that renders, as compact chips, only the *advanced* values that differ from their default — **Tempo** (as its three-state label), **Rest**, **Target Effort**, a non-**working** **Set Type**, and the *presence* of an **Exercise Note** — so a plain working set summarizes to nothing at all. Never stored (the same species as Tempo's three-state label and the **Scheme Preview**), computed per reader, and shown on a Prescription editor's collapsed form to stand in for the advanced fields it hides. The **Progression Scheme** is deliberately **not** part of it — the Scheme Preview sentence stands on its own line whether the editor is collapsed or open. For a Prescription grouped into a **Superset**, Rest is the group's, so a member's summary never carries a rest chip; the group's round-rest is summarized on the Superset container instead.
+_Avoid_: Prescription card (that is the whole editor), badge (that is the visual of one chip), stored/denormalized summary, "advanced values" (bare)
+
 **Preference / Limitation**:
 A non-medical constraint that steers exercise selection ("no running", "no jumping in the apartment", "avoid overhead but not injured"). Influences generation but does **not** trigger the safety cache bypass. Distinct from a Sensitive Constraint.
 _Avoid_: Constraint (bare), restriction
