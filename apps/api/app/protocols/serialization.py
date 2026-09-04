@@ -32,6 +32,12 @@ def serialize_session(
                 "rest_seconds": p.rest_seconds,
                 "tempo": p.tempo,
                 "recommended_load": p.recommended_load,
+                # Typed Prescribed Quantity (ADR-0050): the plan's "how much" axis (a rep
+                # count, a distance, or a duration), or null for a prescription with no typed
+                # amount. Surfaced on the Protocol/Builder read so the editor's Quantity kind
+                # selector reflects the stored kind and a tail edit round-trips it (#464)
+                # instead of coercing a duration/distance back to reps.
+                "prescribed_quantity": p.prescribed_quantity,
                 # Superset overlay (ADR-0023): both null on a flat, solo Prescription.
                 "superset_group": p.superset_group,
                 "round_rest_seconds": p.round_rest_seconds,

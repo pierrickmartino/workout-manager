@@ -46,6 +46,12 @@ class DraftPrescription:
     rest_seconds: int | None = None
     tempo: str | None = None
     recommended_load: dict | None = None
+    # Typed Prescribed Quantity (ADR-0050, #464): the plan's typed amount dict, or ``None``
+    # when the client sent no typed Quantity (an older client falls back to inferring it from
+    # the free-text ``reps`` target at the write boundary). Carried through Deploy re-numbered
+    # untouched so a duration/distance the Builder authored is persisted as such, not coerced
+    # to reps; it has no compatibility rule, so it needs no validation here.
+    prescribed_quantity: dict | None = None
     # Superset grouping (ADR-0023): both ``None`` for a flat, solo Prescription.
     superset_group: str | None = None
     round_rest_seconds: int | None = None

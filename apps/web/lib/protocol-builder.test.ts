@@ -15,6 +15,7 @@ import {
   rowDropId,
   chipDropId,
   boxDropId,
+  quantityToDraftFields,
 } from "./protocol-builder.ts";
 import type { BuilderDraft, DraftPrescription } from "./protocol-builder.ts";
 import type { ProtocolProgress } from "./protocols-types.ts";
@@ -365,6 +366,102 @@ test("toDeployPayload emits unset Set Type / Target Effort / Note as null for a 
   assert.equal(emitted.target_effort_scale, null);
   assert.equal(emitted.target_effort_value, null);
   assert.equal(emitted.note, null);
+});
+
+test("initBuilderDraft seeds the typed Quantity kind and unit from the stored Prescribed Quantity", () => {
+  // Arrange — a Protocol whose movements carry a duration and a distance-in-miles Quantity
+  const source = protocol({
+    sessions: [
+      session({
+        prescriptions: [
+          prescription({
+            reps: "45s",
+            prescribed_quantity: { kind: "duration", text: "45s", seconds: 45 },
+          }),
+          prescription({
+            reps: "3",
+            prescribed_quantity: { kind: "distance", text: "3 mi", metres: 4828 },
+          }),
+        ],
+      }),
+    ],
+  });
+
+  // Act
+  const [held, run] = initBuilderDraft(source).sessions[0].prescriptions;
+
+  // Assert — the stored kind is authoritative; the distance unit is recovered from the text
+  assert.equal(held.quantityKind, "duration");
+  assert.equal(held.quantityUnit, "km");
+  assert.equal(run.quantityKind, "distance");
+  assert.equal(run.quantityUnit, "mi");
+});
+
+test("initBuilderDraft defaults an absent Prescribed Quantity to a rep count in km", () => {
+  // Arrange — a legacy/pre-backfill movement with no typed Quantity on the read
+  const draft = initBuilderDraft(protocol());
+
+  // Assert — the selector opens sensibly rather than crashing on a missing kind
+  const drafted = draft.sessions[0].prescriptions[0];
+  assert.equal(drafted.quantityKind, "repetitions");
+  assert.equal(drafted.quantityUnit, "km");
+});
+
+test("SET_QUANTITY picks the Quantity kind and unit without touching the target", () => {
+  // Arrange — a plain rep-count movement in an un-performed Session
+  const draft = initBuilderDraft(protocol());
+
+  // Act — the user picks Distance in miles through the Quantity selector
+  const next = builderReducer(draft, {
+    type: "SET_QUANTITY",
+    sessionId: 1,
+    position: 0,
+    quantityKind: "distance",
+    quantityUnit: "mi",
+  });
+
+  // Assert — kind and unit change; the free-text target (reps) is left for its own edit
+  const edited = next.sessions[0].prescriptions[0];
+  assert.equal(edited.quantityKind, "distance");
+  assert.equal(edited.quantityUnit, "mi");
+  assert.equal(edited.reps, draft.sessions[0].prescriptions[0].reps);
+});
+
+test("toDeployPayload carries the typed Quantity kind and unit through DEPLOY", () => {
+  // Arrange — a distance-in-miles movement authored in the Builder
+  const source = protocol({
+    sessions: [
+      session({
+        prescriptions: [
+          prescription({
+            reps: "5",
+            prescribed_quantity: { kind: "distance", text: "5 mi", metres: 8047 },
+          }),
+        ],
+      }),
+    ],
+  });
+  const draft = initBuilderDraft(source);
+
+  // Act
+  const emitted = toDeployPayload(draft, "kg").sessions[0].prescriptions[0];
+
+  // Assert — the pick rides the payload so the server persists it a distance, not reps
+  assert.equal(emitted.quantity_kind, "distance");
+  assert.equal(emitted.quantity_unit, "mi");
+});
+
+test("quantityToDraftFields reads the kind and recovers the distance unit from the text", () => {
+  // Arrange / Act / Assert — a pure reversal of a stored Quantity into the editable fields
+  assert.deepEqual(quantityToDraftFields(null), { kind: "repetitions", unit: "km" });
+  assert.deepEqual(
+    quantityToDraftFields({ kind: "duration", text: "45s", seconds: 45 }),
+    { kind: "duration", unit: "km" },
+  );
+  assert.deepEqual(
+    quantityToDraftFields({ kind: "distance", text: "5 mi", metres: 8047 }),
+    { kind: "distance", unit: "mi" },
+  );
 });
 
 test("editing a performed Session is a no-op (frozen prefix)", () => {

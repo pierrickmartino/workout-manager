@@ -25,7 +25,6 @@ import {
 } from "@/lib/hand-authored-session";
 import type { CaptureSeed, CaptureSeedExercise } from "@/lib/capture-seed";
 import { dissolveSingletonGroups } from "@/lib/supersets";
-import { loadKindOptions } from "@/lib/load";
 import {
   DEFAULT_EFFORT_SCALE,
   KNOWN_EFFORT_SCALES,
@@ -34,15 +33,11 @@ import {
 } from "@/lib/effort";
 import { weightUnitLabel } from "@/lib/weight-format";
 import type { WeightUnit } from "@/lib/weight-unit";
-import {
-  AMOUNT_KIND_OPTIONS,
-  DISTANCE_UNIT_OPTIONS,
-  type DistanceUnit,
-  type QuantityKind,
-} from "@/lib/quantity";
+import { type DistanceUnit, type QuantityKind } from "@/lib/quantity";
 import type { PickedExercise } from "@/lib/protocol-builder";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
 import { ExerciseLibrary } from "@/components/ExerciseLibrary";
+import { PrescriptionFieldStack } from "@/components/prescription/PrescriptionFieldStack";
 import { Field, FieldLabel } from "@/components/pulse/field";
 import { Alert } from "@/components/pulse/alert";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -653,13 +648,10 @@ function ExerciseCard({
   onMoveUp,
   onMoveDown,
 }: ExerciseCardProps) {
-  // The plan-side target stays one free-text field (ADR-0032); only its wording follows
-  // the Amount kind, so a timed hold reads as a hold and a run as a distance rather than a
-  // "rep target".
+  // The performed-set inputs' shape follows the exercise's Amount kind (ADR-0032): a distance
+  // set takes a value + companion time, a duration set a single hold time, a rep set a count.
   const isDuration = row.kind === "duration";
   const isDistance = row.kind === "distance";
-  const targetLabel = isDuration ? "Hold (time)" : isDistance ? "Distance" : "Reps";
-  const targetPlaceholder = isDuration ? "45s" : isDistance ? "5 km" : "8-12";
   return (
     <Card className="flex flex-col gap-4 p-4">
       <div className="flex items-center justify-between gap-2">
@@ -706,144 +698,79 @@ function ExerciseCard({
         </div>
       </div>
 
-      {/* The authored plan: an Amount kind, then sets/target/rest/tempo and a typed Load
-          (ADR-0010, ADR-0032). The Amount kind governs the target field and the sets below. */}
-      <div className="grid grid-cols-2 gap-2.5">
-        <FieldLabel label="Quantity">
-          <Select
-            value={row.kind}
-            onChange={(event) => {
-              // Picking Duration/Reps re-defaults the plan's Load kind for that Quantity
-              // (bodyweight for a hold, absolute for reps) — still overridable below.
-              const kind = event.target.value as QuantityKind;
-              onChange({ kind, loadKind: defaultLoadKindForAmount(kind) });
-            }}
-            aria-label={`Quantity kind for ${row.exerciseName}`}
-          >
-            {AMOUNT_KIND_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </FieldLabel>
-        {/* A distance exercise reads in one unit, chosen once here and applied to every set
-            (ADR-0032, issue #301). Hidden for the other kinds, which carry no unit. */}
-        {isDistance ? (
-          <FieldLabel label="Unit">
-            <Select
-              value={row.unit}
-              onChange={(event) =>
-                onChange({ unit: event.target.value as DistanceUnit })
-              }
-              aria-label={`Distance unit for ${row.exerciseName}`}
-            >
-              {DISTANCE_UNIT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          </FieldLabel>
-        ) : null}
-        <FieldLabel label="Sets">
-          <Input
-            type="number"
-            min={1}
-            value={row.sets}
-            onChange={(event) => onChange({ sets: event.target.value })}
-            aria-label={`Sets for ${row.exerciseName}`}
-          />
-        </FieldLabel>
-        <FieldLabel label={targetLabel}>
-          <Input
-            value={row.reps}
-            placeholder={targetPlaceholder}
-            onChange={(event) => onChange({ reps: event.target.value })}
-            aria-label={`${targetLabel} for ${row.exerciseName}`}
-          />
-        </FieldLabel>
-        {/* A grouped member rests once per round at the group level, so its own rest is
-            dormant while grouped — hidden here and restored on ungroup (ADR-0023). */}
-        {slot.group === null ? (
-          <FieldLabel label="Rest (sec)">
-            <Input
-              type="number"
-              min={0}
-              value={row.restSeconds}
-              placeholder="90"
-              onChange={(event) => onChange({ restSeconds: event.target.value })}
-              aria-label={`Rest seconds for ${row.exerciseName}`}
-            />
-          </FieldLabel>
-        ) : null}
-        <FieldLabel label="Tempo">
-          <Input
-            value={row.tempo}
-            placeholder="3-1-1"
-            onChange={(event) => onChange({ tempo: event.target.value })}
-            aria-label={`Tempo for ${row.exerciseName}`}
-          />
-        </FieldLabel>
-        <FieldLabel label="Load kind">
-          <Select
-            value={row.loadKind}
-            onChange={(event) => onChange({ loadKind: event.target.value })}
-            aria-label={`Load kind for ${row.exerciseName}`}
-          >
-            {loadKindOptions(unit).map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </FieldLabel>
-        <FieldLabel label="Load">
-          <Input
-            value={row.loadValue}
-            placeholder={`60 ${weightUnitLabel(unit)}`}
-            onChange={(event) => onChange({ loadValue: event.target.value })}
-            aria-label={`Load for ${row.exerciseName}`}
-          />
-        </FieldLabel>
-        {/* Exercise Note (ADR-0065, #451): an optional plan-side coaching cue, edited as raw
-            text — the backend length-caps and HTML-escapes it at the write boundary. */}
-        <FieldLabel label="Note">
-          <Input
-            value={row.note}
-            placeholder="Optional cue (e.g. pause on the chest)"
-            onChange={(event) => onChange({ note: event.target.value })}
-            aria-label={`Note for ${row.exerciseName}`}
-          />
-        </FieldLabel>
-        {/* Target Effort (ADR-0066, #454): an optional prescribed effort in either scale.
-            A blank value authors no target; the backend validates the value's band. */}
-        <FieldLabel label="Target effort scale">
-          <Select
-            value={row.targetEffortScale}
-            onChange={(event) =>
-              onChange({ targetEffortScale: event.target.value as EffortScale })
-            }
-            aria-label={`Target effort scale for ${row.exerciseName}`}
-          >
-            {KNOWN_EFFORT_SCALES.map((scale) => (
-              <option key={scale} value={scale}>
-                {effortScaleLabel(scale)}
-              </option>
-            ))}
-          </Select>
-        </FieldLabel>
-        <FieldLabel label="Target effort">
-          <Input
-            value={row.targetEffortValue}
-            placeholder={row.targetEffortScale === "rir" ? "e.g. 2" : "e.g. 8"}
-            onChange={(event) =>
-              onChange({ targetEffortValue: event.target.value })
-            }
-            aria-label={`Target effort for ${row.exerciseName}`}
-          />
-        </FieldLabel>
-      </div>
+      {/* The authored plan — the one shared, presentation-only field stack every authoring
+          surface now renders (ADR-0067, #464): Quantity, sets, target, rest, tempo, and a
+          typed Load. The Hand-Authored form's own advanced fields — the Exercise Note and the
+          Target Effort — ride in the `advanced` slot, keeping their existing behavior until the
+          progressive-disclosure slice formalizes them. */}
+      <PrescriptionFieldStack
+        exerciseName={row.exerciseName}
+        weightUnit={unit}
+        kind={row.kind}
+        unit={row.unit}
+        sets={row.sets}
+        target={row.reps}
+        restSeconds={row.restSeconds}
+        tempo={row.tempo}
+        loadKind={row.loadKind}
+        loadValue={row.loadValue}
+        // A grouped member rests once per round at the group level, so its own rest is dormant
+        // while grouped — hidden here and restored on ungroup (ADR-0023).
+        showRest={slot.group === null}
+        onChangeKind={(kind) =>
+          // Picking Duration/Distance re-defaults the plan's Load kind for that Quantity
+          // (bodyweight for a hold or a run, absolute for reps) — still overridable below.
+          onChange({ kind, loadKind: defaultLoadKindForAmount(kind) })
+        }
+        onChangeUnit={(unit) => onChange({ unit })}
+        onChangeSets={(value) => onChange({ sets: value })}
+        onChangeTarget={(value) => onChange({ reps: value })}
+        onChangeRest={(value) => onChange({ restSeconds: value })}
+        onChangeTempo={(value) => onChange({ tempo: value })}
+        onChangeLoadKind={(value) => onChange({ loadKind: value })}
+        onChangeLoadValue={(value) => onChange({ loadValue: value })}
+        advanced={
+          <div className="grid grid-cols-2 gap-2.5">
+            {/* Exercise Note (ADR-0065, #451): an optional plan-side coaching cue, edited as raw
+                text — the backend length-caps and HTML-escapes it at the write boundary. */}
+            <FieldLabel label="Note">
+              <Input
+                value={row.note}
+                placeholder="Optional cue (e.g. pause on the chest)"
+                onChange={(event) => onChange({ note: event.target.value })}
+                aria-label={`Note for ${row.exerciseName}`}
+              />
+            </FieldLabel>
+            {/* Target Effort (ADR-0066, #454): an optional prescribed effort in either scale.
+                A blank value authors no target; the backend validates the value's band. */}
+            <FieldLabel label="Target effort scale">
+              <Select
+                value={row.targetEffortScale}
+                onChange={(event) =>
+                  onChange({ targetEffortScale: event.target.value as EffortScale })
+                }
+                aria-label={`Target effort scale for ${row.exerciseName}`}
+              >
+                {KNOWN_EFFORT_SCALES.map((scale) => (
+                  <option key={scale} value={scale}>
+                    {effortScaleLabel(scale)}
+                  </option>
+                ))}
+              </Select>
+            </FieldLabel>
+            <FieldLabel label="Target effort">
+              <Input
+                value={row.targetEffortValue}
+                placeholder={row.targetEffortScale === "rir" ? "e.g. 2" : "e.g. 8"}
+                onChange={(event) =>
+                  onChange({ targetEffortValue: event.target.value })
+                }
+                aria-label={`Target effort for ${row.exerciseName}`}
+              />
+            </FieldLabel>
+          </div>
+        }
+      />
 
       {/* The record: what was actually performed, set by set. Hidden in plan-only mode
           (Capture), where the builder authors a plan and logs nothing (ADR-0044). */}

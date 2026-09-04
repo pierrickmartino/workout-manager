@@ -20,6 +20,7 @@ import {
   type PickedExercise,
 } from "@/lib/protocol-builder";
 import { type LoadKind } from "@/lib/load";
+import type { DistanceUnit, QuantityKind } from "@/lib/quantity";
 import type { WeightUnit } from "@/lib/weight-unit";
 import type { BalancePreview, ProtocolProgress } from "@/lib/protocols-types";
 import { toMuscleBars } from "@/lib/muscle-distribution";
@@ -239,6 +240,15 @@ export function ProtocolBuilder({
               sessionId: selectedSession.sessionId,
               position,
               scheme,
+            })
+          }
+          onSetQuantity={(position, quantityKind, quantityUnit) =>
+            dispatch({
+              type: "SET_QUANTITY",
+              sessionId: selectedSession.sessionId,
+              position,
+              quantityKind,
+              quantityUnit,
             })
           }
           onAdd={(exercise) =>
@@ -662,6 +672,11 @@ interface SessionEditorProps {
   ) => void;
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
   onSetScheme: (position: number, scheme: string | null) => void;
+  onSetQuantity: (
+    position: number,
+    quantityKind: QuantityKind,
+    quantityUnit: DistanceUnit,
+  ) => void;
   onAdd: (exercise: PickedExercise) => void;
   onRemove: (position: number) => void;
   onReorder: (from: number, to: number) => void;
@@ -683,6 +698,7 @@ function SessionEditor({
   onEditField,
   onEditLoad,
   onSetScheme,
+  onSetQuantity,
   onAdd,
   onRemove,
   onReorder,
@@ -739,6 +755,7 @@ function SessionEditor({
         onEditField={onEditField}
         onEditLoad={onEditLoad}
         onSetScheme={onSetScheme}
+        onSetQuantity={onSetQuantity}
         onEditRoundRest={onEditRoundRest}
         onReorder={onReorder}
         onGroupWithNext={onGroupWithNext}
