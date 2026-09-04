@@ -30,13 +30,14 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-import { loadKindOptions, type LoadKind } from "@/lib/load";
+import { type LoadKind } from "@/lib/load";
 import {
   DEFAULT_SCHEME,
   compatibleSchemesForInput,
   currentScheme,
 } from "@/lib/scheme-view";
 import { schemePreviewForInput } from "@/lib/scheme-preview";
+import type { DistanceUnit, QuantityKind } from "@/lib/quantity";
 import type { WeightUnit } from "@/lib/weight-unit";
 import {
   boxDropId,
@@ -54,6 +55,7 @@ import type {
   SupersetSlot,
 } from "@/lib/protocol-builder";
 import { cn } from "@/lib/utils";
+import { PrescriptionFieldStack } from "@/components/prescription/PrescriptionFieldStack";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -98,6 +100,12 @@ interface PrescriptionListProps {
   ) => void;
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
   onSetScheme: (position: number, scheme: string | null) => void;
+  // Pick the typed Quantity kind + unit on the Prescription at `position` (ADR-0050, #464).
+  onSetQuantity: (
+    position: number,
+    quantityKind: QuantityKind,
+    quantityUnit: DistanceUnit,
+  ) => void;
   onEditRoundRest: (position: number, roundRestSeconds: number | null) => void;
   onReorder: (from: number, to: number) => void;
   onGroupWithNext: (position: number) => void;
@@ -121,6 +129,7 @@ export function PrescriptionList({
   onEditField,
   onEditLoad,
   onSetScheme,
+  onSetQuantity,
   onEditRoundRest,
   onReorder,
   onGroupWithNext,
@@ -285,6 +294,7 @@ export function PrescriptionList({
                 onEditField={onEditField}
                 onEditLoad={onEditLoad}
                 onSetScheme={onSetScheme}
+                onSetQuantity={onSetQuantity}
                 onReorder={onReorder}
                 onGroupWithNext={onGroupWithNext}
                 onUngroup={onUngroup}
@@ -306,6 +316,7 @@ export function PrescriptionList({
                 onEditField={onEditField}
                 onEditLoad={onEditLoad}
                 onSetScheme={onSetScheme}
+                onSetQuantity={onSetQuantity}
                 onEditRoundRest={onEditRoundRest}
                 onReorder={onReorder}
                 onGroupWithNext={onGroupWithNext}
@@ -466,6 +477,11 @@ interface SupersetContainerProps {
   ) => void;
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
   onSetScheme: (position: number, scheme: string | null) => void;
+  onSetQuantity: (
+    position: number,
+    quantityKind: QuantityKind,
+    quantityUnit: DistanceUnit,
+  ) => void;
   onEditRoundRest: (position: number, roundRestSeconds: number | null) => void;
   onReorder: (from: number, to: number) => void;
   onGroupWithNext: (position: number) => void;
@@ -498,6 +514,7 @@ function SupersetContainer({
   onEditField,
   onEditLoad,
   onSetScheme,
+  onSetQuantity,
   onEditRoundRest,
   onReorder,
   onGroupWithNext,
@@ -566,6 +583,7 @@ function SupersetContainer({
               onEditField={onEditField}
               onEditLoad={onEditLoad}
               onSetScheme={onSetScheme}
+              onSetQuantity={onSetQuantity}
               onReorder={onReorder}
               onGroupWithNext={onGroupWithNext}
               onUngroup={onUngroup}
@@ -625,6 +643,11 @@ interface SortablePrescriptionRowProps {
   ) => void;
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
   onSetScheme: (position: number, scheme: string | null) => void;
+  onSetQuantity: (
+    position: number,
+    quantityKind: QuantityKind,
+    quantityUnit: DistanceUnit,
+  ) => void;
   onReorder: (from: number, to: number) => void;
   onGroupWithNext: (position: number) => void;
   onUngroup: (position: number) => void;
@@ -652,6 +675,7 @@ function SortablePrescriptionRow({
   onEditField,
   onEditLoad,
   onSetScheme,
+  onSetQuantity,
   onReorder,
   onGroupWithNext,
   onUngroup,
@@ -694,6 +718,9 @@ function SortablePrescriptionRow({
           onEditLoad(position, loadKind, loadValue)
         }
         onSetScheme={(scheme) => onSetScheme(position, scheme)}
+        onSetQuantity={(kind, quantityUnit) =>
+          onSetQuantity(position, kind, quantityUnit)
+        }
       />
       {slot.group === null &&
       draggingId != null &&
@@ -908,6 +935,7 @@ interface PrescriptionEditorProps {
   onEditField: (field: PrescriptionField, value: string | number | null) => void;
   onEditLoad: (loadKind: LoadKind, loadValue: string) => void;
   onSetScheme: (scheme: string | null) => void;
+  onSetQuantity: (quantityKind: QuantityKind, quantityUnit: DistanceUnit) => void;
 }
 
 function PrescriptionEditor({
@@ -917,6 +945,7 @@ function PrescriptionEditor({
   onEditField,
   onEditLoad,
   onSetScheme,
+  onSetQuantity,
 }: PrescriptionEditorProps) {
   const name = prescription.exerciseName;
   // While grouped, a member's own rest is dormant (ADR-0023): the group rests once per
@@ -932,132 +961,87 @@ function PrescriptionEditor({
         </span>
       </span>
 
-      <div className="grid grid-cols-2 gap-2.5">
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">Sets</span>
-          <Input
-            type="number"
-            min={1}
-            value={prescription.sets}
-            aria-label={`Sets for ${name}`}
-            onChange={(e) => onEditField("sets", toIntOrZero(e.target.value))}
-          />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">Reps</span>
-          <Input
-            value={prescription.reps}
-            aria-label={`Reps for ${name}`}
-            placeholder="8-12"
-            onChange={(e) => onEditField("reps", e.target.value)}
-          />
-        </label>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2.5">
-        {grouped ? null : (
+      {/* The authored plan — the one shared, presentation-only field stack every authoring
+          surface now renders (ADR-0067, #464). Extracting it hands the Builder card the typed
+          Quantity kind selector the ad-hoc surfaces already carried, so a duration/distance is
+          authored honestly rather than forced into a rep string. The Progression Scheme (the
+          Builder's own advanced field) rides in the `advanced` slot. */}
+      <PrescriptionFieldStack
+        exerciseName={name}
+        weightUnit={unit}
+        kind={prescription.quantityKind}
+        unit={prescription.quantityUnit}
+        sets={String(prescription.sets)}
+        target={prescription.reps}
+        restSeconds={
+          prescription.restSeconds === null ? "" : String(prescription.restSeconds)
+        }
+        tempo={prescription.tempo ?? ""}
+        loadKind={prescription.loadKind}
+        loadValue={prescription.loadValue}
+        showRest={!grouped}
+        // Picking a Quantity kind fixes what the target means; unlike the ad-hoc surfaces the
+        // Builder does not re-default the Load, so a generated Load the user is editing is
+        // never silently discarded.
+        onChangeKind={(kind) => onSetQuantity(kind, prescription.quantityUnit)}
+        onChangeUnit={(quantityUnit) =>
+          onSetQuantity(prescription.quantityKind, quantityUnit)
+        }
+        onChangeSets={(value) => onEditField("sets", toIntOrZero(value))}
+        onChangeTarget={(value) => onEditField("reps", value)}
+        onChangeRest={(value) =>
+          onEditField("restSeconds", value === "" ? null : toIntOrZero(value))
+        }
+        onChangeTempo={(value) =>
+          onEditField("tempo", value === "" ? null : value)
+        }
+        onChangeLoadKind={(value) =>
+          onEditLoad(value as LoadKind, prescription.loadValue)
+        }
+        onChangeLoadValue={(value) => onEditLoad(prescription.loadKind, value)}
+        advanced={
+          /* Progression Scheme (ADR-0064, #432): how this movement's un-performed tail steps.
+             Only schemes compatible with the current Load are offered — Greyskull disappears the
+             moment the Load has no clean kilogram axis — so an incompatible choice can't be
+             staged. Selecting the default clears the stored selection (null ⇒ default). */
           <label className="flex flex-col gap-1.5">
             <span className="label-mono text-[9px] text-text-muted">
-              Rest (sec)
+              Progression scheme
             </span>
-            <Input
-              type="number"
-              min={0}
-              value={prescription.restSeconds ?? ""}
-              aria-label={`Rest seconds for ${name}`}
+            <Select
+              value={currentScheme(prescription)}
+              aria-label={`Progression scheme for ${name}`}
               onChange={(e) =>
-                onEditField(
-                  "restSeconds",
-                  e.target.value === "" ? null : toIntOrZero(e.target.value),
-                )
+                onSetScheme(e.target.value === DEFAULT_SCHEME ? null : e.target.value)
               }
-            />
+            >
+              {compatibleSchemesForInput(
+                prescription.loadKind,
+                prescription.loadValue,
+              ).map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+            {/* Scheme Preview (ADR-0064/0065, #452): a plain-language sentence describing what
+                the chosen scheme will do next, from this movement's live reps + Load. Recomputes
+                as the scheme, reps, or Load fields change — a read-time projection that stores
+                nothing. */}
+            <span
+              aria-live="polite"
+              className="font-mono text-[11px] leading-snug text-text-muted"
+            >
+              {schemePreviewForInput(
+                currentScheme(prescription),
+                prescription.reps,
+                prescription.loadKind,
+                prescription.loadValue,
+              )}
+            </span>
           </label>
-        )}
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">Tempo</span>
-          <Input
-            value={prescription.tempo ?? ""}
-            aria-label={`Tempo for ${name}`}
-            placeholder="3-1-1"
-            onChange={(e) =>
-              onEditField("tempo", e.target.value === "" ? null : e.target.value)
-            }
-          />
-        </label>
-      </div>
-
-      {/* Load is a typed value (ADR-0010): pick the kind, then give the value that
-          kind carries — the same picker the log form uses. */}
-      <div className="grid grid-cols-[7rem_1fr] gap-2.5">
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">Load kind</span>
-          <Select
-            value={prescription.loadKind}
-            aria-label={`Load kind for ${name}`}
-            onChange={(e) =>
-              onEditLoad(e.target.value as LoadKind, prescription.loadValue)
-            }
-          >
-            {loadKindOptions(unit).map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">Load</span>
-          <Input
-            value={prescription.loadValue}
-            placeholder="70"
-            aria-label={`Load for ${name}`}
-            onChange={(e) => onEditLoad(prescription.loadKind, e.target.value)}
-          />
-        </label>
-      </div>
-
-      {/* Progression Scheme (ADR-0064, #432): how this movement's un-performed tail steps.
-          Only schemes compatible with the current Load are offered — Greyskull disappears the
-          moment the Load has no clean kilogram axis — so an incompatible choice can't be
-          staged. Selecting the default clears the stored selection (null ⇒ default). */}
-      <label className="flex flex-col gap-1.5">
-        <span className="label-mono text-[9px] text-text-muted">
-          Progression scheme
-        </span>
-        <Select
-          value={currentScheme(prescription)}
-          aria-label={`Progression scheme for ${name}`}
-          onChange={(e) =>
-            onSetScheme(
-              e.target.value === DEFAULT_SCHEME ? null : e.target.value,
-            )
-          }
-        >
-          {compatibleSchemesForInput(
-            prescription.loadKind,
-            prescription.loadValue,
-          ).map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </Select>
-        {/* Scheme Preview (ADR-0064/0065, #452): a plain-language sentence describing what the
-            chosen scheme will do next, from this movement's live reps + Load. Recomputes as the
-            scheme, reps, or Load fields change — a read-time projection that stores nothing. */}
-        <span
-          aria-live="polite"
-          className="font-mono text-[11px] leading-snug text-text-muted"
-        >
-          {schemePreviewForInput(
-            currentScheme(prescription),
-            prescription.reps,
-            prescription.loadKind,
-            prescription.loadValue,
-          )}
-        </span>
-      </label>
+        }
+      />
     </div>
   );
 }

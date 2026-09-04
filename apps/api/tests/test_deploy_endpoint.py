@@ -819,3 +819,69 @@ def test_deploy_rejects_an_unknown_scheme_value_at_the_boundary():
     # Assert — the request body validator rejects it before the deploy gate
     assert response.status_code == 422
     assert response.json()["success"] is False
+
+
+def test_deploy_persists_a_duration_quantity_as_typed_not_reps():
+    # The Builder's Quantity kind selector (ADR-0050, #464) must persist a timed movement AS a
+    # duration through Deploy — not coerce it to reps. Author a "duration / 45s" prescription on
+    # an un-performed tail and assert the persisted plan carries a typed ``duration`` Quantity.
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_qty_duration")
+    protocol_id = protocol["id"]
+    body = _deploy_body(protocol)
+    first = body["sessions"][0]["prescriptions"][0]
+    first["quantity_kind"] = "duration"
+    first["reps"] = "45s"
+
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_qty_duration"),
+        json=body,
+    )
+
+    assert response.status_code == 200, response.json()
+    persisted = response.json()["data"]["sessions"][0]["prescriptions"][0]
+    assert persisted["prescribed_quantity"]["kind"] == "duration"
+    assert persisted["prescribed_quantity"]["text"] == "45s"
+
+
+def test_deploy_persists_a_distance_quantity_with_its_unit():
+    # A "distance / 5 km" the Builder authors is persisted a distance in the picked unit (#464),
+    # even when the free-text target ("5") alone would infer as a plain rep count.
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_qty_distance")
+    protocol_id = protocol["id"]
+    body = _deploy_body(protocol)
+    first = body["sessions"][0]["prescriptions"][0]
+    first["quantity_kind"] = "distance"
+    first["quantity_unit"] = "km"
+    first["reps"] = "5"
+
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_qty_distance"),
+        json=body,
+    )
+
+    assert response.status_code == 200, response.json()
+    persisted = response.json()["data"]["sessions"][0]["prescriptions"][0]
+    assert persisted["prescribed_quantity"]["kind"] == "distance"
+    assert persisted["prescribed_quantity"]["metres"] == 5000
+
+
+def test_deploy_rejects_an_unknown_quantity_kind_at_the_boundary():
+    # A quantity_kind outside the closed catalog is a client bug rejected before the deploy gate.
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_qty_bad")
+    protocol_id = protocol["id"]
+    body = _deploy_body(protocol)
+    body["sessions"][0]["prescriptions"][0]["quantity_kind"] = "furlongs"
+
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_qty_bad"),
+        json=body,
+    )
+
+    assert response.status_code == 422
+    assert response.json()["success"] is False

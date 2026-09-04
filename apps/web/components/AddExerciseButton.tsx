@@ -10,22 +10,13 @@ import {
   type InsertPrescriptionFields,
 } from "@/lib/insert-prescription";
 import { defaultLoadKindForAmount } from "@/lib/hand-authored-session";
-import { loadKindOptions } from "@/lib/load";
-import { weightUnitLabel } from "@/lib/weight-format";
 import type { WeightUnit } from "@/lib/weight-unit";
-import {
-  AMOUNT_KIND_OPTIONS,
-  DISTANCE_UNIT_OPTIONS,
-  type DistanceUnit,
-  type QuantityKind,
-} from "@/lib/quantity";
+import { type DistanceUnit, type QuantityKind } from "@/lib/quantity";
 import type { PickedExercise } from "@/lib/protocol-builder";
 import { ExerciseLibrary } from "@/components/ExerciseLibrary";
-import { FieldLabel } from "@/components/pulse/field";
+import { PrescriptionFieldStack } from "@/components/prescription/PrescriptionFieldStack";
 import { Alert } from "@/components/pulse/alert";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 
 interface AddExerciseButtonProps {
@@ -153,10 +144,6 @@ export function AddExerciseButton({ sessionId, unit }: AddExerciseButtonProps) {
     );
   }
 
-  const isDuration = editor.kind === "duration";
-  const isDistance = editor.kind === "distance";
-  const targetLabel = isDuration ? "Hold (time)" : isDistance ? "Distance" : "Reps";
-  const targetPlaceholder = isDuration ? "45s" : isDistance ? "5 km" : "8-12";
   const exerciseName = editor.exercise?.name;
 
   return (
@@ -187,101 +174,35 @@ export function AddExerciseButton({ sessionId, unit }: AddExerciseButtonProps) {
             </Button>
           </div>
 
-          {/* The authored plan: an Amount kind, then sets/target/rest/tempo and a typed Load
-              (ADR-0010, ADR-0032) — the same plan fields the Hand-Authored editor collects. */}
-          <div className="grid grid-cols-2 gap-2.5">
-            <FieldLabel label="Quantity">
-              <Select
-                value={editor.kind}
-                onChange={(event) => {
-                  // Picking a kind re-defaults the plan's Load kind for it (bodyweight for a
-                  // hold or a run, absolute for reps) — still overridable below.
-                  const kind = event.target.value as QuantityKind;
-                  patch({ kind, loadKind: defaultLoadKindForAmount(kind) });
-                }}
-                aria-label={`Quantity kind for ${exerciseName}`}
-              >
-                {AMOUNT_KIND_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
-            </FieldLabel>
-            {isDistance ? (
-              <FieldLabel label="Unit">
-                <Select
-                  value={editor.unit}
-                  onChange={(event) =>
-                    patch({ unit: event.target.value as DistanceUnit })
-                  }
-                  aria-label={`Distance unit for ${exerciseName}`}
-                >
-                  {DISTANCE_UNIT_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-              </FieldLabel>
-            ) : null}
-            <FieldLabel label="Sets">
-              <Input
-                type="number"
-                min={1}
-                value={editor.sets}
-                onChange={(event) => patch({ sets: event.target.value })}
-                aria-label={`Sets for ${exerciseName}`}
-              />
-            </FieldLabel>
-            <FieldLabel label={targetLabel}>
-              <Input
-                value={editor.reps}
-                placeholder={targetPlaceholder}
-                onChange={(event) => patch({ reps: event.target.value })}
-                aria-label={`${targetLabel} for ${exerciseName}`}
-              />
-            </FieldLabel>
-            <FieldLabel label="Rest (sec)">
-              <Input
-                type="number"
-                min={0}
-                value={editor.restSeconds}
-                placeholder="90"
-                onChange={(event) => patch({ restSeconds: event.target.value })}
-                aria-label={`Rest seconds for ${exerciseName}`}
-              />
-            </FieldLabel>
-            <FieldLabel label="Tempo">
-              <Input
-                value={editor.tempo}
-                placeholder="3-1-1"
-                onChange={(event) => patch({ tempo: event.target.value })}
-                aria-label={`Tempo for ${exerciseName}`}
-              />
-            </FieldLabel>
-            <FieldLabel label="Load kind">
-              <Select
-                value={editor.loadKind}
-                onChange={(event) => patch({ loadKind: event.target.value })}
-                aria-label={`Load kind for ${exerciseName}`}
-              >
-                {loadKindOptions(unit).map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
-            </FieldLabel>
-            <FieldLabel label="Load">
-              <Input
-                value={editor.loadValue}
-                placeholder={`60 ${weightUnitLabel(unit)}`}
-                onChange={(event) => patch({ loadValue: event.target.value })}
-                aria-label={`Load for ${exerciseName}`}
-              />
-            </FieldLabel>
-          </div>
+          {/* The authored plan — the one shared, presentation-only field stack every
+              authoring surface now renders (ADR-0067, #464): Quantity, sets, target, rest,
+              tempo, and a typed Load. Insert appends one solo movement, so it carries no
+              surface-specific advanced fields. */}
+          <PrescriptionFieldStack
+            exerciseName={exerciseName ?? ""}
+            weightUnit={unit}
+            kind={editor.kind}
+            unit={editor.unit}
+            sets={editor.sets}
+            target={editor.reps}
+            restSeconds={editor.restSeconds}
+            tempo={editor.tempo}
+            loadKind={editor.loadKind}
+            loadValue={editor.loadValue}
+            showRest
+            onChangeKind={(kind) =>
+              // Picking a kind re-defaults the plan's Load kind for it (bodyweight for a hold
+              // or a run, absolute for reps) — still overridable below.
+              patch({ kind, loadKind: defaultLoadKindForAmount(kind) })
+            }
+            onChangeUnit={(unit) => patch({ unit })}
+            onChangeSets={(value) => patch({ sets: value })}
+            onChangeTarget={(value) => patch({ reps: value })}
+            onChangeRest={(value) => patch({ restSeconds: value })}
+            onChangeTempo={(value) => patch({ tempo: value })}
+            onChangeLoadKind={(value) => patch({ loadKind: value })}
+            onChangeLoadValue={(value) => patch({ loadValue: value })}
+          />
         </>
       )}
 

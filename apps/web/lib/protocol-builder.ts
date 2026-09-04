@@ -9,6 +9,13 @@
 
 import type { Effort, EffortScale } from "./effort";
 import { loadToFields, loadValueToKg, type Load, type LoadKind } from "./load.ts";
+import {
+  REPETITIONS_KIND,
+  distanceUnitFromText,
+  type DistanceUnit,
+  type Quantity,
+  type QuantityKind,
+} from "./quantity.ts";
 import type { WeightUnit } from "./weight-unit";
 import type { ProtocolProgress } from "./protocols-types.ts";
 import {
@@ -36,6 +43,13 @@ export interface DraftPrescription {
   exerciseName: string;
   sets: number;
   reps: string;
+  // The typed Quantity pick (ADR-0050/0032, #464): the kind the Builder's Quantity selector
+  // chose (`repetitions` / `distance` / `duration`) and, for a distance, its display unit
+  // (km / mi). `reps` stays the free-text target; these type it so a duration or distance is
+  // authored and persisted as such, not coerced to a rep count. Seeded from the stored
+  // Prescribed Quantity on open and carried through DEPLOY. Defaults to `repetitions` / `km`.
+  quantityKind: QuantityKind;
+  quantityUnit: DistanceUnit;
   restSeconds: number | null;
   tempo: string | null;
   loadKind: LoadKind;
@@ -143,6 +157,17 @@ export type BuilderEvent =
       scheme: string | null;
     }
   | {
+      // Pick the typed Quantity kind + unit on the Prescription at `position` (ADR-0050, #464)
+      // — the Builder's counterpart to the Amount picker the ad-hoc surfaces carry. The
+      // free-text target (`reps`) is edited separately via EDIT_PRESCRIPTION; this fixes what
+      // that target means so a duration/distance is deployed as such, not coerced to reps.
+      type: "SET_QUANTITY";
+      sessionId: number;
+      position: number;
+      quantityKind: QuantityKind;
+      quantityUnit: DistanceUnit;
+    }
+  | {
       type: "ADD_PRESCRIPTION";
       sessionId: number;
       exercise: PickedExercise;
@@ -231,6 +256,21 @@ function prefillLoad(
   return { kind: loadKind, value: loadValue };
 }
 
+// Reverse a stored Prescribed Quantity into the Builder's editable kind + unit fields
+// (ADR-0050, #464) — the Quantity twin of `prefillLoad`. The stored `kind` is authoritative;
+// the distance unit is recovered from the display text's suffix (`"5 mi"` → miles, else km),
+// the same reversal the Log Correction pre-fill and the Capture seed use. An absent Quantity
+// (a pre-backfill/legacy read) falls back to `repetitions` / km so the selector opens sensibly.
+export function quantityToDraftFields(quantity: Quantity | null | undefined): {
+  kind: QuantityKind;
+  unit: DistanceUnit;
+} {
+  return {
+    kind: quantity?.kind ?? REPETITIONS_KIND,
+    unit: distanceUnitFromText(quantity?.text),
+  };
+}
+
 // How the builder opens for a given user. A Sensitive-Constraint user (injury, rehab,
 // postpartum, flagged medical) is never handed a Superset (ADR-0023), so the draft
 // opens with grouping paused; a non-medical Preference / Limitation never sets this.
@@ -271,6 +311,7 @@ export function initBuilderDraft(
       performed: session.performed,
       prescriptions: session.prescriptions.map((prescription) => {
         const load = prefillLoad(prescription.recommended_load, weightUnit);
+        const quantity = quantityToDraftFields(prescription.prescribed_quantity);
         // Auto-unlink the editable tail's groups under suppression; the frozen prefix
         // (a performed Session) keeps its settled grouping.
         const paused = suppress && !session.performed;
@@ -279,6 +320,8 @@ export function initBuilderDraft(
           exerciseName: prescription.exercise_name,
           sets: prescription.sets,
           reps: prescription.reps,
+          quantityKind: quantity.kind,
+          quantityUnit: quantity.unit,
           restSeconds: prescription.rest_seconds,
           tempo: prescription.tempo,
           loadKind: load.kind,
@@ -320,6 +363,13 @@ export function builderReducer(
       return mapPrescription(state, event.sessionId, event.position, (prescription) => ({
         ...prescription,
         scheme: event.scheme,
+      }));
+
+    case "SET_QUANTITY":
+      return mapPrescription(state, event.sessionId, event.position, (prescription) => ({
+        ...prescription,
+        quantityKind: event.quantityKind,
+        quantityUnit: event.quantityUnit,
       }));
 
     case "ADD_PRESCRIPTION":
@@ -450,6 +500,10 @@ function newPrescription(exercise: PickedExercise): DraftPrescription {
     exerciseName: exercise.name,
     sets: NEW_PRESCRIPTION_SETS,
     reps: NEW_PRESCRIPTION_REPS,
+    // A freshly-added movement starts as a rep count (ADR-0050): the user retargets the kind
+    // through the Quantity selector. The unit only matters once distance is picked.
+    quantityKind: REPETITIONS_KIND,
+    quantityUnit: "km",
     restSeconds: null,
     tempo: null,
     loadKind: "absolute",
@@ -941,6 +995,11 @@ export interface DeployPrescriptionPayload {
   tempo: string | null;
   load_kind: LoadKind;
   load_value: string;
+  // The typed Quantity pick (ADR-0050, #464): the kind the Builder's selector chose and, for a
+  // distance, its unit. The server types the Prescribed Quantity from these plus the free-text
+  // `reps` target, so a duration/distance is persisted as such rather than coerced to reps.
+  quantity_kind: QuantityKind;
+  quantity_unit: DistanceUnit;
   // Superset overlay (ADR-0023): the shared group tag and group-owned round-rest, both
   // null on a flat, solo Prescription. The deploy gate validates the grouping.
   superset_group: string | null;
@@ -1009,6 +1068,10 @@ export function toDeployPayload(
             prescription.loadValue,
             unit,
           ),
+          // The picked Quantity kind + unit ride onto the plan so the choice is persisted, not
+          // dropped: the server types the Prescribed Quantity from these (ADR-0050, #464).
+          quantity_kind: prescription.quantityKind,
+          quantity_unit: prescription.quantityUnit,
           superset_group: prescription.supersetGroup,
           round_rest_seconds: prescription.roundRestSeconds,
           scheme: prescription.scheme,

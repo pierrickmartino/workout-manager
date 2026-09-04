@@ -24,6 +24,7 @@ from app.domain.fitness_profile import is_sensitive, resolve_equipment
 from app.domain.load import LoadKind, load_from_input
 from app.domain.note import parse_note
 from app.domain.progression import ProgressionScheme, parse_scheme
+from app.domain.quantity import QuantityKind, prescribed_quantity_from_input
 from app.domain.set_type import SetType, parse_set_type
 from app.envelope import error_envelope, success_envelope
 from app.generation.orchestrator import GenerationOrchestrator
@@ -222,6 +223,14 @@ class DeployPrescriptionBody(BaseModel):
     tempo: str | None = None
     load_kind: str = DEFAULT_LOAD_KIND
     load_value: str | None = None
+    # Typed Quantity pick (ADR-0050, #464): the kind the Builder's Quantity selector chose
+    # (``repetitions`` / ``distance`` / ``duration``) and, for a distance, its unit. They type
+    # the plan's Prescribed Quantity at the write boundary (below) so a "Distance / 5 km" the
+    # user authored is *persisted* a distance rather than coerced to a rep target. Both are
+    # optional: an older client that omits them still types the plan by inferring the kind from
+    # the free-text ``reps`` target — the same fallback the Hand-Authored/Insert paths keep.
+    quantity_kind: str | None = None
+    quantity_unit: str | None = None
     # Superset overlay (ADR-0023): the group tag members of one Superset share and the
     # group-owned round-rest. Both ``None`` for a flat, solo Prescription. Validated by
     # the shared Superset validator on the deploy gate.
@@ -258,6 +267,21 @@ class DeployPrescriptionBody(BaseModel):
         except ValueError as exc:
             allowed = ", ".join(kind.value for kind in LoadKind)
             raise ValueError(f"load_kind must be one of: {allowed}") from exc
+        return value
+
+    @field_validator("quantity_kind")
+    @classmethod
+    def _known_quantity_kind(cls, value: str | None) -> str | None:
+        # A blank/absent pick is tolerated — the free-text target's prose is inferred instead
+        # (below); an explicit but unknown kind is a client bug rejected at the boundary. Mirrors
+        # the Hand-Authored/Insert boundary so "what a valid Quantity pick is" stays one rule.
+        if value is None or value == "":
+            return value
+        try:
+            QuantityKind(value)
+        except ValueError as exc:
+            allowed = ", ".join(kind.value for kind in QuantityKind)
+            raise ValueError(f"quantity_kind must be one of: {allowed}") from exc
         return value
 
     @field_validator("scheme")
@@ -318,6 +342,19 @@ class DeployPrescriptionBody(BaseModel):
     def resolved_load(self) -> dict | None:
         parsed = load_from_input(self.load_kind, self.load_value)
         return parsed.to_dict() if parsed is not None else None
+
+    def resolved_prescribed_quantity(self) -> dict:
+        # Type the plan's Prescribed Quantity at the write boundary (ADR-0050, #464): the picked
+        # ``quantity_kind`` is authoritative, falling back to inference over the free-text target
+        # when the pick is absent or can't type it — the same shared primitive the Hand-Authored/
+        # Insert author paths, generation, and the backfill use, so a Builder-authored plan is born
+        # typed like any other and a duration/distance is persisted as such, not coerced to reps.
+        quantity = prescribed_quantity_from_input(
+            self.quantity_kind,
+            self.reps,
+            unit=self.quantity_unit or "km",
+        )
+        return quantity.to_dict()
 
     def resolved_target_effort(self) -> dict | None:
         # The typed Target Effort dict for the draft, or ``None`` when no target was set — the
@@ -414,6 +451,7 @@ def deploy_protocol(
                         rest_seconds=prescription.rest_seconds,
                         tempo=prescription.tempo,
                         recommended_load=prescription.resolved_load(),
+                        prescribed_quantity=prescription.resolved_prescribed_quantity(),
                         superset_group=prescription.superset_group,
                         round_rest_seconds=prescription.round_rest_seconds,
                         scheme=prescription.scheme,
