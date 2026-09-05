@@ -6,9 +6,10 @@
 //
 // It is a **read-time projection**: it stores nothing and touches no record — the same species as
 // Tempo's three-state label and the Scheme Preview. At this slice the advanced fields present are
-// **Tempo** (rendered as its three-state label, raw code as fallback) and **Rest** (`90s rest`).
-// Later slices extend this same seam with Target Effort, Set Type, and the Exercise Note; the
-// chip order here is the order they render.
+// **Tempo** (rendered as its three-state label, raw code as fallback), **Rest** (`90s rest`), and
+// **Set Type** (its label, shown only when the type is not the working default, #466). Later
+// slices extend this same seam with Target Effort and the Exercise Note; the chip order here is
+// the order they render.
 //
 // The **Progression Scheme** is deliberately not part of the summary — its Scheme Preview sentence
 // stands on its own line whether the card is collapsed or open (CONTEXT: Prescription Summary), so
@@ -19,6 +20,7 @@
 // No server-only imports, so it is safe in both Server and Client Components and unit-testable
 // without a browser.
 
+import { setTypeBadge } from "./set-type-view.ts";
 import { toTempoView } from "./tempo-view.ts";
 
 // One compact chip in a collapsed card's Prescription Summary. `key` is a stable React key (also
@@ -35,6 +37,10 @@ export interface PrescriptionSummaryChip {
 export interface PrescriptionAdvancedFields {
   tempo?: string | null;
   restSeconds?: number | null;
+  // The stored Set Type (ADR-0065): a curated member (warm-up / working / drop / failure /
+  // AMRAP) or null/absent for "unset". An unset — or explicit working — value is the quiet
+  // default and summarizes to no chip; only a non-working member earns one.
+  setType?: string | null;
 }
 
 // Parse a Rest display string — blank for unset, else a seconds count — back to the number the
@@ -75,14 +81,33 @@ function restChip(restSeconds: number | null | undefined): PrescriptionSummaryCh
   };
 }
 
+// The Set Type chip, or null when the type is the working default. Reuses `set-type-view`'s
+// one badge rule — an unset, explicit-working, or unknown value resolves to working and earns
+// no chip, while a non-working member (warm-up / drop / failure / AMRAP) reads as its label —
+// so the collapsed summary and the plan/record badges name a Set Type exactly one way.
+function setTypeChip(setType: string | null | undefined): PrescriptionSummaryChip | null {
+  const badge = setTypeBadge(setType);
+  if (badge === null) {
+    return null;
+  }
+  return {
+    key: "set-type",
+    label: badge.label,
+    ariaLabel: `Set type ${badge.label}`,
+  };
+}
+
 // The ordered Prescription Summary chips for a Prescription's advanced fields — one per non-default
-// value, in render order (Tempo, then Rest). A plain set with all-default fields returns `[]`.
+// value, in render order (Tempo, Rest, then Set Type). A plain set with all-default fields
+// returns `[]`.
 export function prescriptionSummaryChips(
   fields: PrescriptionAdvancedFields,
 ): PrescriptionSummaryChip[] {
-  return [tempoChip(fields.tempo), restChip(fields.restSeconds)].filter(
-    (chip): chip is PrescriptionSummaryChip => chip !== null,
-  );
+  return [
+    tempoChip(fields.tempo),
+    restChip(fields.restSeconds),
+    setTypeChip(fields.setType),
+  ].filter((chip): chip is PrescriptionSummaryChip => chip !== null);
 }
 
 // Whether a freshly-rendered card should open expanded: true iff any advanced field is non-default

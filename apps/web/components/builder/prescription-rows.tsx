@@ -37,6 +37,7 @@ import {
   currentScheme,
 } from "@/lib/scheme-view";
 import { schemePreviewForInput } from "@/lib/scheme-preview";
+import { planSetType } from "@/lib/set-type-view";
 import type { DistanceUnit, QuantityKind } from "@/lib/quantity";
 import type { WeightUnit } from "@/lib/weight-unit";
 import {
@@ -100,6 +101,7 @@ interface PrescriptionListProps {
   ) => void;
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
   onSetScheme: (position: number, scheme: string | null) => void;
+  onSetSetType: (position: number, setType: string | null) => void;
   // Pick the typed Quantity kind + unit on the Prescription at `position` (ADR-0050, #464).
   onSetQuantity: (
     position: number,
@@ -129,6 +131,7 @@ export function PrescriptionList({
   onEditField,
   onEditLoad,
   onSetScheme,
+  onSetSetType,
   onSetQuantity,
   onEditRoundRest,
   onReorder,
@@ -294,6 +297,7 @@ export function PrescriptionList({
                 onEditField={onEditField}
                 onEditLoad={onEditLoad}
                 onSetScheme={onSetScheme}
+                onSetSetType={onSetSetType}
                 onSetQuantity={onSetQuantity}
                 onReorder={onReorder}
                 onGroupWithNext={onGroupWithNext}
@@ -316,6 +320,7 @@ export function PrescriptionList({
                 onEditField={onEditField}
                 onEditLoad={onEditLoad}
                 onSetScheme={onSetScheme}
+                onSetSetType={onSetSetType}
                 onSetQuantity={onSetQuantity}
                 onEditRoundRest={onEditRoundRest}
                 onReorder={onReorder}
@@ -477,6 +482,7 @@ interface SupersetContainerProps {
   ) => void;
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
   onSetScheme: (position: number, scheme: string | null) => void;
+  onSetSetType: (position: number, setType: string | null) => void;
   onSetQuantity: (
     position: number,
     quantityKind: QuantityKind,
@@ -514,6 +520,7 @@ function SupersetContainer({
   onEditField,
   onEditLoad,
   onSetScheme,
+  onSetSetType,
   onSetQuantity,
   onEditRoundRest,
   onReorder,
@@ -583,6 +590,7 @@ function SupersetContainer({
               onEditField={onEditField}
               onEditLoad={onEditLoad}
               onSetScheme={onSetScheme}
+              onSetSetType={onSetSetType}
               onSetQuantity={onSetQuantity}
               onReorder={onReorder}
               onGroupWithNext={onGroupWithNext}
@@ -643,6 +651,7 @@ interface SortablePrescriptionRowProps {
   ) => void;
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
   onSetScheme: (position: number, scheme: string | null) => void;
+  onSetSetType: (position: number, setType: string | null) => void;
   onSetQuantity: (
     position: number,
     quantityKind: QuantityKind,
@@ -675,6 +684,7 @@ function SortablePrescriptionRow({
   onEditField,
   onEditLoad,
   onSetScheme,
+  onSetSetType,
   onSetQuantity,
   onReorder,
   onGroupWithNext,
@@ -718,6 +728,7 @@ function SortablePrescriptionRow({
           onEditLoad(position, loadKind, loadValue)
         }
         onSetScheme={(scheme) => onSetScheme(position, scheme)}
+        onSetSetType={(setType) => onSetSetType(position, setType)}
         onSetQuantity={(kind, quantityUnit) =>
           onSetQuantity(position, kind, quantityUnit)
         }
@@ -935,6 +946,7 @@ interface PrescriptionEditorProps {
   onEditField: (field: PrescriptionField, value: string | number | null) => void;
   onEditLoad: (loadKind: LoadKind, loadValue: string) => void;
   onSetScheme: (scheme: string | null) => void;
+  onSetSetType: (setType: string | null) => void;
   onSetQuantity: (quantityKind: QuantityKind, quantityUnit: DistanceUnit) => void;
 }
 
@@ -945,6 +957,7 @@ function PrescriptionEditor({
   onEditField,
   onEditLoad,
   onSetScheme,
+  onSetSetType,
   onSetQuantity,
 }: PrescriptionEditorProps) {
   const name = prescription.exerciseName;
@@ -977,6 +990,7 @@ function PrescriptionEditor({
           prescription.restSeconds === null ? "" : String(prescription.restSeconds)
         }
         tempo={prescription.tempo ?? ""}
+        setType={prescription.setType ?? ""}
         loadKind={prescription.loadKind}
         loadValue={prescription.loadValue}
         showRest={!grouped}
@@ -995,6 +1009,9 @@ function PrescriptionEditor({
         onChangeTempo={(value) =>
           onEditField("tempo", value === "" ? null : value)
         }
+        // The working default is stored as unset (null) so a plain set carries no annotation;
+        // any non-working member is stored as-is and rides through DEPLOY (#463/#466).
+        onChangeSetType={(value) => onSetSetType(planSetType(value))}
         onChangeLoadKind={(value) =>
           onEditLoad(value as LoadKind, prescription.loadValue)
         }

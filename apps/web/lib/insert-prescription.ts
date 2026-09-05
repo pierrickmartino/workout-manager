@@ -19,6 +19,7 @@ import {
   type AuthorPrescriptionInput,
 } from "./hand-authored-session.ts";
 import { loadValueToKg, type LoadKind } from "./load.ts";
+import { planSetType } from "./set-type-view.ts";
 import type { WeightUnit } from "./weight-unit";
 import type { DistanceUnit, QuantityKind } from "./quantity";
 
@@ -40,6 +41,9 @@ export interface InsertPrescriptionFields {
   reps: string;
   restSeconds: string;
   tempo: string;
+  // The Set Type (ADR-0065, #466): the picked curated member as a form string. Blank or
+  // `working` appends a plain working set (stored null); any other member rides onto the plan.
+  setType: string;
   loadKind: string;
   loadValue: string;
 }
@@ -103,6 +107,9 @@ export function buildInsertPrescriptionRequest(
       reps,
       rest_seconds: restSeconds,
       tempo: tempo === "" ? null : tempo,
+      // The working default appends no annotation (null); a non-working member rides onto the
+      // plan (ADR-0065, #466).
+      set_type: planSetType(fields.setType),
       load_kind: loadKind,
       load_value: loadValue === "" ? null : loadValue,
       // The picked Quantity kind and unit travel onto the plan so the choice is persisted, not

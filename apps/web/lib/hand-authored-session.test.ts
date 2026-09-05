@@ -63,6 +63,7 @@ test("maps a plan and its first performance into the author-and-log payload", ()
         reps: "5",
         rest_seconds: 90,
         tempo: "3-1-1",
+        set_type: null,
         note: null,
         load_kind: "absolute",
         load_value: "100",
@@ -104,6 +105,33 @@ test("a blank Exercise Note authors no note (null), not an empty string", () => 
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.equal(result.request.prescriptions[0].note, null);
+});
+
+test("authors a non-working Set Type onto the plan", () => {
+  const input = fields({ exercises: [exercise({ setType: "amrap" })] });
+
+  const result = buildAuthorSessionRequest(input, "kg", TODAY);
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.prescriptions[0].set_type, "amrap");
+});
+
+test("a working or unset Set Type authors no annotation (null)", () => {
+  // The working default — and an untouched control — leave the plain working set unannotated.
+  const working = buildAuthorSessionRequest(
+    fields({ exercises: [exercise({ setType: "working" })] }),
+    "kg",
+    TODAY,
+  );
+  const unset = buildAuthorSessionRequest(
+    fields({ exercises: [exercise({ setType: undefined })] }),
+    "kg",
+    TODAY,
+  );
+
+  assert.equal(working.ok && working.request.prescriptions[0].set_type, null);
+  assert.equal(unset.ok && unset.request.prescriptions[0].set_type, null);
 });
 
 test("authors a Target Effort onto the plan as scale + numeric value", () => {

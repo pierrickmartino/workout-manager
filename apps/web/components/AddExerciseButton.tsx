@@ -38,6 +38,7 @@ interface EditorState {
   reps: string;
   restSeconds: string;
   tempo: string;
+  setType: string;
   loadKind: string;
   loadValue: string;
 }
@@ -54,6 +55,7 @@ function freshEditor(): EditorState {
     reps: "",
     restSeconds: "",
     tempo: "",
+    setType: "",
     loadKind: defaultLoadKindForAmount(DEFAULT_AMOUNT_KIND),
     loadValue: "",
   };
@@ -108,6 +110,7 @@ export function AddExerciseButton({ sessionId, unit }: AddExerciseButtonProps) {
       reps: editor.reps,
       restSeconds: editor.restSeconds,
       tempo: editor.tempo,
+      setType: editor.setType,
       loadKind: editor.loadKind,
       loadValue: editor.loadValue,
     };
@@ -187,6 +190,7 @@ export function AddExerciseButton({ sessionId, unit }: AddExerciseButtonProps) {
             target={editor.reps}
             restSeconds={editor.restSeconds}
             tempo={editor.tempo}
+            setType={editor.setType}
             loadKind={editor.loadKind}
             loadValue={editor.loadValue}
             showRest
@@ -200,6 +204,7 @@ export function AddExerciseButton({ sessionId, unit }: AddExerciseButtonProps) {
             onChangeTarget={(value) => patch({ reps: value })}
             onChangeRest={(value) => patch({ restSeconds: value })}
             onChangeTempo={(value) => patch({ tempo: value })}
+            onChangeSetType={(value) => patch({ setType: value })}
             onChangeLoadKind={(value) => patch({ loadKind: value })}
             onChangeLoadValue={(value) => patch({ loadValue: value })}
           />

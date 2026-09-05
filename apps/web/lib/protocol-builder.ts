@@ -157,6 +157,15 @@ export type BuilderEvent =
       scheme: string | null;
     }
   | {
+      // Select (or clear, with `null`) the Set Type on the Prescription at `position`
+      // (ADR-0065, #466). Descriptive only — it feeds no progression — and carried through
+      // DEPLOY untouched (#463); the working default is stored as `null` (unset).
+      type: "SET_SET_TYPE";
+      sessionId: number;
+      position: number;
+      setType: string | null;
+    }
+  | {
       // Pick the typed Quantity kind + unit on the Prescription at `position` (ADR-0050, #464)
       // — the Builder's counterpart to the Amount picker the ad-hoc surfaces carry. The
       // free-text target (`reps`) is edited separately via EDIT_PRESCRIPTION; this fixes what
@@ -363,6 +372,12 @@ export function builderReducer(
       return mapPrescription(state, event.sessionId, event.position, (prescription) => ({
         ...prescription,
         scheme: event.scheme,
+      }));
+
+    case "SET_SET_TYPE":
+      return mapPrescription(state, event.sessionId, event.position, (prescription) => ({
+        ...prescription,
+        setType: event.setType,
       }));
 
     case "SET_QUANTITY":

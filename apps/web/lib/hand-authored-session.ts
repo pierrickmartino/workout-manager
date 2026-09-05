@@ -22,6 +22,7 @@ import {
   type QuantityKind,
 } from "./quantity.ts";
 import { loadValueToKg, type LoadKind } from "./load.ts";
+import { planSetType } from "./set-type-view.ts";
 import type { WeightUnit } from "./weight-unit";
 import type { LogSetInput } from "./logs-types";
 import { TRAINING_TYPES } from "./sessions-types.ts";
@@ -94,6 +95,11 @@ export interface AuthoredExerciseFields {
   tempo?: string;
   loadKind?: string;
   loadValue?: string;
+  // The Set Type (ADR-0065, #466): the picked curated member (warm-up / working / drop /
+  // failure / AMRAP) as a form string. Blank or `working` authors no annotation (stored null,
+  // the working default); any other member rides onto the plan. Optional so existing
+  // callers/tests that omit it author a plain working set.
+  setType?: string;
   // The Exercise Note (ADR-0065, #451): an optional plan-side coaching cue authored by hand,
   // as raw text. Blank means no note; the backend length-caps and HTML-escapes it at the write
   // boundary. Optional so existing callers/tests that omit it author a note-less plan.
@@ -135,6 +141,10 @@ export interface AuthorPrescriptionInput {
   // type it, and continues to render the prescribed line.
   quantity_kind: QuantityKind;
   quantity_unit: DistanceUnit;
+  // The Set Type (ADR-0065, #466): the curated plan annotation, or null for the working
+  // default. Descriptive only (it feeds no progression); the backend validates it names a known
+  // member and defaults an absent value to working.
+  set_type?: string | null;
   // The Exercise Note (ADR-0065, #451): the plan-side coaching cue, or omitted/null for "no
   // note". Rides as raw text; the backend length-caps and HTML-escapes it at the write boundary.
   note?: string | null;
@@ -422,6 +432,9 @@ function toPrescription(
       reps,
       rest_seconds: restSeconds,
       tempo: tempo === "" ? null : tempo,
+      // The working default authors no annotation (null); a non-working member rides onto
+      // the plan (ADR-0065, #466).
+      set_type: planSetType(exercise.setType),
       note: note === "" ? null : note,
       // The Target Effort rides as scale+value; a blank value is no target (both keys omitted,
       // never a spurious zero), so an un-annotated plan authors no target. The backend validates
