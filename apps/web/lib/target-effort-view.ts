@@ -16,6 +16,27 @@
 import { formatEffort, type Effort, type EffortScale } from "./effort.ts";
 import type { ExercisePrescription } from "./sessions-types.ts";
 
+// Read an editor's Target Effort inputs — a chosen `scale` plus a free-text `value` — into the
+// typed Effort the Prescription Summary chip and the payload reason about, or `null` when the
+// value is blank (no target) or not a finite number. This is **scale-faithful**: it keeps the
+// scale the user picked and never converts across scales, so the chip reads exactly what was
+// prescribed. It does **not** band-check the number (an RPE past 10, an RIR past 5) — that is
+// validated at the write boundary (a 422, mirroring `hand-authored-session`'s payload build and
+// the backend `effort_from_input`), so a mid-edit value still surfaces faithfully rather than
+// being dropped. The one place the editor's strings become the typed value, so the parse is
+// unit-tested rather than hidden in a component.
+export function targetEffortFromInput(
+  scale: EffortScale,
+  value: string,
+): Effort | null {
+  const trimmed = value.trim();
+  if (trimmed === "") {
+    return null;
+  }
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? { scale, value: parsed } : null;
+}
+
 // The typed Target Effort a Prescription carries for display, or `null` when none is set — the
 // one seam the plan view reaches a target through. Normalizes an absent field to `null` so a
 // caller never has to distinguish `undefined` from `null`.

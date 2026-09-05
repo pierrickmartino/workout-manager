@@ -38,6 +38,8 @@ import {
 } from "@/lib/scheme-view";
 import { schemePreviewForInput } from "@/lib/scheme-preview";
 import { planSetType } from "@/lib/set-type-view";
+import { targetEffortFromInput } from "@/lib/target-effort-view";
+import { DEFAULT_EFFORT_SCALE, type Effort } from "@/lib/effort";
 import type { DistanceUnit, QuantityKind } from "@/lib/quantity";
 import type { WeightUnit } from "@/lib/weight-unit";
 import {
@@ -102,6 +104,7 @@ interface PrescriptionListProps {
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
   onSetScheme: (position: number, scheme: string | null) => void;
   onSetSetType: (position: number, setType: string | null) => void;
+  onSetTargetEffort: (position: number, targetEffort: Effort | null) => void;
   // Pick the typed Quantity kind + unit on the Prescription at `position` (ADR-0050, #464).
   onSetQuantity: (
     position: number,
@@ -132,6 +135,7 @@ export function PrescriptionList({
   onEditLoad,
   onSetScheme,
   onSetSetType,
+  onSetTargetEffort,
   onSetQuantity,
   onEditRoundRest,
   onReorder,
@@ -298,6 +302,7 @@ export function PrescriptionList({
                 onEditLoad={onEditLoad}
                 onSetScheme={onSetScheme}
                 onSetSetType={onSetSetType}
+                onSetTargetEffort={onSetTargetEffort}
                 onSetQuantity={onSetQuantity}
                 onReorder={onReorder}
                 onGroupWithNext={onGroupWithNext}
@@ -321,6 +326,7 @@ export function PrescriptionList({
                 onEditLoad={onEditLoad}
                 onSetScheme={onSetScheme}
                 onSetSetType={onSetSetType}
+                onSetTargetEffort={onSetTargetEffort}
                 onSetQuantity={onSetQuantity}
                 onEditRoundRest={onEditRoundRest}
                 onReorder={onReorder}
@@ -483,6 +489,7 @@ interface SupersetContainerProps {
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
   onSetScheme: (position: number, scheme: string | null) => void;
   onSetSetType: (position: number, setType: string | null) => void;
+  onSetTargetEffort: (position: number, targetEffort: Effort | null) => void;
   onSetQuantity: (
     position: number,
     quantityKind: QuantityKind,
@@ -521,6 +528,7 @@ function SupersetContainer({
   onEditLoad,
   onSetScheme,
   onSetSetType,
+  onSetTargetEffort,
   onSetQuantity,
   onEditRoundRest,
   onReorder,
@@ -591,6 +599,7 @@ function SupersetContainer({
               onEditLoad={onEditLoad}
               onSetScheme={onSetScheme}
               onSetSetType={onSetSetType}
+              onSetTargetEffort={onSetTargetEffort}
               onSetQuantity={onSetQuantity}
               onReorder={onReorder}
               onGroupWithNext={onGroupWithNext}
@@ -652,6 +661,7 @@ interface SortablePrescriptionRowProps {
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
   onSetScheme: (position: number, scheme: string | null) => void;
   onSetSetType: (position: number, setType: string | null) => void;
+  onSetTargetEffort: (position: number, targetEffort: Effort | null) => void;
   onSetQuantity: (
     position: number,
     quantityKind: QuantityKind,
@@ -685,6 +695,7 @@ function SortablePrescriptionRow({
   onEditLoad,
   onSetScheme,
   onSetSetType,
+  onSetTargetEffort,
   onSetQuantity,
   onReorder,
   onGroupWithNext,
@@ -729,6 +740,9 @@ function SortablePrescriptionRow({
         }
         onSetScheme={(scheme) => onSetScheme(position, scheme)}
         onSetSetType={(setType) => onSetSetType(position, setType)}
+        onSetTargetEffort={(targetEffort) =>
+          onSetTargetEffort(position, targetEffort)
+        }
         onSetQuantity={(kind, quantityUnit) =>
           onSetQuantity(position, kind, quantityUnit)
         }
@@ -947,6 +961,7 @@ interface PrescriptionEditorProps {
   onEditLoad: (loadKind: LoadKind, loadValue: string) => void;
   onSetScheme: (scheme: string | null) => void;
   onSetSetType: (setType: string | null) => void;
+  onSetTargetEffort: (targetEffort: Effort | null) => void;
   onSetQuantity: (quantityKind: QuantityKind, quantityUnit: DistanceUnit) => void;
 }
 
@@ -958,6 +973,7 @@ function PrescriptionEditor({
   onEditLoad,
   onSetScheme,
   onSetSetType,
+  onSetTargetEffort,
   onSetQuantity,
 }: PrescriptionEditorProps) {
   const name = prescription.exerciseName;
@@ -991,6 +1007,13 @@ function PrescriptionEditor({
         }
         tempo={prescription.tempo ?? ""}
         setType={prescription.setType ?? ""}
+        // Target Effort (ADR-0066, #467): the draft holds the typed value, so project it back to
+        // the editor's scale pick + display value; an unset target defaults the scale and leaves
+        // the value blank. The onChange parses the pair back to the typed value (or null).
+        targetEffortScale={prescription.targetEffort?.scale ?? DEFAULT_EFFORT_SCALE}
+        targetEffortValue={
+          prescription.targetEffort ? String(prescription.targetEffort.value) : ""
+        }
         loadKind={prescription.loadKind}
         loadValue={prescription.loadValue}
         showRest={!grouped}
@@ -1012,6 +1035,11 @@ function PrescriptionEditor({
         // The working default is stored as unset (null) so a plain set carries no annotation;
         // any non-working member is stored as-is and rides through DEPLOY (#463/#466).
         onChangeSetType={(value) => onSetSetType(planSetType(value))}
+        // A blank value clears the target (null); any value rides onto the picked scale and
+        // through DEPLOY untouched (#463). Descriptive only — it feeds no progression (ADR-0066).
+        onChangeTargetEffort={(scale, value) =>
+          onSetTargetEffort(targetEffortFromInput(scale, value))
+        }
         onChangeLoadKind={(value) =>
           onEditLoad(value as LoadKind, prescription.loadValue)
         }
