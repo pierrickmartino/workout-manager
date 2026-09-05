@@ -305,6 +305,50 @@ test("SET_SET_TYPE annotates a Prescription's Set Type and carries it through DE
   assert.equal(payload.sessions[0].prescriptions[0].set_type, "warm_up");
 });
 
+test("SET_NOTE attaches an Exercise Note and carries it through DEPLOY", () => {
+  // Arrange
+  const draft = initBuilderDraft(protocol());
+
+  // Act — attach a plan-side coaching cue
+  const next = builderReducer(draft, {
+    type: "SET_NOTE",
+    sessionId: 1,
+    position: 0,
+    note: "Pause on the chest",
+  });
+
+  // Assert — stored on the draft and emitted on the deploy payload (#463/#468); the backend
+  // length-caps and HTML-escapes it at the write boundary (ADR-0065).
+  assert.equal(next.sessions[0].prescriptions[0].note, "Pause on the chest");
+  const payload = toDeployPayload(next, "kg");
+  assert.equal(
+    payload.sessions[0].prescriptions[0].note,
+    "Pause on the chest",
+  );
+});
+
+test("SET_NOTE with null clears the Exercise Note back to no cue", () => {
+  // Arrange — a movement already carrying a note
+  const draft = builderReducer(initBuilderDraft(protocol()), {
+    type: "SET_NOTE",
+    sessionId: 1,
+    position: 0,
+    note: "Pause on the chest",
+  });
+
+  // Act — clear it
+  const next = builderReducer(draft, {
+    type: "SET_NOTE",
+    sessionId: 1,
+    position: 0,
+    note: null,
+  });
+
+  // Assert — null in the draft and the payload (no cue)
+  assert.equal(next.sessions[0].prescriptions[0].note, null);
+  assert.equal(toDeployPayload(next, "kg").sessions[0].prescriptions[0].note, null);
+});
+
 test("SET_SET_TYPE with null clears the annotation back to the working default", () => {
   // Arrange — a movement already tagged with a Set Type
   const draft = builderReducer(initBuilderDraft(protocol()), {
@@ -392,6 +436,29 @@ test("initBuilderDraft carries an existing Prescription's stored Set Type, Targe
   assert.equal(drafted.setType, "warm_up");
   assert.deepEqual(drafted.targetEffort, { scale: "rir", value: 2 });
   assert.equal(drafted.note, "brace hard");
+});
+
+test("initBuilderDraft decodes a stored (HTML-escaped) Note so DEPLOY re-escapes it exactly once", () => {
+  // Arrange — a stored note carrying an escaped entity, as the API serves it (ADR-0065). The
+  // editor must show and round-trip the *decoded* text, or a tail edit would double-escape it
+  // into `a &amp;amp; b` on every Deploy (#468).
+  const source = protocol({
+    sessions: [
+      session({ prescriptions: [prescription({ note: "a &amp; b" })] }),
+    ],
+  });
+
+  // Act
+  const draft = initBuilderDraft(source);
+
+  // Assert — the draft holds the decoded cue (the editable text), and Deploy sends that decoded
+  // value; the write boundary (`parse_note`) re-escapes it back to `a &amp; b` server-side, so
+  // the round-trip is idempotent rather than a growing chain of entities.
+  assert.equal(draft.sessions[0].prescriptions[0].note, "a & b");
+  assert.equal(
+    toDeployPayload(draft, "kg").sessions[0].prescriptions[0].note,
+    "a & b",
+  );
 });
 
 test("toDeployPayload emits unset Set Type / Target Effort / Note as null for a plain working set", () => {

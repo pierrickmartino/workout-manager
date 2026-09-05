@@ -1,12 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, StickyNote } from "lucide-react";
 
 import { loadKindOptions } from "@/lib/load";
 import {
   prescriptionSummaryChips,
   restSecondsFromInput,
+  type PrescriptionSummaryChip,
 } from "@/lib/prescription-summary";
 import {
   DEFAULT_EFFORT_SCALE,
@@ -48,9 +49,9 @@ import { Select } from "@/components/ui/select";
 //
 // **Progressive disclosure** (#465): the frequent path — Quantity (kind + optional distance unit),
 // Sets, the typed target, and the optional Load — stays always visible. The advanced fields —
-// Tempo, Rest, the **Set Type** (#466), the optional **Target Effort** (#467), and the surface's
-// `advanced` slot (the Builder's Progression Scheme selector, the Hand-Authored Note) — collapse
-// behind **More**.
+// Tempo, Rest, the **Set Type** (#466), the optional **Target Effort** (#467), the optional
+// **Exercise Note** (#468), and the surface's `advanced` slot (the Builder's Progression Scheme
+// selector) — collapse behind **More**.
 // When collapsed the card shows a
 // **Prescription Summary** (`lib/prescription-summary`): compact chips for only the non-default
 // advanced values, so a plain working set reads clean. A card **auto-expands** when any advanced
@@ -83,6 +84,17 @@ function targetPlaceholderFor(kind: QuantityKind): string {
   }
 }
 
+// A summary chip's visible content: an icon for a chip that names one (the Exercise Note, whose
+// presence — not its text — is the signal, #468), else its label text. The Badge already carries
+// the chip's `ariaLabel`, so the icon is decorative (`aria-hidden`) and a screen reader hears the
+// spoken form rather than an unlabeled graphic.
+function chipContent(chip: PrescriptionSummaryChip): React.ReactNode {
+  if (chip.icon === "note") {
+    return <StickyNote className="h-3.5 w-3.5" aria-hidden />;
+  }
+  return chip.label;
+}
+
 export interface PrescriptionFieldStackProps {
   // The movement's name, woven into each field's accessible label so a screen reader hears
   // which exercise a control belongs to.
@@ -110,6 +122,12 @@ export interface PrescriptionFieldStackProps {
   // Target Effort (Insert) omits `onChangeTargetEffort`, and the control is not rendered.
   targetEffortScale?: EffortScale;
   targetEffortValue?: string;
+  // The Exercise Note (ADR-0065, #468): the plan-side coaching cue authored behind **More** as
+  // free text — a blank value is no note. Held as the display string the component renders and
+  // reports (ADR-0067). Optional: a surface that authors no Note (Insert) omits `onChangeNote`,
+  // and the control is not rendered. A present note earns a note **icon** in the summary (never a
+  // text preview) and opens the card.
+  note?: string;
   // The typed Load (ADR-0010): the picked kind and its value field — on the frequent path.
   loadKind: string;
   loadValue: string;
@@ -134,11 +152,15 @@ export interface PrescriptionFieldStackProps {
   // the typed value it stores (Builder) or holds the two strings as-is (Hand-Authored). Omitted
   // by a surface that authors no Target Effort, which also suppresses the control's render.
   onChangeTargetEffort?: (scale: EffortScale, value: string) => void;
+  // Report the edited Exercise Note as its raw text. The surface stores it (a blank value is no
+  // note, stored `null`) and the backend length-caps + HTML-escapes it at the write boundary
+  // (ADR-0065). Omitted by a surface that authors no Note, which also suppresses the control.
+  onChangeNote?: (value: string) => void;
   onChangeLoadKind: (value: string) => void;
   onChangeLoadValue: (value: string) => void;
-  // Surface-specific advanced fields rendered inside the **More** area, below Rest + Tempo (the
-  // Builder's Progression Scheme selector; the Hand-Authored Note + Target Effort). Omitted by
-  // Insert.
+  // Surface-specific advanced fields rendered inside the **More** area, below the shared advanced
+  // controls (the Builder's Progression Scheme selector). Omitted by Insert and the Hand-Authored
+  // form, whose advanced fields are now all first-class props of this stack.
   advanced?: React.ReactNode;
   // The always-visible line under the disclosure — the **Scheme Preview** sentence (#452). It
   // stands in for the Progression Scheme whether More is open or closed and is never a summary
@@ -146,9 +168,11 @@ export interface PrescriptionFieldStackProps {
   preview?: React.ReactNode;
   // Whether the surface's opaque `advanced` slot currently holds a non-default value that should
   // force the card open, so nothing meaningful is hidden on first view (#465). The component can't
-  // read into that slot, so the surface reports it: Hand-Authored sets it for a non-blank Note or
-  // Target Effort; the Builder leaves it false — its scheme selector isn't a hidden value, the
-  // always-visible Scheme Preview line stands in for it.
+  // read into that slot, so the surface reports it. Now that Set Type, Target Effort, and the
+  // Exercise Note are first-class fields with their own summary chips, no surface's `advanced`
+  // slot holds a hidden value — the Builder's scheme selector isn't one (the always-visible Scheme
+  // Preview line stands in for it) — so this defaults false and the slot's chip-driven fields open
+  // the card on their own.
   advancedNonDefault?: boolean;
 }
 
@@ -164,6 +188,7 @@ export function PrescriptionFieldStack({
   setType,
   targetEffortScale = DEFAULT_EFFORT_SCALE,
   targetEffortValue = "",
+  note = "",
   loadKind,
   loadValue,
   showRest,
@@ -175,6 +200,7 @@ export function PrescriptionFieldStack({
   onChangeTempo,
   onChangeSetType,
   onChangeTargetEffort,
+  onChangeNote,
   onChangeLoadKind,
   onChangeLoadValue,
   advanced,
@@ -201,23 +227,29 @@ export function PrescriptionFieldStack({
     ? targetEffortFromInput(effortScale, targetEffortValue)
     : null;
 
+  // The Exercise Note the summary reasons about — only when the surface authors one (Insert does
+  // not), so a note-less surface never manufactures a note chip. A present cue earns the note
+  // icon chip (and, via the seed below, opens the card).
+  const summaryNote = onChangeNote ? note : null;
+
   // The advanced values the Prescription Summary reasons about. A grouped member's rest belongs to
   // the group (ADR-0023), so it is excluded here — a member's summary never carries a rest chip.
-  // A non-working Set Type or a set Target Effort earns its own chip (and, via the seed below,
-  // opens the card).
+  // A non-working Set Type, a set Target Effort, or a present Exercise Note earns its own chip
+  // (and, via the seed below, opens the card).
   const summaryChips = prescriptionSummaryChips({
     tempo,
     restSeconds: showRest ? restSecondsFromInput(restSeconds) : null,
     setType,
     targetEffort,
+    note: summaryNote,
   });
 
   // Open/closed is ephemeral React state (#465): seeded once so a card with any non-default
   // advanced value opens expanded and a plain set opens collapsed, then freely toggled. It never
   // persists — a fresh render (reload, remount) re-seeds. The seed mirrors `shouldAutoExpand`
-  // (a chip means a non-default summarized value — Target Effort now among them, #467) and adds
-  // the surface's advanced-slot signal, so a Hand-Authored Note — behind More but not a chip —
-  // still opens the card.
+  // (a chip means a non-default summarized value — Target Effort and the Exercise Note now among
+  // them, #467/#468) and keeps the surface's advanced-slot signal as a backstop for any future
+  // hidden value.
   const [open, setOpen] = React.useState<boolean>(
     () => summaryChips.length > 0 || advancedNonDefault,
   );
@@ -310,7 +342,7 @@ export function PrescriptionFieldStack({
             {summaryChips.map((chip) => (
               <li key={chip.key}>
                 <Badge variant="outline" aria-label={chip.ariaLabel}>
-                  {chip.label}
+                  {chipContent(chip)}
                 </Badge>
               </li>
             ))}
@@ -420,6 +452,21 @@ export function PrescriptionFieldStack({
               </>
             ) : null}
           </div>
+          {/* Exercise Note (ADR-0065, #468): an optional plan-side coaching cue as free text —
+              "pause on the chest". A blank value authors no note; the backend length-caps and
+              HTML-escapes it at the write boundary. Full-width below the two-column grid so a
+              sentence-long cue has room. When present it shows a note icon in the collapsed
+              summary and opens the card. Rendered only for a surface that authors a Note. */}
+          {onChangeNote ? (
+            <FieldLabel label="Note">
+              <Input
+                value={note}
+                placeholder="Optional cue (e.g. pause on the chest)"
+                onChange={(event) => onChangeNote(event.target.value)}
+                aria-label={`Note for ${name}`}
+              />
+            </FieldLabel>
+          ) : null}
           {advanced}
         </div>
 
