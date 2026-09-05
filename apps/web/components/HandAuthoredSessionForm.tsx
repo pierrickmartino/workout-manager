@@ -717,6 +717,12 @@ function ExerciseCard({
         // A grouped member rests once per round at the group level, so its own rest is dormant
         // while grouped — hidden here and restored on ungroup (ADR-0023).
         showRest={slot.group === null}
+        // The advanced slot below holds a Note + Target Effort; when either carries a value the
+        // card must open expanded so those (not-yet-a-chip) fields aren't hidden behind More on
+        // first view (#465).
+        advancedNonDefault={
+          row.note.trim() !== "" || row.targetEffortValue.trim() !== ""
+        }
         onChangeKind={(kind) =>
           // Picking Duration/Distance re-defaults the plan's Load kind for that Quantity
           // (bodyweight for a hold or a run, absolute for reps) — still overridable below.
