@@ -25,12 +25,7 @@ import {
 } from "@/lib/hand-authored-session";
 import type { CaptureSeed, CaptureSeedExercise } from "@/lib/capture-seed";
 import { dissolveSingletonGroups } from "@/lib/supersets";
-import {
-  DEFAULT_EFFORT_SCALE,
-  KNOWN_EFFORT_SCALES,
-  effortScaleLabel,
-  type EffortScale,
-} from "@/lib/effort";
+import { DEFAULT_EFFORT_SCALE, type EffortScale } from "@/lib/effort";
 import { weightUnitLabel } from "@/lib/weight-format";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { type DistanceUnit, type QuantityKind } from "@/lib/quantity";
@@ -721,17 +716,17 @@ function ExerciseCard({
         restSeconds={row.restSeconds}
         tempo={row.tempo}
         setType={row.setType}
+        targetEffortScale={row.targetEffortScale}
+        targetEffortValue={row.targetEffortValue}
         loadKind={row.loadKind}
         loadValue={row.loadValue}
         // A grouped member rests once per round at the group level, so its own rest is dormant
         // while grouped — hidden here and restored on ungroup (ADR-0023).
         showRest={slot.group === null}
-        // The advanced slot below holds a Note + Target Effort; when either carries a value the
-        // card must open expanded so those (not-yet-a-chip) fields aren't hidden behind More on
-        // first view (#465).
-        advancedNonDefault={
-          row.note.trim() !== "" || row.targetEffortValue.trim() !== ""
-        }
+        // The advanced slot below holds only the Note now (Target Effort is a first-class field
+        // with its own summary chip, #467); when the Note carries a value the card must open
+        // expanded so that (not-yet-a-chip) field isn't hidden behind More on first view (#465).
+        advancedNonDefault={row.note.trim() !== ""}
         onChangeKind={(kind) =>
           // Picking Duration/Distance re-defaults the plan's Load kind for that Quantity
           // (bodyweight for a hold or a run, absolute for reps) — still overridable below.
@@ -743,6 +738,12 @@ function ExerciseCard({
         onChangeRest={(value) => onChange({ restSeconds: value })}
         onChangeTempo={(value) => onChange({ tempo: value })}
         onChangeSetType={(value) => onChange({ setType: value })}
+        // Target Effort (ADR-0066, #467): now a first-class field in the shared stack. The row
+        // holds the picked scale + value as-is; a blank value authors no target and the backend
+        // validates the value's band at the write boundary.
+        onChangeTargetEffort={(scale, value) =>
+          onChange({ targetEffortScale: scale, targetEffortValue: value })
+        }
         onChangeLoadKind={(value) => onChange({ loadKind: value })}
         onChangeLoadValue={(value) => onChange({ loadValue: value })}
         advanced={
@@ -755,33 +756,6 @@ function ExerciseCard({
                 placeholder="Optional cue (e.g. pause on the chest)"
                 onChange={(event) => onChange({ note: event.target.value })}
                 aria-label={`Note for ${row.exerciseName}`}
-              />
-            </FieldLabel>
-            {/* Target Effort (ADR-0066, #454): an optional prescribed effort in either scale.
-                A blank value authors no target; the backend validates the value's band. */}
-            <FieldLabel label="Target effort scale">
-              <Select
-                value={row.targetEffortScale}
-                onChange={(event) =>
-                  onChange({ targetEffortScale: event.target.value as EffortScale })
-                }
-                aria-label={`Target effort scale for ${row.exerciseName}`}
-              >
-                {KNOWN_EFFORT_SCALES.map((scale) => (
-                  <option key={scale} value={scale}>
-                    {effortScaleLabel(scale)}
-                  </option>
-                ))}
-              </Select>
-            </FieldLabel>
-            <FieldLabel label="Target effort">
-              <Input
-                value={row.targetEffortValue}
-                placeholder={row.targetEffortScale === "rir" ? "e.g. 2" : "e.g. 8"}
-                onChange={(event) =>
-                  onChange({ targetEffortValue: event.target.value })
-                }
-                aria-label={`Target effort for ${row.exerciseName}`}
               />
             </FieldLabel>
           </div>

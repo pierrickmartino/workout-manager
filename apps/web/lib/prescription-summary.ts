@@ -6,10 +6,10 @@
 //
 // It is a **read-time projection**: it stores nothing and touches no record — the same species as
 // Tempo's three-state label and the Scheme Preview. At this slice the advanced fields present are
-// **Tempo** (rendered as its three-state label, raw code as fallback), **Rest** (`90s rest`), and
-// **Set Type** (its label, shown only when the type is not the working default, #466). Later
-// slices extend this same seam with Target Effort and the Exercise Note; the chip order here is
-// the order they render.
+// **Tempo** (rendered as its three-state label, raw code as fallback), **Rest** (`90s rest`),
+// **Set Type** (its label, shown only when the type is not the working default, #466), and
+// **Target Effort** (its typed chip — `RPE 8` / `2 RIR`, #467). A later slice extends this same
+// seam with the Exercise Note; the chip order here is the order they render.
 //
 // The **Progression Scheme** is deliberately not part of the summary — its Scheme Preview sentence
 // stands on its own line whether the card is collapsed or open (CONTEXT: Prescription Summary), so
@@ -20,6 +20,7 @@
 // No server-only imports, so it is safe in both Server and Client Components and unit-testable
 // without a browser.
 
+import { formatEffort, type Effort } from "./effort.ts";
 import { setTypeBadge } from "./set-type-view.ts";
 import { toTempoView } from "./tempo-view.ts";
 
@@ -41,6 +42,10 @@ export interface PrescriptionAdvancedFields {
   // AMRAP) or null/absent for "unset". An unset — or explicit working — value is the quiet
   // default and summarizes to no chip; only a non-working member earns one.
   setType?: string | null;
+  // The typed Target Effort (ADR-0066): the prescribed Effort `{scale, value}`, or null/absent
+  // for no target. A set target reads as a scale-faithful chip (`RPE 8` / `2 RIR`); an unset one
+  // is the quiet default and summarizes to no chip.
+  targetEffort?: Effort | null;
 }
 
 // Parse a Rest display string — blank for unset, else a seconds count — back to the number the
@@ -97,9 +102,24 @@ function setTypeChip(setType: string | null | undefined): PrescriptionSummaryChi
   };
 }
 
+// The Target Effort chip, or null when no target is set. The typed value routes through
+// `formatEffort` with **no scale argument**, so it reads in the exact scale it was prescribed in
+// — `RPE 8` / `2 RIR`, no cross-scale conversion (ADR-0066, #467). This is the collapsed-card
+// counterpart of `target-effort-view`'s "Target …" label, sharing the one `effort.ts` formatter
+// so the plan target reads the same everywhere.
+function targetEffortChip(
+  targetEffort: Effort | null | undefined,
+): PrescriptionSummaryChip | null {
+  if (targetEffort == null) {
+    return null;
+  }
+  const label = formatEffort(targetEffort);
+  return { key: "target-effort", label, ariaLabel: `Target effort ${label}` };
+}
+
 // The ordered Prescription Summary chips for a Prescription's advanced fields — one per non-default
-// value, in render order (Tempo, Rest, then Set Type). A plain set with all-default fields
-// returns `[]`.
+// value, in render order (Tempo, Rest, Set Type, then Target Effort). A plain set with all-default
+// fields returns `[]`.
 export function prescriptionSummaryChips(
   fields: PrescriptionAdvancedFields,
 ): PrescriptionSummaryChip[] {
@@ -107,6 +127,7 @@ export function prescriptionSummaryChips(
     tempoChip(fields.tempo),
     restChip(fields.restSeconds),
     setTypeChip(fields.setType),
+    targetEffortChip(fields.targetEffort),
   ].filter((chip): chip is PrescriptionSummaryChip => chip !== null);
 }
 

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   prescriptionTargetEffort,
+  targetEffortFromInput,
   targetEffortLabel,
 } from "./target-effort-view.ts";
 
@@ -47,6 +48,27 @@ test("a target label projects across scales at read time (RPE⇄RIR)", () => {
     targetEffortLabel({ target_effort: { scale: "rir", value: 2 } }, "rpe"),
     "Target RPE 8",
   );
+});
+
+test("targetEffortFromInput reads a blank value as no target", () => {
+  assert.equal(targetEffortFromInput("rpe", ""), null);
+  assert.equal(targetEffortFromInput("rir", "   "), null);
+});
+
+test("targetEffortFromInput keeps the picked scale and never converts", () => {
+  // The value rides onto the scale the editor chose — an "8" on RPE is RPE 8, an "8" on RIR
+  // stays 8 RIR (not cross-converted), so the chip reads what was prescribed.
+  assert.deepEqual(targetEffortFromInput("rpe", "8"), { scale: "rpe", value: 8 });
+  assert.deepEqual(targetEffortFromInput("rir", "2"), { scale: "rir", value: 2 });
+  assert.deepEqual(targetEffortFromInput("rir", "8"), { scale: "rir", value: 8 });
+});
+
+test("targetEffortFromInput keeps a half-step RPE value", () => {
+  assert.deepEqual(targetEffortFromInput("rpe", "7.5"), { scale: "rpe", value: 7.5 });
+});
+
+test("targetEffortFromInput reads a non-numeric value as no target", () => {
+  assert.equal(targetEffortFromInput("rpe", "hard"), null);
 });
 
 test("a half-step RPE target survives projection to RPE and rounds into the RIR band", () => {

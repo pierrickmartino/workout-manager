@@ -129,9 +129,61 @@ test("an unknown Set Type value resolves to working and shows no chip", () => {
   assert.deepEqual(prescriptionSummaryChips({ setType: "superset" }), []);
 });
 
-test("chips are ordered Tempo, Rest, then Set Type", () => {
-  // Arrange — a set carrying a tempo, a rest, and a non-working Set Type.
-  const fields = { tempo: "3-1-1", restSeconds: 90, setType: "amrap" };
+test("a Target Effort reads as its typed chip in the scale it was prescribed in", () => {
+  // Arrange — an RPE 8 target reads "RPE 8"; a 2 RIR target reads "2 RIR".
+  // Act / Assert
+  assert.equal(
+    prescriptionSummaryChips({ targetEffort: { scale: "rpe", value: 8 } })[0].label,
+    "RPE 8",
+  );
+  assert.equal(
+    prescriptionSummaryChips({ targetEffort: { scale: "rir", value: 2 } })[0].label,
+    "2 RIR",
+  );
+});
+
+test("the Target Effort chip is scale-faithful and never converts across scales", () => {
+  // A 2 RIR target stays "2 RIR" in the chip — it is not rendered as its RPE-8 equivalent, and
+  // an RPE 8 target stays "RPE 8" rather than the equivalent 2 RIR (no cross-scale conversion).
+  assert.equal(
+    prescriptionSummaryChips({ targetEffort: { scale: "rir", value: 2 } })[0].label,
+    "2 RIR",
+  );
+  assert.equal(
+    prescriptionSummaryChips({ targetEffort: { scale: "rpe", value: 8 } })[0].label,
+    "RPE 8",
+  );
+});
+
+test("a half-step RPE Target Effort keeps its half-step in the chip", () => {
+  assert.equal(
+    prescriptionSummaryChips({ targetEffort: { scale: "rpe", value: 7.5 } })[0].label,
+    "RPE 7.5",
+  );
+});
+
+test("an unset Target Effort shows no chip", () => {
+  assert.deepEqual(prescriptionSummaryChips({ targetEffort: null }), []);
+  assert.deepEqual(prescriptionSummaryChips({ targetEffort: undefined }), []);
+});
+
+test("the Target Effort chip carries a stable key and a spoken aria label", () => {
+  const [chip] = prescriptionSummaryChips({
+    targetEffort: { scale: "rpe", value: 8 },
+  });
+
+  assert.equal(chip.key, "target-effort");
+  assert.ok(chip.ariaLabel.includes("RPE 8"));
+});
+
+test("chips are ordered Tempo, Rest, Set Type, then Target Effort", () => {
+  // Arrange — a set carrying a tempo, a rest, a non-working Set Type, and a Target Effort.
+  const fields = {
+    tempo: "3-1-1",
+    restSeconds: 90,
+    setType: "amrap",
+    targetEffort: { scale: "rpe", value: 8 } as const,
+  };
 
   // Act
   const chips = prescriptionSummaryChips(fields);
@@ -139,7 +191,7 @@ test("chips are ordered Tempo, Rest, then Set Type", () => {
   // Assert
   assert.deepEqual(
     chips.map((chip) => chip.label),
-    ["Controlled", "90s rest", "AMRAP"],
+    ["Controlled", "90s rest", "AMRAP", "RPE 8"],
   );
 });
 
@@ -172,6 +224,12 @@ test("auto-expand is true when any advanced field is non-default", () => {
   assert.equal(shouldAutoExpand({ tempo: null, restSeconds: 90 }), true);
   assert.equal(shouldAutoExpand({ tempo: null, restSeconds: 0 }), true);
   assert.equal(shouldAutoExpand({ setType: "warm_up" }), true);
+  assert.equal(shouldAutoExpand({ targetEffort: { scale: "rir", value: 2 } }), true);
+});
+
+test("auto-expand ignores an unset Target Effort", () => {
+  // No prescribed target has nothing to reveal, so the card opens collapsed.
+  assert.equal(shouldAutoExpand({ targetEffort: null }), false);
 });
 
 test("auto-expand ignores a working/unset Set Type", () => {

@@ -20,6 +20,7 @@ import {
   type PickedExercise,
 } from "@/lib/protocol-builder";
 import { type LoadKind } from "@/lib/load";
+import type { Effort } from "@/lib/effort";
 import type { DistanceUnit, QuantityKind } from "@/lib/quantity";
 import type { WeightUnit } from "@/lib/weight-unit";
 import type { BalancePreview, ProtocolProgress } from "@/lib/protocols-types";
@@ -248,6 +249,14 @@ export function ProtocolBuilder({
               sessionId: selectedSession.sessionId,
               position,
               setType,
+            })
+          }
+          onSetTargetEffort={(position, targetEffort) =>
+            dispatch({
+              type: "SET_TARGET_EFFORT",
+              sessionId: selectedSession.sessionId,
+              position,
+              targetEffort,
             })
           }
           onSetQuantity={(position, quantityKind, quantityUnit) =>
@@ -681,6 +690,7 @@ interface SessionEditorProps {
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
   onSetScheme: (position: number, scheme: string | null) => void;
   onSetSetType: (position: number, setType: string | null) => void;
+  onSetTargetEffort: (position: number, targetEffort: Effort | null) => void;
   onSetQuantity: (
     position: number,
     quantityKind: QuantityKind,
@@ -708,6 +718,7 @@ function SessionEditor({
   onEditLoad,
   onSetScheme,
   onSetSetType,
+  onSetTargetEffort,
   onSetQuantity,
   onAdd,
   onRemove,
@@ -766,6 +777,7 @@ function SessionEditor({
         onEditLoad={onEditLoad}
         onSetScheme={onSetScheme}
         onSetSetType={onSetSetType}
+        onSetTargetEffort={onSetTargetEffort}
         onSetQuantity={onSetQuantity}
         onEditRoundRest={onEditRoundRest}
         onReorder={onReorder}

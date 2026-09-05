@@ -8,6 +8,13 @@ import {
   prescriptionSummaryChips,
   restSecondsFromInput,
 } from "@/lib/prescription-summary";
+import {
+  DEFAULT_EFFORT_SCALE,
+  KNOWN_EFFORT_SCALES,
+  effortScaleLabel,
+  type EffortScale,
+} from "@/lib/effort";
+import { targetEffortFromInput } from "@/lib/target-effort-view";
 import { SET_TYPE_OPTIONS, resolveSetType } from "@/lib/set-type-view";
 import {
   AMOUNT_KIND_OPTIONS,
@@ -41,8 +48,9 @@ import { Select } from "@/components/ui/select";
 //
 // **Progressive disclosure** (#465): the frequent path — Quantity (kind + optional distance unit),
 // Sets, the typed target, and the optional Load — stays always visible. The advanced fields —
-// Tempo, Rest, the **Set Type** (#466), and the surface's `advanced` slot (the Builder's
-// Progression Scheme selector, the Hand-Authored Note + Target Effort) — collapse behind **More**.
+// Tempo, Rest, the **Set Type** (#466), the optional **Target Effort** (#467), and the surface's
+// `advanced` slot (the Builder's Progression Scheme selector, the Hand-Authored Note) — collapse
+// behind **More**.
 // When collapsed the card shows a
 // **Prescription Summary** (`lib/prescription-summary`): compact chips for only the non-default
 // advanced values, so a plain working set reads clean. A card **auto-expands** when any advanced
@@ -95,6 +103,13 @@ export interface PrescriptionFieldStackProps {
   // is the quiet default — it renders no summary chip and never forces the card open. Shared by
   // all three authoring surfaces, so it lives here rather than in any one surface's slot.
   setType: string;
+  // The Target Effort (ADR-0066, #467): the prescribed Effort authored behind **More** as a
+  // scale pick (RPE / RIR) plus a free-text value — a blank value is no target. Held as the
+  // picked `scale` and the display `value`, matching how the component keeps every field a
+  // display string it renders and reports (ADR-0067). Optional: a surface that authors no
+  // Target Effort (Insert) omits `onChangeTargetEffort`, and the control is not rendered.
+  targetEffortScale?: EffortScale;
+  targetEffortValue?: string;
   // The typed Load (ADR-0010): the picked kind and its value field — on the frequent path.
   loadKind: string;
   loadValue: string;
@@ -115,6 +130,10 @@ export interface PrescriptionFieldStackProps {
   // the working default back to unset via `planSetType`), so the component reports the pick and
   // holds no domain state.
   onChangeSetType: (value: string) => void;
+  // Report the picked Target Effort as its `(scale, value)` pair — the surface parses that into
+  // the typed value it stores (Builder) or holds the two strings as-is (Hand-Authored). Omitted
+  // by a surface that authors no Target Effort, which also suppresses the control's render.
+  onChangeTargetEffort?: (scale: EffortScale, value: string) => void;
   onChangeLoadKind: (value: string) => void;
   onChangeLoadValue: (value: string) => void;
   // Surface-specific advanced fields rendered inside the **More** area, below Rest + Tempo (the
@@ -143,6 +162,8 @@ export function PrescriptionFieldStack({
   restSeconds,
   tempo,
   setType,
+  targetEffortScale = DEFAULT_EFFORT_SCALE,
+  targetEffortValue = "",
   loadKind,
   loadValue,
   showRest,
@@ -153,6 +174,7 @@ export function PrescriptionFieldStack({
   onChangeRest,
   onChangeTempo,
   onChangeSetType,
+  onChangeTargetEffort,
   onChangeLoadKind,
   onChangeLoadValue,
   advanced,
@@ -163,20 +185,39 @@ export function PrescriptionFieldStack({
   const isDistance = kind === "distance";
   const targetLabel = targetLabelFor(kind);
 
+  // The picked Target Effort scale is ephemeral React state, the same species as the open/closed
+  // state below: a scale means nothing to the plan until a value rides onto it, so a surface that
+  // derives its stored scale from the typed value (the Builder) would otherwise snap the selector
+  // back to the default the instant a user picks a scale *before* typing. Seeding the pick here
+  // lets the user choose a scale first and then type; the value stays the controlled prop, and
+  // every edit still reports the `(scale, value)` pair the surface stores and round-trips. Seeded
+  // from the incoming scale so a stored target shows the scale it was prescribed in.
+  const [effortScale, setEffortScale] = React.useState<EffortScale>(targetEffortScale);
+
+  // The typed Target Effort the summary reasons about, parsed from the picked scale + value — the
+  // one seam the editor's strings become the typed value (scale-faithful, no conversion). Null
+  // (no target) when the surface authors none or the value is blank, so it earns no chip.
+  const targetEffort = onChangeTargetEffort
+    ? targetEffortFromInput(effortScale, targetEffortValue)
+    : null;
+
   // The advanced values the Prescription Summary reasons about. A grouped member's rest belongs to
   // the group (ADR-0023), so it is excluded here — a member's summary never carries a rest chip.
-  // A non-working Set Type earns its own chip (and, via the seed below, opens the card).
+  // A non-working Set Type or a set Target Effort earns its own chip (and, via the seed below,
+  // opens the card).
   const summaryChips = prescriptionSummaryChips({
     tempo,
     restSeconds: showRest ? restSecondsFromInput(restSeconds) : null,
     setType,
+    targetEffort,
   });
 
   // Open/closed is ephemeral React state (#465): seeded once so a card with any non-default
   // advanced value opens expanded and a plain set opens collapsed, then freely toggled. It never
   // persists — a fresh render (reload, remount) re-seeds. The seed mirrors `shouldAutoExpand`
-  // (a chip means a non-default summarized value) and adds the surface's advanced-slot signal, so
-  // a Hand-Authored Note or Target Effort — behind More but not yet a chip — still opens the card.
+  // (a chip means a non-default summarized value — Target Effort now among them, #467) and adds
+  // the surface's advanced-slot signal, so a Hand-Authored Note — behind More but not a chip —
+  // still opens the card.
   const [open, setOpen] = React.useState<boolean>(
     () => summaryChips.length > 0 || advancedNonDefault,
   );
@@ -342,6 +383,42 @@ export function PrescriptionFieldStack({
                 ))}
               </Select>
             </FieldLabel>
+            {/* Target Effort (ADR-0066, #467): the prescribed Effort in either scale — pick a
+                scale (RPE / RIR), then give a value; a blank value authors no target. Descriptive
+                only (it feeds no progression, ADR-0066); a set target shows a scale-faithful
+                summary chip and opens the card. The value's band is validated at the write
+                boundary. Rendered only for a surface that authors Target Effort. */}
+            {onChangeTargetEffort ? (
+              <>
+                <FieldLabel label="Target effort scale">
+                  <Select
+                    value={effortScale}
+                    onChange={(event) => {
+                      const scale = event.target.value as EffortScale;
+                      setEffortScale(scale);
+                      onChangeTargetEffort(scale, targetEffortValue);
+                    }}
+                    aria-label={`Target effort scale for ${name}`}
+                  >
+                    {KNOWN_EFFORT_SCALES.map((scale) => (
+                      <option key={scale} value={scale}>
+                        {effortScaleLabel(scale)}
+                      </option>
+                    ))}
+                  </Select>
+                </FieldLabel>
+                <FieldLabel label="Target effort">
+                  <Input
+                    value={targetEffortValue}
+                    placeholder={effortScale === "rir" ? "e.g. 2" : "e.g. 8"}
+                    onChange={(event) =>
+                      onChangeTargetEffort(effortScale, event.target.value)
+                    }
+                    aria-label={`Target effort for ${name}`}
+                  />
+                </FieldLabel>
+              </>
+            ) : null}
           </div>
           {advanced}
         </div>

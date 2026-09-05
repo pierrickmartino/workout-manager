@@ -166,6 +166,15 @@ export type BuilderEvent =
       setType: string | null;
     }
   | {
+      // Set (or clear, with `null`) the typed Target Effort on the Prescription at `position`
+      // (ADR-0066, #467). Descriptive only — it feeds no progression — and carried through
+      // DEPLOY untouched (#463); an unset target is stored as `null`.
+      type: "SET_TARGET_EFFORT";
+      sessionId: number;
+      position: number;
+      targetEffort: Effort | null;
+    }
+  | {
       // Pick the typed Quantity kind + unit on the Prescription at `position` (ADR-0050, #464)
       // — the Builder's counterpart to the Amount picker the ad-hoc surfaces carry. The
       // free-text target (`reps`) is edited separately via EDIT_PRESCRIPTION; this fixes what
@@ -378,6 +387,12 @@ export function builderReducer(
       return mapPrescription(state, event.sessionId, event.position, (prescription) => ({
         ...prescription,
         setType: event.setType,
+      }));
+
+    case "SET_TARGET_EFFORT":
+      return mapPrescription(state, event.sessionId, event.position, (prescription) => ({
+        ...prescription,
+        targetEffort: event.targetEffort,
       }));
 
     case "SET_QUANTITY":
