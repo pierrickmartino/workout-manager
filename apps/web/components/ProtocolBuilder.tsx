@@ -242,6 +242,14 @@ export function ProtocolBuilder({
               scheme,
             })
           }
+          onSetSetType={(position, setType) =>
+            dispatch({
+              type: "SET_SET_TYPE",
+              sessionId: selectedSession.sessionId,
+              position,
+              setType,
+            })
+          }
           onSetQuantity={(position, quantityKind, quantityUnit) =>
             dispatch({
               type: "SET_QUANTITY",
@@ -672,6 +680,7 @@ interface SessionEditorProps {
   ) => void;
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
   onSetScheme: (position: number, scheme: string | null) => void;
+  onSetSetType: (position: number, setType: string | null) => void;
   onSetQuantity: (
     position: number,
     quantityKind: QuantityKind,
@@ -698,6 +707,7 @@ function SessionEditor({
   onEditField,
   onEditLoad,
   onSetScheme,
+  onSetSetType,
   onSetQuantity,
   onAdd,
   onRemove,
@@ -755,6 +765,7 @@ function SessionEditor({
         onEditField={onEditField}
         onEditLoad={onEditLoad}
         onSetScheme={onSetScheme}
+        onSetSetType={onSetSetType}
         onSetQuantity={onSetQuantity}
         onEditRoundRest={onEditRoundRest}
         onReorder={onReorder}

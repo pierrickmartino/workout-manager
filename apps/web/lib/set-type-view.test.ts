@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 
 import {
   DEFAULT_SET_TYPE,
+  SET_TYPE_OPTIONS,
   loggedSetTypeBadge,
+  planSetType,
   prescriptionSetTypeBadge,
   resolveSetType,
   setTypeBadge,
@@ -75,4 +77,33 @@ test("loggedSetTypeBadge reads the record-side field", () => {
     label: "To failure",
   });
   assert.equal(loggedSetTypeBadge({ set_type: undefined }), null);
+});
+
+test("SET_TYPE_OPTIONS lists every member in catalog order with its label", () => {
+  // The selector reads the catalog from here, so a plan editor never hardcodes the labels.
+  assert.deepEqual(SET_TYPE_OPTIONS, [
+    { value: "warm_up", label: "Warm-up" },
+    { value: "working", label: "Working" },
+    { value: "drop", label: "Drop set" },
+    { value: "failure", label: "To failure" },
+    { value: "amrap", label: "AMRAP" },
+  ]);
+});
+
+test("planSetType stores a non-working member as itself", () => {
+  // A deliberate warm-up/drop/failure/AMRAP is persisted verbatim.
+  assert.equal(planSetType("warm_up"), "warm_up");
+  assert.equal(planSetType("amrap"), "amrap");
+});
+
+test("planSetType stores an unset or working pick as null", () => {
+  // "Working" is the quiet default, so both unset and an explicit working pick author no value.
+  assert.equal(planSetType(""), null);
+  assert.equal(planSetType(null), null);
+  assert.equal(planSetType(undefined), null);
+  assert.equal(planSetType("working"), null);
+});
+
+test("planSetType stores an unknown value as null, never a fabricated one", () => {
+  assert.equal(planSetType("superset"), null);
 });

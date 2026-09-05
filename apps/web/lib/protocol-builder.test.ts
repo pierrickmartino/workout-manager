@@ -287,6 +287,46 @@ test("SET_SCHEME with null clears the selection back to the default", () => {
   assert.equal(toDeployPayload(next, "kg").sessions[0].prescriptions[0].scheme, null);
 });
 
+test("SET_SET_TYPE annotates a Prescription's Set Type and carries it through DEPLOY", () => {
+  // Arrange
+  const draft = initBuilderDraft(protocol());
+
+  // Act — tag the movement as a warm-up
+  const next = builderReducer(draft, {
+    type: "SET_SET_TYPE",
+    sessionId: 1,
+    position: 0,
+    setType: "warm_up",
+  });
+
+  // Assert — stored on the draft and emitted in the deploy payload (#463/#466)
+  assert.equal(next.sessions[0].prescriptions[0].setType, "warm_up");
+  const payload = toDeployPayload(next, "kg");
+  assert.equal(payload.sessions[0].prescriptions[0].set_type, "warm_up");
+});
+
+test("SET_SET_TYPE with null clears the annotation back to the working default", () => {
+  // Arrange — a movement already tagged with a Set Type
+  const draft = builderReducer(initBuilderDraft(protocol()), {
+    type: "SET_SET_TYPE",
+    sessionId: 1,
+    position: 0,
+    setType: "warm_up",
+  });
+
+  // Act — clear it (the working default is stored as unset)
+  const next = builderReducer(draft, {
+    type: "SET_SET_TYPE",
+    sessionId: 1,
+    position: 0,
+    setType: null,
+  });
+
+  // Assert — null in the draft and the payload (the read side resolves it to working)
+  assert.equal(next.sessions[0].prescriptions[0].setType, null);
+  assert.equal(toDeployPayload(next, "kg").sessions[0].prescriptions[0].set_type, null);
+});
+
 test("initBuilderDraft carries an existing Prescription's stored scheme", () => {
   // Arrange — a Protocol whose movement already carries a scheme selection
   const source = protocol({

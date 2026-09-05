@@ -105,6 +105,9 @@ interface ExerciseRow {
   reps: string;
   restSeconds: string;
   tempo: string;
+  // The Set Type (ADR-0065, #466): the picked curated member, edited behind More. Blank or
+  // `working` authors a plain working set (stored null); any other member rides onto the plan.
+  setType: string;
   // The Exercise Note (ADR-0065, #451): the plan-side coaching cue, edited inline as raw text.
   // Blank means no note; the backend length-caps and HTML-escapes it at the write boundary.
   note: string;
@@ -156,6 +159,7 @@ function makeExerciseRow(exercise: PickedExercise): ExerciseRow {
     reps: "",
     restSeconds: "",
     tempo: "",
+    setType: "",
     note: "",
     targetEffortScale: DEFAULT_EFFORT_SCALE,
     targetEffortValue: "",
@@ -182,6 +186,9 @@ function seededExerciseRow(seed: CaptureSeedExercise): ExerciseRow {
     reps: seed.reps,
     restSeconds: "",
     tempo: "",
+    // Capture leaves the Set Type unset (ADR-0065): a plan-less record never carried a plan
+    // annotation, so the seed authors a plain working set — the same as rest/tempo/Note below.
+    setType: "",
     // Capture leaves the Exercise Note unset (ADR-0065): a plan-less record never carried a
     // plan cue, so the seed authors none — the same as rest/tempo/Superset above.
     note: "",
@@ -361,6 +368,7 @@ export function HandAuthoredSessionForm({
     reps: row.reps,
     restSeconds: row.restSeconds,
     tempo: row.tempo,
+    setType: row.setType,
     note: row.note,
     targetEffortScale: row.targetEffortScale,
     targetEffortValue: row.targetEffortValue,
@@ -699,10 +707,10 @@ function ExerciseCard({
       </div>
 
       {/* The authored plan — the one shared, presentation-only field stack every authoring
-          surface now renders (ADR-0067, #464): Quantity, sets, target, rest, tempo, and a
-          typed Load. The Hand-Authored form's own advanced fields — the Exercise Note and the
-          Target Effort — ride in the `advanced` slot, keeping their existing behavior until the
-          progressive-disclosure slice formalizes them. */}
+          surface now renders (ADR-0067, #464): Quantity, sets, target, rest, tempo, the shared
+          Set Type control (#466), and a typed Load. The Hand-Authored form's own remaining
+          advanced fields — the Exercise Note and the Target Effort — ride in the `advanced` slot,
+          keeping their existing behavior until the progressive-disclosure slice formalizes them. */}
       <PrescriptionFieldStack
         exerciseName={row.exerciseName}
         weightUnit={unit}
@@ -712,6 +720,7 @@ function ExerciseCard({
         target={row.reps}
         restSeconds={row.restSeconds}
         tempo={row.tempo}
+        setType={row.setType}
         loadKind={row.loadKind}
         loadValue={row.loadValue}
         // A grouped member rests once per round at the group level, so its own rest is dormant
@@ -733,6 +742,7 @@ function ExerciseCard({
         onChangeTarget={(value) => onChange({ reps: value })}
         onChangeRest={(value) => onChange({ restSeconds: value })}
         onChangeTempo={(value) => onChange({ tempo: value })}
+        onChangeSetType={(value) => onChange({ setType: value })}
         onChangeLoadKind={(value) => onChange({ loadKind: value })}
         onChangeLoadValue={(value) => onChange({ loadValue: value })}
         advanced={

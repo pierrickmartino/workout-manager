@@ -22,6 +22,7 @@ function fields(
     reps: "8-12",
     restSeconds: "90",
     tempo: "3-1-1",
+    setType: "",
     loadKind: "absolute",
     loadValue: "60",
     ...overrides,
@@ -41,6 +42,7 @@ test("maps a complete prescription to the Insert payload", () => {
     reps: "8-12",
     rest_seconds: 90,
     tempo: "3-1-1",
+    set_type: null,
     load_kind: "absolute",
     load_value: "60",
     quantity_kind: "repetitions",
@@ -48,6 +50,25 @@ test("maps a complete prescription to the Insert payload", () => {
     superset_group: null,
     round_rest_seconds: null,
   });
+});
+
+test("carries a non-working Set Type onto the plan", () => {
+  // Arrange — the user annotated the appended movement as a warm-up.
+  const result = buildInsertPrescriptionRequest(fields({ setType: "warm_up" }), "kg");
+
+  // Assert
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.request.set_type, "warm_up");
+});
+
+test("stores a working or unset Set Type as null", () => {
+  // Both an untouched (blank) control and an explicit working pick append a plain working set.
+  const unset = buildInsertPrescriptionRequest(fields({ setType: "" }), "kg");
+  const working = buildInsertPrescriptionRequest(fields({ setType: "working" }), "kg");
+
+  assert.equal(unset.ok && unset.request.set_type, null);
+  assert.equal(working.ok && working.request.set_type, null);
 });
 
 test("carries the picked Quantity kind and unit onto the plan", () => {

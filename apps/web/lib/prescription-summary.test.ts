@@ -92,9 +92,46 @@ test("a zero-second Rest is a deliberate value and still renders a chip", () => 
   assert.equal(chips[0].label, "0s rest");
 });
 
-test("chips are ordered Tempo before Rest", () => {
-  // Arrange — a set carrying both a tempo and a rest.
-  const fields = { tempo: "3-1-1", restSeconds: 90 };
+test("a non-working Set Type renders its label as a chip", () => {
+  // Arrange — a warm-up is a non-default Set Type, so it earns a chip.
+  const fields = { tempo: null, restSeconds: null, setType: "warm_up" };
+
+  // Act
+  const chips = prescriptionSummaryChips(fields);
+
+  // Assert
+  assert.equal(chips.length, 1);
+  assert.equal(chips[0].label, "Warm-up");
+});
+
+test("every non-working Set Type reads as its own label", () => {
+  assert.equal(prescriptionSummaryChips({ setType: "drop" })[0].label, "Drop set");
+  assert.equal(
+    prescriptionSummaryChips({ setType: "failure" })[0].label,
+    "To failure",
+  );
+  assert.equal(prescriptionSummaryChips({ setType: "amrap" })[0].label, "AMRAP");
+});
+
+test("a working Set Type is the default and shows no chip", () => {
+  // The quiet case: an ordinary working set carries no redundant "working" badge.
+  assert.deepEqual(prescriptionSummaryChips({ setType: "working" }), []);
+});
+
+test("an unset Set Type shows no chip", () => {
+  // Null, undefined, or omitted all read as the working default → no chip.
+  assert.deepEqual(prescriptionSummaryChips({ setType: null }), []);
+  assert.deepEqual(prescriptionSummaryChips({ setType: undefined }), []);
+});
+
+test("an unknown Set Type value resolves to working and shows no chip", () => {
+  // A legacy/foreign value reads as the default rather than a fabricated label.
+  assert.deepEqual(prescriptionSummaryChips({ setType: "superset" }), []);
+});
+
+test("chips are ordered Tempo, Rest, then Set Type", () => {
+  // Arrange — a set carrying a tempo, a rest, and a non-working Set Type.
+  const fields = { tempo: "3-1-1", restSeconds: 90, setType: "amrap" };
 
   // Act
   const chips = prescriptionSummaryChips(fields);
@@ -102,8 +139,15 @@ test("chips are ordered Tempo before Rest", () => {
   // Assert
   assert.deepEqual(
     chips.map((chip) => chip.label),
-    ["Controlled", "90s rest"],
+    ["Controlled", "90s rest", "AMRAP"],
   );
+});
+
+test("the Set Type chip carries a stable key and a spoken aria label", () => {
+  const [chip] = prescriptionSummaryChips({ setType: "warm_up" });
+
+  assert.equal(chip.key, "set-type");
+  assert.ok(chip.ariaLabel.includes("Warm-up"));
 });
 
 test("each chip carries a stable key and a spoken aria label", () => {
@@ -127,6 +171,13 @@ test("auto-expand is true when any advanced field is non-default", () => {
   assert.equal(shouldAutoExpand({ tempo: "3-1-1", restSeconds: null }), true);
   assert.equal(shouldAutoExpand({ tempo: null, restSeconds: 90 }), true);
   assert.equal(shouldAutoExpand({ tempo: null, restSeconds: 0 }), true);
+  assert.equal(shouldAutoExpand({ setType: "warm_up" }), true);
+});
+
+test("auto-expand ignores a working/unset Set Type", () => {
+  // A plain working set has nothing to reveal, so it opens collapsed.
+  assert.equal(shouldAutoExpand({ setType: "working" }), false);
+  assert.equal(shouldAutoExpand({ setType: null }), false);
 });
 
 test("undefined advanced fields are treated as the unset default", () => {

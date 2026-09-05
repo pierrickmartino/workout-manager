@@ -8,6 +8,7 @@ import {
   prescriptionSummaryChips,
   restSecondsFromInput,
 } from "@/lib/prescription-summary";
+import { SET_TYPE_OPTIONS, resolveSetType } from "@/lib/set-type-view";
 import {
   AMOUNT_KIND_OPTIONS,
   DISTANCE_UNIT_OPTIONS,
@@ -40,8 +41,9 @@ import { Select } from "@/components/ui/select";
 //
 // **Progressive disclosure** (#465): the frequent path — Quantity (kind + optional distance unit),
 // Sets, the typed target, and the optional Load — stays always visible. The advanced fields —
-// Tempo, Rest, and the surface's `advanced` slot (the Builder's Progression Scheme selector, the
-// Hand-Authored Note + Target Effort) — collapse behind **More**. When collapsed the card shows a
+// Tempo, Rest, the **Set Type** (#466), and the surface's `advanced` slot (the Builder's
+// Progression Scheme selector, the Hand-Authored Note + Target Effort) — collapse behind **More**.
+// When collapsed the card shows a
 // **Prescription Summary** (`lib/prescription-summary`): compact chips for only the non-default
 // advanced values, so a plain working set reads clean. A card **auto-expands** when any advanced
 // value is non-default, so nothing meaningful is hidden on first view. The **Scheme Preview**
@@ -88,6 +90,11 @@ export interface PrescriptionFieldStackProps {
   // Advanced fields, collapsed behind **More** (#465).
   restSeconds: string;
   tempo: string;
+  // The Set Type (ADR-0065, #466): the stored value ("" for unset), shown behind **More** as a
+  // curated selector that leads with Warm-up and defaults to Working. An unset or working value
+  // is the quiet default — it renders no summary chip and never forces the card open. Shared by
+  // all three authoring surfaces, so it lives here rather than in any one surface's slot.
+  setType: string;
   // The typed Load (ADR-0010): the picked kind and its value field — on the frequent path.
   loadKind: string;
   loadValue: string;
@@ -104,6 +111,10 @@ export interface PrescriptionFieldStackProps {
   onChangeTarget: (value: string) => void;
   onChangeRest: (value: string) => void;
   onChangeTempo: (value: string) => void;
+  // Report the picked Set Type — a raw catalog member string. The surface stores it (mapping
+  // the working default back to unset via `planSetType`), so the component reports the pick and
+  // holds no domain state.
+  onChangeSetType: (value: string) => void;
   onChangeLoadKind: (value: string) => void;
   onChangeLoadValue: (value: string) => void;
   // Surface-specific advanced fields rendered inside the **More** area, below Rest + Tempo (the
@@ -131,6 +142,7 @@ export function PrescriptionFieldStack({
   target,
   restSeconds,
   tempo,
+  setType,
   loadKind,
   loadValue,
   showRest,
@@ -140,6 +152,7 @@ export function PrescriptionFieldStack({
   onChangeTarget,
   onChangeRest,
   onChangeTempo,
+  onChangeSetType,
   onChangeLoadKind,
   onChangeLoadValue,
   advanced,
@@ -152,9 +165,11 @@ export function PrescriptionFieldStack({
 
   // The advanced values the Prescription Summary reasons about. A grouped member's rest belongs to
   // the group (ADR-0023), so it is excluded here — a member's summary never carries a rest chip.
+  // A non-working Set Type earns its own chip (and, via the seed below, opens the card).
   const summaryChips = prescriptionSummaryChips({
     tempo,
     restSeconds: showRest ? restSecondsFromInput(restSeconds) : null,
+    setType,
   });
 
   // Open/closed is ephemeral React state (#465): seeded once so a card with any non-default
@@ -308,6 +323,24 @@ export function PrescriptionFieldStack({
                 onChange={(event) => onChangeTempo(event.target.value)}
                 aria-label={`Tempo for ${name}`}
               />
+            </FieldLabel>
+            {/* Set Type (ADR-0065, #466): a curated annotation on the movement line —
+                Warm-up / Working / Drop set / To failure / AMRAP. It is descriptive only
+                (it feeds no progression); leaving it Working keeps the set a plain working
+                set and shows no summary chip. The value resolves for display so an unset
+                (or legacy) value reads as Working rather than a blank option. */}
+            <FieldLabel label="Set type">
+              <Select
+                value={resolveSetType(setType)}
+                onChange={(event) => onChangeSetType(event.target.value)}
+                aria-label={`Set type for ${name}`}
+              >
+                {SET_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
             </FieldLabel>
           </div>
           {advanced}

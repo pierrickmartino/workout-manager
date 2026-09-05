@@ -33,6 +33,14 @@ const LABELS: Record<SetType, string> = {
   amrap: "AMRAP",
 };
 
+// The catalog's members in order, each with its label — the single source a Set Type
+// selector reads so an editor offers the five members (Warm-up first, the working default
+// second) without hardcoding the labels. `working` stays in the list as the pick that means
+// "the quiet default"; `planSetType` normalizes it back to unset on the way to the payload.
+export const SET_TYPE_OPTIONS: readonly { value: SetType; label: string }[] = (
+  ["warm_up", "working", "drop", "failure", "amrap"] as const
+).map((value) => ({ value, label: LABELS[value] }));
+
 // Whether a stored value names a known catalog member — the boundary the view resolves
 // against, so a legacy or foreign value reads as unset rather than a fabricated label.
 function isKnown(value: string | null | undefined): value is SetType {
@@ -43,6 +51,16 @@ function isKnown(value: string | null | undefined): value is SetType {
 // else the default (`working`). Never throws — mirrors the backend `resolve_set_type`.
 export function resolveSetType(value: string | null | undefined): SetType {
   return isKnown(value) ? value : DEFAULT_SET_TYPE;
+}
+
+// The value an authoring surface stores for a picked Set Type: a non-working member as itself,
+// and an unset/blank/working/unknown pick as `null`. "Working" is the quiet default the domain
+// resolves an unset value back to, so it is never written explicitly — this keeps every
+// authoring surface (Builder, Insert, Hand-Authored) writing the one "working is unset" rule
+// instead of each re-deriving it, and keeps a plain set's plan free of a redundant annotation.
+export function planSetType(value: string | null | undefined): SetType | null {
+  const resolved = resolveSetType(value);
+  return resolved === DEFAULT_SET_TYPE ? null : resolved;
 }
 
 // One rendered Set Type badge: the resolved member and its label. The view-model returns
