@@ -105,6 +105,7 @@ interface PrescriptionListProps {
   onSetScheme: (position: number, scheme: string | null) => void;
   onSetSetType: (position: number, setType: string | null) => void;
   onSetTargetEffort: (position: number, targetEffort: Effort | null) => void;
+  onSetNote: (position: number, note: string | null) => void;
   // Pick the typed Quantity kind + unit on the Prescription at `position` (ADR-0050, #464).
   onSetQuantity: (
     position: number,
@@ -136,6 +137,7 @@ export function PrescriptionList({
   onSetScheme,
   onSetSetType,
   onSetTargetEffort,
+  onSetNote,
   onSetQuantity,
   onEditRoundRest,
   onReorder,
@@ -303,6 +305,7 @@ export function PrescriptionList({
                 onSetScheme={onSetScheme}
                 onSetSetType={onSetSetType}
                 onSetTargetEffort={onSetTargetEffort}
+                onSetNote={onSetNote}
                 onSetQuantity={onSetQuantity}
                 onReorder={onReorder}
                 onGroupWithNext={onGroupWithNext}
@@ -327,6 +330,7 @@ export function PrescriptionList({
                 onSetScheme={onSetScheme}
                 onSetSetType={onSetSetType}
                 onSetTargetEffort={onSetTargetEffort}
+                onSetNote={onSetNote}
                 onSetQuantity={onSetQuantity}
                 onEditRoundRest={onEditRoundRest}
                 onReorder={onReorder}
@@ -490,6 +494,7 @@ interface SupersetContainerProps {
   onSetScheme: (position: number, scheme: string | null) => void;
   onSetSetType: (position: number, setType: string | null) => void;
   onSetTargetEffort: (position: number, targetEffort: Effort | null) => void;
+  onSetNote: (position: number, note: string | null) => void;
   onSetQuantity: (
     position: number,
     quantityKind: QuantityKind,
@@ -529,6 +534,7 @@ function SupersetContainer({
   onSetScheme,
   onSetSetType,
   onSetTargetEffort,
+  onSetNote,
   onSetQuantity,
   onEditRoundRest,
   onReorder,
@@ -600,6 +606,7 @@ function SupersetContainer({
               onSetScheme={onSetScheme}
               onSetSetType={onSetSetType}
               onSetTargetEffort={onSetTargetEffort}
+              onSetNote={onSetNote}
               onSetQuantity={onSetQuantity}
               onReorder={onReorder}
               onGroupWithNext={onGroupWithNext}
@@ -662,6 +669,7 @@ interface SortablePrescriptionRowProps {
   onSetScheme: (position: number, scheme: string | null) => void;
   onSetSetType: (position: number, setType: string | null) => void;
   onSetTargetEffort: (position: number, targetEffort: Effort | null) => void;
+  onSetNote: (position: number, note: string | null) => void;
   onSetQuantity: (
     position: number,
     quantityKind: QuantityKind,
@@ -696,6 +704,7 @@ function SortablePrescriptionRow({
   onSetScheme,
   onSetSetType,
   onSetTargetEffort,
+  onSetNote,
   onSetQuantity,
   onReorder,
   onGroupWithNext,
@@ -743,6 +752,7 @@ function SortablePrescriptionRow({
         onSetTargetEffort={(targetEffort) =>
           onSetTargetEffort(position, targetEffort)
         }
+        onSetNote={(note) => onSetNote(position, note)}
         onSetQuantity={(kind, quantityUnit) =>
           onSetQuantity(position, kind, quantityUnit)
         }
@@ -962,6 +972,7 @@ interface PrescriptionEditorProps {
   onSetScheme: (scheme: string | null) => void;
   onSetSetType: (setType: string | null) => void;
   onSetTargetEffort: (targetEffort: Effort | null) => void;
+  onSetNote: (note: string | null) => void;
   onSetQuantity: (quantityKind: QuantityKind, quantityUnit: DistanceUnit) => void;
 }
 
@@ -974,6 +985,7 @@ function PrescriptionEditor({
   onSetScheme,
   onSetSetType,
   onSetTargetEffort,
+  onSetNote,
   onSetQuantity,
 }: PrescriptionEditorProps) {
   const name = prescription.exerciseName;
@@ -1014,6 +1026,9 @@ function PrescriptionEditor({
         targetEffortValue={
           prescription.targetEffort ? String(prescription.targetEffort.value) : ""
         }
+        // Exercise Note (ADR-0065, #468): the draft holds the decoded cue (see
+        // `initBuilderDraft`), so it renders directly; a null note is an empty field.
+        note={prescription.note ?? ""}
         loadKind={prescription.loadKind}
         loadValue={prescription.loadValue}
         showRest={!grouped}
@@ -1039,6 +1054,11 @@ function PrescriptionEditor({
         // through DEPLOY untouched (#463). Descriptive only — it feeds no progression (ADR-0066).
         onChangeTargetEffort={(scale, value) =>
           onSetTargetEffort(targetEffortFromInput(scale, value))
+        }
+        // A blank value clears the note (null); any text rides through DEPLOY, where the write
+        // boundary length-caps + HTML-escapes it (ADR-0065, #468). Descriptive only.
+        onChangeNote={(value) =>
+          onSetNote(value.trim() === "" ? null : value)
         }
         onChangeLoadKind={(value) =>
           onEditLoad(value as LoadKind, prescription.loadValue)

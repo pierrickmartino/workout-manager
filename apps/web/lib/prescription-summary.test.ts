@@ -176,23 +176,64 @@ test("the Target Effort chip carries a stable key and a spoken aria label", () =
   assert.ok(chip.ariaLabel.includes("RPE 8"));
 });
 
-test("chips are ordered Tempo, Rest, Set Type, then Target Effort", () => {
-  // Arrange — a set carrying a tempo, a rest, a non-working Set Type, and a Target Effort.
+test("a present Exercise Note renders an icon chip, not a text preview", () => {
+  // Arrange — a coaching cue is present.
+  const fields = { note: "Pause on the chest" };
+
+  // Act
+  const chips = prescriptionSummaryChips(fields);
+
+  // Assert — one chip, flagged as an icon, and it never leaks the note's text.
+  assert.equal(chips.length, 1);
+  assert.equal(chips[0].icon, "note");
+  assert.ok(!chips[0].label.includes("Pause"));
+});
+
+test("the Note chip carries a stable key and a spoken aria label", () => {
+  const [chip] = prescriptionSummaryChips({ note: "Brace hard" });
+
+  assert.equal(chip.key, "note");
+  assert.ok(chip.ariaLabel.length > 0);
+  // The aria label announces the note's presence, not its text (no preview).
+  assert.ok(!chip.ariaLabel.includes("Brace"));
+});
+
+test("a stored (HTML-escaped) Note still reads as present and earns its chip", () => {
+  // The Builder loads a generated note in its stored, escaped form; presence still holds.
+  const chips = prescriptionSummaryChips({ note: "a &amp; b" });
+
+  assert.equal(chips.length, 1);
+  assert.equal(chips[0].icon, "note");
+});
+
+test("a blank, whitespace-only, null, or absent Note shows no chip", () => {
+  // The quiet case: no cue means no icon competing with the exercise name.
+  assert.deepEqual(prescriptionSummaryChips({ note: "" }), []);
+  assert.deepEqual(prescriptionSummaryChips({ note: "   " }), []);
+  assert.deepEqual(prescriptionSummaryChips({ note: null }), []);
+  assert.deepEqual(prescriptionSummaryChips({ note: undefined }), []);
+});
+
+test("chips are ordered Tempo, Rest, Set Type, Target Effort, then Note", () => {
+  // Arrange — a set carrying every advanced value, including a note.
   const fields = {
     tempo: "3-1-1",
     restSeconds: 90,
     setType: "amrap",
     targetEffort: { scale: "rpe", value: 8 } as const,
+    note: "Pause on the chest",
   };
 
   // Act
   const chips = prescriptionSummaryChips(fields);
 
-  // Assert
+  // Assert — the note chip is last; the earlier chips keep their labels.
   assert.deepEqual(
-    chips.map((chip) => chip.label),
+    chips.slice(0, 4).map((chip) => chip.label),
     ["Controlled", "90s rest", "AMRAP", "RPE 8"],
   );
+  assert.equal(chips[4].key, "note");
+  assert.equal(chips[4].icon, "note");
 });
 
 test("the Set Type chip carries a stable key and a spoken aria label", () => {
@@ -225,6 +266,14 @@ test("auto-expand is true when any advanced field is non-default", () => {
   assert.equal(shouldAutoExpand({ tempo: null, restSeconds: 0 }), true);
   assert.equal(shouldAutoExpand({ setType: "warm_up" }), true);
   assert.equal(shouldAutoExpand({ targetEffort: { scale: "rir", value: 2 } }), true);
+  assert.equal(shouldAutoExpand({ note: "Pause on the chest" }), true);
+});
+
+test("auto-expand ignores a blank or absent Note", () => {
+  // A cue-less movement has nothing to reveal, so the card opens collapsed.
+  assert.equal(shouldAutoExpand({ note: "" }), false);
+  assert.equal(shouldAutoExpand({ note: "   " }), false);
+  assert.equal(shouldAutoExpand({ note: null }), false);
 });
 
 test("auto-expand ignores an unset Target Effort", () => {

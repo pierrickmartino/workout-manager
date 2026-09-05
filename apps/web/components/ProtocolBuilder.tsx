@@ -259,6 +259,14 @@ export function ProtocolBuilder({
               targetEffort,
             })
           }
+          onSetNote={(position, note) =>
+            dispatch({
+              type: "SET_NOTE",
+              sessionId: selectedSession.sessionId,
+              position,
+              note,
+            })
+          }
           onSetQuantity={(position, quantityKind, quantityUnit) =>
             dispatch({
               type: "SET_QUANTITY",
@@ -691,6 +699,7 @@ interface SessionEditorProps {
   onSetScheme: (position: number, scheme: string | null) => void;
   onSetSetType: (position: number, setType: string | null) => void;
   onSetTargetEffort: (position: number, targetEffort: Effort | null) => void;
+  onSetNote: (position: number, note: string | null) => void;
   onSetQuantity: (
     position: number,
     quantityKind: QuantityKind,
@@ -719,6 +728,7 @@ function SessionEditor({
   onSetScheme,
   onSetSetType,
   onSetTargetEffort,
+  onSetNote,
   onSetQuantity,
   onAdd,
   onRemove,
@@ -778,6 +788,7 @@ function SessionEditor({
         onSetScheme={onSetScheme}
         onSetSetType={onSetSetType}
         onSetTargetEffort={onSetTargetEffort}
+        onSetNote={onSetNote}
         onSetQuantity={onSetQuantity}
         onEditRoundRest={onEditRoundRest}
         onReorder={onReorder}

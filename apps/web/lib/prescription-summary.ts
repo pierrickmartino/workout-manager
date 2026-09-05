@@ -7,9 +7,10 @@
 // It is a **read-time projection**: it stores nothing and touches no record — the same species as
 // Tempo's three-state label and the Scheme Preview. At this slice the advanced fields present are
 // **Tempo** (rendered as its three-state label, raw code as fallback), **Rest** (`90s rest`),
-// **Set Type** (its label, shown only when the type is not the working default, #466), and
-// **Target Effort** (its typed chip — `RPE 8` / `2 RIR`, #467). A later slice extends this same
-// seam with the Exercise Note; the chip order here is the order they render.
+// **Set Type** (its label, shown only when the type is not the working default, #466),
+// **Target Effort** (its typed chip — `RPE 8` / `2 RIR`, #467), and the **Exercise Note** (a note
+// **icon**, never a text preview — its presence, not its text, #468). The chip order here is the
+// order they render.
 //
 // The **Progression Scheme** is deliberately not part of the summary — its Scheme Preview sentence
 // stands on its own line whether the card is collapsed or open (CONTEXT: Prescription Summary), so
@@ -21,16 +22,26 @@
 // without a browser.
 
 import { formatEffort, type Effort } from "./effort.ts";
+import { noteText } from "./note-view.ts";
 import { setTypeBadge } from "./set-type-view.ts";
 import { toTempoView } from "./tempo-view.ts";
 
+// The distinguishing mark a chip can render instead of text. Most chips read as a compact label
+// (`Controlled`, `90s rest`); the Exercise Note reads as an **icon only** — its presence matters
+// but its text would compete with the exercise name (CONTEXT: Prescription Summary), so the chip
+// names an icon and carries no preview of the cue. Extend the union as more icon chips appear.
+export type PrescriptionSummaryChipIcon = "note";
+
 // One compact chip in a collapsed card's Prescription Summary. `key` is a stable React key (also
 // the field's identity); `label` is the visible text; `ariaLabel` is the fuller, spoken form so a
-// screen-reader user hears the same signal a sighted reader sees.
+// screen-reader user hears the same signal a sighted reader sees. `icon`, when present, tells the
+// renderer to show that icon in place of the label text — the `label` stays as the icon's terse
+// fallback and never leaks the underlying value (e.g. the note's text).
 export interface PrescriptionSummaryChip {
   key: string;
   label: string;
   ariaLabel: string;
+  icon?: PrescriptionSummaryChipIcon;
 }
 
 // The advanced fields a Prescription carries at this slice. Each is optional and nullable: a
@@ -46,6 +57,10 @@ export interface PrescriptionAdvancedFields {
   // for no target. A set target reads as a scale-faithful chip (`RPE 8` / `2 RIR`); an unset one
   // is the quiet default and summarizes to no chip.
   targetEffort?: Effort | null;
+  // The Exercise Note (ADR-0065): the plan-side coaching cue, as its raw or stored (escaped)
+  // string, or null/absent for no cue. A present note earns a note **icon** chip (never a text
+  // preview, #468); a blank/whitespace-only/absent value is "no note" and summarizes to nothing.
+  note?: string | null;
 }
 
 // Parse a Rest display string — blank for unset, else a seconds count — back to the number the
@@ -117,9 +132,28 @@ function targetEffortChip(
   return { key: "target-effort", label, ariaLabel: `Target effort ${label}` };
 }
 
+// The Exercise Note chip, or null when the movement carries no cue — an **icon**, never a text
+// preview (#468, user story 19): a present note shows a small note icon so the cue's presence is
+// visible without a second block of text competing with the exercise name (CONTEXT: Prescription
+// Summary). Presence is decided by `noteText` — the exact same "is there a note" rule the note
+// views share — so the chip appears precisely when the note renders elsewhere, and a stored
+// (escaped) note reads as present just as a freshly-typed one does. The `label` is a terse
+// fallback for a renderer that can't draw the icon; it deliberately does not carry the note text.
+function noteChip(note: string | null | undefined): PrescriptionSummaryChip | null {
+  if (noteText(note) === null) {
+    return null;
+  }
+  return {
+    key: "note",
+    icon: "note",
+    label: "Note",
+    ariaLabel: "Has a coaching note",
+  };
+}
+
 // The ordered Prescription Summary chips for a Prescription's advanced fields — one per non-default
-// value, in render order (Tempo, Rest, Set Type, then Target Effort). A plain set with all-default
-// fields returns `[]`.
+// value, in render order (Tempo, Rest, Set Type, Target Effort, then the Note icon). A plain set
+// with all-default fields returns `[]`.
 export function prescriptionSummaryChips(
   fields: PrescriptionAdvancedFields,
 ): PrescriptionSummaryChip[] {
@@ -128,6 +162,7 @@ export function prescriptionSummaryChips(
     restChip(fields.restSeconds),
     setTypeChip(fields.setType),
     targetEffortChip(fields.targetEffort),
+    noteChip(fields.note),
   ].filter((chip): chip is PrescriptionSummaryChip => chip !== null);
 }
 

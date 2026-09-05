@@ -703,9 +703,9 @@ function ExerciseCard({
 
       {/* The authored plan — the one shared, presentation-only field stack every authoring
           surface now renders (ADR-0067, #464): Quantity, sets, target, rest, tempo, the shared
-          Set Type control (#466), and a typed Load. The Hand-Authored form's own remaining
-          advanced fields — the Exercise Note and the Target Effort — ride in the `advanced` slot,
-          keeping their existing behavior until the progressive-disclosure slice formalizes them. */}
+          Set Type control (#466), the Target Effort (#467), the Exercise Note (#468), and a typed
+          Load. Every advanced field the Hand-Authored form once rendered itself is now a
+          first-class prop of the stack, so the form passes no `advanced` slot. */}
       <PrescriptionFieldStack
         exerciseName={row.exerciseName}
         weightUnit={unit}
@@ -718,15 +718,12 @@ function ExerciseCard({
         setType={row.setType}
         targetEffortScale={row.targetEffortScale}
         targetEffortValue={row.targetEffortValue}
+        note={row.note}
         loadKind={row.loadKind}
         loadValue={row.loadValue}
         // A grouped member rests once per round at the group level, so its own rest is dormant
         // while grouped — hidden here and restored on ungroup (ADR-0023).
         showRest={slot.group === null}
-        // The advanced slot below holds only the Note now (Target Effort is a first-class field
-        // with its own summary chip, #467); when the Note carries a value the card must open
-        // expanded so that (not-yet-a-chip) field isn't hidden behind More on first view (#465).
-        advancedNonDefault={row.note.trim() !== ""}
         onChangeKind={(kind) =>
           // Picking Duration/Distance re-defaults the plan's Load kind for that Quantity
           // (bodyweight for a hold or a run, absolute for reps) — still overridable below.
@@ -744,22 +741,13 @@ function ExerciseCard({
         onChangeTargetEffort={(scale, value) =>
           onChange({ targetEffortScale: scale, targetEffortValue: value })
         }
+        // Exercise Note (ADR-0065, #468): now a first-class field in the shared stack. The row
+        // holds the raw text; a blank value authors no note and the backend length-caps and
+        // HTML-escapes it at the write boundary. A present note shows a summary icon and opens
+        // the card via the #465 predicate.
+        onChangeNote={(value) => onChange({ note: value })}
         onChangeLoadKind={(value) => onChange({ loadKind: value })}
         onChangeLoadValue={(value) => onChange({ loadValue: value })}
-        advanced={
-          <div className="grid grid-cols-2 gap-2.5">
-            {/* Exercise Note (ADR-0065, #451): an optional plan-side coaching cue, edited as raw
-                text — the backend length-caps and HTML-escapes it at the write boundary. */}
-            <FieldLabel label="Note">
-              <Input
-                value={row.note}
-                placeholder="Optional cue (e.g. pause on the chest)"
-                onChange={(event) => onChange({ note: event.target.value })}
-                aria-label={`Note for ${row.exerciseName}`}
-              />
-            </FieldLabel>
-          </div>
-        }
       />
 
       {/* The record: what was actually performed, set by set. Hidden in plan-only mode

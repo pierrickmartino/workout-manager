@@ -9,6 +9,7 @@
 
 import type { Effort, EffortScale } from "./effort";
 import { loadToFields, loadValueToKg, type Load, type LoadKind } from "./load.ts";
+import { noteText } from "./note-view.ts";
 import {
   REPETITIONS_KIND,
   distanceUnitFromText,
@@ -73,7 +74,10 @@ export interface DraftPrescription {
   //   - `setType`: the stored `SetType` value (warm-up / working / drop / failure / AMRAP),
   //     or `null` for "unset" (reads as working).
   //   - `targetEffort`: the typed prescribed Effort (`{scale, value}`), or `null` for no target.
-  //   - `note`: the Exercise Note coaching cue (stored HTML-escaped), or `null` for no note.
+  //   - `note`: the Exercise Note coaching cue, held **decoded** (the text the user reads and
+  //     edits), or `null` for no note. `initBuilderDraft` decodes the stored (HTML-escaped)
+  //     value once; the write boundary (`parse_note`, ADR-0065) re-escapes it on DEPLOY, so the
+  //     round-trip is idempotent — an editable cue, never a growing chain of `&amp;amp;` (#468).
   setType: string | null;
   targetEffort: Effort | null;
   note: string | null;
@@ -173,6 +177,16 @@ export type BuilderEvent =
       sessionId: number;
       position: number;
       targetEffort: Effort | null;
+    }
+  | {
+      // Set (or clear, with `null`) the Exercise Note on the Prescription at `position`
+      // (ADR-0065, #468) — the plan-side coaching cue. The draft carries the raw text and the
+      // deploy boundary length-caps + HTML-escapes it (ADR-0065); a blank/cleared note is stored
+      // as `null`. Descriptive only, carried through DEPLOY untouched (#463).
+      type: "SET_NOTE";
+      sessionId: number;
+      position: number;
+      note: string | null;
     }
   | {
       // Pick the typed Quantity kind + unit on the Prescription at `position` (ADR-0050, #464)
@@ -349,7 +363,10 @@ export function initBuilderDraft(
           scheme: prescription.scheme ?? null,
           setType: prescription.set_type ?? null,
           targetEffort: prescription.target_effort ?? null,
-          note: prescription.note ?? null,
+          // Decode the stored (HTML-escaped) Exercise Note into the text the user reads and
+          // edits (#468); the DEPLOY write boundary re-escapes it once, so the note round-trips
+          // idempotently. `noteText` also normalizes blank/absent to `null` ("no note").
+          note: noteText(prescription.note),
         };
       }),
     })),
@@ -393,6 +410,12 @@ export function builderReducer(
       return mapPrescription(state, event.sessionId, event.position, (prescription) => ({
         ...prescription,
         targetEffort: event.targetEffort,
+      }));
+
+    case "SET_NOTE":
+      return mapPrescription(state, event.sessionId, event.position, (prescription) => ({
+        ...prescription,
+        note: event.note,
       }));
 
     case "SET_QUANTITY":
