@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  ChevronDown,
   GripVertical,
   Link2,
   Unlink,
@@ -37,6 +38,10 @@ import {
   currentScheme,
 } from "@/lib/scheme-view";
 import { schemePreviewForInput } from "@/lib/scheme-preview";
+import {
+  shouldAutoExpandSuperset,
+  supersetSummaryChips,
+} from "@/lib/prescription-summary";
 import { planSetType } from "@/lib/set-type-view";
 import { targetEffortFromInput } from "@/lib/target-effort-view";
 import { DEFAULT_EFFORT_SCALE, type Effort } from "@/lib/effort";
@@ -59,6 +64,7 @@ import type {
 } from "@/lib/protocol-builder";
 import { cn } from "@/lib/utils";
 import { PrescriptionFieldStack } from "@/components/prescription/PrescriptionFieldStack";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -512,6 +518,14 @@ interface SupersetContainerProps {
 // badge stays inside each member row; the group's single round-rest field lives on the
 // container (not on whichever member lands last), so rest belongs to the group.
 //
+// The container mirrors the members' progressive disclosure (#469): the group round-rest lives
+// inside its own **More** drawer, and when the drawer is collapsed a `round rest 90s` chip stands
+// in for it (the container twin of a member's Prescription Summary — never a member's `90s rest`).
+// The drawer auto-expands when a round-rest is set so the field is visible on first view, and its
+// open/closed state is ephemeral (per-render React state), exactly like the field stack's. The
+// disclosure is a standard button/region pair so keyboard and screen-reader users operate and hear
+// it, matching the Builder's accessibility floor (ADR-0027).
+//
 // The container box is itself the group's join drop target (`box-<group>`, #218):
 // releasing a dragged Prescription inside the box adds it to this Superset via the
 // self-healing resolver. The box lights up while it is the live drop target — except
@@ -548,6 +562,17 @@ function SupersetContainer({
   // name the drag microcopy speaks, so the round-rest control and the drag announcements
   // refer to the group the same way instead of leaking its internal tag.
   const groupLetter = supersetGroupLetter(prescriptions, group);
+  // The container's ephemeral More/Less state (#469), the exact species as the field stack's:
+  // seeded once so a group with a round-rest opens expanded (nothing meaningful hidden on first
+  // view) and an empty one opens collapsed, then freely toggled. It never persists — a fresh
+  // render re-seeds off the current round-rest. When collapsed, the round-rest chip stands in for
+  // the hidden field.
+  const roundRestSeconds = firstSlot.roundRestSeconds;
+  const summaryChips = supersetSummaryChips({ roundRestSeconds });
+  const [open, setOpen] = useState<boolean>(() =>
+    shouldAutoExpandSuperset({ roundRestSeconds }),
+  );
+  const contentId = useId();
   // The box registers as the group's join drop target; whether it *lights* is decided by
   // the shared feedback classifier (`joinActive`), not the raw hover — so a co-member
   // dropped back on its own box (a resolver no-op) never promises a join (#218/#219).
@@ -616,24 +641,64 @@ function SupersetContainer({
           ))}
         </ul>
 
-        {/* One group-owned round-rest field for the whole Superset — the round rests
-            once at the boundary, after every member (ADR-0023). The edit applies to
-            every member regardless of which position carries it. */}
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-cyan">Round rest (sec)</span>
-          <Input
-            type="number"
-            min={0}
-            value={firstSlot.roundRestSeconds ?? ""}
-            aria-label={`Round rest for superset ${groupLetter}`}
-            onChange={(e) =>
-              onEditRoundRest(
-                firstPosition,
-                e.target.value === "" ? null : toIntOrZero(e.target.value),
-              )
-            }
+        {/* The container's Prescription Summary (#469): a `round rest 90s` chip standing in for
+            the round-rest field while the More drawer is collapsed, so the group's boundary rest
+            reads at a glance without opening the drawer. A group with no round-rest set shows
+            nothing here. */}
+        {!open && summaryChips.length > 0 ? (
+          <ul
+            className="flex flex-wrap gap-1.5"
+            aria-label={`Superset ${groupLetter} summary`}
+          >
+            {summaryChips.map((chip) => (
+              <li key={chip.key}>
+                <Badge variant="outline" aria-label={chip.ariaLabel}>
+                  {chip.label}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        {/* The More disclosure — a button/region pair (aria-expanded + aria-controls) so
+            keyboard and screen-reader users operate and hear it (ADR-0027), mirroring the
+            members'. The accessible name leads with the visible "More"/"Less" word (WCAG 2.5.3)
+            and names the superset so one group's control is distinguishable from the next. */}
+        <button
+          type="button"
+          onClick={() => setOpen((wasOpen) => !wasOpen)}
+          aria-expanded={open}
+          aria-controls={contentId}
+          aria-label={`${open ? "Less" : "More"} — round rest for superset ${groupLetter}`}
+          className="label-mono flex items-center gap-1 self-start rounded-sm text-[10px] text-cyan transition-colors hover:text-text-primary"
+        >
+          <ChevronDown
+            className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")}
+            aria-hidden
           />
-        </label>
+          {open ? "Less" : "More"}
+        </button>
+
+        {/* One group-owned round-rest field for the whole Superset — the round rests
+            once at the boundary, after every member (ADR-0023). Held inside the More drawer
+            (#469); the edit applies to every member regardless of which position carries it. */}
+        <div id={contentId} hidden={!open}>
+          <label className="flex flex-col gap-1.5">
+            <span className="label-mono text-[9px] text-cyan">Round rest (sec)</span>
+            <Input
+              type="number"
+              min={0}
+              value={roundRestSeconds ?? ""}
+              aria-label={`Round rest for superset ${groupLetter}`}
+              onChange={(e) =>
+                onEditRoundRest(
+                  firstPosition,
+                  e.target.value === "" ? null : toIntOrZero(e.target.value),
+                )
+              }
+            />
+          </label>
+        </div>
       </div>
     </li>
   );

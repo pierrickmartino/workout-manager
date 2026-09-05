@@ -5,6 +5,8 @@ import {
   prescriptionSummaryChips,
   restSecondsFromInput,
   shouldAutoExpand,
+  shouldAutoExpandSuperset,
+  supersetSummaryChips,
 } from "./prescription-summary.ts";
 
 // `prescription-summary` is the Prescription Summary read-time projection (CONTEXT: Prescription
@@ -308,4 +310,78 @@ test("restSecondsFromInput keeps a deliberate zero rest", () => {
 
 test("restSecondsFromInput reads a non-numeric string as unset", () => {
   assert.equal(restSecondsFromInput("abc"), null);
+});
+
+// --- Superset container summary (ADR-0023, #469). Rest is group-owned: the round rests once at
+// the boundary, so a grouped member's summary never carries a rest chip — the round-rest is
+// summarized on the Superset *container* instead, reading `round rest 90s` (distinct from a solo
+// movement's `90s rest`). These assert the container-vs-member rest rule at the view-model seam.
+
+test("a set round-rest renders a `round rest 90s` chip on the container", () => {
+  // Arrange
+  const fields = { roundRestSeconds: 90 };
+
+  // Act
+  const chips = supersetSummaryChips(fields);
+
+  // Assert
+  assert.equal(chips.length, 1);
+  assert.equal(chips[0].key, "round-rest");
+  assert.equal(chips[0].label, "round rest 90s");
+});
+
+test("a zero-second round-rest is a deliberate value and still renders a chip", () => {
+  const chips = supersetSummaryChips({ roundRestSeconds: 0 });
+
+  assert.equal(chips.length, 1);
+  assert.equal(chips[0].label, "round rest 0s");
+});
+
+test("an unset round-rest shows no chip on the container", () => {
+  // Null, undefined, or omitted all read as "no round-rest set" → no chip.
+  assert.deepEqual(supersetSummaryChips({ roundRestSeconds: null }), []);
+  assert.deepEqual(supersetSummaryChips({ roundRestSeconds: undefined }), []);
+  assert.deepEqual(supersetSummaryChips({}), []);
+});
+
+test("the round-rest chip carries a stable key and a spoken aria label", () => {
+  const [chip] = supersetSummaryChips({ roundRestSeconds: 90 });
+
+  assert.equal(chip.key, "round-rest");
+  assert.equal(chip.ariaLabel, "Round rest 90 seconds");
+});
+
+test("the round-rest chip label distinguishes the group's rest from a member's own", () => {
+  // The member rest chip reads `90s rest`; the container round-rest chip reads `round rest 90s`,
+  // so a reader can never mistake the group's boundary rest for a member's per-set rest.
+  const memberRestLabel = prescriptionSummaryChips({ restSeconds: 90 })[0].label;
+  const roundRestLabel = supersetSummaryChips({ roundRestSeconds: 90 })[0].label;
+
+  assert.equal(memberRestLabel, "90s rest");
+  assert.equal(roundRestLabel, "round rest 90s");
+  assert.notEqual(memberRestLabel, roundRestLabel);
+});
+
+test("a grouped member's summary carries no rest chip — rest lives on the container", () => {
+  // The container-vs-member rest rule (ADR-0023): a grouped member's own rest is dormant, so its
+  // surface passes `restSeconds: null` and the member summarizes to nothing; the group's rest is a
+  // round-rest chip on the container instead. Even a member that still carries an own-rest value in
+  // the draft shows no rest chip while grouped (the surface excludes it), so the two never
+  // double-count the same recovery.
+  const groupedMemberChips = prescriptionSummaryChips({ restSeconds: null });
+  const containerChips = supersetSummaryChips({ roundRestSeconds: 90 });
+
+  assert.deepEqual(groupedMemberChips, []);
+  assert.equal(containerChips.length, 1);
+  assert.equal(containerChips[0].key, "round-rest");
+});
+
+test("the container auto-expands only when a round-rest is set", () => {
+  // Mirrors `shouldAutoExpand` for members: a container with a round-rest opens expanded so the
+  // field is visible on first view; an empty one opens collapsed with no chip. A deliberate 0 is a
+  // set value and opens the drawer.
+  assert.equal(shouldAutoExpandSuperset({ roundRestSeconds: 90 }), true);
+  assert.equal(shouldAutoExpandSuperset({ roundRestSeconds: 0 }), true);
+  assert.equal(shouldAutoExpandSuperset({ roundRestSeconds: null }), false);
+  assert.equal(shouldAutoExpandSuperset({}), false);
 });

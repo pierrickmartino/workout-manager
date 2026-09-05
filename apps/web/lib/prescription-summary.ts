@@ -174,3 +174,53 @@ export function prescriptionSummaryChips(
 export function shouldAutoExpand(fields: PrescriptionAdvancedFields): boolean {
   return prescriptionSummaryChips(fields).length > 0;
 }
+
+// --- Superset container summary (ADR-0023, #469). Rest is group-owned: the round rests once at the
+// boundary, after every member, so a grouped member's own rest is dormant and its summary never
+// carries a rest chip. The group's round-rest is summarized on the Superset *container* instead —
+// the container twin of a member's Prescription Summary, with its own chip and auto-expand rule.
+
+// The advanced fields a Superset container carries at this slice (#469). The only value the
+// container summarizes is its round-rest; a member's own rest never appears here (it belongs to the
+// member's summary only once ungrouped).
+export interface SupersetSummaryFields {
+  roundRestSeconds?: number | null;
+}
+
+// The round-rest chip, or null when no round-rest is set. Deliberately distinct from a solo
+// movement's `90s rest` chip: the group's boundary rest reads `round rest 90s` so a reader never
+// mistakes it for a member's per-set rest (CONTEXT: Prescription Summary). Any present, finite
+// value is shown, including a deliberate `0` (no rest between rounds).
+function roundRestChip(
+  roundRestSeconds: number | null | undefined,
+): PrescriptionSummaryChip | null {
+  if (roundRestSeconds == null || !Number.isFinite(roundRestSeconds)) {
+    return null;
+  }
+  return {
+    key: "round-rest",
+    label: `round rest ${roundRestSeconds}s`,
+    ariaLabel: `Round rest ${roundRestSeconds} seconds`,
+  };
+}
+
+// The ordered Prescription Summary chips for a Superset container's advanced fields — the group's
+// round-rest chip when set, else `[]`. The container twin of `prescriptionSummaryChips`: rest is
+// the group's, so it is summarized here rather than on any one member, whose own summary excludes
+// rest while grouped. An array (not a bare chip) so the render layer maps it the same way it maps a
+// member's chips and room stays for any future container-advanced field.
+export function supersetSummaryChips(
+  fields: SupersetSummaryFields,
+): PrescriptionSummaryChip[] {
+  return [roundRestChip(fields.roundRestSeconds)].filter(
+    (chip): chip is PrescriptionSummaryChip => chip !== null,
+  );
+}
+
+// Whether a freshly-rendered Superset container should open expanded: true iff a round-rest is set
+// (i.e. the container summary would carry its chip). Kept in lock-step with `supersetSummaryChips`
+// exactly as `shouldAutoExpand` is with the member chips, so a container opens expanded precisely
+// when it has a round-rest to show and stays collapsed for a group with none.
+export function shouldAutoExpandSuperset(fields: SupersetSummaryFields): boolean {
+  return supersetSummaryChips(fields).length > 0;
+}
