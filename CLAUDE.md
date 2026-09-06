@@ -125,5 +125,10 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   repository, add an endpoint test.
 - New AI generation → go through the LLM port; add a `parse_*` boundary; test
   with the fake LLM.
+- New Exercise Prescription field → add it to the spine in
+  `app/repositories/prescription_mapping.py` (`PrescriptionDraft` + its ORM
+  column) and classify it in the authorship partition; every persistence mapper
+  routes through the one manifest, and `tests/test_prescription_spine.py` fails
+  if a projection or the partition forgets it (ADR-0069).
 - Frontend logic → put it in `apps/web/lib/` as a view-model with a `*.test.ts`,
   keep components thin.
