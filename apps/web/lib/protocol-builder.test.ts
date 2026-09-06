@@ -16,6 +16,7 @@ import {
   chipDropId,
   boxDropId,
   quantityToDraftFields,
+  sessionMoveOptions,
 } from "./protocol-builder.ts";
 import type { BuilderDraft, DraftPrescription } from "./protocol-builder.ts";
 import type { ProtocolProgress } from "./protocols-types.ts";
@@ -1088,6 +1089,263 @@ test("REMOVE_SESSION is a no-op on a performed Session (frozen prefix)", () => {
     next.sessions.map((s) => s.sessionId),
     [1, 2],
   );
+});
+
+// --- MOVE_SESSION: tail-only Session reordering (ADR-0068) ---------------------
+// A Session is repositioned within a Week or across Week boundaries by rewriting
+// its (week, day); the backend re-enumerates positions from those. Only un-performed
+// Sessions move, and a performed Session's (week, day) is never touched. `toIndex`
+// is the target slot among the destination Week's *un-performed* Sessions.
+
+// Read one Session's (week, day) out of a draft by id — a small test convenience.
+function slotOf(draft: BuilderDraft, sessionId: number): { week: number; day: number } {
+  const found = draft.sessions.find((s) => s.sessionId === sessionId);
+  assert.ok(found, `session ${sessionId} present`);
+  return { week: found.week, day: found.day };
+}
+
+// A three-Session week-1 draft (A=1, B=2, C=3), all un-performed, over a 2-week header.
+function threeInWeekOne(): BuilderDraft {
+  return initBuilderDraft(
+    protocol({
+      weeks: 2,
+      sessions_per_week: 3,
+      sessions: [
+        session({ session_id: 1, week: 1, day: 1 }),
+        session({ session_id: 2, week: 1, day: 2 }),
+        session({ session_id: 3, week: 1, day: 3 }),
+      ],
+    }),
+  );
+}
+
+test("MOVE_SESSION reorders a Session later within its Week (move down)", () => {
+  // Arrange — week 1 holds A(1), B(2), C(3)
+  const draft = threeInWeekOne();
+
+  // Act — move A to the second slot
+  const next = builderReducer(draft, {
+    type: "MOVE_SESSION",
+    sessionId: 1,
+    toWeek: 1,
+    toIndex: 1,
+  });
+
+  // Assert — order becomes B, A, C with contiguous days
+  assert.deepEqual(slotOf(next, 2), { week: 1, day: 1 });
+  assert.deepEqual(slotOf(next, 1), { week: 1, day: 2 });
+  assert.deepEqual(slotOf(next, 3), { week: 1, day: 3 });
+});
+
+test("MOVE_SESSION reorders a Session earlier within its Week (move up)", () => {
+  // Arrange — week 1 holds A(1), B(2), C(3)
+  const draft = threeInWeekOne();
+
+  // Act — move C to the first slot
+  const next = builderReducer(draft, {
+    type: "MOVE_SESSION",
+    sessionId: 3,
+    toWeek: 1,
+    toIndex: 0,
+  });
+
+  // Assert — order becomes C, A, B
+  assert.deepEqual(slotOf(next, 3), { week: 1, day: 1 });
+  assert.deepEqual(slotOf(next, 1), { week: 1, day: 2 });
+  assert.deepEqual(slotOf(next, 2), { week: 1, day: 3 });
+});
+
+test("MOVE_SESSION moves a Session across a Week boundary, re-packing both Weeks", () => {
+  // Arrange — week 1: A(1), B(2); week 2: C(1)
+  const draft = initBuilderDraft(
+    protocol({
+      weeks: 2,
+      sessions_per_week: 2,
+      sessions: [
+        session({ session_id: 1, week: 1, day: 1 }),
+        session({ session_id: 2, week: 1, day: 2 }),
+        session({ session_id: 3, week: 2, day: 1 }),
+      ],
+    }),
+  );
+
+  // Act — move B to the front of week 2
+  const next = builderReducer(draft, {
+    type: "MOVE_SESSION",
+    sessionId: 2,
+    toWeek: 2,
+    toIndex: 0,
+  });
+
+  // Assert — B leaves week 1 (A re-packs to day 1); B leads week 2 ahead of C
+  assert.deepEqual(slotOf(next, 1), { week: 1, day: 1 });
+  assert.deepEqual(slotOf(next, 2), { week: 2, day: 1 });
+  assert.deepEqual(slotOf(next, 3), { week: 2, day: 2 });
+});
+
+test("MOVE_SESSION into a straddling Week lands after the frozen performed Sessions", () => {
+  // Arrange — week 1 holds a performed Session (day 1); week 2 holds an un-performed one
+  const draft = initBuilderDraft(
+    protocol({
+      weeks: 2,
+      sessions_per_week: 1,
+      sessions: [
+        session({ session_id: 1, week: 1, day: 1, performed: true }),
+        session({ session_id: 2, week: 2, day: 1, performed: false }),
+      ],
+    }),
+  );
+
+  // Act — pull the un-performed Session up into week 1, slot 0
+  const next = builderReducer(draft, {
+    type: "MOVE_SESSION",
+    sessionId: 2,
+    toWeek: 1,
+    toIndex: 0,
+  });
+
+  // Assert — the performed Session keeps (1,1); the un-performed one lands at day 2, never before it
+  assert.deepEqual(slotOf(next, 1), { week: 1, day: 1 });
+  assert.deepEqual(slotOf(next, 2), { week: 1, day: 2 });
+});
+
+test("MOVE_SESSION is a no-op on a performed Session (frozen prefix)", () => {
+  // Arrange — Session 1 is performed
+  const draft = initBuilderDraft(
+    protocol({
+      weeks: 2,
+      sessions_per_week: 1,
+      sessions: [
+        session({ session_id: 1, week: 1, day: 1, performed: true }),
+        session({ session_id: 2, week: 2, day: 1, performed: false }),
+      ],
+    }),
+  );
+
+  // Act — try to move the frozen Session
+  const next = builderReducer(draft, {
+    type: "MOVE_SESSION",
+    sessionId: 1,
+    toWeek: 2,
+    toIndex: 0,
+  });
+
+  // Assert — nothing moves
+  assert.deepEqual(slotOf(next, 1), { week: 1, day: 1 });
+  assert.deepEqual(slotOf(next, 2), { week: 2, day: 1 });
+});
+
+test("MOVE_SESSION is a no-op for an unknown Session id", () => {
+  const draft = threeInWeekOne();
+  const next = builderReducer(draft, {
+    type: "MOVE_SESSION",
+    sessionId: 999,
+    toWeek: 2,
+    toIndex: 0,
+  });
+  assert.deepEqual(
+    next.sessions.map((s) => ({ id: s.sessionId, week: s.week, day: s.day })),
+    draft.sessions.map((s) => ({ id: s.sessionId, week: s.week, day: s.day })),
+  );
+});
+
+test("MOVE_SESSION clamps an over-large toIndex to the end of the Week", () => {
+  // Arrange — week 1 holds A(1), B(2), C(3)
+  const draft = threeInWeekOne();
+
+  // Act — move A far past the end
+  const next = builderReducer(draft, {
+    type: "MOVE_SESSION",
+    sessionId: 1,
+    toWeek: 1,
+    toIndex: 99,
+  });
+
+  // Assert — A lands last
+  assert.deepEqual(slotOf(next, 2), { week: 1, day: 1 });
+  assert.deepEqual(slotOf(next, 3), { week: 1, day: 2 });
+  assert.deepEqual(slotOf(next, 1), { week: 1, day: 3 });
+});
+
+test("MOVE_SESSION carries the new order through DEPLOY", () => {
+  // Arrange — week 1: A(1), B(2)
+  const draft = initBuilderDraft(
+    protocol({
+      weeks: 1,
+      sessions_per_week: 2,
+      sessions: [
+        session({ session_id: 1, week: 1, day: 1 }),
+        session({ session_id: 2, week: 1, day: 2 }),
+      ],
+    }),
+  );
+
+  // Act — swap them, then serialize
+  const swapped = builderReducer(draft, {
+    type: "MOVE_SESSION",
+    sessionId: 1,
+    toWeek: 1,
+    toIndex: 1,
+  });
+  const payload = toDeployPayload(swapped, "kg");
+
+  // Assert — the tail carries B ahead of A by (week, day)
+  const byId = new Map(payload.sessions.map((s) => [s.session_id, s]));
+  assert.deepEqual(
+    { week: byId.get(2)?.week, day: byId.get(2)?.day },
+    { week: 1, day: 1 },
+  );
+  assert.deepEqual(
+    { week: byId.get(1)?.week, day: byId.get(1)?.day },
+    { week: 1, day: 2 },
+  );
+});
+
+test("sessionMoveOptions reports the legal moves for an un-performed Session", () => {
+  // Arrange — week 1: A(1), B(2); week 2: C(1); a 2-week header
+  const draft = initBuilderDraft(
+    protocol({
+      weeks: 2,
+      sessions_per_week: 2,
+      sessions: [
+        session({ session_id: 1, week: 1, day: 1 }),
+        session({ session_id: 2, week: 1, day: 2 }),
+        session({ session_id: 3, week: 2, day: 1 }),
+      ],
+    }),
+  );
+
+  // Act
+  const first = sessionMoveOptions(draft, 1);
+  const second = sessionMoveOptions(draft, 2);
+
+  // Assert — A is first in week 1 (can go down + to the next week, not up / prev week)
+  assert.deepEqual(first, {
+    week: 1,
+    index: 0,
+    canMoveUp: false,
+    canMoveDown: true,
+    canMoveToPrevWeek: false,
+    canMoveToNextWeek: true,
+  });
+  // B is last in week 1 (can go up + across weeks either way)
+  assert.deepEqual(second, {
+    week: 1,
+    index: 1,
+    canMoveUp: true,
+    canMoveDown: false,
+    canMoveToPrevWeek: false,
+    canMoveToNextWeek: true,
+  });
+});
+
+test("sessionMoveOptions returns null for a performed Session", () => {
+  const draft = initBuilderDraft(
+    protocol({
+      sessions: [session({ session_id: 1, week: 1, day: 1, performed: true })],
+    }),
+  );
+  assert.equal(sessionMoveOptions(draft, 1), null);
 });
 
 test("a newly-added Session deploys with a null session_id for the server to insert", () => {
