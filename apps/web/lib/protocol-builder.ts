@@ -36,6 +36,13 @@ import {
 export { supersetLayout } from "./supersets.ts";
 export type { SupersetSlot } from "./supersets.ts";
 
+// Tail-only Session reordering lives in its own cohesive module (ADR-0068); the reducer
+// applies `moveSession`, and `sessionMoveOptions` is re-exported so components keep
+// importing the Builder's view-models from `protocol-builder` unchanged.
+import { moveSession } from "./session-move.ts";
+export { sessionMoveOptions } from "./session-move.ts";
+export type { SessionMoveOptions } from "./session-move.ts";
+
 // One Prescription in the draft. `loadKind`/`loadValue` mirror the log form's Load
 // kind-picker (ADR-0010) so building and logging speak one Load language; they are
 // what the deploy payload carries and the server resolves through `load_from_input`.
@@ -260,6 +267,17 @@ export type BuilderEvent =
       sessionId: number;
     }
   | {
+      // Reposition an un-performed Session within a Week or across Week boundaries
+      // (ADR-0068), tail-only: a performed Session never moves and its (week, day) is
+      // never touched. `toIndex` is the target slot among the *destination* Week's
+      // un-performed Sessions (0-based), clamped to that Week's bounds; the backend
+      // re-enumerates positions from the rewritten (week, day) (`reenumerate_tail`).
+      type: "MOVE_SESSION";
+      sessionId: number;
+      toWeek: number;
+      toIndex: number;
+    }
+  | {
       type: "SET_WEEKS";
       weeks: number;
     }
@@ -477,6 +495,17 @@ export function builderReducer(
         ...state,
         sessions: state.sessions.filter(
           (session) => session.sessionId !== event.sessionId || session.performed,
+        ),
+      };
+
+    case "MOVE_SESSION":
+      return {
+        ...state,
+        sessions: moveSession(
+          state.sessions,
+          event.sessionId,
+          event.toWeek,
+          event.toIndex,
         ),
       };
 
