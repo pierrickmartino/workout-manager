@@ -23,7 +23,7 @@ from collections.abc import Sequence
 from app.domain.exercise import Provenance
 from app.generation.schema import GeneratedExercisePrescription
 from app.repositories.exercise_repository import ExerciseRepository
-from app.repositories.session_repository import PrescriptionDraft
+from app.repositories.prescription_mapping import PrescriptionDraft
 
 
 def resolve_prescriptions(

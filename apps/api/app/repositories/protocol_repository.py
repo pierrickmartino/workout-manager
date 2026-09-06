@@ -21,10 +21,11 @@ _KEEP_NAME: Any = object()
 
 from app.db.models import Exercise, ExercisePrescription, Protocol, WorkoutSession
 from app.repositories.exercise_repository import ExerciseRepository
-from app.repositories.session_repository import (
+from app.repositories.prescription_mapping import (
     PrescriptionDraft,
     PrescriptionView,
-    _prescription_view,
+    row_from_draft,
+    view_from_row,
 )
 
 
@@ -164,7 +165,7 @@ class SqlProtocolRepository:
             .order_by(ExercisePrescription.position)
         ).all()
         views = [
-            _prescription_view(p, self._session.get(Exercise, p.exercise_id))
+            view_from_row(p, self._session.get(Exercise, p.exercise_id))
             for p in prescriptions
         ]
         return ProtocolSessionView(
@@ -233,22 +234,8 @@ class SqlProtocolRepository:
 
             for p_position, prescription in enumerate(session_draft.prescriptions):
                 self._session.add(
-                    ExercisePrescription(
-                        session_id=workout.id,
-                        exercise_id=prescription.exercise_id,
-                        position=p_position,
-                        sets=prescription.sets,
-                        reps=prescription.reps,
-                        rest_seconds=prescription.rest_seconds,
-                        tempo=prescription.tempo,
-                        recommended_load=prescription.recommended_load,
-                        prescribed_quantity=prescription.prescribed_quantity,
-                        superset_group=prescription.superset_group,
-                        round_rest_seconds=prescription.round_rest_seconds,
-                        scheme=prescription.scheme,
-                        set_type=prescription.set_type,
-                        target_effort=prescription.target_effort,
-                        note=prescription.note,
+                    row_from_draft(
+                        prescription, session_id=workout.id, position=p_position
                     )
                 )
             self._session.commit()
@@ -334,22 +321,8 @@ class SqlProtocolRepository:
             self._session.flush()  # assign the new Session id without committing
             for position, draft in enumerate(spec.prescriptions):
                 self._session.add(
-                    ExercisePrescription(
-                        session_id=workout.id,
-                        exercise_id=draft.exercise_id,
-                        position=position,
-                        sets=draft.sets,
-                        reps=draft.reps,
-                        rest_seconds=draft.rest_seconds,
-                        tempo=draft.tempo,
-                        recommended_load=draft.recommended_load,
-                        prescribed_quantity=draft.prescribed_quantity,
-                        superset_group=draft.superset_group,
-                        round_rest_seconds=draft.round_rest_seconds,
-                        scheme=draft.scheme,
-                        set_type=draft.set_type,
-                        target_effort=draft.target_effort,
-                        note=draft.note,
+                    row_from_draft(
+                        draft, session_id=workout.id, position=position
                     )
                 )
         self._session.commit()
@@ -370,7 +343,7 @@ class InMemoryProtocolRepository:
             self._prescriptions.get(workout.id, []), key=lambda p: p.position
         )
         views = [
-            _prescription_view(p, self._exercises.get(p.exercise_id))
+            view_from_row(p, self._exercises.get(p.exercise_id))
             for p in prescriptions
         ]
         return ProtocolSessionView(
@@ -435,27 +408,15 @@ class InMemoryProtocolRepository:
             )
             self._next_session_id += 1
             self._sessions[protocol.id].append(workout)
-            self._prescriptions[workout.id] = [
-                ExercisePrescription(
-                    id=p_position + 1,
-                    session_id=workout.id,
-                    exercise_id=prescription.exercise_id,
-                    position=p_position,
-                    sets=prescription.sets,
-                    reps=prescription.reps,
-                    rest_seconds=prescription.rest_seconds,
-                    tempo=prescription.tempo,
-                    recommended_load=prescription.recommended_load,
-                    prescribed_quantity=prescription.prescribed_quantity,
-                    superset_group=prescription.superset_group,
-                    round_rest_seconds=prescription.round_rest_seconds,
-                    scheme=prescription.scheme,
-                    set_type=prescription.set_type,
-                    target_effort=prescription.target_effort,
-                    note=prescription.note,
+            rows: list[ExercisePrescription] = []
+            for p_position, prescription in enumerate(session_draft.prescriptions):
+                row = row_from_draft(
+                    prescription, session_id=workout.id, position=p_position
                 )
-                for p_position, prescription in enumerate(session_draft.prescriptions)
-            ]
+                # The in-memory store assigns row ids the SQL adapter leaves to the DB.
+                row.id = p_position + 1
+                rows.append(row)
+            self._prescriptions[workout.id] = rows
         return self._view(protocol)
 
     def get(self, protocol_id: int, clerk_user_id: str) -> ProtocolView | None:
@@ -526,27 +487,15 @@ class InMemoryProtocolRepository:
             )
             self._next_session_id += 1
             kept.append(workout)
-            self._prescriptions[workout.id] = [
-                ExercisePrescription(
-                    id=position + 1,
-                    session_id=workout.id,
-                    exercise_id=draft.exercise_id,
-                    position=position,
-                    sets=draft.sets,
-                    reps=draft.reps,
-                    rest_seconds=draft.rest_seconds,
-                    tempo=draft.tempo,
-                    recommended_load=draft.recommended_load,
-                    prescribed_quantity=draft.prescribed_quantity,
-                    superset_group=draft.superset_group,
-                    round_rest_seconds=draft.round_rest_seconds,
-                    scheme=draft.scheme,
-                    set_type=draft.set_type,
-                    target_effort=draft.target_effort,
-                    note=draft.note,
+            rows: list[ExercisePrescription] = []
+            for position, draft in enumerate(spec.prescriptions):
+                row = row_from_draft(
+                    draft, session_id=workout.id, position=position
                 )
-                for position, draft in enumerate(spec.prescriptions)
-            ]
+                # The in-memory store assigns row ids the SQL adapter leaves to the DB.
+                row.id = position + 1
+                rows.append(row)
+            self._prescriptions[workout.id] = rows
 
         self._sessions[protocol_id] = kept
         return self._view(protocol)

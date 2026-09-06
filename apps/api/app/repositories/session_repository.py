@@ -31,52 +31,18 @@ from app.repositories.favorite_repository import (
     InMemoryFavoriteRepository,
     SqlFavoriteRepository,
 )
+from app.repositories.prescription_mapping import (
+    PrescriptionDraft,
+    PrescriptionView,
+    draft_from_row,
+    evolve_prescription_row,
+    row_from_draft,
+    view_from_row,
+)
 from app.repositories.profile_repository import (
     ProfileRepository,
     SqlProfileRepository,
 )
-
-
-@dataclass(frozen=True)
-class PrescriptionDraft:
-    """One Exercise Prescription to persist, referencing a catalog Exercise.
-
-    ``superset_group``/``round_rest_seconds`` overlay Supersets (ADR-0023): both
-    ``None`` for a flat, solo Prescription; members of one Superset share the group
-    tag and carry the group-owned round-rest denormalized onto each member."""
-
-    exercise_id: int
-    sets: int
-    reps: str
-    rest_seconds: int | None = None
-    tempo: str | None = None
-    recommended_load: dict | None = None
-    # Typed Prescribed Quantity (ADR-0050): a stored ``Quantity`` dict, ``None`` for a
-    # prescription that carries no typed amount yet. Additive and carried through create,
-    # Duplicate, and Regeneration so a backfilled cardio target survives a copy.
-    prescribed_quantity: dict | None = None
-    superset_group: str | None = None
-    round_rest_seconds: int | None = None
-    # Progression Scheme selection (ADR-0064, #429): the chosen ``ProgressionScheme``
-    # value, or ``None`` for the default (Double Progression). Carried through
-    # create/Duplicate/Regeneration-keep like the other prescription fields so a chosen
-    # scheme survives a copy of the user's own plan.
-    scheme: str | None = None
-    # Set Type annotation (ADR-0065, #449): the chosen ``SetType`` value, or ``None`` for
-    # "unset" — which reads as ``working``. A descriptive plan property (never a
-    # Progression input) carried through create/Duplicate/Redeem/Share/Substitution like
-    # the other prescription fields, so a tagged movement survives a copy of the plan.
-    set_type: str | None = None
-    # Target Effort (ADR-0066, #454): the *prescribed* Effort dict ("aim for RPE 8"), or ``None``
-    # for "no target". A descriptive plan property (never a Progression input) carried through
-    # create/Duplicate/Redeem/Share/Substitution like the other prescription fields, so a targeted
-    # movement survives a copy of the plan; left unset by Capture.
-    target_effort: dict | None = None
-    # Exercise Note (ADR-0065, #451): the plan-side coaching cue, or ``None`` for "no note".
-    # Already length-capped and HTML-escaped at the write boundary (``app.domain.note``); a
-    # plan property carried through create/Duplicate/Redeem/Share/Substitution like the other
-    # prescription fields, so a movement's cue survives a copy of the plan.
-    note: str | None = None
 
 
 @dataclass(frozen=True)
@@ -96,50 +62,6 @@ class SessionDraft:
     # Call that produced this standalone Session, stamped at creation. ``None`` when no
     # monitoring backend was configured.
     trace_id: str | None = None
-
-
-@dataclass(frozen=True)
-class PrescriptionView:
-    """A prescription joined to its catalog Exercise, ready to serialize."""
-
-    position: int
-    sets: int
-    reps: str
-    rest_seconds: int | None
-    tempo: str | None
-    recommended_load: dict | None
-    # Typed Prescribed Quantity (ADR-0050): the stored ``Quantity`` dict, ``None`` when the
-    # prescription has no typed amount. Surfaced on the read so the session-detail response
-    # carries it to the web client.
-    prescribed_quantity: dict | None
-    superset_group: str | None
-    round_rest_seconds: int | None
-    exercise_id: int
-    exercise_name: str
-    exercise_description: str | None
-    targeted_muscles: list[str]
-    required_equipment: list[str]
-    provenance: str
-    # Progression Scheme selection (ADR-0064, #429): the chosen ``ProgressionScheme``
-    # value, or ``None`` for "no choice" — which the read-time Progression overlay
-    # resolves to the default (Double Progression). Defaulted so the many call sites that
-    # build a view without a scheme keep reading unchanged as the un-chosen default.
-    scheme: str | None = None
-    # Set Type annotation (ADR-0065, #449): the chosen ``SetType`` value, or ``None`` for
-    # "unset" — which the frontend view-model resolves to no badge (a neutral working set).
-    # Surfaced on the read so the session-detail response carries the tag to the web client.
-    # Defaulted so the many call sites that build a view without one read as unset.
-    set_type: str | None = None
-    # Target Effort (ADR-0066, #454): the *prescribed* Effort dict, or ``None`` for "no target" —
-    # which the frontend renders as nothing. Surfaced on the read so the session-detail response
-    # carries the target to the web client, where it is shown/edited with an RPE⇄RIR projection.
-    # Defaulted so the many call sites that build a view without one read as no target.
-    target_effort: dict | None = None
-    # Exercise Note (ADR-0065, #451): the plan-side coaching cue, or ``None`` for "no note" —
-    # which the frontend renders as nothing. The stored value is already HTML-escaped at the
-    # write boundary. Surfaced on the read so the session-detail response carries it to the web
-    # client. Defaulted so the many call sites that build a view without one read as no note.
-    note: str | None = None
 
 
 @dataclass(frozen=True)
@@ -497,24 +419,6 @@ class SessionRepository(Protocol):
         ...
 
 
-def _draft_from(prescription: ExercisePrescription) -> PrescriptionDraft:
-    return PrescriptionDraft(
-        exercise_id=prescription.exercise_id,
-        sets=prescription.sets,
-        reps=prescription.reps,
-        rest_seconds=prescription.rest_seconds,
-        tempo=prescription.tempo,
-        recommended_load=prescription.recommended_load,
-        prescribed_quantity=prescription.prescribed_quantity,
-        superset_group=prescription.superset_group,
-        round_rest_seconds=prescription.round_rest_seconds,
-        scheme=prescription.scheme,
-        set_type=prescription.set_type,
-        target_effort=prescription.target_effort,
-        note=prescription.note,
-    )
-
-
 def _regenerated_drafts(
     current: list[ExercisePrescription],
     keep_positions: Sequence[int],
@@ -524,7 +428,7 @@ def _regenerated_drafts(
 
     keep = set(keep_positions)
     kept = [
-        _draft_from(p)
+        draft_from_row(p)
         for p in sorted(current, key=lambda p: p.position)
         if p.position in keep
     ]
@@ -551,7 +455,7 @@ def _removed_drafts(
 
     drafts: list[PrescriptionDraft] = []
     for prescription in survivors:
-        draft = _draft_from(prescription)
+        draft = draft_from_row(prescription)
         # A group left with a single survivor is no longer a Superset (ADR-0023): dissolve
         # it to a valid solo prescription rather than persist a lone tagged member (Q5).
         if (
@@ -561,57 +465,6 @@ def _removed_drafts(
             draft = replace(draft, superset_group=None, round_rest_seconds=None)
         drafts.append(draft)
     return drafts
-
-
-def _prescription_model(
-    session_id: int, position: int, draft: PrescriptionDraft
-) -> ExercisePrescription:
-    """Build one persistable prescription row at ``position`` from a draft — the single
-    field mapping shared by the full-list create and the single-row Insert append."""
-
-    return ExercisePrescription(
-        session_id=session_id,
-        exercise_id=draft.exercise_id,
-        position=position,
-        sets=draft.sets,
-        reps=draft.reps,
-        rest_seconds=draft.rest_seconds,
-        tempo=draft.tempo,
-        recommended_load=draft.recommended_load,
-        prescribed_quantity=draft.prescribed_quantity,
-        superset_group=draft.superset_group,
-        round_rest_seconds=draft.round_rest_seconds,
-        scheme=draft.scheme,
-        set_type=draft.set_type,
-        target_effort=draft.target_effort,
-        note=draft.note,
-    )
-
-
-def _prescription_view(
-    prescription: ExercisePrescription, exercise: Exercise
-) -> PrescriptionView:
-    return PrescriptionView(
-        position=prescription.position,
-        sets=prescription.sets,
-        reps=prescription.reps,
-        rest_seconds=prescription.rest_seconds,
-        tempo=prescription.tempo,
-        recommended_load=prescription.recommended_load,
-        prescribed_quantity=prescription.prescribed_quantity,
-        superset_group=prescription.superset_group,
-        round_rest_seconds=prescription.round_rest_seconds,
-        exercise_id=exercise.id,
-        exercise_name=exercise.name,
-        exercise_description=exercise.description,
-        targeted_muscles=list(exercise.targeted_muscles),
-        required_equipment=list(exercise.required_equipment),
-        provenance=exercise.provenance,
-        scheme=prescription.scheme,
-        set_type=prescription.set_type,
-        target_effort=prescription.target_effort,
-        note=prescription.note,
-    )
 
 
 def _author_display_name(
@@ -648,7 +501,7 @@ class SqlSessionRepository:
             .order_by(ExercisePrescription.position)
         ).all()
         views = [
-            _prescription_view(p, self._session.get(Exercise, p.exercise_id))
+            view_from_row(p, self._session.get(Exercise, p.exercise_id))
             for p in prescriptions
         ]
         return SessionView(
@@ -678,7 +531,7 @@ class SqlSessionRepository:
     ) -> None:
         for position, prescription in enumerate(prescriptions):
             self._session.add(
-                _prescription_model(session_id, position, prescription)
+                row_from_draft(prescription, session_id=session_id, position=position)
             )
 
     def create(self, clerk_user_id: str, draft: SessionDraft) -> SessionView:
@@ -824,7 +677,7 @@ class SqlSessionRepository:
         self._session.commit()
         self._session.refresh(copy)
 
-        self._add_prescriptions(copy.id, [_draft_from(p) for p in prescriptions])
+        self._add_prescriptions(copy.id, [draft_from_row(p) for p in prescriptions])
         self._session.commit()
         return self._view(copy)
 
@@ -878,7 +731,7 @@ class SqlSessionRepository:
         self._session.commit()
         self._session.refresh(copy)
 
-        self._add_prescriptions(copy.id, [_draft_from(p) for p in prescriptions])
+        self._add_prescriptions(copy.id, [draft_from_row(p) for p in prescriptions])
         self._session.commit()
         return self._view(copy)
 
@@ -1014,7 +867,7 @@ class SqlSessionRepository:
         ).all()
         next_position = max((p.position for p in current), default=-1) + 1
         self._session.add(
-            _prescription_model(session_id, next_position, prescription)
+            row_from_draft(prescription, session_id=session_id, position=next_position)
         )
         self._session.commit()
         return self._view(workout)
@@ -1074,7 +927,7 @@ class InMemorySessionRepository:
     def _view(self, workout: WorkoutSession) -> SessionView:
         prescriptions = self._prescriptions.get(workout.id, [])
         views = [
-            _prescription_view(p, self._exercises.get(p.exercise_id))
+            view_from_row(p, self._exercises.get(p.exercise_id))
             for p in sorted(prescriptions, key=lambda p: p.position)
         ]
         return SessionView(
@@ -1101,27 +954,16 @@ class InMemorySessionRepository:
     def _materialize(
         self, session_id: int, prescriptions: list[PrescriptionDraft]
     ) -> list[ExercisePrescription]:
-        return [
-            ExercisePrescription(
-                id=position + 1,
-                session_id=session_id,
-                exercise_id=prescription.exercise_id,
-                position=position,
-                sets=prescription.sets,
-                reps=prescription.reps,
-                rest_seconds=prescription.rest_seconds,
-                tempo=prescription.tempo,
-                recommended_load=prescription.recommended_load,
-                prescribed_quantity=prescription.prescribed_quantity,
-                superset_group=prescription.superset_group,
-                round_rest_seconds=prescription.round_rest_seconds,
-                scheme=prescription.scheme,
-                set_type=prescription.set_type,
-                target_effort=prescription.target_effort,
-                note=prescription.note,
+        rows: list[ExercisePrescription] = []
+        for position, prescription in enumerate(prescriptions):
+            row = row_from_draft(
+                prescription, session_id=session_id, position=position
             )
-            for position, prescription in enumerate(prescriptions)
-        ]
+            # The in-memory store assigns row ids the SQL adapter leaves to the DB;
+            # a contiguous 1-based id per position mirrors the SQL insert order.
+            row.id = position + 1
+            rows.append(row)
+        return rows
 
     def create(self, clerk_user_id: str, draft: SessionDraft) -> SessionView:
         workout = WorkoutSession(
@@ -1240,7 +1082,7 @@ class InMemorySessionRepository:
         self._next_id += 1
         self._sessions[copy.id] = copy
         self._prescriptions[copy.id] = self._materialize(
-            copy.id, [_draft_from(p) for p in prescriptions]
+            copy.id, [draft_from_row(p) for p in prescriptions]
         )
         return self._view(copy)
 
@@ -1289,7 +1131,7 @@ class InMemorySessionRepository:
         self._next_id += 1
         self._sessions[copy.id] = copy
         self._prescriptions[copy.id] = self._materialize(
-            copy.id, [_draft_from(p) for p in prescriptions]
+            copy.id, [draft_from_row(p) for p in prescriptions]
         )
         return self._view(copy)
 
@@ -1355,27 +1197,14 @@ class InMemorySessionRepository:
         if not any(p.position == position for p in current):
             return None
 
-        # Rebuild the list with only the targeted prescription's Exercise swapped;
-        # everything else (sets/reps/load) and the regeneration guard are preserved.
+        # Swap only the targeted prescription's Exercise; every other spine field (and
+        # the regeneration guard) is preserved. ``evolve_prescription_row`` routes through
+        # the one field manifest (ADR-0069), so a newly added field can never be dropped
+        # here the way a hand-listed rebuild once flattened a Superset.
         self._prescriptions[session_id] = [
-            ExercisePrescription(
-                id=p.id,
-                session_id=p.session_id,
-                exercise_id=new_exercise_id if p.position == position else p.exercise_id,
-                position=p.position,
-                sets=p.sets,
-                reps=p.reps,
-                rest_seconds=p.rest_seconds,
-                tempo=p.tempo,
-                recommended_load=p.recommended_load,
-                prescribed_quantity=p.prescribed_quantity,
-                superset_group=p.superset_group,
-                round_rest_seconds=p.round_rest_seconds,
-                scheme=p.scheme,
-                set_type=p.set_type,
-                target_effort=p.target_effort,
-                note=p.note,
-            )
+            evolve_prescription_row(p, exercise_id=new_exercise_id)
+            if p.position == position
+            else p
             for p in current
         ]
         return self._view(workout)
@@ -1395,27 +1224,12 @@ class InMemorySessionRepository:
         if not any(p.position == position for p in current):
             return None
 
-        # Rebuild the list with only the targeted prescription's scheme changed; every
-        # other field is preserved immutably, mirroring the pin mutation.
+        # Change only the targeted prescription's scheme; every other spine field is
+        # preserved immutably through the one field manifest (ADR-0069).
         self._prescriptions[session_id] = [
-            ExercisePrescription(
-                id=p.id,
-                session_id=p.session_id,
-                exercise_id=p.exercise_id,
-                position=p.position,
-                sets=p.sets,
-                reps=p.reps,
-                rest_seconds=p.rest_seconds,
-                tempo=p.tempo,
-                recommended_load=p.recommended_load,
-                prescribed_quantity=p.prescribed_quantity,
-                superset_group=p.superset_group,
-                round_rest_seconds=p.round_rest_seconds,
-                scheme=scheme if p.position == position else p.scheme,
-                set_type=p.set_type,
-                target_effort=p.target_effort,
-                note=p.note,
-            )
+            evolve_prescription_row(p, scheme=scheme)
+            if p.position == position
+            else p
             for p in current
         ]
         return self._view(workout)
@@ -1432,7 +1246,9 @@ class InMemorySessionRepository:
 
         current = self._prescriptions.get(session_id, [])
         next_position = max((p.position for p in current), default=-1) + 1
-        appended = _prescription_model(session_id, next_position, prescription)
+        appended = row_from_draft(
+            prescription, session_id=session_id, position=next_position
+        )
         appended.id = len(current) + 1
         self._prescriptions[session_id] = [*current, appended]
         return self._view(workout)
