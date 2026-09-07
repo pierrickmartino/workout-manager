@@ -52,23 +52,18 @@ async function loadRecentSessions(): Promise<RecentSessionRow[]> {
   });
 }
 
-// The TRAIN tab's landing page: pick up a recent workout, or start something new — a full
-// multi-week Protocol or a standalone workout. Previously the TRAIN tab jumped straight into
-// the standalone-workout form, so protocol generation had no home in the global nav once a
+// The TRAIN tab's landing page: start something new — a full multi-week Protocol or a
+// standalone workout — or pick up an existing Session. Previously the TRAIN tab jumped straight
+// into the standalone-workout form, so protocol generation had no home in the global nav once a
 // Current Protocol existed (ADR-0037). This launchpad restores the protocol entry point
-// everywhere, not just the Home empty state; the Recent Sessions panel above it lets a user
-// re-run a recent standalone Session in one tap (CONTEXT: Recent Sessions).
+// everywhere, not just the Home empty state; the Recent Sessions panel by My Sessions lets a
+// user re-run a recent standalone Session in one tap (CONTEXT: Recent Sessions).
 export default async function TrainPage(): Promise<React.JSX.Element> {
   const recentSessions = await loadRecentSessions();
 
   return (
     <section className="flex flex-col gap-6">
       <PageHeader overline="PULSE // TRAIN" title="Start new training" />
-
-      {/* Pick up where you left off: the user's up-to-five most-recently-performed standalone
-          Sessions, each a one-tap Start into a Live Session (CONTEXT: Recent Sessions). Renders
-          nothing when there is nothing to resume, so it sits quietly above "start new". */}
-      <RecentSessions rows={recentSessions} />
 
       <p className="font-mono text-[13px] leading-relaxed text-text-muted">
         Generate a full multi-week protocol or a single standalone workout — or log a
@@ -78,6 +73,12 @@ export default async function TrainPage(): Promise<React.JSX.Element> {
         eyebrow="TRAIN // START SOMETHING NEW"
         showLogPastWorkout
       />
+
+      {/* Pick up where you left off: the user's up-to-five most-recently-performed standalone
+          Sessions, each a one-tap Start into a Live Session (CONTEXT: Recent Sessions). Sits just
+          above My Sessions — both are about reusing existing Sessions, distinct from the "start
+          new" launchpad — and renders nothing when there is nothing to resume. */}
+      <RecentSessions rows={recentSessions} />
 
       {/* The user's own saved standalone Sessions — reopen one to run again (CONTEXT: My
           Sessions, issue #397). Distinct from generation (starting something new) and from
