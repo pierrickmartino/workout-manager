@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 
 import {
   TRAINING_TYPES,
+  favoriteSession,
   generateSession,
+  unfavoriteSession,
   type GenerateSessionInput,
 } from "@/lib/sessions";
 import { requestSessionDelete } from "@/app/sessions/delete-request";
@@ -16,6 +18,38 @@ export interface GenerateFormState {
 
 export interface DeleteSessionRowState {
   error: string | null;
+}
+
+export interface ToggleFavoriteState {
+  error: string | null;
+}
+
+// Toggle a Session's Favorite marker from a My Sessions row (CONTEXT: Favorite, #396). The
+// star button submits the *target* state in `favorite` ("true" to mark, else unmark) alongside
+// the `session_id`; this action calls the matching endpoint and, on success, revalidates
+// `/sessions` so the library re-renders with the new marker (the client-side search/chip filter
+// state is preserved, exactly like the row Delete action). A 404/409 or transport failure comes
+// back as the row control's error; nothing is toggled. The JWT never leaves the server.
+export async function submitToggleFavorite(
+  _prevState: ToggleFavoriteState,
+  form: FormData,
+): Promise<ToggleFavoriteState> {
+  const rawId = form.get("session_id");
+  const sessionId = Number(typeof rawId === "string" ? rawId : NaN);
+  if (!Number.isInteger(sessionId) || sessionId < 1) {
+    return { error: "Invalid session." };
+  }
+
+  const makeFavorite = form.get("favorite") === "true";
+  const result = makeFavorite
+    ? await favoriteSession(sessionId)
+    : await unfavoriteSession(sessionId);
+  if (!result.success) {
+    return { error: result.error ?? "Could not update favorite." };
+  }
+
+  revalidatePath("/sessions");
+  return { error: null };
 }
 
 // Permanently delete one of the user's own standalone Sessions from the My Sessions library

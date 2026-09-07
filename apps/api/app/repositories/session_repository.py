@@ -14,6 +14,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from typing import Protocol
 
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.db.models import (
@@ -124,7 +125,9 @@ class SessionSummaryView:
     the never-blank display label through ``session_label`` exactly as the detail read
     does; ``training_type`` and ``author_display_name`` feed the row's Training Type and
     Author, and ``is_favorite`` is the owner's Favorite marker (the favorites-only
-    filter, CONTEXT: My Sessions / Favorite)."""
+    filter, CONTEXT: My Sessions / Favorite). ``prescription_count`` is the number of
+    Exercise Prescriptions in the plan — the row's *plan-side* "N exercises" fact, counted
+    without joining the prescriptions themselves (CONTEXT: Exercise Prescription)."""
 
     id: int
     training_type: str
@@ -132,6 +135,7 @@ class SessionSummaryView:
     created_at: datetime
     author_display_name: str | None
     is_favorite: bool
+    prescription_count: int
 
 
 @dataclass(frozen=True)
@@ -590,10 +594,13 @@ class SqlSessionRepository:
         self._session.commit()
         return True
 
-    def _summary(self, workout: WorkoutSession) -> SessionSummaryView:
+    def _summary(
+        self, workout: WorkoutSession, prescription_count: int
+    ) -> SessionSummaryView:
         """The thin My Sessions row for one owned Session (issue #397): Author and the
         Favorite marker resolve through the same seams ``_view`` uses, but no prescriptions
-        are joined — the library never needs them."""
+        are joined — the ``prescription_count`` is a plain count passed in by the caller (one
+        grouped query for the whole page), never a per-row prescription fetch."""
 
         return SessionSummaryView(
             id=workout.id,
@@ -606,7 +613,26 @@ class SqlSessionRepository:
             is_favorite=self._favorites.is_favorite(
                 workout.clerk_user_id, workout.id
             ),
+            prescription_count=prescription_count,
         )
+
+    def _prescription_counts(self, session_ids: list[int]) -> dict[int, int]:
+        """The Exercise Prescription count per Session for the given ids, in one grouped
+        query (issue #397). A Session with no prescriptions is absent from the map and reads
+        as zero — the same shape as the Logged-Count map, so the "N exercises" fact never
+        fans out into a per-Session count."""
+
+        if not session_ids:
+            return {}
+        rows = self._session.exec(
+            select(
+                ExercisePrescription.session_id,
+                func.count(ExercisePrescription.id),
+            )
+            .where(ExercisePrescription.session_id.in_(session_ids))
+            .group_by(ExercisePrescription.session_id)
+        ).all()
+        return {session_id: count for session_id, count in rows}
 
     def list_standalone(
         self,
@@ -626,7 +652,12 @@ class SqlSessionRepository:
                 WorkoutSession.protocol_id.is_(None),
             )
         ).all()
-        summaries = [self._summary(workout) for workout in workouts]
+        # One grouped count for the whole candidate set, so badging "N exercises" on every
+        # row never fans out into a per-Session query (mirrors the Logged-Count read).
+        counts = self._prescription_counts([workout.id for workout in workouts])
+        summaries = [
+            self._summary(workout, counts.get(workout.id, 0)) for workout in workouts
+        ]
         return _session_list_page(
             summaries,
             query=query,
@@ -1003,7 +1034,8 @@ class InMemorySessionRepository:
 
     def _summary(self, workout: WorkoutSession) -> SessionSummaryView:
         """The thin My Sessions row for one owned Session (issue #397) — Author and the
-        Favorite marker resolve through the same seams ``_view`` uses, no prescriptions."""
+        Favorite marker resolve through the same seams ``_view`` uses, no prescriptions
+        joined; ``prescription_count`` is the length of the stored prescription list."""
 
         return SessionSummaryView(
             id=workout.id,
@@ -1016,6 +1048,7 @@ class InMemorySessionRepository:
             is_favorite=self._favorites.is_favorite(
                 workout.clerk_user_id, workout.id
             ),
+            prescription_count=len(self._prescriptions.get(workout.id, [])),
         )
 
     def list_standalone(

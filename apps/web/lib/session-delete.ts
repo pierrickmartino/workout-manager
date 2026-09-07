@@ -34,11 +34,12 @@ export function sessionDeleteView(session: WorkoutSession): SessionDeleteView {
 }
 
 // The My Sessions row badge label for a Session's Logged Count, or `null` when the Session has
-// never been performed (so an unperformed row reads clean and its Delete affordance shows). A
-// singular/plural label so "1 LOGGED" never reads as "1 logged sessions".
+// never been performed (so an unperformed row reads clean and its Delete affordance shows). The
+// label counts *performances* (CONTEXT: Logged Count) — "Trained N×" — never Logged Sets, so a
+// single workout of many sets still reads as one training.
 export function loggedCountBadge(loggedCount: number): string | null {
   if (loggedCount <= 0) {
     return null;
   }
-  return `${loggedCount} logged`;
+  return `Trained ${loggedCount}×`;
 }

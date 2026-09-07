@@ -147,6 +147,23 @@ def test_blank_query_returns_the_full_list(repos):
     assert page.total == 2
 
 
+def test_row_carries_the_exercise_prescription_count(repos):
+    # The "N exercises" plan fact (issue #397): the summary reports how many Exercise
+    # Prescriptions the plan holds, on both the in-memory fake and the real SQL path. The
+    # ``_create`` helper authors exactly one prescription.
+    repo, exercises = repos
+    single = _create(repo, exercises, "user_pc", name="One Move")
+    empty = repo.create(
+        "user_pc",
+        SessionDraft(training_type="yoga", duration_minutes=30, prescriptions=[]),
+    ).id
+
+    summaries = {s.id: s for s in repo.list_standalone("user_pc", limit=50, offset=0).items}
+
+    assert summaries[single].prescription_count == 1
+    assert summaries[empty].prescription_count == 0
+
+
 def test_search_matches_name_and_type_and_fallback(repos):
     repo, exercises = repos
     named = _create(repo, exercises, "user_f", training_type="strength", name="Leg Day")

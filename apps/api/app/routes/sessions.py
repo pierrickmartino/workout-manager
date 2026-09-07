@@ -548,7 +548,8 @@ MAX_LIST_LIMIT = 100
 
 def _serialize_summary(summary: SessionSummaryView, logged_count: int) -> dict:
     """One My Sessions row (issue #397): the same name/fallback and Author shapes the
-    detail read uses, kept thin (no prescriptions). ``created_at`` is sent as its calendar
+    detail read uses, kept thin (the prescriptions themselves are not joined — only their
+    count rides as ``exercise_count``). ``created_at`` is sent as its calendar
     date — the exact string the derived fallback label embeds — so the web view-model can
     reproduce the fallback for client-side search with parity to the server. ``logged_count``
     is the read-time **Logged Count** (ADR-0063): how many Logged Sessions were recorded
@@ -571,6 +572,8 @@ def _serialize_summary(summary: SessionSummaryView, logged_count: int) -> dict:
         "is_favorite": summary.is_favorite,
         # The Logged Count (ADR-0063): the row badges it when > 0 and hides Delete then.
         "logged_count": logged_count,
+        # The plan-side Exercise Prescription count — the row's "N exercises" fact (#397).
+        "exercise_count": summary.prescription_count,
     }
 
 
