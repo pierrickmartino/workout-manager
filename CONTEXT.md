@@ -357,7 +357,7 @@ The rendered appearance of the app for one user at one moment — always the *co
 _Avoid_: Style, look, colour scheme (as the concept name)
 
 **Skin**:
-A named **visual identity** — the coordinated **colour, typography, and shape** the whole app draws with (ADR-0050). Skins come from a **fixed, curated catalog** (never user- or AI-authored). A Skin's **colour** is polarity-dependent, so each Skin defines **both a light and a dark variant** and composes with any Mode; its **typography** (typefaces) and **shape** (corner roundness) are Mode-invariant, defined once per Skin. Exactly one Skin is live app-wide at a time (the Active Skin); an ordinary user never chooses a Skin. Distinct from Mode, which is the light/dark polarity chosen *within* a Skin.
+A named **visual identity** — the coordinated **colour, typography, and shape** the whole app draws with (ADR-0050). Skins come from a **fixed, curated catalog** (never user- or AI-authored). A Skin's **colour** is polarity-dependent, so each Skin defines **both a light and a dark variant** and composes with any Mode; its **typography** (typefaces) and **shape** (corner roundness) are Mode-invariant, defined once per Skin. Every rung of a well-formed Skin's **Text Ramp** clears the **Contrast Floor** in both variants. Exactly one Skin is live app-wide at a time (the Active Skin); an ordinary user never chooses a Skin. Distinct from Mode, which is the light/dark polarity chosen *within* a Skin.
 _Avoid_: Theme (bare), palette / colour scheme (a Skin is more than its colours; palette names only the colour group)
 
 **Mode**:
@@ -367,6 +367,14 @@ _Avoid_: Theme, dark mode (as the concept name), colour scheme
 **Active Skin**:
 The single Skin currently published for the whole app — what every user's Mode renders within until it changes. Exactly one exists at any moment, defaulting to the original **PULSE** Skin. Only an **admin** changes it, and only by **publishing**: a Skin is previewed privately first, then deliberately made the Active Skin for everyone, restyling the app on each user's *next visit* rather than mid-action. The admin who publishes is the **admin** — never the "Operator", which would collide with Operator Level.
 _Avoid_: Current theme, global theme, default skin (that is only the Active Skin's starting value)
+
+**Text Ramp**:
+The ordered three-rung set of text colours every Skin defines, descending in prominence: **primary** (headings and headline values), **secondary** (supporting copy), and **muted** (quiet metadata — the mono micro-labels, captions, and data labels that carry the app's structure). "Muted" is the quietest rung, never an illegible one: every rung must clear the **Contrast Floor**. Distinct from the accent colours (cyan, violet…), which are not part of the ramp.
+_Avoid_: label colour (a rung is a Skin-wide role, not one component's colour), greyed-out text
+
+**Contrast Floor**:
+The accessibility invariant on a Skin's **Text Ramp**: every rung reaches **WCAG AA** contrast (4.5:1) against **every** surface (base, surface, elevated), in **both** Mode variants. The smallest labels never qualify as "large text", so 4.5:1 is the single bar for all body-size text — a smaller label earns no lighter threshold. A hard requirement of a well-formed Skin, enforced as an invariant rather than left to review (ADR-0070).
+_Avoid_: contrast ratio (bare), a11y pass
 
 **Interface Preference**:
 A user's own per-account UI choice — read-time state that steers how the app **behaves or presents** for them, never what the AI generates — kept deliberately **separate from the Fitness Profile**. The Fitness Profile is what the AI conditions a generation on; an Interface Preference steers nothing about the plan and must never leak into generation or its cache key. Server-synced so the choice follows the user across devices (ADR-0047, ADR-0055). Its members are the user's **Mode** (the appearance facet — an **Appearance Preference**) and whether to **Keep Screen Awake** during a Live Session.
