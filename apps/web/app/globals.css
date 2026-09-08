@@ -31,6 +31,14 @@
       @theme `:root` defaults without needing to repeat per Mode. PULSE inherits the
       @theme defaults, so only Aurora and Vercel restate this group.
   Colours transcribed from docs/design/pulse.pen.
+
+  Contrast Floor (ADR-0070): every rung of a Skin's Text Ramp
+  (text-primary/secondary/muted) must clear WCAG AA (4.5:1) against every surface
+  (base/surface/elevated), in *both* Mode variants. `muted` is the binding rung —
+  its values here are tuned a hair above 4.5:1 against the lightest surface, so it
+  reads darker/lighter than a naive quiet-grey would. Vercel light additionally
+  darkens `secondary` so an AA-passing `muted` still sits a visible step below it.
+  lib/skin-contrast.test.ts parses this file and fails CI on any regression.
 */
 @theme {
   /* Surfaces */
@@ -45,7 +53,7 @@
   /* Text */
   --color-text-primary: #fafafa;
   --color-text-secondary: #a1a1aa;
-  --color-text-muted: #71717a;
+  --color-text-muted: #8f8f97;
 
   /* Accents */
   --color-cyan: #29e7e0;
@@ -95,7 +103,7 @@
     /* Text — near-black primary down to a mid-grey muted */
     --color-text-primary: #18181b;
     --color-text-secondary: #52525b;
-    --color-text-muted: #71717a;
+    --color-text-muted: #6d6d76;
 
     /* Accents — darker/richer so they read on light surfaces */
     --color-cyan: #0891a5;
@@ -122,7 +130,7 @@
 
       --color-text-primary: #18181b;
       --color-text-secondary: #52525b;
-      --color-text-muted: #71717a;
+      --color-text-muted: #6d6d76;
 
       --color-cyan: #0891a5;
       --color-cyan-dim: #0891a51f;
@@ -160,7 +168,7 @@
     /* Text — cool near-white down to a slate muted */
     --color-text-primary: #eef2fb;
     --color-text-secondary: #a4b2cf;
-    --color-text-muted: #6f7d9c;
+    --color-text-muted: #818da8;
 
     /* Accents — emerald leads, with sky/violet/pink support */
     --color-cyan: #34d399;
@@ -186,7 +194,7 @@
     /* Text — deep indigo-black down to a slate muted */
     --color-text-primary: #101728;
     --color-text-secondary: #465066;
-    --color-text-muted: #6f7d9c;
+    --color-text-muted: #606d8b;
 
     /* Accents — deepened so they read on light surfaces */
     --color-cyan: #0f766e;
@@ -212,7 +220,7 @@
 
       --color-text-primary: #101728;
       --color-text-secondary: #465066;
-      --color-text-muted: #6f7d9c;
+      --color-text-muted: #606d8b;
 
       --color-cyan: #0f766e;
       --color-cyan-dim: #0f766e1f;
@@ -252,7 +260,7 @@
     /* Text — Geist foreground down through its gray ramp */
     --color-text-primary: #ededed;
     --color-text-secondary: #a1a1a1;
-    --color-text-muted: #6e6e6e;
+    --color-text-muted: #818181;
 
     /* Accents — Vercel blue leads (cyan token), with a lighter sky blue plus the
        Geist purple/pink for the secondary slots. on-accent is white for text on
@@ -279,8 +287,8 @@
 
     /* Text — Geist near-black down to a mid gray */
     --color-text-primary: #171717;
-    --color-text-secondary: #666666;
-    --color-text-muted: #8f8f8f;
+    --color-text-secondary: #525252;
+    --color-text-muted: #6d6d6d;
 
     /* Accents — Vercel blue leads (cyan token) on white; a deeper blue plus the
        Geist purple/pink fill the secondary slots. on-accent is white for text on
@@ -307,8 +315,8 @@
       --color-border-lite: #d4d4d4;
 
       --color-text-primary: #171717;
-      --color-text-secondary: #666666;
-      --color-text-muted: #8f8f8f;
+      --color-text-secondary: #525252;
+      --color-text-muted: #6d6d6d;
 
       --color-cyan: #0070f3;
       --color-cyan-dim: #0070f31f;
