@@ -42,6 +42,7 @@ function summary(overrides: Partial<SessionSummary>): SessionSummary {
     created_at: "2026-06-01",
     author: { display_name: null },
     is_favorite: false,
+    exercise_count: 3,
     logged_count: 1,
     ...overrides,
   };

@@ -63,8 +63,8 @@ test("the disabled hint states why a performed session can't be deleted", () => 
   assert.match(DELETE_DISABLED_HINT, /logged training/);
 });
 
-test("badges the Logged Count only when the Session has been performed", () => {
+test("badges the Logged Count (performances) only when the Session has been performed", () => {
   assert.equal(loggedCountBadge(0), null);
-  assert.equal(loggedCountBadge(1), "1 logged");
-  assert.equal(loggedCountBadge(5), "5 logged");
+  assert.equal(loggedCountBadge(1), "Trained 1×");
+  assert.equal(loggedCountBadge(5), "Trained 5×");
 });

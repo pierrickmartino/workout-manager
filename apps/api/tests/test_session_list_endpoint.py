@@ -11,6 +11,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from app.auth.dependencies import get_jwks
+from app.domain.exercise import Provenance
 from app.config import Settings, get_settings
 from app.main import create_app
 from app.repositories.deps import (
@@ -28,6 +29,7 @@ from app.repositories.profile_repository import (
 )
 from app.repositories.session_repository import (
     InMemorySessionRepository,
+    PrescriptionDraft,
     SessionDraft,
 )
 from tests.conftest import ISSUER, make_signing_context
@@ -136,6 +138,37 @@ def test_row_carries_name_fallback_type_author_and_favorite():
     assert row["training_type"] == "yoga"
     assert row["author"] == {"display_name": "Dana Lin"}
     assert row["is_favorite"] is True
+    # The plan-side "N exercises" fact — zero here (the helper creates an empty plan).
+    assert row["exercise_count"] == 0
+
+
+def test_row_carries_the_exercise_prescription_count():
+    # Arrange — a Session whose plan holds two Exercise Prescriptions (issue #397, "N exercises")
+    client, ctx, sessions = build_client()
+    squat = sessions._exercises.find_or_create(
+        "Back Squat", provenance=Provenance.AI_GENERATED
+    )
+    press = sessions._exercises.find_or_create(
+        "Overhead Press", provenance=Provenance.AI_GENERATED
+    )
+    view = sessions.create(
+        "user_ex",
+        SessionDraft(
+            training_type="strength",
+            duration_minutes=45,
+            prescriptions=[
+                PrescriptionDraft(exercise_id=squat.id, sets=5, reps="5"),
+                PrescriptionDraft(exercise_id=press.id, sets=3, reps="8"),
+            ],
+        ),
+    )
+
+    # Act
+    row = _list(client, ctx, "user_ex").json()["data"][0]
+
+    # Assert — the row reports its plan's prescription count
+    assert row["id"] == view.id
+    assert row["exercise_count"] == 2
 
 
 def test_unnamed_session_reads_back_the_derived_fallback_label():
