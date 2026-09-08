@@ -19,7 +19,7 @@ interface RemoveExerciseButtonProps {
   dissolvesSuperset: boolean;
 }
 
-const LAST_MOVEMENT_HINT = "A session must keep at least one movement.";
+const LAST_MOVEMENT_HINT = "A session must keep at least one exercise.";
 
 // A per-prescription control to remove the prescribed Exercise from a standalone Session
 // (Remove, ADR-0052) — Insert's symmetric partner. A hand-authored prescription's

@@ -50,7 +50,7 @@ export default async function ExercisesPage({
       <PageHeader overline="PULSE // CATALOG" title="Browse exercises" />
       <p className="font-mono text-[13px] leading-relaxed text-text-muted">
         Explore the whole exercise catalog. Filter by muscle group, equipment, or
-        difficulty — or search by name — and open any movement for its full details.
+        difficulty — or search by name — and open any exercise for its full details.
       </p>
 
       {pageEnvelope.success && pageEnvelope.data ? (

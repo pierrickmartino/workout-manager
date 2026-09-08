@@ -473,7 +473,7 @@ export function HandAuthoredSessionForm({
 
         {exercises.length === 0 ? (
           <p className="font-mono text-[12px] text-text-muted">
-            Search the catalog below to add the movements you trained.
+            Search the catalog below to add the exercises you trained.
           </p>
         ) : null}
 
