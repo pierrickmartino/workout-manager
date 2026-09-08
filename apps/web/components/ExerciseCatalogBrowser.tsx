@@ -161,7 +161,7 @@ export function ExerciseCatalogBrowser({
           />
           <Input
             value={filters.query}
-            placeholder="Search a movement…"
+            placeholder="Search an exercise…"
             aria-label="Search the Exercise Catalog"
             className="pl-9"
             disabled={!online}
@@ -225,7 +225,7 @@ export function ExerciseCatalogBrowser({
 
       <div className="flex items-center justify-between">
         <span className="label-mono text-[10px] text-text-muted">
-          {pending ? "SEARCHING…" : `${total} MOVEMENT${total === 1 ? "" : "S"}`}
+          {pending ? "SEARCHING…" : `${total} EXERCISE${total === 1 ? "" : "S"}`}
         </span>
         {active ? (
           <button
@@ -245,7 +245,7 @@ export function ExerciseCatalogBrowser({
       {!pending && results.length === 0 && !error ? (
         <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border bg-surface p-6 text-center">
           <p className="font-sans text-[13px] text-text-secondary">
-            No movements match these filters.
+            No exercises match these filters.
           </p>
           {active ? (
             <Button type="button" variant="outline" size="sm" onClick={clearFilters}>

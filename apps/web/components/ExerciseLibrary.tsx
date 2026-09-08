@@ -104,7 +104,7 @@ export function ExerciseLibrary({ onPick, onCreate }: ExerciseLibraryProps) {
           />
           <Input
             value={query}
-            placeholder="Search a movement…"
+            placeholder="Search an exercise…"
             aria-label="Search the Exercise Library"
             className="pl-9"
             onChange={(e) => setQuery(e.target.value)}
@@ -122,7 +122,7 @@ export function ExerciseLibrary({ onPick, onCreate }: ExerciseLibraryProps) {
 
       {!pending && searched && results.length === 0 && !error && !onCreate ? (
         <p className="label-mono text-[10px] text-text-muted">
-          NOT IN CATALOG — pick another movement
+          NOT IN CATALOG — pick another exercise
         </p>
       ) : null}
 

@@ -96,7 +96,7 @@ export function HistoryBrowser({
               href="/logs/new"
               className="label-mono text-[11px] text-cyan hover:underline"
             >
-              + Log a movement
+              + Log an exercise
             </Link>
             {/* Filtered count with total context when a facet is active, else the plain
                 total (Q9) — so a narrowed list never looks like a shrunken history. */}

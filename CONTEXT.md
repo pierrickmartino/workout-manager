@@ -40,7 +40,7 @@ _Avoid_: Library (that is the pick-mode widget over the Catalog, not the Catalog
 
 **Exercise**:
 A movement definition in the shared, global Catalog — name, description, ordered Execution Steps, targeted muscles (split into Primary and Secondary), difficulty, required equipment, variations, alternatives, precautions, and an optional Exercise Image. One Exercise (e.g. "Barbell Back Squat") is shared across all users; AI-invented movements are stored once and enriched once for everyone. Distinct from the prescription of its sets/reps.
-_Avoid_: Movement, Exercise Prescription (when referring to the definition)
+_Avoid_: Movement (as the user-facing term for this concept — every UI label, placeholder, and count says "Exercise"; "movement" is fine only as common-noun prose describing what an Exercise *is*), Exercise Prescription (when referring to the definition)
 
 **Execution Steps**:
 The ordered sequence of instructions for performing an Exercise — an enumerated list of discrete steps, not a prose blob. The count of steps reflects what the author (AI enrichment) actually wrote; there is no sentence-level chopping that fabricates step boundaries. An Exercise with no discrete steps carries a single step (rendered as plain guidance) rather than a false "step 01 of 1".
