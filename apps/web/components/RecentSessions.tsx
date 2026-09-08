@@ -58,10 +58,14 @@ function RecentSessionCard({
           </div>
         </div>
         {/* Start deep-links straight into the plan's Live Session (Q2); the concurrency guard
-            lives in LiveSessionScreen (ADR-0012). Matches the Session page's "Start session". */}
+            lives in LiveSessionScreen (ADR-0012). Deliberately `secondary`, not primary: this
+            Start repeats once per Recent Session card (up to five), under the launchpad's one
+            filled-teal "Generate a protocol" hero — so it is not this screen's primary action.
+            Contrast the Session detail page, where a lone "Start session" IS the page hero and
+            stays primary. Emphasis is per-screen: a repeated list action is never the primary. */}
         <Link
           href={row.startHref}
-          className={buttonVariants({ className: "shrink-0" })}
+          className={buttonVariants({ variant: "secondary", className: "shrink-0" })}
         >
           <Play className="h-4 w-4" />
           Start
