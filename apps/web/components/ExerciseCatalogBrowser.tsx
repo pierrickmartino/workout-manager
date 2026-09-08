@@ -16,7 +16,12 @@ import {
   hasActiveFilters,
   toggleFacetValue,
 } from "@/lib/exercise-browse-query";
-import { buildUsageMap, usageMarker } from "@/lib/exercise-usage-view";
+import {
+  buildUsageMap,
+  usageBadgeText,
+  usageMarker,
+  type UsageMarker,
+} from "@/lib/exercise-usage-view";
 import { formatMuscleSummary } from "@/lib/exercise-muscle-summary";
 import { useConnectivity } from "@/lib/use-connectivity";
 import type { ExerciseSearchResult } from "@/lib/exercises-types";
@@ -343,7 +348,7 @@ function CatalogRow({ exercise, lastPerformedOn, referenceIso }: CatalogRowProps
           </span>
           <ProvenanceBadge provenance={exercise.provenance} />
           <CompletenessBadge completeness={exercise.completeness} />
-          <UsageBadge trained={marker.trained} label={marker.label} />
+          <UsageBadge marker={marker} />
         </div>
         {exercise.targeted_muscles.length > 0 ? (
           <span className="truncate label-mono text-[9px] text-text-muted">
@@ -368,12 +373,13 @@ function ProvenanceBadge({ provenance }: { provenance: string }) {
 }
 
 // The strictly descriptive usage marker (ADR-0042): NEW when never trained, else a neutral
-// "last …" recency. No call to action, no "overdue" styling.
-function UsageBadge({ trained, label }: { trained: boolean; label: string }) {
-  if (!trained) {
-    return <Badge variant="outline">NEW</Badge>;
+// "TRAINED · <recency>" (or bare TRAINED when recency is unknown). No call to action, no
+// "overdue" styling. The caption is composed by `usageBadgeText` so the self-contained
+// recency phrase is never re-prefixed here into "last last week".
+function UsageBadge({ marker }: { marker: UsageMarker }) {
+  const text = usageBadgeText(marker);
+  if (!marker.trained) {
+    return <Badge variant="outline">{text}</Badge>;
   }
-  return (
-    <span className="label-mono text-[9px] text-text-muted">TRAINED · last {label}</span>
-  );
+  return <span className="label-mono text-[9px] text-text-muted">{text}</span>;
 }
