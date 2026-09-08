@@ -24,7 +24,9 @@ Concretely:
   screen exists to show. One bucket width also keeps the engine simple.
 - **The delta compares equal windows.** "+12%" is the selected window against the
   immediately preceding equal-length window (this 30D vs. the prior 30D) — the only
-  honest period-over-period read.
+  honest period-over-period read. It is subject to the **Trend Delta honesty floor**
+  below: a comparison against a baseline too thin to be a fair reference is withheld,
+  not shown.
 - **Bento is sessions · active days · new PRs · total sets — avg time is
   dropped.** The record captures **no elapsed time**: `duration_minutes` is the
   *planned* length on the plan, and logging is post-hoc, so even a row's
@@ -52,6 +54,41 @@ Concretely:
   timeline on the Strength Analytics screen (`/analytics/strength`); the affordance
   is gated on the same condition as that screen's nav entry, so it never lands on an
   empty gate. The last-8 content itself is unchanged.
+
+## Trend Delta honesty floor
+
+The equal-window delta (the **Trend Delta**) is technically defined the moment the
+prior window moved *any* volume — but a prior window of one stray set produces a true
+yet meaningless figure (`+3679% vs. previous 30D`, `+529%` for distance). On an app
+built on honest data, a four-digit hero reads as a vanity metric or a bug, and it is
+the very first thing on the screen. So the delta is **withheld** — omitted entirely,
+never "0%" and never a capped "+999%" — unless the prior window is a **fair
+reference**.
+
+- **Floor chosen: History Depth, not an absolute tonnage/distance threshold.** A
+  percentage cannot distinguish a *meaningless baseline* (one light set) from a
+  *genuine ramp* (a real doubling), and neither can an absolute floor without
+  suppressing legitimately light trainees. What actually produces the explosions is a
+  **truncated prior window**: the account did not exist for most of it. So the delta is
+  shown only when the user's earliest logged activity reaches back to the **start of
+  the prior window** (`history_start ≤ prior_start`; equivalently History Depth ≥
+  `2×window − 1`). This reuses the History-Depth concept (ADR-0056) rather than
+  inventing a magic constant, and sidesteps the calibration problem entirely.
+  Considered and rejected: **capping** the number (still a fabricated figure) and an
+  **absolute floor** (arbitrary, unit-tuned, and punitive to light trainees).
+- **Applies to Volume and Weekly Distance identically.** Both explode the same way; one
+  rule governs both, computed in the pure domain engines (`domain/volume`,
+  `domain/distance`) so the frontend stays a dumb formatter that simply omits the badge
+  on a `null` delta.
+- **Residual, accepted for v1.** A user with *deep* history who trained very little in
+  the prior window can still show a large (rarely four-digit) delta. Left as a known
+  limitation rather than stacking an absolute floor on top now; addable later if it
+  proves real.
+- **Presentation follows the same principle.** A day that moved **no tonnage** (a 0 kg
+  or 0-rep set) is dropped from the volume series rather than charted as a `0` that
+  strands the Y-axis, and the volume chart anchors its axis at zero (`domain={[0,
+  'auto']}`) so a near-flat series reads as flat instead of an auto-zoomed cliff — the
+  same refusal to exaggerate change that the floor enforces on the delta.
 
 ## Consequences
 

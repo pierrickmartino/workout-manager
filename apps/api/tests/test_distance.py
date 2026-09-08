@@ -133,7 +133,27 @@ def test_sets_outside_the_window_are_excluded():
 
 
 def test_delta_compares_the_window_to_the_preceding_equal_window():
-    # Arrange — 10 km this 30d window vs 8 km in the preceding 30d window
+    # Arrange — 10 km this 30d window vs 8 km in the preceding 30d window, plus a run
+    # 70 days back so the user's history reaches past the prior window's start (day 59):
+    # the baseline is a fair reference and the delta is shown.
+    history = [
+        _distance(10.0, TODAY),
+        _distance(8.0, TODAY - timedelta(days=30)),
+        _distance(3.0, TODAY - timedelta(days=70)),
+    ]
+
+    # Act
+    series = distance_series(history, days=30, today=TODAY)
+
+    # Assert — (10 - 8) / 8 = +25%
+    assert series.delta_pct == 25.0
+
+
+def test_delta_is_withheld_when_history_does_not_reach_the_prior_window():
+    # Arrange — real distance this window (10 km) and a real prior-window baseline
+    # (8 km), but the earliest run sits at the prior window's tail (day 30), so history
+    # does not reach that window's start (day 59). The preceding window is truncated by
+    # the account's age — the "+529% vs. previous 30D" new-account case.
     history = [
         _distance(10.0, TODAY),
         _distance(8.0, TODAY - timedelta(days=30)),
@@ -142,8 +162,9 @@ def test_delta_compares_the_window_to_the_preceding_equal_window():
     # Act
     series = distance_series(history, days=30, today=TODAY)
 
-    # Assert — (10 - 8) / 8 = +25%
-    assert series.delta_pct == 25.0
+    # Assert — a comparison against a partial prior window is withheld, not a huge
+    # percent: the Trend Delta honesty floor (ADR-0011).
+    assert series.delta_pct is None
 
 
 def test_delta_is_none_without_a_prior_window_baseline():

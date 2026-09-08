@@ -279,7 +279,27 @@ def test_full_coverage_when_every_logged_set_converts():
 
 
 def test_delta_compares_the_window_to_the_preceding_equal_window():
-    # Arrange — 1000 kg this 7d window (day 0) vs 800 kg the prior 7d window (day 7)
+    # Arrange — 1000 kg this 7d window (day 0) vs 800 kg the prior 7d window (day 7),
+    # plus a set 20 days back so the user's history reaches past the prior window's
+    # start (day 13): the baseline is a fair reference and the delta is shown.
+    history = [
+        _set(100.0, 10, TODAY),
+        _set(100.0, 8, TODAY - timedelta(days=7)),
+        _set(100.0, 5, TODAY - timedelta(days=20)),
+    ]
+
+    # Act
+    series = volume_series(history, days=7, today=TODAY)
+
+    # Assert — (1000 - 800) / 800 = +25%
+    assert series.delta_pct == 25.0
+
+
+def test_delta_is_withheld_when_history_does_not_reach_the_prior_window():
+    # Arrange — real volume this window (1000 kg) and a real prior-window baseline
+    # (800 kg), but the earliest logged set sits at the prior window's tail (day 7),
+    # so history does not reach that window's start (day 13). The preceding window is
+    # truncated by the account's age — the "+3679% vs. previous 30D" new-account case.
     history = [
         _set(100.0, 10, TODAY),
         _set(100.0, 8, TODAY - timedelta(days=7)),
@@ -288,8 +308,28 @@ def test_delta_compares_the_window_to_the_preceding_equal_window():
     # Act
     series = volume_series(history, days=7, today=TODAY)
 
-    # Assert — (1000 - 800) / 800 = +25%
-    assert series.delta_pct == 25.0
+    # Assert — a comparison against a partial prior window is withheld, not a huge
+    # percent: the Trend Delta honesty floor (ADR-0011).
+    assert series.delta_pct is None
+
+
+def test_zero_volume_days_are_dropped_from_the_series():
+    # Arrange — a real 500 kg day and a day whose only set moves no tonnage (a 0 kg
+    # absolute load: 0 × 5 = 0). A day that moved no kilograms is not a volume point;
+    # left in, its stray 0 strands the chart's Y-axis beneath a near-flat series.
+    history = [
+        _set(100.0, 5, TODAY),
+        _set(0.0, 5, TODAY - timedelta(days=1)),
+    ]
+
+    # Act
+    series = volume_series(history, days=7, today=TODAY)
+
+    # Assert — only the day that moved tonnage charts; the zero day is absent, not a
+    # 0 point. Coverage is untouched: a 0 kg load is a *known* load, so it still counts
+    # as converted (10 of 10 reps), never a coverage miss.
+    assert series.points == (VolumePoint(TODAY, 500.0),)
+    assert series.coverage_pct == 100.0
 
 
 def test_delta_is_none_without_a_prior_window_baseline():
@@ -382,11 +422,13 @@ def test_legacy_untyped_sets_count_as_working_volume():
 
 def test_warm_up_sets_are_dropped_from_the_delta_baseline():
     # Arrange — this window: one working set (100×5 = 500). Prior window: a warm-up
-    # (100×8) and a working set (100×5 = 500)
+    # (100×8) and a working set (100×5 = 500). A working set 20 days back anchors the
+    # history past the prior window's start, so the delta is shown rather than withheld.
     history = [
         _typed(100.0, 5, TODAY, "working"),
         _typed(100.0, 8, TODAY - timedelta(days=7), "warm_up"),
         _typed(100.0, 5, TODAY - timedelta(days=7), "working"),
+        _typed(100.0, 5, TODAY - timedelta(days=20), "working"),
     ]
 
     # Act

@@ -62,9 +62,12 @@ class DistanceSeries:
     """The weekly-distance bars for one window plus the trend delta.
 
     ``weeks`` are the weeks that had distance work, ascending by their Monday.
-    ``delta_pct`` is the window's total distance against the immediately preceding
-    equal-length window, or ``None`` when there is no prior distance to compare against.
-    There is deliberately no coverage figure — distance never partially converts.
+    ``delta_pct`` is the **Trend Delta**: the window's total distance against the
+    immediately preceding equal-length window, or ``None`` when that window is not a fair
+    reference — either it covered no distance, or the user's logged history does not reach
+    its start (a baseline truncated by the account's age). Withheld, never shown as a
+    meaningless percent. There is deliberately no coverage figure — distance never
+    partially converts.
     """
 
     weeks: tuple[DistanceWeek, ...]
@@ -93,11 +96,19 @@ def distance_series(
     The window is the ``days`` calendar days ending on ``today`` (inclusive). Only
     ``distance`` sets contribute; their metres are bucketed by Monday week-start and
     summed into kilometres, one bar per week ascending. The delta compares the window's
-    total distance against the immediately preceding equal-length window, and is
-    ``None`` when that prior window covered no distance.
+    total distance against the immediately preceding equal-length window, and is ``None``
+    when that prior window covered no distance **or** when the user's logged history does
+    not reach back to its start — a baseline truncated by the account's age is not a fair
+    reference, so its (otherwise huge) percent is withheld rather than shown (the Trend
+    Delta honesty floor, ADR-0011).
     """
 
     sets = list(history)
+    # History Depth for the Trend Delta honesty floor (ADR-0011): the earliest logged
+    # activity. A distance-less strength set still carries a ``performed_on``, so this is
+    # true account age, not merely the first run. The delta is withheld below when this
+    # does not reach the prior window's start.
+    history_start = min((s.performed_on for s in sets), default=None)
     start = today - timedelta(days=days - 1)
     prior_start = start - timedelta(days=days)
     prior_end = start - timedelta(days=1)
@@ -124,8 +135,17 @@ def distance_series(
         if prior_start <= s.performed_on <= prior_end
         and (metres := metres_of(s.quantity)) is not None
     )
+    # Withheld unless the prior window is a fair reference: it must have covered distance
+    # AND lie fully within the user's logged history (history reaches its start). A window
+    # truncated by the account's age — the "+529% vs. previous 30D" new-account case — has
+    # no honest baseline, so the delta is omitted rather than shown (ADR-0011).
+    baseline_within_history = (
+        history_start is not None and history_start <= prior_start
+    )
     delta_pct = (
-        (window_metres - prior_metres) / prior_metres * 100 if prior_metres else None
+        (window_metres - prior_metres) / prior_metres * 100
+        if prior_metres and baseline_within_history
+        else None
     )
 
     return DistanceSeries(weeks=weeks, delta_pct=delta_pct)
