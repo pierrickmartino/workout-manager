@@ -368,11 +368,15 @@ def _perform_load(sessions, logged, user, performed_on, kg, reps):
 
 def test_analytics_serializes_the_daily_volume_series():
     # Arrange — 100kg×5 today (inside 30d) and 80kg×5 thirty-five days ago (prior 30d
-    # window)
+    # window). A set 60 days back anchors the history past the prior window's start, so
+    # the baseline is a fair reference and the Trend Delta is served, not withheld.
     client, ctx, sessions, logged = build_client()
     _perform_load(sessions, logged, "user_vol", date.today(), 100.0, 5)
     _perform_load(
         sessions, logged, "user_vol", date.today() - timedelta(days=35), 80.0, 5
+    )
+    _perform_load(
+        sessions, logged, "user_vol", date.today() - timedelta(days=60), 60.0, 5
     )
 
     # Act
@@ -385,7 +389,8 @@ def test_analytics_serializes_the_daily_volume_series():
         {"date": date.today().isoformat(), "volume_kg": 500.0},
     ]
     assert volume["coverage"] == 100.0
-    # this window's 500 kg vs the prior window's 400 kg → +25%
+    # this window's 500 kg vs the prior window's 400 kg → +25% (the day-60 set is
+    # outside the prior window, so it anchors history depth without moving the baseline)
     assert volume["delta"] == 25.0
 
 

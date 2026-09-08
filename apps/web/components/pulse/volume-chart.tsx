@@ -42,7 +42,14 @@ export function VolumeChart({
             axisLine={{ stroke: border }}
             minTickGap={16}
           />
+          {/* Anchor the axis at zero (not the data min) so a near-flat tonnage series
+              reads as flat rather than being auto-zoomed into a dramatic-looking cliff —
+              the same refusal-to-exaggerate the Trend Delta honesty floor enforces. A
+              fixed tick count keeps the scale monotonic and legible. */}
           <YAxis
+            domain={[0, "auto"]}
+            allowDecimals={false}
+            tickCount={5}
             tick={{ fill: muted, fontSize: 11 }}
             tickLine={false}
             axisLine={false}

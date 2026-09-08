@@ -308,6 +308,10 @@ _Avoid_: Mileage (imperial; the app is metric-canonical), volume (that is kg ton
 The span from a user's **earliest Logged Session** to now — a **read-time** signal, never stored, that gates which Analytics **windows** (30D / 90D / 150D) the range selector offers. A longer window is offered only once History Depth reaches **past** the next-shorter one, so a window is never shown when its graph would merely repeat the shorter window's ("if the graphs are the same, there is no interest"): 90D needs depth past 30 days, 150D past 90 days, and 30D is the always-available floor (ADR-0049). Measured as the oldest-session age — the same record-derived species as Streak and XP — so a user with no history is offered only the 30D floor. The gate is enforced server-side: an out-of-depth requested window is **clamped** to the deepest available one rather than served a redundant graph (ADR-0056).
 _Avoid_: History length, data range, retention, window depth, coverage (that is Muscle Group Coverage)
 
+**Trend Delta**:
+A **read-time projection** of change: one Analytics window's **Volume** (or **Weekly Distance**) against the immediately preceding equal-length window, as a signed whole percent ("+18%", "−5%") shown as the small hero above the chart. Computed from the *record* at read time like every other projection, never stored. It is **withheld** — shown as nothing, not "0%" or a capped figure — whenever the prior window is not a **fair reference**: when it moved no volume/distance, or when the user's **History Depth** does not reach back to that window's start (a **truncated baseline**, e.g. a new account whose "previous 30D" mostly predates it). Honesty over drama: a comparison against a near-empty or partial past window is silently omitted rather than rendered as a meaningless four-digit percent. The same floor governs Volume and Weekly Distance alike (ADR-0011).
+_Avoid_: Growth (implies a stored trajectory), momentum / streak (a separate calendar concept), "% since signup" (it is window-to-window, not all-time)
+
 ## Gamification
 
 **XP**:
