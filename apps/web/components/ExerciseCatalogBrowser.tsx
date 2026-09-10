@@ -29,7 +29,6 @@ import { OfflineNotice } from "@/components/pulse/offline-notice";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CompletenessBadge } from "@/components/exercise/completeness-badge";
 
 interface ExerciseCatalogBrowserProps {
   initialFilters: CatalogFilters;
@@ -50,8 +49,8 @@ interface ExerciseCatalogBrowserProps {
 const SEARCH_DEBOUNCE_MS = 300;
 
 // The Browse-the-Catalog surface (ADR-0042): the whole shared Catalog, faceted by Muscle
-// Group / equipment / difficulty with a name search, each row carrying its Provenance and
-// Completeness badges and a strictly descriptive TRAINED / NEW usage marker. Read-only —
+// Group / equipment / difficulty with a name search, each row carrying its Provenance
+// marker and a strictly descriptive TRAINED / NEW usage marker. Read-only —
 // a row links out to Exercise Detail; nothing here edits a plan.
 export function ExerciseCatalogBrowser({
   initialFilters,
@@ -347,7 +346,6 @@ function CatalogRow({ exercise, lastPerformedOn, referenceIso }: CatalogRowProps
             {exercise.name}
           </span>
           <ProvenanceBadge provenance={exercise.provenance} />
-          <CompletenessBadge completeness={exercise.completeness} />
           <UsageBadge marker={marker} />
         </div>
         {exercise.targeted_muscles.length > 0 ? (

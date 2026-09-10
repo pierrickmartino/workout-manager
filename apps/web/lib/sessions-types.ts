@@ -214,10 +214,6 @@ export interface ExerciseDetail {
   // reference, `null` when the movement carries none. Curator-only and never
   // AI-fabricated; its absence never degrades the Detail page.
   image: string | null;
-  // Catalog Completeness (ADR-0041): the read-time Stub | Listable | Enriched tier,
-  // a content-presence axis distinct from `provenance` (trust). Shown beside the
-  // Provenance marker in the Detail header.
-  completeness: string;
   variations: RelatedExerciseSummary[];
   alternatives: RelatedExerciseSummary[];
 }

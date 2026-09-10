@@ -57,3 +57,30 @@ an out-of-band **Enrichment** mechanism carry the quality guarantee.
   deferred.
 - **New schema: an optional `image` field on Exercise.** Net-new, nullable, filled from
   curated sources only.
+
+## Revised — Catalog Completeness is internal-only, not user-surfaced (issue #7)
+
+The consequence above that the three tiers are "surfaced in the Exercise Library and on
+Exercise Detail alongside the Provenance marker" is **revised**: Catalog Completeness is
+now an **internal/ops axis**, not a user-facing signal. The badge cluster on a catalog row
+mixed a content-pipeline taxonomy (`STUB` / `LISTABLE` / `ENRICHED`) with the axes that
+carry a *user* decision — Provenance (trust) and the descriptive TRAINED / NEW usage marker
+(ADR-0042) — and a trainer can't tell which pills are for them. "Stub" and "Listable" in
+particular are developer vocabulary, and the loud `ENRICHED` pill shouted the least
+actionable state. So the tiers no longer render on any user-facing catalog/library/detail
+surface, and the `completeness` field is **removed from those API responses**.
+
+What **stands unchanged** from the decision above: Completeness is still a *read-time
+projection, never a stored column* (ADR-0018/0019); it is still *measured
+provenance-blind*; Enrichment still runs *out-of-band, never on the write path*; and the
+projection remains **load-bearing internally** — it is the `curated → completeness → name`
+catalog **ranking** key and the input that tells **Enrichment** which movements are sub-bar.
+The choice of *enrichment over gating* — the substance of this ADR — is untouched.
+
+Where the tiers now surface: the **admin** Catalog Enrichment section (ADR-0071 / ADR-0046),
+as an aggregate **catalog-health readout** (counts per tier) behind `require_admin`, fed by a
+new admin-gated `GET /api/exercises/completeness-breakdown`. This is decision-support for the
+existing backfill trigger — *how much of the corpus is sub-bar, and is Enrichment keeping up*
+— which is exactly where the pipeline vocabulary is apt. A per-exercise breakdown was
+considered and deferred (YAGNI): the aggregate answers the ops question, and the projection
+and endpoint are retained so a drill-down can be added cheaply if a real need appears.

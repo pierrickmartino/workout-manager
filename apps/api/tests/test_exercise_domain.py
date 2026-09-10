@@ -12,6 +12,7 @@ from app.domain.exercise import (
     CatalogCompleteness,
     Provenance,
     catalog_completeness,
+    completeness_breakdown,
     normalize_name,
     parse_instruction_steps,
     rank_exercise_matches,
@@ -351,3 +352,30 @@ def test_projection_is_provenance_blind():
 
     # Assert — trust does not lift content: a curated Stub still reads sub-bar
     assert catalog_completeness(curated_but_thin) == CatalogCompleteness.STUB
+
+
+def test_breakdown_tallies_each_tier():
+    # Arrange — a mixed catalog: two Stubs, one Listable, two Enriched
+    catalog = [
+        _Fields(),
+        _Fields(),
+        _listable_fields(),
+        _enriched_fields(),
+        _enriched_fields(),
+    ]
+
+    # Act
+    breakdown = completeness_breakdown(catalog)
+
+    # Assert — counts match each tier and total sums them
+    assert (breakdown.stub, breakdown.listable, breakdown.enriched) == (2, 1, 2)
+    assert breakdown.total == 5
+
+
+def test_breakdown_of_an_empty_catalog_is_all_zero():
+    # Act — an empty catalog must not divide-by-zero downstream; it is honestly empty
+    breakdown = completeness_breakdown([])
+
+    # Assert
+    assert (breakdown.stub, breakdown.listable, breakdown.enriched) == (0, 0, 0)
+    assert breakdown.total == 0
