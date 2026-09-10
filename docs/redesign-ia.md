@@ -72,11 +72,13 @@ row, not a tab.
 
 ### HOME (`/dashboard`)
 
-- **Add** a persistent **quick-action row** — `Start next` · `Build` · `Log` · `Recent` —
+- **Add** a persistent **quick-action row** — `Start next` · `Build` · `Log` · `My sessions` —
   rendered in **both** the active-protocol state *and* the empty state (today the empty
   state shows only the AI-generation launchpad, stranding the hand-made author). These are
   *shortcuts* that deep-link straight into each flow. `Start next` satisfies the I1 ≤1-tap
-  budget.
+  budget. (The re-use shortcut points at **My Sessions** — the searchable library, and the
+  concrete re-run destination not otherwise one tap from Home — rather than a bare "Recent"
+  label, since there is no dedicated Recent route; it still serves I6.)
 - **Keep**: readiness badge, Current Protocol hero + week strip + queue (or the generate
   CTA when there is no Current Protocol), Operator status (Level / XP / Streak), latest PR.
 - **Remove from Home**: the full **Fitness Profile snapshot** (11 rows — duplicates Profile)
@@ -121,7 +123,7 @@ or misplaced affordance*, not a feature.
 | Feature | Serves | Now | Verdict | Rationale |
 |---|---|---|---|---|
 | Current Protocol hero (Start next) | I1 | primary | **Promote** | Keep as hero; ensure it is the ≤1-tap Start. |
-| Quick-action row (Start/Build/Log/Recent) | I1,I4,I5,I6 | — | **Promote (new)** | The core-verb launch surface; also fills the empty state. |
+| Quick-action row (Start/Build/Log/My sessions) | I1,I4,I5,I6 | — | **Promote (new)** | The core-verb launch surface; also fills the empty state. |
 | Week strip + queue | I1 | primary | Keep | Positional progress, no calendar (ADR-0008). |
 | Generate launchpad (empty state) | I2,I3 | primary (empty only) | Keep | Still the no-Protocol CTA; now beside quick actions. |
 | Operator status (Level/XP/Streak) | I7 | secondary | Keep | Read-time projection; agrees with Profile. |

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 
-import { publishSkin } from "@/app/profile/skin-actions";
+import { publishSkin } from "@/app/admin/skin-actions";
 import { buildSkinControl } from "@/lib/appearance-view";
 import type { Skin } from "@/lib/theme";
 import { Alert } from "@/components/pulse/alert";
