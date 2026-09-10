@@ -12,8 +12,9 @@ auditable — important given the domain's caution around injury and rehab cases
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from enum import Enum
-from typing import Protocol, TypeVar
+from typing import NamedTuple, Protocol, TypeVar
 
 _WHITESPACE = re.compile(r"\s+")
 
@@ -194,6 +195,44 @@ def catalog_completeness(exercise: _Completable) -> CatalogCompleteness:
     if _is_listable(exercise):
         return CatalogCompleteness.LISTABLE
     return CatalogCompleteness.STUB
+
+
+class CompletenessBreakdown(NamedTuple):
+    """A count of catalog Exercises at each Catalog Completeness tier (ADR-0041).
+
+    The catalog-health aggregate behind the **admin** Catalog Enrichment readout:
+    how much of the corpus is sub-bar and whether Enrichment is keeping up. Catalog
+    Completeness is an internal/ops axis — it is never surfaced on a user-facing
+    catalog/library/detail response — so this aggregate exists only to make the
+    admin-gated backfill control legible, not as a per-user signal."""
+
+    stub: int
+    listable: int
+    enriched: int
+
+    @property
+    def total(self) -> int:
+        return self.stub + self.listable + self.enriched
+
+
+def completeness_breakdown(
+    exercises: Iterable[_Completable],
+) -> CompletenessBreakdown:
+    """Tally a catalog's Exercises by their read-time Completeness tier.
+
+    Pure and provenance-blind, reusing the one ``catalog_completeness`` projection so
+    the aggregate can never drift from the per-Exercise tiering. An empty catalog
+    yields all-zero counts (and a ``total`` of 0), which the readout renders as an
+    honest "nothing to show" rather than a divide-by-zero."""
+
+    counts = {tier: 0 for tier in CatalogCompleteness}
+    for exercise in exercises:
+        counts[catalog_completeness(exercise)] += 1
+    return CompletenessBreakdown(
+        stub=counts[CatalogCompleteness.STUB],
+        listable=counts[CatalogCompleteness.LISTABLE],
+        enriched=counts[CatalogCompleteness.ENRICHED],
+    )
 
 
 def parse_instruction_steps(instructions: str | None) -> list[str]:

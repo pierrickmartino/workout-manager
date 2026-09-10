@@ -17,7 +17,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ExerciseTabs } from "@/components/exercise/exercise-tabs";
 import { StatHeader } from "@/components/exercise/stat-header";
-import { CompletenessBadge } from "@/components/exercise/completeness-badge";
 import { SpecsPanel } from "@/components/exercise/specs-panel";
 import { HistoryPanel } from "@/components/exercise/history-panel";
 import { RecordsPanel } from "@/components/exercise/records-panel";
@@ -90,7 +89,6 @@ export default async function ExercisePage({
             ) : (
               <Badge variant="cyan">CURATED</Badge>
             )}
-            <CompletenessBadge completeness={exercise.completeness} />
           </div>
         }
       />

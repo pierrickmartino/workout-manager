@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { resolveIsAdmin } from "@/lib/admin";
 import { resolveActiveSkin } from "@/lib/active-skin";
 import { AppearanceSkinPublisher } from "@/components/AppearanceSkinPublisher";
+import { CatalogCompletenessBreakdown } from "@/components/CatalogCompletenessBreakdown";
 import { EnrichmentBackfillControl } from "@/components/EnrichmentBackfillControl";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -37,7 +38,10 @@ export default async function AdminPage() {
       <div className="flex flex-col gap-4">
         <SectionHeader>CATALOG ENRICHMENT</SectionHeader>
         <Card className="p-4">
-          <EnrichmentBackfillControl />
+          <div className="flex flex-col gap-6">
+            <CatalogCompletenessBreakdown />
+            <EnrichmentBackfillControl />
+          </div>
         </Card>
       </div>
 

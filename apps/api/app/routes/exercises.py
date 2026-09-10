@@ -15,7 +15,11 @@ from pydantic import BaseModel, field_validator
 
 from app.auth.dependencies import get_current_user, require_admin
 from app.db.models import Exercise
-from app.domain.exercise import Provenance, catalog_completeness, normalize_name
+from app.domain.exercise import (
+    Provenance,
+    completeness_breakdown,
+    normalize_name,
+)
 from app.domain.exercise_browse import (
     distinct_equipment,
     parse_difficulty_band,
@@ -60,8 +64,10 @@ MAX_NAME_LENGTH = 100
 def _search_result(exercise: Exercise) -> dict:
     """The pick-only Library projection of a catalog Exercise: just enough to choose
     a movement and know if it is unvalidated. Provenance is surfaced exactly as the
-    Session view and Exercise Detail do (ADR-0021), alongside the Catalog
-    Completeness tier (content presence) as a separate axis (ADR-0041)."""
+    Session view and Exercise Detail do (ADR-0021). Catalog Completeness is *not*
+    surfaced here: it is an internal/ops axis (ADR-0041, revised) — a server-side
+    ranking + Enrichment input only, read in the admin readout, never on this
+    user-facing response."""
 
     return {
         "id": exercise.id,
@@ -70,10 +76,6 @@ def _search_result(exercise: Exercise) -> dict:
         "required_equipment": list(exercise.required_equipment),
         "difficulty": exercise.difficulty,
         "provenance": exercise.provenance,
-        # Catalog Completeness (ADR-0041): a read-time projection of which content
-        # fields are populated — Stub | Listable | Enriched — never a stored column.
-        # A distinct axis from Provenance/trust, shown beside it in the Library.
-        "completeness": catalog_completeness(exercise).value,
     }
 
 
@@ -298,6 +300,31 @@ def read_enrichment_backfill_job(
     )
 
 
+@router.get("/exercises/completeness-breakdown")
+def read_completeness_breakdown(
+    _operator: str = Depends(require_admin),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+) -> dict:
+    """Catalog-health counts by Completeness tier (ADR-0041, revised), operator-only.
+
+    Decision-support for the adjacent enrichment backfill: how much of the corpus is
+    sub-bar and whether Enrichment is keeping up. Catalog Completeness is an
+    internal/ops axis — never surfaced on a user-facing catalog/library/detail read —
+    so this aggregate lives behind ``require_admin`` alongside the backfill trigger.
+    Declared before ``/exercises/{exercise_id}`` so the literal path is never mistaken
+    for an id. Responses use the standard envelope."""
+
+    breakdown = completeness_breakdown(exercises.list_all())
+    return success_envelope(
+        {
+            "stub": breakdown.stub,
+            "listable": breakdown.listable,
+            "enriched": breakdown.enriched,
+            "total": breakdown.total,
+        }
+    )
+
+
 def _summary(related: RelatedExercise) -> dict:
     return {"id": related.exercise.id, "name": related.exercise.name}
 
@@ -323,10 +350,9 @@ def _serialize(exercise: Exercise, related: list[RelatedExercise]) -> dict:
         # degrades the Detail response — a movement with no picture is still
         # fully usable.
         "image": exercise.image,
-        # Catalog Completeness (ADR-0041): the read-time Stub | Listable | Enriched
-        # tier, computed provenance-blind from the fields above, surfaced beside the
-        # Provenance/trust marker on Exercise Detail. Never a stored column.
-        "completeness": catalog_completeness(exercise).value,
+        # Catalog Completeness is deliberately absent (ADR-0041, revised): the
+        # Stub | Listable | Enriched tier is an internal/ops axis, surfaced only in
+        # the admin Catalog Enrichment readout, never on this user-facing detail.
         "variations": [
             _summary(r) for r in related if r.kind == RelationKind.VARIATION
         ],

@@ -70,8 +70,8 @@ def test_search_returns_matches_with_the_library_fields_and_meta():
     assert body["meta"]["total"] == 1
 
 
-def test_search_surfaces_the_completeness_tier_per_item():
-    # Arrange — two matches at different Completeness tiers: a Stub and a Listable
+def test_search_omits_the_internal_completeness_tier():
+    # Arrange — a Stub and a Listable that differ only by Catalog Completeness
     client, ctx, exercises = build_client()
     exercises.find_or_create("Squat Stub", provenance=Provenance.CURATED)
     exercises.find_or_create(
@@ -85,11 +85,10 @@ def test_search_surfaces_the_completeness_tier_per_item():
     # Act
     response = client.get("/api/exercises?query=squat", headers=_auth(ctx))
 
-    # Assert — every item carries its read-time completeness tier (ADR-0041),
-    # reflecting the underlying fields
+    # Assert — Completeness is an internal/ops axis (ADR-0041, revised): it never
+    # rides on a user-facing Library row, whatever the underlying fields
     assert response.status_code == 200
-    tiers = {r["name"]: r["completeness"] for r in response.json()["data"]}
-    assert tiers == {"Squat Stub": "stub", "Squat Listable": "listable"}
+    assert all("completeness" not in r for r in response.json()["data"])
 
 
 def test_search_ranks_curated_before_ai_generated():
