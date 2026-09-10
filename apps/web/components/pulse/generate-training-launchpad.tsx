@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, PencilLine, Zap } from "lucide-react";
+import { ArrowRight, PencilLine, PencilRuler, Zap } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
@@ -8,6 +8,11 @@ interface GenerateTrainingLaunchpadProps {
   // The mono eyebrow above the heading — differs by context ("no active protocol"
   // on the Home empty state, a neutral "start new training" on the TRAIN tab).
   eyebrow: string;
+  // Whether to show the no-AI "Build a workout" card — author a reusable Hand-Authored
+  // Session to run later, no performance logged (intent I4, ADR-0071). The TRAIN launchpad
+  // opts in; the Home empty state stays AI-only (Home's quick-action row already carries
+  // Build), so its two generation cards are untouched.
+  showBuild?: boolean;
   // Whether to show the no-AI "Log a past workout" card (a Hand-Authored Session,
   // ADR-0040). The TRAIN launchpad opts in; the Home empty state stays AI-only, so the
   // two generation cards there are untouched.
@@ -20,6 +25,7 @@ interface GenerateTrainingLaunchpadProps {
 // was previously only on the Home empty state, stranding users mid-Protocol.
 export function GenerateTrainingLaunchpad({
   eyebrow,
+  showBuild = false,
   showLogPastWorkout = false,
 }: GenerateTrainingLaunchpadProps): React.JSX.Element {
   return (
@@ -51,6 +57,18 @@ export function GenerateTrainingLaunchpad({
           Generate a workout
           <ArrowRight className="h-4 w-4" />
         </Link>
+        {showBuild ? (
+          <Link
+            href="/sessions/build"
+            className={buttonVariants({
+              variant: "secondary",
+              className: "w-full",
+            })}
+          >
+            <PencilRuler className="h-4 w-4" />
+            Build a workout
+          </Link>
+        ) : null}
         {showLogPastWorkout ? (
           <Link
             href="/sessions/log"

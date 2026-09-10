@@ -1,18 +1,16 @@
 import Link from "next/link";
-import { User } from "lucide-react";
+import { ShieldCheck, User } from "lucide-react";
 
+import { fetchProfile } from "@/lib/profile";
 import { fetchProfileProgress } from "@/lib/profile-progress";
 import { fetchTrainingHeatmap } from "@/lib/heatmap";
 import { toHeatmapGrid } from "@/lib/heatmap-view";
 import { resolveAppearance } from "@/lib/appearance";
-import { resolveActiveSkin } from "@/lib/active-skin";
 import { resolveIsAdmin } from "@/lib/admin";
 import { toAchievementCards } from "@/lib/achievements-view";
-import { buildAppearanceView } from "@/lib/appearance-view";
 import { AppearanceModePicker } from "@/components/AppearanceModePicker";
 import { AppearanceKeepAwakeToggle } from "@/components/AppearanceKeepAwakeToggle";
 import { AppearanceWeightUnitToggle } from "@/components/AppearanceWeightUnitToggle";
-import { AppearanceSkinPublisher } from "@/components/AppearanceSkinPublisher";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { NavRow } from "@/components/pulse/nav-row";
@@ -20,6 +18,7 @@ import { SignOutRow } from "@/components/pulse/sign-out-row";
 import { LevelBadge } from "@/components/pulse/level-badge";
 import { AchievementWall } from "@/components/pulse/achievement-wall";
 import { TrainingHeatmap } from "@/components/pulse/training-heatmap";
+import { FitnessProfileSummary } from "@/components/pulse/fitness-profile-summary";
 import { Bento, BentoTile } from "@/components/pulse/bento";
 import { Alert } from "@/components/pulse/alert";
 import { Card } from "@/components/ui/card";
@@ -40,13 +39,13 @@ const SUMMARY_COUNT = 4;
 export default async function ProfilePage() {
   // Resolve everything the page needs in parallel. `resolveActiveSkin` /
   // `resolveIsAdmin` share this request's cache with the root layout, so the extra
-  // reads are effectively free; the Skin controls are rendered only for an admin.
-  const [envelope, heatmapEnvelope, appearancePref, activeSkin, isAdmin] =
+  // reads are effectively free; the admin nav row to /admin is rendered only for an admin.
+  const [envelope, profileEnvelope, heatmapEnvelope, appearancePref, isAdmin] =
     await Promise.all([
       fetchProfileProgress(),
+      fetchProfile(),
       fetchTrainingHeatmap(),
       resolveAppearance(),
-      resolveActiveSkin(),
       resolveIsAdmin(),
     ]);
   const {
@@ -76,12 +75,6 @@ export default async function ProfilePage() {
       ? toHeatmapGrid(heatmapEnvelope.data)
       : null;
   const unlockedCount = cards.filter((card) => card.unlocked).length;
-
-  // The per-role Appearance decision runs through the one tested view-model: an
-  // admin gets a `skinControl` (so the Skin catalog is rendered), a non-admin does
-  // not. The interactive Mode/Skin slices are rebuilt client-side by the pickers as
-  // their local selection changes; this call is the role gate.
-  const appearance = buildAppearanceView({ mode, isAdmin, activeSkin });
 
   return (
     <section className="flex flex-col gap-6">
@@ -142,18 +135,21 @@ export default async function ProfilePage() {
             </div>
           </div>
         </Card>
-        {/* The Skin catalog is an admin-only control (ADR-0048): an ordinary user
-            picks their Mode and nothing more. `skinControl` is present only for an
-            admin (decided server-side from the Clerk role claim); the backend
-            independently gates the publish regardless of what is rendered here. */}
-        {appearance.skinControl ? (
-          <Card className="p-4">
-            <AppearanceSkinPublisher
-              activeSkin={appearance.skinControl.activeSkin}
-            />
-          </Card>
-        ) : null}
+        {/* The admin-only Skin catalog moved to the dedicated /admin home (ADR-0071):
+            an ordinary user picks their Mode and nothing more, and an admin reaches
+            Skin publishing via the admin row in ACCOUNT below. */}
       </div>
+
+      {/* The generation-input Fitness Profile snapshot, demoted here from Home
+          (docs/redesign-ia.md, ADR-0071). Read-only; the editable form is the
+          "Edit fitness profile" row below. Omitted if the profile read failed —
+          the progress read above already succeeded to reach here. */}
+      {profileEnvelope.success && profileEnvelope.data ? (
+        <div className="flex flex-col gap-4">
+          <SectionHeader>FITNESS PROFILE</SectionHeader>
+          <FitnessProfileSummary profile={profileEnvelope.data} />
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-4">
         <SectionHeader>ACCOUNT</SectionHeader>
@@ -164,6 +160,17 @@ export default async function ProfilePage() {
             href="/profile/edit"
             accent="cyan"
           />
+          {/* Admin-only: the dedicated /admin home for power features — publishing the
+              Active Skin and running catalog enrichment (ADR-0071). Rendered only for an
+              admin (server-resolved role claim); the backend gates the actions regardless. */}
+          {isAdmin ? (
+            <NavRow
+              icon={ShieldCheck}
+              label="Admin"
+              href="/admin"
+              accent="violet"
+            />
+          ) : null}
           <SignOutRow />
         </Card>
       </div>

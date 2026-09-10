@@ -66,11 +66,12 @@ export default async function TrainPage(): Promise<React.JSX.Element> {
       <PageHeader overline="PULSE // TRAIN" title="Start new training" />
 
       <p className="font-mono text-[13px] leading-relaxed text-text-muted">
-        Generate a full multi-week protocol or a single standalone workout — or log a
-        past workout you did yourself, no AI.
+        Generate a full multi-week protocol or a single standalone workout — or build one
+        by hand to run later, or log a past workout you did yourself, no AI.
       </p>
       <GenerateTrainingLaunchpad
         eyebrow="TRAIN // START SOMETHING NEW"
+        showBuild
         showLogPastWorkout
       />
 

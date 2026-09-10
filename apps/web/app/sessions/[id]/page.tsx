@@ -10,6 +10,7 @@ import { FavoriteSessionControl } from "@/components/FavoriteSessionControl";
 import { ShareSessionControl } from "@/components/ShareSessionControl";
 import { DeleteSessionControl } from "@/components/DeleteSessionControl";
 import { AddExerciseButton } from "@/components/AddExerciseButton";
+import { OverflowMenu } from "@/components/pulse/overflow-menu";
 import { resolveAppearance } from "@/lib/appearance";
 import { formatLoad } from "@/lib/load";
 import type { WeightUnit } from "@/lib/weight-unit";
@@ -147,19 +148,12 @@ export default async function SessionPage({
         {authorView.byline}
       </p>
 
-      {/* Standalone-only header controls. Both Rename and Favorite are withheld on a Protocol
-          member — a Session inside a Protocol carries a Week/Day `title` and is server-refused for
-          both (mirrors Duplicate/Insert). */}
+      {/* Header controls. Favorite — a frequent, cheap toggle — stays visible; the rare and
+          destructive actions (Rename, Share, Delete, Duplicate, Generate another) collapse
+          behind an "⋯ More" disclosure so the primary Start / Log verbs dominate the page
+          (docs/redesign-ia.md, ADR-0071). Each control is standalone-only unless noted; on a
+          Protocol member the menu holds only "Generate another". */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* Rename (issue #394): name, rename, or clear the Session Name on a standalone Session. */}
-        {session.is_protocol_member ? null : (
-          <RenameSessionControl
-            sessionId={session.id}
-            displayName={nameView.displayName}
-            isUserNamed={nameView.isUserNamed}
-            editValue={nameView.editValue}
-          />
-        )}
         {/* Favorite (issue #396): mark/unmark this standalone Session as a Favorite — a stored,
             per-user, per-copy preference used to filter My Sessions. Hidden here on a Protocol
             member (`favoriteView.show` is false, the server withholds the marker). */}
@@ -169,23 +163,48 @@ export default async function SessionPage({
             isFavorite={favoriteView.isFavorite}
           />
         ) : null}
-        {/* Share (ADR-0057, issue #398): publish a revocable Share Link another user can Redeem
-            into their own independent copy. Standalone-only — withheld on a Protocol member (a
-            Share Link is offered on standalone Sessions only), alongside Rename/Favorite. */}
-        {session.is_protocol_member ? null : (
-          <ShareSessionControl sessionId={session.id} />
-        )}
-        {/* Delete (CONTEXT: Delete, ADR-0063): permanently remove this standalone Session, offered
-            only when it has no logged training. Shown here disabled with a hint when the Session has
-            been performed (deleteView.canDelete false); hidden entirely on a Protocol member or a
-            read that omits the Logged Count (deleteView.show false), alongside Rename/Favorite/Share. */}
-        {deleteView.show ? (
-          <DeleteSessionControl
-            sessionId={session.id}
-            action={submitDeleteSession}
-            disabledHint={deleteView.canDelete ? null : DELETE_DISABLED_HINT}
-          />
-        ) : null}
+        <OverflowMenu label="More">
+          {/* Rename (issue #394): name, rename, or clear the Session Name on a standalone Session. */}
+          {session.is_protocol_member ? null : (
+            <RenameSessionControl
+              sessionId={session.id}
+              displayName={nameView.displayName}
+              isUserNamed={nameView.isUserNamed}
+              editValue={nameView.editValue}
+            />
+          )}
+          {/* Share (ADR-0057, issue #398): publish a revocable Share Link another user can Redeem
+              into their own independent copy. Standalone-only. */}
+          {session.is_protocol_member ? null : (
+            <ShareSessionControl sessionId={session.id} />
+          )}
+          {/* Duplicate is withheld on a Protocol member (ADR-0043 consequence): lifting one
+              workout out of a plan the user is working through has no value. It stays on
+              standalone Sessions, where forking a separate editable copy is the actual intent. */}
+          {session.is_protocol_member ? null : (
+            <DuplicateButton sessionId={session.id} />
+          )}
+          {/* Generate another standalone Session — a periodic action, not a per-session verb. */}
+          <Link
+            href="/sessions/new"
+            className={buttonVariants({ variant: "secondary" })}
+          >
+            Generate another
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+          {/* Delete (CONTEXT: Delete, ADR-0063): permanently remove this standalone Session, offered
+              only when it has no logged training. Shown disabled with a hint when the Session has
+              been performed (deleteView.canDelete false); hidden entirely on a Protocol member or a
+              read that omits the Logged Count (deleteView.show false). Last in the menu — the one
+              destructive action, one tap deeper than the rest. */}
+          {deleteView.show ? (
+            <DeleteSessionControl
+              sessionId={session.id}
+              action={submitDeleteSession}
+              disabledHint={deleteView.canDelete ? null : DELETE_DISABLED_HINT}
+            />
+          ) : null}
+        </OverflowMenu>
       </div>
 
       <div className="flex flex-col gap-4">
@@ -220,6 +239,8 @@ export default async function SessionPage({
         )}
       </div>
 
+      {/* The primary verbs: Start and Log. Rare actions (Duplicate, Generate another) moved
+          into the header "⋯ More" disclosure so this block stays focused (ADR-0071). */}
       <div className="flex flex-col gap-2.5">
         <Link
           href={`/sessions/${session.id}/live`}
@@ -237,23 +258,6 @@ export default async function SessionPage({
         >
           <ClipboardCheck className="h-4 w-4" />
           Log this session
-        </Link>
-        {/* Duplicate is withheld on a Protocol member (ADR-0043 consequence, Q2): lifting
-            one workout out of a plan the user is working through has no value here. It
-            stays on standalone Sessions, where forking a separate editable copy is the
-            actual intent. */}
-        {session.is_protocol_member ? null : (
-          <DuplicateButton sessionId={session.id} />
-        )}
-        <Link
-          href="/sessions/new"
-          className={buttonVariants({
-            variant: "secondary",
-            className: "w-full",
-          })}
-        >
-          Generate another
-          <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
     </section>
@@ -418,18 +422,22 @@ function PrescriptionCard({
       ) : null}
 
       <div className="flex flex-wrap items-center gap-3">
+        {/* Substitute stays on the primary surface — an in-context, non-destructive edit. */}
         <SubstituteButton sessionId={sessionId} position={prescription.position} />
         {/* Remove (ADR-0052): withdraw this movement from a standalone Session — Insert's
-            symmetric partner. Withheld on a Protocol member (removing inside a Protocol
-            stays Deploy's job), and disabled on the last remaining movement (a Session must
-            keep at least one). */}
+            symmetric partner. Destructive, so demoted one tap behind a per-row disclosure
+            (docs/redesign-ia.md, ADR-0071). The disclosure is rendered only when Remove is
+            offered — withheld on a Protocol member (removing inside a Protocol stays Deploy's
+            job), so most rows carry no "⋯ More" at all. */}
         {showRemove ? (
-          <RemoveExerciseButton
-            sessionId={sessionId}
-            position={prescription.position}
-            canRemove={canRemove}
-            dissolvesSuperset={dissolvesSuperset}
-          />
+          <OverflowMenu label="More">
+            <RemoveExerciseButton
+              sessionId={sessionId}
+              position={prescription.position}
+              canRemove={canRemove}
+              dissolvesSuperset={dissolvesSuperset}
+            />
+          </OverflowMenu>
         ) : null}
       </div>
     </Card>
