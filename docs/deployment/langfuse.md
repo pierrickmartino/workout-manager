@@ -142,7 +142,10 @@ boot — so they match with no manual copy-paste from the UI.
 > ⚠️ **`LANGFUSE_HOST` differs by environment.** Inside compose it's
 > `http://langfuse-web:3000`. If the app runs outside compose (e.g. local dev
 > against a compose Langfuse), it's `http://localhost:${LANGFUSE_PORT:-3001}`.
-> On Railway/managed hosts it's the Langfuse service's private URL.
+> On Railway/managed hosts it's the Langfuse service's private URL when the app
+> and Langfuse share a private network, or its public HTTPS domain when they
+> don't (still your own infrastructure, TLS-protected) — see
+> [`railway.md`](./railway.md#step-7--optional-self-hosted-langfuse-monitoring).
 
 ---
 
@@ -243,11 +246,14 @@ satisfies the acceptance criteria in #276.
 
 ## Production notes
 
-- **Managed hosts (Railway, etc.).** See [`railway.md`](./railway.md) for the
-  app services. Langfuse's six components map the same way — private services
-  plus their own managed Postgres/Redis (and ClickHouse/object storage from a
-  provider). Set `LANGFUSE_HOST` to the Langfuse service's **private** URL, and
-  keep the Langfuse UI off the public internet (VPN / auth-proxy / IP allowlist).
+- **Managed hosts (Railway, etc.).** Don't hand-build the six components — use
+  Langfuse's official one-click Railway template and wire the three app-side
+  vars to it. The full walkthrough (admin account, UI-created keys, cross-project
+  host, cost) is in
+  [`railway.md` Step 7](./railway.md#step-7--optional-self-hosted-langfuse-monitoring).
+  Reach the operator UI over the public HTTPS domain (behind Langfuse's own
+  login) or a VPN / private network; the app→Langfuse connection is
+  authenticated by the secret key and TLS-protected.
 - **Its own datastore.** Never point Langfuse at the app's `db`/`redis`. Keeping
   the datastores separate is what lets the 90-day purge and per-user erasure act
   on monitoring data without touching product data.

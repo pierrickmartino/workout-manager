@@ -31,8 +31,12 @@ dependencies = [
     "google-genai>=2.10",
     # Operational AI-usage monitoring (ADR-0039). Used only by the production
     # LangfuseGenerationCallRecorder and imported lazily, so the offline suite
-    # (no-op recorder) never touches it.
-    "langfuse>=2.0",
+    # (no-op recorder) never touches it. Pinned to the v2 major line: the
+    # recorder speaks the low-level v2 client API (``client.trace(...)`` ->
+    # ``.generation(...)``, ``client.api.trace`` erasure, ``client.flush()``),
+    # which the v3 SDK rewrite (OpenTelemetry-based, no ``trace()`` method)
+    # removed. Bumping to v3 is a recorder rewrite, not a version bump.
+    "langfuse>=2.0,<3",
 ]
 
 [project.optional-dependencies]

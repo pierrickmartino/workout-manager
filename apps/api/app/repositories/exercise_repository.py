@@ -18,6 +18,29 @@ from sqlmodel import Session, select
 
 from app.db.models import Exercise
 from app.domain.exercise import Provenance, normalize_name, rank_exercise_matches
+from app.domain.exercise_browse import (
+    DifficultyBand,
+    matches_filters,
+    normalize_equipment,
+    rank_browse_results,
+)
+from app.domain.muscle_groups import MuscleGroup
+
+
+@dataclass(frozen=True)
+class ResolvedExercise:
+    """The outcome of a resolve-or-create: the catalog Exercise and whether it was
+    freshly minted this call.
+
+    ``created`` is the async-enrichment trigger (issue #309, ADR-0041): only a
+    genuine normalized-name miss mints a new Stub, and only that case should enqueue
+    an Enrichment job — a dedup hit (``created`` is ``False``) enqueues nothing and
+    leaves the existing entry's Provenance untouched (ADR-0002). The losing side of
+    a concurrent insert also reports ``created`` ``False``: the winner minted the
+    row (and enqueued its job), so the loser must not re-enqueue."""
+
+    exercise: Exercise
+    created: bool
 
 
 @dataclass(frozen=True)
@@ -34,6 +57,30 @@ class ExerciseSearchPage:
 
 
 class ExerciseRepository(Protocol):
+    def resolve_or_create(
+        self,
+        name: str,
+        *,
+        provenance: Provenance,
+        description: str | None = None,
+        targeted_muscles: Sequence[str] = (),
+        primary_muscles: Sequence[str] = (),
+        secondary_muscles: Sequence[str] = (),
+        required_equipment: Sequence[str] = (),
+        instructions: Sequence[str] = (),
+        difficulty: int | None = None,
+        precautions: Sequence[str] = (),
+        image: str | None = None,
+    ) -> ResolvedExercise:
+        """Resolve ``name`` to a catalog Exercise, reporting whether it was created.
+
+        Same normalized-name dedup as ``find_or_create`` (ADR-0002), but returns a
+        ``ResolvedExercise`` whose ``created`` flag distinguishes a genuine miss (a
+        new Stub was minted) from a dedup hit (an existing entry was returned
+        untouched). The async-on-create Enrichment trigger (issue #309) enqueues only
+        when ``created`` is ``True``."""
+        ...
+
     def find_or_create(
         self,
         name: str,
@@ -47,9 +94,13 @@ class ExerciseRepository(Protocol):
         instructions: Sequence[str] = (),
         difficulty: int | None = None,
         precautions: Sequence[str] = (),
+        image: str | None = None,
     ) -> Exercise:
         """Return the catalog Exercise for ``name``'s normalized form, creating it
-        with ``provenance`` and the given details if it does not yet exist."""
+        with ``provenance`` and the given details if it does not yet exist.
+
+        A convenience wrapper over ``resolve_or_create`` for the many callers that do
+        not need to know whether the row was freshly minted."""
         ...
 
     def get(self, exercise_id: int) -> Exercise | None:
@@ -67,12 +118,60 @@ class ExerciseRepository(Protocol):
         Read-only — the Exercise Library never creates a catalog entry (ADR-0021)."""
         ...
 
+    def browse(
+        self,
+        *,
+        query: str,
+        muscle_groups: Sequence[MuscleGroup],
+        equipment: Sequence[str],
+        difficulty_bands: Sequence[DifficultyBand],
+        limit: int,
+        offset: int,
+    ) -> ExerciseSearchPage:
+        """List the whole Catalog for the Browse surface, filtered and paged (ADR-0042).
+
+        A **blank** ``query`` lists the whole Catalog; a non-blank one substring-matches
+        by normalized name. The result is then narrowed by the three facets — curated
+        Muscle Group, required equipment, and difficulty band (all AND'd, OR within each)
+        — ranked curated → completeness → name, and sliced by ``limit``/``offset`` with
+        the full filtered count in ``total``. Read-only: browse never creates a catalog
+        entry."""
+        ...
+
     def list_by_provenance(self, provenance: Provenance) -> list[Exercise]:
         """Return every catalog Exercise carrying ``provenance``.
 
         The re-enrichment pass (issue #107) reads the ``ai_generated`` rows through
         this so it can scope its AI batch to invented movements and never touch
         curated content (ADR-0016)."""
+        ...
+
+    def list_all(self) -> list[Exercise]:
+        """Return every catalog Exercise, regardless of Provenance.
+
+        The Stub-enrichment backfill (issue #308) walks the whole catalog through
+        this and classifies each row with the **provenance-blind** Catalog
+        Completeness projection (ADR-0041), so a sub-bar ``curated`` seed is lifted
+        alongside a ``user_entered`` or ``ai_generated`` Stub."""
+        ...
+
+    def set_enrichment(
+        self,
+        exercise_id: int,
+        *,
+        description: str | None,
+        targeted_muscles: Sequence[str],
+        instructions: Sequence[str],
+        difficulty: int | None,
+    ) -> Exercise | None:
+        """Write the enrichable field set (ADR-0041) on one Exercise.
+
+        Updates *only* ``description`` / ``targeted_muscles`` / ``instructions`` /
+        ``difficulty`` — the fields that lift a Stub to Listable. Provenance,
+        precautions, the Exercise Image, and the Primary/Secondary split are left
+        untouched: enrichment never promotes trust and never writes curator-only or
+        Enriched-tier content. Returns the updated Exercise, or ``None`` if no row
+        has ``exercise_id``."""
         ...
 
     def set_muscle_emphasis(
@@ -101,6 +200,7 @@ def _new_exercise(
     instructions: Sequence[str],
     difficulty: int | None,
     precautions: Sequence[str],
+    image: str | None,
 ) -> Exercise:
     return Exercise(
         name=name,
@@ -114,6 +214,7 @@ def _new_exercise(
         instructions=list(instructions),
         difficulty=difficulty,
         precautions=list(precautions),
+        image=image,
     )
 
 
@@ -128,9 +229,91 @@ def _page(matches: list[Exercise], limit: int, offset: int) -> ExerciseSearchPag
     return ExerciseSearchPage(items=ranked[offset : offset + limit], total=len(ranked))
 
 
+def _browse_page(
+    candidates: list[Exercise],
+    *,
+    muscle_groups: Sequence[MuscleGroup],
+    equipment: Sequence[str],
+    difficulty_bands: Sequence[DifficultyBand],
+    limit: int,
+    offset: int,
+) -> ExerciseSearchPage:
+    """Filter, rank, and slice browse candidates (ADR-0042).
+
+    Shared by the SQL and in-memory repositories so both apply one facet predicate, one
+    ordering, and one slice rule and never drift — the browse twin of ``_page``. Filtering
+    and ranking happen here, *after* the name/list-all candidate set is gathered, so the
+    ``total`` and the page reflect the filtered set. Equipment is normalized once here so
+    the pure predicate compares on the same key on both sides."""
+
+    groups = set(muscle_groups)
+    kit = {normalize_equipment(item) for item in equipment}
+    bands = set(difficulty_bands)
+    filtered = [
+        exercise
+        for exercise in candidates
+        if matches_filters(
+            exercise, muscle_groups=groups, equipment=kit, difficulty_bands=bands
+        )
+    ]
+    ranked = rank_browse_results(filtered)
+    return ExerciseSearchPage(items=ranked[offset : offset + limit], total=len(ranked))
+
+
 class SqlExerciseRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
+
+    def resolve_or_create(
+        self,
+        name: str,
+        *,
+        provenance: Provenance,
+        description: str | None = None,
+        targeted_muscles: Sequence[str] = (),
+        primary_muscles: Sequence[str] = (),
+        secondary_muscles: Sequence[str] = (),
+        required_equipment: Sequence[str] = (),
+        instructions: Sequence[str] = (),
+        difficulty: int | None = None,
+        precautions: Sequence[str] = (),
+        image: str | None = None,
+    ) -> ResolvedExercise:
+        key = normalize_name(name)
+        existing = self._lookup(key)
+        if existing is not None:
+            return ResolvedExercise(exercise=existing, created=False)
+
+        exercise = _new_exercise(
+            name,
+            provenance,
+            description,
+            targeted_muscles,
+            primary_muscles,
+            secondary_muscles,
+            required_equipment,
+            instructions,
+            difficulty,
+            precautions,
+            image,
+        )
+        self._session.add(exercise)
+        try:
+            self._session.commit()
+        except IntegrityError:
+            # A concurrent request inserted the same normalized_name between our
+            # lookup and commit, colliding on the unique index. Roll back our
+            # losing insert and return the row the winner created — resolve stays
+            # idempotent under concurrency (ADR-0002 dedup). The winner minted the
+            # row (and enqueued its Enrichment job), so the loser reports created
+            # False and never re-enqueues (issue #309).
+            self._session.rollback()
+            winner = self._lookup(key)
+            if winner is None:  # a different integrity violation; surface it
+                raise
+            return ResolvedExercise(exercise=winner, created=False)
+        self._session.refresh(exercise)
+        return ResolvedExercise(exercise=exercise, created=True)
 
     def find_or_create(
         self,
@@ -145,39 +328,21 @@ class SqlExerciseRepository:
         instructions: Sequence[str] = (),
         difficulty: int | None = None,
         precautions: Sequence[str] = (),
+        image: str | None = None,
     ) -> Exercise:
-        key = normalize_name(name)
-        existing = self._lookup(key)
-        if existing is not None:
-            return existing
-
-        exercise = _new_exercise(
+        return self.resolve_or_create(
             name,
-            provenance,
-            description,
-            targeted_muscles,
-            primary_muscles,
-            secondary_muscles,
-            required_equipment,
-            instructions,
-            difficulty,
-            precautions,
-        )
-        self._session.add(exercise)
-        try:
-            self._session.commit()
-        except IntegrityError:
-            # A concurrent request inserted the same normalized_name between our
-            # lookup and commit, colliding on the unique index. Roll back our
-            # losing insert and return the row the winner created — find_or_create
-            # stays idempotent under concurrency (ADR-0002 dedup).
-            self._session.rollback()
-            winner = self._lookup(key)
-            if winner is None:  # a different integrity violation; surface it
-                raise
-            return winner
-        self._session.refresh(exercise)
-        return exercise
+            provenance=provenance,
+            description=description,
+            targeted_muscles=targeted_muscles,
+            primary_muscles=primary_muscles,
+            secondary_muscles=secondary_muscles,
+            required_equipment=required_equipment,
+            instructions=instructions,
+            difficulty=difficulty,
+            precautions=precautions,
+            image=image,
+        ).exercise
 
     def _lookup(self, normalized_name: str) -> Exercise | None:
         return self._session.exec(
@@ -202,12 +367,60 @@ class SqlExerciseRepository:
         )
         return _page(matches, limit, offset)
 
+    def browse(
+        self,
+        *,
+        query: str,
+        muscle_groups: Sequence[MuscleGroup],
+        equipment: Sequence[str],
+        difficulty_bands: Sequence[DifficultyBand],
+        limit: int,
+        offset: int,
+    ) -> ExerciseSearchPage:
+        normalized = normalize_name(query)
+        statement = select(Exercise)
+        if normalized:
+            statement = statement.where(Exercise.normalized_name.contains(normalized))
+        candidates = list(self._session.exec(statement).all())
+        return _browse_page(
+            candidates,
+            muscle_groups=muscle_groups,
+            equipment=equipment,
+            difficulty_bands=difficulty_bands,
+            limit=limit,
+            offset=offset,
+        )
+
     def list_by_provenance(self, provenance: Provenance) -> list[Exercise]:
         return list(
             self._session.exec(
                 select(Exercise).where(Exercise.provenance == provenance.value)
             ).all()
         )
+
+    def list_all(self) -> list[Exercise]:
+        return list(self._session.exec(select(Exercise)).all())
+
+    def set_enrichment(
+        self,
+        exercise_id: int,
+        *,
+        description: str | None,
+        targeted_muscles: Sequence[str],
+        instructions: Sequence[str],
+        difficulty: int | None,
+    ) -> Exercise | None:
+        exercise = self._session.get(Exercise, exercise_id)
+        if exercise is None:
+            return None
+        exercise.description = description
+        exercise.targeted_muscles = list(targeted_muscles)
+        exercise.instructions = list(instructions)
+        exercise.difficulty = difficulty
+        self._session.add(exercise)
+        self._session.commit()
+        self._session.refresh(exercise)
+        return exercise
 
     def set_muscle_emphasis(
         self,
@@ -233,6 +446,45 @@ class InMemoryExerciseRepository:
         self._by_id: dict[int, Exercise] = {}
         self._next_id = 1
 
+    def resolve_or_create(
+        self,
+        name: str,
+        *,
+        provenance: Provenance,
+        description: str | None = None,
+        targeted_muscles: Sequence[str] = (),
+        primary_muscles: Sequence[str] = (),
+        secondary_muscles: Sequence[str] = (),
+        required_equipment: Sequence[str] = (),
+        instructions: Sequence[str] = (),
+        difficulty: int | None = None,
+        precautions: Sequence[str] = (),
+        image: str | None = None,
+    ) -> ResolvedExercise:
+        key = normalize_name(name)
+        existing = self._by_key.get(key)
+        if existing is not None:
+            return ResolvedExercise(exercise=existing, created=False)
+
+        exercise = _new_exercise(
+            name,
+            provenance,
+            description,
+            targeted_muscles,
+            primary_muscles,
+            secondary_muscles,
+            required_equipment,
+            instructions,
+            difficulty,
+            precautions,
+            image,
+        )
+        exercise.id = self._next_id
+        self._next_id += 1
+        self._by_key[key] = exercise
+        self._by_id[exercise.id] = exercise
+        return ResolvedExercise(exercise=exercise, created=True)
+
     def find_or_create(
         self,
         name: str,
@@ -246,29 +498,21 @@ class InMemoryExerciseRepository:
         instructions: Sequence[str] = (),
         difficulty: int | None = None,
         precautions: Sequence[str] = (),
+        image: str | None = None,
     ) -> Exercise:
-        key = normalize_name(name)
-        existing = self._by_key.get(key)
-        if existing is not None:
-            return existing
-
-        exercise = _new_exercise(
+        return self.resolve_or_create(
             name,
-            provenance,
-            description,
-            targeted_muscles,
-            primary_muscles,
-            secondary_muscles,
-            required_equipment,
-            instructions,
-            difficulty,
-            precautions,
-        )
-        exercise.id = self._next_id
-        self._next_id += 1
-        self._by_key[key] = exercise
-        self._by_id[exercise.id] = exercise
-        return exercise
+            provenance=provenance,
+            description=description,
+            targeted_muscles=targeted_muscles,
+            primary_muscles=primary_muscles,
+            secondary_muscles=secondary_muscles,
+            required_equipment=required_equipment,
+            instructions=instructions,
+            difficulty=difficulty,
+            precautions=precautions,
+            image=image,
+        ).exercise
 
     def get(self, exercise_id: int) -> Exercise | None:
         return self._by_id.get(exercise_id)
@@ -286,12 +530,58 @@ class InMemoryExerciseRepository:
         ]
         return _page(matches, limit, offset)
 
+    def browse(
+        self,
+        *,
+        query: str,
+        muscle_groups: Sequence[MuscleGroup],
+        equipment: Sequence[str],
+        difficulty_bands: Sequence[DifficultyBand],
+        limit: int,
+        offset: int,
+    ) -> ExerciseSearchPage:
+        normalized = normalize_name(query)
+        candidates = [
+            exercise
+            for exercise in self._by_id.values()
+            if not normalized or normalized in exercise.normalized_name
+        ]
+        return _browse_page(
+            candidates,
+            muscle_groups=muscle_groups,
+            equipment=equipment,
+            difficulty_bands=difficulty_bands,
+            limit=limit,
+            offset=offset,
+        )
+
     def list_by_provenance(self, provenance: Provenance) -> list[Exercise]:
         return [
             exercise
             for exercise in self._by_id.values()
             if exercise.provenance == provenance.value
         ]
+
+    def list_all(self) -> list[Exercise]:
+        return list(self._by_id.values())
+
+    def set_enrichment(
+        self,
+        exercise_id: int,
+        *,
+        description: str | None,
+        targeted_muscles: Sequence[str],
+        instructions: Sequence[str],
+        difficulty: int | None,
+    ) -> Exercise | None:
+        exercise = self._by_id.get(exercise_id)
+        if exercise is None:
+            return None
+        exercise.description = description
+        exercise.targeted_muscles = list(targeted_muscles)
+        exercise.instructions = list(instructions)
+        exercise.difficulty = difficulty
+        return exercise
 
     def set_muscle_emphasis(
         self,
@@ -311,6 +601,7 @@ class InMemoryExerciseRepository:
 __all__ = [
     "ExerciseRepository",
     "ExerciseSearchPage",
+    "ResolvedExercise",
     "SqlExerciseRepository",
     "InMemoryExerciseRepository",
 ]

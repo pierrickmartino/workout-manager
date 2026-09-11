@@ -190,8 +190,13 @@ def _persist_spec(session: EnumeratedSession) -> DeploySessionSpec:
                 rest_seconds=prescription.rest_seconds,
                 tempo=prescription.tempo,
                 recommended_load=prescription.recommended_load,
+                prescribed_quantity=prescription.prescribed_quantity,
                 superset_group=prescription.superset_group,
                 round_rest_seconds=prescription.round_rest_seconds,
+                scheme=prescription.scheme,
+                set_type=prescription.set_type,
+                target_effort=prescription.target_effort,
+                note=prescription.note,
             )
             for prescription in payload.prescriptions
         ],

@@ -22,6 +22,7 @@ from datetime import date, timedelta
 
 from app.domain.load import LoadKind, ParsedLoad
 from app.domain.quantity import repetitions_of
+from app.domain.set_type import is_warm_up
 
 
 @dataclass(frozen=True)
@@ -35,12 +36,16 @@ class VolumeSet:
     converted against that Exercise's Estimated 1RM; it is irrelevant to the other Load
     kinds and defaults to ``0``. ``quantity`` is the typed amount axis (ADR-0032); its
     ``repetitions`` accessor yields the rep count, or ``None`` for a non-rep amount.
+    ``set_type`` is the stored Set Type annotation (ADR-0065), or ``None`` for an unset
+    set that reads as ``working``; a ``warm_up`` set leaves the Volume projection
+    entirely — its tonnage is not working volume — and every other value counts.
     """
 
     quantity: dict | None
     load: dict | None
     performed_on: date
     exercise_id: int = 0
+    set_type: str | None = None
 
 
 @dataclass(frozen=True)
@@ -55,11 +60,14 @@ class VolumePoint:
 class VolumeSeries:
     """The volume line for one window: daily points, coverage, and the trend delta.
 
-    ``points`` are the days that had convertible volume, ascending. ``coverage_pct``
+    ``points`` are the days that moved tonnage, ascending; a day whose sets convert to
+    ``0`` kg is not a point (it would only strand the chart's Y-axis). ``coverage_pct``
     is the share of the window's logged *reps* that actually converted (0–100), so a
-    partial total is disclosed rather than presented as authoritative. ``delta_pct``
-    is the window's total volume against the immediately preceding equal-length
-    window, or ``None`` when there is no prior volume to compare against.
+    partial total is disclosed rather than presented as authoritative. ``delta_pct`` is
+    the **Trend Delta**: the window's total volume against the immediately preceding
+    equal-length window, or ``None`` when that window is not a fair reference — either it
+    moved no volume, or the user's logged history does not reach its start (a baseline
+    truncated by the account's age). Withheld, never shown as a meaningless percent.
     """
 
     points: tuple[VolumePoint, ...]
@@ -124,16 +132,25 @@ def volume_series(
     """Roll a stream of Logged Sets into the volume line for the ``days`` window.
 
     The window is the ``days`` calendar days ending on ``today`` (inclusive). Only
-    convertible sets contribute to the daily points and totals; every logged set —
-    convertible or not — counts toward the coverage denominator, so coverage is the
-    honest share of the window's reps the chart actually represents. The delta
-    compares the window's total against the immediately preceding equal-length
-    window, and is ``None`` when that prior window moved no convertible volume.
+    convertible sets contribute to the daily points and totals, and a day whose total
+    converts to ``0`` kg is dropped (a day that moved no tonnage is not a point); every
+    logged set — convertible or not — counts toward the coverage denominator, so coverage
+    is the honest share of the window's reps the chart actually represents. The delta
+    compares the window's total against the immediately preceding equal-length window,
+    and is ``None`` when that prior window moved no convertible volume **or** when the
+    user's logged history does not reach back to its start — a baseline truncated by the
+    account's age is not a fair reference, so its (otherwise huge) percent is withheld
+    rather than shown (the Trend Delta honesty floor, ADR-0011).
 
     ``body_weight_kg`` (the user's recorded mass) resolves ``bodyweight`` sets and
     ``estimated_1rm_by_exercise`` (each Exercise's best Estimated 1RM) resolves
     ``percent_1rm`` sets. Where the input is missing the set stays excluded and still
     counts against coverage, never as zero.
+
+    A ``warm_up`` Logged Set (ADR-0065) is dropped *before* any aggregation — points,
+    coverage denominator, and the delta baseline alike — so its tonnage never reads as
+    working volume and it is not mistaken for uncovered working reps. Every other Set
+    Type (working / failure / AMRAP / drop) and every unset (legacy) set stays in.
     """
 
     one_rm = estimated_1rm_by_exercise or {}
@@ -146,7 +163,16 @@ def volume_series(
             estimated_1rm=one_rm.get(s.exercise_id),
         )
 
-    sets = list(history)
+    # History Depth for the Trend Delta honesty floor (ADR-0011): the earliest logged
+    # activity, over *all* sets — warm-ups included, since account age is age regardless
+    # of Set Type. Materialize once; the delta is withheld below when this does not reach
+    # the prior window's start.
+    all_sets = list(history)
+    history_start = min((s.performed_on for s in all_sets), default=None)
+
+    # Warm-ups leave the working-volume projection entirely (ADR-0065): drop them up
+    # front so they touch neither the daily points, the coverage fraction, nor the delta.
+    sets = [s for s in all_sets if not is_warm_up(s.set_type)]
     start = today - timedelta(days=days - 1)
     prior_start = start - timedelta(days=days)
     prior_end = start - timedelta(days=1)
@@ -162,7 +188,12 @@ def volume_series(
         by_day[logged_set.performed_on] = (
             by_day.get(logged_set.performed_on, 0.0) + volume
         )
-    points = tuple(VolumePoint(day, by_day[day]) for day in sorted(by_day))
+    # A day that moved no tonnage (a 0 kg absolute set, or a 0-rep set) is not a volume
+    # point: charting a stray 0 beneath a near-flat series strands the Y-axis. Drop it
+    # here rather than fabricate a zero the line then has to reach down to.
+    points = tuple(
+        VolumePoint(day, by_day[day]) for day in sorted(by_day) if by_day[day] > 0
+    )
 
     # Only sets that carry a rep count weigh on coverage; a distance/duration set has
     # no reps and falls out of the fraction entirely (ADR-0032), never counted as zero.
@@ -179,8 +210,18 @@ def volume_series(
     prior_volume = sum(
         volume for s in prior if (volume := convert(s)) is not None
     )
+    # The Trend Delta is withheld unless the prior window is a *fair* reference: it must
+    # have moved volume AND lie fully within the user's logged history (history reaches
+    # its start). A window truncated by the account's age — the "+3679% vs. previous 30D"
+    # new-account case — has no honest baseline, so the delta is omitted, never shown as a
+    # meaningless four-digit percent (ADR-0011).
+    baseline_within_history = (
+        history_start is not None and history_start <= prior_start
+    )
     delta_pct = (
-        (current_volume - prior_volume) / prior_volume * 100 if prior_volume else None
+        (current_volume - prior_volume) / prior_volume * 100
+        if prior_volume and baseline_within_history
+        else None
     )
 
     return VolumeSeries(points=points, coverage_pct=coverage_pct, delta_pct=delta_pct)

@@ -20,7 +20,7 @@ const SQUAT: ExerciseTrajectory = {
 
 test("maps each trajectory to a tile linking to its Exercise Detail chart", () => {
   // Act
-  const tiles = toStrengthTrajectories([SQUAT]);
+  const tiles = toStrengthTrajectories([SQUAT], "kg");
 
   // Assert — the tile carries the Exercise, a deep link (with the Analytics origin
   // so Exercise Detail's back link returns here), and the charted trend
@@ -39,7 +39,7 @@ test("surfaces the latest top set as a whole-kilogram headline estimate", () => 
   };
 
   // Act
-  const [tile] = toStrengthTrajectories([fractional]);
+  const [tile] = toStrengthTrajectories([fractional], "kg");
 
   // Assert — the most recent session's top set, rounded, in kg
   assert.equal(tile.estimate, "104 kg");
@@ -47,7 +47,7 @@ test("surfaces the latest top set as a whole-kilogram headline estimate", () => 
 
 test("builds a screen-reader label naming the lift, its latest top set, and trend", () => {
   // Act
-  const [tile] = toStrengthTrajectories([SQUAT]);
+  const [tile] = toStrengthTrajectories([SQUAT], "kg");
 
   // Assert — the label carries what the decorative chart cannot convey aurally
   assert.equal(
@@ -65,7 +65,7 @@ test("omits the trend clause from the label when there is only one session", () 
   };
 
   // Act
-  const [tile] = toStrengthTrajectories([press]);
+  const [tile] = toStrengthTrajectories([press], "kg");
 
   // Assert
   assert.equal(
@@ -76,7 +76,7 @@ test("omits the trend clause from the label when there is only one session", () 
 
 test("reuses the Top-Set trend shaping for each tile's rows and delta", () => {
   // Act
-  const [tile] = toStrengthTrajectories([SQUAT]);
+  const [tile] = toStrengthTrajectories([SQUAT], "kg");
 
   // Assert — oldest-first rows with the latest bar flagged, and the signed delta pill
   assert.deepEqual(
@@ -98,7 +98,7 @@ test("preserves the server's ranked order across multiple trajectories", () => {
   };
 
   // Act
-  const tiles = toStrengthTrajectories([SQUAT, press]);
+  const tiles = toStrengthTrajectories([SQUAT, press], "kg");
 
   // Assert
   assert.deepEqual(
@@ -116,7 +116,7 @@ test("a single-session trajectory has rows but no delta pill", () => {
   };
 
   // Act
-  const [tile] = toStrengthTrajectories([press]);
+  const [tile] = toStrengthTrajectories([press], "kg");
 
   // Assert — the chart still renders one bar, but the delta pill is omitted
   assert.equal(tile.trend.rows.length, 1);
@@ -124,5 +124,14 @@ test("a single-session trajectory has rows but no delta pill", () => {
 });
 
 test("no trajectories yields no tiles so the section can hide", () => {
-  assert.deepEqual(toStrengthTrajectories([]), []);
+  assert.deepEqual(toStrengthTrajectories([], "kg"), []);
+});
+
+test("projects the trajectory tile's headline estimate into the reader's pounds", () => {
+  // Arrange — the standard squat trajectory, read by a lb user.
+  // Act
+  const [tile] = toStrengthTrajectories([SQUAT], "lb");
+
+  // Assert — the headline estimate carries the lb unit, not kg.
+  assert.ok(tile.estimate.endsWith(" lb"));
 });

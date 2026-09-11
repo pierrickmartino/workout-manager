@@ -7,17 +7,22 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.envelope import error_envelope
+from app.routes.active_skin import router as active_skin_router
 from app.routes.analytics import router as analytics_router
+from app.routes.appearance import router as appearance_router
 from app.routes.exercises import router as exercises_router
+from app.routes.export import router as export_router
 from app.routes.home import router as home_router
 from app.routes.logs import router as logs_router
 from app.routes.metrics import router as metrics_router
 from app.routes.profile import router as profile_router
+from app.routes.profile_heatmap import router as profile_heatmap_router
 from app.routes.profile_progress import router as profile_progress_router
 from app.routes.protocols import router as protocols_router
 from app.routes.progress import router as progress_router
 from app.routes.records import router as records_router
 from app.routes.sessions import router as sessions_router
+from app.routes.shares import router as shares_router
 
 HTTP_UNPROCESSABLE_ENTITY = 422
 
@@ -55,11 +60,16 @@ def create_app() -> FastAPI:
     app.include_router(home_router)
     app.include_router(profile_router)
     app.include_router(profile_progress_router)
+    app.include_router(profile_heatmap_router)
+    app.include_router(appearance_router)
+    app.include_router(active_skin_router)
     app.include_router(sessions_router)
+    app.include_router(shares_router)
     app.include_router(logs_router)
     app.include_router(protocols_router)
     app.include_router(exercises_router)
     app.include_router(metrics_router)
+    app.include_router(export_router)
     app.include_router(progress_router)
     app.include_router(records_router)
     app.include_router(analytics_router)

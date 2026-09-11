@@ -13,18 +13,19 @@ import {
   toDeployPayload,
   toSimulatePayload,
   type BuilderDraft,
-  type BuilderMatrix,
   type DraftSession,
   type DropIntent,
-  type MatrixCell,
   type PickedExercise,
 } from "@/lib/protocol-builder";
 import { type LoadKind } from "@/lib/load";
+import type { Effort } from "@/lib/effort";
+import type { DistanceUnit, QuantityKind } from "@/lib/quantity";
+import type { WeightUnit } from "@/lib/weight-unit";
 import type { BalancePreview, ProtocolProgress } from "@/lib/protocols-types";
 import { toMuscleBars } from "@/lib/muscle-distribution";
-import { cn } from "@/lib/utils";
 import { ExerciseLibrary } from "@/components/ExerciseLibrary";
 import { PrescriptionList } from "@/components/builder/prescription-rows";
+import { SessionMatrix } from "@/components/builder/session-matrix";
 import { MuscleSplit } from "@/components/pulse/muscle-split";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -44,6 +45,9 @@ interface ProtocolBuilderProps {
   // opens with existing Supersets auto-unlinked in the editable tail and shows a
   // banner; a non-medical Preference / Limitation never sets this.
   hasSensitiveConstraint?: boolean;
+  // The reader's Weight Unit (#417): each Prescription's Load is authored in this unit and
+  // the pickers name it; DEPLOY converts the entries back to canonical kilograms.
+  unit: WeightUnit;
 }
 
 // Shape bounds mirror the server's deploy validation (weeks 1–52, frequency 1–14).
@@ -61,6 +65,7 @@ export function ProtocolBuilder({
   protocol,
   queuedExercise = null,
   hasSensitiveConstraint = false,
+  unit,
 }: ProtocolBuilderProps) {
   // Seed the F6-queued Exercise into the initial draft (ADR-0021) so it is waiting to
   // be placed the moment the builder opens — no mount effect, no flash of an empty
@@ -69,7 +74,10 @@ export function ProtocolBuilder({
     builderReducer,
     protocol,
     (source): BuilderDraft => {
-      const base = initBuilderDraft(source, { hasSensitiveConstraint });
+      const base = initBuilderDraft(source, {
+        hasSensitiveConstraint,
+        weightUnit: unit,
+      });
       if (!queuedExercise) return base;
       return builderReducer(base, {
         type: "SEED_QUEUED_EXERCISE",
@@ -109,7 +117,10 @@ export function ProtocolBuilder({
     setError(null);
     setDeployed(false);
     startTransition(async () => {
-      const result = await submitDeploy(draft.protocolId, toDeployPayload(draft));
+      const result = await submitDeploy(
+        draft.protocolId,
+        toDeployPayload(draft, unit),
+      );
       if (result.error || !result.protocol) {
         setError(result.error ?? "Could not deploy the protocol.");
         return;
@@ -182,10 +193,14 @@ export function ProtocolBuilder({
       ) : null}
 
       <SessionMatrix
+        draft={draft}
         matrix={matrix}
         selectedSessionId={selectedSessionId}
         onSelect={setSelectedSessionId}
         onAddSession={(week) => dispatch({ type: "ADD_SESSION", week })}
+        onMoveSession={(sessionId, toWeek, toIndex) =>
+          dispatch({ type: "MOVE_SESSION", sessionId, toWeek, toIndex })
+        }
         onAddWeek={() => {
           const nextWeek = draft.weeks + 1;
           dispatch({ type: "SET_WEEKS", weeks: nextWeek });
@@ -196,6 +211,7 @@ export function ProtocolBuilder({
       {selectedSession ? (
         <SessionEditor
           session={selectedSession}
+          unit={unit}
           queuedExerciseName={draft.queuedExercise?.name ?? null}
           onPlaceQueued={() =>
             dispatch({
@@ -219,6 +235,47 @@ export function ProtocolBuilder({
               position,
               loadKind,
               loadValue,
+            })
+          }
+          onSetScheme={(position, scheme) =>
+            dispatch({
+              type: "SET_SCHEME",
+              sessionId: selectedSession.sessionId,
+              position,
+              scheme,
+            })
+          }
+          onSetSetType={(position, setType) =>
+            dispatch({
+              type: "SET_SET_TYPE",
+              sessionId: selectedSession.sessionId,
+              position,
+              setType,
+            })
+          }
+          onSetTargetEffort={(position, targetEffort) =>
+            dispatch({
+              type: "SET_TARGET_EFFORT",
+              sessionId: selectedSession.sessionId,
+              position,
+              targetEffort,
+            })
+          }
+          onSetNote={(position, note) =>
+            dispatch({
+              type: "SET_NOTE",
+              sessionId: selectedSession.sessionId,
+              position,
+              note,
+            })
+          }
+          onSetQuantity={(position, quantityKind, quantityUnit) =>
+            dispatch({
+              type: "SET_QUANTITY",
+              sessionId: selectedSession.sessionId,
+              position,
+              quantityKind,
+              quantityUnit,
             })
           }
           onAdd={(exercise) =>
@@ -489,145 +546,10 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
   );
 }
 
-interface SessionMatrixProps {
-  matrix: BuilderMatrix;
-  selectedSessionId: number | null;
-  onSelect: (sessionId: number) => void;
-  onAddSession: (week: number) => void;
-  onAddWeek: () => void;
-}
-
-// The Protocol's positional Week × session-slot overview (ADR-0021), replacing the
-// plain Session list. Rows are weeks; cells are the Sessions occupying that week's
-// slots, in order — purely positional, with no weekday or date labels, and each
-// row is as wide as the week's *actual* Session count (deloads render narrower).
-// Each cell shows its Prescription count; performed Sessions read dimmed and
-// locked, distinct from live ones. Selecting a cell opens that Session below.
-function SessionMatrix({
-  matrix,
-  selectedSessionId,
-  onSelect,
-  onAddSession,
-  onAddWeek,
-}: SessionMatrixProps) {
-  return (
-    <div className="flex flex-col gap-4">
-      <SectionHeader meta={matrix.cadenceLabel}>OVERVIEW</SectionHeader>
-      <div className="flex flex-col gap-2">
-        {matrix.rows.map((row) => (
-          <div key={row.week} className="flex items-center gap-3">
-            <span className="w-9 shrink-0 label-mono text-[10px] text-text-muted">
-              WK {row.week}
-            </span>
-            <ul className="flex flex-1 list-none flex-wrap gap-2 p-0">
-              {row.cells.map((cell, slotIndex) => (
-                <li key={cell.sessionId}>
-                  <MatrixCellButton
-                    cell={cell}
-                    slot={slotIndex + 1}
-                    selected={cell.sessionId === selectedSessionId}
-                    onSelect={() => onSelect(cell.sessionId)}
-                  />
-                </li>
-              ))}
-              <li>
-                <AddSlotButton
-                  label={`Add a Session to week ${row.week}`}
-                  onClick={() => onAddSession(row.week)}
-                />
-              </li>
-            </ul>
-          </div>
-        ))}
-      </div>
-      <Button
-        type="button"
-        variant="secondary"
-        onClick={onAddWeek}
-        className="w-full"
-      >
-        <Plus className="mr-1 inline h-3.5 w-3.5" aria-hidden />
-        ADD WEEK
-      </Button>
-    </div>
-  );
-}
-
-// The empty-slot affordance in a matrix row: adds a new, empty un-performed Session
-// to that week (ADR-0020). It matches a cell's footprint so the grid reads evenly.
-function AddSlotButton({
-  label,
-  onClick,
-}: {
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      className="flex h-16 w-16 flex-col items-center justify-center rounded-md border border-dashed border-border text-text-muted transition-colors hover:border-cyan/50 hover:text-cyan"
-    >
-      <Plus className="h-4 w-4" aria-hidden />
-      <span className="label-mono text-[8px]">ADD</span>
-    </button>
-  );
-}
-
-interface MatrixCellButtonProps {
-  cell: MatrixCell;
-  slot: number;
-  selected: boolean;
-  onSelect: () => void;
-}
-
-// One matrix cell: a Session at a week's slot. Renders its Prescription count as
-// the headline figure, a positional `SLOT n` (never a weekday) or a lock for a
-// performed Session, and highlights when it is the one open in the editor.
-function MatrixCellButton({
-  cell,
-  slot,
-  selected,
-  onSelect,
-}: MatrixCellButtonProps) {
-  const count = cell.prescriptionCount;
-  const label =
-    `Week ${cell.week}, slot ${slot} — ${count} ${count === 1 ? "exercise" : "exercises"}` +
-    (cell.performed ? ", performed" : "");
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
-      aria-label={label}
-      className={cn(
-        "flex h-16 w-16 flex-col items-center justify-center gap-1 rounded-md border transition-colors",
-        selected
-          ? "border-cyan ring-2 ring-cyan/30"
-          : "border-border hover:border-cyan/50",
-        cell.performed
-          ? "bg-base/50 text-text-muted opacity-70"
-          : "bg-surface text-text-primary",
-      )}
-    >
-      {cell.performed ? (
-        <Lock className="h-3 w-3" aria-hidden />
-      ) : (
-        <span className="label-mono text-[8px] text-text-muted">
-          SLOT {slot}
-        </span>
-      )}
-      <span className="font-mono text-[18px] font-bold leading-none">
-        {count}
-      </span>
-      <span className="label-mono text-[8px] text-text-muted">EX</span>
-    </button>
-  );
-}
-
 interface SessionEditorProps {
   session: DraftSession;
+  // The reader's Weight Unit (#417), forwarded to each Prescription row's Load picker.
+  unit: WeightUnit;
   // The name of the F6-queued Exercise waiting to be placed (ADR-0021), or `null`
   // when nothing is queued. Drives the "place here" affordance on an un-performed
   // Session.
@@ -639,6 +561,15 @@ interface SessionEditorProps {
     value: string | number | null,
   ) => void;
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
+  onSetScheme: (position: number, scheme: string | null) => void;
+  onSetSetType: (position: number, setType: string | null) => void;
+  onSetTargetEffort: (position: number, targetEffort: Effort | null) => void;
+  onSetNote: (position: number, note: string | null) => void;
+  onSetQuantity: (
+    position: number,
+    quantityKind: QuantityKind,
+    quantityUnit: DistanceUnit,
+  ) => void;
   onAdd: (exercise: PickedExercise) => void;
   onRemove: (position: number) => void;
   onReorder: (from: number, to: number) => void;
@@ -654,10 +585,16 @@ interface SessionEditorProps {
 // read-only — the frozen prefix (ADR-0020).
 function SessionEditor({
   session,
+  unit,
   queuedExerciseName,
   onPlaceQueued,
   onEditField,
   onEditLoad,
+  onSetScheme,
+  onSetSetType,
+  onSetTargetEffort,
+  onSetNote,
+  onSetQuantity,
   onAdd,
   onRemove,
   onReorder,
@@ -710,8 +647,14 @@ function SessionEditor({
         prescriptions={session.prescriptions}
         layout={layout}
         locked={locked}
+        unit={unit}
         onEditField={onEditField}
         onEditLoad={onEditLoad}
+        onSetScheme={onSetScheme}
+        onSetSetType={onSetSetType}
+        onSetTargetEffort={onSetTargetEffort}
+        onSetNote={onSetNote}
+        onSetQuantity={onSetQuantity}
         onEditRoundRest={onEditRoundRest}
         onReorder={onReorder}
         onGroupWithNext={onGroupWithNext}

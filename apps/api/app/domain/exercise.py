@@ -12,8 +12,9 @@ auditable — important given the domain's caution around injury and rehab cases
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from enum import Enum
-from typing import Protocol, TypeVar
+from typing import NamedTuple, Protocol, TypeVar
 
 _WHITESPACE = re.compile(r"\s+")
 
@@ -40,6 +41,17 @@ _PROVENANCE_RANK: dict[str, int] = {
     Provenance.AI_GENERATED.value: 1,
     Provenance.USER_ENTERED.value: 2,
 }
+
+
+def provenance_rank(provenance: str) -> int:
+    """Trust rank of a Provenance value: curated (0) < AI-generated (1) < user-typed (2).
+
+    The single source of the curated-first ordering both the Exercise Library search
+    (``rank_exercise_matches``) and the Catalog browse (``rank_browse_results``, ADR-0042)
+    sort on. Any unknown value falls into the AI-generated tier, preserving the
+    pre-ADR-0033 "non-curated → 1"."""
+
+    return _PROVENANCE_RANK.get(provenance, 1)
 
 
 def normalize_name(name: str) -> str:
@@ -77,9 +89,149 @@ def rank_exercise_matches(matches: list[_RankableT]) -> list[_RankableT]:
     return sorted(
         matches,
         key=lambda match: (
-            _PROVENANCE_RANK.get(match.provenance, 1),
+            provenance_rank(match.provenance),
             match.normalized_name,
         ),
+    )
+
+
+class CatalogCompleteness(str, Enum):
+    """Whether a catalog Exercise meets the shared quality bar (ADR-0041).
+
+    A **read-time projection** over which content fields are populated — never a
+    stored column — in three tiers: ``STUB`` (name only), ``LISTABLE`` (a
+    description, a non-empty flat targeted-muscle list, and at least one Execution
+    Step), and ``ENRICHED`` (Listable plus the Primary/Secondary emphasis split,
+    difficulty, precautions, and an Exercise Image). Measured **provenance-blind**:
+    trust (Provenance) and content-presence (Completeness) are separate axes, so a
+    curated seed missing fields still reads sub-bar.
+    """
+
+    STUB = "stub"
+    LISTABLE = "listable"
+    ENRICHED = "enriched"
+
+
+class _Completable(Protocol):
+    """The content fields the Catalog Completeness bar reads on an Exercise.
+
+    Deliberately narrower than the full catalog row: the projection depends only on
+    field *presence*, never on Provenance, so it stays a pure, provenance-blind
+    read."""
+
+    description: str | None
+    targeted_muscles: list[str]
+    instructions: list[str]
+    primary_muscles: list[str]
+    secondary_muscles: list[str]
+    difficulty: int | None
+    precautions: list[str]
+    image: str | None
+
+
+def _has_text(value: str | None) -> bool:
+    """A string field counts as present only when it carries non-blank content — a
+    whitespace-only value is an empty column, not real content."""
+
+    return bool(value and value.strip())
+
+
+class _Splittable(Protocol):
+    """The two fields that carry a Primary/Secondary emphasis split."""
+
+    primary_muscles: list[str]
+    secondary_muscles: list[str]
+
+
+def has_emphasis_split(exercise: _Splittable) -> bool:
+    """Whether the Exercise asserts a Primary/Secondary emphasis split (ADR-0016).
+
+    Any asserted emphasis — a primary or a secondary — is a populated split, so a
+    true isolation movement with only a primary still qualifies. An empty split is
+    "no asserted primacy", never "all primary". The single source of truth for "has
+    a split": both the Catalog Completeness projection and the muscle-emphasis
+    re-enrichment pass read through here, so one notion holds across the codebase."""
+
+    return bool(exercise.primary_muscles) or bool(exercise.secondary_muscles)
+
+
+def _is_listable(exercise: _Completable) -> bool:
+    """The minimum bar: a description, a non-empty flat targeted-muscle list, and at
+    least one Execution Step. The emphasis split is deliberately *not* required here —
+    that is Enriched-tier only (ADR-0041), so the minimum never pressures fabricated
+    primacy (ADR-0016)."""
+
+    return (
+        _has_text(exercise.description)
+        and bool(exercise.targeted_muscles)
+        and bool(exercise.instructions)
+    )
+
+
+def _is_enriched(exercise: _Completable) -> bool:
+    """The gold bar: Listable plus the Primary/Secondary split, difficulty,
+    precautions, and an Exercise Image. Missing any one gold field leaves the
+    movement Listable, never Enriched."""
+
+    return (
+        _is_listable(exercise)
+        and has_emphasis_split(exercise)
+        and exercise.difficulty is not None
+        and bool(exercise.precautions)
+        and _has_text(exercise.image)
+    )
+
+
+def catalog_completeness(exercise: _Completable) -> CatalogCompleteness:
+    """Project a catalog Exercise's populated fields onto its Completeness tier.
+
+    Pure and read-time (ADR-0041): computed from field presence alone, with no
+    stored column and no write hook, and **provenance-blind** — the projection never
+    reads Provenance, so a ``curated``, ``ai_generated``, or ``user_entered`` movement
+    is held to the same yardstick. Tiers are checked strongest-first."""
+
+    if _is_enriched(exercise):
+        return CatalogCompleteness.ENRICHED
+    if _is_listable(exercise):
+        return CatalogCompleteness.LISTABLE
+    return CatalogCompleteness.STUB
+
+
+class CompletenessBreakdown(NamedTuple):
+    """A count of catalog Exercises at each Catalog Completeness tier (ADR-0041).
+
+    The catalog-health aggregate behind the **admin** Catalog Enrichment readout:
+    how much of the corpus is sub-bar and whether Enrichment is keeping up. Catalog
+    Completeness is an internal/ops axis — it is never surfaced on a user-facing
+    catalog/library/detail response — so this aggregate exists only to make the
+    admin-gated backfill control legible, not as a per-user signal."""
+
+    stub: int
+    listable: int
+    enriched: int
+
+    @property
+    def total(self) -> int:
+        return self.stub + self.listable + self.enriched
+
+
+def completeness_breakdown(
+    exercises: Iterable[_Completable],
+) -> CompletenessBreakdown:
+    """Tally a catalog's Exercises by their read-time Completeness tier.
+
+    Pure and provenance-blind, reusing the one ``catalog_completeness`` projection so
+    the aggregate can never drift from the per-Exercise tiering. An empty catalog
+    yields all-zero counts (and a ``total`` of 0), which the readout renders as an
+    honest "nothing to show" rather than a divide-by-zero."""
+
+    counts = {tier: 0 for tier in CatalogCompleteness}
+    for exercise in exercises:
+        counts[catalog_completeness(exercise)] += 1
+    return CompletenessBreakdown(
+        stub=counts[CatalogCompleteness.STUB],
+        listable=counts[CatalogCompleteness.LISTABLE],
+        enriched=counts[CatalogCompleteness.ENRICHED],
     )
 
 

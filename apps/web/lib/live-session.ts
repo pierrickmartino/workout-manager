@@ -3,7 +3,8 @@
 // built, holding the sets done so far and which set is current. It has NO
 // server-only imports, so both the Server route and the Client screen can use it.
 
-import { formatLoad, NO_LOAD, type Load, type LoadKind } from "./load.ts";
+import { formatLoad, loadToFields, type Load, type LoadKind } from "./load.ts";
+import type { WeightUnit } from "./weight-unit";
 import type {
   ExercisePrescription,
   PreviousSet,
@@ -66,6 +67,19 @@ export interface LiveSet {
 
 export interface LiveSessionState {
   sessionId: number;
+  // The owner's Clerk account id (ADR-0059, amending ADR-0035). Stamped on START so
+  // every persisted slot carries who it belongs to; hydration on another account
+  // purges it rather than offering a cross-account resume on a shared browser. Null
+  // in a not-yet-started performance (no owner until START) — such a state is never
+  // persisted, so a stored slot always carries a real id.
+  accountId: string | null;
+  // The client-minted idempotency key (ADR-0060, issue #412) that makes the finish
+  // duplicate-proof. Stamped on START and carried through the persisted slot, so a
+  // finish that fails and is retried — even after a reload or force-quit — resends the
+  // *same* key and the server (issue #410) upsert-returns the first Logged Session
+  // rather than creating a second. Null until a keyed START; a slot written before this
+  // shipped also reads null and mints a key at finish (see lib/live-session-finish).
+  idempotencyKey: string | null;
   sets: LiveSet[];
   currentIndex: number;
   status: LiveStatus;
@@ -78,7 +92,11 @@ export interface LiveSessionState {
 }
 
 export type LiveEvent =
-  | { type: "START"; now?: number }
+  // START stamps the owner (`accountId`, ADR-0059) and the client-minted idempotency
+  // key (`idempotencyKey`, ADR-0060 — issue #412) alongside the timing instant, so the
+  // first persisted write of a fresh performance already carries who it belongs to and
+  // the stable key its finish will dedupe on. Omitting a field leaves it unchanged.
+  | { type: "START"; now?: number; accountId?: string; idempotencyKey?: string }
   | {
       type: "COMPLETE_SET";
       index: number;
@@ -109,11 +127,15 @@ export const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 //   finalize it as Incomplete (ADR-0014) and show a summary instead of resuming.
 // - `blocked` — a *different* unfinished performance exists; starting this one is
 //   blocked with a resume-or-end prompt so real work is never discarded (ADR-0012).
+// - `purge` — the slot belongs to a *different* account (or no signed-in account can
+//   claim it); it is discarded and this Session starts fresh, so a shared browser
+//   never offers one account's workout to another (ADR-0059, amending ADR-0035).
 export type LiveEntry =
   | { kind: "start_fresh" }
   | { kind: "resume"; state: LiveSessionState }
   | { kind: "auto_end"; state: LiveSessionState }
-  | { kind: "blocked"; existing: LiveSessionState };
+  | { kind: "blocked"; existing: LiveSessionState }
+  | { kind: "purge" };
 
 // Whether the idle gap between `lastActivityAt` and `now` has run past the cap. An
 // untimed performance (no last-activity) can't be measured, so it never expires.
@@ -122,18 +144,46 @@ function isIdleExpired(lastActivityAt: number | null, now: number): boolean {
   return now - lastActivityAt > IDLE_TIMEOUT_MS;
 }
 
+// Whether a persisted slot belongs to the currently signed-in account (ADR-0059).
+// True only when there is a stored slot, a signed-in user, and the two ids match —
+// so a foreign slot, a legacy id-less slot, and an unauthenticated read all read as
+// "not mine". The ownership boundary the resume path and the Home banner both gate on.
+export function ownsLiveSlot(
+  stored: LiveSessionState | null,
+  currentAccountId: string | null,
+): boolean {
+  return (
+    stored !== null &&
+    currentAccountId !== null &&
+    stored.accountId === currentAccountId
+  );
+}
+
 // Decide what happens when the user arrives at a Session's live route, given the
 // single persisted slot (`stored`, or null when empty), the `requestedSessionId`,
-// and the current wall-clock `now`. This is the engine's resume-vs-auto-end and
+// the current wall-clock `now`, and the signed-in `currentAccountId` (null when no
+// user is loaded). This is the engine's ownership, resume-vs-auto-end, and
 // single-session-enforcement verdict; the screen renders it. Pure — no I/O.
 export function resolveLiveEntry(
   stored: LiveSessionState | null,
   requestedSessionId: number,
   now: number,
+  currentAccountId: string | null,
 ): LiveEntry {
-  // An empty slot, or a slot holding an already-finished performance, has nothing
-  // to resume — begin this Session fresh.
-  if (stored === null || stored.status === "finished") {
+  // An empty slot has nothing to resume — begin this Session fresh.
+  if (stored === null) {
+    return { kind: "start_fresh" };
+  }
+  // A slot owned by a *different* account (or unclaimable — no signed-in user, a
+  // legacy id-less slot) is never offered here: it is purged and this Session starts
+  // fresh, so a shared browser never leaks one account's workout to another (ADR-0059).
+  // Ownership precedes every other verdict — a foreign slot for a different Session
+  // is purged, not treated as a block on the current account.
+  if (!ownsLiveSlot(stored, currentAccountId)) {
+    return { kind: "purge" };
+  }
+  // An owned slot holding an already-finished performance has nothing to resume.
+  if (stored.status === "finished") {
     return { kind: "start_fresh" };
   }
   // An unfinished performance of a *different* Session blocks starting this one:
@@ -158,28 +208,17 @@ function prefillReps(reps: string): number {
 }
 
 // Derive the editable kind+value pair a set row starts from, off the typed Load
-// the plan prescribed (ADR-0010). Only the field the kind carries is surfaced;
-// an absent load pre-fills an empty absolute value.
-function prefillLoad(load: Load | null): { kind: LoadKind; value: string } {
-  if (!load) return { kind: "absolute", value: "" };
-  switch (load.kind) {
-    case "absolute":
-      return { kind: load.kind, value: load.kg !== undefined ? String(load.kg) : "" };
-    case "percent_1rm":
-      return { kind: load.kind, value: load.percent !== undefined ? String(load.percent) : "" };
-    case "bodyweight":
-      return { kind: load.kind, value: load.added_kg !== undefined ? String(load.added_kg) : "" };
-    case "range":
-      return {
-        kind: load.kind,
-        value:
-          load.low_kg !== undefined && load.high_kg !== undefined
-            ? `${load.low_kg}-${load.high_kg}`
-            : "",
-      };
-    case "qualitative":
-      return { kind: load.kind, value: load.text };
-  }
+// the plan prescribed (ADR-0010), expressed in the reader's Weight Unit so the input
+// shows what they would type. Delegates to the shared `loadToFields` reverse-map, so
+// the live pre-fill, the Log Correction pre-fill, and the Capture seed all project the
+// plan's kilograms into the reader's unit the same way (#417). On finish the entered
+// value is converted back to exact kilograms by the finish mapper.
+function prefillLoad(
+  load: Load | null,
+  unit: WeightUnit,
+): { kind: LoadKind; value: string } {
+  const { loadKind, loadValue } = loadToFields(load, unit);
+  return { kind: loadKind, value: loadValue };
 }
 
 // The previous-performance reference for the 1-based ``setNumber`` of a
@@ -188,10 +227,11 @@ function prefillLoad(load: Load | null): { kind: LoadKind; value: string } {
 function previousReference(
   previousPerformance: PreviousSet[] | undefined,
   setNumber: number,
+  unit: WeightUnit,
 ): PreviousReference | null {
   const previous = previousPerformance?.[setNumber - 1];
   if (!previous) return null;
-  return { reps: previous.reps, loadText: formatLoad(previous.load) };
+  return { reps: previous.reps, loadText: formatLoad(previous.load, unit) };
 }
 
 // One countable step of a Session: a solo Exercise Prescription, or a contiguous
@@ -234,8 +274,9 @@ function buildLiveSet(
   supersetLabel: string | null,
   restsAfter: boolean,
   restSeconds: number | null,
+  unit: WeightUnit,
 ): LiveSet {
-  const load = prefillLoad(prescription.recommended_load);
+  const load = prefillLoad(prescription.recommended_load, unit);
   return {
     exerciseId: prescription.exercise_id,
     exerciseName: prescription.exercise_name,
@@ -248,8 +289,10 @@ function buildLiveSet(
     restsAfter,
     restSeconds,
     prescribedReps: prescription.reps,
-    prescribedLoadText: prescription.recommended_load?.text ?? NO_LOAD,
-    previous: previousReference(prescription.previous_performance, setNumber),
+    // The prescribed Load is projected into the reader's unit from its numeric fields
+    // (like every other Load, #417), not echoed from the stored kg `text`.
+    prescribedLoadText: formatLoad(prescription.recommended_load ?? null, unit),
+    previous: previousReference(prescription.previous_performance, setNumber, unit),
     reps: prefillReps(prescription.reps),
     loadKind: load.kind,
     loadValue: load.value,
@@ -263,7 +306,10 @@ function buildLiveSet(
 // module-major (all their sets in a row); a Superset expands round-major — one set
 // of each member per round (`A1, B1, A2, B2…`), resting only at the round boundary
 // (ADR-0023). The result is a not-yet-started Live Session ready for START.
-export function initLiveSession(session: WorkoutSession): LiveSessionState {
+export function initLiveSession(
+  session: WorkoutSession,
+  weightUnit: WeightUnit,
+): LiveSessionState {
   const sets: LiveSet[] = [];
   let supersetOrdinal = 0;
 
@@ -285,6 +331,7 @@ export function initLiveSession(session: WorkoutSession): LiveSessionState {
             null,
             true,
             prescription.rest_seconds ?? null,
+            weightUnit,
           ),
         );
       }
@@ -311,6 +358,7 @@ export function initLiveSession(session: WorkoutSession): LiveSessionState {
             label,
             isRoundBoundary,
             isRoundBoundary ? (member.round_rest_seconds ?? null) : null,
+            weightUnit,
           ),
         );
       });
@@ -319,6 +367,12 @@ export function initLiveSession(session: WorkoutSession): LiveSessionState {
 
   return {
     sessionId: session.id,
+    // Owner is unknown until START stamps the signed-in account (ADR-0059); a
+    // not-yet-started performance is never persisted, so this null never reaches a slot.
+    accountId: null,
+    // No idempotency key until START mints one (ADR-0060); like the owner, it never
+    // reaches a slot while null (a not-yet-started performance is never persisted).
+    idempotencyKey: null,
     sets,
     currentIndex: 0,
     status: "not_started",
@@ -337,10 +391,14 @@ export function liveSessionReducer(
     case "START":
       if (state.status !== "not_started") return state;
       // A timed START seeds both the start and the first last-activity instant; an
-      // untimed one leaves them null (timing is opt-in).
+      // untimed one leaves them null (timing is opt-in). It also stamps the owner
+      // (ADR-0059) and the finish idempotency key (ADR-0060), so the first persisted
+      // write carries both; a START omitting either leaves that field unchanged.
       return {
         ...state,
         status: "in_progress",
+        accountId: event.accountId ?? state.accountId,
+        idempotencyKey: event.idempotencyKey ?? state.idempotencyKey,
         startedAt: event.now ?? null,
         lastActivityAt: event.now ?? null,
       };
@@ -480,6 +538,117 @@ export function restCue(state: LiveSessionState): RestCue | null {
     setCount: set.moduleSetCount,
     supersetLabel: set.supersetLabel,
   };
+}
+
+// The exercise the current-set pointer sits on — the on-deck movement the sticky
+// "Next up" line names and its jump control scrolls to. Null once the pointer has
+// run off the end (every set attempted), so the bar drops "Next up" and prompts
+// Finish instead of naming an already-done set.
+export function onDeckExercise(state: LiveSessionState): string | null {
+  if (state.currentIndex >= state.sets.length) return null;
+  return state.sets[state.currentIndex].exerciseName;
+}
+
+// A stable, unique DOM id for one set row, so the sticky "Next up" control can
+// scroll straight to the current on-deck set. `modulePosition`+`setNumber` is unique
+// across a Session — solo sets differ by setNumber, Superset members by position.
+export function liveSetDomId(set: LiveSet): string {
+  return `live-set-${set.modulePosition}-${set.setNumber}`;
+}
+
+// One rendered set carrying its absolute index into `state.sets`. The screen groups
+// sets for display but still dispatches COMPLETE_SET/ADVANCE by that absolute index.
+export interface LiveUnitSet {
+  set: LiveSet;
+  index: number;
+}
+
+// A unit as the live screen renders it: a solo Prescription's sets, or a whole
+// Superset (ADR-0023). A fully-completed unit collapses to its one-line `summary`;
+// the current and upcoming units stay expanded (`containsCurrent` keeps the pointer's
+// unit open even at the moment it is being finished).
+export interface LiveUnit {
+  unitIndex: number;
+  // The Superset display letter (A, B…) when this unit is a Superset, else null.
+  supersetLabel: string | null;
+  // The distinct Exercise names in this unit, in first-appearance order: one for a
+  // solo unit, the members for a Superset.
+  exerciseNames: string[];
+  sets: LiveUnitSet[];
+  // Every set in the unit has been attempted (completed) — the collapse trigger. A
+  // skipped set stays `pending`, so a unit with any left-behind set is never complete.
+  isComplete: boolean;
+  // The current-set pointer sits on a set in this unit — keeps it expanded.
+  containsCurrent: boolean;
+  // The collapsed one-liner: "Back Squat — 3 sets" or
+  // "Superset A · Bench Press + Barbell Row — 3 rounds".
+  summary: string;
+}
+
+// English pluralization for a whole-number count and a singular noun.
+function pluralize(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+// The distinct Exercise names in a unit's sets, in first-appearance order.
+function unitExerciseNames(sets: readonly LiveUnitSet[]): string[] {
+  const names: string[] = [];
+  for (const { set } of sets) {
+    if (!names.includes(set.exerciseName)) names.push(set.exerciseName);
+  }
+  return names;
+}
+
+// The collapsed summary for a completed unit. A solo unit reads as its name and its
+// set count; a Superset reads as its label, members, and round count (rounds =
+// prescribed sets per member, carried on each set as `moduleSetCount`).
+function unitSummary(
+  supersetLabel: string | null,
+  exerciseNames: readonly string[],
+  sets: readonly LiveUnitSet[],
+): string {
+  if (supersetLabel === null) {
+    return `${exerciseNames[0]} — ${pluralize(sets.length, "set")}`;
+  }
+  const rounds = Math.max(...sets.map(({ set }) => set.moduleSetCount));
+  return `Superset ${supersetLabel} · ${exerciseNames.join(" + ")} — ${pluralize(rounds, "round")}`;
+}
+
+// Group the flat set list back into units for display (ADR-0023): a maximal run of
+// sets sharing a `unitIndex` is one unit. Each unit carries its sets (with absolute
+// indices), whether it is fully completed (the collapse trigger), whether it holds
+// the current-set pointer, and its collapsed one-line summary. Pure — no I/O.
+export function groupUnits(state: LiveSessionState): LiveUnit[] {
+  const units: LiveUnit[] = [];
+  const byUnit = new Map<number, LiveUnitSet[]>();
+  const order: number[] = [];
+
+  state.sets.forEach((set, index) => {
+    const existing = byUnit.get(set.unitIndex);
+    if (existing) {
+      existing.push({ set, index });
+    } else {
+      byUnit.set(set.unitIndex, [{ set, index }]);
+      order.push(set.unitIndex);
+    }
+  });
+
+  for (const unitIndex of order) {
+    const sets = byUnit.get(unitIndex)!;
+    const supersetLabel = sets[0].set.supersetLabel;
+    const exerciseNames = unitExerciseNames(sets);
+    units.push({
+      unitIndex,
+      supersetLabel,
+      exerciseNames,
+      sets,
+      isComplete: sets.every(({ set }) => set.status === "completed"),
+      containsCurrent: sets.some(({ index }) => index === state.currentIndex),
+      summary: unitSummary(supersetLabel, exerciseNames, sets),
+    });
+  }
+
+  return units;
 }
 
 // A preview of the next exercise to come — the first upcoming set (in performed

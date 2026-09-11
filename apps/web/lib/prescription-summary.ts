@@ -1,0 +1,226 @@
+// The Prescription Summary projection (CONTEXT: Prescription Summary; ADR-0067, #465) — the pure
+// view-model behind a collapsed Exercise Prescription card. Given a Prescription's *advanced*
+// fields it renders compact chips for only the values that differ from their default, so a plain
+// working set summarizes to nothing at all, and it decides whether a freshly-rendered card opens
+// expanded so nothing meaningful is hidden on first view.
+//
+// It is a **read-time projection**: it stores nothing and touches no record — the same species as
+// Tempo's three-state label and the Scheme Preview. At this slice the advanced fields present are
+// **Tempo** (rendered as its three-state label, raw code as fallback), **Rest** (`90s rest`),
+// **Set Type** (its label, shown only when the type is not the working default, #466),
+// **Target Effort** (its typed chip — `RPE 8` / `2 RIR`, #467), and the **Exercise Note** (a note
+// **icon**, never a text preview — its presence, not its text, #468). The chip order here is the
+// order they render.
+//
+// The **Progression Scheme** is deliberately not part of the summary — its Scheme Preview sentence
+// stands on its own line whether the card is collapsed or open (CONTEXT: Prescription Summary), so
+// a non-default scheme is never hidden and never drives the auto-expand decision. Auto-expand is
+// exactly "is there any chip", which keeps the collapsed summary and the open-on-first-view rule
+// in lock-step: a card shows chips iff it would have auto-expanded.
+//
+// No server-only imports, so it is safe in both Server and Client Components and unit-testable
+// without a browser.
+
+import { formatEffort, type Effort } from "./effort.ts";
+import { noteText } from "./note-view.ts";
+import { setTypeBadge } from "./set-type-view.ts";
+import { toTempoView } from "./tempo-view.ts";
+
+// The distinguishing mark a chip can render instead of text. Most chips read as a compact label
+// (`Controlled`, `90s rest`); the Exercise Note reads as an **icon only** — its presence matters
+// but its text would compete with the exercise name (CONTEXT: Prescription Summary), so the chip
+// names an icon and carries no preview of the cue. Extend the union as more icon chips appear.
+export type PrescriptionSummaryChipIcon = "note";
+
+// One compact chip in a collapsed card's Prescription Summary. `key` is a stable React key (also
+// the field's identity); `label` is the visible text; `ariaLabel` is the fuller, spoken form so a
+// screen-reader user hears the same signal a sighted reader sees. `icon`, when present, tells the
+// renderer to show that icon in place of the label text — the `label` stays as the icon's terse
+// fallback and never leaks the underlying value (e.g. the note's text).
+export interface PrescriptionSummaryChip {
+  key: string;
+  label: string;
+  ariaLabel: string;
+  icon?: PrescriptionSummaryChipIcon;
+}
+
+// The advanced fields a Prescription carries at this slice. Each is optional and nullable: a
+// surface may pass `null` or omit the field entirely, and both mean "unset — the default".
+export interface PrescriptionAdvancedFields {
+  tempo?: string | null;
+  restSeconds?: number | null;
+  // The stored Set Type (ADR-0065): a curated member (warm-up / working / drop / failure /
+  // AMRAP) or null/absent for "unset". An unset — or explicit working — value is the quiet
+  // default and summarizes to no chip; only a non-working member earns one.
+  setType?: string | null;
+  // The typed Target Effort (ADR-0066): the prescribed Effort `{scale, value}`, or null/absent
+  // for no target. A set target reads as a scale-faithful chip (`RPE 8` / `2 RIR`); an unset one
+  // is the quiet default and summarizes to no chip.
+  targetEffort?: Effort | null;
+  // The Exercise Note (ADR-0065): the plan-side coaching cue, as its raw or stored (escaped)
+  // string, or null/absent for no cue. A present note earns a note **icon** chip (never a text
+  // preview, #468); a blank/whitespace-only/absent value is "no note" and summarizes to nothing.
+  note?: string | null;
+}
+
+// Parse a Rest display string — blank for unset, else a seconds count — back to the number the
+// Prescription Summary and the auto-expand predicate reason about. A blank or non-numeric string
+// is "unset" (null); a `0` is a deliberate no-rest value and survives. Kept here, beside the
+// projection that consumes it, so the parse is unit-tested rather than hidden in a component.
+export function restSecondsFromInput(restSeconds: string): number | null {
+  if (restSeconds.trim() === "") return null;
+  const parsed = Number(restSeconds);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+// The Tempo chip, or null when Tempo is unset. A parsed tempo shows its three-state label
+// (`Controlled`) with the tempo view's spoken aria label; an unparseable-but-present tempo falls
+// back to its raw code so a hand-typed value is still surfaced rather than dropped; a blank tempo
+// is the unset default and renders nothing.
+function tempoChip(tempo: string | null | undefined): PrescriptionSummaryChip | null {
+  const view = toTempoView(tempo);
+  if (view.kind === "none") {
+    return null;
+  }
+  if (view.kind === "raw") {
+    return { key: "tempo", label: view.raw, ariaLabel: `Tempo ${view.raw}` };
+  }
+  return { key: "tempo", label: view.label, ariaLabel: view.ariaLabel };
+}
+
+// The Rest chip, or null when Rest is unset. Any present, finite value is non-default — including
+// a deliberate `0` (a superset-style no-rest) — and reads as `90s rest`.
+function restChip(restSeconds: number | null | undefined): PrescriptionSummaryChip | null {
+  if (restSeconds == null || !Number.isFinite(restSeconds)) {
+    return null;
+  }
+  return {
+    key: "rest",
+    label: `${restSeconds}s rest`,
+    ariaLabel: `${restSeconds} seconds rest`,
+  };
+}
+
+// The Set Type chip, or null when the type is the working default. Reuses `set-type-view`'s
+// one badge rule — an unset, explicit-working, or unknown value resolves to working and earns
+// no chip, while a non-working member (warm-up / drop / failure / AMRAP) reads as its label —
+// so the collapsed summary and the plan/record badges name a Set Type exactly one way.
+function setTypeChip(setType: string | null | undefined): PrescriptionSummaryChip | null {
+  const badge = setTypeBadge(setType);
+  if (badge === null) {
+    return null;
+  }
+  return {
+    key: "set-type",
+    label: badge.label,
+    ariaLabel: `Set type ${badge.label}`,
+  };
+}
+
+// The Target Effort chip, or null when no target is set. The typed value routes through
+// `formatEffort` with **no scale argument**, so it reads in the exact scale it was prescribed in
+// — `RPE 8` / `2 RIR`, no cross-scale conversion (ADR-0066, #467). This is the collapsed-card
+// counterpart of `target-effort-view`'s "Target …" label, sharing the one `effort.ts` formatter
+// so the plan target reads the same everywhere.
+function targetEffortChip(
+  targetEffort: Effort | null | undefined,
+): PrescriptionSummaryChip | null {
+  if (targetEffort == null) {
+    return null;
+  }
+  const label = formatEffort(targetEffort);
+  return { key: "target-effort", label, ariaLabel: `Target effort ${label}` };
+}
+
+// The Exercise Note chip, or null when the movement carries no cue — an **icon**, never a text
+// preview (#468, user story 19): a present note shows a small note icon so the cue's presence is
+// visible without a second block of text competing with the exercise name (CONTEXT: Prescription
+// Summary). Presence is decided by `noteText` — the exact same "is there a note" rule the note
+// views share — so the chip appears precisely when the note renders elsewhere, and a stored
+// (escaped) note reads as present just as a freshly-typed one does. The `label` is a terse
+// fallback for a renderer that can't draw the icon; it deliberately does not carry the note text.
+function noteChip(note: string | null | undefined): PrescriptionSummaryChip | null {
+  if (noteText(note) === null) {
+    return null;
+  }
+  return {
+    key: "note",
+    icon: "note",
+    label: "Note",
+    ariaLabel: "Has a coaching note",
+  };
+}
+
+// The ordered Prescription Summary chips for a Prescription's advanced fields — one per non-default
+// value, in render order (Tempo, Rest, Set Type, Target Effort, then the Note icon). A plain set
+// with all-default fields returns `[]`.
+export function prescriptionSummaryChips(
+  fields: PrescriptionAdvancedFields,
+): PrescriptionSummaryChip[] {
+  return [
+    tempoChip(fields.tempo),
+    restChip(fields.restSeconds),
+    setTypeChip(fields.setType),
+    targetEffortChip(fields.targetEffort),
+    noteChip(fields.note),
+  ].filter((chip): chip is PrescriptionSummaryChip => chip !== null);
+}
+
+// Whether a freshly-rendered card should open expanded: true iff any advanced field is non-default
+// (i.e. the summary would carry at least one chip). Kept in lock-step with the chips so a card
+// auto-expands exactly when it has something meaningful to show, and stays collapsed for a plain
+// set. The Progression Scheme is excluded by design — its always-visible preview line means a
+// non-default scheme is never hidden.
+export function shouldAutoExpand(fields: PrescriptionAdvancedFields): boolean {
+  return prescriptionSummaryChips(fields).length > 0;
+}
+
+// --- Superset container summary (ADR-0023, #469). Rest is group-owned: the round rests once at the
+// boundary, after every member, so a grouped member's own rest is dormant and its summary never
+// carries a rest chip. The group's round-rest is summarized on the Superset *container* instead —
+// the container twin of a member's Prescription Summary, with its own chip and auto-expand rule.
+
+// The advanced fields a Superset container carries at this slice (#469). The only value the
+// container summarizes is its round-rest; a member's own rest never appears here (it belongs to the
+// member's summary only once ungrouped).
+export interface SupersetSummaryFields {
+  roundRestSeconds?: number | null;
+}
+
+// The round-rest chip, or null when no round-rest is set. Deliberately distinct from a solo
+// movement's `90s rest` chip: the group's boundary rest reads `round rest 90s` so a reader never
+// mistakes it for a member's per-set rest (CONTEXT: Prescription Summary). Any present, finite
+// value is shown, including a deliberate `0` (no rest between rounds).
+function roundRestChip(
+  roundRestSeconds: number | null | undefined,
+): PrescriptionSummaryChip | null {
+  if (roundRestSeconds == null || !Number.isFinite(roundRestSeconds)) {
+    return null;
+  }
+  return {
+    key: "round-rest",
+    label: `round rest ${roundRestSeconds}s`,
+    ariaLabel: `Round rest ${roundRestSeconds} seconds`,
+  };
+}
+
+// The ordered Prescription Summary chips for a Superset container's advanced fields — the group's
+// round-rest chip when set, else `[]`. The container twin of `prescriptionSummaryChips`: rest is
+// the group's, so it is summarized here rather than on any one member, whose own summary excludes
+// rest while grouped. An array (not a bare chip) so the render layer maps it the same way it maps a
+// member's chips and room stays for any future container-advanced field.
+export function supersetSummaryChips(
+  fields: SupersetSummaryFields,
+): PrescriptionSummaryChip[] {
+  return [roundRestChip(fields.roundRestSeconds)].filter(
+    (chip): chip is PrescriptionSummaryChip => chip !== null,
+  );
+}
+
+// Whether a freshly-rendered Superset container should open expanded: true iff a round-rest is set
+// (i.e. the container summary would carry its chip). Kept in lock-step with `supersetSummaryChips`
+// exactly as `shouldAutoExpand` is with the member chips, so a container opens expanded precisely
+// when it has a round-rest to show and stays collapsed for a group with none.
+export function shouldAutoExpandSuperset(fields: SupersetSummaryFields): boolean {
+  return supersetSummaryChips(fields).length > 0;
+}

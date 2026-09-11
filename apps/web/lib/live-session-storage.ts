@@ -5,6 +5,8 @@
 // never trusted — a malformed or stale-shaped slot deserializes to null, so the
 // caller falls back to a fresh start rather than crashing on a corrupt slot.
 
+import { clearOutbox } from "./finish-outbox-store.ts";
+import { clearLastSynced } from "./last-synced-store.ts";
 import type { LiveSessionState, LiveStatus, SetStatus } from "./live-session.ts";
 
 // The one key the single slot lives under. Namespaced to the app so it never
@@ -36,7 +38,11 @@ export function loadLiveSession(storage: SlotStorage): LiveSessionState | null {
 
   try {
     const parsed: unknown = JSON.parse(raw);
-    return isLiveSessionState(parsed) ? parsed : null;
+    if (!isLiveSessionState(parsed)) return null;
+    // Normalize a slot written before #412 (no finish key) to an explicit null, so the
+    // resumed state is well-typed (`string | null`) and its finish mints a key rather
+    // than reading an `undefined` (ADR-0060). A keyed slot passes through unchanged.
+    return { ...parsed, idempotencyKey: parsed.idempotencyKey ?? null };
   } catch {
     // Malformed JSON — fall back to empty rather than propagating the parse error.
     return null;
@@ -65,6 +71,18 @@ function isLiveSessionState(value: unknown): value is LiveSessionState {
 
   return (
     typeof state.sessionId === "number" &&
+    // The owner's Clerk account id (ADR-0059). Required as a string, so a legacy slot
+    // written before account-scoping (no id) is rejected here — the same "start fresh"
+    // outcome as any structurally invalid slot, rather than a guessed owner. A stored
+    // slot always carries a real id (START stamps it before the first persist).
+    typeof state.accountId === "string" &&
+    // The client-minted finish idempotency key (ADR-0060, issue #412). Unlike the owner
+    // id, an absent/null key must NOT purge the slot: a keyed START stamps a string, but
+    // a slot written before this shipped carries none — it is still valid to resume and
+    // mints a key at finish. So absent (undefined) and null both pass; only a wrong
+    // *type* (a non-string key) is rejected. `loadLiveSession` normalizes absent → null.
+    (state.idempotencyKey === undefined ||
+      isNullableString(state.idempotencyKey)) &&
     typeof state.currentIndex === "number" &&
     isLiveStatus(state.status) &&
     isNullableNumber(state.startedAt) &&
@@ -128,4 +146,19 @@ export function writeLiveSessionSlot(state: LiveSessionState): void {
 export function clearLiveSessionSlot(): void {
   const storage = browserStorage();
   if (storage) clearLiveSession(storage);
+}
+
+// Purge every user-scoped local live store before a sign-out (ADR-0059), so a shared
+// browser profile never hands the next signed-in account the previous one's data. That
+// is the single live slot (synchronous `localStorage`) and the finish outbox (the
+// IndexedDB queue of undelivered finishes, ADR-0060). The outbox clear is async and
+// fired-and-forgotten so it never blocks the sign-out redirect; account-scoping is the
+// real safety boundary anyway — a next account rejects and purges any foreign entry on
+// hydration (`purgeForeignFinishes`), so a clear that loses the redirect race is covered.
+export function purgeLocalLiveState(): void {
+  clearLiveSessionSlot();
+  void clearOutbox();
+  // The last-synced stamp (issue #414) is account-guarded on read, but clear it too so a
+  // shared browser profile leaves nothing of the prior account behind.
+  clearLastSynced();
 }

@@ -7,8 +7,41 @@
 // This slice edits an existing Prescription's fields and Load inside an un-performed
 // Session; structural edits (add/remove/reorder/reshape) arrive in later slices.
 
-import type { Load, LoadKind } from "./load.ts";
+import type { Effort, EffortScale } from "./effort";
+import { loadToFields, loadValueToKg, type Load, type LoadKind } from "./load.ts";
+import { noteText } from "./note-view.ts";
+import {
+  REPETITIONS_KIND,
+  distanceUnitFromText,
+  type DistanceUnit,
+  type Quantity,
+  type QuantityKind,
+} from "./quantity.ts";
+import type { WeightUnit } from "./weight-unit";
 import type { ProtocolProgress } from "./protocols-types.ts";
+import {
+  dissolveSingletonGroups,
+  editRoundRest,
+  groupSpan,
+  groupWithNext as supersetGroupWithNext,
+  moveItem,
+  reorderKeepingContiguous,
+  supersetsAreContiguous,
+  ungroup,
+} from "./supersets.ts";
+
+// The per-row Superset layout view-model lives in the shared `supersets` module now
+// (ADR-0023); re-exported here so the Builder's components keep importing it from
+// `protocol-builder` unchanged.
+export { supersetLayout } from "./supersets.ts";
+export type { SupersetSlot } from "./supersets.ts";
+
+// Tail-only Session reordering lives in its own cohesive module (ADR-0068); the reducer
+// applies `moveSession`, and `sessionMoveOptions` is re-exported so components keep
+// importing the Builder's view-models from `protocol-builder` unchanged.
+import { moveSession } from "./session-move.ts";
+export { sessionMoveOptions } from "./session-move.ts";
+export type { SessionMoveOptions } from "./session-move.ts";
 
 // One Prescription in the draft. `loadKind`/`loadValue` mirror the log form's Load
 // kind-picker (ADR-0010) so building and logging speak one Load language; they are
@@ -18,6 +51,13 @@ export interface DraftPrescription {
   exerciseName: string;
   sets: number;
   reps: string;
+  // The typed Quantity pick (ADR-0050/0032, #464): the kind the Builder's Quantity selector
+  // chose (`repetitions` / `distance` / `duration`) and, for a distance, its display unit
+  // (km / mi). `reps` stays the free-text target; these type it so a duration or distance is
+  // authored and persisted as such, not coerced to a rep count. Seeded from the stored
+  // Prescribed Quantity on open and carried through DEPLOY. Defaults to `repetitions` / `km`.
+  quantityKind: QuantityKind;
+  quantityUnit: DistanceUnit;
   restSeconds: number | null;
   tempo: string | null;
   loadKind: LoadKind;
@@ -29,6 +69,25 @@ export interface DraftPrescription {
   // ungroup.
   supersetGroup: string | null;
   roundRestSeconds: number | null;
+  // The chosen Progression Scheme (ADR-0064, #432): a stored catalog value, or `null` for
+  // the inherited default (Double Progression). Carried through DEPLOY so the deployed plan
+  // progresses this movement by the selection; the selector offers only schemes compatible
+  // with the movement's Load (`scheme-view`), and the deploy gate rejects an incompatible one.
+  scheme: string | null;
+  // Three descriptive plan-side fields the generation may put on a movement, carried
+  // untouched through the editor session and DEPLOY so a tail edit never strips them
+  // (#463). All default to their domain fallback when unset: `setType` reads as **working**
+  // (ADR-0065), while `targetEffort` and `note` are simply absent (ADR-0066/0065).
+  //   - `setType`: the stored `SetType` value (warm-up / working / drop / failure / AMRAP),
+  //     or `null` for "unset" (reads as working).
+  //   - `targetEffort`: the typed prescribed Effort (`{scale, value}`), or `null` for no target.
+  //   - `note`: the Exercise Note coaching cue, held **decoded** (the text the user reads and
+  //     edits), or `null` for no note. `initBuilderDraft` decodes the stored (HTML-escaped)
+  //     value once; the write boundary (`parse_note`, ADR-0065) re-escapes it on DEPLOY, so the
+  //     round-trip is idempotent — an editable cue, never a growing chain of `&amp;amp;` (#468).
+  setType: string | null;
+  targetEffort: Effort | null;
+  note: string | null;
 }
 
 // One Session in the draft. `performed` marks the frozen prefix (ADR-0020): a
@@ -100,6 +159,54 @@ export type BuilderEvent =
       loadValue: string;
     }
   | {
+      // Select (or clear, with `null`) the Progression Scheme on the Prescription at
+      // `position` (ADR-0064, #432). Carried through DEPLOY; the selector offers only
+      // Load-compatible schemes, and the deploy gate is the backstop.
+      type: "SET_SCHEME";
+      sessionId: number;
+      position: number;
+      scheme: string | null;
+    }
+  | {
+      // Select (or clear, with `null`) the Set Type on the Prescription at `position`
+      // (ADR-0065, #466). Descriptive only — it feeds no progression — and carried through
+      // DEPLOY untouched (#463); the working default is stored as `null` (unset).
+      type: "SET_SET_TYPE";
+      sessionId: number;
+      position: number;
+      setType: string | null;
+    }
+  | {
+      // Set (or clear, with `null`) the typed Target Effort on the Prescription at `position`
+      // (ADR-0066, #467). Descriptive only — it feeds no progression — and carried through
+      // DEPLOY untouched (#463); an unset target is stored as `null`.
+      type: "SET_TARGET_EFFORT";
+      sessionId: number;
+      position: number;
+      targetEffort: Effort | null;
+    }
+  | {
+      // Set (or clear, with `null`) the Exercise Note on the Prescription at `position`
+      // (ADR-0065, #468) — the plan-side coaching cue. The draft carries the raw text and the
+      // deploy boundary length-caps + HTML-escapes it (ADR-0065); a blank/cleared note is stored
+      // as `null`. Descriptive only, carried through DEPLOY untouched (#463).
+      type: "SET_NOTE";
+      sessionId: number;
+      position: number;
+      note: string | null;
+    }
+  | {
+      // Pick the typed Quantity kind + unit on the Prescription at `position` (ADR-0050, #464)
+      // — the Builder's counterpart to the Amount picker the ad-hoc surfaces carry. The
+      // free-text target (`reps`) is edited separately via EDIT_PRESCRIPTION; this fixes what
+      // that target means so a duration/distance is deployed as such, not coerced to reps.
+      type: "SET_QUANTITY";
+      sessionId: number;
+      position: number;
+      quantityKind: QuantityKind;
+      quantityUnit: DistanceUnit;
+    }
+  | {
       type: "ADD_PRESCRIPTION";
       sessionId: number;
       exercise: PickedExercise;
@@ -160,6 +267,17 @@ export type BuilderEvent =
       sessionId: number;
     }
   | {
+      // Reposition an un-performed Session within a Week or across Week boundaries
+      // (ADR-0068), tail-only: a performed Session never moves and its (week, day) is
+      // never touched. `toIndex` is the target slot among the *destination* Week's
+      // un-performed Sessions (0-based), clamped to that Week's bounds; the backend
+      // re-enumerates positions from the rewritten (week, day) (`reenumerate_tail`).
+      type: "MOVE_SESSION";
+      sessionId: number;
+      toWeek: number;
+      toIndex: number;
+    }
+  | {
       type: "SET_WEEKS";
       weeks: number;
     }
@@ -180,32 +298,27 @@ export type BuilderEvent =
 // typed Load the plan stored (ADR-0010). Mirrors `live-session.ts`'s prefill so the
 // Builder and the log form surface a Load identically. An absent Load pre-fills an
 // empty absolute value.
-function prefillLoad(load: Load | null): { kind: LoadKind; value: string } {
-  if (!load) return { kind: "absolute", value: "" };
-  switch (load.kind) {
-    case "absolute":
-      return { kind: load.kind, value: load.kg !== undefined ? String(load.kg) : "" };
-    case "percent_1rm":
-      return {
-        kind: load.kind,
-        value: load.percent !== undefined ? String(load.percent) : "",
-      };
-    case "bodyweight":
-      return {
-        kind: load.kind,
-        value: load.added_kg !== undefined ? String(load.added_kg) : "",
-      };
-    case "range":
-      return {
-        kind: load.kind,
-        value:
-          load.low_kg !== undefined && load.high_kg !== undefined
-            ? `${load.low_kg}-${load.high_kg}`
-            : "",
-      };
-    case "qualitative":
-      return { kind: load.kind, value: load.text };
-  }
+function prefillLoad(
+  load: Load | null,
+  weightUnit: WeightUnit,
+): { kind: LoadKind; value: string } {
+  const { loadKind, loadValue } = loadToFields(load, weightUnit);
+  return { kind: loadKind, value: loadValue };
+}
+
+// Reverse a stored Prescribed Quantity into the Builder's editable kind + unit fields
+// (ADR-0050, #464) — the Quantity twin of `prefillLoad`. The stored `kind` is authoritative;
+// the distance unit is recovered from the display text's suffix (`"5 mi"` → miles, else km),
+// the same reversal the Log Correction pre-fill and the Capture seed use. An absent Quantity
+// (a pre-backfill/legacy read) falls back to `repetitions` / km so the selector opens sensibly.
+export function quantityToDraftFields(quantity: Quantity | null | undefined): {
+  kind: QuantityKind;
+  unit: DistanceUnit;
+} {
+  return {
+    kind: quantity?.kind ?? REPETITIONS_KIND,
+    unit: distanceUnitFromText(quantity?.text),
+  };
 }
 
 // How the builder opens for a given user. A Sensitive-Constraint user (injury, rehab,
@@ -213,6 +326,10 @@ function prefillLoad(load: Load | null): { kind: LoadKind; value: string } {
 // opens with grouping paused; a non-medical Preference / Limitation never sets this.
 export interface InitBuilderOptions {
   hasSensitiveConstraint?: boolean;
+  // The reader's Weight Unit (#417): each Prescription's stored Load is reversed into the
+  // picker's fields in this unit, so the builder shows what the user would type. The DEPLOY
+  // payload converts the entry back to canonical kilograms. Defaults to kg.
+  weightUnit?: WeightUnit;
 }
 
 // Read a fetched Protocol into an editable builder draft. Each Session keeps its
@@ -228,6 +345,7 @@ export function initBuilderDraft(
   options: InitBuilderOptions = {},
 ): BuilderDraft {
   const suppress = options.hasSensitiveConstraint ?? false;
+  const weightUnit = options.weightUnit ?? "kg";
   return {
     protocolId: protocol.id,
     name: protocol.name,
@@ -242,7 +360,8 @@ export function initBuilderDraft(
       day: session.day,
       performed: session.performed,
       prescriptions: session.prescriptions.map((prescription) => {
-        const load = prefillLoad(prescription.recommended_load);
+        const load = prefillLoad(prescription.recommended_load, weightUnit);
+        const quantity = quantityToDraftFields(prescription.prescribed_quantity);
         // Auto-unlink the editable tail's groups under suppression; the frozen prefix
         // (a performed Session) keeps its settled grouping.
         const paused = suppress && !session.performed;
@@ -251,12 +370,21 @@ export function initBuilderDraft(
           exerciseName: prescription.exercise_name,
           sets: prescription.sets,
           reps: prescription.reps,
+          quantityKind: quantity.kind,
+          quantityUnit: quantity.unit,
           restSeconds: prescription.rest_seconds,
           tempo: prescription.tempo,
           loadKind: load.kind,
           loadValue: load.value,
           supersetGroup: paused ? null : prescription.superset_group ?? null,
           roundRestSeconds: paused ? null : prescription.round_rest_seconds ?? null,
+          scheme: prescription.scheme ?? null,
+          setType: prescription.set_type ?? null,
+          targetEffort: prescription.target_effort ?? null,
+          // Decode the stored (HTML-escaped) Exercise Note into the text the user reads and
+          // edits (#468); the DEPLOY write boundary re-escapes it once, so the note round-trips
+          // idempotently. `noteText` also normalizes blank/absent to `null` ("no note").
+          note: noteText(prescription.note),
         };
       }),
     })),
@@ -284,6 +412,37 @@ export function builderReducer(
         loadValue: event.loadValue,
       }));
 
+    case "SET_SCHEME":
+      return mapPrescription(state, event.sessionId, event.position, (prescription) => ({
+        ...prescription,
+        scheme: event.scheme,
+      }));
+
+    case "SET_SET_TYPE":
+      return mapPrescription(state, event.sessionId, event.position, (prescription) => ({
+        ...prescription,
+        setType: event.setType,
+      }));
+
+    case "SET_TARGET_EFFORT":
+      return mapPrescription(state, event.sessionId, event.position, (prescription) => ({
+        ...prescription,
+        targetEffort: event.targetEffort,
+      }));
+
+    case "SET_NOTE":
+      return mapPrescription(state, event.sessionId, event.position, (prescription) => ({
+        ...prescription,
+        note: event.note,
+      }));
+
+    case "SET_QUANTITY":
+      return mapPrescription(state, event.sessionId, event.position, (prescription) => ({
+        ...prescription,
+        quantityKind: event.quantityKind,
+        quantityUnit: event.quantityUnit,
+      }));
+
     case "ADD_PRESCRIPTION":
       return mapSessionPrescriptions(state, event.sessionId, (prescriptions) => [
         ...prescriptions,
@@ -297,11 +456,10 @@ export function builderReducer(
 
     case "REORDER_PRESCRIPTION":
       // A reorder must never leave a Superset non-contiguous (ADR-0023): if moving
-      // this Prescription would split a group, refuse the move.
-      return mapSessionPrescriptions(state, event.sessionId, (prescriptions) => {
-        const moved = movePrescription(prescriptions, event.from, event.to);
-        return supersetsAreContiguous(moved) ? moved : prescriptions;
-      });
+      // this Prescription would split a group, the shared helper refuses the move.
+      return mapSessionPrescriptions(state, event.sessionId, (prescriptions) =>
+        reorderKeepingContiguous(prescriptions, event.from, event.to),
+      );
 
     case "GROUP_WITH_NEXT":
       return mapSessionPrescriptions(state, event.sessionId, (prescriptions) =>
@@ -337,6 +495,17 @@ export function builderReducer(
         ...state,
         sessions: state.sessions.filter(
           (session) => session.sessionId !== event.sessionId || session.performed,
+        ),
+      };
+
+    case "MOVE_SESSION":
+      return {
+        ...state,
+        sessions: moveSession(
+          state.sessions,
+          event.sessionId,
+          event.toWeek,
+          event.toIndex,
         ),
       };
 
@@ -413,107 +582,35 @@ function newPrescription(exercise: PickedExercise): DraftPrescription {
     exerciseName: exercise.name,
     sets: NEW_PRESCRIPTION_SETS,
     reps: NEW_PRESCRIPTION_REPS,
+    // A freshly-added movement starts as a rep count (ADR-0050): the user retargets the kind
+    // through the Quantity selector. The unit only matters once distance is picked.
+    quantityKind: REPETITIONS_KIND,
+    quantityUnit: "km",
     restSeconds: null,
     tempo: null,
     loadKind: "absolute",
     loadValue: "",
     supersetGroup: null,
     roundRestSeconds: null,
+    scheme: null,
+    setType: null,
+    targetEffort: null,
+    note: null,
   };
 }
 
-// Move the Prescription at `from` to index `to`, shifting the rest, and return a new
-// array. An out-of-range index leaves the order unchanged.
-function movePrescription(
-  prescriptions: DraftPrescription[],
-  from: number,
-  to: number,
-): DraftPrescription[] {
-  const last = prescriptions.length - 1;
-  if (from < 0 || from > last || to < 0 || to > last || from === to) {
-    return prescriptions;
-  }
-  const reordered = [...prescriptions];
-  const [moved] = reordered.splice(from, 1);
-  reordered.splice(to, 0, moved);
-  return reordered;
-}
-
-// A fresh Superset tag for a Session: one past the largest numeric tag already in use,
-// so a new group never collides with an existing one. Tags originate here (the reducer
-// is the only author this slice), so a simple numeric scheme suffices.
-function freshSupersetTag(prescriptions: DraftPrescription[]): string {
-  const used = prescriptions
-    .map((prescription) => prescription.supersetGroup)
-    .filter((group): group is string => group !== null)
-    .map((group) => Number.parseInt(group, 10))
-    .filter((value) => Number.isInteger(value));
-  return String(used.length > 0 ? Math.max(...used) + 1 : 1);
-}
-
-// Group the Prescription at `position` with the next one into one Superset, unifying
-// any groups they already belong to (ADR-0023). The unified group takes the first
-// member's tag (else the next's, else a fresh tag) and one round-rest: an existing
-// group's round-rest is kept, otherwise it seeds from the last member's own rest. An
-// out-of-range `position` (no next Prescription) leaves the list untouched.
+// Group the Prescription at `position` with the next one into one Superset (ADR-0023),
+// seeding a new group's round-rest from the last member's own rest. Thin wrapper over the
+// shared `groupWithNext` so the Builder's keyboard and drag paths share the one grouping
+// rule with the Hand-Authored screen; `next.restSeconds` is the Builder-specific seed.
 function groupWithNext(
   prescriptions: DraftPrescription[],
   position: number,
 ): DraftPrescription[] {
-  const first = prescriptions[position];
-  const next = prescriptions[position + 1];
-  if (!first || !next) return prescriptions;
-
-  const tag = first.supersetGroup ?? next.supersetGroup ?? freshSupersetTag(prescriptions);
-  const absorbed = new Set<string>();
-  if (first.supersetGroup) absorbed.add(first.supersetGroup);
-  if (next.supersetGroup) absorbed.add(next.supersetGroup);
-
-  const existingRoundRest =
-    (first.supersetGroup ? first.roundRestSeconds : null) ??
-    (next.supersetGroup ? next.roundRestSeconds : null);
-  const roundRest = existingRoundRest ?? next.restSeconds;
-
-  return prescriptions.map((prescription, index) => {
-    const joins =
-      index === position ||
-      index === position + 1 ||
-      (prescription.supersetGroup !== null && absorbed.has(prescription.supersetGroup));
-    if (!joins) return prescription;
-    return { ...prescription, supersetGroup: tag, roundRestSeconds: roundRest };
-  });
-}
-
-// Dissolve the Superset the Prescription at `position` belongs to: clear the tag and
-// round-rest on every member, so each member's own (dormant) rest is live again. A
-// Prescription that is not in a group leaves the list untouched.
-function ungroup(
-  prescriptions: DraftPrescription[],
-  position: number,
-): DraftPrescription[] {
-  const tag = prescriptions[position]?.supersetGroup ?? null;
-  if (tag === null) return prescriptions;
-  return prescriptions.map((prescription) =>
-    prescription.supersetGroup === tag
-      ? { ...prescription, supersetGroup: null, roundRestSeconds: null }
-      : prescription,
-  );
-}
-
-// Set the group-owned round-rest of the Superset at `position` on every member, so the
-// value stays consistent no matter which member the edit came from. A no-op when the
-// Prescription is not grouped.
-function editRoundRest(
-  prescriptions: DraftPrescription[],
-  position: number,
-  roundRestSeconds: number | null,
-): DraftPrescription[] {
-  const tag = prescriptions[position]?.supersetGroup ?? null;
-  if (tag === null) return prescriptions;
-  return prescriptions.map((prescription) =>
-    prescription.supersetGroup === tag
-      ? { ...prescription, roundRestSeconds }
-      : prescription,
+  return supersetGroupWithNext(
+    prescriptions,
+    position,
+    prescriptions[position + 1]?.restSeconds ?? null,
   );
 }
 
@@ -533,26 +630,6 @@ function detachFromGroup(
       : prescription,
   );
   return dissolveSingletonGroups(detached);
-}
-
-// Clear the tag and round-rest of any Superset left with fewer than two members — a
-// lone tag is not a valid group (ADR-0023). Returns a new array; solo Prescriptions
-// and healthy groups pass through untouched.
-function dissolveSingletonGroups(
-  prescriptions: DraftPrescription[],
-): DraftPrescription[] {
-  const counts = new Map<string, number>();
-  for (const prescription of prescriptions) {
-    const group = prescription.supersetGroup;
-    if (group !== null) counts.set(group, (counts.get(group) ?? 0) + 1);
-  }
-  return prescriptions.map((prescription) => {
-    const group = prescription.supersetGroup;
-    if (group !== null && (counts.get(group) ?? 0) < 2) {
-      return { ...prescription, supersetGroup: null, roundRestSeconds: null };
-    }
-    return prescription;
-  });
 }
 
 // Drop the Prescription at `from` onto the row at `to`, forming or joining a Superset
@@ -578,31 +655,11 @@ function groupByDrag(
     return prescriptions;
   }
   const detached = detachFromGroup(prescriptions, from);
-  const moved = movePrescription(detached, from, to);
+  const moved = moveItem(detached, from, to);
   // After the move the dragged row sits at `to`; the drop target is the neighbour it
   // landed against — below it when dragging down, above it when dragging up.
   const anchor = from < to ? to - 1 : to;
   return groupWithNext(moved, anchor);
-}
-
-// Whether every Superset occupies an unbroken run of positions — the invariant the
-// reducer maintains on reorder and the deploy gate re-checks (ADR-0023).
-function supersetsAreContiguous(prescriptions: DraftPrescription[]): boolean {
-  const bounds = new Map<string, { first: number; last: number; count: number }>();
-  prescriptions.forEach((prescription, index) => {
-    const group = prescription.supersetGroup;
-    if (group === null) return;
-    const bound = bounds.get(group);
-    if (!bound) bounds.set(group, { first: index, last: index, count: 1 });
-    else {
-      bound.last = index;
-      bound.count += 1;
-    }
-  });
-  for (const { first, last, count } of bounds.values()) {
-    if (last - first + 1 !== count) return false;
-  }
-  return true;
 }
 
 // --- The manipulation layer's two pure modules (#217, ADR-0023). A drag-intent
@@ -654,23 +711,6 @@ function parseBoxId(id: string): string | null {
   if (!id.startsWith(BOX_DROP_PREFIX)) return null;
   const tag = id.slice(BOX_DROP_PREFIX.length);
   return tag.length > 0 ? tag : null;
-}
-
-// The first/last positions a Superset occupies, or `null` if the tag is absent — used
-// to tell a within-box reorder from a member being dragged outside its own container.
-function groupSpan(
-  prescriptions: DraftPrescription[],
-  group: string,
-): { first: number; last: number } | null {
-  let first = -1;
-  let last = -1;
-  prescriptions.forEach((prescription, index) => {
-    if (prescription.supersetGroup === group) {
-      if (first < 0) first = index;
-      last = index;
-    }
-  });
-  return first < 0 ? null : { first, last };
 }
 
 // Map a raw drag-end (dragged row id, drop-target id) to a semantic DropIntent, or
@@ -733,7 +773,7 @@ export interface DragFeedback {
 // derived from `classifyDrag` so the escalating visuals can never promise an outcome the
 // resolver won't produce (#217/#218). The insertion line sits at the target slot: below
 // the hovered row when dragging downward, at it when dragging upward — matching where
-// `movePrescription` lands the row.
+// `moveItem` lands the row.
 export function dragFeedback(
   activeId: string,
   overId: string | null,
@@ -766,7 +806,7 @@ export function dragFeedback(
 
 // The boundary index where the insertion line is drawn for a move from `from` to `to`:
 // dragging downward the row lands just after the target (`to + 1`), upward it lands at
-// the target (`to`) — the same slot `movePrescription` splices it into.
+// the target (`to`) — the same slot `moveItem` splices it into.
 function insertionGapFor(from: number, to: number): number {
   return from < to ? to + 1 : to;
 }
@@ -886,14 +926,14 @@ function moveKeepingContiguous(
   from: number,
   to: number,
 ): DraftPrescription[] {
-  const moved = movePrescription(prescriptions, from, to);
+  const moved = moveItem(prescriptions, from, to);
   if (moved === prescriptions || supersetsAreContiguous(moved)) return moved;
   // The dragged row (now at `to`) wedged into a group's run; both neighbours share it.
   const straddled = moved[to - 1]?.supersetGroup ?? moved[to + 1]?.supersetGroup ?? null;
   if (straddled === null) return moved;
   const span = groupSpan(moved, straddled);
   if (!span) return moved;
-  return movePrescription(moved, to, from < to ? span.last : span.first);
+  return moveItem(moved, to, from < to ? span.last : span.first);
 }
 
 // Add the Prescription at `from` to the existing Superset `group`: detach it from any
@@ -914,81 +954,12 @@ function joinGroup(
   const detached = detachFromGroup(prescriptions, from);
   const span = groupSpan(detached, group);
   if (!span) return prescriptions;
-  const moved = movePrescription(detached, from, span.last);
+  const moved = moveItem(detached, from, span.last);
   return moved.map((prescription, index) =>
     index === span.last
       ? { ...prescription, supersetGroup: group, roundRestSeconds: roundRest }
       : prescription,
   );
-}
-
-// One Prescription's Superset display facts, aligned to the Session's Prescription
-// list — what the Builder renders per row (ADR-0023). Solo Prescriptions carry a null
-// `memberLabel`; a grouped member gets its A/B/C badge, whether it opens or closes the
-// group (so the Builder brackets the group into one visible container, #215), and the
-// group's round-rest. `groupSize` is the container-grouping fact the box needs: how many
-// members the container wraps — `0` for a solo Prescription, so it renders outside any
-// container. `canGroupWithNext` gates the "group with next" control.
-export interface SupersetSlot {
-  group: string | null;
-  memberLabel: string | null;
-  isFirstMember: boolean;
-  isLastMember: boolean;
-  groupSize: number;
-  roundRestSeconds: number | null;
-  canGroupWithNext: boolean;
-}
-
-// Derive the per-Prescription Superset layout for a Session. Members of a group are
-// lettered A, B, C… in order; the group's first/last members are flagged so the UI can
-// bracket it and place the single round-rest field on its last member.
-export function supersetLayout(
-  prescriptions: DraftPrescription[],
-): SupersetSlot[] {
-  const totals = new Map<string, number>();
-  for (const prescription of prescriptions) {
-    if (prescription.supersetGroup !== null) {
-      totals.set(
-        prescription.supersetGroup,
-        (totals.get(prescription.supersetGroup) ?? 0) + 1,
-      );
-    }
-  }
-
-  const ordinals = new Map<string, number>();
-  return prescriptions.map((prescription, index) => {
-    const group = prescription.supersetGroup;
-    const next = prescriptions[index + 1];
-    // A Prescription can start/extend a group with its neighbour when one exists and
-    // is not already in the *same* group.
-    const canGroupWithNext =
-      next !== undefined && (group === null || next.supersetGroup !== group);
-
-    if (group === null) {
-      return {
-        group: null,
-        memberLabel: null,
-        isFirstMember: false,
-        isLastMember: false,
-        groupSize: 0,
-        roundRestSeconds: null,
-        canGroupWithNext,
-      };
-    }
-
-    const ordinal = ordinals.get(group) ?? 0;
-    ordinals.set(group, ordinal + 1);
-    const total = totals.get(group) ?? 1;
-    return {
-      group,
-      memberLabel: String.fromCharCode(65 + ordinal),
-      isFirstMember: ordinal === 0,
-      isLastMember: ordinal === total - 1,
-      groupSize: total,
-      roundRestSeconds: prescription.roundRestSeconds,
-      canGroupWithNext,
-    };
-  });
 }
 
 // Replace an un-performed Session's whole Prescription list via `change`, returning a
@@ -1106,10 +1077,26 @@ export interface DeployPrescriptionPayload {
   tempo: string | null;
   load_kind: LoadKind;
   load_value: string;
+  // The typed Quantity pick (ADR-0050, #464): the kind the Builder's selector chose and, for a
+  // distance, its unit. The server types the Prescribed Quantity from these plus the free-text
+  // `reps` target, so a duration/distance is persisted as such rather than coerced to reps.
+  quantity_kind: QuantityKind;
+  quantity_unit: DistanceUnit;
   // Superset overlay (ADR-0023): the shared group tag and group-owned round-rest, both
   // null on a flat, solo Prescription. The deploy gate validates the grouping.
   superset_group: string | null;
   round_rest_seconds: number | null;
+  // The chosen Progression Scheme (ADR-0064, #432), or null for the inherited default. The
+  // deploy gate validates it against the movement's Load kind.
+  scheme: string | null;
+  // The three descriptive fields the editor now round-trips (#463), so a tail edit preserves
+  // what the generation prescribed instead of nulling it. Set Type and Note ride as-is; the
+  // typed Target Effort is decomposed into the server's `scale`+`value` pair (ADR-0066), both
+  // null when no target is set. The server defaults each absent field to its domain fallback.
+  set_type: string | null;
+  target_effort_scale: EffortScale | null;
+  target_effort_value: number | null;
+  note: string | null;
 }
 
 export interface DeploySessionPayload {
@@ -1133,7 +1120,10 @@ export interface DeployPayload {
 // Derive the desired un-performed tail the deploy endpoint validates and replaces.
 // Only un-performed Sessions are sent — the frozen prefix is never part of the
 // payload (ADR-0020).
-export function toDeployPayload(draft: BuilderDraft): DeployPayload {
+export function toDeployPayload(
+  draft: BuilderDraft,
+  unit: WeightUnit,
+): DeployPayload {
   return {
     weeks: draft.weeks,
     sessions_per_week: draft.sessionsPerWeek,
@@ -1153,9 +1143,26 @@ export function toDeployPayload(draft: BuilderDraft): DeployPayload {
           rest_seconds: prescription.restSeconds,
           tempo: prescription.tempo,
           load_kind: prescription.loadKind,
-          load_value: prescription.loadValue,
+          // The Load was authored in the reader's Weight Unit; convert it to canonical
+          // kilograms for storage (#417).
+          load_value: loadValueToKg(
+            prescription.loadKind,
+            prescription.loadValue,
+            unit,
+          ),
+          // The picked Quantity kind + unit ride onto the plan so the choice is persisted, not
+          // dropped: the server types the Prescribed Quantity from these (ADR-0050, #464).
+          quantity_kind: prescription.quantityKind,
+          quantity_unit: prescription.quantityUnit,
           superset_group: prescription.supersetGroup,
           round_rest_seconds: prescription.roundRestSeconds,
+          scheme: prescription.scheme,
+          set_type: prescription.setType,
+          // Decompose the typed Target Effort into the server's scale+value pair (ADR-0066);
+          // an absent target rides as a null pair, which the server reads as "no target".
+          target_effort_scale: prescription.targetEffort?.scale ?? null,
+          target_effort_value: prescription.targetEffort?.value ?? null,
+          note: prescription.note,
         })),
       })),
   };

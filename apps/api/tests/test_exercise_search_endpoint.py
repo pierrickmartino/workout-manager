@@ -70,6 +70,27 @@ def test_search_returns_matches_with_the_library_fields_and_meta():
     assert body["meta"]["total"] == 1
 
 
+def test_search_omits_the_internal_completeness_tier():
+    # Arrange — a Stub and a Listable that differ only by Catalog Completeness
+    client, ctx, exercises = build_client()
+    exercises.find_or_create("Squat Stub", provenance=Provenance.CURATED)
+    exercises.find_or_create(
+        "Squat Listable",
+        provenance=Provenance.CURATED,
+        description="A knee-dominant sit.",
+        targeted_muscles=["quads"],
+        instructions=["Sit down and stand up."],
+    )
+
+    # Act
+    response = client.get("/api/exercises?query=squat", headers=_auth(ctx))
+
+    # Assert — Completeness is an internal/ops axis (ADR-0041, revised): it never
+    # rides on a user-facing Library row, whatever the underlying fields
+    assert response.status_code == 200
+    assert all("completeness" not in r for r in response.json()["data"])
+
+
 def test_search_ranks_curated_before_ai_generated():
     # Arrange — a matching AI-invented movement and a curated one
     client, ctx, exercises = build_client()

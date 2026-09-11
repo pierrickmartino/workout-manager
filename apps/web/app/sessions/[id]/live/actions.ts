@@ -1,7 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
-
 import { logSession } from "@/lib/logs";
 import type { LogSessionInput } from "@/lib/logs-types";
 
@@ -33,19 +31,11 @@ async function record(
   return { error: null };
 }
 
-// Finish a Live Session and route to history — the normal "Finish session" path.
-export async function finishLiveSession(
-  sessionId: number,
-  input: LogSessionInput | null,
-): Promise<FinishState> {
-  const result = await record(sessionId, input);
-  if (result.error) return result;
-  redirect("/history");
-}
-
 // Record a Live Session without navigating — used when the screen shows its own
 // summary (idle auto-end, ADR-0014) or continues in place after ending a blocked
-// session, rather than redirecting to history.
+// session, rather than redirecting to history. The normal "Finish session" path no
+// longer records here: it queues the finish in the durable outbox and delivers it via
+// `deliverQueuedFinish` (ADR-0060, issue #413).
 export async function recordLiveSession(
   sessionId: number,
   input: LogSessionInput | null,

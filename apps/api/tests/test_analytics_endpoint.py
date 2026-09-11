@@ -2,7 +2,7 @@
 record-side repository, and the response envelope wired through FastAPI.
 Repositories are injected via dependency overrides so tests run offline.
 
-``GET /api/analytics?range=7d|30d|90d`` returns the honest count read model —
+``GET /api/analytics?range=30d|30d|90d`` returns the honest count read model —
 sessions, active days, total sets — scoped to the authenticated user and to the
 selected rolling window. A user who has logged nothing sees zero counts, not an
 error; an unknown range is rejected in the standard error envelope."""
@@ -19,6 +19,8 @@ from app.auth.dependencies import get_jwks
 from app.config import Settings, get_settings
 from app.domain.exercise import Provenance
 from app.domain.load import LoadKind, ParsedLoad
+from app.domain.quantity import Quantity, QuantityKind
+from app.domain.week import week_start
 from app.main import create_app
 from app.repositories.deps import (
     get_logged_session_repository,
@@ -108,14 +110,14 @@ def test_analytics_returns_range_scoped_counts_in_the_envelope():
     _perform(sessions, logged, "user_a", date.today() - timedelta(days=1), 2)
 
     # Act
-    response = client.get("/api/analytics?range=7d", headers=_auth(ctx, "user_a"))
+    response = client.get("/api/analytics?range=30d", headers=_auth(ctx, "user_a"))
 
     # Assert
     assert response.status_code == 200
     body = response.json()
     assert body["success"] is True
     data = body["data"]
-    assert data["range"] == "7d"
+    assert data["range"] == "30d"
     assert data["sessions"] == 2
     assert data["active_days"] == 2
     assert data["total_sets"] == 5
@@ -127,7 +129,7 @@ def test_analytics_serializes_the_muscle_distribution():
     _perform(sessions, logged, "user_dist", date.today(), 3)
 
     # Act
-    response = client.get("/api/analytics?range=7d", headers=_auth(ctx, "user_dist"))
+    response = client.get("/api/analytics?range=30d", headers=_auth(ctx, "user_dist"))
 
     # Assert — the distribution rides in the envelope as ordered group/pct pairs
     assert response.status_code == 200
@@ -142,7 +144,7 @@ def test_analytics_serializes_the_six_group_coverage_in_canonical_order():
     _perform(sessions, logged, "user_cov", date.today(), 3)
 
     # Act
-    response = client.get("/api/analytics?range=7d", headers=_auth(ctx, "user_cov"))
+    response = client.get("/api/analytics?range=30d", headers=_auth(ctx, "user_cov"))
 
     # Assert — the six real groups ride in the envelope in canonical order, each with a
     # covered boolean, under a labeled 8-week window; Legs is the only one trained
@@ -184,7 +186,7 @@ def test_analytics_discloses_in_window_unclassified_work_in_the_envelope():
     )
 
     # Act
-    response = client.get("/api/analytics?range=7d", headers=_auth(ctx, "user_unc"))
+    response = client.get("/api/analytics?range=30d", headers=_auth(ctx, "user_unc"))
 
     # Assert — the six real groups stay honest (all not-trained) while the envelope
     # discloses that in-window work fell outside them; Unclassified is never a group row
@@ -252,6 +254,7 @@ def test_analytics_empty_state_is_zero_counts_not_an_error():
     assert body["success"] is True
     assert body["data"] == {
         "range": "30d",
+        "available_ranges": ["30d"],
         "sessions": 0,
         "active_days": 0,
         "total_sets": 0,
@@ -259,6 +262,7 @@ def test_analytics_empty_state_is_zero_counts_not_an_error():
         "recent_records": [],
         "new_prs": 0,
         "volume": {"points": [], "coverage": 0.0, "delta": None},
+        "distance": {"weeks": [], "delta": None, "has_distance": False},
         "coverage": {
             "weeks": 8,
             "groups": [
@@ -274,23 +278,56 @@ def test_analytics_empty_state_is_zero_counts_not_an_error():
     }
 
 
-def test_analytics_defaults_to_the_seven_day_window():
+def test_analytics_offers_only_the_floor_and_clamps_an_out_of_depth_request():
+    # Arrange — a shallow (10-day) history and a stale ?range=150d request
+    client, ctx, sessions, logged = build_client()
+    _perform(sessions, logged, "user_shallow", date.today(), 1)
+    _perform(sessions, logged, "user_shallow", date.today() - timedelta(days=10), 1)
+
+    # Act
+    response = client.get("/api/analytics?range=150d", headers=_auth(ctx, "user_shallow"))
+
+    # Assert — only the floor window is offered, and the redundant 150D request is
+    # clamped down rather than served an identical graph
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["available_ranges"] == ["30d"]
+    assert data["range"] == "30d"
+
+
+def test_analytics_offers_every_window_for_a_deep_history():
+    # Arrange — history 120 days deep; every window reveals something new
+    client, ctx, sessions, logged = build_client()
+    _perform(sessions, logged, "user_deep", date.today(), 1)
+    _perform(sessions, logged, "user_deep", date.today() - timedelta(days=120), 1)
+
+    # Act
+    response = client.get("/api/analytics?range=90d", headers=_auth(ctx, "user_deep"))
+
+    # Assert — all three windows offered, and the in-depth request is served as asked
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["available_ranges"] == ["30d", "90d", "150d"]
+    assert data["range"] == "90d"
+
+
+def test_analytics_defaults_to_the_thirty_day_window():
     # Arrange — no range supplied
     client, ctx, _, _ = build_client()
 
     # Act
     response = client.get("/api/analytics", headers=_auth(ctx, "user_c"))
 
-    # Assert
+    # Assert — the shortest window is the default now that 7d is retired (ADR-0049)
     assert response.status_code == 200
-    assert response.json()["data"]["range"] == "7d"
+    assert response.json()["data"]["range"] == "30d"
 
 
 def test_analytics_rejects_an_unknown_range_in_the_error_envelope():
     # Arrange
     client, ctx, _, _ = build_client()
 
-    # Act — a range value outside 7d / 30d / 90d
+    # Act — a range value outside 30d / 90d / 150d
     response = client.get("/api/analytics?range=1y", headers=_auth(ctx, "user_d"))
 
     # Assert — validation failure surfaced through the standard envelope
@@ -305,7 +342,7 @@ def test_analytics_requires_authentication():
     client, _, _, _ = build_client()
 
     # Act — no token
-    response = client.get("/api/analytics?range=7d")
+    response = client.get("/api/analytics?range=30d")
 
     # Assert
     assert response.status_code == 401
@@ -330,15 +367,20 @@ def _perform_load(sessions, logged, user, performed_on, kg, reps):
 
 
 def test_analytics_serializes_the_daily_volume_series():
-    # Arrange — 100kg×5 today (inside 7d) and 80kg×5 eight days ago (prior 7d window)
+    # Arrange — 100kg×5 today (inside 30d) and 80kg×5 thirty-five days ago (prior 30d
+    # window). A set 60 days back anchors the history past the prior window's start, so
+    # the baseline is a fair reference and the Trend Delta is served, not withheld.
     client, ctx, sessions, logged = build_client()
     _perform_load(sessions, logged, "user_vol", date.today(), 100.0, 5)
     _perform_load(
-        sessions, logged, "user_vol", date.today() - timedelta(days=8), 80.0, 5
+        sessions, logged, "user_vol", date.today() - timedelta(days=35), 80.0, 5
+    )
+    _perform_load(
+        sessions, logged, "user_vol", date.today() - timedelta(days=60), 60.0, 5
     )
 
     # Act
-    response = client.get("/api/analytics?range=7d", headers=_auth(ctx, "user_vol"))
+    response = client.get("/api/analytics?range=30d", headers=_auth(ctx, "user_vol"))
 
     # Assert — the daily points, coverage, and equal-window delta ride in the envelope
     assert response.status_code == 200
@@ -347,7 +389,8 @@ def test_analytics_serializes_the_daily_volume_series():
         {"date": date.today().isoformat(), "volume_kg": 500.0},
     ]
     assert volume["coverage"] == 100.0
-    # this window's 500 kg vs the prior window's 400 kg → +25%
+    # this window's 500 kg vs the prior window's 400 kg → +25% (the day-60 set is
+    # outside the prior window, so it anchors history depth without moving the baseline)
     assert volume["delta"] == 25.0
 
 
@@ -377,7 +420,7 @@ def test_analytics_folds_bodyweight_volume_using_the_recorded_body_weight():
     _perform_bodyweight(sessions, logged, "user_bw", date.today(), 10)
 
     # Act
-    response = client.get("/api/analytics?range=7d", headers=_auth(ctx, "user_bw"))
+    response = client.get("/api/analytics?range=30d", headers=_auth(ctx, "user_bw"))
 
     # Assert — the body weight resolves the set end to end: 10 × 70 = 700, fully covered
     assert response.status_code == 200
@@ -386,3 +429,42 @@ def test_analytics_folds_bodyweight_volume_using_the_recorded_body_weight():
         {"date": date.today().isoformat(), "volume_kg": 700.0},
     ]
     assert volume["coverage"] == 100.0
+
+
+def _perform_distance(sessions, logged, user, performed_on, km):
+    """Log a single ``distance``-Quantity Squat set of ``km`` kilometres (distance tests)."""
+
+    session_view = sessions.create(
+        user,
+        SessionDraft(training_type="running", duration_minutes=45, prescriptions=[]),
+    )
+    quantity = Quantity(
+        kind=QuantityKind.DISTANCE, text=f"{km:g} km", metres=km * 1000.0
+    ).to_dict()
+    logged.create(
+        user,
+        LoggedSessionDraft(
+            session_id=session_view.id,
+            performed_on=performed_on,
+            logged_sets=[LoggedSetDraft(exercise_id=SQUAT, quantity=quantity)],
+        ),
+    )
+
+
+def test_analytics_serializes_the_weekly_distance_series_and_gate():
+    # Arrange — a 5 km run today; the screen should read the weekly bar and open the gate
+    client, ctx, sessions, logged = build_client()
+    _perform_distance(sessions, logged, "user_run", date.today(), 5.0)
+
+    # Act
+    response = client.get("/api/analytics?range=30d", headers=_auth(ctx, "user_run"))
+
+    # Assert — one weekly bar keyed by this week's Monday, in kilometres, gate open,
+    # and no coverage figure (distance is exact metres, ADR-0049)
+    assert response.status_code == 200
+    distance = response.json()["data"]["distance"]
+    assert distance == {
+        "weeks": [{"week": week_start(date.today()).isoformat(), "km": 5.0}],
+        "delta": None,
+        "has_distance": True,
+    }

@@ -222,6 +222,66 @@ def _parent_protocol_order(
     return []
 
 
+@dataclass(frozen=True)
+class CorrectionVerdicts:
+    """Whether a Logged Session may be deleted / un-completed without breaking the
+    gap-free performed sequence (ADR-0034) — the read-side companion the History screen
+    uses to disable a control the server would otherwise reject with a ``409``."""
+
+    deletable: bool
+    uncompletable: bool
+
+
+def history_correction_verdicts(
+    history: list[LoggedSessionView],
+    clerk_user_id: str,
+    *,
+    protocols: ProtocolRepository,
+) -> dict[int, CorrectionVerdicts]:
+    """Per-record contiguity verdicts for the caller's whole Logged history (ADR-0034).
+
+    The History screen must disable Delete / Un-complete on a record the server would
+    refuse, so the user is not surprised by a bare ``409`` (issue #249, user story 27). A
+    faithful client-side mirror is impossible: it would need every Protocol's Session
+    ordering, while Home only surfaces the *current* one. So the server — which already
+    owns the one gate — computes the verdicts here, over the same history the read
+    serializes, and returns them keyed by Logged Session id.
+
+    Each Protocol's Session ordering is loaded once and indexed by Session id, so the pure
+    ``evaluate_contiguity`` gate runs against the correct order for *any* Protocol a record
+    belongs to (current, older, or fully performed), not just the active one."""
+
+    orders_by_session: dict[int, list[int]] = {}
+    for protocol in protocols.list_for_user(clerk_user_id):
+        order = [session.session_id for session in protocol.sessions]
+        for session_id in order:
+            orders_by_session[session_id] = order
+
+    verdicts: dict[int, CorrectionVerdicts] = {}
+    for record in history:
+        order = (
+            orders_by_session.get(record.session_id, [])
+            if record.session_id is not None
+            else []
+        )
+        deletable = evaluate_contiguity(
+            target=record,
+            operation=CorrectionOperation.DELETE,
+            history=history,
+            protocol_session_order=order,
+        ).allowed
+        uncompletable = evaluate_contiguity(
+            target=record,
+            operation=CorrectionOperation.FLIP_TO_INCOMPLETE,
+            history=history,
+            protocol_session_order=order,
+        ).allowed
+        verdicts[record.id] = CorrectionVerdicts(
+            deletable=deletable, uncompletable=uncompletable
+        )
+    return verdicts
+
+
 def delete_session(
     log_id: int,
     clerk_user_id: str,
@@ -262,6 +322,8 @@ __all__ = [
     "ContiguityError",
     "UnknownExerciseError",
     "CorrectSessionRequest",
+    "CorrectionVerdicts",
     "correct_session",
     "delete_session",
+    "history_correction_verdicts",
 ]

@@ -2,6 +2,7 @@
 // safe to import from both Server and Client Components. The server-only data
 // access (Clerk auth + fetch) lives in `lib/logs.ts`.
 
+import type { Effort, EffortScale } from "./effort";
 import type { Load, LoadKind } from "./load";
 import type { Quantity, QuantityKind } from "./quantity";
 
@@ -18,8 +19,26 @@ export interface LoggedSet {
   quantity: Quantity | null;
   load: Load | null;
   perceived_difficulty: number | null;
+  // The typed Effort (ADR-0066) the user logged, in either scale (RPE or RIR), or null/absent
+  // when none was recorded — the set then falls back to `perceived_difficulty` read as RPE. The
+  // display projects RPE⇄RIR at read time (`lib/effort.ts`), the effort counterpart of the
+  // kg/lb Weight-Unit projection.
+  effort?: Effort | null;
   exercise_id: number;
   exercise_name: string;
+  // The Performed Body Weight (ADR-0026) — the performer's mass snapshotted onto the set,
+  // or null when none was on file at log time (never guessed). Fixes a bodyweight set's
+  // strength estimate to what actually happened; surfaced on the record detail.
+  body_weight_kg: number | null;
+  // The Set Type (ADR-0065) tagging what this performed set was (warm-up / working /
+  // drop / failure / AMRAP), or null/absent for "unset" — which resolves to working and
+  // renders as no badge (`set-type-view`). Descriptive only; it feeds no analytics yet.
+  set_type?: string | null;
+  // The Set Note (ADR-0065, #451): the record-side remark on this performed set ("felt easy",
+  // "left knee twinge"), or null/absent for "no note" — which the note view-model (`note-view`)
+  // renders as nothing. Stored HTML-escaped at the write boundary; the view decodes it for
+  // display. Editable through Log Correction like any other Logged Set field.
+  note?: string | null;
 }
 
 // A record of the user performing a Session on a date. One Session can have many
@@ -38,6 +57,13 @@ export interface LoggedSession {
   // performance was not live-tracked (e.g. logged after the fact through the form).
   duration_seconds: number | null;
   logged_sets: LoggedSet[];
+  // Whether this record may be deleted / un-completed without breaking the gap-free
+  // performed sequence (ADR-0034), computed server-side by the one contiguity gate. Present
+  // only on the History list read (`GET /api/logs`); the single-record and write responses
+  // omit them (they host no correction control). The History screen disables the control
+  // when a flag is `false`, so the server's `409` is never a surprise (user story 27).
+  deletable?: boolean;
+  uncompletable?: boolean;
 }
 
 // A set the user submits to record. The amount is captured as a typed Quantity
@@ -57,6 +83,16 @@ export interface LogSetInput {
   load_kind: LoadKind;
   load_value: string | null;
   perceived_difficulty: number | null;
+  // The logged Effort in either scale (ADR-0066): `effort_scale` is the picked scale and
+  // `effort_value` its number. Both omitted means no typed effort (an rpe-only client still
+  // sends `perceived_difficulty`); the backend dual-writes the typed value and mirrors an RPE
+  // value into `perceived_difficulty`.
+  effort_scale?: EffortScale;
+  effort_value?: number | null;
+  // The Set Note (ADR-0065, #451): an optional record-side remark, or omitted/blank for "no
+  // note". The backend length-caps and HTML-escapes it at the write boundary; a blank note
+  // stores as unset. Rides the finish, the static log form, the ad-hoc log, and Log Correction.
+  note?: string | null;
 }
 
 // The request the user submits to record a performance of a Session. The
@@ -69,6 +105,11 @@ export interface LogSessionInput {
   // The recorded Session Duration in whole seconds (ADR-0014). Optional and nullable:
   // the Live Session sends start → last-activity time; the static form omits it.
   duration_seconds?: number | null;
+  // The client-minted idempotency key (ADR-0060) that dedupes a retried finish to one
+  // Logged Session server-side (issue #410): a retry resends the same key and the write
+  // upsert-returns the first record. Optional/nullable — a keyless write still records
+  // (the static log form, which has no retry path of its own).
+  idempotency_key?: string | null;
   logged_sets: LogSetInput[];
 }
 

@@ -279,7 +279,27 @@ def test_full_coverage_when_every_logged_set_converts():
 
 
 def test_delta_compares_the_window_to_the_preceding_equal_window():
-    # Arrange — 1000 kg this 7d window (day 0) vs 800 kg the prior 7d window (day 7)
+    # Arrange — 1000 kg this 7d window (day 0) vs 800 kg the prior 7d window (day 7),
+    # plus a set 20 days back so the user's history reaches past the prior window's
+    # start (day 13): the baseline is a fair reference and the delta is shown.
+    history = [
+        _set(100.0, 10, TODAY),
+        _set(100.0, 8, TODAY - timedelta(days=7)),
+        _set(100.0, 5, TODAY - timedelta(days=20)),
+    ]
+
+    # Act
+    series = volume_series(history, days=7, today=TODAY)
+
+    # Assert — (1000 - 800) / 800 = +25%
+    assert series.delta_pct == 25.0
+
+
+def test_delta_is_withheld_when_history_does_not_reach_the_prior_window():
+    # Arrange — real volume this window (1000 kg) and a real prior-window baseline
+    # (800 kg), but the earliest logged set sits at the prior window's tail (day 7),
+    # so history does not reach that window's start (day 13). The preceding window is
+    # truncated by the account's age — the "+3679% vs. previous 30D" new-account case.
     history = [
         _set(100.0, 10, TODAY),
         _set(100.0, 8, TODAY - timedelta(days=7)),
@@ -288,8 +308,28 @@ def test_delta_compares_the_window_to_the_preceding_equal_window():
     # Act
     series = volume_series(history, days=7, today=TODAY)
 
-    # Assert — (1000 - 800) / 800 = +25%
-    assert series.delta_pct == 25.0
+    # Assert — a comparison against a partial prior window is withheld, not a huge
+    # percent: the Trend Delta honesty floor (ADR-0011).
+    assert series.delta_pct is None
+
+
+def test_zero_volume_days_are_dropped_from_the_series():
+    # Arrange — a real 500 kg day and a day whose only set moves no tonnage (a 0 kg
+    # absolute load: 0 × 5 = 0). A day that moved no kilograms is not a volume point;
+    # left in, its stray 0 strands the chart's Y-axis beneath a near-flat series.
+    history = [
+        _set(100.0, 5, TODAY),
+        _set(0.0, 5, TODAY - timedelta(days=1)),
+    ]
+
+    # Act
+    series = volume_series(history, days=7, today=TODAY)
+
+    # Assert — only the day that moved tonnage charts; the zero day is absent, not a
+    # 0 point. Coverage is untouched: a 0 kg load is a *known* load, so it still counts
+    # as converted (10 of 10 reps), never a coverage miss.
+    assert series.points == (VolumePoint(TODAY, 500.0),)
+    assert series.coverage_pct == 100.0
 
 
 def test_delta_is_none_without_a_prior_window_baseline():
@@ -313,3 +353,86 @@ def test_empty_history_yields_no_points_zero_coverage_and_no_delta():
     assert series.points == ()
     assert series.coverage_pct == 0.0
     assert series.delta_pct is None
+
+
+def _typed(kg, reps, day, set_type):
+    """A convertible absolute-load VolumeSet carrying a Set Type."""
+
+    return VolumeSet(
+        quantity=_reps(reps), load=_abs(kg), performed_on=day, set_type=set_type
+    )
+
+
+def test_warm_up_sets_do_not_add_to_working_volume():
+    # Arrange — one working set (100×5 = 500) and a light warm-up (40×5 = 200), same day
+    history = [
+        _typed(100.0, 5, TODAY, "working"),
+        _typed(40.0, 5, TODAY, "warm_up"),
+    ]
+
+    # Act
+    series = volume_series(history, days=7, today=TODAY)
+
+    # Assert — warm-up tonnage is not working volume (ADR-0065): only the 500 points
+    assert series.points == (VolumePoint(TODAY, 500.0),)
+
+
+def test_warm_up_sets_are_dropped_from_coverage_not_counted_as_a_miss():
+    # Arrange — a convertible working set and a warm-up, both absolute (both convert)
+    history = [
+        _typed(100.0, 5, TODAY, "working"),
+        _typed(40.0, 8, TODAY, "warm_up"),
+    ]
+
+    # Act
+    series = volume_series(history, days=7, today=TODAY)
+
+    # Assert — the warm-up leaves the projection entirely: coverage is a clean 100% of
+    # the working reps, never diluted by the warm-up's 8 reps as if they were uncovered
+    assert series.coverage_pct == 100.0
+
+
+def test_non_warm_up_types_all_count_toward_volume():
+    # Arrange — working / failure / AMRAP / drop, 100×5 = 500 each, plus one warm-up
+    history = [
+        _typed(100.0, 5, TODAY, "working"),
+        _typed(100.0, 5, TODAY, "failure"),
+        _typed(100.0, 5, TODAY, "amrap"),
+        _typed(100.0, 5, TODAY, "drop"),
+        _typed(100.0, 5, TODAY, "warm_up"),
+    ]
+
+    # Act
+    series = volume_series(history, days=7, today=TODAY)
+
+    # Assert — the four working-analytics types sum (4 × 500); the warm-up is excluded
+    assert series.points == (VolumePoint(TODAY, 2000.0),)
+
+
+def test_legacy_untyped_sets_count_as_working_volume():
+    # Arrange — a set with no Set Type (a pre-Set-Type row) reads as working
+    history = [VolumeSet(quantity=_reps(5), load=_abs(100.0), performed_on=TODAY)]
+
+    # Act
+    series = volume_series(history, days=7, today=TODAY)
+
+    # Assert — legacy rows keep counting everywhere: the figure does not move
+    assert series.points == (VolumePoint(TODAY, 500.0),)
+
+
+def test_warm_up_sets_are_dropped_from_the_delta_baseline():
+    # Arrange — this window: one working set (100×5 = 500). Prior window: a warm-up
+    # (100×8) and a working set (100×5 = 500). A working set 20 days back anchors the
+    # history past the prior window's start, so the delta is shown rather than withheld.
+    history = [
+        _typed(100.0, 5, TODAY, "working"),
+        _typed(100.0, 8, TODAY - timedelta(days=7), "warm_up"),
+        _typed(100.0, 5, TODAY - timedelta(days=7), "working"),
+        _typed(100.0, 5, TODAY - timedelta(days=20), "working"),
+    ]
+
+    # Act
+    series = volume_series(history, days=7, today=TODAY)
+
+    # Assert — the prior baseline is the working 500, not 500 + warm-up: delta is 0%
+    assert series.delta_pct == 0.0

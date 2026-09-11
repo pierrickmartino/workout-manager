@@ -8,7 +8,8 @@ from __future__ import annotations
 from dataclasses import replace
 
 import pytest
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel
+from tests.conftest import make_fk_engine
 
 from app.domain.exercise import Provenance
 from app.repositories.exercise_repository import (
@@ -29,7 +30,7 @@ def repos(request):
         exercises = InMemoryExerciseRepository()
         yield InMemorySessionRepository(exercises), exercises
         return
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    engine = make_fk_engine()
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         yield SqlSessionRepository(session), SqlExerciseRepository(session)
@@ -71,6 +72,19 @@ def test_create_persists_a_user_owned_standalone_session(repos):
     assert view.clerk_user_id == "user_owner"
     assert view.training_type == "strength"
     assert view.duration_minutes == 45
+
+
+def test_created_session_attributes_its_author_to_the_creator(repos):
+    # A self-authored/generated Session credits the user who created it (CONTEXT: Author,
+    # #395): the Author reference is stamped with the creating user at creation, distinct
+    # from Provenance and equal to the owner until a later Redeem transfers ownership.
+    session_repo, exercises = repos
+
+    # Act
+    view = session_repo.create("user_author", _draft_with_two_prescriptions(exercises))
+
+    # Assert
+    assert view.author_clerk_user_id == "user_author"
 
 
 def test_created_session_carries_its_prescriptions_in_order(repos):
@@ -135,6 +149,33 @@ def test_a_new_session_has_not_been_regenerated(repos):
 
     # Assert — the once-per-Session guard starts open
     assert view.has_been_regenerated is False
+
+
+def test_create_defaults_provenance_to_ai_generated(repos):
+    # Arrange / Act — a draft that does not name a provenance (the generation path).
+    session_repo, exercises = repos
+    view = session_repo.create("user_ai", _draft_with_two_prescriptions(exercises))
+
+    # Assert — every existing creation path is AI (ADR-0040).
+    assert view.provenance == "ai_generated"
+
+
+def test_create_persists_user_authored_provenance(repos):
+    # Arrange — the Hand-Authored create path stamps user_authored (ADR-0040).
+    session_repo, exercises = repos
+    draft = _draft_with_two_prescriptions(exercises)
+    authored = SessionDraft(
+        training_type=draft.training_type,
+        duration_minutes=draft.duration_minutes,
+        prescriptions=draft.prescriptions,
+        provenance="user_authored",
+    )
+
+    # Act
+    view = session_repo.create("user_hand", authored)
+
+    # Assert
+    assert view.provenance == "user_authored"
 
 
 def _replacement(exercises) -> PrescriptionDraft:

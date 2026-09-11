@@ -21,7 +21,7 @@ test("builds a plan-less request from a picked exercise, type, and rep sets", ()
   const input = fields();
 
   // Act
-  const result = buildAdhocLogRequest(input);
+  const result = buildAdhocLogRequest(input, "kg");
 
   // Assert — a well-formed LogAdhocInput carrying a repetitions Quantity, no outcome
   assert.equal(result.ok, true);
@@ -49,7 +49,7 @@ test("carries the picked load kind and value through when given", () => {
   });
 
   // Act
-  const result = buildAdhocLogRequest(input);
+  const result = buildAdhocLogRequest(input, "kg");
 
   // Assert
   assert.equal(result.ok, true);
@@ -68,7 +68,7 @@ test("skips rows left without reps and keeps the ones performed", () => {
   });
 
   // Act
-  const result = buildAdhocLogRequest(input);
+  const result = buildAdhocLogRequest(input, "kg");
 
   // Assert — only the performed row survives
   assert.equal(result.ok, true);
@@ -82,7 +82,7 @@ test("rejects a request with no performed sets", () => {
   const input = fields({ sets: [{ exerciseId: 7, reps: "" }] });
 
   // Act
-  const result = buildAdhocLogRequest(input);
+  const result = buildAdhocLogRequest(input, "kg");
 
   // Assert
   assert.equal(result.ok, false);
@@ -90,20 +90,20 @@ test("rejects a request with no performed sets", () => {
 
 test("rejects a missing performed date", () => {
   // Act / Assert
-  const result = buildAdhocLogRequest(fields({ performedOn: "  " }));
+  const result = buildAdhocLogRequest(fields({ performedOn: "  " }), "kg");
   assert.equal(result.ok, false);
 });
 
 test("rejects an unknown training type", () => {
   // Act / Assert — the type must be one the domain offers (ADR-0031)
-  const result = buildAdhocLogRequest(fields({ trainingType: "powerlifting" }));
+  const result = buildAdhocLogRequest(fields({ trainingType: "powerlifting" }), "kg");
   assert.equal(result.ok, false);
 });
 
 test("rejects a negative or non-integer rep count", () => {
   // Act / Assert — a rep count is a whole, non-negative number
-  assert.equal(buildAdhocLogRequest(fields({ sets: [{ exerciseId: 7, reps: "-3" }] })).ok, false);
-  assert.equal(buildAdhocLogRequest(fields({ sets: [{ exerciseId: 7, reps: "3.5" }] })).ok, false);
+  assert.equal(buildAdhocLogRequest(fields({ sets: [{ exerciseId: 7, reps: "-3" }] }), "kg").ok, false);
+  assert.equal(buildAdhocLogRequest(fields({ sets: [{ exerciseId: 7, reps: "3.5" }] }), "kg").ok, false);
 });
 
 test("readAdhocFormRows reads each indexed row's movement, kind, and fields", () => {
@@ -169,7 +169,7 @@ test("builds a distance set carrying its unit and companion time", () => {
   });
 
   // Act
-  const result = buildAdhocLogRequest(input);
+  const result = buildAdhocLogRequest(input, "kg");
 
   // Assert — the picked kind is authoritative; unit and time ride through verbatim
   assert.equal(result.ok, true);
@@ -193,7 +193,7 @@ test("a distance set entered in miles carries the miles unit through", () => {
   });
 
   // Act
-  const result = buildAdhocLogRequest(input);
+  const result = buildAdhocLogRequest(input, "kg");
 
   // Assert
   assert.equal(result.ok, true);
@@ -213,7 +213,7 @@ test("builds a mixed session with heterogeneous distance and rep sets", () => {
   });
 
   // Act
-  const result = buildAdhocLogRequest(input);
+  const result = buildAdhocLogRequest(input, "kg");
 
   // Assert — both survive, each typed by its own picked kind
   assert.equal(result.ok, true);
@@ -234,7 +234,7 @@ test("skips a distance row left without a distance value", () => {
   });
 
   // Act
-  const result = buildAdhocLogRequest(input);
+  const result = buildAdhocLogRequest(input, "kg");
 
   // Assert — only the performed distance row survives
   assert.equal(result.ok, true);
@@ -251,7 +251,7 @@ test("builds a duration set from a mm:ss hold", () => {
   });
 
   // Act
-  const result = buildAdhocLogRequest(input);
+  const result = buildAdhocLogRequest(input, "kg");
 
   // Assert — the picked kind is authoritative; the time rides through verbatim, with
   // no distance unit and no companion time (a duration carries no pace)
@@ -274,7 +274,7 @@ test("builds a duration set from a bare-seconds plank", () => {
   });
 
   // Act
-  const result = buildAdhocLogRequest(input);
+  const result = buildAdhocLogRequest(input, "kg");
 
   // Assert — a bare-seconds value is a valid duration and rides through unchanged
   assert.equal(result.ok, true);
@@ -290,7 +290,7 @@ test("builds a distance-unknown treadmill session as a duration set", () => {
   });
 
   // Act
-  const result = buildAdhocLogRequest(input);
+  const result = buildAdhocLogRequest(input, "kg");
 
   // Assert — no distance is required; the session records purely as a duration
   assert.equal(result.ok, true);
@@ -310,7 +310,7 @@ test("skips a duration row left without a time and keeps a performed one", () =>
   });
 
   // Act
-  const result = buildAdhocLogRequest(input);
+  const result = buildAdhocLogRequest(input, "kg");
 
   // Assert — only the performed duration row survives
   assert.equal(result.ok, true);
@@ -324,19 +324,19 @@ test("rejects a non-positive or non-numeric duration", () => {
   assert.equal(
     buildAdhocLogRequest(
       fields({ sets: [{ exerciseId: 7, kind: "duration", duration: "0" }] }),
-    ).ok,
+    "kg").ok,
     false,
   );
   assert.equal(
     buildAdhocLogRequest(
       fields({ sets: [{ exerciseId: 7, kind: "duration", duration: "a while" }] }),
-    ).ok,
+    "kg").ok,
     false,
   );
   assert.equal(
     buildAdhocLogRequest(
       fields({ sets: [{ exerciseId: 7, kind: "duration", duration: "1:aa" }] }),
-    ).ok,
+    "kg").ok,
     false,
   );
 });
@@ -353,7 +353,7 @@ test("builds a heterogeneous session mixing a hold, a run, and a rep set", () =>
   });
 
   // Act
-  const result = buildAdhocLogRequest(input);
+  const result = buildAdhocLogRequest(input, "kg");
 
   // Assert — all three survive, each typed by its own picked kind
   assert.equal(result.ok, true);
@@ -388,13 +388,13 @@ test("rejects a non-positive or non-numeric distance", () => {
   assert.equal(
     buildAdhocLogRequest(
       fields({ sets: [{ exerciseId: 7, kind: "distance", distance: "0" }] }),
-    ).ok,
+    "kg").ok,
     false,
   );
   assert.equal(
     buildAdhocLogRequest(
       fields({ sets: [{ exerciseId: 7, kind: "distance", distance: "far" }] }),
-    ).ok,
+    "kg").ok,
     false,
   );
 });

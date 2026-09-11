@@ -38,6 +38,14 @@ export async function fetchHistory(): Promise<Envelope<LoggedSession[]>> {
   return apiGet("/api/logs");
 }
 
+// Read one of the user's Logged Sessions in full — the record detail (the record side's
+// counterpart to `fetchSession`). The backend is owner-scoped: a record that is missing or
+// owned by another user comes back `404`, never served. The Clerk JWT is attached
+// server-side and never reaches the browser.
+export async function fetchLog(logId: number): Promise<Envelope<LoggedSession>> {
+  return apiGet(`/api/logs/${logId}`);
+}
+
 // Correct a Logged Session's contents after the fact (ADR-0034). PUTs the full-replace
 // payload to `/api/logs/{id}`; the backend resolves ownership (`404` when not yours),
 // reads the plan-backed/plan-less boundary rule off the record, guards catalog validity

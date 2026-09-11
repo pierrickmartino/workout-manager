@@ -8,23 +8,23 @@ import { toAnalyticsRange } from "./analytics-types.ts";
 
 test("keeps a valid range value as-is", () => {
   // Arrange / Act / Assert
-  assert.equal(toAnalyticsRange("7d"), "7d");
   assert.equal(toAnalyticsRange("30d"), "30d");
   assert.equal(toAnalyticsRange("90d"), "90d");
+  assert.equal(toAnalyticsRange("150d"), "150d");
 });
 
-test("falls back to 7d when the range is missing", () => {
+test("falls back to 30d when the range is missing", () => {
   // Arrange — a page opened with no ?range=
   const range = toAnalyticsRange(undefined);
 
   // Assert
-  assert.equal(range, "7d");
+  assert.equal(range, "30d");
 });
 
-test("falls back to 7d for an unknown range value", () => {
-  // Arrange — a value outside the supported windows (e.g. an old 1Y link)
-  const range = toAnalyticsRange("1y");
+test("falls back to 30d for an unknown range value", () => {
+  // Arrange — a value outside the supported windows (e.g. an old 7d bookmark)
+  const range = toAnalyticsRange("7d");
 
   // Assert — the honest default, never an invalid window
-  assert.equal(range, "7d");
+  assert.equal(range, "30d");
 });

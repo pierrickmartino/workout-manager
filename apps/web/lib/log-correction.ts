@@ -7,13 +7,16 @@
 
 import {
   distanceInput,
+  distanceUnitFromText,
   durationInput,
   repetitionsInput,
   type DistanceUnit,
   type Quantity,
   type QuantityKind,
 } from "./quantity.ts";
-import type { Load } from "./load.ts";
+import { loadToFields as reverseLoadFields, loadValueToKg } from "./load.ts";
+import { noteText } from "./note-view.ts";
+import type { WeightUnit } from "./weight-unit";
 import type {
   CompletionOutcome,
   LogCorrectionInput,
@@ -45,6 +48,10 @@ export interface CorrectionSetFields {
   loadKind: string;
   loadValue: string;
   perceivedDifficulty: number | null;
+  // The Set Note (ADR-0065, #451), as editable raw text. Pre-filled decoded from the stored
+  // (escaped) value so the user edits what they typed; blank means "no note". Re-sent raw and
+  // re-escaped once by the backend, so correcting a set never double-escapes or drops its note.
+  note: string;
 }
 
 // The whole correction form: the record's editable header (`performedOn`, its
@@ -100,9 +107,8 @@ function quantityToFields(
   if (quantity === null) return { kind: "repetitions", ...blank };
 
   if (quantity.kind === "distance") {
-    const inMiles = (quantity.text ?? "").trimEnd().endsWith("mi");
-    const unit: DistanceUnit = inMiles ? "mi" : "km";
-    const metresPerUnit = inMiles ? METRES_PER_MILE : METRES_PER_KM;
+    const unit: DistanceUnit = distanceUnitFromText(quantity.text);
+    const metresPerUnit = unit === "mi" ? METRES_PER_MILE : METRES_PER_KM;
     const metres = quantity.metres ?? 0;
     return {
       kind: "distance",
@@ -121,49 +127,13 @@ function quantityToFields(
   return { kind: "repetitions", ...blank, reps: String(quantity.count ?? "") };
 }
 
-// Reverse a typed Load into the form's `loadKind` + `loadValue` (ADR-0010). The value
-// is the raw field the picker sends for the kind: kilograms for absolute, the percent
-// for `percent_1rm`, the added kilograms for bodyweight (blank for pure bodyweight),
-// the `low-high` pair for a range, the free text for qualitative. No load → a blank
-// absolute field.
-function loadToFields(
-  load: Load | null,
-): Pick<CorrectionSetFields, "loadKind" | "loadValue"> {
-  if (load === null) return { loadKind: DEFAULT_LOAD_KIND, loadValue: "" };
-  switch (load.kind) {
-    case "absolute":
-      return {
-        loadKind: "absolute",
-        loadValue: load.kg != null ? String(load.kg) : "",
-      };
-    case "percent_1rm":
-      return {
-        loadKind: "percent_1rm",
-        loadValue: load.percent != null ? String(load.percent) : "",
-      };
-    case "bodyweight":
-      return {
-        loadKind: "bodyweight",
-        loadValue: load.added_kg != null ? String(load.added_kg) : "",
-      };
-    case "range":
-      return {
-        loadKind: "range",
-        loadValue:
-          load.low_kg != null && load.high_kg != null
-            ? `${load.low_kg}-${load.high_kg}`
-            : "",
-      };
-    default:
-      return { loadKind: "qualitative", loadValue: load.text ?? "" };
-  }
-}
-
 // Pre-fill the correction form from the record's current values (ADR-0034). Each set is
 // reversed into raw fields so the form binds them directly and a save with no edits
-// re-sends the record unchanged.
+// re-sends the record unchanged. The typed Load reverse-map is the shared `loadToFields`
+// (lib/load.ts), so the correction pre-fill and the Capture seed never drift.
 export function correctionFieldsFromRecord(
   record: LoggedSession,
+  unit: WeightUnit,
 ): CorrectionFormFields {
   return {
     performedOn: record.performed_on,
@@ -174,8 +144,11 @@ export function correctionFieldsFromRecord(
       exerciseId: loggedSet.exercise_id,
       exerciseName: loggedSet.exercise_name,
       ...quantityToFields(loggedSet.quantity),
-      ...loadToFields(loggedSet.load),
+      ...reverseLoadFields(loggedSet.load, unit),
       perceivedDifficulty: loggedSet.perceived_difficulty,
+      // Pre-fill the note decoded from its stored (escaped) form, so the edit field shows the
+      // text the user typed rather than raw entities. `noteText` returns null for no note → "".
+      note: noteText(loggedSet.note) ?? "",
     })),
   };
 }
@@ -184,10 +157,14 @@ export function correctionFieldsFromRecord(
 // or null when the row records no load.
 function loadFields(
   row: CorrectionSetFields,
+  unit: WeightUnit,
 ): Pick<LogSetInput, "load_kind" | "load_value"> {
-  const loadValue = row.loadValue.trim();
+  const loadKind = row.loadKind || DEFAULT_LOAD_KIND;
+  // The value was edited in the reader's Weight Unit; convert it back to canonical kilograms
+  // for storage (#417). Blank stays "no load recorded" → null.
+  const loadValue = loadValueToKg(loadKind, row.loadValue.trim(), unit);
   return {
-    load_kind: (row.loadKind || DEFAULT_LOAD_KIND) as LogSetInput["load_kind"],
+    load_kind: loadKind as LogSetInput["load_kind"],
     load_value: loadValue === "" ? null : loadValue,
   };
 }
@@ -241,15 +218,19 @@ function amountFor(
 
 // Build one logged-set payload from a row, or null when the row was left un-performed or
 // is malformed. The perceived difficulty rides through so the correction preserves it.
-function toSet(row: CorrectionSetFields): LogSetInput | null {
+function toSet(row: CorrectionSetFields, unit: WeightUnit): LogSetInput | null {
   if (!Number.isInteger(row.exerciseId)) return null;
   const amount = amountFor(row);
   if (amount === null) return null;
+  const note = row.note.trim();
   return {
     exercise_id: row.exerciseId,
     ...amount,
-    ...loadFields(row),
+    ...loadFields(row, unit),
     perceived_difficulty: row.perceivedDifficulty,
+    // Re-send the note only when non-blank; the backend re-escapes it once. A cleared field
+    // sends no note, so a correction can also remove a note by blanking it.
+    ...(note !== "" ? { note } : {}),
   };
 }
 
@@ -260,6 +241,7 @@ function toSet(row: CorrectionSetFields): LogSetInput | null {
 // Outcome is never sent; the server preserves the record's.
 export function buildCorrectionRequest(
   fields: CorrectionFormFields,
+  unit: WeightUnit,
 ): CorrectionResult {
   const performedOn = fields.performedOn.trim();
   if (performedOn === "") {
@@ -273,7 +255,7 @@ export function buildCorrectionRequest(
   }
 
   const loggedSets = fields.sets
-    .map(toSet)
+    .map((row) => toSet(row, unit))
     .filter((set): set is LogSetInput => set !== null);
   if (loggedSets.length === 0) {
     return {
@@ -308,8 +290,14 @@ export function buildOutcomeCorrection(
   record: LoggedSession,
   outcome: CompletionOutcome,
 ): CorrectionResult {
-  return buildCorrectionRequest({
-    ...correctionFieldsFromRecord(record),
-    completionOutcome: outcome,
-  });
+  // This is a pure round-trip of the record's own kilogram contents — the reversed fields
+  // are never shown to the user — so it converts in canonical kilograms end to end, keeping
+  // every stored Load byte-for-byte unchanged regardless of the reader's Weight Unit (#417).
+  return buildCorrectionRequest(
+    {
+      ...correctionFieldsFromRecord(record, "kg"),
+      completionOutcome: outcome,
+    },
+    "kg",
+  );
 }

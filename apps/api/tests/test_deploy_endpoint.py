@@ -126,6 +126,80 @@ def test_deploy_edits_an_un_performed_prescription_in_place():
     assert first["recommended_load"] == parse_load("80 kg").to_dict()
 
 
+def test_deploy_sets_and_echoes_a_target_effort_on_an_un_performed_prescription():
+    # A Deploy tail edit is a plan-edit surface for Target Effort (ADR-0066, #454): a Builder
+    # user prescribes "aim for RPE 8" on a Protocol-member movement through the deploy write,
+    # and it rides back on the progressed Protocol.
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_target")
+    protocol_id = protocol["id"]
+    body = _deploy_body(protocol)
+    body["sessions"][0]["prescriptions"][0]["target_effort_scale"] = "rpe"
+    body["sessions"][0]["prescriptions"][0]["target_effort_value"] = 8
+
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_target"),
+        json=body,
+    )
+
+    assert response.status_code == 200, response.json()
+    first = response.json()["data"]["sessions"][0]["prescriptions"][0]
+    assert first["target_effort"] == {"scale": "rpe", "value": 8}
+
+
+def test_deploy_round_trips_set_type_target_effort_and_note_byte_for_byte():
+    # The Builder's tail edit must PRESERVE the three descriptive fields the generation put on a
+    # movement — Set Type, Target Effort, and Exercise Note (#463) — not silently null them. Deploy
+    # an un-performed tail carrying all three and assert each survives byte-for-byte on the
+    # persisted plan (ADR-0065/0066).
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_roundtrip")
+    protocol_id = protocol["id"]
+    body = _deploy_body(protocol)
+    prescription = body["sessions"][0]["prescriptions"][0]
+    prescription["set_type"] = "amrap"
+    prescription["target_effort_scale"] = "rpe"
+    prescription["target_effort_value"] = 8
+    prescription["note"] = "pause on the chest"
+
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_roundtrip"),
+        json=body,
+    )
+
+    # The deploy response carries all three, and a fresh fetch reads the same values back —
+    # nothing was stripped in the round-trip.
+    assert response.status_code == 200, response.json()
+    for source in (
+        response.json()["data"],
+        h.fetch_protocol("user_roundtrip", protocol_id).json()["data"],
+    ):
+        first = source["sessions"][0]["prescriptions"][0]
+        assert first["set_type"] == "amrap"
+        assert first["target_effort"] == {"scale": "rpe", "value": 8}
+        assert first["note"] == "pause on the chest"
+
+
+def test_deploy_rejects_an_invalid_target_effort_and_persists_nothing():
+    # An out-of-band target is a 422 at the boundary (ADR-0066), never a coerced number.
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_bad_target")
+    protocol_id = protocol["id"]
+    body = _deploy_body(protocol)
+    body["sessions"][0]["prescriptions"][0]["target_effort_scale"] = "rir"
+    body["sessions"][0]["prescriptions"][0]["target_effort_value"] = 9
+
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_bad_target"),
+        json=body,
+    )
+
+    assert response.status_code == 422
+
+
 def test_deploy_rejects_a_change_to_a_performed_session():
     # Arrange — perform Week 1 so it is frozen, then try to edit it
     h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
@@ -631,3 +705,183 @@ def test_another_user_cannot_deploy_to_someone_elses_protocol():
         json=body,
     )
     assert response.status_code == 404
+
+
+# --- Selecting a Progression Scheme through Deploy (ADR-0064, #432) --------------------
+
+
+def _set_scheme_and_load(body: dict, scheme: str, load_value: str) -> None:
+    """Stamp every tail Prescription with a chosen scheme and an absolute Load, so the
+    deployed movements carry the selection and have a kilogram axis to step."""
+
+    for session in body["sessions"]:
+        for prescription in session["prescriptions"]:
+            prescription["scheme"] = scheme
+            prescription["load_kind"] = "absolute"
+            prescription["load_value"] = load_value
+
+
+def test_deploy_sets_a_prescription_scheme_and_progresses_by_it():
+    # Arrange — a fresh kg Protocol; deploy Greyskull onto every un-performed movement
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_scheme")
+    protocol_id = protocol["id"]
+    body = _deploy_body(protocol)
+    _set_scheme_and_load(body, "greyskull", "60")
+
+    # Act — deploy the selection
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_scheme"),
+        json=body,
+    )
+
+    # Assert — the deployed plan carries the chosen scheme on its movements
+    assert response.status_code == 200
+    deployed = h.fetch_protocol("user_scheme", protocol_id).json()["data"]
+    assert deployed["sessions"][0]["prescriptions"][0]["scheme"] == "greyskull"
+
+    # And it progresses by Greyskull, not the default: perform Week 1 hitting the rep
+    # floor at HIGH perceived effort — Double Progression would HOLD (its low-effort gate),
+    # but Greyskull steps +2.5 kg per session on any hit.
+    week_one = deployed["sessions"][0]
+    h.logged.create(
+        "user_scheme",
+        LoggedSessionDraft(
+            session_id=week_one["session_id"],
+            performed_on=date(2026, 1, 1),
+            completion_outcome="completed",
+            logged_sets=[
+                LoggedSetDraft(
+                    exercise_id=week_one["prescriptions"][0]["exercise_id"],
+                    quantity=reps_quantity(5),
+                    load=parse_load("60 kg").to_dict(),
+                    perceived_difficulty=9,
+                )
+            ],
+        ),
+    )
+
+    after = h.fetch_protocol("user_scheme", protocol_id).json()["data"]
+    assert after["next_session"]["week"] == 2
+    assert after["next_session"]["prescriptions"][0]["recommended_load"] == (
+        parse_load("62.5 kg").to_dict()
+    )
+
+
+def test_deploy_rejects_an_incompatible_scheme_and_persists_nothing():
+    # Arrange — a fresh kg Protocol; try to deploy Greyskull onto a pure-bodyweight
+    # movement (no kilogram axis to step), the incompatible (scheme, Load) case
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_bad_scheme")
+    protocol_id = protocol["id"]
+    body = _deploy_body(protocol)
+    for session in body["sessions"]:
+        for prescription in session["prescriptions"]:
+            prescription["scheme"] = "greyskull"
+            prescription["load_kind"] = "bodyweight"
+            prescription["load_value"] = None
+
+    # Act
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_bad_scheme"),
+        json=body,
+    )
+
+    # Assert — rejected via the standard error envelope, located to the Prescription
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["success"] is False
+    offending = next(e for e in payload["errors"] if e["code"] == "incompatible_scheme")
+    assert offending["session_id"] == protocol["sessions"][0]["session_id"]
+    assert offending["position"] == 0
+    # Nothing persisted: the movement still carries no scheme (the inherited default)
+    after = h.fetch_protocol("user_bad_scheme", protocol_id).json()["data"]
+    assert after["sessions"][0]["prescriptions"][0]["scheme"] is None
+
+
+def test_deploy_rejects_an_unknown_scheme_value_at_the_boundary():
+    # Arrange — a scheme string outside the closed catalog is a client bug
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_unknown_scheme")
+    protocol_id = protocol["id"]
+    body = _deploy_body(protocol)
+    _set_scheme_and_load(body, "banana", "60")
+
+    # Act
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_unknown_scheme"),
+        json=body,
+    )
+
+    # Assert — the request body validator rejects it before the deploy gate
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+
+
+def test_deploy_persists_a_duration_quantity_as_typed_not_reps():
+    # The Builder's Quantity kind selector (ADR-0050, #464) must persist a timed movement AS a
+    # duration through Deploy — not coerce it to reps. Author a "duration / 45s" prescription on
+    # an un-performed tail and assert the persisted plan carries a typed ``duration`` Quantity.
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_qty_duration")
+    protocol_id = protocol["id"]
+    body = _deploy_body(protocol)
+    first = body["sessions"][0]["prescriptions"][0]
+    first["quantity_kind"] = "duration"
+    first["reps"] = "45s"
+
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_qty_duration"),
+        json=body,
+    )
+
+    assert response.status_code == 200, response.json()
+    persisted = response.json()["data"]["sessions"][0]["prescriptions"][0]
+    assert persisted["prescribed_quantity"]["kind"] == "duration"
+    assert persisted["prescribed_quantity"]["text"] == "45s"
+
+
+def test_deploy_persists_a_distance_quantity_with_its_unit():
+    # A "distance / 5 km" the Builder authors is persisted a distance in the picked unit (#464),
+    # even when the free-text target ("5") alone would infer as a plain rep count.
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_qty_distance")
+    protocol_id = protocol["id"]
+    body = _deploy_body(protocol)
+    first = body["sessions"][0]["prescriptions"][0]
+    first["quantity_kind"] = "distance"
+    first["quantity_unit"] = "km"
+    first["reps"] = "5"
+
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_qty_distance"),
+        json=body,
+    )
+
+    assert response.status_code == 200, response.json()
+    persisted = response.json()["data"]["sessions"][0]["prescriptions"][0]
+    assert persisted["prescribed_quantity"]["kind"] == "distance"
+    assert persisted["prescribed_quantity"]["metres"] == 5000
+
+
+def test_deploy_rejects_an_unknown_quantity_kind_at_the_boundary():
+    # A quantity_kind outside the closed catalog is a client bug rejected before the deploy gate.
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _fresh_protocol(h, "user_qty_bad")
+    protocol_id = protocol["id"]
+    body = _deploy_body(protocol)
+    body["sessions"][0]["prescriptions"][0]["quantity_kind"] = "furlongs"
+
+    response = h.client.post(
+        f"/api/protocols/{protocol_id}/deploy",
+        headers=h.auth("user_qty_bad"),
+        json=body,
+    )
+
+    assert response.status_code == 422
+    assert response.json()["success"] is False

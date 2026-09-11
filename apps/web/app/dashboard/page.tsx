@@ -1,15 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Dumbbell, History, LineChart, Trophy } from "lucide-react";
+import { Trophy } from "lucide-react";
 
-import {
-  GENDER_OPTIONS,
-  fetchProfile,
-  isProfileComplete,
-  type Profile,
-} from "@/lib/profile";
+import { fetchProfile, isProfileComplete } from "@/lib/profile";
 import { READINESS_BADGE, fetchHome } from "@/lib/home";
 import { latestPrLine, operatorStatus } from "@/lib/home-view";
+import { quickActions } from "@/lib/quick-actions";
+import { resolveAppearance } from "@/lib/appearance";
 import { appendFrom } from "@/lib/back-target";
 import { Alert } from "@/components/pulse/alert";
 import { PageHeader } from "@/components/pulse/page-header";
@@ -20,19 +17,21 @@ import { WeekCycleStrip } from "@/components/pulse/week-cycle-strip";
 import { QueueList } from "@/components/pulse/queue-list";
 import { LevelBadge } from "@/components/pulse/level-badge";
 import { Bento, BentoTile } from "@/components/pulse/bento";
-import { NavRow } from "@/components/pulse/nav-row";
-import { DataList } from "@/components/pulse/data-list";
+import { QuickActions } from "@/components/pulse/quick-actions";
 import { GenerateTrainingLaunchpad } from "@/components/pulse/generate-training-launchpad";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 // The dashboard renders the full Fitness Profile that round-tripped through
 // Postgres on the FastAPI backend. New users (incomplete profile) are sent to
-// onboarding first.
+// onboarding first. Since the role-aware IA redesign (ADR-0071) Home is a launch
+// surface: the Current Protocol hero, a persistent quick-action row for the core
+// intents, and honest Operator status — no duplicated Fitness Profile snapshot and
+// no duplicated navigation card (those live on Profile and Analytics respectively).
 export default async function DashboardPage() {
-  const [profileEnvelope, homeEnvelope] = await Promise.all([
+  const [profileEnvelope, homeEnvelope, appearance] = await Promise.all([
     fetchProfile(),
     fetchHome(),
+    resolveAppearance(),
   ]);
 
   if (!profileEnvelope.success || !profileEnvelope.data) {
@@ -67,7 +66,8 @@ export default async function DashboardPage() {
   const readiness = READINESS_BADGE[homeEnvelope.data.readiness];
   const currentProtocol = homeEnvelope.data.current_protocol;
   const status = operatorStatus(homeEnvelope.data.gamification);
-  const latestPr = latestPrLine(homeEnvelope.data.latest_pr);
+  const latestPr = latestPrLine(homeEnvelope.data.latest_pr, appearance.weight_unit);
+  const actions = quickActions(homeEnvelope.data);
 
   return (
     <section className="flex flex-col gap-7">
@@ -96,6 +96,12 @@ export default async function DashboardPage() {
       ) : (
         <GenerateTrainingLaunchpad eyebrow="GET STARTED // NO ACTIVE PROTOCOL" />
       )}
+
+      {/* Persistent quick-action row: the launch shortcuts for the recurring core
+          intents (Start next / Build / Log / My sessions), rendered in both the
+          active-protocol and empty states so a self-managed user is never stranded
+          (docs/redesign-ia.md, ADR-0071). */}
+      <QuickActions actions={actions} />
 
       {/* Operator status: the account's Level / XP and weekly Streak, projected
           read-time from Logged Sessions (ADR-0018/0019). Deliberately OUTSIDE the
@@ -133,105 +139,6 @@ export default async function DashboardPage() {
           />
         </Bento>
       </div>
-
-      {/* Records & profile navigation. */}
-      <div className="flex flex-col gap-4">
-        <SectionHeader>OPERATIONS</SectionHeader>
-        <Card className="divide-y divide-border overflow-hidden py-0">
-          <NavRow
-            icon={History}
-            label="Training history"
-            href="/history"
-            accent="cyan"
-          />
-          <NavRow
-            icon={LineChart}
-            label="Metric history"
-            href="/metrics"
-            accent="violet"
-          />
-          <NavRow
-            icon={Dumbbell}
-            label="Edit profile"
-            href="/profile/edit"
-            accent="blue"
-          />
-        </Card>
-      </div>
-
-      {/* Profile snapshot. */}
-      <div className="flex flex-col gap-4">
-        <SectionHeader meta="SNAPSHOT">FITNESS PROFILE</SectionHeader>
-        <ProfileSummary profile={profile} />
-      </div>
     </section>
-  );
-}
-
-function formatGender(gender: string | null): string {
-  if (gender === null) return "—";
-  return (
-    GENDER_OPTIONS.find((option) => option.value === gender)?.label ?? gender
-  );
-}
-
-function formatList(values: string[]): string {
-  return values.length > 0 ? values.join(", ") : "—";
-}
-
-function formatLevels(levels: Record<string, number>): React.ReactNode {
-  const entries = Object.entries(levels);
-  if (entries.length === 0) return "—";
-  return (
-    <span className="flex flex-wrap justify-end gap-1.5">
-      {entries.map(([type, level]) => (
-        <Badge key={type} variant="outline">
-          {type} {level}/10
-        </Badge>
-      ))}
-    </span>
-  );
-}
-
-function ProfileSummary({ profile }: { profile: Profile }) {
-  return (
-    <Card className="p-5">
-      <DataList
-        rows={[
-          { label: "Display name", value: profile.display_name ?? "—" },
-          { label: "Gender", value: formatGender(profile.gender) },
-          { label: "Age", value: profile.age ?? "—" },
-          {
-            label: "Height",
-            value: profile.height_cm !== null ? `${profile.height_cm} cm` : "—",
-          },
-          {
-            label: "Weight",
-            value: profile.weight_kg !== null ? `${profile.weight_kg} kg` : "—",
-          },
-          { label: "Training habits", value: profile.training_habits ?? "—" },
-          {
-            label: "Default equipment",
-            value: formatList(profile.default_equipment),
-          },
-          {
-            label: "Fitness levels",
-            value: formatLevels(profile.fitness_levels),
-          },
-          {
-            label: "Preferences / limitations",
-            value: formatList(profile.preferences),
-          },
-          {
-            label: "Sensitive constraints",
-            value: formatList(profile.sensitive_constraints),
-          },
-          {
-            label: "Requires extra caution",
-            value: profile.is_sensitive ? "Yes" : "No",
-          },
-        ]}
-      />
-    </Card>
   );
 }

@@ -18,9 +18,15 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Column
+from sqlalchemy import Column, UniqueConstraint
 from sqlalchemy.types import JSON
 from sqlmodel import Field, SQLModel
+
+from app.domain.appearance import (
+    DEFAULT_KEEP_SCREEN_AWAKE,
+    DEFAULT_MODE,
+    DEFAULT_WEIGHT_UNIT,
+)
 
 
 def _utcnow() -> datetime:
@@ -61,6 +67,48 @@ class Profile(SQLModel, table=True):
     sensitive_constraints: list[str] = Field(
         default_factory=list, sa_column=Column(JSON, nullable=False)
     )
+
+
+class AppearancePreference(SQLModel, table=True):
+    """One user's Interface Preference: Mode + Keep Screen Awake + Weight Unit, keyed by user.
+
+    A deliberately *separate* store from ``Profile`` (ADR-0047) so an Interface
+    Preference never enters generation or the cache key — one row per user. The
+    physical ``appearance_*`` name stays as an incidental legacy detail even though
+    the concept generalised to an *Interface Preference* (ADR-0055): a rename buys
+    nothing functional. ``mode`` is the raw value of ``app.domain.appearance.Mode``
+    (``light`` | ``dark`` | ``system``); ``keep_screen_awake`` is the behavioural
+    facet; ``weight_unit`` is the raw value of ``app.domain.appearance.WeightUnit``
+    (``kg`` | ``lb``), steering only how a Load is entered and displayed, never what
+    is stored. Absence of a row means the shipped defaults (Dark + Keep-Screen-Awake
+    on + kilograms), so this table only ever holds a *deliberate* choice and existing
+    users are never disturbed on deploy."""
+
+    __tablename__ = "appearance_preference"
+
+    id: int | None = Field(default=None, primary_key=True)
+    clerk_user_id: str = Field(index=True, unique=True)
+    mode: str = Field(default=DEFAULT_MODE.value)
+    keep_screen_awake: bool = Field(default=DEFAULT_KEEP_SCREEN_AWAKE)
+    weight_unit: str = Field(default=DEFAULT_WEIGHT_UNIT.value)
+
+
+class AppSetting(SQLModel, table=True):
+    """A single global app-setting: one ``key`` → ``value`` row for the whole app.
+
+    The store behind the **Active Skin** (ADR-0048) — the codebase's first global,
+    mutable app-state singleton. Unlike every other table this is *not* keyed by
+    ``clerk_user_id``: a setting like the Active Skin is app-wide, one logical row
+    per key (``active_skin``), changed only by an admin publishing. Kept a generic
+    key/value shape so a future global setting reuses the same store rather than
+    growing another one-row table. The 0026 migration seeds ``active_skin=pulse``
+    (ADR-0048); absence of the row still defaults to PULSE in the repository."""
+
+    __tablename__ = "app_setting"
+
+    id: int | None = Field(default=None, primary_key=True)
+    key: str = Field(index=True, unique=True)
+    value: str
 
 
 class Exercise(SQLModel, table=True):
@@ -110,6 +158,12 @@ class Exercise(SQLModel, table=True):
     precautions: list[str] = Field(
         default_factory=list, sa_column=Column(JSON, nullable=False)
     )
+    # An optional Exercise Image: a single curated-source illustration reference
+    # (a URL / asset key) shown on Exercise Detail. Curator-only and never
+    # AI-fabricated — a misleading generated picture is a safety hazard in an
+    # injury/rehab-cautious domain — and part of the Enriched (gold) tier, so its
+    # absence never holds a movement below the Listable bar (ADR-0041).
+    image: str | None = Field(default=None)
 
 
 class ExerciseRelationship(SQLModel, table=True):
@@ -176,6 +230,17 @@ class WorkoutSession(SQLModel, table=True):
     duration_minutes: int
     created_at: datetime = Field(default_factory=_utcnow)
 
+    # Session Provenance (CONTEXT.md, ADR-0040): how this plan came to exist —
+    # ``ai_generated`` (the generation pipeline: standalone generation or a Protocol
+    # Session adopted from a Generated Protocol) or ``user_authored`` (a Hand-Authored
+    # Session, built by hand with no AI call). Every existing creation path is AI, so the
+    # default is ``ai_generated`` and the 0023 migration backfills pre-existing rows;
+    # ``user_authored`` arrives with the Hand-Authored Session feature that builds on this
+    # column. Load-bearing, not cosmetic: Generation Feedback and Regeneration are hidden
+    # for ``user_authored`` plans (offering "the AI gave me a bad plan" on a hand-written
+    # plan is nonsensical). See ``app.domain.session_provenance.SessionProvenance``.
+    provenance: str = Field(default="ai_generated")
+
     # Protocol linkage — all null for a standalone Session (Slices 3-4 path).
     protocol_id: int | None = Field(default=None, foreign_key="protocol.id", index=True)
     objective: str | None = Field(default=None)
@@ -183,6 +248,28 @@ class WorkoutSession(SQLModel, table=True):
     day: int | None = Field(default=None)
     position: int | None = Field(default=None)
     title: str | None = Field(default=None)
+
+    # The user-given Session Name on a standalone Session (CONTEXT: Session Name, issue
+    # #394) — the act the user calls "rename". Nullable and never backfilled: a generated
+    # or adopted Session is born unnamed and read paths fall back to a derived
+    # ``training_type · date`` label (``app.domain.session_naming.session_label``), the same
+    # pattern as a Protocol's ``name``. Distinct from ``title`` (a Protocol member's
+    # descriptive Week/Day label). Touches the plan only — renaming never reaches a Logged
+    # Session — and is carried verbatim across Duplicate and Redeem.
+    name: str | None = Field(default=None)
+
+    # Author (CONTEXT: Author, issue #395): a reference to the **human who first created**
+    # this plan, held as the creator's ``clerk_user_id``. A distinct axis from both the
+    # **Owner** (``clerk_user_id`` above, which will transfer on Redeem) and **Session
+    # Provenance** (``ai_generated`` / ``user_authored`` — *how* the plan was made, not
+    # *who*). **Immutable origin**: stamped once with the creating user at every creation
+    # path and carried verbatim across Duplicate (and, later, Redeem), so even a heavily
+    # edited copy still credits its original creator — the same non-re-attribution as
+    # Provenance and ``trace_id`` lineage. Nullable in the schema so the 0031 migration can
+    # backfill pre-existing rows to their owner (after which no Session is authorless); a
+    # missing display name resolves to a generic label at render time (the web
+    # ``sessionAuthorView`` mapper), never blank.
+    author_clerk_user_id: str | None = Field(default=None)
 
     # Regeneration is limited to once per Session in v1 (Slice 10): the flag is
     # set when the user keeps some prescriptions and regenerates the rest, and
@@ -215,10 +302,23 @@ class ExercisePrescription(SQLModel, table=True):
     reps: str
     rest_seconds: int | None = Field(default=None)
     tempo: str | None = Field(default=None)
+    # Typed Prescribed Quantity (ADR-0050): a ``{kind, text, ...payload}`` value object
+    # matching ``app.domain.quantity.Quantity`` — the plan side's amount axis, mirroring
+    # ``LoggedSet.quantity`` on the record side. A ``repetitions`` kind carries the target
+    # count; a ``distance`` or ``duration`` kind types a prescribed run or timed hold, so a
+    # cardio Prescription is loggable through its own plan. The free-text ``reps`` above is
+    # retained for display/back-compat; this typed Quantity is the source of truth for
+    # rendering the log input. Additive and nullable: existing rows read ``None`` until the
+    # backfill (0027) types them, and no write path is required to populate it yet.
+    prescribed_quantity: dict | None = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
     # Typed Load (ADR-0010): a ``{kind, text, ...payload}`` value object, never a
     # bare string — so downstream analytics read the meaning instead of re-guessing
     # the free-text. See ``app.domain.load.ParsedLoad``.
-    recommended_load: dict | None = Field(default=None, sa_column=Column(JSON, nullable=True))
+    recommended_load: dict | None = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
     # Superset grouping (ADR-0023) — both NULL for a flat, solo Prescription. Members
     # of one Superset share ``superset_group`` (an ordered, contiguous run) and carry
     # the group-owned ``round_rest_seconds`` (denormalized onto each member so it is
@@ -227,6 +327,103 @@ class ExercisePrescription(SQLModel, table=True):
     # intact on ungroup. Additive and nullable: existing flat Protocols read unchanged.
     superset_group: str | None = Field(default=None)
     round_rest_seconds: int | None = Field(default=None)
+    # Progression Scheme selection (ADR-0064): the ``ProgressionScheme`` value
+    # (e.g. ``"static"``) the read-time Progression overlay dispatches through for this
+    # movement, or NULL for "no choice" — which resolves to the system default (Double
+    # Progression) and reproduces today's behaviour exactly. A stored user *choice*,
+    # permitted by ADR-0018 (which bans stored *derived* ledgers, not choices), the same
+    # species as the Favorite marker. Additive and nullable: every existing row reads
+    # NULL. A scheme is chosen as a plan edit (#432) and travels through
+    # create/Duplicate/Substitution like the other Prescription fields. Only the user's
+    # own copy is ever written — never a shared/cached artifact. This selection is what
+    # retired the Pinned Target: Static holds a movement's authored values where Pin
+    # once froze them (ADR-0064, supersedes ADR-0053).
+    scheme: str | None = Field(default=None)
+    # Set Type annotation (ADR-0065, #449): the movement line's ``SetType`` value
+    # (e.g. ``"warm_up"``), or NULL for "unset" — which reads as ``working``
+    # (``app.domain.set_type``). A descriptive, plan-level label, never a Progression
+    # input; schemes keep reading the rep grammar. Additive and nullable: every existing
+    # row reads NULL. It is a plan property like reps/load/rest/tempo/scheme, so it
+    # travels through create/Duplicate/Redeem/Share/Substitution and a Deploy tail edit,
+    # and only the user's own copy is ever written.
+    set_type: str | None = Field(default=None)
+    # Target Effort (ADR-0066): the *prescribed* Effort on this movement — a typed
+    # ``{scale, value}`` value (``app.domain.effort.Effort``) capturing "aim for RPE 8" /
+    # "leave 2 in reserve", or NULL for "unset". A plan value like reps/load/scheme, carried
+    # across Duplicate/Redeem/Share/Substitution and unset by Capture. Descriptive in v1: it
+    # feeds the Scheme Preview and the UI but is **never** a Progression input — stepping
+    # stays a function of the *record*, never the plan. Additive and nullable: every existing
+    # row reads NULL, and only the user's own copy is ever written.
+    target_effort: dict | None = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
+    # Exercise Note (ADR-0065, #451): an optional plan-side coaching cue on this movement
+    # ("pause on the chest"), or NULL for "no note". User-authored free text, length-capped and
+    # **HTML-escaped at the write boundary** (``app.domain.note.parse_note``) so the stored value
+    # is inert wherever it renders (nonce-CSP DOM-XSS posture, ADR-0036). A plan property like
+    # reps/load/scheme/set_type: it travels through create/Duplicate/Redeem/Share/Substitution
+    # and a Deploy tail edit re-numbered untouched, is left unset by Capture, and only the user's
+    # own copy is ever written. Additive and nullable: every existing row reads NULL.
+    note: str | None = Field(default=None)
+
+
+class SessionFavorite(SQLModel, table=True):
+    """A user's Favorite marker on one standalone Session (CONTEXT: Favorite, issue #396).
+
+    A **stored, per-user, per-copy** preference — the same species as an Interface
+    Preference, deliberately stored rather than derived: the no-stored-ledger rule
+    (ADR-0018) governs *derived* facts (XP, Streak, Personal Records), never user *choices*.
+    Modeled as a per-user relationship keyed by ``(clerk_user_id, session_id)`` so the marker
+    is **private to the user** and **never carried across Duplicate/Redeem**: a duplicated or
+    redeemed copy is a new ``session_id`` with no row here, so it simply starts un-favorited
+    for its new owner. Presence of a row means favorited; absence means not. The unique
+    constraint keeps the mark idempotent — a user favorites a Session once, not many times."""
+
+    __tablename__ = "session_favorite"
+    __table_args__ = (
+        UniqueConstraint(
+            "clerk_user_id", "session_id", name="uq_session_favorite_user_session"
+        ),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    clerk_user_id: str = Field(index=True)
+    session_id: int = Field(foreign_key="workout_session.id", index=True)
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class ShareLink(SQLModel, table=True):
+    """A revocable, reusable Share Link to one of a user's standalone Sessions (ADR-0057).
+
+    The token a **Share** produces (CONTEXT: Share Link): an **unguessable** ``token``
+    referencing the sharer's standalone ``session_id``, held alongside the sharer
+    (``clerk_user_id``) so revocation stays owner-scoped. Anyone holding the token may
+    **Redeem** it — each Redeem yielding one fresh, independent deep-copy — until the
+    sharer **revokes** it. Revocation is modeled as a nullable ``revoked_at`` stamp
+    (``NULL`` means active): it stops *future* Redeems but never reaches copies already
+    taken, which are independent Sessions their recipients own (the copy model, ADR-0057).
+
+    **No auto-expiry in v1** — a link is valid until revoked. There is no ``UNIQUE`` on
+    ``session_id``: a Session may accumulate revoked links over its history, and at most
+    one *active* link is kept by the create path returning the existing active row rather
+    than minting a duplicate. The token is unique so a redeem/preview lookup is exact."""
+
+    __tablename__ = "share_link"
+
+    id: int | None = Field(default=None, primary_key=True)
+    # The unguessable token carried in the Share Link — unique so preview/redeem resolve it
+    # exactly, indexed for that lookup. Minted from a cryptographic RNG at create time.
+    token: str = Field(index=True, unique=True)
+    # The shared standalone Session this link hands out copies of.
+    session_id: int = Field(foreign_key="workout_session.id", index=True)
+    # The sharer (the Session's Owner at share time) — the scope revocation is keyed to, so a
+    # non-owner can never create or revoke a link for someone else's Session.
+    clerk_user_id: str = Field(index=True)
+    # Revocation stamp: ``NULL`` while the link is active (redeemable), set to the revoke time
+    # once the sharer revokes it. Revocation stops future Redeems only (ADR-0057); already-taken
+    # copies are untouched. Not an auto-expiry — there is none in v1.
+    revoked_at: datetime | None = Field(default=None)
+    created_at: datetime = Field(default_factory=_utcnow)
 
 
 class LoggedSession(SQLModel, table=True):
@@ -241,6 +438,15 @@ class LoggedSession(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     clerk_user_id: str = Field(index=True)
+    # Idempotency key (ADR-0060): the client-minted UUID that identifies one *finish*,
+    # so a write retried after a dropped connection dedupes to a single Logged Session
+    # instead of duplicating it. Nullable-unique: any present key is globally unique so
+    # the create path can upsert-return on it, while multiple NULLs are permitted (both
+    # SQLite and Postgres treat NULLs as distinct) — a historical row, or a request that
+    # mints no key (the static form), stays untouched and still inserts. This is an
+    # identity/transport detail, not a stored sync state (ADR-0060 keeps sync out of the
+    # domain); it never becomes a "pending" flag the read-time-projection rule forbids.
+    idempotency_key: str | None = Field(default=None, index=True, unique=True)
     # The prescribing Session, or NULL for a plan-less record (ADR-0031). A record of
     # performed work is first-class whether or not a plan ever described it; a plan-less
     # log carries no Session id and so structurally cannot advance a Protocol.
@@ -289,13 +495,38 @@ class LoggedSet(SQLModel, table=True):
     # ``app.domain.load.ParsedLoad``, so a logged bodyweight or %-1RM set carries
     # its meaning and is never silently dropped by a kg-only aggregate.
     load: dict | None = Field(default=None, sa_column=Column(JSON, nullable=True))
+    # Performance Feedback as the legacy RPE-style 1–10 int (ADR-0004). Retained and read
+    # as an ``rpe``-scale Effort for back-compat (ADR-0066): a returning user's records need
+    # no backfill. New writes **dual-write** — they populate ``effort`` below and mirror an
+    # RPE value here — so any reader still on this column keeps working during the transition.
     perceived_difficulty: int | None = Field(default=None)
+    # Logged Effort as a typed value (ADR-0066): a ``{scale, value}`` value object matching
+    # ``app.domain.effort.Effort`` — the user's Performance Feedback in *either* scale (RPE
+    # 0–10 half-steps, or RIR integer 0–5), so it is never a bare number whose scale is
+    # guessed. The Progression low-effort gate reads this in preference to
+    # ``perceived_difficulty``, normalizing a logged RIR to its RPE-equivalent (``10 − rir``)
+    # before the threshold compare. Additive and nullable: every set logged before this reads
+    # NULL and falls back to the legacy int.
+    effort: dict | None = Field(default=None, sa_column=Column(JSON, nullable=True))
     # Performed Body Weight (ADR-0026): the performer's body mass at the moment this
     # set was logged, snapshotted from the Profile once at the write boundary so a
     # bodyweight set's strength estimate is fixed by what happened and never drifts.
     # NULL when no weight was on file — the set is left outside strength records, not
     # given a fabricated mass. Additive/nullable: sets logged before this stay NULL.
     body_weight_kg: float | None = Field(default=None)
+    # Set Type annotation (ADR-0065, #449): the ``SetType`` value tagging what this
+    # performed set *was* (e.g. ``"warm_up"``), or NULL for "unset" — which reads as
+    # ``working`` (``app.domain.set_type``). A record-side, per-set label editable through
+    # Log Correction like any other Logged Set field; descriptive only in v1 (it feeds no
+    # analytics yet). Additive and nullable: every set logged before this reads NULL.
+    set_type: str | None = Field(default=None)
+    # Set Note (ADR-0065, #451): an optional record-side remark on this performed set
+    # ("felt easy", "left knee twinge"), or NULL for "no note". User-authored free text,
+    # length-capped and **HTML-escaped at the write boundary** (``app.domain.note.parse_note``)
+    # so the stored value is inert wherever it renders (nonce-CSP DOM-XSS posture, ADR-0036).
+    # Part of the record and editable through Log Correction like any other Logged Set field.
+    # Additive and nullable: every set logged before this reads NULL.
+    note: str | None = Field(default=None)
 
 
 class MetricEntry(SQLModel, table=True):

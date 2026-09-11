@@ -17,7 +17,7 @@ const THREE: TopSetPoint[] = [
 
 test("maps the series to oldest-first rows with the most recent flagged latest", () => {
   // Act
-  const trend = toTopSetTrend(THREE);
+  const trend = toTopSetTrend(THREE, "kg");
 
   // Assert — one row per point, short labels, only the last flagged latest
   assert.deepEqual(trend.rows, [
@@ -29,7 +29,7 @@ test("maps the series to oldest-first rows with the most recent flagged latest",
 
 test("computes the delta as latest minus oldest in whole kilograms", () => {
   // Act — 112 − 100 = +12
-  const trend = toTopSetTrend(THREE);
+  const trend = toTopSetTrend(THREE, "kg");
 
   // Assert
   assert.equal(trend.delta, "+12 KG");
@@ -43,7 +43,7 @@ test("rounds a fractional delta and signs a regression with a minus", () => {
   ];
 
   // Act — 100.1 − 105.4 = -5.3 → -5
-  const trend = toTopSetTrend(series);
+  const trend = toTopSetTrend(series, "kg");
 
   // Assert
   assert.equal(trend.delta, "-5 KG");
@@ -54,7 +54,7 @@ test("a single qualifying session yields one row and no delta pill", () => {
   const series: TopSetPoint[] = [{ date: "2026-01-01", estimated_1rm: 100 }];
 
   // Act
-  const trend = toTopSetTrend(series);
+  const trend = toTopSetTrend(series, "kg");
 
   // Assert — one bar, no pill
   assert.equal(trend.rows.length, 1);
@@ -64,9 +64,24 @@ test("a single qualifying session yields one row and no delta pill", () => {
 
 test("an empty series yields no rows and no delta, so no chart renders", () => {
   // Act
-  const trend = toTopSetTrend([]);
+  const trend = toTopSetTrend([], "kg");
 
   // Assert
   assert.deepEqual(trend.rows, []);
   assert.equal(trend.delta, null);
+});
+
+test("toTopSetTrend projects bar estimates and the delta into pounds", () => {
+  // Arrange — two points, 100 kg then 110 kg, read by a lb user.
+  const series = [
+    { date: "2026-07-01", estimated_1rm: 100 },
+    { date: "2026-07-08", estimated_1rm: 110 },
+  ];
+
+  // Act
+  const trend = toTopSetTrend(series, "lb");
+
+  // Assert — bar heights are the raw lb projection; the delta is +22 LB (10 kg gain).
+  assert.ok(Math.abs(trend.rows[0].estimate - 220.462) < 0.01);
+  assert.equal(trend.delta, "+22 LB");
 });

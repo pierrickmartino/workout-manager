@@ -7,6 +7,8 @@ import type { ProtocolProgress, ProtocolSession } from "./protocols-types";
 import type { Gamification, LatestPr } from "./home-types";
 import type { OperatorLevel } from "./profile-progress-types";
 import { formatRecordAchievement } from "./record-achievement.ts";
+import type { WeightUnit } from "./weight-unit";
+import { formatWholeWeight } from "./weight-format.ts";
 
 // The Session Hero's headline stats — duration · modules · sets — for a Current
 // Protocol's Next Session. Deliberately no target-calorie and no single volume /
@@ -250,11 +252,14 @@ export interface LatestPrLine {
 // user has no Personal Record (a brand-new account), so Home hides the line rather than
 // fabricating a "0 kg" — Level and Streak still render. A bodyweight record renders as
 // the set that achieved it (ADR-0026); an absolute one keeps its "kg est. 1RM" wording.
-export function latestPrLine(latestPr: LatestPr | null): LatestPrLine | null {
+export function latestPrLine(
+  latestPr: LatestPr | null,
+  unit: WeightUnit,
+): LatestPrLine | null {
   if (!latestPr) return null;
   const estimate = latestPr.is_bodyweight
-    ? formatRecordAchievement(latestPr)
-    : `${Math.round(latestPr.estimated_1rm)} kg est. 1RM`;
+    ? formatRecordAchievement(latestPr, unit)
+    : `${formatWholeWeight(latestPr.estimated_1rm, unit)} est. 1RM`;
   return {
     exercise: latestPr.exercise,
     exerciseId: latestPr.exercise_id,

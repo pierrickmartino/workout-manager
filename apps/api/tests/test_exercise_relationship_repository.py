@@ -8,7 +8,8 @@ and the real SQLModel implementation."""
 from __future__ import annotations
 
 import pytest
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel
+from tests.conftest import make_fk_engine
 
 from app.domain.exercise import Provenance
 from app.domain.substitution import RelationKind
@@ -28,7 +29,7 @@ def repos(request):
         exercises = InMemoryExerciseRepository()
         yield InMemoryExerciseRelationshipRepository(exercises), exercises
         return
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    engine = make_fk_engine()
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         yield (

@@ -580,6 +580,45 @@ def test_data_only_correction_preserves_the_outcome_when_none_is_supplied():
     assert updated.completion_outcome == "completed"
 
 
+def test_adding_an_off_plan_set_keeps_completed_and_never_trips_contiguity():
+    # Characterization guard (issue #358): the record-side "add a movement" flow relies
+    # on the correction path already accepting an off-plan Catalog Exercise and full-
+    # replacing the record's sets. Pin the two invariants the frontend seam leans on —
+    # a Completed record stays Completed, and adding attempted work never trips the
+    # contiguity gate — even in the sharpest case: a mid-Protocol Session with a *later*
+    # performed Session (where a delete or flip-to-Incomplete would be refused).
+    protocols, exercises, _, logged = _wire_with_protocols()
+    protocol, squat = _protocol_with_three_sessions(protocols, exercises)
+    first = _perform(logged, protocol, 0, squat)  # Completed, mid-Protocol
+    _perform(logged, protocol, 1, squat)  # a later Session is performed
+    curl = exercises.find_or_create("Bicep Curl", provenance=Provenance.CURATED)
+
+    # Act — a contents-only correction (no outcome supplied) that appends an off-plan set
+    # the plan never prescribed, re-sending the record's own squat set unchanged.
+    updated = correct_session(
+        CorrectSessionRequest(
+            log_id=first.id,
+            performed_on=first.performed_on,
+            logged_sets=[
+                LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(5)),
+                LoggedSetDraft(exercise_id=curl.id, quantity=reps_quantity(12), load="15kg"),
+            ],
+        ),
+        "user_owner",
+        exercises=exercises,
+        logged=logged,
+        protocols=protocols,
+    )
+
+    # Assert — the off-plan set persists as an ordinary set; the record stays Completed
+    # (Completion Outcome is over *prescribed* sets, ADR-0013), its Session and id are
+    # preserved, and no ContiguityError was raised (ADR-0034).
+    assert updated.id == first.id
+    assert updated.session_id == protocol.sessions[0].session_id
+    assert updated.completion_outcome == "completed"
+    assert [s.exercise_id for s in updated.logged_sets] == [squat.id, curl.id]
+
+
 def test_plan_less_correction_supplying_an_outcome_is_rejected():
     # Arrange — an ad-hoc, plan-less record gates no Protocol and declares no outcome
     sessions, exercises, logged, profiles = _wire()

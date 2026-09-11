@@ -3,6 +3,9 @@
 // isolation. Every PR surface (the stat header tile, the RECORDS lens, the all-time PR
 // timeline, Home's Latest PR) formats through here so a record reads the same everywhere.
 
+import type { WeightUnit } from "./weight-unit";
+import { formatWeight, formatWholeWeight } from "./weight-format.ts";
+
 // The fields a Personal Record needs to render its achievement — the subset shared by the
 // analytics `PersonalRecordEntry`, the stat-header milestone, and Home's Latest PR.
 export interface RecordAchievement {
@@ -18,23 +21,23 @@ export interface RecordAchievement {
   added_kg: number | null;
 }
 
-// Render a kilogram number without a trailing ".0" (`20.0` → "20", `2.5` → "2.5"). A
-// template literal already drops an integer's fractional zero in JS.
-function formatKg(value: number): string {
-  return `${value}`;
-}
-
-// Format a Personal Record's headline honestly (ADR-0026). An absolute record shows its
-// Estimated 1RM rounded to whole kilograms — a shared magnitude comparable across
-// barbell lifts. A bodyweight record shows the *set that achieved it* — "bodyweight × 12"
-// or "bodyweight + 20 kg × 5" — never a kilogram figure: full body weight is an
-// unreliable absolute across movements, so the estimate only orders records within one
-// Exercise and must never surface as a cross-movement kg headline.
-export function formatRecordAchievement(record: RecordAchievement): string {
+// Format a Personal Record's headline honestly (ADR-0026), in the reader's Weight Unit. An
+// absolute record shows its Estimated 1RM rounded to a whole figure in that unit — a shared
+// magnitude comparable across barbell lifts. A bodyweight record shows the *set that achieved
+// it* — "bodyweight × 12" or "bodyweight + 20 kg × 5" — never a bare mass figure: full body
+// weight is an unreliable absolute across movements, so the estimate only orders records within
+// one Exercise and must never surface as a cross-movement headline. The *added* load on a
+// weighted bodyweight set is a real weight, so it is projected to the reader's unit like every
+// other Load (#417).
+export function formatRecordAchievement(
+  record: RecordAchievement,
+  unit: WeightUnit,
+): string {
   if (!record.is_bodyweight) {
-    return `${Math.round(record.estimated_1rm)} kg`;
+    return formatWholeWeight(record.estimated_1rm, unit);
   }
   const added = record.added_kg;
-  const base = added && added > 0 ? `bodyweight + ${formatKg(added)} kg` : "bodyweight";
+  const base =
+    added && added > 0 ? `bodyweight + ${formatWeight(added, unit)}` : "bodyweight";
   return `${base} × ${record.reps}`;
 }

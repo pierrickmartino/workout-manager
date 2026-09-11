@@ -7,6 +7,7 @@ import {
   submitAdvanceVariation,
   type SubstituteFormState,
 } from "@/app/sessions/[id]/actions";
+import { useConnectivity } from "@/lib/use-connectivity";
 import { Button } from "@/components/ui/button";
 import type { HarderVariationOffer as OfferView } from "@/lib/harder-variation-view";
 
@@ -32,6 +33,9 @@ export function HarderVariationOffer({
     submitAdvanceVariation,
     { error: null },
   );
+  // Advancing a Variation is an AI (LLM) call: annotate and disable it while offline
+  // rather than let a submit fail after the fact (issue #414).
+  const online = useConnectivity();
 
   if (offer.kind !== "offer" || dismissed) return null;
 
@@ -57,7 +61,12 @@ export function HarderVariationOffer({
             name="target_exercise_id"
             value={offer.exerciseId}
           />
-          <Button type="submit" variant="outline" size="sm" disabled={pending}>
+          <Button
+            type="submit"
+            variant="outline"
+            size="sm"
+            disabled={pending || !online}
+          >
             {pending ? "Advancing…" : offer.acceptLabel}
           </Button>
         </form>
@@ -71,6 +80,11 @@ export function HarderVariationOffer({
           {offer.dismissLabel}
         </Button>
       </div>
+      {!online ? (
+        <span className="font-mono text-[12px] text-text-muted">
+          Offline — reconnect to advance.
+        </span>
+      ) : null}
       {state.error ? (
         <span role="alert" className="font-mono text-[12px] text-magenta">
           {state.error}

@@ -6,9 +6,11 @@ import { GenerationProgress } from "@/components/GenerationProgress";
 import { EquipmentField } from "@/components/EquipmentField";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
 import { useProtocolGeneration } from "@/lib/use-protocol-generation";
+import { useConnectivity } from "@/lib/use-connectivity";
 import { parseEquipment } from "@/lib/equipment-presets";
 import { Field } from "@/components/pulse/field";
 import { Alert } from "@/components/pulse/alert";
+import { OfflineNotice } from "@/components/pulse/offline-notice";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -29,6 +31,9 @@ export function GenerateProtocolForm({
 }: GenerateProtocolFormProps = {}) {
   const { phase, error, start } = useProtocolGeneration();
   const busy = phase === "submitting" || phase === "generating";
+  // AI generation is network-only: annotate and disable it while offline rather than let a
+  // submit fail after the fact (issue #414).
+  const online = useConnectivity();
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -56,6 +61,11 @@ export function GenerateProtocolForm({
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-5">
       {error ? <Alert tone="error">{error}</Alert> : null}
+      {!online ? (
+        <OfflineNotice>
+          Generating a protocol needs a connection — reconnect to generate.
+        </OfflineNotice>
+      ) : null}
 
       <Field label="Training type">
         <Select name="training_type" defaultValue="strength">
@@ -102,7 +112,7 @@ export function GenerateProtocolForm({
 
       <EquipmentField initialEquipment={defaultEquipment} />
 
-      <Button type="submit" className="w-full">
+      <Button type="submit" disabled={!online} className="w-full">
         <Zap className="h-4 w-4" />
         Generate protocol
       </Button>

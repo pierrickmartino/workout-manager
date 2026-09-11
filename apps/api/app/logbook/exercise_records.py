@@ -34,6 +34,7 @@ from dataclasses import dataclass
 from app.domain.load import LoadKind, ParsedLoad
 from app.domain.one_rep_max import MAX_TRUSTWORTHY_REPS, MIN_TRUSTWORTHY_REPS
 from app.domain.quantity import repetitions_of
+from app.domain.set_type import is_warm_up
 from app.domain.personal_records import (
     LoggedSetRecord,
     PersonalRecord,
@@ -140,7 +141,9 @@ def _needs_body_weight_nudge(
     1–12 window — save for the one missing fact: no Performed Body Weight was captured on
     it. That is the honest ask (ADR-0026): recording a weight would unlock records the
     user's calisthenics work has already earned. Once any record exists the prompt is
-    silenced, so it never nags a user who is already scoring.
+    silenced, so it never nags a user who is already scoring. A ``warm_up`` set never
+    triggers it: a warm-up is no record candidate (ADR-0065), so a body weight would
+    unlock nothing for it.
     """
 
     if records:
@@ -150,6 +153,8 @@ def _needs_body_weight_nudge(
             if logged_set.exercise_id != exercise_id:
                 continue
             if logged_set.body_weight_kg is not None or logged_set.load is None:
+                continue
+            if is_warm_up(logged_set.set_type):
                 continue
             reps = repetitions_of(logged_set.quantity)
             if reps is None or not (MIN_TRUSTWORTHY_REPS <= reps <= MAX_TRUSTWORTHY_REPS):

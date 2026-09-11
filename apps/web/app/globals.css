@@ -1,10 +1,44 @@
 @import "tailwindcss";
 
 /*
-  PULSE design system — dark "tactical command-center" fitness theme.
-  Tokens transcribed from docs/design/pulse.pen. Declaring them inside @theme
-  makes Tailwind emit matching utilities (bg-surface, text-muted, font-mono,
-  rounded-md, …) and exposes them as CSS variables for hand-authored styles.
+  PULSE design system — a "tactical command-center" fitness theme.
+
+  A rendered Theme is always Active Skin × Mode (CONTEXT "Theme"), so colour
+  tokens resolve from a `[data-skin][data-mode]` selector layer rather than a
+  single hardcoded block (ADR-0047/0048). The root layout stamps those two
+  attributes on <html> via `resolveTheme` (lib/theme.ts); components keep
+  consuming the *semantic* utilities (bg-surface, text-cyan…), so re-theming is
+  swapping token values under a selector, never editing components.
+
+  Structure:
+    - @theme declares every token so Tailwind emits the matching utilities and
+      seeds :root. Its colours are the PULSE **dark** values, and its fonts/radii
+      are the PULSE identity, so an element with no attributes still renders
+      today's look byte-for-byte.
+    - [data-skin="pulse"][data-mode="light"] re-declares the colour tokens for
+      the PULSE **light** variant; utilities read the variables, so they inherit
+      whichever value wins the cascade.
+    - System Mode stamps no `data-mode`; a prefers-color-scheme fallback then
+      applies the light variant on a light device (dark stays the :root default).
+
+  A Skin is a full visual identity — colour **and** typography **and** shape
+  (ADR-0050). Two token groups, by how they compose with Mode:
+    - **Colour** is polarity-dependent, so it lives under `[data-skin][data-mode]`
+      (a light and a dark block per Skin), as above.
+    - **Fonts + radii** are Mode-invariant (a typeface never flips light/dark), so
+      each non-default Skin states them once under `html[data-skin="…"]` — no
+      `data-mode` qualifier. The `html` element carries the specificity to beat the
+      @theme `:root` defaults without needing to repeat per Mode. PULSE inherits the
+      @theme defaults, so only Aurora and Vercel restate this group.
+  Colours transcribed from docs/design/pulse.pen.
+
+  Contrast Floor (ADR-0070): every rung of a Skin's Text Ramp
+  (text-primary/secondary/muted) must clear WCAG AA (4.5:1) against every surface
+  (base/surface/elevated), in *both* Mode variants. `muted` is the binding rung —
+  its values here are tuned a hair above 4.5:1 against the lightest surface, so it
+  reads darker/lighter than a naive quiet-grey would. Vercel light additionally
+  darkens `secondary` so an AA-passing `muted` still sits a visible step below it.
+  lib/skin-contrast.test.ts parses this file and fails CI on any regression.
 */
 @theme {
   /* Surfaces */
@@ -19,7 +53,7 @@
   /* Text */
   --color-text-primary: #fafafa;
   --color-text-secondary: #a1a1aa;
-  --color-text-muted: #71717a;
+  --color-text-muted: #8f8f97;
 
   /* Accents */
   --color-cyan: #29e7e0;
@@ -46,13 +80,346 @@
   --spacing-shell: 26rem;
 }
 
+/*
+  PULSE — light variant.
+
+  The polarity flip of the dark palette: surfaces climb from a near-white page
+  up through white cards, text darkens onto near-black, and the bright dark-mode
+  accents are re-saturated so they carry enough contrast on light surfaces (with
+  `on-accent` flipping to white for text laid over an accent fill). The token
+  *names* are unchanged, so every component re-themes for free.
+*/
+@layer theme {
+  [data-skin="pulse"][data-mode="light"] {
+    /* Surfaces — near-white page, white cards, subtle grey elevation */
+    --color-base: #ffffff;
+    --color-surface: #fafafa;
+    --color-elevated: #f4f4f5;
+
+    /* Borders */
+    --color-border: #e4e4e7;
+    --color-border-lite: #d4d4d8;
+
+    /* Text — near-black primary down to a mid-grey muted */
+    --color-text-primary: #18181b;
+    --color-text-secondary: #52525b;
+    --color-text-muted: #6d6d76;
+
+    /* Accents — darker/richer so they read on light surfaces */
+    --color-cyan: #0891a5;
+    --color-cyan-dim: #0891a51f;
+    --color-blue: #2563eb;
+    --color-violet: #7c3aed;
+    --color-violet-dim: #7c3aed1f;
+    --color-magenta: #db2777;
+    --color-magenta-dim: #db27771f;
+    --color-on-accent: #ffffff;
+  }
+
+  /* System Mode: no `data-mode` is stamped, so follow the device. Dark is the
+     :root default; only the light branch needs stating. Values mirror the light
+     variant above (kept explicit — CSS can't share a block across @media). */
+  @media (prefers-color-scheme: light) {
+    [data-skin="pulse"]:not([data-mode]) {
+      --color-base: #ffffff;
+      --color-surface: #fafafa;
+      --color-elevated: #f4f4f5;
+
+      --color-border: #e4e4e7;
+      --color-border-lite: #d4d4d8;
+
+      --color-text-primary: #18181b;
+      --color-text-secondary: #52525b;
+      --color-text-muted: #6d6d76;
+
+      --color-cyan: #0891a5;
+      --color-cyan-dim: #0891a51f;
+      --color-blue: #2563eb;
+      --color-violet: #7c3aed;
+      --color-violet-dim: #7c3aed1f;
+      --color-magenta: #db2777;
+      --color-magenta-dim: #db27771f;
+      --color-on-accent: #ffffff;
+    }
+  }
+
+  /*
+    AURORA — the minimal second seed Skin (ADR-0048 / #331).
+
+    A cooler, deep-indigo palette led by an emerald accent, shipped purely so that
+    publishing a new Active Skin visibly restyles the app while each user's Mode
+    still applies — the end-to-end publish machinery is the point, not the art
+    direction (richer skins are out of scope per the spec). The token *names* are
+    identical to PULSE, so every component re-themes for free. Because :root
+    carries the PULSE dark values, Aurora restates the full token set for both its
+    dark base and its light variant.
+  */
+  [data-skin="aurora"][data-mode="dark"],
+  [data-skin="aurora"]:not([data-mode]) {
+    /* Surfaces — deep indigo page climbing to lighter slate cards */
+    --color-base: #0a0e17;
+    --color-surface: #121829;
+    --color-elevated: #1c2438;
+
+    /* Borders */
+    --color-border: #1c2438;
+    --color-border-lite: #2f3a54;
+
+    /* Text — cool near-white down to a slate muted */
+    --color-text-primary: #eef2fb;
+    --color-text-secondary: #a4b2cf;
+    --color-text-muted: #818da8;
+
+    /* Accents — emerald leads, with sky/violet/pink support */
+    --color-cyan: #34d399;
+    --color-cyan-dim: #34d3991f;
+    --color-blue: #38bdf8;
+    --color-violet: #a78bfa;
+    --color-violet-dim: #a78bfa1f;
+    --color-magenta: #f472b6;
+    --color-magenta-dim: #f472b61f;
+    --color-on-accent: #04121a;
+  }
+
+  [data-skin="aurora"][data-mode="light"] {
+    /* Surfaces — cool near-white page, white cards */
+    --color-base: #f6f8fc;
+    --color-surface: #ffffff;
+    --color-elevated: #eef2f9;
+
+    /* Borders */
+    --color-border: #dde5f0;
+    --color-border-lite: #c6d2e4;
+
+    /* Text — deep indigo-black down to a slate muted */
+    --color-text-primary: #101728;
+    --color-text-secondary: #465066;
+    --color-text-muted: #606d8b;
+
+    /* Accents — deepened so they read on light surfaces */
+    --color-cyan: #0f766e;
+    --color-cyan-dim: #0f766e1f;
+    --color-blue: #0284c7;
+    --color-violet: #7c3aed;
+    --color-violet-dim: #7c3aed1f;
+    --color-magenta: #be185d;
+    --color-magenta-dim: #be185d1f;
+    --color-on-accent: #ffffff;
+  }
+
+  /* Aurora System Mode: no `data-mode`, so follow the device. The dark base above
+     already covers dark devices; only the light branch needs stating here. */
+  @media (prefers-color-scheme: light) {
+    [data-skin="aurora"]:not([data-mode]) {
+      --color-base: #f6f8fc;
+      --color-surface: #ffffff;
+      --color-elevated: #eef2f9;
+
+      --color-border: #dde5f0;
+      --color-border-lite: #c6d2e4;
+
+      --color-text-primary: #101728;
+      --color-text-secondary: #465066;
+      --color-text-muted: #606d8b;
+
+      --color-cyan: #0f766e;
+      --color-cyan-dim: #0f766e1f;
+      --color-blue: #0284c7;
+      --color-violet: #7c3aed;
+      --color-violet-dim: #7c3aed1f;
+      --color-magenta: #be185d;
+      --color-magenta-dim: #be185d1f;
+      --color-on-accent: #ffffff;
+    }
+  }
+
+  /*
+    VERCEL — a minimalist, high-contrast Skin inspired by Vercel's Geist design
+    language (ADR-0048). Its signature is a stark monochrome shell — a *true-black*
+    page (or pure white in light) under a strict grayscale surface/border/text ramp
+    — carried by a single iconic accent: **Vercel blue (#0070f3)**. That blue is
+    deliberately loaded onto the *lead* accent token (`cyan`: bg-cyan buttons,
+    active states, labels, the focus ring) so the whole app visibly shifts off
+    PULSE's teal and reads as Vercel at a glance; purple/pink round out the Geist
+    gradient for the few components that use the secondary accents. The token
+    *names* are identical to PULSE, so every component re-themes for free. Because
+    :root carries the PULSE dark values, Vercel restates the full token set for
+    both its dark base and its light variant.
+  */
+  [data-skin="vercel"][data-mode="dark"],
+  [data-skin="vercel"]:not([data-mode]) {
+    /* Surfaces — true-black page climbing through near-black cards */
+    --color-base: #000000;
+    --color-surface: #0a0a0a;
+    --color-elevated: #161616;
+
+    /* Borders — the low-contrast Geist grays */
+    --color-border: #242424;
+    --color-border-lite: #363636;
+
+    /* Text — Geist foreground down through its gray ramp */
+    --color-text-primary: #ededed;
+    --color-text-secondary: #a1a1a1;
+    --color-text-muted: #818181;
+
+    /* Accents — Vercel blue leads (cyan token), with a lighter sky blue plus the
+       Geist purple/pink for the secondary slots. on-accent is white for text on
+       the blue fill. */
+    --color-cyan: #0070f3;
+    --color-cyan-dim: #0070f31f;
+    --color-blue: #66b2ff;
+    --color-violet: #a06bf5;
+    --color-violet-dim: #a06bf51f;
+    --color-magenta: #ff4da6;
+    --color-magenta-dim: #ff4da61f;
+    --color-on-accent: #ffffff;
+  }
+
+  [data-skin="vercel"][data-mode="light"] {
+    /* Surfaces — pure-white page, faint gray elevation (Geist light) */
+    --color-base: #ffffff;
+    --color-surface: #fafafa;
+    --color-elevated: #f2f2f2;
+
+    /* Borders — the pale Geist light grays */
+    --color-border: #eaeaea;
+    --color-border-lite: #d4d4d4;
+
+    /* Text — Geist near-black down to a mid gray */
+    --color-text-primary: #171717;
+    --color-text-secondary: #525252;
+    --color-text-muted: #6d6d6d;
+
+    /* Accents — Vercel blue leads (cyan token) on white; a deeper blue plus the
+       Geist purple/pink fill the secondary slots. on-accent is white for text on
+       the blue fill. */
+    --color-cyan: #0070f3;
+    --color-cyan-dim: #0070f31f;
+    --color-blue: #0761d1;
+    --color-violet: #7928ca;
+    --color-violet-dim: #7928ca1f;
+    --color-magenta: #d6006f;
+    --color-magenta-dim: #d6006f1f;
+    --color-on-accent: #ffffff;
+  }
+
+  /* Vercel System Mode: no `data-mode`, so follow the device. The true-black base
+     above already covers dark devices; only the light branch needs stating here. */
+  @media (prefers-color-scheme: light) {
+    [data-skin="vercel"]:not([data-mode]) {
+      --color-base: #ffffff;
+      --color-surface: #fafafa;
+      --color-elevated: #f2f2f2;
+
+      --color-border: #eaeaea;
+      --color-border-lite: #d4d4d4;
+
+      --color-text-primary: #171717;
+      --color-text-secondary: #525252;
+      --color-text-muted: #6d6d6d;
+
+      --color-cyan: #0070f3;
+      --color-cyan-dim: #0070f31f;
+      --color-blue: #0761d1;
+      --color-violet: #7928ca;
+      --color-violet-dim: #7928ca1f;
+      --color-magenta: #d6006f;
+      --color-magenta-dim: #d6006f1f;
+      --color-on-accent: #ffffff;
+    }
+  }
+
+  /*
+    Per-Skin identity — typography + shape (ADR-0050).
+
+    These tokens are Mode-invariant, so each Skin states them once (no `data-mode`).
+    Scoped to `html[data-skin="…"]` so they outrank the @theme `:root` defaults
+    (PULSE) without repeating per Light/Dark. PULSE needs no block — it *is* the
+    default. The font `var(--font-*)` handles are wired from next/font in
+    app/layout.tsx; each falls back to a same-category system stack so a font that
+    fails to load still renders in the right shape.
+
+    AURORA — a softer humanist identity: Bricolage Grotesque display over Inter
+    body, IBM Plex Mono for data, and a **soft** roundness (generous, near-pill).
+  */
+  html[data-skin="aurora"] {
+    /* Typography */
+    --font-display: var(--font-bricolage), "Bricolage Grotesque", system-ui, sans-serif;
+    --font-sans: var(--font-inter), "Inter", system-ui, sans-serif;
+    --font-mono: var(--font-ibm-plex-mono), "IBM Plex Mono", ui-monospace, monospace;
+
+    /* Shape — soft */
+    --radius-sm: 10px;
+    --radius-md: 14px;
+    --radius-lg: 18px;
+    --radius-xl: 24px;
+  }
+
+  /*
+    VERCEL — the Geist identity: Geist Sans for both display and body, Geist Mono
+    for data, and a **sharp** roundness (crisp, near-square corners) to match
+    Geist's precise, minimal feel.
+  */
+  html[data-skin="vercel"] {
+    /* Typography */
+    --font-display: var(--font-geist), "Geist", system-ui, sans-serif;
+    --font-sans: var(--font-geist), "Geist", system-ui, sans-serif;
+    --font-mono: var(--font-geist-mono), "Geist Mono", ui-monospace, monospace;
+
+    /* Shape — sharp */
+    --radius-sm: 2px;
+    --radius-md: 3px;
+    --radius-lg: 4px;
+    --radius-xl: 6px;
+  }
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
   }
 
-  html {
+  /* Ambient color-scheme follows the resolved Mode so native controls (form
+     fields, scrollbars) match. System Mode stamps no data-mode and widens to
+     `light dark` so the device decides, in step with the token fallback above. */
+  [data-skin="pulse"][data-mode="dark"] {
     color-scheme: dark;
+  }
+
+  [data-skin="pulse"][data-mode="light"] {
+    color-scheme: light;
+  }
+
+  [data-skin="pulse"]:not([data-mode]) {
+    color-scheme: light dark;
+  }
+
+  /* Aurora mirrors the same ambient color-scheme mapping so native controls track
+     the resolved Mode under whichever Skin is active. */
+  [data-skin="aurora"][data-mode="dark"] {
+    color-scheme: dark;
+  }
+
+  [data-skin="aurora"][data-mode="light"] {
+    color-scheme: light;
+  }
+
+  [data-skin="aurora"]:not([data-mode]) {
+    color-scheme: light dark;
+  }
+
+  /* Vercel mirrors the same ambient color-scheme mapping so native controls track
+     the resolved Mode under whichever Skin is active. */
+  [data-skin="vercel"][data-mode="dark"] {
+    color-scheme: dark;
+  }
+
+  [data-skin="vercel"][data-mode="light"] {
+    color-scheme: light;
+  }
+
+  [data-skin="vercel"]:not([data-mode]) {
+    color-scheme: light dark;
   }
 
   body {
@@ -62,11 +429,11 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  /* Native controls inherit the dark theme instead of the OS light default. */
+  /* Native controls inherit the app polarity via the ambient color-scheme. */
   input,
   select,
   textarea {
-    color-scheme: dark;
+    color-scheme: inherit;
   }
 
   /* Themed selection + focus ring baseline. */

@@ -11,7 +11,8 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel
+from tests.conftest import make_fk_engine
 
 from app.repositories.metric_entry_repository import (
     InMemoryMetricEntryRepository,
@@ -26,7 +27,7 @@ def metrics(request):
     if request.param == "in_memory":
         yield InMemoryMetricEntryRepository()
         return
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    engine = make_fk_engine()
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         yield SqlMetricEntryRepository(session)

@@ -2,18 +2,20 @@ import Link from "next/link";
 import { Dumbbell, History, LineChart, Trophy } from "lucide-react";
 
 import {
-  ANALYTICS_RANGES,
   fetchAnalytics,
   toAnalyticsRange,
   type AnalyticsRange,
   type VolumeSeries,
+  type DistanceSeries,
 } from "@/lib/analytics";
+import { RANGE_LABELS, toRangeOptions } from "@/lib/analytics-range-view";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { NavRow } from "@/components/pulse/nav-row";
 import { Bento, BentoTile } from "@/components/pulse/bento";
 import { Alert } from "@/components/pulse/alert";
 import { VolumeChart } from "@/components/pulse/volume-chart";
+import { DistanceChart } from "@/components/pulse/distance-chart";
 import { MuscleSplit } from "@/components/pulse/muscle-split";
 import { MuscleCoverage } from "@/components/analytics/muscle-coverage";
 import { Card } from "@/components/ui/card";
@@ -30,6 +32,9 @@ import {
   formatVolumeDelta,
   formatCoverageCaption,
 } from "@/lib/volume-view";
+import { toDistanceBars, formatDistanceDelta } from "@/lib/distance-view";
+import { resolveAppearance } from "@/lib/appearance";
+import type { WeightUnit } from "@/lib/weight-unit";
 import { cn } from "@/lib/utils";
 
 // The Analytics screen (F3 Slice 1–4): honest, range-scoped counts drawn straight
@@ -44,8 +49,12 @@ export default async function AnalyticsPage({
   searchParams: Promise<{ range?: string }>;
 }) {
   const { range: rawRange } = await searchParams;
-  const range = toAnalyticsRange(rawRange);
-  const envelope = await fetchAnalytics(range);
+  const requestedRange = toAnalyticsRange(rawRange);
+  const [envelope, appearance] = await Promise.all([
+    fetchAnalytics(requestedRange),
+    resolveAppearance(),
+  ]);
+  const unit = appearance.weight_unit;
 
   if (!envelope.success || !envelope.data) {
     return (
@@ -59,10 +68,14 @@ export default async function AnalyticsPage({
   }
 
   const overview = envelope.data;
+  // The window actually served — the requested one clamped into what History Depth makes
+  // available (ADR-0056) — drives both the active toggle button and the trend captions,
+  // so an out-of-depth request highlights and describes the window it was served.
+  const range = overview.range;
   const hasHistory = overview.sessions > 0;
   const muscleBars = toMuscleBars(overview.muscle_distribution);
   const coverageView = toCoverageView(overview.coverage);
-  const recordRows = toRecordRows(overview.recent_records);
+  const recordRows = toRecordRows(overview.recent_records, unit);
   // The Strength Analytics screen is offered only to a user with qualifying strength
   // history — the same condition the strength read model gates on
   // (`has_qualifying_strength`): at least one all-time Personal Record. Gating on the
@@ -77,11 +90,14 @@ export default async function AnalyticsPage({
     <section className="flex flex-col gap-6">
       <PageHeader overline="PULSE // STATS" title="Analytics" />
 
-      <RangeToggle active={range} />
+      <RangeToggle active={range} available={overview.available_ranges} />
 
       {hasHistory ? (
         <>
-          <TotalVolume volume={overview.volume} range={range} />
+          <TotalVolume volume={overview.volume} range={range} unit={unit} />
+          {overview.distance.has_distance ? (
+            <WeeklyDistance distance={overview.distance} range={range} />
+          ) : null}
           <Bento>
             <BentoTile label="SESSIONS" value={overview.sessions} />
             <BentoTile label="ACTIVE DAYS" value={overview.active_days} />
@@ -167,11 +183,13 @@ function MuscleDistribution({ bars }: { bars: MuscleBar[] }) {
 function TotalVolume({
   volume,
   range,
+  unit,
 }: {
   volume: VolumeSeries;
   range: AnalyticsRange;
+  unit: WeightUnit;
 }) {
-  const rows = toVolumeRows(volume.points);
+  const rows = toVolumeRows(volume.points, unit);
   const delta = formatVolumeDelta(volume.delta);
 
   return (
@@ -195,10 +213,55 @@ function TotalVolume({
                 </span>
               </div>
             ) : null}
-            <VolumeChart rows={rows} />
+            <VolumeChart rows={rows} unit={unit} />
             <p className="label-mono text-[11px] text-text-muted">
               {formatCoverageCaption(volume.coverage)}
             </p>
+          </>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// The Weekly Distance chart (ADR-0049): the endurance counterpart to Total Volume, one
+// bar per Monday-anchored week in kilometres, summed from `distance`-kind Quantities. It
+// carries the "+N%" trend delta against the immediately preceding equal-length window but
+// — unlike volume — no coverage caption: a distance Quantity is exact metres, so nothing
+// sits uncovered. Rendered only for a user with all-time distance work; a window with no
+// runs reads as an honest empty state, not a fabricated zero bar.
+function WeeklyDistance({
+  distance,
+  range,
+}: {
+  distance: DistanceSeries;
+  range: AnalyticsRange;
+}) {
+  const rows = toDistanceBars(distance.weeks);
+  const delta = formatDistanceDelta(distance.delta);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <SectionHeader>WEEKLY DISTANCE</SectionHeader>
+      <Card className="flex flex-col gap-4 p-6">
+        {rows.length === 0 ? (
+          <p className="font-sans text-sm text-text-secondary">
+            No distance logged in this window yet. Log a run and your weekly
+            kilometres will chart here.
+          </p>
+        ) : (
+          <>
+            {delta ? (
+              <div className="flex items-baseline gap-2">
+                <span className="font-display text-2xl font-semibold text-text-primary tabular-nums">
+                  {delta}
+                </span>
+                <span className="label-mono text-[11px] text-text-muted">
+                  vs. previous {RANGE_LABELS[range]}
+                </span>
+              </div>
+            ) : null}
+            <DistanceChart rows={rows} />
           </>
         )}
       </Card>
@@ -264,35 +327,55 @@ function RecentRecords({
   );
 }
 
-const RANGE_LABELS: Record<AnalyticsRange, string> = {
-  "7d": "7D",
-  "30d": "30D",
-  "90d": "90D",
-};
+// The 30D / 90D / 150D window selector, gated by History Depth (ADR-0056). Server-rendered
+// as links so the screen needs no client JavaScript; the active window is scoped via
+// ?range=. A window the user's history isn't deep enough to make worthwhile is rendered
+// disabled (never a link) rather than hidden, with a hint below naming what unlocks it —
+// so a longer window is never offered when its graph would merely repeat a shorter one's.
+function RangeToggle({
+  active,
+  available,
+}: {
+  active: AnalyticsRange;
+  available: AnalyticsRange[];
+}) {
+  const options = toRangeOptions(active, available);
+  const nextLocked = options.find((option) => !option.available);
 
-// The 7D / 30D / 90D window selector. Server-rendered as links so the screen
-// needs no client JavaScript; the active window is scoped via ?range=.
-function RangeToggle({ active }: { active: AnalyticsRange }) {
   return (
-    <div className="flex items-center gap-1 rounded-md border border-border bg-surface p-1">
-      {ANALYTICS_RANGES.map((range) => {
-        const isActive = range === active;
-        return (
-          <Link
-            key={range}
-            href={`/analytics?range=${range}`}
-            aria-current={isActive ? "page" : undefined}
-            className={cn(
-              "flex-1 rounded-sm py-1.5 text-center label-mono text-[11px] font-semibold transition-colors",
-              isActive
-                ? "bg-cyan/15 text-cyan"
-                : "text-text-muted hover:text-text-secondary",
-            )}
-          >
-            {RANGE_LABELS[range]}
-          </Link>
-        );
-      })}
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-1 rounded-md border border-border bg-surface p-1">
+        {options.map((option) =>
+          option.available ? (
+            <Link
+              key={option.range}
+              href={`/analytics?range=${option.range}`}
+              aria-current={option.active ? "page" : undefined}
+              className={cn(
+                "flex-1 rounded-sm py-1.5 text-center label-mono text-[11px] font-semibold transition-colors",
+                option.active
+                  ? "bg-cyan/15 text-cyan"
+                  : "text-text-muted hover:text-text-secondary",
+              )}
+            >
+              {option.label}
+            </Link>
+          ) : (
+            <span
+              key={option.range}
+              aria-disabled="true"
+              aria-label={option.hint ?? undefined}
+              title={option.hint ?? undefined}
+              className="flex-1 cursor-not-allowed rounded-sm py-1.5 text-center label-mono text-[11px] font-semibold text-text-muted/40"
+            >
+              {option.label}
+            </span>
+          ),
+        )}
+      </div>
+      {nextLocked ? (
+        <p className="label-mono text-[11px] text-text-muted">{nextLocked.hint}</p>
+      ) : null}
     </div>
   );
 }

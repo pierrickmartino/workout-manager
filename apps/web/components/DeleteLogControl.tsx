@@ -23,7 +23,7 @@ export function DeleteLogControl({ logId, disabled, reason }: DeleteLogControlPr
   );
 
   return (
-    <form action={action} className="flex flex-col items-end gap-1">
+    <form action={action} className="inline-flex flex-wrap items-center gap-2">
       <input type="hidden" name="log_id" value={logId} />
       <button
         type="submit"
@@ -34,17 +34,17 @@ export function DeleteLogControl({ logId, disabled, reason }: DeleteLogControlPr
             event.preventDefault();
           }
         }}
-        className="label-mono text-[10px] text-magenta transition-opacity hover:underline disabled:cursor-not-allowed disabled:text-text-muted disabled:no-underline"
+        className="label-mono inline-flex items-center rounded-md border border-border bg-elevated px-3 py-1.5 text-[10px] text-magenta transition-colors hover:border-magenta hover:bg-magenta/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-magenta/60 disabled:cursor-not-allowed disabled:opacity-50 disabled:text-text-muted disabled:hover:border-border disabled:hover:bg-elevated motion-reduce:transition-none"
       >
         {pending ? "Deleting…" : "Delete"}
       </button>
       {disabled && reason ? (
-        <span className="max-w-[16rem] text-right font-mono text-[9px] leading-tight text-text-muted">
+        <span className="w-full font-mono text-[9px] leading-tight text-text-muted">
           {reason}
         </span>
       ) : null}
       {state.error ? (
-        <span className="max-w-[16rem] text-right font-mono text-[9px] leading-tight text-magenta">
+        <span className="w-full font-mono text-[9px] leading-tight text-magenta">
           {state.error}
         </span>
       ) : null}

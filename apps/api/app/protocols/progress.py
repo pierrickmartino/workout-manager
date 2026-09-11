@@ -28,7 +28,7 @@ from dataclasses import dataclass, replace
 
 from app.domain.completion import CompletionOutcome
 from app.domain.load import parse_load
-from app.domain.progression import next_prescription
+from app.domain.progression import next_prescription, resolve_scheme
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
     LoggedSessionView,
@@ -164,17 +164,57 @@ def latest_sets_by_exercise(
     return latest
 
 
+def exposure_counts_by_exercise(
+    logged_sessions: list[LoggedSessionView],
+) -> dict[int, int]:
+    """Map each Exercise to its count of **performed exposures** — the Session-Count input.
+
+    How many performed Sessions have included that Exercise (ADR-0064): each Logged
+    Session that carries at least one set for the Exercise counts once, however many sets
+    it holds. This is the record-derived, calendar-free tally the Session-Count-Based
+    scheme steps on — read off the *same* already-loaded history the load overlay reads,
+    so the whole projection stays one history read. Every performance is counted —
+    Incomplete ones included, mirroring ``latest_sets_by_exercise`` — because a set
+    performed is an exposure had; only a training layoff (no Session at all) fails to
+    advance it, never calendar time.
+    """
+
+    counts: dict[int, int] = {}
+    for session in logged_sessions:
+        for exercise_id in {ls.exercise_id for ls in session.logged_sets}:
+            counts[exercise_id] = counts.get(exercise_id, 0) + 1
+    return counts
+
+
 def progressed_prescription(
-    prescription: PrescriptionView, sets: list[LoggedSetView]
+    prescription: PrescriptionView,
+    sets: list[LoggedSetView],
+    exposure_count: int = 0,
 ) -> PrescriptionView:
     """Overlay the ADR-0004 Progression adjustment onto a Prescription view.
 
-    Delegates to :func:`next_prescription`, which reads the free-text load and rep
-    target and returns the stepped values: an external-weight load moves its kg, a
-    weighted-bodyweight load its added kg, and a pure-bodyweight movement its rep
-    target (ADR-0026); %-1RM, ranges and qualitative loads are left untouched. The
-    stored load is a typed ``{kind, text, ...}`` dict, so the stepped load text is
-    re-typed through :func:`parse_load` to keep the view a typed Load end to end.
+    Resolves the Prescription's stored **Progression Scheme** (ADR-0064) — a null
+    selection resolves to the default (Double Progression), so an un-chosen movement
+    behaves exactly as today — and dispatches through :func:`next_prescription` to that
+    scheme's step function. The step reads the free-text load and rep target and returns
+    the stepped values: an external-weight load moves its kg, a weighted-bodyweight load
+    its added kg, and a pure-bodyweight movement its rep target (ADR-0026); %-1RM, ranges
+    and qualitative loads are left untouched, and a ``static`` scheme holds every axis.
+    The stored load is a typed ``{kind, text, ...}`` dict, so the stepped load text is
+    re-typed through :func:`parse_load` to keep the view a typed Load end to end. The
+    overlay stays a pure, read-only projection — it returns a fresh view and mutates
+    neither the stored Protocol nor the cached Generated artifact.
+
+    ``exposure_count`` — how many performed Sessions have included this Exercise
+    (:func:`exposure_counts_by_exercise`) — is the one extra input the Session-Count-Based
+    scheme steps on; it is threaded through to the pure domain function so that scheme
+    stays a pure function of the record. Every other scheme ignores it, so the default of
+    zero leaves them (and an un-chosen movement) behaving exactly as before.
+
+    A movement whose stored scheme is Static (ADR-0064) holds its authored ``reps`` and
+    ``recommended_load`` unchanged — the read-time replacement for the retired Pin's
+    "stop auto-progressing this movement" job, and better: it holds *every* future
+    occurrence at the plan's authored values rather than freezing a single one.
     """
 
     load = prescription.recommended_load
@@ -184,6 +224,8 @@ def progressed_prescription(
             recommended_load=load["text"] if load else None,
         ),
         sets,
+        resolve_scheme(prescription.scheme),
+        exposure_count,
     )
     adjusted_load = (
         parse_load(result.recommended_load).to_dict()
@@ -196,12 +238,15 @@ def progressed_prescription(
 def _adjusted_session(
     session: ProtocolSessionView,
     latest_sets: dict[int, list[LoggedSetView]],
+    exposure_counts: dict[int, int],
 ) -> ProtocolSessionView:
     """A copy of ``session`` with each Prescription progressed (load and reps)."""
 
     adjusted = [
         progressed_prescription(
-            prescription, latest_sets.get(prescription.exercise_id, [])
+            prescription,
+            latest_sets.get(prescription.exercise_id, []),
+            exposure_counts.get(prescription.exercise_id, 0),
         )
         for prescription in session.prescriptions
     ]
@@ -226,11 +271,12 @@ def progressed_protocol_from(
     # are real history (volume, PRs) and legitimately drive the next recommended load.
     performed = _advancing_sessions(logged_sessions)
     latest_sets = latest_sets_by_exercise(logged_sessions)
+    exposure_counts = exposure_counts_by_exercise(logged_sessions)
 
     sessions = [
         session
         if session.session_id in performed
-        else _adjusted_session(session, latest_sets)
+        else _adjusted_session(session, latest_sets, exposure_counts)
         for session in protocol.sessions
     ]
     adjusted_protocol = replace(protocol, sessions=sessions)
@@ -301,5 +347,6 @@ __all__ = [
     "progressed_protocol_from",
     "current_protocol",
     "latest_sets_by_exercise",
+    "exposure_counts_by_exercise",
     "progressed_prescription",
 ]

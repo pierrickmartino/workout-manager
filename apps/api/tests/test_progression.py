@@ -8,10 +8,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import pytest
+
+from app.domain.effort import Effort, EffortScale
+from app.domain.load import LoadKind, parse_load
 from app.domain.progression import (
+    DEFAULT_SCHEME,
+    RESET_FRACTION,
+    SESSION_COUNT_N,
     ProgressionKind,
+    ProgressionScheme,
     next_load,
     next_prescription,
+    parse_scheme,
+    resolve_scheme,
+    scheme_applies_to,
+    scheme_applies_to_load,
 )
 from tests.quantities import reps_quantity
 
@@ -34,6 +46,10 @@ class _LoggedSet:
 
     reps: int
     perceived_difficulty: int | None = None
+    # The typed logged Effort (ADR-0066), when a test exercises the RIR/RPE gate directly.
+    # ``None`` (the common case) falls back to ``perceived_difficulty`` read as RPE, so the
+    # existing tests are untouched.
+    effort: dict | None = None
 
     @property
     def quantity(self) -> dict:
@@ -100,6 +116,55 @@ def test_missing_perceived_effort_holds_rather_than_increases():
 
     # Assert — without evidence the work was easy, the load only holds
     assert result == "60 kg"
+
+
+def test_a_logged_rir_gates_identically_to_the_equivalent_rpe():
+    # Arrange — the same strong session logged in RIR instead of RPE: "3 RIR" ≈ RPE 7, at
+    # the low-effort threshold, so it must earn the same load step as an RPE-logged one.
+    prescription = _Prescription(reps="5", recommended_load="60 kg")
+    rir_sets = [
+        _LoggedSet(reps=5, effort=Effort(EffortScale.RIR, 3).to_dict()) for _ in range(3)
+    ]
+
+    # Act
+    result = next_load(prescription, rir_sets)
+
+    # Assert — 3 RIR normalizes to RPE 7 (≤ 7) and steps the load exactly as RPE 7 does
+    assert result == "62.5 kg"
+
+
+def test_a_logged_low_rir_is_hard_effort_and_holds_the_load():
+    # Arrange — "0 RIR" (nothing left in the tank) normalizes to RPE 10: a grind, not easy
+    prescription = _Prescription(reps="5", recommended_load="60 kg")
+    sets = [
+        _LoggedSet(reps=5, effort=Effort(EffortScale.RIR, 0).to_dict()) for _ in range(3)
+    ]
+
+    # Act
+    result = next_load(prescription, sets)
+
+    # Assert — hard effort holds the load, whichever scale expressed it
+    assert result == "60 kg"
+
+
+def test_typed_effort_takes_precedence_over_the_legacy_int():
+    # Arrange — a dual-written set: the typed RIR 3 (≈ RPE 7, easy) is authoritative even
+    # though a mismatched legacy int of 9 (hard) sits alongside it.
+    prescription = _Prescription(reps="5", recommended_load="60 kg")
+    sets = [
+        _LoggedSet(
+            reps=5,
+            perceived_difficulty=9,
+            effort=Effort(EffortScale.RIR, 3).to_dict(),
+        )
+        for _ in range(3)
+    ]
+
+    # Act
+    result = next_load(prescription, sets)
+
+    # Assert — the gate reads the typed value, so the easy session steps the load up
+    assert result == "62.5 kg"
 
 
 def test_a_rep_range_increases_only_when_the_ceiling_is_reached():
@@ -416,3 +481,645 @@ def test_weighted_bodyweight_reps_hit_at_high_effort_holds_the_added_load():
     # Assert — hard sets hold; only easy ones earn more added load
     assert result.kind is ProgressionKind.HOLD
     assert result.recommended_load == "bodyweight + 10 kg"
+
+
+# --- Progression Scheme registry (ADR-0064, #428) ----------------------------------
+# ``next_prescription`` dispatches through a closed registry of schemes. The default
+# scheme is Double Progression — the existing engine — so every current caller is
+# unchanged. Static never auto-steps. A compatibility predicate answers whether a
+# scheme applies to a Load kind, and no scheme ever auto-swaps a movement.
+
+
+def test_the_default_scheme_is_double_progression():
+    # Assert — an omitted scheme resolves to today's engine, keeping plans unaffected
+    assert DEFAULT_SCHEME is ProgressionScheme.DOUBLE_PROGRESSION
+
+
+def test_the_scheme_catalog_is_the_closed_v1_landing_set():
+    # Assert — the complete, closed v1 catalog (ADR-0064): the two universal defaults,
+    # Greyskull-style Linear (#430), and Session-Count-Based (#431).
+    assert {scheme.value for scheme in ProgressionScheme} == {
+        "double_progression",
+        "static",
+        "greyskull",
+        "session_count",
+    }
+
+
+def test_omitting_the_scheme_reproduces_double_progression():
+    # Arrange — strong performance on an external-weight prescription
+    prescription = _Prescription(reps="5", recommended_load="60 kg")
+    sets = [_LoggedSet(reps=5, perceived_difficulty=6) for _ in range(3)]
+
+    # Act — calling with no scheme argument (the existing call shape)
+    result = next_prescription(prescription, sets)
+
+    # Assert — identical to explicitly selecting Double Progression
+    assert result == next_prescription(
+        prescription, sets, ProgressionScheme.DOUBLE_PROGRESSION
+    )
+    assert result.kind is ProgressionKind.LOAD_STEP
+    assert result.recommended_load == "62.5 kg"
+
+
+def test_explicit_double_progression_still_backs_off_on_a_miss():
+    # Arrange — a missed set under the rep floor
+    prescription = _Prescription(reps="5", recommended_load="60 kg")
+    sets = [
+        _LoggedSet(reps=5, perceived_difficulty=8),
+        _LoggedSet(reps=3, perceived_difficulty=9),
+    ]
+
+    # Act
+    result = next_prescription(prescription, sets, ProgressionScheme.DOUBLE_PROGRESSION)
+
+    # Assert — the cautious back-off is preserved under the named scheme
+    assert result.kind is ProgressionKind.LOAD_STEP
+    assert result.recommended_load == "55 kg"
+
+
+@pytest.mark.parametrize(
+    "reps, load",
+    [
+        ("5", "60 kg"),              # absolute
+        ("5", "bodyweight + 10 kg"),  # bodyweight + added
+        ("8-12", "bodyweight"),      # pure bodyweight
+        ("5", "70% 1RM"),            # percent-1RM
+        ("5", "70-80 kg"),           # range
+        ("5", "moderate"),           # qualitative
+    ],
+)
+def test_static_holds_the_authored_values_for_every_load_kind(reps, load):
+    # Arrange — a session strong enough to make Double Progression step every axis
+    prescription = _Prescription(reps=reps, recommended_load=load)
+    sets = [_LoggedSet(reps=12, perceived_difficulty=6) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets, ProgressionScheme.STATIC)
+
+    # Assert — Static never moves: authored reps and load carried through as a HOLD
+    assert result.kind is ProgressionKind.HOLD
+    assert result.reps == reps
+    assert result.recommended_load == load
+
+
+def test_static_never_offers_a_harder_variation_at_the_bodyweight_ceiling():
+    # Arrange — a pure-bodyweight target already at its ceiling, hit easily: the exact
+    # case where Double Progression raises the harder-Variation offer
+    prescription = _Prescription(reps="12-12", recommended_load="bodyweight")
+    sets = [_LoggedSet(reps=12, perceived_difficulty=6) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets, ProgressionScheme.STATIC)
+
+    # Assert — Static holds and stays silent; it never raises the offer
+    assert result.kind is ProgressionKind.HOLD
+    assert result.suggest_harder_variation is False
+
+
+def test_static_ignores_a_missed_session_and_still_holds():
+    # Arrange — a badly missed session that would back Double Progression off
+    prescription = _Prescription(reps="5", recommended_load="60 kg")
+    sets = [_LoggedSet(reps=1, perceived_difficulty=10)]
+
+    # Act
+    result = next_prescription(prescription, sets, ProgressionScheme.STATIC)
+
+    # Assert — the record does not move a Static movement in either direction
+    assert result.recommended_load == "60 kg"
+
+
+@pytest.mark.parametrize(
+    "scheme",
+    [
+        ProgressionScheme.DOUBLE_PROGRESSION,
+        ProgressionScheme.STATIC,
+        ProgressionScheme.SESSION_COUNT,
+    ],
+)
+@pytest.mark.parametrize("load_kind", list(LoadKind))
+def test_the_universal_schemes_apply_to_every_load_kind(scheme, load_kind):
+    # Assert — the full-vocabulary schemes accept every Load kind: Double Progression
+    # (the default) and Session-Count step the clean axes and hold the rest, and Static
+    # holds any kind. Greyskull is bounded and is covered separately.
+    assert scheme_applies_to(scheme, load_kind) is True
+
+
+def test_compatibility_predicate_reads_the_registered_load_kinds(monkeypatch):
+    # Arrange — a scheme restricted to absolute loads only (later schemes look like this).
+    # monkeypatch.setitem restores the registry leak-safely, so the global is untouched
+    # for other tests even if an assertion fails mid-way.
+    from app.domain import progression as module
+
+    restricted = module._SchemeEntry(
+        module._REGISTRY[ProgressionScheme.STATIC].step, frozenset({LoadKind.ABSOLUTE})
+    )
+    monkeypatch.setitem(module._REGISTRY, ProgressionScheme.STATIC, restricted)
+
+    # Act / Assert — the predicate answers from the entry's declared Load kinds
+    assert scheme_applies_to(ProgressionScheme.STATIC, LoadKind.ABSOLUTE) is True
+    assert scheme_applies_to(ProgressionScheme.STATIC, LoadKind.BODYWEIGHT) is False
+
+
+def test_resolve_scheme_maps_a_null_selection_to_the_default():
+    # Assert — an unset stored selection (every existing/generated Prescription) resolves
+    # to Double Progression, so the read path behaves exactly as before ADR-0064.
+    assert resolve_scheme(None) is DEFAULT_SCHEME
+    assert resolve_scheme(None) is ProgressionScheme.DOUBLE_PROGRESSION
+
+
+def test_resolve_scheme_maps_a_stored_value_back_to_its_member():
+    # Assert — a stored selection is the closed enum's own string, so it round-trips
+    assert resolve_scheme("static") is ProgressionScheme.STATIC
+    assert resolve_scheme("double_progression") is ProgressionScheme.DOUBLE_PROGRESSION
+
+
+def test_resolve_scheme_rejects_an_unrecognized_value():
+    # Assert — an unknown selection fails fast rather than silently picking a scheme
+    with pytest.raises(ValueError):
+        resolve_scheme("nonsense")
+
+
+def test_no_scheme_auto_swaps_at_the_pure_bodyweight_ceiling():
+    # Arrange — the one place a rep-stepping scheme could "run out of room": a
+    # pure-bodyweight target at its ceiling, hit easily
+    prescription = _Prescription(reps="12-12", recommended_load="bodyweight")
+    sets = [_LoggedSet(reps=12, perceived_difficulty=6) for _ in range(3)]
+
+    # Act / Assert — for *every* registered scheme, the movement is never swapped: the
+    # load is carried through unchanged (any pressure surfaces as an offer, not a swap)
+    for scheme in ProgressionScheme:
+        result = next_prescription(prescription, sets, scheme)
+        assert result.recommended_load == "bodyweight"
+
+
+# --- Greyskull-style Linear scheme (ADR-0064, #430) ---------------------------------
+# A loaded-movement methodology bounded to absolute + bodyweight-added Loads. It steps
+# the Load up by the standard increment *per session* on hitting the rep floor (no
+# low-effort gate, AMRAP-aware final set), and — the trait that distinguishes it from
+# Double Progression's cautious fixed back-off — deloads by RESET_FRACTION on a miss.
+
+GREYSKULL = ProgressionScheme.GREYSKULL
+
+
+def test_greyskull_is_in_the_closed_catalog():
+    # Assert — the scheme is registered under its stored value
+    assert GREYSKULL.value == "greyskull"
+
+
+@pytest.mark.parametrize(
+    "load_kind, expected",
+    [
+        (LoadKind.ABSOLUTE, True),
+        (LoadKind.BODYWEIGHT, True),  # bodyweight-added is the refined case below
+        (LoadKind.PERCENT_1RM, False),
+        (LoadKind.QUALITATIVE, False),
+        (LoadKind.RANGE, False),
+    ],
+)
+def test_greyskull_registers_for_absolute_and_bodyweight_only(load_kind, expected):
+    # Assert — the coarse LoadKind gate: compatible with absolute + bodyweight, and
+    # rejects the non-clean loads (%-1RM, qualitative, range) outright
+    assert scheme_applies_to(GREYSKULL, load_kind) is expected
+
+
+@pytest.mark.parametrize(
+    "load, expected",
+    [
+        ("60 kg", True),                 # absolute
+        ("bodyweight + 10 kg", True),    # bodyweight + added
+        ("bodyweight", False),           # pure bodyweight — no kg axis to step
+        ("bw", False),                   # pure bodyweight, abbreviated
+        ("70% 1RM", False),              # non-clean
+        ("70-80 kg", False),             # non-clean (range)
+        ("moderate", False),             # non-clean (qualitative)
+    ],
+)
+def test_greyskull_compatibility_rejects_pure_bodyweight_and_non_clean_loads(
+    load, expected
+):
+    # Assert — the full typed-Load predicate refines the LoadKind gate with the one
+    # distinction LoadKind can't carry: pure bodyweight (no added kg) is rejected while
+    # bodyweight-added is accepted
+    assert scheme_applies_to_load(GREYSKULL, parse_load(load)) is expected
+
+
+def test_greyskull_steps_the_absolute_load_up_per_session_on_a_hit():
+    # Arrange — every set met the rep floor
+    prescription = _Prescription(reps="5", recommended_load="100 kg")
+    sets = [_LoggedSet(reps=5, perceived_difficulty=6) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets, GREYSKULL)
+
+    # Assert — one standard increment up, per session
+    assert result.kind is ProgressionKind.LOAD_STEP
+    assert result.recommended_load == "102.5 kg"
+
+
+def test_greyskull_steps_up_even_when_the_effort_was_high():
+    # Arrange — the floor was met but every set felt maximal (no low-effort gate)
+    prescription = _Prescription(reps="5", recommended_load="100 kg")
+    sets = [_LoggedSet(reps=5, perceived_difficulty=10) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets, GREYSKULL)
+
+    # Assert — Greyskull steps every session a hit lands, unlike Double Progression's
+    # low-effort gate which would hold here
+    assert result.kind is ProgressionKind.LOAD_STEP
+    assert result.recommended_load == "102.5 kg"
+
+
+def test_greyskull_steps_the_added_bodyweight_load_up_on_a_hit():
+    # Arrange — a weighted bodyweight movement whose floor was met
+    prescription = _Prescription(reps="5", recommended_load="bodyweight + 20 kg")
+    sets = [_LoggedSet(reps=5, perceived_difficulty=8) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets, GREYSKULL)
+
+    # Assert — the *added* kilograms step by the standard increment
+    assert result.kind is ProgressionKind.ADDED_LOAD_STEP
+    assert result.recommended_load == "bodyweight + 22.5 kg"
+
+
+def test_greyskull_reads_an_amrap_target_and_steps_up_when_the_floor_is_beaten():
+    # Arrange — an AMRAP final-set target ("5+" = five-or-more); the set beat the floor
+    prescription = _Prescription(reps="5+", recommended_load="100 kg")
+    sets = [_LoggedSet(reps=9, perceived_difficulty=7) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets, GREYSKULL)
+
+    # Assert — the AMRAP grammar is read (not held on as None); beating the floor is a hit
+    assert result.kind is ProgressionKind.LOAD_STEP
+    assert result.recommended_load == "102.5 kg"
+
+
+def test_greyskull_reads_an_amrap_target_on_an_added_bodyweight_load():
+    # Arrange — AMRAP floor of 5, comfortably beaten, on a weighted bodyweight movement
+    prescription = _Prescription(reps="5+", recommended_load="bodyweight + 20 kg")
+    sets = [_LoggedSet(reps=8, perceived_difficulty=7) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets, GREYSKULL)
+
+    # Assert — a beaten AMRAP floor steps the added load up
+    assert result.kind is ProgressionKind.ADDED_LOAD_STEP
+    assert result.recommended_load == "bodyweight + 22.5 kg"
+
+
+def test_greyskull_deloads_the_absolute_load_by_the_reset_fraction_on_a_miss():
+    # Arrange — a set fell below the rep floor
+    prescription = _Prescription(reps="5", recommended_load="100 kg")
+    sets = [
+        _LoggedSet(reps=5, perceived_difficulty=8),
+        _LoggedSet(reps=3, perceived_difficulty=10),
+    ]
+
+    # Act
+    result = next_prescription(prescription, sets, GREYSKULL)
+
+    # Assert — a fractional reset (−10%), not Double Progression's fixed −5 kg hold
+    assert result.kind is ProgressionKind.LOAD_STEP
+    assert result.recommended_load == "90 kg"
+    assert result.recommended_load == f"{int(100 * RESET_FRACTION)} kg"
+
+
+def test_greyskull_deload_uses_the_fraction_not_the_fixed_decrease():
+    # Arrange — the same miss under Double Progression backs off a fixed 5 kg
+    prescription = _Prescription(reps="5", recommended_load="100 kg")
+    sets = [_LoggedSet(reps=2, perceived_difficulty=10)]
+
+    # Act
+    greyskull = next_prescription(prescription, sets, GREYSKULL)
+    double = next_prescription(
+        prescription, sets, ProgressionScheme.DOUBLE_PROGRESSION
+    )
+
+    # Assert — the two schemes deload differently: fraction vs fixed decrease
+    assert greyskull.recommended_load == "90 kg"
+    assert double.recommended_load == "95 kg"
+
+
+def test_greyskull_deloads_the_added_bodyweight_load_by_the_reset_fraction():
+    # Arrange — a weighted bodyweight movement missed below the floor
+    prescription = _Prescription(reps="5", recommended_load="bodyweight + 20 kg")
+    sets = [_LoggedSet(reps=2, perceived_difficulty=10)]
+
+    # Act
+    result = next_prescription(prescription, sets, GREYSKULL)
+
+    # Assert — the *added* kilograms reset by the fraction (20 → 18)
+    assert result.kind is ProgressionKind.ADDED_LOAD_STEP
+    assert result.recommended_load == "bodyweight + 18 kg"
+
+
+def test_greyskull_holds_with_no_logged_sets():
+    # Arrange — nothing performed yet, so there is no floor evidence to act on
+    prescription = _Prescription(reps="5", recommended_load="100 kg")
+
+    # Act
+    result = next_prescription(prescription, [], GREYSKULL)
+
+    # Assert — the recommendation is unchanged
+    assert result.kind is ProgressionKind.HOLD
+    assert result.recommended_load == "100 kg"
+
+
+def test_greyskull_holds_a_pure_bodyweight_movement_it_cannot_step():
+    # Arrange — pure bodyweight is incompatible; defensively the step must not invent a
+    # kilogram axis if ever dispatched here
+    prescription = _Prescription(reps="5", recommended_load="bodyweight")
+    sets = [_LoggedSet(reps=12, perceived_difficulty=6) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets, GREYSKULL)
+
+    # Assert — held, no reps or load moved
+    assert result.kind is ProgressionKind.HOLD
+    assert result.recommended_load == "bodyweight"
+    assert result.reps == "5"
+
+
+def test_greyskull_holds_a_floorless_amrap_target():
+    # Arrange — a bare "AMRAP" carries no number to test a hit against
+    prescription = _Prescription(reps="AMRAP", recommended_load="100 kg")
+    sets = [_LoggedSet(reps=8, perceived_difficulty=6) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, sets, GREYSKULL)
+
+    # Assert — with no floor to read, the scheme holds rather than stepping blind
+    assert result.kind is ProgressionKind.HOLD
+    assert result.recommended_load == "100 kg"
+
+
+# --- Session-Count-Based scheme (ADR-0064, #431) ------------------------------------
+# The calendar-free reinterpretation of "time-based": it steps unconditionally on every
+# N-th *performed exposure* of the movement (default N via SESSION_COUNT_N), on the same
+# axis Double Progression uses, with no rep/effort gate and no reset. The exposure count
+# is passed in explicitly so the domain function stays pure; only the count advances it.
+
+SESSION_COUNT = ProgressionScheme.SESSION_COUNT
+
+
+def test_session_count_is_in_the_closed_catalog():
+    # Assert — the scheme is registered under its stored value
+    assert SESSION_COUNT.value == "session_count"
+
+
+def test_session_count_default_cadence_is_three():
+    # Assert — the single fixed v1 cadence is a named constant defaulting to 3
+    assert SESSION_COUNT_N == 3
+
+
+@pytest.mark.parametrize("load_kind", list(LoadKind))
+def test_session_count_applies_to_the_same_load_kinds_as_double_progression(load_kind):
+    # Assert — Session-Count is registered against the full Load vocabulary, exactly as
+    # Double Progression is (it steps the clean axes and holds the rest)
+    assert scheme_applies_to(SESSION_COUNT, load_kind) is scheme_applies_to(
+        ProgressionScheme.DOUBLE_PROGRESSION, load_kind
+    )
+
+
+# The step is driven by the exposure count alone (a cumulative ramp of one increment per
+# elapsed cadence), so a session strong enough for Double Progression to step is used
+# throughout to prove the *count* — not the reps/effort — is what drives Session-Count.
+def _neutral_sets() -> list[_LoggedSet]:
+    """Three sets that neither hit a ceiling nor miss a floor for a "5" target — so any
+    step Session-Count makes is driven purely by the exposure count, not the record."""
+
+    return [_LoggedSet(reps=5, perceived_difficulty=8) for _ in range(3)]
+
+
+@pytest.mark.parametrize("exposure_count", [1, 2])
+def test_session_count_holds_before_the_first_cadence(exposure_count):
+    # Arrange — an absolute load before the first N exposures have elapsed
+    prescription = _Prescription(reps="5", recommended_load="100 kg")
+
+    # Act
+    result = next_prescription(
+        prescription, _neutral_sets(), SESSION_COUNT, exposure_count
+    )
+
+    # Assert — no cadence elapsed yet, so it holds the authored load
+    assert result.kind is ProgressionKind.HOLD
+    assert result.recommended_load == "100 kg"
+
+
+@pytest.mark.parametrize("exposure_count", [3, 4, 5])
+def test_session_count_steps_once_at_the_first_cadence_and_holds_between(exposure_count):
+    # Arrange — the first cadence (exposure 3) and the intervening exposures 4, 5
+    prescription = _Prescription(reps="5", recommended_load="100 kg")
+
+    # Act
+    result = next_prescription(
+        prescription, _neutral_sets(), SESSION_COUNT, exposure_count
+    )
+
+    # Assert — one increment lands at the cadence and *holds* through the intervening
+    # exposures (the value does not drift back down between cadences)
+    assert result.kind is ProgressionKind.LOAD_STEP
+    assert result.recommended_load == "102.5 kg"
+
+
+@pytest.mark.parametrize(
+    "exposure_count, expected",
+    [(6, "105 kg"), (9, "107.5 kg"), (12, "110 kg")],
+)
+def test_session_count_accumulates_one_increment_per_cadence_and_never_resets(
+    exposure_count, expected
+):
+    # Arrange — later cadences: the ramp compounds and only ever grows (ADR-0064: no reset)
+    prescription = _Prescription(reps="5", recommended_load="100 kg")
+
+    # Act
+    result = next_prescription(
+        prescription, _neutral_sets(), SESSION_COUNT, exposure_count
+    )
+
+    # Assert — one increment per elapsed cadence, monotonically up
+    assert result.kind is ProgressionKind.LOAD_STEP
+    assert result.recommended_load == expected
+
+
+def test_session_count_steps_up_regardless_of_high_effort_or_missed_reps():
+    # Arrange — a badly missed, maximal-effort session that Double Progression would step
+    # *down*, but the cadence has elapsed
+    prescription = _Prescription(reps="5", recommended_load="100 kg")
+    missed = [_LoggedSet(reps=1, perceived_difficulty=10) for _ in range(3)]
+
+    # Act
+    result = next_prescription(prescription, missed, SESSION_COUNT, SESSION_COUNT_N)
+
+    # Assert — no rep/effort gate and no reset: the elapsed cadence still steps up
+    assert result.kind is ProgressionKind.LOAD_STEP
+    assert result.recommended_load == "102.5 kg"
+
+
+def test_session_count_steps_the_added_bodyweight_load_at_the_cadence():
+    # Arrange — a weighted bodyweight movement two cadences in
+    prescription = _Prescription(reps="5", recommended_load="bodyweight + 10 kg")
+
+    # Act — six exposures = two elapsed cadences
+    result = next_prescription(prescription, _neutral_sets(), SESSION_COUNT, 6)
+
+    # Assert — the *added* kilograms accumulate two increments (10 → 15)
+    assert result.kind is ProgressionKind.ADDED_LOAD_STEP
+    assert result.recommended_load == "bodyweight + 15 kg"
+
+
+def test_session_count_steps_the_pure_bodyweight_reps_toward_the_ceiling():
+    # Arrange — a pure-bodyweight movement with rep headroom, one cadence in
+    prescription = _Prescription(reps="8-12", recommended_load="bodyweight")
+
+    # Act
+    result = next_prescription(
+        prescription, _neutral_sets(), SESSION_COUNT, SESSION_COUNT_N
+    )
+
+    # Assert — with no weight to add, the rep target's floor steps one rep toward the
+    # ceiling; the movement stays bodyweight
+    assert result.kind is ProgressionKind.REPS_STEP
+    assert result.reps == "9-12"
+    assert result.recommended_load == "bodyweight"
+
+
+def test_session_count_raises_the_reps_by_the_elapsed_cadences():
+    # Arrange — three cadences elapsed (nine exposures) on an 8–12 target
+    prescription = _Prescription(reps="8-12", recommended_load="bodyweight")
+
+    # Act
+    result = next_prescription(prescription, _neutral_sets(), SESSION_COUNT, 9)
+
+    # Assert — the floor rises by three toward the ceiling (8 → 11), clamped by the ceiling
+    assert result.kind is ProgressionKind.REPS_STEP
+    assert result.reps == "11-12"
+
+
+def test_session_count_offers_a_harder_variation_at_the_bodyweight_ceiling():
+    # Arrange — a pure-bodyweight target already at its ceiling, one cadence in: reps can
+    # grow no further
+    prescription = _Prescription(reps="12-12", recommended_load="bodyweight")
+
+    # Act
+    result = next_prescription(
+        prescription, _neutral_sets(), SESSION_COUNT, SESSION_COUNT_N
+    )
+
+    # Assert — never-auto-swap: it holds and raises the harder-Variation offer instead of
+    # growing reps unbounded (the movement is never swapped, ADR-0026)
+    assert result.kind is ProgressionKind.HOLD
+    assert result.reps == "12-12"
+    assert result.recommended_load == "bodyweight"
+    assert result.suggest_harder_variation is True
+
+
+def test_session_count_offers_a_harder_variation_once_the_reps_ramp_past_the_ceiling():
+    # Arrange — an 8–12 target with enough cadences elapsed to push the floor past the
+    # ceiling (five cadences would put the floor at 13 > 12)
+    prescription = _Prescription(reps="8-12", recommended_load="bodyweight")
+
+    # Act — fifteen exposures = five elapsed cadences
+    result = next_prescription(prescription, _neutral_sets(), SESSION_COUNT, 15)
+
+    # Assert — reps never grow unbounded: at the ceiling the harder-Variation offer is
+    # raised instead, and the movement holds (never auto-swaps)
+    assert result.kind is ProgressionKind.HOLD
+    assert result.recommended_load == "bodyweight"
+    assert result.suggest_harder_variation is True
+
+
+def test_session_count_does_not_offer_at_the_ceiling_before_the_first_cadence():
+    # Arrange — the same at-ceiling movement, but before the first cadence has elapsed
+    prescription = _Prescription(reps="12-12", recommended_load="bodyweight")
+
+    # Act
+    result = next_prescription(prescription, _neutral_sets(), SESSION_COUNT, 2)
+
+    # Assert — no step is due, so it plainly holds with no offer raised
+    assert result.kind is ProgressionKind.HOLD
+    assert result.suggest_harder_variation is False
+
+
+@pytest.mark.parametrize("load", ["70% 1RM", "70-80 kg", "moderate"])
+def test_session_count_holds_a_load_with_no_clean_value_even_at_the_cadence(load):
+    # Arrange — a %-1RM, range, or qualitative Load has no single value to move, at a
+    # cadence
+    prescription = _Prescription(reps="5", recommended_load=load)
+
+    # Act
+    result = next_prescription(
+        prescription, _neutral_sets(), SESSION_COUNT, SESSION_COUNT_N
+    )
+
+    # Assert — nothing clean to step, so it holds exactly as every other scheme leaves it
+    assert result.kind is ProgressionKind.HOLD
+    assert result.recommended_load == load
+
+
+def test_session_count_never_advances_on_a_layoff_with_zero_exposures():
+    # Arrange — a movement never performed (a layoff before its first exposure)
+    prescription = _Prescription(reps="5", recommended_load="100 kg")
+
+    # Act
+    result = next_prescription(prescription, _neutral_sets(), SESSION_COUNT, 0)
+
+    # Assert — only *performed* exposures advance it, so a zero count can never step
+    assert result.kind is ProgressionKind.HOLD
+    assert result.recommended_load == "100 kg"
+
+
+def test_session_count_holds_a_null_load():
+    # Arrange — no recommendation to move, even at a cadence
+    prescription = _Prescription(reps="5", recommended_load=None)
+
+    # Act
+    result = next_prescription(
+        prescription, _neutral_sets(), SESSION_COUNT, SESSION_COUNT_N
+    )
+
+    # Assert
+    assert result.kind is ProgressionKind.HOLD
+    assert result.recommended_load is None
+
+
+def test_session_count_holds_a_pure_bodyweight_with_an_unreadable_rep_target():
+    # Arrange — a pure-bodyweight movement whose rep target can't be read ("AMRAP"), at a
+    # cadence: there is no floor/ceiling to step
+    prescription = _Prescription(reps="AMRAP", recommended_load="bodyweight")
+
+    # Act
+    result = next_prescription(
+        prescription, _neutral_sets(), SESSION_COUNT, SESSION_COUNT_N
+    )
+
+    # Assert — nothing to move, so it holds
+    assert result.kind is ProgressionKind.HOLD
+    assert result.reps == "AMRAP"
+    assert result.recommended_load == "bodyweight"
+
+
+# --- parse_scheme: the write-path "known scheme?" check (ADR-0064) --------------------
+
+
+def test_parse_scheme_maps_a_known_value_to_its_member():
+    # Assert — every catalog value round-trips to its enum member
+    for scheme in ProgressionScheme:
+        assert parse_scheme(scheme.value) is scheme
+
+
+def test_parse_scheme_returns_none_for_an_unknown_value():
+    # Assert — unlike resolve_scheme, it never invents a default: an unrecognized value is
+    # reported as None so a validator can reject it
+    assert parse_scheme("banana") is None
+    assert parse_scheme("") is None
+
+
+def test_the_default_scheme_applies_to_every_load():
+    # Assert — Double Progression is the default an unset movement resolves to, so it must
+    # be compatible with every Load kind (clearing a selection must always land legally)
+    for load in ("60 kg", "bodyweight", "70% 1RM", "70-80 kg", "moderate"):
+        assert scheme_applies_to_load(DEFAULT_SCHEME, parse_load(load))

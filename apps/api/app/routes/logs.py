@@ -12,12 +12,15 @@ from __future__ import annotations
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.auth.dependencies import get_current_user
 from app.domain.completion import parse_completion_outcome
+from app.domain.effort import EffortScale, effort_from_input
 from app.domain.load import LoadKind, load_from_input
+from app.domain.note import parse_note
 from app.domain.quantity import QuantityKind, quantity_from_input
+from app.domain.set_type import SetType, parse_set_type
 from app.envelope import success_envelope
 from app.logbook.correction import (
     ContiguityError,
@@ -25,6 +28,7 @@ from app.logbook.correction import (
     LogNotFoundError,
     correct_session,
     delete_session,
+    history_correction_verdicts,
 )
 from app.logbook.service import (
     LogKindError,
@@ -89,6 +93,26 @@ class LogSetBody(BaseModel):
     load_kind: str = DEFAULT_LOAD_KIND
     load_value: str | None = None
     perceived_difficulty: int | None = Field(default=None, ge=MIN_RPE, le=MAX_RPE)
+    # Logged Effort (ADR-0066): a typed value logged in *either* scale — ``effort_scale`` is
+    # the picked scale (``rpe`` / ``rir``) and ``effort_value`` its number. Both absent means
+    # no effort recorded (the set falls back to ``perceived_difficulty``); a present value with
+    # no scale defaults to RPE, so an rpe-only client logs exactly as before. The value is
+    # validated against its scale's band at the boundary (below) and rejected (422) if invalid.
+    # On write the set dual-writes: ``to_draft`` stores the typed ``effort`` and mirrors an RPE
+    # value into ``perceived_difficulty`` so the gate and any legacy reader both keep working.
+    effort_scale: str | None = None
+    effort_value: float | None = None
+    # Set Type annotation (ADR-0065, #449): a chosen ``SetType`` value tagging what this
+    # performed set *was*, or ``None``/blank for "unset" (reads as working). Descriptive
+    # only — echoed back per Logged Set, never a Progression input. Rides the finish, the
+    # static log form, the ad-hoc log, and Log Correction (all share this body). Membership
+    # is checked at the boundary and never coerced.
+    set_type: str | None = None
+    # Set Note (ADR-0065, #451): an optional record-side remark on this performed set, or
+    # ``None``/blank for "no note". Sanitized at the boundary by ``parse_note`` (below): blank →
+    # unset, over-cap → 422, else stripped + HTML-escaped so the stored value is inert wherever
+    # it renders. Rides the finish, the static log form, the ad-hoc log, and Log Correction.
+    note: str | None = None
 
     @field_validator("quantity_kind")
     @classmethod
@@ -110,6 +134,50 @@ class LogSetBody(BaseModel):
             raise ValueError(f"load_kind must be one of: {allowed}") from exc
         return value
 
+    @field_validator("set_type")
+    @classmethod
+    def _known_set_type(cls, value: str | None) -> str | None:
+        # A blank/absent Set Type is "unset" and normalizes to ``None`` (reads as working);
+        # a present but unknown value is a client bug rejected at the boundary, never coerced.
+        if value is None or value == "":
+            return None
+        if parse_set_type(value) is None:
+            allowed = ", ".join(member.value for member in SetType)
+            raise ValueError(f"set_type must be one of: {allowed}")
+        return value
+
+    @field_validator("note")
+    @classmethod
+    def _sanitize_note(cls, value: str | None) -> str | None:
+        # Sanitize the Set Note at the write boundary (ADR-0065): blank → unset (None), over-cap
+        # → 422 (``NoteTooLongError`` is a ``ValueError``), else stripped + HTML-escaped so it is
+        # inert wherever it renders (ADR-0036). Log Correction re-submits the edited note as raw
+        # text, so escaping once here re-sanitizes a corrected note without double-escaping.
+        return parse_note(value)
+
+    @field_validator("effort_scale")
+    @classmethod
+    def _known_effort_scale(cls, value: str | None) -> str | None:
+        # A blank/absent scale normalizes to ``None`` (an RPE value can be logged with no
+        # explicit scale); a present but unknown scale is rejected at the boundary.
+        if value is None or value == "":
+            return None
+        if value not in (scale.value for scale in EffortScale):
+            allowed = ", ".join(scale.value for scale in EffortScale)
+            raise ValueError(f"effort_scale must be one of: {allowed}")
+        return value
+
+    @model_validator(mode="after")
+    def _valid_effort(self) -> "LogSetBody":
+        # Validate the scale+value combination once, so an out-of-band value (RPE 11, RIR 2.5,
+        # a non-half-step) is rejected (422) at the boundary rather than stored as a number
+        # whose meaning was guessed. A blank value is no effort and passes.
+        try:
+            effort_from_input(self.effort_scale, self.effort_value)
+        except ValueError as exc:
+            raise ValueError(f"effort: {exc}") from exc
+        return self
+
     def to_draft(self) -> LoggedSetDraft:
         parsed = load_from_input(self.load_kind, self.load_value)
         quantity = quantity_from_input(
@@ -118,11 +186,25 @@ class LogSetBody(BaseModel):
             unit=self.quantity_unit,
             duration=self.quantity_duration,
         )
+        # Dual-write the typed Effort (ADR-0066): when an effort is logged, store the typed
+        # value *and* mirror its RPE-equivalent into the legacy int, so the progression gate
+        # (which prefers the typed value) and any reader still on ``perceived_difficulty`` both
+        # keep working. With no effort logged, the legacy int the client sent rides through.
+        effort = effort_from_input(self.effort_scale, self.effort_value)
+        if effort is not None:
+            effort_dict = effort.to_dict()
+            perceived_difficulty = int(round(effort.as_rpe))
+        else:
+            effort_dict = None
+            perceived_difficulty = self.perceived_difficulty
         return LoggedSetDraft(
             exercise_id=self.exercise_id,
             quantity=quantity.to_dict() if quantity is not None else None,
             load=parsed.to_dict() if parsed is not None else None,
-            perceived_difficulty=self.perceived_difficulty,
+            perceived_difficulty=perceived_difficulty,
+            effort=effort_dict,
+            set_type=self.set_type,
+            note=self.note,
         )
 
 
@@ -141,6 +223,10 @@ class LogSessionBody(BaseModel):
     logged_sets: list[LogSetBody] = Field(min_length=1)
     completion_outcome: str | None = None
     duration_seconds: int | None = Field(default=None, ge=0)
+    # The client-minted idempotency key (ADR-0060) that makes the finish duplicate-proof:
+    # a retry resends the same key and the write upsert-returns the first record. Optional
+    # — a keyless (``None``) finish still records, but is not de-duplicated.
+    idempotency_key: str | None = None
 
     @field_validator("completion_outcome")
     @classmethod
@@ -151,7 +237,11 @@ class LogSessionBody(BaseModel):
         return parse_completion_outcome(value).value
 
 
-def _serialize(view: LoggedSessionView) -> dict:
+def serialize_logged_session(view: LoggedSessionView) -> dict:
+    """Serialize a Logged Session to the envelope's ``data`` shape.
+
+    Public so sibling routes that also return a Logged Session (the Hand-Authored Session
+    create path, ADR-0040) share one serializer instead of re-deriving the shape."""
     return {
         "id": view.id,
         "clerk_user_id": view.clerk_user_id,
@@ -166,6 +256,17 @@ def _serialize(view: LoggedSessionView) -> dict:
                 "quantity": s.quantity,
                 "load": s.load,
                 "perceived_difficulty": s.perceived_difficulty,
+                # Logged Effort (ADR-0066): the stored typed ``{scale, value}`` Effort, or null
+                # when none was recorded. Echoed in the scale the user logged; the web
+                # view-model projects RPE⇄RIR for display (mirroring the kg/lb projection).
+                "effort": s.effort,
+                # Set Type annotation (ADR-0065, #449): the stored ``SetType`` value, or
+                # null for "unset" (reads as working). Descriptive only; the web view-model
+                # renders it as a badge (no badge when unset).
+                "set_type": s.set_type,
+                # Set Note (ADR-0065, #451): the stored record-side remark, or null for "no
+                # note" (rendered as nothing). Already HTML-escaped at the write boundary.
+                "note": s.note,
                 "exercise_id": s.exercise_id,
                 "exercise_name": s.exercise_name,
                 "body_weight_kg": s.body_weight_kg,
@@ -190,6 +291,7 @@ def create_log(
         performed_on=payload.performed_on,
         completion_outcome=payload.completion_outcome,
         duration_seconds=payload.duration_seconds,
+        idempotency_key=payload.idempotency_key,
         logged_sets=[s.to_draft() for s in payload.logged_sets],
     )
     try:
@@ -209,7 +311,7 @@ def create_log(
         raise HTTPException(
             status_code=HTTP_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
-    return success_envelope(_serialize(view))
+    return success_envelope(serialize_logged_session(view))
 
 
 class LogAdhocBody(BaseModel):
@@ -232,6 +334,9 @@ class LogAdhocBody(BaseModel):
     training_type: str = Field(min_length=1)
     logged_sets: list[LogSetBody] = Field(min_length=1)
     duration_seconds: int | None = Field(default=None, ge=0)
+    # The client-minted idempotency key (ADR-0060): the ad-hoc finish is as duplicate-proof
+    # as the plan-backed one — a retry resends the same key and upsert-returns the record.
+    idempotency_key: str | None = None
 
 
 @router.post("/logs")
@@ -256,6 +361,7 @@ def create_adhoc_log(
         performed_on=payload.performed_on,
         completion_outcome=None,
         duration_seconds=payload.duration_seconds,
+        idempotency_key=payload.idempotency_key,
         logged_sets=[s.to_draft() for s in payload.logged_sets],
     )
     try:
@@ -271,7 +377,7 @@ def create_adhoc_log(
         raise HTTPException(
             status_code=HTTP_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
-    return success_envelope(_serialize(view))
+    return success_envelope(serialize_logged_session(view))
 
 
 class LogCorrectionBody(BaseModel):
@@ -350,7 +456,7 @@ def correct_log(
         raise HTTPException(
             status_code=HTTP_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
-    return success_envelope(_serialize(view))
+    return success_envelope(serialize_logged_session(view))
 
 
 @router.delete("/logs/{log_id}")
@@ -383,6 +489,48 @@ def delete_log(
 def read_history(
     clerk_user_id: str = Depends(get_current_user),
     logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+    protocols: ProtocolRepository = Depends(get_protocol_repository),
 ) -> dict:
+    """Return the caller's Logged history, most recent first, each record annotated with
+    whether it may be deleted / un-completed without breaking the gap-free performed
+    sequence (ADR-0034).
+
+    The ``deletable`` / ``uncompletable`` flags ride only on this list read: the server
+    owns the one contiguity gate, so the History screen can disable a control the server
+    would reject with a ``409`` instead of surprising the user with a bare rejection (user
+    story 27). A faithful client-side mirror is impossible — it would need every Protocol's
+    Session ordering, while Home surfaces only the current one — so the verdicts are
+    computed here over the same history."""
+
     history = logged.list_for_user(clerk_user_id)
-    return success_envelope([_serialize(view) for view in history])
+    verdicts = history_correction_verdicts(
+        history, clerk_user_id, protocols=protocols
+    )
+    records = []
+    for view in history:
+        record = serialize_logged_session(view)
+        verdict = verdicts[view.id]
+        record["deletable"] = verdict.deletable
+        record["uncompletable"] = verdict.uncompletable
+        records.append(record)
+    return success_envelope(records)
+
+
+@router.get("/logs/{log_id}")
+def read_log(
+    log_id: int,
+    clerk_user_id: str = Depends(get_current_user),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+) -> dict:
+    """Return one of the caller's Logged Sessions in full — the record detail.
+
+    Owner-scoped like every other logbook read: a log that is missing or owned by another
+    user surfaces as ``404``, so the detail page can never open another user's record. The
+    single-record read the history list has always been able to serve, now given its own
+    route so the Logged Session gets a stable, linkable home (the record side's counterpart
+    to ``GET /api/sessions/{id}`` on the plan side)."""
+
+    view = logged.get(log_id, clerk_user_id)
+    if view is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Log not found")
+    return success_envelope(serialize_logged_session(view))

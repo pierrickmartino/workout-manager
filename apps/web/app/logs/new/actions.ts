@@ -9,6 +9,7 @@ import {
 } from "@/lib/adhoc-log";
 import { resolveExercise } from "@/lib/exercises";
 import { logAdhocSession } from "@/lib/logs";
+import { resolveAppearance } from "@/lib/appearance";
 
 export interface AdhocLogFormState {
   error: string | null;
@@ -43,11 +44,17 @@ export async function submitAdhocLog(
     sets.push({ exerciseId: resolved.data.id, ...fields });
   }
 
-  const built = buildAdhocLogRequest({
-    performedOn: String(form.get("performed_on") ?? ""),
-    trainingType: String(form.get("training_type") ?? ""),
-    sets,
-  });
+  // Load values arrive in the user's Weight Unit; resolve it server-side so each entered
+  // Load is stored as canonical kilograms (#417). A signed-out/unreachable read defaults to kg.
+  const { weight_unit: unit } = await resolveAppearance();
+  const built = buildAdhocLogRequest(
+    {
+      performedOn: String(form.get("performed_on") ?? ""),
+      trainingType: String(form.get("training_type") ?? ""),
+      sets,
+    },
+    unit,
+  );
   if (!built.ok) {
     return { error: built.error };
   }

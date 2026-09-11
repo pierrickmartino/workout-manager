@@ -1,14 +1,17 @@
 """JSON serialization for the Live Session hydration read model (issue #90).
 
 Turns a ``HydratedSessionView`` into the plain-``dict`` the PWA's live screen
-consumes. The shape is the standard Session payload — so the live engine keeps
-pre-filling each set row from ``recommended_load`` (now progression-adjusted) — with
-one addition per prescription: ``previous_performance``, the ordinal-aligned Logged
-Sets of that Exercise's most recent performance (``[]`` when never logged)."""
+consumes. The shape is the standard Session payload — each Prescription rendered
+through the shared :func:`serialize_prescription` (``app.session_serialization``), so
+the live read can never again drift out of the plain Session read the way it once
+dropped the Superset overlay (ADR-0023) and flattened Supersets on Start — with one
+addition per prescription: ``previous_performance``, the ordinal-aligned Logged Sets
+of that Exercise's most recent performance (``[]`` when never logged)."""
 
 from __future__ import annotations
 
 from app.live.hydration import HydratedSessionView, PreviousSetView
+from app.session_serialization import serialize_prescription
 
 
 def _serialize_previous_set(view: PreviousSetView) -> dict:
@@ -25,18 +28,10 @@ def serialize_hydrated_session(view: HydratedSessionView) -> dict:
         "has_been_regenerated": session.has_been_regenerated,
         "prescriptions": [
             {
-                "position": p.position,
-                "sets": p.sets,
-                "reps": p.reps,
-                "rest_seconds": p.rest_seconds,
-                "tempo": p.tempo,
-                "recommended_load": p.recommended_load,
-                "exercise_id": p.exercise_id,
-                "exercise_name": p.exercise_name,
-                "exercise_description": p.exercise_description,
-                "targeted_muscles": p.targeted_muscles,
-                "required_equipment": p.required_equipment,
-                "provenance": p.provenance,
+                **serialize_prescription(p),
+                # The live read's one addition over the canonical Prescription shape:
+                # the ordinal-aligned Logged Sets of this Exercise's most recent
+                # performance — the reference the user is beating (``[]`` when never logged).
                 "previous_performance": [
                     _serialize_previous_set(s)
                     for s in view.previous_performance.get(p.exercise_id, [])

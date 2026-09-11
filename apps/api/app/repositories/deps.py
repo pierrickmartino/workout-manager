@@ -10,9 +10,12 @@ from fastapi import Depends
 from rq import Queue
 from sqlmodel import Session
 
+from app.active_skin.cache import ActiveSkinCache
 from app.config import Settings, get_settings
 from app.db.session import get_session
 from app.generation.cache import GenerationCache, RedisCacheStore
+from app.generation.backfill_queue import BackfillQueue, RqBackfillQueue
+from app.generation.enrichment_queue import EnrichmentQueue, RqEnrichmentQueue
 from app.generation.job_queue import JobQueue, RqJobQueue
 from app.generation.llm import build_llm_client
 from app.generation.orchestrator import GenerationOrchestrator
@@ -54,6 +57,14 @@ from app.repositories.metric_entry_repository import (
     MetricEntryRepository,
     SqlMetricEntryRepository,
 )
+from app.repositories.active_skin_repository import (
+    ActiveSkinRepository,
+    SqlActiveSkinRepository,
+)
+from app.repositories.appearance_preference_repository import (
+    AppearancePreferenceRepository,
+    SqlAppearancePreferenceRepository,
+)
 from app.repositories.profile_repository import (
     ProfileRepository,
     SqlProfileRepository,
@@ -62,12 +73,40 @@ from app.repositories.session_repository import (
     SessionRepository,
     SqlSessionRepository,
 )
+from app.repositories.share_link_repository import (
+    ShareLinkRepository,
+    SqlShareLinkRepository,
+)
 
 
 def get_profile_repository(
     session: Session = Depends(get_session),
 ) -> ProfileRepository:
     return SqlProfileRepository(session)
+
+
+def get_appearance_preference_repository(
+    session: Session = Depends(get_session),
+) -> AppearancePreferenceRepository:
+    return SqlAppearancePreferenceRepository(session)
+
+
+def get_active_skin_repository(
+    session: Session = Depends(get_session),
+) -> ActiveSkinRepository:
+    return SqlActiveSkinRepository(session)
+
+
+# The Active Skin read-through cache is a *process-wide singleton* (ADR-0048): the
+# whole app shares one Active Skin, so the GET path and the PUT path must share one
+# cache instance for a publish's invalidate to be seen by subsequent reads in this
+# worker. Constructed once at import, not per request. Tests override this provider
+# with a fresh cache for isolation, mirroring how they override the repositories.
+_active_skin_cache = ActiveSkinCache()
+
+
+def get_active_skin_cache() -> ActiveSkinCache:
+    return _active_skin_cache
 
 
 def get_exercise_repository(
@@ -92,6 +131,12 @@ def get_logged_session_repository(
     session: Session = Depends(get_session),
 ) -> LoggedSessionRepository:
     return SqlLoggedSessionRepository(session)
+
+
+def get_share_link_repository(
+    session: Session = Depends(get_session),
+) -> ShareLinkRepository:
+    return SqlShareLinkRepository(session)
 
 
 def get_protocol_repository(
@@ -130,6 +175,26 @@ def get_job_queue(
 ) -> JobQueue:
     connection = redis.Redis.from_url(settings.redis_url)
     return RqJobQueue(Queue(QUEUE_NAME, connection=connection))
+
+
+def get_enrichment_queue(
+    settings: Settings = Depends(get_settings),
+) -> EnrichmentQueue:
+    # The async-on-create Stub-enrichment queue (issue #309) shares the one
+    # ``generation`` RQ queue with Protocol generation, so both ride a single Redis
+    # (ADR-0005).
+    connection = redis.Redis.from_url(settings.redis_url)
+    return RqEnrichmentQueue(Queue(QUEUE_NAME, connection=connection))
+
+
+def get_backfill_queue(
+    settings: Settings = Depends(get_settings),
+) -> BackfillQueue:
+    # The admin-triggered Stub-enrichment backfill (ADR-0046) rides the same one
+    # ``generation`` RQ queue as Protocol generation and on-create enrichment, so the
+    # whole app shares a single Redis (ADR-0005).
+    connection = redis.Redis.from_url(settings.redis_url)
+    return RqBackfillQueue(Queue(QUEUE_NAME, connection=connection))
 
 
 def get_generation_orchestrator(

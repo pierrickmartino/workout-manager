@@ -27,6 +27,15 @@ class Settings(BaseSettings):
     clerk_issuer: str = ""
     clerk_jwks_url: str = ""
 
+    # Operator gate for maintenance endpoints (ADR-0046). There is no admin concept in
+    # the codebase, so "operator" is a single Clerk custom claim: ``admin_role_claim``
+    # names the claim to read (sourced from ``public_metadata`` via the Clerk
+    # session-token template) and ``admin_role_value`` is the value that grants access.
+    # Both are configurable so the claim path is never hardcoded; the endpoint fails
+    # closed (403) when the claim is absent or does not match.
+    admin_role_claim: str = "role"
+    admin_role_value: str = "admin"
+
     # Infrastructure
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/workout"
     redis_url: str = "redis://localhost:6379/0"

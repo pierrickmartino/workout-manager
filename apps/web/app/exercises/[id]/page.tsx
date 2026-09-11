@@ -5,6 +5,8 @@ import { fetchExercise } from "@/lib/sessions";
 import { fetchExerciseProgress } from "@/lib/progress";
 import { fetchExerciseRecords } from "@/lib/exercise-records";
 import { fetchHome } from "@/lib/home";
+import { resolveAppearance } from "@/lib/appearance";
+import type { WeightUnit } from "@/lib/weight-unit";
 import { toExerciseTab } from "@/lib/exercise-detail-view";
 import { backTarget } from "@/lib/back-target";
 import type { ProtocolProgress } from "@/lib/protocols-types";
@@ -68,25 +70,30 @@ export default async function ExercisePage({
       ? homeEnvelope.data.current_protocol
       : null;
 
+  // The reader's Weight Unit steers every weight surface on this screen — the stat header's
+  // Personal Record, the SPECS Top-Set Trend, the RECORDS milestones, and each HISTORY Load
+  // (#417). One cached read, shared with the layout.
+  const { weight_unit: unit } = await resolveAppearance();
+
   return (
     <section className="flex flex-col gap-7">
-      <BackLink href={back.href}>{back.label}</BackLink>
-
       <PageHeader
         overline="PULSE // EXERCISE"
         title={exercise.name}
         action={
-          exercise.provenance === "ai_generated" ? (
-            <Badge variant="magenta" title="AI-generated, not yet reviewed">
-              AI-GEN
-            </Badge>
-          ) : (
-            <Badge variant="cyan">CURATED</Badge>
-          )
+          <div className="flex items-center gap-1.5">
+            {exercise.provenance === "ai_generated" ? (
+              <Badge variant="magenta" title="AI-generated, not yet reviewed">
+                AI-GEN
+              </Badge>
+            ) : (
+              <Badge variant="cyan">CURATED</Badge>
+            )}
+          </div>
         }
       />
 
-      {records ? <StatHeader records={records} /> : null}
+      {records ? <StatHeader records={records} unit={unit} /> : null}
 
       <ExerciseTabs exerciseId={exerciseId} active={tab} from={from} />
 
@@ -94,14 +101,16 @@ export default async function ExercisePage({
         <SpecsPanel
           exercise={exercise}
           topSetSeries={records?.top_set_series ?? []}
+          unit={unit}
           from={from}
         />
       ) : null}
-      {tab === "history" ? <HistoryTab exerciseId={exerciseId} /> : null}
+      {tab === "history" ? <HistoryTab exerciseId={exerciseId} unit={unit} /> : null}
       {tab === "records" ? (
         <RecordsPanel
           milestones={records?.pr_milestones ?? []}
           bodyWeightNudge={records?.body_weight_nudge ?? false}
+          unit={unit}
         />
       ) : null}
 
@@ -110,6 +119,8 @@ export default async function ExercisePage({
         exerciseName={exercise.name}
         currentProtocol={currentProtocol}
       />
+
+      <BackLink href={back.href}>{back.label}</BackLink>
     </section>
   );
 }
@@ -117,7 +128,13 @@ export default async function ExercisePage({
 // HISTORY reads the record side, so it fetches only when its tab is active. An
 // Exercise never logged shows an honest empty state (handled in HistoryPanel); a
 // failed read surfaces the error rather than a fabricated empty history.
-async function HistoryTab({ exerciseId }: { exerciseId: number }) {
+async function HistoryTab({
+  exerciseId,
+  unit,
+}: {
+  exerciseId: number;
+  unit: WeightUnit;
+}) {
   const envelope = await fetchExerciseProgress(exerciseId);
   if (!envelope.success || !envelope.data) {
     return (
@@ -126,7 +143,7 @@ async function HistoryTab({ exerciseId }: { exerciseId: number }) {
       </Alert>
     );
   }
-  return <HistoryPanel progress={envelope.data} />;
+  return <HistoryPanel progress={envelope.data} unit={unit} />;
 }
 
 // ADD TO PROTOCOL, now wired to the Protocol Builder (F4 Slice 7, ADR-0021). When the

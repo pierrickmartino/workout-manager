@@ -7,7 +7,8 @@ Provenance."""
 from __future__ import annotations
 
 import pytest
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import Session, SQLModel, select
+from tests.conftest import make_fk_engine
 
 from app.db.models import Exercise
 from app.domain.exercise import Provenance
@@ -17,12 +18,81 @@ from app.repositories.exercise_repository import (
 )
 
 
+def test_resolve_or_create_reports_a_fresh_create(repo):
+    # Act — a genuine normalized-name miss mints a new Stub
+    resolved = repo.resolve_or_create("Jefferson Curl", provenance=Provenance.USER_ENTERED)
+
+    # Assert — the created flag is the async-enrichment trigger (issue #309): a real
+    # create is reported so the endpoint knows to enqueue an Enrichment job for it.
+    assert resolved.created is True
+    assert resolved.exercise.id is not None
+    assert resolved.exercise.name == "Jefferson Curl"
+    assert resolved.exercise.provenance == Provenance.USER_ENTERED.value
+
+
+def test_resolve_or_create_reports_a_dedup_hit(repo):
+    # Arrange — the movement already exists (a prior curated seed)
+    seeded = repo.find_or_create("Running", provenance=Provenance.CURATED)
+
+    # Act — a normalized-name hit resolves to the existing row
+    resolved = repo.resolve_or_create("  running ", provenance=Provenance.USER_ENTERED)
+
+    # Assert — created is False (a dedup hit must enqueue nothing, ADR-0002) and the
+    # existing entry's Provenance is untouched by the resolve
+    assert resolved.created is False
+    assert resolved.exercise.id == seeded.id
+    assert resolved.exercise.provenance == Provenance.CURATED.value
+
+
+def test_resolve_or_create_and_find_or_create_agree_on_the_row(repo):
+    # Arrange — find_or_create still returns the same row resolve_or_create would
+    first = repo.resolve_or_create("Box Jump", provenance=Provenance.USER_ENTERED)
+
+    # Act — a second resolve is a dedup hit onto the same catalog entry
+    second = repo.find_or_create("box jump", provenance=Provenance.USER_ENTERED)
+
+    # Assert — one catalog entry, reused
+    assert second.id == first.exercise.id
+
+
+def test_losing_concurrent_resolve_reports_no_create():
+    # Arrange — two requests race to create the same new Exercise; the loser must
+    # report created=False so it never enqueues a duplicate Enrichment job for a row
+    # the winner already created (and already enqueued).
+    engine = make_fk_engine()
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as winner_session, Session(engine) as loser_session:
+        winner = SqlExerciseRepository(winner_session).find_or_create(
+            "Clean", provenance=Provenance.AI_GENERATED
+        )
+
+        loser = SqlExerciseRepository(loser_session)
+        real_lookup = loser._lookup
+        calls = {"count": 0}
+
+        def racing_lookup(key: str):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                return None  # not yet visible at lookup time
+            return real_lookup(key)
+
+        loser._lookup = racing_lookup  # type: ignore[method-assign]
+
+        # Act — the loser collides on the unique index, rolls back, and resolves to
+        # the winner's row.
+        resolved = loser.resolve_or_create("Clean", provenance=Provenance.AI_GENERATED)
+
+        # Assert — same row, and reported as a dedup hit (no create), not a mint.
+        assert resolved.created is False
+        assert resolved.exercise.id == winner.id
+
+
 @pytest.fixture(params=["in_memory", "sql"])
 def repo(request):
     if request.param == "in_memory":
         yield InMemoryExerciseRepository()
         return
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    engine = make_fk_engine()
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         yield SqlExerciseRepository(session)
@@ -216,11 +286,94 @@ def test_set_muscle_emphasis_on_an_unknown_id_returns_none(repo):
     )
 
 
+def test_list_all_returns_every_row_regardless_of_provenance(repo):
+    # Arrange — a catalog spanning all three Provenance tiers
+    ai = repo.find_or_create("Wall Sit", provenance=Provenance.AI_GENERATED)
+    curated = repo.find_or_create("Back Squat", provenance=Provenance.CURATED)
+    user = repo.find_or_create("Jefferson Curl", provenance=Provenance.USER_ENTERED)
+
+    # Act — the Stub-enrichment backfill walks the whole catalog (issue #308)
+    rows = repo.list_all()
+
+    # Assert — every row, no tier filtered out
+    assert {row.id for row in rows} == {ai.id, curated.id, user.id}
+
+
+def test_set_enrichment_writes_the_enrichable_fields(repo):
+    # Arrange — a name-only Stub
+    exercise = repo.find_or_create("Cossack Squat", provenance=Provenance.USER_ENTERED)
+
+    # Act — the backfill fills the fields that lift a Stub to Listable (ADR-0041)
+    updated = repo.set_enrichment(
+        exercise.id,
+        description="A deep lateral lunge.",
+        targeted_muscles=["quads", "glutes"],
+        instructions=["Step wide.", "Sink low."],
+        difficulty=3,
+    )
+
+    # Assert — the enrichable set is written and persists
+    assert updated is not None
+    assert updated.description == "A deep lateral lunge."
+    assert updated.targeted_muscles == ["quads", "glutes"]
+    assert updated.instructions == ["Step wide.", "Sink low."]
+    assert updated.difficulty == 3
+    refetched = repo.get(exercise.id)
+    assert refetched.description == "A deep lateral lunge."
+    assert refetched.difficulty == 3
+
+
+def test_set_enrichment_preserves_pre_existing_provenance_precautions_image_split(repo):
+    # Arrange — a row that already carries curator-only and Enriched-tier content, so
+    # the test proves set_enrichment *preserves* those values, not merely that a fresh
+    # row's defaults stay empty.
+    exercise = repo.find_or_create(
+        "Cossack Squat",
+        provenance=Provenance.USER_ENTERED,
+        primary_muscles=["quads"],
+        secondary_muscles=["glutes"],
+        precautions=["Warm up the hips."],
+        image="cossack-squat.png",
+    )
+
+    # Act
+    repo.set_enrichment(
+        exercise.id,
+        description="A deep lateral lunge.",
+        targeted_muscles=["quads", "glutes"],
+        instructions=["Step wide."],
+        difficulty=3,
+    )
+
+    # Assert — enrichment touches only the enrichable set: trust and the pre-existing
+    # curator-only / Enriched-tier fields are all left exactly as they were
+    stored = repo.get(exercise.id)
+    assert stored.provenance == Provenance.USER_ENTERED.value
+    assert stored.precautions == ["Warm up the hips."]
+    assert stored.image == "cossack-squat.png"
+    assert stored.primary_muscles == ["quads"]
+    assert stored.secondary_muscles == ["glutes"]
+
+
+def test_set_enrichment_on_an_unknown_id_returns_none(repo):
+    # Assert — no row to update, no exception
+    assert (
+        repo.set_enrichment(
+            9999,
+            description="x",
+            targeted_muscles=[],
+            instructions=[],
+            difficulty=None,
+        )
+        is None
+    )
+
+
 def test_losing_concurrent_insert_returns_the_winning_row():
     # Arrange — two requests race to create the same new Exercise. SQLite's
     # in-memory engine shares one DB across sessions on the thread, so we can
     # drive both sides of the race over the same engine.
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    engine = make_fk_engine()
     SQLModel.metadata.create_all(engine)
     with Session(engine) as winner_session, Session(engine) as loser_session:
         # The winning request commits "Clean" first.

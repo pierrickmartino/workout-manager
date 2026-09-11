@@ -35,9 +35,12 @@ move from `.reps` (int) to `.quantity.repetitions` (`int | None`). This is the
 largest single piece of the change: it touches the strength engine ADR-0010/0024
 built and every guard that assumed integer reps now has a `None` path.
 
-**Record-side only, for now.** `ExercisePrescription.reps` stays free text; typing
-the *plan* side (prescribed running: the generation prompt, the parse boundary, the
-cache key, the builder, `progression.py`) is a separate future feature. Logging a
+**Record-side only, for now.** _(Superseded by ADR-0050, which types the plan side —
+`ExercisePrescription` gains a prescribed `Quantity`. The record-side decision below
+stands unchanged; only this "for now" deferral was lifted.)_ `ExercisePrescription.reps`
+stays free text; typing the *plan* side (prescribed running: the generation prompt,
+the parse boundary, the cache key, the builder, `progression.py`) is a separate future
+feature. Logging a
 run and being prescribed a run are deliberately different features — and there is
 **no plan→record bridge**: the client never parses a prescription's `"5 km"` into a
 Quantity, because that is the re-guessing outside the write boundary ADR-0010

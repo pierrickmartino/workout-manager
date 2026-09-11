@@ -2,6 +2,7 @@ import { Trophy } from "lucide-react";
 
 import type { PersonalRecordEntry } from "@/lib/analytics-types";
 import { toRecordRows } from "@/lib/records-view";
+import type { WeightUnit } from "@/lib/weight-unit";
 import { Card } from "@/components/ui/card";
 
 interface RecordsPanelProps {
@@ -13,6 +14,8 @@ interface RecordsPanelProps {
   // Weight (ADR-0026) — the signal to prompt the user to record their weight so their
   // calisthenics work can start setting records.
   bodyWeightNudge?: boolean;
+  // The reader's Weight Unit, so each PR milestone's estimate and gain render in kg or lb (#417).
+  unit: WeightUnit;
 }
 
 // The RECORDS lens (ADR-0017): the sets where the user struck a new best Estimated 1RM
@@ -23,8 +26,9 @@ interface RecordsPanelProps {
 export function RecordsPanel({
   milestones,
   bodyWeightNudge = false,
+  unit,
 }: RecordsPanelProps): React.JSX.Element {
-  const rows = toRecordRows(milestones);
+  const rows = toRecordRows(milestones, unit);
 
   if (rows.length === 0) {
     return (

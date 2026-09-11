@@ -19,6 +19,7 @@ from app.generation.generator import GenerationRequest
 from app.generation.schema import GeneratedExercisePrescription, GeneratedSession
 from app.main import create_app
 from app.repositories.deps import (
+    get_enrichment_queue,
     get_exercise_repository,
     get_logged_session_repository,
     get_profile_repository,
@@ -31,7 +32,7 @@ from app.repositories.logged_session_repository import InMemoryLoggedSessionRepo
 from app.repositories.profile_repository import InMemoryProfileRepository
 from app.repositories.protocol_repository import InMemoryProtocolRepository
 from app.repositories.session_repository import InMemorySessionRepository
-from tests.conftest import ISSUER, make_signing_context
+from tests.conftest import ISSUER, NullEnrichmentQueue, make_signing_context
 
 
 class FakeGenerator:
@@ -68,12 +69,18 @@ def build_client(ctx=None):
     app.dependency_overrides[get_protocol_repository] = lambda: protocols
     app.dependency_overrides[get_session_generator] = lambda: FakeGenerator()
     app.dependency_overrides[get_profile_repository] = lambda: InMemoryProfileRepository()
+    # The picker's create-on-miss (POST /api/exercises) now enqueues an async
+    # Enrichment job (issue #309); keep the offline harness Redis-free with a no-op.
+    app.dependency_overrides[get_enrichment_queue] = lambda: NullEnrichmentQueue()
     client = TestClient(app)
     # Exposed so a test can seed a Protocol + performed history directly, without
     # driving the heavier generation endpoints, to exercise the contiguity 409.
     client.exercises = exercises
     client.logged = logged
     client.protocols = protocols
+    # Exposed so a test can seed a Protocol-member Session directly (``create`` only
+    # builds standalone ones) to exercise Insert's standalone-only 422 at the boundary.
+    client.sessions = sessions
     return client, ctx
 
 
@@ -177,6 +184,140 @@ def test_user_logs_a_performance_and_reads_it_back_in_history():
     entries = history.json()["data"]
     assert len(entries) == 1
     assert entries[0]["id"] == data["id"]
+
+
+def test_logging_effort_in_rir_echoes_the_typed_value_and_mirrors_rpe():
+    # Arrange — a set logged with effort in the RIR scale (ADR-0066)
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_effort_rir")
+    session = _generate_session(client, headers)
+    body = _log_body(
+        session,
+        logged_sets=[
+            {
+                "exercise_id": session["prescriptions"][0]["exercise_id"],
+                "quantity_value": "5",
+                "load_kind": "absolute",
+                "load_value": "70",
+                "effort_scale": "rir",
+                "effort_value": 3,
+            }
+        ],
+    )
+
+    # Act
+    logged = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=body
+    )
+
+    # Assert — the typed Effort is echoed in the scale it was logged…
+    assert logged.status_code == 200
+    logged_set = logged.json()["data"]["logged_sets"][0]
+    assert logged_set["effort"] == {"scale": "rir", "value": 3}
+    # …and the dual-write mirrors its RPE-equivalent (10 − 3 = 7) into the legacy int
+    assert logged_set["perceived_difficulty"] == 7
+
+
+def test_logging_effort_in_rpe_stores_a_half_step_typed_value():
+    # Arrange — a half-step RPE, a resolution the legacy int cannot hold
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_effort_rpe")
+    session = _generate_session(client, headers)
+    body = _log_body(
+        session,
+        logged_sets=[
+            {
+                "exercise_id": session["prescriptions"][0]["exercise_id"],
+                "quantity_value": "5",
+                "load_kind": "absolute",
+                "load_value": "70",
+                "effort_scale": "rpe",
+                "effort_value": 6.5,
+            }
+        ],
+    )
+
+    # Act
+    logged = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=body
+    )
+
+    # Assert — the half-step survives on the typed value; the mirror rounds to an int
+    assert logged.status_code == 200
+    logged_set = logged.json()["data"]["logged_sets"][0]
+    assert logged_set["effort"] == {"scale": "rpe", "value": 6.5}
+    assert logged_set["perceived_difficulty"] in (6, 7)
+
+
+def test_an_out_of_range_effort_is_rejected_at_the_boundary():
+    # Arrange — RIR 2.5 is not a valid member (RIR is an integer 0–5)
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_effort_bad")
+    session = _generate_session(client, headers)
+    body = _log_body(
+        session,
+        logged_sets=[
+            {
+                "exercise_id": session["prescriptions"][0]["exercise_id"],
+                "quantity_value": "5",
+                "effort_scale": "rir",
+                "effort_value": 2.5,
+            }
+        ],
+    )
+
+    # Act
+    logged = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=body
+    )
+
+    # Assert — a boundary rejection, never a stored guess
+    assert logged.status_code == 422
+    assert logged.json()["success"] is False
+
+
+def test_an_unknown_effort_scale_is_rejected_at_the_boundary():
+    # Arrange — a scale outside the closed RPE/RIR vocabulary
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_effort_scale")
+    session = _generate_session(client, headers)
+    body = _log_body(
+        session,
+        logged_sets=[
+            {
+                "exercise_id": session["prescriptions"][0]["exercise_id"],
+                "quantity_value": "5",
+                "effort_scale": "borg",
+                "effort_value": 15,
+            }
+        ],
+    )
+
+    # Act
+    logged = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=body
+    )
+
+    # Assert
+    assert logged.status_code == 422
+
+
+def test_a_returning_users_legacy_effort_still_serializes_with_no_typed_effort():
+    # Arrange — an rpe-only client sends only perceived_difficulty (no effort fields)
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_effort_legacy")
+    session = _generate_session(client, headers)
+
+    # Act
+    logged = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=_log_body(session)
+    )
+
+    # Assert — the legacy int rides through; no typed Effort is fabricated
+    assert logged.status_code == 200
+    logged_set = logged.json()["data"]["logged_sets"][0]
+    assert logged_set["perceived_difficulty"] == 8
+    assert logged_set["effort"] is None
 
 
 def test_client_declared_completion_outcome_is_persisted_and_serialized():
@@ -323,6 +464,89 @@ def test_same_session_logged_twice_yields_two_history_entries():
     # Assert — recorded separately, newest first
     assert len(history) == 2
     assert [e["performed_on"] for e in history] == ["2026-06-27", "2026-06-20"]
+
+
+# --- Idempotent finish (ADR-0060, issue #410) ---------------------------------------
+
+
+def test_repeating_a_finish_key_returns_one_logged_session():
+    # Arrange — a finish carrying a client-minted idempotency key
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_idem")
+    session = _generate_session(client, headers)
+    body = _log_body(session, idempotency_key="finish-key-1")
+
+    # Act — the same finish is delivered twice (a dropped connection, then a retry)
+    first = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=body
+    )
+    second = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=body
+    )
+
+    # Assert — both calls succeed and return the same record; history holds exactly one
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["data"]["id"] == first.json()["data"]["id"]
+    history = client.get("/api/logs", headers=headers).json()["data"]
+    assert len(history) == 1
+
+
+def test_distinct_finish_keys_create_two_logged_sessions():
+    # Arrange — two genuinely different finishes, each with its own key
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_idem_distinct")
+    session = _generate_session(client, headers)
+
+    # Act
+    first = client.post(
+        f"/api/sessions/{session['id']}/logs",
+        headers=headers,
+        json=_log_body(session, idempotency_key="finish-key-a"),
+    )
+    second = client.post(
+        f"/api/sessions/{session['id']}/logs",
+        headers=headers,
+        json=_log_body(session, idempotency_key="finish-key-b"),
+    )
+
+    # Assert — distinct keys are distinct records
+    assert first.json()["data"]["id"] != second.json()["data"]["id"]
+    assert len(client.get("/api/logs", headers=headers).json()["data"]) == 2
+
+
+def test_a_finish_without_a_key_still_records():
+    # Arrange — a keyless finish (the static form path) is unaffected
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_idem_keyless")
+    session = _generate_session(client, headers)
+
+    # Act
+    response = client.post(
+        f"/api/sessions/{session['id']}/logs", headers=headers, json=_log_body(session)
+    )
+
+    # Assert — one insert, as before idempotency existed
+    assert response.status_code == 200
+    assert len(client.get("/api/logs", headers=headers).json()["data"]) == 1
+
+
+def test_repeating_an_ad_hoc_finish_key_returns_one_logged_session():
+    # Arrange — the ad-hoc (plan-less) path is as duplicate-proof as the plan-backed one
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_idem_adhoc")
+    running = _create_exercise(client, headers, "Running")
+    body = _adhoc_body(running, idempotency_key="adhoc-key-1")
+
+    # Act — the same ad-hoc finish, delivered twice
+    first = client.post("/api/logs", headers=headers, json=body)
+    second = client.post("/api/logs", headers=headers, json=body)
+
+    # Assert — identical behaviour to the plan-backed route: one record, returned twice
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["data"]["id"] == first.json()["data"]["id"]
+    assert len(client.get("/api/logs", headers=headers).json()["data"]) == 1
 
 
 def test_user_cannot_log_another_users_session():
@@ -1258,3 +1482,51 @@ def test_deleting_a_log_requires_authentication():
     # Assert
     assert response.status_code == 401
     assert response.json()["success"] is False
+
+
+def test_history_flags_a_mid_protocol_record_as_not_deletable():
+    # Arrange — a two-Session Protocol with both Sessions performed (a contiguous prefix).
+    # The mid-Protocol record cannot be deleted (a later Session is performed), while the
+    # last-performed one can — the same verdict the server's contiguity gate would return
+    # on a DELETE, surfaced on the read so the History screen can disable the control
+    # before the user clicks it (ADR-0034, user story 27).
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_flags")
+    protocol, squat = _seed_protocol(client, "user_flags")
+    first = _perform_protocol_session(client, "user_flags", protocol, 0, squat)
+    second = _perform_protocol_session(client, "user_flags", protocol, 1, squat)
+
+    # Act
+    history = client.get("/api/logs", headers=headers).json()["data"]
+    by_id = {record["id"]: record for record in history}
+
+    # Assert — the mid-Protocol record is refused; the tail one is allowed. The verdict
+    # matches what an actual DELETE returns (409 vs 200).
+    assert by_id[first.id]["deletable"] is False
+    assert by_id[first.id]["uncompletable"] is False
+    assert by_id[second.id]["deletable"] is True
+    assert by_id[second.id]["uncompletable"] is True
+    assert (
+        client.delete(f"/api/logs/{first.id}", headers=headers).status_code == 409
+    )
+    assert (
+        client.delete(f"/api/logs/{second.id}", headers=headers).status_code == 200
+    )
+
+
+def test_history_flags_a_plan_less_record_as_freely_correctable():
+    # Arrange — an ad-hoc (plan-less) record gates no Protocol, so it is always correctable.
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_flags_adhoc")
+    running = _create_exercise(client, headers, "Running")
+    created = client.post(
+        "/api/logs", headers=headers, json=_adhoc_body(running)
+    ).json()["data"]
+
+    # Act
+    history = client.get("/api/logs", headers=headers).json()["data"]
+
+    # Assert
+    record = next(r for r in history if r["id"] == created["id"])
+    assert record["deletable"] is True
+    assert record["uncompletable"] is True

@@ -9,13 +9,21 @@ Reads are owner-scoped — feedback is never served to another user."""
 from __future__ import annotations
 
 import pytest
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel
+from tests.conftest import make_fk_engine
 
+from app.db.models import WorkoutSession
 from app.domain.feedback import Verdict
 from app.repositories.generation_feedback_repository import (
     InMemoryGenerationFeedbackRepository,
     SqlGenerationFeedbackRepository,
 )
+
+# The Session ids these tests record feedback against. Under FK enforcement the parent
+# ``workout_session`` rows must exist, so the SQL fixture seeds them (the in-memory fake
+# has no such constraint). Feedback references a Session (``generation_feedback.session_id
+# -> workout_session.id``); this suite exercises the feedback repo, not Session creation.
+_SEEDED_SESSION_IDS = range(1, 12)
 
 
 @pytest.fixture(params=["in_memory", "sql"])
@@ -23,9 +31,19 @@ def feedback_repo(request):
     if request.param == "in_memory":
         yield InMemoryGenerationFeedbackRepository()
         return
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
+    engine = make_fk_engine()
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
+        for session_id in _SEEDED_SESSION_IDS:
+            session.add(
+                WorkoutSession(
+                    id=session_id,
+                    clerk_user_id="seed",
+                    training_type="strength",
+                    duration_minutes=45,
+                )
+            )
+        session.commit()
         yield SqlGenerationFeedbackRepository(session)
 
 

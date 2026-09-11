@@ -40,6 +40,12 @@ from app.domain.personal_records import (
     detect_personal_records,
     logged_set_records,
 )
+from app.domain.distance import (
+    DistanceSet,
+    DistanceWeek,
+    distance_series,
+    has_distance,
+)
 from app.domain.volume import VolumePoint, VolumeSet, volume_series
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
@@ -53,15 +59,60 @@ RECENT_RECORDS_LIMIT = 8
 
 
 class AnalyticsRange(Enum):
-    """The window the Analytics screen is scoped to: a rolling span of days."""
+    """The window the Analytics screen is scoped to: a rolling span of days.
 
-    SEVEN_DAY = "7d"
+    The floor is 30 days: the Weekly Distance chart (ADR-0049) draws one bar per week,
+    so a 7-day window would be a single bar — useless — and the whole screen realigned
+    to ``30/90/150`` rather than carry a second selector just for that chart.
+    """
+
     THIRTY_DAY = "30d"
     NINETY_DAY = "90d"
+    ONE_FIFTY_DAY = "150d"
 
     @property
     def days(self) -> int:
-        return {"7d": 7, "30d": 30, "90d": 90}[self.value]
+        return {"30d": 30, "90d": 90, "150d": 150}[self.value]
+
+
+# The Analytics windows in ascending span order — the range selector's fixed order and
+# the sequence History Depth unlocks them in (ADR-0056).
+RANGE_ORDER: tuple[AnalyticsRange, ...] = (
+    AnalyticsRange.THIRTY_DAY,
+    AnalyticsRange.NINETY_DAY,
+    AnalyticsRange.ONE_FIFTY_DAY,
+)
+
+
+def history_depth_days(history: list[LoggedSessionView], today: date) -> int:
+    """History Depth: the span in days from the earliest Logged Session to ``today``.
+
+    Zero when the user has logged nothing — only the floor window is ever offered then.
+    A read-time signal over the record, never stored (like Streak and XP).
+    """
+
+    if not history:
+        return 0
+    earliest = min(session.performed_on for session in history)
+    return (today - earliest).days
+
+
+def available_ranges(depth_days: int) -> tuple[AnalyticsRange, ...]:
+    """The Analytics windows worth offering at a given History Depth (ADR-0056).
+
+    The shortest window (the floor) is always offered; each longer one only once History
+    Depth reaches **past** the next-shorter window, so a window is never offered when its
+    graph would merely repeat the shorter one's ("if the graphs are the same, there is no
+    interest"). Contiguous by construction: the first window whose threshold isn't met
+    stops the unlock.
+    """
+
+    offered = [RANGE_ORDER[0]]
+    for shorter, window in zip(RANGE_ORDER, RANGE_ORDER[1:]):
+        if depth_days <= shorter.days:
+            break
+        offered.append(window)
+    return tuple(offered)
 
 
 @dataclass(frozen=True)
@@ -86,15 +137,32 @@ class AnalyticsOverview:
     total volume against the immediately preceding equal-length window, or ``None`` when
     there is no prior volume to compare against.
 
+    ``distance_weeks`` is the Weekly Distance line for the window (ADR-0049): one bar per
+    Monday-anchored week, in kilometres, summed from ``distance``-kind Quantities and
+    empty when no distance was logged in-window. ``distance_delta`` is the window's total
+    distance against the immediately preceding equal-length window, or ``None`` when there
+    is no prior distance. ``has_distance`` is the **all-time** gate the screen reads to
+    decide whether to render the chart at all — true when the user has *ever* logged
+    distance work, independent of the window. There is deliberately no distance coverage
+    figure: a ``distance`` Quantity carries exact metres, so nothing sits uncovered.
+
     ``coverage`` is the neutral Muscle Group Coverage signal (ADR-0025): each of the six
     real Muscle Groups read trained / not-trained over a **fixed 8-week window that does
     not follow ``range``** — coverage reads its own recent slice so a well-rotated user is
-    never rebuked at the 7-day scale. Always all six groups in canonical order, ungated.
+    never rebuked at the shortest scale. Always all six groups in canonical order, ungated.
     Its ``unclassified_present`` flag discloses any in-window work that rolls up outside the
     six real groups, so the "of 6" figure stays honest (issue #189).
+
+    ``available_ranges`` is the ordered tuple of window values (``"30d"`` first) the range
+    selector may offer at the user's current History Depth (ADR-0056): a longer window
+    appears only once its extra span would show data the shorter one misses. ``range`` is
+    the window actually served — the requested one when it is available, else clamped down
+    to the deepest available window, so an out-of-depth request is never served a graph
+    identical to a shorter window's.
     """
 
     range: str
+    available_ranges: tuple[str, ...]
     sessions: int
     active_days: int
     total_sets: int
@@ -104,6 +172,9 @@ class AnalyticsOverview:
     volume_points: tuple[VolumePoint, ...]
     volume_coverage: float
     volume_delta: float | None
+    distance_weeks: tuple[DistanceWeek, ...]
+    distance_delta: float | None
+    has_distance: bool
     coverage: RecentCoverage
 
 
@@ -127,8 +198,16 @@ def analytics_overview(
     Exercise's best Estimated 1RM, taken from the Personal Records detected below.
     """
 
-    start = today - timedelta(days=window.days - 1)
     history = logged.list_for_user(clerk_user_id)
+
+    # Gate the window by History Depth (ADR-0056): a requested window deeper than the
+    # user's history is clamped down to the deepest available one, so the "same graph"
+    # a shallow history would produce is never actually served. The floor is always
+    # available, so ``offered`` is never empty.
+    offered = available_ranges(history_depth_days(history, today))
+    window = window if window in offered else offered[-1]
+
+    start = today - timedelta(days=window.days - 1)
     in_window = [
         session for session in history if start <= session.performed_on <= today
     ]
@@ -159,8 +238,14 @@ def analytics_overview(
         estimated_1rm_by_exercise=best_1rm_by_exercise,
     )
 
+    # Weekly Distance (ADR-0049): the endurance twin of volume, over the same history.
+    # The engine slices its own window and preceding one; the gate reads all-time.
+    distance_sets = _distance_sets(history)
+    distance = distance_series(distance_sets, days=window.days, today=today)
+
     return AnalyticsOverview(
         range=window.value,
+        available_ranges=tuple(offered_range.value for offered_range in offered),
         sessions=len(in_window),
         active_days=len({session.performed_on for session in in_window}),
         total_sets=sum(len(session.logged_sets) for session in in_window),
@@ -172,6 +257,9 @@ def analytics_overview(
         volume_points=series.points,
         volume_coverage=series.coverage_pct,
         volume_delta=series.delta_pct,
+        distance_weeks=distance.weeks,
+        distance_delta=distance.delta_pct,
+        has_distance=has_distance(distance_sets),
         # Coverage reads its own fixed 8-week slice of the full history — deliberately the
         # range-independent window (ADR-0025), not the range-scoped ``in_window`` set.
         coverage=recent_coverage(
@@ -184,9 +272,10 @@ def _volume_sets(history: list[LoggedSessionView]) -> list[VolumeSet]:
     """Flatten Logged Sessions into dated Logged Sets for the volume engine.
 
     The engine needs each set's typed Quantity (its rep count), typed Load, the date it
-    was performed on — the session's ``performed_on`` — and its ``exercise_id`` (so a
-    percent-of-1RM set can be converted against that Exercise's Estimated 1RM) to
-    convert and bucket it.
+    was performed on — the session's ``performed_on`` — its ``exercise_id`` (so a
+    percent-of-1RM set can be converted against that Exercise's Estimated 1RM), and its
+    ``set_type`` (so the engine can drop ``warm_up`` sets from working volume, ADR-0065)
+    to convert and bucket it.
     """
 
     return [
@@ -195,6 +284,25 @@ def _volume_sets(history: list[LoggedSessionView]) -> list[VolumeSet]:
             load=logged_set.load,
             performed_on=session.performed_on,
             exercise_id=logged_set.exercise_id,
+            set_type=logged_set.set_type,
+        )
+        for session in history
+        for logged_set in session.logged_sets
+    ]
+
+
+def _distance_sets(history: list[LoggedSessionView]) -> list[DistanceSet]:
+    """Flatten Logged Sessions into dated Logged Sets for the distance engine.
+
+    The engine needs only each set's typed Quantity (its distance metres) and the date
+    it was performed on — the session's ``performed_on``. A non-``distance`` amount
+    yields ``None`` metres and falls out, so no filtering is needed here.
+    """
+
+    return [
+        DistanceSet(
+            quantity=logged_set.quantity,
+            performed_on=session.performed_on,
         )
         for session in history
         for logged_set in session.logged_sets
@@ -205,5 +313,8 @@ __all__ = [
     "AnalyticsRange",
     "AnalyticsOverview",
     "analytics_overview",
+    "available_ranges",
+    "history_depth_days",
+    "RANGE_ORDER",
     "RECENT_RECORDS_LIMIT",
 ]

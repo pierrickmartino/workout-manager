@@ -96,6 +96,63 @@ def test_exercise_detail_surfaces_enriched_fields_and_relationships():
     assert [a["name"] for a in data["alternatives"]] == ["Goblet Squat"]
 
 
+def test_exercise_detail_round_trips_a_curated_image():
+    # Arrange — a curated Exercise with a curator-set Exercise Image
+    client, ctx, exercises, _ = build_client()
+    squat = exercises.find_or_create(
+        "Back Squat",
+        provenance=Provenance.CURATED,
+        image="https://cdn.example.com/curated/back-squat.svg",
+    )
+
+    # Act
+    response = client.get(f"/api/exercises/{squat.id}", headers=_auth(ctx))
+
+    # Assert — the image is surfaced verbatim in the detail payload
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["image"] == "https://cdn.example.com/curated/back-squat.svg"
+
+
+def test_exercise_detail_serializes_a_missing_image_as_null():
+    # Arrange — a movement with no image (the frictionless name-only case)
+    client, ctx, exercises, _ = build_client()
+    stub = exercises.find_or_create("Jefferson Curl", provenance=Provenance.USER_ENTERED)
+
+    # Act
+    response = client.get(f"/api/exercises/{stub.id}", headers=_auth(ctx))
+
+    # Assert — the absent image never degrades the response; it is simply null
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["image"] is None
+
+
+def test_exercise_detail_omits_the_internal_completeness_tier():
+    # Arrange — a full gold movement whose Completeness would read Enriched
+    client, ctx, exercises, _ = build_client()
+    squat = exercises.find_or_create(
+        "Back Squat",
+        provenance=Provenance.CURATED,
+        description="A barbell squat.",
+        targeted_muscles=["quads", "glutes"],
+        primary_muscles=["quads"],
+        secondary_muscles=["glutes"],
+        instructions=["Brace your core."],
+        difficulty=6,
+        precautions=["keep a neutral spine"],
+        image="https://cdn.example.com/curated/back-squat.svg",
+    )
+
+    # Act
+    response = client.get(f"/api/exercises/{squat.id}", headers=_auth(ctx))
+
+    # Assert — Completeness is an internal/ops axis (ADR-0041, revised): the detail
+    # payload never carries the tier, however complete the movement is
+    assert response.status_code == 200
+    assert "completeness" not in response.json()["data"]
+
+
 def test_exercise_detail_omits_primacy_for_a_flat_muscle_list():
     # Arrange — a curated Exercise with only a flat targeted-muscle list, no split
     client, ctx, exercises, _ = build_client()

@@ -35,7 +35,22 @@ class LoggedSetDraft:
     quantity: dict | None = None
     load: dict | None = None
     perceived_difficulty: int | None = None
+    # Logged Effort (ADR-0066): the typed ``{scale, value}`` Effort the user actually felt,
+    # in either scale (RPE or RIR). New writes dual-write — the log boundary populates this
+    # and mirrors an RPE value into ``perceived_difficulty`` above — so the progression gate
+    # and any legacy reader both keep working. ``None`` when no effort was recorded.
+    effort: dict | None = None
     body_weight_kg: float | None = None
+    # Set Type annotation (ADR-0065, #449): the ``SetType`` value tagging what this set
+    # *was* (e.g. ``"warm_up"``), or ``None`` for "unset" — which reads as ``working``.
+    # Raw record data like ``load``; descriptive only in v1 (feeds no analytics yet) and
+    # editable through Log Correction like any other Logged Set field.
+    set_type: str | None = None
+    # Set Note (ADR-0065, #451): an optional record-side remark on this set ("felt easy",
+    # "left knee twinge"), or ``None`` for "no note". Already length-capped and HTML-escaped at
+    # the write boundary (``app.domain.note``); part of the record and editable through Log
+    # Correction like any other Logged Set field.
+    note: str | None = None
 
 
 @dataclass(frozen=True)
@@ -52,13 +67,19 @@ class LoggedSessionDraft:
     ``"completed"`` | ``"incomplete"``, or ``None`` when the record does not declare
     one (e.g. a log-after-the-fact through the static form). ``duration_seconds`` is
     the recorded Session Duration (ADR-0014) — actual training time in whole seconds,
-    or ``None`` when unrecorded (the static form measures none)."""
+    or ``None`` when unrecorded (the static form measures none).
+
+    ``idempotency_key`` is the client-minted key that makes the write duplicate-proof
+    (ADR-0060): a retried finish resends the *same* key, and ``create`` upsert-returns the
+    existing record instead of inserting a second one. ``None`` (the default) is a keyless
+    write — the static form path — which always inserts, never dedupes."""
 
     session_id: int | None
     performed_on: date
     training_type: str = ""
     completion_outcome: str | None = None
     duration_seconds: int | None = None
+    idempotency_key: str | None = None
     logged_sets: list[LoggedSetDraft] = field(default_factory=list)
 
 
@@ -76,9 +97,22 @@ class LoggedSetView:
     perceived_difficulty: int | None
     exercise_id: int
     exercise_name: str
+    # Logged Effort (ADR-0066): the stored typed ``{scale, value}`` Effort, or ``None`` when
+    # none was recorded (a returning user's set falls back to ``perceived_difficulty`` read as
+    # RPE). Surfaced on the read so the response echoes the effort in the scale it was logged,
+    # and so the progression overlay reads the typed value off this view.
+    effort: dict | None = None
     # Performed Body Weight (ADR-0026), carried through so later slices can score a
     # bodyweight set against the mass performed at; ``None`` when none was captured.
     body_weight_kg: float | None = None
+    # Set Type annotation (ADR-0065, #449): the stored ``SetType`` value, or ``None`` for
+    # "unset" — which the web view-model resolves to no badge (a neutral working set).
+    # Surfaced on the read so the logged-session response carries the tag to the client.
+    set_type: str | None = None
+    # Set Note (ADR-0065, #451): the stored record-side remark, or ``None`` for "no note" —
+    # which the frontend renders as nothing. Already HTML-escaped at the write boundary.
+    # Surfaced on the read so the logged-session response carries the note to the client.
+    note: str | None = None
     # The performed Exercise's free-form targeted muscles, denormalized onto the
     # view so read models (e.g. the Analytics muscle distribution) never touch the
     # ORM — mirrors how ``exercise_name`` is carried here.
@@ -110,7 +144,12 @@ class LoggedSessionRepository(Protocol):
         self, clerk_user_id: str, draft: LoggedSessionDraft
     ) -> LoggedSessionView:
         """Persist ``draft`` as a Logged Session owned by ``clerk_user_id`` and
-        return it joined to its sets and the prescribing Session's training type."""
+        return it joined to its sets and the prescribing Session's training type.
+
+        Upsert-return on the idempotency key (ADR-0060): when ``draft.idempotency_key``
+        is a key this owner has already recorded, return that existing record unchanged
+        and insert nothing, so a retried finish yields exactly one Logged Session. A
+        keyless draft (``idempotency_key is None``) always inserts a fresh record."""
         ...
 
     def get(
@@ -141,6 +180,26 @@ class LoggedSessionRepository(Protocol):
         """Return the user's Logged Sessions, most recently performed first."""
         ...
 
+    def count_for_session(self, clerk_user_id: str, session_id: int) -> int:
+        """The **Logged Count** for one Session (ADR-0063, CONTEXT: Logged Count).
+
+        How many Logged Sessions the owner has recorded against ``session_id`` — counted
+        across **every Completion Outcome** (an Incomplete performance is still logged
+        training), a read-time projection over the record, never a stored counter. Owner-
+        scoped, so another user's performances of the same Session never leak in. This is
+        the fact the Delete guard reads: a Session is deletable iff this is zero."""
+        ...
+
+    def count_by_session(self, clerk_user_id: str) -> dict[int, int]:
+        """The owner's **Logged Count** per Session, in one read (ADR-0063).
+
+        Maps each ``session_id`` the user has performed to how many Logged Sessions they
+        recorded against it, so the My Sessions list can badge every row without an N+1
+        per-Session count. Plan-less records (``session_id`` is ``None``) carry no Session
+        and are excluded; a Session the user has never performed is simply absent from the
+        map (the caller reads it as zero)."""
+        ...
+
 
 def _set_view(logged_set: LoggedSet, exercise: Exercise) -> LoggedSetView:
     return LoggedSetView(
@@ -150,7 +209,10 @@ def _set_view(logged_set: LoggedSet, exercise: Exercise) -> LoggedSetView:
         perceived_difficulty=logged_set.perceived_difficulty,
         exercise_id=exercise.id,
         exercise_name=exercise.name,
+        effort=logged_set.effort,
         body_weight_kg=logged_set.body_weight_kg,
+        set_type=logged_set.set_type,
+        note=logged_set.note,
         targeted_muscles=list(exercise.targeted_muscles),
     )
 
@@ -177,11 +239,34 @@ class SqlLoggedSessionRepository:
             duration_seconds=logged.duration_seconds,
         )
 
+    def _existing_by_key(
+        self, clerk_user_id: str, idempotency_key: str | None
+    ) -> LoggedSession | None:
+        """The owner's record already carrying ``idempotency_key`` (ADR-0060), or ``None``.
+
+        Owner-scoped so a retry only ever resolves to the caller's own finish; a keyless
+        write (``None``) matches nothing, so it always inserts."""
+        if idempotency_key is None:
+            return None
+        return self._session.exec(
+            select(LoggedSession).where(
+                LoggedSession.clerk_user_id == clerk_user_id,
+                LoggedSession.idempotency_key == idempotency_key,
+            )
+        ).first()
+
     def create(
         self, clerk_user_id: str, draft: LoggedSessionDraft
     ) -> LoggedSessionView:
+        # Upsert-return (ADR-0060): a repeat of an already-recorded finish returns the
+        # existing record and inserts nothing, so a retry never duplicates.
+        existing = self._existing_by_key(clerk_user_id, draft.idempotency_key)
+        if existing is not None:
+            return self._view(existing)
+
         logged = LoggedSession(
             clerk_user_id=clerk_user_id,
+            idempotency_key=draft.idempotency_key,
             session_id=draft.session_id,
             training_type=draft.training_type,
             performed_on=draft.performed_on,
@@ -201,7 +286,10 @@ class SqlLoggedSessionRepository:
                     quantity=logged_set.quantity,
                     load=logged_set.load,
                     perceived_difficulty=logged_set.perceived_difficulty,
+                    effort=logged_set.effort,
                     body_weight_kg=logged_set.body_weight_kg,
+                    set_type=logged_set.set_type,
+                    note=logged_set.note,
                 )
             )
         self._session.commit()
@@ -244,7 +332,10 @@ class SqlLoggedSessionRepository:
                     quantity=logged_set.quantity,
                     load=logged_set.load,
                     perceived_difficulty=logged_set.perceived_difficulty,
+                    effort=logged_set.effort,
                     body_weight_kg=logged_set.body_weight_kg,
+                    set_type=logged_set.set_type,
+                    note=logged_set.note,
                 )
             )
         self._session.commit()
@@ -256,12 +347,18 @@ class SqlLoggedSessionRepository:
         if logged is None or logged.clerk_user_id != clerk_user_id:
             return False
 
-        # Cascade the Logged Sets, then the record itself, in one transaction.
+        # Cascade the Logged Sets, then the record itself, in one transaction. The FK
+        # ``logged_set.logged_session_id -> logged_session.id`` has no ORM relationship, so
+        # the unit-of-work has no dependency edge forcing child-before-parent delete
+        # ordering; without the explicit ``flush`` below it may emit the parent DELETE
+        # first and a FK-enforcing database (Postgres) rejects it. Flushing the child
+        # deletes sends them ahead of the parent's within the same transaction.
         sets = self._session.exec(
             select(LoggedSet).where(LoggedSet.logged_session_id == logged.id)
         ).all()
         for logged_set in sets:
             self._session.delete(logged_set)
+        self._session.flush()
         self._session.delete(logged)
         self._session.commit()
         return True
@@ -273,6 +370,27 @@ class SqlLoggedSessionRepository:
             .order_by(LoggedSession.performed_on.desc(), LoggedSession.id.desc())
         ).all()
         return [self._view(logged) for logged in rows]
+
+    def count_for_session(self, clerk_user_id: str, session_id: int) -> int:
+        rows = self._session.exec(
+            select(LoggedSession.id).where(
+                LoggedSession.clerk_user_id == clerk_user_id,
+                LoggedSession.session_id == session_id,
+            )
+        ).all()
+        return len(rows)
+
+    def count_by_session(self, clerk_user_id: str) -> dict[int, int]:
+        rows = self._session.exec(
+            select(LoggedSession.session_id).where(
+                LoggedSession.clerk_user_id == clerk_user_id,
+                LoggedSession.session_id.is_not(None),
+            )
+        ).all()
+        counts: dict[int, int] = {}
+        for session_id in rows:
+            counts[session_id] = counts.get(session_id, 0) + 1
+        return counts
 
 
 class InMemoryLoggedSessionRepository:
@@ -304,12 +422,35 @@ class InMemoryLoggedSessionRepository:
             duration_seconds=logged.duration_seconds,
         )
 
+    def _existing_by_key(
+        self, clerk_user_id: str, idempotency_key: str | None
+    ) -> LoggedSession | None:
+        """The owner's record already carrying ``idempotency_key`` (ADR-0060), or ``None``.
+
+        Owner-scoped like the SQL repo; a keyless write (``None``) matches nothing."""
+        if idempotency_key is None:
+            return None
+        for logged in self._logged.values():
+            if (
+                logged.clerk_user_id == clerk_user_id
+                and logged.idempotency_key == idempotency_key
+            ):
+                return logged
+        return None
+
     def create(
         self, clerk_user_id: str, draft: LoggedSessionDraft
     ) -> LoggedSessionView:
+        # Upsert-return (ADR-0060): a repeat of an already-recorded finish returns the
+        # existing record and inserts nothing, so a retry never duplicates.
+        existing = self._existing_by_key(clerk_user_id, draft.idempotency_key)
+        if existing is not None:
+            return self._view(existing)
+
         logged = LoggedSession(
             id=self._next_id,
             clerk_user_id=clerk_user_id,
+            idempotency_key=draft.idempotency_key,
             session_id=draft.session_id,
             training_type=draft.training_type,
             performed_on=draft.performed_on,
@@ -327,7 +468,10 @@ class InMemoryLoggedSessionRepository:
                 quantity=logged_set.quantity,
                 load=logged_set.load,
                 perceived_difficulty=logged_set.perceived_difficulty,
+                effort=logged_set.effort,
                 body_weight_kg=logged_set.body_weight_kg,
+                set_type=logged_set.set_type,
+                note=logged_set.note,
             )
             for position, logged_set in enumerate(draft.logged_sets)
         ]
@@ -364,7 +508,10 @@ class InMemoryLoggedSessionRepository:
                 quantity=logged_set.quantity,
                 load=logged_set.load,
                 perceived_difficulty=logged_set.perceived_difficulty,
+                effort=logged_set.effort,
                 body_weight_kg=logged_set.body_weight_kg,
+                set_type=logged_set.set_type,
+                note=logged_set.note,
             )
             for position, logged_set in enumerate(draft.logged_sets)
         ]
@@ -386,6 +533,22 @@ class InMemoryLoggedSessionRepository:
         ]
         owned.sort(key=lambda logged: (logged.performed_on, logged.id), reverse=True)
         return [self._view(logged) for logged in owned]
+
+    def count_for_session(self, clerk_user_id: str, session_id: int) -> int:
+        return sum(
+            1
+            for logged in self._logged.values()
+            if logged.clerk_user_id == clerk_user_id
+            and logged.session_id == session_id
+        )
+
+    def count_by_session(self, clerk_user_id: str) -> dict[int, int]:
+        counts: dict[int, int] = {}
+        for logged in self._logged.values():
+            if logged.clerk_user_id != clerk_user_id or logged.session_id is None:
+                continue
+            counts[logged.session_id] = counts.get(logged.session_id, 0) + 1
+        return counts
 
 
 __all__ = [

@@ -1,24 +1,21 @@
+import { Suspense } from "react";
 import Link from "next/link";
 
-import { fetchHistory, type LoggedSession, type LoggedSet } from "@/lib/logs";
-import { fetchHome } from "@/lib/home";
-import { evaluateDeletion } from "@/lib/log-deletion";
-import { evaluateUncomplete } from "@/lib/log-outcome";
-import { formatLoad } from "@/lib/load";
-import { formatPace, formatQuantity } from "@/lib/quantity";
+import { fetchHistory } from "@/lib/logs";
+import { resolveAppearance } from "@/lib/appearance";
 import { PageHeader } from "@/components/pulse/page-header";
 import { Alert } from "@/components/pulse/alert";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { DeleteLogControl } from "@/components/DeleteLogControl";
-import { OutcomeToggle } from "@/components/OutcomeToggle";
+import { HistoryBrowser } from "@/components/HistoryBrowser";
 
-// Lists the user's completed Logged Sessions — the record side of the plan/record
-// split — newest first, each with its Logged Sets and perceived difficulty.
+// Lists the user's Logged Sessions — the record side of the plan/record split — newest first.
+// The Server Component fetches the whole feed once (ADR-0031); the interactive search-by-
+// exercise and Training Type filter run entirely client-side over it in `HistoryBrowser`.
 export default async function HistoryPage() {
-  const [envelope, homeEnvelope] = await Promise.all([
+  const [envelope, appearance] = await Promise.all([
     fetchHistory(),
-    fetchHome(),
+    resolveAppearance(),
   ]);
 
   if (!envelope.success || !envelope.data) {
@@ -34,35 +31,26 @@ export default async function HistoryPage() {
 
   const history = envelope.data;
 
-  // The parent Protocol's Session ordering, for the client mirror of the contiguity
-  // gate (ADR-0034). Home surfaces the Current Protocol's Sessions in position order;
-  // that covers the everyday case a delete could break (the server stays authoritative
-  // for any other Protocol, returning 409). An array per Protocol keeps the mirror's
-  // shape ready to widen if more orderings become available.
-  const protocolSessionOrders =
-    homeEnvelope.success && homeEnvelope.data?.current_protocol
-      ? [homeEnvelope.data.current_protocol.sessions.map((s) => s.session_id)]
-      : [];
-
-  return (
-    <section className="flex flex-col gap-6">
-      <PageHeader
-        overline="PULSE // STATS"
-        title="Training history"
-        action={
-          <div className="flex items-center gap-3">
-            <Link
-              href="/logs/new"
-              className="label-mono text-[11px] text-cyan hover:underline"
-            >
-              + Log a movement
-            </Link>
-            <Badge variant="muted">{history.length} LOGGED</Badge>
-          </div>
-        }
-      />
-
-      {history.length === 0 ? (
+  // With no records at all, there is nothing to filter — show the first-run prompt rather
+  // than an empty filter bar.
+  if (history.length === 0) {
+    return (
+      <section className="flex flex-col gap-6">
+        <PageHeader
+          overline="PULSE // STATS"
+          title="Training history"
+          action={
+            <div className="flex items-center gap-3">
+              <Link
+                href="/logs/new"
+                className="label-mono text-[11px] text-cyan hover:underline"
+              >
+                + Log a movement
+              </Link>
+              <Badge variant="muted">0 LOGGED</Badge>
+            </div>
+          }
+        />
         <Card className="flex flex-col items-start gap-3 p-6">
           <p className="font-sans text-sm text-text-secondary">
             You haven&apos;t logged any sessions yet.
@@ -80,138 +68,15 @@ export default async function HistoryPage() {
             Or log something you did →
           </Link>
         </Card>
-      ) : (
-        <ol className="flex list-none flex-col gap-4 p-0">
-          {history.map((entry) => {
-            const verdict = evaluateDeletion(
-              entry,
-              history,
-              protocolSessionOrders,
-            );
-            const uncomplete = evaluateUncomplete(
-              entry,
-              history,
-              protocolSessionOrders,
-            );
-            return (
-              <li key={entry.id}>
-                <LoggedSessionCard
-                  entry={entry}
-                  deleteDisabled={!verdict.allowed}
-                  deleteReason={verdict.reason}
-                  uncompleteDisabled={!uncomplete.allowed}
-                  uncompleteReason={uncomplete.reason}
-                />
-              </li>
-            );
-          })}
-        </ol>
-      )}
-    </section>
-  );
-}
+      </section>
+    );
+  }
 
-function LoggedSessionCard({
-  entry,
-  deleteDisabled,
-  deleteReason,
-  uncompleteDisabled,
-  uncompleteReason,
-}: {
-  entry: LoggedSession;
-  deleteDisabled: boolean;
-  deleteReason: string | null;
-  uncompleteDisabled: boolean;
-  uncompleteReason: string | null;
-}) {
+  // `HistoryBrowser` reads the URL via `useSearchParams`, so it lives under a Suspense
+  // boundary per the App Router contract.
   return (
-    <Card className="flex flex-col gap-4 p-5">
-      <div className="flex items-start justify-between gap-3">
-        <h2 className="font-display text-lg font-semibold capitalize text-text-primary">
-          {entry.training_type} session
-        </h2>
-        <div className="flex items-start gap-3">
-          {/* A Completion Outcome rides only on a plan-backed record (ADR-0031); an
-              ad-hoc record gates no Protocol, so it shows no outcome toggle. */}
-          {entry.session_id !== null ? (
-            <OutcomeToggle
-              logId={entry.id}
-              outcome={entry.completion_outcome}
-              uncompleteDisabled={uncompleteDisabled}
-              uncompleteReason={uncompleteReason}
-            />
-          ) : null}
-          <Link
-            href={`/history/${entry.id}/edit`}
-            className="label-mono text-[10px] text-cyan hover:underline"
-          >
-            Edit
-          </Link>
-          <DeleteLogControl
-            logId={entry.id}
-            disabled={deleteDisabled}
-            reason={deleteReason}
-          />
-          <span className="label-mono text-[10px] text-text-muted">
-            {entry.performed_on}
-          </span>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <div className="grid grid-cols-[1fr_3rem_4rem_3rem] gap-2 px-1">
-          <SetHead>Exercise</SetHead>
-          <SetHead className="text-right">Reps</SetHead>
-          <SetHead className="text-right">Load</SetHead>
-          <SetHead className="text-right">RPE</SetHead>
-        </div>
-        {entry.logged_sets.map((loggedSet) => (
-          <LoggedSetRow key={loggedSet.position} loggedSet={loggedSet} />
-        ))}
-      </div>
-    </Card>
-  );
-}
-
-function SetHead({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <span
-      className={`label-mono text-[9px] text-text-muted ${className ?? ""}`}
-    >
-      {children}
-    </span>
-  );
-}
-
-function LoggedSetRow({ loggedSet }: { loggedSet: LoggedSet }) {
-  // Pace is a read-time projection (ADR-0032), shown only for a distance set that
-  // carries a time — never a stored figure, and absent for a distance-only set.
-  const pace = formatPace(loggedSet.quantity);
-  return (
-    <div className="grid grid-cols-[1fr_3rem_4rem_3rem] items-center gap-2 rounded-sm border border-border bg-base/40 px-3 py-2.5">
-      <span className="truncate font-sans text-[13px] text-text-primary">
-        {loggedSet.exercise_name}
-      </span>
-      <span className="flex flex-col items-end">
-        <span className="font-display text-sm font-semibold text-text-primary">
-          {formatQuantity(loggedSet.quantity)}
-        </span>
-        {pace ? (
-          <span className="font-mono text-[10px] text-text-muted">{pace}</span>
-        ) : null}
-      </span>
-      <span className="text-right font-mono text-[13px] text-text-secondary">
-        {formatLoad(loggedSet.load)}
-      </span>
-      <span className="text-right font-mono text-[13px] text-cyan">
-        {loggedSet.perceived_difficulty ?? "—"}
-      </span>
-    </div>
+    <Suspense fallback={null}>
+      <HistoryBrowser records={history} unit={appearance.weight_unit} />
+    </Suspense>
   );
 }

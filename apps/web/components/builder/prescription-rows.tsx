@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  ChevronDown,
   GripVertical,
   Link2,
   Unlink,
@@ -30,7 +31,22 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-import { LOAD_KIND_OPTIONS, type LoadKind } from "@/lib/load";
+import { type LoadKind } from "@/lib/load";
+import {
+  DEFAULT_SCHEME,
+  compatibleSchemesForInput,
+  currentScheme,
+} from "@/lib/scheme-view";
+import { schemePreviewForInput } from "@/lib/scheme-preview";
+import {
+  shouldAutoExpandSuperset,
+  supersetSummaryChips,
+} from "@/lib/prescription-summary";
+import { planSetType } from "@/lib/set-type-view";
+import { targetEffortFromInput } from "@/lib/target-effort-view";
+import { DEFAULT_EFFORT_SCALE, type Effort } from "@/lib/effort";
+import type { DistanceUnit, QuantityKind } from "@/lib/quantity";
+import type { WeightUnit } from "@/lib/weight-unit";
 import {
   boxDropId,
   chipDropId,
@@ -47,6 +63,8 @@ import type {
   SupersetSlot,
 } from "@/lib/protocol-builder";
 import { cn } from "@/lib/utils";
+import { PrescriptionFieldStack } from "@/components/prescription/PrescriptionFieldStack";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -82,12 +100,24 @@ interface PrescriptionListProps {
   // A performed Session is the frozen prefix (ADR-0020): its rows render read-only and
   // carry no edit/reorder/group affordances and no drag.
   locked: boolean;
+  // The reader's Weight Unit (#417), forwarded to each row's Load picker.
+  unit: WeightUnit;
   onEditField: (
     position: number,
     field: PrescriptionField,
     value: string | number | null,
   ) => void;
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
+  onSetScheme: (position: number, scheme: string | null) => void;
+  onSetSetType: (position: number, setType: string | null) => void;
+  onSetTargetEffort: (position: number, targetEffort: Effort | null) => void;
+  onSetNote: (position: number, note: string | null) => void;
+  // Pick the typed Quantity kind + unit on the Prescription at `position` (ADR-0050, #464).
+  onSetQuantity: (
+    position: number,
+    quantityKind: QuantityKind,
+    quantityUnit: DistanceUnit,
+  ) => void;
   onEditRoundRest: (position: number, roundRestSeconds: number | null) => void;
   onReorder: (from: number, to: number) => void;
   onGroupWithNext: (position: number) => void;
@@ -107,8 +137,14 @@ export function PrescriptionList({
   prescriptions,
   layout,
   locked,
+  unit,
   onEditField,
   onEditLoad,
+  onSetScheme,
+  onSetSetType,
+  onSetTargetEffort,
+  onSetNote,
+  onSetQuantity,
   onEditRoundRest,
   onReorder,
   onGroupWithNext,
@@ -259,6 +295,7 @@ export function PrescriptionList({
                 position={item.position}
                 prescription={prescriptions[item.position]}
                 slot={layout[item.position]}
+                unit={unit}
                 canMoveUp={item.position > 0}
                 canMoveDown={item.position < lastPosition}
                 draggingId={draggingId}
@@ -271,6 +308,11 @@ export function PrescriptionList({
                 foreshadow={foreshadow}
                 onEditField={onEditField}
                 onEditLoad={onEditLoad}
+                onSetScheme={onSetScheme}
+                onSetSetType={onSetSetType}
+                onSetTargetEffort={onSetTargetEffort}
+                onSetNote={onSetNote}
+                onSetQuantity={onSetQuantity}
                 onReorder={onReorder}
                 onGroupWithNext={onGroupWithNext}
                 onUngroup={onUngroup}
@@ -283,6 +325,7 @@ export function PrescriptionList({
                 positions={item.positions}
                 prescriptions={prescriptions}
                 layout={layout}
+                unit={unit}
                 lastPosition={lastPosition}
                 joinActive={feedback?.joinGroup === item.group}
                 losingMember={feedback?.losingGroup === item.group}
@@ -290,6 +333,11 @@ export function PrescriptionList({
                 foreshadow={foreshadow}
                 onEditField={onEditField}
                 onEditLoad={onEditLoad}
+                onSetScheme={onSetScheme}
+                onSetSetType={onSetSetType}
+                onSetTargetEffort={onSetTargetEffort}
+                onSetNote={onSetNote}
+                onSetQuantity={onSetQuantity}
                 onEditRoundRest={onEditRoundRest}
                 onReorder={onReorder}
                 onGroupWithNext={onGroupWithNext}
@@ -429,6 +477,7 @@ interface SupersetContainerProps {
   positions: number[];
   prescriptions: DraftPrescription[];
   layout: SupersetSlot[];
+  unit: WeightUnit;
   lastPosition: number;
   // Escalating drag feedback for this container (#219), all derived from the one
   // `dragFeedback` classifier so the visuals match the drop. `joinActive`: a dragged row
@@ -448,6 +497,15 @@ interface SupersetContainerProps {
     value: string | number | null,
   ) => void;
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
+  onSetScheme: (position: number, scheme: string | null) => void;
+  onSetSetType: (position: number, setType: string | null) => void;
+  onSetTargetEffort: (position: number, targetEffort: Effort | null) => void;
+  onSetNote: (position: number, note: string | null) => void;
+  onSetQuantity: (
+    position: number,
+    quantityKind: QuantityKind,
+    quantityUnit: DistanceUnit,
+  ) => void;
   onEditRoundRest: (position: number, roundRestSeconds: number | null) => void;
   onReorder: (from: number, to: number) => void;
   onGroupWithNext: (position: number) => void;
@@ -460,6 +518,14 @@ interface SupersetContainerProps {
 // badge stays inside each member row; the group's single round-rest field lives on the
 // container (not on whichever member lands last), so rest belongs to the group.
 //
+// The container mirrors the members' progressive disclosure (#469): the group round-rest lives
+// inside its own **More** drawer, and when the drawer is collapsed a `round rest 90s` chip stands
+// in for it (the container twin of a member's Prescription Summary — never a member's `90s rest`).
+// The drawer auto-expands when a round-rest is set so the field is visible on first view, and its
+// open/closed state is ephemeral (per-render React state), exactly like the field stack's. The
+// disclosure is a standard button/region pair so keyboard and screen-reader users operate and hear
+// it, matching the Builder's accessibility floor (ADR-0027).
+//
 // The container box is itself the group's join drop target (`box-<group>`, #218):
 // releasing a dragged Prescription inside the box adds it to this Superset via the
 // self-healing resolver. The box lights up while it is the live drop target — except
@@ -471,6 +537,7 @@ function SupersetContainer({
   positions,
   prescriptions,
   layout,
+  unit,
   lastPosition,
   joinActive,
   losingMember,
@@ -478,6 +545,11 @@ function SupersetContainer({
   foreshadow,
   onEditField,
   onEditLoad,
+  onSetScheme,
+  onSetSetType,
+  onSetTargetEffort,
+  onSetNote,
+  onSetQuantity,
   onEditRoundRest,
   onReorder,
   onGroupWithNext,
@@ -490,6 +562,17 @@ function SupersetContainer({
   // name the drag microcopy speaks, so the round-rest control and the drag announcements
   // refer to the group the same way instead of leaking its internal tag.
   const groupLetter = supersetGroupLetter(prescriptions, group);
+  // The container's ephemeral More/Less state (#469), the exact species as the field stack's:
+  // seeded once so a group with a round-rest opens expanded (nothing meaningful hidden on first
+  // view) and an empty one opens collapsed, then freely toggled. It never persists — a fresh
+  // render re-seeds off the current round-rest. When collapsed, the round-rest chip stands in for
+  // the hidden field.
+  const roundRestSeconds = firstSlot.roundRestSeconds;
+  const summaryChips = supersetSummaryChips({ roundRestSeconds });
+  const [open, setOpen] = useState<boolean>(() =>
+    shouldAutoExpandSuperset({ roundRestSeconds }),
+  );
+  const contentId = useId();
   // The box registers as the group's join drop target; whether it *lights* is decided by
   // the shared feedback classifier (`joinActive`), not the raw hover — so a co-member
   // dropped back on its own box (a resolver no-op) never promises a join (#218/#219).
@@ -535,6 +618,7 @@ function SupersetContainer({
               position={position}
               prescription={prescriptions[position]}
               slot={layout[position]}
+              unit={unit}
               canMoveUp={position > 0}
               canMoveDown={position < lastPosition}
               // A member row never shows a link chip (it groups via the box, #218); an
@@ -544,6 +628,11 @@ function SupersetContainer({
               foreshadow={foreshadow}
               onEditField={onEditField}
               onEditLoad={onEditLoad}
+              onSetScheme={onSetScheme}
+              onSetSetType={onSetSetType}
+              onSetTargetEffort={onSetTargetEffort}
+              onSetNote={onSetNote}
+              onSetQuantity={onSetQuantity}
               onReorder={onReorder}
               onGroupWithNext={onGroupWithNext}
               onUngroup={onUngroup}
@@ -552,24 +641,64 @@ function SupersetContainer({
           ))}
         </ul>
 
-        {/* One group-owned round-rest field for the whole Superset — the round rests
-            once at the boundary, after every member (ADR-0023). The edit applies to
-            every member regardless of which position carries it. */}
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-cyan">Round rest (sec)</span>
-          <Input
-            type="number"
-            min={0}
-            value={firstSlot.roundRestSeconds ?? ""}
-            aria-label={`Round rest for superset ${groupLetter}`}
-            onChange={(e) =>
-              onEditRoundRest(
-                firstPosition,
-                e.target.value === "" ? null : toIntOrZero(e.target.value),
-              )
-            }
+        {/* The container's Prescription Summary (#469): a `round rest 90s` chip standing in for
+            the round-rest field while the More drawer is collapsed, so the group's boundary rest
+            reads at a glance without opening the drawer. A group with no round-rest set shows
+            nothing here. */}
+        {!open && summaryChips.length > 0 ? (
+          <ul
+            className="flex flex-wrap gap-1.5"
+            aria-label={`Superset ${groupLetter} summary`}
+          >
+            {summaryChips.map((chip) => (
+              <li key={chip.key}>
+                <Badge variant="outline" aria-label={chip.ariaLabel}>
+                  {chip.label}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        {/* The More disclosure — a button/region pair (aria-expanded + aria-controls) so
+            keyboard and screen-reader users operate and hear it (ADR-0027), mirroring the
+            members'. The accessible name leads with the visible "More"/"Less" word (WCAG 2.5.3)
+            and names the superset so one group's control is distinguishable from the next. */}
+        <button
+          type="button"
+          onClick={() => setOpen((wasOpen) => !wasOpen)}
+          aria-expanded={open}
+          aria-controls={contentId}
+          aria-label={`${open ? "Less" : "More"} — round rest for superset ${groupLetter}`}
+          className="label-mono flex items-center gap-1 self-start rounded-sm text-[10px] text-cyan transition-colors hover:text-text-primary"
+        >
+          <ChevronDown
+            className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")}
+            aria-hidden
           />
-        </label>
+          {open ? "Less" : "More"}
+        </button>
+
+        {/* One group-owned round-rest field for the whole Superset — the round rests
+            once at the boundary, after every member (ADR-0023). Held inside the More drawer
+            (#469); the edit applies to every member regardless of which position carries it. */}
+        <div id={contentId} hidden={!open}>
+          <label className="flex flex-col gap-1.5">
+            <span className="label-mono text-[9px] text-cyan">Round rest (sec)</span>
+            <Input
+              type="number"
+              min={0}
+              value={roundRestSeconds ?? ""}
+              aria-label={`Round rest for superset ${groupLetter}`}
+              onChange={(e) =>
+                onEditRoundRest(
+                  firstPosition,
+                  e.target.value === "" ? null : toIntOrZero(e.target.value),
+                )
+              }
+            />
+          </label>
+        </div>
       </div>
     </li>
   );
@@ -579,6 +708,7 @@ interface SortablePrescriptionRowProps {
   position: number;
   prescription: DraftPrescription;
   slot: SupersetSlot;
+  unit: WeightUnit;
   canMoveUp: boolean;
   canMoveDown: boolean;
   // The row currently being dragged (`row-<pos>`), or null/absent when idle. A solo row
@@ -601,6 +731,15 @@ interface SortablePrescriptionRowProps {
     value: string | number | null,
   ) => void;
   onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
+  onSetScheme: (position: number, scheme: string | null) => void;
+  onSetSetType: (position: number, setType: string | null) => void;
+  onSetTargetEffort: (position: number, targetEffort: Effort | null) => void;
+  onSetNote: (position: number, note: string | null) => void;
+  onSetQuantity: (
+    position: number,
+    quantityKind: QuantityKind,
+    quantityUnit: DistanceUnit,
+  ) => void;
   onReorder: (from: number, to: number) => void;
   onGroupWithNext: (position: number) => void;
   onUngroup: (position: number) => void;
@@ -618,6 +757,7 @@ function SortablePrescriptionRow({
   position,
   prescription,
   slot,
+  unit,
   canMoveUp,
   canMoveDown,
   draggingId,
@@ -626,6 +766,11 @@ function SortablePrescriptionRow({
   foreshadow,
   onEditField,
   onEditLoad,
+  onSetScheme,
+  onSetSetType,
+  onSetTargetEffort,
+  onSetNote,
+  onSetQuantity,
   onReorder,
   onGroupWithNext,
   onUngroup,
@@ -662,9 +807,19 @@ function SortablePrescriptionRow({
       <PrescriptionEditor
         prescription={prescription}
         slot={slot}
+        unit={unit}
         onEditField={(field, value) => onEditField(position, field, value)}
         onEditLoad={(loadKind, loadValue) =>
           onEditLoad(position, loadKind, loadValue)
+        }
+        onSetScheme={(scheme) => onSetScheme(position, scheme)}
+        onSetSetType={(setType) => onSetSetType(position, setType)}
+        onSetTargetEffort={(targetEffort) =>
+          onSetTargetEffort(position, targetEffort)
+        }
+        onSetNote={(note) => onSetNote(position, note)}
+        onSetQuantity={(kind, quantityUnit) =>
+          onSetQuantity(position, kind, quantityUnit)
         }
       />
       {slot.group === null &&
@@ -875,15 +1030,28 @@ function SupersetBadge({ label }: { label: string }) {
 interface PrescriptionEditorProps {
   prescription: DraftPrescription;
   slot: SupersetSlot;
+  // The reader's Weight Unit (#417): the Load picker names it and the value is authored in it.
+  unit: WeightUnit;
   onEditField: (field: PrescriptionField, value: string | number | null) => void;
   onEditLoad: (loadKind: LoadKind, loadValue: string) => void;
+  onSetScheme: (scheme: string | null) => void;
+  onSetSetType: (setType: string | null) => void;
+  onSetTargetEffort: (targetEffort: Effort | null) => void;
+  onSetNote: (note: string | null) => void;
+  onSetQuantity: (quantityKind: QuantityKind, quantityUnit: DistanceUnit) => void;
 }
 
 function PrescriptionEditor({
   prescription,
   slot,
+  unit,
   onEditField,
   onEditLoad,
+  onSetScheme,
+  onSetSetType,
+  onSetTargetEffort,
+  onSetNote,
+  onSetQuantity,
 }: PrescriptionEditorProps) {
   const name = prescription.exerciseName;
   // While grouped, a member's own rest is dormant (ADR-0023): the group rests once per
@@ -899,90 +1067,115 @@ function PrescriptionEditor({
         </span>
       </span>
 
-      <div className="grid grid-cols-2 gap-2.5">
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">Sets</span>
-          <Input
-            type="number"
-            min={1}
-            value={prescription.sets}
-            aria-label={`Sets for ${name}`}
-            onChange={(e) => onEditField("sets", toIntOrZero(e.target.value))}
-          />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">Reps</span>
-          <Input
-            value={prescription.reps}
-            aria-label={`Reps for ${name}`}
-            placeholder="8-12"
-            onChange={(e) => onEditField("reps", e.target.value)}
-          />
-        </label>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2.5">
-        {grouped ? null : (
+      {/* The authored plan — the one shared, presentation-only field stack every authoring
+          surface now renders (ADR-0067, #464). Extracting it hands the Builder card the typed
+          Quantity kind selector the ad-hoc surfaces already carried, so a duration/distance is
+          authored honestly rather than forced into a rep string. The Progression Scheme (the
+          Builder's own advanced field) rides in the `advanced` slot. */}
+      <PrescriptionFieldStack
+        exerciseName={name}
+        weightUnit={unit}
+        kind={prescription.quantityKind}
+        unit={prescription.quantityUnit}
+        sets={String(prescription.sets)}
+        target={prescription.reps}
+        restSeconds={
+          prescription.restSeconds === null ? "" : String(prescription.restSeconds)
+        }
+        tempo={prescription.tempo ?? ""}
+        setType={prescription.setType ?? ""}
+        // Target Effort (ADR-0066, #467): the draft holds the typed value, so project it back to
+        // the editor's scale pick + display value; an unset target defaults the scale and leaves
+        // the value blank. The onChange parses the pair back to the typed value (or null).
+        targetEffortScale={prescription.targetEffort?.scale ?? DEFAULT_EFFORT_SCALE}
+        targetEffortValue={
+          prescription.targetEffort ? String(prescription.targetEffort.value) : ""
+        }
+        // Exercise Note (ADR-0065, #468): the draft holds the decoded cue (see
+        // `initBuilderDraft`), so it renders directly; a null note is an empty field.
+        note={prescription.note ?? ""}
+        loadKind={prescription.loadKind}
+        loadValue={prescription.loadValue}
+        showRest={!grouped}
+        // Picking a Quantity kind fixes what the target means; unlike the ad-hoc surfaces the
+        // Builder does not re-default the Load, so a generated Load the user is editing is
+        // never silently discarded.
+        onChangeKind={(kind) => onSetQuantity(kind, prescription.quantityUnit)}
+        onChangeUnit={(quantityUnit) =>
+          onSetQuantity(prescription.quantityKind, quantityUnit)
+        }
+        onChangeSets={(value) => onEditField("sets", toIntOrZero(value))}
+        onChangeTarget={(value) => onEditField("reps", value)}
+        onChangeRest={(value) =>
+          onEditField("restSeconds", value === "" ? null : toIntOrZero(value))
+        }
+        onChangeTempo={(value) =>
+          onEditField("tempo", value === "" ? null : value)
+        }
+        // The working default is stored as unset (null) so a plain set carries no annotation;
+        // any non-working member is stored as-is and rides through DEPLOY (#463/#466).
+        onChangeSetType={(value) => onSetSetType(planSetType(value))}
+        // A blank value clears the target (null); any value rides onto the picked scale and
+        // through DEPLOY untouched (#463). Descriptive only — it feeds no progression (ADR-0066).
+        onChangeTargetEffort={(scale, value) =>
+          onSetTargetEffort(targetEffortFromInput(scale, value))
+        }
+        // A blank value clears the note (null); any text rides through DEPLOY, where the write
+        // boundary length-caps + HTML-escapes it (ADR-0065, #468). Descriptive only.
+        onChangeNote={(value) =>
+          onSetNote(value.trim() === "" ? null : value)
+        }
+        onChangeLoadKind={(value) =>
+          onEditLoad(value as LoadKind, prescription.loadValue)
+        }
+        onChangeLoadValue={(value) => onEditLoad(prescription.loadKind, value)}
+        advanced={
+          /* Progression Scheme (ADR-0064, #432): how this movement's un-performed tail steps.
+             The selector lives inside **More** (#465). Only schemes compatible with the current
+             Load are offered — Greyskull disappears the moment the Load has no clean kilogram
+             axis — so an incompatible choice can't be staged. Selecting the default clears the
+             stored selection (null ⇒ default). */
           <label className="flex flex-col gap-1.5">
             <span className="label-mono text-[9px] text-text-muted">
-              Rest (sec)
+              Progression scheme
             </span>
-            <Input
-              type="number"
-              min={0}
-              value={prescription.restSeconds ?? ""}
-              aria-label={`Rest seconds for ${name}`}
+            <Select
+              value={currentScheme(prescription)}
+              aria-label={`Progression scheme for ${name}`}
               onChange={(e) =>
-                onEditField(
-                  "restSeconds",
-                  e.target.value === "" ? null : toIntOrZero(e.target.value),
-                )
+                onSetScheme(e.target.value === DEFAULT_SCHEME ? null : e.target.value)
               }
-            />
+            >
+              {compatibleSchemesForInput(
+                prescription.loadKind,
+                prescription.loadValue,
+              ).map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
           </label>
-        )}
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">Tempo</span>
-          <Input
-            value={prescription.tempo ?? ""}
-            aria-label={`Tempo for ${name}`}
-            placeholder="3-1-1"
-            onChange={(e) =>
-              onEditField("tempo", e.target.value === "" ? null : e.target.value)
-            }
-          />
-        </label>
-      </div>
-
-      {/* Load is a typed value (ADR-0010): pick the kind, then give the value that
-          kind carries — the same picker the log form uses. */}
-      <div className="grid grid-cols-[7rem_1fr] gap-2.5">
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">Load kind</span>
-          <Select
-            value={prescription.loadKind}
-            aria-label={`Load kind for ${name}`}
-            onChange={(e) =>
-              onEditLoad(e.target.value as LoadKind, prescription.loadValue)
-            }
+        }
+        preview={
+          /* Scheme Preview (ADR-0064/0065, #452): a plain-language sentence describing what the
+             chosen scheme will do next, from this movement's live reps + Load. It stands in for
+             the scheme on its own line whether More is open or closed (never a summary chip,
+             #465), and recomputes as the scheme, reps, or Load fields change — a read-time
+             projection that stores nothing. */
+          <span
+            aria-live="polite"
+            className="font-mono text-[11px] leading-snug text-text-muted"
           >
-            {LOAD_KIND_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">Load</span>
-          <Input
-            value={prescription.loadValue}
-            placeholder="70"
-            aria-label={`Load for ${name}`}
-            onChange={(e) => onEditLoad(prescription.loadKind, e.target.value)}
-          />
-        </label>
-      </div>
+            {schemePreviewForInput(
+              currentScheme(prescription),
+              prescription.reps,
+              prescription.loadKind,
+              prescription.loadValue,
+            )}
+          </span>
+        }
+      />
     </div>
   );
 }

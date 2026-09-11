@@ -1,14 +1,24 @@
 import Link from "next/link";
-import { User } from "lucide-react";
+import { ShieldCheck, User } from "lucide-react";
 
+import { fetchProfile } from "@/lib/profile";
 import { fetchProfileProgress } from "@/lib/profile-progress";
+import { fetchTrainingHeatmap } from "@/lib/heatmap";
+import { toHeatmapGrid } from "@/lib/heatmap-view";
+import { resolveAppearance } from "@/lib/appearance";
+import { resolveIsAdmin } from "@/lib/admin";
 import { toAchievementCards } from "@/lib/achievements-view";
+import { AppearanceModePicker } from "@/components/AppearanceModePicker";
+import { AppearanceKeepAwakeToggle } from "@/components/AppearanceKeepAwakeToggle";
+import { AppearanceWeightUnitToggle } from "@/components/AppearanceWeightUnitToggle";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { NavRow } from "@/components/pulse/nav-row";
 import { SignOutRow } from "@/components/pulse/sign-out-row";
 import { LevelBadge } from "@/components/pulse/level-badge";
 import { AchievementWall } from "@/components/pulse/achievement-wall";
+import { TrainingHeatmap } from "@/components/pulse/training-heatmap";
+import { FitnessProfileSummary } from "@/components/pulse/fitness-profile-summary";
 import { Bento, BentoTile } from "@/components/pulse/bento";
 import { Alert } from "@/components/pulse/alert";
 import { Card } from "@/components/ui/card";
@@ -27,7 +37,22 @@ const SUMMARY_COUNT = 4;
 // Achievements onto this same spine — a compact wall with a "see all" affordance to the
 // full catalog.
 export default async function ProfilePage() {
-  const envelope = await fetchProfileProgress();
+  // Resolve everything the page needs in parallel. `resolveActiveSkin` /
+  // `resolveIsAdmin` share this request's cache with the root layout, so the extra
+  // reads are effectively free; the admin nav row to /admin is rendered only for an admin.
+  const [envelope, profileEnvelope, heatmapEnvelope, appearancePref, isAdmin] =
+    await Promise.all([
+      fetchProfileProgress(),
+      fetchProfile(),
+      fetchTrainingHeatmap(),
+      resolveAppearance(),
+      resolveIsAdmin(),
+    ]);
+  const {
+    mode,
+    keep_screen_awake: keepScreenAwake,
+    weight_unit: weightUnit,
+  } = appearancePref;
 
   if (!envelope.success || !envelope.data) {
     return (
@@ -43,6 +68,12 @@ export default async function ProfilePage() {
   const { xp, level, streak, total_sessions, total_sets, achievements } =
     envelope.data;
   const cards = toAchievementCards(achievements);
+  // The Heatmap is a secondary read on its own endpoint (ADR-0054); a failure there must
+  // not blank the whole Profile, so it simply omits the mosaic when it can't load.
+  const heatmapGrid =
+    heatmapEnvelope.success && heatmapEnvelope.data
+      ? toHeatmapGrid(heatmapEnvelope.data)
+      : null;
   const unlockedCount = cards.filter((card) => card.unlocked).length;
 
   return (
@@ -64,6 +95,13 @@ export default async function ProfilePage() {
         </Bento>
       </div>
 
+      {heatmapGrid ? (
+        <div className="flex flex-col gap-4">
+          <SectionHeader>TRAINING HEATMAP</SectionHeader>
+          <TrainingHeatmap grid={heatmapGrid} />
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-4">
         <SectionHeader
           meta={
@@ -83,6 +121,37 @@ export default async function ProfilePage() {
       </div>
 
       <div className="flex flex-col gap-4">
+        <SectionHeader>APPEARANCE</SectionHeader>
+        {/* The Interface Preferences (ADR-0055) live together: the Mode picker and,
+            beneath dividers, the Keep Screen Awake and Weight Unit toggles. */}
+        <Card className="p-4">
+          <div className="flex flex-col gap-4">
+            <AppearanceModePicker currentMode={mode} />
+            <div className="border-t border-border pt-4">
+              <AppearanceKeepAwakeToggle keepScreenAwake={keepScreenAwake} />
+            </div>
+            <div className="border-t border-border pt-4">
+              <AppearanceWeightUnitToggle weightUnit={weightUnit} />
+            </div>
+          </div>
+        </Card>
+        {/* The admin-only Skin catalog moved to the dedicated /admin home (ADR-0071):
+            an ordinary user picks their Mode and nothing more, and an admin reaches
+            Skin publishing via the admin row in ACCOUNT below. */}
+      </div>
+
+      {/* The generation-input Fitness Profile snapshot, demoted here from Home
+          (docs/redesign-ia.md, ADR-0071). Read-only; the editable form is the
+          "Edit fitness profile" row below. Omitted if the profile read failed —
+          the progress read above already succeeded to reach here. */}
+      {profileEnvelope.success && profileEnvelope.data ? (
+        <div className="flex flex-col gap-4">
+          <SectionHeader>FITNESS PROFILE</SectionHeader>
+          <FitnessProfileSummary profile={profileEnvelope.data} />
+        </div>
+      ) : null}
+
+      <div className="flex flex-col gap-4">
         <SectionHeader>ACCOUNT</SectionHeader>
         <Card className="divide-y divide-border overflow-hidden py-0">
           <NavRow
@@ -91,6 +160,17 @@ export default async function ProfilePage() {
             href="/profile/edit"
             accent="cyan"
           />
+          {/* Admin-only: the dedicated /admin home for power features — publishing the
+              Active Skin and running catalog enrichment (ADR-0071). Rendered only for an
+              admin (server-resolved role claim); the backend gates the actions regardless. */}
+          {isAdmin ? (
+            <NavRow
+              icon={ShieldCheck}
+              label="Admin"
+              href="/admin"
+              accent="violet"
+            />
+          ) : null}
           <SignOutRow />
         </Card>
       </div>

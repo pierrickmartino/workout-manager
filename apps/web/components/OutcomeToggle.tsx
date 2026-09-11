@@ -44,10 +44,15 @@ export function OutcomeToggle({
   const disabled = (uncompleteDisabled && !isIncomplete) || pending;
 
   return (
-    <form action={action} className="flex flex-col items-end gap-1">
+    <form action={action} className="inline-flex flex-wrap items-center gap-2">
       <input type="hidden" name="log_id" value={logId} />
       <input type="hidden" name="outcome" value={target} />
-      <span className="label-mono text-[9px] text-text-muted">
+      {/* The current outcome as a small status indicator (dot + label), not a button. */}
+      <span className="label-mono inline-flex items-center gap-1.5 text-[10px] text-text-muted">
+        <span
+          aria-hidden="true"
+          className={`h-1.5 w-1.5 rounded-full ${isIncomplete ? "bg-text-muted" : "bg-cyan"}`}
+        />
         {isIncomplete ? "INCOMPLETE" : "COMPLETED"}
       </span>
       <button
@@ -56,17 +61,17 @@ export function OutcomeToggle({
         title={
           disabled && !pending ? (uncompleteReason ?? undefined) : undefined
         }
-        className="label-mono text-[10px] text-cyan transition-opacity hover:underline disabled:cursor-not-allowed disabled:text-text-muted disabled:no-underline"
+        className="label-mono inline-flex items-center rounded-md border border-border bg-elevated px-3 py-1.5 text-[10px] text-text-primary transition-colors hover:border-cyan hover:text-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan/60 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:text-text-primary motion-reduce:transition-none"
       >
         {pending ? "Saving…" : label}
       </button>
       {uncompleteDisabled && !isIncomplete && uncompleteReason ? (
-        <span className="max-w-[16rem] text-right font-mono text-[9px] leading-tight text-text-muted">
+        <span className="w-full font-mono text-[9px] leading-tight text-text-muted">
           {uncompleteReason}
         </span>
       ) : null}
       {state.error ? (
-        <span className="max-w-[16rem] text-right font-mono text-[9px] leading-tight text-magenta">
+        <span className="w-full font-mono text-[9px] leading-tight text-magenta">
           {state.error}
         </span>
       ) : null}

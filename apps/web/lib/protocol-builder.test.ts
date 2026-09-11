@@ -15,6 +15,8 @@ import {
   rowDropId,
   chipDropId,
   boxDropId,
+  quantityToDraftFields,
+  sessionMoveOptions,
 } from "./protocol-builder.ts";
 import type { BuilderDraft, DraftPrescription } from "./protocol-builder.ts";
 import type { ProtocolProgress } from "./protocols-types.ts";
@@ -246,6 +248,330 @@ test("EDIT_LOAD replaces a Prescription's Load kind and value", () => {
   assert.equal(next.sessions[0].prescriptions[0].loadValue, "10");
 });
 
+test("SET_SCHEME selects a Progression Scheme on a Prescription and carries it through DEPLOY", () => {
+  // Arrange
+  const draft = initBuilderDraft(protocol());
+
+  // Act — choose Greyskull (compatible with the absolute-load default)
+  const next = builderReducer(draft, {
+    type: "SET_SCHEME",
+    sessionId: 1,
+    position: 0,
+    scheme: "greyskull",
+  });
+
+  // Assert — stored on the draft and emitted in the deploy payload
+  assert.equal(next.sessions[0].prescriptions[0].scheme, "greyskull");
+  const payload = toDeployPayload(next, "kg");
+  assert.equal(payload.sessions[0].prescriptions[0].scheme, "greyskull");
+});
+
+test("SET_SCHEME with null clears the selection back to the default", () => {
+  // Arrange — a movement already carrying a chosen scheme
+  const draft = builderReducer(initBuilderDraft(protocol()), {
+    type: "SET_SCHEME",
+    sessionId: 1,
+    position: 0,
+    scheme: "greyskull",
+  });
+
+  // Act — clear it
+  const next = builderReducer(draft, {
+    type: "SET_SCHEME",
+    sessionId: 1,
+    position: 0,
+    scheme: null,
+  });
+
+  // Assert — null in the draft and the payload (the read side resolves it to the default)
+  assert.equal(next.sessions[0].prescriptions[0].scheme, null);
+  assert.equal(toDeployPayload(next, "kg").sessions[0].prescriptions[0].scheme, null);
+});
+
+test("SET_SET_TYPE annotates a Prescription's Set Type and carries it through DEPLOY", () => {
+  // Arrange
+  const draft = initBuilderDraft(protocol());
+
+  // Act — tag the movement as a warm-up
+  const next = builderReducer(draft, {
+    type: "SET_SET_TYPE",
+    sessionId: 1,
+    position: 0,
+    setType: "warm_up",
+  });
+
+  // Assert — stored on the draft and emitted in the deploy payload (#463/#466)
+  assert.equal(next.sessions[0].prescriptions[0].setType, "warm_up");
+  const payload = toDeployPayload(next, "kg");
+  assert.equal(payload.sessions[0].prescriptions[0].set_type, "warm_up");
+});
+
+test("SET_NOTE attaches an Exercise Note and carries it through DEPLOY", () => {
+  // Arrange
+  const draft = initBuilderDraft(protocol());
+
+  // Act — attach a plan-side coaching cue
+  const next = builderReducer(draft, {
+    type: "SET_NOTE",
+    sessionId: 1,
+    position: 0,
+    note: "Pause on the chest",
+  });
+
+  // Assert — stored on the draft and emitted on the deploy payload (#463/#468); the backend
+  // length-caps and HTML-escapes it at the write boundary (ADR-0065).
+  assert.equal(next.sessions[0].prescriptions[0].note, "Pause on the chest");
+  const payload = toDeployPayload(next, "kg");
+  assert.equal(
+    payload.sessions[0].prescriptions[0].note,
+    "Pause on the chest",
+  );
+});
+
+test("SET_NOTE with null clears the Exercise Note back to no cue", () => {
+  // Arrange — a movement already carrying a note
+  const draft = builderReducer(initBuilderDraft(protocol()), {
+    type: "SET_NOTE",
+    sessionId: 1,
+    position: 0,
+    note: "Pause on the chest",
+  });
+
+  // Act — clear it
+  const next = builderReducer(draft, {
+    type: "SET_NOTE",
+    sessionId: 1,
+    position: 0,
+    note: null,
+  });
+
+  // Assert — null in the draft and the payload (no cue)
+  assert.equal(next.sessions[0].prescriptions[0].note, null);
+  assert.equal(toDeployPayload(next, "kg").sessions[0].prescriptions[0].note, null);
+});
+
+test("SET_SET_TYPE with null clears the annotation back to the working default", () => {
+  // Arrange — a movement already tagged with a Set Type
+  const draft = builderReducer(initBuilderDraft(protocol()), {
+    type: "SET_SET_TYPE",
+    sessionId: 1,
+    position: 0,
+    setType: "warm_up",
+  });
+
+  // Act — clear it (the working default is stored as unset)
+  const next = builderReducer(draft, {
+    type: "SET_SET_TYPE",
+    sessionId: 1,
+    position: 0,
+    setType: null,
+  });
+
+  // Assert — null in the draft and the payload (the read side resolves it to working)
+  assert.equal(next.sessions[0].prescriptions[0].setType, null);
+  assert.equal(toDeployPayload(next, "kg").sessions[0].prescriptions[0].set_type, null);
+});
+
+test("initBuilderDraft carries an existing Prescription's stored scheme", () => {
+  // Arrange — a Protocol whose movement already carries a scheme selection
+  const source = protocol({
+    sessions: [session({ prescriptions: [prescription({ scheme: "session_count" })] })],
+  });
+
+  // Act
+  const draft = initBuilderDraft(source);
+
+  // Assert
+  assert.equal(draft.sessions[0].prescriptions[0].scheme, "session_count");
+});
+
+test("toDeployPayload carries Set Type, Target Effort, and Exercise Note through DEPLOY", () => {
+  // Arrange — a movement whose generation put a Set Type, a Target Effort, and a Note on it
+  const source = protocol({
+    sessions: [
+      session({
+        prescriptions: [
+          prescription({
+            set_type: "amrap",
+            target_effort: { scale: "rpe", value: 8 },
+            note: "pause on the chest",
+          }),
+        ],
+      }),
+    ],
+  });
+  const draft = initBuilderDraft(source);
+
+  // Act
+  const payload = toDeployPayload(draft, "kg");
+
+  // Assert — the three fields ride the Deploy payload (Target Effort as scale+value)
+  const emitted = payload.sessions[0].prescriptions[0];
+  assert.equal(emitted.set_type, "amrap");
+  assert.equal(emitted.target_effort_scale, "rpe");
+  assert.equal(emitted.target_effort_value, 8);
+  assert.equal(emitted.note, "pause on the chest");
+});
+
+test("initBuilderDraft carries an existing Prescription's stored Set Type, Target Effort, and Note", () => {
+  // Arrange — a Protocol whose movement already carries all three fields
+  const source = protocol({
+    sessions: [
+      session({
+        prescriptions: [
+          prescription({
+            set_type: "warm_up",
+            target_effort: { scale: "rir", value: 2 },
+            note: "brace hard",
+          }),
+        ],
+      }),
+    ],
+  });
+
+  // Act
+  const draft = initBuilderDraft(source);
+
+  // Assert
+  const drafted = draft.sessions[0].prescriptions[0];
+  assert.equal(drafted.setType, "warm_up");
+  assert.deepEqual(drafted.targetEffort, { scale: "rir", value: 2 });
+  assert.equal(drafted.note, "brace hard");
+});
+
+test("initBuilderDraft decodes a stored (HTML-escaped) Note so DEPLOY re-escapes it exactly once", () => {
+  // Arrange — a stored note carrying an escaped entity, as the API serves it (ADR-0065). The
+  // editor must show and round-trip the *decoded* text, or a tail edit would double-escape it
+  // into `a &amp;amp; b` on every Deploy (#468).
+  const source = protocol({
+    sessions: [
+      session({ prescriptions: [prescription({ note: "a &amp; b" })] }),
+    ],
+  });
+
+  // Act
+  const draft = initBuilderDraft(source);
+
+  // Assert — the draft holds the decoded cue (the editable text), and Deploy sends that decoded
+  // value; the write boundary (`parse_note`) re-escapes it back to `a &amp; b` server-side, so
+  // the round-trip is idempotent rather than a growing chain of entities.
+  assert.equal(draft.sessions[0].prescriptions[0].note, "a & b");
+  assert.equal(
+    toDeployPayload(draft, "kg").sessions[0].prescriptions[0].note,
+    "a & b",
+  );
+});
+
+test("toDeployPayload emits unset Set Type / Target Effort / Note as null for a plain working set", () => {
+  // Arrange — a plain movement (the generation left the three advanced fields unset)
+  const draft = initBuilderDraft(protocol());
+
+  // Act
+  const emitted = toDeployPayload(draft, "kg").sessions[0].prescriptions[0];
+
+  // Assert — nothing is fabricated; each rides as null (the domain default is applied server-side)
+  assert.equal(emitted.set_type, null);
+  assert.equal(emitted.target_effort_scale, null);
+  assert.equal(emitted.target_effort_value, null);
+  assert.equal(emitted.note, null);
+});
+
+test("initBuilderDraft seeds the typed Quantity kind and unit from the stored Prescribed Quantity", () => {
+  // Arrange — a Protocol whose movements carry a duration and a distance-in-miles Quantity
+  const source = protocol({
+    sessions: [
+      session({
+        prescriptions: [
+          prescription({
+            reps: "45s",
+            prescribed_quantity: { kind: "duration", text: "45s", seconds: 45 },
+          }),
+          prescription({
+            reps: "3",
+            prescribed_quantity: { kind: "distance", text: "3 mi", metres: 4828 },
+          }),
+        ],
+      }),
+    ],
+  });
+
+  // Act
+  const [held, run] = initBuilderDraft(source).sessions[0].prescriptions;
+
+  // Assert — the stored kind is authoritative; the distance unit is recovered from the text
+  assert.equal(held.quantityKind, "duration");
+  assert.equal(held.quantityUnit, "km");
+  assert.equal(run.quantityKind, "distance");
+  assert.equal(run.quantityUnit, "mi");
+});
+
+test("initBuilderDraft defaults an absent Prescribed Quantity to a rep count in km", () => {
+  // Arrange — a legacy/pre-backfill movement with no typed Quantity on the read
+  const draft = initBuilderDraft(protocol());
+
+  // Assert — the selector opens sensibly rather than crashing on a missing kind
+  const drafted = draft.sessions[0].prescriptions[0];
+  assert.equal(drafted.quantityKind, "repetitions");
+  assert.equal(drafted.quantityUnit, "km");
+});
+
+test("SET_QUANTITY picks the Quantity kind and unit without touching the target", () => {
+  // Arrange — a plain rep-count movement in an un-performed Session
+  const draft = initBuilderDraft(protocol());
+
+  // Act — the user picks Distance in miles through the Quantity selector
+  const next = builderReducer(draft, {
+    type: "SET_QUANTITY",
+    sessionId: 1,
+    position: 0,
+    quantityKind: "distance",
+    quantityUnit: "mi",
+  });
+
+  // Assert — kind and unit change; the free-text target (reps) is left for its own edit
+  const edited = next.sessions[0].prescriptions[0];
+  assert.equal(edited.quantityKind, "distance");
+  assert.equal(edited.quantityUnit, "mi");
+  assert.equal(edited.reps, draft.sessions[0].prescriptions[0].reps);
+});
+
+test("toDeployPayload carries the typed Quantity kind and unit through DEPLOY", () => {
+  // Arrange — a distance-in-miles movement authored in the Builder
+  const source = protocol({
+    sessions: [
+      session({
+        prescriptions: [
+          prescription({
+            reps: "5",
+            prescribed_quantity: { kind: "distance", text: "5 mi", metres: 8047 },
+          }),
+        ],
+      }),
+    ],
+  });
+  const draft = initBuilderDraft(source);
+
+  // Act
+  const emitted = toDeployPayload(draft, "kg").sessions[0].prescriptions[0];
+
+  // Assert — the pick rides the payload so the server persists it a distance, not reps
+  assert.equal(emitted.quantity_kind, "distance");
+  assert.equal(emitted.quantity_unit, "mi");
+});
+
+test("quantityToDraftFields reads the kind and recovers the distance unit from the text", () => {
+  // Arrange / Act / Assert — a pure reversal of a stored Quantity into the editable fields
+  assert.deepEqual(quantityToDraftFields(null), { kind: "repetitions", unit: "km" });
+  assert.deepEqual(
+    quantityToDraftFields({ kind: "duration", text: "45s", seconds: 45 }),
+    { kind: "duration", unit: "km" },
+  );
+  assert.deepEqual(
+    quantityToDraftFields({ kind: "distance", text: "5 mi", metres: 8047 }),
+    { kind: "distance", unit: "mi" },
+  );
+});
+
 test("editing a performed Session is a no-op (frozen prefix)", () => {
   // Arrange — Session 1 is performed
   const draft = initBuilderDraft(
@@ -290,7 +616,7 @@ test("toDeployPayload emits only the un-performed tail with Load as kind+value",
   });
 
   // Act
-  const payload = toDeployPayload(draft);
+  const payload = toDeployPayload(draft, "kg");
 
   // Assert — the frozen Session 1 is absent; Session 2 carries its edited Load
   assert.equal(payload.weeks, 2);
@@ -345,7 +671,7 @@ test("toDeployPayload carries the edited name so it rides through DEPLOY", () =>
   });
 
   // Act
-  const payload = toDeployPayload(draft);
+  const payload = toDeployPayload(draft, "kg");
 
   // Assert — the name travels in the deploy payload (ADR-0021)
   assert.equal(payload.name, "Summer Split");
@@ -501,7 +827,7 @@ test("a reordered un-performed Session's new order flows through to the deploy p
     from: 0,
     to: 1,
   });
-  const payload = toDeployPayload(draft);
+  const payload = toDeployPayload(draft, "kg");
 
   // Assert — the payload's prescription order (which becomes position on deploy)
   // reflects the reorder
@@ -765,6 +1091,263 @@ test("REMOVE_SESSION is a no-op on a performed Session (frozen prefix)", () => {
   );
 });
 
+// --- MOVE_SESSION: tail-only Session reordering (ADR-0068) ---------------------
+// A Session is repositioned within a Week or across Week boundaries by rewriting
+// its (week, day); the backend re-enumerates positions from those. Only un-performed
+// Sessions move, and a performed Session's (week, day) is never touched. `toIndex`
+// is the target slot among the destination Week's *un-performed* Sessions.
+
+// Read one Session's (week, day) out of a draft by id — a small test convenience.
+function slotOf(draft: BuilderDraft, sessionId: number): { week: number; day: number } {
+  const found = draft.sessions.find((s) => s.sessionId === sessionId);
+  assert.ok(found, `session ${sessionId} present`);
+  return { week: found.week, day: found.day };
+}
+
+// A three-Session week-1 draft (A=1, B=2, C=3), all un-performed, over a 2-week header.
+function threeInWeekOne(): BuilderDraft {
+  return initBuilderDraft(
+    protocol({
+      weeks: 2,
+      sessions_per_week: 3,
+      sessions: [
+        session({ session_id: 1, week: 1, day: 1 }),
+        session({ session_id: 2, week: 1, day: 2 }),
+        session({ session_id: 3, week: 1, day: 3 }),
+      ],
+    }),
+  );
+}
+
+test("MOVE_SESSION reorders a Session later within its Week (move down)", () => {
+  // Arrange — week 1 holds A(1), B(2), C(3)
+  const draft = threeInWeekOne();
+
+  // Act — move A to the second slot
+  const next = builderReducer(draft, {
+    type: "MOVE_SESSION",
+    sessionId: 1,
+    toWeek: 1,
+    toIndex: 1,
+  });
+
+  // Assert — order becomes B, A, C with contiguous days
+  assert.deepEqual(slotOf(next, 2), { week: 1, day: 1 });
+  assert.deepEqual(slotOf(next, 1), { week: 1, day: 2 });
+  assert.deepEqual(slotOf(next, 3), { week: 1, day: 3 });
+});
+
+test("MOVE_SESSION reorders a Session earlier within its Week (move up)", () => {
+  // Arrange — week 1 holds A(1), B(2), C(3)
+  const draft = threeInWeekOne();
+
+  // Act — move C to the first slot
+  const next = builderReducer(draft, {
+    type: "MOVE_SESSION",
+    sessionId: 3,
+    toWeek: 1,
+    toIndex: 0,
+  });
+
+  // Assert — order becomes C, A, B
+  assert.deepEqual(slotOf(next, 3), { week: 1, day: 1 });
+  assert.deepEqual(slotOf(next, 1), { week: 1, day: 2 });
+  assert.deepEqual(slotOf(next, 2), { week: 1, day: 3 });
+});
+
+test("MOVE_SESSION moves a Session across a Week boundary, re-packing both Weeks", () => {
+  // Arrange — week 1: A(1), B(2); week 2: C(1)
+  const draft = initBuilderDraft(
+    protocol({
+      weeks: 2,
+      sessions_per_week: 2,
+      sessions: [
+        session({ session_id: 1, week: 1, day: 1 }),
+        session({ session_id: 2, week: 1, day: 2 }),
+        session({ session_id: 3, week: 2, day: 1 }),
+      ],
+    }),
+  );
+
+  // Act — move B to the front of week 2
+  const next = builderReducer(draft, {
+    type: "MOVE_SESSION",
+    sessionId: 2,
+    toWeek: 2,
+    toIndex: 0,
+  });
+
+  // Assert — B leaves week 1 (A re-packs to day 1); B leads week 2 ahead of C
+  assert.deepEqual(slotOf(next, 1), { week: 1, day: 1 });
+  assert.deepEqual(slotOf(next, 2), { week: 2, day: 1 });
+  assert.deepEqual(slotOf(next, 3), { week: 2, day: 2 });
+});
+
+test("MOVE_SESSION into a straddling Week lands after the frozen performed Sessions", () => {
+  // Arrange — week 1 holds a performed Session (day 1); week 2 holds an un-performed one
+  const draft = initBuilderDraft(
+    protocol({
+      weeks: 2,
+      sessions_per_week: 1,
+      sessions: [
+        session({ session_id: 1, week: 1, day: 1, performed: true }),
+        session({ session_id: 2, week: 2, day: 1, performed: false }),
+      ],
+    }),
+  );
+
+  // Act — pull the un-performed Session up into week 1, slot 0
+  const next = builderReducer(draft, {
+    type: "MOVE_SESSION",
+    sessionId: 2,
+    toWeek: 1,
+    toIndex: 0,
+  });
+
+  // Assert — the performed Session keeps (1,1); the un-performed one lands at day 2, never before it
+  assert.deepEqual(slotOf(next, 1), { week: 1, day: 1 });
+  assert.deepEqual(slotOf(next, 2), { week: 1, day: 2 });
+});
+
+test("MOVE_SESSION is a no-op on a performed Session (frozen prefix)", () => {
+  // Arrange — Session 1 is performed
+  const draft = initBuilderDraft(
+    protocol({
+      weeks: 2,
+      sessions_per_week: 1,
+      sessions: [
+        session({ session_id: 1, week: 1, day: 1, performed: true }),
+        session({ session_id: 2, week: 2, day: 1, performed: false }),
+      ],
+    }),
+  );
+
+  // Act — try to move the frozen Session
+  const next = builderReducer(draft, {
+    type: "MOVE_SESSION",
+    sessionId: 1,
+    toWeek: 2,
+    toIndex: 0,
+  });
+
+  // Assert — nothing moves
+  assert.deepEqual(slotOf(next, 1), { week: 1, day: 1 });
+  assert.deepEqual(slotOf(next, 2), { week: 2, day: 1 });
+});
+
+test("MOVE_SESSION is a no-op for an unknown Session id", () => {
+  const draft = threeInWeekOne();
+  const next = builderReducer(draft, {
+    type: "MOVE_SESSION",
+    sessionId: 999,
+    toWeek: 2,
+    toIndex: 0,
+  });
+  assert.deepEqual(
+    next.sessions.map((s) => ({ id: s.sessionId, week: s.week, day: s.day })),
+    draft.sessions.map((s) => ({ id: s.sessionId, week: s.week, day: s.day })),
+  );
+});
+
+test("MOVE_SESSION clamps an over-large toIndex to the end of the Week", () => {
+  // Arrange — week 1 holds A(1), B(2), C(3)
+  const draft = threeInWeekOne();
+
+  // Act — move A far past the end
+  const next = builderReducer(draft, {
+    type: "MOVE_SESSION",
+    sessionId: 1,
+    toWeek: 1,
+    toIndex: 99,
+  });
+
+  // Assert — A lands last
+  assert.deepEqual(slotOf(next, 2), { week: 1, day: 1 });
+  assert.deepEqual(slotOf(next, 3), { week: 1, day: 2 });
+  assert.deepEqual(slotOf(next, 1), { week: 1, day: 3 });
+});
+
+test("MOVE_SESSION carries the new order through DEPLOY", () => {
+  // Arrange — week 1: A(1), B(2)
+  const draft = initBuilderDraft(
+    protocol({
+      weeks: 1,
+      sessions_per_week: 2,
+      sessions: [
+        session({ session_id: 1, week: 1, day: 1 }),
+        session({ session_id: 2, week: 1, day: 2 }),
+      ],
+    }),
+  );
+
+  // Act — swap them, then serialize
+  const swapped = builderReducer(draft, {
+    type: "MOVE_SESSION",
+    sessionId: 1,
+    toWeek: 1,
+    toIndex: 1,
+  });
+  const payload = toDeployPayload(swapped, "kg");
+
+  // Assert — the tail carries B ahead of A by (week, day)
+  const byId = new Map(payload.sessions.map((s) => [s.session_id, s]));
+  assert.deepEqual(
+    { week: byId.get(2)?.week, day: byId.get(2)?.day },
+    { week: 1, day: 1 },
+  );
+  assert.deepEqual(
+    { week: byId.get(1)?.week, day: byId.get(1)?.day },
+    { week: 1, day: 2 },
+  );
+});
+
+test("sessionMoveOptions reports the legal moves for an un-performed Session", () => {
+  // Arrange — week 1: A(1), B(2); week 2: C(1); a 2-week header
+  const draft = initBuilderDraft(
+    protocol({
+      weeks: 2,
+      sessions_per_week: 2,
+      sessions: [
+        session({ session_id: 1, week: 1, day: 1 }),
+        session({ session_id: 2, week: 1, day: 2 }),
+        session({ session_id: 3, week: 2, day: 1 }),
+      ],
+    }),
+  );
+
+  // Act
+  const first = sessionMoveOptions(draft, 1);
+  const second = sessionMoveOptions(draft, 2);
+
+  // Assert — A is first in week 1 (can go down + to the next week, not up / prev week)
+  assert.deepEqual(first, {
+    week: 1,
+    index: 0,
+    canMoveUp: false,
+    canMoveDown: true,
+    canMoveToPrevWeek: false,
+    canMoveToNextWeek: true,
+  });
+  // B is last in week 1 (can go up + across weeks either way)
+  assert.deepEqual(second, {
+    week: 1,
+    index: 1,
+    canMoveUp: true,
+    canMoveDown: false,
+    canMoveToPrevWeek: false,
+    canMoveToNextWeek: true,
+  });
+});
+
+test("sessionMoveOptions returns null for a performed Session", () => {
+  const draft = initBuilderDraft(
+    protocol({
+      sessions: [session({ session_id: 1, week: 1, day: 1, performed: true })],
+    }),
+  );
+  assert.equal(sessionMoveOptions(draft, 1), null);
+});
+
 test("a newly-added Session deploys with a null session_id for the server to insert", () => {
   // Arrange — add a filled new slot to week 2
   const added = builderReducer(initBuilderDraft(protocol()), {
@@ -779,7 +1362,7 @@ test("a newly-added Session deploys with a null session_id for the server to ins
   });
 
   // Act
-  const payload = toDeployPayload(filled);
+  const payload = toDeployPayload(filled, "kg");
 
   // Assert — the existing Session keeps its id; the new slot sends session_id null
   assert.deepEqual(
@@ -795,7 +1378,7 @@ test("toDeployPayload carries the reshaped weeks and frequency header", () => {
   draft = builderReducer(draft, { type: "SET_SESSIONS_PER_WEEK", sessionsPerWeek: 4 });
 
   // Act
-  const payload = toDeployPayload(draft);
+  const payload = toDeployPayload(draft, "kg");
 
   // Assert
   assert.equal(payload.weeks, 6);
@@ -1208,7 +1791,7 @@ test("toDeployPayload carries the Superset group tag and round-rest", () => {
   );
 
   // Act
-  const payload = toDeployPayload(grouped);
+  const payload = toDeployPayload(grouped, "kg");
 
   // Assert — the grouping rides through DEPLOY on both members
   const prescriptions = payload.sessions[0].prescriptions;
@@ -1591,7 +2174,7 @@ test("a drag-formed Superset rides through toDeployPayload contiguous", () => {
   );
 
   // Act
-  const payload = toDeployPayload(grouped);
+  const payload = toDeployPayload(grouped, "kg");
 
   // Assert — both members carry the shared tag and a round-rest on the deploy tail
   const prescriptions = payload.sessions[0].prescriptions;

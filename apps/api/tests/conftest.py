@@ -14,6 +14,20 @@ ISSUER = "https://example.clerk.accounts.dev"
 KID = "test-key-1"
 
 
+class NullEnrichmentQueue:
+    """A no-op ``EnrichmentQueue`` for tests that exercise ``POST /api/exercises``
+    without caring about the async-on-create Enrichment trigger (issue #309).
+
+    The real ``get_enrichment_queue`` builds an RQ queue over Redis; a genuine create
+    would try to enqueue and hit a refused connection offline. Any offline harness
+    that mints a movement through the endpoint (the log picker, hand-authoring)
+    overrides ``get_enrichment_queue`` with this so the create path stays Redis-free.
+    Tests that assert the enqueue decision use a recording spy instead."""
+
+    def enqueue(self, exercise_id: int) -> None:
+        return None
+
+
 @dataclass
 class SigningContext:
     private_key: rsa.RSAPrivateKey
@@ -74,3 +88,26 @@ def make_signing_context() -> SigningContext:
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     jwks = _jwks_from_public_key(private_key.public_key(), KID)
     return SigningContext(private_key=private_key, jwks=jwks)
+
+
+def make_fk_engine(url: str = "sqlite://"):
+    """A SQLite test engine with foreign-key enforcement turned on.
+
+    SQLite ignores foreign keys unless ``PRAGMA foreign_keys=ON`` is set per connection,
+    so a repository whose delete/cascade order violates a constraint passes on SQLite yet
+    fails on Postgres (which always enforces them). Repository suites that exercise
+    cascading deletes use this engine so that class of bug is caught offline, not in
+    production."""
+
+    from sqlalchemy import event
+    from sqlmodel import create_engine
+
+    engine = create_engine(url, connect_args={"check_same_thread": False})
+
+    @event.listens_for(engine, "connect")
+    def _enable_foreign_keys(dbapi_connection, _record):  # pragma: no cover - trivial
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+    return engine

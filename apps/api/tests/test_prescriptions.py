@@ -83,6 +83,44 @@ def test_carries_the_superset_overlay_across():
     assert [d.round_rest_seconds for d in drafts] == [120, 120]
 
 
+def test_carries_the_typed_prescribed_quantity_the_model_emitted():
+    # Arrange — a generated distance run declaring its kind up front (ADR-0050)
+    exercises = InMemoryExerciseRepository()
+    prescription = _prescription(
+        "Easy Run",
+        reps="7 KM",
+        recommended_load=None,
+        quantity={"kind": "distance", "value": "7", "unit": "km"},
+    )
+
+    # Act
+    draft = resolve_prescriptions([prescription], exercises=exercises)[0]
+
+    # Assert — the typed Prescribed Quantity is carried onto the draft so an adopted
+    # or regenerated running Session inherits it
+    assert draft.prescribed_quantity == {
+        "kind": "distance",
+        "text": "7 km",
+        "metres": 7000.0,
+    }
+
+
+def test_carries_the_inferred_quantity_when_the_model_emits_a_bare_amount():
+    # Arrange — no typed `quantity`; only the free-text reps target survives
+    exercises = InMemoryExerciseRepository()
+    prescription = _prescription("Long Run", reps="10 km", recommended_load=None)
+
+    # Act
+    draft = resolve_prescriptions([prescription], exercises=exercises)[0]
+
+    # Assert — the #341 inference fallback types it as a distance on the draft
+    assert draft.prescribed_quantity == {
+        "kind": "distance",
+        "text": "10 km",
+        "metres": 10000.0,
+    }
+
+
 def test_reuses_the_catalog_entry_for_a_repeated_exercise_name():
     # Arrange — the same movement prescribed twice must not create two catalog rows
     exercises = InMemoryExerciseRepository()

@@ -17,6 +17,8 @@ from datetime import date, timedelta
 
 from app.domain.exercise import Provenance
 from app.domain.load import LoadKind, ParsedLoad
+from app.domain.quantity import Quantity, QuantityKind
+from app.domain.week import week_start
 from app.domain.muscle_groups import GROUP_ORDER, MuscleGroup
 from app.logbook.analytics import AnalyticsRange, analytics_overview
 from app.repositories.exercise_repository import InMemoryExerciseRepository
@@ -106,7 +108,7 @@ def test_counts_sessions_active_days_and_total_sets_in_the_window():
 
     # Act
     overview = analytics_overview(
-        "user_a", AnalyticsRange.SEVEN_DAY, logged=logged, today=TODAY
+        "user_a", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
     )
 
     # Assert
@@ -133,7 +135,7 @@ def test_overview_carries_the_set_count_muscle_distribution_for_the_window():
 
     # Act
     overview = analytics_overview(
-        "user_dist", AnalyticsRange.SEVEN_DAY, logged=logged, today=TODAY
+        "user_dist", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
     )
 
     # Assert — Legs = 2 whole sets, Shoulders & Arms = half a set each, /3 sets
@@ -158,7 +160,7 @@ def test_muscle_distribution_is_empty_when_nothing_is_logged():
 
 
 def test_muscle_distribution_only_covers_sessions_inside_the_window():
-    # Arrange — a Legs session inside 7d and a Press session just outside it
+    # Arrange — a Legs session inside 30d and a Press session just outside it
     _, sessions, logged = _build()
     _log(
         sessions,
@@ -171,13 +173,13 @@ def test_muscle_distribution_only_covers_sessions_inside_the_window():
         sessions,
         logged,
         "user_win",
-        TODAY - timedelta(days=10),
+        TODAY - timedelta(days=40),
         [LoggedSetDraft(exercise_id=PRESS, quantity=reps_quantity(8))],
     )
 
-    # Act — the 7d window excludes the 10-day-old Press session
+    # Act — the 30d window excludes the 40-day-old Press session
     overview = analytics_overview(
-        "user_win", AnalyticsRange.SEVEN_DAY, logged=logged, today=TODAY
+        "user_win", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
     )
 
     # Assert — only the in-window Legs work shows
@@ -185,27 +187,27 @@ def test_muscle_distribution_only_covers_sessions_inside_the_window():
 
 
 def test_sessions_outside_the_rolling_window_are_excluded():
-    # Arrange — one session inside a 7-day window (6 days ago) and one just outside
-    # it (7 days ago). The 7d window spans today and the six days before it.
+    # Arrange — one session inside a 30-day window (29 days ago) and one just outside
+    # it (30 days ago). The 30d window spans today and the 29 days before it.
     _, sessions, logged = _build()
     _log(
         sessions,
         logged,
         "user_b",
-        TODAY - timedelta(days=6),
+        TODAY - timedelta(days=29),
         [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5))],
     )
     _log(
         sessions,
         logged,
         "user_b",
-        TODAY - timedelta(days=7),
+        TODAY - timedelta(days=30),
         [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5))],
     )
 
     # Act
     overview = analytics_overview(
-        "user_b", AnalyticsRange.SEVEN_DAY, logged=logged, today=TODAY
+        "user_b", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
     )
 
     # Assert — only the in-window performance counts
@@ -214,28 +216,28 @@ def test_sessions_outside_the_rolling_window_are_excluded():
 
 
 def test_a_wider_range_pulls_in_sessions_a_shorter_one_excludes():
-    # Arrange — a performance 20 days ago: outside 7d, inside 30d
+    # Arrange — a performance 40 days ago: outside 30d, inside 90d
     _, sessions, logged = _build()
     _log(
         sessions,
         logged,
         "user_c",
-        TODAY - timedelta(days=20),
+        TODAY - timedelta(days=40),
         [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5))],
     )
 
     # Act
-    seven = analytics_overview(
-        "user_c", AnalyticsRange.SEVEN_DAY, logged=logged, today=TODAY
-    )
     thirty = analytics_overview(
         "user_c", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
     )
+    ninety = analytics_overview(
+        "user_c", AnalyticsRange.NINETY_DAY, logged=logged, today=TODAY
+    )
 
     # Assert
-    assert seven.sessions == 0
-    assert thirty.sessions == 1
-    assert thirty.range == "30d"
+    assert thirty.sessions == 0
+    assert ninety.sessions == 1
+    assert ninety.range == "90d"
 
 
 def test_a_user_who_logged_nothing_gets_zero_counts_not_an_error():
@@ -272,7 +274,7 @@ def test_another_users_sessions_do_not_count_toward_my_totals():
 
     # Act
     overview = analytics_overview(
-        "user_me", AnalyticsRange.SEVEN_DAY, logged=logged, today=TODAY
+        "user_me", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
     )
 
     # Assert — only my own performance is counted
@@ -282,7 +284,7 @@ def test_another_users_sessions_do_not_count_toward_my_totals():
 
 def test_recent_records_surface_all_time_prs_newest_first_decoupled_from_the_window():
     # Arrange — a 100 kg PR 200 days ago and a heavier 110 kg PR 100 days ago, both
-    # far outside the 7-day window the toggle is on
+    # far outside the 30-day window the toggle is on
     _, sessions, logged = _build()
     _log(
         sessions,
@@ -301,7 +303,7 @@ def test_recent_records_surface_all_time_prs_newest_first_decoupled_from_the_win
 
     # Act — the short window would exclude both, but the feed is decoupled from it
     overview = analytics_overview(
-        "user_pr", AnalyticsRange.SEVEN_DAY, logged=logged, today=TODAY
+        "user_pr", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
     )
 
     # Assert — both all-time PRs show, newest first, with gain over the prior PR
@@ -333,7 +335,7 @@ def test_recent_records_surface_a_bodyweight_pr_so_the_nav_gate_admits_calisthen
 
     # Act
     overview = analytics_overview(
-        "user_calisthenics", AnalyticsRange.SEVEN_DAY, logged=logged, today=TODAY
+        "user_calisthenics", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
     )
 
     # Assert — the bodyweight set sets a PR and surfaces on the feed as the set that
@@ -408,7 +410,7 @@ def test_a_user_with_no_records_has_an_empty_feed_and_zero_new_prs():
 
     # Act
     overview = analytics_overview(
-        "user_no_pr", AnalyticsRange.SEVEN_DAY, logged=logged, today=TODAY
+        "user_no_pr", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
     )
 
     # Assert — honest empty state, not an error
@@ -424,7 +426,7 @@ def test_two_sessions_on_the_same_day_are_two_sessions_but_one_active_day():
 
     # Act
     overview = analytics_overview(
-        "user_d", AnalyticsRange.SEVEN_DAY, logged=logged, today=TODAY
+        "user_d", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
     )
 
     # Assert — sessions counts both, active days collapses to one
@@ -465,7 +467,7 @@ def test_overview_carries_the_daily_volume_series_for_the_window():
 
     # Act
     overview = analytics_overview(
-        "user_vol", AnalyticsRange.SEVEN_DAY, logged=logged, today=TODAY
+        "user_vol", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
     )
 
     # Assert — daily points ascending, full coverage, no prior-window baseline
@@ -494,7 +496,7 @@ def test_overview_volume_coverage_discloses_unconvertible_reps():
 
     # Act
     overview = analytics_overview(
-        "user_cov", AnalyticsRange.SEVEN_DAY, logged=logged, today=TODAY
+        "user_cov", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
     )
 
     # Assert — only half the logged reps converted
@@ -545,7 +547,7 @@ def test_overview_folds_bodyweight_and_percent_volume_when_the_inputs_exist():
     # Act
     overview = analytics_overview(
         "user_fold",
-        AnalyticsRange.SEVEN_DAY,
+        AnalyticsRange.THIRTY_DAY,
         logged=logged,
         today=TODAY,
         profiles=profiles,
@@ -576,7 +578,7 @@ def test_overview_excludes_bodyweight_when_body_weight_is_unrecorded():
     # Act
     overview = analytics_overview(
         "user_nobw",
-        AnalyticsRange.SEVEN_DAY,
+        AnalyticsRange.THIRTY_DAY,
         logged=logged,
         today=TODAY,
         profiles=profiles,
@@ -596,7 +598,7 @@ def _covered_groups(overview) -> set[MuscleGroup]:
 
 
 def test_overview_coverage_is_a_fixed_eight_week_window_independent_of_the_range():
-    # Arrange — Legs trained 40 days ago: outside the 7d/30d ranges, but well inside the
+    # Arrange — Legs trained 40 days ago: outside the 30-day range, but well inside the
     # fixed 8-week (56-day) coverage window. Coverage must not follow the range toggle.
     _, sessions, logged = _build()
     _log(
@@ -614,7 +616,7 @@ def test_overview_coverage_is_a_fixed_eight_week_window_independent_of_the_range
     ]
 
     # Assert — every range reports the identical coverage, and Legs reads trained even
-    # though the 7d/30d counts exclude that session entirely
+    # though the 30d count excludes that session entirely
     coverages = {o.coverage for o in overviews}
     assert len(coverages) == 1
     for overview in overviews:
@@ -628,7 +630,7 @@ def test_overview_coverage_reports_all_six_real_groups_ungated():
 
     # Act
     overview = analytics_overview(
-        "user_nocov", AnalyticsRange.SEVEN_DAY, logged=logged, today=TODAY
+        "user_nocov", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
     )
 
     # Assert — six real groups in canonical order, all not-trained
@@ -636,3 +638,236 @@ def test_overview_coverage_reports_all_six_real_groups_ungated():
         group for group in GROUP_ORDER if group is not MuscleGroup.UNCLASSIFIED
     )
     assert all(row.covered is False for row in overview.coverage.groups)
+
+
+def _distance_quantity(km: float) -> dict:
+    """The stored ``distance`` Quantity dict for a ``km``-kilometre run."""
+
+    return Quantity(
+        kind=QuantityKind.DISTANCE, text=f"{km:g} km", metres=km * 1000.0
+    ).to_dict()
+
+
+def test_overview_carries_the_weekly_distance_series_and_opens_the_gate():
+    # Arrange — a 5 km run today and a 3 km run yesterday (same ISO week), plus a
+    # strength set that carries no distance
+    _, sessions, logged = _build()
+    _log(
+        sessions,
+        logged,
+        "user_run",
+        TODAY,
+        [
+            LoggedSetDraft(exercise_id=SQUAT, quantity=_distance_quantity(5.0)),
+            LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load=_abs(100.0)),
+        ],
+    )
+    _log(
+        sessions,
+        logged,
+        "user_run",
+        TODAY - timedelta(days=1),
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=_distance_quantity(3.0))],
+    )
+
+    # Act
+    overview = analytics_overview(
+        "user_run", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — today and yesterday fall in the same Monday-anchored week, so the two
+    # runs sum into one 8 km bar; the gate opens and there is no baseline delta
+    assert [(w.week_start, w.kilometres) for w in overview.distance_weeks] == [
+        (week_start(TODAY), 8.0)
+    ]
+    assert overview.distance_delta is None
+    assert overview.has_distance is True
+
+
+def test_overview_gate_stays_closed_for_a_pure_strength_user():
+    # Arrange — a user who only logs rep-and-load sets, never a distance
+    _, sessions, logged = _build()
+    _log(
+        sessions,
+        logged,
+        "user_lift",
+        TODAY,
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5), load=_abs(100.0))],
+    )
+
+    # Act
+    overview = analytics_overview(
+        "user_lift", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — no distance work ever, so the chart is gated off and empty
+    assert overview.has_distance is False
+    assert overview.distance_weeks == ()
+
+
+# --- History Depth: which windows the range selector may offer (ADR-0056) -------------
+
+
+def _log_reps(sessions, logged, user, performed_on):
+    """Log one bare rep set on ``performed_on`` — the minimal history for depth tests."""
+
+    _log(
+        sessions,
+        logged,
+        user,
+        performed_on,
+        [LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5))],
+    )
+
+
+def test_history_below_thirty_days_deep_offers_only_the_floor_window():
+    # Arrange — a user whose entire history is 10 days deep: 90D and 150D would only
+    # repeat the 30D graph, so neither is worth offering
+    _, sessions, logged = _build()
+    _log_reps(sessions, logged, "user_shallow", TODAY)
+    _log_reps(sessions, logged, "user_shallow", TODAY - timedelta(days=10))
+
+    # Act
+    overview = analytics_overview(
+        "user_shallow", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert
+    assert overview.available_ranges == ("30d",)
+
+
+def test_history_past_thirty_days_unlocks_the_ninety_day_window():
+    # Arrange — history 45 days deep: past 30, not past 90
+    _, sessions, logged = _build()
+    _log_reps(sessions, logged, "user_mid", TODAY)
+    _log_reps(sessions, logged, "user_mid", TODAY - timedelta(days=45))
+
+    # Act
+    overview = analytics_overview(
+        "user_mid", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — 90D now reveals data 30D misses, but 150D would still repeat 90D
+    assert overview.available_ranges == ("30d", "90d")
+
+
+def test_history_past_ninety_days_unlocks_every_window():
+    # Arrange — history 120 days deep
+    _, sessions, logged = _build()
+    _log_reps(sessions, logged, "user_deep", TODAY)
+    _log_reps(sessions, logged, "user_deep", TODAY - timedelta(days=120))
+
+    # Act
+    overview = analytics_overview(
+        "user_deep", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — every step up reveals something the shorter window doesn't
+    assert overview.available_ranges == ("30d", "90d", "150d")
+
+
+def test_history_exactly_thirty_days_deep_keeps_the_ninety_day_window_locked():
+    # Arrange — the oldest session is exactly 30 days ago, so it still sits inside the
+    # 30D window; 90D would repeat it. Unlock is strict — only *past* the shorter window.
+    _, sessions, logged = _build()
+    _log_reps(sessions, logged, "user_edge", TODAY)
+    _log_reps(sessions, logged, "user_edge", TODAY - timedelta(days=30))
+
+    # Act
+    overview = analytics_overview(
+        "user_edge", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert
+    assert overview.available_ranges == ("30d",)
+
+
+def test_a_user_with_no_history_is_offered_only_the_floor_window():
+    # Arrange — no Logged Sessions at all
+    _, _, logged = _build()
+
+    # Act
+    overview = analytics_overview(
+        "user_none", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — the honest floor, never an empty selector
+    assert overview.available_ranges == ("30d",)
+
+
+def test_an_out_of_depth_requested_window_is_clamped_to_the_deepest_available():
+    # Arrange — a shallow (10-day) history but a request for the 150D window, as a stale
+    # bookmark or hand-edited URL would produce
+    _, sessions, logged = _build()
+    _log_reps(sessions, logged, "user_clamp", TODAY)
+    _log_reps(sessions, logged, "user_clamp", TODAY - timedelta(days=10))
+
+    # Act
+    overview = analytics_overview(
+        "user_clamp", AnalyticsRange.ONE_FIFTY_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — clamped to the only available window rather than served a redundant graph
+    assert overview.range == "30d"
+    assert overview.available_ranges == ("30d",)
+
+
+def test_an_in_depth_requested_window_is_served_untouched():
+    # Arrange — a 120-day-deep history and a legitimate 90D request
+    _, sessions, logged = _build()
+    _log_reps(sessions, logged, "user_ok", TODAY)
+    _log_reps(sessions, logged, "user_ok", TODAY - timedelta(days=120))
+
+    # Act
+    overview = analytics_overview(
+        "user_ok", AnalyticsRange.NINETY_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — an in-depth request is honoured as asked
+    assert overview.range == "90d"
+
+
+def test_overview_volume_excludes_warm_up_sets_but_not_total_sets_or_prs():
+    # Arrange — a heavy warm-up (would-be 130 kg PR, 130×5 = 650 tonnage) and a working
+    # set (100×5 = 500), same day, same Exercise (ADR-0065 end-to-end)
+    _, sessions, logged = _build()
+    _log(
+        sessions,
+        logged,
+        "user_warm",
+        TODAY,
+        [
+            LoggedSetDraft(
+                exercise_id=SQUAT,
+                quantity=reps_quantity(5),
+                load=_abs_load(130.0),
+                set_type="warm_up",
+            ),
+            LoggedSetDraft(
+                exercise_id=SQUAT,
+                quantity=reps_quantity(5),
+                load=_abs_load(100.0),
+                set_type="working",
+            ),
+        ],
+    )
+
+    # Act
+    overview = analytics_overview(
+        "user_warm", AnalyticsRange.THIRTY_DAY, logged=logged, today=TODAY
+    )
+
+    # Assert — Volume counts only the working set's tonnage; the warm-up leaves it.
+    assert [(p.performed_on, p.volume_kg) for p in overview.volume_points] == [
+        (TODAY, 500.0)
+    ]
+    # …coverage is over the working reps alone, not diluted by the warm-up's reps…
+    assert overview.volume_coverage == 100.0
+    # …the PR is the 100 kg working set, never the heavier warm-up (records skip it):
+    # the estimate is the working set's (100 × (1 + 5/30)), below the warm-up's would-be
+    # 130 × (1 + 5/30) — proof the heavier warm-up was not taken as the record.
+    assert overview.new_prs == 1
+    assert overview.recent_records[0].estimated_1rm == 100.0 * (1 + 5 / 30)
+    assert overview.recent_records[0].estimated_1rm < 130.0 * (1 + 5 / 30)
+    # …but Total Sets is type-neutral: both performed sets are still counted.
+    assert overview.total_sets == 2

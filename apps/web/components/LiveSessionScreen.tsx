@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
 import { useEffect, useReducer, useState, useTransition } from "react";
 import {
   AlertTriangle,
-  Check,
+  ArrowDown,
   Clock,
   Flag,
   Minus,
@@ -15,10 +17,10 @@ import {
 } from "lucide-react";
 
 import {
-  finishLiveSession,
   recordLiveSession,
   type FinishState,
 } from "@/app/sessions/[id]/live/actions";
+import { deliverQueuedFinish } from "@/app/actions/outbox";
 import {
   initLiveSession,
   liveSessionReducer,
@@ -28,11 +30,24 @@ import {
   currentUnit,
   currentSuperset,
   nextExercise,
-  restCue,
-  type LiveSet,
+  onDeckExercise,
+  groupUnits,
+  liveSetDomId,
   type LiveSessionState,
 } from "@/lib/live-session";
 import { mapFinishToLog } from "@/lib/live-session-mapper";
+import {
+  browserMintKey,
+  decideFinishOutcome,
+  stampWithFreshKey,
+  FINISH_SAVE_FAILED_MESSAGE,
+  type FinishAttempt,
+} from "@/lib/live-session-finish";
+import { buildOutboxEntry } from "@/lib/finish-outbox";
+import { drainOutbox, enqueueFinish } from "@/lib/finish-outbox-sync";
+import { useWakeLock } from "@/lib/use-wake-lock";
+import type { Phase } from "@/lib/wake-lock";
+import { LiveSessionSets } from "@/components/live-session-sets";
 import {
   readLiveSessionSlot,
   writeLiveSessionSlot,
@@ -48,7 +63,8 @@ import {
   adjustRestTargetEnd,
   REST_ADJUST_STEP_SECONDS,
 } from "@/lib/live-timer";
-import { LOAD_KIND_OPTIONS, type LoadKind } from "@/lib/load";
+import type { LoadKind } from "@/lib/load";
+import type { WeightUnit } from "@/lib/weight-unit";
 import type { WorkoutSession } from "@/lib/sessions-types";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -57,11 +73,7 @@ import { BackLink } from "@/components/pulse/back-link";
 import { Alert } from "@/components/pulse/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { Button, buttonVariants } from "@/components/ui/button";
-
-const RPE_VALUES = Array.from({ length: 10 }, (_, index) => index + 1);
 
 interface LiveSessionScreenProps {
   session: WorkoutSession;
@@ -69,13 +81,22 @@ interface LiveSessionScreenProps {
   // The user's default rest-timer duration in whole seconds (issue #121), or null
   // when unset — then each set's rest falls back to the prescription's own value.
   defaultRestSeconds: number | null;
+  // The user's Keep Screen Awake preference (issue #386 — ADR-0055), read server-side
+  // from the Interface Preference. When on, the screen holds a best-effort Screen Wake
+  // Lock through the `live` phase; off means no lock is ever acquired.
+  keepScreenAwake: boolean;
+  // The user's Weight Unit (issue #417), read server-side from the Interface Preference.
+  // Every prescribed / previous Load pre-fills and displays in this unit, and the entered
+  // Load is converted back to canonical kilograms when the finished Session is recorded.
+  unit: WeightUnit;
 }
 
-// The screen's lifecycle, decided on the first foreground from the persisted slot
-// (issue #91 — F2·S6): `deciding` until the entry is resolved, then the running
-// performance, a summary for an idle auto-ended session, or a block when a
-// different unfinished session must be resumed or ended first.
-type Phase = "deciding" | "live" | "summary" | "blocked";
+// The screen's lifecycle phase is defined alongside the wake-lock decision it drives
+// (lib/wake-lock), so the pure rule and this screen share one vocabulary. Decided on
+// the first foreground from the persisted slot (issue #91 — F2·S6): `deciding` until
+// the entry is resolved, then the running performance, a summary for an idle
+// auto-ended session, or a block when a different unfinished session must be resumed
+// or ended first.
 
 // Runs a Session live and records it per set (issue #86 — F2·S1), surviving refresh
 // and phone-lock via a single `localStorage` slot with resume, idle auto-end, and
@@ -87,12 +108,25 @@ export function LiveSessionScreen({
   session,
   today,
   defaultRestSeconds,
+  keepScreenAwake,
+  unit: weightUnit,
 }: LiveSessionScreenProps) {
   const [state, dispatch] = useReducer(
     liveSessionReducer,
     session,
-    initLiveSession,
+    // The engine's initializer projects each plan Load into the reader's Weight Unit, so it
+    // is seeded with the unit rather than called bare by `useReducer` (#417). Named
+    // `weightUnit` to avoid colliding with the live header's `unit` (a Session unit).
+    (initial) => initLiveSession(initial, weightUnit),
   );
+  // The signed-in Clerk account (issue #411 — ADR-0059). It scopes the persisted slot
+  // to its owner: START stamps it, and the entry resolution below purges a slot owned
+  // by another account rather than offering a cross-account resume. `isLoaded` gates
+  // the decision so a not-yet-hydrated auth read never purges the user's own slot.
+  const { userId, isLoaded: isAuthLoaded } = useAuth();
+  // The normal finish records without navigating (ADR-0060), so the screen routes to
+  // history itself once the write is acknowledged and the slot released.
+  const router = useRouter();
   const [finishState, setFinishState] = useState<FinishState>({ error: null });
   const [pending, startTransition] = useTransition();
   // The lifecycle phase, plus the states the non-live phases render from: the
@@ -111,19 +145,56 @@ export function LiveSessionScreen({
   // like the elapsed timer it survives a phone lock. Purely client-side: rest is
   // never written to the record.
   const [restEndAt, setRestEndAt] = useState<number | null>(null);
+  // Completed units the user has manually re-expanded to review. A completed unit
+  // collapses to its one-line summary by default; its `unitIndex` here forces it back
+  // open. Current and upcoming units are always expanded and never appear here.
+  const [expandedUnits, setExpandedUnits] = useState<ReadonlySet<number>>(
+    () => new Set(),
+  );
 
   // Resolve what arriving at this live route does, from the single persisted slot
   // (ADR-0012). Runs once on the first foreground — the idle guard (ADR-0014) is
   // evaluated here, never on a background timer, so the user experiences "I came
   // back after 40 minutes and it had ended my workout" on return, not while away.
+  // Begin this Session's performance: START stamps the instant Session Duration
+  // measures from (not_started → in_progress) and the owner it belongs to (ADR-0059).
+  // The single call site for every "start this Session fresh" path — a fresh slot, a
+  // purged foreign slot, and ending a blocking session — so the owner and the finish
+  // idempotency key are always stamped. The key is minted here (ADR-0060 — issue #412),
+  // once per performance, so it is already in the first persisted slot; a finish that
+  // fails and is retried resends this same key and the server dedupes it (issue #410).
+  function startFresh(accountId: string | null) {
+    dispatch({
+      type: "START",
+      now: Date.now(),
+      accountId: accountId ?? undefined,
+      idempotencyKey: browserMintKey(),
+    });
+    setPhase("live");
+  }
+
   useEffect(() => {
-    const entry = resolveLiveEntry(readLiveSessionSlot(), session.id, Date.now());
+    // Wait until Clerk has resolved the current user: the entry decision is
+    // account-scoped (ADR-0059), and deciding against an unknown user would purge the
+    // owner's own valid slot. The `deciding` placeholder holds until then.
+    if (!isAuthLoaded) return;
+    const currentAccountId = userId ?? null;
+    const entry = resolveLiveEntry(
+      readLiveSessionSlot(),
+      session.id,
+      Date.now(),
+      currentAccountId,
+    );
     switch (entry.kind) {
+      case "purge":
+        // The slot belongs to another account (or a legacy id-less slot): discard it
+        // so it is never offered here, then start this Session fresh — the same
+        // outcome as an empty slot (ADR-0059).
+        clearLiveSessionSlot();
+        startFresh(currentAccountId);
+        break;
       case "start_fresh":
-        // A fresh performance: START stamps the instant Session Duration measures
-        // from (not_started → in_progress).
-        dispatch({ type: "START", now: Date.now() });
-        setPhase("live");
+        startFresh(currentAccountId);
         break;
       case "resume":
         // Restore the persisted performance exactly — set table, current set, and
@@ -139,9 +210,10 @@ export function LiveSessionScreen({
         setPhase("blocked");
         break;
     }
-    // Only the initial mount decides the entry; `session.id`/`today` are stable.
+    // The entry is decided once, when auth first resolves; `session.id`/`today` are
+    // stable and `userId` does not change without a remount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isAuthLoaded]);
 
   // Persist every state change while the performance is live, so a refresh or lock
   // resumes exactly here. Non-live phases (summary/blocked) never write.
@@ -154,51 +226,96 @@ export function LiveSessionScreen({
     return () => clearInterval(interval);
   }, []);
 
-  // Finalize an idle-expired performance as Incomplete (ADR-0014): record the
-  // completed sets (idle-excluded duration) and show a summary instead of resuming.
-  // The slot is cleared only once the record succeeds — a failed POST keeps the
-  // slot so the next foreground retries the auto-end rather than losing the sets.
-  function endIdleSession(stored: LiveSessionState) {
-    const finished = liveSessionReducer(stored, { type: "FINISH" });
-    setSummary(finished);
-    setPhase("summary");
-    const payload = mapFinishToLog(finished, today);
+  // Keep the screen on while the performance is live (issue #386 — ADR-0055). The
+  // hook holds a best-effort Screen Wake Lock only in the `live` phase and only when
+  // the preference is on; it re-acquires across a hide/show cycle and no-ops silently
+  // where unsupported. It never touches the idle/duration model (ADR-0014).
+  useWakeLock(phase, keepScreenAwake);
+
+  // Adapt a finish server-action call into the FinishAttempt the pure decider reads
+  // (lib/live-session-finish): an error envelope is a server-side failure, a
+  // thrown/rejected call (offline, a dropped connection — the response never came back)
+  // is `unreachable`, and a clean return is an acknowledged write. The effect-side shell
+  // around the pure clear-or-retain decision.
+  async function attemptFinish(
+    call: () => Promise<FinishState>,
+  ): Promise<FinishAttempt> {
+    try {
+      const result = await call();
+      return result?.error
+        ? { status: "error", message: result.error }
+        : { status: "acknowledged" };
+    } catch {
+      return { status: "unreachable" };
+    }
+  }
+
+  // Record an idle-auto-ended performance (ADR-0014) — shared by the initial auto-end
+  // and the summary's manual Retry, so both resend the SAME idempotency key (the
+  // finished state carries it). The slot is cleared only once the record is
+  // acknowledged; a failed or unreachable POST keeps the key-stamped slot and surfaces
+  // the error, so the user can retry (or the next foreground re-fires the auto-end)
+  // without losing the sets or double-writing them (ADR-0060).
+  function recordIdleFinish(finished: LiveSessionState) {
+    const payload = mapFinishToLog(finished, today, weightUnit);
     if (!payload) {
       // No completed set to record — nothing to persist, so just drop the slot.
       clearLiveSessionSlot();
       return;
     }
     startTransition(async () => {
-      const result = await recordLiveSession(stored.sessionId, payload);
-      if (result?.error) {
-        setFinishState({ error: result.error });
+      const outcome = decideFinishOutcome(
+        await attemptFinish(() => recordLiveSession(finished.sessionId, payload)),
+      );
+      if (outcome.kind === "clear") {
+        clearLiveSessionSlot();
+        setFinishState({ error: null });
         return;
       }
-      clearLiveSessionSlot();
+      setFinishState({ error: outcome.error });
     });
+  }
+
+  // Finalize an idle-expired performance as Incomplete (ADR-0014): key-stamp it, show a
+  // summary instead of resuming, and record the completed sets (idle-excluded duration).
+  function endIdleSession(stored: LiveSessionState) {
+    const stamped = stampWithFreshKey(stored, browserMintKey);
+    const finished = liveSessionReducer(stamped, { type: "FINISH" });
+    setSummary(finished);
+    setPhase("summary");
+    // Persist the key-stamped (still-unfinished) slot before the write, so a failed
+    // auto-end resumes and retries with the same key rather than minting a new one.
+    writeLiveSessionSlot(stamped);
+    recordIdleFinish(finished);
   }
 
   // End the other unfinished session that blocks this one: record it as-is (no work
   // discarded — ADR-0012), then start this Session fresh in place. The slot is
-  // cleared only after a successful record, so a failed POST keeps that session's
-  // work intact and the user stays on the block to retry.
+  // cleared only after an acknowledged record, so a failed or unreachable POST keeps
+  // that session's work intact and the user stays on the block to retry. The finish
+  // carries its idempotency key (ADR-0060), stamped onto the block's state and the
+  // slot so a retry — even after a reload of this prompt — resends the same key.
   function handleEndExisting() {
     const existing = blockedExisting;
     if (!existing) return;
-    const finished = liveSessionReducer(existing, { type: "FINISH" });
-    const payload = mapFinishToLog(finished, today);
+    const stamped = stampWithFreshKey(existing, browserMintKey);
+    const finished = liveSessionReducer(stamped, { type: "FINISH" });
+    const payload = mapFinishToLog(finished, today, weightUnit);
+    setBlockedExisting(stamped);
+    if (payload) writeLiveSessionSlot(stamped);
     startTransition(async () => {
       if (payload) {
-        const result = await recordLiveSession(existing.sessionId, payload);
-        if (result?.error) {
-          setFinishState({ error: result.error });
+        const outcome = decideFinishOutcome(
+          await attemptFinish(() => recordLiveSession(existing.sessionId, payload)),
+        );
+        if (outcome.kind === "retain") {
+          setFinishState({ error: outcome.error });
           return;
         }
       }
       clearLiveSessionSlot();
       setBlockedExisting(null);
-      dispatch({ type: "START", now: Date.now() });
-      setPhase("live");
+      startFresh(userId ?? null);
     });
   }
 
@@ -217,15 +334,40 @@ export function LiveSessionScreen({
   const percent = progressPercent(state);
   const unit = currentUnit(state);
   const superset = currentSuperset(state);
-  // The on-deck set — what the user performs when the rest ends. The rest card cues
-  // it directly, and the persistent "Next up" line mirrors it *while resting* so the
-  // two never disagree at a Superset round boundary (where the forward look-ahead
-  // names the exercise after the on-deck one). When not resting, "Next up" keeps its
-  // forward look-ahead, preserving the useful mid-round "co-member is next" cue.
-  const cue = restCue(state);
-  const upcoming = isResting ? (cue?.exerciseName ?? null) : nextExercise(state);
+  // The sticky bar's two distinct look-aheads: "Next up" names the *on-deck* exercise
+  // (the current-set pointer's) and its jump control scrolls straight to that set;
+  // "Then" names the *following* distinct exercise. Splitting them removes the old
+  // dual meaning of "Next up" (on-deck while resting, look-ahead otherwise).
+  const onDeck = onDeckExercise(state);
+  const following = nextExercise(state);
+  const units = groupUnits(state);
+  // The DOM id of the current on-deck set row — the jump target. Null once every set
+  // is attempted (the pointer has run off the end), when there is nothing to jump to.
+  const currentDomId =
+    state.currentIndex < state.sets.length
+      ? liveSetDomId(state.sets[state.currentIndex])
+      : null;
   const completedCount = state.sets.filter((s) => s.status === "completed").length;
   const elapsed = formatElapsed(elapsedSeconds(state.startedAt, now));
+
+  // Scroll the current on-deck set into view — the sticky "Next up" line's action, so
+  // the user can glance at the pinned timer and jump back to their place in one tap.
+  function scrollToCurrent() {
+    if (!currentDomId) return;
+    document
+      .getElementById(currentDomId)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  // Re-expand a collapsed completed unit to review its logged sets (which stay
+  // read-only). Expansion lasts the rest of the performance — there is no re-collapse.
+  function expandUnit(unitIndex: number) {
+    setExpandedUnits((prev) => {
+      const next = new Set(prev);
+      next.add(unitIndex);
+      return next;
+    });
+  }
 
   function handleCompleteSet(
     index: number,
@@ -275,18 +417,44 @@ export function LiveSessionScreen({
   }
 
   function handleFinish() {
-    const snapshot = state;
-    const payload = mapFinishToLog(snapshot, today);
-    // Clear the slot up front: the success path redirects to history and never
-    // returns here, so an uncleared slot would otherwise re-offer to "resume" an
-    // already-logged session. On failure the snapshot is written back below.
-    clearLiveSessionSlot();
+    // A finish is an immediately-real Logged Session whose delivery is in flight
+    // (ADR-0060 — issue #413): it is queued in the durable IndexedDB outbox, not held in
+    // the live slot. Reuse the key minted at START (or mint one for a slot written before
+    // #412) so every delivery attempt resends the SAME key and the server dedupes it to
+    // one Logged Session (issue #410).
+    const stamped = stampWithFreshKey(state, browserMintKey);
+    const payload = mapFinishToLog(stamped, today, weightUnit);
+    const owner = stamped.accountId ?? userId ?? null;
+
+    // No completed set — nothing to record. Release the slot and go.
+    if (!payload) {
+      clearLiveSessionSlot();
+      router.push("/history");
+      return;
+    }
+
+    // Persist the key-stamped slot before enqueuing, so an interrupted enqueue still
+    // resumes and retries with the same key rather than losing the work.
+    writeLiveSessionSlot(stamped);
+    const entry = owner ? buildOutboxEntry(owner, session.id, payload) : null;
+
     startTransition(async () => {
-      const result = await finishLiveSession(session.id, payload);
-      if (result?.error) {
-        setFinishState({ error: result.error });
-        writeLiveSessionSlot(snapshot);
+      // Queue durably. Only once the record is safely in the outbox do we release the
+      // live slot — which frees the one-Live-Session invariant so the user can start
+      // their Next Session immediately while this finish is still queued (ADR-0060).
+      const queued = entry !== null && (await enqueueFinish(entry));
+      if (!queued) {
+        // Couldn't persist on device — keep the slot and surface a retry rather than
+        // dropping the record or implying a save that didn't happen.
+        setFinishState({ error: FINISH_SAVE_FAILED_MESSAGE });
+        return;
       }
+      clearLiveSessionSlot();
+      // Try to deliver right now; if offline, the entry stays queued and the app-scope
+      // registrar drains it on the next online / foreground / restart. Fire-and-forget —
+      // the finish is already real, so navigate without waiting on the network.
+      void drainOutbox(owner, deliverQueuedFinish);
+      router.push("/history");
     });
   }
 
@@ -331,6 +499,8 @@ export function LiveSessionScreen({
         session={session}
         summary={summary}
         error={finishState.error}
+        pending={pending}
+        onRetry={() => recordIdleFinish(summary)}
       />
     );
   }
@@ -349,122 +519,115 @@ export function LiveSessionScreen({
         }
       />
 
-      <Card className="flex flex-col gap-3 p-4">
-        <div className="flex items-center justify-between">
-          <span className="label-mono text-[11px] text-text-muted">
-            PROGRESS
-          </span>
-          <span
-            className="flex items-center gap-1.5 font-mono text-[13px] font-bold text-text-primary"
-            aria-label="Elapsed time"
-          >
-            <Clock className="h-3.5 w-3.5 text-text-muted" aria-hidden />
-            {elapsed}
-          </span>
-        </div>
+      {/* The always-on bar: timer + overall progress + a "Next up" jump stay pinned
+          beneath the app header while the set list scrolls, so the user never scrolls
+          up to check the time or back down to find their place. While a rest is
+          running it swaps the elapsed timer for the rest countdown and its controls
+          (the moment the user is most likely looking away from the list). */}
+      <div className="sticky top-14 z-20 -mx-6 flex flex-col gap-2.5 border-b border-border bg-base/95 px-6 py-3 backdrop-blur">
+        {isResting ? (
+          <div className="flex items-center justify-between gap-3">
+            <span className="label-mono flex items-center gap-1.5 text-[11px] text-text-muted">
+              <Timer className="h-3.5 w-3.5" aria-hidden />
+              REST
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => adjustRest(-REST_ADJUST_STEP_SECONDS)}
+                aria-label={`Subtract ${REST_ADJUST_STEP_SECONDS} seconds of rest`}
+              >
+                <Minus className="h-3.5 w-3.5" />
+                {REST_ADJUST_STEP_SECONDS}
+              </Button>
+              <span
+                className="min-w-[3.5rem] text-center font-mono text-[20px] font-bold leading-none text-cyan"
+                aria-label="Rest remaining"
+              >
+                {formatElapsed(restRemaining)}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => adjustRest(REST_ADJUST_STEP_SECONDS)}
+                aria-label={`Add ${REST_ADJUST_STEP_SECONDS} seconds of rest`}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                {REST_ADJUST_STEP_SECONDS}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setRestEndAt(null)}
+                aria-label="Skip rest"
+              >
+                <SkipForward className="h-3.5 w-3.5" />
+                Skip
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <span className="label-mono text-[11px] text-text-muted">
+              PROGRESS
+            </span>
+            <span
+              className="flex items-center gap-1.5 font-mono text-[13px] font-bold text-text-primary"
+              aria-label="Elapsed time"
+            >
+              <Clock className="h-3.5 w-3.5 text-text-muted" aria-hidden />
+              {elapsed}
+            </span>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <SegmentedBar value={percent / 100} className="flex-1" />
           <span className="ml-3 font-mono text-[13px] font-bold text-cyan">
             {percent}%
           </span>
         </div>
-        <p className="font-mono text-[12px] text-text-secondary">
-          {upcoming ? (
-            <>
-              Next up: <span className="text-text-primary">{upcoming}</span>
-            </>
-          ) : (
-            "Final exercise"
-          )}
-        </p>
-      </Card>
+        {onDeck ? (
+          <button
+            type="button"
+            onClick={scrollToCurrent}
+            className="flex items-center justify-between gap-2 rounded-sm border border-border bg-surface px-3 py-2 text-left transition-colors hover:border-cyan"
+            aria-label={`Jump to current exercise, ${onDeck}`}
+          >
+            <span className="font-mono text-[12px] text-text-secondary">
+              Next up: <span className="text-text-primary">{onDeck}</span>
+            </span>
+            <ArrowDown className="h-3.5 w-3.5 shrink-0 text-cyan" aria-hidden />
+          </button>
+        ) : null}
+      </div>
 
       {finishState.error ? (
         <Alert tone="error">{finishState.error}</Alert>
       ) : null}
 
-      {isResting ? (
-        <Card className="flex flex-col gap-3 border-cyan p-4">
-          <div className="flex items-center justify-between">
-            <span className="label-mono flex items-center gap-1.5 text-[11px] text-text-muted">
-              <Timer className="h-3.5 w-3.5" aria-hidden />
-              REST
-            </span>
-            <span
-              className="font-mono text-[28px] font-bold leading-none text-cyan"
-              aria-label="Rest remaining"
-            >
-              {formatElapsed(restRemaining)}
-            </span>
-          </div>
-          {cue ? (
-            <p
-              className="font-mono text-[12px] text-text-secondary"
-              aria-label="Up next"
-            >
-              Up next:{" "}
-              <span className="text-text-primary">{cue.exerciseName}</span>
-              <span className="text-text-muted">
-                {" · "}
-                {cue.supersetLabel
-                  ? `superset ${cue.supersetLabel} · round ${cue.setNumber}/${cue.setCount}`
-                  : `set ${cue.setNumber}/${cue.setCount}`}
-              </span>
-            </p>
-          ) : null}
-          <div className="grid grid-cols-3 gap-2.5">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => adjustRest(-REST_ADJUST_STEP_SECONDS)}
-              aria-label={`Subtract ${REST_ADJUST_STEP_SECONDS} seconds of rest`}
-            >
-              <Minus className="h-3.5 w-3.5" />
-              {REST_ADJUST_STEP_SECONDS}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setRestEndAt(null)}
-              aria-label="Skip rest"
-            >
-              <SkipForward className="h-3.5 w-3.5" />
-              Skip
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => adjustRest(REST_ADJUST_STEP_SECONDS)}
-              aria-label={`Add ${REST_ADJUST_STEP_SECONDS} seconds of rest`}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              {REST_ADJUST_STEP_SECONDS}
-            </Button>
-          </div>
-        </Card>
+      {following ? (
+        <p className="font-mono text-[12px] text-text-secondary">
+          Then: <span className="text-text-primary">{following}</span>
+        </p>
       ) : null}
 
       <div className="flex flex-col gap-3">
         <SectionHeader meta={`${completedCount}/${state.sets.length} SETS`}>
           SETS
         </SectionHeader>
-        <ol className="flex list-none flex-col gap-3 p-0">
-          {state.sets.map((set, index) => (
-            <li key={`${set.modulePosition}-${set.setNumber}`}>
-              <SetRow
-                set={set}
-                isCurrent={index === state.currentIndex}
-                onComplete={(reps, loadKind, loadValue, rpe) =>
-                  handleCompleteSet(index, reps, loadKind, loadValue, rpe)
-                }
-                onSkip={() => dispatch({ type: "ADVANCE" })}
-              />
-            </li>
-          ))}
-        </ol>
+        <LiveSessionSets
+          units={units}
+          currentIndex={state.currentIndex}
+          expandedUnits={expandedUnits}
+          onExpandUnit={expandUnit}
+          onCompleteSet={handleCompleteSet}
+          onSkipSet={() => dispatch({ type: "ADVANCE" })}
+          weightUnit={weightUnit}
+        />
       </div>
 
       <Button
@@ -555,15 +718,21 @@ interface IdleEndedSummaryProps {
   session: WorkoutSession;
   summary: LiveSessionState;
   error: string | null;
+  pending: boolean;
+  onRetry: () => void;
 }
 
 // The idle auto-end summary (ADR-0014): the user returned after >30 minutes, so
 // the performance was finalized as Incomplete. The completed sets and the
 // idle-excluded duration are what got recorded — shown here instead of resuming.
+// When the record failed, the sets are still held on the device (ADR-0060): a Retry
+// resends the same idempotency key, so the history link is withheld until it lands.
 function IdleEndedSummary({
   session,
   summary,
   error,
+  pending,
+  onRetry,
 }: IdleEndedSummaryProps): React.JSX.Element {
   const completed = summary.sets.filter((s) => s.status === "completed").length;
   const total = summary.sets.length;
@@ -610,174 +779,23 @@ function IdleEndedSummary({
         </div>
       </Card>
 
-      <Link
-        href="/history"
-        className={buttonVariants({ className: "w-full" })}
-      >
-        View training history
-      </Link>
+      {error ? (
+        // The record didn't land — keep the sets and offer a retry (the same key is
+        // resent, so a duplicate is impossible). Don't route to history yet; it would
+        // imply a save that hasn't happened.
+        <Button type="button" onClick={onRetry} disabled={pending} className="w-full">
+          <Flag className="h-4 w-4" />
+          {pending ? "Saving…" : "Retry saving session"}
+        </Button>
+      ) : (
+        <Link
+          href="/history"
+          className={buttonVariants({ className: "w-full" })}
+        >
+          View training history
+        </Link>
+      )}
       <BackLink href={`/sessions/${session.id}`}>Back to session</BackLink>
     </section>
-  );
-}
-
-interface SetRowProps {
-  set: LiveSet;
-  isCurrent: boolean;
-  onComplete: (
-    reps: number,
-    loadKind: LoadKind,
-    loadValue: string,
-    rpe: number | null,
-  ) => void;
-  onSkip: () => void;
-}
-
-// One prescribed set. Its edited reps/load/RPE live as local input state, seeded
-// from the prescription pre-fill; "Complete" folds those values into a
-// COMPLETE_SET event (the engine's only editing path). "Skip" leaves the set
-// un-attempted (ADVANCE) — finishing with any skipped set records the performance
-// Incomplete (ADR-0013).
-function SetRow({ set, isCurrent, onComplete, onSkip }: SetRowProps) {
-  const [reps, setReps] = useState(String(set.reps));
-  const [loadKind, setLoadKind] = useState<LoadKind>(set.loadKind);
-  const [loadValue, setLoadValue] = useState(set.loadValue);
-  const [rpe, setRpe] = useState(set.rpe === null ? "" : String(set.rpe));
-
-  const completed = set.status === "completed";
-  const label = `${set.exerciseName}, set ${set.setNumber}`;
-
-  function handleComplete() {
-    const repsValue = Number.parseInt(reps, 10);
-    const rpeValue = rpe === "" ? null : Number.parseInt(rpe, 10);
-    onComplete(
-      Number.isInteger(repsValue) && repsValue >= 0 ? repsValue : 0,
-      loadKind,
-      loadValue.trim(),
-      rpeValue !== null && Number.isInteger(rpeValue) ? rpeValue : null,
-    );
-  }
-
-  return (
-    <Card
-      className={
-        completed
-          ? "flex flex-col gap-3 border-cyan/40 bg-surface p-4 opacity-80"
-          : isCurrent
-            ? "flex flex-col gap-3 border-cyan p-4"
-            : "flex flex-col gap-3 p-4"
-      }
-    >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-base font-mono text-[12px] font-bold text-cyan">
-            {set.setNumber}/{set.moduleSetCount}
-          </span>
-          <span className="font-display text-[15px] font-semibold text-text-primary">
-            {set.exerciseName}
-          </span>
-        </div>
-        {completed ? (
-          <Badge variant="cyan">
-            <Check className="h-3 w-3" aria-hidden />
-            DONE
-          </Badge>
-        ) : null}
-      </div>
-
-      <p className="font-mono text-[11px] text-text-muted">
-        Prescribed: {set.prescribedReps} reps · {set.prescribedLoadText}
-      </p>
-
-      {set.previous ? (
-        <p className="font-mono text-[11px] text-cyan/80">
-          Previous: {set.previous.reps} reps · {set.previous.loadText}
-        </p>
-      ) : null}
-
-      <div className="grid grid-cols-2 gap-2.5">
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">Reps</span>
-          <Input
-            type="number"
-            min={0}
-            value={reps}
-            onChange={(event) => setReps(event.target.value)}
-            disabled={completed}
-            aria-label={`Reps for ${label}`}
-          />
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">RPE</span>
-          <Select
-            value={rpe}
-            onChange={(event) => setRpe(event.target.value)}
-            disabled={completed}
-            aria-label={`RPE for ${label}`}
-          >
-            <option value="">—</option>
-            {RPE_VALUES.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </Select>
-        </label>
-      </div>
-
-      <div className="grid grid-cols-[7rem_1fr] gap-2.5">
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">
-            Load kind
-          </span>
-          <Select
-            value={loadKind}
-            onChange={(event) => setLoadKind(event.target.value as LoadKind)}
-            disabled={completed}
-            aria-label={`Load kind for ${label}`}
-          >
-            {LOAD_KIND_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">Load</span>
-          <Input
-            value={loadValue}
-            onChange={(event) => setLoadValue(event.target.value)}
-            disabled={completed}
-            placeholder="70"
-            aria-label={`Load for ${label}`}
-          />
-        </label>
-      </div>
-
-      {!completed ? (
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleComplete}
-          >
-            <Check className="h-3.5 w-3.5" />
-            Complete set
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onSkip}
-            aria-label={`Skip ${label}`}
-          >
-            <SkipForward className="h-3.5 w-3.5" />
-            Skip
-          </Button>
-        </div>
-      ) : null}
-    </Card>
   );
 }

@@ -14,6 +14,9 @@ export type DistanceUnit = "km" | "mi";
 const METRES_PER_MILE = 1609.344;
 const METRES_PER_KM = 1000;
 const SECONDS_PER_MINUTE = 60;
+// Decimal places a canonical distance is rounded to when read back into a display value —
+// enough to round-trip a typed value (e.g. 3.1 mi) without surfacing binary-float noise.
+const DISTANCE_DECIMALS = 3;
 const DISTANCE_KIND: QuantityKind = "distance";
 const DURATION_KIND: QuantityKind = "duration";
 
@@ -35,6 +38,22 @@ export const NO_QUANTITY = "—";
 // write boundary so the persisted set fixes its meaning instead of re-guessing it.
 export const REPETITIONS_KIND: QuantityKind = "repetitions";
 
+// The Amount kinds an authoring picker offers, paired with a human label (ADR-0032). Reps is
+// the default. Shared by every surface that authors a prescription's kind — the Hand-Authored
+// build-and-log screen and the Insert "Add exercise" editor — so the two never drift.
+export const AMOUNT_KIND_OPTIONS: ReadonlyArray<{ value: QuantityKind; label: string }> = [
+  { value: "repetitions", label: "Reps" },
+  { value: "duration", label: "Duration" },
+  { value: "distance", label: "Distance" },
+];
+
+// The distance units a distance prescription can read in, chosen once for the exercise (#301).
+// Shared by the same authoring surfaces so the unit list stays one source of truth.
+export const DISTANCE_UNIT_OPTIONS: ReadonlyArray<{ value: DistanceUnit; label: string }> = [
+  { value: "km", label: "km" },
+  { value: "mi", label: "mi" },
+];
+
 // Render a typed Quantity for display, falling back to the em dash when absent. The
 // stored `text` is authoritative — it preserves exactly what was logged ("5", "5 km",
 // "5:00") — so the UI never re-derives it.
@@ -47,6 +66,29 @@ export function formatQuantity(quantity: Quantity | null | undefined): string {
 // wants the number rather than the display text reaches it at one call site.
 export function quantityReps(quantity: Quantity | null | undefined): number | null {
   return quantity && quantity.kind === "repetitions" ? quantity.count ?? null : null;
+}
+
+// The unit a stored distance Quantity was entered in, recovered from its display text's
+// suffix (`"5 mi"` → miles, else km) — the reverse of how `distanceInput` writes the text.
+// Shared by the Log Correction pre-fill and the Capture seed so both read the unit the same
+// way, rather than each re-deriving the suffix check.
+export function distanceUnitFromText(text: string | undefined): DistanceUnit {
+  return (text ?? "").trimEnd().endsWith("mi") ? "mi" : "km";
+}
+
+// The display value a canonical distance (metres) reads as in the given unit — the
+// reverse of how `distanceInput`/the backend canonicalise a typed distance to metres.
+// Used to pre-fill the log form's distance field from a Prescribed Quantity ("7 KM" →
+// metres 7000 → "7"). Rounds to trim binary-float noise (3.1 mi round-trips to "3.1",
+// not "3.0999…") and strips trailing zeros; a missing or non-positive distance reads as
+// blank so the field is simply empty rather than "0".
+export function distanceValueFromMetres(
+  metres: number | null | undefined,
+  unit: DistanceUnit,
+): string {
+  if (metres == null || !Number.isFinite(metres) || metres <= 0) return "";
+  const metresPerUnit = unit === "mi" ? METRES_PER_MILE : METRES_PER_KM;
+  return String(Number((metres / metresPerUnit).toFixed(DISTANCE_DECIMALS)));
 }
 
 // The per-set request fields for a repetitions Quantity, built from the reps the log
@@ -82,6 +124,21 @@ export function distanceInput(
   };
 }
 
+// Parse a time value into total seconds — colon-separated `mm:ss` / `hh:mm:ss` summed in
+// base-60, or a bare number of seconds — or null for any empty, negative, or non-numeric
+// segment. Mirrors the backend's canonicalisation (`_parse_time_to_seconds`) so a form
+// boundary rejects here exactly what the write boundary would reject there. Shared by
+// every surface that validates a duration input (the ad-hoc log and the Hand-Authored form).
+export function parseDurationSeconds(raw: string): number | null {
+  let seconds = 0;
+  for (const segment of raw.split(":")) {
+    const value = Number(segment);
+    if (segment.trim() === "" || !Number.isFinite(value) || value < 0) return null;
+    seconds = seconds * SECONDS_PER_MINUTE + value;
+  }
+  return seconds;
+}
+
 // The per-set request fields for a duration Quantity — timed, non-locomotion work (a
 // hold, a distance-unknown treadmill session). The picked kind and the entered time
 // ride through verbatim; the backend canonicalises to seconds. No unit or companion
@@ -93,9 +150,11 @@ export function durationInput(value: string): {
   return { quantity_kind: DURATION_KIND, quantity_value: value };
 }
 
-// The whole seconds of a canonical seconds figure, formatted as `m:ss` (the display
-// form pace and split times share). A partial second rounds to the nearest second.
-function formatMinutesSeconds(totalSeconds: number): string {
+// A canonical seconds figure formatted as `m:ss` — the unambiguous clock form pace, split
+// times, and a seeded hold-time field share. A partial second rounds to the nearest second.
+// Exported so the log form seeds a `duration` set's time field in the same `mm:ss` shape its
+// placeholder promises, rather than a bare-seconds value the format would contradict.
+export function formatSecondsAsClock(totalSeconds: number): string {
   const rounded = Math.round(totalSeconds);
   const minutes = Math.floor(rounded / SECONDS_PER_MINUTE);
   const seconds = rounded % SECONDS_PER_MINUTE;
@@ -117,5 +176,5 @@ export function formatPace(quantity: Quantity | null | undefined): string | null
   const unitLabel = inMiles ? "mi" : "km";
 
   const secondsPerUnit = duration_s / (metres / metresPerUnit);
-  return `${formatMinutesSeconds(secondsPerUnit)} /${unitLabel}`;
+  return `${formatSecondsAsClock(secondsPerUnit)} /${unitLabel}`;
 }

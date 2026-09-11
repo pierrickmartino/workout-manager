@@ -16,11 +16,16 @@ from dataclasses import replace
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.auth.dependencies import get_current_user
+from app.domain.effort import EffortScale, effort_from_input
 from app.domain.fitness_profile import is_sensitive, resolve_equipment
 from app.domain.load import LoadKind, load_from_input
+from app.domain.note import parse_note
+from app.domain.progression import ProgressionScheme, parse_scheme
+from app.domain.quantity import QuantityKind, prescribed_quantity_from_input
+from app.domain.set_type import SetType, parse_set_type
 from app.envelope import error_envelope, success_envelope
 from app.generation.orchestrator import GenerationOrchestrator
 from app.generation.protocol_generator import ProtocolGenerationRequest
@@ -218,11 +223,41 @@ class DeployPrescriptionBody(BaseModel):
     tempo: str | None = None
     load_kind: str = DEFAULT_LOAD_KIND
     load_value: str | None = None
+    # Typed Quantity pick (ADR-0050, #464): the kind the Builder's Quantity selector chose
+    # (``repetitions`` / ``distance`` / ``duration``) and, for a distance, its unit. They type
+    # the plan's Prescribed Quantity at the write boundary (below) so a "Distance / 5 km" the
+    # user authored is *persisted* a distance rather than coerced to a rep target. Both are
+    # optional: an older client that omits them still types the plan by inferring the kind from
+    # the free-text ``reps`` target — the same fallback the Hand-Authored/Insert paths keep.
+    quantity_kind: str | None = None
+    quantity_unit: str | None = None
     # Superset overlay (ADR-0023): the group tag members of one Superset share and the
     # group-owned round-rest. Both ``None`` for a flat, solo Prescription. Validated by
     # the shared Superset validator on the deploy gate.
     superset_group: str | None = None
     round_rest_seconds: int | None = None
+    # Progression Scheme selection (ADR-0064, #432): the chosen scheme value, or ``None``/
+    # blank for the inherited default (Double Progression). The value's membership is
+    # checked here; its Load-kind *compatibility* is the deploy gate's job so a mismatch
+    # surfaces as a located, retry-able ``incompatible_scheme`` rather than a 422 body error.
+    scheme: str | None = None
+    # Set Type annotation (ADR-0065, #449): a chosen ``SetType`` value, or ``None``/blank
+    # for "unset" (reads as working). Membership is checked here; it has no Load or
+    # Progression compatibility rule, so — unlike ``scheme`` — nothing about it is deferred
+    # to the deploy gate. A descriptive label that rides Deploy re-numbered untouched.
+    set_type: str | None = None
+    # Target Effort (ADR-0066, #454): the *prescribed* Effort on this movement, in *either*
+    # scale — ``target_effort_scale`` (``rpe`` / ``rir``) and ``target_effort_value``. Both
+    # absent means no target; a present value with no scale defaults to RPE. Validated against
+    # its scale's band at the boundary (below) and rejected (422) if invalid — it has no Load or
+    # Progression compatibility rule (descriptive only), so nothing about it is deferred to the
+    # deploy gate; it rides Deploy re-numbered untouched.
+    target_effort_scale: str | None = None
+    target_effort_value: float | None = None
+    # Exercise Note (ADR-0065, #451): an optional plan-side coaching cue, or ``None``/blank for
+    # "no note". Sanitized at the boundary by ``parse_note`` (below): blank → unset, over-cap →
+    # 422, else stripped + HTML-escaped so the stored value is inert; it rides Deploy untouched.
+    note: str | None = None
 
     @field_validator("load_kind")
     @classmethod
@@ -234,9 +269,98 @@ class DeployPrescriptionBody(BaseModel):
             raise ValueError(f"load_kind must be one of: {allowed}") from exc
         return value
 
+    @field_validator("quantity_kind")
+    @classmethod
+    def _known_quantity_kind(cls, value: str | None) -> str | None:
+        # A blank/absent pick is tolerated — the free-text target's prose is inferred instead
+        # (below); an explicit but unknown kind is a client bug rejected at the boundary. Mirrors
+        # the Hand-Authored/Insert boundary so "what a valid Quantity pick is" stays one rule.
+        if value is None or value == "":
+            return value
+        try:
+            QuantityKind(value)
+        except ValueError as exc:
+            allowed = ", ".join(kind.value for kind in QuantityKind)
+            raise ValueError(f"quantity_kind must be one of: {allowed}") from exc
+        return value
+
+    @field_validator("scheme")
+    @classmethod
+    def _known_scheme(cls, value: str | None) -> str | None:
+        # A blank/absent selection is the inherited default and normalizes to ``None``; a
+        # present but unknown value is a client bug rejected at the boundary. Compatibility
+        # with this movement's Load is checked later, on the deploy gate.
+        if value is None or value == "":
+            return None
+        if parse_scheme(value) is None:
+            allowed = ", ".join(scheme.value for scheme in ProgressionScheme)
+            raise ValueError(f"scheme must be one of: {allowed}")
+        return value
+
+    @field_validator("set_type")
+    @classmethod
+    def _known_set_type(cls, value: str | None) -> str | None:
+        # A blank/absent Set Type is "unset" and normalizes to ``None`` (reads as working);
+        # a present but unknown value is a client bug rejected at the boundary, never coerced.
+        if value is None or value == "":
+            return None
+        if parse_set_type(value) is None:
+            allowed = ", ".join(member.value for member in SetType)
+            raise ValueError(f"set_type must be one of: {allowed}")
+        return value
+
+    @field_validator("note")
+    @classmethod
+    def _sanitize_note(cls, value: str | None) -> str | None:
+        # Sanitize the Exercise Note at the write boundary (ADR-0065): blank → unset (None),
+        # over-cap → 422, else stripped + HTML-escaped so it is inert wherever it renders
+        # (ADR-0036). Escaping here (not on copy) keeps a Deploy tail edit from double-escaping.
+        return parse_note(value)
+
+    @field_validator("target_effort_scale")
+    @classmethod
+    def _known_target_effort_scale(cls, value: str | None) -> str | None:
+        # A blank/absent scale normalizes to ``None`` (an RPE target can be set with no explicit
+        # scale); a present but unknown scale is rejected at the boundary.
+        if value is None or value == "":
+            return None
+        if value not in (scale.value for scale in EffortScale):
+            allowed = ", ".join(scale.value for scale in EffortScale)
+            raise ValueError(f"target_effort_scale must be one of: {allowed}")
+        return value
+
+    @model_validator(mode="after")
+    def _valid_target_effort(self) -> "DeployPrescriptionBody":
+        # Validate the scale+value combination once, so an out-of-band target (RPE 11, RIR 2.5,
+        # a non-half-step) is rejected (422) at the boundary rather than stored as a guessed number.
+        try:
+            effort_from_input(self.target_effort_scale, self.target_effort_value)
+        except ValueError as exc:
+            raise ValueError(f"target_effort: {exc}") from exc
+        return self
+
     def resolved_load(self) -> dict | None:
         parsed = load_from_input(self.load_kind, self.load_value)
         return parsed.to_dict() if parsed is not None else None
+
+    def resolved_prescribed_quantity(self) -> dict:
+        # Type the plan's Prescribed Quantity at the write boundary (ADR-0050, #464): the picked
+        # ``quantity_kind`` is authoritative, falling back to inference over the free-text target
+        # when the pick is absent or can't type it — the same shared primitive the Hand-Authored/
+        # Insert author paths, generation, and the backfill use, so a Builder-authored plan is born
+        # typed like any other and a duration/distance is persisted as such, not coerced to reps.
+        quantity = prescribed_quantity_from_input(
+            self.quantity_kind,
+            self.reps,
+            unit=self.quantity_unit or "km",
+        )
+        return quantity.to_dict()
+
+    def resolved_target_effort(self) -> dict | None:
+        # The typed Target Effort dict for the draft, or ``None`` when no target was set — the
+        # plan-side counterpart of ``resolved_load``. Already validated by ``_valid_target_effort``.
+        effort = effort_from_input(self.target_effort_scale, self.target_effort_value)
+        return effort.to_dict() if effort is not None else None
 
 
 class DeploySessionBody(BaseModel):
@@ -327,8 +451,13 @@ def deploy_protocol(
                         rest_seconds=prescription.rest_seconds,
                         tempo=prescription.tempo,
                         recommended_load=prescription.resolved_load(),
+                        prescribed_quantity=prescription.resolved_prescribed_quantity(),
                         superset_group=prescription.superset_group,
                         round_rest_seconds=prescription.round_rest_seconds,
+                        scheme=prescription.scheme,
+                        set_type=prescription.set_type,
+                        target_effort=prescription.resolved_target_effort(),
+                        note=prescription.note,
                     )
                     for prescription in session.prescriptions
                 ],

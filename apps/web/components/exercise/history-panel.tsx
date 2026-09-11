@@ -6,17 +6,20 @@ import type {
 } from "@/lib/progress-types";
 import { formatLoad } from "@/lib/load";
 import { formatQuantity } from "@/lib/quantity";
+import type { WeightUnit } from "@/lib/weight-unit";
 import { Card } from "@/components/ui/card";
 
 interface HistoryPanelProps {
   progress: ExerciseProgress;
+  // The reader's Weight Unit, so each Logged Set's Load renders in kg or lb (#417).
+  unit: WeightUnit;
 }
 
 // The HISTORY lens (ADR-0017): every Logged Session of this Exercise, oldest-first,
 // with per-Logged-Set reps, Load, and perceived difficulty. This is the read that
 // used to back the standalone /exercises/[id]/progress route, now folded in. An
 // Exercise the user has never performed shows an honest empty state, not an error.
-export function HistoryPanel({ progress }: HistoryPanelProps): React.JSX.Element {
+export function HistoryPanel({ progress, unit }: HistoryPanelProps): React.JSX.Element {
   const label = progress.exercise_name || "this exercise";
 
   if (progress.points.length === 0) {
@@ -39,14 +42,20 @@ export function HistoryPanel({ progress }: HistoryPanelProps): React.JSX.Element
     <ol className="flex list-none flex-col gap-4 p-0">
       {progress.points.map((point) => (
         <li key={point.logged_session_id}>
-          <ProgressPoint point={point} />
+          <ProgressPoint point={point} unit={unit} />
         </li>
       ))}
     </ol>
   );
 }
 
-function ProgressPoint({ point }: { point: ExerciseProgressPoint }) {
+function ProgressPoint({
+  point,
+  unit,
+}: {
+  point: ExerciseProgressPoint;
+  unit: WeightUnit;
+}) {
   return (
     <Card className="flex flex-col gap-3 p-5">
       <h2 className="label-mono text-[11px] text-cyan">{point.performed_on}</h2>
@@ -76,7 +85,7 @@ function ProgressPoint({ point }: { point: ExerciseProgressPoint }) {
               {formatQuantity(set.quantity)}
             </span>
             <span className="text-right font-mono text-[13px] text-text-secondary">
-              {formatLoad(set.load)}
+              {formatLoad(set.load, unit)}
             </span>
             <span className="text-right font-mono text-[13px] text-cyan">
               {set.perceived_difficulty ?? "—"}

@@ -20,7 +20,7 @@ const RECORD: PersonalRecordEntry = {
 
 test("formats a record's estimate, gain, and date for display", () => {
   // Arrange / Act
-  const [row] = toRecordRows([RECORD]);
+  const [row] = toRecordRows([RECORD], "kg");
 
   // Assert
   assert.equal(row.exercise, "Back Squat");
@@ -34,7 +34,7 @@ test("rounds a fractional Estimated 1RM to whole kilograms", () => {
   const record: PersonalRecordEntry = { ...RECORD, estimated_1rm: 105.4, gain: 5.4 };
 
   // Act
-  const [row] = toRecordRows([record]);
+  const [row] = toRecordRows([record], "kg");
 
   // Assert — the eye gets whole kilograms, not a long float
   assert.equal(row.estimate, "105 kg");
@@ -46,7 +46,7 @@ test("marks the first-ever PR distinctly instead of a zero gain", () => {
   const record: PersonalRecordEntry = { ...RECORD, gain: 0 };
 
   // Act
-  const [row] = toRecordRows([record]);
+  const [row] = toRecordRows([record], "kg");
 
   // Assert — a clear "first" badge, never a misleading "+0 kg"
   assert.equal(row.gain, "First PR");
@@ -58,7 +58,7 @@ test("preserves the feed's newest-first order", () => {
   const newer: PersonalRecordEntry = { ...RECORD, estimated_1rm: 110, date: "2026-07-04" };
 
   // Act
-  const rows = toRecordRows([newer, older]);
+  const rows = toRecordRows([newer, older], "kg");
 
   // Assert — order is carried through untouched
   assert.deepEqual(
@@ -79,7 +79,7 @@ test("renders a bodyweight record as the set that achieved it, never kilograms",
   };
 
   // Act
-  const [row] = toRecordRows([record]);
+  const [row] = toRecordRows([record], "kg");
 
   // Assert — the set, not a fabricated kg headline (ADR-0026)
   assert.equal(row.estimate, "bodyweight × 12");
@@ -98,7 +98,7 @@ test("renders a weighted bodyweight record with its added load", () => {
   };
 
   // Act
-  const [row] = toRecordRows([record]);
+  const [row] = toRecordRows([record], "kg");
 
   // Assert — the belt load shows; the kg-equivalent estimate never does
   assert.equal(row.estimate, "bodyweight + 20 kg × 5");
@@ -126,4 +126,14 @@ test("shows no teaser when the user has no qualifying strength history", () => {
 
   // Assert — no dead link, consistent with the gated nav entry
   assert.equal(teaser, null);
+});
+
+test("toRecordRows projects the estimate and gain into the reader's pounds", () => {
+  // Arrange — an absolute PR of 110 kg with a 10 kg gain, read by a lb user.
+  // Act
+  const [row] = toRecordRows([RECORD], "lb");
+
+  // Assert — 110 kg ≈ 243 lb; a 10 kg gain ≈ 22 lb; both in the reader's unit.
+  assert.equal(row.estimate, "243 lb");
+  assert.equal(row.gain, "+22 lb");
 });

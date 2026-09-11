@@ -25,7 +25,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from app.domain.exercise import Provenance
+from app.domain.exercise import Provenance, has_emphasis_split
 from app.generation.muscle_emphasis_generator import (
     MuscleEmphasisGenerator,
     MuscleEmphasisRequest,
@@ -48,10 +48,6 @@ class ReenrichmentSummary:
     skipped_no_muscles: int = 0
 
 
-def _has_split(exercise) -> bool:
-    return bool(exercise.primary_muscles) or bool(exercise.secondary_muscles)
-
-
 def reenrich_muscle_emphasis(
     *,
     exercises: ExerciseRepository,
@@ -69,7 +65,7 @@ def reenrich_muscle_emphasis(
     skipped_no_muscles = 0
 
     for exercise in exercises.list_by_provenance(Provenance.AI_GENERATED):
-        if _has_split(exercise):
+        if has_emphasis_split(exercise):
             skipped_already_split += 1
             continue
         if not exercise.targeted_muscles:

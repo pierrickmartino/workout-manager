@@ -1,58 +1,24 @@
 "use server";
 
-import { redirect } from "next/navigation";
-
-import { logSession, type LogSetInput } from "@/lib/logs";
-import { repetitionsInput } from "@/lib/quantity";
+import { logSession } from "@/lib/logs";
+import type { CompletionOutcome } from "@/lib/logs-types";
+import { buildLoggedSets, readLogFormRows } from "@/lib/log-session-form";
+import { resolveAppearance } from "@/lib/appearance";
 
 export interface LogFormState {
   error: string | null;
+  // Set once the log is saved, so the client can navigate away from the form. The action does
+  // not redirect itself — the client pushes to History on success — so the form stays a client
+  // component that can surface an inline error without a full navigation on failure.
+  ok?: boolean;
 }
 
-const MIN_RPE = 1;
-const MAX_RPE = 10;
-
-function strings(form: FormData, name: string): string[] {
-  return form.getAll(name).map((value) => (typeof value === "string" ? value.trim() : ""));
-}
-
-// Build the per-set payload from the row-aligned form fields, skipping rows the
-// user left without reps (exercises they didn't perform).
-function loggedSets(form: FormData): LogSetInput[] {
-  const exerciseIds = strings(form, "exercise_id");
-  const reps = strings(form, "reps");
-  const loadKinds = strings(form, "load_kind");
-  const loadValues = strings(form, "load_value");
-  const rpes = strings(form, "rpe");
-
-  const sets: LogSetInput[] = [];
-  for (let row = 0; row < exerciseIds.length; row += 1) {
-    if (reps[row] === "") continue;
-
-    const repsValue = Number(reps[row]);
-    if (!Number.isInteger(repsValue) || repsValue < 0) continue;
-
-    const exerciseId = Number(exerciseIds[row]);
-    if (!Number.isInteger(exerciseId)) continue;
-
-    const rpeValue = rpes[row] === "" ? null : Number(rpes[row]);
-    const perceivedDifficulty =
-      rpeValue !== null && Number.isInteger(rpeValue) && rpeValue >= MIN_RPE && rpeValue <= MAX_RPE
-        ? rpeValue
-        : null;
-
-    // Carry the picked kinds through; the backend types the amount and the load from
-    // them. The reps become a repetitions Quantity via the shared mapper. An empty load
-    // value means "no load recorded" for this set (the backend maps it to null).
-    sets.push({
-      exercise_id: exerciseId,
-      ...repetitionsInput(repsValue),
-      load_kind: (loadKinds[row] || "absolute") as LogSetInput["load_kind"],
-      load_value: loadValues[row] === "" ? null : loadValues[row],
-      perceived_difficulty: perceivedDifficulty,
-    });
-  }
-  return sets;
+// The client submits only Done (attempted) rows — a skipped set marks its `done` field false,
+// so the reader drops it (Model B, Q10). Read the derived Completion Outcome back off the
+// form, falling back to `completed` for any missing/unknown value so the action never
+// fabricates an outcome the form did not send.
+function completionOutcome(form: FormData): CompletionOutcome {
+  return form.get("completion_outcome") === "incomplete" ? "incomplete" : "completed";
 }
 
 export async function submitLog(
@@ -64,27 +30,40 @@ export async function submitLog(
     return { error: "Could not determine which session to log." };
   }
 
-  const performedOn = typeof form.get("performed_on") === "string" ? String(form.get("performed_on")).trim() : "";
+  const performedOn =
+    typeof form.get("performed_on") === "string"
+      ? String(form.get("performed_on")).trim()
+      : "";
   if (performedOn === "") {
     return { error: "Pick the date you performed this session." };
   }
 
-  const sets = loggedSets(form);
-  if (sets.length === 0) {
-    return { error: "Enter the reps for at least one exercise you performed." };
+  // Reading the rows and typing the per-set Quantity by kind live in the pure lib
+  // (`readLogFormRows` / `buildLoggedSets`, ADR-0050): the action stays a thin caller and the
+  // "which kind, reject-or-skip?" rules are unit-tested. A malformed distance/duration
+  // rejects the whole submission with a clear message; a malformed reps set drops silently.
+  // The Load values arrive in the user's Weight Unit; resolve it server-side so each entered
+  // Load is stored as canonical kilograms (#417). A signed-out/unreachable read defaults to kg.
+  const { weight_unit: unit } = await resolveAppearance();
+  const built = buildLoggedSets(readLogFormRows(form), unit);
+  if (!built.ok) {
+    return { error: built.error };
+  }
+  if (built.sets.length === 0) {
+    return { error: "Mark at least one set as done to log this session." };
   }
 
-  // The static form logs a performance after the fact, with no live per-set
-  // tracking to derive from, so it declares the Completion Outcome `completed`
-  // (ADR-0013) — the honest default that advances the Protocol.
+  // The Completion Outcome is derived per-set (Q8, ADR-0045): the form marks each prescribed
+  // set done or skipped, and reports Incomplete when any prescribed set was left un-attempted.
   const result = await logSession(sessionId, {
     performed_on: performedOn,
-    completion_outcome: "completed",
-    logged_sets: sets,
+    completion_outcome: completionOutcome(form),
+    logged_sets: built.sets,
   });
   if (!result.success || !result.data) {
     return { error: result.error ?? "Could not save your log." };
   }
 
-  redirect("/history");
+  // Saved. The client navigates to History (`ok` flips the form's post-save effect).
+  return { error: null, ok: true };
 }

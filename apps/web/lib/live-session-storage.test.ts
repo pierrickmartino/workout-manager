@@ -61,9 +61,10 @@ function fakeStorage(): SlotStorage & { size: () => number } {
 }
 
 function inProgress(): LiveSessionState {
-  return liveSessionReducer(initLiveSession(SESSION), {
+  return liveSessionReducer(initLiveSession(SESSION, "kg"), {
     type: "START",
     now: 1_000_000,
+    accountId: "user_1",
   });
 }
 
@@ -136,6 +137,76 @@ test("loadLiveSession rejects a legacy slot missing the Superset overlay fields"
   );
 
   // Act / Assert — the stale-shaped slot is rejected, so the caller starts fresh
+  assert.equal(loadLiveSession(storage), null);
+});
+
+test("saveLiveSession persists the owner's account id", () => {
+  // Arrange / Act — a slot stamped with its owner (ADR-0059) round-trips its id
+  const storage = fakeStorage();
+  saveLiveSession(storage, inProgress());
+
+  // Assert — the persisted slot carries who it belongs to
+  assert.equal(loadLiveSession(storage)?.accountId, "user_1");
+});
+
+test("loadLiveSession rejects a legacy slot with no account id", () => {
+  // Arrange — a slot in the pre-#411 shape: otherwise well-formed, but no owner. Rather
+  // than guess an owner, hydration rejects it — the same "start fresh" outcome as any
+  // structurally invalid slot (ADR-0059), so a legacy slot is never mis-attributed.
+  const storage = fakeStorage();
+  const ownerless: Record<string, unknown> = { ...inProgress() };
+  delete ownerless.accountId;
+  storage.setItem(LIVE_SESSION_SLOT_KEY, JSON.stringify(ownerless));
+
+  // Act / Assert
+  assert.equal(loadLiveSession(storage), null);
+});
+
+test("loadLiveSession rejects a slot whose account id is not a string", () => {
+  // Arrange — a tampered/foreign-shaped slot with a non-string owner
+  const storage = fakeStorage();
+  storage.setItem(
+    LIVE_SESSION_SLOT_KEY,
+    JSON.stringify({ ...inProgress(), accountId: 12345 }),
+  );
+
+  // Act / Assert — the malformed owner is rejected, not coerced
+  assert.equal(loadLiveSession(storage), null);
+});
+
+test("saveLiveSession persists the finish idempotency key", () => {
+  // Arrange — a slot whose START stamped a finish key (ADR-0060, issue #412)
+  const storage = fakeStorage();
+  const keyed = { ...inProgress(), idempotencyKey: "finish-key-abc" };
+  saveLiveSession(storage, keyed);
+
+  // Assert — the key round-trips so a resumed finish resends the same one
+  assert.equal(loadLiveSession(storage)?.idempotencyKey, "finish-key-abc");
+});
+
+test("loadLiveSession accepts a slot with no idempotency key (a pre-#412 slot)", () => {
+  // Arrange — an otherwise well-formed slot with a null key, as written before #412.
+  // Unlike the owner id, a missing key must NOT purge the slot: it is still valid to
+  // resume and mints a key at finish (ADR-0060), so hydration keeps it.
+  const storage = fakeStorage();
+  const keyless: Record<string, unknown> = { ...inProgress() };
+  delete keyless.idempotencyKey;
+  storage.setItem(LIVE_SESSION_SLOT_KEY, JSON.stringify(keyless));
+
+  // Act / Assert — the slot survives (a null key deserializes cleanly)
+  assert.equal(loadLiveSession(storage)?.sessionId, 42);
+  assert.equal(loadLiveSession(storage)?.idempotencyKey ?? null, null);
+});
+
+test("loadLiveSession rejects a slot whose idempotency key is not a string", () => {
+  // Arrange — a tampered slot with a non-string key
+  const storage = fakeStorage();
+  storage.setItem(
+    LIVE_SESSION_SLOT_KEY,
+    JSON.stringify({ ...inProgress(), idempotencyKey: 12345 }),
+  );
+
+  // Act / Assert — a malformed key is rejected, not coerced
   assert.equal(loadLiveSession(storage), null);
 });
 

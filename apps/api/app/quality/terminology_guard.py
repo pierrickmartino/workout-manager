@@ -101,6 +101,17 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
         ),
     ),
     BannedTerm(
+        name="activity heatmap",
+        pattern=re.compile(r"activity_heatmap|activityHeatmap|/activity-heatmap\b"),
+        guidance=(
+            "The Profile daily-activity mosaic is the 'Training Heatmap' (CONTEXT "
+            "'Training Heatmap', ADR-0054): 'activity' is vague, and the projection is "
+            "strictly descriptive — it derives no daily streak / don't-break-the-chain "
+            "mechanic (the weekly Streak stays the sole consecutiveness metric). Use "
+            "'Training Heatmap'."
+        ),
+    ),
+    BannedTerm(
         name="personal best",
         pattern=re.compile(r"personal_best|personalBest"),
         guidance=(
@@ -129,6 +140,57 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
             "Caution), NOT a computed score or recovery percentage (ADR-0001, CONTEXT "
             "'Readiness'): the calendar-free model gives no honest basis for a "
             "recovery %."
+        ),
+    ),
+    BannedTerm(
+        name="mileage",
+        pattern=re.compile(r"mileage|Mileage"),
+        guidance=(
+            "The weekly-distance projection is 'Distance', reported in kilometres "
+            "(CONTEXT 'Distance', ADR-0049). The app is metric-canonical; 'mileage' "
+            "smuggles in an imperial unit. Use Distance / kilometres."
+        ),
+    ),
+    BannedTerm(
+        name="stored pace",
+        pattern=re.compile(r"stored_pace|storedPace|pace_column"),
+        guidance=(
+            "Pace is a read-time projection over a distance Quantity's metres and "
+            "companion duration, never stored (ADR-0032, CONTEXT 'Quantity'). A "
+            "stored-pace field reinvents the derived value that ADR eliminated."
+        ),
+    ),
+    BannedTerm(
+        name="amount (Quantity label)",
+        # Only the quoted display-label form (``label="Amount"``, ``const x = "Amount"``)
+        # is banned — the user-facing word for the amount axis is "Quantity" (issue #345).
+        # Scoped to the label string so internal identifiers (``DEFAULT_AMOUNT_KIND``,
+        # ``performedAmount``) and prose that name the amount axis stay legal.
+        pattern=re.compile(r"[\"']Amount[\"']"),
+        guidance=(
+            "The amount picker's user-facing label is 'Quantity', not 'Amount' (CONTEXT "
+            "'Quantity' lists 'amount' under _Avoid_; ADR-0032/0050). Rename the display "
+            "label to 'Quantity'. Internal identifiers naming the amount axis are fine — "
+            "only the quoted label string is banned."
+        ),
+    ),
+    BannedTerm(
+        name="Pin / Pinned Target",
+        # The retired Pin identifiers (ADR-0064): the domain offer (``PinOffer`` /
+        # ``pin_offer``), the stored column/field (``pinned_reps`` / ``pinnedReps``), and
+        # the concept in identifier form (``PinnedTarget`` / ``pinned_target``). Scoped to
+        # these compound identifiers so ordinary prose ("stay pinned", "pin the timer")
+        # and unrelated identifiers (a future "pin to top" UI) never trip the guard.
+        pattern=re.compile(
+            r"pinned_reps|pinnedReps|pin_offer|PinOffer"
+            r"|pinned_target|pinnedTarget|PinnedTarget"
+        ),
+        guidance=(
+            "Pin is retired (ADR-0064, supersedes ADR-0053). Its 'stop auto-progressing "
+            "this movement' job is the Static Progression Scheme (better: it holds every "
+            "future occurrence, not just one), and banking a specific rep target is a "
+            "Builder edit. There is no stored Pinned Target — use a Progression Scheme "
+            "selection (app.domain.progression.ProgressionScheme) instead."
         ),
     ),
     BannedTerm(
