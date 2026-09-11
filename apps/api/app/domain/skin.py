@@ -172,13 +172,20 @@ def _full_skin(skin_id: str) -> Skin:
 # ``aurora`` is the minimal second seed Skin (ADR-0048 / #331) shipped purely so
 # publishing a new Active Skin is observably different; ``vercel`` is a
 # minimalist, high-contrast palette inspired by Vercel's Geist design language
-# (true-black surfaces, the blue→purple→pink→cyan brand gradient as accents). The
-# ids here are the single source of truth the frontend ``Skin`` union in
-# lib/theme.ts mirrors.
+# (true-black surfaces, the blue→purple→pink→cyan brand gradient as accents).
+# ``alpine`` (outdoor forest-and-stone), ``clay`` (warm ceramic/terracotta), and
+# ``track`` (athletic cobalt) are the third wave from docs/design/pulse-skin-ideas.md
+# — each a full token identity (colour per variant, medium/soft/sharp shape) that
+# keeps the shipped Space Grotesk + JetBrains Mono type for its first pass. The ids
+# here are the single source of truth the frontend ``Skin`` union in lib/theme.ts
+# mirrors.
 SKIN_CATALOG: tuple[Skin, ...] = (
     _full_skin("pulse"),
     _full_skin("aurora"),
     _full_skin("vercel"),
+    _full_skin("alpine"),
+    _full_skin("clay"),
+    _full_skin("track"),
 )
 
 # The Active Skin's starting value: the original PULSE Skin (ADR-0048). The

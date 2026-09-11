@@ -111,6 +111,16 @@ def test_vercel_skin_ships_in_the_catalog():
     assert is_known_skin("vercel") is True
 
 
+@pytest.mark.parametrize("skin_id", ["alpine", "clay", "track"])
+def test_third_wave_skins_ship_in_the_catalog(skin_id):
+    # Assert — Alpine (outdoor), Clay (warm ceramic), and Track (athletic) are
+    # curated catalog members, so an admin can publish each and the PUT gate accepts
+    # its id (their token values live in the frontend's globals.css under
+    # [data-skin="…"], colour per variant + fonts/radii once per html[data-skin]).
+    assert skin_id in skin_ids()
+    assert is_known_skin(skin_id) is True
+
+
 def test_skin_ids_are_unique():
     ids = skin_ids()
     assert len(ids) == len(set(ids))

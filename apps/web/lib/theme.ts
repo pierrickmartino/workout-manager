@@ -14,12 +14,21 @@
 // backend catalog in app/domain/skin.py, and the two must not drift on which Skins
 // exist. `aurora` is the minimal second seed Skin (ADR-0048 / #331); `vercel` is a
 // minimalist, high-contrast palette inspired by Vercel's Geist design language.
-export type Skin = "pulse" | "aurora" | "vercel";
+// `alpine` (outdoor forest/stone), `clay` (warm ceramic/terracotta), and `track`
+// (athletic cobalt) are the third wave from docs/design/pulse-skin-ideas.md.
+export type Skin = "pulse" | "aurora" | "vercel" | "alpine" | "clay" | "track";
 
 // The catalog as a runtime set, so an id arriving from the API (untyped `string`
 // on the wire) can be narrowed to a `Skin` before it is stamped. Kept in lockstep
 // with the `Skin` union above.
-export const KNOWN_SKINS = ["pulse", "aurora", "vercel"] as const;
+export const KNOWN_SKINS = [
+  "pulse",
+  "aurora",
+  "vercel",
+  "alpine",
+  "clay",
+  "track",
+] as const;
 
 // Narrow an arbitrary string to a catalog `Skin`. The backend validates a
 // published id against its catalog, so the wire value is normally valid; this is a
