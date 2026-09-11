@@ -330,6 +330,274 @@
   }
 
   /*
+    ALPINE — an outdoor, trail-map identity (docs/design/pulse-skin-ideas.md §1).
+
+    Forest tones over pale stone: the lead accent (cyan token) is a grounded
+    forest green, with a lake blue and a plum rounding out the chart/support
+    accents; magenta stays a clear brick red so destructive/error feedback never
+    reads as brand. Because :root carries the PULSE dark values, Alpine restates
+    the full token set for both its dark base and its light variant. Text rungs are
+    tuned to clear the ADR-0070 Contrast Floor against every surface in both modes.
+  */
+  [data-skin="alpine"][data-mode="dark"],
+  [data-skin="alpine"]:not([data-mode]) {
+    /* Surfaces — deep pine page climbing to lighter moss cards */
+    --color-base: #101b17;
+    --color-surface: #1b2b23;
+    --color-elevated: #25382e;
+
+    /* Borders */
+    --color-border: #25382e;
+    --color-border-lite: #3a4f44;
+
+    /* Text — pale stone down to a moss-grey muted */
+    --color-text-primary: #edf4ef;
+    --color-text-secondary: #b4c6bb;
+    --color-text-muted: #8fa79a;
+
+    /* Accents — forest green leads, lake blue + plum support, brick-red danger */
+    --color-cyan: #8bd6aa;
+    --color-cyan-dim: #8bd6aa1f;
+    --color-blue: #7fc4e0;
+    --color-violet: #c9a0da;
+    --color-violet-dim: #c9a0da1f;
+    --color-magenta: #f09088;
+    --color-magenta-dim: #f090881f;
+    --color-on-accent: #0b1712;
+  }
+
+  [data-skin="alpine"][data-mode="light"] {
+    /* Surfaces — pale stone page, white cards, a deeper stone elevation */
+    --color-base: #f2f5ef;
+    --color-surface: #ffffff;
+    --color-elevated: #e8ede3;
+
+    /* Borders */
+    --color-border: #d9e0d2;
+    --color-border-lite: #c4ceba;
+
+    /* Text — deep forest ink down to a stone-green muted */
+    --color-text-primary: #172a24;
+    --color-text-secondary: #3d5148;
+    --color-text-muted: #566b60;
+
+    /* Accents — deepened forest green so it reads on light stone */
+    --color-cyan: #236547;
+    --color-cyan-dim: #2365471f;
+    --color-blue: #2c6e8f;
+    --color-violet: #7a4e86;
+    --color-violet-dim: #7a4e861f;
+    --color-magenta: #b23a2e;
+    --color-magenta-dim: #b23a2e1f;
+    --color-on-accent: #ffffff;
+  }
+
+  /* Alpine System Mode: no `data-mode`, so follow the device. The dark base above
+     already covers dark devices; only the light branch needs stating here. */
+  @media (prefers-color-scheme: light) {
+    [data-skin="alpine"]:not([data-mode]) {
+      --color-base: #f2f5ef;
+      --color-surface: #ffffff;
+      --color-elevated: #e8ede3;
+
+      --color-border: #d9e0d2;
+      --color-border-lite: #c4ceba;
+
+      --color-text-primary: #172a24;
+      --color-text-secondary: #3d5148;
+      --color-text-muted: #566b60;
+
+      --color-cyan: #236547;
+      --color-cyan-dim: #2365471f;
+      --color-blue: #2c6e8f;
+      --color-violet: #7a4e86;
+      --color-violet-dim: #7a4e861f;
+      --color-magenta: #b23a2e;
+      --color-magenta-dim: #b23a2e1f;
+      --color-on-accent: #ffffff;
+    }
+  }
+
+  /*
+    CLAY — a warm ceramic identity (docs/design/pulse-skin-ideas.md §2).
+
+    Chalk, cream, and terracotta: the lead accent (cyan token) is a terracotta
+    that must stay visually distinct from destructive/error feedback, so magenta
+    is a cooler crimson red rather than another warm orange. A muted ceramic teal
+    and a clay mauve fill the support slots. Because :root carries the PULSE dark
+    values, Clay restates the full token set for both its dark base and its light
+    variant; text rungs clear the ADR-0070 Contrast Floor on every surface.
+  */
+  [data-skin="clay"][data-mode="dark"],
+  [data-skin="clay"]:not([data-mode]) {
+    /* Surfaces — warm dark clay page climbing to lighter terracotta-brown cards */
+    --color-base: #211b18;
+    --color-surface: #302621;
+    --color-elevated: #3d302a;
+
+    /* Borders */
+    --color-border: #3d302a;
+    --color-border-lite: #4e3e36;
+
+    /* Text — warm cream down to a soft clay muted */
+    --color-text-primary: #f8ede3;
+    --color-text-secondary: #d2bdac;
+    --color-text-muted: #b49c8c;
+
+    /* Accents — soft terracotta leads; crimson danger stays distinct from it */
+    --color-cyan: #eba88b;
+    --color-cyan-dim: #eba88b1f;
+    --color-blue: #93c4c9;
+    --color-violet: #d2a0b6;
+    --color-violet-dim: #d2a0b61f;
+    --color-magenta: #f1908f;
+    --color-magenta-dim: #f1908f1f;
+    --color-on-accent: #241611;
+  }
+
+  [data-skin="clay"][data-mode="light"] {
+    /* Surfaces — warm cream page, near-white cards, a deeper sand elevation */
+    --color-base: #f8f1e9;
+    --color-surface: #fffcf7;
+    --color-elevated: #f0e6da;
+
+    /* Borders */
+    --color-border: #e6d8c8;
+    --color-border-lite: #d6c4b0;
+
+    /* Text — deep umber ink down to a warm clay muted */
+    --color-text-primary: #382921;
+    --color-text-secondary: #5e4a3d;
+    --color-text-muted: #75604f;
+
+    /* Accents — deep terracotta leads; a cooler crimson keeps danger distinct */
+    --color-cyan: #98462e;
+    --color-cyan-dim: #98462e1f;
+    --color-blue: #3f6f74;
+    --color-violet: #7c4b63;
+    --color-violet-dim: #7c4b631f;
+    --color-magenta: #be2f42;
+    --color-magenta-dim: #be2f421f;
+    --color-on-accent: #ffffff;
+  }
+
+  /* Clay System Mode: no `data-mode`, so follow the device. The dark base above
+     already covers dark devices; only the light branch needs stating here. */
+  @media (prefers-color-scheme: light) {
+    [data-skin="clay"]:not([data-mode]) {
+      --color-base: #f8f1e9;
+      --color-surface: #fffcf7;
+      --color-elevated: #f0e6da;
+
+      --color-border: #e6d8c8;
+      --color-border-lite: #d6c4b0;
+
+      --color-text-primary: #382921;
+      --color-text-secondary: #5e4a3d;
+      --color-text-muted: #75604f;
+
+      --color-cyan: #98462e;
+      --color-cyan-dim: #98462e1f;
+      --color-blue: #3f6f74;
+      --color-violet: #7c4b63;
+      --color-violet-dim: #7c4b631f;
+      --color-magenta: #be2f42;
+      --color-magenta-dim: #be2f421f;
+      --color-on-accent: #ffffff;
+    }
+  }
+
+  /*
+    TRACK — an athletics-meet identity (docs/design/pulse-skin-ideas.md §3).
+
+    Strong cobalt blue with a cool slate shell: the lead accent (cyan token) is
+    cobalt, a secondary sky blue and an indigo-violet fill the support slots, and
+    magenta is a track red for danger. The spec's warm-yellow "selected" highlight
+    would need a new semantic token (there is no warning slot in the current set),
+    so it is deferred with the decorative lane/finish graphics — this ships the
+    full colour identity. Because :root carries the PULSE dark values, Track
+    restates the whole token set for both variants; text clears the Contrast Floor.
+  */
+  [data-skin="track"][data-mode="dark"],
+  [data-skin="track"]:not([data-mode]) {
+    /* Surfaces — cool near-navy page climbing to slate cards */
+    --color-base: #101520;
+    --color-surface: #1b2435;
+    --color-elevated: #273245;
+
+    /* Borders */
+    --color-border: #273245;
+    --color-border-lite: #3a4863;
+
+    /* Text — cool near-white down to a slate muted */
+    --color-text-primary: #f4f6fc;
+    --color-text-secondary: #b7c2da;
+    --color-text-muted: #8e9bb6;
+
+    /* Accents — bright cobalt leads, sky blue + indigo support, track-red danger */
+    --color-cyan: #a9beff;
+    --color-cyan-dim: #a9beff1f;
+    --color-blue: #7fb4f0;
+    --color-violet: #b3a6f5;
+    --color-violet-dim: #b3a6f51f;
+    --color-magenta: #f58a96;
+    --color-magenta-dim: #f58a961f;
+    --color-on-accent: #0b1220;
+  }
+
+  [data-skin="track"][data-mode="light"] {
+    /* Surfaces — cool near-white page, white cards, a faint slate elevation */
+    --color-base: #f3f5f8;
+    --color-surface: #ffffff;
+    --color-elevated: #e7ebf1;
+
+    /* Borders */
+    --color-border: #d5dce6;
+    --color-border-lite: #bfc9d8;
+
+    /* Text — deep navy ink down to a slate muted */
+    --color-text-primary: #111c32;
+    --color-text-secondary: #39445c;
+    --color-text-muted: #566079;
+
+    /* Accents — deep cobalt leads on light; sky blue + indigo support, track red */
+    --color-cyan: #234ed8;
+    --color-cyan-dim: #234ed81f;
+    --color-blue: #2f72c0;
+    --color-violet: #5b4bc4;
+    --color-violet-dim: #5b4bc41f;
+    --color-magenta: #c62b42;
+    --color-magenta-dim: #c62b421f;
+    --color-on-accent: #ffffff;
+  }
+
+  /* Track System Mode: no `data-mode`, so follow the device. The dark base above
+     already covers dark devices; only the light branch needs stating here. */
+  @media (prefers-color-scheme: light) {
+    [data-skin="track"]:not([data-mode]) {
+      --color-base: #f3f5f8;
+      --color-surface: #ffffff;
+      --color-elevated: #e7ebf1;
+
+      --color-border: #d5dce6;
+      --color-border-lite: #bfc9d8;
+
+      --color-text-primary: #111c32;
+      --color-text-secondary: #39445c;
+      --color-text-muted: #566079;
+
+      --color-cyan: #234ed8;
+      --color-cyan-dim: #234ed81f;
+      --color-blue: #2f72c0;
+      --color-violet: #5b4bc4;
+      --color-violet-dim: #5b4bc41f;
+      --color-magenta: #c62b42;
+      --color-magenta-dim: #c62b421f;
+      --color-on-accent: #ffffff;
+    }
+  }
+
+  /*
     Per-Skin identity — typography + shape (ADR-0050).
 
     These tokens are Mode-invariant, so each Skin states them once (no `data-mode`).
@@ -371,6 +639,64 @@
     --radius-md: 3px;
     --radius-lg: 4px;
     --radius-xl: 6px;
+  }
+
+  /*
+    ALPINE, CLAY, and TRACK all keep the shipped Space Grotesk / JetBrains Mono
+    type for their first pass (the spec defers a condensed/serif face to a later
+    iteration), so their identity blocks restate the PULSE font handles and vary
+    only the *shape* — the one axis each of these three moves. Stating the fonts
+    explicitly (rather than inheriting the @theme default) keeps each Skin a
+    self-contained identity per ADR-0050, matching Aurora/Vercel above.
+
+    ALPINE — medium-rounded: softened cards and pill-like metadata, a touch
+    rounder than PULSE without Aurora's near-pill softness.
+  */
+  html[data-skin="alpine"] {
+    /* Typography — the shipped PULSE pair */
+    --font-display: var(--font-space-grotesk), "Space Grotesk", system-ui, sans-serif;
+    --font-sans: var(--font-space-grotesk), "Space Grotesk", system-ui, sans-serif;
+    --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, monospace;
+
+    /* Shape — medium */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+  }
+
+  /*
+    CLAY — soft: card radii increase moderately for a warm, tactile, journal-like
+    feel while control heights stay put (the roundness lives on panels, not fields).
+  */
+  html[data-skin="clay"] {
+    /* Typography — the shipped PULSE pair (mono kept for numeric comparisons) */
+    --font-display: var(--font-space-grotesk), "Space Grotesk", system-ui, sans-serif;
+    --font-sans: var(--font-space-grotesk), "Space Grotesk", system-ui, sans-serif;
+    --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, monospace;
+
+    /* Shape — soft */
+    --radius-sm: 10px;
+    --radius-md: 14px;
+    --radius-lg: 18px;
+    --radius-xl: 22px;
+  }
+
+  /*
+    TRACK — firm: smaller radii than PULSE for a precise, athletic edge, pairing
+    with the deliberately higher-contrast border tokens in its colour blocks.
+  */
+  html[data-skin="track"] {
+    /* Typography — the shipped PULSE pair */
+    --font-display: var(--font-space-grotesk), "Space Grotesk", system-ui, sans-serif;
+    --font-sans: var(--font-space-grotesk), "Space Grotesk", system-ui, sans-serif;
+    --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, monospace;
+
+    /* Shape — firm */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 10px;
   }
 }
 
@@ -419,6 +745,44 @@
   }
 
   [data-skin="vercel"]:not([data-mode]) {
+    color-scheme: light dark;
+  }
+
+  /* Alpine, Clay, and Track each mirror the same ambient color-scheme mapping so
+     native controls (form fields, scrollbars) track the resolved Mode. */
+  [data-skin="alpine"][data-mode="dark"] {
+    color-scheme: dark;
+  }
+
+  [data-skin="alpine"][data-mode="light"] {
+    color-scheme: light;
+  }
+
+  [data-skin="alpine"]:not([data-mode]) {
+    color-scheme: light dark;
+  }
+
+  [data-skin="clay"][data-mode="dark"] {
+    color-scheme: dark;
+  }
+
+  [data-skin="clay"][data-mode="light"] {
+    color-scheme: light;
+  }
+
+  [data-skin="clay"]:not([data-mode]) {
+    color-scheme: light dark;
+  }
+
+  [data-skin="track"][data-mode="dark"] {
+    color-scheme: dark;
+  }
+
+  [data-skin="track"][data-mode="light"] {
+    color-scheme: light;
+  }
+
+  [data-skin="track"]:not([data-mode]) {
     color-scheme: light dark;
   }
 

@@ -90,6 +90,27 @@ test("isSkin accepts a catalog id", () => {
   assert.equal(isSkin("vercel"), true);
 });
 
+test("KNOWN_SKINS carries the third-wave skins", () => {
+  // Assert — Alpine, Clay, and Track ship so an admin can publish each
+  assert.ok(KNOWN_SKINS.includes("alpine"));
+  assert.ok(KNOWN_SKINS.includes("clay"));
+  assert.ok(KNOWN_SKINS.includes("track"));
+});
+
+test("isSkin accepts the third-wave catalog ids", () => {
+  assert.equal(isSkin("alpine"), true);
+  assert.equal(isSkin("clay"), true);
+  assert.equal(isSkin("track"), true);
+});
+
+test("composes a third-wave Skin with a Mode", () => {
+  // Arrange / Act — the Track Skin at Light Mode (Active Skin × Mode)
+  const attrs = resolveTheme("track", "light");
+
+  // Assert — the published Skin is stamped alongside the user's Mode
+  assert.deepEqual(attrs, { "data-skin": "track", "data-mode": "light" });
+});
+
 test("KNOWN_SKINS carries the Vercel-inspired Skin", () => {
   // Assert — the third catalog Skin ships so an admin can publish it
   assert.ok(KNOWN_SKINS.includes("vercel"));

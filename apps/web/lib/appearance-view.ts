@@ -165,6 +165,21 @@ export const SKIN_OPTIONS = [
     label: "Vercel",
     caption: "Minimal true-black, Geist type, sharp corners",
   },
+  {
+    value: "alpine",
+    label: "Alpine",
+    caption: "Outdoor forest and stone, medium-rounded",
+  },
+  {
+    value: "clay",
+    label: "Clay",
+    caption: "Warm ceramic and terracotta, softly rounded",
+  },
+  {
+    value: "track",
+    label: "Track",
+    caption: "Athletic cobalt, bold numerals, sharp corners",
+  },
 ] as const satisfies readonly Omit<
   AppearanceSkinOption,
   "isActive" | "isPreviewing"
