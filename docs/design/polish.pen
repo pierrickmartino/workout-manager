@@ -1,0 +1,414 @@
+{
+  "version": "2.17",
+  "children": [
+    {
+      "type": "text",
+      "id": "polishTitle",
+      "name": "PULSE · UI/UX REVIEW BOARD",
+      "x": 0,
+      "y": 0,
+      "fill": "#FAFAFA",
+      "content": "PULSE · UI/UX REVIEW BOARD",
+      "fontFamily": "Inter",
+      "fontSize": 64,
+      "fontWeight": "600"
+    },
+    {
+      "type": "text",
+      "id": "polishGuide",
+      "name": "Read left to right by navigation area, then top to bottom within each column.",
+      "x": 0,
+      "y": 100,
+      "fill": "#A1A1AA",
+      "content": "Read left to right by navigation area, then top to bottom within each column.",
+      "fontFamily": "Inter",
+      "fontSize": 26,
+      "fontWeight": "600"
+    },
+    {
+      "type": "text",
+      "id": "polishSource",
+      "name": "12 original screen captures · Review: polish-ui-ux-review.md",
+      "x": 0,
+      "y": 150,
+      "fill": "#A1A1AA",
+      "content": "12 original screen captures · Review: polish-ui-ux-review.md",
+      "fontFamily": "Inter",
+      "fontSize": 24,
+      "fontWeight": "600"
+    },
+    {
+      "type": "text",
+      "id": "polishLane0",
+      "name": "HOME",
+      "x": 0,
+      "y": 290,
+      "fill": "#7CE5DF",
+      "content": "HOME",
+      "fontFamily": "Inter",
+      "fontSize": 42,
+      "fontWeight": "600"
+    },
+    {
+      "type": "text",
+      "id": "polishLabelIskyF",
+      "name": "01 · Dashboard",
+      "x": 0,
+      "y": 420,
+      "fill": "#FAFAFA",
+      "content": "01 · Dashboard",
+      "fontFamily": "Inter",
+      "fontSize": 30,
+      "fontWeight": "600"
+    },
+    {
+      "type": "rectangle",
+      "id": "IskyF",
+      "x": 0,
+      "y": 485,
+      "fill": {
+        "type": "image",
+        "enabled": true,
+        "url": "../img/IMG_6898.JPG",
+        "mode": "fill"
+      },
+      "width": 786,
+      "height": 3700,
+      "name": "01 · Dashboard"
+    },
+    {
+      "type": "text",
+      "id": "polishLane1",
+      "name": "TRAIN",
+      "x": 1250,
+      "y": 290,
+      "fill": "#7CE5DF",
+      "content": "TRAIN",
+      "fontFamily": "Inter",
+      "fontSize": 42,
+      "fontWeight": "600"
+    },
+    {
+      "type": "text",
+      "id": "polishLabelg0e635",
+      "name": "02 · Training hub",
+      "x": 1250,
+      "y": 420,
+      "fill": "#FAFAFA",
+      "content": "02 · Training hub",
+      "fontFamily": "Inter",
+      "fontSize": 30,
+      "fontWeight": "600"
+    },
+    {
+      "type": "rectangle",
+      "id": "g0e635",
+      "x": 1250,
+      "y": 485,
+      "fill": {
+        "type": "image",
+        "enabled": true,
+        "url": "../img/IMG_6906.JPG",
+        "mode": "fill"
+      },
+      "width": 786,
+      "height": 3528,
+      "name": "02 · Training hub"
+    },
+    {
+      "type": "text",
+      "id": "polishLabelM265c",
+      "name": "03 · My sessions",
+      "x": 1250,
+      "y": 4193,
+      "fill": "#FAFAFA",
+      "content": "03 · My sessions",
+      "fontFamily": "Inter",
+      "fontSize": 30,
+      "fontWeight": "600"
+    },
+    {
+      "type": "rectangle",
+      "id": "M265c",
+      "x": 1250,
+      "y": 4258,
+      "fill": {
+        "type": "image",
+        "enabled": true,
+        "url": "../img/IMG_6902.JPG",
+        "mode": "fill"
+      },
+      "width": 786,
+      "height": 4600,
+      "name": "03 · My sessions"
+    },
+    {
+      "type": "text",
+      "id": "polishLabelPegqK",
+      "name": "04 · Session detail",
+      "x": 1250,
+      "y": 9038,
+      "fill": "#FAFAFA",
+      "content": "04 · Session detail",
+      "fontFamily": "Inter",
+      "fontSize": 30,
+      "fontWeight": "600"
+    },
+    {
+      "type": "rectangle",
+      "id": "PegqK",
+      "x": 1250,
+      "y": 9103,
+      "fill": {
+        "type": "image",
+        "enabled": true,
+        "url": "../img/IMG_6900.JPG",
+        "mode": "fill"
+      },
+      "width": 786,
+      "height": 5394,
+      "name": "04 · Session detail"
+    },
+    {
+      "type": "text",
+      "id": "polishLabelP6vUV",
+      "name": "05 · Workout builder",
+      "x": 1250,
+      "y": 14677,
+      "fill": "#FAFAFA",
+      "content": "05 · Workout builder",
+      "fontFamily": "Inter",
+      "fontSize": 30,
+      "fontWeight": "600"
+    },
+    {
+      "type": "rectangle",
+      "id": "P6vUV",
+      "x": 1250,
+      "y": 14742,
+      "fill": {
+        "type": "image",
+        "enabled": true,
+        "url": "../img/IMG_6904.JPG",
+        "mode": "fill"
+      },
+      "width": 998,
+      "height": 3432,
+      "name": "05 · Workout builder"
+    },
+    {
+      "type": "text",
+      "id": "polishLabelFQp3v",
+      "name": "06 · Exercise catalog",
+      "x": 1250,
+      "y": 18354,
+      "fill": "#FAFAFA",
+      "content": "06 · Exercise catalog",
+      "fontFamily": "Inter",
+      "fontSize": 30,
+      "fontWeight": "600"
+    },
+    {
+      "type": "rectangle",
+      "id": "FQp3v",
+      "x": 1250,
+      "y": 18419,
+      "fill": {
+        "type": "image",
+        "enabled": true,
+        "url": "../img/IMG_6908.JPG",
+        "mode": "fill"
+      },
+      "width": 786,
+      "height": 5086,
+      "name": "06 · Exercise catalog"
+    },
+    {
+      "type": "text",
+      "id": "polishLane2",
+      "name": "STATS",
+      "x": 2500,
+      "y": 290,
+      "fill": "#7CE5DF",
+      "content": "STATS",
+      "fontFamily": "Inter",
+      "fontSize": 42,
+      "fontWeight": "600"
+    },
+    {
+      "type": "text",
+      "id": "polishLabelIN28A",
+      "name": "07 · Analytics overview",
+      "x": 2500,
+      "y": 420,
+      "fill": "#FAFAFA",
+      "content": "07 · Analytics overview",
+      "fontFamily": "Inter",
+      "fontSize": 30,
+      "fontWeight": "600"
+    },
+    {
+      "type": "rectangle",
+      "id": "IN28A",
+      "x": 2500,
+      "y": 485,
+      "fill": {
+        "type": "image",
+        "enabled": true,
+        "url": "../img/IMG_6910.JPG",
+        "mode": "fill"
+      },
+      "width": 786,
+      "height": 6336,
+      "name": "07 · Analytics overview"
+    },
+    {
+      "type": "text",
+      "id": "polishLabelg10VOK",
+      "name": "08 · Strength analytics",
+      "x": 2500,
+      "y": 7001,
+      "fill": "#FAFAFA",
+      "content": "08 · Strength analytics",
+      "fontFamily": "Inter",
+      "fontSize": 30,
+      "fontWeight": "600"
+    },
+    {
+      "type": "rectangle",
+      "id": "g10VOK",
+      "x": 2500,
+      "y": 7066,
+      "fill": {
+        "type": "image",
+        "enabled": true,
+        "url": "../img/IMG_6912.JPG",
+        "mode": "fill"
+      },
+      "width": 786,
+      "height": 8336,
+      "name": "08 · Strength analytics"
+    },
+    {
+      "type": "text",
+      "id": "polishLabellL0Lq",
+      "name": "09 · Metric history",
+      "x": 2500,
+      "y": 15582,
+      "fill": "#FAFAFA",
+      "content": "09 · Metric history",
+      "fontFamily": "Inter",
+      "fontSize": 30,
+      "fontWeight": "600"
+    },
+    {
+      "type": "rectangle",
+      "id": "lL0Lq",
+      "x": 2500,
+      "y": 15647,
+      "fill": {
+        "type": "image",
+        "enabled": true,
+        "url": "../img/IMG_6914.JPG",
+        "mode": "fill"
+      },
+      "width": 806,
+      "height": 1826,
+      "name": "09 · Metric history"
+    },
+    {
+      "type": "text",
+      "id": "polishLane3",
+      "name": "PROFILE",
+      "x": 3750,
+      "y": 290,
+      "fill": "#7CE5DF",
+      "content": "PROFILE",
+      "fontFamily": "Inter",
+      "fontSize": 42,
+      "fontWeight": "600"
+    },
+    {
+      "type": "text",
+      "id": "polishLabelp7Vdw",
+      "name": "10 · Profile and settings",
+      "x": 3750,
+      "y": 420,
+      "fill": "#FAFAFA",
+      "content": "10 · Profile and settings",
+      "fontFamily": "Inter",
+      "fontSize": 30,
+      "fontWeight": "600"
+    },
+    {
+      "type": "rectangle",
+      "id": "p7Vdw",
+      "x": 3750,
+      "y": 485,
+      "fill": {
+        "type": "image",
+        "enabled": true,
+        "url": "../img/IMG_6916.JPG",
+        "mode": "fill"
+      },
+      "width": 786,
+      "height": 5500,
+      "name": "10 · Profile and settings"
+    },
+    {
+      "type": "text",
+      "id": "polishLabelaMpDT",
+      "name": "11 · Edit profile",
+      "x": 3750,
+      "y": 6165,
+      "fill": "#FAFAFA",
+      "content": "11 · Edit profile",
+      "fontFamily": "Inter",
+      "fontSize": 30,
+      "fontWeight": "600"
+    },
+    {
+      "type": "rectangle",
+      "id": "aMpDT",
+      "x": 3750,
+      "y": 6230,
+      "fill": {
+        "type": "image",
+        "enabled": true,
+        "url": "../img/IMG_6920.JPG",
+        "mode": "fill"
+      },
+      "width": 786,
+      "height": 3380,
+      "name": "11 · Edit profile"
+    },
+    {
+      "type": "text",
+      "id": "polishLabelZ9ayNs",
+      "name": "12 · Admin",
+      "x": 3750,
+      "y": 9790,
+      "fill": "#FAFAFA",
+      "content": "12 · Admin",
+      "fontFamily": "Inter",
+      "fontSize": 30,
+      "fontWeight": "600"
+    },
+    {
+      "type": "rectangle",
+      "id": "Z9ayNs",
+      "x": 3750,
+      "y": 9855,
+      "fill": {
+        "type": "image",
+        "enabled": true,
+        "url": "../img/IMG_6918.JPG",
+        "mode": "fill"
+      },
+      "width": 786,
+      "height": 2264,
+      "name": "12 · Admin"
+    }
+  ],
+  "fileToken": "c5c1094b-0c2b-4cd8-95e5-0184f0c6d377"
+}
