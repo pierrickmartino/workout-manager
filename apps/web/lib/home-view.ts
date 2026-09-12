@@ -23,62 +23,87 @@ export interface HeroStats {
   sets: number;
 }
 
-// A cell's position relative to the Next Session: already performed (`done`), the
-// Next Session itself (`active`), or still to come (`upcoming`). Purely
-// positional — no weekday or date semantics (ADR-0008).
-export type WeekCellState = "done" | "active" | "upcoming";
+// A stop's position relative to the Next Session on the training route: already
+// performed (`done`), the Next Session itself (`next`), or still to come
+// (`upcoming`). Purely positional — no weekday or date semantics (ADR-0008).
+export type RouteStopState = "done" | "next" | "upcoming";
 
-// One Session cell within a week pill of the completion map.
-export interface WeekCell {
+// One Session as a named stop on the route: its absolute 1-based position, its
+// positional Week/Day, its display title (the "named stop", e.g. "Upper A"), and
+// its state relative to the Next Session. `title` always resolves to something
+// readable — a Session with no authored title falls back to a Week/Day label — so
+// a stop is never blank.
+export interface RouteStop {
   sessionId: number;
   position: number;
-  state: WeekCellState;
+  week: number;
+  day: number;
+  title: string;
+  state: RouteStopState;
 }
 
-// One week of the Protocol as a segmented pill: its 1-based week number, its
-// ordered Session cells, and whether it is the current week (the one holding the
-// Next Session). A pill's fill is a count of BINARY Session completions, never a
-// per-session percentage (ADR-0008/0009).
-export interface WeekPill {
+// One week of the route: its 1-based number, its ordered stops, and whether it is
+// the current week (the one holding the Next Session). Completion is BINARY per
+// stop, never a per-session percentage (ADR-0008/0009).
+export interface RouteWeek {
   week: number;
-  cells: WeekCell[];
+  stops: RouteStop[];
   // True for the single week that holds the Next Session.
   isCurrent: boolean;
 }
 
-// The Home completion map view-model: every week of the Current Protocol in
-// order, each a pill of done / active / upcoming Session cells, plus a
-// `WEEK n/total` overline. Spans the whole Protocol so the strip answers "how far
-// am I through the Protocol, and what is left?" (ADR-0009). Positional, not
-// calendrical (ADR-0008). The protocol-level `X / N` count is NOT here — it lives
-// once, on the Queue.
-export interface WeekStrip {
-  weeks: WeekPill[];
-  // The 1-based week of the Next Session — the current week.
-  currentWeek: number;
+// The Home training-route view-model: the whole Current Protocol as a route of
+// named stops. `currentWeek` is surfaced up front; `weeks` carries every week in
+// order for the expandable full-plan reveal, so the route answers "how far am I
+// through the Protocol, and what is left?" (ADR-0009). Positional, never
+// calendrical (ADR-0008). The two completion figures are deliberately kept
+// SEPARATE and never conflated (the ambiguity behind the retired dots): `position`
+// is where you are in the sequence — the N in "session N of M" — while
+// `completedCount` is how many Sessions you have actually performed ("X done").
+// Returns null when the Protocol has no Next Session, so Home shows the route only
+// for a live Current Protocol.
+export interface TrainingRoute {
+  currentWeek: RouteWeek;
+  weeks: RouteWeek[];
+  // The 1-based week of the Next Session — the current week's number.
+  currentWeekNumber: number;
   // The Protocol's total number of weeks (equals `weeks.length`).
   totalWeeks: number;
   // The rendered overline, e.g. "WEEK 2/6".
-  label: string;
+  weekLabel: string;
+  // The 1-based position of the Next Session in the sequence — the N in "session
+  // N of M". Distinct from `completedCount` (in a linear plan it is that + 1).
+  position: number;
+  // The Protocol's total number of Sessions — the M in "session N of M".
+  total: number;
+  // How many Sessions have actually been performed — "X completed".
+  completedCount: number;
 }
 
-function cellState(position: number, nextPosition: number): WeekCellState {
+function stopState(position: number, nextPosition: number): RouteStopState {
   if (position < nextPosition) return "done";
-  if (position === nextPosition) return "active";
+  if (position === nextPosition) return "next";
   return "upcoming";
 }
 
-// Derive the Home completion map from a Current Protocol: one pill per week across
-// the whole Protocol (so the pill count matches the `WEEK n/total` overline), each
-// carrying its Sessions in position order tagged done / active / upcoming relative
-// to the Next Session, with the current week flagged. Returns null when the
-// Protocol has no Next Session, so Home shows the map only for a live Current
-// Protocol.
-export function weekStrip(protocol: ProtocolProgress): WeekStrip | null {
+// A Session's readable stop title: its authored title (e.g. "Upper A"), or a
+// positional "Week W · Day D" fallback when a Session carries no title.
+function stopTitle(session: ProtocolSession): string {
+  return session.title ?? `Week ${session.week} · Day ${session.day}`;
+}
+
+// Derive the Home training route from a Current Protocol: every week across the
+// whole Protocol (so the week count matches the `WEEK n/total` overline), each
+// carrying its Sessions in position order as named stops tagged done / next /
+// upcoming relative to the Next Session, with the current week flagged and pulled
+// out as `currentWeek`. The sequence position and the performed count are carried
+// separately so the UI never conflates them. Returns null when the Protocol has no
+// Next Session, so Home shows the route only for a live Current Protocol.
+export function trainingRoute(protocol: ProtocolProgress): TrainingRoute | null {
   const next = protocol.next_session;
   if (!next) return null;
 
-  // Group Sessions by their week so each pill draws from its own week's Sessions.
+  // Group Sessions by their week so each week draws from its own Sessions.
   const sessionsByWeek = new Map<number, ProtocolSession[]>();
   for (const session of protocol.sessions) {
     const bucket = sessionsByWeek.get(session.week);
@@ -86,26 +111,36 @@ export function weekStrip(protocol: ProtocolProgress): WeekStrip | null {
     else sessionsByWeek.set(session.week, [session]);
   }
 
-  // Iterate 1..weeks (not the grouped keys) so the pill count is tied to the
+  // Iterate 1..weeks (not the grouped keys) so the week count is tied to the
   // Protocol's total weeks and always matches the overline.
-  const weeks: WeekPill[] = [];
+  const weeks: RouteWeek[] = [];
   for (let week = 1; week <= protocol.weeks; week += 1) {
-    const cells = (sessionsByWeek.get(week) ?? [])
+    const stops = (sessionsByWeek.get(week) ?? [])
       .slice()
       .sort((a, b) => a.position - b.position)
       .map((session) => ({
         sessionId: session.session_id,
         position: session.position,
-        state: cellState(session.position, next.position),
+        week: session.week,
+        day: session.day,
+        title: stopTitle(session),
+        state: stopState(session.position, next.position),
       }));
-    weeks.push({ week, cells, isCurrent: week === next.week });
+    weeks.push({ week, stops, isCurrent: week === next.week });
   }
 
+  const currentWeek = weeks.find((week) => week.isCurrent);
+  if (!currentWeek) return null;
+
   return {
+    currentWeek,
     weeks,
-    currentWeek: next.week,
+    currentWeekNumber: next.week,
     totalWeeks: protocol.weeks,
-    label: `WEEK ${next.week}/${protocol.weeks}`,
+    weekLabel: `WEEK ${next.week}/${protocol.weeks}`,
+    position: next.position,
+    total: protocol.sessions.length,
+    completedCount: protocol.completed_count,
   };
 }
 
