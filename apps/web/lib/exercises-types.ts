@@ -13,4 +13,9 @@ export interface ExerciseSearchResult {
   required_equipment: string[];
   difficulty: number | null;
   provenance: string;
+  // The broad Movement Pattern (ADR-0072), a read-time projection the backend classifies
+  // from the movement's name and muscles. Present on the browse/taxonomy projection so a
+  // row and its field-guide section agree on the family. A raw wire token ("squat" …
+  // "general"); the client resolves it via `parseMovementPattern`.
+  movement_pattern: string;
 }

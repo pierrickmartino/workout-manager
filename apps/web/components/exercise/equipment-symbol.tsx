@@ -1,10 +1,8 @@
-// PROTOTYPE — Field Guide exercise discovery. Throwaway; see README.md.
-//
-// Maps a catalog `required_equipment` label to a Lucide icon — the field-guide "at a
-// glance, what do I need" symbol. Equipment labels are free-form in the catalog, so we
-// match on lowercased substrings and fall back to a neutral dot for anything unmapped
-// (and treat "bodyweight"/"none"/empty as no equipment). Uses the Lucide set the app
-// already ships; no new dependency.
+// Maps a catalog Exercise's `required_equipment` to a Lucide symbol — the field-guide "at
+// a glance, what do I need" marker (ADR-0072). Equipment labels are free-form in the
+// Catalog, so we match on lowercased substrings and fall back to a neutral dot for an
+// unmapped label; an empty / "bodyweight" list shows the bodyweight symbol. Uses the
+// Lucide set the app already ships; no new dependency.
 
 import {
   Dumbbell,
@@ -19,8 +17,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-// Ordered substring → icon rules. First match wins, so put the specific labels
-// (kettlebell) before the general ones (bell → nothing here, but weight before bar).
+// Ordered substring → icon rules; first match wins, so specific labels (kettlebell)
+// precede general ones (bar).
 const EQUIPMENT_RULES: ReadonlyArray<readonly [string, LucideIcon, string]> = [
   ["dumbbell", Dumbbell, "Dumbbell"],
   ["kettlebell", Weight, "Kettlebell"],
@@ -48,31 +46,30 @@ const EQUIPMENT_RULES: ReadonlyArray<readonly [string, LucideIcon, string]> = [
 // Labels that mean "nothing needed" — surfaced as the bodyweight symbol, not a fallback dot.
 const BODYWEIGHT_LABELS = new Set(["bodyweight", "body weight", "none", "no equipment"]);
 
-export interface ResolvedEquipment {
+interface ResolvedEquipment {
   Icon: LucideIcon;
   label: string;
 }
 
-// Resolve the FIRST piece of equipment to a symbol — the field-guide entry shows one
-// primary symbol, with the full list on Details. Returns bodyweight for an empty/none
-// list, and a neutral fallback for an unmapped label (still honest: "some equipment").
-export function resolvePrimaryEquipment(
-  equipment: readonly string[],
-): ResolvedEquipment {
-  const meaningful = equipment.filter(
+function meaningfulEquipment(equipment: readonly string[]): string[] {
+  return equipment.filter(
     (item) => item.trim() && !BODYWEIGHT_LABELS.has(item.trim().toLowerCase()),
   );
+}
 
+// Resolve the FIRST meaningful piece of equipment to a symbol — the field-guide entry
+// shows one primary symbol, the full list lives on Details. Bodyweight for an empty / none
+// list; a neutral fallback for an unmapped label (still honest: "some equipment").
+function resolvePrimaryEquipment(equipment: readonly string[]): ResolvedEquipment {
+  const meaningful = meaningfulEquipment(equipment);
   if (meaningful.length === 0) {
     return { Icon: PersonStanding, label: "Bodyweight" };
   }
-
-  const first = meaningful[0];
-  const lower = first.toLowerCase();
+  const lower = meaningful[0].toLowerCase();
   for (const [needle, Icon, label] of EQUIPMENT_RULES) {
     if (lower.includes(needle)) return { Icon, label };
   }
-  return { Icon: Circle, label: first };
+  return { Icon: Circle, label: meaningful[0] };
 }
 
 interface EquipmentSymbolProps {
@@ -82,23 +79,20 @@ interface EquipmentSymbolProps {
   showOverflowCount?: boolean;
 }
 
-// The compact symbol + short label used on a field-guide entry.
 export function EquipmentSymbol({
   equipment,
   className,
   showOverflowCount = false,
 }: EquipmentSymbolProps): React.JSX.Element {
   const { Icon, label } = resolvePrimaryEquipment(equipment);
-  const meaningfulCount = equipment.filter(
-    (item) => item.trim() && !BODYWEIGHT_LABELS.has(item.trim().toLowerCase()),
-  ).length;
-  const overflow = showOverflowCount && meaningfulCount > 1 ? meaningfulCount - 1 : 0;
+  const overflow =
+    showOverflowCount && meaningfulEquipment(equipment).length > 1
+      ? meaningfulEquipment(equipment).length - 1
+      : 0;
 
   return (
     <span
-      className={
-        "inline-flex items-center gap-1.5 text-text-muted " + (className ?? "")
-      }
+      className={"inline-flex items-center gap-1.5 text-text-muted " + (className ?? "")}
     >
       <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
       <span className="label-mono text-[9px]">

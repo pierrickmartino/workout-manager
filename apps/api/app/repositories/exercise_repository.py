@@ -138,6 +138,23 @@ class ExerciseRepository(Protocol):
         entry."""
         ...
 
+    def browse_all(
+        self,
+        *,
+        query: str,
+        muscle_groups: Sequence[MuscleGroup],
+        equipment: Sequence[str],
+        difficulty_bands: Sequence[DifficultyBand],
+    ) -> list[Exercise]:
+        """The whole filtered, ranked Catalog for the field-guide taxonomy (ADR-0072).
+
+        Same query + facet narrowing and same curated → completeness → name ordering as
+        ``browse``, but **unpaged**: every matching Exercise is returned so the route can
+        group them by Movement Pattern with accurate per-pattern counts. The taxonomy needs
+        the whole filtered set to group it, so it does not paginate; the catalog is a
+        bounded shared set. Read-only."""
+        ...
+
     def list_by_provenance(self, provenance: Provenance) -> list[Exercise]:
         """Return every catalog Exercise carrying ``provenance``.
 
@@ -229,6 +246,33 @@ def _page(matches: list[Exercise], limit: int, offset: int) -> ExerciseSearchPag
     return ExerciseSearchPage(items=ranked[offset : offset + limit], total=len(ranked))
 
 
+def _browse_matches(
+    candidates: list[Exercise],
+    *,
+    muscle_groups: Sequence[MuscleGroup],
+    equipment: Sequence[str],
+    difficulty_bands: Sequence[DifficultyBand],
+) -> list[Exercise]:
+    """Filter and rank browse candidates, unsliced (ADR-0042).
+
+    The shared facet predicate + ordering both the paged ``browse`` and the whole-set
+    ``browse_all`` read (the taxonomy, ADR-0072) run through, so a movement appears in the
+    same order and passes the same facets whichever surface asks. Equipment is normalized
+    once here so the pure predicate compares on the same key on both sides."""
+
+    groups = set(muscle_groups)
+    kit = {normalize_equipment(item) for item in equipment}
+    bands = set(difficulty_bands)
+    filtered = [
+        exercise
+        for exercise in candidates
+        if matches_filters(
+            exercise, muscle_groups=groups, equipment=kit, difficulty_bands=bands
+        )
+    ]
+    return rank_browse_results(filtered)
+
+
 def _browse_page(
     candidates: list[Exercise],
     *,
@@ -242,21 +286,15 @@ def _browse_page(
 
     Shared by the SQL and in-memory repositories so both apply one facet predicate, one
     ordering, and one slice rule and never drift — the browse twin of ``_page``. Filtering
-    and ranking happen here, *after* the name/list-all candidate set is gathered, so the
-    ``total`` and the page reflect the filtered set. Equipment is normalized once here so
-    the pure predicate compares on the same key on both sides."""
+    and ranking happen in ``_browse_matches``, *after* the name/list-all candidate set is
+    gathered, so the ``total`` and the page reflect the filtered set."""
 
-    groups = set(muscle_groups)
-    kit = {normalize_equipment(item) for item in equipment}
-    bands = set(difficulty_bands)
-    filtered = [
-        exercise
-        for exercise in candidates
-        if matches_filters(
-            exercise, muscle_groups=groups, equipment=kit, difficulty_bands=bands
-        )
-    ]
-    ranked = rank_browse_results(filtered)
+    ranked = _browse_matches(
+        candidates,
+        muscle_groups=muscle_groups,
+        equipment=equipment,
+        difficulty_bands=difficulty_bands,
+    )
     return ExerciseSearchPage(items=ranked[offset : offset + limit], total=len(ranked))
 
 
@@ -389,6 +427,26 @@ class SqlExerciseRepository:
             difficulty_bands=difficulty_bands,
             limit=limit,
             offset=offset,
+        )
+
+    def browse_all(
+        self,
+        *,
+        query: str,
+        muscle_groups: Sequence[MuscleGroup],
+        equipment: Sequence[str],
+        difficulty_bands: Sequence[DifficultyBand],
+    ) -> list[Exercise]:
+        normalized = normalize_name(query)
+        statement = select(Exercise)
+        if normalized:
+            statement = statement.where(Exercise.normalized_name.contains(normalized))
+        candidates = list(self._session.exec(statement).all())
+        return _browse_matches(
+            candidates,
+            muscle_groups=muscle_groups,
+            equipment=equipment,
+            difficulty_bands=difficulty_bands,
         )
 
     def list_by_provenance(self, provenance: Provenance) -> list[Exercise]:
@@ -553,6 +611,27 @@ class InMemoryExerciseRepository:
             difficulty_bands=difficulty_bands,
             limit=limit,
             offset=offset,
+        )
+
+    def browse_all(
+        self,
+        *,
+        query: str,
+        muscle_groups: Sequence[MuscleGroup],
+        equipment: Sequence[str],
+        difficulty_bands: Sequence[DifficultyBand],
+    ) -> list[Exercise]:
+        normalized = normalize_name(query)
+        candidates = [
+            exercise
+            for exercise in self._by_id.values()
+            if not normalized or normalized in exercise.normalized_name
+        ]
+        return _browse_matches(
+            candidates,
+            muscle_groups=muscle_groups,
+            equipment=equipment,
+            difficulty_bands=difficulty_bands,
         )
 
     def list_by_provenance(self, provenance: Provenance) -> list[Exercise]:

@@ -6,7 +6,8 @@ import type {
   CatalogFilters,
   ExerciseUsage,
 } from "./exercise-browse-types";
-import { buildCatalogQuery } from "./exercise-browse-query";
+import type { CatalogTaxonomy } from "./exercise-taxonomy-types";
+import { buildCatalogQuery, catalogFiltersToParams } from "./exercise-browse-query";
 
 // Re-export the server-free types so server-side callers can import them from
 // "@/lib/exercise-browse". Client Components import them directly from
@@ -25,6 +26,17 @@ export async function browseCatalog(
   page: { limit: number; offset: number },
 ): Promise<Envelope<ExerciseSearchResult[]>> {
   return apiGet(`/api/exercises?${buildCatalogQuery(filters, page)}`);
+}
+
+// The whole filtered Catalog grouped into the field-guide Movement Pattern taxonomy
+// (ADR-0072): the same facets as `browseCatalog` narrow it, then the backend groups every
+// match by pattern in canonical order with accurate per-pattern counts. Unpaged — the
+// taxonomy needs the whole filtered set to group it. Returns the standard envelope.
+export async function fetchCatalogTaxonomy(
+  filters: CatalogFilters,
+): Promise<Envelope<CatalogTaxonomy>> {
+  const params = catalogFiltersToParams(filters).toString();
+  return apiGet(`/api/exercises/taxonomy${params ? `?${params}` : ""}`);
 }
 
 // The facet option lists that need the server — just the Catalog's distinct equipment

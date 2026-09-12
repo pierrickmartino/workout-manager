@@ -1,55 +1,45 @@
 "use client";
 
-// PROTOTYPE — Field Guide exercise discovery. Throwaway; see README.md.
-//
-// The shared INNER content of the Details surface — the same body whether it is wrapped
-// in the morphing dialog (variants A/B) or the bottom drawer (variant C). Given the row
-// summary it already has (name, family, muscles, equipment) it paints the field-guide
-// header instantly, then lazily loads the honest detail (how-to, alternatives, past
-// performance) via the read-only `fetchFieldGuideDetail` action. Read-only: alternatives
-// deep-link to the real Exercise Detail page; nothing here edits a plan.
+// The inner content of the field-guide Details drawer (ADR-0072). Given the taxonomy row
+// it already has (name, pattern, muscles, equipment) it paints the field-guide header
+// instantly, then lazily loads the honest detail — how-to, alternatives, past performance —
+// via the read-only `fetchCatalogEntryDetail` action. Read-only: alternatives deep-link to
+// the full Exercise Detail page; nothing here edits a plan.
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ChevronRight, TrendingUp } from "lucide-react";
 
 import {
-  fetchFieldGuideDetail,
-  type FieldGuideDetail,
-} from "@/app/exercises/fieldguide-detail-action";
+  fetchCatalogEntryDetail,
+  type CatalogEntryDetail,
+} from "@/app/exercises/catalog-detail-action";
 import {
-  classifyMovementFamily,
-  FAMILY_BLURB,
-  FAMILY_LABEL,
-} from "@/lib/prototype/movement-family";
-import { plainMuscleSummary } from "@/lib/prototype/plain-muscle-summary";
+  PATTERN_BLURB,
+  PATTERN_LABEL,
+  parseMovementPattern,
+} from "@/lib/movement-pattern";
+import { plainMuscleSummary } from "@/lib/plain-muscle-summary";
 import { toStatTiles } from "@/lib/exercise-stats-view";
 import type { WeightUnit } from "@/lib/weight-unit";
 import type { ExerciseSearchResult } from "@/lib/exercises-types";
 import { MovementGlyph } from "./movement-glyph";
 import { EquipmentSymbol } from "./equipment-symbol";
 
-interface DetailContentProps {
+interface CatalogDetailProps {
   exercise: ExerciseSearchResult;
   unit: WeightUnit;
-  // The shared view-transition name so the glyph can morph from the row/card into this
-  // hero (variants A/B). Omitted by the drawer, which slides rather than morphs.
-  glyphViewTransitionName?: string;
 }
 
-export function DetailContent({
-  exercise,
-  unit,
-  glyphViewTransitionName,
-}: DetailContentProps): React.JSX.Element {
-  const [detail, setDetail] = useState<FieldGuideDetail | null>(null);
+export function CatalogDetail({ exercise, unit }: CatalogDetailProps): React.JSX.Element {
+  const [detail, setDetail] = useState<CatalogEntryDetail | null>(null);
 
-  // Load the honest detail when the surface opens for this exercise. A changed id
-  // (the user tapped a different row while one was open) re-fetches.
+  // Load the honest detail when the drawer opens for this exercise. A changed id (the user
+  // tapped another row while one was open) re-fetches.
   useEffect(() => {
     let live = true;
     setDetail(null);
-    fetchFieldGuideDetail(exercise.id).then((result) => {
+    fetchCatalogEntryDetail(exercise.id).then((result) => {
       if (live) setDetail(result);
     });
     return () => {
@@ -57,34 +47,23 @@ export function DetailContent({
     };
   }, [exercise.id]);
 
-  const verdict = classifyMovementFamily(exercise);
+  const pattern = parseMovementPattern(exercise.movement_pattern);
   const summary = plainMuscleSummary(exercise.targeted_muscles);
 
   return (
     <div className="flex flex-col gap-6">
       {/* Field-guide header — painted instantly from what the row already knows. */}
       <div className="flex items-start gap-4">
-        <div
-          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border border-border bg-elevated text-text-primary"
-          style={
-            glyphViewTransitionName
-              ? { viewTransitionName: glyphViewTransitionName }
-              : undefined
-          }
-        >
-          <MovementGlyph
-            family={verdict.family}
-            dimmed={verdict.confidence === "inferred"}
-            className="h-11 w-11"
-          />
-        </div>
+        <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border border-border bg-elevated text-text-primary">
+          <MovementGlyph pattern={pattern} className="h-11 w-11" />
+        </span>
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <h2 className="font-display text-xl font-semibold leading-tight text-text-primary">
             {exercise.name}
           </h2>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="label-mono text-[10px] text-cyan">
-              {FAMILY_LABEL[verdict.family]}
+              {PATTERN_LABEL[pattern]}
             </span>
             <EquipmentSymbol equipment={exercise.required_equipment} showOverflowCount />
           </div>
@@ -97,7 +76,7 @@ export function DetailContent({
       </div>
 
       <p className="rounded-md border border-dashed border-border bg-surface px-3.5 py-2.5 font-sans text-[12px] leading-relaxed text-text-muted">
-        {FAMILY_BLURB[verdict.family]}
+        {PATTERN_BLURB[pattern]}
       </p>
 
       {detail === null ? (
@@ -115,7 +94,7 @@ function LoadedDetail({
   detail,
   unit,
 }: {
-  detail: FieldGuideDetail;
+  detail: CatalogEntryDetail;
   unit: WeightUnit;
 }) {
   const { exercise, records } = detail;
@@ -125,7 +104,10 @@ function LoadedDetail({
 
   return (
     <div className="flex flex-col gap-6">
-      <PastPerformance tiles={tiles} hasSeries={(records?.top_set_series.length ?? 0) > 0} />
+      <PastPerformance
+        tiles={tiles}
+        hasSeries={(records?.top_set_series.length ?? 0) > 0}
+      />
       <HowTo steps={exercise.instructions} />
       <Alternatives items={exercise.alternatives} />
     </div>
@@ -133,8 +115,8 @@ function LoadedDetail({
 }
 
 // PAST PERFORMANCE — the record-side figures the field guide surfaces without leaving the
-// panel. Honest empties: a never-logged movement shows the "not trained yet" line rather
-// than fabricated zeros.
+// drawer. Honest empties: a never-logged movement shows the "not trained yet" line rather
+// than fabricated zeros (ADR-0017).
 function PastPerformance({
   tiles,
   hasSeries,
@@ -142,7 +124,9 @@ function PastPerformance({
   tiles: { label: string; value: string }[];
   hasSeries: boolean;
 }) {
-  const trained = tiles.some((tile) => tile.label === "TOTAL SETS" && tile.value !== "0");
+  const trained = tiles.some(
+    (tile) => tile.label === "TOTAL SETS" && tile.value !== "0",
+  );
   return (
     <section className="flex flex-col gap-2.5">
       <SectionLabel icon={<TrendingUp className="h-3.5 w-3.5" aria-hidden />}>
@@ -203,7 +187,7 @@ function HowTo({ steps }: { steps: string[] }) {
   );
 }
 
-// ALTERNATIVES — sibling movements the user can swap toward, each linking to real Detail.
+// ALTERNATIVES — sibling movements the user can swap toward, each linking to full Detail.
 function Alternatives({ items }: { items: { id: number; name: string }[] }) {
   if (items.length === 0) return null;
   return (
