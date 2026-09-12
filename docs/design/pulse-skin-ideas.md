@@ -2,6 +2,8 @@
 
 Prepared: 11 September 2026. Based on the current [globals.css](../../apps/web/app/globals.css), [root layout](../../apps/web/app/layout.tsx), and shared button, card, input, and alert components.
 
+Prompt : Now create a new markdown file with ideas of skins to add. Look at global.css first to understand what is already implemented.
+
 ## What is implemented in this checkout
 
 The stylesheet is named `globals.css`. It defines one dark PULSE appearance through Tailwind's `@theme` tokens:

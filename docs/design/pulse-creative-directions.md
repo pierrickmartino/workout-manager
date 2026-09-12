@@ -2,6 +2,8 @@
 
 Prepared: 11 September 2026.
 
+Prompt : Now create a new markdown file with ideas to add more creativity to this app using external resources like 21st.dev or other libraries to give the app a unique aspect.
+
 This proposal builds on the 12 screens in [polish.pen](polish.pen) and the [UI/UX review](polish-ui-ux-review.md). It combines researched external resources with original concepts for PULSE. The concepts are proposals, not features supplied out of the box by the linked libraries. Resources were checked on the date above; no packages were installed or prototypes implemented.
 
 ## Recommended direction: a personal training atlas

@@ -2,6 +2,8 @@
 
 Prepared: 11 September 2026.
 
+Prompt : Finally create a new markdown file with your recommendations for future improvements. Feel free to provide all you think in this file.
+
 ## Overall recommendation
 
 Make PULSE exceptionally dependable at three things: **knowing what to do next, recording what actually happened, and explaining progress accurately**. Build its visual identity around that experience. Expand into more ambitious features once the core journey is easy to understand and difficult to lose.
