@@ -122,9 +122,11 @@ function VariantA({ story }: { story: ProgressStory }) {
         <span className="h-0.5 w-16 rounded-full bg-cyan" aria-hidden />
       </div>
 
-      <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-2">
+      {/* Stacks THEN → NOW vertically on phones (the 3-across grid is too tight under
+          ~400px); side-by-side with the delta between them from sm up. */}
+      <div className="grid grid-cols-1 items-stretch gap-2 sm:grid-cols-[1fr_auto_1fr]">
         <LedgerCell label="THEN" perf={story.earlier} tone="muted" />
-        <div className="flex flex-col items-center justify-center px-1">
+        <div className="flex items-center justify-center px-1">
           {story.headline ? (
             <Badge variant="cyan" className="whitespace-nowrap">
               {story.delta}
