@@ -17,6 +17,8 @@ import { StrengthTrajectories } from "@/components/analytics/strength-trajectori
 import { MuscleBalance } from "@/components/analytics/muscle-balance";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+// PROTOTYPE — throwaway. Mounted only when ?variant= is present (see ./_prototype).
+import { ProgressStoryPrototype } from "./_prototype/progress-story-prototype";
 
 // The default PR-timeline page size — kept in step with the endpoint's default so the
 // first page matches whether or not a ?offset= is supplied.
@@ -35,9 +37,23 @@ const TIMELINE_LIMIT = 20;
 export default async function StrengthAnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ offset?: string }>;
+  searchParams: Promise<{ offset?: string; variant?: string; story?: string }>;
 }) {
-  const { offset: rawOffset } = await searchParams;
+  const { offset: rawOffset, variant, story } = await searchParams;
+
+  // PROTOTYPE guard (throwaway — see ./_prototype/README.md). When ?variant= is
+  // present, render the "progress as a verifiable story" prototype over stub data
+  // instead of the real screen, so it runs with no backend (`npm run dev`, then
+  // /analytics/strength?variant=A). The real path below is untouched when absent.
+  if (variant) {
+    return (
+      <section className="flex flex-col gap-6">
+        <PageHeader overline="PULSE // STATS · PROTOTYPE" title="Strength Analytics" />
+        <ProgressStoryPrototype variant={variant} storyKey={story} />
+      </section>
+    );
+  }
+
   const offset = toOffset(rawOffset);
   const envelope = await fetchStrengthAnalytics(TIMELINE_LIMIT, offset);
 
