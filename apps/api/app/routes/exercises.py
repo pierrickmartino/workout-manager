@@ -26,6 +26,10 @@ from app.domain.exercise_browse import (
     parse_muscle_group,
 )
 from app.domain.exercise_usage import last_performed
+from app.domain.movement_pattern import (
+    classify_movement_pattern,
+    group_by_movement_pattern,
+)
 from app.domain.substitution import RelationKind
 from app.envelope import success_envelope
 from app.generation.backfill_queue import BackfillQueue
@@ -76,6 +80,10 @@ def _search_result(exercise: Exercise) -> dict:
         "required_equipment": list(exercise.required_equipment),
         "difficulty": exercise.difficulty,
         "provenance": exercise.provenance,
+        # The broad Movement Pattern (ADR-0072): a read-time projection over the
+        # movement's name and muscles, so the field-guide row and its taxonomy section
+        # agree on which family the entry belongs to. Never a stored column.
+        "movement_pattern": classify_movement_pattern(exercise).value,
     }
 
 
@@ -162,6 +170,60 @@ def exercise_usage(
             {"exercise_id": exercise_id, "last_performed_on": performed_on.isoformat()}
             for exercise_id, performed_on in usage.items()
         ]
+    )
+
+
+@router.get("/exercises/taxonomy")
+def browse_taxonomy(
+    query: str = Query(default="", description="Name substring to match."),
+    muscle_group: list[str] = Query(
+        default=[], description="Curated Muscle Group facet (repeatable)."
+    ),
+    equipment: list[str] = Query(
+        default=[], description="Required-equipment facet (repeatable)."
+    ),
+    difficulty: list[str] = Query(
+        default=[], description="Difficulty band facet: beginner|intermediate|advanced."
+    ),
+    _: str = Depends(get_current_user),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+) -> dict:
+    """The Catalog grouped into the field-guide Movement Pattern taxonomy (ADR-0072).
+
+    Applies the same query + facet narrowing as ``GET /exercises`` (AND across facets, OR
+    within each; unknown facet values dropped), then groups the **whole** filtered set by
+    broad Movement Pattern — Squat, Hinge, Push, Pull, Carry, Locomotion, Core, then a
+    General bucket — in canonical order with empty patterns omitted. Each group carries its
+    ranked exercises (curated → completeness → name) and an accurate ``count``; the pattern
+    is a read-time projection, so this endpoint owns no new state. Unpaged: the taxonomy
+    needs the whole filtered set to group it, and the catalog is a bounded shared set.
+    Declared before ``/exercises/{exercise_id}`` so the literal path wins. Read-only."""
+
+    muscle_groups = [
+        group for raw in muscle_group if (group := parse_muscle_group(raw)) is not None
+    ]
+    difficulty_bands = [
+        band for raw in difficulty if (band := parse_difficulty_band(raw)) is not None
+    ]
+    matches = exercises.browse_all(
+        query=query,
+        muscle_groups=muscle_groups,
+        equipment=equipment,
+        difficulty_bands=difficulty_bands,
+    )
+    groups = group_by_movement_pattern(matches)
+    return success_envelope(
+        {
+            "groups": [
+                {
+                    "pattern": pattern.value,
+                    "count": len(members),
+                    "exercises": [_search_result(exercise) for exercise in members],
+                }
+                for pattern, members in groups
+            ],
+        },
+        meta={"total": sum(len(members) for _, members in groups)},
     )
 
 
