@@ -41,6 +41,7 @@ import { sessionDeleteView, DELETE_DISABLED_HINT } from "@/lib/session-delete";
 import { submitDeleteSession } from "@/app/sessions/[id]/actions";
 import { appendFrom } from "@/lib/back-target";
 import { PageHeader } from "@/components/pulse/page-header";
+import { WorkoutSigil } from "@/components/pulse/workout-sigil";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { DataList } from "@/components/pulse/data-list";
 import { Card } from "@/components/ui/card";
@@ -125,7 +126,20 @@ export default async function SessionPage({
     <section className="flex flex-col gap-7">
       <PageHeader
         overline="PULSE // SESSION"
-        title={nameView.displayName}
+        title={
+          <span className="flex items-center gap-3">
+            {/* The Workout Signature mark (CONTEXT: Workout Signature): the Session's recognizable
+                sigil, keyed on its id so it matches the mark shown for this Session on Home, My
+                Sessions, and Train. Fill hue by Training Type, beside the type badge on the right. */}
+            <WorkoutSigil
+              seedId={session.id}
+              exerciseCount={session.prescriptions.length}
+              trainingType={session.training_type}
+              size={48}
+            />
+            <span className="min-w-0">{nameView.displayName}</span>
+          </span>
+        }
         action={
           <div className="flex items-center gap-2">
             <Badge variant="magenta" className="capitalize">

@@ -4,6 +4,7 @@ import { ArrowRight, Play } from "lucide-react";
 import type { ProtocolProgress } from "@/lib/protocols-types";
 import { heroStats } from "@/lib/home-view";
 import { StatRow } from "@/components/pulse/stat-row";
+import { WorkoutSigil } from "@/components/pulse/workout-sigil";
 import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 
@@ -35,13 +36,25 @@ export function SessionHero({ protocol }: SessionHeroProps): React.JSX.Element {
         </span>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <h2 className="font-display text-2xl font-bold capitalize text-text-primary">
-          {heading}
-        </h2>
-        <p className="label-mono text-[11px] capitalize text-text-secondary">
-          {protocol.training_type} &middot; {protocol.objective}
-        </p>
+      <div className="flex items-center gap-4">
+        {/* The Workout Signature mark (CONTEXT: Workout Signature): the Next Session's
+            recognizable sigil, keyed on its Session id so it matches the same Session's mark on
+            My Sessions and its detail page. Falls back to the Protocol id when a Protocol has no
+            Next Session (the heading is non-Session then too). */}
+        <WorkoutSigil
+          seedId={next?.session_id ?? protocol.id}
+          exerciseCount={stats.modules}
+          trainingType={protocol.training_type}
+          size={60}
+        />
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <h2 className="font-display text-2xl font-bold capitalize text-text-primary">
+            {heading}
+          </h2>
+          <p className="label-mono text-[11px] capitalize text-text-secondary">
+            {protocol.training_type} &middot; {protocol.objective}
+          </p>
+        </div>
       </div>
 
       <StatRow

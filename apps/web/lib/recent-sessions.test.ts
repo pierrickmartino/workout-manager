@@ -196,13 +196,15 @@ test("buildRecentSessionRow assembles plan identity, performance recency, and th
   // Act
   const row = buildRecentSessionRow(selection, prescriptions);
 
-  // Assert — names from the library row, preview capped at three from the plan, Start into live.
+  // Assert — names from the library row, preview capped at three from the plan, the full
+  // exercise count for the Workout Signature (not the capped preview), Start into live.
   assert.deepEqual(row, {
     id: 8,
     displayName: "Push Day",
     trainingType: "strength",
     lastPerformedOn: "2026-09-01",
     previewExercises: ["Overhead Press", "Incline Bench", "Lateral Raise"],
+    exerciseCount: 4,
     startHref: "/sessions/8/live",
   });
 });

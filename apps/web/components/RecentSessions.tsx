@@ -4,6 +4,7 @@ import { Play } from "lucide-react";
 import type { RecentSessionRow } from "@/lib/recent-sessions";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { WorkoutSigil } from "@/components/pulse/workout-sigil";
 import { buttonVariants } from "@/components/ui/button";
 
 // The Train page's "Recent Sessions" panel (CONTEXT: Recent Sessions): the user's up-to-five
@@ -42,19 +43,29 @@ function RecentSessionCard({
   return (
     <Card className="flex flex-col gap-3 p-4 transition-colors hover:border-cyan/40">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-2">
-          <h3 className="truncate font-display text-base font-semibold text-text-primary">
-            {row.displayName}
-          </h3>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="cyan" className="capitalize">
-              {row.trainingType}
-            </Badge>
-            {/* A performed date is honest record data (History shows it too) — not the
-                forbidden calendar "today" (ADR-0001). */}
-            <span className="label-mono text-[10px] text-text-muted">
-              Last trained {row.lastPerformedOn}
-            </span>
+        <div className="flex min-w-0 items-start gap-3">
+          {/* The Workout Signature mark (CONTEXT: Workout Signature): keyed on the Session id, so
+              a plan carries the same sigil here that it shows on My Sessions and its detail page. */}
+          <WorkoutSigil
+            seedId={row.id}
+            exerciseCount={row.exerciseCount}
+            trainingType={row.trainingType}
+            size={44}
+          />
+          <div className="flex min-w-0 flex-col gap-2">
+            <h3 className="truncate font-display text-base font-semibold text-text-primary">
+              {row.displayName}
+            </h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="cyan" className="capitalize">
+                {row.trainingType}
+              </Badge>
+              {/* A performed date is honest record data (History shows it too) — not the
+                  forbidden calendar "today" (ADR-0001). */}
+              <span className="label-mono text-[10px] text-text-muted">
+                Last trained {row.lastPerformedOn}
+              </span>
+            </div>
           </div>
         </div>
         {/* Start deep-links straight into the plan's Live Session (Q2); the concurrency guard
