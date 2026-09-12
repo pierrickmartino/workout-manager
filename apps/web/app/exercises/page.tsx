@@ -2,6 +2,8 @@ import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
 import { Alert } from "@/components/pulse/alert";
 import { ExerciseCatalogBrowser } from "@/components/ExerciseCatalogBrowser";
+import { FieldGuidePrototype } from "@/components/exercise-fieldguide-prototype/field-guide-prototype";
+import { FIELD_GUIDE_KEYS } from "@/components/exercise-fieldguide-prototype/variant-catalog";
 import {
   browseCatalog,
   fetchCatalogFacets,
@@ -10,6 +12,19 @@ import {
 import { CATALOG_PAGE_SIZE } from "@/lib/exercise-browse-types";
 import { parseCatalogFilters, type RawSearchParams } from "@/lib/exercise-browse-query";
 import { fetchProfile } from "@/lib/profile";
+import { resolveAppearance } from "@/lib/appearance";
+
+// PROTOTYPE HOOK (throwaway, gated behind ?variant=). When the URL carries a valid
+// ?variant= key the "Field Guide" discovery prototype renders in place of the production
+// browser; without it, or in any production build, the page is exactly as it was. The
+// floating switcher (hidden in production builds) cycles the variants. See
+// components/exercise-fieldguide-prototype/README.md.
+function resolvePrototypeVariant(raw: RawSearchParams): string | null {
+  if (process.env.NODE_ENV === "production") return null;
+  const value = raw.variant;
+  const key = Array.isArray(value) ? value[0] : value;
+  return key && FIELD_GUIDE_KEYS.has(key) ? key : null;
+}
 
 // Browse the Catalog (ADR-0042): a first-class, read-only destination to discover
 // movements across the whole shared Catalog, faceted by Muscle Group / equipment /
@@ -23,7 +38,9 @@ export default async function ExercisesPage({
 }: {
   searchParams: Promise<RawSearchParams>;
 }) {
-  const filters = parseCatalogFilters(await searchParams);
+  const raw = await searchParams;
+  const filters = parseCatalogFilters(raw);
+  const prototypeVariant = resolvePrototypeVariant(raw);
 
   const [pageEnvelope, facetsEnvelope, usageEnvelope, profileEnvelope] =
     await Promise.all([
@@ -32,6 +49,10 @@ export default async function ExercisesPage({
       fetchExerciseUsage(),
       fetchProfile(),
     ]);
+
+  // The prototype's Details panel needs the reader's Weight Unit; the production browser
+  // does not. Fetch it only on the prototype path so the shipped page is untouched.
+  const appearance = prototypeVariant ? await resolveAppearance() : null;
 
   // Today as a date-only ISO string, so the descriptive recency reads relative to now.
   const referenceIso = new Date().toISOString().slice(0, 10);
@@ -54,15 +75,27 @@ export default async function ExercisesPage({
       </p>
 
       {pageEnvelope.success && pageEnvelope.data ? (
-        <ExerciseCatalogBrowser
-          initialFilters={filters}
-          initialResults={pageEnvelope.data}
-          initialTotal={pageEnvelope.meta?.total ?? pageEnvelope.data.length}
-          equipmentOptions={equipmentOptions}
-          myEquipment={myEquipment}
-          usage={usage}
-          referenceIso={referenceIso}
-        />
+        prototypeVariant ? (
+          <FieldGuidePrototype
+            variant={prototypeVariant}
+            initialFilters={filters}
+            initialResults={pageEnvelope.data}
+            initialTotal={pageEnvelope.meta?.total ?? pageEnvelope.data.length}
+            equipmentOptions={equipmentOptions}
+            myEquipment={myEquipment}
+            unit={appearance?.weight_unit ?? "kg"}
+          />
+        ) : (
+          <ExerciseCatalogBrowser
+            initialFilters={filters}
+            initialResults={pageEnvelope.data}
+            initialTotal={pageEnvelope.meta?.total ?? pageEnvelope.data.length}
+            equipmentOptions={equipmentOptions}
+            myEquipment={myEquipment}
+            usage={usage}
+            referenceIso={referenceIso}
+          />
+        )
       ) : (
         <Alert tone="error">
           Could not load the catalog: {pageEnvelope.error ?? "unknown error"}
