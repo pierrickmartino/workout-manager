@@ -17,10 +17,10 @@ import { Alert } from "@/components/pulse/alert";
 import { VolumeChart } from "@/components/pulse/volume-chart";
 import { DistanceChart } from "@/components/pulse/distance-chart";
 import { MuscleSplit } from "@/components/pulse/muscle-split";
-import { MuscleCoverage } from "@/components/analytics/muscle-coverage";
+import { MuscleAtlas } from "@/components/analytics/muscle-atlas";
 import { Card } from "@/components/ui/card";
 import { toMuscleBars, type MuscleBar } from "@/lib/muscle-distribution";
-import { toCoverageView } from "@/lib/muscle-coverage-view";
+import { toAtlasView } from "@/lib/muscle-atlas-view";
 import {
   toRecordRows,
   toRecentRecordsTeaser,
@@ -74,7 +74,7 @@ export default async function AnalyticsPage({
   const range = overview.range;
   const hasHistory = overview.sessions > 0;
   const muscleBars = toMuscleBars(overview.muscle_distribution);
-  const coverageView = toCoverageView(overview.coverage);
+  const atlasView = toAtlasView(overview.coverage);
   const recordRows = toRecordRows(overview.recent_records, unit);
   // The Strength Analytics screen is offered only to a user with qualifying strength
   // history — the same condition the strength read model gates on
@@ -121,10 +121,11 @@ export default async function AnalyticsPage({
         </Card>
       )}
 
-      {/* Muscle Group Coverage (ADR-0025): ungated and type-neutral, beside the Muscle
-          Split — presence next to proportion. Rendered for every user, including a pure
-          yoga/mobility/bodyweight history, over its own fixed 8-week window. */}
-      <MuscleCoverage view={coverageView} />
+      {/* Muscle Atlas (ADR-0025/0073, task #9): the body map of Muscle Group Coverage —
+          ungated and type-neutral, beside the Muscle Split (presence + volume next to
+          proportion). Rendered for every user, including a pure yoga/mobility/bodyweight
+          history, over its own fixed range-independent 8-week window. */}
+      <MuscleAtlas view={atlasView} />
 
       {recordRows.length > 0 ? (
         <RecentRecords rows={recordRows} teaser={recordsTeaser} />

@@ -19,6 +19,7 @@ import pytest
 
 from app.domain.muscle_groups import (
     GROUP_ORDER,
+    ContributingExercise,
     GroupCoverage,
     MuscleGroup,
     classify,
@@ -31,9 +32,11 @@ from app.domain.muscle_groups import (
 
 @dataclass
 class _LoggedSet:
-    """Minimal stand-in carrying only the Exercise muscles ``distribution`` reads."""
+    """Minimal stand-in carrying the Exercise muscles ``distribution`` reads and the
+    Exercise ``name`` the coverage read attributes a group's sets back to."""
 
     targeted_muscles: list[str] = field(default_factory=list)
+    exercise_name: str = ""
 
 
 @dataclass
@@ -539,3 +542,137 @@ def test_unclassified_present_is_false_for_an_empty_history():
 
     # Assert — nothing logged, nothing to disclose
     assert coverage.unclassified_present is False
+
+
+# ``GroupCoverage.sets`` / ``contributing_exercises`` — the atlas region detail (task #9):
+# per-group in-window set counts and the exercises behind them, so a lit region explains its
+# presence. Descriptive only — a count and its exercises, never a ranking or a target.
+
+
+def _group(coverage: tuple[GroupCoverage, ...], group: MuscleGroup) -> GroupCoverage:
+    return next(row for row in coverage if row.group is group)
+
+
+def test_group_coverage_counts_in_window_sets_per_group():
+    # Arrange — three Legs sets and one Chest set inside the window
+    history = [
+        _DatedSession(
+            _TODAY,
+            [
+                _LoggedSet(["quadriceps"], "Back Squat"),
+                _LoggedSet(["hamstrings"], "Romanian Deadlift"),
+                _LoggedSet(["glutes"], "Hip Thrust"),
+                _LoggedSet(["chest"], "Bench Press"),
+            ],
+        )
+    ]
+
+    # Act
+    coverage = recent_coverage(history, reference=_TODAY, weeks=8)
+
+    # Assert — each group's set count reflects the sets that trained it
+    assert _group(coverage.groups, MuscleGroup.LEGS).sets == 3
+    assert _group(coverage.groups, MuscleGroup.CHEST).sets == 1
+    assert _group(coverage.groups, MuscleGroup.BACK).sets == 0
+
+
+def test_a_compound_set_counts_once_toward_each_group_it_trains():
+    # Arrange — one set training Chest, Shoulders, and Arms (a bench press's full union)
+    history = [
+        _DatedSession(_TODAY, [_LoggedSet(["chest", "front delts", "triceps"], "Bench Press")])
+    ]
+
+    # Act
+    coverage = recent_coverage(history, reference=_TODAY, weeks=8)
+
+    # Assert — the single set counts one toward each distinct group (not split into thirds),
+    # so per-group counts intentionally exceed the one logged set
+    assert _group(coverage.groups, MuscleGroup.CHEST).sets == 1
+    assert _group(coverage.groups, MuscleGroup.SHOULDERS).sets == 1
+    assert _group(coverage.groups, MuscleGroup.ARMS).sets == 1
+
+
+def test_contributing_exercises_are_ranked_most_sets_first_then_alphabetically():
+    # Arrange — Legs trained by three exercises with 3 / 3 / 1 sets; the two tied at 3 must
+    # break alphabetically so the order is deterministic
+    history = [
+        _DatedSession(
+            _TODAY,
+            [
+                _LoggedSet(["quadriceps"], "Back Squat"),
+                _LoggedSet(["quadriceps"], "Back Squat"),
+                _LoggedSet(["quadriceps"], "Back Squat"),
+                _LoggedSet(["hamstrings"], "Deadlift"),
+                _LoggedSet(["hamstrings"], "Deadlift"),
+                _LoggedSet(["hamstrings"], "Deadlift"),
+                _LoggedSet(["calves"], "Calf Raise"),
+            ],
+        )
+    ]
+
+    # Act
+    legs = _group(recent_coverage(history, reference=_TODAY, weeks=8).groups, MuscleGroup.LEGS)
+
+    # Assert — sorted by set count desc, then name asc
+    assert legs.contributing_exercises == (
+        ContributingExercise(name="Back Squat", sets=3),
+        ContributingExercise(name="Deadlift", sets=3),
+        ContributingExercise(name="Calf Raise", sets=1),
+    )
+
+
+def test_an_untrained_group_has_zero_sets_and_no_contributing_exercises():
+    # Arrange — only Chest trained; Legs never touched
+    history = [_DatedSession(_TODAY, [_LoggedSet(["chest"], "Bench Press")])]
+
+    # Act
+    legs = _group(recent_coverage(history, reference=_TODAY, weeks=8).groups, MuscleGroup.LEGS)
+
+    # Assert — an honest empty region: not covered, zero sets, no exercises
+    assert legs.covered is False
+    assert legs.sets == 0
+    assert legs.contributing_exercises == ()
+
+
+def test_group_sets_ignore_out_of_window_work():
+    # Arrange — Legs trained only a day before the window opens (Mon 2026-05-18 relative to
+    # _TODAY): it must not add to the in-window set count
+    history = [_DatedSession(date(2026, 5, 17), [_LoggedSet(["quadriceps"], "Back Squat")])]
+
+    # Act
+    legs = _group(recent_coverage(history, reference=_TODAY, weeks=8).groups, MuscleGroup.LEGS)
+
+    # Assert — out-of-window sets are not counted
+    assert legs.sets == 0
+    assert legs.contributing_exercises == ()
+
+
+def test_unclassified_sets_counts_in_window_unmapped_sets():
+    # Arrange — two unmapped sets plus a real Chest set, all in-window
+    history = [
+        _DatedSession(
+            _TODAY,
+            [
+                _LoggedSet(["unobtainium"], "Vinyasa Flow"),
+                _LoggedSet([], "Mobility Circuit"),
+                _LoggedSet(["chest"], "Bench Press"),
+            ],
+        )
+    ]
+
+    # Act
+    coverage = recent_coverage(history, reference=_TODAY, weeks=8)
+
+    # Assert — both unmapped sets are disclosed as a count, and the real work is untouched
+    assert coverage.unclassified_sets == 2
+    assert coverage.unclassified_present is True
+    assert _group(coverage.groups, MuscleGroup.CHEST).sets == 1
+
+
+def test_unclassified_sets_is_zero_when_all_work_maps():
+    # Arrange / Act — every in-window set rolls up to a real group
+    history = [_DatedSession(_TODAY, [_LoggedSet(["quadriceps"], "Back Squat")])]
+    coverage = recent_coverage(history, reference=_TODAY, weeks=8)
+
+    # Assert — nothing off-map
+    assert coverage.unclassified_sets == 0

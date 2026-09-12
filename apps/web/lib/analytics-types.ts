@@ -82,13 +82,25 @@ export interface DistanceSeries {
   has_distance: boolean;
 }
 
-// One real Muscle Group's recent presence (issue #188 / ADR-0025): the display `group`
-// label (Legs / Chest / Back / Shoulders / Arms / Core — never Unclassified) and whether
-// it was `covered` — trained at least once — in the coverage window. Presence, not a
-// proportion: it names what has and hasn't appeared, it never flags or ranks.
+// One Exercise behind a Muscle Group's recent coverage (task #9): its display `name` and
+// how many in-window Logged Sets of it `sets` trained the group. The atlas region detail
+// lists these so a lit region is explained by the exercises behind it, never a bare count.
+export interface ContributingExercise {
+  name: string;
+  sets: number;
+}
+
+// One real Muscle Group's recent presence and volume (issue #188 / ADR-0025, task #9): the
+// display `group` label (Legs / Chest / Back / Shoulders / Arms / Core — never Unclassified),
+// whether it was `covered` — trained at least once — in the window (equivalently `sets > 0`),
+// its in-window `sets` count (one per distinct group a set trains, so a compound counts
+// toward each; a presence/volume read distinct from the sum-to-100 Muscle Split), and the
+// `contributing_exercises` behind it, most sets first. Presence, never a rank or a target.
 export interface GroupCoverage {
   group: string;
   covered: boolean;
+  sets: number;
+  contributing_exercises: ContributingExercise[];
 }
 
 // The Muscle Group Coverage signal for the Analytics screen (issue #188 / ADR-0025): the
@@ -97,11 +109,13 @@ export interface GroupCoverage {
 // and type-neutral — a pure yoga/mobility history reads the same shape as a barbell one.
 // `unclassified_present` is true when some in-window set lists a muscle outside the six
 // real groups (issue #189) — the signal behind a neutral disclosure footnote, never a
-// seventh group and never a coverage target.
+// seventh group and never a coverage target; `unclassified_sets` is how many such sets, so
+// the disclosure can name the off-map leftovers honestly.
 export interface RecentCoverage {
   weeks: number;
   groups: GroupCoverage[];
   unclassified_present: boolean;
+  unclassified_sets: number;
 }
 
 // The honest read model for one range window (F3 Slice 1–5): sessions, active days,

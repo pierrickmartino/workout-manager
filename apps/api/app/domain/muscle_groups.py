@@ -171,6 +171,22 @@ class _DatedLoggedSession(_LoggedSession, Protocol):
     performed_on: date
 
 
+class _NamedLoggedSet(_LoggedSet, Protocol):
+    """A Logged Set that also names the Exercise it belongs to, so the coverage read
+    can attribute a group's sets back to the exercises that trained it (the atlas
+    region detail). ``exercise_name`` rides on the same view the roll-up already reads."""
+
+    exercise_name: str
+
+
+class _NamedDatedLoggedSession(Protocol):
+    """A dated Logged Session whose sets carry their Exercise name — the input
+    :func:`recent_coverage` needs to build each group's contributing-exercise list."""
+
+    performed_on: date
+    logged_sets: Sequence[_NamedLoggedSet]
+
+
 def _normalize(muscle: str) -> str:
     """Canonical lookup key: lowercased, trimmed, internal whitespace collapsed."""
 
@@ -320,55 +336,74 @@ def weekly_distribution(
 
 
 @dataclass(frozen=True)
+class ContributingExercise:
+    """One Exercise's contribution to a Muscle Group over the coverage window.
+
+    ``name`` is the Exercise's display name; ``sets`` is how many in-window Logged Sets of
+    that Exercise trained the group. The atlas region detail lists these so a group's
+    presence is explained by the exercises behind it, never a bare count. Frozen and
+    value-typed like the rest of the coverage read."""
+
+    name: str
+    sets: int
+
+
+@dataclass(frozen=True)
 class GroupCoverage:
-    """One real Muscle Group's presence over the recent coverage window.
+    """One real Muscle Group's presence and volume over the recent coverage window.
 
     ``covered`` is ``True`` iff the group was trained at least once inside the window —
-    presence, not a threshold or a proportion. Frozen and value-typed, mirroring
-    :class:`WeeklyComposition`'s discipline, so the coverage read stays immutable and the
-    six rows carry the group alongside its state rather than a bare bool the caller must
-    re-pair with a label.
+    presence, not a threshold or a proportion (equivalently, ``sets > 0``). ``sets`` is the
+    count of in-window Logged Sets that trained the group, counted **once per distinct group
+    a set trains**: a compound set that hits Chest and Shoulders counts one set toward each,
+    so per-group counts intentionally need not sum to the total set count. (This is a
+    presence/volume read, distinct from the even-split, sum-to-100 ``distribution`` behind
+    the Muscle Split.) ``contributing_exercises`` names the exercises behind those sets, most
+    sets first. Frozen and value-typed, mirroring :class:`WeeklyComposition`'s discipline, so
+    the coverage read stays immutable and each row carries the group alongside its state.
     """
 
     group: MuscleGroup
     covered: bool
+    sets: int
+    contributing_exercises: tuple[ContributingExercise, ...]
 
 
 @dataclass(frozen=True)
 class RecentCoverage:
     """The neutral Muscle Group Coverage read over the recent window (ADR-0025).
 
-    ``groups`` is the six real Muscle Groups in canonical order, each trained / not-trained;
+    ``groups`` is the six real Muscle Groups in canonical order, each with its trained /
+    not-trained state, its in-window set count, and the exercises behind it.
     ``unclassified_present`` is ``True`` iff some in-window Logged Set lists a muscle that
     rolls up to Unclassified (unmapped, AI-invented, or an Exercise with no muscles recorded),
-    the signal behind the neutral disclosure footnote (issue #189). Unclassified is disclosed,
-    never dropped — but it is never one of the six and never a coverage target, so the flag
-    leaves every real-group state untouched. Frozen and value-typed, mirroring
-    :class:`WeeklyComposition`'s discipline, so the whole read stays immutable.
+    the signal behind the neutral disclosure footnote (issue #189); ``unclassified_sets`` is
+    how many in-window sets that is, so the disclosure can name the leftovers honestly.
+    Unclassified is disclosed, never dropped — but it is never one of the six and never a
+    coverage target, so it leaves every real-group state untouched. Frozen and value-typed,
+    mirroring :class:`WeeklyComposition`'s discipline, so the whole read stays immutable.
     """
 
     groups: tuple[GroupCoverage, ...]
     unclassified_present: bool
+    unclassified_sets: int
 
 
-def _has_unclassified(history: Iterable[_LoggedSession]) -> bool:
-    """Whether any Logged Set in ``history`` rolls up to the Unclassified bucket.
+def _rank_exercises(tally: dict[str, int]) -> tuple[ContributingExercise, ...]:
+    """Order an Exercise-name → set-count tally into the contributing-exercise list.
 
-    Reuses :func:`_groups_for_set` so the "counts as Unclassified" rule is identical to the
-    one the distribution weighs by: a set lists an unmapped muscle, or records no muscles at
-    all. A set that trains a real group *and* an unmapped muscle still counts — the unmapped
-    work is real work sitting outside the six, which is exactly what the footnote discloses.
+    Most sets first, ties broken alphabetically so the order is deterministic and stable
+    across reads. An empty tally yields an empty tuple (an untrained group's honest state).
     """
 
-    return any(
-        MuscleGroup.UNCLASSIFIED in _groups_for_set(logged_set)
-        for session in history
-        for logged_set in session.logged_sets
+    return tuple(
+        ContributingExercise(name=name, sets=sets)
+        for name, sets in sorted(tally.items(), key=lambda item: (-item[1], item[0]))
     )
 
 
 def recent_coverage(
-    history: Iterable[_DatedLoggedSession],
+    history: Iterable[_NamedDatedLoggedSession],
     *,
     reference: date,
     weeks: int,
@@ -378,16 +413,20 @@ def recent_coverage(
     The window is the ``weeks`` consecutive weeks ending at ``reference``'s week, bucketed
     by Monday exactly as :func:`weekly_distribution` — so an absent group is precisely one
     with no segment in any of the drift chart's bars (ADR-0025). A group counts as *covered*
-    when at least one in-window Logged Set rolls a muscle into it via :func:`covered_groups`;
-    presence, never a threshold. Every one of :data:`REAL_GROUPS` is returned in canonical
-    order (Unclassified is never a coverage target); a group trained only outside the window
-    reads not-trained, and an empty or wholly out-of-window history reads six not-trained
-    rows — the caller decides how to present that honest "nothing recent" state.
+    when at least one in-window Logged Set rolls a muscle into it; presence, never a
+    threshold. Every one of :data:`REAL_GROUPS` is returned in canonical order (Unclassified
+    is never a coverage target); a group trained only outside the window reads not-trained,
+    and an empty or wholly out-of-window history reads six not-trained rows — the caller
+    decides how to present that honest "nothing recent" state.
 
-    Alongside the six, :attr:`RecentCoverage.unclassified_present` discloses whether any
-    in-window set rolls up to Unclassified, so the "of 6" figure stays honest about work
-    that falls outside the real groups (issue #189) without ever listing Unclassified as a
-    seventh row or a coverage target.
+    Each covered group also carries its in-window ``sets`` count (one per distinct group a
+    set trains) and its ``contributing_exercises`` — the exercises behind those sets, most
+    first — so the atlas can explain a group's presence rather than assert a bare tick.
+
+    Alongside the six, :attr:`RecentCoverage.unclassified_present` /
+    :attr:`RecentCoverage.unclassified_sets` disclose whether (and how much) in-window work
+    rolls up to Unclassified, so the read stays honest about work that falls outside the real
+    groups (issue #189) without ever listing Unclassified as a seventh row or coverage target.
     """
 
     this_week = week_start(reference)
@@ -397,13 +436,37 @@ def recent_coverage(
         for session in history
         if earliest <= week_start(session.performed_on) <= this_week
     ]
-    covered = covered_groups(in_window)
+
+    set_counts: dict[MuscleGroup, int] = {group: 0 for group in REAL_GROUPS}
+    exercise_tally: dict[MuscleGroup, dict[str, int]] = {
+        group: {} for group in REAL_GROUPS
+    }
+    unclassified_sets = 0
+    for session in in_window:
+        for logged_set in session.logged_sets:
+            groups = _groups_for_set(logged_set)
+            if MuscleGroup.UNCLASSIFIED in groups:
+                unclassified_sets += 1
+            for group in groups:
+                if group is MuscleGroup.UNCLASSIFIED:
+                    continue
+                set_counts[group] += 1
+                tally = exercise_tally[group]
+                name = logged_set.exercise_name
+                tally[name] = tally.get(name, 0) + 1
+
     return RecentCoverage(
         groups=tuple(
-            GroupCoverage(group=group, covered=group in covered)
+            GroupCoverage(
+                group=group,
+                covered=set_counts[group] > 0,
+                sets=set_counts[group],
+                contributing_exercises=_rank_exercises(exercise_tally[group]),
+            )
             for group in REAL_GROUPS
         ),
-        unclassified_present=_has_unclassified(in_window),
+        unclassified_present=unclassified_sets > 0,
+        unclassified_sets=unclassified_sets,
     )
 
 
@@ -413,6 +476,7 @@ __all__ = [
     "REAL_GROUPS",
     "MUSCLE_BALANCE_WEEKS",
     "WeeklyComposition",
+    "ContributingExercise",
     "GroupCoverage",
     "RecentCoverage",
     "classify",

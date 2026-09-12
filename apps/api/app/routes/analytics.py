@@ -78,18 +78,30 @@ def _serialize(overview: AnalyticsOverview) -> dict:
             "delta": overview.distance_delta,
             "has_distance": overview.has_distance,
         },
-        # Muscle Group Coverage (ADR-0025): the six real groups each trained / not-trained
-        # over the labeled, range-independent 8-week window, in canonical order.
-        # ``unclassified_present`` discloses any in-window work that rolls up outside the six
-        # real groups (issue #189) — the signal behind the neutral footnote, never a seventh
-        # row and never a coverage target.
+        # Muscle Group Coverage / Muscle Atlas (ADR-0025, task #9): the six real groups over
+        # the labeled, range-independent 8-week window, in canonical order — each with its
+        # trained / not-trained state, its in-window set count, and the exercises behind it
+        # so the atlas can explain a lit region rather than assert a bare tick. Set counts are
+        # one per distinct group a set trains (a compound counts toward each), a presence read
+        # distinct from the even-split Muscle Split. ``unclassified_present`` /
+        # ``unclassified_sets`` disclose in-window work that rolls up outside the six real
+        # groups (issue #189) — the neutral footnote signal, never a seventh row or a target.
         "coverage": {
             "weeks": MUSCLE_BALANCE_WEEKS,
             "groups": [
-                {"group": row.group.value, "covered": row.covered}
+                {
+                    "group": row.group.value,
+                    "covered": row.covered,
+                    "sets": row.sets,
+                    "contributing_exercises": [
+                        {"name": exercise.name, "sets": exercise.sets}
+                        for exercise in row.contributing_exercises
+                    ],
+                }
                 for row in overview.coverage.groups
             ],
             "unclassified_present": overview.coverage.unclassified_present,
+            "unclassified_sets": overview.coverage.unclassified_sets,
         },
     }
 
