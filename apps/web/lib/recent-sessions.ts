@@ -33,6 +33,9 @@ export interface RecentSessionRow {
   trainingType: string;
   lastPerformedOn: string;
   previewExercises: string[];
+  // The plan's full Exercise Prescription count — the Workout Signature's node count. Distinct
+  // from `previewExercises.length` (capped at three); this is the whole plan's size.
+  exerciseCount: number;
   startHref: string;
 }
 
@@ -105,6 +108,7 @@ export function buildRecentSessionRow(
     trainingType: selection.session.training_type,
     lastPerformedOn: selection.lastPerformedOn,
     previewExercises: previewExerciseNames(prescriptions),
+    exerciseCount: prescriptions.length,
     startHref: startLiveHref(selection.session.id),
   };
 }

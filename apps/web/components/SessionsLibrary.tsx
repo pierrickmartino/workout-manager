@@ -25,6 +25,7 @@ import {
 } from "@/app/sessions/actions";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/pulse/page-header";
+import { WorkoutSigil } from "@/components/pulse/workout-sigil";
 import { BackLink } from "@/components/pulse/back-link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -245,9 +246,19 @@ function SessionRow({
             Delete control below are interactive and must not nest inside an anchor. */}
         <Link
           href={`/sessions/${session.id}`}
-          className="flex flex-1 items-start justify-between gap-3 focus-visible:outline-none"
+          className="flex flex-1 items-start gap-3 focus-visible:outline-none"
         >
-          <h2 className="font-display text-lg font-semibold text-text-primary">
+          {/* The Workout Signature mark (CONTEXT: Workout Signature): the Session's recognizable
+              generated sigil, keyed on its id so the two same-named "Calisthenics" entries read
+              as two distinct marks. Skin-aware fill by Training Type, always beside the type badge. */}
+          <WorkoutSigil
+            seedId={session.id}
+            exerciseCount={session.exercise_count}
+            trainingType={session.training_type}
+            size={44}
+            className="mt-0.5"
+          />
+          <h2 className="flex-1 font-display text-lg font-semibold text-text-primary">
             {title}
           </h2>
           <div className="flex shrink-0 flex-col items-end gap-1.5">

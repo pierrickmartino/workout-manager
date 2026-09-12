@@ -102,6 +102,10 @@ _Avoid_: Enrich-on-write, backfill (bare — that is one trigger), promotion (it
 An optional illustrative picture for a catalog Exercise, shown on Exercise Detail. **Curated-source only and never AI-fabricated** — anatomically misleading generated imagery is a safety hazard in an injury/rehab-cautious domain — and part of the Enriched (gold) tier, so its absence never holds a movement below the Listable bar. User uploads are deferred (ADR-0041).
 _Avoid_: Photo, thumbnail, media, AI-generated image
 
+**Workout Signature**:
+A Session's recognizable generated **cover mark** — a small geometric "sigil" (a base polygon plus a constellation of nodes) that identifies the Session at a glance wherever it appears (Home hero, My Sessions, Train, Session detail). Purely presentational and **deterministic in the Session id alone** (the one identifier present on every surface), with the node count from the Exercise count, so the same Session renders the same mark everywhere and two Sessions — including two same-named "Calisthenics" — read as two distinct marks. Its fill is the Skin-aware **Training Type** accent and is **always shown beside the Training Type label** (colour is never the sole carrier). Never AI-fabricated and never an anatomical picture (contrast **Exercise Image**); it is drawn from local SVG, so it needs no storage, no generation, and no network.
+_Avoid_: Cover image, avatar, logo, thumbnail, identicon, AI-generated image
+
 **Variation**:
 A catalog Exercise that is the *same* movement pattern as another, scaled in difficulty or execution (knee push-up is a Variation of push-up). Modeled as a typed relationship between Exercises.
 _Avoid_: Progression, regression, scaling (as the relationship name)
