@@ -13,7 +13,7 @@ import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { SessionHero } from "@/components/pulse/session-hero";
 import { ResumeSessionBanner } from "@/components/pulse/resume-session-banner";
-import { WeekCycleStrip } from "@/components/pulse/week-cycle-strip";
+import { TrainingRouteCard } from "@/components/pulse/training-route";
 import { QueueList } from "@/components/pulse/queue-list";
 import { LevelBadge } from "@/components/pulse/level-badge";
 import { Bento, BentoTile } from "@/components/pulse/bento";
@@ -86,9 +86,11 @@ export default async function DashboardPage() {
       {currentProtocol ? (
         <>
           <SessionHero protocol={currentProtocol} />
-          {/* Position within the current week (done / active / upcoming), plus a
-              WEEK n/total overline — purely positional, no calendar (ADR-0008). */}
-          <WeekCycleStrip protocol={currentProtocol} />
+          {/* The training route: the current week as named stops (done / next /
+              upcoming) with a WEEK n/total overline and an expandable full plan —
+              purely positional, no calendar (ADR-0008). Replaces the old dots and
+              keeps the sequence position and performed count honestly separate. */}
+          <TrainingRouteCard protocol={currentProtocol} />
           {/* The remaining upcoming Sessions with an honest X/N completion header
               and a "view all" to the Protocol detail — no per-session % (ADR-0008). */}
           <QueueList protocol={currentProtocol} />

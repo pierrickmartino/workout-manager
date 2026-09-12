@@ -5,10 +5,10 @@ import {
   latestPrLine,
   operatorStatus,
   queueView,
-  weekStrip,
+  trainingRoute,
   QUEUE_CAP,
 } from "./home-view.ts";
-import type { WeekStrip } from "./home-view.ts";
+import type { TrainingRoute } from "./home-view.ts";
 import type { Gamification, LatestPr } from "./home-types.ts";
 import type { ProtocolProgress, ProtocolSession } from "./protocols-types.ts";
 import type { ExercisePrescription } from "./sessions-types.ts";
@@ -86,20 +86,20 @@ function makeProtocol({
   };
 }
 
-// Collapse a strip into a compact, table-friendly view: each week as its number,
-// current-week flag, and the ordered states of its cells. Lets the whole-Protocol
-// map be asserted at a glance without reaching into cell objects.
-function weekShape(strip: WeekStrip) {
-  return strip.weeks.map((week) => ({
+// Collapse a route into a compact, table-friendly view: each week as its number,
+// current-week flag, and the ordered states of its stops. Lets the whole-Protocol
+// route be asserted at a glance without reaching into stop objects.
+function routeShape(route: TrainingRoute) {
+  return route.weeks.map((week) => ({
     week: week.week,
     isCurrent: week.isCurrent,
-    states: week.cells.map((cell) => cell.state),
+    states: week.stops.map((stop) => stop.state),
   }));
 }
 
-test("emits one pill per Protocol week, in ascending week order", () => {
-  // Arrange: a 4-week / 3-per-week Protocol — the map spans every week, not just
-  // the current one, so the pill count matches the WEEK n/total overline.
+test("emits one week per Protocol week, in ascending order, each carrying its stops", () => {
+  // Arrange: a 4-week / 3-per-week Protocol — the route spans every week, not just
+  // the current one, so the week count matches the WEEK n/total overline.
   const protocol = makeProtocol({
     weeks: 4,
     sessionsPerWeek: 3,
@@ -107,18 +107,18 @@ test("emits one pill per Protocol week, in ascending week order", () => {
   });
 
   // Act
-  const strip = weekStrip(protocol);
+  const route = trainingRoute(protocol);
 
-  // Assert: four pills — one per week — in order, each carrying its week's cells.
-  assert.ok(strip);
-  assert.equal(strip.weeks.length, 4);
-  assert.equal(strip.weeks.length, strip.totalWeeks);
+  // Assert: four weeks — in order — each carrying its own Sessions as stops.
+  assert.ok(route);
+  assert.equal(route.weeks.length, 4);
+  assert.equal(route.weeks.length, route.totalWeeks);
   assert.deepEqual(
-    strip.weeks.map((w) => w.week),
+    route.weeks.map((w) => w.week),
     [1, 2, 3, 4],
   );
   assert.deepEqual(
-    strip.weeks.map((w) => w.cells.map((c) => c.position)),
+    route.weeks.map((w) => w.stops.map((s) => s.position)),
     [
       [1, 2, 3],
       [4, 5, 6],
@@ -128,7 +128,23 @@ test("emits one pill per Protocol week, in ascending week order", () => {
   );
 });
 
-test("tags every cell upcoming (bar the active one) when the Next Session is the first", () => {
+test("carries the Session title as the named stop, falling back to Week/Day when absent", () => {
+  // Arrange: a Protocol whose Sessions default to titled fixtures, plus one whose
+  // title is explicitly cleared to exercise the positional fallback.
+  const protocol = makeProtocol({ weeks: 1, sessionsPerWeek: 2, nextPosition: 1 });
+  const untitled = { ...protocol.sessions[1]!, title: null };
+  const withUntitled = { ...protocol, sessions: [protocol.sessions[0]!, untitled] };
+
+  // Act
+  const route = trainingRoute(withUntitled);
+
+  // Assert: the authored title is kept; the untitled Session reads as its Week/Day.
+  assert.ok(route);
+  assert.equal(route.currentWeek.stops[0]?.title, "Session 1");
+  assert.equal(route.currentWeek.stops[1]?.title, "Week 1 · Day 2");
+});
+
+test("tags every stop upcoming (bar the next one) when the Next Session is the first", () => {
   // Arrange: a fresh Protocol — the Next Session is week 1's first Session.
   const protocol = makeProtocol({
     weeks: 3,
@@ -137,18 +153,18 @@ test("tags every cell upcoming (bar the active one) when the Next Session is the
   });
 
   // Act
-  const strip = weekStrip(protocol);
+  const route = trainingRoute(protocol);
 
-  // Assert: nothing is done; week 1 opens with the active cell, all else upcoming.
-  assert.ok(strip);
-  assert.deepEqual(weekShape(strip), [
-    { week: 1, isCurrent: true, states: ["active", "upcoming", "upcoming"] },
+  // Assert: nothing is done; week 1 opens with the next stop, all else upcoming.
+  assert.ok(route);
+  assert.deepEqual(routeShape(route), [
+    { week: 1, isCurrent: true, states: ["next", "upcoming", "upcoming"] },
     { week: 2, isCurrent: false, states: ["upcoming", "upcoming", "upcoming"] },
     { week: 3, isCurrent: false, states: ["upcoming", "upcoming", "upcoming"] },
   ]);
 });
 
-test("tags cells done / active / upcoming around a mid-Protocol Next Session", () => {
+test("tags stops done / next / upcoming around a mid-Protocol Next Session", () => {
   // Arrange: Next Session is the middle Session of week 2 (positions 4, 5, 6).
   const protocol = makeProtocol({
     weeks: 3,
@@ -157,19 +173,77 @@ test("tags cells done / active / upcoming around a mid-Protocol Next Session", (
   });
 
   // Act
-  const strip = weekStrip(protocol);
+  const route = trainingRoute(protocol);
 
   // Assert: week 1 is fully done, week 2 straddles the Next Session, week 3 is all
   // upcoming — and only week 2 is flagged current.
-  assert.ok(strip);
-  assert.deepEqual(weekShape(strip), [
+  assert.ok(route);
+  assert.deepEqual(routeShape(route), [
     { week: 1, isCurrent: false, states: ["done", "done", "done"] },
-    { week: 2, isCurrent: true, states: ["done", "active", "upcoming"] },
+    { week: 2, isCurrent: true, states: ["done", "next", "upcoming"] },
     { week: 3, isCurrent: false, states: ["upcoming", "upcoming", "upcoming"] },
   ]);
 });
 
-test("tags every earlier cell done when the Next Session is the very last", () => {
+test("surfaces the current week (the one holding the Next Session) up front", () => {
+  // Arrange: Next Session is the middle Session of week 2.
+  const protocol = makeProtocol({
+    weeks: 3,
+    sessionsPerWeek: 3,
+    nextPosition: 5,
+  });
+
+  // Act
+  const route = trainingRoute(protocol);
+
+  // Assert: currentWeek is week 2, flagged, with its own straddling stops.
+  assert.ok(route);
+  assert.equal(route.currentWeek.week, 2);
+  assert.equal(route.currentWeek.isCurrent, true);
+  assert.deepEqual(
+    route.currentWeek.stops.map((s) => s.state),
+    ["done", "next", "upcoming"],
+  );
+});
+
+test("keeps the sequence position and the performed count as separate figures", () => {
+  // Arrange: a fresh 8-week / 4-per-week Protocol with nothing performed — the
+  // "session 1 of 32" vs "0 completed" case the route must never conflate.
+  const protocol = makeProtocol({
+    weeks: 8,
+    sessionsPerWeek: 4,
+    nextPosition: 1,
+  });
+
+  // Act
+  const route = trainingRoute(protocol);
+
+  // Assert: position is 1 of 32 while the performed count is a distinct 0.
+  assert.ok(route);
+  assert.equal(route.position, 1);
+  assert.equal(route.total, 32);
+  assert.equal(route.completedCount, 0);
+});
+
+test("advances the sequence position to one past the completed count mid-Protocol", () => {
+  // Arrange: five Sessions performed, so the Next Session is position 6.
+  const protocol = makeProtocol({
+    weeks: 8,
+    sessionsPerWeek: 4,
+    nextPosition: 6,
+  });
+
+  // Act
+  const route = trainingRoute(protocol);
+
+  // Assert: "session 6 of 32" sits beside "5 done" — off by one, never merged.
+  assert.ok(route);
+  assert.equal(route.position, 6);
+  assert.equal(route.total, 32);
+  assert.equal(route.completedCount, 5);
+});
+
+test("tags every earlier stop done when the Next Session is the very last", () => {
   // Arrange: only the final Session of a 2-week / 3-per-week Protocol is upcoming.
   const protocol = makeProtocol({
     weeks: 2,
@@ -178,13 +252,13 @@ test("tags every earlier cell done when the Next Session is the very last", () =
   });
 
   // Act
-  const strip = weekStrip(protocol);
+  const route = trainingRoute(protocol);
 
-  // Assert: week 1 is done and week 2 ends on the active last cell.
-  assert.ok(strip);
-  assert.deepEqual(weekShape(strip), [
+  // Assert: week 1 is done and week 2 ends on the next stop.
+  assert.ok(route);
+  assert.deepEqual(routeShape(route), [
     { week: 1, isCurrent: false, states: ["done", "done", "done"] },
-    { week: 2, isCurrent: true, states: ["done", "done", "active"] },
+    { week: 2, isCurrent: true, states: ["done", "done", "next"] },
   ]);
 });
 
@@ -197,18 +271,18 @@ test("flags exactly the week holding the Next Session as current", () => {
   });
 
   // Act
-  const strip = weekStrip(protocol);
+  const route = trainingRoute(protocol);
 
   // Assert: current-week flag is true on week 3 alone.
-  assert.ok(strip);
-  assert.equal(strip.currentWeek, 3);
+  assert.ok(route);
+  assert.equal(route.currentWeekNumber, 3);
   assert.deepEqual(
-    strip.weeks.map((w) => w.isCurrent),
+    route.weeks.map((w) => w.isCurrent),
     [false, false, true, false, false],
   );
 });
 
-test("renders one cell per pill for a single-Session-per-week Protocol", () => {
+test("renders one stop per week for a single-Session-per-week Protocol", () => {
   // Arrange: each week holds exactly one Session; the Next Session is week 2's.
   const protocol = makeProtocol({
     weeks: 4,
@@ -217,20 +291,20 @@ test("renders one cell per pill for a single-Session-per-week Protocol", () => {
   });
 
   // Act
-  const strip = weekStrip(protocol);
+  const route = trainingRoute(protocol);
 
-  // Assert: four single-cell pills, tagged done / active / upcoming across weeks.
-  assert.ok(strip);
-  assert.deepEqual(weekShape(strip), [
+  // Assert: four single-stop weeks, tagged done / next / upcoming across weeks.
+  assert.ok(route);
+  assert.deepEqual(routeShape(route), [
     { week: 1, isCurrent: false, states: ["done"] },
-    { week: 2, isCurrent: true, states: ["active"] },
+    { week: 2, isCurrent: true, states: ["next"] },
     { week: 3, isCurrent: false, states: ["upcoming"] },
     { week: 4, isCurrent: false, states: ["upcoming"] },
   ]);
 });
 
-test("renders a single pill for a one-week Protocol", () => {
-  // Arrange: a one-week Protocol — the whole map is a single pill.
+test("renders a single week for a one-week Protocol", () => {
+  // Arrange: a one-week Protocol — the whole route is a single week.
   const protocol = makeProtocol({
     weeks: 1,
     sessionsPerWeek: 3,
@@ -238,14 +312,14 @@ test("renders a single pill for a one-week Protocol", () => {
   });
 
   // Act
-  const strip = weekStrip(protocol);
+  const route = trainingRoute(protocol);
 
-  // Assert: one pill, WEEK 1/1, its cells straddling the Next Session.
-  assert.ok(strip);
-  assert.equal(strip.weeks.length, 1);
-  assert.equal(strip.label, "WEEK 1/1");
-  assert.deepEqual(weekShape(strip), [
-    { week: 1, isCurrent: true, states: ["done", "active", "upcoming"] },
+  // Assert: one week, WEEK 1/1, its stops straddling the Next Session.
+  assert.ok(route);
+  assert.equal(route.weeks.length, 1);
+  assert.equal(route.weekLabel, "WEEK 1/1");
+  assert.deepEqual(routeShape(route), [
+    { week: 1, isCurrent: true, states: ["done", "next", "upcoming"] },
   ]);
 });
 
@@ -258,13 +332,13 @@ test("derives the WEEK n/total label from the Next Session's week and the Protoc
   });
 
   // Act
-  const strip = weekStrip(protocol);
+  const route = trainingRoute(protocol);
 
   // Assert
-  assert.ok(strip);
-  assert.equal(strip.currentWeek, 2);
-  assert.equal(strip.totalWeeks, 6);
-  assert.equal(strip.label, "WEEK 2/6");
+  assert.ok(route);
+  assert.equal(route.currentWeekNumber, 2);
+  assert.equal(route.totalWeeks, 6);
+  assert.equal(route.weekLabel, "WEEK 2/6");
 });
 
 test("returns null when the Protocol has no Next Session", () => {
@@ -276,7 +350,7 @@ test("returns null when the Protocol has no Next Session", () => {
   });
 
   // Act & Assert
-  assert.equal(weekStrip(protocol), null);
+  assert.equal(trainingRoute(protocol), null);
 });
 
 test("queue lists the upcoming un-performed Sessions in position order, first flagged NEXT", () => {
