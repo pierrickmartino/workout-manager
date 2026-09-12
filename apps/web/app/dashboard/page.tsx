@@ -14,7 +14,6 @@ import { SectionHeader } from "@/components/pulse/section-header";
 import { SessionHero } from "@/components/pulse/session-hero";
 import { ResumeSessionBanner } from "@/components/pulse/resume-session-banner";
 import { TrainingRouteCard } from "@/components/pulse/training-route";
-import { QueueList } from "@/components/pulse/queue-list";
 import { LevelBadge } from "@/components/pulse/level-badge";
 import { Bento, BentoTile } from "@/components/pulse/bento";
 import { QuickActions } from "@/components/pulse/quick-actions";
@@ -91,9 +90,6 @@ export default async function DashboardPage() {
               purely positional, no calendar (ADR-0008). Replaces the old dots and
               keeps the sequence position and performed count honestly separate. */}
           <TrainingRouteCard protocol={currentProtocol} />
-          {/* The remaining upcoming Sessions with an honest X/N completion header
-              and a "view all" to the Protocol detail — no per-session % (ADR-0008). */}
-          <QueueList protocol={currentProtocol} />
         </>
       ) : (
         <GenerateTrainingLaunchpad eyebrow="GET STARTED // NO ACTIVE PROTOCOL" />
