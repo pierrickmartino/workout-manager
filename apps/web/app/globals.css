@@ -63,6 +63,14 @@
   --color-violet-dim: #9a6bff1f;
   --color-magenta: #ff4d9d;
   --color-magenta-dim: #ff4d9d1f;
+  /* Amber + green complete the distinct-six Muscle Group palette (ADR-0073): the muscle
+     roll-up needs one hue per real group, and cyan/blue/violet/magenta cover only four.
+     Only PULSE tunes these per Mode below; the other Skins inherit these mid-tone base
+     values, which read on both their light and dark surfaces. */
+  --color-amber: #ffb454;
+  --color-amber-dim: #ffb4541f;
+  --color-green: #35e08b;
+  --color-green-dim: #35e08b1f;
   --color-on-accent: #04121a;
 
   /* Typography — wired up from next/font in app/layout.tsx */
@@ -113,6 +121,11 @@
     --color-violet-dim: #7c3aed1f;
     --color-magenta: #db2777;
     --color-magenta-dim: #db27771f;
+    /* Amber + green re-saturated to read on light surfaces (ADR-0073) */
+    --color-amber: #b45309;
+    --color-amber-dim: #b453091f;
+    --color-green: #059669;
+    --color-green-dim: #0596691f;
     --color-on-accent: #ffffff;
   }
 
@@ -139,6 +152,11 @@
       --color-violet-dim: #7c3aed1f;
       --color-magenta: #db2777;
       --color-magenta-dim: #db27771f;
+      /* Amber + green re-saturated to read on light surfaces (ADR-0073) */
+      --color-amber: #b45309;
+      --color-amber-dim: #b453091f;
+      --color-green: #059669;
+      --color-green-dim: #0596691f;
       --color-on-accent: #ffffff;
     }
   }

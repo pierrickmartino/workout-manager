@@ -146,21 +146,28 @@ def test_analytics_serializes_the_six_group_coverage_in_canonical_order():
     # Act
     response = client.get("/api/analytics?range=30d", headers=_auth(ctx, "user_cov"))
 
-    # Assert — the six real groups ride in the envelope in canonical order, each with a
-    # covered boolean, under a labeled 8-week window; Legs is the only one trained
+    # Assert — the six real groups ride in the envelope in canonical order, each with its
+    # covered state, in-window set count, and contributing exercises, under a labeled 8-week
+    # window; Legs is the only one trained (three Back Squat sets behind it)
     assert response.status_code == 200
     coverage = response.json()["data"]["coverage"]
     assert coverage["weeks"] == 8
     assert coverage["groups"] == [
-        {"group": "Legs", "covered": True},
-        {"group": "Chest", "covered": False},
-        {"group": "Back", "covered": False},
-        {"group": "Shoulders", "covered": False},
-        {"group": "Arms", "covered": False},
-        {"group": "Core", "covered": False},
+        {
+            "group": "Legs",
+            "covered": True,
+            "sets": 3,
+            "contributing_exercises": [{"name": "Back Squat", "sets": 3}],
+        },
+        {"group": "Chest", "covered": False, "sets": 0, "contributing_exercises": []},
+        {"group": "Back", "covered": False, "sets": 0, "contributing_exercises": []},
+        {"group": "Shoulders", "covered": False, "sets": 0, "contributing_exercises": []},
+        {"group": "Arms", "covered": False, "sets": 0, "contributing_exercises": []},
+        {"group": "Core", "covered": False, "sets": 0, "contributing_exercises": []},
     ]
     # All the recent work maps to a real group, so nothing sits outside the six
     assert coverage["unclassified_present"] is False
+    assert coverage["unclassified_sets"] == 0
 
 
 def test_analytics_discloses_in_window_unclassified_work_in_the_envelope():
@@ -202,6 +209,50 @@ def test_analytics_discloses_in_window_unclassified_work_in_the_envelope():
         "Core",
     ]
     assert coverage["unclassified_present"] is True
+    # The single off-map set is disclosed as a count, and no real group claims it
+    assert coverage["unclassified_sets"] == 1
+    assert all(row["sets"] == 0 for row in coverage["groups"])
+
+
+def test_analytics_lists_the_contributing_exercises_behind_a_covered_group():
+    # Arrange — two exercises train Legs in-window: three Back Squat sets and one Leg Press
+    # set (Leg Press trains only Legs). Coverage must name both, most sets first.
+    client, ctx, sessions, logged = build_client()
+    leg_press = logged._exercises.find_or_create(
+        "Leg Press",
+        provenance=Provenance.CURATED,
+        targeted_muscles=["quadriceps"],
+    )
+    session_view = sessions.create(
+        "user_ex",
+        SessionDraft(training_type="strength", duration_minutes=45, prescriptions=[]),
+    )
+    logged.create(
+        "user_ex",
+        LoggedSessionDraft(
+            session_id=session_view.id,
+            performed_on=date.today(),
+            logged_sets=[
+                LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5)),
+                LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5)),
+                LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5)),
+                LoggedSetDraft(exercise_id=leg_press.id, quantity=reps_quantity(10)),
+            ],
+        ),
+    )
+
+    # Act
+    response = client.get("/api/analytics?range=30d", headers=_auth(ctx, "user_ex"))
+
+    # Assert — the Legs row names both exercises with their set counts, most sets first
+    assert response.status_code == 200
+    coverage = response.json()["data"]["coverage"]
+    legs = next(row for row in coverage["groups"] if row["group"] == "Legs")
+    assert legs["sets"] == 4
+    assert legs["contributing_exercises"] == [
+        {"name": "Back Squat", "sets": 3},
+        {"name": "Leg Press", "sets": 1},
+    ]
 
 
 def test_analytics_serializes_the_recent_records_feed_and_new_prs_tile():
@@ -266,14 +317,15 @@ def test_analytics_empty_state_is_zero_counts_not_an_error():
         "coverage": {
             "weeks": 8,
             "groups": [
-                {"group": "Legs", "covered": False},
-                {"group": "Chest", "covered": False},
-                {"group": "Back", "covered": False},
-                {"group": "Shoulders", "covered": False},
-                {"group": "Arms", "covered": False},
-                {"group": "Core", "covered": False},
+                {"group": "Legs", "covered": False, "sets": 0, "contributing_exercises": []},
+                {"group": "Chest", "covered": False, "sets": 0, "contributing_exercises": []},
+                {"group": "Back", "covered": False, "sets": 0, "contributing_exercises": []},
+                {"group": "Shoulders", "covered": False, "sets": 0, "contributing_exercises": []},
+                {"group": "Arms", "covered": False, "sets": 0, "contributing_exercises": []},
+                {"group": "Core", "covered": False, "sets": 0, "contributing_exercises": []},
             ],
             "unclassified_present": False,
+            "unclassified_sets": 0,
         },
     }
 
