@@ -663,10 +663,13 @@ function SessionEditor({
           bracketed with their shared round instruction, and selecting a tile focuses its
           editable Prescription below. */}
       <SessionCompositionStrip
-        prescriptions={session.prescriptions}
+        exercises={session.prescriptions}
         layout={layout}
         selectedPosition={selectedPosition}
         onSelect={focusPrescription}
+        // Dragging a tile reorders the Prescription (ADR-0074): warm-up/cooldown follow the
+        // new position. A performed Session is settled record, so it gets no reorder.
+        onReorder={locked ? undefined : onReorder}
       />
 
       <PrescriptionList

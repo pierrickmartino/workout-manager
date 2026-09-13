@@ -385,3 +385,44 @@ test("the container auto-expands only when a round-rest is set", () => {
   assert.equal(shouldAutoExpandSuperset({ roundRestSeconds: null }), false);
   assert.equal(shouldAutoExpandSuperset({}), false);
 });
+
+// --- Warm-up chip suppression (ADR-0074) ------------------------------------------------
+// A surface that already shows the Session Section (the builder's composition strip) passes
+// `suppressWarmUpSetType` so a warm-up exercise, shown under the WARM-UP band, does not also
+// read "warm-up" as a row chip. Only the warm-up chip is dropped — never the picker, never
+// another Set Type.
+
+test("suppressWarmUpSetType drops the warm-up chip", () => {
+  // Arrange / Act
+  const chips = prescriptionSummaryChips(
+    { setType: "warm_up" },
+    { suppressWarmUpSetType: true },
+  );
+
+  // Assert — the redundant warm-up chip is gone.
+  assert.deepEqual(chips, []);
+});
+
+test("suppressWarmUpSetType keeps other Set Types", () => {
+  // Arrange / Act — drop/failure/AMRAP have no band, so they still earn a chip.
+  const drop = prescriptionSummaryChips({ setType: "drop" }, { suppressWarmUpSetType: true });
+  const amrap = prescriptionSummaryChips(
+    { setType: "amrap" },
+    { suppressWarmUpSetType: true },
+  );
+
+  // Assert
+  assert.equal(drop[0].label, "Drop set");
+  assert.equal(amrap[0].label, "AMRAP");
+});
+
+test("a warm-up-only card no longer auto-expands when the chip is suppressed", () => {
+  // Arrange / Act / Assert — with nothing left to summarize, the card opens collapsed; the band
+  // above carries the warm-up signal.
+  assert.equal(
+    shouldAutoExpand({ setType: "warm_up" }, { suppressWarmUpSetType: true }),
+    false,
+  );
+  // Without suppression it still opens (the chip is the only meaningful value).
+  assert.equal(shouldAutoExpand({ setType: "warm_up" }), true);
+});

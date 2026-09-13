@@ -65,3 +65,25 @@ muscle **Unclassified** rather than forcing a guess.
   conditions on.
 - **A new domain term, "Session Section," enters `CONTEXT.md`,** disambiguated from the
   audience **Role** axis (ADR-0071) whose name it deliberately does not reuse.
+
+## Follow-up (revisited, projection reaffirmed)
+
+A later review reopened whether Sections should become *authored* (a stored, draggable
+label) and whether to fold warm-up into a single concept. The projection was reaffirmed and
+the model left unchanged; the outcomes:
+
+- **Drag = reorder, not a stored tag.** The composition strip's tiles are draggable, but a
+  drag **reorders** the exercise (contiguity-preserving, reusing the builders' existing
+  reorder); warm-up (front) and cooldown (back) then fall out of position and the bands
+  re-derive. There is no drop-zone that pins a Section, so no stored field and no migration —
+  the projection stands. Main vs accessory stays heuristic (not position-expressible), which
+  the review accepted.
+- **Set Type keeps `warm_up`; the two warm-ups stay orthogonal.** `warm_up` remains a
+  per-set, record-bearing Set Type driving Volume/1RM/PR exclusion; the warm-up **Section**
+  is the per-exercise, plan-only composition band. They were *not* merged (a main-work lift
+  can contain warm-up sets, which a per-exercise Section can't express). The only real
+  overlap was visual — the same exercise reading "warm-up" as both a band and a row chip — so
+  the builders that show the strip **suppress the redundant warm-up Set-Type summary chip**
+  (the picker and every other Set Type are untouched).
+- **The strip is surfaced on the Hand-Authored "Build a workout" builder** as well as the
+  Protocol editor — the create-a-workout surface it was missing from at first.
