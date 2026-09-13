@@ -174,6 +174,11 @@ export interface PrescriptionFieldStackProps {
   // Preview line stands in for it) — so this defaults false and the slot's chip-driven fields open
   // the card on their own.
   advancedNonDefault?: boolean;
+  // Drop the warm-up Set-Type summary chip only (ADR-0074): set by a surface that already
+  // shows the Session Section, so a warm-up exercise under the WARM-UP band doesn't also read
+  // "warm-up" on its row. The Set-Type picker and every other chip are untouched; defaults
+  // false so non-builder surfaces keep the chip.
+  suppressWarmUpSummaryChip?: boolean;
 }
 
 export function PrescriptionFieldStack({
@@ -206,6 +211,7 @@ export function PrescriptionFieldStack({
   advanced,
   preview,
   advancedNonDefault = false,
+  suppressWarmUpSummaryChip = false,
 }: PrescriptionFieldStackProps): React.JSX.Element {
   const name = exerciseName;
   const isDistance = kind === "distance";
@@ -236,13 +242,16 @@ export function PrescriptionFieldStack({
   // the group (ADR-0023), so it is excluded here — a member's summary never carries a rest chip.
   // A non-working Set Type, a set Target Effort, or a present Exercise Note earns its own chip
   // (and, via the seed below, opens the card).
-  const summaryChips = prescriptionSummaryChips({
-    tempo,
-    restSeconds: showRest ? restSecondsFromInput(restSeconds) : null,
-    setType,
-    targetEffort,
-    note: summaryNote,
-  });
+  const summaryChips = prescriptionSummaryChips(
+    {
+      tempo,
+      restSeconds: showRest ? restSecondsFromInput(restSeconds) : null,
+      setType,
+      targetEffort,
+      note: summaryNote,
+    },
+    { suppressWarmUpSetType: suppressWarmUpSummaryChip },
+  );
 
   // Open/closed is ephemeral React state (#465): seeded once so a card with any non-default
   // advanced value opens expanded and a plain set opens collapsed, then freely toggled. It never

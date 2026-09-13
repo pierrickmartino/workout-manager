@@ -105,9 +105,19 @@ function restChip(restSeconds: number | null | undefined): PrescriptionSummaryCh
 // one badge rule — an unset, explicit-working, or unknown value resolves to working and earns
 // no chip, while a non-working member (warm-up / drop / failure / AMRAP) reads as its label —
 // so the collapsed summary and the plan/record badges name a Set Type exactly one way.
-function setTypeChip(setType: string | null | undefined): PrescriptionSummaryChip | null {
+function setTypeChip(
+  setType: string | null | undefined,
+  suppressWarmUp = false,
+): PrescriptionSummaryChip | null {
   const badge = setTypeBadge(setType);
   if (badge === null) {
+    return null;
+  }
+  // In a surface that already shows the Session Section (the builder's composition strip,
+  // ADR-0074), a warm-up exercise sits under the WARM-UP band, so the row's warm-up Set-Type
+  // chip is a redundant second "warm-up" label — suppress it. Every other member (drop /
+  // failure / AMRAP) has no band and keeps its chip; the Set-Type picker itself is untouched.
+  if (suppressWarmUp && badge.value === "warm_up") {
     return null;
   }
   return {
@@ -151,16 +161,24 @@ function noteChip(note: string | null | undefined): PrescriptionSummaryChip | nu
   };
 }
 
+// Options for the summary projection. `suppressWarmUpSetType` drops the warm-up Set-Type chip
+// only — for a surface that already communicates warm-up through the Session Section band
+// (ADR-0074), so the same exercise doesn't read "warm-up" twice.
+export interface PrescriptionSummaryOptions {
+  suppressWarmUpSetType?: boolean;
+}
+
 // The ordered Prescription Summary chips for a Prescription's advanced fields — one per non-default
 // value, in render order (Tempo, Rest, Set Type, Target Effort, then the Note icon). A plain set
 // with all-default fields returns `[]`.
 export function prescriptionSummaryChips(
   fields: PrescriptionAdvancedFields,
+  options: PrescriptionSummaryOptions = {},
 ): PrescriptionSummaryChip[] {
   return [
     tempoChip(fields.tempo),
     restChip(fields.restSeconds),
-    setTypeChip(fields.setType),
+    setTypeChip(fields.setType, options.suppressWarmUpSetType ?? false),
     targetEffortChip(fields.targetEffort),
     noteChip(fields.note),
   ].filter((chip): chip is PrescriptionSummaryChip => chip !== null);
@@ -171,8 +189,11 @@ export function prescriptionSummaryChips(
 // auto-expands exactly when it has something meaningful to show, and stays collapsed for a plain
 // set. The Progression Scheme is excluded by design — its always-visible preview line means a
 // non-default scheme is never hidden.
-export function shouldAutoExpand(fields: PrescriptionAdvancedFields): boolean {
-  return prescriptionSummaryChips(fields).length > 0;
+export function shouldAutoExpand(
+  fields: PrescriptionAdvancedFields,
+  options: PrescriptionSummaryOptions = {},
+): boolean {
+  return prescriptionSummaryChips(fields, options).length > 0;
 }
 
 // --- Superset container summary (ADR-0023, #469). Rest is group-owned: the round rests once at the

@@ -1077,6 +1077,9 @@ function PrescriptionEditor({
           Builder's own advanced field) rides in the `advanced` slot. */}
       <PrescriptionFieldStack
         exerciseName={name}
+        // The composition strip above shows this exercise's warm-up under the WARM-UP band, so
+        // don't repeat a warm-up chip on the row (ADR-0074).
+        suppressWarmUpSummaryChip
         weightUnit={unit}
         kind={prescription.quantityKind}
         unit={prescription.quantityUnit}

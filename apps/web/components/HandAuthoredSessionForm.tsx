@@ -32,6 +32,7 @@ import { type DistanceUnit, type QuantityKind } from "@/lib/quantity";
 import type { PickedExercise } from "@/lib/protocol-builder";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
 import { ExerciseLibrary } from "@/components/ExerciseLibrary";
+import { SessionCompositionStrip } from "@/components/builder/session-composition-strip";
 import { PrescriptionFieldStack } from "@/components/prescription/PrescriptionFieldStack";
 import { Field, FieldLabel } from "@/components/pulse/field";
 import { Alert } from "@/components/pulse/alert";
@@ -250,6 +251,20 @@ export function HandAuthoredSessionForm({
   );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // Which exercise the composition strip last focused (ADR-0074) — ephemeral view state, a
+  // scroll target, never part of the draft.
+  const [selectedPosition, setSelectedPosition] = useState<number | null>(null);
+
+  // Selecting a composition tile moves focus to its exercise card (idea 5): mark it selected
+  // and scroll the card (anchored by id below) into view.
+  const focusExercise = (position: number) => {
+    setSelectedPosition(position);
+    if (typeof document !== "undefined") {
+      document
+        .getElementById(`authored-exercise-${position}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  };
 
   // A Sensitive-Constraint user is never handed a Superset (ADR-0023): the draft the
   // screen renders and submits is flattened, so any grouping is unlinked (staged, not
@@ -477,6 +492,24 @@ export function HandAuthoredSessionForm({
           </p>
         ) : null}
 
+        {/* The visible workout composition (ADR-0074, idea 5): a Section-grouped strip above
+            the editable exercises. Each exercise is a labeled tile grouped into warm-up /
+            main / accessory / cooldown; drag a tile to reorder (warm-up/cooldown follow the
+            new position), tap to focus its card. Reuses the form's existing superset layout. */}
+        <SessionCompositionStrip
+          exercises={effectiveExercises.map((row) => ({
+            exerciseName: row.exerciseName,
+            sets: row.sets,
+            reps: row.reps,
+            setType: row.setType,
+            quantityKind: row.kind,
+          }))}
+          layout={layout}
+          selectedPosition={selectedPosition}
+          onSelect={focusExercise}
+          onReorder={moveExercise}
+        />
+
         {runs.map((run) => {
           if (run.kind === "solo") {
             const index = run.index;
@@ -484,6 +517,7 @@ export function HandAuthoredSessionForm({
             return (
               <ExerciseCard
                 key={row.key}
+                anchorId={`authored-exercise-${index}`}
                 row={row}
                 slot={layout[index]}
                 unit={unit}
@@ -520,9 +554,10 @@ export function HandAuthoredSessionForm({
                 return (
                   <ExerciseCard
                     key={row.key}
+                    anchorId={`authored-exercise-${index}`}
                     row={row}
                     slot={layout[index]}
-                unit={unit}
+                    unit={unit}
                     canMoveUp={index > 0 && canMove(index, index - 1)}
                     canMoveDown={
                       index < effectiveExercises.length - 1 &&
@@ -617,6 +652,9 @@ function SupersetContainer({
 }
 
 interface ExerciseCardProps {
+  // A stable anchor so the composition strip (ADR-0074) can scroll a tapped tile's card into
+  // view — "select a tile → focus its exercise" (idea 5).
+  anchorId: string;
   row: ExerciseRow;
   slot: SupersetSlot;
   unit: WeightUnit;
@@ -636,6 +674,7 @@ interface ExerciseCardProps {
 }
 
 function ExerciseCard({
+  anchorId,
   row,
   slot,
   unit,
@@ -656,7 +695,7 @@ function ExerciseCard({
   const isDuration = row.kind === "duration";
   const isDistance = row.kind === "distance";
   return (
-    <Card className="flex flex-col gap-4 p-4">
+    <Card id={anchorId} className="flex flex-col gap-4 p-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           {slot.memberLabel ? (
@@ -708,6 +747,9 @@ function ExerciseCard({
           first-class prop of the stack, so the form passes no `advanced` slot. */}
       <PrescriptionFieldStack
         exerciseName={row.exerciseName}
+        // The composition strip above shows this exercise's warm-up under the WARM-UP band, so
+        // don't repeat a warm-up chip on the row (ADR-0074).
+        suppressWarmUpSummaryChip
         weightUnit={unit}
         kind={row.kind}
         unit={row.unit}
