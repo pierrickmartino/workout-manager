@@ -50,7 +50,11 @@ from app.repositories.exercise_relationship_repository import (
     ExerciseRelationshipRepository,
     RelatedExercise,
 )
-from app.repositories.exercise_repository import ExerciseRepository
+from app.repositories.exercise_repository import (
+    ExercisePatch,
+    ExerciseRepository,
+    NameCollision,
+)
 from app.repositories.logged_session_repository import LoggedSessionRepository
 
 logger = logging.getLogger(__name__)
@@ -59,6 +63,12 @@ router = APIRouter(prefix="/api", tags=["exercises"])
 
 HTTP_NOT_FOUND = 404
 HTTP_ACCEPTED = 202
+HTTP_CONFLICT = 409
+
+# The stored difficulty is a 1–10 scale aligned with Fitness Level (models.Exercise); an
+# admin edit is held to the same bounds so a bad value never enters the shared catalog.
+MIN_DIFFICULTY = 1
+MAX_DIFFICULTY = 10
 
 # The Exercise Library page bounds: a sensible default page and a cap so one search
 # never returns an unbounded slice of the catalog.
@@ -526,3 +536,106 @@ def read_exercise(
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
     related = relationships.substitutes_for(exercise_id)
     return success_envelope(_serialize(exercise, related))
+
+
+class UpdateExerciseBody(BaseModel):
+    """A partial edit of one Catalog Exercise's descriptive fields (issue #502, spec §5).
+
+    Every field is optional: only the fields the admin changed are sent, and a field left
+    out is left untouched. The body spans exactly the descriptive set — display name,
+    description, Execution Steps, targeted muscles, required equipment, difficulty — and
+    the Primary/Secondary emphasis split; Provenance, precautions, the Image, and the
+    retired tombstone are each a separate deliberate act with its own endpoint and are not
+    editable here. Boundary validation mirrors the create path: a supplied name must have a
+    non-empty normalized identity within ``MAX_NAME_LENGTH``, a supplied difficulty sits in
+    1–10, and list items are trimmed with blanks dropped. ``description`` and ``difficulty``
+    accept an explicit ``null`` to clear them; the presence of a key (not its value) is what
+    marks a field as edited."""
+
+    name: str | None = None
+    description: str | None = None
+    targeted_muscles: list[str] | None = None
+    primary_muscles: list[str] | None = None
+    secondary_muscles: list[str] | None = None
+    required_equipment: list[str] | None = None
+    instructions: list[str] | None = None
+    difficulty: int | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _has_normalized_identity(cls, value: str | None) -> str | None:
+        # A rename must resolve to a real normalized identity; a blank/whitespace name
+        # would map two movements onto one key (or none at all), so reject it (ADR-0002).
+        if value is None or not normalize_name(value):
+            raise ValueError("name must not be blank")
+        if len(value.strip()) > MAX_NAME_LENGTH:
+            raise ValueError(f"name must be at most {MAX_NAME_LENGTH} characters")
+        return value
+
+    @field_validator("difficulty")
+    @classmethod
+    def _difficulty_in_range(cls, value: int | None) -> int | None:
+        if value is not None and not (MIN_DIFFICULTY <= value <= MAX_DIFFICULTY):
+            raise ValueError(
+                f"difficulty must be between {MIN_DIFFICULTY} and {MAX_DIFFICULTY}"
+            )
+        return value
+
+    @field_validator(
+        "targeted_muscles",
+        "primary_muscles",
+        "secondary_muscles",
+        "required_equipment",
+        "instructions",
+    )
+    @classmethod
+    def _clean_list(cls, value: list[str] | None) -> list[str] | None:
+        # Trim each entry and drop blanks so a stray empty row from the editor never
+        # enters the shared catalog; a provided-but-empty list still clears the field.
+        if value is None:
+            return None
+        return [item.strip() for item in value if item.strip()]
+
+
+def _build_patch(payload: UpdateExerciseBody) -> ExercisePatch:
+    """Turn the request body into an ``ExercisePatch`` of *only the supplied fields*.
+
+    ``exclude_unset`` keeps the sent keys — including an explicit ``null`` — and drops the
+    rest, so ``ExercisePatch`` receives exactly the fields the admin edited and leaves
+    every other field on its ``UNSET`` sentinel (the writer then preserves it)."""
+
+    return ExercisePatch(**payload.model_dump(exclude_unset=True))
+
+
+@router.patch("/exercises/{exercise_id}")
+def update_exercise(
+    exercise_id: int,
+    payload: UpdateExerciseBody,
+    _operator: str = Depends(require_admin),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    relationships: ExerciseRelationshipRepository = Depends(
+        get_exercise_relationship_repository
+    ),
+) -> dict:
+    """Partially edit one Catalog Exercise's descriptive fields (issue #502, spec §5).
+
+    Operator-only (``require_admin``, ADR-0046): a non-operator is rejected before any
+    write. Applies the partial ``ExercisePatch`` through the immutable repository writer
+    and returns the updated Exercise via the standard envelope, in the same shape as
+    ``GET /{id}``. A rename that would collide with a **different** movement's normalized
+    name is a ``409`` that changes nothing (``NameCollision``, ADR-0002); a same-identity
+    spelling/casing fix succeeds. A missing Exercise is ``404``; invalid input is ``422``
+    (handled by the body model). Provenance, precautions, the Image, and the retired
+    tombstone are never touched here — each is a separate deliberate act."""
+
+    try:
+        updated = exercises.update(exercise_id, _build_patch(payload))
+    except NameCollision as exc:
+        raise HTTPException(
+            status_code=HTTP_CONFLICT,
+            detail="Another exercise already uses that name.",
+        ) from exc
+    if updated is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    related = relationships.substitutes_for(exercise_id)
+    return success_envelope(_serialize(updated, related))

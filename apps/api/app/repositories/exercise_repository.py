@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Final, Protocol
 
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
@@ -55,6 +55,60 @@ class ExerciseSearchPage:
 
     items: list[Exercise]
     total: int
+
+
+class _Unset:
+    """Sentinel for a patch field that was **not supplied**.
+
+    A partial edit (``PATCH``) carries only the fields the admin changed, so the writer
+    must tell "leave this field alone" apart from "set this field to ``None``" — a
+    distinction a bare ``None`` default cannot make for the nullable ``description`` and
+    ``difficulty`` columns. Every ``ExercisePatch`` field defaults to this singleton;
+    ``_apply_patch`` copies the existing value wherever it is still present."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid only
+        return "UNSET"
+
+
+UNSET: Final = _Unset()
+
+
+@dataclass(frozen=True)
+class ExercisePatch:
+    """A partial edit of one catalog Exercise's descriptive fields (issue #502).
+
+    Only the fields an admin actually changed are supplied; every other field keeps the
+    sentinel ``UNSET`` and is left untouched by ``update``. The patch spans exactly the
+    descriptive set and the Primary/Secondary emphasis split — never Provenance,
+    precautions, the Image, or the retired tombstone, each of which is a separate
+    deliberate act with its own endpoint (spec §5). Frozen: a patch is a value, and the
+    writer never mutates it."""
+
+    name: str | _Unset = UNSET
+    description: str | None | _Unset = UNSET
+    targeted_muscles: Sequence[str] | _Unset = UNSET
+    primary_muscles: Sequence[str] | _Unset = UNSET
+    secondary_muscles: Sequence[str] | _Unset = UNSET
+    required_equipment: Sequence[str] | _Unset = UNSET
+    instructions: Sequence[str] | _Unset = UNSET
+    difficulty: int | None | _Unset = UNSET
+
+
+class NameCollision(Exception):
+    """A rename would collide with a **different** Exercise's normalized name (ADR-0002).
+
+    Identity is by normalized name, so renaming one movement onto the normalized name of
+    another would silently merge two distinct movements. The writer refuses and raises
+    this instead, changing nothing; the route maps it to ``409``. A same-row rename that
+    keeps the normalized identity (a spelling/casing fix) is *not* a collision."""
+
+    def __init__(self, normalized_name: str) -> None:
+        super().__init__(
+            f"another exercise already uses the name {normalized_name!r}"
+        )
+        self.normalized_name = normalized_name
 
 
 class ExerciseRepository(Protocol):
@@ -219,6 +273,21 @@ class ExerciseRepository(Protocol):
         returns the updated Exercise, or ``None`` if no row has ``exercise_id``."""
         ...
 
+    def update(
+        self, exercise_id: int, patch: ExercisePatch
+    ) -> Exercise | None:
+        """Partially edit one Exercise's descriptive fields + emphasis split (issue #502).
+
+        Writes only the fields the ``patch`` supplies (the rest keep ``UNSET`` and are
+        preserved), spanning the descriptive set and the Primary/Secondary split but never
+        Provenance, precautions, the Image, or the retired tombstone (spec §5). A supplied
+        ``name`` recomputes ``normalized_name``; if that lands on a **different** row's
+        normalized name the write is refused with ``NameCollision`` and nothing changes
+        (ADR-0002), while a same-row spelling/casing fix is accepted. **Immutable**:
+        returns a fresh Exercise and never mutates the row the caller already holds.
+        Returns ``None`` if no row has ``exercise_id``."""
+        ...
+
 
 def _new_exercise(
     name: str,
@@ -246,6 +315,41 @@ def _new_exercise(
         difficulty=difficulty,
         precautions=list(precautions),
         image=image,
+    )
+
+
+def _apply_patch(existing: Exercise, patch: ExercisePatch) -> Exercise:
+    """Build a **fresh** Exercise from ``existing`` with the ``patch``'s fields overlaid.
+
+    Pure and immutable (coding-style): ``existing`` is read, never mutated, and a new
+    Exercise is returned carrying its id. Every field the patch left ``UNSET`` keeps the
+    existing value — including Provenance, precautions, the Image, and the retired flag,
+    which this descriptive edit never touches — and a supplied ``name`` recomputes the
+    normalized identity so the caller can detect a collision before persisting."""
+
+    def _pick(value: object, current: object) -> object:
+        return current if value is UNSET else value
+
+    name = existing.name if patch.name is UNSET else patch.name
+    return Exercise(
+        id=existing.id,
+        name=name,
+        normalized_name=normalize_name(name),
+        provenance=existing.provenance,
+        description=_pick(patch.description, existing.description),
+        targeted_muscles=list(_pick(patch.targeted_muscles, existing.targeted_muscles)),
+        primary_muscles=list(_pick(patch.primary_muscles, existing.primary_muscles)),
+        secondary_muscles=list(
+            _pick(patch.secondary_muscles, existing.secondary_muscles)
+        ),
+        required_equipment=list(
+            _pick(patch.required_equipment, existing.required_equipment)
+        ),
+        instructions=list(_pick(patch.instructions, existing.instructions)),
+        difficulty=_pick(patch.difficulty, existing.difficulty),
+        precautions=list(existing.precautions),
+        image=existing.image,
+        retired=existing.retired,
     )
 
 
@@ -540,6 +644,27 @@ class SqlExerciseRepository:
         self._session.refresh(exercise)
         return exercise
 
+    def update(
+        self, exercise_id: int, patch: ExercisePatch
+    ) -> Exercise | None:
+        existing = self._session.get(Exercise, exercise_id)
+        if existing is None:
+            return None
+        merged = _apply_patch(existing, patch)
+        if merged.normalized_name != existing.normalized_name:
+            collision = self._lookup(merged.normalized_name)
+            if collision is not None and collision.id != exercise_id:
+                raise NameCollision(merged.normalized_name)
+        # Immutable write: detach the row the caller holds so persisting the edit never
+        # mutates it in place, then merge the fresh state onto a newly loaded managed
+        # instance. ``merge`` reconciles by primary key, so the single catalog row is
+        # updated (not duplicated) and returned as a fresh Exercise.
+        self._session.expunge(existing)
+        persistent = self._session.merge(merged)
+        self._session.commit()
+        self._session.refresh(persistent)
+        return persistent
+
 
 class InMemoryExerciseRepository:
     def __init__(self) -> None:
@@ -725,11 +850,35 @@ class InMemoryExerciseRepository:
         exercise.secondary_muscles = list(secondary_muscles)
         return exercise
 
+    def update(
+        self, exercise_id: int, patch: ExercisePatch
+    ) -> Exercise | None:
+        existing = self._by_id.get(exercise_id)
+        if existing is None:
+            return None
+        merged = _apply_patch(existing, patch)
+        old_key = existing.normalized_name
+        new_key = merged.normalized_name
+        if new_key != old_key:
+            collision = self._by_key.get(new_key)
+            if collision is not None and collision.id != exercise_id:
+                raise NameCollision(new_key)
+            del self._by_key[old_key]
+        # Immutable write: replace the stored entry with the fresh Exercise rather than
+        # mutating the one the caller may still hold. Re-key under the new normalized name
+        # when a rename moved the identity.
+        self._by_key[new_key] = merged
+        self._by_id[exercise_id] = merged
+        return merged
+
 
 __all__ = [
+    "ExercisePatch",
     "ExerciseRepository",
     "ExerciseSearchPage",
+    "NameCollision",
     "ResolvedExercise",
     "SqlExerciseRepository",
     "InMemoryExerciseRepository",
+    "UNSET",
 ]
