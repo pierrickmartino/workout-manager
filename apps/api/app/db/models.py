@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Column, UniqueConstraint
+from sqlalchemy import Boolean, Column, UniqueConstraint, false
 from sqlalchemy.types import JSON
 from sqlmodel import Field, SQLModel
 
@@ -164,6 +164,14 @@ class Exercise(SQLModel, table=True):
     # injury/rehab-cautious domain — and part of the Enriched (gold) tier, so its
     # absence never holds a movement below the Listable bar (ADR-0041).
     image: str | None = Field(default=None)
+    # The Catalog Retire tombstone (ADR-0076): a reversible soft flag an admin sets to
+    # hide a junk, duplicate, or unsafe movement from every discovery / candidate surface
+    # while it stays fully resolvable by id, so nothing that already references it breaks.
+    # NOT NULL, defaulting active — a movement is discoverable until an admin retires it,
+    # and only an admin un-retires; retirement is never a side effect of another path.
+    retired: bool = Field(
+        default=False, sa_column=Column(Boolean, nullable=False, server_default=false())
+    )
 
 
 class ExerciseRelationship(SQLModel, table=True):
