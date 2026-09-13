@@ -1,184 +1,211 @@
 # Spec — Admin Exercise Administration
 
-**Status:** draft for sign-off · **Branch:** `claude/hello-opus-lnhnvf`
-**Decisions:** ADR-0075 (Provenance mutability), ADR-0076 (Retire / guarded delete),
-CONTEXT.md (`Retire` term). Builds on ADR-0002, ADR-0041, ADR-0046, ADR-0069, ADR-0071.
+> **Triage:** `ready-for-agent` · **Branch:** `claude/hello-opus-lnhnvf`
+> **Decisions:** ADR-0075 (Provenance is a deliberate admin-mutable act), ADR-0076
+> (Catalog Retire + guarded hard delete), CONTEXT.md `Retire` term. Respects ADR-0002,
+> ADR-0041, ADR-0046, ADR-0063, ADR-0069, ADR-0071.
+>
+> _Publishing note: the project issue tracker was unavailable when this was written
+> (GitHub connector 403); this file is the interim home. Re-publish to the tracker with
+> the `ready-for-agent` label once the connector is restored._
 
-## 1. Goal & scope
+## Problem Statement
 
-Give the `role=admin` operator full administration of the shared Exercise **Catalog**.
+The shared **Catalog** fills up over time with AI-invented (`ai_generated`) and
+user-typed (`user_entered`) Exercises that no human has reviewed. Today an admin has no
+way to act on any single Exercise: they can only trigger a bulk Enrichment backfill and
+read an aggregate catalog-health readout. They cannot fix a wrong description, add the
+curator-only precautions or an Exercise **Image**, confer or revoke the `curated` trust
+tier, wire up **Variation** / **Alternative** relationships, or get a junk or unsafe
+movement out of users' way. In an injury/rehab/postpartum-cautious domain, having no
+per-Exercise curator controls is a safety and quality gap.
 
-**In scope**
-- Edit an Exercise's descriptive fields (description, Execution Steps/instructions,
-  targeted muscles, difficulty, required equipment) and the muscle-emphasis split.
-- Write the **curator-only** fields: precautions and the Exercise **Image** (real upload).
-- Set **Provenance** deliberately (promote/correct/demote) — audited.
-- Manage **Variation / Alternative** relationships (list + add + remove).
-- **Enrichment**: surface existing controls in the new UI + a per-Exercise "enrich now".
-- **Retire / un-retire** and guarded **hard delete** (retire-then-delete).
-- Minimal **audit** of provenance changes and retire/delete.
-- Admin **catalog browser** (all provenance/completeness, incl. Stubs and retired).
+## Solution
 
-**Out of scope (v1):** create-from-scratch, merge duplicate Exercises, per-field edit
-history, object-storage image backend, any new role tier.
+Give the `role=admin` operator full administration of individual Catalog Exercises,
+delivered as a backend API and an `/admin` frontend surface:
 
-**Authorization:** every write and the admin browser feed sit behind `require_admin`
-(ADR-0046). No new role concept. Frontend gate = existing `resolveIsAdmin()`; the
-backend is the sole authority (server actions do not re-check).
+- **Browse** the whole Catalog as an ops view — every **Provenance**, every **Catalog
+  Completeness** tier (including **Stub**s and **Retired** Exercises), with the internal
+  completeness signal shown (it stays hidden on the user-facing catalog).
+- **Edit** an Exercise's descriptive fields, its **Primary/Secondary** muscle-emphasis
+  split, its **precautions**, and its **Exercise Image** (a real upload — curator-only).
+- **Set Provenance** deliberately — promote a reviewed movement to `curated`, or
+  correct/demote — as an explicit, audited act (never a side effect of other edits).
+- **Manage relationships** — list, add, and remove **Variation** / **Alternative** links.
+- **Enrich** — surface the existing backfill + catalog-health controls in the new UI and
+  trigger Enrichment for a single **Stub** on demand.
+- **Retire / un-retire** an Exercise (a reversible tombstone that hides it from discovery
+  while keeping it resolvable), and **hard-delete** one only when it is both Retired and
+  wholly unreferenced.
 
-## 2. Data model & migration `0041_admin_exercise_admin`
+Every consequential act (Provenance change, retire, un-retire, hard delete) is recorded
+in an append-only admin audit trail.
 
-`down_revision = "0040_note"`.
+## User Stories
 
-1. **`exercise.retired`** — `bool NOT NULL DEFAULT false`. Add a column; existing rows
-   backfill to `false`.
-2. **`exercise_image`** table — uploaded image bytes kept out of the wide `exercise` row:
-   - `exercise_id` (PK, FK→`exercise.id`, one image per Exercise)
-   - `content_type` (`text`, one of `image/jpeg|png|webp`)
-   - `bytes` (`LargeBinary`)
-   - `byte_size` (`int`), `uploaded_by` (`text`, clerk sub), `uploaded_at` (`datetime`)
-   - The existing nullable `exercise.image` **URL/asset-key stays** and continues to serve
-     curated external references; the served image URL is chosen image-row-first, else the
-     legacy `image` string. (No migration of existing values.)
-3. **`exercise_admin_audit`** table — append-only:
-   - `id` (PK), `exercise_id` (FK→`exercise.id`, indexed), `actor` (clerk sub),
-     `action` (`provenance_change|retire|unretire|hard_delete`), `detail` (`JSON`, e.g.
-     `{"from":"ai_generated","to":"curated"}`), `created_at` (`datetime`, indexed).
-   - `hard_delete` rows keep `exercise_id` as a plain int (no FK enforcement post-delete)
-     plus the deleted Exercise's normalized name in `detail`, so the trail survives the row.
+1. As an admin, I want to open an admin exercise browser, so that I can see and act on the whole Catalog in one place.
+2. As an admin, I want the browser to list every Exercise regardless of Provenance, so that unreviewed `ai_generated` and `user_entered` movements are visible to me.
+3. As an admin, I want the browser to include **Stub** Exercises, so that I can find name-only movements that still need content.
+4. As an admin, I want each row to show its **Catalog Completeness** tier (Stub / Listable / Enriched), so that I can prioritise which movements to enrich — a signal deliberately hidden from ordinary users.
+5. As an admin, I want to filter the browser by Provenance, so that I can review only AI-invented movements.
+6. As an admin, I want to filter by Completeness tier, so that I can work through all the Stubs.
+7. As an admin, I want to filter by active vs Retired, so that I can find movements I previously retired.
+8. As an admin, I want to search the browser by name, so that I can jump straight to a movement I know exists.
+9. As an admin, I want to open an editor for one Exercise, so that I can change its details.
+10. As an admin, I want to edit an Exercise's description, so that a wrong or empty description can be corrected.
+11. As an admin, I want to edit an Exercise's **Execution Steps**, so that the how-to instructions are accurate.
+12. As an admin, I want to edit an Exercise's targeted muscles and required equipment, so that generation and discovery use correct data.
+13. As an admin, I want to set the **Primary/Secondary** muscle-emphasis split, so that the Enriched tier and Muscle Group roll-ups are right.
+14. As an admin, I want to edit an Exercise's difficulty, so that it reflects reality.
+15. As an admin, I want to fix an Exercise's display name, so that spelling and casing can be corrected.
+16. As an admin, I want a rename that would collide with another Exercise's normalized name to be rejected with a clear conflict, so that I never silently merge two distinct movements.
+17. As an admin, I want to write an Exercise's **precautions**, so that safety notes exist — a curator-only field the Enrichment AI is forbidden to fabricate.
+18. As an admin, I want precautions to be stored safely (escaped), so that free text cannot inject markup.
+19. As an admin, I want to upload an **Exercise Image**, so that Exercise Detail can show a correct, curated illustration.
+20. As an admin, I want image uploads restricted to safe image types and a sane size, so that bad or oversized files are refused.
+21. As an admin, I want to replace an existing image, so that I can correct a wrong illustration.
+22. As an admin, I want to remove an image, so that a wrong picture can be taken down without leaving a broken one.
+23. As any signed-in user, I want an Exercise's uploaded image to render on Exercise Detail, so that the curated picture is visible where it always was.
+24. As an admin, I want to promote an Exercise's Provenance to `curated`, so that a movement I have reviewed is marked human-trusted.
+25. As an admin, I want to correct or demote Provenance, so that a wrongly-trusted or unsafe movement loses its `curated` badge.
+26. As an admin, I want Provenance changes to be a deliberate, separate action, so that trust is never conferred as an accidental by-product of editing other fields.
+27. As an admin, I want every Provenance change recorded with who/when/old→new, so that conferring trust is auditable in a safety-cautious domain.
+28. As an admin, I want to see an Exercise's existing Variation and Alternative relationships (both directions), so that I understand what Substitution will offer.
+29. As an admin, I want to add a Variation or Alternative link, so that Substitution has good lookup-first candidates.
+30. As an admin, I want to remove a relationship, so that a wrong or misleading link is gone.
+31. As an admin, I want self-links and duplicate links rejected, so that the relationship graph stays clean.
+32. As an admin, I want to trigger Enrichment for a single Stub on demand, so that I can fill one movement I'm looking at without running the whole backfill.
+33. As an admin, I want the existing bulk Enrichment backfill and catalog-health readout available from the new admin exercise area, so that per-Exercise and corpus-wide tools live together.
+34. As an admin, I want to Retire an Exercise, so that a junk, duplicate, or unsafe movement disappears from users' discovery.
+35. As an admin, I want a Retired Exercise to vanish from Browse the Catalog, the Library pick widget, equipment facets, Substitution candidates, and Exercise Detail's variation/alternative lists, so that users never encounter it.
+36. As an admin, I want Retiring an Exercise to leave every existing Exercise Prescription, Logged Set, and Relationship intact, so that no user's plan or settled record breaks.
+37. As an admin, I want a Retired Exercise excluded from the Enrichment scan, so that no LLM effort is spent on a hidden movement.
+38. As an admin, I want to un-Retire an Exercise, so that a movement I hid by mistake returns cleanly to discovery.
+39. As an admin, I want a Retired Exercise to still show up in my admin browser, so that I can find and un-Retire it.
+40. As an admin, I want an AI- or user-generated movement whose name matches a Retired one to reuse the existing row without un-Retiring it, so that the model re-inventing a name cannot undo my decision.
+41. As an admin, I want to hard-delete an Exercise that is Retired and wholly unreferenced, so that a genuine mistake can be removed permanently.
+42. As an admin, I want a hard delete refused when the Exercise is still referenced by any Prescription, Logged Set, or Relationship, so that I can never corrupt a plan or record.
+43. As an admin, I want a hard delete refused unless the Exercise has been Retired first, so that permanent removal is always a deliberate two-step act.
+44. As an admin, I want retire, un-retire, and hard delete recorded in the audit trail, so that destructive acts are traceable.
+45. As an admin, I want the editor to disable Delete (with the reason shown) until the Exercise is Retired and unreferenced, so that I understand why I can't delete yet.
+46. As a non-admin user, I want all of these write endpoints to reject me, so that only operators can change the shared Catalog.
+47. As a user with a Sensitive Constraint, I want retirement and curation to change nothing about the safety cache bypass, so that fresh generation still applies to me.
+48. As a user, I want generation and Substitution to keep working unchanged, so that admin activity never degrades my experience.
 
-## 3. Domain (`app/domain/exercise.py`)
+## Implementation Decisions
 
-Pure helpers, unit-tested, no I/O:
-- `can_hard_delete(is_retired: bool, reference_count: int) -> bool` — true iff retired and
-  zero references.
-- `next_provenance(...)` is trivial (any→any) so no gate function; validation is "value is a
-  member of `Provenance`".
-- Image validation: `validate_image(content_type, byte_size)` → allowed types +
-  `MAX_IMAGE_BYTES` (constant, 2 MB). Rejects otherwise.
-- No change to `catalog_completeness` / `completeness_breakdown`.
+- **Authorization reuses the one operator gate.** Every write and the admin browser feed
+  sit behind the existing `require_admin` dependency (ADR-0046); the frontend reuses the
+  existing server-side admin gate and `notFound()` pattern (ADR-0071). No new role tier,
+  no roles table — "admin" stays the single Clerk `role=admin` claim. Server actions do
+  not re-check; the backend is the sole authority.
+- **New schema (one migration, `down_revision` = the current head).**
+  - A `retired` boolean on the Exercise, defaulting false; backfilled false for existing rows.
+  - An **Exercise Image** store holding uploaded bytes + content-type + size + uploader +
+    timestamp, one image per Exercise, kept out of the wide Exercise row. The legacy
+    nullable image URL/asset-key field remains and still serves curated external
+    references; the served image is chosen upload-first, else the legacy URL.
+  - An append-only **exercise admin audit** record: exercise reference, actor, action
+    (`provenance_change` | `retire` | `unretire` | `hard_delete`), a JSON detail
+    (e.g. old→new Provenance, or the deleted movement's normalized name), and a timestamp.
+    A hard-delete audit row survives the deleted Exercise (no enforced FK back to it).
+- **Repository pattern extended, not bypassed.** The Exercise repository gains immutable
+  writers — a partial `update` (returns a fresh Exercise; a rename whose normalized name
+  collides with a *different* Exercise raises a typed conflict → HTTP 409), a deliberate
+  Provenance setter, a precautions setter, retire / un-retire, a guarded hard delete, and
+  a reference counter (Prescriptions + Logged Sets + Relationships). Discovery reads
+  (`search`, `browse`, `browse_all`, and the equipment-facet consumer of `list_all`) gain
+  an `include_retired` flag defaulting to exclude; the admin browser passes it true. A new
+  admin-browse read returns filtered, paged rows carrying the computed Completeness tier.
+  New small repositories back the Exercise Image store and the audit trail. The
+  relationship repository gains list-both-directions and remove, and `add` rejects
+  self-links and duplicate `(from, to, kind)`.
+- **Pure domain helpers.** The hard-delete guard (`retired ∧ zero-references`) and image
+  validation (allowed content-types + a max-size constant) are pure functions in the
+  domain layer, consumed by the routes. Provenance accepts any member value (no gate);
+  Catalog Completeness computation is unchanged.
+- **API contract (all admin-gated unless noted; standard `{success,data,error}` envelope;
+  literal paths declared before the `/{id}` path).**
+  - Admin browser feed: paged, filterable by name query, Provenance, Completeness tier,
+    and retired/active; rows include the Completeness tier and retired flag.
+  - Partial edit of descriptive fields + emphasis → 200; 409 on name collision; 422 on
+    invalid input; 404 if absent.
+  - Set Provenance → 200 + audit; set precautions (escaped) → 200.
+  - Retire / un-retire → 200 + audit.
+  - Hard delete → 204 + audit; **409** when not (Retired ∧ unreferenced).
+  - Image upload (multipart) → 200 with the served URL; **415** wrong type; **413** too
+    large. Image delete → 204. Image fetch is readable by **any signed-in user** (it feeds
+    Exercise Detail); every other route is operator-only.
+  - Relationships: list → 200; add → 201 (409 duplicate, 422 self-link); remove → 204.
+  - Single-Stub enrich → 202 (reuses the existing Enrichment machinery).
+- **Retire enforcement lives in the repository reads**, so the existing user-facing catalog
+  browse, facets, taxonomy, Exercise-Detail variation sublist, and Substitution candidate
+  build all stop surfacing Retired Exercises automatically, while fetch-by-id still resolves
+  a Retired Exercise for existing references.
+- **Generation / Substitution unchanged beyond reuse-but-keep-retired.** The existing
+  find-or-create-by-normalized-name already reuses a matching row; because it applies no
+  status predicate it binds to a Retired row without un-retiring it.
+- **Image upload path.** Storage is the app's own database (no object store, no new
+  secret). The web app forwards the uploaded file as multipart to the API with the Clerk
+  JWT via a single new upload helper in the existing server-only transport seam; the rest
+  of that seam stays JSON. Exercise Detail's existing plain-`<img>` component points at the
+  image-fetch endpoint when an upload exists, else the legacy URL (no `next/image`, no
+  remote-host config change).
+- **Frontend surface.** An admin catalog **browser** page (search + the three filters,
+  rows linking to the editor, Completeness tier shown) and an admin **editor** page
+  (descriptive fields, emphasis, precautions, image upload/preview/remove, Provenance
+  control, relationship add/remove, single-Stub enrich, retire/un-retire, guarded delete
+  with a confirm and a disabled-reason). A card on the existing `/admin` home links to the
+  browser. Frontend logic (row view-model, filter predicate, delete-enablement predicate,
+  image-src resolution) lives in the web `lib/` layer with co-located tests; components
+  stay thin. The admin-claim constants stay in lockstep with the backend config, per the
+  existing note.
 
-## 4. Repositories
+## Testing Decisions
 
-### `ExerciseRepository` (+ in-memory impl, both kept in lockstep)
-New/changed methods — all **immutable** (return a fresh `Exercise`, never mutate in place):
-- `update(id, patch: ExercisePatch) -> Exercise` — partial write of descriptive fields.
-  Renaming recomputes `normalized_name`; if that collides with **another** row → raise a
-  typed `NameCollision` (route → 409). Same-row no-op rename is fine.
-- `set_provenance(id, provenance) -> Exercise`.
-- `set_precautions(id, list[str]) -> Exercise` (HTML-escaped at the route boundary).
-- `retire(id) -> Exercise` / `unretire(id) -> Exercise`.
-- `hard_delete(id) -> None` — caller has already checked the guard.
-- `reference_count(id) -> int` — counts Prescriptions + Logged Sets + Relationships.
-- **Retired filter** threaded through discovery reads: `search`, `browse`, `browse_all`,
-  and `list_all` **as consumed by facets**. Add `include_retired: bool = False` param;
-  discovery callers pass default (exclude), admin browser passes `True`.
-- `list_all` / `list_by_provenance` gain `include_retired` (admin readouts pass `True`);
-  the enrichment scan excludes retired.
-- Admin browser feed: `admin_browse(filters) -> page` — filter by provenance, completeness
-  tier (computed), retired/active, and free-text name; includes the completeness tier in
-  each row (the internal signal, hidden from the public catalog).
+- **What makes a good test here:** assert observable behavior at the seam — the HTTP
+  response and envelope, what each discovery surface returns, the audit record produced,
+  the rendered view-model — never repository internals, private fields, or ORM state.
+  AAA structure, behavior-describing names, ≥80% coverage.
+- **Seam 1 — the HTTP route boundary (primary).** Exercise the whole backend through the
+  FastAPI endpoints using the existing offline `TestClient` harness (SQLite / in-memory
+  repositories, injected admin JWT). Prior art: the existing admin-auth test and the
+  exercise-route tests. Coverage: the auth matrix (unauthenticated / non-operator /
+  operator) on every admin route; partial edit happy-path + 409 name collision + 422;
+  Provenance change writes an audit row; retiring hides the Exercise from the user-facing
+  browse, facets, and Substitution candidates while fetch-by-id still resolves it;
+  un-retire restores it; the hard-delete guard returns 409 until the Exercise is Retired
+  and unreferenced, then 204 and an audit row; image upload 200 / 415 / 413, and image
+  fetch readable by a normal user; relationship list / add / remove with self-link and
+  duplicate guards; single-Stub enrich accepted; and a regression that generation /
+  Substitution over a name matching a Retired row keeps it Retired.
+- **Seam 2 — the web view-model (`lib/`).** Test the pure mapping/predicate logic with the
+  project's `node --test` runner, matching the existing co-located `lib/*.test.ts` prior
+  art: the admin-row view-model (tier + retired badge), the filter predicate, the
+  delete-enablement predicate (Retired ∧ unreferenced), and image-src resolution
+  (uploaded vs legacy URL).
+- **Pure domain helpers** (hard-delete guard truth table, image validation boundaries) are
+  tested directly as unit tests in the domain layer — the repo treats domain logic as the
+  natural home for exhaustive, I/O-free unit tests.
+- **Terminology guard:** `Retire` is additive, so nothing is removed from the banned-terms
+  registry; the change must not introduce any banned regression.
 
-### `ExerciseRelationshipRepository`
-- `list_for(exercise_id) -> list[Relationship]` — both directions, with kind + direction.
-- `remove(from_id, to_id, kind) -> None`.
-- `add(...)` gains guards: reject self-link (`from == to`) and duplicate `(from,to,kind)`.
+## Out of Scope
 
-### `ExerciseImageRepository` (new)
-- `put(exercise_id, content_type, bytes, byte_size, actor) -> None` (upsert, one per Exercise)
-- `get(exercise_id) -> ImageRow | None`
-- `delete(exercise_id) -> None`
+- Creating a brand-new Exercise from scratch in the admin UI.
+- Merging two duplicate Catalog Exercises (re-pointing every reference).
+- Per-field edit history / full change log (only the four consequential acts are audited).
+- Object-storage / CDN image backend and user-facing image uploads (still deferred,
+  ADR-0041); admin upload is stored in the app database.
+- Any new role tier or per-user permission model beyond the existing `role=admin` claim.
+- Changes to how Substitution or generation *select* movements, beyond honoring the
+  Retired filter and the reuse-but-keep-retired rule.
 
-### `ExerciseAuditRepository` (new)
-- `record(exercise_id, actor, action, detail) -> None`
-- `list_for(exercise_id) -> list[AuditRow]` (admin read; newest first)
+## Further Notes
 
-DI providers added in `repositories/deps.py`.
-
-## 5. Endpoints (`app/routes/exercises.py`, all `require_admin` unless noted)
-
-All return the standard envelope; literal paths declared **before** `/{exercise_id}`.
-
-| Method & path | Body / params | Success | Errors |
-|---|---|---|---|
-| `GET /api/admin/exercises` | `q, provenance, completeness, retired, page, limit` | `200` page of admin rows (incl. tier, retired) | — |
-| `PATCH /api/exercises/{id}` | descriptive fields + emphasis, partial | `200` updated Exercise | `404`; `409` name collision; `422` validation |
-| `PUT /api/exercises/{id}/provenance` | `{provenance}` | `200`; audit `provenance_change` | `404`; `422` bad value |
-| `PUT /api/exercises/{id}/precautions` | `{precautions: string[]}` | `200` (escaped) | `404`; `422` |
-| `POST /api/exercises/{id}/retire` | — | `200` retired; audit `retire` | `404` |
-| `POST /api/exercises/{id}/unretire` | — | `200` active; audit `unretire` | `404` |
-| `DELETE /api/exercises/{id}` | — | `204`; audit `hard_delete` | `404`; `409` if not (retired ∧ unreferenced) |
-| `POST /api/exercises/{id}/image` | multipart file | `200` served URL | `404`; `415` type; `413` too large |
-| `DELETE /api/exercises/{id}/image` | — | `204` | `404` |
-| `GET /api/exercises/{id}/image` *(auth: any signed-in user)* | — | `200` bytes + content-type | `404` |
-| `GET /api/exercises/{id}/relationships` | — | `200` list both directions | `404` |
-| `POST /api/exercises/{id}/relationships` | `{to_id, kind}` | `201` | `404`; `409` dup; `422` self-link |
-| `DELETE /api/exercises/{id}/relationships` | `{to_id, kind}` | `204` | `404` |
-| `POST /api/exercises/{id}/enrich` | — | `202` job accepted | `404` |
-
-`GET …/image` is readable by any authenticated user (it feeds Exercise Detail); every other
-route is `require_admin`. Retire enforcement (ADR-0076) is applied in the repository reads,
-so the existing public `GET /api/exercises`, `/facets`, `/taxonomy`, `/{id}` (variations
-sublist), and Substitution automatically stop surfacing retired Exercises; `GET /{id}` itself
-still resolves a retired Exercise by id.
-
-## 6. Generation / substitution touch-point
-
-No behavior change beyond ADR-0076's reuse-but-keep-retired: `find_or_create` already reuses
-by normalized name; because it applies no status predicate it binds to a retired row **without
-un-retiring** it. A regression test pins that generation/substitution never flips `retired`.
-
-## 7. Image upload path (web → API)
-
-- **Storage:** Postgres (`exercise_image` table). No object store, no new secret (ADR-choice Q14a).
-- **Web:** a new admin **server action** receives the `File`, validates type/size client- and
-  server-side, and forwards it as `multipart/form-data` to `POST /api/exercises/{id}/image`
-  with the Clerk JWT. This is the one multipart path added to the otherwise-JSON `lib/api.ts`
-  (a dedicated `apiUpload` helper, `server-only`).
-- **Render:** Exercise Detail's `<ExerciseImage>` points `src` at `GET /api/exercises/{id}/image`
-  when an uploaded image exists, else the legacy `image` URL. Still a plain `<img>` (no
-  `next/image`, no `remotePatterns` change).
-
-## 8. Frontend (`apps/web`)
-
-- `app/admin/exercises/page.tsx` — **catalog browser** (server component, `require_admin`
-  via `resolveIsAdmin`/`notFound()`): search + filters (provenance, completeness tier,
-  retired/active), rows link to the editor. Shows the completeness tier — the ops signal
-  hidden from the public catalog.
-- `app/admin/exercises/[id]/page.tsx` — **editor**: descriptive fields, precautions, emphasis,
-  image upload/preview/delete, provenance control, relationship add/remove, enrich-now,
-  retire/un-retire, and (guarded) delete with a confirm. Delete disabled unless retired ∧
-  unreferenced, with the reason shown.
-- `app/admin/exercises/actions.ts` — server actions wrapping each endpoint (incl. the
-  multipart image action); unwrap the envelope.
-- `apps/web/lib/admin-exercises.ts` (+ `admin-exercises.test.ts`) — view-model mappers,
-  filter/sort logic, the delete-enablement predicate. Frontend logic lives here per repo rule.
-- A card on `app/admin/page.tsx` linking to the browser.
-- Admin constants stay in lockstep with `config.py` (existing `lib/admin.ts` note).
-
-## 9. Testing plan (test-first, ≥80%)
-
-**API / domain**
-- `can_hard_delete` truth table; image validation (type, size boundaries).
-- Repo (both impls): `update` incl. name-collision→`NameCollision`; `set_provenance`;
-  `retire`/`unretire`; `hard_delete`; `reference_count`; discovery reads exclude retired;
-  `admin_browse` filters; relationship `list_for`/`remove`/self-link/dup guards; image
-  put/get/delete; audit record/list.
-- Routes: auth matrix (401/403/200) on every admin route reusing the `require_admin`
-  pattern; `PATCH` happy + 409 + 422; provenance change writes audit; retire hides from
-  `GET /api/exercises` and `/facets` and substitution candidates but `GET /{id}` still
-  resolves; delete guard 409 then 204 after retire; image 200/415/413; `GET /{id}/image`
-  readable by a normal user.
-- Regression: generation/substitution over a name matching a retired row keeps it retired.
-
-**Web (`node --test` over `lib/*.test.ts`)**
-- View-model mapping of an admin row (tier, retired badge); filter predicate; delete-enable
-  predicate (retired ∧ unreferenced); image-src resolution (uploaded vs legacy URL).
-
-**Terminology guard:** no banned regressions introduced; `Retire` is additive (no removed
-term to register).
-
-## 10. Delivery
-
-Conventional commits on `claude/hello-opus-lnhnvf`; migration + backend first (red→green),
-then web. No PR unless requested. `REVIEW.md` checklist run before hand-off.
+- The two ADRs (0075, 0076) carry the "why" and the rejected alternatives; this spec is the
+  "what". CONTEXT.md now defines **Retire** and records the Provenance and Catalog revisions.
+- Delivery order: schema + backend first (test-first, red→green), then the web surface.
+  Conventional commits on the feature branch; no PR unless explicitly requested; the
+  `REVIEW.md` checklist is run before hand-off.
