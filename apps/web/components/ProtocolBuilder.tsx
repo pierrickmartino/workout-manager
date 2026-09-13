@@ -25,6 +25,7 @@ import type { BalancePreview, ProtocolProgress } from "@/lib/protocols-types";
 import { toMuscleBars } from "@/lib/muscle-distribution";
 import { ExerciseLibrary } from "@/components/ExerciseLibrary";
 import { PrescriptionList } from "@/components/builder/prescription-rows";
+import { SessionCompositionStrip } from "@/components/builder/session-composition-strip";
 import { SessionMatrix } from "@/components/builder/session-matrix";
 import { MuscleSplit } from "@/components/pulse/muscle-split";
 import { PageHeader } from "@/components/pulse/page-header";
@@ -606,10 +607,24 @@ function SessionEditor({
 }: SessionEditorProps) {
   const locked = session.performed;
   const [libraryOpen, setLibraryOpen] = useState(false);
+  // Which Prescription the composition strip last focused (ADR-0074), so its tile reads as
+  // selected. Ephemeral view state — a scroll target, never part of the draft.
+  const [selectedPosition, setSelectedPosition] = useState<number | null>(null);
   // The per-Prescription Superset layout (ADR-0023): member badges (A/B/C), the group
   // ends, and where the single round-rest field belongs. A flat Session has an all-solo
   // layout, so nothing extra renders.
   const layout = supersetLayout(session.prescriptions);
+
+  // Selecting a composition tile moves focus to its editable Prescription (idea 5): mark it
+  // selected and scroll its row (anchored by id in `prescription-rows`) into view.
+  function focusPrescription(position: number) {
+    setSelectedPosition(position);
+    if (typeof document !== "undefined") {
+      document
+        .getElementById(`builder-prescription-${position}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }
   return (
     <Card
       className={`flex flex-col gap-3 p-4 ${locked ? "opacity-70" : ""}`}
@@ -642,6 +657,17 @@ function SessionEditor({
           </button>
         )}
       </div>
+
+      {/* The visible workout composition (ADR-0074, idea 5): a Section-grouped strip above
+          the editable exercises. Each Exercise is a labeled tile, Superset pairs are
+          bracketed with their shared round instruction, and selecting a tile focuses its
+          editable Prescription below. */}
+      <SessionCompositionStrip
+        prescriptions={session.prescriptions}
+        layout={layout}
+        selectedPosition={selectedPosition}
+        onSelect={focusPrescription}
+      />
 
       <PrescriptionList
         prescriptions={session.prescriptions}
