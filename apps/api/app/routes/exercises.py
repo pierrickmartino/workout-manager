@@ -9,6 +9,8 @@ authentication like the rest of the API. Responses use the standard envelope."""
 from __future__ import annotations
 
 import logging
+from enum import Enum
+from typing import TypeVar
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, field_validator
@@ -414,23 +416,18 @@ def _admin_row(exercise: Exercise) -> dict:
     }
 
 
-def _parse_provenance(raw: str | None) -> Provenance | None:
-    """Parse the ``provenance`` filter, dropping an unrecognized value rather than 422ing.
-
-    Mirrors the Browse facets' lenient parsing (ADR-0042): an unknown value narrows
-    nothing instead of erroring the whole read."""
-
-    try:
-        return Provenance(raw) if raw else None
-    except ValueError:
-        return None
+_EnumT = TypeVar("_EnumT", bound=Enum)
 
 
-def _parse_completeness(raw: str | None) -> CatalogCompleteness | None:
-    """Parse the ``completeness`` tier filter, dropping an unrecognized value."""
+def _parse_enum(enum_cls: type[_EnumT], raw: str | None) -> _EnumT | None:
+    """Parse a filter value into ``enum_cls``, dropping an unrecognized value.
+
+    Mirrors the Browse facets' lenient parsing (ADR-0042): a blank or unknown value
+    narrows nothing instead of 422ing the whole read. Shared by the ``provenance`` and
+    ``completeness`` browser filters so the two parse identically."""
 
     try:
-        return CatalogCompleteness(raw) if raw else None
+        return enum_cls(raw) if raw else None
     except ValueError:
         return None
 
@@ -467,8 +464,8 @@ def admin_browse_exercises(
 
     filters = AdminBrowseFilters(
         query=q,
-        provenance=_parse_provenance(provenance),
-        completeness=_parse_completeness(completeness),
+        provenance=_parse_enum(Provenance, provenance),
+        completeness=_parse_enum(CatalogCompleteness, completeness),
         retired=retired,
     )
     page = exercises.admin_browse(filters=filters, limit=limit, offset=offset)
