@@ -16,10 +16,13 @@ from pydantic import BaseModel, field_validator
 from app.auth.dependencies import get_current_user, require_admin
 from app.db.models import Exercise
 from app.domain.exercise import (
+    CatalogCompleteness,
     Provenance,
+    catalog_completeness,
     completeness_breakdown,
     normalize_name,
 )
+from app.domain.exercise_admin import AdminBrowseFilters
 from app.domain.exercise_browse import (
     distinct_equipment,
     parse_difficulty_band,
@@ -59,6 +62,12 @@ HTTP_ACCEPTED = 202
 # never returns an unbounded slice of the catalog.
 DEFAULT_SEARCH_LIMIT = 20
 MAX_SEARCH_LIMIT = 50
+
+# The admin catalog browser (issue #501) reads a bounded shared set, so its page cap is
+# generous — the ops UI pulls the whole catalog in one page and filters/searches it
+# client-side — while still bounding any single read.
+ADMIN_BROWSE_DEFAULT_LIMIT = 50
+ADMIN_BROWSE_MAX_LIMIT = 500
 
 # The sane upper bound on a user-typed movement name: long enough for any real
 # movement, short enough to reject a junk paste before it enters the shared catalog.
@@ -384,6 +393,88 @@ def read_completeness_breakdown(
             "enriched": breakdown.enriched,
             "total": breakdown.total,
         }
+    )
+
+
+def _admin_row(exercise: Exercise) -> dict:
+    """One row of the admin catalog browser (issue #501, ADR-0076).
+
+    Unlike the user-facing ``_search_result``, this ops row surfaces the two axes the
+    public catalog deliberately hides: the computed Catalog Completeness tier (ADR-0041)
+    and the ``retired`` tombstone (ADR-0076, for the later editor). ``id`` and ``name`` are
+    enough for a row to link toward the editor; the tier is the read-time projection, never
+    a stored column."""
+
+    return {
+        "id": exercise.id,
+        "name": exercise.name,
+        "provenance": exercise.provenance,
+        "completeness": catalog_completeness(exercise).value,
+        "retired": exercise.retired,
+    }
+
+
+def _parse_provenance(raw: str | None) -> Provenance | None:
+    """Parse the ``provenance`` filter, dropping an unrecognized value rather than 422ing.
+
+    Mirrors the Browse facets' lenient parsing (ADR-0042): an unknown value narrows
+    nothing instead of erroring the whole read."""
+
+    try:
+        return Provenance(raw) if raw else None
+    except ValueError:
+        return None
+
+
+def _parse_completeness(raw: str | None) -> CatalogCompleteness | None:
+    """Parse the ``completeness`` tier filter, dropping an unrecognized value."""
+
+    try:
+        return CatalogCompleteness(raw) if raw else None
+    except ValueError:
+        return None
+
+
+@router.get("/admin/exercises")
+def admin_browse_exercises(
+    q: str = Query(default="", description="Case-insensitive name substring."),
+    provenance: str | None = Query(
+        default=None, description="Filter by Provenance: curated|ai_generated|user_entered."
+    ),
+    completeness: str | None = Query(
+        default=None, description="Filter by Completeness tier: stub|listable|enriched."
+    ),
+    retired: bool | None = Query(
+        default=None, description="Filter by retired (true) / active (false); omit for both."
+    ),
+    limit: int = Query(default=ADMIN_BROWSE_DEFAULT_LIMIT, ge=1, le=ADMIN_BROWSE_MAX_LIMIT),
+    offset: int = Query(default=0, ge=0),
+    _operator: str = Depends(require_admin),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+) -> dict:
+    """The operator-only admin catalog browser (issue #501, ADR-0075/0076).
+
+    A paged, filterable ops view over the **whole** shared Catalog — every Provenance,
+    every Completeness tier (Stubs included), and both retired and active rows, unlike the
+    user-facing, Listable-only library. Each row carries its computed Completeness tier (the
+    internal signal hidden from the public catalog) and its retired state (for the later
+    editor). The four filters — name search, Provenance, Completeness tier, retired/active —
+    compose (AND'd); an unrecognized Provenance or tier value is dropped rather than
+    erroring the read (ADR-0042 style). Behind ``require_admin`` (ADR-0046): a non-operator
+    is rejected. Declared before ``/exercises/{exercise_id}`` is irrelevant here — the
+    ``/admin`` prefix never collides with an id. Responses use the standard paginated
+    envelope."""
+
+    filters = AdminBrowseFilters(
+        query=q,
+        provenance=_parse_provenance(provenance),
+        completeness=_parse_completeness(completeness),
+        retired=retired,
+    )
+    page = exercises.admin_browse(filters=filters, limit=limit, offset=offset)
+    return success_envelope(
+        [_admin_row(exercise) for exercise in page.items],
+        meta={"total": page.total, "limit": limit, "offset": offset},
     )
 
 

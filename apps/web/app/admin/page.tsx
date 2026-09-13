@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 
+import { Dumbbell } from "lucide-react";
+
 import { resolveIsAdmin } from "@/lib/admin";
 import { resolveActiveSkin } from "@/lib/active-skin";
 import { AppearanceSkinPublisher } from "@/components/AppearanceSkinPublisher";
@@ -7,6 +9,7 @@ import { CatalogCompletenessBreakdown } from "@/components/CatalogCompletenessBr
 import { EnrichmentBackfillControl } from "@/components/EnrichmentBackfillControl";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
+import { NavRow } from "@/components/pulse/nav-row";
 import { BackLink } from "@/components/pulse/back-link";
 import { Card } from "@/components/ui/card";
 
@@ -32,6 +35,19 @@ export default async function AdminPage() {
         <SectionHeader>ACTIVE SKIN</SectionHeader>
         <Card className="p-4">
           <AppearanceSkinPublisher activeSkin={activeSkin} />
+        </Card>
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <SectionHeader>CATALOG</SectionHeader>
+        <Card className="p-0">
+          <NavRow
+            icon={Dumbbell}
+            label="Exercise catalog"
+            href="/admin/exercises"
+            value="BROWSE"
+            accent="cyan"
+          />
         </Card>
       </div>
 

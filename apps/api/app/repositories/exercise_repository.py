@@ -18,6 +18,7 @@ from sqlmodel import Session, select
 
 from app.db.models import Exercise
 from app.domain.exercise import Provenance, normalize_name, rank_exercise_matches
+from app.domain.exercise_admin import AdminBrowseFilters, filter_admin_catalog
 from app.domain.exercise_browse import (
     DifficultyBand,
     matches_filters,
@@ -153,6 +154,19 @@ class ExerciseRepository(Protocol):
         group them by Movement Pattern with accurate per-pattern counts. The taxonomy needs
         the whole filtered set to group it, so it does not paginate; the catalog is a
         bounded shared set. Read-only."""
+        ...
+
+    def admin_browse(
+        self, *, filters: AdminBrowseFilters, limit: int, offset: int
+    ) -> ExerciseSearchPage:
+        """The operator-only admin catalog-browser feed (issue #501, ADR-0076).
+
+        Spans the **whole** shared Catalog — every Provenance, every Completeness tier
+        (Stubs included), and both retired and active rows, unlike the user-facing,
+        Listable-only library — narrowed by the composable ``AdminBrowseFilters`` (name
+        search, Provenance, computed Completeness tier, retired/active) and sliced by
+        ``limit``/``offset`` with the full filtered count in ``total``. Ordered A→Z by
+        normalized name for a stable, paginable ops list. Read-only."""
         ...
 
     def list_by_provenance(self, provenance: Provenance) -> list[Exercise]:
@@ -296,6 +310,25 @@ def _browse_page(
         difficulty_bands=difficulty_bands,
     )
     return ExerciseSearchPage(items=ranked[offset : offset + limit], total=len(ranked))
+
+
+def _admin_page(
+    candidates: list[Exercise],
+    *,
+    filters: AdminBrowseFilters,
+    limit: int,
+    offset: int,
+) -> ExerciseSearchPage:
+    """Filter, order, and slice the admin browser's candidate set (issue #501).
+
+    Shared by the SQL and in-memory repositories so both narrow through the one pure
+    ``filter_admin_catalog`` and apply one slice rule — the admin twin of ``_browse_page``
+    — and never drift. ``total`` is the full filtered count before the page slice."""
+
+    filtered = filter_admin_catalog(candidates, filters)
+    return ExerciseSearchPage(
+        items=filtered[offset : offset + limit], total=len(filtered)
+    )
 
 
 class SqlExerciseRepository:
@@ -448,6 +481,16 @@ class SqlExerciseRepository:
             equipment=equipment,
             difficulty_bands=difficulty_bands,
         )
+
+    def admin_browse(
+        self, *, filters: AdminBrowseFilters, limit: int, offset: int
+    ) -> ExerciseSearchPage:
+        # The whole Catalog is the candidate set — no status/provenance predicate — so
+        # the ops view spans everything; the pure filter then narrows and orders it. The
+        # catalog is a bounded shared set, so loading it and filtering in Python keeps the
+        # SQL and in-memory reads on one code path (the browse/taxonomy approach, ADR-0042).
+        candidates = list(self._session.exec(select(Exercise)).all())
+        return _admin_page(candidates, filters=filters, limit=limit, offset=offset)
 
     def list_by_provenance(self, provenance: Provenance) -> list[Exercise]:
         return list(
@@ -633,6 +676,12 @@ class InMemoryExerciseRepository:
             equipment=equipment,
             difficulty_bands=difficulty_bands,
         )
+
+    def admin_browse(
+        self, *, filters: AdminBrowseFilters, limit: int, offset: int
+    ) -> ExerciseSearchPage:
+        candidates = list(self._by_id.values())
+        return _admin_page(candidates, filters=filters, limit=limit, offset=offset)
 
     def list_by_provenance(self, provenance: Provenance) -> list[Exercise]:
         return [
