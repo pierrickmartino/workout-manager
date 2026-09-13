@@ -24,7 +24,7 @@ import {
   type SupersetSlot,
 } from "@/lib/hand-authored-session";
 import type { CaptureSeed, CaptureSeedExercise } from "@/lib/capture-seed";
-import { dissolveSingletonGroups } from "@/lib/supersets";
+import { dissolveSingletonGroups, remapSelectionAfterReorder } from "@/lib/supersets";
 import { DEFAULT_EFFORT_SCALE, type EffortScale } from "@/lib/effort";
 import { weightUnitLabel } from "@/lib/weight-format";
 import type { WeightUnit } from "@/lib/weight-unit";
@@ -316,8 +316,15 @@ export function HandAuthoredSessionForm({
       setExerciseRoundRest(current, index, roundRestSeconds),
     );
 
-  const moveExercise = (from: number, to: number) =>
+  // Selection is position-based (ADR-0074), so a reorder must move it with the exercise it
+  // points at — mirror the same contiguity-preserving move `reorderExercise` applies so the
+  // highlight follows the exercise rather than jumping to whatever slid into the old slot.
+  const moveExercise = (from: number, to: number) => {
+    setSelectedPosition((current) =>
+      remapSelectionAfterReorder(exercises, from, to, current),
+    );
     setExercises((current) => reorderExercise(current, from, to));
+  };
 
   // Whether moving `from` → `to` actually reorders: `reorderExercise` returns the input
   // unchanged when a move would split a Superset (or is a no-op), so an identity result

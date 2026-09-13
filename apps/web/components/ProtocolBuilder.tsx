@@ -17,6 +17,7 @@ import {
   type DropIntent,
   type PickedExercise,
 } from "@/lib/protocol-builder";
+import { remapSelectionAfterReorder } from "@/lib/supersets";
 import { type LoadKind } from "@/lib/load";
 import type { Effort } from "@/lib/effort";
 import type { DistanceUnit, QuantityKind } from "@/lib/quantity";
@@ -625,6 +626,16 @@ function SessionEditor({
         ?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }
+
+  // Selection is position-based, so a reorder must move it with the exercise it points at
+  // (ADR-0074) — otherwise the highlight jumps to whatever slid into the old slot. Remap it
+  // against the same contiguity-preserving move the reducer applies, then dispatch.
+  function handleReorder(from: number, to: number) {
+    setSelectedPosition((current) =>
+      remapSelectionAfterReorder(session.prescriptions, from, to, current),
+    );
+    onReorder(from, to);
+  }
   return (
     <Card
       className={`flex flex-col gap-3 p-4 ${locked ? "opacity-70" : ""}`}
@@ -669,7 +680,7 @@ function SessionEditor({
         onSelect={focusPrescription}
         // Dragging a tile reorders the Prescription (ADR-0074): warm-up/cooldown follow the
         // new position. A performed Session is settled record, so it gets no reorder.
-        onReorder={locked ? undefined : onReorder}
+        onReorder={locked ? undefined : handleReorder}
       />
 
       <PrescriptionList
@@ -685,7 +696,7 @@ function SessionEditor({
         onSetNote={onSetNote}
         onSetQuantity={onSetQuantity}
         onEditRoundRest={onEditRoundRest}
-        onReorder={onReorder}
+        onReorder={handleReorder}
         onGroupWithNext={onGroupWithNext}
         onUngroup={onUngroup}
         onRemove={onRemove}

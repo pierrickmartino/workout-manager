@@ -8,6 +8,7 @@ import {
   freshSupersetTag,
   groupWithNext,
   moveItem,
+  remapSelectionAfterReorder,
   reorderKeepingContiguous,
   supersetLayout,
   supersetsAreContiguous,
@@ -182,6 +183,67 @@ test("reorderKeepingContiguous allows a move that keeps every group contiguous",
     result.map((r) => r.name),
     ["c", "a", "b"],
   );
+});
+
+test("remapSelectionAfterReorder follows the moved exercise to its new index", () => {
+  // Arrange — select the exercise at index 1, then drag it to the back.
+  const items = [row("a"), row("b"), row("c"), row("d")];
+
+  // Act
+  const next = remapSelectionAfterReorder(items, 1, 3, 1);
+
+  // Assert — selection lands where "b" now sits.
+  assert.equal(next, 3);
+});
+
+test("remapSelectionAfterReorder shifts a selection between from and to (downward move)", () => {
+  // Arrange — move index 0 down to index 2; the selected index 1 slides up one slot.
+  const items = [row("a"), row("b"), row("c"), row("d")];
+
+  // Act
+  const next = remapSelectionAfterReorder(items, 0, 2, 1);
+
+  // Assert — "b" moved from index 1 to index 0.
+  assert.equal(next, 0);
+});
+
+test("remapSelectionAfterReorder shifts a selection between to and from (upward move)", () => {
+  // Arrange — move index 3 up to index 1; the selected index 1 slides down one slot.
+  const items = [row("a"), row("b"), row("c"), row("d")];
+
+  // Act
+  const next = remapSelectionAfterReorder(items, 3, 1, 1);
+
+  // Assert — "b" moved from index 1 to index 2.
+  assert.equal(next, 2);
+});
+
+test("remapSelectionAfterReorder leaves a selection outside the moved span untouched", () => {
+  const items = [row("a"), row("b"), row("c"), row("d")];
+  assert.equal(remapSelectionAfterReorder(items, 0, 1, 3), 3);
+});
+
+test("remapSelectionAfterReorder holds selection when the move splits a group", () => {
+  // Arrange — a superset (b, c); a move that would break it is refused, so the list — and
+  // the selection pointing at "b" — is unchanged.
+  const items = [row("a"), row("b", "1"), row("c", "1"), row("d")];
+
+  // Act
+  const next = remapSelectionAfterReorder(items, 1, 3, 1);
+
+  // Assert
+  assert.equal(next, 1);
+});
+
+test("remapSelectionAfterReorder holds selection for a no-op or out-of-range move", () => {
+  const items = [row("a"), row("b"), row("c")];
+  assert.equal(remapSelectionAfterReorder(items, 1, 1, 1), 1);
+  assert.equal(remapSelectionAfterReorder(items, 0, 9, 2), 2);
+});
+
+test("remapSelectionAfterReorder returns null when nothing is selected", () => {
+  const items = [row("a"), row("b")];
+  assert.equal(remapSelectionAfterReorder(items, 0, 1, null), null);
 });
 
 test("freshSupersetTag picks one past the largest numeric tag in use", () => {

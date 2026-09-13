@@ -63,6 +63,28 @@ export function reorderKeepingContiguous<T extends SupersetMember>(
   return supersetsAreContiguous(moved) ? moved : items;
 }
 
+// Where a position-based selection lands after `reorderKeepingContiguous(items, from, to)`,
+// so a selection follows the exercise it points at rather than the slot it used to sit in.
+// Mirrors that move exactly: a refused move (out-of-range, no-op, or one that would split a
+// Superset) leaves the order — and so the selection — unchanged; otherwise the selected
+// index is remapped, including the indices that shift when it sits between `from` and `to`.
+export function remapSelectionAfterReorder(
+  items: readonly SupersetMember[],
+  from: number,
+  to: number,
+  selected: number | null,
+): number | null {
+  if (selected === null) return null;
+  const moved = moveItem(items as SupersetMember[], from, to);
+  // `moveItem` returns the same reference for a no-op/out-of-range move; a group-splitting
+  // move is likewise refused, so in both cases the list is untouched and selection holds.
+  if (moved === items || !supersetsAreContiguous(moved)) return selected;
+  if (selected === from) return to;
+  if (from < to && selected > from && selected <= to) return selected - 1;
+  if (from > to && selected >= to && selected < from) return selected + 1;
+  return selected;
+}
+
 // The first/last positions a Superset occupies, or `null` if the tag is absent.
 export function groupSpan(
   items: readonly SupersetMember[],
