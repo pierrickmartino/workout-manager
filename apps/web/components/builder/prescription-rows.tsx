@@ -794,6 +794,9 @@ function SortablePrescriptionRow({
     <li
       ref={setNodeRef}
       style={style}
+      // A stable anchor so the composition strip (ADR-0074) can scroll a tapped tile's
+      // editable Prescription into view — "select a tile → focus its prescription" (idea 5).
+      id={`builder-prescription-${position}`}
       // While lifted, the source dims into a dashed placeholder gap — the row's clone
       // rides in the DragOverlay instead (#219). `relative` anchors the insertion line.
       className={cn(
