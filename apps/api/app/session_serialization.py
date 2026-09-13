@@ -16,10 +16,11 @@ other field a Prescription carries lives here.
 from __future__ import annotations
 
 from app.domain.session_naming import session_label
+from app.domain.session_section import sectionize
 from app.repositories.session_repository import PrescriptionView, SessionView
 
 
-def serialize_prescription(view: PrescriptionView) -> dict:
+def serialize_prescription(view: PrescriptionView, *, section: str | None = None) -> dict:
     """The canonical JSON dict for one Exercise Prescription.
 
     Carries the plan fields (sets/reps/rest/tempo/typed Load), the typed Prescribed
@@ -27,9 +28,19 @@ def serialize_prescription(view: PrescriptionView) -> dict:
     group-owned round-rest, both ``None`` on a solo Prescription), the Progression
     Scheme selection (ADR-0064), and the joined catalog Exercise. Read paths add their
     own extras (the live read appends ``previous_performance``) around this base.
+
+    ``section`` is the read-time **Session Section** (ADR-0074) the movement falls in —
+    warm-up / main / accessory / cooldown — a projection over the whole ordered Session,
+    so it is computed by the *session* serializer and threaded in here. It defaults to
+    ``None`` for the callers that render one Prescription without its Session context
+    (the Live read), which carry no section.
     """
 
     return {
+        # Session Section (ADR-0074): the read-time composition bucket, or null when the
+        # caller has no Session context to project it from. A discovery/authoring signal
+        # only — never persisted, never a Progression or generation input.
+        "section": section,
         "position": view.position,
         "sets": view.sets,
         "reps": view.reps,
@@ -103,7 +114,15 @@ def serialize_session(view: SessionView, *, logged_count: int | None = None) -> 
         "author": {"display_name": view.author_display_name},
         "is_protocol_member": view.is_protocol_member,
         "is_favorite": None if view.is_protocol_member else view.is_favorite,
-        "prescriptions": [serialize_prescription(p) for p in view.prescriptions],
+        # Session Section (ADR-0074) is a projection over the *ordered* Session, so it is
+        # computed once here and threaded into each Prescription's dict — never stored,
+        # re-derived per read as the plan is edited.
+        "prescriptions": [
+            serialize_prescription(prescription, section=section.value)
+            for prescription, section in zip(
+                view.prescriptions, sectionize(view.prescriptions)
+            )
+        ],
     }
     if logged_count is not None:
         payload["logged_count"] = logged_count

@@ -9,6 +9,7 @@ byte-for-byte the same payload."""
 from __future__ import annotations
 
 from app.domain.protocol import protocol_label
+from app.domain.session_section import sectionize
 from app.protocols.balance_preview import BalancePreview
 from app.protocols.progress import ProtocolProgressView
 from app.repositories.protocol_repository import ProtocolSessionView, ProtocolView
@@ -17,6 +18,10 @@ from app.repositories.protocol_repository import ProtocolSessionView, ProtocolVi
 def serialize_session(
     session: ProtocolSessionView, *, performed: bool = False
 ) -> dict:
+    # Session Section (ADR-0074): the read-time composition bucket is a projection over
+    # the *ordered* Session, computed once here and zipped onto each Prescription. Never
+    # stored; re-derived per read (and re-derived client-side as the Builder edits).
+    sections = sectionize(session.prescriptions)
     return {
         "session_id": session.session_id,
         "position": session.position,
@@ -32,6 +37,9 @@ def serialize_session(
                 "rest_seconds": p.rest_seconds,
                 "tempo": p.tempo,
                 "recommended_load": p.recommended_load,
+                # Session Section (ADR-0074): warm-up / main / accessory / cooldown, or the
+                # projection's value in Session order. A discovery/authoring signal only.
+                "section": section.value,
                 # Typed Prescribed Quantity (ADR-0050): the plan's "how much" axis (a rep
                 # count, a distance, or a duration), or null for a prescription with no typed
                 # amount. Surfaced on the Protocol/Builder read so the editor's Quantity kind
@@ -64,7 +72,7 @@ def serialize_session(
                 "required_equipment": p.required_equipment,
                 "provenance": p.provenance,
             }
-            for p in session.prescriptions
+            for p, section in zip(session.prescriptions, sections)
         ],
     }
 
