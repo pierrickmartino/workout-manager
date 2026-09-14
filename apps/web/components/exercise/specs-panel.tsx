@@ -6,7 +6,11 @@ import type {
   RelatedExerciseSummary,
 } from "@/lib/sessions-types";
 import type { TopSetPoint } from "@/lib/exercise-stats-view";
-import { toExecutionSteps, toMuscleEmphasis } from "@/lib/exercise-detail-view";
+import {
+  toExecutionSteps,
+  toMuscleEmphasis,
+  toPrecautions,
+} from "@/lib/exercise-detail-view";
 import { appendFrom } from "@/lib/back-target";
 import { toTopSetTrend } from "@/lib/top-set-trend-view";
 import type { WeightUnit } from "@/lib/weight-unit";
@@ -71,7 +75,7 @@ export function SpecsPanel({
 
       <ExecutionSteps instructions={exercise.instructions} />
 
-      <StringList title="PRECAUTIONS" items={exercise.precautions} />
+      <StringList title="PRECAUTIONS" items={toPrecautions(exercise.precautions)} />
       <RelatedList title="VARIATIONS" items={exercise.variations} from={from} />
       <RelatedList
         title="ALTERNATIVES"

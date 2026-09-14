@@ -5,6 +5,7 @@ import {
   toExerciseTab,
   toExecutionSteps,
   toMuscleEmphasis,
+  toPrecautions,
 } from "./exercise-detail-view.ts";
 
 // `toExerciseTab` narrows an untrusted ?tab= query value to one of the Exercise
@@ -186,4 +187,23 @@ test("drops blank muscle entries so the map stays honest", () => {
     primary: ["quads"],
     secondary: [],
   });
+});
+
+// `toPrecautions` decodes each curator-authored precaution from its stored (HTML-escaped)
+// form for display and drops blanks. React re-escapes the decoded text, so it stays inert and
+// never double-escapes on the public Exercise page.
+test("decodes stored precautions so the reader sees the true text, not raw entities", () => {
+  const result = toPrecautions([
+    "Stop if you feel &lt;sharp&gt; pain",
+    "Keep the core braced &amp; neutral",
+  ]);
+
+  assert.deepEqual(result, [
+    "Stop if you feel <sharp> pain",
+    "Keep the core braced & neutral",
+  ]);
+});
+
+test("drops blank precaution entries so no empty bullet is shown", () => {
+  assert.deepEqual(toPrecautions(["brace first", "  ", ""]), ["brace first"]);
 });

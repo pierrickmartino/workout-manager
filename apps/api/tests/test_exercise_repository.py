@@ -518,6 +518,115 @@ def test_set_enrichment_on_an_unknown_id_returns_none(repo):
     )
 
 
+def test_set_provenance_writes_the_tier_and_leaves_everything_else(repo):
+    # Arrange — an AI-invented row carrying descriptive + curator-only content
+    exercise = repo.find_or_create(
+        "Cossack Squat",
+        provenance=Provenance.AI_GENERATED,
+        description="A deep lateral squat.",
+        targeted_muscles=["adductors", "quads"],
+        precautions=["ease into the depth"],
+        image="https://cdn.example.com/cossack.svg",
+    )
+
+    # Act — an admin promotes it to curated (ADR-0075): a deliberate trust change
+    updated = repo.set_provenance(exercise.id, Provenance.CURATED)
+
+    # Assert — only provenance moved; every other field is preserved
+    assert updated is not None
+    assert updated.provenance == Provenance.CURATED.value
+    stored = repo.get(exercise.id)
+    assert stored.provenance == Provenance.CURATED.value
+    assert stored.description == "A deep lateral squat."
+    assert stored.targeted_muscles == ["adductors", "quads"]
+    assert stored.precautions == ["ease into the depth"]
+    assert stored.image == "https://cdn.example.com/cossack.svg"
+    assert stored.retired is False
+
+
+def test_set_provenance_returns_a_fresh_exercise_without_mutating_the_prior_reference(
+    repo,
+):
+    # Arrange — hold a reference to the pre-change Exercise
+    original = repo.find_or_create("Zercher Squat", provenance=Provenance.AI_GENERATED)
+
+    # Act — the writer is immutable (coding-style): it returns a fresh Exercise
+    updated = repo.set_provenance(original.id, Provenance.CURATED)
+
+    # Assert — the returned row carries the change; the earlier reference is untouched
+    assert updated is not None
+    assert updated.provenance == Provenance.CURATED.value
+    assert original.provenance == Provenance.AI_GENERATED.value
+
+
+def test_set_provenance_on_an_unknown_id_returns_none(repo):
+    assert repo.set_provenance(9999, Provenance.CURATED) is None
+
+
+def test_set_precautions_writes_the_list_and_leaves_everything_else(repo):
+    # Arrange — a curated row with no precautions and other content to preserve
+    exercise = repo.find_or_create(
+        "Overhead Press",
+        provenance=Provenance.CURATED,
+        description="A standing barbell press.",
+        targeted_muscles=["shoulders"],
+    )
+
+    # Act — a curator writes the curator-only precautions (spec §5)
+    updated = repo.set_precautions(
+        exercise.id, ["stop if you feel shoulder impingement"]
+    )
+
+    # Assert — only precautions changed; provenance and descriptive fields are preserved
+    assert updated is not None
+    assert updated.precautions == ["stop if you feel shoulder impingement"]
+    stored = repo.get(exercise.id)
+    assert stored.precautions == ["stop if you feel shoulder impingement"]
+    assert stored.provenance == Provenance.CURATED.value
+    assert stored.description == "A standing barbell press."
+    assert stored.targeted_muscles == ["shoulders"]
+
+
+def test_set_precautions_can_clear_the_list(repo):
+    # Arrange — a row that already carries precautions
+    exercise = repo.find_or_create(
+        "Deadlift",
+        provenance=Provenance.CURATED,
+        precautions=["brace before lifting"],
+    )
+
+    # Act — an empty list clears the field (a curator removing a stale caution)
+    updated = repo.set_precautions(exercise.id, [])
+
+    # Assert
+    assert updated is not None
+    assert updated.precautions == []
+    assert repo.get(exercise.id).precautions == []
+
+
+def test_set_precautions_returns_a_fresh_exercise_without_mutating_the_prior_reference(
+    repo,
+):
+    # Arrange — hold a reference to the pre-change Exercise
+    original = repo.find_or_create(
+        "Bench Press",
+        provenance=Provenance.CURATED,
+        precautions=["use a spotter"],
+    )
+
+    # Act — immutable writer
+    updated = repo.set_precautions(original.id, ["use a spotter", "warm up the shoulders"])
+
+    # Assert — the earlier reference is never mutated in place
+    assert updated is not None
+    assert updated.precautions == ["use a spotter", "warm up the shoulders"]
+    assert original.precautions == ["use a spotter"]
+
+
+def test_set_precautions_on_an_unknown_id_returns_none(repo):
+    assert repo.set_precautions(9999, ["x"]) is None
+
+
 def test_losing_concurrent_insert_returns_the_winning_row():
     # Arrange — two requests race to create the same new Exercise. SQLite's
     # in-memory engine shares one DB across sessions on the thread, so we can

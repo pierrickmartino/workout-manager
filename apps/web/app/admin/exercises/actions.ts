@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 
-import { updateAdminExercise } from "@/lib/admin-exercises";
+import {
+  setAdminExercisePrecautions,
+  setAdminExerciseProvenance,
+  updateAdminExercise,
+} from "@/lib/admin-exercises";
 import type { ExercisePatchPayload } from "@/lib/admin-exercise-editor";
 import type { ExerciseDetail } from "@/lib/sessions-types";
 
@@ -31,5 +35,49 @@ export async function updateExerciseAction(
   revalidatePath("/admin/exercises");
   revalidatePath(`/admin/exercises/${id}`);
   revalidatePath(`/exercises/${id}`);
+  return { exercise: result.data, error: null };
+}
+
+// Drop the cached renders an admin write touches: the catalog browser row, this editor (its
+// audit trail changes on a provenance change), and the public Exercise Detail page.
+function revalidateExercise(id: number): void {
+  revalidatePath("/admin/exercises");
+  revalidatePath(`/admin/exercises/${id}`);
+  revalidatePath(`/exercises/${id}`);
+}
+
+// Deliberately set the Exercise's Provenance (issue #503, ADR-0075). The backend is the gate:
+// it enforces `require_admin`, rejects an invalid tier (422), and writes the audit record — this
+// only forwards the value and unwraps the envelope. A distinct act from the descriptive save.
+export async function setProvenanceAction(
+  id: number,
+  provenance: string,
+): Promise<UpdateExerciseResult> {
+  const result = await setAdminExerciseProvenance(id, provenance);
+  if (!result.success || !result.data) {
+    return {
+      exercise: null,
+      error: result.error ?? "Could not change the provenance.",
+    };
+  }
+  revalidateExercise(id);
+  return { exercise: result.data, error: null };
+}
+
+// Write the Exercise's curator-only precautions (issue #503, spec §5). The backend trims and
+// HTML-escapes each entry at its write boundary; this forwards the plain-text list and unwraps
+// the envelope. Separate from the descriptive save and never audited.
+export async function setPrecautionsAction(
+  id: number,
+  precautions: string[],
+): Promise<UpdateExerciseResult> {
+  const result = await setAdminExercisePrecautions(id, precautions);
+  if (!result.success || !result.data) {
+    return {
+      exercise: null,
+      error: result.error ?? "Could not save the precautions.",
+    };
+  }
+  revalidateExercise(id);
   return { exercise: result.data, error: null };
 }

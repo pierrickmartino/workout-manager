@@ -3,6 +3,7 @@ import "server-only";
 import { apiGet, apiSend, type Envelope } from "./api";
 import type { AdminExerciseRow } from "./admin-exercises-view";
 import type { ExercisePatchPayload } from "./admin-exercise-editor";
+import type { AdminAuditEntry } from "./admin-exercise-curation";
 import type { ExerciseDetail } from "./sessions-types";
 
 // Server-side data access for the admin catalog browser (issue #501, ADR-0075/0076). The
@@ -40,4 +41,34 @@ export async function updateAdminExercise(
   patch: Partial<ExercisePatchPayload>,
 ): Promise<Envelope<ExerciseDetail>> {
   return apiSend(`/api/exercises/${id}`, "PATCH", patch);
+}
+
+// Deliberately set an Exercise's Provenance (issue #503, ADR-0075) — a distinct act, never a
+// side effect of the descriptive edit. Hits the admin-gated, audited `PUT
+// /api/exercises/{id}/provenance`; the backend rejects an invalid tier (422) and writes the
+// audit record. Returns the updated Exercise, or an error envelope the action surfaces.
+export async function setAdminExerciseProvenance(
+  id: number,
+  provenance: string,
+): Promise<Envelope<ExerciseDetail>> {
+  return apiSend(`/api/exercises/${id}/provenance`, "PUT", { provenance });
+}
+
+// Write an Exercise's curator-only precautions (issue #503, spec §5). Hits the admin-gated
+// `PUT /api/exercises/{id}/precautions`; the backend trims and HTML-escapes each entry at its
+// write boundary. The whole list is replaced (an empty list clears it). Returns the updated
+// Exercise, or an error envelope.
+export async function setAdminExercisePrecautions(
+  id: number,
+  precautions: string[],
+): Promise<Envelope<ExerciseDetail>> {
+  return apiSend(`/api/exercises/${id}/precautions`, "PUT", { precautions });
+}
+
+// Read an Exercise's append-only admin audit trail (issue #503, ADR-0075), newest first. Hits
+// the admin-gated `GET /api/exercises/{id}/audit`; the editor page renders it read-only.
+export async function fetchAdminExerciseAudit(
+  id: number,
+): Promise<Envelope<AdminAuditEntry[]>> {
+  return apiGet(`/api/exercises/${id}/audit`);
 }

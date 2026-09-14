@@ -2,6 +2,8 @@
 // it is safe to import from both Server and Client Components. The server-only data
 // access (Clerk auth + fetch) lives in `lib/sessions.ts` and `lib/progress.ts`.
 
+import { decodeHtmlEntities } from "./html-entities.ts";
+
 // The three lenses of the Exercise Detail screen (ADR-0017): SPECS (the catalog
 // facts), HISTORY (every Logged Session of this Exercise), and RECORDS (PR-setting
 // sets — filled by a later slice). The active tab is reflected in the URL as ?tab=.
@@ -47,6 +49,17 @@ export function toExecutionSteps(instructions: string[]): ExecutionSteps {
       text,
     })),
   };
+}
+
+// The precautions to show on the SPECS panel, ready to render. Precautions are curator-authored
+// free text the backend HTML-escapes at its write boundary (ADR-0036), so each entry is decoded
+// back to the text the curator typed before display — React re-escapes it as a text node, so it
+// stays inert and never shows a raw entity or double-escapes. Blank entries are dropped
+// defensively so a stray whitespace value never surfaces as a bullet.
+export function toPrecautions(precautions: string[]): string[] {
+  return precautions
+    .map((precaution) => decodeHtmlEntities(precaution).trim())
+    .filter((precaution) => precaution.length > 0);
 }
 
 // The muscle emphasis of a catalog Exercise (ADR-0016), as the SPECS muscle map
