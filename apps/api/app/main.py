@@ -10,6 +10,7 @@ from app.envelope import error_envelope
 from app.routes.active_skin import router as active_skin_router
 from app.routes.analytics import router as analytics_router
 from app.routes.appearance import router as appearance_router
+from app.routes.exercise_images import router as exercise_images_router
 from app.routes.exercises import router as exercises_router
 from app.routes.export import router as export_router
 from app.routes.home import router as home_router
@@ -68,6 +69,7 @@ def create_app() -> FastAPI:
     app.include_router(logs_router)
     app.include_router(protocols_router)
     app.include_router(exercises_router)
+    app.include_router(exercise_images_router)
     app.include_router(metrics_router)
     app.include_router(export_router)
     app.include_router(progress_router)

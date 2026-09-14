@@ -33,12 +33,13 @@ class ImageRejection(str, Enum):
     TOO_LARGE = "too_large"
 
 
-def _normalize_content_type(content_type: str | None) -> str:
+def normalize_content_type(content_type: str | None) -> str:
     """Reduce a raw ``Content-Type`` header to its bare media type, lowercased.
 
     A browser may send parameters (``image/jpeg; charset=binary``) or vary the casing; the
     media type alone decides the allow-list, so strip any ``;``-parameters and casing first.
-    """
+    Public so the upload route stores the same normalized type it was validated against,
+    rather than re-deriving it inline."""
 
     if not content_type:
         return ""
@@ -54,7 +55,7 @@ def validate_image(content_type: str | None, byte_size: int) -> ImageRejection |
     ``TOO_LARGE``. Pure: no I/O, so it is trivially unit-testable and the route stays a thin
     adapter that only maps the verdict to an HTTP status."""
 
-    if _normalize_content_type(content_type) not in ALLOWED_IMAGE_CONTENT_TYPES:
+    if normalize_content_type(content_type) not in ALLOWED_IMAGE_CONTENT_TYPES:
         return ImageRejection.UNSUPPORTED_TYPE
     if byte_size > MAX_IMAGE_BYTES:
         return ImageRejection.TOO_LARGE
@@ -65,5 +66,6 @@ __all__ = [
     "ALLOWED_IMAGE_CONTENT_TYPES",
     "MAX_IMAGE_BYTES",
     "ImageRejection",
+    "normalize_content_type",
     "validate_image",
 ]

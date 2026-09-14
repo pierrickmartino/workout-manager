@@ -3,7 +3,8 @@
 ``validate_image`` is the one place the upload's content-type and size are judged, so the
 route stays a thin adapter that maps the verdict to a status (415 unsupported type, 413 too
 large). These tests pin the allow-list, the 2 MB ceiling with its exact boundary, and the
-type-before-size ordering — the rules are pure, so they are unit-tested here with no I/O."""
+type-before-size ordering — the rules are pure, so they are unit-tested here with no I/O.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ from app.domain.exercise_image import (
     ALLOWED_IMAGE_CONTENT_TYPES,
     MAX_IMAGE_BYTES,
     ImageRejection,
+    normalize_content_type,
     validate_image,
 )
 
@@ -37,7 +39,9 @@ def test_the_allow_list_is_exactly_jpeg_png_webp():
     ["image/gif", "image/svg+xml", "application/pdf", "text/html", "", "  "],
 )
 def test_rejects_a_disallowed_content_type_as_unsupported(content_type):
-    assert validate_image(content_type, byte_size=1024) is ImageRejection.UNSUPPORTED_TYPE
+    assert (
+        validate_image(content_type, byte_size=1024) is ImageRejection.UNSUPPORTED_TYPE
+    )
 
 
 def test_rejects_a_missing_content_type_as_unsupported():
@@ -65,6 +69,23 @@ def test_rejects_a_file_one_byte_over_the_ceiling_as_too_large():
 
 def test_the_ceiling_is_two_megabytes():
     assert MAX_IMAGE_BYTES == 2 * 1024 * 1024
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("image/png", "image/png"),
+        ("IMAGE/PNG", "image/png"),
+        ("image/jpeg; charset=binary", "image/jpeg"),
+        ("  image/webp  ", "image/webp"),
+        (None, ""),
+        ("", ""),
+    ],
+)
+def test_normalize_content_type_strips_parameters_and_casing(raw, expected):
+    # The upload route stores exactly this normalized type, so it must match what the
+    # allow-list check saw (the reason it is public, not re-derived inline).
+    assert normalize_content_type(raw) == expected
 
 
 def test_type_is_judged_before_size():
