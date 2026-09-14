@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from app.domain.exercise import (
     CatalogCompleteness,
     Provenance,
+    can_hard_delete,
     catalog_completeness,
     completeness_breakdown,
     normalize_name,
@@ -379,3 +380,34 @@ def test_breakdown_of_an_empty_catalog_is_all_zero():
     # Assert
     assert (breakdown.stub, breakdown.listable, breakdown.enriched) == (0, 0, 0)
     assert breakdown.total == 0
+
+
+# --- Guarded hard delete (ADR-0076, issue #507) -----------------------------------------
+
+
+def test_hard_delete_allowed_only_when_retired_and_unreferenced():
+    # Arrange / Act / Assert — the sole green cell of the truth table: a Retired row with
+    # zero references may be permanently removed (retire-then-delete).
+    assert can_hard_delete(is_retired=True, reference_count=0) is True
+
+
+def test_hard_delete_refused_when_not_yet_retired():
+    # An active (un-retired) row is never deletable, even with no references — Retire first
+    # forces a deliberate, reversible pause before the irreversible step (ADR-0076).
+    assert can_hard_delete(is_retired=False, reference_count=0) is False
+
+
+def test_hard_delete_refused_when_referenced_even_if_retired():
+    # A referenced Exercise is settled shared state (a Prescription, Logged Set, or
+    # Relationship points at it) and is never destroyed, retired or not (ADR-0002/0076).
+    assert can_hard_delete(is_retired=True, reference_count=1) is False
+
+
+def test_hard_delete_refused_when_active_and_referenced():
+    # The fully-blocked cell: neither guard is satisfied.
+    assert can_hard_delete(is_retired=False, reference_count=3) is False
+
+
+def test_hard_delete_guard_is_robust_to_a_larger_reference_count():
+    # Any positive count blocks; the guard is a zero-check, not a threshold.
+    assert can_hard_delete(is_retired=True, reference_count=42) is False

@@ -14,7 +14,11 @@ from __future__ import annotations
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
-from app.auth.dependencies import get_jwks, require_admin
+from app.auth.dependencies import (
+    current_user_is_operator,
+    get_jwks,
+    require_admin,
+)
 from app.config import Settings, get_settings
 from tests.conftest import ISSUER, make_signing_context
 
@@ -26,6 +30,12 @@ def build_client(settings: Settings | None = None):
     @app.get("/admin-only")
     def _admin_only(operator: str = Depends(require_admin)) -> dict:
         return {"operator": operator}
+
+    @app.get("/maybe-operator")
+    def _maybe_operator(
+        is_operator: bool = Depends(current_user_is_operator),
+    ) -> dict:
+        return {"is_operator": is_operator}
 
     app.dependency_overrides[get_jwks] = lambda: ctx.jwks
     app.dependency_overrides[get_settings] = lambda: settings or Settings(
@@ -92,6 +102,45 @@ def test_require_admin_admits_the_operator_role_and_returns_the_subject():
     # Assert — admitted, and the handler sees the operator's Clerk subject
     assert response.status_code == 200
     assert response.json() == {"operator": "user_ops"}
+
+
+# --- current_user_is_operator: the non-raising role flag (issue #507) -------------------
+
+
+def test_is_operator_flag_is_true_for_an_operator_token():
+    client, ctx = build_client()
+
+    response = client.get(
+        "/maybe-operator",
+        headers={"Authorization": f"Bearer {ctx.mint(extra_claims={'role': 'admin'})}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"is_operator": True}
+
+
+def test_is_operator_flag_is_false_for_a_verified_non_operator():
+    client, ctx = build_client()
+
+    # Non-raising: a normal signed-in user is admitted to the route and simply reads False.
+    response = client.get(
+        "/maybe-operator",
+        headers={"Authorization": f"Bearer {ctx.mint(sub='user_normal')}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"is_operator": False}
+
+
+def test_is_operator_flag_is_false_for_a_missing_or_invalid_token():
+    client, _ = build_client()
+
+    # No token at all: the flag never raises on its own, so the route runs and reads False.
+    # (A route that must reject the anonymous caller pairs this with get_current_user.)
+    assert client.get("/maybe-operator").json() == {"is_operator": False}
+    assert client.get(
+        "/maybe-operator", headers={"Authorization": "Bearer not-a-jwt"}
+    ).json() == {"is_operator": False}
 
 
 def test_require_admin_honours_a_configured_claim_key_and_value():

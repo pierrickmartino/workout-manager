@@ -96,6 +96,17 @@ export async function fetchAdminExerciseAudit(
   return apiGet(`/api/exercises/${id}/audit`);
 }
 
+// Permanently delete an Exercise — the guarded, retire-then-delete hard delete (issue #507,
+// ADR-0076). Hits the admin-gated `DELETE /api/exercises/{id}`; the backend is the authority:
+// it removes the row only when it is Retired and unreferenced, writes the `hard_delete` audit
+// record, and otherwise refuses with 409 (referenced or not yet retired) changing nothing.
+// Returns a 204 the transport seam reports as success, or an error envelope the action surfaces.
+export async function deleteAdminExercise(
+  id: number,
+): Promise<Envelope<null>> {
+  return apiSend(`/api/exercises/${id}`, "DELETE");
+}
+
 // The served URL the API returns after a successful image upload.
 export interface UploadedImage {
   image_url: string;

@@ -13,10 +13,17 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final, Protocol
 
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
+from sqlmodel.sql.expression import SelectOfScalar
 
-from app.db.models import Exercise
+from app.db.models import (
+    Exercise,
+    ExercisePrescription,
+    ExerciseRelationship,
+    LoggedSet,
+)
 from app.domain.exercise import Provenance, normalize_name, rank_exercise_matches
 from app.domain.exercise_admin import AdminBrowseFilters, filter_admin_catalog
 from app.domain.exercise_browse import (
@@ -345,6 +352,26 @@ class ExerciseRepository(Protocol):
         automated resurrection (ADR-0076), so the AI re-inventing a junk name cannot undo a
         curator's decision. **Immutable**: returns a fresh Exercise and never mutates the
         caller's row. Returns ``None`` if no row has ``exercise_id``."""
+        ...
+
+    def reference_count(self, exercise_id: int) -> int:
+        """Count everything that points at ``exercise_id`` — the hard-delete guard's input.
+
+        Sums the Exercise Prescriptions, Logged Sets, and Exercise Relationships (in **both**
+        directions — a link references the Exercise whether it is the ``from`` or the ``to``)
+        that reference it (issue #507, ADR-0076). A non-zero count means the Exercise is
+        settled shared state a live plan or Logged Set depends on and must never be destroyed;
+        the delete route feeds this to ``can_hard_delete``. An unknown id counts ``0``."""
+        ...
+
+    def hard_delete(self, exercise_id: int) -> None:
+        """Permanently remove one Catalog Exercise — the irreversible act (ADR-0076).
+
+        The narrow exception to "membership is never deleted": the **caller has already
+        checked the guard** (the Exercise is Retired and ``reference_count`` is 0), so this
+        just removes the single row. Deleting a missing id is a harmless no-op (the route's
+        404 guard runs first). The admin audit row survives the delete — its ``exercise_id``
+        is a plain int with no FK — so the trail outlives the destroyed Exercise."""
         ...
 
 
@@ -808,6 +835,44 @@ class SqlExerciseRepository:
             return None
         return self._persist_fresh(existing, _clone_exercise(existing, retired=False))
 
+    def reference_count(self, exercise_id: int) -> int:
+        prescriptions = self._count(
+            select(func.count())
+            .select_from(ExercisePrescription)
+            .where(ExercisePrescription.exercise_id == exercise_id)
+        )
+        logged_sets = self._count(
+            select(func.count())
+            .select_from(LoggedSet)
+            .where(LoggedSet.exercise_id == exercise_id)
+        )
+        # A relationship references the Exercise whether it is the ``from`` or the ``to`` end,
+        # so both directions count toward the guard (ADR-0076: "no Relationship points at it").
+        relationships = self._count(
+            select(func.count())
+            .select_from(ExerciseRelationship)
+            .where(
+                or_(
+                    ExerciseRelationship.from_exercise_id == exercise_id,
+                    ExerciseRelationship.to_exercise_id == exercise_id,
+                )
+            )
+        )
+        return prescriptions + logged_sets + relationships
+
+    def _count(self, statement: SelectOfScalar[int]) -> int:
+        """Run a ``select(func.count())…`` statement and return the single scalar count."""
+
+        return self._session.exec(statement).one()
+
+    def hard_delete(self, exercise_id: int) -> None:
+        existing = self._session.get(Exercise, exercise_id)
+        if existing is None:
+            # Idempotent: the route's 404 guard runs first, so a miss here is a benign no-op.
+            return
+        self._session.delete(existing)
+        self._session.commit()
+
     def _persist_fresh(self, existing: Exercise, fresh: Exercise) -> Exercise:
         """Persist ``fresh`` over ``existing`` without mutating the caller's row.
 
@@ -829,6 +894,12 @@ class InMemoryExerciseRepository:
         self._by_key: dict[str, Exercise] = {}
         self._by_id: dict[int, Exercise] = {}
         self._next_id = 1
+        # The fake's stand-in for the three real reference tables (Prescriptions, Logged
+        # Sets, Relationships), which live in other repositories the SQL query joins across.
+        # Tests seed it through ``register_reference`` so the route/service delete logic can
+        # be exercised offline; the SQL implementation is the source of truth for the real
+        # count and is verified against a database (ADR-0076).
+        self._references: dict[int, int] = {}
 
     def resolve_or_create(
         self,
@@ -1076,6 +1147,26 @@ class InMemoryExerciseRepository:
         if existing is None:
             return None
         return self._store_fresh(_clone_exercise(existing, retired=False))
+
+    def register_reference(self, exercise_id: int, *, count: int = 1) -> None:
+        """Test seam: record that ``count`` things reference ``exercise_id``.
+
+        Not part of the ``ExerciseRepository`` contract — the fake has no Prescription /
+        Logged Set / Relationship tables of its own, so tests use this to model that the
+        Exercise is referenced and drive the hard-delete guard offline."""
+
+        self._references[exercise_id] = self._references.get(exercise_id, 0) + count
+
+    def reference_count(self, exercise_id: int) -> int:
+        return self._references.get(exercise_id, 0)
+
+    def hard_delete(self, exercise_id: int) -> None:
+        existing = self._by_id.pop(exercise_id, None)
+        if existing is None:
+            # Idempotent: the route's 404 guard runs first, so a miss here is a benign no-op.
+            return
+        self._by_key.pop(existing.normalized_name, None)
+        self._references.pop(exercise_id, None)
 
 
 __all__ = [

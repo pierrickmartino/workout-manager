@@ -223,6 +223,12 @@ export interface ExerciseDetail {
   // discovery surface but still resolves by id, so the editor can open it and offer
   // Retire / un-Retire. Absent from user-facing surfaces — a row a user reaches is active.
   retired: boolean;
+  // How many Exercise Prescriptions, Logged Sets, and Relationships point at this row
+  // (issue #507, ADR-0076) — a read-time count, never a stored ledger. The admin editor
+  // reads it with `retired` to decide whether the guarded hard delete is offered: deletable
+  // only when Retired and this is 0. Computed for **operators only**; `null` for every other
+  // caller (the public detail page never uses it). The backend re-checks the guard on delete.
+  reference_count: number | null;
   variations: RelatedExerciseSummary[];
   alternatives: RelatedExerciseSummary[];
 }

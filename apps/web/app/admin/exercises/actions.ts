@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import {
   addAdminExerciseRelationship,
+  deleteAdminExercise,
   deleteAdminExerciseImage,
   fetchAdminExerciseRelationships,
   removeAdminExerciseRelationship,
@@ -102,6 +103,32 @@ export async function setRetiredAction(
   }
   revalidateExercise(id);
   return { exercise: result.data, error: null };
+}
+
+// The outcome of a guarded hard delete, unwrapped for the editor: `deleted` true when the
+// row is gone, or an error message (e.g. the 409 refusal when the guard is unmet).
+export interface DeleteExerciseResult {
+  deleted: boolean;
+  error: string | null;
+}
+
+// Permanently delete the Exercise — guarded, retire-then-delete (issue #507, ADR-0076). The
+// backend is the authority: it enforces `require_admin`, re-checks the retired ∧ unreferenced
+// guard (409 if unmet), writes the `hard_delete` audit record, and removes the row — this only
+// forwards the call and unwraps the envelope. On success the row no longer exists, so the
+// catalog browser and the (now-gone) public detail page must drop their cached renders; the
+// editor route for this id will 404 on next load.
+export async function deleteExerciseAction(
+  id: number,
+): Promise<DeleteExerciseResult> {
+  const result = await deleteAdminExercise(id);
+  if (!result.success) {
+    return { deleted: false, error: result.error ?? "Could not delete the exercise." };
+  }
+  revalidatePath("/admin/exercises");
+  revalidatePath(`/admin/exercises/${id}`);
+  revalidatePath(`/exercises/${id}`);
+  return { deleted: true, error: null };
 }
 
 // The outcome of an image upload/remove, unwrapped for the editor: the served URL on a
