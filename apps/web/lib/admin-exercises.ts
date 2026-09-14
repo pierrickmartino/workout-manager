@@ -4,6 +4,10 @@ import { apiGet, apiSend, apiUpload, type Envelope } from "./api";
 import type { AdminExerciseRow } from "./admin-exercises-view";
 import type { ExercisePatchPayload } from "./admin-exercise-editor";
 import type { AdminAuditEntry } from "./admin-exercise-curation";
+import type {
+  ExerciseRelationship,
+  RelationshipKind,
+} from "./admin-exercise-relationships";
 import type { ExerciseDetail } from "./sessions-types";
 
 // Server-side data access for the admin catalog browser (issue #501, ADR-0075/0076). The
@@ -96,4 +100,44 @@ export async function deleteAdminExerciseImage(
   id: number,
 ): Promise<Envelope<{ id: number }>> {
   return apiSend(`/api/exercises/${id}/image`, "DELETE");
+}
+
+// List an Exercise's typed Variation/Alternative relationships in both directions (issue #505),
+// the lookup-first candidates Substitution resolves over. Hits the admin-gated `GET
+// /api/exercises/{id}/relationships`; each row carries the other Exercise, the kind, and the
+// direction. Returns the standard envelope the editor page renders.
+export async function fetchAdminExerciseRelationships(
+  id: number,
+): Promise<Envelope<ExerciseRelationship[]>> {
+  return apiGet(`/api/exercises/${id}/relationships`);
+}
+
+// Add one directed Variation/Alternative link from `id` to `toId` (issue #505). Hits the
+// admin-gated `POST /api/exercises/{id}/relationships`; the backend rejects a self-link (422)
+// and a duplicate (409), and creates no reciprocal link. Returns the standard envelope (201 on
+// success) or an error envelope the action surfaces.
+export async function addAdminExerciseRelationship(
+  id: number,
+  toId: number,
+  kind: RelationshipKind,
+): Promise<Envelope<{ from_id: number; to_id: number; kind: string }>> {
+  return apiSend(`/api/exercises/${id}/relationships`, "POST", {
+    to_id: toId,
+    kind,
+  });
+}
+
+// Remove one directed link `(fromId → toId, kind)` (issue #505). Hits the admin-gated `DELETE
+// /api/exercises/{fromId}/relationships`; the endpoint keys on the `from` Exercise, so an
+// incoming link is removed by naming the other movement as `fromId`. Idempotent server-side and
+// returns a 204 the transport seam reports as success.
+export async function removeAdminExerciseRelationship(
+  fromId: number,
+  toId: number,
+  kind: RelationshipKind,
+): Promise<Envelope<null>> {
+  return apiSend(`/api/exercises/${fromId}/relationships`, "DELETE", {
+    to_id: toId,
+    kind,
+  });
 }

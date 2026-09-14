@@ -56,8 +56,11 @@ from app.repositories.exercise_audit_repository import (
 )
 from app.repositories.exercise_image_repository import ExerciseImageRepository
 from app.repositories.exercise_relationship_repository import (
+    DirectedRelationship,
+    DuplicateRelationshipError,
     ExerciseRelationshipRepository,
     RelatedExercise,
+    SelfLinkError,
 )
 from app.repositories.exercise_repository import (
     ExercisePatch,
@@ -72,7 +75,10 @@ router = APIRouter(prefix="/api", tags=["exercises"])
 
 HTTP_NOT_FOUND = 404
 HTTP_ACCEPTED = 202
+HTTP_CREATED = 201
+HTTP_NO_CONTENT = 204
 HTTP_CONFLICT = 409
+HTTP_UNPROCESSABLE_ENTITY = 422
 
 # The stored difficulty is a 1–10 scale aligned with Fitness Level (models.Exercise); an
 # admin edit is held to the same bounds so a bad value never enters the shared catalog.
@@ -798,3 +804,126 @@ def read_exercise_audit(
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
     records = audit.list_for(exercise_id)
     return success_envelope([_audit_record(record) for record in records])
+
+
+class RelationshipLinkBody(BaseModel):
+    """The target + kind of one Variation/Alternative link to add or remove (issue #505).
+
+    ``kind`` is typed as the ``RelationKind`` enum, so FastAPI rejects any value outside
+    ``variation`` / ``alternative`` with a ``422`` before the handler runs. The ``from`` end
+    of the link is the path Exercise; ``to_id`` names the other end. The self-link and
+    duplicate guards live in the repository and surface as ``422`` / ``409`` below."""
+
+    to_id: int
+    kind: RelationKind
+
+
+def _relationship_row(relationship: DirectedRelationship) -> dict:
+    """One row of an Exercise's relationship list (issue #505): the *other* Exercise, the
+    relationship kind, and which way the link points relative to the viewed Exercise."""
+
+    return {
+        "id": relationship.exercise.id,
+        "name": relationship.exercise.name,
+        "kind": relationship.kind.value,
+        "direction": relationship.direction.value,
+    }
+
+
+@router.get("/exercises/{exercise_id}/relationships")
+def list_exercise_relationships(
+    exercise_id: int,
+    _operator: str = Depends(require_admin),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    relationships: ExerciseRelationshipRepository = Depends(
+        get_exercise_relationship_repository
+    ),
+) -> dict:
+    """List one Catalog Exercise's typed relationships in **both** directions (issue #505).
+
+    Operator-only (``require_admin``, ADR-0046). Returns every Variation/Alternative link
+    touching this Exercise — outgoing (the linked movement is a kind-of this one) and incoming
+    (this movement is a kind-of the linked one) — each row carrying the other Exercise, the
+    kind, and the direction, so a curator sees the full local graph before editing it. These
+    are the lookup-first candidates Substitution resolves over. A missing Exercise is ``404``;
+    an Exercise with no links is a ``200`` with an empty list. Responses use the standard
+    envelope."""
+
+    exercise = exercises.get(exercise_id)
+    if exercise is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    listed = relationships.list_for(exercise_id)
+    return success_envelope([_relationship_row(rel) for rel in listed])
+
+
+@router.post("/exercises/{exercise_id}/relationships")
+def add_exercise_relationship(
+    exercise_id: int,
+    payload: RelationshipLinkBody,
+    response: Response,
+    _operator: str = Depends(require_admin),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    relationships: ExerciseRelationshipRepository = Depends(
+        get_exercise_relationship_repository
+    ),
+) -> dict:
+    """Add one Variation/Alternative link from this Exercise to another (issue #505, spec §5).
+
+    Operator-only (``require_admin``, ADR-0046). Records that ``to_id`` is a ``kind`` of the
+    path Exercise — a single **directed** row; no reciprocal/inverse link is created, so the
+    inverse (if wanted) is a separate deliberate add. Both endpoints of the link must exist —
+    a missing path Exercise or a missing ``to_id`` is a ``404`` — so no dangling link enters
+    the graph. A self-link (``to_id`` == path id) is a ``422`` and a duplicate ``(from, to,
+    kind)`` is a ``409`` (the two guards that keep the graph clean, spec §4); an invalid kind
+    is a ``422`` handled by the body model. On success returns ``201`` with the created link
+    via the standard envelope."""
+
+    from_exercise = exercises.get(exercise_id)
+    if from_exercise is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    if exercises.get(payload.to_id) is None:
+        raise HTTPException(
+            status_code=HTTP_NOT_FOUND, detail="Target exercise not found"
+        )
+    try:
+        relationships.add(exercise_id, payload.to_id, payload.kind)
+    except SelfLinkError as exc:
+        raise HTTPException(
+            status_code=HTTP_UNPROCESSABLE_ENTITY,
+            detail="An exercise cannot be a variation or alternative of itself.",
+        ) from exc
+    except DuplicateRelationshipError as exc:
+        raise HTTPException(
+            status_code=HTTP_CONFLICT,
+            detail="That relationship already exists.",
+        ) from exc
+    response.status_code = HTTP_CREATED
+    return success_envelope(
+        {"from_id": exercise_id, "to_id": payload.to_id, "kind": payload.kind.value}
+    )
+
+
+@router.delete("/exercises/{exercise_id}/relationships")
+def remove_exercise_relationship(
+    exercise_id: int,
+    payload: RelationshipLinkBody,
+    _operator: str = Depends(require_admin),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    relationships: ExerciseRelationshipRepository = Depends(
+        get_exercise_relationship_repository
+    ),
+) -> Response:
+    """Remove one Variation/Alternative link by ``(to_id, kind)`` (issue #505, spec §5).
+
+    Operator-only (``require_admin``, ADR-0046). Deletes the single directed ``(from, to,
+    kind)`` row from the path Exercise; the inverse direction (if any) is untouched. A missing
+    path Exercise is a ``404``; otherwise the remove is idempotent — removing a link that does
+    not exist still succeeds — and returns a bodyless ``204`` (spec §5, the one non-envelope
+    write; the transport seam treats a 204 as success). An invalid kind is a ``422`` handled by
+    the body model."""
+
+    exercise = exercises.get(exercise_id)
+    if exercise is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    relationships.remove(exercise_id, payload.to_id, payload.kind)
+    return Response(status_code=HTTP_NO_CONTENT)
