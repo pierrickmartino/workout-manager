@@ -219,6 +219,10 @@ export interface ExerciseDetail {
   // uploaded-first: `resolveExerciseImageSrc` serves `GET /api/exercises/{id}/image` when
   // true, else the legacy `image` URL, else nothing.
   has_image: boolean;
+  // The Catalog Retire tombstone (ADR-0076): a retired movement is hidden from every
+  // discovery surface but still resolves by id, so the editor can open it and offer
+  // Retire / un-Retire. Absent from user-facing surfaces — a row a user reaches is active.
+  retired: boolean;
   variations: RelatedExerciseSummary[];
   alternatives: RelatedExerciseSummary[];
 }

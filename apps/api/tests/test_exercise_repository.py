@@ -722,3 +722,160 @@ def test_search_returns_no_matches_and_creates_nothing(repo):
     assert page.items == []
     assert page.total == 0
     assert repo.search("", limit=10, offset=0).total == 0
+
+
+# --- Retire / un-retire tombstone (ADR-0076) --------------------------------------------
+
+
+def test_retire_sets_the_flag_and_leaves_everything_else(repo):
+    # Arrange — a curated row carrying descriptive + curator-only content
+    exercise = repo.find_or_create(
+        "Sissy Squat",
+        provenance=Provenance.CURATED,
+        description="A knee-dominant quad squat.",
+        targeted_muscles=["quads"],
+        precautions=["ease into the range"],
+        image="https://cdn.example.com/sissy.svg",
+    )
+    assert exercise.retired is False
+
+    # Act — an admin retires it (ADR-0076): a reversible soft tombstone
+    updated = repo.retire(exercise.id)
+
+    # Assert — only the tombstone moved; every other field is preserved and it still resolves
+    assert updated is not None
+    assert updated.retired is True
+    stored = repo.get(exercise.id)
+    assert stored is not None
+    assert stored.retired is True
+    assert stored.provenance == Provenance.CURATED.value
+    assert stored.description == "A knee-dominant quad squat."
+    assert stored.targeted_muscles == ["quads"]
+    assert stored.precautions == ["ease into the range"]
+    assert stored.image == "https://cdn.example.com/sissy.svg"
+
+
+def test_unretire_clears_the_flag_for_a_clean_restore(repo):
+    # Arrange — a retired row
+    exercise = repo.find_or_create("Good Morning", provenance=Provenance.CURATED)
+    repo.retire(exercise.id)
+    assert repo.get(exercise.id).retired is True
+
+    # Act — an admin un-retires it (ADR-0076): un-retire fully restores discovery
+    updated = repo.unretire(exercise.id)
+
+    # Assert
+    assert updated is not None
+    assert updated.retired is False
+    assert repo.get(exercise.id).retired is False
+
+
+def test_retire_returns_a_fresh_exercise_without_mutating_the_prior_reference(repo):
+    # Arrange — hold a reference to the pre-change Exercise
+    original = repo.find_or_create("Nordic Curl", provenance=Provenance.CURATED)
+
+    # Act — the writer is immutable (coding-style): it returns a fresh Exercise
+    updated = repo.retire(original.id)
+
+    # Assert — the returned row carries the change; the earlier reference is untouched
+    assert updated is not None
+    assert updated.retired is True
+    assert original.retired is False
+
+
+def test_retire_and_unretire_on_an_unknown_id_return_none(repo):
+    assert repo.retire(9999) is None
+    assert repo.unretire(9999) is None
+
+
+def test_search_excludes_retired_by_default_but_includes_on_request(repo):
+    # Arrange — one active and one retired match
+    repo.find_or_create("Back Squat", provenance=Provenance.CURATED)
+    retired = repo.find_or_create("Front Squat", provenance=Provenance.CURATED)
+    repo.retire(retired.id)
+
+    # Act / Assert — discovery hides the retired row (ADR-0076)
+    default_page = repo.search("squat", limit=10, offset=0)
+    assert {e.name for e in default_page.items} == {"Back Squat"}
+    assert default_page.total == 1
+
+    # ...but an admin read can span it
+    admin_page = repo.search("squat", limit=10, offset=0, include_retired=True)
+    assert {e.name for e in admin_page.items} == {"Back Squat", "Front Squat"}
+    assert admin_page.total == 2
+
+
+def test_browse_excludes_retired_by_default_but_includes_on_request(repo):
+    # Arrange
+    repo.find_or_create("Back Squat", provenance=Provenance.CURATED)
+    retired = repo.find_or_create("Front Squat", provenance=Provenance.CURATED)
+    repo.retire(retired.id)
+
+    default_page = repo.browse(
+        query="squat",
+        muscle_groups=[],
+        equipment=[],
+        difficulty_bands=[],
+        limit=10,
+        offset=0,
+    )
+    assert {e.name for e in default_page.items} == {"Back Squat"}
+    assert default_page.total == 1
+
+    admin_page = repo.browse(
+        query="squat",
+        muscle_groups=[],
+        equipment=[],
+        difficulty_bands=[],
+        limit=10,
+        offset=0,
+        include_retired=True,
+    )
+    assert {e.name for e in admin_page.items} == {"Back Squat", "Front Squat"}
+
+
+def test_browse_all_excludes_retired_by_default(repo):
+    # Arrange
+    repo.find_or_create("Back Squat", provenance=Provenance.CURATED)
+    retired = repo.find_or_create("Front Squat", provenance=Provenance.CURATED)
+    repo.retire(retired.id)
+
+    # Act — the taxonomy read excludes the retired row (ADR-0076)
+    matches = repo.browse_all(
+        query="squat", muscle_groups=[], equipment=[], difficulty_bands=[]
+    )
+
+    # Assert
+    assert {e.name for e in matches} == {"Back Squat"}
+
+
+def test_list_all_excludes_retired_by_default_but_includes_on_request(repo):
+    # Arrange
+    active = repo.find_or_create("Wall Sit", provenance=Provenance.AI_GENERATED)
+    retired = repo.find_or_create("Back Squat", provenance=Provenance.CURATED)
+    repo.retire(retired.id)
+
+    # The enrichment scan excludes retired (no LLM spend on a hidden movement)
+    assert {row.id for row in repo.list_all()} == {active.id}
+
+    # An admin readout (catalog-health) spans it
+    assert {row.id for row in repo.list_all(include_retired=True)} == {
+        active.id,
+        retired.id,
+    }
+
+
+def test_list_by_provenance_excludes_retired_by_default_but_includes_on_request(repo):
+    # Arrange — two AI rows, one retired
+    active = repo.find_or_create("Wall Sit", provenance=Provenance.AI_GENERATED)
+    retired = repo.find_or_create("Air Squat", provenance=Provenance.AI_GENERATED)
+    repo.retire(retired.id)
+
+    # The re-enrichment pass never touches a retired movement (ADR-0076)
+    default_rows = repo.list_by_provenance(Provenance.AI_GENERATED)
+    assert {row.id for row in default_rows} == {active.id}
+
+    admin_rows = repo.list_by_provenance(
+        Provenance.AI_GENERATED, include_retired=True
+    )
+    assert {row.id for row in admin_rows} == {active.id, retired.id}

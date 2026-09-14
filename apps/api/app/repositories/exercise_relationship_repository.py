@@ -78,7 +78,12 @@ class ExerciseRelationshipRepository(Protocol):
 
     def substitutes_for(self, exercise_id: int) -> list[RelatedExercise]:
         """Return the catalog Exercises linked as substitutes for ``exercise_id``,
-        each tagged with its relationship kind (outgoing links only)."""
+        each tagged with its relationship kind (outgoing links only).
+
+        A **Retired** linked Exercise is omitted (ADR-0076): this is the discovery-facing
+        candidate read behind both Substitution and the Exercise-Detail variation/alternative
+        sublist, so a retired movement never surfaces as a candidate. The link itself is left
+        intact — un-retiring restores it — and ``list_for`` still shows it to the admin."""
         ...
 
     def list_for(self, exercise_id: int) -> list[DirectedRelationship]:
@@ -137,7 +142,9 @@ class SqlExerciseRelationshipRepository:
         related: list[RelatedExercise] = []
         for row in rows:
             exercise = self._session.get(Exercise, row.to_exercise_id)
-            if exercise is not None:
+            # A retired candidate is hidden from this discovery read (ADR-0076); the link
+            # row stays intact so un-retiring restores the candidate.
+            if exercise is not None and not exercise.retired:
                 related.append(
                     RelatedExercise(exercise=exercise, kind=RelationKind(row.kind))
                 )
@@ -225,7 +232,9 @@ class InMemoryExerciseRelationshipRepository:
             if link.from_exercise_id != exercise_id:
                 continue
             exercise = self._exercises.get(link.to_exercise_id)
-            if exercise is not None:
+            # A retired candidate is hidden from this discovery read (ADR-0076); the link
+            # row stays intact so un-retiring restores the candidate.
+            if exercise is not None and not exercise.retired:
                 related.append(
                     RelatedExercise(exercise=exercise, kind=RelationKind(link.kind))
                 )

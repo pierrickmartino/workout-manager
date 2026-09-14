@@ -86,9 +86,20 @@ test("summarizeAuditEntry labels a provenance change as old → new tiers", () =
   );
 });
 
-test("summarizeAuditEntry falls back to the raw action for an unknown act", () => {
+test("summarizeAuditEntry labels retire and un-retire acts", () => {
   assert.equal(
     summarizeAuditEntry(auditEntry({ action: "retire", detail: {} })),
-    "retire",
+    "Retired",
+  );
+  assert.equal(
+    summarizeAuditEntry(auditEntry({ action: "unretire", detail: {} })),
+    "Un-retired",
+  );
+});
+
+test("summarizeAuditEntry falls back to the raw action for an unknown act", () => {
+  assert.equal(
+    summarizeAuditEntry(auditEntry({ action: "hard_delete", detail: {} })),
+    "hard_delete",
   );
 });
