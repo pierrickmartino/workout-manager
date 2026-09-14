@@ -235,6 +235,22 @@ def completeness_breakdown(
     )
 
 
+def can_hard_delete(*, is_retired: bool, reference_count: int) -> bool:
+    """Whether a Catalog Exercise may be **permanently** removed (retire-then-delete, ADR-0076).
+
+    Pure guard behind the one narrow exception to ADR-0002's "membership is never deleted":
+    a hard delete is permitted **iff** the Exercise is already **Retired** *and* is wholly
+    **unreferenced** — no Exercise Prescription, Logged Set, or Exercise Relationship points
+    at it (``reference_count == 0``). Requiring Retire first makes destruction a deliberate,
+    reversible-until-the-last-step act rather than a one-click surprise; the unreferenced
+    guard keeps a referenced row — settled shared state a live plan or Logged Set depends on
+    — from ever being destroyed. A positive ``reference_count`` blocks regardless of how
+    large, so this is a zero-check, not a threshold. The route enforces the same rule server-
+    side (the sole authority); the editor mirrors it only to disable the control up front."""
+
+    return is_retired and reference_count == 0
+
+
 def parse_instruction_steps(instructions: str | None) -> list[str]:
     """Split authored execution prose into ordered Execution Steps (ADR-0015).
 

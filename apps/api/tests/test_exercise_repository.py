@@ -6,11 +6,20 @@ Provenance."""
 
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 from sqlmodel import Session, SQLModel, select
 from tests.conftest import make_fk_engine
 
-from app.db.models import Exercise
+from app.db.models import (
+    Exercise,
+    ExercisePrescription,
+    ExerciseRelationship,
+    LoggedSession,
+    LoggedSet,
+    WorkoutSession,
+)
 from app.domain.exercise import Provenance
 from app.repositories.exercise_repository import (
     ExercisePatch,
@@ -786,6 +795,130 @@ def test_retire_returns_a_fresh_exercise_without_mutating_the_prior_reference(re
 def test_retire_and_unretire_on_an_unknown_id_return_none(repo):
     assert repo.retire(9999) is None
     assert repo.unretire(9999) is None
+
+
+# --- Guarded hard delete (ADR-0076, issue #507) -----------------------------------------
+
+
+def test_hard_delete_removes_the_row(repo):
+    # Arrange — the caller (route) has already checked the guard; the repo just removes it
+    exercise = repo.find_or_create("Sumo Deadlift", provenance=Provenance.CURATED)
+    assert repo.get(exercise.id) is not None
+
+    # Act
+    repo.hard_delete(exercise.id)
+
+    # Assert — the row is gone and no longer resolvable by id
+    assert repo.get(exercise.id) is None
+
+
+def test_hard_delete_of_an_unknown_id_is_a_noop(repo):
+    # Deleting a missing row is a harmless no-op (the route's 404 guard runs first).
+    repo.hard_delete(9999)
+    assert repo.get(9999) is None
+
+
+def test_reference_count_of_an_unreferenced_exercise_is_zero(repo):
+    exercise = repo.find_or_create("Turkish Get-Up", provenance=Provenance.CURATED)
+    assert repo.reference_count(exercise.id) == 0
+
+
+def test_reference_count_of_an_unknown_id_is_zero(repo):
+    assert repo.reference_count(9999) == 0
+
+
+def test_in_memory_reference_count_reflects_registered_references():
+    # The in-memory fake stands in for the three real reference tables via an explicit
+    # test seam, so the route/service delete logic can be exercised offline.
+    repo = InMemoryExerciseRepository()
+    exercise = repo.find_or_create("Hack Squat", provenance=Provenance.CURATED)
+
+    assert repo.reference_count(exercise.id) == 0
+    repo.register_reference(exercise.id)
+    repo.register_reference(exercise.id, count=2)
+
+    assert repo.reference_count(exercise.id) == 3
+
+
+def test_sql_reference_count_sums_prescriptions_logged_sets_and_relationships():
+    # The SQL implementation is the source of truth, verified against a real (SQLite) DB:
+    # reference_count sums Exercise Prescriptions + Logged Sets + Exercise Relationships in
+    # *both* directions (a link "points at" the Exercise whether it is the from or the to).
+    engine = make_fk_engine()
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as session:
+        repo = SqlExerciseRepository(session)
+        target = repo.find_or_create("Front Squat", provenance=Provenance.CURATED)
+        other = repo.find_or_create("Back Squat", provenance=Provenance.CURATED)
+
+        # An Exercise Prescription references the target through its owning Session.
+        workout = WorkoutSession(
+            clerk_user_id="user_1", training_type="strength", duration_minutes=45
+        )
+        session.add(workout)
+        session.commit()
+        session.refresh(workout)
+        session.add(
+            ExercisePrescription(
+                session_id=workout.id,
+                exercise_id=target.id,
+                position=0,
+                sets=3,
+                reps="5",
+            )
+        )
+
+        # A Logged Set references the target through its owning Logged Session.
+        logged = LoggedSession(
+            clerk_user_id="user_1",
+            training_type="strength",
+            performed_on=date(2026, 1, 1),
+        )
+        session.add(logged)
+        session.commit()
+        session.refresh(logged)
+        session.add(
+            LoggedSet(
+                logged_session_id=logged.id, exercise_id=target.id, position=0
+            )
+        )
+
+        # Two relationships touch the target: one outgoing (target is the from) and one
+        # incoming (target is the to) — both are references that block a hard delete.
+        session.add(
+            ExerciseRelationship(
+                from_exercise_id=target.id,
+                to_exercise_id=other.id,
+                kind="variation",
+            )
+        )
+        session.add(
+            ExerciseRelationship(
+                from_exercise_id=other.id,
+                to_exercise_id=target.id,
+                kind="alternative",
+            )
+        )
+        session.commit()
+
+        # Prescription (1) + Logged Set (1) + Relationships in both directions (2) = 4.
+        assert repo.reference_count(target.id) == 4
+        # The unrelated row is referenced only by the two relationship rows.
+        assert repo.reference_count(other.id) == 2
+
+
+def test_sql_hard_delete_removes_only_the_target_row():
+    engine = make_fk_engine()
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as session:
+        repo = SqlExerciseRepository(session)
+        target = repo.find_or_create("Zercher Squat", provenance=Provenance.CURATED)
+        keep = repo.find_or_create("Goblet Squat", provenance=Provenance.CURATED)
+
+        repo.hard_delete(target.id)
+
+        assert repo.get(target.id) is None
+        assert repo.get(keep.id) is not None
 
 
 def test_search_excludes_retired_by_default_but_includes_on_request(repo):

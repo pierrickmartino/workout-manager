@@ -69,3 +69,24 @@ def require_admin(
             detail="operator role required",
         )
     return claims["sub"]
+
+
+def current_user_is_operator(
+    authorization: str | None = Header(default=None),
+    jwks: dict = Depends(get_jwks),
+    settings: Settings = Depends(get_settings),
+) -> bool:
+    """Whether the caller is a verified operator — the **non-raising** twin of ``require_admin``.
+
+    For a route that serves *every* authenticated user but wants to include an operator-only
+    field for admins only (issue #507: the Exercise reference count the admin editor reads):
+    a valid operator token returns ``True``; any other case — a verified non-operator, or a
+    missing/invalid token — returns ``False`` without raising. It never gates the request: a
+    route pairs it with ``get_current_user``, which still 401s an unauthenticated caller, so
+    this only decides whether the extra field is computed, never whether access is allowed."""
+
+    try:
+        claims = _verified_claims(authorization, jwks, settings)
+    except HTTPException:
+        return False
+    return claims.get(settings.admin_role_claim) == settings.admin_role_value

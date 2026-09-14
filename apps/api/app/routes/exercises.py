@@ -16,17 +16,26 @@ from typing import TypeVar
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, field_validator
 
-from app.auth.dependencies import get_current_user, require_admin
+from app.auth.dependencies import (
+    current_user_is_operator,
+    get_current_user,
+    require_admin,
+)
 from app.db.models import Exercise
 from app.domain.exercise import (
     CatalogCompleteness,
     Provenance,
+    can_hard_delete,
     catalog_completeness,
     completeness_breakdown,
     normalize_name,
 )
 from app.domain.exercise_admin import AdminBrowseFilters
-from app.domain.exercise_audit import AuditAction, provenance_change_detail
+from app.domain.exercise_audit import (
+    AuditAction,
+    hard_delete_detail,
+    provenance_change_detail,
+)
 from app.domain.exercise_browse import (
     distinct_equipment,
     parse_difficulty_band,
@@ -507,7 +516,11 @@ def _summary(related: RelatedExercise) -> dict:
 
 
 def _serialize(
-    exercise: Exercise, related: list[RelatedExercise], *, has_image: bool
+    exercise: Exercise,
+    related: list[RelatedExercise],
+    *,
+    has_image: bool,
+    reference_count: int | None,
 ) -> dict:
     return {
         "id": exercise.id,
@@ -537,6 +550,13 @@ def _serialize(
         # flag to offer Retire / un-Retire. Discovery surfaces exclude retired Exercises
         # upstream, so a row reaching a user here is active in practice.
         "retired": exercise.retired,
+        # How many Exercise Prescriptions, Logged Sets, and Relationships point at this row
+        # (issue #507, ADR-0076): a read-time count, never a stored ledger. The admin editor
+        # reads it (with ``retired``) to decide whether the guarded hard delete is offered —
+        # deletable only when Retired and this is 0 — so it is computed for **operators only**
+        # and is ``null`` for everyone else, keeping the three COUNT queries off the public
+        # detail path for the callers who never use it. The backend re-checks on delete.
+        "reference_count": reference_count,
         # Catalog Completeness is deliberately absent (ADR-0041, revised): the
         # Stub | Listable | Enriched tier is an internal/ops axis, surfaced only in
         # the admin Catalog Enrichment readout, never on this user-facing detail.
@@ -549,10 +569,36 @@ def _serialize(
     }
 
 
+def _detail(
+    exercise: Exercise,
+    *,
+    relationships: ExerciseRelationshipRepository,
+    images: ExerciseImageRepository,
+    reference_count: int | None,
+) -> dict:
+    """Assemble the detail response for one Exercise — the shared gather step.
+
+    Resolves the both-directions related list and the image-presence flag through the
+    repositories, then hands them to the pure ``_serialize``. The ``GET /{id}`` read and every
+    single-Exercise write that echoes the updated row (patch, provenance, precautions,
+    retire / un-retire) return through here, so the response shape lives in one place and
+    adding a field never means editing each handler. ``reference_count`` stays the caller's to
+    supply — the public read computes it for operators only (issue #507), the admin writes
+    always."""
+
+    return _serialize(
+        exercise,
+        relationships.substitutes_for(exercise.id),
+        has_image=images.exists(exercise.id),
+        reference_count=reference_count,
+    )
+
+
 @router.get("/exercises/{exercise_id}")
 def read_exercise(
     exercise_id: int,
     _: str = Depends(get_current_user),
+    is_operator: bool = Depends(current_user_is_operator),
     exercises: ExerciseRepository = Depends(get_exercise_repository),
     relationships: ExerciseRelationshipRepository = Depends(
         get_exercise_relationship_repository
@@ -562,9 +608,18 @@ def read_exercise(
     exercise = exercises.get(exercise_id)
     if exercise is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
-    related = relationships.substitutes_for(exercise_id)
+    # The reference count is an operator-only signal for the admin editor's delete guard; skip
+    # the three COUNT queries for everyone else (issue #507) so the public detail path stays lean.
+    reference_count = (
+        exercises.reference_count(exercise_id) if is_operator else None
+    )
     return success_envelope(
-        _serialize(exercise, related, has_image=images.exists(exercise_id))
+        _detail(
+            exercise,
+            relationships=relationships,
+            images=images,
+            reference_count=reference_count,
+        )
     )
 
 
@@ -668,9 +723,13 @@ def update_exercise(
         ) from exc
     if updated is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
-    related = relationships.substitutes_for(exercise_id)
     return success_envelope(
-        _serialize(updated, related, has_image=images.exists(exercise_id))
+        _detail(
+            updated,
+            relationships=relationships,
+            images=images,
+            reference_count=exercises.reference_count(exercise_id),
+        )
     )
 
 
@@ -745,9 +804,13 @@ def set_exercise_provenance(
             action=AuditAction.PROVENANCE_CHANGE,
             detail=provenance_change_detail(old_provenance, updated.provenance),
         )
-    related = relationships.substitutes_for(exercise_id)
     return success_envelope(
-        _serialize(updated, related, has_image=images.exists(exercise_id))
+        _detail(
+            updated,
+            relationships=relationships,
+            images=images,
+            reference_count=exercises.reference_count(exercise_id),
+        )
     )
 
 
@@ -774,9 +837,13 @@ def set_exercise_precautions(
     updated = exercises.set_precautions(exercise_id, payload.precautions)
     if updated is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
-    related = relationships.substitutes_for(exercise_id)
     return success_envelope(
-        _serialize(updated, related, has_image=images.exists(exercise_id))
+        _detail(
+            updated,
+            relationships=relationships,
+            images=images,
+            reference_count=exercises.reference_count(exercise_id),
+        )
     )
 
 
@@ -878,9 +945,13 @@ def _flip_retire(
             action=AuditAction.RETIRE if retire else AuditAction.UNRETIRE,
             detail={},
         )
-    related = relationships.substitutes_for(exercise_id)
     return success_envelope(
-        _serialize(updated, related, has_image=images.exists(exercise_id))
+        _detail(
+            updated,
+            relationships=relationships,
+            images=images,
+            reference_count=exercises.reference_count(exercise_id),
+        )
     )
 
 
@@ -1037,4 +1108,57 @@ def remove_exercise_relationship(
     if exercise is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
     relationships.remove(exercise_id, payload.to_id, payload.kind)
+    return Response(status_code=HTTP_NO_CONTENT)
+
+
+@router.delete("/exercises/{exercise_id}")
+def delete_exercise(
+    exercise_id: int,
+    operator: str = Depends(require_admin),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    audit: ExerciseAuditRepository = Depends(get_exercise_audit_repository),
+    images: ExerciseImageRepository = Depends(get_exercise_image_repository),
+) -> Response:
+    """Permanently delete a Catalog Exercise — guarded, retire-then-delete (issue #507, ADR-0076).
+
+    Operator-only (``require_admin``, ADR-0046): a non-operator is rejected before any read.
+    The narrow exception to ADR-0002's "membership is never deleted" — a hard delete is
+    permitted **iff** the Exercise is already **Retired** *and* wholly **unreferenced** (no
+    Exercise Prescription, Logged Set, or Relationship points at it). The pure
+    ``can_hard_delete`` guard decides, fed the live ``reference_count``; a delete of a
+    referenced Exercise, or one not yet Retired, is refused with ``409`` and **changes
+    nothing** (no audit, no removal), so a live plan or settled record can never be corrupted.
+    A missing Exercise is ``404``. On success the act is recorded on the append-only admin
+    audit trail (``hard_delete``, with the deleted normalized name in ``detail``) — the trail
+    survives the deleted row — the Exercise's owned image is cleaned up, the row is removed,
+    and the response is a bodyless ``204`` (the transport seam treats it as success)."""
+
+    exercise = exercises.get(exercise_id)
+    if exercise is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    if not can_hard_delete(
+        is_retired=exercise.retired,
+        reference_count=exercises.reference_count(exercise_id),
+    ):
+        # Refused before any write: retire the Exercise first and clear its references. The
+        # editor mirrors this guard to disable the control, but the backend is the authority.
+        raise HTTPException(
+            status_code=HTTP_CONFLICT,
+            detail=(
+                "An exercise can be deleted only after it is retired and no longer "
+                "referenced by any prescription, logged set, or relationship."
+            ),
+        )
+    # Record the act before removing the row. The audit row's ``exercise_id`` is a plain int
+    # (no FK) and its detail keeps the deleted normalized name, so the trail outlives the row.
+    audit.record(
+        exercise_id=exercise_id,
+        actor=operator,
+        action=AuditAction.HARD_DELETE,
+        detail=hard_delete_detail(exercise.normalized_name),
+    )
+    # The uploaded image is an FK child owned by the Exercise; remove it before the parent so
+    # an FK-enforcing database accepts the delete (idempotent when there is no image).
+    images.delete(exercise_id)
+    exercises.hard_delete(exercise_id)
     return Response(status_code=HTTP_NO_CONTENT)
