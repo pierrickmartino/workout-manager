@@ -20,11 +20,15 @@ from app.domain.exercise_audit import AuditAction
 from app.main import create_app
 from app.repositories.deps import (
     get_exercise_audit_repository,
+    get_exercise_image_repository,
     get_exercise_relationship_repository,
     get_exercise_repository,
 )
 from app.repositories.exercise_audit_repository import (
     InMemoryExerciseAuditRepository,
+)
+from app.repositories.exercise_image_repository import (
+    InMemoryExerciseImageRepository,
 )
 from app.repositories.exercise_relationship_repository import (
     InMemoryExerciseRelationshipRepository,
@@ -38,6 +42,7 @@ def build_client():
     exercises = InMemoryExerciseRepository()
     relationships = InMemoryExerciseRelationshipRepository(exercises)
     audit = InMemoryExerciseAuditRepository()
+    images = InMemoryExerciseImageRepository()
     app = create_app()
     app.dependency_overrides[get_jwks] = lambda: ctx.jwks
     app.dependency_overrides[get_settings] = lambda: Settings(clerk_issuer=ISSUER)
@@ -46,6 +51,7 @@ def build_client():
         lambda: relationships
     )
     app.dependency_overrides[get_exercise_audit_repository] = lambda: audit
+    app.dependency_overrides[get_exercise_image_repository] = lambda: images
     return TestClient(app), ctx, exercises, audit
 
 

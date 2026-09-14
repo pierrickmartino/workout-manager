@@ -19,8 +19,12 @@ from app.config import Settings, get_settings
 from app.domain.exercise import Provenance
 from app.main import create_app
 from app.repositories.deps import (
+    get_exercise_image_repository,
     get_exercise_relationship_repository,
     get_exercise_repository,
+)
+from app.repositories.exercise_image_repository import (
+    InMemoryExerciseImageRepository,
 )
 from app.repositories.exercise_relationship_repository import (
     InMemoryExerciseRelationshipRepository,
@@ -33,6 +37,7 @@ def build_client():
     ctx = make_signing_context()
     exercises = InMemoryExerciseRepository()
     relationships = InMemoryExerciseRelationshipRepository(exercises)
+    images = InMemoryExerciseImageRepository()
     app = create_app()
     app.dependency_overrides[get_jwks] = lambda: ctx.jwks
     app.dependency_overrides[get_settings] = lambda: Settings(clerk_issuer=ISSUER)
@@ -40,6 +45,7 @@ def build_client():
     app.dependency_overrides[get_exercise_relationship_repository] = (
         lambda: relationships
     )
+    app.dependency_overrides[get_exercise_image_repository] = lambda: images
     return TestClient(app), ctx, exercises
 
 

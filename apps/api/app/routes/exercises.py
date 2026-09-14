@@ -13,7 +13,15 @@ import logging
 from enum import Enum
 from typing import TypeVar
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+)
 from pydantic import BaseModel, field_validator
 
 from app.auth.dependencies import get_current_user, require_admin
@@ -32,6 +40,7 @@ from app.domain.exercise_browse import (
     parse_difficulty_band,
     parse_muscle_group,
 )
+from app.domain.exercise_image import ImageRejection, validate_image
 from app.domain.exercise_usage import last_performed
 from app.domain.movement_pattern import (
     classify_movement_pattern,
@@ -45,6 +54,7 @@ from app.repositories.deps import (
     get_backfill_queue,
     get_enrichment_queue,
     get_exercise_audit_repository,
+    get_exercise_image_repository,
     get_exercise_relationship_repository,
     get_exercise_repository,
     get_logged_session_repository,
@@ -53,6 +63,7 @@ from app.repositories.exercise_audit_repository import (
     AuditRecord,
     ExerciseAuditRepository,
 )
+from app.repositories.exercise_image_repository import ExerciseImageRepository
 from app.repositories.exercise_relationship_repository import (
     ExerciseRelationshipRepository,
     RelatedExercise,
@@ -71,6 +82,15 @@ router = APIRouter(prefix="/api", tags=["exercises"])
 HTTP_NOT_FOUND = 404
 HTTP_ACCEPTED = 202
 HTTP_CONFLICT = 409
+HTTP_PAYLOAD_TOO_LARGE = 413
+HTTP_UNSUPPORTED_MEDIA_TYPE = 415
+
+# The rejection reason → HTTP status the Exercise Image upload answers with. Wrong type is a
+# 415, an oversized file a 413 — the two rules the pure ``validate_image`` helper enforces.
+_IMAGE_REJECTION_STATUS: dict[ImageRejection, int] = {
+    ImageRejection.UNSUPPORTED_TYPE: HTTP_UNSUPPORTED_MEDIA_TYPE,
+    ImageRejection.TOO_LARGE: HTTP_PAYLOAD_TOO_LARGE,
+}
 
 # The stored difficulty is a 1–10 scale aligned with Fitness Level (models.Exercise); an
 # admin edit is held to the same bounds so a bad value never enters the shared catalog.
@@ -496,7 +516,9 @@ def _summary(related: RelatedExercise) -> dict:
     return {"id": related.exercise.id, "name": related.exercise.name}
 
 
-def _serialize(exercise: Exercise, related: list[RelatedExercise]) -> dict:
+def _serialize(
+    exercise: Exercise, related: list[RelatedExercise], *, has_image: bool
+) -> dict:
     return {
         "id": exercise.id,
         "name": exercise.name,
@@ -512,11 +534,15 @@ def _serialize(exercise: Exercise, related: list[RelatedExercise]) -> dict:
         "instructions": list(exercise.instructions),
         "difficulty": exercise.difficulty,
         "precautions": list(exercise.precautions),
-        # The optional Exercise Image (ADR-0041): a curated-source illustration
-        # reference, ``null`` when the movement carries none. Its absence never
-        # degrades the Detail response — a movement with no picture is still
-        # fully usable.
+        # The legacy Exercise Image (ADR-0041): a curated-source illustration
+        # reference (URL / asset key), ``null`` when the movement carries none. Its
+        # absence never degrades the Detail response — a movement with no picture is
+        # still fully usable.
         "image": exercise.image,
+        # Whether a curator-uploaded image exists in the app database (issue #504).
+        # The frontend serves the uploaded image (``GET /{id}/image``) when true and
+        # falls back to the legacy ``image`` URL otherwise — image-row-first (ADR-0041).
+        "has_image": has_image,
         # Catalog Completeness is deliberately absent (ADR-0041, revised): the
         # Stub | Listable | Enriched tier is an internal/ops axis, surfaced only in
         # the admin Catalog Enrichment readout, never on this user-facing detail.
@@ -537,12 +563,15 @@ def read_exercise(
     relationships: ExerciseRelationshipRepository = Depends(
         get_exercise_relationship_repository
     ),
+    images: ExerciseImageRepository = Depends(get_exercise_image_repository),
 ) -> dict:
     exercise = exercises.get(exercise_id)
     if exercise is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
     related = relationships.substitutes_for(exercise_id)
-    return success_envelope(_serialize(exercise, related))
+    return success_envelope(
+        _serialize(exercise, related, has_image=images.exists(exercise_id))
+    )
 
 
 class UpdateExerciseBody(BaseModel):
@@ -623,6 +652,7 @@ def update_exercise(
     relationships: ExerciseRelationshipRepository = Depends(
         get_exercise_relationship_repository
     ),
+    images: ExerciseImageRepository = Depends(get_exercise_image_repository),
 ) -> dict:
     """Partially edit one Catalog Exercise's descriptive fields (issue #502, spec §5).
 
@@ -645,7 +675,9 @@ def update_exercise(
     if updated is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
     related = relationships.substitutes_for(exercise_id)
-    return success_envelope(_serialize(updated, related))
+    return success_envelope(
+        _serialize(updated, related, has_image=images.exists(exercise_id))
+    )
 
 
 class SetProvenanceBody(BaseModel):
@@ -675,9 +707,7 @@ class SetPrecautionsBody(BaseModel):
     def _clean_and_escape(cls, value: list[str]) -> list[str]:
         # Trim, drop blanks, then escape (quotes included) — the same one-time write-boundary
         # sanitizing the Note domain applies (app.domain.note.parse_note), here over a list.
-        return [
-            html.escape(item.strip(), quote=True) for item in value if item.strip()
-        ]
+        return [html.escape(item.strip(), quote=True) for item in value if item.strip()]
 
 
 @router.put("/exercises/{exercise_id}/provenance")
@@ -690,6 +720,7 @@ def set_exercise_provenance(
         get_exercise_relationship_repository
     ),
     audit: ExerciseAuditRepository = Depends(get_exercise_audit_repository),
+    images: ExerciseImageRepository = Depends(get_exercise_image_repository),
 ) -> dict:
     """Deliberately set one Catalog Exercise's Provenance and audit the act (ADR-0075).
 
@@ -721,7 +752,9 @@ def set_exercise_provenance(
             detail=provenance_change_detail(old_provenance, updated.provenance),
         )
     related = relationships.substitutes_for(exercise_id)
-    return success_envelope(_serialize(updated, related))
+    return success_envelope(
+        _serialize(updated, related, has_image=images.exists(exercise_id))
+    )
 
 
 @router.put("/exercises/{exercise_id}/precautions")
@@ -733,6 +766,7 @@ def set_exercise_precautions(
     relationships: ExerciseRelationshipRepository = Depends(
         get_exercise_relationship_repository
     ),
+    images: ExerciseImageRepository = Depends(get_exercise_image_repository),
 ) -> dict:
     """Write one Catalog Exercise's curator-only precautions (issue #503, spec §5).
 
@@ -747,7 +781,9 @@ def set_exercise_precautions(
     if updated is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
     related = relationships.substitutes_for(exercise_id)
-    return success_envelope(_serialize(updated, related))
+    return success_envelope(
+        _serialize(updated, related, has_image=images.exists(exercise_id))
+    )
 
 
 def _audit_record(record: AuditRecord) -> dict[str, object]:
@@ -781,3 +817,101 @@ def read_exercise_audit(
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
     records = audit.list_for(exercise_id)
     return success_envelope([_audit_record(record) for record in records])
+
+
+def _image_url(exercise_id: int) -> str:
+    """The served path the frontend points an ``<img>`` at once an image exists."""
+
+    return f"/api/exercises/{exercise_id}/image"
+
+
+@router.post("/exercises/{exercise_id}/image")
+async def upload_exercise_image(
+    exercise_id: int,
+    file: UploadFile = File(...),
+    operator: str = Depends(require_admin),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    images: ExerciseImageRepository = Depends(get_exercise_image_repository),
+) -> dict:
+    """Upload (or replace) one Catalog Exercise's curator-only image (issue #504, ADR-0041).
+
+    Operator-only (``require_admin``, ADR-0046): the image is a curated illustration the
+    Enrichment AI is forbidden to fabricate, so only an admin sets it. The bytes, content-type,
+    size, uploader, and timestamp are stored in the app database, one image per Exercise — a
+    re-upload replaces the previous one. The upload is admitted only through the pure
+    ``validate_image`` guard: a disallowed content-type is a ``415`` and an oversized file a
+    ``413`` (nothing is stored on either), and a missing Exercise is a ``404`` resolved before
+    the file is read. On success returns the served image URL via the standard envelope.
+    """
+
+    exercise = exercises.get(exercise_id)
+    if exercise is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+
+    data = await file.read()
+    rejection = validate_image(file.content_type, len(data))
+    if rejection is not None:
+        raise HTTPException(
+            status_code=_IMAGE_REJECTION_STATUS[rejection],
+            detail=(
+                "Unsupported image type."
+                if rejection is ImageRejection.UNSUPPORTED_TYPE
+                else "Image is too large."
+            ),
+        )
+
+    images.put(
+        exercise_id=exercise_id,
+        # ``validate_image`` accepted it, so the media type is one of the allow-listed
+        # values; store the bare type (never ``None``) so the fetch echoes it verbatim.
+        content_type=(file.content_type or "").split(";", 1)[0].strip().lower(),
+        image_bytes=data,
+        byte_size=len(data),
+        uploaded_by=operator,
+    )
+    return success_envelope({"image_url": _image_url(exercise_id)})
+
+
+@router.delete("/exercises/{exercise_id}/image")
+def delete_exercise_image(
+    exercise_id: int,
+    _operator: str = Depends(require_admin),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    images: ExerciseImageRepository = Depends(get_exercise_image_repository),
+) -> dict:
+    """Remove one Catalog Exercise's uploaded image (issue #504, ADR-0041).
+
+    Operator-only (``require_admin``, ADR-0046). A missing Exercise is a ``404``; otherwise the
+    stored image is removed and the endpoint returns the standard envelope carrying the cleared
+    Exercise's id. Returning the envelope (rather than a bodyless 204) keeps every endpoint on
+    the one response shape (CLAUDE.md) and lets the JSON transport seam unwrap it like any other
+    write. The delete is idempotent — removing an image from an Exercise that carries none still
+    succeeds — and the legacy ``image`` URL string on the Exercise is left untouched (this only
+    clears the uploaded bytes)."""
+
+    exercise = exercises.get(exercise_id)
+    if exercise is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    images.delete(exercise_id)
+    return success_envelope({"id": exercise_id})
+
+
+@router.get("/exercises/{exercise_id}/image")
+def fetch_exercise_image(
+    exercise_id: int,
+    _: str = Depends(get_current_user),
+    images: ExerciseImageRepository = Depends(get_exercise_image_repository),
+) -> Response:
+    """Serve one Catalog Exercise's uploaded image bytes (issue #504, ADR-0041).
+
+    Readable by **any** signed-in user — not operator-only — because it feeds Exercise Detail
+    for every user, not just admins (spec §5). Returns the raw bytes with the stored
+    content-type; an Exercise with no uploaded image is a ``404`` (the frontend then falls back
+    to the legacy ``image`` URL, or shows nothing — never a broken image)."""
+
+    stored = images.get(exercise_id)
+    if stored is None:
+        raise HTTPException(
+            status_code=HTTP_NOT_FOUND, detail="Exercise image not found"
+        )
+    return Response(content=stored.image_bytes, media_type=stored.content_type)

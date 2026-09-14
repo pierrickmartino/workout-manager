@@ -1,6 +1,6 @@
 import "server-only";
 
-import { apiGet, apiSend, type Envelope } from "./api";
+import { apiGet, apiSend, apiUpload, type Envelope } from "./api";
 import type { AdminExerciseRow } from "./admin-exercises-view";
 import type { ExercisePatchPayload } from "./admin-exercise-editor";
 import type { AdminAuditEntry } from "./admin-exercise-curation";
@@ -71,4 +71,29 @@ export async function fetchAdminExerciseAudit(
   id: number,
 ): Promise<Envelope<AdminAuditEntry[]>> {
   return apiGet(`/api/exercises/${id}/audit`);
+}
+
+// The served URL the API returns after a successful image upload.
+export interface UploadedImage {
+  image_url: string;
+}
+
+// Upload (or replace) an Exercise's curator-only image (issue #504, ADR-0041). Forwards the
+// file as multipart to the admin-gated `POST /api/exercises/{id}/image` via the one `apiUpload`
+// helper; the backend validates type/size (415/413) and stores the bytes in the app database.
+// Returns the served-URL envelope, or an error envelope the action surfaces.
+export async function uploadAdminExerciseImage(
+  id: number,
+  file: File,
+): Promise<Envelope<UploadedImage>> {
+  return apiUpload(`/api/exercises/${id}/image`, file);
+}
+
+// Remove an Exercise's uploaded image (issue #504). Hits the admin-gated `DELETE
+// /api/exercises/{id}/image`; the legacy `image` URL is left untouched. Returns the standard
+// envelope carrying the cleared Exercise's id.
+export async function deleteAdminExerciseImage(
+  id: number,
+): Promise<Envelope<{ id: number }>> {
+  return apiSend(`/api/exercises/${id}/image`, "DELETE");
 }

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Boolean, Column, UniqueConstraint, false
+from sqlalchemy import Boolean, Column, LargeBinary, UniqueConstraint, false
 from sqlalchemy.types import JSON
 from sqlmodel import Field, SQLModel
 
@@ -189,6 +189,36 @@ class ExerciseRelationship(SQLModel, table=True):
     from_exercise_id: int = Field(foreign_key="exercise.id", index=True)
     to_exercise_id: int = Field(foreign_key="exercise.id", index=True)
     kind: str
+
+
+class ExerciseImage(SQLModel, table=True):
+    """The bytes of a curator-uploaded Exercise Image, one per catalog Exercise (issue #504).
+
+    The legacy ``exercise.image`` string keeps holding a curated *external* reference (a URL /
+    asset key); this table holds a real **uploaded** image kept out of the wide ``exercise``
+    row so a read of the catalog never drags a blob along. ``exercise_id`` is the primary key
+    *and* a foreign key, so there is exactly one image per Exercise (a re-upload upserts) and
+    the row is removed with the Exercise. The served picture is chosen image-row-first, else the
+    legacy string (ADR-0041). Curator-only and never AI-fabricated — a misleading generated
+    picture is a safety hazard in an injury/rehab-cautious domain.
+
+    ``uploaded_by`` (the admin's Clerk sub) and ``uploaded_at`` record who last set the image and
+    when; ``byte_size`` is stored alongside the bytes so a size read never has to load the blob."""
+
+    __tablename__ = "exercise_image"
+
+    exercise_id: int = Field(foreign_key="exercise.id", primary_key=True)
+    # One of the allow-listed media types (``image/jpeg|png|webp``); validated at the write
+    # boundary and echoed back verbatim as the ``Content-Type`` when the image is served.
+    content_type: str
+    # The raw image bytes. Named ``image_bytes`` in Python (``bytes`` shadows the builtin) but
+    # stored in the ``bytes`` column so the schema reads plainly.
+    image_bytes: bytes = Field(
+        sa_column=Column("bytes", LargeBinary, nullable=False)
+    )
+    byte_size: int
+    uploaded_by: str
+    uploaded_at: datetime = Field(default_factory=_utcnow)
 
 
 class ExerciseAdminAudit(SQLModel, table=True):

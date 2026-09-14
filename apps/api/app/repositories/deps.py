@@ -41,6 +41,10 @@ from app.repositories.exercise_audit_repository import (
     ExerciseAuditRepository,
     SqlExerciseAuditRepository,
 )
+from app.repositories.exercise_image_repository import (
+    ExerciseImageRepository,
+    SqlExerciseImageRepository,
+)
 from app.repositories.exercise_repository import (
     ExerciseRepository,
     SqlExerciseRepository,
@@ -129,6 +133,12 @@ def get_exercise_audit_repository(
     session: Session = Depends(get_session),
 ) -> ExerciseAuditRepository:
     return SqlExerciseAuditRepository(session)
+
+
+def get_exercise_image_repository(
+    session: Session = Depends(get_session),
+) -> ExerciseImageRepository:
+    return SqlExerciseImageRepository(session)
 
 
 def get_session_repository(

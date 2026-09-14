@@ -70,3 +70,31 @@ export async function apiSend<T>(
   const response = await fetch(`${API_URL}${path}`, init);
   return (await response.json()) as Envelope<T>;
 }
+
+// Upload a file to a backend endpoint as `multipart/form-data` — the one non-JSON write in the
+// otherwise-JSON seam, added for the curator Exercise Image upload (issue #504). The file is
+// sent under the `file` field the backend's `UploadFile` reads. Only the Clerk JWT is attached:
+// the `Content-Type` (with its multipart boundary) is set by `fetch` from the `FormData` body,
+// so it must NOT be set by hand. Returns the raw envelope like the JSON writers.
+export async function apiUpload<T>(path: string, file: File): Promise<Envelope<T>> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`${API_URL}${path}`, {
+    method: "POST",
+    headers: await authHeaders(),
+    body: form,
+    cache: "no-store",
+  });
+  return (await response.json()) as Envelope<T>;
+}
+
+// Fetch raw bytes from a backend endpoint (not the JSON envelope) with the Clerk JWT attached —
+// used by the Exercise Image render proxy so the browser's same-origin `<img>` can reach the
+// JWT-guarded `GET /api/exercises/{id}/image`. Returns the raw `Response` so the caller can
+// stream the body and forward the upstream status/content-type.
+export async function apiGetRaw(path: string): Promise<Response> {
+  return fetch(`${API_URL}${path}`, {
+    headers: await authHeaders(),
+    cache: "no-store",
+  });
+}

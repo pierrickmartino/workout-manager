@@ -11,6 +11,7 @@ import {
   toMuscleEmphasis,
   toPrecautions,
 } from "@/lib/exercise-detail-view";
+import { resolveExerciseImageSrc } from "@/lib/exercise-image";
 import { appendFrom } from "@/lib/back-target";
 import { toTopSetTrend } from "@/lib/top-set-trend-view";
 import type { WeightUnit } from "@/lib/weight-unit";
@@ -55,7 +56,7 @@ export function SpecsPanel({
 
   return (
     <div className="flex flex-col gap-7">
-      <ExerciseImage src={exercise.image} name={exercise.name} />
+      <ExerciseImage src={resolveExerciseImageSrc(exercise)} name={exercise.name} />
 
       {exercise.description ? (
         <p className="font-sans text-[15px] leading-relaxed text-text-secondary">
@@ -86,11 +87,12 @@ export function SpecsPanel({
   );
 }
 
-// The optional Exercise Image (ADR-0041): a single curated-source illustration for
-// the movement. Curator-only and never AI-fabricated, and part of the Enriched tier —
-// so a movement with no image simply renders nothing here and stays fully usable; the
-// picture never blocks or degrades the page. A plain <img> (not next/image) since the
-// asset is an external curated reference and no remote-image host is configured.
+// The optional Exercise Image (ADR-0041): a single curator-only illustration, never
+// AI-fabricated and part of the Enriched tier. The `src` is resolved uploaded-first by
+// `resolveExerciseImageSrc` (the same-origin `/api/exercises/{id}/image` proxy when an image
+// was uploaded, else the legacy curated URL); when there is neither, `src` is `null` and this
+// renders nothing, so a movement with no picture stays fully usable and never shows a broken
+// image. A plain <img> (not next/image) — no remote-image host is configured (issue #504).
 function ExerciseImage({
   src,
   name,

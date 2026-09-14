@@ -212,8 +212,13 @@ export interface ExerciseDetail {
   precautions: string[];
   // An optional curated-source Exercise Image (ADR-0041): a single illustration
   // reference, `null` when the movement carries none. Curator-only and never
-  // AI-fabricated; its absence never degrades the Detail page.
+  // AI-fabricated; its absence never degrades the Detail page. Legacy external URL —
+  // `has_image` below flags a real uploaded image stored in the app database.
   image: string | null;
+  // Whether a curator-uploaded image exists (issue #504). The image source is resolved
+  // uploaded-first: `resolveExerciseImageSrc` serves `GET /api/exercises/{id}/image` when
+  // true, else the legacy `image` URL, else nothing.
+  has_image: boolean;
   variations: RelatedExerciseSummary[];
   alternatives: RelatedExerciseSummary[];
 }

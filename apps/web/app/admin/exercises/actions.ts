@@ -3,9 +3,11 @@
 import { revalidatePath } from "next/cache";
 
 import {
+  deleteAdminExerciseImage,
   setAdminExercisePrecautions,
   setAdminExerciseProvenance,
   updateAdminExercise,
+  uploadAdminExerciseImage,
 } from "@/lib/admin-exercises";
 import type { ExercisePatchPayload } from "@/lib/admin-exercise-editor";
 import type { ExerciseDetail } from "@/lib/sessions-types";
@@ -62,6 +64,46 @@ export async function setProvenanceAction(
   }
   revalidateExercise(id);
   return { exercise: result.data, error: null };
+}
+
+// The outcome of an image upload/remove, unwrapped for the editor: the served URL on a
+// successful upload (`null` after a remove), or an error message.
+export interface ImageActionResult {
+  imageUrl: string | null;
+  error: string | null;
+}
+
+// Upload (or replace) the Exercise's curator-only image (issue #504, ADR-0041). The Client
+// Component hands the `File` inside a `FormData` (a File can't cross the server-action boundary
+// on its own); this forwards it as multipart to the admin-gated endpoint. The backend enforces
+// `require_admin` and validates type/size (415/413) — this only unwraps the envelope and drops
+// the cached renders so the uploaded image shows on the editor and the public detail page.
+export async function uploadImageAction(
+  id: number,
+  formData: FormData,
+): Promise<ImageActionResult> {
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { imageUrl: null, error: "Choose an image to upload." };
+  }
+  const result = await uploadAdminExerciseImage(id, file);
+  if (!result.success || !result.data) {
+    return { imageUrl: null, error: result.error ?? "Could not upload the image." };
+  }
+  revalidateExercise(id);
+  return { imageUrl: result.data.image_url, error: null };
+}
+
+// Remove the Exercise's uploaded image (issue #504). Admin-gated server-side; unwraps the
+// envelope and drops the cached renders. The legacy `image` URL is untouched — detail falls
+// back to it (or shows nothing) once the uploaded image is gone.
+export async function removeImageAction(id: number): Promise<ImageActionResult> {
+  const result = await deleteAdminExerciseImage(id);
+  if (!result.success) {
+    return { imageUrl: null, error: result.error ?? "Could not remove the image." };
+  }
+  revalidateExercise(id);
+  return { imageUrl: null, error: null };
 }
 
 // Write the Exercise's curator-only precautions (issue #503, spec §5). The backend trims and
