@@ -8,6 +8,7 @@ import {
 import { summarizeAuditEntry } from "@/lib/admin-exercise-curation";
 import { AdminExerciseEditor } from "@/components/AdminExerciseEditor";
 import { AdminExerciseCuration } from "@/components/AdminExerciseCuration";
+import { AdminExerciseImage } from "@/components/AdminExerciseImage";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { BackLink } from "@/components/pulse/back-link";
@@ -53,6 +54,8 @@ export default async function AdminExerciseEditorPage({
       </p>
 
       <AdminExerciseEditor exercise={exercise} />
+
+      <AdminExerciseImage exercise={exercise} />
 
       <AdminExerciseCuration exercise={exercise} />
 

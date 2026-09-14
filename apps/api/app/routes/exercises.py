@@ -45,6 +45,7 @@ from app.repositories.deps import (
     get_backfill_queue,
     get_enrichment_queue,
     get_exercise_audit_repository,
+    get_exercise_image_repository,
     get_exercise_relationship_repository,
     get_exercise_repository,
     get_logged_session_repository,
@@ -53,6 +54,7 @@ from app.repositories.exercise_audit_repository import (
     AuditRecord,
     ExerciseAuditRepository,
 )
+from app.repositories.exercise_image_repository import ExerciseImageRepository
 from app.repositories.exercise_relationship_repository import (
     ExerciseRelationshipRepository,
     RelatedExercise,
@@ -496,7 +498,9 @@ def _summary(related: RelatedExercise) -> dict:
     return {"id": related.exercise.id, "name": related.exercise.name}
 
 
-def _serialize(exercise: Exercise, related: list[RelatedExercise]) -> dict:
+def _serialize(
+    exercise: Exercise, related: list[RelatedExercise], *, has_image: bool
+) -> dict:
     return {
         "id": exercise.id,
         "name": exercise.name,
@@ -512,11 +516,14 @@ def _serialize(exercise: Exercise, related: list[RelatedExercise]) -> dict:
         "instructions": list(exercise.instructions),
         "difficulty": exercise.difficulty,
         "precautions": list(exercise.precautions),
-        # The optional Exercise Image (ADR-0041): a curated-source illustration
-        # reference, ``null`` when the movement carries none. Its absence never
-        # degrades the Detail response — a movement with no picture is still
-        # fully usable.
+        # The legacy Exercise Image (ADR-0041): a curated-source illustration
+        # reference (URL / asset key), ``null`` when the movement carries none. Its
+        # absence never degrades the Detail response — a movement with no picture is
+        # still fully usable.
         "image": exercise.image,
+        # Whether a curator-uploaded image exists (issue #504); the frontend serves it
+        # (``GET /{id}/image``) when true, else the legacy ``image`` URL (ADR-0041).
+        "has_image": has_image,
         # Catalog Completeness is deliberately absent (ADR-0041, revised): the
         # Stub | Listable | Enriched tier is an internal/ops axis, surfaced only in
         # the admin Catalog Enrichment readout, never on this user-facing detail.
@@ -537,12 +544,15 @@ def read_exercise(
     relationships: ExerciseRelationshipRepository = Depends(
         get_exercise_relationship_repository
     ),
+    images: ExerciseImageRepository = Depends(get_exercise_image_repository),
 ) -> dict:
     exercise = exercises.get(exercise_id)
     if exercise is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
     related = relationships.substitutes_for(exercise_id)
-    return success_envelope(_serialize(exercise, related))
+    return success_envelope(
+        _serialize(exercise, related, has_image=images.exists(exercise_id))
+    )
 
 
 class UpdateExerciseBody(BaseModel):
@@ -623,6 +633,7 @@ def update_exercise(
     relationships: ExerciseRelationshipRepository = Depends(
         get_exercise_relationship_repository
     ),
+    images: ExerciseImageRepository = Depends(get_exercise_image_repository),
 ) -> dict:
     """Partially edit one Catalog Exercise's descriptive fields (issue #502, spec §5).
 
@@ -645,7 +656,9 @@ def update_exercise(
     if updated is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
     related = relationships.substitutes_for(exercise_id)
-    return success_envelope(_serialize(updated, related))
+    return success_envelope(
+        _serialize(updated, related, has_image=images.exists(exercise_id))
+    )
 
 
 class SetProvenanceBody(BaseModel):
@@ -675,9 +688,7 @@ class SetPrecautionsBody(BaseModel):
     def _clean_and_escape(cls, value: list[str]) -> list[str]:
         # Trim, drop blanks, then escape (quotes included) — the same one-time write-boundary
         # sanitizing the Note domain applies (app.domain.note.parse_note), here over a list.
-        return [
-            html.escape(item.strip(), quote=True) for item in value if item.strip()
-        ]
+        return [html.escape(item.strip(), quote=True) for item in value if item.strip()]
 
 
 @router.put("/exercises/{exercise_id}/provenance")
@@ -690,6 +701,7 @@ def set_exercise_provenance(
         get_exercise_relationship_repository
     ),
     audit: ExerciseAuditRepository = Depends(get_exercise_audit_repository),
+    images: ExerciseImageRepository = Depends(get_exercise_image_repository),
 ) -> dict:
     """Deliberately set one Catalog Exercise's Provenance and audit the act (ADR-0075).
 
@@ -721,7 +733,9 @@ def set_exercise_provenance(
             detail=provenance_change_detail(old_provenance, updated.provenance),
         )
     related = relationships.substitutes_for(exercise_id)
-    return success_envelope(_serialize(updated, related))
+    return success_envelope(
+        _serialize(updated, related, has_image=images.exists(exercise_id))
+    )
 
 
 @router.put("/exercises/{exercise_id}/precautions")
@@ -733,6 +747,7 @@ def set_exercise_precautions(
     relationships: ExerciseRelationshipRepository = Depends(
         get_exercise_relationship_repository
     ),
+    images: ExerciseImageRepository = Depends(get_exercise_image_repository),
 ) -> dict:
     """Write one Catalog Exercise's curator-only precautions (issue #503, spec §5).
 
@@ -747,7 +762,9 @@ def set_exercise_precautions(
     if updated is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
     related = relationships.substitutes_for(exercise_id)
-    return success_envelope(_serialize(updated, related))
+    return success_envelope(
+        _serialize(updated, related, has_image=images.exists(exercise_id))
+    )
 
 
 def _audit_record(record: AuditRecord) -> dict[str, object]:
