@@ -107,6 +107,23 @@ export async function deleteAdminExercise(
   return apiSend(`/api/exercises/${id}`, "DELETE");
 }
 
+// The 202 acknowledgement the API returns when a single-Exercise enrichment is accepted.
+export interface EnrichAccepted {
+  status: string;
+  exercise_id: number;
+}
+
+// Enqueue Enrichment for one Exercise from the editor (issue #508, ADR-0041). Hits the
+// admin-gated `POST /api/exercises/{id}/enrich`, which reuses the same out-of-band worker path
+// the create flow uses — no AI runs on the request. The backend accepts the job (202) and a
+// worker fills the movement later, or 404s a missing Exercise. Returns the acceptance envelope,
+// or an error envelope the action surfaces.
+export async function enrichAdminExercise(
+  id: number,
+): Promise<Envelope<EnrichAccepted>> {
+  return apiSend(`/api/exercises/${id}/enrich`, "POST");
+}
+
 // The served URL the API returns after a successful image upload.
 export interface UploadedImage {
   image_url: string;

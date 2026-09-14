@@ -10,6 +10,7 @@ import { summarizeAuditEntry } from "@/lib/admin-exercise-curation";
 import { AdminExerciseEditor } from "@/components/AdminExerciseEditor";
 import { AdminExerciseCuration } from "@/components/AdminExerciseCuration";
 import { AdminExerciseImage } from "@/components/AdminExerciseImage";
+import { AdminExerciseEnrich } from "@/components/AdminExerciseEnrich";
 import { AdminExerciseRelationships } from "@/components/AdminExerciseRelationships";
 import { AdminExerciseRetire } from "@/components/AdminExerciseRetire";
 import { AdminExerciseDelete } from "@/components/AdminExerciseDelete";
@@ -76,6 +77,8 @@ export default async function AdminExerciseEditorPage({
         exerciseId={exercise.id}
         relationships={relationships}
       />
+
+      <AdminExerciseEnrich exercise={exercise} />
 
       <AdminExerciseRetire exercise={exercise} />
 

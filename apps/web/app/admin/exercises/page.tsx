@@ -3,9 +3,13 @@ import { notFound } from "next/navigation";
 import { resolveIsAdmin } from "@/lib/admin";
 import { fetchAdminExercises } from "@/lib/admin-exercises";
 import { AdminExerciseBrowser } from "@/components/AdminExerciseBrowser";
+import { CatalogCompletenessBreakdown } from "@/components/CatalogCompletenessBreakdown";
+import { EnrichmentBackfillControl } from "@/components/EnrichmentBackfillControl";
 import { PageHeader } from "@/components/pulse/page-header";
+import { SectionHeader } from "@/components/pulse/section-header";
 import { BackLink } from "@/components/pulse/back-link";
 import { Alert } from "@/components/pulse/alert";
+import { Card } from "@/components/ui/card";
 
 // The admin catalog browser (issue #501, ADR-0075/0076): a read-only ops view of the whole
 // shared Catalog. Unlike the user-facing library it hides nothing — every Provenance and
@@ -16,6 +20,11 @@ import { Alert } from "@/components/pulse/alert";
 // (`require_admin`, ADR-0046). The whole bounded catalog is fetched server-side (the JWT
 // never reaches the browser); the client component handles search, the facets, and the
 // links toward the editor from there.
+//
+// The corpus-wide enrichment tools live here too (issue #508): the catalog-health completeness
+// breakdown and the whole-catalog Stub-enrichment backfill trigger, relocated from the admin
+// home so that per-Exercise enrich-now (on the editor) and these corpus-wide controls sit in
+// one place — the admin exercise area. Both remain admin-gated on the backend (ADR-0046).
 export default async function AdminExercisesPage() {
   const isAdmin = await resolveIsAdmin();
   if (!isAdmin) notFound();
@@ -38,6 +47,16 @@ export default async function AdminExercisesPage() {
           Could not load the catalog: {result.error ?? "unknown error"}
         </Alert>
       )}
+
+      <div className="flex flex-col gap-4">
+        <SectionHeader>Catalog enrichment</SectionHeader>
+        <Card className="p-4">
+          <div className="flex flex-col gap-6">
+            <CatalogCompletenessBreakdown />
+            <EnrichmentBackfillControl />
+          </div>
+        </Card>
+      </div>
 
       <BackLink href="/admin">Back to admin</BackLink>
     </section>
