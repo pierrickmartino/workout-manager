@@ -14,20 +14,9 @@
 // No server-only imports, so it is safe in both Server and Client Components and unit-testable
 // without a browser. Keeping the "show it, and as what text" decision here keeps components thin.
 
+import { decodeHtmlEntities } from "./html-entities.ts";
 import type { ExercisePrescription } from "./sessions-types.ts";
 import type { LoggedSet } from "./logs-types.ts";
-
-// The five entities the backend's `html.escape(quote=True)` produces, mapped back to their
-// characters. `&amp;` is applied **last** so an already-decoded `&` is never re-consumed — the
-// exact inverse of the escape, which replaces `&` first.
-function decodeNoteEntities(value: string): string {
-  return value
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#x27;/g, "'")
-    .replace(/&amp;/g, "&");
-}
 
 // The display text for a stored note, or `null` when there is nothing to show. A null,
 // undefined, or blank/whitespace-only value is "no note" and returns `null` — the signal to
@@ -37,7 +26,7 @@ export function noteText(value: string | null | undefined): string | null {
   if (value == null) {
     return null;
   }
-  const decoded = decodeNoteEntities(value).trim();
+  const decoded = decodeHtmlEntities(value).trim();
   return decoded === "" ? null : decoded;
 }
 

@@ -8,6 +8,7 @@ authentication like the rest of the API. Responses use the standard envelope."""
 
 from __future__ import annotations
 
+import html
 import logging
 from enum import Enum
 from typing import TypeVar
@@ -25,6 +26,7 @@ from app.domain.exercise import (
     normalize_name,
 )
 from app.domain.exercise_admin import AdminBrowseFilters
+from app.domain.exercise_audit import AuditAction, provenance_change_detail
 from app.domain.exercise_browse import (
     distinct_equipment,
     parse_difficulty_band,
@@ -42,9 +44,14 @@ from app.generation.enrichment_queue import EnrichmentQueue
 from app.repositories.deps import (
     get_backfill_queue,
     get_enrichment_queue,
+    get_exercise_audit_repository,
     get_exercise_relationship_repository,
     get_exercise_repository,
     get_logged_session_repository,
+)
+from app.repositories.exercise_audit_repository import (
+    AuditRecord,
+    ExerciseAuditRepository,
 )
 from app.repositories.exercise_relationship_repository import (
     ExerciseRelationshipRepository,
@@ -639,3 +646,138 @@ def update_exercise(
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
     related = relationships.substitutes_for(exercise_id)
     return success_envelope(_serialize(updated, related))
+
+
+class SetProvenanceBody(BaseModel):
+    """A deliberate Provenance change on one Catalog Exercise (issue #503, ADR-0075).
+
+    ``provenance`` is typed as the ``Provenance`` enum, so FastAPI rejects any value outside
+    the vocabulary with a ``422`` before the handler runs — the "value is a member of
+    ``Provenance``" validation (spec §3), with no gate function since any tier may move to any
+    other (promote, correct, or demote)."""
+
+    provenance: Provenance
+
+
+class SetPrecautionsBody(BaseModel):
+    """A write of one Catalog Exercise's curator-only precautions (issue #503, spec §5).
+
+    ``precautions`` replaces the whole list (an empty list clears it). Each entry is trimmed
+    with blanks dropped — a stray empty row from the editor never becomes a stored caution —
+    and **HTML-escaped at this write boundary** so the stored value is inert wherever it later
+    renders (the PWA, a CSV export, a future raw-HTML reader), independent of any frontend
+    escaping (ADR-0036). A non-list body is a ``422`` (handled by the type)."""
+
+    precautions: list[str]
+
+    @field_validator("precautions")
+    @classmethod
+    def _clean_and_escape(cls, value: list[str]) -> list[str]:
+        # Trim, drop blanks, then escape (quotes included) — the same one-time write-boundary
+        # sanitizing the Note domain applies (app.domain.note.parse_note), here over a list.
+        return [
+            html.escape(item.strip(), quote=True) for item in value if item.strip()
+        ]
+
+
+@router.put("/exercises/{exercise_id}/provenance")
+def set_exercise_provenance(
+    exercise_id: int,
+    payload: SetProvenanceBody,
+    operator: str = Depends(require_admin),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    relationships: ExerciseRelationshipRepository = Depends(
+        get_exercise_relationship_repository
+    ),
+    audit: ExerciseAuditRepository = Depends(get_exercise_audit_repository),
+) -> dict:
+    """Deliberately set one Catalog Exercise's Provenance and audit the act (ADR-0075).
+
+    Operator-only (``require_admin``, ADR-0046). This is the **one** path that mutates
+    Provenance — a distinct, explicit act, never a side effect of editing other fields — so an
+    admin may promote to ``curated`` when they have reviewed a movement, or correct/demote when
+    content should not carry human-reviewed trust. An invalid tier is ``422`` (handled by the
+    body model), a missing Exercise is ``404``, and neither writes anything. When the tier
+    actually moves, the change is written to the append-only admin audit trail (who, when,
+    old→new); setting the current tier again is an accepted no-op that records nothing, so the
+    trail holds only real changes (ADR-0075). Returns the updated Exercise via the standard
+    envelope in the same shape as ``GET /{id}``. No automated path (enrichment, generation,
+    substitution) reaches this endpoint (ADR-0002/0075)."""
+
+    existing = exercises.get(exercise_id)
+    if existing is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    old_provenance = existing.provenance
+    updated = exercises.set_provenance(exercise_id, payload.provenance)
+    # ``existing`` was resolved above, so the write cannot miss; guard defensively anyway.
+    if updated is None:  # pragma: no cover - unreachable after the resolve above
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    if updated.provenance != old_provenance:
+        # Audit only a real change (ADR-0075): re-affirming the current tier writes no row.
+        audit.record(
+            exercise_id=exercise_id,
+            actor=operator,
+            action=AuditAction.PROVENANCE_CHANGE,
+            detail=provenance_change_detail(old_provenance, updated.provenance),
+        )
+    related = relationships.substitutes_for(exercise_id)
+    return success_envelope(_serialize(updated, related))
+
+
+@router.put("/exercises/{exercise_id}/precautions")
+def set_exercise_precautions(
+    exercise_id: int,
+    payload: SetPrecautionsBody,
+    _operator: str = Depends(require_admin),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    relationships: ExerciseRelationshipRepository = Depends(
+        get_exercise_relationship_repository
+    ),
+) -> dict:
+    """Write one Catalog Exercise's curator-only precautions (issue #503, spec §5).
+
+    Operator-only (``require_admin``, ADR-0046). The incoming list is trimmed and
+    HTML-escaped at the boundary (handled by the body model) before it is stored, so the value
+    is inert wherever it renders (ADR-0036). A missing Exercise is ``404``; a non-list body is
+    ``422``. This writes *only* precautions — Provenance is untouched and, unlike a Provenance
+    change, editing precautions is **not** audited. Returns the updated Exercise via the
+    standard envelope in the same shape as ``GET /{id}``."""
+
+    updated = exercises.set_precautions(exercise_id, payload.precautions)
+    if updated is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    related = relationships.substitutes_for(exercise_id)
+    return success_envelope(_serialize(updated, related))
+
+
+def _audit_record(record: AuditRecord) -> dict[str, object]:
+    """One row of the admin audit trail, serialized for the ops read (ADR-0075/0076)."""
+
+    return {
+        "id": record.id,
+        "actor": record.actor,
+        "action": record.action,
+        "detail": record.detail,
+        "created_at": record.created_at.isoformat(),
+    }
+
+
+@router.get("/exercises/{exercise_id}/audit")
+def read_exercise_audit(
+    exercise_id: int,
+    _operator: str = Depends(require_admin),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    audit: ExerciseAuditRepository = Depends(get_exercise_audit_repository),
+) -> dict:
+    """Read one Catalog Exercise's append-only admin audit trail (issue #503, ADR-0075).
+
+    Operator-only (``require_admin``, ADR-0046): the trail records who conferred or revoked
+    trust, so it is an admin-only read. Returns the Exercise's recorded acts newest-first via
+    the standard envelope; a missing Exercise is ``404`` and an Exercise with no acts yet is a
+    ``200`` with an empty list. The trail is append-only — this route only reads it."""
+
+    exercise = exercises.get(exercise_id)
+    if exercise is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    records = audit.list_for(exercise_id)
+    return success_envelope([_audit_record(record) for record in records])

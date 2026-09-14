@@ -191,6 +191,45 @@ class ExerciseRelationship(SQLModel, table=True):
     kind: str
 
 
+class ExerciseAdminAudit(SQLModel, table=True):
+    """An append-only record of a consequential admin act on one catalog Exercise.
+
+    The admin audit trail (ADR-0075/0076): conferring or revoking trust — and, later,
+    retiring or hard-deleting a movement — in an injury/rehab-cautious domain must be
+    traceable, so each such act writes one immutable row here recording **who** (``actor``,
+    the admin's Clerk sub), **when** (``created_at``), **what** (``action``), and the change
+    itself (``detail``, e.g. ``{"from": "ai_generated", "to": "curated"}``). Rows are only
+    ever appended and read; nothing updates or deletes them.
+
+    Provenance change (ADR-0075) is the first consumer; retire / un-retire / hard delete
+    (ADR-0076) reuse the same trail. ``exercise_id`` is a **plain indexed int, not a foreign
+    key**, on purpose: a future ``hard_delete`` must be able to leave its audit row behind
+    after the Exercise row is gone (with the deleted movement's identity captured in
+    ``detail``), so the trail survives the row it describes."""
+
+    __tablename__ = "exercise_admin_audit"
+
+    id: int | None = Field(default=None, primary_key=True)
+    # A plain indexed int, deliberately not an FK (see the class docstring): the trail must
+    # outlive a hard-deleted Exercise, so it carries the id as data, not as a constraint.
+    exercise_id: int = Field(index=True)
+    # The admin who performed the act, held as their Clerk sub (the same identity the rest of
+    # the API authorizes on) — the "who" of the trail.
+    actor: str
+    # Which act this row records: ``provenance_change`` for now (ADR-0075); retire /
+    # unretire / hard_delete join later (ADR-0076). Stored as the raw
+    # ``app.domain.exercise_audit.AuditAction`` value.
+    action: str
+    # The change payload, shape depending on ``action`` — e.g. a provenance change stores
+    # ``{"from": <old>, "to": <new>}``. JSON so each action type carries exactly what it
+    # needs without widening the table per action.
+    detail: dict[str, str] = Field(
+        default_factory=dict, sa_column=Column(JSON, nullable=False)
+    )
+    # When the act happened, indexed so the per-Exercise read can order newest-first cheaply.
+    created_at: datetime = Field(default_factory=_utcnow, index=True)
+
+
 class Protocol(SQLModel, table=True):
     """A user-owned, multi-week training plan (ADR-0001).
 

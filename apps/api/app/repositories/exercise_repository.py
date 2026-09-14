@@ -273,6 +273,32 @@ class ExerciseRepository(Protocol):
         returns the updated Exercise, or ``None`` if no row has ``exercise_id``."""
         ...
 
+    def set_provenance(
+        self, exercise_id: int, provenance: Provenance
+    ) -> Exercise | None:
+        """Deliberately set one Exercise's Provenance tier (issue #503, ADR-0075).
+
+        The **only** path that mutates Provenance: an admin promoting, correcting, or
+        demoting trust. Writes *only* ``provenance`` — the descriptive set, precautions, the
+        Image, and the retired tombstone are all left untouched — and the audit of the change
+        is the caller's (route's) responsibility, not this writer's. **Immutable**: returns a
+        fresh Exercise and never mutates the row the caller already holds. Returns ``None`` if
+        no row has ``exercise_id``. No automated path (enrichment, generation, substitution)
+        calls this; those never touch Provenance (ADR-0002/0075)."""
+        ...
+
+    def set_precautions(
+        self, exercise_id: int, precautions: Sequence[str]
+    ) -> Exercise | None:
+        """Write one Exercise's curator-only precautions (issue #503, spec §5).
+
+        Writes *only* ``precautions`` — every other field, Provenance included, is left
+        untouched — replacing the list wholesale (an empty list clears it). The values are
+        HTML-escaped at the route boundary before they reach here (ADR-0036). **Immutable**:
+        returns a fresh Exercise and never mutates the caller's row. Returns ``None`` if no
+        row has ``exercise_id``."""
+        ...
+
     def update(
         self, exercise_id: int, patch: ExercisePatch
     ) -> Exercise | None:
@@ -315,6 +341,40 @@ def _new_exercise(
         difficulty=difficulty,
         precautions=list(precautions),
         image=image,
+    )
+
+
+def _clone_exercise(
+    existing: Exercise,
+    *,
+    provenance: Provenance | None = None,
+    precautions: Sequence[str] | None = None,
+) -> Exercise:
+    """Build a **fresh** Exercise from ``existing``, overriding at most one curator field.
+
+    The immutable twin of ``_apply_patch`` for the single-field curator writes
+    (``set_provenance``, ``set_precautions``): ``existing`` is read, never mutated, and a new
+    Exercise is returned carrying its id and normalized identity. Every field not named keeps
+    its existing value, so a provenance change never disturbs precautions (and vice versa) and
+    neither touches the descriptive set, the image, or the retired tombstone (spec §5)."""
+
+    return Exercise(
+        id=existing.id,
+        name=existing.name,
+        normalized_name=existing.normalized_name,
+        provenance=existing.provenance if provenance is None else provenance.value,
+        description=existing.description,
+        targeted_muscles=list(existing.targeted_muscles),
+        primary_muscles=list(existing.primary_muscles),
+        secondary_muscles=list(existing.secondary_muscles),
+        required_equipment=list(existing.required_equipment),
+        instructions=list(existing.instructions),
+        difficulty=existing.difficulty,
+        precautions=(
+            list(existing.precautions) if precautions is None else list(precautions)
+        ),
+        image=existing.image,
+        retired=existing.retired,
     )
 
 
@@ -644,6 +704,26 @@ class SqlExerciseRepository:
         self._session.refresh(exercise)
         return exercise
 
+    def set_provenance(
+        self, exercise_id: int, provenance: Provenance
+    ) -> Exercise | None:
+        existing = self._session.get(Exercise, exercise_id)
+        if existing is None:
+            return None
+        return self._persist_fresh(
+            existing, _clone_exercise(existing, provenance=provenance)
+        )
+
+    def set_precautions(
+        self, exercise_id: int, precautions: Sequence[str]
+    ) -> Exercise | None:
+        existing = self._session.get(Exercise, exercise_id)
+        if existing is None:
+            return None
+        return self._persist_fresh(
+            existing, _clone_exercise(existing, precautions=precautions)
+        )
+
     def update(
         self, exercise_id: int, patch: ExercisePatch
     ) -> Exercise | None:
@@ -655,12 +735,19 @@ class SqlExerciseRepository:
             collision = self._lookup(merged.normalized_name)
             if collision is not None and collision.id != exercise_id:
                 raise NameCollision(merged.normalized_name)
-        # Immutable write: detach the row the caller holds so persisting the edit never
-        # mutates it in place, then merge the fresh state onto a newly loaded managed
-        # instance. ``merge`` reconciles by primary key, so the single catalog row is
-        # updated (not duplicated) and returned as a fresh Exercise.
+        return self._persist_fresh(existing, merged)
+
+    def _persist_fresh(self, existing: Exercise, fresh: Exercise) -> Exercise:
+        """Persist ``fresh`` over ``existing`` without mutating the caller's row.
+
+        The shared immutable-write mechanic for every single-row writer here (``update``,
+        ``set_provenance``, ``set_precautions``): detach the row the caller holds so the write
+        never mutates it in place, then ``merge`` the fresh state onto a newly loaded managed
+        instance. ``merge`` reconciles by primary key, so the single catalog row is updated
+        (not duplicated) and returned as a fresh Exercise."""
+
         self._session.expunge(existing)
-        persistent = self._session.merge(merged)
+        persistent = self._session.merge(fresh)
         self._session.commit()
         self._session.refresh(persistent)
         return persistent
@@ -849,6 +936,35 @@ class InMemoryExerciseRepository:
         exercise.primary_muscles = list(primary_muscles)
         exercise.secondary_muscles = list(secondary_muscles)
         return exercise
+
+    def set_provenance(
+        self, exercise_id: int, provenance: Provenance
+    ) -> Exercise | None:
+        existing = self._by_id.get(exercise_id)
+        if existing is None:
+            return None
+        fresh = _clone_exercise(existing, provenance=provenance)
+        return self._store_fresh(fresh)
+
+    def set_precautions(
+        self, exercise_id: int, precautions: Sequence[str]
+    ) -> Exercise | None:
+        existing = self._by_id.get(exercise_id)
+        if existing is None:
+            return None
+        fresh = _clone_exercise(existing, precautions=precautions)
+        return self._store_fresh(fresh)
+
+    def _store_fresh(self, fresh: Exercise) -> Exercise:
+        """Replace the stored entry with ``fresh`` rather than mutating the caller's row.
+
+        The immutable-write mechanic for the single-field curator writers, which never rename,
+        so the normalized-name key is unchanged and re-keying (as ``update`` does on a rename)
+        is unnecessary."""
+
+        self._by_key[fresh.normalized_name] = fresh
+        self._by_id[fresh.id] = fresh
+        return fresh
 
     def update(
         self, exercise_id: int, patch: ExercisePatch
