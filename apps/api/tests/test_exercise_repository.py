@@ -13,7 +13,9 @@ from tests.conftest import make_fk_engine
 from app.db.models import Exercise
 from app.domain.exercise import Provenance
 from app.repositories.exercise_repository import (
+    ExercisePatch,
     InMemoryExerciseRepository,
+    NameCollision,
     SqlExerciseRepository,
 )
 
@@ -284,6 +286,153 @@ def test_set_muscle_emphasis_on_an_unknown_id_returns_none(repo):
         repo.set_muscle_emphasis(9999, primary_muscles=["quads"], secondary_muscles=[])
         is None
     )
+
+
+def test_update_writes_only_the_supplied_descriptive_fields(repo):
+    # Arrange — a Listable movement with a full descriptive set
+    exercise = repo.find_or_create(
+        "Walking Lunge",
+        provenance=Provenance.AI_GENERATED,
+        description="A split-stance stride.",
+        targeted_muscles=["quads", "glutes"],
+        instructions=["Step forward."],
+        required_equipment=["bodyweight"],
+        difficulty=3,
+    )
+
+    # Act — a partial edit that corrects only two fields (ADR-0069 spine)
+    updated = repo.update(
+        exercise.id,
+        ExercisePatch(
+            description="A long split-stance stride.",
+            difficulty=4,
+        ),
+    )
+
+    # Assert — the two fields change; every untouched field is preserved
+    assert updated is not None
+    assert updated.description == "A long split-stance stride."
+    assert updated.difficulty == 4
+    assert updated.targeted_muscles == ["quads", "glutes"]
+    assert updated.instructions == ["Step forward."]
+    assert updated.required_equipment == ["bodyweight"]
+    # …and it persists
+    stored = repo.get(exercise.id)
+    assert stored.description == "A long split-stance stride."
+    assert stored.difficulty == 4
+
+
+def test_update_writes_the_muscle_emphasis_split(repo):
+    # Arrange — a row with only the flat union, no asserted split
+    exercise = repo.find_or_create(
+        "Bulgarian Split Squat",
+        provenance=Provenance.AI_GENERATED,
+        targeted_muscles=["quads", "glutes", "hamstrings"],
+    )
+
+    # Act — the editor asserts a Primary/Secondary split (ADR-0016)
+    updated = repo.update(
+        exercise.id,
+        ExercisePatch(
+            primary_muscles=["quads"],
+            secondary_muscles=["glutes", "hamstrings"],
+        ),
+    )
+
+    # Assert — the split is written; the durable flat union is untouched
+    assert updated is not None
+    assert updated.primary_muscles == ["quads"]
+    assert updated.secondary_muscles == ["glutes", "hamstrings"]
+    assert updated.targeted_muscles == ["quads", "glutes", "hamstrings"]
+
+
+def test_update_renames_and_recomputes_the_normalized_identity(repo):
+    # Arrange
+    exercise = repo.find_or_create("Barbel Squat", provenance=Provenance.CURATED)
+
+    # Act — a rename to a genuinely different, free name
+    updated = repo.update(exercise.id, ExercisePatch(name="Barbell Squat"))
+
+    # Assert — display name and normalized identity both move; a fresh lookup follows
+    assert updated is not None
+    assert updated.name == "Barbell Squat"
+    assert updated.normalized_name == "barbell squat"
+    assert repo.get(exercise.id).normalized_name == "barbell squat"
+
+
+def test_update_allows_a_same_identity_spelling_or_casing_fix(repo):
+    # Arrange — the normalized identity is "back squat"
+    exercise = repo.find_or_create("back squat", provenance=Provenance.CURATED)
+
+    # Act — a casing fix that does not change the normalized identity is accepted, even
+    # though the row itself already "owns" that normalized name (ADR-0002).
+    updated = repo.update(exercise.id, ExercisePatch(name="Back Squat"))
+
+    # Assert — the display name is corrected; the identity is unchanged
+    assert updated is not None
+    assert updated.name == "Back Squat"
+    assert updated.normalized_name == "back squat"
+
+
+def test_update_rejects_a_rename_that_collides_with_another_exercise(repo):
+    # Arrange — two distinct movements
+    keep = repo.find_or_create("Front Squat", provenance=Provenance.CURATED)
+    other = repo.find_or_create("Goblet Squat", provenance=Provenance.CURATED)
+
+    # Act / Assert — renaming one onto the other's normalized name is rejected so two
+    # distinct movements are never silently merged
+    with pytest.raises(NameCollision):
+        repo.update(other.id, ExercisePatch(name="front squat"))
+
+    # …and nothing changed on the colliding row
+    unchanged = repo.get(other.id)
+    assert unchanged.name == "Goblet Squat"
+    assert unchanged.normalized_name == "goblet squat"
+    assert repo.get(keep.id).name == "Front Squat"
+
+
+def test_update_on_an_unknown_id_returns_none(repo):
+    # Assert — no row to update, no exception
+    assert repo.update(9999, ExercisePatch(description="x")) is None
+
+
+def test_update_leaves_provenance_and_curator_only_fields_untouched(repo):
+    # Arrange — a curated row carrying curator-only / Enriched-tier content
+    exercise = repo.find_or_create(
+        "Back Squat",
+        provenance=Provenance.CURATED,
+        precautions=["keep a neutral spine"],
+        image="https://cdn.example.com/back-squat.svg",
+    )
+
+    # Act — a descriptive edit (this ticket) never touches provenance, precautions,
+    # the image, or the retired tombstone — those are separate deliberate acts
+    repo.update(exercise.id, ExercisePatch(description="A barbell back squat."))
+
+    # Assert
+    stored = repo.get(exercise.id)
+    assert stored.provenance == Provenance.CURATED.value
+    assert stored.precautions == ["keep a neutral spine"]
+    assert stored.image == "https://cdn.example.com/back-squat.svg"
+    assert stored.retired is False
+
+
+def test_update_returns_a_fresh_exercise_without_mutating_the_prior_reference(repo):
+    # Arrange — hold a reference to the pre-edit Exercise
+    original = repo.find_or_create(
+        "Push Up",
+        provenance=Provenance.CURATED,
+        description="old text",
+    )
+
+    # Act — the writer is immutable: it returns a fresh Exercise (coding-style, ADR)
+    updated = repo.update(original.id, ExercisePatch(description="new text"))
+
+    # Assert — the returned row carries the edit; the caller's earlier reference is
+    # never mutated in place
+    assert updated is not None
+    assert updated.description == "new text"
+    assert original.description == "old text"
 
 
 def test_list_all_returns_every_row_regardless_of_provenance(repo):
