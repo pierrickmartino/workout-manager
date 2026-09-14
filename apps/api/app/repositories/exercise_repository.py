@@ -163,14 +163,16 @@ class ExerciseRepository(Protocol):
         ...
 
     def search(
-        self, query: str, *, limit: int, offset: int
+        self, query: str, *, limit: int, offset: int, include_retired: bool = False
     ) -> ExerciseSearchPage:
         """Return the catalog Exercises whose normalized name contains ``query``.
 
         The query is normalized the same way names are (ADR-0002), so matching is
         case- and whitespace-insensitive; a blank query matches nothing. Results
         are ranked curated-first then by name and sliced by ``limit``/``offset``.
-        Read-only — the Exercise Library never creates a catalog entry (ADR-0021)."""
+        Read-only — the Exercise Library never creates a catalog entry (ADR-0021).
+        Retired Exercises are hidden from this discovery read unless ``include_retired``
+        is set (ADR-0076); discovery callers pass the default, admin readouts pass ``True``."""
         ...
 
     def browse(
@@ -182,6 +184,7 @@ class ExerciseRepository(Protocol):
         difficulty_bands: Sequence[DifficultyBand],
         limit: int,
         offset: int,
+        include_retired: bool = False,
     ) -> ExerciseSearchPage:
         """List the whole Catalog for the Browse surface, filtered and paged (ADR-0042).
 
@@ -190,7 +193,7 @@ class ExerciseRepository(Protocol):
         Muscle Group, required equipment, and difficulty band (all AND'd, OR within each)
         — ranked curated → completeness → name, and sliced by ``limit``/``offset`` with
         the full filtered count in ``total``. Read-only: browse never creates a catalog
-        entry."""
+        entry. Retired Exercises are hidden unless ``include_retired`` is set (ADR-0076)."""
         ...
 
     def browse_all(
@@ -200,6 +203,7 @@ class ExerciseRepository(Protocol):
         muscle_groups: Sequence[MuscleGroup],
         equipment: Sequence[str],
         difficulty_bands: Sequence[DifficultyBand],
+        include_retired: bool = False,
     ) -> list[Exercise]:
         """The whole filtered, ranked Catalog for the field-guide taxonomy (ADR-0072).
 
@@ -207,7 +211,8 @@ class ExerciseRepository(Protocol):
         ``browse``, but **unpaged**: every matching Exercise is returned so the route can
         group them by Movement Pattern with accurate per-pattern counts. The taxonomy needs
         the whole filtered set to group it, so it does not paginate; the catalog is a
-        bounded shared set. Read-only."""
+        bounded shared set. Read-only. Retired Exercises are hidden unless ``include_retired``
+        is set (ADR-0076)."""
         ...
 
     def admin_browse(
@@ -223,21 +228,27 @@ class ExerciseRepository(Protocol):
         normalized name for a stable, paginable ops list. Read-only."""
         ...
 
-    def list_by_provenance(self, provenance: Provenance) -> list[Exercise]:
+    def list_by_provenance(
+        self, provenance: Provenance, *, include_retired: bool = False
+    ) -> list[Exercise]:
         """Return every catalog Exercise carrying ``provenance``.
 
         The re-enrichment pass (issue #107) reads the ``ai_generated`` rows through
         this so it can scope its AI batch to invented movements and never touch
-        curated content (ADR-0016)."""
+        curated content (ADR-0016). Retired Exercises are excluded from the enrichment
+        scan (no LLM spend on a hidden movement, ADR-0076); an admin readout passes
+        ``include_retired=True`` to span them."""
         ...
 
-    def list_all(self) -> list[Exercise]:
+    def list_all(self, *, include_retired: bool = False) -> list[Exercise]:
         """Return every catalog Exercise, regardless of Provenance.
 
         The Stub-enrichment backfill (issue #308) walks the whole catalog through
         this and classifies each row with the **provenance-blind** Catalog
         Completeness projection (ADR-0041), so a sub-bar ``curated`` seed is lifted
-        alongside a ``user_entered`` or ``ai_generated`` Stub."""
+        alongside a ``user_entered`` or ``ai_generated`` Stub. Retired Exercises are
+        hidden from the enrichment scan and the equipment facets by default; an admin
+        catalog-health readout passes ``include_retired=True`` (ADR-0076)."""
         ...
 
     def set_enrichment(
@@ -314,6 +325,28 @@ class ExerciseRepository(Protocol):
         Returns ``None`` if no row has ``exercise_id``."""
         ...
 
+    def retire(self, exercise_id: int) -> Exercise | None:
+        """Set one Exercise's Catalog Retire tombstone (ADR-0076).
+
+        Flips ``retired`` to ``True`` and writes *only* that field — the descriptive set,
+        Provenance, precautions, and the Image are all left untouched. A Retired Exercise is
+        hidden from every discovery / candidate surface but stays fully resolvable by id, so
+        nothing that references it breaks. Only an admin path reaches this; retirement is never
+        a side effect of generation, substitution, or enrichment. **Immutable**: returns a
+        fresh Exercise and never mutates the caller's row. Returns ``None`` if no row has
+        ``exercise_id``. Retiring an already-retired row is an idempotent no-op change."""
+        ...
+
+    def unretire(self, exercise_id: int) -> Exercise | None:
+        """Clear one Exercise's Catalog Retire tombstone for a clean restore (ADR-0076).
+
+        Flips ``retired`` to ``False`` and writes *only* that field, fully restoring the
+        Exercise to every discovery surface. Only an admin un-retires — un-retire is never an
+        automated resurrection (ADR-0076), so the AI re-inventing a junk name cannot undo a
+        curator's decision. **Immutable**: returns a fresh Exercise and never mutates the
+        caller's row. Returns ``None`` if no row has ``exercise_id``."""
+        ...
+
 
 def _new_exercise(
     name: str,
@@ -349,14 +382,16 @@ def _clone_exercise(
     *,
     provenance: Provenance | None = None,
     precautions: Sequence[str] | None = None,
+    retired: bool | None = None,
 ) -> Exercise:
-    """Build a **fresh** Exercise from ``existing``, overriding at most one curator field.
+    """Build a **fresh** Exercise from ``existing``, overriding at most one single-field act.
 
-    The immutable twin of ``_apply_patch`` for the single-field curator writes
-    (``set_provenance``, ``set_precautions``): ``existing`` is read, never mutated, and a new
-    Exercise is returned carrying its id and normalized identity. Every field not named keeps
-    its existing value, so a provenance change never disturbs precautions (and vice versa) and
-    neither touches the descriptive set, the image, or the retired tombstone (spec §5)."""
+    The immutable twin of ``_apply_patch`` for the single-field writes (``set_provenance``,
+    ``set_precautions``, ``retire`` / ``unretire``): ``existing`` is read, never mutated, and a
+    new Exercise is returned carrying its id and normalized identity. Every field not named
+    keeps its existing value, so a provenance change never disturbs precautions (and vice
+    versa), retiring never touches the descriptive set, and none of these acts renames the
+    movement (spec §5, ADR-0076)."""
 
     return Exercise(
         id=existing.id,
@@ -374,7 +409,7 @@ def _clone_exercise(
             list(existing.precautions) if precautions is None else list(precautions)
         ),
         image=existing.image,
-        retired=existing.retired,
+        retired=existing.retired if retired is None else retired,
     )
 
 
@@ -411,6 +446,22 @@ def _apply_patch(existing: Exercise, patch: ExercisePatch) -> Exercise:
         image=existing.image,
         retired=existing.retired,
     )
+
+
+def _visible(
+    exercises: list[Exercise], *, include_retired: bool
+) -> list[Exercise]:
+    """Drop the Retire-tombstoned rows from a discovery read unless the caller opts in.
+
+    The one place the ``retired`` predicate is applied for the list-shaped discovery reads
+    (``search``, ``browse``, ``browse_all``, ``list_all``, ``list_by_provenance``), so the SQL
+    and in-memory repositories filter identically and never drift (ADR-0076). A blank/false
+    ``include_retired`` hides retired Exercises; an admin readout passes ``True`` to span them.
+    Returns a fresh list, never mutating the input."""
+
+    if include_retired:
+        return list(exercises)
+    return [exercise for exercise in exercises if not exercise.retired]
 
 
 def _page(matches: list[Exercise], limit: int, offset: int) -> ExerciseSearchPage:
@@ -588,7 +639,7 @@ class SqlExerciseRepository:
         return self._session.get(Exercise, exercise_id)
 
     def search(
-        self, query: str, *, limit: int, offset: int
+        self, query: str, *, limit: int, offset: int, include_retired: bool = False
     ) -> ExerciseSearchPage:
         normalized = normalize_name(query)
         if not normalized:
@@ -600,7 +651,9 @@ class SqlExerciseRepository:
                 )
             ).all()
         )
-        return _page(matches, limit, offset)
+        return _page(
+            _visible(matches, include_retired=include_retired), limit, offset
+        )
 
     def browse(
         self,
@@ -611,6 +664,7 @@ class SqlExerciseRepository:
         difficulty_bands: Sequence[DifficultyBand],
         limit: int,
         offset: int,
+        include_retired: bool = False,
     ) -> ExerciseSearchPage:
         normalized = normalize_name(query)
         statement = select(Exercise)
@@ -618,7 +672,7 @@ class SqlExerciseRepository:
             statement = statement.where(Exercise.normalized_name.contains(normalized))
         candidates = list(self._session.exec(statement).all())
         return _browse_page(
-            candidates,
+            _visible(candidates, include_retired=include_retired),
             muscle_groups=muscle_groups,
             equipment=equipment,
             difficulty_bands=difficulty_bands,
@@ -633,6 +687,7 @@ class SqlExerciseRepository:
         muscle_groups: Sequence[MuscleGroup],
         equipment: Sequence[str],
         difficulty_bands: Sequence[DifficultyBand],
+        include_retired: bool = False,
     ) -> list[Exercise]:
         normalized = normalize_name(query)
         statement = select(Exercise)
@@ -640,7 +695,7 @@ class SqlExerciseRepository:
             statement = statement.where(Exercise.normalized_name.contains(normalized))
         candidates = list(self._session.exec(statement).all())
         return _browse_matches(
-            candidates,
+            _visible(candidates, include_retired=include_retired),
             muscle_groups=muscle_groups,
             equipment=equipment,
             difficulty_bands=difficulty_bands,
@@ -656,15 +711,19 @@ class SqlExerciseRepository:
         candidates = list(self._session.exec(select(Exercise)).all())
         return _admin_page(candidates, filters=filters, limit=limit, offset=offset)
 
-    def list_by_provenance(self, provenance: Provenance) -> list[Exercise]:
-        return list(
+    def list_by_provenance(
+        self, provenance: Provenance, *, include_retired: bool = False
+    ) -> list[Exercise]:
+        rows = list(
             self._session.exec(
                 select(Exercise).where(Exercise.provenance == provenance.value)
             ).all()
         )
+        return _visible(rows, include_retired=include_retired)
 
-    def list_all(self) -> list[Exercise]:
-        return list(self._session.exec(select(Exercise)).all())
+    def list_all(self, *, include_retired: bool = False) -> list[Exercise]:
+        rows = list(self._session.exec(select(Exercise)).all())
+        return _visible(rows, include_retired=include_retired)
 
     def set_enrichment(
         self,
@@ -736,6 +795,18 @@ class SqlExerciseRepository:
             if collision is not None and collision.id != exercise_id:
                 raise NameCollision(merged.normalized_name)
         return self._persist_fresh(existing, merged)
+
+    def retire(self, exercise_id: int) -> Exercise | None:
+        existing = self._session.get(Exercise, exercise_id)
+        if existing is None:
+            return None
+        return self._persist_fresh(existing, _clone_exercise(existing, retired=True))
+
+    def unretire(self, exercise_id: int) -> Exercise | None:
+        existing = self._session.get(Exercise, exercise_id)
+        if existing is None:
+            return None
+        return self._persist_fresh(existing, _clone_exercise(existing, retired=False))
 
     def _persist_fresh(self, existing: Exercise, fresh: Exercise) -> Exercise:
         """Persist ``fresh`` over ``existing`` without mutating the caller's row.
@@ -831,7 +902,7 @@ class InMemoryExerciseRepository:
         return self._by_id.get(exercise_id)
 
     def search(
-        self, query: str, *, limit: int, offset: int
+        self, query: str, *, limit: int, offset: int, include_retired: bool = False
     ) -> ExerciseSearchPage:
         normalized = normalize_name(query)
         if not normalized:
@@ -841,7 +912,9 @@ class InMemoryExerciseRepository:
             for exercise in self._by_id.values()
             if normalized in exercise.normalized_name
         ]
-        return _page(matches, limit, offset)
+        return _page(
+            _visible(matches, include_retired=include_retired), limit, offset
+        )
 
     def browse(
         self,
@@ -852,6 +925,7 @@ class InMemoryExerciseRepository:
         difficulty_bands: Sequence[DifficultyBand],
         limit: int,
         offset: int,
+        include_retired: bool = False,
     ) -> ExerciseSearchPage:
         normalized = normalize_name(query)
         candidates = [
@@ -860,7 +934,7 @@ class InMemoryExerciseRepository:
             if not normalized or normalized in exercise.normalized_name
         ]
         return _browse_page(
-            candidates,
+            _visible(candidates, include_retired=include_retired),
             muscle_groups=muscle_groups,
             equipment=equipment,
             difficulty_bands=difficulty_bands,
@@ -875,6 +949,7 @@ class InMemoryExerciseRepository:
         muscle_groups: Sequence[MuscleGroup],
         equipment: Sequence[str],
         difficulty_bands: Sequence[DifficultyBand],
+        include_retired: bool = False,
     ) -> list[Exercise]:
         normalized = normalize_name(query)
         candidates = [
@@ -883,7 +958,7 @@ class InMemoryExerciseRepository:
             if not normalized or normalized in exercise.normalized_name
         ]
         return _browse_matches(
-            candidates,
+            _visible(candidates, include_retired=include_retired),
             muscle_groups=muscle_groups,
             equipment=equipment,
             difficulty_bands=difficulty_bands,
@@ -895,15 +970,18 @@ class InMemoryExerciseRepository:
         candidates = list(self._by_id.values())
         return _admin_page(candidates, filters=filters, limit=limit, offset=offset)
 
-    def list_by_provenance(self, provenance: Provenance) -> list[Exercise]:
-        return [
+    def list_by_provenance(
+        self, provenance: Provenance, *, include_retired: bool = False
+    ) -> list[Exercise]:
+        rows = [
             exercise
             for exercise in self._by_id.values()
             if exercise.provenance == provenance.value
         ]
+        return _visible(rows, include_retired=include_retired)
 
-    def list_all(self) -> list[Exercise]:
-        return list(self._by_id.values())
+    def list_all(self, *, include_retired: bool = False) -> list[Exercise]:
+        return _visible(list(self._by_id.values()), include_retired=include_retired)
 
     def set_enrichment(
         self,
@@ -986,6 +1064,18 @@ class InMemoryExerciseRepository:
         self._by_key[new_key] = merged
         self._by_id[exercise_id] = merged
         return merged
+
+    def retire(self, exercise_id: int) -> Exercise | None:
+        existing = self._by_id.get(exercise_id)
+        if existing is None:
+            return None
+        return self._store_fresh(_clone_exercise(existing, retired=True))
+
+    def unretire(self, exercise_id: int) -> Exercise | None:
+        existing = self._by_id.get(exercise_id)
+        if existing is None:
+            return None
+        return self._store_fresh(_clone_exercise(existing, retired=False))
 
 
 __all__ = [

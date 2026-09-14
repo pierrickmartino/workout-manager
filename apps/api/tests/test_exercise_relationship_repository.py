@@ -73,6 +73,23 @@ def test_substitutes_for_is_empty_when_the_exercise_has_no_links(repos):
     assert relationships.substitutes_for(squat.id) == []
 
 
+def test_substitutes_for_excludes_a_retired_candidate(repos):
+    # Arrange — the squat links to a box-squat Variation and a goblet-squat Alternative;
+    # an admin then retires the box squat (ADR-0076).
+    relationships, exercises = repos
+    squat, goblet, box = _catalog(exercises)
+    relationships.add(squat.id, box.id, RelationKind.VARIATION)
+    relationships.add(squat.id, goblet.id, RelationKind.ALTERNATIVE)
+    exercises.retire(box.id)
+
+    # Act — Substitution candidates and the Exercise-Detail sublist read through this.
+    related = relationships.substitutes_for(squat.id)
+
+    # Assert — the retired candidate is gone; the active one remains, kind intact.
+    by_id = {r.exercise.id: r.kind for r in related}
+    assert by_id == {goblet.id: RelationKind.ALTERNATIVE}
+
+
 # --- list_for: both directions ----------------------------------------------------------
 
 
@@ -102,6 +119,21 @@ def test_list_for_is_empty_when_the_exercise_has_no_links(repos):
     squat, _, _ = _catalog(exercises)
 
     assert relationships.list_for(squat.id) == []
+
+
+def test_list_for_keeps_a_retired_linked_exercise_for_the_admin_view(repos):
+    # Arrange — the squat links to the box squat, which is then retired.
+    relationships, exercises = repos
+    squat, _, box = _catalog(exercises)
+    relationships.add(squat.id, box.id, RelationKind.VARIATION)
+    exercises.retire(box.id)
+
+    # Act — the admin editor reads both directions and must still see the retired link so a
+    # curator can manage it (ADR-0076: retired stays visible to ops).
+    listed = relationships.list_for(squat.id)
+
+    # Assert — the retired link is present, unlike in the discovery-facing substitutes_for.
+    assert {r.exercise.id for r in listed} == {box.id}
 
 
 # --- add: guards ------------------------------------------------------------------------

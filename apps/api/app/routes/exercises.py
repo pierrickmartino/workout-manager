@@ -412,7 +412,9 @@ def read_completeness_breakdown(
     Declared before ``/exercises/{exercise_id}`` so the literal path is never mistaken
     for an id. Responses use the standard envelope."""
 
-    breakdown = completeness_breakdown(exercises.list_all())
+    # An admin catalog-health readout spans retired rows too (ADR-0076): a curator sizing the
+    # enrichment backlog wants the whole corpus, not the discovery-visible subset.
+    breakdown = completeness_breakdown(exercises.list_all(include_retired=True))
     return success_envelope(
         {
             "stub": breakdown.stub,
@@ -530,6 +532,11 @@ def _serialize(
         # Whether a curator-uploaded image exists (issue #504); the frontend serves it
         # (``GET /{id}/image``) when true, else the legacy ``image`` URL (ADR-0041).
         "has_image": has_image,
+        # The Catalog Retire tombstone (ADR-0076): a Retired Exercise still resolves by id
+        # (this route) so existing references never break, and the admin editor reads this
+        # flag to offer Retire / un-Retire. Discovery surfaces exclude retired Exercises
+        # upstream, so a row reaching a user here is active in practice.
+        "retired": exercise.retired,
         # Catalog Completeness is deliberately absent (ADR-0041, revised): the
         # Stub | Listable | Enriched tier is an internal/ops axis, surfaced only in
         # the admin Catalog Enrichment readout, never on this user-facing detail.
@@ -767,6 +774,110 @@ def set_exercise_precautions(
     updated = exercises.set_precautions(exercise_id, payload.precautions)
     if updated is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    related = relationships.substitutes_for(exercise_id)
+    return success_envelope(
+        _serialize(updated, related, has_image=images.exists(exercise_id))
+    )
+
+
+@router.post("/exercises/{exercise_id}/retire")
+def retire_exercise(
+    exercise_id: int,
+    operator: str = Depends(require_admin),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    relationships: ExerciseRelationshipRepository = Depends(
+        get_exercise_relationship_repository
+    ),
+    audit: ExerciseAuditRepository = Depends(get_exercise_audit_repository),
+    images: ExerciseImageRepository = Depends(get_exercise_image_repository),
+) -> dict:
+    """Retire one Catalog Exercise — the reversible soft tombstone (issue #506, ADR-0076).
+
+    Operator-only (``require_admin``, ADR-0046): retirement is never a side effect of any
+    other path. Sets the ``retired`` flag so the movement disappears from every discovery /
+    candidate surface — catalog browse/search, the equipment facets, the taxonomy,
+    Substitution candidates, and the Exercise-Detail variation/alternative sublist — while it
+    stays fully resolvable by id, so no Exercise Prescription, Logged Set, or Relationship
+    breaks. A missing Exercise is ``404``. The act is written to the append-only admin audit
+    trail (who, when, ``retire``); retiring an already-retired row is an accepted idempotent
+    no-op that records nothing, so the trail holds only real transitions. Returns the updated
+    Exercise via the standard envelope in the same shape as ``GET /{id}``."""
+
+    return _flip_retire(
+        exercise_id,
+        retire=True,
+        operator=operator,
+        exercises=exercises,
+        relationships=relationships,
+        audit=audit,
+        images=images,
+    )
+
+
+@router.post("/exercises/{exercise_id}/unretire")
+def unretire_exercise(
+    exercise_id: int,
+    operator: str = Depends(require_admin),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    relationships: ExerciseRelationshipRepository = Depends(
+        get_exercise_relationship_repository
+    ),
+    audit: ExerciseAuditRepository = Depends(get_exercise_audit_repository),
+    images: ExerciseImageRepository = Depends(get_exercise_image_repository),
+) -> dict:
+    """Un-retire one Catalog Exercise for a clean restore (issue #506, ADR-0076).
+
+    Operator-only (``require_admin``, ADR-0046): only an admin un-retires — un-retire is never
+    an automated resurrection, so the AI re-inventing a junk name cannot undo a curator's
+    decision. Clears the ``retired`` flag, fully restoring the movement to every discovery
+    surface. A missing Exercise is ``404``. The act is written to the audit trail
+    (``unretire``); un-retiring an already-active row is an idempotent no-op that records
+    nothing. Returns the updated Exercise via the standard envelope in the same shape as
+    ``GET /{id}``."""
+
+    return _flip_retire(
+        exercise_id,
+        retire=False,
+        operator=operator,
+        exercises=exercises,
+        relationships=relationships,
+        audit=audit,
+        images=images,
+    )
+
+
+def _flip_retire(
+    exercise_id: int,
+    *,
+    retire: bool,
+    operator: str,
+    exercises: ExerciseRepository,
+    relationships: ExerciseRelationshipRepository,
+    audit: ExerciseAuditRepository,
+    images: ExerciseImageRepository,
+) -> dict:
+    """Set (or clear) the Retire tombstone, audit the transition, and re-serialize (ADR-0076).
+
+    The one body behind the retire and un-retire routes, so both resolve, flip, audit, and
+    respond identically — only the target state and the recorded ``AuditAction`` differ. Audits
+    only a real state change (mirroring the Provenance no-op rule), so re-affirming the current
+    state records nothing and the append-only trail holds only genuine transitions."""
+
+    existing = exercises.get(exercise_id)
+    if existing is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    updated = exercises.retire(exercise_id) if retire else exercises.unretire(exercise_id)
+    # ``existing`` was resolved above, so the write cannot miss; guard defensively anyway.
+    if updated is None:  # pragma: no cover - unreachable after the resolve above
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    if existing.retired != updated.retired:
+        # Audit only a real transition (ADR-0076): flipping to the current state writes no row.
+        audit.record(
+            exercise_id=exercise_id,
+            actor=operator,
+            action=AuditAction.RETIRE if retire else AuditAction.UNRETIRE,
+            detail={},
+        )
     related = relationships.substitutes_for(exercise_id)
     return success_envelope(
         _serialize(updated, related, has_image=images.exists(exercise_id))

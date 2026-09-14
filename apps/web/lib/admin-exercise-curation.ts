@@ -67,15 +67,17 @@ export interface AdminAuditEntry {
   created_at: string;
 }
 
-// A human one-line summary of an audited act for the trail (ADR-0075). A provenance change
-// reads as its labelled old → new tiers; an unknown future action falls back to its raw name so
-// the trail still renders.
+// A human one-line summary of an audited act for the trail (ADR-0075/0076). A provenance change
+// reads as its labelled old → new tiers; retire / un-retire (the reversible tombstone) read as
+// plain acts; an unknown future action falls back to its raw name so the trail still renders.
 export function summarizeAuditEntry(entry: AdminAuditEntry): string {
   if (entry.action === "provenance_change") {
     const from = provenanceLabel(entry.detail.from ?? "");
     const to = provenanceLabel(entry.detail.to ?? "");
     return `Provenance: ${from} → ${to}`;
   }
+  if (entry.action === "retire") return "Retired";
+  if (entry.action === "unretire") return "Un-retired";
   return entry.action;
 }
 

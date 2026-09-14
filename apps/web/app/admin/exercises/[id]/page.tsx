@@ -11,6 +11,7 @@ import { AdminExerciseEditor } from "@/components/AdminExerciseEditor";
 import { AdminExerciseCuration } from "@/components/AdminExerciseCuration";
 import { AdminExerciseImage } from "@/components/AdminExerciseImage";
 import { AdminExerciseRelationships } from "@/components/AdminExerciseRelationships";
+import { AdminExerciseRetire } from "@/components/AdminExerciseRetire";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { BackLink } from "@/components/pulse/back-link";
@@ -74,6 +75,8 @@ export default async function AdminExerciseEditorPage({
         exerciseId={exercise.id}
         relationships={relationships}
       />
+
+      <AdminExerciseRetire exercise={exercise} />
 
       <div className="flex flex-col gap-4">
         <SectionHeader meta={`${auditTrail.length} change${auditTrail.length === 1 ? "" : "s"}`}>

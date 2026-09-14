@@ -69,6 +69,25 @@ export async function setAdminExercisePrecautions(
   return apiSend(`/api/exercises/${id}/precautions`, "PUT", { precautions });
 }
 
+// Retire an Exercise — the reversible Catalog tombstone (issue #506, ADR-0076). Hits the
+// admin-gated, audited `POST /api/exercises/{id}/retire`; the backend hides it from every
+// discovery surface while keeping it resolvable by id, and writes the audit record. Returns the
+// updated Exercise (its `retired` flag now true), or an error envelope the action surfaces.
+export async function retireAdminExercise(
+  id: number,
+): Promise<Envelope<ExerciseDetail>> {
+  return apiSend(`/api/exercises/${id}/retire`, "POST");
+}
+
+// Un-retire an Exercise for a clean restore (issue #506, ADR-0076). Hits the admin-gated,
+// audited `POST /api/exercises/{id}/unretire`, fully restoring it to discovery. Only an admin
+// un-retires — never an automated path. Returns the updated Exercise, or an error envelope.
+export async function unretireAdminExercise(
+  id: number,
+): Promise<Envelope<ExerciseDetail>> {
+  return apiSend(`/api/exercises/${id}/unretire`, "POST");
+}
+
 // Read an Exercise's append-only admin audit trail (issue #503, ADR-0075), newest first. Hits
 // the admin-gated `GET /api/exercises/{id}/audit`; the editor page renders it read-only.
 export async function fetchAdminExerciseAudit(

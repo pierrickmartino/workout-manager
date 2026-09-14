@@ -6,8 +6,8 @@ tests all name an action through one enum rather than scattering string literals
 same discipline ``Provenance`` gives the trust axis.
 
 Pure: no I/O, no ORM. The stored ``action`` column holds the raw value of these members.
-Provenance change (ADR-0075) is the first act; retire / un-retire / hard delete (ADR-0076)
-join the enum when those endpoints land."""
+Provenance change (ADR-0075) is the first act; retire / un-retire (ADR-0076) join it here,
+and hard delete (ADR-0076) lands when its endpoint arrives."""
 
 from __future__ import annotations
 
@@ -18,12 +18,16 @@ class AuditAction(str, Enum):
     """A consequential admin act recorded in the exercise-admin audit trail.
 
     ``PROVENANCE_CHANGE`` is the deliberate promote / correct / demote of an Exercise's
-    Provenance (ADR-0075) — the first and, for now, only audited act. Retire, un-retire,
-    and hard delete (ADR-0076) extend this enum when their endpoints arrive, reusing the
-    same append-only trail.
+    Provenance (ADR-0075). ``RETIRE`` and ``UNRETIRE`` record the reversible Catalog
+    tombstone an admin flips (ADR-0076): a Retired Exercise is hidden from every discovery
+    surface while it stays resolvable by id, and only an admin un-retires it — so both acts
+    are traceable on the same append-only trail. Hard delete (ADR-0076) extends this enum
+    when its endpoint arrives.
     """
 
     PROVENANCE_CHANGE = "provenance_change"
+    RETIRE = "retire"
+    UNRETIRE = "unretire"
 
 
 def provenance_change_detail(old: str, new: str) -> dict[str, str]:

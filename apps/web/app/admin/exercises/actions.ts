@@ -7,8 +7,10 @@ import {
   deleteAdminExerciseImage,
   fetchAdminExerciseRelationships,
   removeAdminExerciseRelationship,
+  retireAdminExercise,
   setAdminExercisePrecautions,
   setAdminExerciseProvenance,
+  unretireAdminExercise,
   updateAdminExercise,
   uploadAdminExerciseImage,
 } from "@/lib/admin-exercises";
@@ -70,6 +72,32 @@ export async function setProvenanceAction(
     return {
       exercise: null,
       error: result.error ?? "Could not change the provenance.",
+    };
+  }
+  revalidateExercise(id);
+  return { exercise: result.data, error: null };
+}
+
+// Retire or un-retire the Exercise (issue #506, ADR-0076) — one control drives both endpoints
+// via `nextRetired` (true ⇒ retire, false ⇒ un-retire). The backend is the gate: it enforces
+// `require_admin`, hides/restores the movement across every discovery surface, and writes the
+// audit record. Retiring changes the catalog browser row (its status), this editor, and the
+// public Exercise Detail (it disappears), so their cached renders are dropped.
+export async function setRetiredAction(
+  id: number,
+  nextRetired: boolean,
+): Promise<UpdateExerciseResult> {
+  const result = nextRetired
+    ? await retireAdminExercise(id)
+    : await unretireAdminExercise(id);
+  if (!result.success || !result.data) {
+    return {
+      exercise: null,
+      error:
+        result.error ??
+        (nextRetired
+          ? "Could not retire the exercise."
+          : "Could not un-retire the exercise."),
     };
   }
   revalidateExercise(id);
