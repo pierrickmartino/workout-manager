@@ -5,8 +5,6 @@ import { Dumbbell } from "lucide-react";
 import { resolveIsAdmin } from "@/lib/admin";
 import { resolveActiveSkin } from "@/lib/active-skin";
 import { AppearanceSkinPublisher } from "@/components/AppearanceSkinPublisher";
-import { CatalogCompletenessBreakdown } from "@/components/CatalogCompletenessBreakdown";
-import { EnrichmentBackfillControl } from "@/components/EnrichmentBackfillControl";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { NavRow } from "@/components/pulse/nav-row";
@@ -14,12 +12,14 @@ import { BackLink } from "@/components/pulse/back-link";
 import { Card } from "@/components/ui/card";
 
 // The admin home (docs/redesign-ia.md, ADR-0071): a dedicated surface for the account's power
-// features, reached by an admin-only nav row on Profile rather than a fifth tab. It gathers
-// the two admin-gated capabilities that had no coherent home — publishing the Active Skin
-// (relocated out of Profile → Appearance, where it was buried for every ordinary user) and
-// running the catalog-enrichment backfill (previously reachable only by raw API call). The
-// admin gate is resolved server-side; a non-admin gets a 404 rather than a revealed-but-denied
-// page, and the backend independently gates every underlying action (ADR-0046).
+// features, reached by an admin-only nav row on Profile rather than a fifth tab. It publishes
+// the Active Skin (relocated out of Profile → Appearance, where it was buried for every
+// ordinary user) and links into the admin exercise area. The catalog-enrichment tools — the
+// completeness readout and the whole-catalog backfill — now live inside that exercise area
+// (issue #508) beside the per-Exercise enrich-now, so all enrichment controls sit in one place.
+// The admin gate is resolved server-side; a non-admin gets a 404 rather than a
+// revealed-but-denied page, and the backend independently gates every underlying action
+// (ADR-0046).
 export default async function AdminPage() {
   const [isAdmin, activeSkin] = await Promise.all([
     resolveIsAdmin(),
@@ -48,16 +48,6 @@ export default async function AdminPage() {
             value="BROWSE"
             accent="cyan"
           />
-        </Card>
-      </div>
-
-      <div className="flex flex-col gap-4">
-        <SectionHeader>CATALOG ENRICHMENT</SectionHeader>
-        <Card className="p-4">
-          <div className="flex flex-col gap-6">
-            <CatalogCompletenessBreakdown />
-            <EnrichmentBackfillControl />
-          </div>
         </Card>
       </div>
 

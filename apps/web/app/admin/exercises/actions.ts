@@ -6,6 +6,7 @@ import {
   addAdminExerciseRelationship,
   deleteAdminExercise,
   deleteAdminExerciseImage,
+  enrichAdminExercise,
   fetchAdminExerciseRelationships,
   removeAdminExerciseRelationship,
   retireAdminExercise,
@@ -129,6 +130,28 @@ export async function deleteExerciseAction(
   revalidatePath(`/admin/exercises/${id}`);
   revalidatePath(`/exercises/${id}`);
   return { deleted: true, error: null };
+}
+
+// The outcome of an enrich-now trigger, unwrapped for the editor: `accepted` true when the
+// backend queued the job (202), or an error message (e.g. the 404 for a missing Exercise).
+export interface EnrichExerciseResult {
+  accepted: boolean;
+  error: string | null;
+}
+
+// Enqueue Enrichment for one Exercise from the editor (issue #508, ADR-0041). The backend is the
+// gate: it enforces `require_admin`, 404s a missing Exercise, and reuses the same out-of-band
+// worker path the create flow uses (no AI on the request) — this only forwards the call and
+// unwraps the envelope. Nothing is revalidated: the fill lands asynchronously in the background,
+// so there is no fresh state to show on this request (the editor reloads later to see it).
+export async function enrichExerciseAction(
+  id: number,
+): Promise<EnrichExerciseResult> {
+  const result = await enrichAdminExercise(id);
+  if (!result.success || !result.data) {
+    return { accepted: false, error: result.error ?? "Could not queue enrichment." };
+  }
+  return { accepted: true, error: null };
 }
 
 // The outcome of an image upload/remove, unwrapped for the editor: the served URL on a

@@ -847,6 +847,36 @@ def set_exercise_precautions(
     )
 
 
+@router.post("/exercises/{exercise_id}/enrich")
+def enrich_exercise_now(
+    exercise_id: int,
+    response: Response,
+    _operator: str = Depends(require_admin),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    enrichment_queue: EnrichmentQueue = Depends(get_enrichment_queue),
+) -> dict:
+    """Enqueue Enrichment for a single Catalog Exercise from the editor (issue #508, ADR-0041).
+
+    Operator-only (``require_admin``, ADR-0046): a non-operator is rejected before any
+    work. The per-Exercise counterpart to the whole-catalog backfill — it reuses the very
+    same out-of-band Enrichment path a fresh create uses (``run_enrichment_job`` on the
+    shared ``generation`` queue, issue #309), so no AI runs on this request. A missing
+    Exercise is ``404`` and enqueues nothing. On success it hands the one Stub to the
+    background worker and returns a ``202`` — the worker runs the shared, idempotent-friendly
+    ``enrich_exercise`` step, so a row already at or above Listable costs no AI call, and
+    Provenance, precautions, the image, and the emphasis split are left untouched
+    (ADR-0002/0041). Unlike the create path this enqueue is *not* best-effort: the enrich-now
+    request exists only to accept the job, so a queue failure surfaces rather than being
+    swallowed. Responses use the standard envelope."""
+
+    exercise = exercises.get(exercise_id)
+    if exercise is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    enrichment_queue.enqueue(exercise_id)
+    response.status_code = HTTP_ACCEPTED
+    return success_envelope({"status": "accepted", "exercise_id": exercise_id})
+
+
 @router.post("/exercises/{exercise_id}/retire")
 def retire_exercise(
     exercise_id: int,
