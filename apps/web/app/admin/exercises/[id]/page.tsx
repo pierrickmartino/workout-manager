@@ -4,11 +4,13 @@ import { resolveIsAdmin } from "@/lib/admin";
 import {
   fetchAdminExercise,
   fetchAdminExerciseAudit,
+  fetchAdminExerciseRelationships,
 } from "@/lib/admin-exercises";
 import { summarizeAuditEntry } from "@/lib/admin-exercise-curation";
 import { AdminExerciseEditor } from "@/components/AdminExerciseEditor";
 import { AdminExerciseCuration } from "@/components/AdminExerciseCuration";
 import { AdminExerciseImage } from "@/components/AdminExerciseImage";
+import { AdminExerciseRelationships } from "@/components/AdminExerciseRelationships";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { BackLink } from "@/components/pulse/back-link";
@@ -44,6 +46,15 @@ export default async function AdminExerciseEditorPage({
     ? auditEnvelope.data
     : [];
 
+  // The typed relationships (both directions) are admin-only and best-effort for the page: if
+  // they fail to load, the rest of the editor still works — the manager simply starts empty.
+  const relationshipsEnvelope =
+    await fetchAdminExerciseRelationships(exerciseId);
+  const relationships =
+    relationshipsEnvelope.success && relationshipsEnvelope.data
+      ? relationshipsEnvelope.data
+      : [];
+
   return (
     <section className="flex flex-col gap-8">
       <PageHeader overline="PULSE // ADMIN" title="Edit exercise" />
@@ -58,6 +69,11 @@ export default async function AdminExerciseEditorPage({
       <AdminExerciseImage exercise={exercise} />
 
       <AdminExerciseCuration exercise={exercise} />
+
+      <AdminExerciseRelationships
+        exerciseId={exercise.id}
+        relationships={relationships}
+      />
 
       <div className="flex flex-col gap-4">
         <SectionHeader meta={`${auditTrail.length} change${auditTrail.length === 1 ? "" : "s"}`}>

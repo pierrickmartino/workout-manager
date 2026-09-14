@@ -14,7 +14,10 @@ from tests.conftest import make_fk_engine
 from app.domain.exercise import Provenance
 from app.domain.substitution import RelationKind
 from app.repositories.exercise_relationship_repository import (
+    DuplicateRelationshipError,
     InMemoryExerciseRelationshipRepository,
+    RelationDirection,
+    SelfLinkError,
     SqlExerciseRelationshipRepository,
 )
 from app.repositories.exercise_repository import (
@@ -68,3 +71,119 @@ def test_substitutes_for_is_empty_when_the_exercise_has_no_links(repos):
     squat, _, _ = _catalog(exercises)
 
     assert relationships.substitutes_for(squat.id) == []
+
+
+# --- list_for: both directions ----------------------------------------------------------
+
+
+def test_list_for_returns_outgoing_and_incoming_links_tagged_with_kind_and_direction(
+    repos,
+):
+    # Arrange — the squat has an outgoing Variation (box) and is itself an Alternative of
+    # the goblet squat (an incoming link).
+    relationships, exercises = repos
+    squat, goblet, box = _catalog(exercises)
+    relationships.add(squat.id, box.id, RelationKind.VARIATION)
+    relationships.add(goblet.id, squat.id, RelationKind.ALTERNATIVE)
+
+    # Act
+    listed = relationships.list_for(squat.id)
+
+    # Assert — both directions come back, each carrying target, kind, and direction.
+    by_id = {r.exercise.id: (r.kind, r.direction) for r in listed}
+    assert by_id == {
+        box.id: (RelationKind.VARIATION, RelationDirection.OUTGOING),
+        goblet.id: (RelationKind.ALTERNATIVE, RelationDirection.INCOMING),
+    }
+
+
+def test_list_for_is_empty_when_the_exercise_has_no_links(repos):
+    relationships, exercises = repos
+    squat, _, _ = _catalog(exercises)
+
+    assert relationships.list_for(squat.id) == []
+
+
+# --- add: guards ------------------------------------------------------------------------
+
+
+def test_add_rejects_a_self_link(repos):
+    relationships, exercises = repos
+    squat, _, _ = _catalog(exercises)
+
+    with pytest.raises(SelfLinkError):
+        relationships.add(squat.id, squat.id, RelationKind.VARIATION)
+
+    assert relationships.list_for(squat.id) == []
+
+
+def test_add_rejects_a_duplicate_link(repos):
+    relationships, exercises = repos
+    squat, _, box = _catalog(exercises)
+    relationships.add(squat.id, box.id, RelationKind.VARIATION)
+
+    with pytest.raises(DuplicateRelationshipError):
+        relationships.add(squat.id, box.id, RelationKind.VARIATION)
+
+    # The single existing link is untouched — no second row was written.
+    assert len(relationships.list_for(squat.id)) == 1
+
+
+def test_add_allows_the_same_pair_under_a_different_kind(repos):
+    # A duplicate is (from, to, kind); the same pair may be linked as both a Variation and
+    # an Alternative without tripping the guard.
+    relationships, exercises = repos
+    squat, _, box = _catalog(exercises)
+    relationships.add(squat.id, box.id, RelationKind.VARIATION)
+    relationships.add(squat.id, box.id, RelationKind.ALTERNATIVE)
+
+    kinds = {r.kind for r in relationships.list_for(squat.id)}
+    assert kinds == {RelationKind.VARIATION, RelationKind.ALTERNATIVE}
+
+
+# --- remove -----------------------------------------------------------------------------
+
+
+def test_remove_deletes_the_matching_link(repos):
+    relationships, exercises = repos
+    squat, goblet, box = _catalog(exercises)
+    relationships.add(squat.id, box.id, RelationKind.VARIATION)
+    relationships.add(squat.id, goblet.id, RelationKind.ALTERNATIVE)
+
+    relationships.remove(squat.id, box.id, RelationKind.VARIATION)
+
+    remaining = {(r.exercise.id, r.kind) for r in relationships.list_for(squat.id)}
+    assert remaining == {(goblet.id, RelationKind.ALTERNATIVE)}
+
+
+def test_remove_only_deletes_the_matching_kind_for_a_pair(repos):
+    relationships, exercises = repos
+    squat, _, box = _catalog(exercises)
+    relationships.add(squat.id, box.id, RelationKind.VARIATION)
+    relationships.add(squat.id, box.id, RelationKind.ALTERNATIVE)
+
+    relationships.remove(squat.id, box.id, RelationKind.VARIATION)
+
+    remaining = {r.kind for r in relationships.list_for(squat.id)}
+    assert remaining == {RelationKind.ALTERNATIVE}
+
+
+def test_remove_is_idempotent_when_the_link_is_absent(repos):
+    relationships, exercises = repos
+    squat, _, box = _catalog(exercises)
+
+    # No link exists; removing one changes nothing and does not raise.
+    relationships.remove(squat.id, box.id, RelationKind.VARIATION)
+
+    assert relationships.list_for(squat.id) == []
+
+
+def test_remove_does_not_create_a_reciprocal_link(repos):
+    # No inverse is ever created by add, so only the exact directed link exists.
+    relationships, exercises = repos
+    squat, _, box = _catalog(exercises)
+    relationships.add(squat.id, box.id, RelationKind.VARIATION)
+
+    # The box squat carries the link only as an incoming one — no auto reciprocal outgoing.
+    box_links = relationships.list_for(box.id)
+    assert [r.direction for r in box_links] == [RelationDirection.INCOMING]

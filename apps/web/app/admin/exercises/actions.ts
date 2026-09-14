@@ -3,13 +3,23 @@
 import { revalidatePath } from "next/cache";
 
 import {
+  addAdminExerciseRelationship,
   deleteAdminExerciseImage,
+  fetchAdminExerciseRelationships,
+  removeAdminExerciseRelationship,
   setAdminExercisePrecautions,
   setAdminExerciseProvenance,
   updateAdminExercise,
   uploadAdminExerciseImage,
 } from "@/lib/admin-exercises";
 import type { ExercisePatchPayload } from "@/lib/admin-exercise-editor";
+import {
+  filterAddCandidates,
+  type ExerciseRelationship,
+  type LinkCandidate,
+  type RelationshipKind,
+} from "@/lib/admin-exercise-relationships";
+import { searchExercises } from "@/lib/exercises";
 import type { ExerciseDetail } from "@/lib/sessions-types";
 
 // The thin server action behind the admin Exercise editor (issue #502). It exists because
@@ -122,4 +132,95 @@ export async function setPrecautionsAction(
   }
   revalidateExercise(id);
   return { exercise: result.data, error: null };
+}
+
+// The outcome of a relationship add/remove, unwrapped for the editor: the fresh both-directions
+// list on success (so the component re-renders without a full reload), or an error message.
+export interface RelationshipActionResult {
+  relationships: ExerciseRelationship[] | null;
+  error: string | null;
+}
+
+// Re-read an Exercise's relationships after a write so the editor shows live state. Best-effort:
+// a failed refetch surfaces as an error rather than a stale list.
+async function reloadRelationships(id: number): Promise<RelationshipActionResult> {
+  const listed = await fetchAdminExerciseRelationships(id);
+  if (!listed.success || !listed.data) {
+    return {
+      relationships: null,
+      error: listed.error ?? "Could not reload the relationships.",
+    };
+  }
+  return { relationships: listed.data, error: null };
+}
+
+// Add one directed Variation/Alternative link from this Exercise to another (issue #505). The
+// backend is the gate: it enforces `require_admin`, rejects a self-link (422) and a duplicate
+// (409), and creates no reciprocal link — this only forwards the values and, on success, returns
+// the refreshed list. The editor page's cached render is dropped so a reload shows the change.
+export async function addRelationshipAction(
+  id: number,
+  toId: number,
+  kind: RelationshipKind,
+): Promise<RelationshipActionResult> {
+  const result = await addAdminExerciseRelationship(id, toId, kind);
+  if (!result.success) {
+    return {
+      relationships: null,
+      error: result.error ?? "Could not add the relationship.",
+    };
+  }
+  revalidateExercise(id);
+  return reloadRelationships(id);
+}
+
+// Remove one directed link `(fromId → toId, kind)` (issue #505). `fromId` is the `from` end the
+// endpoint keys on — this Exercise for an outgoing link, the other movement for an incoming one
+// (see `relationshipRemovalTarget`). `viewedId` is the Exercise whose editor is open, whose list
+// is reloaded and whose cached render is dropped. The backend delete is idempotent.
+export async function removeRelationshipAction(
+  viewedId: number,
+  fromId: number,
+  toId: number,
+  kind: RelationshipKind,
+): Promise<RelationshipActionResult> {
+  const result = await removeAdminExerciseRelationship(fromId, toId, kind);
+  if (!result.success) {
+    return {
+      relationships: null,
+      error: result.error ?? "Could not remove the relationship.",
+    };
+  }
+  revalidateExercise(viewedId);
+  return reloadRelationships(viewedId);
+}
+
+// The outcome of an add-target search, unwrapped for the editor's link picker.
+export interface LinkCandidatesResult {
+  candidates: LinkCandidate[];
+  error: string | null;
+}
+
+// Search the catalog for a movement to link to (issue #505). Reuses the shared name-substring
+// search (`GET /api/exercises`), then drops the Exercise being edited so a self-link is never
+// offered (the backend rejects it 422 regardless). A blank query returns no candidates rather
+// than the whole catalog, keeping the picker intentional.
+export async function searchLinkCandidatesAction(
+  exerciseId: number,
+  query: string,
+): Promise<LinkCandidatesResult> {
+  if (query.trim() === "") {
+    return { candidates: [], error: null };
+  }
+  const result = await searchExercises(query);
+  if (!result.success || !result.data) {
+    return { candidates: [], error: result.error ?? "Could not search exercises." };
+  }
+  return {
+    candidates: filterAddCandidates(
+      exerciseId,
+      result.data.map((match) => ({ id: match.id, name: match.name })),
+    ),
+    error: null,
+  };
 }

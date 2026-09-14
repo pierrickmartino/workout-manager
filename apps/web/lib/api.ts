@@ -14,6 +14,9 @@ import { auth } from "@clerk/nextjs/server";
 // build time, so the JWT-attach path can never leak into the browser bundle.
 const API_URL = process.env.API_URL ?? "http://localhost:8000";
 
+// A 204 No Content success carries no response body, so `response.json()` must be skipped.
+const HTTP_NO_CONTENT = 204;
+
 // Pagination metadata a paginated endpoint attaches alongside `data`: the full record
 // `total` across every page, and the `limit`/`offset` window this page was read with.
 export interface PaginationMeta {
@@ -68,6 +71,13 @@ export async function apiSend<T>(
           cache: "no-store",
         };
   const response = await fetch(`${API_URL}${path}`, init);
+  // A 204 No Content success (e.g. removing a relationship link, issue #505) has no body,
+  // so `response.json()` would throw — synthesize the success envelope instead. Every error
+  // response still carries the JSON envelope (see the API's exception handlers), so only the
+  // bodyless 204 needs this branch.
+  if (response.status === HTTP_NO_CONTENT) {
+    return { success: true, data: null, error: null };
+  }
   return (await response.json()) as Envelope<T>;
 }
 
