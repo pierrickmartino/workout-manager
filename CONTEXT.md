@@ -2,6 +2,8 @@
 
 An AI-assisted application for creating, following, and tracking fitness workouts. This glossary fixes the language used across the domain so that the *plan* a user is given and the *record* of what they actually did are never confused.
 
+The terms defined here are the words the product speaks: each term's canonical name is the **user-facing label** — every UI string, not merely an internal identifier — and its **_Avoid_** list names the synonyms that must not appear in prose, in code, or on screen. A friendlier word is not swapped in at the UI boundary; where a term risks being opaque, it is *taught* in place (a clarifying subtitle) rather than renamed.
+
 ## Plan vs. Record
 
 The single most important distinction in the domain: a **plan** is what the AI prescribes; a **record** is what the user actually performed. They are separate concepts, and the same plan can be performed many times.
@@ -175,6 +177,10 @@ _Avoid_: Available Equipment (that is the per-generation set), gear, kit
 **Available Equipment**:
 The equipment a single generation actually runs with. A generation request may state its own Available Equipment — which replaces the Default Equipment for that generation — or leave it unstated, in which case the Default Equipment applies. Stating *no* equipment is itself a choice (bodyweight only), distinct from leaving it unstated, so a user with saved Default Equipment can still request a bodyweight-only plan.
 _Avoid_: Default Equipment (that is the saved base), equipment (bare)
+
+**Equipment**:
+A coarse, curated **canonical name** for a piece of training kit — drawn from a **fixed, curated set** (never AI- or user-invented, the same species as **Muscle Group**, **Training Type**, and **Progression Scheme**) — that the free-text equipment strings on a **Fitness Profile**'s Default / Available Equipment and on a catalog Exercise's required equipment roll up into, so "barbell" and "barbells" read as one option. Like **Muscle Group**, **Movement Pattern**, and **Catalog Completeness**, it is a **read-time projection**: a curated alias map resolves each free-text string to its canonical Equipment, never a stored column and never a migration, re-derived for free as equipment strings change (ADR-0077). A string no alias claims falls into an explicit **Unmapped** ("Other") bucket rather than being silently dropped — the same honesty as leaving a muscle **Unclassified** or a movement **General**. **User-facing**: it is the canonical option set behind the Exercise-catalog equipment facet and the Fitness Profile's equipment multi-select; free-text entry stays allowed (it maps, or falls to Unmapped), but discovery and filtering group by the canonical set. A **discovery / filter** axis only — canonicalization steers no generation input or cache key beyond the equipment strings already present (generation still reads the raw list, and Default-vs-Available fallback is unchanged — ADR-0038). Distinct from **Default Equipment** (the saved base list) and **Available Equipment** (the per-generation set): those are *which* kit a user has; this is the *canonical vocabulary* those lists are read through.
+_Avoid_: Gear, kit (those are the free-text lists), equipment type, machine (a specific model is preserved only when it changes exercise compatibility)
 
 **Fitness Level**:
 A 1–10 score of the user's ability, held **per training type** — a user can be Level 8 at strength training and Level 2 at yoga. It is the level dimension of the cache key for that type, and it advances over time as logged progress accumulates.
