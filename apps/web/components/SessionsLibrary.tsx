@@ -247,7 +247,7 @@ function SessionRow({
             Delete control below are interactive and must not nest inside an anchor. */}
         <Link
           href={`/sessions/${session.id}`}
-          className="flex flex-1 items-start gap-3 focus-visible:outline-none"
+          className="flex flex-1 items-start gap-3 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan/60"
         >
           {/* The Workout Signature mark (CONTEXT: Workout Signature): the Session's recognizable
               generated sigil, keyed on its id so the two same-named "Calisthenics" entries read
