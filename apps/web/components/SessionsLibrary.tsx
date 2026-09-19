@@ -2,7 +2,7 @@
 
 import { useActionState, useMemo, useState } from "react";
 import Link from "next/link";
-import { Dumbbell, Star } from "lucide-react";
+import { Dumbbell, Play, Star } from "lucide-react";
 
 import {
   ALL_SESSIONS_CHIP,
@@ -30,6 +30,7 @@ import { BackLink } from "@/components/pulse/back-link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { buttonVariants } from "@/components/ui/button";
 
 // The interactive My Sessions library (CONTEXT: My Sessions, issue #397): search over the
 // user's own standalone Sessions plus a single-select chip row (All / Favorites / one Training
@@ -273,6 +274,21 @@ function SessionRow({
               by {authorName}
             </span>
           </div>
+        </Link>
+
+        {/* The per-row Start (I6, docs/redesign-ia.md): a sibling anchor to the detail Link
+            above — NOT nested — that deep-links straight into the plan's Live Session, bringing
+            re-run-from-library within its ≤2-tap budget (Home → My sessions → Start). Deliberately
+            `secondary`, matching Train's Recent Sessions: a Start that repeats once per row is
+            never the list's primary emphasis. An explicit label names the row so screen-reader
+            users tell the rows' Start buttons apart. */}
+        <Link
+          href={`/sessions/${session.id}/live`}
+          aria-label={`Start ${title}`}
+          className={buttonVariants({ variant: "secondary", className: "mt-0.5 shrink-0" })}
+        >
+          <Play className="h-4 w-4" aria-hidden />
+          Start
         </Link>
       </div>
 
