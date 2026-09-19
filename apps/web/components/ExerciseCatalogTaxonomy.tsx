@@ -16,7 +16,11 @@ import {
   type ExerciseUsage,
 } from "@/lib/exercise-browse-types";
 import type { CatalogTaxonomy } from "@/lib/exercise-taxonomy-types";
-import { hasActiveFilters, toggleFacetValue } from "@/lib/exercise-browse-query";
+import {
+  catalogFiltersToParams,
+  hasActiveFilters,
+  toggleFacetValue,
+} from "@/lib/exercise-browse-query";
 import {
   PATTERN_BLURB,
   PATTERN_LABEL,
@@ -79,9 +83,13 @@ export function ExerciseCatalogTaxonomy({
     [myEquipment, equipmentOptions],
   );
 
-  // Re-fetch the whole grouped taxonomy whenever the filters change. The initial render is
-  // seeded from the server, so the first run is skipped. Offline, don't fire a query that
-  // can only fail; reconnecting re-queries the current filters.
+  // Re-fetch the whole grouped taxonomy whenever the filters change, and mirror those same
+  // filters into the shareable URL alongside the fetch — so the URL and the on-screen results
+  // always move together (a mid-typing refresh re-seeds and re-fetches from what the URL last
+  // committed). The initial render is seeded from the server (URL → `initialFilters`), so the
+  // first run is skipped. The URL is written with `history.replaceState` rather than a router
+  // navigation, so this client keeps owning the re-fetch instead of re-running the Server
+  // Component. Offline, don't fire a query that can only fail; reconnecting re-queries.
   const filtersKey = JSON.stringify(filters);
   const firstRun = useRef(true);
   useEffect(() => {
@@ -89,8 +97,11 @@ export function ExerciseCatalogTaxonomy({
       firstRun.current = false;
       return;
     }
-    if (!online) return;
     const handle = setTimeout(() => {
+      const search = catalogFiltersToParams(filters).toString();
+      const url = search.length > 0 ? `?${search}` : window.location.pathname;
+      window.history.replaceState(null, "", url);
+      if (!online) return;
       startTransition(async () => {
         const result = await fetchCatalogTaxonomyForFilters(filters);
         setError(result.error);

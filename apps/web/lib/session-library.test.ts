@@ -9,8 +9,11 @@ import {
   hasActiveSessionFilters,
   isSameChip,
   matchesSessionSearch,
+  parseSessionFilters,
   sessionFallbackLabel,
+  sessionFiltersToQuery,
   sessionRowTitle,
+  type SessionLibraryFilters,
   type SessionSummary,
 } from "./session-library.ts";
 
@@ -223,4 +226,85 @@ test("sessionRowTitle falls back to the formatted date for an unnamed session", 
   // "Strength / STRENGTH" double-print the server's `training_type · date` fallback would give.
   const summary = makeSummary({ name: null, created_at: "2026-09-05" });
   assert.equal(sessionRowTitle(summary), "Sep 5, 2026");
+});
+
+// --- parseSessionFilters / sessionFiltersToQuery: URL <-> filter state --------
+// The My Sessions filters round-trip through the URL (via `history.replaceState`, like
+// History) so a refreshed or shared link restores the narrowed view. The single-select
+// chip is encoded 1:1 — absent = All, `chip=favorites`, or `chip=type:<trainingType>`.
+
+test("parseSessionFilters reads the query and a favorites chip", () => {
+  const filters = parseSessionFilters(
+    new URLSearchParams("query=press&chip=favorites"),
+  );
+
+  assert.equal(filters.query, "press");
+  assert.deepEqual(filters.chip, { kind: "favorites" });
+});
+
+test("parseSessionFilters reads a type chip", () => {
+  const filters = parseSessionFilters(new URLSearchParams("chip=type:strength"));
+
+  assert.deepEqual(filters.chip, { kind: "type", trainingType: "strength" });
+});
+
+test("parseSessionFilters keeps a type outside the curated set (no fixed-list validation)", () => {
+  // Unlike History's training-type facet, the My Sessions type chips are derived from the
+  // library itself (`availableTypeChips`), which keeps types outside the curated five. So a
+  // shared link to `type:pilates` must survive — dropping it would erase a legitimate view.
+  const filters = parseSessionFilters(new URLSearchParams("chip=type:pilates"));
+
+  assert.deepEqual(filters.chip, { kind: "type", trainingType: "pilates" });
+});
+
+test("parseSessionFilters defaults to All with a blank query when the params are empty", () => {
+  const filters = parseSessionFilters(new URLSearchParams(""));
+
+  assert.equal(filters.query, "");
+  assert.deepEqual(filters.chip, ALL_SESSIONS_CHIP);
+});
+
+test("parseSessionFilters falls back to All for an unrecognised or empty-typed chip", () => {
+  // The query string is untrusted input: a bogus chip keyword or a `type:` with no value
+  // collapses to All rather than a broken filter.
+  assert.deepEqual(
+    parseSessionFilters(new URLSearchParams("chip=bogus")).chip,
+    ALL_SESSIONS_CHIP,
+  );
+  assert.deepEqual(
+    parseSessionFilters(new URLSearchParams("chip=type:")).chip,
+    ALL_SESSIONS_CHIP,
+  );
+});
+
+test("sessionFiltersToQuery round-trips a favorites filter through parseSessionFilters", () => {
+  const filters: SessionLibraryFilters = {
+    query: "leg day",
+    chip: { kind: "favorites" },
+  };
+
+  const reparsed = parseSessionFilters(
+    new URLSearchParams(sessionFiltersToQuery(filters).toString()),
+  );
+
+  assert.deepEqual(reparsed, filters);
+});
+
+test("sessionFiltersToQuery round-trips a type filter through parseSessionFilters", () => {
+  const filters: SessionLibraryFilters = {
+    query: "",
+    chip: { kind: "type", trainingType: "cardio" },
+  };
+
+  const reparsed = parseSessionFilters(
+    new URLSearchParams(sessionFiltersToQuery(filters).toString()),
+  );
+
+  assert.deepEqual(reparsed, filters);
+});
+
+test("sessionFiltersToQuery omits a blank query and the All chip", () => {
+  const query = sessionFiltersToQuery({ query: "  ", chip: ALL_SESSIONS_CHIP });
+
+  assert.equal(query.toString(), "");
 });

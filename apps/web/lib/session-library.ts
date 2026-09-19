@@ -169,6 +169,64 @@ export function hasActiveSessionFilters(
   return filters.query.trim().length > 0 || filters.chip.kind !== "all";
 }
 
+// The URL param names the filter state round-trips under, mirrored into the URL with
+// `history.replaceState` (like History's `history-filter`) so a refreshed or shared link
+// restores the same narrowed view. Free text lives under `query` (matching the catalog's
+// param); the single-select chip is encoded 1:1 in one `chip` param — absent = All,
+// `favorites`, or `type:<trainingType>`.
+const SESSION_QUERY_PARAM = "query";
+const SESSION_CHIP_PARAM = "chip";
+const FAVORITES_CHIP_VALUE = "favorites";
+const TYPE_CHIP_PREFIX = "type:";
+
+// Parse one `chip` param value into a `SessionChipFilter`. The query string is untrusted
+// input: an unrecognised keyword, or a `type:` prefix with no value, collapses to All rather
+// than a broken filter. Deliberately NO validation of the type against a fixed set — the type
+// chips are derived from the library itself (`availableTypeChips` keeps types outside the
+// curated five), so a shared link to such a type must survive.
+function parseChipParam(raw: string | null): SessionChipFilter {
+  if (raw === FAVORITES_CHIP_VALUE) {
+    return { kind: "favorites" };
+  }
+  if (raw !== null && raw.startsWith(TYPE_CHIP_PREFIX)) {
+    const trainingType = raw.slice(TYPE_CHIP_PREFIX.length).trim();
+    if (trainingType.length > 0) {
+      return { kind: "type", trainingType };
+    }
+  }
+  return ALL_SESSIONS_CHIP;
+}
+
+// Read the filter state out of the URL — the inverse of `sessionFiltersToQuery`. A blank/absent
+// query collapses to "" and an absent/unknown chip to All, so a bare URL is the unfiltered view.
+export function parseSessionFilters(
+  params: URLSearchParams,
+): SessionLibraryFilters {
+  const query = params.get(SESSION_QUERY_PARAM)?.trim() ?? "";
+  const chip = parseChipParam(params.get(SESSION_CHIP_PARAM));
+  return { query, chip };
+}
+
+// Serialize filter state back into a query string for `history.replaceState` — the inverse of
+// `parseSessionFilters`. A blank query and the All chip contribute nothing, so a cleared filter
+// yields "".
+export function sessionFiltersToQuery(
+  filters: SessionLibraryFilters,
+): URLSearchParams {
+  const params = new URLSearchParams();
+  const query = filters.query.trim();
+  if (query.length > 0) {
+    params.set(SESSION_QUERY_PARAM, query);
+  }
+  const { chip } = filters;
+  if (chip.kind === "favorites") {
+    params.set(SESSION_CHIP_PARAM, FAVORITES_CHIP_VALUE);
+  } else if (chip.kind === "type") {
+    params.set(SESSION_CHIP_PARAM, `${TYPE_CHIP_PREFIX}${chip.trainingType}`);
+  }
+  return params;
+}
+
 // The three-letter month abbreviations for the row date, indexed by 0-based month.
 const MONTH_ABBREVIATIONS = [
   "Jan",

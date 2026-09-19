@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Dumbbell, Play, Star } from "lucide-react";
 
 import {
@@ -10,6 +11,8 @@ import {
   filterSessions,
   hasActiveSessionFilters,
   isSameChip,
+  parseSessionFilters,
+  sessionFiltersToQuery,
   sessionRowTitle,
   type SessionChipFilter,
   type SessionSummary,
@@ -43,10 +46,28 @@ export function SessionsLibrary({
 }: {
   sessions: SessionSummary[];
 }): React.JSX.Element {
-  const [query, setQuery] = useState("");
-  const [chip, setChip] = useState<SessionChipFilter>(ALL_SESSIONS_CHIP);
+  // Seed once from the URL, then own the state locally — a filter change re-filters the
+  // already-fetched library in-browser and is mirrored back into the URL below, never
+  // re-running the Server Component (the History pattern).
+  const initialParams = useSearchParams();
+  const [query, setQuery] = useState(
+    () => parseSessionFilters(new URLSearchParams(initialParams.toString())).query,
+  );
+  const [chip, setChip] = useState<SessionChipFilter>(
+    () => parseSessionFilters(new URLSearchParams(initialParams.toString())).chip,
+  );
 
   const filters = useMemo(() => ({ query, chip }), [query, chip]);
+
+  // Mirror the active filters into the shareable URL without a navigation, so a refresh or
+  // shared link restores the narrowed view and Back from an opened Session returns to it.
+  // `replaceState` (not a router push) keeps the Server Component and its one-shot library
+  // fetch from re-running on a keystroke or chip tap.
+  useEffect(() => {
+    const search = sessionFiltersToQuery(filters).toString();
+    const url = search.length > 0 ? `?${search}` : window.location.pathname;
+    window.history.replaceState(null, "", url);
+  }, [filters]);
   const filtered = useMemo(
     () => filterSessions(sessions, filters),
     [sessions, filters],

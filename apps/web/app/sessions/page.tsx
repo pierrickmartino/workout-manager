@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 
 import { fetchSessions } from "@/lib/sessions";
@@ -58,5 +59,12 @@ export default async function SessionsLibraryPage(): Promise<React.JSX.Element> 
     );
   }
 
-  return <SessionsLibrary sessions={sessions} />;
+  // `SessionsLibrary` reads the URL via `useSearchParams` (to restore a shared/refreshed
+  // filtered view), so it lives under a Suspense boundary per the App Router contract —
+  // the same wrapping History uses.
+  return (
+    <Suspense fallback={null}>
+      <SessionsLibrary sessions={sessions} />
+    </Suspense>
+  );
 }

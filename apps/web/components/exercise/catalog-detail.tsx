@@ -20,6 +20,7 @@ import {
   parseMovementPattern,
 } from "@/lib/movement-pattern";
 import { plainMuscleSummary } from "@/lib/plain-muscle-summary";
+import { appendFrom } from "@/lib/back-target";
 import { toStatTiles } from "@/lib/exercise-stats-view";
 import type { WeightUnit } from "@/lib/weight-unit";
 import type { ExerciseSearchResult } from "@/lib/exercises-types";
@@ -190,6 +191,15 @@ function HowTo({ steps }: { steps: string[] }) {
 // ALTERNATIVES — sibling movements the user can swap toward, each linking to full Detail.
 function Alternatives({ items }: { items: { id: number; name: string }[] }) {
   if (items.length === 0) return null;
+  // The filtered catalog origin, captured live so Back from the opened Exercise Detail returns
+  // to the exact narrowed Browse view — the filters now round-trip through the URL, so the
+  // whole `pathname + search` is the honest origin (not a hard-coded bare `/exercises`).
+  // Read here rather than threaded as a prop: this drawer is client-only, so `window` is
+  // always defined; the guard is belt-and-braces for any pre-hydration render.
+  const from =
+    typeof window !== "undefined"
+      ? window.location.pathname + window.location.search
+      : "/exercises";
   return (
     <section className="flex flex-col gap-2.5">
       <SectionLabel>Alternatives</SectionLabel>
@@ -197,7 +207,7 @@ function Alternatives({ items }: { items: { id: number; name: string }[] }) {
         {items.map((item, index) => (
           <Link
             key={item.id}
-            href={`/exercises/${item.id}?from=${encodeURIComponent("/exercises")}`}
+            href={appendFrom(`/exercises/${item.id}`, from)}
             className={
               "group flex items-center justify-between gap-3 px-3.5 py-3 transition-colors hover:bg-elevated/60 " +
               (index > 0 ? "border-t border-border" : "")
