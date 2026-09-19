@@ -11,6 +11,7 @@ import { loadKindOptions } from "@/lib/load";
 import type { WeightUnit } from "@/lib/weight-unit";
 import type { QuantityKind } from "@/lib/quantity";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
+import { useNavigationGuard } from "@/components/NavigationGuardProvider";
 import { Field } from "@/components/pulse/field";
 import { Alert } from "@/components/pulse/alert";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -202,6 +203,13 @@ export function CorrectLogForm({ logId, fields, today, unit }: CorrectLogFormPro
   const nextRowId = useRef(0);
   const isPlanLess = fields.sessionId === null;
 
+  // Coarse, sticky dirty tracking for the navigation guard (finding #4): the baseline is
+  // the pre-filled record, so opening and saving nothing is clean. Any field edit flips
+  // `interacted`, and any added row is unsaved work; neither resets. This errs toward a
+  // harmless extra confirm rather than silently dropping a correction in progress.
+  const [interacted, setInteracted] = useState(false);
+  useNavigationGuard(interacted || addedRows.length > 0);
+
   const addRow = () => {
     nextRowId.current += 1;
     const id = nextRowId.current;
@@ -219,7 +227,11 @@ export function CorrectLogForm({ logId, fields, today, unit }: CorrectLogFormPro
   const baseCount = fields.sets.length;
 
   return (
-    <form action={action} className="flex flex-col gap-6">
+    <form
+      action={action}
+      onChange={() => setInteracted(true)}
+      className="flex flex-col gap-6"
+    >
       <input type="hidden" name="log_id" value={logId} />
       <input
         type="hidden"

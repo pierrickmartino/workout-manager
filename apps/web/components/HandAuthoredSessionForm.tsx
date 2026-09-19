@@ -31,6 +31,7 @@ import type { WeightUnit } from "@/lib/weight-unit";
 import { type DistanceUnit, type QuantityKind } from "@/lib/quantity";
 import type { PickedExercise } from "@/lib/protocol-builder";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
+import { useNavigationGuard } from "@/components/NavigationGuardProvider";
 import { ExerciseLibrary } from "@/components/ExerciseLibrary";
 import { SessionCompositionStrip } from "@/components/builder/session-composition-strip";
 import { PrescriptionFieldStack } from "@/components/prescription/PrescriptionFieldStack";
@@ -249,6 +250,13 @@ export function HandAuthoredSessionForm({
   const [exercises, setExercises] = useState<ExerciseRow[]>(() =>
     seed ? seed.exercises.map(seededExerciseRow) : [],
   );
+  // Coarse, sticky dirty tracking for the navigation guard (finding #4): any field edit
+  // flips `interacted`, and it never resets. A Capture (`planOnly`) form opens pre-seeded,
+  // so the baseline is its seeded exercise count — the draft is dirty once the user edits
+  // a field or the exercise count diverges from that baseline (adding or removing one).
+  const [interacted, setInteracted] = useState(false);
+  const baselineExerciseCount = seed ? seed.exercises.length : 0;
+  useNavigationGuard(interacted || exercises.length !== baselineExerciseCount);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   // Which exercise the composition strip last focused (ADR-0074) — ephemeral view state, a
@@ -452,7 +460,11 @@ export function HandAuthoredSessionForm({
   const runs = renderRuns(layout);
 
   return (
-    <form action={submit} className="flex flex-col gap-6">
+    <form
+      action={submit}
+      onChange={() => setInteracted(true)}
+      className="flex flex-col gap-6"
+    >
       {error ? <Alert tone="error">{error}</Alert> : null}
 
       {hasSensitiveConstraint ? (

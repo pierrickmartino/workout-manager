@@ -7,6 +7,7 @@ import { loadKindOptions } from "@/lib/load";
 import type { WeightUnit } from "@/lib/weight-unit";
 import type { QuantityKind } from "@/lib/quantity";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
+import { useNavigationGuard } from "@/components/NavigationGuardProvider";
 import { Field } from "@/components/pulse/field";
 import { Alert } from "@/components/pulse/alert";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -44,6 +45,11 @@ export function AdhocLogForm({ today, unit }: AdhocLogFormProps) {
     { error: null },
   );
   const [rows, setRows] = useState<SetRow[]>(() => [makeRow("distance")]);
+  // Coarse, sticky dirty tracking for the navigation guard (finding #4): any field edit
+  // flips `interacted`, and adding a set past the single starting row is itself work worth
+  // guarding. Neither resets, so the guard errs toward an extra confirm over a silent loss.
+  const [interacted, setInteracted] = useState(false);
+  useNavigationGuard(interacted || rows.length > 1);
 
   const setRowKind = (id: number, kind: QuantityKind) =>
     setRows((current) =>
@@ -56,7 +62,11 @@ export function AdhocLogForm({ today, unit }: AdhocLogFormProps) {
     );
 
   return (
-    <form action={action} className="flex flex-col gap-6">
+    <form
+      action={action}
+      onChange={() => setInteracted(true)}
+      className="flex flex-col gap-6"
+    >
       {state.error ? <Alert tone="error">{state.error}</Alert> : null}
 
       <Field label="Date performed">
