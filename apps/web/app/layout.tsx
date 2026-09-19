@@ -17,6 +17,7 @@ import {
 } from "@clerk/nextjs";
 
 import { TabBar } from "@/components/pulse/tab-bar";
+import { NavigationGuardProvider } from "@/components/NavigationGuardProvider";
 import { OutboxSyncRegistrar } from "@/components/OutboxSyncRegistrar";
 import { SyncStatusBanner } from "@/components/SyncStatusBanner";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
@@ -183,7 +184,11 @@ export default async function RootLayout({
           </header>
 
           <main className="mx-auto min-h-[calc(100vh-3.5rem)] w-full max-w-shell px-6 pb-28 pt-6">
-            {children}
+            {/* Guards the authoring/correction forms against discarding unsaved work on
+                navigation (finding #4). Descendant forms opt in via useNavigationGuard;
+                the click interceptor it installs is document-wide, so it also catches the
+                TabBar and header links rendered outside this subtree. */}
+            <NavigationGuardProvider>{children}</NavigationGuardProvider>
           </main>
 
           {/* Bottom navigation is only meaningful once authenticated. */}
