@@ -90,6 +90,28 @@ test("falls back to the Dashboard for a valid but unlinked area", () => {
   });
 });
 
+test("resolves the area from the pathname when the origin carries a filter query", () => {
+  // Arrange — a filtered catalog origin: the Browse view carries its facets in the
+  // query string, so `?from=` round-trips the whole narrowed view. The area is
+  // `exercises`, and back must return to that exact filtered URL — not silently
+  // strand the user on the Dashboard because the query fooled the area split.
+  const target = backTarget("/exercises?query=press&muscle_group=Legs");
+
+  // Assert — the query is preserved in the href and the area is still recognised
+  assert.deepEqual(target, {
+    href: "/exercises?query=press&muscle_group=Legs",
+    label: "Back to exercise",
+  });
+});
+
+test("resolves the area from the pathname when the origin carries a fragment", () => {
+  // Assert — a `#hash` after the path must not defeat the area lookup either
+  assert.deepEqual(backTarget("/sessions/12#sets"), {
+    href: "/sessions/12#sets",
+    label: "Back to session",
+  });
+});
+
 // `appendFrom` threads the origin onto an outgoing `/exercises/[id]` link so the
 // destination — and every hop from it — can resolve a back target. An untrusted or
 // absent origin is dropped rather than propagated.

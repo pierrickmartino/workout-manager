@@ -56,7 +56,13 @@ export function backTarget(from: string | null | undefined): BackTarget {
   const safe = sanitizeInternalPath(from);
   if (safe === null) return FALLBACK;
 
-  const area = safe.split("/")[1] ?? "";
+  // Derive the area from the *path* only. A filtered origin carries its facets as a
+  // query string (`/exercises?query=press&muscle_group=Legs`), so splitting the whole
+  // value would fold the query into the first segment and miss the area — stranding the
+  // user on the Dashboard. Strip the query and fragment before indexing; the honoured
+  // href still carries them so back returns to the exact narrowed view.
+  const pathname = safe.split(/[?#]/, 1)[0];
+  const area = pathname.split("/")[1] ?? "";
   const label = AREA_LABELS[area];
   if (label === undefined) return FALLBACK;
 
