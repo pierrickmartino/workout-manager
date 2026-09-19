@@ -159,7 +159,7 @@ export default async function RootLayout({
                   {/* Clerk's SignInButton clones its child and re-validates
                       with React.Children.only; the trigger button must contain
                       a single text child (no nested elements/icons). */}
-                  <SignInButton mode="modal">
+                  <SignInButton mode="modal" forceRedirectUrl="/dashboard">
                     <button
                       type="button"
                       className={buttonVariants({
