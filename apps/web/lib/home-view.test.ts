@@ -58,6 +58,7 @@ function makeProtocol({
         day,
         title: `Session ${position}`,
         performed: false,
+        logged_session_id: null,
         prescriptions: Array.from({ length: modulesPerSession }, (_, i) =>
           makePrescription(i + 1),
         ),

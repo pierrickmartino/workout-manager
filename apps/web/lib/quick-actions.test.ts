@@ -34,6 +34,7 @@ function nextSession(sessionId: number): ProtocolSession {
     position: 1,
     title: "Push A",
     performed: false,
+    logged_session_id: null,
     prescriptions: [],
   } as ProtocolSession;
 }

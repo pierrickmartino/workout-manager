@@ -373,6 +373,91 @@ def test_current_protocol_never_selects_another_users_protocol():
     )
 
 
+def test_performed_log_ids_map_each_performed_session_to_its_advancing_log():
+    # Arrange — Week 1 is performed (Completed); its Logged Session id is the record the
+    # overview links a performed schedule card to (Q7, plan≠record).
+    exercises, protocols, logged = _build()
+    view = adopt(_three_week_protocol(), "user_ids", PARAMS,
+                 exercises=exercises, protocols=protocols)
+    week_one = view.sessions[0].session_id
+    log = logged.create(
+        "user_ids",
+        LoggedSessionDraft(
+            session_id=week_one,
+            performed_on=date(2026, 1, 1),
+            completion_outcome="completed",
+            logged_sets=[],
+        ),
+    )
+
+    # Act
+    progress = protocol_progress("user_ids", view.id, protocols=protocols, logged=logged)
+
+    # Assert — the one performed Session maps to its advancing log; nothing else is present
+    assert progress.performed_log_ids == {week_one: log.id}
+
+
+def test_performed_log_ids_point_at_the_advancing_log_not_an_incomplete_retry():
+    # Arrange — Week 1 is first failed (Incomplete), then retried to Completed. Only the
+    # Completed log advanced the Protocol, so that is the record to open (ADR-0013).
+    exercises, protocols, logged = _build()
+    view = adopt(_three_week_protocol(), "user_retry_ids", PARAMS,
+                 exercises=exercises, protocols=protocols)
+    week_one = view.sessions[0].session_id
+    logged.create(
+        "user_retry_ids",
+        LoggedSessionDraft(
+            session_id=week_one,
+            performed_on=date(2026, 1, 1),
+            completion_outcome="incomplete",
+            logged_sets=[],
+        ),
+    )
+    completed = logged.create(
+        "user_retry_ids",
+        LoggedSessionDraft(
+            session_id=week_one,
+            performed_on=date(2026, 1, 2),
+            completion_outcome="completed",
+            logged_sets=[],
+        ),
+    )
+
+    # Act
+    progress = protocol_progress(
+        "user_retry_ids", view.id, protocols=protocols, logged=logged
+    )
+
+    # Assert — the map points at the advancing (Completed) log, not the Incomplete attempt
+    assert progress.performed_log_ids[week_one] == completed.id
+
+
+def test_progressed_protocol_carries_the_same_performed_log_ids():
+    # Arrange — the progressed (load-overlay) view must expose the record links too, since
+    # GET /api/protocols/{id} serializes the progressed view.
+    exercises, protocols, logged = _build()
+    view = adopt(_three_week_protocol(), "user_prog_ids", PARAMS,
+                 exercises=exercises, protocols=protocols)
+    week_one = view.sessions[0].session_id
+    log = logged.create(
+        "user_prog_ids",
+        LoggedSessionDraft(
+            session_id=week_one,
+            performed_on=date(2026, 1, 1),
+            completion_outcome="completed",
+            logged_sets=[],
+        ),
+    )
+
+    # Act
+    progress = progressed_protocol(
+        "user_prog_ids", view.id, protocols=protocols, logged=logged
+    )
+
+    # Assert
+    assert progress.performed_log_ids == {week_one: log.id}
+
+
 def test_progressed_protocol_from_projects_over_a_given_history_with_no_io():
     # Arrange — a resolved Protocol and an already-loaded history, built via repos but
     # then handed to the pure projection tier directly. Week 1 is performed.

@@ -17,6 +17,10 @@ export interface ProtocolSession {
   // Whether this Session has an advancing Logged Session (ADR-0013). Performed
   // Sessions are the frozen record the Builder renders read-only (ADR-0020).
   performed: boolean;
+  // The id of the Logged Session that advanced this Session — the *record* a performed
+  // schedule card opens (plan≠record). Null on an un-performed Session (and on
+  // `next_session`, which is un-performed by definition).
+  logged_session_id: number | null;
   prescriptions: ExercisePrescription[];
 }
 
