@@ -117,14 +117,25 @@ export function ExerciseCatalogTaxonomy({
   // The Details drawer: which exercise is open, and its enter/exit animation state.
   const [selected, setSelected] = useState<ExerciseSearchResult | null>(null);
   const [drawerEntered, setDrawerEntered] = useState(false);
+  // The control that opened the drawer (the tapped row), so focus can return to it on close.
+  const openerRef = useRef<HTMLElement | null>(null);
 
   const openDetail = (exercise: ExerciseSearchResult) => {
+    openerRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setSelected(exercise);
     requestAnimationFrame(() => setDrawerEntered(true));
   };
   const closeDetail = () => {
     setDrawerEntered(false);
-    setTimeout(() => setSelected(null), DRAWER_ANIM_MS);
+    setTimeout(() => {
+      setSelected(null);
+      // Restore focus to the originating row once the sheet has slid away — but only if it
+      // is still in the document, since the list can re-render behind the drawer.
+      const opener = openerRef.current;
+      openerRef.current = null;
+      if (opener && document.contains(opener)) opener.focus();
+    }, DRAWER_ANIM_MS);
   };
 
   useEffect(() => {
@@ -265,7 +276,7 @@ export function ExerciseCatalogTaxonomy({
       </div>
 
       {selected ? (
-        <DetailDrawer entered={drawerEntered} onClose={closeDetail}>
+        <DetailDrawer entered={drawerEntered} onClose={closeDetail} label={selected.name}>
           <CatalogDetail exercise={selected} unit={unit} />
         </DetailDrawer>
       ) : null}
@@ -397,12 +408,61 @@ function UsageBadge({ marker }: { marker: UsageMarker }) {
 interface DetailDrawerProps {
   entered: boolean;
   onClose: () => void;
+  // The dialog's accessible name — the open exercise, so assistive tech announces which
+  // entry the sheet is showing. Owned by the caller rather than tied to the detail heading,
+  // so `CatalogDetail` stays a standalone, id-free component.
+  label: string;
   children: React.ReactNode;
 }
 
+// Elements that can hold keyboard focus, used to contain Tab within the open dialog.
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), ' +
+  'select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 // The bottom Drawer detail surface: a mobile-first sheet that slides up from the bottom
 // edge over a scrim, with a grab handle. The search and filters stay mounted behind it.
-function DetailDrawer({ entered, onClose, children }: DetailDrawerProps) {
+// It behaves as a modal dialog: focus moves in on open, is contained while open (Escape and
+// focus restoration to the opener are handled by the parent), and the sheet carries an
+// accessible name.
+function DetailDrawer({ entered, onClose, label, children }: DetailDrawerProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Move focus into the sheet on open so keyboard users land inside it. The parent mounts
+  // this component only while a detail is open, so mounting is opening.
+  useEffect(() => {
+    dialogRef.current?.focus();
+  }, []);
+
+  // Keep Tab / Shift+Tab cycling within the sheet. Without a portal the dialog renders
+  // inside the page and the app's global chrome sits outside this component, so a trap —
+  // not `inert` on a sibling — is what actually contains focus.
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Tab") return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const focusables = Array.from(
+      dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+    ).filter((el) => el.offsetParent !== null || el === document.activeElement);
+    if (focusables.length === 0) {
+      event.preventDefault();
+      dialog.focus();
+      return;
+    }
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    const activeEl = document.activeElement;
+    if (event.shiftKey) {
+      if (activeEl === first || activeEl === dialog) {
+        event.preventDefault();
+        last.focus();
+      }
+    } else if (activeEl === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center">
       <div
@@ -414,10 +474,14 @@ function DetailDrawer({ entered, onClose, children }: DetailDrawerProps) {
         aria-hidden
       />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
+        aria-label={label}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
         className={
-          "relative z-10 max-h-[88vh] w-full max-w-shell overflow-y-auto scrollbar-thin rounded-t-2xl border border-border-lite bg-base px-5 pb-8 pt-3 shadow-2xl shadow-black/50 transition-transform duration-300 ease-out " +
+          "relative z-10 max-h-[88vh] w-full max-w-shell overflow-y-auto scrollbar-thin rounded-t-2xl border border-border-lite bg-base px-5 pb-8 pt-3 shadow-2xl shadow-black/50 outline-none transition-transform duration-300 ease-out " +
           (entered ? "translate-y-0" : "translate-y-full")
         }
       >
