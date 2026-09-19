@@ -24,7 +24,8 @@ Current Protocol never re-reads the history per Protocol. No AI, no HTTP."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from collections.abc import Mapping
+from dataclasses import dataclass, field, replace
 
 from app.domain.completion import CompletionOutcome
 from app.domain.load import parse_load
@@ -60,6 +61,11 @@ class ProtocolProgressView:
     # The ids of Sessions with an advancing Logged Session (ADR-0013) — the frozen
     # prefix the Builder renders read-only and deploy refuses to touch (ADR-0020).
     performed_session_ids: frozenset[int] = frozenset()
+    # Each performed Session id → the id of the Logged Session that advanced it — the
+    # *record* a performed schedule card links to (plan≠record). Distinct from the set
+    # above, which is only membership; this carries the record to open (Q7). Empty on a
+    # view built without a history (authoring/deploy), so those serialize null links.
+    performed_log_ids: Mapping[int, int] = field(default_factory=dict)
 
 
 def _advances(entry: LoggedSessionView) -> bool:
@@ -79,6 +85,23 @@ def _advancing_sessions(logged_sessions: list[LoggedSessionView]) -> set[int]:
     """The set of Session ids that have at least one *advancing* Logged Session."""
 
     return {entry.session_id for entry in logged_sessions if _advances(entry)}
+
+
+def _advancing_log_ids(logged_sessions: list[LoggedSessionView]) -> dict[int, int]:
+    """Map each performed Session id to its advancing Logged Session's id.
+
+    ``logged_sessions`` arrives newest-first (the repository contract), so the first
+    advancing log seen per Session wins: the *most recent* Completed performance is the
+    record a performed schedule card opens. Non-advancing (Incomplete) logs are skipped,
+    and a plan-less record (``session_id`` is ``None``) carries no Session to key on.
+    """
+
+    log_ids: dict[int, int] = {}
+    for entry in logged_sessions:
+        if entry.session_id is None or not _advances(entry):
+            continue
+        log_ids.setdefault(entry.session_id, entry.id)
+    return log_ids
 
 
 def _progress_over(
@@ -119,6 +142,7 @@ def protocol_progress_from(
         next_session=next_session,
         completed_count=completed_count,
         performed_session_ids=frozenset(performed),
+        performed_log_ids=_advancing_log_ids(logged_sessions),
     )
 
 
@@ -287,6 +311,7 @@ def progressed_protocol_from(
         next_session=next_session,
         completed_count=completed_count,
         performed_session_ids=frozenset(performed),
+        performed_log_ids=_advancing_log_ids(logged_sessions),
     )
 
 

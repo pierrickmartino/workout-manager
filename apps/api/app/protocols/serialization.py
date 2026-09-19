@@ -8,6 +8,9 @@ byte-for-byte the same payload."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from types import MappingProxyType
+
 from app.domain.protocol import protocol_label
 from app.domain.session_section import sectionize
 from app.protocols.balance_preview import BalancePreview
@@ -16,7 +19,10 @@ from app.repositories.protocol_repository import ProtocolSessionView, ProtocolVi
 
 
 def serialize_session(
-    session: ProtocolSessionView, *, performed: bool = False
+    session: ProtocolSessionView,
+    *,
+    performed: bool = False,
+    logged_session_id: int | None = None,
 ) -> dict:
     # Session Section (ADR-0074): the read-time composition bucket is a projection over
     # the *ordered* Session, computed once here and zipped onto each Prescription. Never
@@ -29,6 +35,11 @@ def serialize_session(
         "day": session.day,
         "title": session.title,
         "performed": performed,
+        # The record link (Q7, plan≠record): the id of the Logged Session that advanced
+        # this Session, so a performed schedule card opens the *record* the user made,
+        # not the plan. Null on an un-performed Session (and on the next_session, which is
+        # un-performed by definition).
+        "logged_session_id": logged_session_id,
         "prescriptions": [
             {
                 "position": p.position,
@@ -78,7 +89,10 @@ def serialize_session(
 
 
 def serialize_protocol(
-    view: ProtocolView, *, performed_session_ids: frozenset[int] = frozenset()
+    view: ProtocolView,
+    *,
+    performed_session_ids: frozenset[int] = frozenset(),
+    performed_log_ids: Mapping[int, int] = MappingProxyType({}),
 ) -> dict:
     return {
         "id": view.id,
@@ -94,7 +108,11 @@ def serialize_protocol(
         "name": view.name,
         "label": protocol_label(view.name, view.objective, view.training_type),
         "sessions": [
-            serialize_session(s, performed=s.session_id in performed_session_ids)
+            serialize_session(
+                s,
+                performed=s.session_id in performed_session_ids,
+                logged_session_id=performed_log_ids.get(s.session_id),
+            )
             for s in view.sessions
         ],
     }
@@ -102,12 +120,18 @@ def serialize_protocol(
 
 def serialize_protocol_progress(progress: ProtocolProgressView) -> dict:
     performed = progress.performed_session_ids
-    data = serialize_protocol(progress.protocol, performed_session_ids=performed)
+    performed_log_ids = progress.performed_log_ids
+    data = serialize_protocol(
+        progress.protocol,
+        performed_session_ids=performed,
+        performed_log_ids=performed_log_ids,
+    )
     data["completed_count"] = progress.completed_count
     data["next_session"] = (
         serialize_session(
             progress.next_session,
             performed=progress.next_session.session_id in performed,
+            logged_session_id=performed_log_ids.get(progress.next_session.session_id),
         )
         if progress.next_session is not None
         else None
