@@ -9,6 +9,7 @@ import {
   type DistanceSeries,
 } from "@/lib/analytics";
 import { RANGE_LABELS, toRangeOptions } from "@/lib/analytics-range-view";
+import { analyticsBackOrigin } from "@/lib/analytics-nav";
 import { appendFrom } from "@/lib/back-target";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -86,6 +87,11 @@ export default async function AnalyticsPage({
   // affordances into the strength screen can never disagree (ADR-0011).
   const recordsTeaser = toRecentRecordsTeaser(overview.recent_records);
   const hasQualifyingStrength = recordsTeaser !== null;
+  // The origin threaded onto every link into a child screen (Strength Analytics, Metric
+  // history), so the child's "Back to analytics" returns to the served window — not a
+  // reset hub. Same value drives the Recent Records teaser and the Operations nav rows,
+  // so the affordances into the strength screen carry an identical back target.
+  const backOrigin = analyticsBackOrigin(range);
 
   return (
     <section className="flex flex-col gap-6">
@@ -129,7 +135,17 @@ export default async function AnalyticsPage({
       <MuscleAtlas view={atlasView} />
 
       {recordRows.length > 0 ? (
-        <RecentRecords rows={recordRows} teaser={recordsTeaser} />
+        <RecentRecords
+          rows={recordRows}
+          teaser={
+            recordsTeaser
+              ? {
+                  ...recordsTeaser,
+                  href: appendFrom(recordsTeaser.href, backOrigin),
+                }
+              : null
+          }
+        />
       ) : null}
 
       <div className="flex flex-col gap-4">
@@ -139,7 +155,7 @@ export default async function AnalyticsPage({
             <NavRow
               icon={Dumbbell}
               label="Strength Analytics"
-              href="/analytics/strength"
+              href={appendFrom("/analytics/strength", backOrigin)}
               accent="cyan"
             />
           ) : null}
@@ -152,7 +168,7 @@ export default async function AnalyticsPage({
           <NavRow
             icon={LineChart}
             label="Metric history"
-            href="/metrics"
+            href={appendFrom("/metrics", backOrigin)}
             accent="violet"
           />
         </Card>

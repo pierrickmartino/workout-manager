@@ -1,6 +1,8 @@
 import { RecordMetricForm } from "@/components/RecordMetricForm";
 import { fetchMetrics, type MetricEntry } from "@/lib/metrics";
+import { backTarget } from "@/lib/back-target";
 import { PageHeader } from "@/components/pulse/page-header";
+import { BackLink } from "@/components/pulse/back-link";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { Alert } from "@/components/pulse/alert";
 import { Card } from "@/components/ui/card";
@@ -12,14 +14,18 @@ import { Card } from "@/components/ui/card";
 export default async function MetricsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ metric?: string }>;
+  searchParams: Promise<{ metric?: string; from?: string }>;
 }) {
-  const { metric } = await searchParams;
+  const { metric, from } = await searchParams;
   const envelope = await fetchMetrics(metric);
   const today = new Date().toISOString().slice(0, 10);
+  // Where "back" points: the `?from=` origin the Analytics hub threaded on the way in.
+  // A shared/deep link with no origin falls back to the Dashboard.
+  const back = backTarget(from);
 
   return (
     <section className="flex flex-col gap-6">
+      <BackLink href={back.href}>{back.label}</BackLink>
       <PageHeader overline="PULSE // STATS" title="Metric history" />
       <p className="font-mono text-[13px] leading-relaxed text-text-muted">
         Track your weight or other metrics over time. These readings are kept as
