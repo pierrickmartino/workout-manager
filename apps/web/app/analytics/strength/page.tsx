@@ -7,11 +7,12 @@ import {
   toStrengthTimelineView,
   type StrengthTimelineView,
 } from "@/lib/strength-analytics-view";
-import { appendFrom } from "@/lib/back-target";
+import { appendFrom, backTarget } from "@/lib/back-target";
 import { toStrengthTrajectories } from "@/lib/strength-trajectories-view";
 import { toMuscleBalance } from "@/lib/muscle-balance-view";
 import { resolveAppearance } from "@/lib/appearance";
 import { PageHeader } from "@/components/pulse/page-header";
+import { BackLink } from "@/components/pulse/back-link";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { Alert } from "@/components/pulse/alert";
 import { StrengthTrajectories } from "@/components/analytics/strength-trajectories";
@@ -36,15 +37,20 @@ const TIMELINE_LIMIT = 20;
 export default async function StrengthAnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ offset?: string }>;
+  searchParams: Promise<{ offset?: string; from?: string }>;
 }) {
-  const { offset: rawOffset } = await searchParams;
+  const { offset: rawOffset, from } = await searchParams;
   const offset = toOffset(rawOffset);
+  // Where "back" points: the `?from=` origin the Analytics hub threaded on the way in,
+  // resolved to its labelled target. A shared/deep link with no origin falls back to the
+  // Dashboard rather than stranding the user on the global tabs alone.
+  const back = backTarget(from);
   const envelope = await fetchStrengthAnalytics(TIMELINE_LIMIT, offset);
 
   if (!envelope.success || !envelope.data) {
     return (
       <section className="flex flex-col gap-6">
+        <BackLink href={back.href}>{back.label}</BackLink>
         <PageHeader overline="PULSE // STATS" title="Strength Analytics" />
         <Alert tone="error">
           Could not load your strength analytics:{" "}
@@ -70,6 +76,7 @@ export default async function StrengthAnalyticsPage({
 
   return (
     <section className="flex flex-col gap-6">
+      <BackLink href={back.href}>{back.label}</BackLink>
       <PageHeader overline="PULSE // STATS" title="Strength Analytics" />
 
       {view.isEmpty ? (
@@ -78,7 +85,7 @@ export default async function StrengthAnalyticsPage({
         <>
           <StrengthTrajectories tiles={trajectories} unit={unit} />
           <MuscleBalance view={muscleBalance} />
-          <PersonalRecordTimeline view={view} offset={offset} />
+          <PersonalRecordTimeline view={view} offset={offset} from={from} />
         </>
       )}
     </section>
@@ -119,9 +126,11 @@ function StrengthEmptyState() {
 function PersonalRecordTimeline({
   view,
   offset,
+  from,
 }: {
   view: StrengthTimelineView;
   offset: number;
+  from: string | undefined;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -149,7 +158,7 @@ function PersonalRecordTimeline({
           </div>
         ))}
       </Card>
-      <TimelinePager view={view} offset={offset} />
+      <TimelinePager view={view} offset={offset} from={from} />
     </div>
   );
 }
@@ -160,9 +169,11 @@ function PersonalRecordTimeline({
 function TimelinePager({
   view,
   offset,
+  from,
 }: {
   view: StrengthTimelineView;
   offset: number;
+  from: string | undefined;
 }) {
   if (!view.hasPreviousPage && !view.hasNextPage) {
     return null;
@@ -171,16 +182,18 @@ function TimelinePager({
   const previousOffset = Math.max(0, offset - TIMELINE_LIMIT);
   const nextOffset = offset + TIMELINE_LIMIT;
 
+  // Carry the `?from=` origin across the pager so the BackLink survives paging — without
+  // it, tapping "Older" would strand the user with a Dashboard fallback back target.
   return (
     <div className="flex items-center justify-between">
       <PagerLink
-        href={`/analytics/strength?offset=${previousOffset}`}
+        href={appendFrom(`/analytics/strength?offset=${previousOffset}`, from)}
         enabled={view.hasPreviousPage}
       >
         ← Newer
       </PagerLink>
       <PagerLink
-        href={`/analytics/strength?offset=${nextOffset}`}
+        href={appendFrom(`/analytics/strength?offset=${nextOffset}`, from)}
         enabled={view.hasNextPage}
       >
         Older →
