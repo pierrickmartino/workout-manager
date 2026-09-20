@@ -1,9 +1,8 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Dumbbell, Play, Star } from "lucide-react";
+import { Star } from "lucide-react";
 
 import {
   ALL_SESSIONS_CHIP,
@@ -13,27 +12,16 @@ import {
   isSameChip,
   parseSessionFilters,
   sessionFiltersToQuery,
-  sessionRowTitle,
   type SessionChipFilter,
   type SessionSummary,
 } from "@/lib/session-library";
-import { trainingTypeBadgeVariant } from "@/lib/training-type-badge";
-import { GENERIC_AUTHOR_LABEL } from "@/lib/session-author";
-import { loggedCountBadge } from "@/lib/session-delete";
-import { DeleteSessionControl } from "@/components/DeleteSessionControl";
-import {
-  submitDeleteSessionRow,
-  submitToggleFavorite,
-  type ToggleFavoriteState,
-} from "@/app/sessions/actions";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/pulse/page-header";
-import { WorkoutSigil } from "@/components/pulse/workout-sigil";
 import { BackLink } from "@/components/pulse/back-link";
+import { SessionLibraryRow } from "@/components/SessionLibraryRow";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { buttonVariants } from "@/components/ui/button";
 
 // The interactive My Sessions library (CONTEXT: My Sessions, issue #397): search over the
 // user's own standalone Sessions plus a single-select chip row (All / Favorites / one Training
@@ -191,7 +179,7 @@ export function SessionsLibrary({
         <ol className="flex list-none flex-col gap-4 p-0">
           {filtered.map((session) => (
             <li key={session.id}>
-              <SessionRow session={session} />
+              <SessionLibraryRow session={session} />
             </li>
           ))}
         </ol>
@@ -234,165 +222,5 @@ function FilterChip({
       {icon}
       {label}
     </button>
-  );
-}
-
-function SessionRow({
-  session,
-}: {
-  session: SessionSummary;
-}): React.JSX.Element {
-  // The Author credit, with the same never-blank generic fallback the Session detail uses
-  // (a null/blank raw name → the generic label), so a row is never authored by "".
-  const authorName =
-    session.author.display_name?.trim() || GENERIC_AUTHOR_LABEL;
-
-  // The row title (CONTEXT: Session Name): the name when set, else the formatted creation date
-  // — the Training Type is NOT repeated here, it lives on the badge (Q5).
-  const title = sessionRowTitle(session);
-
-  // The Logged Count signal (CONTEXT: Logged Count, ADR-0063): the "Trained N×" label when the
-  // Session has been performed (≥ 1), else `null`. It and the Delete control are mutually
-  // exclusive — a performed row shows the label (and is undeletable), an unperformed row shows
-  // Delete.
-  const loggedBadge = loggedCountBadge(session.logged_count);
-
-  return (
-    <Card
-      className={cn(
-        "flex flex-col gap-3 p-5 transition-colors hover:border-cyan/40",
-        // Glow Edge (CONTEXT: Favorite): a favorited row wears the soft cyan glow.
-        // Purely presentational — driven by the already-tested `is_favorite` marker.
-        session.is_favorite && "glow-favorite",
-      )}
-    >
-      <div className="flex items-start gap-3">
-        {/* The inline Favorite toggle (CONTEXT: Favorite) — interactive, so it sits OUTSIDE the
-            navigation link. */}
-        <FavoriteToggle session={session} />
-
-        {/* The navigation link wraps only the textual content — the toggle above and the
-            Delete control below are interactive and must not nest inside an anchor. */}
-        <Link
-          href={`/sessions/${session.id}`}
-          className="flex flex-1 items-start gap-3 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan/60"
-        >
-          {/* The Workout Signature mark (CONTEXT: Workout Signature): the Session's recognizable
-              generated sigil, keyed on its id so the two same-named "Calisthenics" entries read
-              as two distinct marks. Skin-aware fill by Training Type, always beside the type badge. */}
-          <WorkoutSigil
-            seedId={session.id}
-            exerciseCount={session.exercise_count}
-            trainingType={session.training_type}
-            size={44}
-            className="mt-0.5"
-          />
-          <h2 className="flex-1 font-display text-lg font-semibold text-text-primary">
-            {title}
-          </h2>
-          <div className="flex shrink-0 flex-col items-end gap-1.5">
-            {/* The Training Type badge, colored per type (Q9) — the one place the type appears. */}
-            <Badge
-              variant={trainingTypeBadgeVariant(session.training_type)}
-              className="capitalize"
-            >
-              {session.training_type}
-            </Badge>
-            <span className="label-mono text-[10px] text-text-muted">
-              by {authorName}
-            </span>
-          </div>
-        </Link>
-
-        {/* The per-row Start (I6, docs/redesign-ia.md): a sibling anchor to the detail Link
-            above — NOT nested — that deep-links straight into the plan's Live Session, bringing
-            re-run-from-library within its ≤2-tap budget (Home → My sessions → Start). Deliberately
-            `secondary`, matching Train's Recent Sessions: a Start that repeats once per row is
-            never the list's primary emphasis. An explicit label names the row so screen-reader
-            users tell the rows' Start buttons apart. */}
-        <Link
-          href={`/sessions/${session.id}/live`}
-          aria-label={`Start ${title}`}
-          className={buttonVariants({ variant: "secondary", className: "mt-0.5 shrink-0" })}
-        >
-          <Play className="h-4 w-4" aria-hidden />
-          Start
-        </Link>
-      </div>
-
-      {/* The fact row: the plan's Exercise Prescription count (always) and, on the right, the
-          Logged Count label when performed (so it is spotted at a glance and its Delete is
-          withheld), else the Delete control. */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
-        <span className="label-mono inline-flex items-center gap-1.5 text-[11px] text-text-secondary">
-          <Dumbbell className="h-3.5 w-3.5 text-text-muted" aria-hidden />
-          {session.exercise_count}{" "}
-          {session.exercise_count === 1 ? "exercise" : "exercises"}
-        </span>
-        {loggedBadge ? (
-          <Badge
-            variant="muted"
-            className="uppercase"
-            title="Logged performances of this session"
-          >
-            {loggedBadge}
-          </Badge>
-        ) : (
-          <DeleteSessionControl
-            sessionId={session.id}
-            action={submitDeleteSessionRow}
-            confirmPrompt="Delete?"
-          />
-        )}
-      </div>
-    </Card>
-  );
-}
-
-// The inline Favorite star toggle for one row (CONTEXT: Favorite, #396). A one-button form
-// posting to `submitToggleFavorite`: the hidden `favorite` field carries the *target* state
-// (the opposite of the current marker), so the server marks or unmarks and revalidates
-// `/sessions`. The button reflects the current state (filled star + `aria-pressed`); while the
-// action is in flight it is disabled. A failure surfaces the returned error inline.
-function FavoriteToggle({
-  session,
-}: {
-  session: SessionSummary;
-}): React.JSX.Element {
-  const [state, formAction, pending] = useActionState<
-    ToggleFavoriteState,
-    FormData
-  >(submitToggleFavorite, { error: null });
-
-  const label = session.is_favorite ? "Unfavorite session" : "Favorite session";
-
-  return (
-    <form action={formAction} className="mt-0.5 shrink-0">
-      <input type="hidden" name="session_id" value={session.id} />
-      {/* The target state: mark when currently unfavorited, unmark when currently favorited. */}
-      <input
-        type="hidden"
-        name="favorite"
-        value={session.is_favorite ? "false" : "true"}
-      />
-      <button
-        type="submit"
-        aria-pressed={session.is_favorite}
-        aria-label={label}
-        title={state.error ?? label}
-        disabled={pending}
-        className={cn(
-          "rounded-sm p-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan/60 disabled:opacity-50 motion-reduce:transition-none",
-          session.is_favorite
-            ? "text-cyan"
-            : "text-text-muted hover:text-cyan",
-        )}
-      >
-        <Star
-          className={cn("h-4 w-4", session.is_favorite && "fill-cyan")}
-          aria-hidden
-        />
-      </button>
-    </form>
   );
 }
