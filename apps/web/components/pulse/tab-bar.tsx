@@ -5,41 +5,20 @@ import { usePathname } from "next/navigation";
 import { LayoutGrid, Zap, BarChart3, User, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { TABS, isActive, type TabLabel } from "@/lib/tab-nav";
 
-interface Tab {
-  label: string;
-  href: string;
-  icon: LucideIcon;
-  // Route prefixes that should light this tab as active.
-  match: string[];
-}
+// Route ownership (which tab lights for which path) lives in `@/lib/tab-nav` so it can be
+// tested without a browser; this component owns only presentation. Icons are attached here
+// by label — the one bit of the tab that is purely visual.
+const ICONS: Record<TabLabel, LucideIcon> = {
+  HOME: LayoutGrid,
+  TRAIN: Zap,
+  STATS: BarChart3,
+  PROFILE: User,
+};
 
-// Bottom navigation mirroring pulse.pen's tab bar: a top "tick" indicator, an
-// icon, and a mono micro-label. Active tab is cyan, the rest are muted. The four
-// tabs map onto the app's existing sections without changing any routes.
-const TABS: Tab[] = [
-  { label: "HOME", href: "/dashboard", icon: LayoutGrid, match: ["/dashboard"] },
-  {
-    label: "TRAIN",
-    href: "/train",
-    icon: Zap,
-    match: ["/train", "/sessions", "/protocols", "/exercises"],
-  },
-  {
-    label: "STATS",
-    href: "/analytics",
-    icon: BarChart3,
-    match: ["/analytics", "/history", "/metrics"],
-  },
-  { label: "PROFILE", href: "/profile", icon: User, match: ["/profile"] },
-];
-
-function isActive(pathname: string, tab: Tab): boolean {
-  return tab.match.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
-}
-
+// Bottom navigation mirroring pulse.pen's tab bar: a top "tick" indicator, an icon, and a
+// mono micro-label. Active tab is cyan, the rest are muted.
 export function TabBar(): React.JSX.Element {
   const pathname = usePathname() ?? "";
 
@@ -48,7 +27,7 @@ export function TabBar(): React.JSX.Element {
       <div className="mx-auto flex max-w-shell items-stretch justify-between px-3 pb-5 pt-0">
         {TABS.map((tab) => {
           const active = isActive(pathname, tab);
-          const Icon = tab.icon;
+          const Icon = ICONS[tab.label];
           return (
             <Link
               key={tab.label}
