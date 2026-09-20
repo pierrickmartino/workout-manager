@@ -258,7 +258,14 @@ function SessionRow({
   const loggedBadge = loggedCountBadge(session.logged_count);
 
   return (
-    <Card className="flex flex-col gap-3 p-5 transition-colors hover:border-cyan/40">
+    <Card
+      className={cn(
+        "flex flex-col gap-3 p-5 transition-colors hover:border-cyan/40",
+        // Glow Edge (CONTEXT: Favorite): a favorited row wears the soft cyan glow.
+        // Purely presentational — driven by the already-tested `is_favorite` marker.
+        session.is_favorite && "glow-favorite",
+      )}
+    >
       <div className="flex items-start gap-3">
         {/* The inline Favorite toggle (CONTEXT: Favorite) — interactive, so it sits OUTSIDE the
             navigation link. */}
