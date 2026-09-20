@@ -1,11 +1,12 @@
-// Where the "back" control on the Exercise Detail screen should point. Exercise
-// Detail is a global catalog screen reachable from many origins — a Session's
+// Where the "back" control should point on a screen reachable from many origins.
+// Exercise Detail is the archetype — a global catalog screen opened from a Session's
 // Exercise, a Protocol's Exercise, the Dashboard's latest-PR card, the Analytics
-// strength tiles, and a related Variation/Alternative on the screen itself — so
-// "back" is not a fixed destination. Each link that opens the screen carries its
-// origin as a `?from=` path, and this module turns that into the labelled BackLink
-// target. A missing or untrusted origin falls back to the Dashboard rather than
-// stranding the user, which is the dead-end this screen used to be.
+// strength tiles, and a related Variation/Alternative on the screen itself — but the
+// Generate-a-workout form is the same shape (reached from the Dashboard launchpad,
+// History, Analytics, and the Sessions list). For these "back" is not a fixed
+// destination: each link that opens the screen carries its origin as a `?from=` path,
+// and this module turns that into the labelled BackLink target. A missing or untrusted
+// origin falls back to the Dashboard rather than stranding the user.
 //
 // Pure and server-free (no Clerk, no fetch), so it is safe to import from both
 // Server and Client Components.
@@ -30,6 +31,8 @@ const AREA_LABELS: Record<string, string> = {
   protocols: "Back to protocol",
   exercises: "Back to exercise",
   analytics: "Back to analytics",
+  history: "Back to history",
+  train: "Back to training",
   dashboard: "Back to dashboard",
 };
 

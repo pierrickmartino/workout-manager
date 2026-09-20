@@ -92,7 +92,10 @@ export default async function DashboardPage() {
           <TrainingRouteCard protocol={currentProtocol} />
         </>
       ) : (
-        <GenerateTrainingLaunchpad eyebrow="GET STARTED // NO ACTIVE PROTOCOL" />
+        <GenerateTrainingLaunchpad
+          eyebrow="GET STARTED // NO ACTIVE PROTOCOL"
+          from="/dashboard"
+        />
       )}
 
       {/* Persistent quick-action row: the launch shortcuts for the recurring core

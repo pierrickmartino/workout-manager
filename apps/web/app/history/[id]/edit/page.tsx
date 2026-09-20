@@ -32,7 +32,7 @@ export default async function EditLogPage({ params }: EditLogPageProps) {
         <Alert tone="error">
           Could not load your history: {envelope.error ?? "unknown error"}
         </Alert>
-        <BackLink href="/history">Back to history</BackLink>
+        <BackLink href={`/history/${logId}`}>Back to workout record</BackLink>
       </section>
     );
   }
@@ -60,7 +60,7 @@ export default async function EditLogPage({ params }: EditLogPageProps) {
         unit={appearance.weight_unit}
       />
 
-      <BackLink href="/history">Back to history</BackLink>
+      <BackLink href={`/history/${logId}`}>Back to workout record</BackLink>
     </section>
   );
 }

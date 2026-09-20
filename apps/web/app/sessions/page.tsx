@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 
 import { fetchSessions } from "@/lib/sessions";
+import { appendFrom } from "@/lib/back-target";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
 import { Alert } from "@/components/pulse/alert";
@@ -42,7 +43,7 @@ export default async function SessionsLibraryPage(): Promise<React.JSX.Element> 
             here once you create one.
           </p>
           <Link
-            href="/sessions/new"
+            href={appendFrom("/sessions/new", "/sessions")}
             className="label-mono text-[11px] text-cyan hover:underline"
           >
             Generate a workout →

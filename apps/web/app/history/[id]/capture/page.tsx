@@ -60,7 +60,7 @@ export default async function CaptureLogPage({ params }: CaptureLogPageProps) {
         unit={appearance.weight_unit}
       />
 
-      <BackLink href={`/history/${logId}`}>Back to session</BackLink>
+      <BackLink href={`/history/${logId}`}>Back to workout record</BackLink>
     </section>
   );
 }

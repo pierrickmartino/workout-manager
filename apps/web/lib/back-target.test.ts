@@ -66,6 +66,22 @@ test("labels a related-Exercise origin as 'Back to exercise'", () => {
   });
 });
 
+test("labels a History origin as 'Back to history'", () => {
+  // Arrange — the Generate-a-workout form reached from the empty History list
+  assert.deepEqual(backTarget("/history"), {
+    href: "/history",
+    label: "Back to history",
+  });
+});
+
+test("labels a Train origin as 'Back to training'", () => {
+  // Arrange — the Generate-a-workout form reached from the TRAIN launchpad
+  assert.deepEqual(backTarget("/train"), {
+    href: "/train",
+    label: "Back to training",
+  });
+});
+
 test("falls back to the Dashboard when no origin is given", () => {
   // Arrange — a shared/deep link or bookmark carries no `from`
   assert.deepEqual(backTarget(undefined), {
@@ -122,6 +138,14 @@ test("appends the origin as an encoded ?from= on a query-less href", () => {
 
   // Assert — the origin rides along, percent-encoded
   assert.equal(href, "/exercises/7?from=%2Fsessions%2F12");
+});
+
+test("threads the origin onto a Generate-a-workout link", () => {
+  // Arrange — the multi-origin sessions/new form: each entry point rides its own path
+  const href = appendFrom("/sessions/new", "/history");
+
+  // Assert — sessions/new can resolve "Back to history" from the encoded origin
+  assert.equal(href, "/sessions/new?from=%2Fhistory");
 });
 
 test("appends with & when the href already carries a query", () => {

@@ -71,6 +71,7 @@ export default async function TrainPage(): Promise<React.JSX.Element> {
       </p>
       <GenerateTrainingLaunchpad
         eyebrow="TRAIN // START SOMETHING NEW"
+        from="/train"
         showBuild
         showLogPastWorkout
       />

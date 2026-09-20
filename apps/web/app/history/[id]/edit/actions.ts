@@ -176,5 +176,7 @@ export async function submitCorrection(
     return { error: result.error ?? "Could not save your correction." };
   }
 
-  redirect("/history");
+  // Return to the corrected record's detail — the screen the edit was opened from —
+  // so the user sees their correction land, rather than bouncing to the History list.
+  redirect(`/history/${logId}`);
 }

@@ -20,6 +20,10 @@ interface ProfileFormProps {
   // Pre-fill when editing an existing profile; omit during first onboarding.
   profile?: Profile;
   submitLabel: string;
+  // Where the save action returns the user. Editing round-trips to the screen the
+  // form was opened from (the Profile), while first onboarding is a one-way step
+  // into the app — so this defaults to the Dashboard. Sanitized server-side.
+  returnTo?: string;
 }
 
 const LEVELS = Array.from({ length: 10 }, (_, i) => i + 1);
@@ -27,7 +31,11 @@ const LEVELS = Array.from({ length: 10 }, (_, i) => i + 1);
 // Shared fieldset-legend styling in the pulse mono micro-label grammar.
 const legendClass = "label-mono text-[11px] font-medium text-text-secondary";
 
-export function ProfileForm({ profile, submitLabel }: ProfileFormProps) {
+export function ProfileForm({
+  profile,
+  submitLabel,
+  returnTo,
+}: ProfileFormProps) {
   const [state, action, pending] = useActionState<ProfileFormState, FormData>(
     submitProfile,
     { error: null },
@@ -35,6 +43,9 @@ export function ProfileForm({ profile, submitLabel }: ProfileFormProps) {
 
   return (
     <form action={action} className="flex flex-col gap-5">
+      {returnTo ? (
+        <input type="hidden" name="returnTo" value={returnTo} />
+      ) : null}
       {state.error ? <Alert tone="error">{state.error}</Alert> : null}
 
       <Field label="Display name">
