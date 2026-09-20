@@ -200,7 +200,7 @@ export default async function SessionPage({
           )}
           {/* Generate another standalone Session — a periodic action, not a per-session verb. */}
           <Link
-            href="/sessions/new"
+            href={appendFrom("/sessions/new", `/sessions/${session.id}`)}
             className={buttonVariants({ variant: "secondary" })}
           >
             Generate another

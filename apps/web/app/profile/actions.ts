@@ -9,6 +9,7 @@ import {
   saveProfile,
   type ProfileInput,
 } from "@/lib/profile";
+import { sanitizeInternalPath } from "@/lib/back-target";
 
 export interface ProfileFormState {
   error: string | null;
@@ -87,6 +88,13 @@ function toProfileInput(form: FormData): ProfileInput {
   };
 }
 
+// The same form serves first onboarding and later edits (shared ProfileForm), so
+// the caller declares where a successful save returns via a hidden `returnTo`: the
+// edit screen round-trips to the Profile, while onboarding omits it and lands on the
+// Dashboard. The value is a form field, so it goes through the same internal-path
+// guard as the `?from=` back link — a crafted `returnTo` can never redirect off-site.
+const DEFAULT_RETURN_TO = "/dashboard";
+
 export async function submitProfile(
   _prevState: ProfileFormState,
   form: FormData,
@@ -95,5 +103,7 @@ export async function submitProfile(
   if (!result.success) {
     return { error: result.error ?? "Could not save your profile." };
   }
-  redirect("/dashboard");
+  const returnTo =
+    sanitizeInternalPath(text(form, "returnTo")) ?? DEFAULT_RETURN_TO;
+  redirect(returnTo);
 }

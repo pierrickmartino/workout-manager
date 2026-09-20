@@ -7,6 +7,7 @@ import {
   toStrengthTimelineView,
   type StrengthTimelineView,
 } from "@/lib/strength-analytics-view";
+import { appendFrom } from "@/lib/back-target";
 import { toStrengthTrajectories } from "@/lib/strength-trajectories-view";
 import { toMuscleBalance } from "@/lib/muscle-balance-view";
 import { resolveAppearance } from "@/lib/appearance";
@@ -102,7 +103,7 @@ function StrengthEmptyState() {
         {STRENGTH_EMPTY_STATE_COPY}
       </p>
       <Link
-        href="/sessions/new"
+        href={appendFrom("/sessions/new", "/analytics/strength")}
         className="label-mono text-[11px] text-cyan hover:underline"
       >
         Generate a workout →

@@ -3,11 +3,16 @@ import { ArrowRight, PencilLine, PencilRuler, Zap } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
+import { appendFrom } from "@/lib/back-target";
 
 interface GenerateTrainingLaunchpadProps {
   // The mono eyebrow above the heading — differs by context ("no active protocol"
   // on the Home empty state, a neutral "start new training" on the TRAIN tab).
   eyebrow: string;
+  // The route this launchpad is rendered on ("/dashboard" or "/train"), threaded
+  // onto the "Generate a workout" link as `?from=` so that screen's back control
+  // returns here rather than defaulting to the Dashboard. Omitted → Dashboard fallback.
+  from?: string;
   // Whether to show the no-AI "Build a workout" card — author a reusable Hand-Authored
   // Session to run later, no performance logged (intent I4, ADR-0071). The TRAIN launchpad
   // opts in; the Home empty state stays AI-only (Home's quick-action row already carries
@@ -25,6 +30,7 @@ interface GenerateTrainingLaunchpadProps {
 // was previously only on the Home empty state, stranding users mid-Protocol.
 export function GenerateTrainingLaunchpad({
   eyebrow,
+  from,
   showBuild = false,
   showLogPastWorkout = false,
 }: GenerateTrainingLaunchpadProps): React.JSX.Element {
@@ -48,7 +54,7 @@ export function GenerateTrainingLaunchpad({
           Generate a protocol
         </Link>
         <Link
-          href="/sessions/new"
+          href={appendFrom("/sessions/new", from)}
           className={buttonVariants({
             variant: "secondary",
             className: "w-full",

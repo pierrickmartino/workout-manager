@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 
 import { fetchHistory } from "@/lib/logs";
+import { appendFrom } from "@/lib/back-target";
 import { resolveAppearance } from "@/lib/appearance";
 import { PageHeader } from "@/components/pulse/page-header";
 import { Alert } from "@/components/pulse/alert";
@@ -56,7 +57,7 @@ export default async function HistoryPage() {
             You haven&apos;t logged any sessions yet.
           </p>
           <Link
-            href="/sessions/new"
+            href={appendFrom("/sessions/new", "/history")}
             className="label-mono text-[11px] text-cyan hover:underline"
           >
             Generate a workout →

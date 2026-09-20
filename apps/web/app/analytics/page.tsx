@@ -9,6 +9,7 @@ import {
   type DistanceSeries,
 } from "@/lib/analytics";
 import { RANGE_LABELS, toRangeOptions } from "@/lib/analytics-range-view";
+import { appendFrom } from "@/lib/back-target";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { NavRow } from "@/components/pulse/nav-row";
@@ -113,7 +114,7 @@ export default async function AnalyticsPage({
             sessions, active days, and total sets will appear here.
           </p>
           <Link
-            href="/sessions/new"
+            href={appendFrom("/sessions/new", "/analytics")}
             className="label-mono text-[11px] text-cyan hover:underline"
           >
             Generate a workout →

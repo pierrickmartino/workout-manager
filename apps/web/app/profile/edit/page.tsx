@@ -23,8 +23,12 @@ export default async function EditProfilePage() {
   return (
     <section className="flex flex-col gap-6">
       <PageHeader overline="PULSE // OPERATOR" title="Edit profile" />
-      <ProfileForm profile={envelope.data} submitLabel="Save changes" />
-      <BackLink href="/dashboard">Back to dashboard</BackLink>
+      <ProfileForm
+        profile={envelope.data}
+        submitLabel="Save changes"
+        returnTo="/profile"
+      />
+      <BackLink href="/profile">Back to profile</BackLink>
     </section>
   );
 }
