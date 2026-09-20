@@ -6,6 +6,7 @@ import { LayoutGrid, Zap, BarChart3, User, type LucideIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils";
 import { TABS, isActive, type TabLabel } from "@/lib/tab-nav";
+import { NAV_LABELS } from "@/lib/shell-a11y";
 
 // Route ownership (which tab lights for which path) lives in `@/lib/tab-nav` so it can be
 // tested without a browser; this component owns only presentation. Icons are attached here
@@ -23,8 +24,14 @@ export function TabBar(): React.JSX.Element {
   const pathname = usePathname() ?? "";
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 backdrop-blur">
-      <div className="mx-auto flex max-w-shell items-stretch justify-between px-3 pb-5 pt-0">
+    <nav
+      aria-label={NAV_LABELS.primary}
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 backdrop-blur"
+    >
+      {/* `pb` keeps the tabs above the home indicator by adding the bottom safe-area inset to
+          the 1.25rem base; env() is 0 on non-notched devices, so layout is unchanged there.
+          <main>'s bottom clearance tracks the same inset (app/layout.tsx). */}
+      <div className="mx-auto flex max-w-shell items-stretch justify-between px-3 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-0">
         {TABS.map((tab) => {
           const active = isActive(pathname, tab);
           const Icon = ICONS[tab.label];

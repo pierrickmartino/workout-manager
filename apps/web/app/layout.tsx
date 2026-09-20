@@ -22,6 +22,12 @@ import { OutboxSyncRegistrar } from "@/components/OutboxSyncRegistrar";
 import { SyncStatusBanner } from "@/components/SyncStatusBanner";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import { buttonVariants } from "@/components/ui/button";
+import {
+  MAIN_CONTENT_ID,
+  SKIP_LINK_HREF,
+  SKIP_LINK_LABEL,
+  NAV_LABELS,
+} from "@/lib/shell-a11y";
 import { resolveActiveSkin } from "@/lib/active-skin";
 import { resolveUserMode } from "@/lib/appearance";
 import { resolveTheme } from "@/lib/theme";
@@ -149,13 +155,24 @@ export default async function RootLayout({
         {...themeAttributes}
       >
         <body className="min-h-screen bg-base text-text-primary antialiased">
-          {/* Slim branded top bar — the web analogue of the app status bar. */}
-          <header className="sticky top-0 z-30 border-b border-border bg-base/90 backdrop-blur">
+          {/* Skip-to-content link: the first focusable element, hidden until focused so
+              keyboard/screen-reader users can jump past the repeated shell chrome straight
+              to <main>. Target id + href are the one contract in `lib/shell-a11y`. */}
+          <a
+            href={SKIP_LINK_HREF}
+            className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-sm focus:border focus:border-border focus:bg-surface focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-text-primary focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-cyan"
+          >
+            {SKIP_LINK_LABEL}
+          </a>
+          {/* Slim branded top bar — the web analogue of the app status bar. `pt` carries the
+              top safe-area inset so the bar clears the notch/status bar in iOS standalone
+              (statusBarStyle: black-translucent); env() is 0 on non-notched devices. */}
+          <header className="sticky top-0 z-30 border-b border-border bg-base/90 pt-[env(safe-area-inset-top)] backdrop-blur">
             <div className="mx-auto flex h-14 max-w-shell items-center justify-between px-6">
               <span className="label-mono text-[13px] font-bold tracking-[0.2em] text-text-primary">
                 PULSE<span className="text-cyan"> //</span>
               </span>
-              <nav className="flex items-center gap-3">
+              <nav aria-label={NAV_LABELS.account} className="flex items-center gap-3">
                 <SignedOut>
                   {/* Clerk's SignInButton clones its child and re-validates
                       with React.Children.only; the trigger button must contain
@@ -183,7 +200,15 @@ export default async function RootLayout({
             </div>
           </header>
 
-          <main className="mx-auto min-h-[calc(100vh-3.5rem)] w-full max-w-shell px-6 pb-28 pt-6">
+          {/* `id`/`tabIndex` make this the skip link's landing target — tabIndex={-1} moves
+              focus here (not just the viewport) on the jump. `pb` clears the fixed TabBar
+              plus the bottom safe-area inset it now absorbs (see tab-bar.tsx); the 7rem base
+              is unchanged, env() adds 0 on non-notched devices. */}
+          <main
+            id={MAIN_CONTENT_ID}
+            tabIndex={-1}
+            className="mx-auto min-h-[calc(100vh-3.5rem)] w-full max-w-shell px-6 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-6"
+          >
             {/* Guards the authoring/correction forms against discarding unsaved work on
                 navigation (finding #4). Descendant forms opt in via useNavigationGuard;
                 the click interceptor it installs is document-wide, so it also catches the
