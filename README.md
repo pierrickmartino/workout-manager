@@ -26,6 +26,10 @@ round-trips through Postgres before rendering.
 1. Create a Clerk application at <https://dashboard.clerk.com>.
 2. Copy `.env.example` to `.env` and fill in:
    - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`
+   - `NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in` and
+     `NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up` — point Clerk at the in-app auth
+     routes so protected-route redirects stay on-domain and preserve the
+     intended destination as `?redirect_url=…` (finding #9)
    - `CLERK_ISSUER` (the `iss` of your Clerk session tokens) and
      `CLERK_JWKS_URL` (`{issuer}/.well-known/jwks.json`)
 3. Bring everything up:

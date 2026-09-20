@@ -4,16 +4,18 @@ import assert from "node:assert/strict";
 // The seam imports Clerk's server `auth()` and the `server-only` guard. Neither is
 // resolvable in a plain Node test context, so we stub both at the module boundary
 // (via --experimental-test-module-mocks) and drive the seam through a mocked
-// `fetch`, asserting the request it produces and the envelope it returns.
+// `fetch`, asserting the request it produces and the envelope it returns. `getToken`
+// reads a mutable `mockedToken` so a test can simulate a signed-out request (null).
+let mockedToken: string | null = "test-jwt";
 mock.module("server-only", { namedExports: {} });
 mock.module("@clerk/nextjs/server", {
   namedExports: {
-    auth: async () => ({ getToken: async () => "test-jwt" }),
+    auth: async () => ({ getToken: async () => mockedToken }),
   },
 });
 
 // Import after the mocks are registered so the seam binds to the stubs.
-const { apiGet, apiSend } = await import("./api.ts");
+const { apiGet, apiSend, MissingAuthError } = await import("./api.ts");
 
 // Capture the arguments each `fetch` call receives and hand back a canned envelope.
 let lastFetch: { url: string; init: RequestInit | undefined };
@@ -27,9 +29,11 @@ function stubFetch(payload: unknown): void {
 const realFetch = globalThis.fetch;
 beforeEach(() => {
   lastFetch = { url: "", init: undefined };
+  mockedToken = "test-jwt";
 });
 afterEach(() => {
   globalThis.fetch = realFetch;
+  mockedToken = "test-jwt";
 });
 
 test("apiGet requests the base-prefixed path with the Clerk JWT attached", async () => {
@@ -97,4 +101,26 @@ test("apiSend returns the parsed envelope unchanged", async () => {
 
   // Assert — writes surface the raw envelope too; unwrap stays at the caller
   assert.deepEqual(result, envelope);
+});
+
+test("apiGet throws MissingAuthError on a null token instead of sending Bearer null", async () => {
+  // Arrange — a signed-out request (Clerk's getToken resolves null) and a fetch stub
+  // that records whether it was reached
+  mockedToken = null;
+  stubFetch({ success: true, data: 1, error: null });
+
+  // Act / Assert — the seam refuses to build a bogus header (finding #9)…
+  await assert.rejects(() => apiGet("/api/home"), MissingAuthError);
+  // …and never reaches the network with an unauthenticated request
+  assert.equal(lastFetch.url, "");
+});
+
+test("apiSend throws MissingAuthError on a null token before writing", async () => {
+  // Arrange — a signed-out write must not hit the backend at all
+  mockedToken = null;
+  stubFetch({ success: true, data: null, error: null });
+
+  // Act / Assert
+  await assert.rejects(() => apiSend("/api/profile", "PUT", { name: "Ada" }), MissingAuthError);
+  assert.equal(lastFetch.url, "");
 });

@@ -1,10 +1,11 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 import {
   buildContentSecurityPolicy,
   buildTrustedTypesReportOnly,
 } from "@/lib/csp";
+import { isPublicRoute } from "@/lib/route-access";
 
 // Next.js 16 renamed the Middleware file convention from `middleware.ts` to
 // `proxy.ts`; a root `middleware.ts` is no longer registered, which left
@@ -12,13 +13,16 @@ import {
 // "can't detect usage of clerkMiddleware()". `clerkMiddleware` itself is
 // unchanged — only the filename moved.
 //
-// The dashboard, onboarding, and profile editing are authenticated screens;
-// everything else (landing, Clerk's own sign-in UI) stays public.
-const isProtectedRoute = createRouteMatcher([
-  "/dashboard(.*)",
-  "/onboarding(.*)",
-  "/profile(.*)",
-]);
+// Authentication is **fail-closed** (finding #9): every route is protected unless it
+// is on the public allowlist in `lib/route-access`. This replaced a short denylist
+// (`/dashboard`, `/onboarding`, `/profile` only) under which ~9 private route
+// families — protocols, sessions, history, exercises, train, metrics, analytics,
+// logs, admin — silently rendered for signed-out visitors, who then hit a load
+// error, an empty hub, or a not-found screen instead of a deliberate sign-in. A
+// signed-out visitor to a private route is now redirected to `/sign-in` with the
+// deep link preserved as `?redirect_url=…`, which Clerk returns them to after
+// sign-in (see app/sign-in). Admin stays private here; its role gate (resolveIsAdmin
+// → notFound for a signed-in non-admin) is unchanged and independent (ADR-0046).
 
 // The app-wide DOM-XSS defense (ADR-0036, #257). The `contentSecurityPolicy`
 // option makes Clerk emit the enforcing, nonce-based `strict-dynamic` CSP —
@@ -27,7 +31,7 @@ const isProtectedRoute = createRouteMatcher([
 // + `worker-src 'self' blob:` etc.) lives in the pure, tested `lib/csp` builder.
 export default clerkMiddleware(
   async (auth, req) => {
-    if (isProtectedRoute(req)) {
+    if (!isPublicRoute(req.nextUrl.pathname)) {
       await auth.protect();
     }
     // Trusted Types ships report-only first (React 19 + Clerk are the expected

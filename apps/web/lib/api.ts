@@ -35,9 +35,30 @@ export interface Envelope<T> {
   meta?: PaginationMeta;
 }
 
+// Thrown when an authenticated request is attempted with no Clerk session token.
+// This is a defense-in-depth net, not the primary gate: `proxy.ts` protects every
+// private route and redirects a signed-out visitor to `/sign-in` before any page
+// that calls this seam renders (finding #9). A null token here therefore means a
+// route escaped the public allowlist, or the session vanished mid-request — a "can't
+// happen" that we surface loudly instead of papering over.
+export class MissingAuthError extends Error {
+  constructor() {
+    super("No Clerk session token for an authenticated API request.");
+    this.name = "MissingAuthError";
+  }
+}
+
 async function authHeaders(): Promise<Record<string, string>> {
   const { getToken } = await auth();
   const token = await getToken();
+  // Fail loud rather than sending `Authorization: Bearer null`: that produced a
+  // backend 401 which callers then collapsed into a generic error, an empty hub, or
+  // a `notFound()` — exactly the inconsistent signed-out entry finding #9 flagged.
+  // The redirect + deep-link preservation is the middleware's job (proxy.ts), so this
+  // transport seam stays transport-only and just refuses to build a bogus header.
+  if (token === null || token === undefined) {
+    throw new MissingAuthError();
+  }
   return { Authorization: `Bearer ${token}` };
 }
 
