@@ -41,6 +41,7 @@ from app.repositories.exercise_audit_repository import (
     ExerciseAuditRepository,
     SqlExerciseAuditRepository,
 )
+from app.repositories.exercise_audit_trail import AuditTrail
 from app.repositories.exercise_image_repository import (
     ExerciseImageRepository,
     SqlExerciseImageRepository,
@@ -133,6 +134,16 @@ def get_exercise_audit_repository(
     session: Session = Depends(get_session),
 ) -> ExerciseAuditRepository:
     return SqlExerciseAuditRepository(session)
+
+
+def get_exercise_audit_trail(
+    audit: ExerciseAuditRepository = Depends(get_exercise_audit_repository),
+) -> AuditTrail:
+    # The one seam the admin routes record through: it composes the record-iff-changed
+    # decision with the append-only repository. Depending on ``get_exercise_audit_repository``
+    # (rather than the raw session) means a test overriding that provider with an in-memory
+    # repository is honored here for free — the trail wraps whatever repository is injected.
+    return AuditTrail(audit)
 
 
 def get_exercise_image_repository(

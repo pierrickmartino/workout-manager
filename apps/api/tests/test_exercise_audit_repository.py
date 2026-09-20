@@ -12,7 +12,7 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.db.models import ExerciseAdminAudit  # noqa: F401 - ensure table is registered
-from app.domain.exercise_audit import AuditAction, provenance_change_detail
+from app.domain.exercise_audit import AuditAction
 from app.repositories.exercise_audit_repository import (
     InMemoryExerciseAuditRepository,
     SqlExerciseAuditRepository,
@@ -42,7 +42,7 @@ def test_record_persists_the_act_and_list_for_reads_it_back(repo):
         exercise_id=42,
         actor="user_admin",
         action=AuditAction.PROVENANCE_CHANGE,
-        detail=provenance_change_detail("ai_generated", "curated"),
+        detail={"from": "ai_generated", "to": "curated"},
     )
 
     rows = repo.list_for(42)
@@ -61,13 +61,13 @@ def test_list_for_is_scoped_to_one_exercise(repo):
         exercise_id=1,
         actor="user_admin",
         action=AuditAction.PROVENANCE_CHANGE,
-        detail=provenance_change_detail("ai_generated", "curated"),
+        detail={"from": "ai_generated", "to": "curated"},
     )
     repo.record(
         exercise_id=2,
         actor="user_admin",
         action=AuditAction.PROVENANCE_CHANGE,
-        detail=provenance_change_detail("curated", "ai_generated"),
+        detail={"from": "curated", "to": "ai_generated"},
     )
 
     rows = repo.list_for(1)
@@ -80,13 +80,13 @@ def test_list_for_returns_newest_first(repo):
         exercise_id=9,
         actor="user_admin",
         action=AuditAction.PROVENANCE_CHANGE,
-        detail=provenance_change_detail("user_entered", "ai_generated"),
+        detail={"from": "user_entered", "to": "ai_generated"},
     )
     repo.record(
         exercise_id=9,
         actor="user_admin",
         action=AuditAction.PROVENANCE_CHANGE,
-        detail=provenance_change_detail("ai_generated", "curated"),
+        detail={"from": "ai_generated", "to": "curated"},
     )
 
     rows = repo.list_for(9)
@@ -104,13 +104,13 @@ def test_record_is_append_only(repo):
         exercise_id=5,
         actor="user_admin",
         action=AuditAction.PROVENANCE_CHANGE,
-        detail=provenance_change_detail("ai_generated", "curated"),
+        detail={"from": "ai_generated", "to": "curated"},
     )
     repo.record(
         exercise_id=5,
         actor="user_other",
         action=AuditAction.PROVENANCE_CHANGE,
-        detail=provenance_change_detail("curated", "ai_generated"),
+        detail={"from": "curated", "to": "ai_generated"},
     )
 
     rows = repo.list_for(5)
