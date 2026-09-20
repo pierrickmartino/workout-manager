@@ -1,13 +1,14 @@
 "use client";
 
 import { useActionState } from "react";
-import { Heart } from "lucide-react";
+import { Star } from "lucide-react";
 
 import {
   submitFavorite,
   type FavoriteFormState,
 } from "@/app/sessions/[id]/actions";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface FavoriteSessionControlProps {
   sessionId: number;
@@ -44,8 +45,14 @@ export function FavoriteSessionControl({
         aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
         disabled={pending}
       >
-        <Heart
-          className={`h-3.5 w-3.5 ${isFavorite ? "fill-current" : ""}`}
+        {/* Star, matching the My Sessions list toggle so the Favorite marker reads
+            the same on both surfaces (the aria-label, not the glyph, carries the
+            term). Cyan fill when set, muted otherwise — one favorite = cyan language. */}
+        <Star
+          className={cn(
+            "h-3.5 w-3.5",
+            isFavorite ? "fill-cyan text-cyan" : "text-text-muted hover:text-cyan",
+          )}
           aria-hidden
         />
         {isFavorite ? "Favorited" : "Favorite"}
