@@ -1,16 +1,23 @@
-"""The admin audit-trail vocabulary (ADR-0075/0076).
+"""The admin audit-trail vocabulary and the record-iff-changed decision (ADR-0075/0076).
 
-The exercise-admin audit trail records the consequential admin acts on a catalog
-Exercise. This module owns the closed set of act names, so the repository, routes, and
-tests all name an action through one enum rather than scattering string literals — the
-same discipline ``Provenance`` gives the trust axis.
+The exercise-admin audit trail records the consequential admin acts on a catalog Exercise.
+This module owns two things, both pure (no I/O, no ORM):
 
-Pure: no I/O, no ORM. The stored ``action`` column holds the raw value of these members.
-Provenance change (ADR-0075) is the first act; retire / un-retire and the guarded hard
-delete (ADR-0076) join it here."""
+- the closed set of act names (``AuditAction``), so the repository, the trail, the routes, and
+  the tests all name an action through one enum rather than scattering string literals — the
+  same discipline ``Provenance`` gives the trust axis; and
+- the decision *whether and what* to record for one admin act — ``audit_provenance_change`` /
+  ``audit_retire_transition`` / ``audit_hard_delete`` — returning an ``AuditIntent`` to persist
+  or ``None`` for a no-op. This is the "audit only a real change" rule that once lived inline in
+  three route handlers, now with one home and its own test surface (``tests/test_exercise_audit``).
+
+Persisting an intent is the ``AuditTrail``'s job (``repositories/exercise_audit_trail``), which
+holds the repository — the pure decision here stays trivially testable without any I/O.
+"""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import Enum
 
 
@@ -33,24 +40,57 @@ class AuditAction(str, Enum):
     HARD_DELETE = "hard_delete"
 
 
-def provenance_change_detail(old: str, new: str) -> dict[str, str]:
-    """The ``detail`` payload for a ``PROVENANCE_CHANGE`` row: the old → new tiers.
+@dataclass(frozen=True)
+class AuditIntent:
+    """What to append to the trail for one admin act — the action plus its detail payload.
 
-    Kept here, beside the action it belongs to, so every writer shapes the payload the
-    same way and a reader knows exactly which keys a provenance-change row carries."""
+    The decisions below return ``AuditIntent | None``: ``None`` is the "nothing changed, record
+    nothing" verdict (a re-affirmed tier, or a Retire flip to the current state), and an intent
+    is a genuine act to persist. Separating *what to record* (here, pure) from *persisting it*
+    (the ``AuditTrail``, which holds the repository) keeps the record-iff-changed rule
+    unit-testable without any I/O and gives it one home instead of a copy in every handler.
+    """
 
-    return {"from": old, "to": new}
-
-
-def hard_delete_detail(normalized_name: str) -> dict[str, str]:
-    """The ``detail`` payload for a ``HARD_DELETE`` row: the deleted Exercise's normalized name.
-
-    Kept beside the action it belongs to so every writer shapes it the same way. The
-    ``exercise_id`` on the audit row is a plain int with no foreign key, so once the Exercise
-    row is gone this name is the human-readable record of *what* was destroyed — the trail
-    survives the deleted row (ADR-0076)."""
-
-    return {"name": normalized_name}
+    action: AuditAction
+    detail: dict[str, str]
 
 
-__all__ = ["AuditAction", "provenance_change_detail", "hard_delete_detail"]
+def audit_provenance_change(*, before: str, after: str) -> AuditIntent | None:
+    """The intent for a deliberate Provenance change (ADR-0075), or ``None`` when the tier is
+    re-affirmed. Detail carries the old→new tiers so a reader knows exactly what moved.
+    """
+
+    if before == after:
+        return None
+    return AuditIntent(AuditAction.PROVENANCE_CHANGE, {"from": before, "to": after})
+
+
+def audit_retire_transition(
+    *, before_retired: bool, after_retired: bool
+) -> AuditIntent | None:
+    """The intent for a Retire-tombstone flip (ADR-0076), or ``None`` when the state is
+    re-affirmed. The direction picks the action — hiding is ``RETIRE``, restoring ``UNRETIRE`` —
+    and the row needs no detail beyond that verb."""
+
+    if before_retired == after_retired:
+        return None
+    action = AuditAction.RETIRE if after_retired else AuditAction.UNRETIRE
+    return AuditIntent(action, {})
+
+
+def audit_hard_delete(*, normalized_name: str) -> AuditIntent:
+    """The intent for a guarded hard delete (ADR-0076) — always recorded, since a delete is a
+    terminal act with no before/after to compare. Detail keeps the deleted Exercise's normalized
+    name, so the append-only trail outlives the row it describes (the audit row's ``exercise_id``
+    is a plain int with no FK)."""
+
+    return AuditIntent(AuditAction.HARD_DELETE, {"name": normalized_name})
+
+
+__all__ = [
+    "AuditAction",
+    "AuditIntent",
+    "audit_provenance_change",
+    "audit_retire_transition",
+    "audit_hard_delete",
+]

@@ -31,11 +31,6 @@ from app.domain.exercise import (
     normalize_name,
 )
 from app.domain.exercise_admin import AdminBrowseFilters
-from app.domain.exercise_audit import (
-    AuditAction,
-    hard_delete_detail,
-    provenance_change_detail,
-)
 from app.domain.exercise_browse import (
     distinct_equipment,
     parse_difficulty_band,
@@ -53,16 +48,14 @@ from app.generation.enrichment_queue import EnrichmentQueue
 from app.repositories.deps import (
     get_backfill_queue,
     get_enrichment_queue,
-    get_exercise_audit_repository,
+    get_exercise_audit_trail,
     get_exercise_image_repository,
     get_exercise_relationship_repository,
     get_exercise_repository,
     get_logged_session_repository,
 )
-from app.repositories.exercise_audit_repository import (
-    AuditRecord,
-    ExerciseAuditRepository,
-)
+from app.repositories.exercise_audit_repository import AuditRecord
+from app.repositories.exercise_audit_trail import AuditTrail
 from app.repositories.exercise_image_repository import ExerciseImageRepository
 from app.repositories.exercise_relationship_repository import (
     DirectedRelationship,
@@ -472,15 +465,19 @@ def _parse_enum(enum_cls: type[_EnumT], raw: str | None) -> _EnumT | None:
 def admin_browse_exercises(
     q: str = Query(default="", description="Case-insensitive name substring."),
     provenance: str | None = Query(
-        default=None, description="Filter by Provenance: curated|ai_generated|user_entered."
+        default=None,
+        description="Filter by Provenance: curated|ai_generated|user_entered.",
     ),
     completeness: str | None = Query(
         default=None, description="Filter by Completeness tier: stub|listable|enriched."
     ),
     retired: bool | None = Query(
-        default=None, description="Filter by retired (true) / active (false); omit for both."
+        default=None,
+        description="Filter by retired (true) / active (false); omit for both.",
     ),
-    limit: int = Query(default=ADMIN_BROWSE_DEFAULT_LIMIT, ge=1, le=ADMIN_BROWSE_MAX_LIMIT),
+    limit: int = Query(
+        default=ADMIN_BROWSE_DEFAULT_LIMIT, ge=1, le=ADMIN_BROWSE_MAX_LIMIT
+    ),
     offset: int = Query(default=0, ge=0),
     _operator: str = Depends(require_admin),
     exercises: ExerciseRepository = Depends(get_exercise_repository),
@@ -610,9 +607,7 @@ def read_exercise(
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
     # The reference count is an operator-only signal for the admin editor's delete guard; skip
     # the three COUNT queries for everyone else (issue #507) so the public detail path stays lean.
-    reference_count = (
-        exercises.reference_count(exercise_id) if is_operator else None
-    )
+    reference_count = exercises.reference_count(exercise_id) if is_operator else None
     return success_envelope(
         _detail(
             exercise,
@@ -772,7 +767,7 @@ def set_exercise_provenance(
     relationships: ExerciseRelationshipRepository = Depends(
         get_exercise_relationship_repository
     ),
-    audit: ExerciseAuditRepository = Depends(get_exercise_audit_repository),
+    audit: AuditTrail = Depends(get_exercise_audit_trail),
     images: ExerciseImageRepository = Depends(get_exercise_image_repository),
 ) -> dict:
     """Deliberately set one Catalog Exercise's Provenance and audit the act (ADR-0075).
@@ -796,14 +791,11 @@ def set_exercise_provenance(
     # ``existing`` was resolved above, so the write cannot miss; guard defensively anyway.
     if updated is None:  # pragma: no cover - unreachable after the resolve above
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
-    if updated.provenance != old_provenance:
-        # Audit only a real change (ADR-0075): re-affirming the current tier writes no row.
-        audit.record(
-            exercise_id=exercise_id,
-            actor=operator,
-            action=AuditAction.PROVENANCE_CHANGE,
-            detail=provenance_change_detail(old_provenance, updated.provenance),
-        )
+    # The trail records only a real change (ADR-0075): re-affirming the current tier writes no
+    # row. The before/after compare and the old→new detail live inside the trail, not here.
+    audit.record_provenance_change(
+        exercise_id, operator, before=old_provenance, after=updated.provenance
+    )
     return success_envelope(
         _detail(
             updated,
@@ -885,7 +877,7 @@ def retire_exercise(
     relationships: ExerciseRelationshipRepository = Depends(
         get_exercise_relationship_repository
     ),
-    audit: ExerciseAuditRepository = Depends(get_exercise_audit_repository),
+    audit: AuditTrail = Depends(get_exercise_audit_trail),
     images: ExerciseImageRepository = Depends(get_exercise_image_repository),
 ) -> dict:
     """Retire one Catalog Exercise — the reversible soft tombstone (issue #506, ADR-0076).
@@ -919,7 +911,7 @@ def unretire_exercise(
     relationships: ExerciseRelationshipRepository = Depends(
         get_exercise_relationship_repository
     ),
-    audit: ExerciseAuditRepository = Depends(get_exercise_audit_repository),
+    audit: AuditTrail = Depends(get_exercise_audit_trail),
     images: ExerciseImageRepository = Depends(get_exercise_image_repository),
 ) -> dict:
     """Un-retire one Catalog Exercise for a clean restore (issue #506, ADR-0076).
@@ -950,31 +942,34 @@ def _flip_retire(
     operator: str,
     exercises: ExerciseRepository,
     relationships: ExerciseRelationshipRepository,
-    audit: ExerciseAuditRepository,
+    audit: AuditTrail,
     images: ExerciseImageRepository,
 ) -> dict:
     """Set (or clear) the Retire tombstone, audit the transition, and re-serialize (ADR-0076).
 
     The one body behind the retire and un-retire routes, so both resolve, flip, audit, and
-    respond identically — only the target state and the recorded ``AuditAction`` differ. Audits
-    only a real state change (mirroring the Provenance no-op rule), so re-affirming the current
-    state records nothing and the append-only trail holds only genuine transitions."""
+    respond identically — only the target state differs. The ``AuditTrail`` records only a real
+    state change (mirroring the Provenance no-op rule) and derives the retire vs un-retire
+    action from the before/after, so re-affirming the current state records nothing and the
+    append-only trail holds only genuine transitions."""
 
     existing = exercises.get(exercise_id)
     if existing is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
-    updated = exercises.retire(exercise_id) if retire else exercises.unretire(exercise_id)
+    updated = (
+        exercises.retire(exercise_id) if retire else exercises.unretire(exercise_id)
+    )
     # ``existing`` was resolved above, so the write cannot miss; guard defensively anyway.
     if updated is None:  # pragma: no cover - unreachable after the resolve above
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
-    if existing.retired != updated.retired:
-        # Audit only a real transition (ADR-0076): flipping to the current state writes no row.
-        audit.record(
-            exercise_id=exercise_id,
-            actor=operator,
-            action=AuditAction.RETIRE if retire else AuditAction.UNRETIRE,
-            detail={},
-        )
+    # The trail records only a real transition (ADR-0076): flipping to the current state writes
+    # no row, and the direction (retire vs un-retire) is derived inside from before/after.
+    audit.record_retire_transition(
+        exercise_id,
+        operator,
+        before_retired=existing.retired,
+        after_retired=updated.retired,
+    )
     return success_envelope(
         _detail(
             updated,
@@ -1002,7 +997,7 @@ def read_exercise_audit(
     exercise_id: int,
     _operator: str = Depends(require_admin),
     exercises: ExerciseRepository = Depends(get_exercise_repository),
-    audit: ExerciseAuditRepository = Depends(get_exercise_audit_repository),
+    audit: AuditTrail = Depends(get_exercise_audit_trail),
 ) -> dict:
     """Read one Catalog Exercise's append-only admin audit trail (issue #503, ADR-0075).
 
@@ -1146,7 +1141,7 @@ def delete_exercise(
     exercise_id: int,
     operator: str = Depends(require_admin),
     exercises: ExerciseRepository = Depends(get_exercise_repository),
-    audit: ExerciseAuditRepository = Depends(get_exercise_audit_repository),
+    audit: AuditTrail = Depends(get_exercise_audit_trail),
     images: ExerciseImageRepository = Depends(get_exercise_image_repository),
 ) -> Response:
     """Permanently delete a Catalog Exercise — guarded, retire-then-delete (issue #507, ADR-0076).
@@ -1181,12 +1176,9 @@ def delete_exercise(
         )
     # Record the act before removing the row. The audit row's ``exercise_id`` is a plain int
     # (no FK) and its detail keeps the deleted normalized name, so the trail outlives the row.
-    audit.record(
-        exercise_id=exercise_id,
-        actor=operator,
-        action=AuditAction.HARD_DELETE,
-        detail=hard_delete_detail(exercise.normalized_name),
-    )
+    # The route still sequences the removal below (it touches other repositories); the trail
+    # only appends the audit row.
+    audit.record_delete(exercise_id, operator, normalized_name=exercise.normalized_name)
     # The uploaded image is an FK child owned by the Exercise; remove it before the parent so
     # an FK-enforcing database accepts the delete (idempotent when there is no image).
     images.delete(exercise_id)
