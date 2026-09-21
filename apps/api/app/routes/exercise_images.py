@@ -25,6 +25,7 @@ from app.repositories.deps import (
 )
 from app.repositories.exercise_image_repository import ExerciseImageRepository
 from app.repositories.exercise_repository import ExerciseRepository
+from app.routes.resolve import get_exercise_or_404
 
 router = APIRouter(prefix="/api", tags=["exercises"])
 
@@ -66,9 +67,7 @@ async def upload_exercise_image(
     ``404`` resolved first. On success returns the served image URL via the standard envelope.
     """
 
-    exercise = exercises.get(exercise_id)
-    if exercise is None:
-        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    get_exercise_or_404(exercises, exercise_id)
 
     # Judge type and the declared size before reading, so a wrong-type or oversized upload is
     # refused without pulling its (up to 2 MB) body into memory. ``UploadFile.size`` is the byte
@@ -113,9 +112,7 @@ def delete_exercise_image(
     succeeds — and the legacy ``image`` URL string on the Exercise is left untouched (this only
     clears the uploaded bytes)."""
 
-    exercise = exercises.get(exercise_id)
-    if exercise is None:
-        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    get_exercise_or_404(exercises, exercise_id)
     images.delete(exercise_id)
     return success_envelope({"id": exercise_id})
 

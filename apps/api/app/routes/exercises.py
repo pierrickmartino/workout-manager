@@ -70,6 +70,7 @@ from app.repositories.exercise_repository import (
     NameCollision,
 )
 from app.repositories.logged_session_repository import LoggedSessionRepository
+from app.routes.resolve import get_exercise_or_404
 
 logger = logging.getLogger(__name__)
 
@@ -602,9 +603,7 @@ def read_exercise(
     ),
     images: ExerciseImageRepository = Depends(get_exercise_image_repository),
 ) -> dict:
-    exercise = exercises.get(exercise_id)
-    if exercise is None:
-        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    exercise = get_exercise_or_404(exercises, exercise_id)
     # The reference count is an operator-only signal for the admin editor's delete guard; skip
     # the three COUNT queries for everyone else (issue #507) so the public detail path stays lean.
     reference_count = exercises.reference_count(exercise_id) if is_operator else None
@@ -783,9 +782,7 @@ def set_exercise_provenance(
     envelope in the same shape as ``GET /{id}``. No automated path (enrichment, generation,
     substitution) reaches this endpoint (ADR-0002/0075)."""
 
-    existing = exercises.get(exercise_id)
-    if existing is None:
-        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    existing = get_exercise_or_404(exercises, exercise_id)
     old_provenance = existing.provenance
     updated = exercises.set_provenance(exercise_id, payload.provenance)
     # ``existing`` was resolved above, so the write cannot miss; guard defensively anyway.
@@ -861,9 +858,7 @@ def enrich_exercise_now(
     request exists only to accept the job, so a queue failure surfaces rather than being
     swallowed. Responses use the standard envelope."""
 
-    exercise = exercises.get(exercise_id)
-    if exercise is None:
-        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    get_exercise_or_404(exercises, exercise_id)
     enrichment_queue.enqueue(exercise_id)
     response.status_code = HTTP_ACCEPTED
     return success_envelope({"status": "accepted", "exercise_id": exercise_id})
@@ -953,9 +948,7 @@ def _flip_retire(
     action from the before/after, so re-affirming the current state records nothing and the
     append-only trail holds only genuine transitions."""
 
-    existing = exercises.get(exercise_id)
-    if existing is None:
-        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    existing = get_exercise_or_404(exercises, exercise_id)
     updated = (
         exercises.retire(exercise_id) if retire else exercises.unretire(exercise_id)
     )
@@ -1006,9 +999,7 @@ def read_exercise_audit(
     the standard envelope; a missing Exercise is ``404`` and an Exercise with no acts yet is a
     ``200`` with an empty list. The trail is append-only — this route only reads it."""
 
-    exercise = exercises.get(exercise_id)
-    if exercise is None:
-        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    get_exercise_or_404(exercises, exercise_id)
     records = audit.list_for(exercise_id)
     return success_envelope([_audit_record(record) for record in records])
 
@@ -1056,9 +1047,7 @@ def list_exercise_relationships(
     an Exercise with no links is a ``200`` with an empty list. Responses use the standard
     envelope."""
 
-    exercise = exercises.get(exercise_id)
-    if exercise is None:
-        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    get_exercise_or_404(exercises, exercise_id)
     listed = relationships.list_for(exercise_id)
     return success_envelope([_relationship_row(rel) for rel in listed])
 
@@ -1085,9 +1074,7 @@ def add_exercise_relationship(
     is a ``422`` handled by the body model. On success returns ``201`` with the created link
     via the standard envelope."""
 
-    from_exercise = exercises.get(exercise_id)
-    if from_exercise is None:
-        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    get_exercise_or_404(exercises, exercise_id)
     if exercises.get(payload.to_id) is None:
         raise HTTPException(
             status_code=HTTP_NOT_FOUND, detail="Target exercise not found"
@@ -1129,9 +1116,7 @@ def remove_exercise_relationship(
     write; the transport seam treats a 204 as success). An invalid kind is a ``422`` handled by
     the body model."""
 
-    exercise = exercises.get(exercise_id)
-    if exercise is None:
-        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    get_exercise_or_404(exercises, exercise_id)
     relationships.remove(exercise_id, payload.to_id, payload.kind)
     return Response(status_code=HTTP_NO_CONTENT)
 
@@ -1158,9 +1143,7 @@ def delete_exercise(
     survives the deleted row — the Exercise's owned image is cleaned up, the row is removed,
     and the response is a bodyless ``204`` (the transport seam treats it as success)."""
 
-    exercise = exercises.get(exercise_id)
-    if exercise is None:
-        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Exercise not found")
+    exercise = get_exercise_or_404(exercises, exercise_id)
     if not can_hard_delete(
         is_retired=exercise.retired,
         reference_count=exercises.reference_count(exercise_id),
