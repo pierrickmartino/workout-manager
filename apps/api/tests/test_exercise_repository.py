@@ -31,7 +31,9 @@ from app.repositories.exercise_repository import (
 
 def test_resolve_or_create_reports_a_fresh_create(repo):
     # Act — a genuine normalized-name miss mints a new Stub
-    resolved = repo.resolve_or_create("Jefferson Curl", provenance=Provenance.USER_ENTERED)
+    resolved = repo.resolve_or_create(
+        "Jefferson Curl", provenance=Provenance.USER_ENTERED
+    )
 
     # Assert — the created flag is the async-enrichment trigger (issue #309): a real
     # create is reported so the endpoint knows to enqueue an Enrichment job for it.
@@ -297,6 +299,28 @@ def test_set_muscle_emphasis_on_an_unknown_id_returns_none(repo):
     )
 
 
+def test_set_muscle_emphasis_returns_a_fresh_exercise_without_mutating_the_prior_reference(
+    repo,
+):
+    # Arrange — hold a reference to the pre-change Exercise (no split yet)
+    original = repo.find_or_create(
+        "Bulgarian Split Squat",
+        provenance=Provenance.CURATED,
+        targeted_muscles=["quads", "glutes"],
+    )
+
+    # Act — the writer is immutable (coding-style): it returns a fresh Exercise
+    updated = repo.set_muscle_emphasis(
+        original.id, primary_muscles=["quads"], secondary_muscles=["glutes"]
+    )
+
+    # Assert — the returned row carries the split; the earlier reference is untouched
+    assert updated is not None
+    assert updated.primary_muscles == ["quads"]
+    assert original.primary_muscles == []
+    assert original.secondary_muscles == []
+
+
 def test_update_writes_only_the_supplied_descriptive_fields(repo):
     # Arrange — a Listable movement with a full descriptive set
     exercise = repo.find_or_create(
@@ -527,6 +551,28 @@ def test_set_enrichment_on_an_unknown_id_returns_none(repo):
     )
 
 
+def test_set_enrichment_returns_a_fresh_exercise_without_mutating_the_prior_reference(
+    repo,
+):
+    # Arrange — hold a reference to the pre-enrichment Stub (name only)
+    original = repo.find_or_create("Sissy Squat", provenance=Provenance.AI_GENERATED)
+
+    # Act — the writer is immutable (coding-style): it returns a fresh Exercise
+    updated = repo.set_enrichment(
+        original.id,
+        description="A knee-dominant quad movement.",
+        targeted_muscles=["quads"],
+        instructions=["Lean back", "Bend the knees"],
+        difficulty=4,
+    )
+
+    # Assert — the returned row carries the enrichment; the earlier reference is untouched
+    assert updated is not None
+    assert updated.description == "A knee-dominant quad movement."
+    assert original.description is None
+    assert original.targeted_muscles == []
+
+
 def test_set_provenance_writes_the_tier_and_leaves_everything_else(repo):
     # Arrange — an AI-invented row carrying descriptive + curator-only content
     exercise = repo.find_or_create(
@@ -624,7 +670,9 @@ def test_set_precautions_returns_a_fresh_exercise_without_mutating_the_prior_ref
     )
 
     # Act — immutable writer
-    updated = repo.set_precautions(original.id, ["use a spotter", "warm up the shoulders"])
+    updated = repo.set_precautions(
+        original.id, ["use a spotter", "warm up the shoulders"]
+    )
 
     # Assert — the earlier reference is never mutated in place
     assert updated is not None
@@ -878,9 +926,7 @@ def test_sql_reference_count_sums_prescriptions_logged_sets_and_relationships():
         session.commit()
         session.refresh(logged)
         session.add(
-            LoggedSet(
-                logged_session_id=logged.id, exercise_id=target.id, position=0
-            )
+            LoggedSet(logged_session_id=logged.id, exercise_id=target.id, position=0)
         )
 
         # Two relationships touch the target: one outgoing (target is the from) and one
@@ -1008,7 +1054,5 @@ def test_list_by_provenance_excludes_retired_by_default_but_includes_on_request(
     default_rows = repo.list_by_provenance(Provenance.AI_GENERATED)
     assert {row.id for row in default_rows} == {active.id}
 
-    admin_rows = repo.list_by_provenance(
-        Provenance.AI_GENERATED, include_retired=True
-    )
+    admin_rows = repo.list_by_provenance(Provenance.AI_GENERATED, include_retired=True)
     assert {row.id for row in admin_rows} == {active.id, retired.id}

@@ -112,9 +112,7 @@ class NameCollision(Exception):
     keeps the normalized identity (a spelling/casing fix) is *not* a collision."""
 
     def __init__(self, normalized_name: str) -> None:
-        super().__init__(
-            f"another exercise already uses the name {normalized_name!r}"
-        )
+        super().__init__(f"another exercise already uses the name {normalized_name!r}")
         self.normalized_name = normalized_name
 
 
@@ -179,7 +177,8 @@ class ExerciseRepository(Protocol):
         are ranked curated-first then by name and sliced by ``limit``/``offset``.
         Read-only — the Exercise Library never creates a catalog entry (ADR-0021).
         Retired Exercises are hidden from this discovery read unless ``include_retired``
-        is set (ADR-0076); discovery callers pass the default, admin readouts pass ``True``."""
+        is set (ADR-0076); discovery callers pass the default, admin readouts pass ``True``.
+        """
         ...
 
     def browse(
@@ -200,7 +199,8 @@ class ExerciseRepository(Protocol):
         Muscle Group, required equipment, and difficulty band (all AND'd, OR within each)
         — ranked curated → completeness → name, and sliced by ``limit``/``offset`` with
         the full filtered count in ``total``. Read-only: browse never creates a catalog
-        entry. Retired Exercises are hidden unless ``include_retired`` is set (ADR-0076)."""
+        entry. Retired Exercises are hidden unless ``include_retired`` is set (ADR-0076).
+        """
         ...
 
     def browse_all(
@@ -273,8 +273,8 @@ class ExerciseRepository(Protocol):
         ``difficulty`` — the fields that lift a Stub to Listable. Provenance,
         precautions, the Exercise Image, and the Primary/Secondary split are left
         untouched: enrichment never promotes trust and never writes curator-only or
-        Enriched-tier content. Returns the updated Exercise, or ``None`` if no row
-        has ``exercise_id``."""
+        Enriched-tier content. **Immutable**: returns a fresh Exercise and never mutates the
+        row the caller already holds. Returns ``None`` if no row has ``exercise_id``."""
         ...
 
     def set_muscle_emphasis(
@@ -287,8 +287,9 @@ class ExerciseRepository(Protocol):
         """Write the Primary/Secondary emphasis split (ADR-0016) on one Exercise.
 
         Updates *only* ``primary_muscles`` / ``secondary_muscles`` — the durable
-        ``targeted_muscles`` union the F3 roll-up reads is left untouched — and
-        returns the updated Exercise, or ``None`` if no row has ``exercise_id``."""
+        ``targeted_muscles`` union the F3 roll-up reads is left untouched. **Immutable**:
+        returns a fresh Exercise and never mutates the caller's row, or ``None`` if no row has
+        ``exercise_id``."""
         ...
 
     def set_provenance(
@@ -317,9 +318,7 @@ class ExerciseRepository(Protocol):
         row has ``exercise_id``."""
         ...
 
-    def update(
-        self, exercise_id: int, patch: ExercisePatch
-    ) -> Exercise | None:
+    def update(self, exercise_id: int, patch: ExercisePatch) -> Exercise | None:
         """Partially edit one Exercise's descriptive fields + emphasis split (issue #502).
 
         Writes only the fields the ``patch`` supplies (the rest keep ``UNSET`` and are
@@ -341,7 +340,8 @@ class ExerciseRepository(Protocol):
         nothing that references it breaks. Only an admin path reaches this; retirement is never
         a side effect of generation, substitution, or enrichment. **Immutable**: returns a
         fresh Exercise and never mutates the caller's row. Returns ``None`` if no row has
-        ``exercise_id``. Retiring an already-retired row is an idempotent no-op change."""
+        ``exercise_id``. Retiring an already-retired row is an idempotent no-op change.
+        """
         ...
 
     def unretire(self, exercise_id: int) -> Exercise | None:
@@ -361,7 +361,8 @@ class ExerciseRepository(Protocol):
         directions — a link references the Exercise whether it is the ``from`` or the ``to``)
         that reference it (issue #507, ADR-0076). A non-zero count means the Exercise is
         settled shared state a live plan or Logged Set depends on and must never be destroyed;
-        the delete route feeds this to ``can_hard_delete``. An unknown id counts ``0``."""
+        the delete route feeds this to ``can_hard_delete``. An unknown id counts ``0``.
+        """
         ...
 
     def hard_delete(self, exercise_id: int) -> None:
@@ -407,36 +408,53 @@ def _new_exercise(
 def _clone_exercise(
     existing: Exercise,
     *,
-    provenance: Provenance | None = None,
-    precautions: Sequence[str] | None = None,
-    retired: bool | None = None,
+    provenance: Provenance | _Unset = UNSET,
+    description: str | None | _Unset = UNSET,
+    targeted_muscles: Sequence[str] | _Unset = UNSET,
+    primary_muscles: Sequence[str] | _Unset = UNSET,
+    secondary_muscles: Sequence[str] | _Unset = UNSET,
+    instructions: Sequence[str] | _Unset = UNSET,
+    difficulty: int | None | _Unset = UNSET,
+    precautions: Sequence[str] | _Unset = UNSET,
+    retired: bool | _Unset = UNSET,
 ) -> Exercise:
-    """Build a **fresh** Exercise from ``existing``, overriding at most one single-field act.
+    """Build a **fresh** Exercise from ``existing``, overriding only the named fields.
 
-    The immutable twin of ``_apply_patch`` for the single-field writes (``set_provenance``,
-    ``set_precautions``, ``retire`` / ``unretire``): ``existing`` is read, never mutated, and a
-    new Exercise is returned carrying its id and normalized identity. Every field not named
-    keeps its existing value, so a provenance change never disturbs precautions (and vice
-    versa), retiring never touches the descriptive set, and none of these acts renames the
-    movement (spec §5, ADR-0076)."""
+    The immutable twin of ``_apply_patch`` for the single-field writes — ``set_enrichment``,
+    ``set_muscle_emphasis``, ``set_provenance``, ``set_precautions``, ``retire`` / ``unretire``:
+    ``existing`` is read, never mutated, and a new Exercise is returned carrying its id and
+    normalized identity. Every field left ``UNSET`` keeps its existing value, so each writer
+    stays a "writes *only* X" act — enrichment never disturbs Provenance or the emphasis split,
+    a provenance change never touches precautions, retiring never touches the descriptive set —
+    and none of these acts rename the movement, touch ``required_equipment``, or write the
+    ``image`` (spec §5, ADR-0041/0075/0076). ``UNSET`` (not ``None``) is the skip sentinel so a
+    nullable ``description`` / ``difficulty`` can be cleared to ``None`` explicitly."""
 
     return Exercise(
         id=existing.id,
         name=existing.name,
         normalized_name=existing.normalized_name,
-        provenance=existing.provenance if provenance is None else provenance.value,
-        description=existing.description,
-        targeted_muscles=list(existing.targeted_muscles),
-        primary_muscles=list(existing.primary_muscles),
-        secondary_muscles=list(existing.secondary_muscles),
-        required_equipment=list(existing.required_equipment),
-        instructions=list(existing.instructions),
-        difficulty=existing.difficulty,
-        precautions=(
-            list(existing.precautions) if precautions is None else list(precautions)
+        provenance=existing.provenance if provenance is UNSET else provenance.value,
+        description=existing.description if description is UNSET else description,
+        targeted_muscles=list(
+            existing.targeted_muscles if targeted_muscles is UNSET else targeted_muscles
         ),
+        primary_muscles=list(
+            existing.primary_muscles if primary_muscles is UNSET else primary_muscles
+        ),
+        secondary_muscles=list(
+            existing.secondary_muscles
+            if secondary_muscles is UNSET
+            else secondary_muscles
+        ),
+        required_equipment=list(existing.required_equipment),
+        instructions=list(
+            existing.instructions if instructions is UNSET else instructions
+        ),
+        difficulty=existing.difficulty if difficulty is UNSET else difficulty,
+        precautions=list(existing.precautions if precautions is UNSET else precautions),
         image=existing.image,
-        retired=existing.retired if retired is None else retired,
+        retired=existing.retired if retired is UNSET else retired,
     )
 
 
@@ -475,9 +493,7 @@ def _apply_patch(existing: Exercise, patch: ExercisePatch) -> Exercise:
     )
 
 
-def _visible(
-    exercises: list[Exercise], *, include_retired: bool
-) -> list[Exercise]:
+def _visible(exercises: list[Exercise], *, include_retired: bool) -> list[Exercise]:
     """Drop the Retire-tombstoned rows from a discovery read unless the caller opts in.
 
     The one place the ``retired`` predicate is applied for the list-shaped discovery reads
@@ -673,14 +689,10 @@ class SqlExerciseRepository:
             return ExerciseSearchPage(items=[], total=0)
         matches = list(
             self._session.exec(
-                select(Exercise).where(
-                    Exercise.normalized_name.contains(normalized)
-                )
+                select(Exercise).where(Exercise.normalized_name.contains(normalized))
             ).all()
         )
-        return _page(
-            _visible(matches, include_retired=include_retired), limit, offset
-        )
+        return _page(_visible(matches, include_retired=include_retired), limit, offset)
 
     def browse(
         self,
@@ -761,17 +773,19 @@ class SqlExerciseRepository:
         instructions: Sequence[str],
         difficulty: int | None,
     ) -> Exercise | None:
-        exercise = self._session.get(Exercise, exercise_id)
-        if exercise is None:
+        existing = self._session.get(Exercise, exercise_id)
+        if existing is None:
             return None
-        exercise.description = description
-        exercise.targeted_muscles = list(targeted_muscles)
-        exercise.instructions = list(instructions)
-        exercise.difficulty = difficulty
-        self._session.add(exercise)
-        self._session.commit()
-        self._session.refresh(exercise)
-        return exercise
+        return self._persist_fresh(
+            existing,
+            _clone_exercise(
+                existing,
+                description=description,
+                targeted_muscles=targeted_muscles,
+                instructions=instructions,
+                difficulty=difficulty,
+            ),
+        )
 
     def set_muscle_emphasis(
         self,
@@ -780,15 +794,17 @@ class SqlExerciseRepository:
         primary_muscles: Sequence[str],
         secondary_muscles: Sequence[str],
     ) -> Exercise | None:
-        exercise = self._session.get(Exercise, exercise_id)
-        if exercise is None:
+        existing = self._session.get(Exercise, exercise_id)
+        if existing is None:
             return None
-        exercise.primary_muscles = list(primary_muscles)
-        exercise.secondary_muscles = list(secondary_muscles)
-        self._session.add(exercise)
-        self._session.commit()
-        self._session.refresh(exercise)
-        return exercise
+        return self._persist_fresh(
+            existing,
+            _clone_exercise(
+                existing,
+                primary_muscles=primary_muscles,
+                secondary_muscles=secondary_muscles,
+            ),
+        )
 
     def set_provenance(
         self, exercise_id: int, provenance: Provenance
@@ -810,9 +826,7 @@ class SqlExerciseRepository:
             existing, _clone_exercise(existing, precautions=precautions)
         )
 
-    def update(
-        self, exercise_id: int, patch: ExercisePatch
-    ) -> Exercise | None:
+    def update(self, exercise_id: int, patch: ExercisePatch) -> Exercise | None:
         existing = self._session.get(Exercise, exercise_id)
         if existing is None:
             return None
@@ -983,9 +997,7 @@ class InMemoryExerciseRepository:
             for exercise in self._by_id.values()
             if normalized in exercise.normalized_name
         ]
-        return _page(
-            _visible(matches, include_retired=include_retired), limit, offset
-        )
+        return _page(_visible(matches, include_retired=include_retired), limit, offset)
 
     def browse(
         self,
@@ -1063,14 +1075,18 @@ class InMemoryExerciseRepository:
         instructions: Sequence[str],
         difficulty: int | None,
     ) -> Exercise | None:
-        exercise = self._by_id.get(exercise_id)
-        if exercise is None:
+        existing = self._by_id.get(exercise_id)
+        if existing is None:
             return None
-        exercise.description = description
-        exercise.targeted_muscles = list(targeted_muscles)
-        exercise.instructions = list(instructions)
-        exercise.difficulty = difficulty
-        return exercise
+        return self._store_fresh(
+            _clone_exercise(
+                existing,
+                description=description,
+                targeted_muscles=targeted_muscles,
+                instructions=instructions,
+                difficulty=difficulty,
+            )
+        )
 
     def set_muscle_emphasis(
         self,
@@ -1079,12 +1095,16 @@ class InMemoryExerciseRepository:
         primary_muscles: Sequence[str],
         secondary_muscles: Sequence[str],
     ) -> Exercise | None:
-        exercise = self._by_id.get(exercise_id)
-        if exercise is None:
+        existing = self._by_id.get(exercise_id)
+        if existing is None:
             return None
-        exercise.primary_muscles = list(primary_muscles)
-        exercise.secondary_muscles = list(secondary_muscles)
-        return exercise
+        return self._store_fresh(
+            _clone_exercise(
+                existing,
+                primary_muscles=primary_muscles,
+                secondary_muscles=secondary_muscles,
+            )
+        )
 
     def set_provenance(
         self, exercise_id: int, provenance: Provenance
@@ -1115,9 +1135,7 @@ class InMemoryExerciseRepository:
         self._by_id[fresh.id] = fresh
         return fresh
 
-    def update(
-        self, exercise_id: int, patch: ExercisePatch
-    ) -> Exercise | None:
+    def update(self, exercise_id: int, patch: ExercisePatch) -> Exercise | None:
         existing = self._by_id.get(exercise_id)
         if existing is None:
             return None
