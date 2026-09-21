@@ -119,8 +119,8 @@ class LoggedSetView:
     targeted_muscles: list[str] = field(default_factory=list)
     # The performed Exercise's Primary/Secondary emphasis split (ADR-0016), carried
     # through so the coverage read layer can reach each set's emphasis — not just the
-    # flat ``targeted_muscles`` union — via ``muscle_groups.set_emphasis`` (issue #539).
-    # Empty when the Exercise asserts no split; ``set_emphasis`` then falls back to the
+    # flat ``targeted_muscles`` union — via ``muscle_groups.emphasis_of`` (issue #539).
+    # Empty when the Exercise asserts no split; ``emphasis_of`` then falls back to the
     # flat union as all-primary. Denormalized off the Exercise like the union above.
     primary_muscles: list[str] = field(default_factory=list)
     secondary_muscles: list[str] = field(default_factory=list)

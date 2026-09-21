@@ -31,7 +31,6 @@ mapping is curated data, not an AI call per read; the human labels are the enum 
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from enum import Enum
 
 from app.domain.muscle_groups import MuscleGroup, normalize_muscle
@@ -154,21 +153,6 @@ MUSCLE_TO_GROUP: dict[Muscle, MuscleGroup] = {
 }
 
 
-# The six real Muscle Groups in canonical body order, each with the curated canonical
-# Muscles that nest under it — a presentation-ordered view derived from ``MUSCLE_TO_GROUP``
-# for surfaces (the Atlas) that render muscles grouped under their region. Unclassified is
-# never a real group, so it holds no muscles here.
-MUSCLES_BY_GROUP: dict[MuscleGroup, tuple[Muscle, ...]] = {
-    group: tuple(
-        muscle
-        for muscle in Muscle
-        if muscle is not Muscle.UNCLASSIFIED and MUSCLE_TO_GROUP[muscle] is group
-    )
-    for group in MuscleGroup
-    if group is not MuscleGroup.UNCLASSIFIED
-}
-
-
 # Curated map from a normalized free-form muscle to its canonical Muscle. Mirrors
 # ``muscle_groups._MUSCLE_TO_GROUP`` term-for-term where a string names an individual muscle
 # (so ``MUSCLE_TO_GROUP[classify_muscle(term)] == classify(term)`` holds — asserted by a
@@ -286,30 +270,18 @@ def classify_muscle(muscle: str) -> Muscle:
 
 
 def group_of(muscle: Muscle) -> MuscleGroup:
-    """The Muscle Group a canonical :class:`Muscle` nests under (total over ``Muscle``)."""
+    """The Muscle Group a canonical :class:`Muscle` nests under (total over ``Muscle``).
+
+    The one read of the muscle→group nesting: callers roll a Muscle up to its parent
+    group through here rather than reaching into ``MUSCLE_TO_GROUP`` at each site, so the
+    six-group roll-up keeps working unchanged on top of the finer vocabulary."""
 
     return MUSCLE_TO_GROUP[muscle]
-
-
-def canonical_muscles(values: Iterable[str]) -> list[Muscle]:
-    """The distinct canonical Muscles a set of free-form strings rolls up into, ordered.
-
-    Each string is classified, duplicates collapse (so "quads" and "quadriceps" read as one
-    ``QUADRICEPS``), and the result is returned in :class:`Muscle` declaration order with
-    ``UNCLASSIFIED`` last. Blank strings contribute nothing; anything unmapped surfaces as
-    the single ``UNCLASSIFIED`` bucket — disclosed, never dropped, the finer-tier twin of
-    ``muscle_groups`` keeping Unclassified visible.
-    """
-
-    present = {classify_muscle(value) for value in values if value.strip()}
-    return [muscle for muscle in Muscle if muscle in present]
 
 
 __all__ = [
     "Muscle",
     "MUSCLE_TO_GROUP",
-    "MUSCLES_BY_GROUP",
     "classify_muscle",
     "group_of",
-    "canonical_muscles",
 ]

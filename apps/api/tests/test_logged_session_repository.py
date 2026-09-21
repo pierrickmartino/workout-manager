@@ -19,7 +19,7 @@ import pytest
 from sqlmodel import Session, SQLModel
 
 from app.domain.exercise import Provenance
-from app.domain.muscle_groups import MuscleEmphasis, set_emphasis
+from app.domain.muscle_groups import MuscleEmphasis, emphasis_of
 from app.repositories.exercise_repository import (
     InMemoryExerciseRepository,
     SqlExerciseRepository,
@@ -503,7 +503,7 @@ def test_logged_set_view_carries_the_exercises_primary_secondary_split(repos):
     assert logged_set.primary_muscles == ["chest"]
     assert logged_set.secondary_muscles == ["triceps", "front delts"]
     # ...and the coverage layer's emphasis accessor reads that split off the view verbatim
-    assert set_emphasis(logged_set) == MuscleEmphasis(
+    assert emphasis_of(logged_set) == MuscleEmphasis(
         primary=("chest",), secondary=("triceps", "front delts")
     )
 
@@ -540,6 +540,6 @@ def test_logged_set_view_emphasis_falls_back_to_all_primary_without_a_split(repo
     logged_set = view.logged_sets[0]
     assert logged_set.primary_muscles == []
     assert logged_set.secondary_muscles == []
-    assert set_emphasis(logged_set) == MuscleEmphasis(
+    assert emphasis_of(logged_set) == MuscleEmphasis(
         primary=("quadriceps", "glutes"), secondary=()
     )

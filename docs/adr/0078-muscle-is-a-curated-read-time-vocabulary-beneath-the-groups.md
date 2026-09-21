@@ -31,7 +31,7 @@ the six-group atlas still renders exactly as today.
 - **Thread the Primary/Secondary emphasis split through the read path.** `LoggedSetView`
   gains `primary_muscles` / `secondary_muscles`, denormalized off the Exercise exactly as
   `targeted_muscles` already is, so the coverage read layer can reach each set's emphasis —
-  not just the flat union. `muscle_groups.set_emphasis` exposes it with a **"no split → all
+  not just the flat union. `muscle_groups.emphasis_of` exposes it with a **"no split → all
   primary"** fallback (the whole `targeted_muscles` union as primary, no secondary), matching
   the SPECS render's "no asserted split → flat list" behaviour so a split-less set still
   contributes every muscle at full emphasis rather than vanishing.
@@ -55,7 +55,7 @@ the six-group atlas still renders exactly as today.
 - **Backfill "all primary" onto split-less Exercises.** Rejected at the *storage* layer
   (ADR-0016: "all primary" is a false claim, not a null one — primacy is populated only where
   enrichment or a curator asserts it). The all-primary fallback lives only in the **read**
-  accessor `set_emphasis`, so no fabricated split ever enters the catalog.
+  accessor `emphasis_of`, so no fabricated split ever enters the catalog.
 - **An LLM call to classify each muscle string.** Rejected: needless cost and nondeterminism
   for a coarse, curated mapping a keyword table resolves reliably — the same reasoning that
   keeps Muscle Group, Movement Pattern, and Equipment curated maps, not AI calls per read.
@@ -73,5 +73,5 @@ the six-group atlas still renders exactly as today.
   completeness invariant (every Muscle has a group) and the no-contradiction invariant (the
   muscle tier never disagrees with the group tier) are the load-bearing, tested parts.
 - The dependent slice — per-muscle, emphasis-weighted atlas heat — is now a small additive
-  step: classify each set's `set_emphasis` primaries/secondaries to canonical Muscles and
+  step: classify each set's `emphasis_of` primaries/secondaries to canonical Muscles and
   weight the two tiers, with the group roll-up and every existing surface untouched beneath.

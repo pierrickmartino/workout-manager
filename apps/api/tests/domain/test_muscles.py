@@ -11,9 +11,7 @@ from __future__ import annotations
 from app.domain.muscle_groups import MuscleGroup, classify
 from app.domain.muscles import (
     MUSCLE_TO_GROUP,
-    MUSCLES_BY_GROUP,
     Muscle,
-    canonical_muscles,
     classify_muscle,
     group_of,
 )
@@ -54,17 +52,11 @@ class TestVocabularyCompleteness:
         real = [m for m in Muscle if m is not Muscle.UNCLASSIFIED]
         assert 40 <= len(real) <= 50
 
-    def test_muscles_by_group_partitions_every_real_muscle_once(self) -> None:
-        # The grouped view is a partition of the real muscles — each appears under
-        # exactly its one parent group, and none is lost.
-        flattened = [m for muscles in MUSCLES_BY_GROUP.values() for m in muscles]
-        assert sorted(flattened, key=lambda m: m.value) == sorted(
-            (m for m in Muscle if m is not Muscle.UNCLASSIFIED),
-            key=lambda m: m.value,
-        )
-        for group, muscles in MUSCLES_BY_GROUP.items():
-            for muscle in muscles:
-                assert group_of(muscle) is group
+    def test_each_muscle_nests_under_exactly_one_group(self) -> None:
+        # ``group_of`` is total and single-valued over the vocabulary: every muscle has one
+        # and only one parent group (dict semantics), the "exactly one" the issue requires.
+        for muscle in Muscle:
+            assert isinstance(group_of(muscle), MuscleGroup)
 
 
 class TestClassifyMuscleHits:
@@ -133,17 +125,3 @@ class TestConsistencyWithGroupRollUp:
             group = classify(term)
             if group is not MuscleGroup.UNCLASSIFIED:
                 assert group_of(muscle) is group
-
-
-class TestCanonicalMuscles:
-    def test_duplicates_collapse_and_order_follows_declaration(self) -> None:
-        # "quads" and "quadriceps" are one muscle; declaration order is preserved.
-        result = canonical_muscles(["hamstrings", "quads", "quadriceps", "glutes"])
-        assert result == [Muscle.QUADRICEPS, Muscle.HAMSTRINGS, Muscle.GLUTEUS_MAXIMUS]
-
-    def test_unmapped_surfaces_as_a_single_unclassified_bucket_last(self) -> None:
-        result = canonical_muscles(["quads", "mystery muscle", "another mystery"])
-        assert result == [Muscle.QUADRICEPS, Muscle.UNCLASSIFIED]
-
-    def test_blank_strings_contribute_nothing(self) -> None:
-        assert canonical_muscles(["", "   "]) == []

@@ -189,7 +189,7 @@ class _NamedDatedLoggedSession(Protocol):
 
 class _EmphasisSet(Protocol):
     """A Logged Set carrying the Primary/Secondary emphasis split (ADR-0016) alongside the
-    flat targeted-muscle union — the shape :func:`set_emphasis` reads to expose emphasis to
+    flat targeted-muscle union — the shape :func:`emphasis_of` reads to expose emphasis to
     the coverage layer. ``primary_muscles`` / ``secondary_muscles`` ride on the same
     denormalized view the roll-up already reads ``targeted_muscles`` from."""
 
@@ -233,7 +233,7 @@ class MuscleEmphasis:
     secondary: tuple[str, ...]
 
 
-def set_emphasis(logged_set: _EmphasisSet) -> MuscleEmphasis:
+def emphasis_of(logged_set: _EmphasisSet) -> MuscleEmphasis:
     """Expose one Logged Set's Primary/Secondary muscles to the coverage layer (ADR-0016).
 
     Returns the set's asserted emphasis split when it has one; otherwise falls back to
@@ -530,7 +530,7 @@ __all__ = [
     "MuscleEmphasis",
     "classify",
     "normalize_muscle",
-    "set_emphasis",
+    "emphasis_of",
     "covered_groups",
     "distribution",
     "recent_coverage",
