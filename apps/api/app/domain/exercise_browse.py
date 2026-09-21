@@ -14,19 +14,22 @@ holds only for the unfiltered view (ADR-0042)."""
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterable, Sequence
 from enum import Enum
 from typing import Protocol
 
+from app.domain.equipment import (
+    EQUIPMENT_ORDER,
+    Equipment,
+    canonical_equipment,
+    classify_equipment,
+)
 from app.domain.exercise import (
     CatalogCompleteness,
     catalog_completeness,
     provenance_rank,
 )
 from app.domain.muscle_groups import MuscleGroup, classify
-
-_WHITESPACE = re.compile(r"\s+")
 
 
 class DifficultyBand(str, Enum):
@@ -105,16 +108,6 @@ def parse_muscle_group(value: str) -> MuscleGroup | None:
     return _GROUP_BY_LABEL.get(value.strip().lower())
 
 
-def normalize_equipment(equipment: str) -> str:
-    """Canonical key for equipment matching: lowercased, trimmed, whitespace collapsed.
-
-    Mirrors ``normalize_name``/muscle normalization so "Pull-up Bar" and "pull-up bar"
-    match, keeping the free-form ``required_equipment`` list comparable across the facet.
-    """
-
-    return _WHITESPACE.sub(" ", equipment.strip()).lower()
-
-
 class _Browsable(Protocol):
     """The catalog fields the browse filter and order read on an Exercise.
 
@@ -157,11 +150,12 @@ def matches_filters(
     """Whether ``exercise`` passes every active browse facet (ADR-0042).
 
     Facets combine with **AND**; within a facet, membership is **OR**. An empty facet set
-    is "no filter" and always passes. ``equipment`` is expected already normalized (via
-    ``normalize_equipment``); the exercise side is normalized here so the two compare on
-    the same key. A movement missing the content a facet reads — a Stub with no muscles,
-    no equipment, or no difficulty — fails that facet, which is exactly why any active
-    facet excludes Stubs.
+    is "no filter" and always passes. ``equipment`` is expected as a set of canonical
+    Equipment **tokens** (via ``classify_equipment``); the exercise side is classified here
+    so the two compare on the same curated bucket — "barbells" on a movement matches a
+    ``barbell`` filter (ADR-0077). A movement missing the content a facet reads — a Stub with
+    no muscles, no equipment, or no difficulty — fails that facet, which is exactly why any
+    active facet excludes Stubs.
     """
 
     if muscle_groups:
@@ -170,7 +164,7 @@ def matches_filters(
             return False
 
     if equipment:
-        have = {normalize_equipment(item) for item in exercise.required_equipment}
+        have = {classify_equipment(item).value for item in exercise.required_equipment}
         if have.isdisjoint(equipment):
             return False
 
@@ -209,21 +203,21 @@ def rank_browse_results(matches: list[_Browsable]) -> list[_Browsable]:
     return sorted(matches, key=browse_sort_key)
 
 
-def distinct_equipment(exercises: Iterable[_Browsable]) -> list[str]:
-    """The Catalog's distinct required-equipment labels, deduped case-insensitively.
+def catalog_equipment(exercises: Iterable[_Browsable]) -> list[str]:
+    """The Catalog's canonical Equipment facet options, ordered (ADR-0077).
 
-    Powers the equipment facet's option list (``GET /api/exercises/facets``): one entry
-    per normalized equipment key, keeping the first original casing seen, sorted for a
-    stable menu. Blank entries are dropped rather than surfaced as an empty chip.
+    Powers the equipment facet's option list (``GET /api/exercises/facets``): every movement's
+    free-text required equipment is rolled up through the curated vocabulary, so "barbell" and
+    "barbells" read as the one ``barbell`` option and casing/product-name noise never multiplies
+    the menu. Returns the distinct canonical **tokens** present across the Catalog in
+    :data:`EQUIPMENT_ORDER`, with the ``other`` bucket included only when at least one movement
+    lands there — disclosed, never hidden, and always last.
     """
 
-    seen: dict[str, str] = {}
+    present: set[Equipment] = set()
     for exercise in exercises:
-        for raw in exercise.required_equipment:
-            key = normalize_equipment(raw)
-            if key and key not in seen:
-                seen[key] = raw.strip()
-    return [seen[key] for key in sorted(seen)]
+        present.update(canonical_equipment(exercise.required_equipment))
+    return [bucket.value for bucket in EQUIPMENT_ORDER if bucket in present]
 
 
 __all__ = [
@@ -231,10 +225,9 @@ __all__ = [
     "difficulty_band",
     "parse_difficulty_band",
     "parse_muscle_group",
-    "normalize_equipment",
     "exercise_muscle_groups",
     "matches_filters",
     "browse_sort_key",
     "rank_browse_results",
-    "distinct_equipment",
+    "catalog_equipment",
 ]

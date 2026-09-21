@@ -117,6 +117,9 @@ def test_onboarding_put_saves_full_profile_and_get_returns_it():
     data = body["data"]
     assert data["age"] == 34
     assert data["default_equipment"] == ["dumbbells", "pull-up bar"]
+    # The raw kit round-trips the edit form; the canonical projection (ADR-0077) lets the
+    # Catalog "My equipment" shortcut match the facet's canonical options.
+    assert data["default_equipment_canonical"] == ["dumbbell", "pull-up bar"]
     assert data["fitness_levels"] == {"strength": 8, "yoga": 2}
     assert data["preferences"] == ["no running"]
     assert data["sensitive_constraints"] == ["postpartum"]

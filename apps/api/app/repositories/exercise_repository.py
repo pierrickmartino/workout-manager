@@ -9,6 +9,7 @@ for tests; the same contract runs over both."""
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final, Protocol
@@ -24,15 +25,17 @@ from app.db.models import (
     ExerciseRelationship,
     LoggedSet,
 )
+from app.domain.equipment import classify_equipment, normalize_stored_equipment
 from app.domain.exercise import Provenance, normalize_name, rank_exercise_matches
 from app.domain.exercise_admin import AdminBrowseFilters, filter_admin_catalog
 from app.domain.exercise_browse import (
     DifficultyBand,
     matches_filters,
-    normalize_equipment,
     rank_browse_results,
 )
 from app.domain.muscle_groups import MuscleGroup
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -389,6 +392,19 @@ def _new_exercise(
     precautions: Sequence[str],
     image: str | None,
 ) -> Exercise:
+    # Write-time normalization boundary (ADR-0077, amended): a newly minted Exercise stores its
+    # equipment in the curated canonical form so the "barbell"/"barbells"/"Floor" proliferation
+    # never enters the shared catalog, while a string no alias claims is kept verbatim (never
+    # dropped) so nothing novel is lost. The unmapped strings are logged as a tripwire — the one
+    # place a hallucinated or genuinely new piece of kit entering the global catalog is *seen*.
+    normalized_equipment = normalize_stored_equipment(required_equipment)
+    if normalized_equipment.unmapped:
+        logger.warning(
+            "equipment strings on new exercise %r did not map to the curated vocabulary "
+            "and were stored verbatim: %r",
+            name,
+            normalized_equipment.unmapped,
+        )
     return Exercise(
         name=name,
         normalized_name=normalize_name(name),
@@ -397,7 +413,7 @@ def _new_exercise(
         targeted_muscles=list(targeted_muscles),
         primary_muscles=list(primary_muscles),
         secondary_muscles=list(secondary_muscles),
-        required_equipment=list(required_equipment),
+        required_equipment=normalized_equipment.values,
         instructions=list(instructions),
         difficulty=difficulty,
         precautions=list(precautions),
@@ -482,8 +498,14 @@ def _apply_patch(existing: Exercise, patch: ExercisePatch) -> Exercise:
         secondary_muscles=list(
             _pick(patch.secondary_muscles, existing.secondary_muscles)
         ),
-        required_equipment=list(
-            _pick(patch.required_equipment, existing.required_equipment)
+        # A supplied equipment edit is normalized through the same write-time boundary as a
+        # create (ADR-0077): mapped strings stored canonically, unmapped kept verbatim. An
+        # unsupplied field keeps the existing value untouched — this descriptive edit never
+        # re-normalizes equipment the admin did not touch (no accidental backfill).
+        required_equipment=(
+            list(existing.required_equipment)
+            if patch.required_equipment is UNSET
+            else normalize_stored_equipment(patch.required_equipment).values
         ),
         instructions=list(_pick(patch.instructions, existing.instructions)),
         difficulty=_pick(patch.difficulty, existing.difficulty),
@@ -529,11 +551,12 @@ def _browse_matches(
 
     The shared facet predicate + ordering both the paged ``browse`` and the whole-set
     ``browse_all`` read (the taxonomy, ADR-0072) run through, so a movement appears in the
-    same order and passes the same facets whichever surface asks. Equipment is normalized
-    once here so the pure predicate compares on the same key on both sides."""
+    same order and passes the same facets whichever surface asks. The requested equipment is
+    rolled up to canonical Equipment tokens once here so the pure predicate compares on the
+    same curated bucket on both sides (ADR-0077); a blank request value contributes nothing."""
 
     groups = set(muscle_groups)
-    kit = {normalize_equipment(item) for item in equipment}
+    kit = {classify_equipment(item).value for item in equipment if item.strip()}
     bands = set(difficulty_bands)
     filtered = [
         exercise

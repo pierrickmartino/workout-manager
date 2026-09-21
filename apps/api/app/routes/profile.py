@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.auth.dependencies import get_current_user
 from app.db.models import Profile
+from app.domain.equipment import canonical_equipment
 from app.domain.fitness_profile import Gender, SensitiveConstraintType, is_sensitive
 from app.envelope import success_envelope
 from app.repositories.deps import get_profile_repository
@@ -89,6 +90,14 @@ def _serialize(profile: Profile) -> dict:
         "recent_workout": profile.recent_workout,
         "default_rest_seconds": profile.default_rest_seconds,
         "default_equipment": profile.default_equipment,
+        # The user's Default Equipment read through the curated Equipment vocabulary (ADR-0077):
+        # the canonical tokens their free-text kit rolls up into, so the Catalog's "My equipment"
+        # shortcut can match the facet's canonical options — a casing/plural mismatch ("Barbell"
+        # vs "barbell") never silently drops the user's kit. A read-time projection over the same
+        # stored strings; the raw ``default_equipment`` above still round-trips the edit form.
+        "default_equipment_canonical": [
+            bucket.value for bucket in canonical_equipment(profile.default_equipment)
+        ],
         "fitness_levels": profile.fitness_levels,
         "preferences": profile.preferences,
         "sensitive_constraints": profile.sensitive_constraints,

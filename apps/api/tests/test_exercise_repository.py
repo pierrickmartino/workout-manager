@@ -1056,3 +1056,60 @@ def test_list_by_provenance_excludes_retired_by_default_but_includes_on_request(
 
     admin_rows = repo.list_by_provenance(Provenance.AI_GENERATED, include_retired=True)
     assert {row.id for row in admin_rows} == {active.id, retired.id}
+
+
+# --- write-time equipment normalization (ADR-0077, amended) ------------------------
+
+
+def test_create_stores_equipment_in_canonical_form_keeping_unmapped_verbatim(repo):
+    # Arrange / Act — a fresh AI create carrying the exact proliferation the critique names,
+    # plus an unmapped product name
+    created = repo.find_or_create(
+        "Contraption Press",
+        provenance=Provenance.AI_GENERATED,
+        required_equipment=["Barbell", "barbells", "Floor", "Atletica R8 Combat"],
+    )
+
+    # Assert — mapped strings collapse to their canonical token; the product name survives
+    # verbatim (never dropped) so a later alias-map fix can still re-bucket it (ADR-0077)
+    assert created.required_equipment == ["barbell", "bodyweight", "Atletica R8 Combat"]
+
+
+def test_dedup_hit_never_renormalizes_existing_equipment(repo):
+    # Arrange — an existing row whose stored equipment predates normalization
+    seeded = repo.find_or_create(
+        "Legacy Move",
+        provenance=Provenance.CURATED,
+        required_equipment=["barbell"],
+    )
+
+    # Act — a later AI resolve of the same normalized name must reuse, not rewrite (ADR-0002)
+    resolved = repo.resolve_or_create(
+        "legacy move",
+        provenance=Provenance.AI_GENERATED,
+        required_equipment=["Dumbbells"],
+    )
+
+    # Assert — the existing row and its equipment are untouched by the dedup hit
+    assert resolved.created is False
+    assert resolved.exercise.id == seeded.id
+    assert resolved.exercise.required_equipment == ["barbell"]
+
+
+def test_update_normalizes_supplied_equipment_but_leaves_it_untouched_when_absent(repo):
+    # Arrange — a row with clean stored equipment
+    row = repo.find_or_create(
+        "Editable Move",
+        provenance=Provenance.AI_GENERATED,
+        required_equipment=["Atletica R8 Combat"],
+    )
+
+    # Act — an admin edit that supplies equipment normalizes it through the same boundary
+    edited = repo.update(row.id, ExercisePatch(required_equipment=["Dumbbells", "KB"]))
+    assert edited is not None
+    assert edited.required_equipment == ["dumbbell", "kettlebell"]
+
+    # Act — an unrelated edit (no equipment key) leaves the stored equipment untouched
+    renamed = repo.update(edited.id, ExercisePatch(name="Editable Movement"))
+    assert renamed is not None
+    assert renamed.required_equipment == ["dumbbell", "kettlebell"]

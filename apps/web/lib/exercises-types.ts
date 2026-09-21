@@ -18,4 +18,9 @@ export interface ExerciseSearchResult {
   // row and its field-guide section agree on the family. A raw wire token ("squat" …
   // "general"); the client resolves it via `parseMovementPattern`.
   movement_pattern: string;
+  // The canonical Equipment the movement's free-text `required_equipment` rolls up into
+  // (ADR-0077): a read-time projection so the kit chip agrees with the equipment facet and an
+  // unmapped product name collapses to "other". Raw wire tokens ("barbell" … "other"); the
+  // client resolves them via `lib/equipment`. Distinct from the raw `required_equipment`.
+  equipment: string[];
 }

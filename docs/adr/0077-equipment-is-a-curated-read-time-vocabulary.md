@@ -61,3 +61,33 @@ untouched, so no cache key or generation input shifts.
   the raw equipment list under ADR-0038.
 - The **Unmapped** bucket is disclosed, never hidden: a genuinely novel piece of kit still filters
   and displays under "Other" rather than vanishing, keeping the facet honest about its own coverage.
+
+## Amendment: a write-time normalization boundary complements the read-time projection
+
+Canonicalization for **discovery and display** stays a read-time projection exactly as above —
+`classify_equipment` / `canonical_equipment` re-derive the facet, the per-exercise chip, and the
+profile roll-up from whatever strings are present, with no stored column and no migration. We
+**add** one thing this ADR originally left out: a **write-time normalization boundary** on the
+single path that mints a *new* catalog Exercise (`_new_exercise`, covering AI generation, the
+substitute generator, and the admin edit). It is **input validation at a boundary**, not the
+rejected "canonicalize-on-write hook + migration": it rewrites the surface form of the *same*
+free-text `required_equipment` list as it is first stored — a mapped string is kept in its
+canonical token form so the `barbell`/`barbells`/`Floor` proliferation never enters the shared
+catalog at all — and it adds **no column and no migration**.
+
+Crucially it preserves this ADR's two load-bearing guarantees:
+
+- **Unmapped is never dropped.** A string no alias claims is stored **verbatim** (a product name
+  like `Atletica R8 …` survives as typed), so nothing novel is lost and a later alias-map
+  improvement still re-buckets it at read time — the re-derivability the read-time model was
+  chosen for is intact.
+- **Generation is untouched.** The stored equipment metadata still feeds no generation input and
+  no cache key; generation reads the raw available-equipment list under ADR-0038 as before, and
+  the Default-vs-Available fallback is unchanged.
+
+The boundary also logs each unmapped string as a **tripwire** — the one place a hallucinated or
+genuinely new piece of kit entering the global catalog is *seen* — without rewriting or dropping
+it. Existing rows are **not backfilled** (still no migration): the read-time projection already
+makes their messy stored strings read canonically on every discovery surface, so a backfill would
+buy nothing the projection does not already give. The net effect is that *new* writes are clean at
+the source while *old* rows are cleaned only where it matters — on read.
