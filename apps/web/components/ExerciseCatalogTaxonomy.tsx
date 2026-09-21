@@ -26,6 +26,7 @@ import {
   PATTERN_LABEL,
   parseMovementPattern,
 } from "@/lib/movement-pattern";
+import { equipmentLabel } from "@/lib/equipment";
 import {
   buildUsageMap,
   usageBadgeText,
@@ -231,7 +232,7 @@ export function ExerciseCatalogTaxonomy({
           {equipmentOptions.map((item) => (
             <FacetChip
               key={item}
-              label={item}
+              label={equipmentLabel(item)}
               active={filters.equipment.includes(item)}
               disabled={!online}
               onToggle={() => toggle("equipment", item)}
@@ -399,7 +400,7 @@ function TaxonomyRow({
           <UsageBadge marker={marker} />
         </span>
       </span>
-      <EquipmentSymbol equipment={exercise.required_equipment} />
+      <EquipmentSymbol equipment={exercise.equipment} />
       <ChevronRight className="h-4 w-4 shrink-0 text-text-muted" aria-hidden />
     </button>
   );

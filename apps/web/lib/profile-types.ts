@@ -48,6 +48,11 @@ export interface Profile {
   // which case the Live Session falls back to the prescription's own rest.
   default_rest_seconds: number | null;
   default_equipment: string[];
+  // The user's Default Equipment read through the curated Equipment vocabulary (ADR-0077):
+  // the canonical wire tokens their free-text kit rolls up into, so the Catalog "My equipment"
+  // shortcut matches the facet's canonical options. A read-time projection; the editable form
+  // still round-trips `default_equipment`.
+  default_equipment_canonical: string[];
   fitness_levels: Record<string, number>;
   preferences: string[];
   sensitive_constraints: string[];

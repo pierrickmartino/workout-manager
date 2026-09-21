@@ -47,9 +47,12 @@ export default async function ExercisesPage({
       ? facetsEnvelope.data.equipment
       : [];
   const usage = usageEnvelope.success && usageEnvelope.data ? usageEnvelope.data : [];
+  // The user's kit as canonical Equipment tokens (ADR-0077), so the "My equipment" shortcut
+  // intersects cleanly with the facet's canonical options — a casing/plural mismatch never
+  // silently drops it.
   const myEquipment =
     profileEnvelope.success && profileEnvelope.data
-      ? profileEnvelope.data.default_equipment
+      ? profileEnvelope.data.default_equipment_canonical
       : [];
 
   return (

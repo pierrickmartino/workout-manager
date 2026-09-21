@@ -30,9 +30,10 @@ from app.domain.exercise import (
     completeness_breakdown,
     normalize_name,
 )
+from app.domain.equipment import canonical_equipment
 from app.domain.exercise_admin import AdminBrowseFilters
 from app.domain.exercise_browse import (
-    distinct_equipment,
+    catalog_equipment,
     parse_difficulty_band,
     parse_muscle_group,
 )
@@ -123,6 +124,12 @@ def _search_result(exercise: Exercise) -> dict:
         # movement's name and muscles, so the field-guide row and its taxonomy section
         # agree on which family the entry belongs to. Never a stored column.
         "movement_pattern": classify_movement_pattern(exercise).value,
+        # The canonical Equipment the free-text ``required_equipment`` rolls up into
+        # (ADR-0077): a read-time projection so the field-guide row's kit chip agrees with the
+        # equipment facet — "barbells" reads as one "barbell" — and an unmapped product name
+        # collapses into "other" rather than showing verbatim. Canonical wire tokens; the
+        # client owns the labels. The raw ``required_equipment`` above stays for other readers.
+        "equipment": [bucket.value for bucket in canonical_equipment(exercise.required_equipment)],
     }
 
 
@@ -180,13 +187,15 @@ def exercise_facets(
 ) -> dict:
     """Return the option lists that drive the Browse facets (ADR-0042).
 
-    Only ``equipment`` needs the server — it is the Catalog's distinct required-equipment
-    labels (deduped case-insensitively, sorted), since equipment is free-form. The Muscle
-    Group buckets and difficulty bands are fixed and live as frontend constants, so they
-    are not restated here. Declared before ``/exercises/{exercise_id}`` so the literal
-    path is never mistaken for an id."""
+    Only ``equipment`` needs the server — it is the Catalog's canonical Equipment options,
+    each free-text required-equipment string rolled up through the curated vocabulary so
+    "barbell"/"barbells" read as one option and product-name noise never multiplies the menu
+    (ADR-0077). Canonical wire tokens in fixed order, with ``other`` present only when a
+    movement lands there; the client owns the labels. The Muscle Group buckets and difficulty
+    bands are fixed frontend constants, so they are not restated here. Declared before
+    ``/exercises/{exercise_id}`` so the literal path is never mistaken for an id."""
 
-    return success_envelope({"equipment": distinct_equipment(exercises.list_all())})
+    return success_envelope({"equipment": catalog_equipment(exercises.list_all())})
 
 
 @router.get("/exercises/usage")

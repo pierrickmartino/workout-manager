@@ -117,6 +117,38 @@ def test_equipment_and_difficulty_facets_and_together():
     assert names == ["Back Squat"]
 
 
+def test_browse_row_carries_canonical_equipment_projection():
+    client, ctx, exercises, _ = build_client()
+    # a row stored with a plural + an unmapped product name (pre-normalization legacy shape)
+    row = _listable(
+        exercises,
+        "Barbell Row",
+        required_equipment=["Barbells", "Atletica R8 Combat"],
+    )
+    row.required_equipment = ["Barbells", "Atletica R8 Combat"]  # force the messy stored form
+
+    data = client.get("/api/exercises", headers=_auth(ctx)).json()["data"]
+    result = next(r for r in data if r["name"] == "Barbell Row")
+
+    # the raw list stays for other readers; the canonical projection dedupes + buckets unmapped
+    assert result["equipment"] == ["barbell", "other"]
+
+
+def test_facet_filter_matches_a_plural_stored_value_by_canonical_token():
+    client, ctx, exercises, _ = build_client()
+    row = _listable(exercises, "Barbell Row", required_equipment=["barbell"])
+    row.required_equipment = ["Barbells"]  # a legacy row that never went through normalization
+
+    # the singular canonical filter still catches the plural stored value (ADR-0077)
+    names = [
+        r["name"]
+        for r in client.get(
+            "/api/exercises?equipment=barbell", headers=_auth(ctx)
+        ).json()["data"]
+    ]
+    assert names == ["Barbell Row"]
+
+
 def test_active_facet_excludes_name_only_stubs():
     client, ctx, exercises, _ = build_client()
     _listable(exercises, "Back Squat", targeted_muscles=["quads"])
@@ -157,15 +189,16 @@ def test_unrecognized_facet_values_are_ignored_not_errored():
 # --- facets endpoint --------------------------------------------------------------
 
 
-def test_facets_returns_distinct_equipment_sorted():
+def test_facets_returns_canonical_equipment_tokens_in_order():
     client, ctx, exercises, _ = build_client()
     _listable(exercises, "Back Squat", required_equipment=["Barbell"])
-    _listable(exercises, "Row", required_equipment=["barbell", "Dumbbell"])
+    _listable(exercises, "Row", required_equipment=["barbells", "Dumbbell"])
 
     response = client.get("/api/exercises/facets", headers=_auth(ctx))
 
     assert response.status_code == 200
-    assert response.json()["data"]["equipment"] == ["Barbell", "Dumbbell"]
+    # "Barbell"/"barbells" roll up to one canonical token, returned in EQUIPMENT_ORDER
+    assert response.json()["data"]["equipment"] == ["barbell", "dumbbell"]
 
 
 # --- usage endpoint ---------------------------------------------------------------

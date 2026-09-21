@@ -66,7 +66,7 @@ export function CatalogDetail({ exercise, unit }: CatalogDetailProps): React.JSX
             <span className="label-mono text-[10px] text-cyan">
               {PATTERN_LABEL[pattern]}
             </span>
-            <EquipmentSymbol equipment={exercise.required_equipment} showOverflowCount />
+            <EquipmentSymbol equipment={exercise.equipment} showOverflowCount />
           </div>
           {summary ? (
             <p className="font-sans text-[13px] leading-relaxed text-text-secondary">

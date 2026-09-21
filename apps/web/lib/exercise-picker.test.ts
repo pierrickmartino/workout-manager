@@ -13,6 +13,7 @@ function result(overrides: Partial<ExerciseSearchResult> = {}): ExerciseSearchRe
     difficulty: null,
     provenance: "curated",
     movement_pattern: "squat",
+    equipment: [],
     ...overrides,
   };
 }

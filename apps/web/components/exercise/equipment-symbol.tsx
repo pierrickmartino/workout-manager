@@ -1,8 +1,8 @@
-// Maps a catalog Exercise's `required_equipment` to a Lucide symbol — the field-guide "at
-// a glance, what do I need" marker (ADR-0072). Equipment labels are free-form in the
-// Catalog, so we match on lowercased substrings and fall back to a neutral dot for an
-// unmapped label; an empty / "bodyweight" list shows the bodyweight symbol. Uses the
-// Lucide set the app already ships; no new dependency.
+// Maps a movement's canonical Equipment tokens (ADR-0077) to a Lucide symbol — the field-guide
+// "at a glance, what do I need" marker (ADR-0072). The backend rolls the free-text equipment up
+// into a small curated vocabulary, so this matches on the canonical token and reads its human
+// label from `lib/equipment`; an empty / "bodyweight" list shows the bodyweight symbol, and the
+// honest "other" bucket falls to a neutral dot. Uses the Lucide set the app already ships.
 
 import {
   Dumbbell,
@@ -10,41 +10,33 @@ import {
   Cable,
   Grip,
   Activity,
-  Bike,
-  Waves,
   PersonStanding,
   Circle,
   type LucideIcon,
 } from "lucide-react";
 
-// Ordered substring → icon rules; first match wins, so specific labels (kettlebell)
-// precede general ones (bar).
-const EQUIPMENT_RULES: ReadonlyArray<readonly [string, LucideIcon, string]> = [
-  ["dumbbell", Dumbbell, "Dumbbell"],
-  ["kettlebell", Weight, "Kettlebell"],
-  ["barbell", Dumbbell, "Barbell"],
-  ["ez bar", Dumbbell, "EZ bar"],
-  ["bar", Dumbbell, "Bar"],
-  ["cable", Cable, "Cable"],
-  ["machine", Cable, "Machine"],
-  ["band", Cable, "Resistance band"],
-  ["pull-up", Grip, "Pull-up bar"],
-  ["pull up", Grip, "Pull-up bar"],
-  ["rig", Grip, "Rig"],
-  ["rings", Grip, "Rings"],
-  ["plate", Weight, "Weight plate"],
-  ["weight", Weight, "Weight"],
-  ["bike", Bike, "Bike"],
-  ["rower", Activity, "Rower"],
-  ["treadmill", Activity, "Treadmill"],
-  ["erg", Activity, "Erg"],
-  ["pool", Waves, "Pool"],
-  ["bench", Weight, "Bench"],
-  ["ball", Circle, "Ball"],
+import { equipmentLabel } from "@/lib/equipment";
+
+// Ordered canonical-token → icon rules; first match wins, so a specific token (kettlebell)
+// precedes a broader one. Labels are owned by `lib/equipment`, so these carry the icon only.
+const EQUIPMENT_ICONS: ReadonlyArray<readonly [string, LucideIcon]> = [
+  ["kettlebell", Weight],
+  ["dumbbell", Dumbbell],
+  ["barbell", Dumbbell],
+  ["cable", Cable],
+  ["machine", Cable],
+  ["resistance band", Cable],
+  ["pull-up bar", Grip],
+  ["rings", Grip],
+  ["parallettes", Grip],
+  ["cardio machine", Activity],
+  ["medicine ball", Circle],
+  ["bench", Weight],
+  ["rack", Weight],
 ];
 
-// Labels that mean "nothing needed" — surfaced as the bodyweight symbol, not a fallback dot.
-const BODYWEIGHT_LABELS = new Set(["bodyweight", "body weight", "none", "no equipment"]);
+// The canonical token that means "nothing needed" — the bodyweight symbol, not a fallback dot.
+const BODYWEIGHT_LABELS = new Set(["bodyweight"]);
 
 interface ResolvedEquipment {
   Icon: LucideIcon;
@@ -57,19 +49,20 @@ function meaningfulEquipment(equipment: readonly string[]): string[] {
   );
 }
 
-// Resolve the FIRST meaningful piece of equipment to a symbol — the field-guide entry
-// shows one primary symbol, the full list lives on Details. Bodyweight for an empty / none
-// list; a neutral fallback for an unmapped label (still honest: "some equipment").
+// Resolve the FIRST meaningful piece of equipment to a symbol — the field-guide entry shows one
+// primary symbol, the full list lives on Details. Bodyweight for an empty / bodyweight-only
+// list; a neutral dot for a token with no dedicated icon (still honest: "some equipment"). The
+// label is always the canonical Title-Case form, so a chip and its symbol never disagree.
 function resolvePrimaryEquipment(equipment: readonly string[]): ResolvedEquipment {
   const meaningful = meaningfulEquipment(equipment);
   if (meaningful.length === 0) {
     return { Icon: PersonStanding, label: "Bodyweight" };
   }
-  const lower = meaningful[0].toLowerCase();
-  for (const [needle, Icon, label] of EQUIPMENT_RULES) {
-    if (lower.includes(needle)) return { Icon, label };
-  }
-  return { Icon: Circle, label: meaningful[0] };
+  const token = meaningful[0];
+  const lower = token.toLowerCase();
+  const Icon =
+    EQUIPMENT_ICONS.find(([needle]) => lower.includes(needle))?.[1] ?? Circle;
+  return { Icon, label: equipmentLabel(token) };
 }
 
 interface EquipmentSymbolProps {

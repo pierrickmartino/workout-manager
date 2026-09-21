@@ -1,7 +1,7 @@
 """Unit tests for the pure Catalog-browse domain (ADR-0042).
 
 Covers the difficulty banding, facet parsing, the AND-of-facets / OR-within-facet
-predicate, the curated → completeness → name ordering, and the distinct-equipment
+predicate, the curated → completeness → name ordering, and the canonical-equipment
 option list. No ORM: a lightweight ``_Ex`` double satisfies the ``_Browsable`` shape."""
 
 from __future__ import annotations
@@ -12,11 +12,10 @@ from app.domain.exercise import normalize_name
 from app.domain.exercise_browse import (
     DifficultyBand,
     browse_sort_key,
+    catalog_equipment,
     difficulty_band,
-    distinct_equipment,
     exercise_muscle_groups,
     matches_filters,
-    normalize_equipment,
     parse_difficulty_band,
     parse_muscle_group,
     rank_browse_results,
@@ -134,21 +133,37 @@ def test_any_active_facet_excludes_a_name_only_stub():
     )
 
 
-def test_equipment_filter_is_normalized_and_or_within_facet():
+def test_equipment_filter_rolls_up_to_canonical_bucket_and_or_within_facet():
     ohp = _listable("Overhead Press", required_equipment=["Pull-up Bar"])
-    # normalized both sides, so casing/spacing differences still match
+    # both sides roll up to the canonical token, so casing/spacing variants still match
     assert matches_filters(
         ohp,
         muscle_groups=set(),
-        equipment={normalize_equipment("pull-up bar")},
+        equipment={"pull-up bar"},
         difficulty_bands=set(),
     )
     # OR within the facet: matching any one requested equipment passes
     assert matches_filters(
         ohp,
         muscle_groups=set(),
-        equipment={"dumbbell", normalize_equipment("Pull-up Bar")},
+        equipment={"dumbbell", "pull-up bar"},
         difficulty_bands=set(),
+    )
+
+
+def test_equipment_filter_folds_plural_and_product_variants():
+    # A movement stored with a plural still matches the singular canonical filter (ADR-0077)
+    row = _listable("Barbell Row", required_equipment=["Barbells"])
+    assert matches_filters(
+        row, muscle_groups=set(), equipment={"barbell"}, difficulty_bands=set()
+    )
+    # An unmapped product name matches the honest "other" bucket, never a generic one
+    branded = _listable("Combat Press", required_equipment=["Atletica R8 Combat"])
+    assert matches_filters(
+        branded, muscle_groups=set(), equipment={"other"}, difficulty_bands=set()
+    )
+    assert not matches_filters(
+        branded, muscle_groups=set(), equipment={"barbell"}, difficulty_bands=set()
     )
 
 
@@ -233,14 +248,27 @@ def test_browse_sort_key_is_a_pure_tuple():
     assert key == (0, 1, "back squat")  # curated=0, listable=1, normalized name
 
 
-# --- distinct equipment options ---------------------------------------------------
+# --- canonical equipment options --------------------------------------------------
 
 
-def test_distinct_equipment_dedupes_case_insensitively_and_sorts():
+def test_catalog_equipment_rolls_up_to_canonical_tokens_in_order():
     exercises = [
         _listable("A", required_equipment=["Barbell", "bench"]),
-        _listable("B", required_equipment=["barbell", "  "]),  # blank dropped
+        _listable("B", required_equipment=["barbells", "  "]),  # plural folds, blank dropped
         _listable("C", required_equipment=["Dumbbell"]),
     ]
-    # one entry per normalized key, first casing kept, sorted; blank never surfaced
-    assert distinct_equipment(exercises) == ["Barbell", "bench", "Dumbbell"]
+    # one entry per canonical bucket (barbell/barbells collapse), in EQUIPMENT_ORDER
+    assert catalog_equipment(exercises) == ["barbell", "dumbbell", "bench"]
+
+
+def test_catalog_equipment_appends_other_last_only_when_present():
+    exercises = [
+        _listable("A", required_equipment=["barbell"]),
+        _listable("B", required_equipment=["Atletica R8 Combat"]),  # unmapped → other
+    ]
+    result = catalog_equipment(exercises)
+    assert result == ["barbell", "other"]
+    # with nothing unmapped, "other" never shows
+    assert catalog_equipment([_listable("A", required_equipment=["barbell"])]) == [
+        "barbell"
+    ]
