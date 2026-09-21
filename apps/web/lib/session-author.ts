@@ -25,6 +25,11 @@ export interface SessionAuthorView {
   byline: string;
   displayName: string;
   isNamed: boolean;
+  // Whether to render the byline at all. False when the Author resolves to the viewer
+  // (`authored_by_me`): crediting "by <you>" on your own plan is pure repetition. True for an
+  // adopted/shared plan (a different Author — provenance) and whenever the signal is absent, so a
+  // read that omits `authored_by_me` never hides provenance by default.
+  showByline: boolean;
 }
 
 // Map a Session onto its Author view. Pure and server-free (types are erased), so the
@@ -36,5 +41,8 @@ export interface SessionAuthorView {
 // never rendered blank, and `isNamed` stays meaningful for the placeholder styling.
 export function sessionAuthorView(session: WorkoutSession): SessionAuthorView {
   const { displayName, isNamed } = resolveAuthorCredit(session.author);
-  return { byline: `by ${displayName}`, displayName, isNamed };
+  // Hide the byline only when the Author is the viewer. A missing flag (a read that omits it)
+  // is treated as "not self", so provenance on an adopted/shared plan is never suppressed.
+  const showByline = !(session.authored_by_me ?? false);
+  return { byline: `by ${displayName}`, displayName, isNamed, showByline };
 }

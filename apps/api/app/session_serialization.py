@@ -97,7 +97,13 @@ def serialize_session(view: SessionView, *, logged_count: int | None = None) -> 
 
     The raw Author reference (``author_clerk_user_id``) is deliberately kept server-side —
     the client needs only the credit name, and withholding the id avoids exposing the original
-    author's Clerk id to a different owner once Redeem transfers ownership (ADR-0057).
+    author's Clerk id to a different owner once Redeem transfers ownership (ADR-0057). In its
+    place the boolean ``authored_by_me`` is derived here: whether the Author resolves to the
+    viewing owner (``author_clerk_user_id == clerk_user_id`` — every view is built for its
+    owner). The client shows the "by <name>" byline only when this is false, so an adopted or
+    shared copy (which keeps its original Author) still carries provenance while a self-authored
+    plan drops the redundant "by <you>". A ``None`` Author id (legacy/pre-#395) resolves to
+    false, so provenance is never hidden by an unknown Author.
     """
 
     payload = {
@@ -112,6 +118,8 @@ def serialize_session(view: SessionView, *, logged_count: int | None = None) -> 
             view.name, view.training_type, view.created_at
         ),
         "author": {"display_name": view.author_display_name},
+        "authored_by_me": view.author_clerk_user_id is not None
+        and view.author_clerk_user_id == view.clerk_user_id,
         "is_protocol_member": view.is_protocol_member,
         "is_favorite": None if view.is_protocol_member else view.is_favorite,
         # Session Section (ADR-0074) is a projection over the *ordered* Session, so it is

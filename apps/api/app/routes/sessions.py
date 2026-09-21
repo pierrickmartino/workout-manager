@@ -546,7 +546,9 @@ DEFAULT_LIST_LIMIT = 20
 MAX_LIST_LIMIT = 100
 
 
-def _serialize_summary(summary: SessionSummaryView, logged_count: int) -> dict:
+def _serialize_summary(
+    summary: SessionSummaryView, logged_count: int, clerk_user_id: str
+) -> dict:
     """One My Sessions row (issue #397): the same name/fallback and Author shapes the
     detail read uses, kept thin (the prescriptions themselves are not joined — only their
     count rides as ``exercise_count``). ``created_at`` is sent as its calendar
@@ -568,6 +570,12 @@ def _serialize_summary(summary: SessionSummaryView, logged_count: int) -> dict:
         # Author surfaced as the raw credit name (``null`` when unset); the web
         # ``sessionAuthorView`` mapper resolves the never-blank generic fallback.
         "author": {"display_name": summary.author_display_name},
+        # Whether the Author resolves to the viewing owner (the list is scoped to the caller, so
+        # ``clerk_user_id`` is the owner). The card shows the "by <name>" byline only when this is
+        # false — an adopted/shared copy keeps its original Author (provenance), a self-authored
+        # row drops the redundant "by <you>" (CONTEXT: Author). The raw Author id stays off-wire.
+        "authored_by_me": summary.author_clerk_user_id is not None
+        and summary.author_clerk_user_id == clerk_user_id,
         # The owner's Favorite marker, driving the favorites-only filter's rendering.
         "is_favorite": summary.is_favorite,
         # The Logged Count (ADR-0063): the row badges it when > 0 and hides Delete then.
@@ -613,7 +621,7 @@ def list_sessions(
     counts = logged.count_by_session(clerk_user_id)
     return success_envelope(
         [
-            _serialize_summary(summary, counts.get(summary.id, 0))
+            _serialize_summary(summary, counts.get(summary.id, 0), clerk_user_id)
             for summary in page.items
         ],
         meta={"total": page.total, "limit": limit, "offset": offset},

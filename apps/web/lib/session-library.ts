@@ -43,6 +43,11 @@ export interface SessionSummary {
   display_name: string;
   created_at: string;
   author: { display_name?: string | null };
+  // Whether the Author resolves to the viewing owner (CONTEXT: Author). The card surfaces the "by
+  // <name>" byline only when this is false — it is provenance (a plan adopted from someone else),
+  // not self-repetition on every row. Computed server-side (owner == author); always present on a
+  // list row.
+  authored_by_me: boolean;
   is_favorite: boolean;
   exercise_count: number;
   // Logged Count (CONTEXT: Logged Count, ADR-0063): how many Logged Sessions the owner has

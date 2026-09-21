@@ -142,6 +142,33 @@ def test_row_carries_name_fallback_type_author_and_favorite():
     assert row["exercise_count"] == 0
 
 
+def test_self_authored_row_is_marked_authored_by_me():
+    # Arrange — a plan the caller created themselves
+    client, ctx, sessions = build_client()
+    _make_session(sessions, "user_own", name="My Plan")
+
+    # Act
+    row = _list(client, ctx, "user_own").json()["data"][0]
+
+    # Assert — the Author resolves to the viewer, so the card hides the redundant "by <you>"
+    assert row["authored_by_me"] is True
+
+
+def test_adopted_copy_row_is_not_authored_by_me():
+    # Arrange — the sharer authors a plan; the recipient adopts it (Redeem deep-copies it,
+    # preserving the original Author). The copy is standalone and owned by the recipient, so it
+    # appears in *their* My Sessions — where the byline carries provenance, not self-repetition.
+    client, ctx, sessions = build_client()
+    source = _make_session(sessions, "sharer", name="Sharer's Plan")
+    sessions.redeem(source, "recipient")
+
+    # Act — the recipient lists their library
+    row = _list(client, ctx, "recipient").json()["data"][0]
+
+    # Assert — the adopted copy is authored by someone else: the byline stays.
+    assert row["authored_by_me"] is False
+
+
 def test_row_carries_the_exercise_prescription_count():
     # Arrange — a Session whose plan holds two Exercise Prescriptions (issue #397, "N exercises")
     client, ctx, sessions = build_client()

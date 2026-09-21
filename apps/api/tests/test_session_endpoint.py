@@ -179,6 +179,24 @@ def test_generated_session_credits_its_author_by_display_name():
     assert fetched["provenance"] == "ai_generated"
 
 
+def test_detail_read_marks_a_self_created_session_authored_by_me():
+    # Arrange — a plan the caller created themselves
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_self")
+
+    # Act — create, then read it back
+    created = client.post(
+        "/api/sessions/generate", headers=headers, json=_generate_body()
+    ).json()["data"]
+    fetched = client.get(
+        f"/api/sessions/{created['id']}", headers=headers
+    ).json()["data"]
+
+    # Assert — the Author resolves to the viewer, so the byline is self-repetition: the client
+    # suppresses "by <you>" (CONTEXT: Author). The raw Author id stays server-side.
+    assert fetched["authored_by_me"] is True
+
+
 def test_author_display_name_is_null_when_the_creator_has_no_profile_name():
     # Arrange — the creating user has no Profile display name on file
     client, ctx = build_client()

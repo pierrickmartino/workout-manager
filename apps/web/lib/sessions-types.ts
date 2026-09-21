@@ -116,6 +116,12 @@ export interface WorkoutSession {
   // Session read always carries it; the live hydration read omits it, so it is optional here
   // (mirror of `provenance`). The `sessionAuthorView` mapper applies the generic fallback.
   author?: SessionAuthor;
+  // Whether the Author resolves to the viewing owner (CONTEXT: Author, ADR-0040). The byline is
+  // provenance, not self-repetition — so it is surfaced only when this is false (an adopted or
+  // shared plan keeps its original Author). Computed server-side (owner == author), since the raw
+  // Author id stays off the wire. Optional/absent on read paths that omit the Author (live
+  // hydration); a missing flag is treated as "not self", so provenance is never hidden by default.
+  authored_by_me?: boolean;
   // Favorite (CONTEXT: Favorite, issue #396): the owner's stored, per-user, per-copy marker,
   // surfaced on the standalone Session read as a toggle. `true`/`false` on a standalone Session;
   // `null` when withheld on a Protocol member (Favorite is standalone-only), and absent on read
