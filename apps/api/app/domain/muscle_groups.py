@@ -187,8 +187,23 @@ class _NamedDatedLoggedSession(Protocol):
     logged_sets: Sequence[_NamedLoggedSet]
 
 
-def _normalize(muscle: str) -> str:
-    """Canonical lookup key: lowercased, trimmed, internal whitespace collapsed."""
+class _EmphasisSet(Protocol):
+    """A Logged Set carrying the Primary/Secondary emphasis split (ADR-0016) alongside the
+    flat targeted-muscle union — the shape :func:`set_emphasis` reads to expose emphasis to
+    the coverage layer. ``primary_muscles`` / ``secondary_muscles`` ride on the same
+    denormalized view the roll-up already reads ``targeted_muscles`` from."""
+
+    targeted_muscles: Sequence[str]
+    primary_muscles: Sequence[str]
+    secondary_muscles: Sequence[str]
+
+
+def normalize_muscle(muscle: str) -> str:
+    """Canonical lookup key: lowercased, trimmed, internal whitespace collapsed.
+
+    The one normalization both the group roll-up (:func:`classify`) and the finer
+    canonical-muscle vocabulary (``app.domain.muscles.classify_muscle``) key on, so the two
+    tiers can never disagree on how a free-form string is matched."""
 
     return _WHITESPACE.sub(" ", muscle.strip()).lower()
 
@@ -201,7 +216,40 @@ def classify(muscle: str) -> MuscleGroup:
     guessed at.
     """
 
-    return _MUSCLE_TO_GROUP.get(_normalize(muscle), MuscleGroup.UNCLASSIFIED)
+    return _MUSCLE_TO_GROUP.get(normalize_muscle(muscle), MuscleGroup.UNCLASSIFIED)
+
+
+@dataclass(frozen=True)
+class MuscleEmphasis:
+    """One Logged Set's targeted muscles split by emphasis (ADR-0016), for the coverage read.
+
+    ``primary`` are the prime movers a movement is chosen to train; ``secondary`` assist.
+    Both are the free-form muscle strings (not yet classified), in the order they were
+    asserted, so a caller can classify each to a Muscle Group or canonical Muscle and weight
+    the two tiers differently — the data the later emphasis-weighted Atlas heat depends on.
+    Frozen and value-typed, mirroring :class:`WeeklyComposition`'s discipline."""
+
+    primary: tuple[str, ...]
+    secondary: tuple[str, ...]
+
+
+def set_emphasis(logged_set: _EmphasisSet) -> MuscleEmphasis:
+    """Expose one Logged Set's Primary/Secondary muscles to the coverage layer (ADR-0016).
+
+    Returns the set's asserted emphasis split when it has one; otherwise falls back to
+    **all primary** — the full ``targeted_muscles`` union as primary, no secondary — matching
+    the SPECS render's "no asserted split → flat list" behaviour so a set with no split still
+    contributes every targeted muscle at full emphasis rather than vanishing. "Has a split" is
+    *any* asserted primary or secondary (the same rule as ``exercise.has_emphasis_split``), so
+    a true isolation movement with only a primary keeps its exact split. Pure and read-time:
+    it invents no primacy a set does not carry — the fallback claims *all* primary, never
+    guesses *which* muscle is primary."""
+
+    primary = tuple(logged_set.primary_muscles)
+    secondary = tuple(logged_set.secondary_muscles)
+    if primary or secondary:
+        return MuscleEmphasis(primary=primary, secondary=secondary)
+    return MuscleEmphasis(primary=tuple(logged_set.targeted_muscles), secondary=())
 
 
 def covered_groups(history: Iterable[_LoggedSession]) -> set[MuscleGroup]:
@@ -479,7 +527,10 @@ __all__ = [
     "ContributingExercise",
     "GroupCoverage",
     "RecentCoverage",
+    "MuscleEmphasis",
     "classify",
+    "normalize_muscle",
+    "set_emphasis",
     "covered_groups",
     "distribution",
     "recent_coverage",

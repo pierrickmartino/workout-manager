@@ -19,6 +19,7 @@ import pytest
 from sqlmodel import Session, SQLModel
 
 from app.domain.exercise import Provenance
+from app.domain.muscle_groups import MuscleEmphasis, set_emphasis
 from app.repositories.exercise_repository import (
     InMemoryExerciseRepository,
     SqlExerciseRepository,
@@ -464,3 +465,81 @@ def test_delete_returns_false_for_an_unknown_log(repos):
 
     # Act / Assert — nothing to delete
     assert logged.delete(987654, "user_any") is False
+
+
+def test_logged_set_view_carries_the_exercises_primary_secondary_split(repos):
+    # Arrange — an Exercise with an asserted Primary/Secondary emphasis split (ADR-0016),
+    # threaded through so the coverage read layer can reach each set's emphasis (issue #539)
+    logged, sessions, exercises = repos
+    bench = exercises.find_or_create(
+        "Bench Press",
+        provenance=Provenance.CURATED,
+        targeted_muscles=["chest", "triceps", "front delts"],
+        primary_muscles=["chest"],
+        secondary_muscles=["triceps", "front delts"],
+    )
+    session_view = sessions.create(
+        "user_owner",
+        SessionDraft(
+            training_type="strength",
+            duration_minutes=30,
+            prescriptions=[PrescriptionDraft(exercise_id=bench.id, sets=3, reps="8")],
+        ),
+    )
+
+    # Act — record a performance and read it back through the repository
+    view = logged.create(
+        "user_owner",
+        LoggedSessionDraft(
+            session_id=session_view.id,
+            performed_on=date(2026, 6, 20),
+            logged_sets=[LoggedSetDraft(exercise_id=bench.id, quantity=reps_quantity(8))],
+        ),
+    )
+
+    # Assert — the split rides on the read view alongside the flat union
+    logged_set = view.logged_sets[0]
+    assert logged_set.targeted_muscles == ["chest", "triceps", "front delts"]
+    assert logged_set.primary_muscles == ["chest"]
+    assert logged_set.secondary_muscles == ["triceps", "front delts"]
+    # ...and the coverage layer's emphasis accessor reads that split off the view verbatim
+    assert set_emphasis(logged_set) == MuscleEmphasis(
+        primary=("chest",), secondary=("triceps", "front delts")
+    )
+
+
+def test_logged_set_view_emphasis_falls_back_to_all_primary_without_a_split(repos):
+    # Arrange — an Exercise with only the flat targeted-muscle union, no asserted split
+    logged, sessions, exercises = repos
+    squat = exercises.find_or_create(
+        "Back Squat",
+        provenance=Provenance.CURATED,
+        targeted_muscles=["quadriceps", "glutes"],
+    )
+    session_view = sessions.create(
+        "user_owner",
+        SessionDraft(
+            training_type="strength",
+            duration_minutes=30,
+            prescriptions=[PrescriptionDraft(exercise_id=squat.id, sets=5, reps="5")],
+        ),
+    )
+
+    # Act
+    view = logged.create(
+        "user_owner",
+        LoggedSessionDraft(
+            session_id=session_view.id,
+            performed_on=date(2026, 6, 20),
+            logged_sets=[LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(5))],
+        ),
+    )
+
+    # Assert — no split stored, so the emphasis accessor falls back to the whole union as
+    # all-primary (the "no split → all primary" rule), never a fabricated primacy
+    logged_set = view.logged_sets[0]
+    assert logged_set.primary_muscles == []
+    assert logged_set.secondary_muscles == []
+    assert set_emphasis(logged_set) == MuscleEmphasis(
+        primary=("quadriceps", "glutes"), secondary=()
+    )

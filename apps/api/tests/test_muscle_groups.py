@@ -21,11 +21,13 @@ from app.domain.muscle_groups import (
     GROUP_ORDER,
     ContributingExercise,
     GroupCoverage,
+    MuscleEmphasis,
     MuscleGroup,
     classify,
     covered_groups,
     distribution,
     recent_coverage,
+    set_emphasis,
     weekly_distribution,
 )
 
@@ -676,3 +678,64 @@ def test_unclassified_sets_is_zero_when_all_work_maps():
 
     # Assert — nothing off-map
     assert coverage.unclassified_sets == 0
+
+
+@dataclass
+class _EmphasisSet:
+    """A Logged Set stub carrying the Primary/Secondary emphasis split (ADR-0016)
+    alongside the flat targeted-muscle union — the shape ``set_emphasis`` reads."""
+
+    targeted_muscles: list[str] = field(default_factory=list)
+    primary_muscles: list[str] = field(default_factory=list)
+    secondary_muscles: list[str] = field(default_factory=list)
+
+
+def test_set_emphasis_returns_the_asserted_split_when_one_is_populated():
+    # Arrange — a set whose Exercise asserts a Primary/Secondary split (ADR-0016)
+    logged_set = _EmphasisSet(
+        targeted_muscles=["chest", "triceps", "front delts"],
+        primary_muscles=["chest"],
+        secondary_muscles=["triceps", "front delts"],
+    )
+
+    # Act
+    emphasis = set_emphasis(logged_set)
+
+    # Assert — the asserted split is surfaced verbatim, in order
+    assert emphasis == MuscleEmphasis(
+        primary=("chest",), secondary=("triceps", "front delts")
+    )
+
+
+def test_set_emphasis_falls_back_to_all_primary_when_no_split_is_asserted():
+    # Arrange — a set whose Exercise carries only the flat union, no split
+    logged_set = _EmphasisSet(targeted_muscles=["quadriceps", "glutes"])
+
+    # Act
+    emphasis = set_emphasis(logged_set)
+
+    # Assert — the whole union rides as primary, no secondary (the SPECS "flat list" rule),
+    # so the set still contributes every targeted muscle at full emphasis
+    assert emphasis == MuscleEmphasis(primary=("quadriceps", "glutes"), secondary=())
+
+
+def test_set_emphasis_keeps_a_primary_only_isolation_split():
+    # Arrange — a true isolation movement asserts only a primary (ADR-0016: any asserted
+    # emphasis is a populated split)
+    logged_set = _EmphasisSet(
+        targeted_muscles=["biceps"], primary_muscles=["biceps"], secondary_muscles=[]
+    )
+
+    # Act
+    emphasis = set_emphasis(logged_set)
+
+    # Assert — the split is honored as-is; it does NOT fall back to the union
+    assert emphasis == MuscleEmphasis(primary=("biceps",), secondary=())
+
+
+def test_set_emphasis_of_an_empty_set_is_empty():
+    # Arrange / Act — a set with no muscles recorded at all
+    emphasis = set_emphasis(_EmphasisSet())
+
+    # Assert — nothing to emphasize, and no fabricated primacy
+    assert emphasis == MuscleEmphasis(primary=(), secondary=())
