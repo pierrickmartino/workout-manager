@@ -153,14 +153,18 @@ export default async function SessionPage({
       {/* Author (issue #395): credit the human who first created this plan, "by <name>". Quiet
           secondary text so it reads as attribution, kept visually distinct from the magenta
           AI-GENERATED Provenance badges on each movement (who made it vs. how it was made). A
-          generic-label fallback (unnamed author) is shown muted/italic to read as a placeholder. */}
-      <p
-        className={`-mt-4 font-sans text-[13px] ${
-          authorView.isNamed ? "text-text-secondary" : "text-text-muted italic"
-        }`}
-      >
-        {authorView.byline}
-      </p>
+          generic-label fallback (unnamed author) is shown muted/italic to read as a placeholder.
+          Suppressed when the Author is the viewer (`showByline`): the byline is provenance, not a
+          "by <you>" on every one of your own plans. */}
+      {authorView.showByline ? (
+        <p
+          className={`-mt-4 font-sans text-[13px] ${
+            authorView.isNamed ? "text-text-secondary" : "text-text-muted italic"
+          }`}
+        >
+          {authorView.byline}
+        </p>
+      ) : null}
 
       {/* Header controls. Favorite — a frequent, cheap toggle — stays visible; the rare and
           destructive actions (Rename, Share, Delete, Duplicate, Generate another) collapse

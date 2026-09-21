@@ -36,6 +36,7 @@ function makeSummary(overrides: Partial<SessionSummary> = {}): SessionSummary {
     display_name: "Zone 2 Ride",
     created_at: "2026-09-01",
     author: { display_name: "Dana" },
+    authored_by_me: false,
     is_favorite: false,
     exercise_count: 3,
     logged_count: 4,
@@ -94,6 +95,7 @@ test("an unnamed My Sessions row titles by its formatted creation date", () => {
 });
 
 test("a blank or missing Author credit falls back to the generic label, never blank", () => {
+  // An adopted row (not self-authored) whose original Author has no name still shows a byline.
   assert.equal(
     sessionSummaryCardModel(makeSummary({ author: { display_name: "   " } })).authorName,
     "Anonymous",
@@ -102,6 +104,23 @@ test("a blank or missing Author credit falls back to the generic label, never bl
     sessionSummaryCardModel(makeSummary({ author: { display_name: null } })).authorName,
     "Anonymous",
   );
+});
+
+test("a self-authored row carries no author byline (pure repetition of the viewer)", () => {
+  // A plan the viewer created themselves credits them on every row — hide it (the whole point).
+  const model = sessionSummaryCardModel(
+    makeSummary({ authored_by_me: true, author: { display_name: "Pierrick" } }),
+  );
+
+  assert.equal(model.authorName, null);
+});
+
+test("an adopted row keeps its Author byline (provenance from another user)", () => {
+  const model = sessionSummaryCardModel(
+    makeSummary({ authored_by_me: false, author: { display_name: "Alex Rivera" } }),
+  );
+
+  assert.equal(model.authorName, "Alex Rivera");
 });
 
 test("row Delete is offered only for a never-performed plan (Logged Count 0)", () => {

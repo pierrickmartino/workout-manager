@@ -74,9 +74,13 @@ export function sessionSummaryCardModel(
   summary: SessionSummary,
 ): SessionCardModel {
   const title = sessionRowTitle(summary);
-  // The never-blank Author credit — the same fallback the row used before (a null/blank raw name
-  // → the generic label), so a row is never authored by "".
-  const authorName = summary.author.display_name?.trim() || GENERIC_AUTHOR_LABEL;
+  // The Author byline (CONTEXT: Author) is provenance, not self-repetition: shown only when the
+  // plan was authored by someone else (an adopted/shared copy). A self-authored row drops it
+  // (`null` → the card renders no byline). Otherwise the never-blank credit — the same fallback
+  // the row used before (a null/blank raw name → the generic label), so a shown byline is never "".
+  const authorName = summary.authored_by_me
+    ? null
+    : summary.author.display_name?.trim() || GENERIC_AUTHOR_LABEL;
   return {
     id: summary.id,
     displayName: title,

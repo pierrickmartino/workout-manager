@@ -133,6 +133,11 @@ class SessionSummaryView:
     training_type: str
     name: str | None
     created_at: datetime
+    # The Author reference (the creator's ``clerk_user_id``), preserved through Duplicate/Redeem
+    # like the detail read's. Kept server-side (never serialized): the route compares it to the
+    # viewing owner to derive the row's ``authored_by_me`` — the byline is provenance, not a
+    # "by <you>" on every self-authored row (CONTEXT: Author). ``None`` for a legacy/pre-#395 row.
+    author_clerk_user_id: str | None
     author_display_name: str | None
     is_favorite: bool
     prescription_count: int
@@ -607,6 +612,7 @@ class SqlSessionRepository:
             training_type=workout.training_type,
             name=workout.name,
             created_at=workout.created_at,
+            author_clerk_user_id=workout.author_clerk_user_id,
             author_display_name=_author_display_name(
                 self._profiles, workout.author_clerk_user_id
             ),
@@ -1042,6 +1048,7 @@ class InMemorySessionRepository:
             training_type=workout.training_type,
             name=workout.name,
             created_at=workout.created_at,
+            author_clerk_user_id=workout.author_clerk_user_id,
             author_display_name=_author_display_name(
                 self._profiles, workout.author_clerk_user_id
             ),

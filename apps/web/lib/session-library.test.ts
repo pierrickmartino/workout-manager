@@ -31,6 +31,7 @@ function makeSummary(overrides: Partial<SessionSummary>): SessionSummary {
     display_name: "Leg Day A",
     created_at: "2026-08-25",
     author: { display_name: "Dana Lin" },
+    authored_by_me: true,
     is_favorite: false,
     exercise_count: 5,
     logged_count: 0,
