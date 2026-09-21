@@ -41,6 +41,7 @@ function summary(overrides: Partial<SessionSummary>): SessionSummary {
     display_name: "strength · 2026-06-01",
     created_at: "2026-06-01",
     author: { display_name: null },
+    authored_by_me: true,
     is_favorite: false,
     exercise_count: 3,
     logged_count: 1,
