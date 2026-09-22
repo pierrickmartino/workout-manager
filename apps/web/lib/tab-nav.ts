@@ -53,6 +53,9 @@ export const TAB_LESS_ROUTES: string[] = [
   "/shared",
   "/sign-in",
   "/sign-up",
+  // PROTOTYPE (throwaway): mock-data UI prototypes under `/prototype/*` render no app chrome.
+  // Remove when the `app/prototype/` folder is deleted.
+  "/prototype",
 ];
 
 // A tab is active when the pathname exactly equals one of its match prefixes or is a
