@@ -208,18 +208,33 @@ const SILHOUETTE: Point[][] = [
 // shoulders band so it sits proportionally on each figure.
 const HEAD = { cx: 110, cy: 46, r: 30 } as const;
 
+// The head (a warped circle) plus the body-part blob `d` strings for one figure — the
+// silhouette as structured data, so a React consumer can render it as real nodes and the markup
+// builder below can compose it into a string from the very same source. Both the standalone
+// asset and the in-app figure taper identically because they read this one model.
+export interface SilhouetteModel {
+  head: { cx: number; cy: number; r: number };
+  parts: string[];
+}
+
+// The structured silhouette for one figure: the warped head circle and each warped body-part
+// blob as a smooth closed path. Pure.
+export function silhouetteModel(figure: Figure): SilhouetteModel {
+  const head = warpPoint([HEAD.cx, HEAD.cy], figure);
+  const parts = SILHOUETTE.map((ring) =>
+    smoothClosedPath(ring.map((point) => warpPoint(point, figure))),
+  );
+  return { head: { cx: round(head[0]), cy: round(head[1]), r: HEAD.r }, parts };
+}
+
 // Build the silhouette markup for one figure: the head plus each warped body-part blob, all
 // filled with the themeable figure tokens. Marked `aria-hidden` and carrying no muscle id, so it
 // is never mistaken for an addressable muscle path by a consumer or a test.
 export function silhouetteMarkup(figure: Figure): string {
-  const head = warpPoint([HEAD.cx, HEAD.cy], figure);
-  const parts = SILHOUETTE.map((ring) => {
-    const d = smoothClosedPath(ring.map((point) => warpPoint(point, figure)));
-    return `    <path class="atlas-figure" d="${d}" />`;
-  });
+  const { head, parts } = silhouetteModel(figure);
   return [
-    `    <circle class="atlas-figure" cx="${round(head[0])}" cy="${round(head[1])}" r="${HEAD.r}" />`,
-    ...parts,
+    `    <circle class="atlas-figure" cx="${head.cx}" cy="${head.cy}" r="${head.r}" />`,
+    ...parts.map((d) => `    <path class="atlas-figure" d="${d}" />`),
   ].join("\n");
 }
 

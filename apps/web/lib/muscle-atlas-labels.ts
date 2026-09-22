@@ -1,9 +1,8 @@
-// Shared, color-independent copy for the Muscle Atlas surfaces — the six-group
-// `muscle-atlas-view` and its per-muscle successor `muscle-region-atlas-view` (ADR-0025/0073).
-// Both tiers speak the same neutral, descriptive language ("Trained" / "Not trained", the
-// off-map footnote, the trained-in-window aria label), so it lives in one place: a copy tweak
-// then lands on both atlases at once rather than silently drifting between them. Pure and
-// server-free, safe from either a Server or Client Component.
+// Shared, color-independent copy for the Muscle Atlas view-model `muscle-region-atlas-view`
+// (ADR-0025/0073/0079). The atlas speaks a neutral, descriptive language ("Trained" / "Not
+// trained", the off-map footnote, the trained-in-window aria label), kept in one place so a copy
+// tweak lands consistently across the body map, its group roll-up, and their aria-labels rather
+// than drifting between them. Pure and server-free, safe from either a Server or Client Component.
 
 export const TRAINED_LABEL = "Trained";
 export const NOT_TRAINED_LABEL = "Not trained";

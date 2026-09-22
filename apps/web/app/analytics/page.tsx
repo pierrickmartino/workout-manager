@@ -19,10 +19,12 @@ import { Alert } from "@/components/pulse/alert";
 import { VolumeChart } from "@/components/pulse/volume-chart";
 import { DistanceChart } from "@/components/pulse/distance-chart";
 import { MuscleSplit } from "@/components/pulse/muscle-split";
-import { MuscleAtlas } from "@/components/analytics/muscle-atlas";
+import { MuscleRegionAtlas } from "@/components/analytics/muscle-region-atlas";
 import { Card } from "@/components/ui/card";
 import { toMuscleBars, type MuscleBar } from "@/lib/muscle-distribution";
-import { toAtlasView } from "@/lib/muscle-atlas-view";
+import { toMuscleRegionAtlas } from "@/lib/muscle-region-atlas-view";
+import { resolveFigure } from "@/lib/atlas/atlas-render";
+import { fetchProfile } from "@/lib/profile";
 import {
   toRecordRows,
   toRecentRecordsTeaser,
@@ -52,11 +54,18 @@ export default async function AnalyticsPage({
 }) {
   const { range: rawRange } = await searchParams;
   const requestedRange = toAnalyticsRange(rawRange);
-  const [envelope, appearance] = await Promise.all([
+  const [envelope, appearance, profileEnvelope] = await Promise.all([
     fetchAnalytics(requestedRange),
     resolveAppearance(),
+    fetchProfile(),
   ]);
   const unit = appearance.weight_unit;
+  // The atlas figure is chosen by the Fitness Profile's gender, falling back to the neutral
+  // figure when it is null, unset, unrecognized, or the profile read failed (issue #543). The
+  // atlas renders for every user, so a missing profile degrades to neutral rather than hiding it.
+  const atlasFigure = resolveFigure(
+    profileEnvelope.success ? profileEnvelope.data?.gender : null,
+  );
 
   if (!envelope.success || !envelope.data) {
     return (
@@ -76,7 +85,7 @@ export default async function AnalyticsPage({
   const range = overview.range;
   const hasHistory = overview.sessions > 0;
   const muscleBars = toMuscleBars(overview.muscle_distribution);
-  const atlasView = toAtlasView(overview.coverage);
+  const atlasView = toMuscleRegionAtlas(overview.coverage);
   const recordRows = toRecordRows(overview.recent_records, unit);
   // The Strength Analytics screen is offered only to a user with qualifying strength
   // history — the same condition the strength read model gates on
@@ -128,11 +137,13 @@ export default async function AnalyticsPage({
         </Card>
       )}
 
-      {/* Muscle Atlas (ADR-0025/0073, task #9): the body map of Muscle Group Coverage —
-          ungated and type-neutral, beside the Muscle Split (presence + volume next to
-          proportion). Rendered for every user, including a pure yoga/mobility/bodyweight
-          history, over its own fixed range-independent 8-week window. */}
-      <MuscleAtlas view={atlasView} />
+      {/* Muscle Atlas (ADR-0025/0073/0079): the detailed anatomical body map, heat-shaded per
+          individual Muscle over the enriched per-muscle coverage read (issue #540/#541), the
+          figure chosen by Profile.gender (neutral fallback). Ungated and type-neutral, beside the
+          Muscle Split (presence + volume next to proportion). Rendered for every user, including a
+          pure yoga/mobility/bodyweight history, over its own fixed range-independent 8-week
+          window. */}
+      <MuscleRegionAtlas view={atlasView} figure={atlasFigure} />
 
       {recordRows.length > 0 ? (
         <RecentRecords
