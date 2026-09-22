@@ -415,6 +415,36 @@ def _resolve_targets(muscle: str) -> tuple[Muscle, ...] | None:
     return MUSCLES_IN_GROUP[group]
 
 
+def _set_contributions(logged_set: _EmphasisNamedSet) -> tuple[dict[Muscle, float], float]:
+    """One Logged Set's emphasis-weighted contribution per canonical Muscle, plus its off-map
+    weight.
+
+    Folds the set's Primary/Secondary emphasis (``emphasis_of``, with its "no split → all
+    primary" fallback) into a ``{muscle: weight}`` map — each primary muscle string adds
+    :data:`PRIMARY_EMPHASIS_WEIGHT`, each secondary :data:`SECONDARY_EMPHASIS_WEIGHT`, with a
+    coarse group-level term's weight spread evenly across its group (:func:`_resolve_targets`).
+    Weight the group tier can't place is returned separately as the set's off-map (Unclassified)
+    contribution, so the caller can accumulate the two tiers without re-walking the set. Pure —
+    it mutates nothing the caller owns."""
+
+    emphasis = emphasis_of(logged_set)
+    contribution: dict[Muscle, float] = {}
+    unclassified = 0.0
+    for muscles, weight in (
+        (emphasis.primary, PRIMARY_EMPHASIS_WEIGHT),
+        (emphasis.secondary, SECONDARY_EMPHASIS_WEIGHT),
+    ):
+        for muscle_str in muscles:
+            targets = _resolve_targets(muscle_str)
+            if targets is None:
+                unclassified += weight
+                continue
+            share = weight / len(targets)
+            for muscle in targets:
+                contribution[muscle] = contribution.get(muscle, 0.0) + share
+    return contribution, unclassified
+
+
 def recent_muscle_coverage(
     history: Iterable[_MuscleCoverageSession], *, reference: date, weeks: int
 ) -> RecentMuscleCoverage:
@@ -447,23 +477,13 @@ recent_coverage` — the ``weeks`` weeks ending at ``reference``'s week, via the
 
     for session in windowed:
         for logged_set in session.logged_sets:
-            emphasis = emphasis_of(logged_set)
+            contribution, off_map = _set_contributions(logged_set)
+            unclassified_volume += off_map
             name = logged_set.exercise_name
-            trained: set[Muscle] = set()
-            for muscles, weight in (
-                (emphasis.primary, PRIMARY_EMPHASIS_WEIGHT),
-                (emphasis.secondary, SECONDARY_EMPHASIS_WEIGHT),
-            ):
-                for muscle_str in muscles:
-                    targets = _resolve_targets(muscle_str)
-                    if targets is None:
-                        unclassified_volume += weight
-                        continue
-                    share = weight / len(targets)
-                    for muscle in targets:
-                        volume[muscle] += share
-                        trained.add(muscle)
-            for muscle in trained:
+            for muscle, weight in contribution.items():
+                volume[muscle] += weight
+                # An exercise is credited once per set that trained the muscle — the
+                # contribution's keys are exactly the distinct muscles this set touched.
                 exercise_tally[muscle][name] = exercise_tally[muscle].get(name, 0) + 1
 
     return RecentMuscleCoverage(
