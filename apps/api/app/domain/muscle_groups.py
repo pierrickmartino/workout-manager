@@ -24,7 +24,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
 from enum import Enum
-from typing import Protocol
+from typing import Protocol, TypeVar
 
 from app.domain.week import week_start
 
@@ -185,6 +185,37 @@ class _NamedDatedLoggedSession(Protocol):
 
     performed_on: date
     logged_sets: Sequence[_NamedLoggedSet]
+
+
+class _Dated(Protocol):
+    """Anything the coverage window buckets by the week it was performed in."""
+
+    performed_on: date
+
+
+_DatedT = TypeVar("_DatedT", bound=_Dated)
+
+
+def sessions_in_window(
+    history: Iterable[_DatedT], *, reference: date, weeks: int
+) -> list[_DatedT]:
+    """The Logged Sessions whose week falls inside the coverage window.
+
+    The window is the ``weeks`` consecutive weeks ending at ``reference``'s week, each
+    bucketed by its Monday exactly as :func:`weekly_distribution`. This is the single
+    definition of "in the recent coverage window", shared by the six-group roll-up
+    (:func:`recent_coverage`) and the finer per-muscle read
+    (``app.domain.muscles.recent_muscle_coverage``), so the two tiers can never disagree on
+    how far back "recent" reaches (ADR-0025). A non-positive ``weeks`` selects nothing.
+    """
+
+    this_week = week_start(reference)
+    earliest = this_week - (weeks - 1) * _WEEK if weeks > 0 else this_week + _WEEK
+    return [
+        session
+        for session in history
+        if earliest <= week_start(session.performed_on) <= this_week
+    ]
 
 
 class _EmphasisSet(Protocol):
@@ -437,11 +468,13 @@ class RecentCoverage:
     unclassified_sets: int
 
 
-def _rank_exercises(tally: dict[str, int]) -> tuple[ContributingExercise, ...]:
+def rank_exercises(tally: dict[str, int]) -> tuple[ContributingExercise, ...]:
     """Order an Exercise-name → set-count tally into the contributing-exercise list.
 
     Most sets first, ties broken alphabetically so the order is deterministic and stable
     across reads. An empty tally yields an empty tuple (an untrained group's honest state).
+    Shared by the group roll-up and the finer per-muscle read so both rank exercises the
+    same way.
     """
 
     return tuple(
@@ -477,13 +510,7 @@ def recent_coverage(
     groups (issue #189) without ever listing Unclassified as a seventh row or coverage target.
     """
 
-    this_week = week_start(reference)
-    earliest = this_week - (weeks - 1) * _WEEK if weeks > 0 else this_week + _WEEK
-    in_window = [
-        session
-        for session in history
-        if earliest <= week_start(session.performed_on) <= this_week
-    ]
+    in_window = sessions_in_window(history, reference=reference, weeks=weeks)
 
     set_counts: dict[MuscleGroup, int] = {group: 0 for group in REAL_GROUPS}
     exercise_tally: dict[MuscleGroup, dict[str, int]] = {
@@ -509,7 +536,7 @@ def recent_coverage(
                 group=group,
                 covered=set_counts[group] > 0,
                 sets=set_counts[group],
-                contributing_exercises=_rank_exercises(exercise_tally[group]),
+                contributing_exercises=rank_exercises(exercise_tally[group]),
             )
             for group in REAL_GROUPS
         ),
@@ -534,5 +561,7 @@ __all__ = [
     "covered_groups",
     "distribution",
     "recent_coverage",
+    "rank_exercises",
+    "sessions_in_window",
     "weekly_distribution",
 ]

@@ -35,6 +35,7 @@ from app.domain.muscle_groups import (
     distribution,
     recent_coverage,
 )
+from app.domain.muscles import RecentMuscleCoverage, recent_muscle_coverage
 from app.domain.personal_records import (
     PersonalRecord,
     detect_personal_records,
@@ -153,6 +154,12 @@ class AnalyticsOverview:
     Its ``unclassified_present`` flag discloses any in-window work that rolls up outside the
     six real groups, so the "of 6" figure stays honest (issue #189).
 
+    ``muscle_coverage`` is the finer per-muscle tier of that same read (ADR-0073/0078, issue
+    #540): every canonical Muscle over the **same** fixed 8-week window, each with its presence,
+    emphasis-weighted volume, and contributing exercises — the heat the anatomical body map
+    shades. It rolls up consistently to ``coverage`` (a muscle is present only where its group
+    is covered), with its own per-muscle Unclassified disclosure for truly off-map work.
+
     ``available_ranges`` is the ordered tuple of window values (``"30d"`` first) the range
     selector may offer at the user's current History Depth (ADR-0056): a longer window
     appears only once its extra span would show data the shorter one misses. ``range`` is
@@ -176,6 +183,7 @@ class AnalyticsOverview:
     distance_delta: float | None
     has_distance: bool
     coverage: RecentCoverage
+    muscle_coverage: RecentMuscleCoverage
 
 
 def analytics_overview(
@@ -261,8 +269,13 @@ def analytics_overview(
         distance_delta=distance.delta_pct,
         has_distance=has_distance(distance_sets),
         # Coverage reads its own fixed 8-week slice of the full history — deliberately the
-        # range-independent window (ADR-0025), not the range-scoped ``in_window`` set.
+        # range-independent window (ADR-0025), not the range-scoped ``in_window`` set. The
+        # per-muscle tier reads the *same* fixed window (ADR-0073/0078) so the map and its
+        # group roll-up can never disagree.
         coverage=recent_coverage(
+            history, reference=today, weeks=MUSCLE_BALANCE_WEEKS
+        ),
+        muscle_coverage=recent_muscle_coverage(
             history, reference=today, weeks=MUSCLE_BALANCE_WEEKS
         ),
     )

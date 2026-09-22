@@ -8,12 +8,27 @@ roll-up (``muscle_groups.classify``) unchanged. Pure — no ORM, no HTTP."""
 
 from __future__ import annotations
 
-from app.domain.muscle_groups import MuscleGroup, classify
+from dataclasses import dataclass, field
+from datetime import date
+
+import pytest
+
+from app.domain.muscle_groups import (
+    MuscleGroup,
+    classify,
+    covered_groups,
+)
 from app.domain.muscles import (
+    MUSCLE_ORDER,
     MUSCLE_TO_GROUP,
+    MUSCLES_IN_GROUP,
+    PRIMARY_EMPHASIS_WEIGHT,
+    SECONDARY_EMPHASIS_WEIGHT,
     Muscle,
+    MuscleCoverage,
     classify_muscle,
     group_of,
+    recent_muscle_coverage,
 )
 from app.domain.muscles import _FREEFORM_TO_MUSCLE
 
@@ -125,3 +140,329 @@ class TestConsistencyWithGroupRollUp:
             group = classify(term)
             if group is not MuscleGroup.UNCLASSIFIED:
                 assert group_of(muscle) is group
+
+
+# ``recent_muscle_coverage`` — the finer per-muscle tier of the Muscle Atlas coverage read
+# (issue #540, ADR-0073/0078): each canonical Muscle's presence, emphasis-weighted volume, and
+# contributing exercises over the same fixed 8-week window as the six-group roll-up. Descriptive
+# only — presence + heat, never a target or a rank. The group tier is the source of truth for
+# what is on the map, so the finer read can never contradict it.
+
+
+@dataclass
+class _Set:
+    """A Logged Set stub carrying the emphasis split and Exercise name the per-muscle read
+    reads. ``targeted_muscles`` is the flat union the ``no split → all primary`` fallback uses."""
+
+    targeted_muscles: list[str] = field(default_factory=list)
+    primary_muscles: list[str] = field(default_factory=list)
+    secondary_muscles: list[str] = field(default_factory=list)
+    exercise_name: str = ""
+
+
+@dataclass
+class _Session:
+    """A dated Logged Session: the ``performed_on`` the coverage window buckets on, plus sets."""
+
+    performed_on: date
+    logged_sets: list[_Set] = field(default_factory=list)
+
+
+# A Wednesday; its ISO week opens Mon 2026-07-06. An 8-week window reaches back to Mon 2026-05-18.
+_TODAY = date(2026, 7, 8)
+
+
+def _row(coverage, muscle: Muscle) -> MuscleCoverage:
+    return next(row for row in coverage.muscles if row.muscle is muscle)
+
+
+def _present(coverage) -> set[Muscle]:
+    return {row.muscle for row in coverage.muscles if row.present}
+
+
+class TestEmphasisWeighting:
+    def test_primary_muscles_get_full_weight_secondary_a_fraction(self) -> None:
+        # Arrange — a bench press with an asserted split: chest primary, arms/shoulders assist
+        history = [
+            _Session(
+                _TODAY,
+                [
+                    _Set(
+                        targeted_muscles=["chest", "triceps", "front delts"],
+                        primary_muscles=["chest"],
+                        secondary_muscles=["triceps", "front delts"],
+                        exercise_name="Bench Press",
+                    )
+                ],
+            )
+        ]
+
+        # Act
+        coverage = recent_muscle_coverage(history, reference=_TODAY, weeks=8)
+
+        # Assert — the prime mover reads at full weight, the assistors at the fraction
+        assert _row(coverage, Muscle.PECTORALIS_MAJOR).volume == PRIMARY_EMPHASIS_WEIGHT
+        assert _row(coverage, Muscle.TRICEPS_BRACHII).volume == SECONDARY_EMPHASIS_WEIGHT
+        assert _row(coverage, Muscle.DELTOIDS).volume == SECONDARY_EMPHASIS_WEIGHT
+
+    def test_no_asserted_split_falls_back_to_all_primary(self) -> None:
+        # Arrange — a squat carrying only the flat union, no primary/secondary split
+        history = [
+            _Session(
+                _TODAY,
+                [_Set(targeted_muscles=["quadriceps", "glutes"], exercise_name="Back Squat")],
+            )
+        ]
+
+        # Act
+        coverage = recent_muscle_coverage(history, reference=_TODAY, weeks=8)
+
+        # Assert — the whole union rides as primary, so both muscles read at full weight
+        assert _row(coverage, Muscle.QUADRICEPS).volume == PRIMARY_EMPHASIS_WEIGHT
+        assert _row(coverage, Muscle.GLUTEUS_MAXIMUS).volume == PRIMARY_EMPHASIS_WEIGHT
+
+    def test_presence_is_any_weight_not_a_threshold(self) -> None:
+        # Arrange — a muscle trained only as a secondary assistor
+        history = [
+            _Session(
+                _TODAY,
+                [
+                    _Set(
+                        targeted_muscles=["chest", "triceps"],
+                        primary_muscles=["chest"],
+                        secondary_muscles=["triceps"],
+                        exercise_name="Bench Press",
+                    )
+                ],
+            )
+        ]
+
+        # Act / Assert — even a fractional contribution reads present (presence, not a cutoff)
+        coverage = recent_muscle_coverage(history, reference=_TODAY, weeks=8)
+        assert _row(coverage, Muscle.TRICEPS_BRACHII).present is True
+        assert _row(coverage, Muscle.TRICEPS_BRACHII).volume == SECONDARY_EMPHASIS_WEIGHT
+
+    def test_volume_accumulates_across_in_window_sets(self) -> None:
+        # Arrange — three all-primary squat sets in-window
+        history = [
+            _Session(
+                _TODAY,
+                [_Set(targeted_muscles=["quadriceps"], exercise_name="Back Squat") for _ in range(3)],
+            )
+        ]
+
+        # Act / Assert — the muscle's heat is the summed weight, three full-weight sets
+        coverage = recent_muscle_coverage(history, reference=_TODAY, weeks=8)
+        assert _row(coverage, Muscle.QUADRICEPS).volume == 3 * PRIMARY_EMPHASIS_WEIGHT
+
+
+class TestCoarseDataSpread:
+    def test_a_coarse_group_term_spreads_evenly_across_its_group(self) -> None:
+        # Arrange — a set naming only the group-level "back" (all-primary fallback)
+        history = [_Session(_TODAY, [_Set(targeted_muscles=["back"], exercise_name="Pull-up")])]
+
+        # Act
+        coverage = recent_muscle_coverage(history, reference=_TODAY, weeks=8)
+
+        # Assert — the full weight spreads evenly across every muscle nested under Back, so the
+        # region is lit rather than a sea of grey, and the spread conserves the set's weight
+        back_muscles = MUSCLES_IN_GROUP[MuscleGroup.BACK]
+        share = PRIMARY_EMPHASIS_WEIGHT / len(back_muscles)
+        for muscle in back_muscles:
+            assert _row(coverage, muscle).present is True
+            assert _row(coverage, muscle).volume == pytest.approx(share)
+        total = sum(_row(coverage, muscle).volume for muscle in back_muscles)
+        assert total == pytest.approx(PRIMARY_EMPHASIS_WEIGHT)
+
+    def test_a_specific_term_sharpens_onto_one_muscle(self) -> None:
+        # Arrange — the same group, but the data now names a specific muscle
+        history = [_Session(_TODAY, [_Set(targeted_muscles=["lats"], exercise_name="Pull-up")])]
+
+        # Act
+        coverage = recent_muscle_coverage(history, reference=_TODAY, weeks=8)
+
+        # Assert — the map sharpens: all the weight lands on Latissimus Dorsi, the rest of the
+        # Back muscles stay dark (no spread when a specific muscle is named)
+        assert _present(coverage) == {Muscle.LATISSIMUS_DORSI}
+        assert _row(coverage, Muscle.LATISSIMUS_DORSI).volume == PRIMARY_EMPHASIS_WEIGHT
+
+
+class TestContributingExercises:
+    def test_exercises_are_ranked_most_sets_first_then_alphabetically(self) -> None:
+        # Arrange — Quadriceps trained by three exercises with 3 / 3 / 1 sets; the two tied at 3
+        # must break alphabetically so the order is deterministic
+        sets = (
+            [_Set(targeted_muscles=["quadriceps"], exercise_name="Back Squat")] * 3
+            + [_Set(targeted_muscles=["quadriceps"], exercise_name="Front Squat")] * 3
+            + [_Set(targeted_muscles=["quadriceps"], exercise_name="Leg Extension")]
+        )
+        history = [_Session(_TODAY, sets)]
+
+        # Act
+        row = _row(recent_muscle_coverage(history, reference=_TODAY, weeks=8), Muscle.QUADRICEPS)
+
+        # Assert — sorted by set count desc, then name asc
+        assert [(e.name, e.sets) for e in row.contributing_exercises] == [
+            ("Back Squat", 3),
+            ("Front Squat", 3),
+            ("Leg Extension", 1),
+        ]
+
+    def test_a_coarse_term_credits_its_exercise_to_every_spread_muscle(self) -> None:
+        # Arrange — a coarse "back" set: the exercise behind it explains each spread muscle
+        history = [_Session(_TODAY, [_Set(targeted_muscles=["back"], exercise_name="Row")])]
+
+        # Act
+        coverage = recent_muscle_coverage(history, reference=_TODAY, weeks=8)
+
+        # Assert — the one set counts once toward each Back muscle it spread onto
+        for muscle in MUSCLES_IN_GROUP[MuscleGroup.BACK]:
+            assert [(e.name, e.sets) for e in _row(coverage, muscle).contributing_exercises] == [
+                ("Row", 1)
+            ]
+
+    def test_an_untrained_muscle_has_zero_volume_and_no_exercises(self) -> None:
+        # Arrange — only Chest trained; a Legs muscle is never touched
+        history = [_Session(_TODAY, [_Set(targeted_muscles=["chest"], exercise_name="Bench Press")])]
+
+        # Act
+        row = _row(recent_muscle_coverage(history, reference=_TODAY, weeks=8), Muscle.QUADRICEPS)
+
+        # Assert — an honest empty muscle: absent, zero heat, no exercises
+        assert row.present is False
+        assert row.volume == 0.0
+        assert row.contributing_exercises == ()
+
+
+class TestWindow:
+    def test_out_of_window_work_is_ignored(self) -> None:
+        # Arrange — Legs trained a day before the 8-week window opens (Mon 2026-05-18)
+        history = [
+            _Session(date(2026, 5, 17), [_Set(targeted_muscles=["quadriceps"], exercise_name="Squat")])
+        ]
+
+        # Act / Assert — out-of-window work lights nothing
+        coverage = recent_muscle_coverage(history, reference=_TODAY, weeks=8)
+        assert _present(coverage) == set()
+
+    def test_the_earliest_week_in_the_window_still_counts(self) -> None:
+        # Arrange — trained on the Monday the window opens (inclusive of its eighth week back)
+        history = [
+            _Session(date(2026, 5, 18), [_Set(targeted_muscles=["chest"], exercise_name="Bench Press")])
+        ]
+
+        # Act / Assert — the boundary week counts
+        coverage = recent_muscle_coverage(history, reference=_TODAY, weeks=8)
+        assert _row(coverage, Muscle.PECTORALIS_MAJOR).present is True
+
+
+class TestShape:
+    def test_returns_every_real_muscle_in_canonical_order_no_unclassified_row(self) -> None:
+        # Arrange — any history at all
+        history = [_Session(_TODAY, [_Set(targeted_muscles=["chest"], exercise_name="Bench Press")])]
+
+        # Act
+        coverage = recent_muscle_coverage(history, reference=_TODAY, weeks=8)
+
+        # Assert — exactly MUSCLE_ORDER, in order, Unclassified never a row
+        assert tuple(row.muscle for row in coverage.muscles) == MUSCLE_ORDER
+        assert Muscle.UNCLASSIFIED not in {row.muscle for row in coverage.muscles}
+
+    def test_empty_history_reads_every_muscle_absent(self) -> None:
+        # Arrange / Act — no history
+        coverage = recent_muscle_coverage([], reference=_TODAY, weeks=8)
+
+        # Assert — still every real muscle, all absent with zero heat, nothing off-map
+        assert tuple(row.muscle for row in coverage.muscles) == MUSCLE_ORDER
+        assert all(row.present is False and row.volume == 0.0 for row in coverage.muscles)
+        assert coverage.unclassified_present is False
+        assert coverage.unclassified_volume == 0.0
+
+
+class TestUnclassifiedDisclosure:
+    def test_a_string_neither_muscle_nor_group_is_disclosed_not_folded(self) -> None:
+        # Arrange — an AI-invented muscle the group tier can't place either
+        history = [_Session(_TODAY, [_Set(targeted_muscles=["unobtainium"], exercise_name="Aerial Silks")])]
+
+        # Act
+        coverage = recent_muscle_coverage(history, reference=_TODAY, weeks=8)
+
+        # Assert — no muscle is lit, and the off-map weight is disclosed, never dropped
+        assert _present(coverage) == set()
+        assert coverage.unclassified_present is True
+        assert coverage.unclassified_volume == PRIMARY_EMPHASIS_WEIGHT
+
+    def test_a_fine_only_alias_the_group_tier_cannot_place_stays_off_map(self) -> None:
+        # Arrange — "supraspinatus" is a fine-map alias the coarse group map does not carry, so
+        # the group tier leaves it Unclassified; the finer read must not light a Shoulders muscle
+        # the roll-up leaves dark — the two tiers can never disagree.
+        history = [_Session(_TODAY, [_Set(targeted_muscles=["supraspinatus"], exercise_name="Y-Raise")])]
+
+        # Act
+        coverage = recent_muscle_coverage(history, reference=_TODAY, weeks=8)
+
+        # Assert — nothing lit; the group tier is the source of truth for what is on the map
+        assert _present(coverage) == set()
+        assert coverage.unclassified_present is True
+
+    def test_off_map_work_leaves_real_muscles_untouched(self) -> None:
+        # Arrange — a real Chest set beside an off-map one, both in-window
+        history = [
+            _Session(
+                _TODAY,
+                [
+                    _Set(targeted_muscles=["chest"], exercise_name="Bench Press"),
+                    _Set(targeted_muscles=["unobtainium"], exercise_name="Aerial Silks"),
+                ],
+            )
+        ]
+
+        # Act
+        coverage = recent_muscle_coverage(history, reference=_TODAY, weeks=8)
+
+        # Assert — the real work is untouched, the off-map work disclosed alongside it
+        assert _row(coverage, Muscle.PECTORALIS_MAJOR).present is True
+        assert coverage.unclassified_present is True
+
+
+class TestGroupRollUpConsistency:
+    def test_present_muscles_roll_up_exactly_to_the_covered_groups(self) -> None:
+        # Arrange — a realistic mixed history: a bench (split), a squat (all-primary), a coarse
+        # "back" set, and off-map work. ``targeted_muscles`` is the union primary ∪ secondary,
+        # exactly as the record carries it, so the group tier reads the same strings.
+        history = [
+            _Session(
+                _TODAY,
+                [
+                    _Set(
+                        targeted_muscles=["chest", "triceps", "front delts"],
+                        primary_muscles=["chest"],
+                        secondary_muscles=["triceps", "front delts"],
+                        exercise_name="Bench Press",
+                    ),
+                    _Set(targeted_muscles=["quadriceps", "glutes"], exercise_name="Back Squat"),
+                    _Set(targeted_muscles=["back"], exercise_name="Row"),
+                    _Set(targeted_muscles=["unobtainium"], exercise_name="Aerial Silks"),
+                ],
+            )
+        ]
+
+        # Act
+        coverage = recent_muscle_coverage(history, reference=_TODAY, weeks=8)
+
+        # Assert — the parent groups of every present muscle are *exactly* the covered groups the
+        # six-group roll-up reports: the map and its per-muscle detail can never disagree.
+        present_groups = {group_of(muscle) for muscle in _present(coverage)}
+        assert present_groups == covered_groups(history)
+
+    def test_a_covered_group_always_has_at_least_one_present_muscle(self) -> None:
+        # Arrange — a coarse group term is the only work: the group is covered at the roll-up, so
+        # the finer read must light at least one muscle under it (never a covered-but-grey region)
+        history = [_Session(_TODAY, [_Set(targeted_muscles=["shoulders"], exercise_name="Overhead Press")])]
+
+        # Act
+        coverage = recent_muscle_coverage(history, reference=_TODAY, weeks=8)
+
+        # Assert — every covered group has a present muscle beneath it
+        for group in covered_groups(history):
+            assert any(row.present for row in coverage.muscles if row.group is group)
