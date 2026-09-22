@@ -2,7 +2,7 @@
 // flips between. All read the same mock coverage; only the rendering/layout/affordance changes.
 //
 //   A — Baseline: the shipped sparse-blob atlas, for direct before/after comparison.
-//   B — Sasha-style anatomical, front + back side by side, tap-to-open detail card below.
+//   B — Anatomical body map (Sasha-derived), front + back side by side, tap-to-open detail below.
 //   C — Same anatomical artwork, ONE large figure with a front/back toggle and a persistent
 //       legend + detail rail beside it (different hierarchy and primary affordance).
 
@@ -15,8 +15,7 @@ import type { View } from "@/lib/atlas/atlas-geometry";
 import { AtlasFigure } from "@/components/analytics/atlas-figure";
 import { groupColorVar } from "@/components/pulse/muscle-colors";
 import { cn } from "@/lib/utils";
-import { RedesignFigure } from "./redesign-figure";
-import { REDESIGN_MUSCLES } from "./redesign-spec";
+import { SashaFigure } from "./sasha-figure";
 import { MOCK_REGIONS } from "./mock-data";
 
 const GROUP_ORDER = ["Legs", "Chest", "Back", "Shoulders", "Arms", "Core"];
@@ -90,9 +89,7 @@ function Legend() {
 }
 
 function FigureCaption({ label }: { label: string }) {
-  return (
-    <span className="label-mono text-[9px] tracking-widest text-text-muted">{label}</span>
-  );
+  return <span className="label-mono text-[9px] tracking-widest text-text-muted">{label}</span>;
 }
 
 // ------------------------------------------------------------------ Variant A — baseline
@@ -143,22 +140,21 @@ export function VariantB({ selected, onSelect }: VariantProps) {
           B · Anatomical body map (front + back)
         </h2>
         <p className="font-sans text-sm text-text-muted">
-          Fuller, contiguous muscles that tile the body — with fiber striations — the way Sasha's
-          Body Map reads. Front and back side by side; tap for detail.
+          A detailed anatomical chart — every muscle its own carved region, the way the reference
+          reads. Untrained muscles stay grey; trained ones tint with the group hue. Tap for detail.
         </p>
       </header>
       <div className="rounded-xl border border-border bg-surface p-5">
         <div className="flex justify-center gap-6">
-          {(["front", "back"] as View[]).map((view) => (
-            <div key={view} className="flex flex-col items-center gap-2">
-              <FigureCaption label={view} />
-              <RedesignFigure
-                figure="neutral"
-                view={view}
+          {(["front", "back"] as const).map((half) => (
+            <div key={half} className="flex flex-col items-center gap-2">
+              <FigureCaption label={half} />
+              <SashaFigure
+                half={half}
                 regionsByMuscle={MOCK_REGIONS}
                 selectedMuscle={selected}
                 onSelectMuscle={onSelect}
-                maxWidth={210}
+                maxWidth={200}
               />
             </div>
           ))}
@@ -174,7 +170,7 @@ export function VariantB({ selected, onSelect }: VariantProps) {
 
 // ------------------------------------------------------------------ Variant C — single + rail
 export function VariantC({ selected, onSelect }: VariantProps) {
-  const [view, setView] = useState<View>("front");
+  const [half, setHalf] = useState<"front" | "back">("front");
   const region = selected ? MOCK_REGIONS.get(selected) ?? null : null;
   return (
     <div className="flex flex-col gap-5">
@@ -190,15 +186,15 @@ export function VariantC({ selected, onSelect }: VariantProps) {
       <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_260px]">
         <div className="flex flex-col items-center gap-4 rounded-xl border border-border bg-surface p-5">
           <div className="flex items-center gap-1 rounded-md border border-border bg-elevated p-1">
-            {(["front", "back"] as View[]).map((option) => (
+            {(["front", "back"] as const).map((option) => (
               <button
                 key={option}
                 type="button"
-                aria-pressed={view === option}
-                onClick={() => setView(option)}
+                aria-pressed={half === option}
+                onClick={() => setHalf(option)}
                 className={cn(
                   "rounded-sm px-4 py-1.5 label-mono text-[11px] font-semibold uppercase tracking-widest transition-colors",
-                  view === option
+                  half === option
                     ? "bg-cyan/15 text-cyan"
                     : "text-text-muted hover:text-text-secondary",
                 )}
@@ -207,13 +203,12 @@ export function VariantC({ selected, onSelect }: VariantProps) {
               </button>
             ))}
           </div>
-          <RedesignFigure
-            figure="neutral"
-            view={view}
+          <SashaFigure
+            half={half}
             regionsByMuscle={MOCK_REGIONS}
             selectedMuscle={selected}
             onSelectMuscle={onSelect}
-            maxWidth={300}
+            maxWidth={280}
           />
         </div>
         <aside className="flex flex-col gap-4">
@@ -229,6 +224,3 @@ export function VariantC({ selected, onSelect }: VariantProps) {
     </div>
   );
 }
-
-// The muscle-count line so the density difference between baseline and redesign is legible.
-export const REDESIGN_MUSCLE_COUNT = REDESIGN_MUSCLES.length;

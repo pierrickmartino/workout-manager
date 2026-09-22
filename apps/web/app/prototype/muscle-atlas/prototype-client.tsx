@@ -8,7 +8,7 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { PrototypeSwitcher, type PrototypeVariant } from "@/components/prototype/prototype-switcher";
-import { VariantA, VariantB, VariantC, REDESIGN_MUSCLE_COUNT } from "./variants";
+import { VariantA, VariantB, VariantC } from "./variants";
 
 const VARIANTS: PrototypeVariant[] = [
   { key: "A", name: "Current (baseline)" },
@@ -44,9 +44,9 @@ export function AtlasPrototypeClient() {
         </h1>
         <p className="font-sans text-sm text-text-muted">
           Flip variants with the bar below or ← / →. Baseline draws{" "}
-          <span className="text-text-secondary">a handful of tiny blobs</span>; the redesign tiles{" "}
-          <span className="text-text-secondary">{REDESIGN_MUSCLE_COUNT} contiguous muscles</span>{" "}
-          with striations over the same coverage data.
+          <span className="text-text-secondary">a handful of tiny blobs</span>; the redesign is a{" "}
+          <span className="text-text-secondary">detailed anatomical chart</span> — each muscle its
+          own carved region — recolored by the same coverage data.
         </p>
       </div>
 
