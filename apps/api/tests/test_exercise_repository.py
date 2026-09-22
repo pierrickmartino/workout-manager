@@ -299,6 +299,61 @@ def test_set_muscle_emphasis_on_an_unknown_id_returns_none(repo):
     )
 
 
+def test_set_targeted_muscles_rewrites_the_union_and_leaves_everything_else(repo):
+    # Arrange — an already-enriched row with a coarse union, a split, and other detail
+    exercise = repo.find_or_create(
+        "Pull-Up",
+        provenance=Provenance.AI_GENERATED,
+        description="A vertical pull.",
+        targeted_muscles=["back", "biceps"],
+        primary_muscles=["back"],
+        secondary_muscles=["biceps"],
+        instructions=["Hang from the bar.", "Pull your chin over."],
+        difficulty=5,
+    )
+
+    # Act — the granularity pass sharpens the union to individual muscles (issue #545)
+    updated = repo.set_targeted_muscles(
+        exercise.id, ["latissimus dorsi", "trapezius", "biceps brachii"]
+    )
+
+    # Assert — only the union changes; description, steps, difficulty, and the split persist
+    assert updated is not None
+    assert updated.targeted_muscles == ["latissimus dorsi", "trapezius", "biceps brachii"]
+    assert updated.description == "A vertical pull."
+    assert updated.primary_muscles == ["back"]
+    assert updated.secondary_muscles == ["biceps"]
+    assert updated.difficulty == 5
+    refetched = repo.get(exercise.id)
+    assert refetched.targeted_muscles == [
+        "latissimus dorsi",
+        "trapezius",
+        "biceps brachii",
+    ]
+    assert refetched.instructions == ["Hang from the bar.", "Pull your chin over."]
+
+
+def test_set_targeted_muscles_on_an_unknown_id_returns_none(repo):
+    assert repo.set_targeted_muscles(9999, ["latissimus dorsi"]) is None
+
+
+def test_set_targeted_muscles_is_immutable_leaving_the_prior_reference_untouched(repo):
+    # Arrange — hold a reference to the pre-change Exercise
+    original = repo.find_or_create(
+        "Row",
+        provenance=Provenance.AI_GENERATED,
+        targeted_muscles=["back"],
+    )
+
+    # Act — the writer returns a fresh Exercise (coding-style: no in-place mutation)
+    updated = repo.set_targeted_muscles(original.id, ["latissimus dorsi", "rhomboids"])
+
+    # Assert — the earlier reference still reads the coarse union
+    assert updated is not None
+    assert updated.targeted_muscles == ["latissimus dorsi", "rhomboids"]
+    assert original.targeted_muscles == ["back"]
+
+
 def test_set_muscle_emphasis_returns_a_fresh_exercise_without_mutating_the_prior_reference(
     repo,
 ):

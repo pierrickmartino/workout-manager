@@ -292,6 +292,48 @@ def group_of(muscle: Muscle) -> MuscleGroup:
     return MUSCLE_TO_GROUP[muscle]
 
 
+def is_coarse_region(muscle: str) -> bool:
+    """Whether a free-form term is a **bare region blob** the granularity pass can still refine.
+
+    A term is coarse-refinable when the group tier can place it (``classify`` names one of the
+    six real groups) but the muscle tier cannot resolve it to a single canonical Muscle
+    (``classify_muscle`` is Unclassified) — i.e. a whole-region word like "back", "legs",
+    "shoulders", "arms", "core", or "deltoids" that currently spreads its heat grey across every
+    muscle nested under its group (:func:`_resolve_targets`) rather than naming the specific
+    muscles worked. Those are exactly the "group-level blobs" the enrichment upgrade (issue #545)
+    sharpens toward per-muscle resolution.
+
+    A term that already resolves to a specific Muscle ("gluteus medius", or an alias the muscle
+    tier maps like "chest" → Pectoralis Major) is **not** coarse — it is already as fine as the
+    read tier reads. Neither is an off-map term the group tier can't place ("supraspinatus",
+    "unobtainium"): the group tier is the source of truth for what is on the map (ADR-0078), so a
+    term it leaves Unclassified is not a region to refine but off-map work, disclosed rather than
+    guessed at. Pure — the same two curated tables the coverage read already keys on."""
+
+    return (
+        classify(muscle) is not MuscleGroup.UNCLASSIFIED
+        and classify_muscle(muscle) is Muscle.UNCLASSIFIED
+    )
+
+
+def real_groups_of(muscles: Iterable[str]) -> frozenset[MuscleGroup]:
+    """The real Muscle Groups a free-form union rolls up to via the group tier (Unclassified
+    dropped).
+
+    The roll-up fingerprint the granularity pass compares before and after a refinement to keep
+    the six-group roll-up **unchanged by construction** (issue #545): a refinement that named a
+    muscle in a group the exercise never worked — or dropped a group it did — would change this
+    set and is discarded unwritten, so a finer union can never fabricate or lose a Muscle Group.
+    Reads the *same* ``muscle_groups.classify`` the Coverage, Split, and Balance surfaces read, so
+    "rolls up to the same groups" here means exactly what it means to those surfaces. Pure."""
+
+    return frozenset(
+        group
+        for muscle in muscles
+        if (group := classify(muscle)) is not MuscleGroup.UNCLASSIFIED
+    )
+
+
 # The real (non-leftovers) muscles in canonical order — the enum's own definition order,
 # which is already grouped by body region (Legs, Chest, Back, Shoulders, Arms, Core) exactly
 # as ``muscle_groups.GROUP_ORDER`` runs. The fixed roster the per-muscle read reports on;
@@ -620,5 +662,7 @@ __all__ = [
     "classify_muscle",
     "exercise_muscle_highlight",
     "group_of",
+    "is_coarse_region",
+    "real_groups_of",
     "recent_muscle_coverage",
 ]

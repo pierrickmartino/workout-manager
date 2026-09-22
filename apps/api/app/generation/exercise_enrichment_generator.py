@@ -53,7 +53,19 @@ def _system_prompt() -> str:
         "exercise and must supply its baseline catalog detail: a short description, "
         "the full set of muscles it works in targeted_muscles, execution "
         "instructions as an ordered list of discrete steps (one action per step, in "
-        "performance order), and a 1–10 difficulty. Do NOT provide safety "
+        "performance order), and a 1–10 difficulty. "
+        # Muscle granularity (issue #545): name the specific individual muscles worked, not
+        # coarse region words, so the Muscle Atlas heat reads at real per-muscle resolution
+        # instead of a group-level blob. The finer terms still roll up to the same Muscle
+        # Groups, so nothing coarse is lost.
+        "For targeted_muscles, name the specific individual muscles the movement works "
+        "using standard anatomical names — for example 'gluteus maximus' and 'gluteus "
+        "medius' rather than only 'glutes', 'latissimus dorsi', 'trapezius', and "
+        "'rhomboids' rather than only 'back', 'pectoralis major' rather than only "
+        "'chest', 'biceps brachii' and 'triceps brachii' rather than only 'arms'. "
+        "Only list muscles the exercise genuinely trains; never add a muscle it does "
+        "not work to appear thorough. "
+        "Do NOT provide safety "
         "precautions and do NOT provide an image — those are added only by a human "
         "reviewer. If the name is too vague to describe a real movement honestly, "
         "return empty fields rather than inventing detail. Respond strictly in the "

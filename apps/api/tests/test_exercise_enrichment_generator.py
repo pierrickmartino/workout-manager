@@ -54,6 +54,52 @@ def test_generator_validates_transport_output_into_an_enrichment():
     assert call["schema"] is GeneratedEnrichment
 
 
+FINE_PAYLOAD = """
+{
+  "description": "A hip-hinge deadlift variant.",
+  "targeted_muscles": ["gluteus maximus", "gluteus medius", "hamstrings", "erector spinae"],
+  "instructions": ["Hinge at the hips.", "Drive through the floor."],
+  "difficulty": 5
+}
+"""
+
+
+def test_prompt_asks_for_specific_individual_muscles_at_fine_granularity():
+    # Arrange — the enrichment prompt must steer the model toward per-muscle resolution so the
+    # Atlas heat sharpens from group-level blobs (issue #545), never fabricating muscles.
+    llm = FakeStructuredLLM(text=VALID_PAYLOAD)
+    generator = LlmExerciseEnrichmentGenerator(llm)
+
+    # Act
+    generator.generate(REQUEST)
+
+    # Assert — the system prompt names the finer-granularity expectation and the no-fabrication
+    # guard, keyed on targeted_muscles.
+    system = llm.calls[0]["system"]
+    assert "targeted_muscles" in system
+    assert "specific individual muscles" in system
+    assert "gluteus medius" in system
+    assert "never add a muscle it does not work" in system
+
+
+def test_validates_a_finer_grained_union_at_the_boundary():
+    # Arrange — a model emitting individual muscles (gluteus maximus/medius, erector spinae)
+    # rather than the coarse "glutes"/"back" must validate cleanly into the enrichment.
+    llm = FakeStructuredLLM(text=FINE_PAYLOAD)
+    generator = LlmExerciseEnrichmentGenerator(llm)
+
+    # Act
+    generated = generator.generate(REQUEST)
+
+    # Assert — the finer union crosses the parse_* boundary intact
+    assert generated.targeted_muscles == [
+        "gluteus maximus",
+        "gluteus medius",
+        "hamstrings",
+        "erector spinae",
+    ]
+
+
 def test_prompt_carries_the_exercise_name():
     # Arrange
     llm = FakeStructuredLLM(text=VALID_PAYLOAD)

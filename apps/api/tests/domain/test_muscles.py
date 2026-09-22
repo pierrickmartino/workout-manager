@@ -29,6 +29,8 @@ from app.domain.muscles import (
     classify_muscle,
     exercise_muscle_highlight,
     group_of,
+    is_coarse_region,
+    real_groups_of,
     recent_muscle_coverage,
 )
 from app.domain.muscles import _FREEFORM_TO_MUSCLE
@@ -141,6 +143,62 @@ class TestConsistencyWithGroupRollUp:
             group = classify(term)
             if group is not MuscleGroup.UNCLASSIFIED:
                 assert group_of(muscle) is group
+
+
+class TestCoarseRegionDetection:
+    """``is_coarse_region`` — the refinable-blob predicate the granularity pass (issue #545)
+    keys on: a whole-region word the group tier can place but the muscle tier cannot resolve to
+    one muscle, so it currently spreads its heat grey across the group."""
+
+    def test_bare_region_words_are_coarse(self) -> None:
+        # The region blobs the group tier can place yet the muscle tier spreads grey across a
+        # whole group — exactly what the granularity upgrade sharpens toward per-muscle
+        # resolution. (Bare "legs"/"arms" are off-map even to the group tier, so they are not
+        # coarse regions — the catalog names them "quadriceps"/"biceps", never the limb word.)
+        for region in ("back", "upper back", "shoulders", "core", "deltoids"):
+            assert is_coarse_region(region) is True
+
+    def test_a_specific_muscle_is_not_coarse(self) -> None:
+        # A term already resolving to one canonical Muscle is as fine as the read tier reads.
+        for specific in ("gluteus medius", "latissimus dorsi", "biceps brachii", "obliques"):
+            assert is_coarse_region(specific) is False
+
+    def test_a_region_alias_that_names_a_specific_muscle_is_not_coarse(self) -> None:
+        # "chest"/"glutes"/"calves" alias to a specific muscle in the muscle tier, so they are
+        # already fine — not a grey blob the pass needs to refine.
+        for alias in ("chest", "glutes", "calves"):
+            assert is_coarse_region(alias) is False
+
+    def test_an_off_map_term_the_group_tier_cannot_place_is_not_coarse(self) -> None:
+        # The group tier is the source of truth for what is on the map (ADR-0078): a term it
+        # leaves Unclassified is off-map work, not a region to refine.
+        for off_map in ("supraspinatus", "unobtainium", "", "   "):
+            assert is_coarse_region(off_map) is False
+
+
+class TestRealGroupsRollUp:
+    """``real_groups_of`` — the roll-up fingerprint the granularity pass compares before/after a
+    refinement so the six-group roll-up stays unchanged by construction (issue #545)."""
+
+    def test_collapses_a_union_to_its_real_groups(self) -> None:
+        assert real_groups_of(["chest", "triceps", "front delts"]) == frozenset(
+            {MuscleGroup.CHEST, MuscleGroup.ARMS, MuscleGroup.SHOULDERS}
+        )
+
+    def test_a_refinement_of_a_region_preserves_its_group(self) -> None:
+        # Refining "back" into its specific muscles rolls up to the exact same real group — the
+        # invariant the pass relies on to reject a fabricated or lost group.
+        assert real_groups_of(["back"]) == real_groups_of(
+            ["latissimus dorsi", "trapezius", "rhomboids"]
+        )
+
+    def test_off_map_terms_never_enter_the_fingerprint(self) -> None:
+        # Unclassified is never a real group, so an off-map term neither adds nor removes a group.
+        assert real_groups_of(["supraspinatus", "unobtainium"]) == frozenset()
+        assert real_groups_of(["chest", "unobtainium"]) == frozenset({MuscleGroup.CHEST})
+
+    def test_an_empty_union_rolls_up_to_no_groups(self) -> None:
+        assert real_groups_of([]) == frozenset()
 
 
 # ``recent_muscle_coverage`` — the finer per-muscle tier of the Muscle Atlas coverage read

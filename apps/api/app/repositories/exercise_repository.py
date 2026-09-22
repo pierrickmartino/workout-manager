@@ -295,6 +295,19 @@ class ExerciseRepository(Protocol):
         ``exercise_id``."""
         ...
 
+    def set_targeted_muscles(
+        self, exercise_id: int, targeted_muscles: Sequence[str]
+    ) -> Exercise | None:
+        """Write the flat ``targeted_muscles`` union on one Exercise (issue #545).
+
+        The union-only twin of ``set_muscle_emphasis``: updates *only* ``targeted_muscles``
+        — description, Execution Steps, difficulty, Provenance, precautions, the Image, and
+        the Primary/Secondary split are all left untouched — so the muscle-granularity
+        re-enrichment can sharpen a coarse union to individual muscles without disturbing an
+        already-enriched row's other fields. **Immutable**: returns a fresh Exercise and never
+        mutates the caller's row. Returns ``None`` if no row has ``exercise_id``."""
+        ...
+
     def set_provenance(
         self, exercise_id: int, provenance: Provenance
     ) -> Exercise | None:
@@ -829,6 +842,16 @@ class SqlExerciseRepository:
             ),
         )
 
+    def set_targeted_muscles(
+        self, exercise_id: int, targeted_muscles: Sequence[str]
+    ) -> Exercise | None:
+        existing = self._session.get(Exercise, exercise_id)
+        if existing is None:
+            return None
+        return self._persist_fresh(
+            existing, _clone_exercise(existing, targeted_muscles=targeted_muscles)
+        )
+
     def set_provenance(
         self, exercise_id: int, provenance: Provenance
     ) -> Exercise | None:
@@ -1127,6 +1150,16 @@ class InMemoryExerciseRepository:
                 primary_muscles=primary_muscles,
                 secondary_muscles=secondary_muscles,
             )
+        )
+
+    def set_targeted_muscles(
+        self, exercise_id: int, targeted_muscles: Sequence[str]
+    ) -> Exercise | None:
+        existing = self._by_id.get(exercise_id)
+        if existing is None:
+            return None
+        return self._store_fresh(
+            _clone_exercise(existing, targeted_muscles=targeted_muscles)
         )
 
     def set_provenance(

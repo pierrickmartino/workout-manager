@@ -172,6 +172,23 @@ class GeneratedMuscleEmphasis(BaseModel):
     secondary_muscles: list[str] = Field(default_factory=list)
 
 
+class GeneratedMuscleGranularity(BaseModel):
+    """The AI's finer-grained ``targeted_muscles`` union for one *existing* catalog Exercise
+    (issue #545).
+
+    The muscle-granularity re-enrichment pass feeds the model an Exercise carrying a coarse,
+    group-level union (e.g. ``["back", "shoulders"]``) and asks it to restate the *same*
+    training at individual-muscle resolution (``["latissimus dorsi", "trapezius",
+    "deltoids"]``), so the Muscle Atlas heat sharpens from a group blob toward real per-muscle
+    coverage. Only the flat union is returned — the Primary/Secondary split lives in separate
+    fields (ADR-0016) and is untouched. The pass refuses to fabricate: the model is told to name
+    only muscles the exercise already works, and the write boundary discards any refinement that
+    would change the six-group roll-up (issue #545). Malformed output is rejected at the
+    ``generate_structured`` boundary and nothing is written."""
+
+    targeted_muscles: list[str] = Field(default_factory=list)
+
+
 class GeneratedEnrichment(BaseModel):
     """The AI's fill for one *existing* Stub catalog Exercise (ADR-0041).
 
