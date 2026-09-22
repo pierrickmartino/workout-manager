@@ -15,32 +15,37 @@ const SILHOUETTE_STYLE: CSSProperties = {
   strokeWidth: 1,
 };
 
-// The fill/stroke for one muscle path from its coverage region (issue #543, honouring
-// ADR-0025). A trained muscle warms up with its group hue at an opacity scaled by the
-// emphasis-weighted heat `intensity` (`muscle-heat`); an untrained one is a faint neutral outline
-// (no fill) — descriptive, never an alarm. Selection brightens the muscle and takes a light
-// stroke; a pointer hover or keyboard focus nudges it up a touch so the active muscle reads live.
-function muscleStyle(
+// Each muscle is drawn as two stacked paths so the anatomy always reads (issue #543, honouring
+// ADR-0025): a **neutral flesh base** that renders the muscle as part of the grey body whether or
+// not it was trained, and a **heat overlay** in the group hue whose opacity scales with the
+// emphasis-weighted `intensity` (`muscle-heat`). An untrained muscle shows only the base — visible
+// grey anatomy, never a colored "train-this" nudge. Selection outlines the muscle (and gives an
+// untrained one a faint group wash); a pointer hover or keyboard focus nudges the overlay up so
+// the active muscle reads live.
+const BASE_STYLE: CSSProperties = {
+  fill: "var(--color-border-lite)",
+  fillOpacity: 0.9,
+  stroke: "var(--color-border)",
+  strokeWidth: 0.5,
+};
+
+function overlayStyle(
   region: MuscleRegion | undefined,
   color: string,
   isSelected: boolean,
   isActive: boolean,
 ): CSSProperties {
   const trained = region?.covered ?? false;
-  if (!trained) {
-    return {
-      fill: color,
-      fillOpacity: isSelected ? HEAT_UNTRAINED_SELECTED_OPACITY : 0,
-      stroke: isSelected ? "var(--color-text-primary)" : "var(--color-border-lite)",
-      strokeWidth: isSelected ? 1.5 : 0.75,
-      strokeDasharray: "3 3",
-    };
-  }
+  const fillOpacity = trained
+    ? heatFillOpacity(region?.intensity ?? 0, { selected: isSelected, active: isActive })
+    : isSelected
+      ? HEAT_UNTRAINED_SELECTED_OPACITY
+      : 0;
   return {
     fill: color,
-    fillOpacity: heatFillOpacity(region?.intensity ?? 0, { selected: isSelected, active: isActive }),
-    stroke: isSelected || isActive ? "var(--color-text-primary)" : color,
-    strokeWidth: isSelected ? 1.5 : 0.9,
+    fillOpacity,
+    stroke: isSelected || isActive ? "var(--color-text-primary)" : "transparent",
+    strokeWidth: isSelected ? 1.4 : isActive ? 1 : 0,
   };
 }
 
@@ -105,7 +110,7 @@ export function AtlasFigure({
         const region = regionsByMuscle.get(muscle.id);
         const isSelected = selectedMuscle === muscle.id;
         const color = groupColorVar(muscle.group);
-        const style = muscleStyle(region, color, isSelected, active === muscle.id);
+        const overlay = overlayStyle(region, color, isSelected, active === muscle.id);
         return (
           <g
             key={muscle.id}
@@ -124,10 +129,15 @@ export function AtlasFigure({
             onPointerLeave={() => clearActive(muscle.id)}
           >
             {muscle.occurrences.map((occ, index) => (
+              // Neutral flesh base — the muscle as part of the grey body, always visible.
+              <path key={`b${index}`} d={occ.d} style={BASE_STYLE} />
+            ))}
+            {muscle.occurrences.map((occ, index) => (
+              // Heat overlay — group hue at coverage opacity, plus the selection/hover outline.
               <path
-                key={index}
+                key={`o${index}`}
                 d={occ.d}
-                style={style}
+                style={overlay}
                 className="transition-[fill-opacity,stroke,stroke-width] duration-150 motion-reduce:transition-none"
               />
             ))}

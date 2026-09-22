@@ -24,10 +24,7 @@ const PUBLIC_EXACT_PATHS: ReadonlySet<string> = new Set(["/", "/offline"]);
 // "/sign-up/verify-email-address", the SSO callback), so the whole subtree is public
 // — that is where `auth.protect()` sends an unauthenticated deep-linker, and gating
 // it would be a redirect loop.
-// PROTOTYPE (throwaway): `/prototype/*` hosts mock-data UI prototypes that need no auth —
-// public so they run from a bare `npm run dev`. Remove this entry when the prototype folders
-// (`app/prototype/`, `components/prototype/`) are deleted.
-const PUBLIC_PATH_PREFIXES: readonly string[] = ["/sign-in", "/sign-up", "/prototype"];
+const PUBLIC_PATH_PREFIXES: readonly string[] = ["/sign-in", "/sign-up"];
 
 // Whether a signed-out visitor may reach this path without being redirected to
 // sign-in. Compared against the request pathname only (no query/hash). Anything not
