@@ -14,10 +14,13 @@ import {
 import { resolveExerciseImageSrc } from "@/lib/exercise-image";
 import { appendFrom } from "@/lib/back-target";
 import { toTopSetTrend } from "@/lib/top-set-trend-view";
+import { toExerciseHighlight } from "@/lib/atlas/exercise-highlight";
+import type { View } from "@/lib/atlas/atlas-geometry";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { DataList } from "@/components/pulse/data-list";
 import { TopSetTrendChart } from "@/components/exercise/top-set-trend-chart";
+import { ExerciseMuscleFigure } from "@/components/exercise/muscle-figure";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -169,18 +172,46 @@ function ExecutionSteps({ instructions }: { instructions: string[] }) {
   );
 }
 
-// The SPECS muscle map (ADR-0016). A populated Primary/Secondary split renders
-// PRIMARY and SECONDARY sub-sections; an Exercise that asserts no split falls back
-// to a flat targeted-muscle row. No Exercise ever shows a primacy it doesn't have —
-// the honest/flat decision lives entirely in `toMuscleEmphasis`.
+// The two body views the muscle figure draws, front then back.
+const MUSCLE_FIGURE_VIEWS: { view: View; label: string }[] = [
+  { view: "front", label: "Front" },
+  { view: "back", label: "Back" },
+];
+
+// The SPECS muscle map (ADR-0016, ADR-0079). The anatomical figure (issue #544) lights the muscles
+// this exercise trains — primary hot, secondary warm, coarse group terms spread across their
+// muscles — over the same original artwork the Stats atlas uses. Beneath it the honest text map
+// names those muscles: a populated Primary/Secondary split renders PRIMARY and SECONDARY
+// sub-sections; an Exercise that asserts no split falls back to a flat targeted-muscle row. No
+// Exercise ever shows a primacy it doesn't have — the honest/flat decision lives entirely in
+// `toMuscleEmphasis`, and the figure is decorative, so the map stays fully legible without it or
+// color. When nothing the exercise names lands on the map (all off-map), the figure is omitted
+// rather than shown blank, and the text alone carries the muscles.
 function MuscleMap({ exercise }: { exercise: ExerciseDetail }) {
   const emphasis = toMuscleEmphasis(exercise);
   if (emphasis.kind === "empty") return null;
+
+  const highlight = toExerciseHighlight(exercise.muscle_highlight);
 
   return (
     <div className="flex flex-col gap-4">
       <SectionHeader>MUSCLES</SectionHeader>
       <Card className="flex flex-col gap-5 p-5">
+        {highlight.isEmpty ? null : (
+          <div className="flex justify-center gap-4">
+            {MUSCLE_FIGURE_VIEWS.map(({ view, label }) => (
+              <div
+                key={view}
+                className="flex min-w-0 flex-1 flex-col items-center gap-2"
+              >
+                <span className="label-mono text-[9px] tracking-widest text-text-muted">
+                  {label}
+                </span>
+                <ExerciseMuscleFigure view={view} byMuscle={highlight.byMuscle} />
+              </div>
+            ))}
+          </div>
+        )}
         {emphasis.kind === "flat" ? (
           <MuscleChips muscles={emphasis.muscles} variant="muted" />
         ) : (
