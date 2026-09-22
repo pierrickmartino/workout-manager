@@ -419,29 +419,42 @@ def _set_contributions(logged_set: _EmphasisNamedSet) -> tuple[dict[Muscle, floa
     """One Logged Set's emphasis-weighted contribution per canonical Muscle, plus its off-map
     weight.
 
-    Folds the set's Primary/Secondary emphasis (``emphasis_of``, with its "no split → all
-    primary" fallback) into a ``{muscle: weight}`` map — each primary muscle string adds
-    :data:`PRIMARY_EMPHASIS_WEIGHT`, each secondary :data:`SECONDARY_EMPHASIS_WEIGHT`, with a
-    coarse group-level term's weight spread evenly across its group (:func:`_resolve_targets`).
-    Weight the group tier can't place is returned separately as the set's off-map (Unclassified)
-    contribution, so the caller can accumulate the two tiers without re-walking the set. Pure —
-    it mutates nothing the caller owns."""
+    **The flat ``targeted_muscles`` union decides what is on the map; the Primary/Secondary
+    emphasis only scales the heat.** Presence is driven off the *same* field the six-group
+    roll-up reads (``muscle_groups.covered_groups`` / ``_groups_for_set`` also walk
+    ``targeted_muscles``), so a muscle lights only where its group is covered and every covered
+    group has a lit muscle — the "can never disagree" guarantee holds *by construction*, not by
+    assuming the split mirrors the union (ADR-0016 stores the two as independent fields, so the
+    per-muscle read must not depend on their alignment).
+
+    Each targeted muscle string is weighted by its role in the set's emphasis (``emphasis_of``,
+    with its "no split → all primary" fallback): :data:`SECONDARY_EMPHASIS_WEIGHT` when the split
+    names it a secondary assistor, else :data:`PRIMARY_EMPHASIS_WEIGHT` — so a prime mover reads
+    hotter than an assistor, and a muscle an incomplete split names in neither list defaults to
+    full weight rather than having its presence suppressed. A coarse group-level term's weight
+    spreads evenly across its group (:func:`_resolve_targets`); weight the group tier can't place
+    is returned separately as the set's off-map (Unclassified) contribution. Pure — it mutates
+    nothing the caller owns."""
 
     emphasis = emphasis_of(logged_set)
+    secondary = {normalize_muscle(muscle) for muscle in emphasis.secondary}
+    primary = {normalize_muscle(muscle) for muscle in emphasis.primary}
     contribution: dict[Muscle, float] = {}
     unclassified = 0.0
-    for muscles, weight in (
-        (emphasis.primary, PRIMARY_EMPHASIS_WEIGHT),
-        (emphasis.secondary, SECONDARY_EMPHASIS_WEIGHT),
-    ):
-        for muscle_str in muscles:
-            targets = _resolve_targets(muscle_str)
-            if targets is None:
-                unclassified += weight
-                continue
-            share = weight / len(targets)
-            for muscle in targets:
-                contribution[muscle] = contribution.get(muscle, 0.0) + share
+    for muscle_str in logged_set.targeted_muscles:
+        key = normalize_muscle(muscle_str)
+        weight = (
+            SECONDARY_EMPHASIS_WEIGHT
+            if key in secondary and key not in primary
+            else PRIMARY_EMPHASIS_WEIGHT
+        )
+        targets = _resolve_targets(muscle_str)
+        if targets is None:
+            unclassified += weight
+            continue
+        share = weight / len(targets)
+        for muscle in targets:
+            contribution[muscle] = contribution.get(muscle, 0.0) + share
     return contribution, unclassified
 
 
@@ -453,10 +466,11 @@ def recent_muscle_coverage(
     Reads the **same** fixed window as the six-group :func:`~app.domain.muscle_groups.\
 recent_coverage` — the ``weeks`` weeks ending at ``reference``'s week, via the shared
     :func:`~app.domain.muscle_groups.sessions_in_window`, so the finer tier can never disagree
-    with the roll-up on how far back "recent" reaches (ADR-0025). Every in-window Logged Set's
-    Primary/Secondary emphasis (``emphasis_of``, with its "no split → all primary" fallback)
-    contributes weight: :data:`PRIMARY_EMPHASIS_WEIGHT` per primary muscle string,
-    :data:`SECONDARY_EMPHASIS_WEIGHT` per secondary, with a coarse group-level term's weight
+    with the roll-up on how far back "recent" reaches (ADR-0025). Presence is driven off each
+    set's flat ``targeted_muscles`` union — the same field the six-group roll-up reads — while
+    the Primary/Secondary emphasis (``emphasis_of``, with its "no split → all primary" fallback)
+    only scales the heat: :data:`PRIMARY_EMPHASIS_WEIGHT` for a prime mover,
+    :data:`SECONDARY_EMPHASIS_WEIGHT` for an assistor, with a coarse group-level term's weight
     spread evenly across the muscles nested under its group so the map sharpens automatically as
     the data names specific muscles.
 

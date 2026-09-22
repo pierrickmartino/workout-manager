@@ -466,3 +466,57 @@ class TestGroupRollUpConsistency:
         # Assert — every covered group has a present muscle beneath it
         for group in covered_groups(history):
             assert any(row.present for row in coverage.muscles if row.group is group)
+
+    def test_a_split_muscle_outside_the_union_never_lights_an_uncovered_group(self) -> None:
+        # Arrange — a drifted split (ADR-0016 stores split and union independently): the
+        # secondary names "triceps", but the flat union does not carry it. The union is what the
+        # group roll-up reads, so Arms is NOT covered — and the finer read must not light a
+        # Triceps under an uncovered Arms, or the map and its detail would contradict.
+        history = [
+            _Session(
+                _TODAY,
+                [
+                    _Set(
+                        targeted_muscles=["chest"],
+                        primary_muscles=["chest"],
+                        secondary_muscles=["triceps"],
+                        exercise_name="Bench Press",
+                    )
+                ],
+            )
+        ]
+
+        # Act
+        coverage = recent_muscle_coverage(history, reference=_TODAY, weeks=8)
+
+        # Assert — only the union's muscle lights; presence rolls up exactly to covered groups
+        assert _present(coverage) == {Muscle.PECTORALIS_MAJOR}
+        assert _row(coverage, Muscle.TRICEPS_BRACHII).present is False
+        assert {group_of(m) for m in _present(coverage)} == covered_groups(history)
+
+    def test_the_union_drives_presence_when_a_split_omits_a_targeted_muscle(self) -> None:
+        # Arrange — the mirror drift: the union carries "triceps" but the asserted split names
+        # it in neither list. A covered group (Arms) must still have a lit muscle beneath it —
+        # an incomplete split never leaves a covered region grey — so it defaults to full weight.
+        history = [
+            _Session(
+                _TODAY,
+                [
+                    _Set(
+                        targeted_muscles=["chest", "triceps"],
+                        primary_muscles=["chest"],
+                        secondary_muscles=[],
+                        exercise_name="Bench Press",
+                    )
+                ],
+            )
+        ]
+
+        # Act
+        coverage = recent_muscle_coverage(history, reference=_TODAY, weeks=8)
+
+        # Assert — the union's Triceps lights (at full default weight), and every covered group
+        # has a present muscle: the roll-up agrees in both directions regardless of the split
+        assert _row(coverage, Muscle.TRICEPS_BRACHII).present is True
+        assert _row(coverage, Muscle.TRICEPS_BRACHII).volume == PRIMARY_EMPHASIS_WEIGHT
+        assert {group_of(m) for m in _present(coverage)} == covered_groups(history)
