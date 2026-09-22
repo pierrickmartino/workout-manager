@@ -1,0 +1,545 @@
+{
+  "schema": "workout-manager/atlas-manifest@1",
+  "contract": "data-muscle-id values are canonical Muscle ids (enum values) from apps/api/app/domain/muscles.py",
+  "viewBox": "0 0 220 640",
+  "views": [
+    "front",
+    "back"
+  ],
+  "figures": [
+    "neutral",
+    "male",
+    "female"
+  ],
+  "muscleCount": 40,
+  "muscles": {
+    "Quadriceps": {
+      "group": "Legs",
+      "occurrences": [
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
+        }
+      ]
+    },
+    "Hamstrings": {
+      "group": "Legs",
+      "occurrences": [
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Gluteus Maximus": {
+      "group": "Legs",
+      "occurrences": [
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Gluteus Medius": {
+      "group": "Legs",
+      "occurrences": [
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Gluteus Minimus": {
+      "group": "Legs",
+      "occurrences": [
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Tensor Fasciae Latae": {
+      "group": "Legs",
+      "occurrences": [
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
+        }
+      ]
+    },
+    "Hip Adductors": {
+      "group": "Legs",
+      "occurrences": [
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
+        }
+      ]
+    },
+    "Hip Abductors": {
+      "group": "Legs",
+      "occurrences": [
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Hip Flexors": {
+      "group": "Legs",
+      "occurrences": [
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
+        }
+      ]
+    },
+    "Sartorius": {
+      "group": "Legs",
+      "occurrences": [
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
+        }
+      ]
+    },
+    "Gastrocnemius": {
+      "group": "Legs",
+      "occurrences": [
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Soleus": {
+      "group": "Legs",
+      "occurrences": [
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Tibialis Anterior": {
+      "group": "Legs",
+      "occurrences": [
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
+        }
+      ]
+    },
+    "Peroneals": {
+      "group": "Legs",
+      "occurrences": [
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
+        }
+      ]
+    },
+    "Pectoralis Major": {
+      "group": "Chest",
+      "occurrences": [
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
+        }
+      ]
+    },
+    "Pectoralis Minor": {
+      "group": "Chest",
+      "occurrences": [
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
+        }
+      ]
+    },
+    "Serratus Anterior": {
+      "group": "Chest",
+      "occurrences": [
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
+        }
+      ]
+    },
+    "Latissimus Dorsi": {
+      "group": "Back",
+      "occurrences": [
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Trapezius": {
+      "group": "Back",
+      "occurrences": [
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Rhomboids": {
+      "group": "Back",
+      "occurrences": [
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Erector Spinae": {
+      "group": "Back",
+      "occurrences": [
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Teres Major": {
+      "group": "Back",
+      "occurrences": [
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Teres Minor": {
+      "group": "Back",
+      "occurrences": [
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Infraspinatus": {
+      "group": "Back",
+      "occurrences": [
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Levator Scapulae": {
+      "group": "Back",
+      "occurrences": [
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Deltoids": {
+      "group": "Shoulders",
+      "occurrences": [
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
+        },
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Supraspinatus": {
+      "group": "Shoulders",
+      "occurrences": [
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Rotator Cuff": {
+      "group": "Shoulders",
+      "occurrences": [
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Biceps Brachii": {
+      "group": "Arms",
+      "occurrences": [
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
+        }
+      ]
+    },
+    "Triceps Brachii": {
+      "group": "Arms",
+      "occurrences": [
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Brachialis": {
+      "group": "Arms",
+      "occurrences": [
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
+        }
+      ]
+    },
+    "Brachioradialis": {
+      "group": "Arms",
+      "occurrences": [
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
+        }
+      ]
+    },
+    "Coracobrachialis": {
+      "group": "Arms",
+      "occurrences": [
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
+        }
+      ]
+    },
+    "Anconeus": {
+      "group": "Arms",
+      "occurrences": [
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Forearms": {
+      "group": "Arms",
+      "occurrences": [
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
+        },
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Rectus Abdominis": {
+      "group": "Core",
+      "occurrences": [
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
+        }
+      ]
+    },
+    "Obliques": {
+      "group": "Core",
+      "occurrences": [
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
+        }
+      ]
+    },
+    "Transverse Abdominis": {
+      "group": "Core",
+      "occurrences": [
+        {
+          "view": "front",
+          "side": "center"
+        }
+      ]
+    },
+    "Quadratus Lumborum": {
+      "group": "Core",
+      "occurrences": [
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        }
+      ]
+    },
+    "Multifidus": {
+      "group": "Core",
+      "occurrences": [
+        {
+          "view": "back",
+          "side": "center"
+        }
+      ]
+    }
+  }
+}
