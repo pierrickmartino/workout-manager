@@ -117,6 +117,13 @@ class LoggedSetView:
     # view so read models (e.g. the Analytics muscle distribution) never touch the
     # ORM — mirrors how ``exercise_name`` is carried here.
     targeted_muscles: list[str] = field(default_factory=list)
+    # The performed Exercise's Primary/Secondary emphasis split (ADR-0016), carried
+    # through so the coverage read layer can reach each set's emphasis — not just the
+    # flat ``targeted_muscles`` union — via ``muscle_groups.emphasis_of`` (issue #539).
+    # Empty when the Exercise asserts no split; ``emphasis_of`` then falls back to the
+    # flat union as all-primary. Denormalized off the Exercise like the union above.
+    primary_muscles: list[str] = field(default_factory=list)
+    secondary_muscles: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -214,6 +221,8 @@ def _set_view(logged_set: LoggedSet, exercise: Exercise) -> LoggedSetView:
         set_type=logged_set.set_type,
         note=logged_set.note,
         targeted_muscles=list(exercise.targeted_muscles),
+        primary_muscles=list(exercise.primary_muscles),
+        secondary_muscles=list(exercise.secondary_muscles),
     )
 
 
