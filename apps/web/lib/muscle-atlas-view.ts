@@ -1,4 +1,10 @@
 import type { ContributingExercise, RecentCoverage } from "./analytics-types.ts";
+import {
+  NOT_TRAINED_LABEL,
+  TRAINED_LABEL,
+  UNCLASSIFIED_FOOTNOTE,
+  coverageAriaLabel,
+} from "./muscle-atlas-labels.ts";
 
 // One real Muscle Group prepared for the atlas (task #9 / ADR-0025). Carries everything the
 // body map and its region drawer render: the display `group`, its `covered` state as both a
@@ -34,17 +40,6 @@ export interface AtlasView {
   unclassifiedSets: number;
 }
 
-const TRAINED_LABEL = "Trained";
-const NOT_TRAINED_LABEL = "Not trained";
-
-// The neutral, non-prescriptive disclosure copy (issue #189 / ADR-0025): it names that some
-// recent work rolls up outside the six real groups without ranking, flagging, or nudging.
-const UNCLASSIFIED_FOOTNOTE = "Some recent sets list muscles we don't map yet.";
-
-function setsWord(sets: number): string {
-  return sets === 1 ? "set" : "sets";
-}
-
 function toRegion(
   group: RecentCoverage["groups"][number],
   weeksLabel: string,
@@ -55,9 +50,7 @@ function toRegion(
   const stateLabel = covered ? TRAINED_LABEL : NOT_TRAINED_LABEL;
   // The aria label carries state *and* volume so a screen reader never needs the region's
   // color or fill: "Legs: trained in the last 8 weeks, 22 sets" / "Core: not trained in…".
-  const ariaLabel = covered
-    ? `${group.group}: trained in the ${weeksLabel}, ${sets} ${setsWord(sets)}`
-    : `${group.group}: not trained in the ${weeksLabel}`;
+  const ariaLabel = coverageAriaLabel(group.group, weeksLabel, covered, sets);
   return {
     group: group.group,
     covered,

@@ -20,10 +20,19 @@ function group(
   return { group: name, covered, sets, contributing_exercises: exercises };
 }
 
+// The group-tier atlas view reads only `groups` / `weeks` / `unclassified_*`; the per-muscle
+// tier is irrelevant to it, so these fixtures carry an empty one just to satisfy the shape.
+const NO_MUSCLES = {
+  items: [],
+  unclassified_present: false,
+  unclassified_volume: 0,
+};
+
 const BALANCED: RecentCoverage = {
   weeks: 8,
   unclassified_present: false,
   unclassified_sets: 0,
+  muscles: NO_MUSCLES,
   groups: [
     group("Legs", true, 20, [
       { name: "Back Squat", sets: 12 },
@@ -98,6 +107,7 @@ test("singularizes the set word for a one-set region", () => {
     weeks: 8,
     unclassified_present: false,
     unclassified_sets: 0,
+    muscles: NO_MUSCLES,
     groups: [group("Legs", true, 1, [{ name: "Back Squat", sets: 1 }])],
   };
   assert.equal(toAtlasView(one).regions[0].ariaLabel, "Legs: trained in the last 8 weeks, 1 set");
@@ -116,6 +126,7 @@ test("is empty when nothing was trained and no off-map work exists", () => {
     weeks: 8,
     unclassified_present: false,
     unclassified_sets: 0,
+    muscles: NO_MUSCLES,
     groups: BALANCED.groups.map((g) => group(g.group, false, 0)),
   };
   const view = toAtlasView(none);
@@ -145,6 +156,7 @@ test("reads only-unclassified history as six not-trained regions with the footno
     weeks: 8,
     unclassified_present: true,
     unclassified_sets: 4,
+    muscles: NO_MUSCLES,
     groups: BALANCED.groups.map((g) => group(g.group, false, 0)),
   };
   const view = toAtlasView(onlyUnclassified);

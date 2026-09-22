@@ -111,11 +111,41 @@ export interface GroupCoverage {
 // real groups (issue #189) — the signal behind a neutral disclosure footnote, never a
 // seventh group and never a coverage target; `unclassified_sets` is how many such sets, so
 // the disclosure can name the off-map leftovers honestly.
+// One canonical individual Muscle's recent presence and emphasis-weighted heat (issue #540 /
+// ADR-0073/0078): the display `muscle` label and its parent `group` label (both never
+// "Unclassified" among the rows), whether it was `present` — trained at least once — in the
+// window (equivalently `volume > 0`), its emphasis-weighted `volume` (a heat magnitude, not a
+// kg total and not a rank: a set's prime movers count full, its assistors a fraction, and a
+// coarse group-level term's weight spreads across the muscles nested under it), and the
+// `contributing_exercises` behind it, most sets first. Presence + volume, never a target.
+export interface MuscleCoverage {
+  muscle: string;
+  group: string;
+  present: boolean;
+  volume: number;
+  contributing_exercises: ContributingExercise[];
+}
+
+// The finer per-muscle tier of the Muscle Group Coverage read (issue #540 / ADR-0073/0078):
+// every real Muscle in the server's canonical order (`items`), each rolling up consistently to
+// the six `groups` above, so the anatomical body map and its group roll-up can never disagree.
+// `unclassified_present` / `unclassified_volume` disclose in-window emphasis weight that names
+// neither a muscle nor a group (truly off-map work) — the per-muscle twin of the group tier's
+// `unclassified_sets` footnote, disclosed and never dropped, never a row and never a target.
+export interface MuscleCoverageTier {
+  items: MuscleCoverage[];
+  unclassified_present: boolean;
+  unclassified_volume: number;
+}
+
 export interface RecentCoverage {
   weeks: number;
   groups: GroupCoverage[];
   unclassified_present: boolean;
   unclassified_sets: number;
+  // The per-muscle tier riding in the same coverage read (issue #540): the finer anatomical
+  // heat the Muscle Atlas body map shades, over the same fixed window as the six `groups`.
+  muscles: MuscleCoverageTier;
 }
 
 // The honest read model for one range window (F3 Slice 1–5): sessions, active days,
