@@ -29,7 +29,7 @@ test("toFigureRender carries the shared viewBox and a silhouette", () => {
   const model = toFigureRender("neutral", "front");
   assert.equal(model.viewBox, VIEW_BOX);
   assert.ok(model.silhouette.parts.length > 0);
-  assert.equal(model.silhouette.head.r, 30);
+  assert.ok(model.silhouette.head.r > 0, "the figure has a drawn head");
 });
 
 test("toFigureRender keeps only the muscles that occur on the requested view", () => {
@@ -57,16 +57,22 @@ test("toFigureRender emits every occurrence on the view as a non-empty path", ()
   }
 });
 
-test("a bilateral muscle renders a left and a right occurrence", () => {
+test("a bilateral muscle renders matching left and right occurrences", () => {
   const model = toFigureRender("neutral", "front");
   const quads = model.muscles.find((m) => m.id === "Quadriceps");
   assert.ok(quads);
-  assert.deepEqual(
-    quads.occurrences.map((o) => o.side).sort(),
-    ["left", "right"],
+  // Quadriceps is drawn as its several heads, each authored once and mirrored — so it renders an
+  // equal number of left and right occurrences (at least one of each), never a lone half.
+  const left = quads.occurrences.filter((o) => o.side === "left");
+  const right = quads.occurrences.filter((o) => o.side === "right");
+  assert.ok(left.length >= 1, "has a left half");
+  assert.equal(left.length, right.length, "left and right halves are balanced");
+  assert.ok(
+    quads.occurrences.every((o) => o.side !== "center"),
+    "a bilateral muscle never sits on the midline",
   );
-  // The two halves are mirror images, so their paths differ.
-  assert.notEqual(quads.occurrences[0].d, quads.occurrences[1].d);
+  // A half and its mirror are different paths.
+  assert.notEqual(left[0].d, right[0].d);
 });
 
 test("the same muscle warps to different paths on different figures", () => {

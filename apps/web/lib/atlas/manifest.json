@@ -23,12 +23,36 @@
         {
           "view": "front",
           "side": "right"
+        },
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
+        },
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
         }
       ]
     },
     "Hamstrings": {
       "group": "Legs",
       "occurrences": [
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
+        },
         {
           "view": "back",
           "side": "left"
@@ -153,6 +177,14 @@
         {
           "view": "back",
           "side": "right"
+        },
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
         }
       ]
     },
@@ -256,6 +288,14 @@
         },
         {
           "view": "back",
+          "side": "right"
+        },
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
           "side": "right"
         }
       ]
@@ -408,6 +448,14 @@
         {
           "view": "back",
           "side": "right"
+        },
+        {
+          "view": "back",
+          "side": "left"
+        },
+        {
+          "view": "back",
+          "side": "right"
         }
       ]
     },
@@ -487,6 +535,22 @@
     "Rectus Abdominis": {
       "group": "Core",
       "occurrences": [
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
+        },
+        {
+          "view": "front",
+          "side": "left"
+        },
+        {
+          "view": "front",
+          "side": "right"
+        },
         {
           "view": "front",
           "side": "left"
