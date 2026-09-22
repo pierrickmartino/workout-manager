@@ -14,7 +14,7 @@ import { groupColorVar } from "@/components/pulse/muscle-colors";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { AtlasFigure } from "./atlas-figure";
+import { ReferenceAtlasFigure } from "./reference-atlas-figure";
 import { AtlasDrawer } from "./atlas-drawer";
 
 const VIEWS: { view: View; label: string }[] = [
@@ -68,10 +68,10 @@ export function MuscleRegionAtlas({ view, figure }: MuscleRegionAtlasProps) {
         <Card className="flex flex-col items-center gap-4 p-6">
           <div className="flex justify-center gap-2">
             {VIEWS.map(({ view: bodyView }) => (
-              <AtlasFigure
+              <ReferenceAtlasFigure
                 key={bodyView}
                 figure={figure}
-                view={bodyView}
+                half={bodyView}
                 regionsByMuscle={regionsByMuscle}
                 selectedMuscle={null}
                 onSelectMuscle={() => {}}
@@ -96,9 +96,9 @@ export function MuscleRegionAtlas({ view, figure }: MuscleRegionAtlasProps) {
         <div className="flex justify-center gap-4">
           {VIEWS.map(({ view: bodyView, label }) => (
             <BodyFigure key={bodyView} label={label}>
-              <AtlasFigure
+              <ReferenceAtlasFigure
                 figure={figure}
-                view={bodyView}
+                half={bodyView}
                 regionsByMuscle={regionsByMuscle}
                 selectedMuscle={selected}
                 onSelectMuscle={handleSelect}
