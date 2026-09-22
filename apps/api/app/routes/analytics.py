@@ -102,6 +102,31 @@ def _serialize(overview: AnalyticsOverview) -> dict:
             ],
             "unclassified_present": overview.coverage.unclassified_present,
             "unclassified_sets": overview.coverage.unclassified_sets,
+            # Per-muscle tier (ADR-0073/0078, issue #540): the finer anatomical heat the body
+            # map shades, over the same fixed 8-week window as the six groups above. Every
+            # canonical Muscle in canonical order — its presence, emphasis-weighted volume
+            # (primary full / secondary fractional, coarse group terms spread across the group),
+            # and the exercises behind it — rolling up consistently to ``groups`` so the map and
+            # its roll-up can never disagree. ``muscles.unclassified_*`` disclose in-window
+            # emphasis weight that names neither a muscle nor a group (truly off-map), the
+            # per-muscle twin of the group footnote — disclosed, never a row, never a target.
+            "muscles": {
+                "items": [
+                    {
+                        "muscle": row.muscle.value,
+                        "group": row.group.value,
+                        "present": row.present,
+                        "volume": row.volume,
+                        "contributing_exercises": [
+                            {"name": exercise.name, "sets": exercise.sets}
+                            for exercise in row.contributing_exercises
+                        ],
+                    }
+                    for row in overview.muscle_coverage.muscles
+                ],
+                "unclassified_present": overview.muscle_coverage.unclassified_present,
+                "unclassified_volume": overview.muscle_coverage.unclassified_volume,
+            },
         },
     }
 

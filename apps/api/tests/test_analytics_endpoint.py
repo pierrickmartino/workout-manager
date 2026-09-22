@@ -19,6 +19,7 @@ from app.auth.dependencies import get_jwks
 from app.config import Settings, get_settings
 from app.domain.exercise import Provenance
 from app.domain.load import LoadKind, ParsedLoad
+from app.domain.muscles import MUSCLE_ORDER, group_of
 from app.domain.quantity import Quantity, QuantityKind
 from app.domain.week import week_start
 from app.main import create_app
@@ -255,6 +256,40 @@ def test_analytics_lists_the_contributing_exercises_behind_a_covered_group():
     ]
 
 
+def test_analytics_serializes_the_per_muscle_coverage_tier_in_the_envelope():
+    # Arrange — three Back Squat sets today. Back Squat trains quadriceps + glutes with no
+    # asserted emphasis split, so the read falls back to all-primary: both muscles at full
+    # weight, under the Legs group, over the same fixed 8-week coverage window.
+    client, ctx, sessions, logged = build_client()
+    _perform(sessions, logged, "user_mus", date.today(), 3)
+
+    # Act
+    response = client.get("/api/analytics?range=30d", headers=_auth(ctx, "user_mus"))
+
+    # Assert — the per-muscle tier rides in the same ``coverage`` envelope, every canonical
+    # muscle in canonical order, with per-muscle Unclassified disclosed alongside it
+    assert response.status_code == 200
+    muscles = response.json()["data"]["coverage"]["muscles"]
+    assert [row["muscle"] for row in muscles["items"]] == [m.value for m in MUSCLE_ORDER]
+    assert muscles["unclassified_present"] is False
+    assert muscles["unclassified_volume"] == 0.0
+
+    # Only Quadriceps and Gluteus Maximus lit, both at full primary weight (3 sets × 1.0),
+    # both nesting under Legs, each naming the Back Squat behind it
+    present = {row["muscle"]: row for row in muscles["items"] if row["present"]}
+    assert set(present) == {"Quadriceps", "Gluteus Maximus"}
+    for row in present.values():
+        assert row["group"] == "Legs"
+        assert row["volume"] == 3.0
+        assert row["contributing_exercises"] == [{"name": "Back Squat", "sets": 3}]
+
+    # Every present muscle rolls up to a covered group — the map and its roll-up agree
+    covered_groups = {
+        row["group"] for row in response.json()["data"]["coverage"]["groups"] if row["covered"]
+    }
+    assert {row["group"] for row in present.values()} <= covered_groups
+
+
 def test_analytics_serializes_the_recent_records_feed_and_new_prs_tile():
     # Arrange — a 100 kg PR 40 days ago (outside 30d) and a heavier 110 kg PR 2 days
     # ago (inside 30d)
@@ -326,6 +361,23 @@ def test_analytics_empty_state_is_zero_counts_not_an_error():
             ],
             "unclassified_present": False,
             "unclassified_sets": 0,
+            # The per-muscle tier is present even on an empty history: every canonical Muscle
+            # in canonical order reads absent with zero volume — the honest "nothing recent"
+            # state, never dropped to zero rows — and nothing sits off-map.
+            "muscles": {
+                "items": [
+                    {
+                        "muscle": muscle.value,
+                        "group": group_of(muscle).value,
+                        "present": False,
+                        "volume": 0.0,
+                        "contributing_exercises": [],
+                    }
+                    for muscle in MUSCLE_ORDER
+                ],
+                "unclassified_present": False,
+                "unclassified_volume": 0.0,
+            },
         },
     }
 
