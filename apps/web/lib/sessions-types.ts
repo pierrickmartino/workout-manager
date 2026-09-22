@@ -197,6 +197,24 @@ export interface RelatedExerciseSummary {
   name: string;
 }
 
+// One emphasis lane of an Exercise's resolved Muscle Atlas highlight (issue #544):
+// `muscles` are specific canonical Muscle ids named outright; `groups` are coarse Muscle
+// Group ids a bare region term named, which the figure spreads across every muscle nested
+// under them. An off-map term (unknown / AI-invented) lands in neither — disclosed by absence.
+export interface EmphasisHighlight {
+  muscles: string[];
+  groups: string[];
+}
+
+// An Exercise's Primary/Secondary muscles resolved for the single-exercise anatomical figure
+// (issue #544): `primary` reads hot, `secondary` a lighter warm. A split-less Exercise resolves
+// its whole flat union as primary (mirroring the SPECS "no split → flat" fallback), so a real
+// movement is never blank.
+export interface ExerciseMuscleHighlight {
+  primary: EmphasisHighlight;
+  secondary: EmphasisHighlight;
+}
+
 // The enriched detail of a single catalog Exercise, plus its typed relationships
 // split into Variations (same movement, scaled) and Alternatives (same effect).
 export interface ExerciseDetail {
@@ -210,6 +228,13 @@ export interface ExerciseDetail {
   targeted_muscles: string[];
   primary_muscles: string[];
   secondary_muscles: string[];
+  // The single-exercise Muscle Atlas highlight (issue #544): the Exercise's own
+  // Primary/Secondary muscles resolved server-side to canonical Muscle ids via
+  // `classify_muscle` (#539) — primary lit hot on the anatomical figure, secondary warm. A
+  // bare region term ("core") resolves to a `group` the figure spreads across its muscles,
+  // not a fabricated single muscle. A read-time projection over the free-form fields above,
+  // distinct from the aggregate coverage read.
+  muscle_highlight: ExerciseMuscleHighlight;
   required_equipment: string[];
   // Ordered Execution Steps (ADR-0015): one entry per authored step, never a prose
   // blob. Rendered numbered (2+) or as a single un-numbered block.

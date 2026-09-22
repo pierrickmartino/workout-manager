@@ -42,6 +42,10 @@ from app.domain.movement_pattern import (
     classify_movement_pattern,
     group_by_movement_pattern,
 )
+from app.domain.muscles import (
+    EmphasisHighlight,
+    exercise_muscle_highlight,
+)
 from app.domain.substitution import RelationKind
 from app.envelope import success_envelope
 from app.generation.backfill_queue import BackfillQueue
@@ -522,6 +526,24 @@ def _summary(related: RelatedExercise) -> dict:
     return {"id": related.exercise.id, "name": related.exercise.name}
 
 
+def _muscle_highlight_payload(exercise: Exercise) -> dict:
+    """The single-exercise Atlas highlight (issue #544): a read-time projection resolving the
+    Exercise's own Primary/Secondary muscles into the canonical Muscles the anatomical figure
+    lights (primary hot, secondary warm), via ``classify_muscle`` and the coarse-spread partition.
+    Each lane serializes to canonical id strings — ``muscles`` are specific canonical Muscles,
+    ``groups`` the coarse Muscle Groups the figure spreads across. No stored column — computed on
+    read, distinct from the aggregate coverage read."""
+
+    def lane(highlight: EmphasisHighlight) -> dict:
+        return {
+            "muscles": [muscle.value for muscle in highlight.muscles],
+            "groups": [group.value for group in highlight.groups],
+        }
+
+    highlight = exercise_muscle_highlight(exercise)
+    return {"primary": lane(highlight.primary), "secondary": lane(highlight.secondary)}
+
+
 def _serialize(
     exercise: Exercise,
     related: list[RelatedExercise],
@@ -540,6 +562,12 @@ def _serialize(
         "targeted_muscles": list(exercise.targeted_muscles),
         "primary_muscles": list(exercise.primary_muscles),
         "secondary_muscles": list(exercise.secondary_muscles),
+        # The single-exercise Muscle Atlas highlight (issue #544): the Exercise's own
+        # Primary/Secondary muscles resolved to canonical Muscles (primary hot, secondary warm),
+        # with bare region terms left as groups for the figure to spread. A read-time projection
+        # over the free-form fields above — no stored column, and independent of the aggregate
+        # coverage read (ADR-0073).
+        "muscle_highlight": _muscle_highlight_payload(exercise),
         "required_equipment": list(exercise.required_equipment),
         "instructions": list(exercise.instructions),
         "difficulty": exercise.difficulty,

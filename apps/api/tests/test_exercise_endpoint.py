@@ -177,3 +177,49 @@ def test_exercise_detail_omits_primacy_for_a_flat_muscle_list():
     assert data["targeted_muscles"] == ["core"]
     assert data["primary_muscles"] == []
     assert data["secondary_muscles"] == []
+
+
+def test_exercise_detail_resolves_the_muscle_highlight_from_the_split():
+    # Arrange — a bench press naming specific muscles, chest primary, arms/shoulders assist
+    client, ctx, exercises, _ = build_client()
+    bench = exercises.find_or_create(
+        "Bench Press",
+        provenance=Provenance.CURATED,
+        targeted_muscles=["chest", "triceps", "front delts"],
+        primary_muscles=["chest"],
+        secondary_muscles=["triceps", "front delts"],
+    )
+
+    # Act
+    response = client.get(f"/api/exercises/{bench.id}", headers=_auth(ctx))
+
+    # Assert — each free-form term folds to its canonical Muscle in its own emphasis lane
+    # (issue #544): primary reads hot, secondary warm, with nothing spread to a group here
+    assert response.status_code == 200
+    highlight = response.json()["data"]["muscle_highlight"]
+    assert highlight["primary"] == {"muscles": ["Pectoralis Major"], "groups": []}
+    assert highlight["secondary"] == {
+        "muscles": ["Triceps Brachii", "Deltoids"],
+        "groups": [],
+    }
+
+
+def test_exercise_detail_muscle_highlight_spreads_a_coarse_group_term():
+    # Arrange — a plank whose only asserted muscle is the bare region term "core"
+    client, ctx, exercises, _ = build_client()
+    plank = exercises.find_or_create(
+        "Plank",
+        provenance=Provenance.CURATED,
+        targeted_muscles=["core"],
+    )
+
+    # Act
+    response = client.get(f"/api/exercises/{plank.id}", headers=_auth(ctx))
+
+    # Assert — with no split, the union rides as primary; a bare region names a group (not one
+    # muscle), so it lands in ``groups`` for the figure to spread rather than being guessed onto a
+    # single muscle
+    assert response.status_code == 200
+    highlight = response.json()["data"]["muscle_highlight"]
+    assert highlight["primary"] == {"muscles": [], "groups": ["Core"]}
+    assert highlight["secondary"] == {"muscles": [], "groups": []}

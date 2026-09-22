@@ -384,35 +384,52 @@ RecentCoverage`: a muscle is present only where its parent group is covered, and
     unclassified_volume: float
 
 
-def _resolve_targets(muscle: str) -> tuple[Muscle, ...] | None:
-    """Which canonical Muscles a single free-form string credits with weight — or ``None``.
+def _classify_target(muscle: str) -> tuple[Muscle | None, MuscleGroup | None]:
+    """Classify one free-form string into a specific Muscle *or* a coarse group — or neither.
 
-    The **group tier is the source of truth** for what is on the map: the string is first
-    rolled up via ``muscle_groups.classify``, and only weight the group tier can place lands on
-    a muscle. This is what keeps the finer read from ever contradicting the six-group roll-up —
-    a muscle is lit only inside a group the roll-up also covers, and the two tiers' Unclassified
-    buckets line up exactly (the group read leaves ``coverage`` unchanged, ADR-0025):
+    The **group tier is the source of truth** for what is on the map: the string is first rolled
+    up via ``muscle_groups.classify``, and only a term the group tier can place resolves to
+    anything. This is the one classification core the coverage heat (:func:`_resolve_targets`)
+    and the single-exercise highlight (:func:`exercise_muscle_highlight`) share, so the two can
+    never disagree on how a term resolves. Exactly one of the pair is set for an on-map term, and
+    both are ``None`` off-map:
 
     - The group tier can't place it (``classify`` is Unclassified — unknown, AI-invented, blank,
-      or a fine-only alias like "supraspinatus" the coarse map doesn't carry) → ``None``, truly
-      off-map, disclosed as Unclassified rather than guessed at, never lighting a region the map
-      leaves dark.
+      or a bare group term the caller declines to spread) → ``(None, None)``, truly off-map,
+      disclosed rather than guessed at, never lighting a region the map leaves dark.
     - The string names a specific muscle whose parent group is the very group it rolled up to
-      (the ADR-0078 no-contradiction invariant guarantees this wherever both classify) → that
-      one Muscle, the map sharpened onto it.
+      (the ADR-0078 no-contradiction invariant guarantees this wherever both classify) →
+      ``(that Muscle, None)``, the map sharpened onto it.
     - Otherwise it is a *coarse* group-level term ("back", "shoulders") that rolls up to a group
-      but names no single muscle → its weight spreads evenly across every muscle nested under
-      that group (:data:`MUSCLES_IN_GROUP`), so a covered group is never a sea of grey and
-      sharpens automatically wherever the data instead names a specific muscle.
+      but names no single muscle → ``(None, that group)``; a caller spreads the group's weight or
+      highlight across the muscles nested under it (:data:`MUSCLES_IN_GROUP`), so a covered group
+      is never a sea of grey and sharpens automatically wherever the data names a specific muscle.
     """
 
     group = classify(muscle)
     if group is MuscleGroup.UNCLASSIFIED:
-        return None
+        return None, None
     resolved = classify_muscle(muscle)
     if resolved is not Muscle.UNCLASSIFIED and group_of(resolved) is group:
-        return (resolved,)
-    return MUSCLES_IN_GROUP[group]
+        return resolved, None
+    return None, group
+
+
+def _resolve_targets(muscle: str) -> tuple[Muscle, ...] | None:
+    """Which canonical Muscles a single free-form string credits with weight — or ``None``.
+
+    The spread form of :func:`_classify_target` used by the coverage heat: a specific muscle
+    credits only itself; a coarse group-level term spreads its weight evenly across every muscle
+    nested under that group (:data:`MUSCLES_IN_GROUP`); an off-map term credits nothing
+    (``None``), disclosed as Unclassified rather than guessed at.
+    """
+
+    specific, group = _classify_target(muscle)
+    if specific is not None:
+        return (specific,)
+    if group is not None:
+        return MUSCLES_IN_GROUP[group]
+    return None
 
 
 def _set_contributions(logged_set: _EmphasisNamedSet) -> tuple[dict[Muscle, float], float]:
@@ -516,6 +533,79 @@ recent_coverage` — the ``weeks`` weeks ending at ``reference``'s week, via the
     )
 
 
+class _EmphasisExercise(Protocol):
+    """A catalog Exercise carrying the flat targeted-muscle union and its Primary/Secondary
+    emphasis split (ADR-0016) — the shape :func:`exercise_muscle_highlight` reads. Structurally
+    the same fields :func:`~app.domain.muscle_groups.emphasis_of` reads, so an Exercise row (or a
+    stub) flows straight through the shared ``no split → all primary`` fallback."""
+
+    targeted_muscles: Sequence[str]
+    primary_muscles: Sequence[str]
+    secondary_muscles: Sequence[str]
+
+
+@dataclass(frozen=True)
+class EmphasisHighlight:
+    """The canonical targets one emphasis lane of an Exercise lights on the anatomical figure.
+
+    ``muscles`` are the specific canonical :class:`Muscle`\\ s named outright, in first-seen order
+    with duplicates collapsed; ``groups`` are the coarse :class:`MuscleGroup`\\ s a bare region
+    term named without a single muscle, which the consuming figure spreads across every muscle
+    nested under them (:data:`MUSCLES_IN_GROUP`) — the same spread rule the coverage heat uses,
+    deferred to the caller so the split stays a read-time projection. A free-form term the group
+    tier can't place (off-map) lands in neither, disclosed by its absence rather than guessed onto
+    a region. Frozen and value-typed like the coverage read models."""
+
+    muscles: tuple[Muscle, ...]
+    groups: tuple[MuscleGroup, ...]
+
+
+@dataclass(frozen=True)
+class ExerciseMuscleHighlight:
+    """One Exercise's Primary/Secondary muscles resolved for the single-exercise Atlas highlight
+    (issue #544): ``primary`` reads hot on the figure, ``secondary`` a lighter warm. Distinct from
+    the aggregate windowed coverage read — it shares ``classify_muscle`` and the coarse-spread
+    partition, not the coverage read (no dependency on the per-muscle read)."""
+
+    primary: EmphasisHighlight
+    secondary: EmphasisHighlight
+
+
+def _highlight_of(muscles: Sequence[str]) -> EmphasisHighlight:
+    """Partition one emphasis lane's free-form muscles into specific canonical Muscles and coarse
+    groups via the shared :func:`_classify_target`, collapsing duplicates while keeping first-seen
+    order. Off-map terms contribute nothing — disclosed by their absence, never guessed at."""
+
+    seen_muscles: dict[Muscle, None] = {}
+    seen_groups: dict[MuscleGroup, None] = {}
+    for raw in muscles:
+        specific, group = _classify_target(raw)
+        if specific is not None:
+            seen_muscles.setdefault(specific, None)
+        elif group is not None:
+            seen_groups.setdefault(group, None)
+    return EmphasisHighlight(muscles=tuple(seen_muscles), groups=tuple(seen_groups))
+
+
+def exercise_muscle_highlight(exercise: _EmphasisExercise) -> ExerciseMuscleHighlight:
+    """Resolve one Exercise's own muscles into the canonical highlight the Atlas figure lights.
+
+    Reuses :func:`~app.domain.muscle_groups.emphasis_of` for the Primary/Secondary split, so the
+    "no asserted split → all primary" fallback matches the SPECS render and the coverage read: a
+    split-less Exercise lights its whole targeted union as primary rather than showing nothing.
+    Each lane is then folded through the shared :func:`_classify_target` classification — a specific
+    muscle to itself, a coarse group-level term to its group (the figure spreads it), an off-map
+    term to nothing — so this single-exercise highlight can never disagree with the coverage heat
+    on how a term resolves. Pure and read-time: it invents no primacy the Exercise doesn't assert.
+    """
+
+    emphasis = emphasis_of(exercise)
+    return ExerciseMuscleHighlight(
+        primary=_highlight_of(emphasis.primary),
+        secondary=_highlight_of(emphasis.secondary),
+    )
+
+
 __all__ = [
     "Muscle",
     "MUSCLE_TO_GROUP",
@@ -523,9 +613,12 @@ __all__ = [
     "MUSCLES_IN_GROUP",
     "PRIMARY_EMPHASIS_WEIGHT",
     "SECONDARY_EMPHASIS_WEIGHT",
+    "EmphasisHighlight",
+    "ExerciseMuscleHighlight",
     "MuscleCoverage",
     "RecentMuscleCoverage",
     "classify_muscle",
+    "exercise_muscle_highlight",
     "group_of",
     "recent_muscle_coverage",
 ]

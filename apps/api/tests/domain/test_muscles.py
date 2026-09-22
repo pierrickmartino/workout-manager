@@ -27,6 +27,7 @@ from app.domain.muscles import (
     Muscle,
     MuscleCoverage,
     classify_muscle,
+    exercise_muscle_highlight,
     group_of,
     recent_muscle_coverage,
 )
@@ -520,3 +521,89 @@ class TestGroupRollUpConsistency:
         assert _row(coverage, Muscle.TRICEPS_BRACHII).present is True
         assert _row(coverage, Muscle.TRICEPS_BRACHII).volume == PRIMARY_EMPHASIS_WEIGHT
         assert {group_of(m) for m in _present(coverage)} == covered_groups(history)
+
+
+# ``exercise_muscle_highlight`` — the single-exercise Atlas highlight (issue #544). Resolves one
+# Exercise's own Primary/Secondary muscles into the canonical Muscles to light on the anatomical
+# figure, distinct from the aggregate windowed coverage read: it shares ``classify_muscle`` and the
+# same on-map/coarse-spread partition, not the coverage read. A specific muscle resolves to itself;
+# a coarse group-level term resolves to its group (the consuming figure spreads it); an off-map term
+# is disclosed by its absence. The "no asserted split → all primary" fallback mirrors ``emphasis_of``.
+
+
+@dataclass
+class _Exercise:
+    """A catalog Exercise stub carrying the three muscle fields the highlight reads (ADR-0016)."""
+
+    targeted_muscles: list[str] = field(default_factory=list)
+    primary_muscles: list[str] = field(default_factory=list)
+    secondary_muscles: list[str] = field(default_factory=list)
+
+
+class TestExerciseMuscleHighlight:
+    def test_specific_muscles_resolve_to_themselves_split_by_emphasis(self) -> None:
+        # Arrange — a bench press naming specific muscles, chest primary, arms/shoulders assist
+        exercise = _Exercise(
+            targeted_muscles=["chest", "triceps", "front delts"],
+            primary_muscles=["chest"],
+            secondary_muscles=["triceps", "front delts"],
+        )
+
+        # Act
+        highlight = exercise_muscle_highlight(exercise)
+
+        # Assert — each free-form term folds to its canonical muscle, kept in its emphasis lane
+        assert highlight.primary.muscles == (Muscle.PECTORALIS_MAJOR,)
+        assert highlight.primary.groups == ()
+        assert highlight.secondary.muscles == (Muscle.TRICEPS_BRACHII, Muscle.DELTOIDS)
+        assert highlight.secondary.groups == ()
+
+    def test_a_coarse_group_term_resolves_to_its_group_not_a_guessed_muscle(self) -> None:
+        # Arrange — a plank whose only asserted muscle is the bare region term "core"
+        exercise = _Exercise(primary_muscles=["core"])
+
+        # Act
+        highlight = exercise_muscle_highlight(exercise)
+
+        # Assert — a bare region names a group, not one muscle: it lands in ``groups`` (the figure
+        # spreads it across the group), never fabricated onto a single muscle
+        assert highlight.primary.muscles == ()
+        assert highlight.primary.groups == (MuscleGroup.CORE,)
+        assert highlight.secondary.muscles == ()
+        assert highlight.secondary.groups == ()
+
+    def test_no_asserted_split_falls_back_to_all_primary(self) -> None:
+        # Arrange — a squat carrying only the flat union, no primary/secondary split
+        exercise = _Exercise(targeted_muscles=["quadriceps", "glutes"])
+
+        # Act
+        highlight = exercise_muscle_highlight(exercise)
+
+        # Assert — the whole union rides as primary (mirrors ``emphasis_of``), no secondary
+        assert highlight.primary.muscles == (Muscle.QUADRICEPS, Muscle.GLUTEUS_MAXIMUS)
+        assert highlight.secondary.muscles == ()
+        assert highlight.secondary.groups == ()
+
+    def test_off_map_muscles_are_disclosed_by_absence(self) -> None:
+        # Arrange — an AI-invented muscle the group tier cannot place
+        exercise = _Exercise(primary_muscles=["mega power core"])
+
+        # Act
+        highlight = exercise_muscle_highlight(exercise)
+
+        # Assert — off-map work lights nothing and never guesses a region
+        assert highlight.primary.muscles == ()
+        assert highlight.primary.groups == ()
+
+    def test_duplicate_terms_collapse_and_keep_first_seen_order(self) -> None:
+        # Arrange — synonyms that fold to the same muscle plus a repeated group term
+        exercise = _Exercise(
+            primary_muscles=["quads", "quadriceps", "back", "lats", "back"],
+        )
+
+        # Act
+        highlight = exercise_muscle_highlight(exercise)
+
+        # Assert — each canonical target appears once, in first-seen order
+        assert highlight.primary.muscles == (Muscle.QUADRICEPS, Muscle.LATISSIMUS_DORSI)
+        assert highlight.primary.groups == (MuscleGroup.BACK,)
