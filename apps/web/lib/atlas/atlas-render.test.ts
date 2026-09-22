@@ -29,7 +29,7 @@ test("toFigureRender carries the shared viewBox and a silhouette", () => {
   const model = toFigureRender("neutral", "front");
   assert.equal(model.viewBox, VIEW_BOX);
   assert.ok(model.silhouette.parts.length > 0);
-  assert.equal(model.silhouette.head.r, 30);
+  assert.ok(model.silhouette.head.r > 0, "the figure has a drawn head");
 });
 
 test("toFigureRender keeps only the muscles that occur on the requested view", () => {

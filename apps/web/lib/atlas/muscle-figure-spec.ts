@@ -52,9 +52,9 @@ export const MUSCLE_SPECS: MuscleSpec[] = [
     // Three heads: vastus lateralis (outer), rectus femoris (central), vastus medialis (the
     // teardrop above the knee).
     shapes: front(
-      belly(80, 330, 452, [[0, 9], [0.45, 15], [0.85, 9], [1, 5]]),
-      belly(91, 332, 466, [[0, 6], [0.5, 10], [1, 6]]),
-      belly(99, 404, 472, [[0, 5], [0.55, 11], [1, 5]]),
+      belly(80, 330, 458, [[0, 10], [0.45, 17], [0.85, 10], [1, 5]]),
+      belly(92, 332, 470, [[0, 7], [0.5, 12], [1, 6]]),
+      belly(100, 406, 476, [[0, 5], [0.55, 13], [1, 5]]),
     ),
   },
   {
@@ -63,58 +63,58 @@ export const MUSCLE_SPECS: MuscleSpec[] = [
     symmetry: "bilateral",
     // Biceps femoris (lateral) + semitendinosus/-membranosus (medial).
     shapes: back(
-      belly(82, 392, 498, [[0, 8], [0.45, 12], [0.85, 8], [1, 5]]),
-      belly(95, 394, 496, [[0, 6], [0.5, 9], [1, 5]]),
+      belly(82, 392, 502, [[0, 9], [0.45, 14], [0.85, 9], [1, 5]]),
+      belly(96, 394, 500, [[0, 7], [0.5, 11], [1, 5]]),
     ),
   },
   {
     id: "Gluteus Maximus",
     group: "Legs",
     symmetry: "bilateral",
-    shapes: back(oval(90, 358, 22, 30)),
+    shapes: back(oval(90, 360, 25, 32)),
   },
   {
     id: "Gluteus Medius",
     group: "Legs",
     symmetry: "bilateral",
-    shapes: back(oval(72, 338, 10, 9)),
+    shapes: back(oval(70, 340, 11, 10)),
   },
   {
     id: "Gluteus Minimus",
     group: "Legs",
     symmetry: "bilateral",
-    shapes: back(oval(76, 346, 6, 5)),
+    shapes: back(oval(75, 348, 6, 5)),
   },
   {
     id: "Tensor Fasciae Latae",
     group: "Legs",
     symmetry: "bilateral",
-    shapes: front(oval(66, 334, 7, 11)),
+    shapes: front(oval(64, 336, 8, 12)),
   },
   {
     id: "Hip Adductors",
     group: "Legs",
     symmetry: "bilateral",
-    shapes: front(belly(103, 332, 460, [[0, 7], [0.5, 11], [1, 5]])),
+    shapes: front(belly(104, 332, 464, [[0, 8], [0.5, 12], [1, 5]])),
   },
   {
     id: "Hip Abductors",
     group: "Legs",
     symmetry: "bilateral",
-    shapes: back(belly(63, 344, 382, [[0, 5], [0.5, 8], [1, 4]])),
+    shapes: back(belly(62, 346, 388, [[0, 6], [0.5, 9], [1, 4]])),
   },
   {
     id: "Hip Flexors",
     group: "Legs",
     symmetry: "bilateral",
-    shapes: front(belly(92, 320, 356, [[0, 7], [0.5, 8], [1, 5]])),
+    shapes: front(belly(90, 322, 360, [[0, 8], [0.5, 9], [1, 5]])),
   },
   {
     id: "Sartorius",
     group: "Legs",
     symmetry: "bilateral",
     // A thin strap crossing the thigh from the outer hip to the inner knee.
-    shapes: front(belly(74, 332, 468, [[0, 3.5, 0], [0.5, 4, 14], [1, 3, 30]])),
+    shapes: front(belly(72, 332, 472, [[0, 4, 0], [0.5, 4.5, 15], [1, 3, 32]])),
   },
   {
     id: "Gastrocnemius",
@@ -122,53 +122,53 @@ export const MUSCLE_SPECS: MuscleSpec[] = [
     symmetry: "bilateral",
     // The two calf heads (medial fuller than lateral).
     shapes: back(
-      belly(85, 506, 584, [[0, 8], [0.4, 12], [0.8, 7], [1, 3]]),
-      belly(74, 508, 574, [[0, 5], [0.4, 8], [1, 3]]),
+      belly(86, 504, 588, [[0, 9], [0.4, 14], [0.8, 8], [1, 3]]),
+      belly(74, 506, 578, [[0, 6], [0.4, 9], [1, 3]]),
     ),
   },
   {
     id: "Soleus",
     group: "Legs",
     symmetry: "bilateral",
-    shapes: back(belly(83, 582, 616, [[0, 6], [0.5, 8], [1, 5]])),
+    shapes: back(belly(83, 586, 616, [[0, 7], [0.5, 9], [1, 5]])),
   },
   {
     id: "Tibialis Anterior",
     group: "Legs",
     symmetry: "bilateral",
-    shapes: front(belly(86, 486, 606, [[0, 5], [0.4, 8], [0.8, 6], [1, 3]])),
+    shapes: front(belly(84, 488, 600, [[0, 6], [0.4, 9], [0.8, 6], [1, 3]])),
   },
   {
     id: "Peroneals",
     group: "Legs",
     symmetry: "bilateral",
-    shapes: front(belly(73, 490, 598, [[0, 3], [0.4, 6], [1, 3]])),
+    shapes: front(belly(72, 492, 588, [[0, 4], [0.4, 7], [1, 3]])),
   },
   // ---- Chest ----
   {
     id: "Pectoralis Major",
     group: "Chest",
     symmetry: "bilateral",
-    shapes: front(slab([[108, 148], [108, 192], [95, 208], [78, 206], [66, 188], [63, 163], [76, 149]])),
+    shapes: front(slab([[108, 148], [108, 196], [93, 210], [74, 208], [64, 190], [61, 165], [76, 148]])),
   },
   {
     id: "Pectoralis Minor",
     group: "Chest",
     symmetry: "bilateral",
-    shapes: front(oval(86, 172, 8, 6)),
+    shapes: front(oval(84, 174, 9, 6)),
   },
   {
     id: "Serratus Anterior",
     group: "Chest",
     symmetry: "bilateral",
-    shapes: front(belly(70, 196, 226, [[0, 5], [0.5, 8], [1, 4]])),
+    shapes: front(belly(68, 196, 228, [[0, 5], [0.5, 9], [1, 4]])),
   },
   // ---- Back ----
   {
     id: "Latissimus Dorsi",
     group: "Back",
     symmetry: "bilateral",
-    shapes: back(slab([[62, 208], [96, 214], [100, 256], [86, 292], [66, 262], [59, 230]])),
+    shapes: back(slab([[62, 206], [98, 214], [104, 262], [86, 296], [64, 266], [58, 230]])),
   },
   {
     id: "Trapezius",
@@ -176,75 +176,75 @@ export const MUSCLE_SPECS: MuscleSpec[] = [
     symmetry: "bilateral",
     // The big back diamond, plus the small upper-trap slope visible from the front.
     shapes: [
-      { view: "back", points: slab([[108, 108], [86, 116], [64, 150], [70, 190], [96, 210], [108, 210]]) },
-      { view: "front", points: slab([[98, 108], [108, 110], [108, 120], [86, 148], [68, 146], [64, 128], [82, 115]]) },
+      { view: "back", points: slab([[108, 106], [84, 114], [62, 150], [70, 196], [98, 214], [108, 214]]) },
+      { view: "front", points: slab([[98, 106], [108, 108], [108, 120], [84, 148], [64, 146], [60, 126], [82, 113]]) },
     ],
   },
   {
     id: "Rhomboids",
     group: "Back",
     symmetry: "bilateral",
-    shapes: back(belly(102, 166, 208, [[0, 6], [0.5, 8], [1, 6]])),
+    shapes: back(belly(102, 164, 210, [[0, 7], [0.5, 9], [1, 7]])),
   },
   {
     id: "Erector Spinae",
     group: "Back",
     symmetry: "bilateral",
-    shapes: back(belly(103, 210, 320, [[0, 6], [0.5, 7], [1, 6]])),
+    shapes: back(belly(103, 210, 326, [[0, 7], [0.5, 8], [1, 6]])),
   },
   {
     id: "Teres Major",
     group: "Back",
     symmetry: "bilateral",
-    shapes: back(oval(77, 202, 8, 6)),
+    shapes: back(oval(76, 204, 9, 6)),
   },
   {
     id: "Teres Minor",
     group: "Back",
     symmetry: "bilateral",
-    shapes: back(oval(72, 193, 6, 4)),
+    shapes: back(oval(70, 194, 6, 4)),
   },
   {
     id: "Infraspinatus",
     group: "Back",
     symmetry: "bilateral",
-    shapes: back(oval(75, 180, 12, 10)),
+    shapes: back(oval(73, 182, 13, 10)),
   },
   {
     id: "Levator Scapulae",
     group: "Back",
     symmetry: "bilateral",
-    shapes: back(belly(101, 116, 142, [[0, 3], [0.5, 4], [1, 3]])),
+    shapes: back(belly(100, 114, 144, [[0, 3], [0.5, 4], [1, 3]])),
   },
   // ---- Shoulders ----
   {
     id: "Deltoids",
     group: "Shoulders",
     symmetry: "bilateral",
-    // A rounded cap over the shoulder that wraps down onto the upper arm — not a floating ball.
+    // A broad rounded cap filling the shoulder and wrapping onto the upper arm.
     shapes: [
-      { view: "front", points: slab([[45, 140], [53, 121], [69, 115], [85, 124], [87, 143], [80, 160], [65, 164], [51, 156]]) },
-      { view: "back", points: slab([[45, 140], [53, 121], [69, 115], [85, 124], [87, 143], [80, 160], [65, 164], [51, 156]]) },
+      { view: "front", points: slab([[35, 143], [45, 120], [64, 113], [84, 123], [88, 147], [80, 168], [61, 172], [44, 162]]) },
+      { view: "back", points: slab([[35, 143], [45, 120], [64, 113], [84, 123], [88, 147], [80, 168], [61, 172], [44, 162]]) },
     ],
   },
   {
     id: "Supraspinatus",
     group: "Shoulders",
     symmetry: "bilateral",
-    shapes: back(oval(84, 160, 11, 4)),
+    shapes: back(oval(82, 160, 12, 4)),
   },
   {
     id: "Rotator Cuff",
     group: "Shoulders",
     symmetry: "bilateral",
-    shapes: back(oval(80, 172, 7, 8)),
+    shapes: back(oval(78, 173, 7, 8)),
   },
   // ---- Arms ----
   {
     id: "Biceps Brachii",
     group: "Arms",
     symmetry: "bilateral",
-    shapes: front(belly(52, 156, 214, [[0, 5], [0.5, 11], [1, 6]])),
+    shapes: front(belly(48, 157, 216, [[0, 6], [0.5, 13], [1, 7]])),
   },
   {
     id: "Triceps Brachii",
@@ -252,41 +252,41 @@ export const MUSCLE_SPECS: MuscleSpec[] = [
     symmetry: "bilateral",
     // Long head + lateral head.
     shapes: back(
-      belly(52, 158, 240, [[0, 6], [0.5, 9], [0.85, 6], [1, 4]]),
-      belly(45, 166, 214, [[0, 4], [0.5, 6], [1, 3]]),
+      belly(48, 157, 242, [[0, 7], [0.5, 12], [0.85, 7], [1, 4]]),
+      belly(40, 166, 216, [[0, 5], [0.5, 7], [1, 3]]),
     ),
   },
   {
     id: "Brachialis",
     group: "Arms",
     symmetry: "bilateral",
-    shapes: front(belly(53, 206, 242, [[0, 6], [0.5, 7], [1, 5]])),
+    shapes: front(belly(50, 208, 244, [[0, 7], [0.5, 8], [1, 5]])),
   },
   {
     id: "Brachioradialis",
     group: "Arms",
     symmetry: "bilateral",
-    shapes: front(belly(47, 240, 288, [[0, 4, 0], [0.4, 8, -2], [1, 3, -6]])),
+    shapes: front(belly(44, 242, 292, [[0, 5, 0], [0.4, 9, -2], [1, 4, -6]])),
   },
   {
     id: "Coracobrachialis",
     group: "Arms",
     symmetry: "bilateral",
-    shapes: front(oval(61, 166, 4, 9)),
+    shapes: front(oval(58, 168, 4, 9)),
   },
   {
     id: "Anconeus",
     group: "Arms",
     symmetry: "bilateral",
-    shapes: back(oval(50, 242, 5, 5)),
+    shapes: back(oval(47, 244, 5, 5)),
   },
   {
     id: "Forearms",
     group: "Arms",
     symmetry: "bilateral",
     shapes: [
-      { view: "front", points: belly(46, 244, 346, [[0, 9], [0.35, 10], [0.7, 7], [1, 3]]) },
-      { view: "back", points: belly(46, 244, 342, [[0, 9], [0.35, 10], [0.7, 7], [1, 3]]) },
+      { view: "front", points: belly(43, 246, 350, [[0, 11], [0.35, 12], [0.7, 8], [1, 3]]) },
+      { view: "back", points: belly(43, 246, 346, [[0, 11], [0.35, 12], [0.7, 8], [1, 3]]) },
     ],
   },
   // ---- Core ----
@@ -296,34 +296,34 @@ export const MUSCLE_SPECS: MuscleSpec[] = [
     symmetry: "bilateral",
     // The six-pack: three stacked rounded packs on the left column (mirrored to six).
     shapes: front(
-      belly(101, 214, 242, [[0, 6], [0.5, 7], [1, 6]]),
-      belly(101, 246, 274, [[0, 6], [0.5, 7], [1, 6]]),
-      belly(101, 278, 308, [[0, 6], [0.5, 7], [1, 6]]),
+      belly(100, 214, 243, [[0, 7], [0.5, 8], [1, 7]]),
+      belly(100, 247, 276, [[0, 7], [0.5, 8], [1, 7]]),
+      belly(100, 280, 309, [[0, 7], [0.5, 8], [1, 7]]),
     ),
   },
   {
     id: "Obliques",
     group: "Core",
     symmetry: "bilateral",
-    shapes: front(belly(76, 214, 304, [[0, 6, 0], [0.4, 11, 2], [0.8, 9, 6], [1, 5, 9]])),
+    shapes: front(belly(74, 214, 306, [[0, 7, 0], [0.4, 12, 2], [0.8, 10, 6], [1, 6, 9]])),
   },
   {
     id: "Transverse Abdominis",
     group: "Core",
     symmetry: "center",
-    shapes: front(slab([[88, 300], [132, 300], [130, 320], [90, 320]])),
+    shapes: front(slab([[86, 300], [134, 300], [132, 322], [88, 322]])),
   },
   {
     id: "Quadratus Lumborum",
     group: "Core",
     symmetry: "bilateral",
-    shapes: back(oval(99, 300, 7, 12)),
+    shapes: back(oval(99, 302, 7, 12)),
   },
   {
     id: "Multifidus",
     group: "Core",
     symmetry: "center",
-    shapes: back(slab([[105, 210], [115, 210], [115, 320], [105, 320]])),
+    shapes: back(slab([[105, 210], [115, 210], [115, 326], [105, 326]])),
   },
 ];
 

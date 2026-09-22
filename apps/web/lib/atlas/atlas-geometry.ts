@@ -148,65 +148,103 @@ export function smoothClosedPath(points: readonly Point[]): string {
 // like the muscles, so the outline and the muscles taper together. The back view reuses the same
 // silhouette — the difference between front and back is the muscles, not the outline.
 const SILHOUETTE: Point[][] = [
-  // Neck
+  // Neck — short and thick, a trapezius-fed column into broad shoulders.
   [
-    [99, 74],
-    [121, 74],
-    [122, 104],
-    [98, 104],
+    [100, 70],
+    [120, 70],
+    [122, 102],
+    [98, 102],
   ],
-  // Torso: shoulders down to the hips, gently waisted
+  // Torso — a muscular V-taper: broad shoulder girdle, drawn-in waist, a slight oblique flare to
+  // the hips. The neck notch sits between the two shoulder tops.
   [
-    [61, 118],
-    [159, 118],
-    [156, 176],
-    [150, 250],
-    [146, 322],
-    [74, 322],
-    [70, 250],
-    [64, 176],
+    [58, 120],
+    [92, 116],
+    [110, 122],
+    [128, 116],
+    [162, 120],
+    [156, 166],
+    [150, 206],
+    [140, 248],
+    [134, 288],
+    [140, 314],
+    [148, 328],
+    [72, 328],
+    [80, 314],
+    [86, 288],
+    [80, 248],
+    [70, 206],
+    [64, 166],
   ],
-  // Left arm
+  // Left arm — thick, hanging just clear of the torso: deltoid shoulder into a full upper arm,
+  // tapering through the elbow to the forearm and a small hand.
   [
-    [44, 122],
-    [67, 128],
-    [60, 250],
-    [52, 350],
-    [36, 348],
-    [40, 250],
+    [38, 140],
+    [64, 143],
+    [62, 200],
+    [57, 250],
+    [50, 322],
+    [46, 352],
+    [33, 352],
+    [31, 320],
+    [33, 250],
+    [33, 196],
+    [34, 162],
   ],
   // Right arm (mirror of the left)
   [
-    [176, 122],
-    [153, 128],
-    [160, 250],
-    [168, 350],
-    [184, 348],
-    [180, 250],
+    [182, 140],
+    [156, 143],
+    [158, 200],
+    [163, 250],
+    [170, 322],
+    [174, 352],
+    [187, 352],
+    [189, 320],
+    [187, 250],
+    [187, 196],
+    [186, 162],
   ],
-  // Left leg
+  // Left leg — a full thigh that meets its twin at the top, narrowing at the knee, a diamond calf,
+  // a thin ankle and a small foot.
   [
-    [74, 322],
-    [107, 322],
-    [104, 470],
-    [98, 616],
-    [80, 616],
-    [78, 470],
+    [72, 328],
+    [108, 328],
+    [106, 396],
+    [99, 452],
+    [98, 500],
+    [93, 556],
+    [86, 596],
+    [88, 616],
+    [74, 616],
+    [74, 588],
+    [70, 540],
+    [72, 492],
+    [73, 446],
+    [69, 384],
   ],
   // Right leg (mirror of the left)
   [
-    [146, 322],
-    [113, 322],
-    [116, 470],
-    [122, 616],
-    [140, 616],
-    [142, 470],
+    [148, 328],
+    [112, 328],
+    [114, 396],
+    [121, 452],
+    [122, 500],
+    [127, 556],
+    [134, 596],
+    [132, 616],
+    [146, 616],
+    [146, 588],
+    [150, 540],
+    [148, 492],
+    [147, 446],
+    [151, 384],
   ],
 ];
 
 // The head, drawn as a circle so the figure reads as a body at a glance; warped in x with the
-// shoulders band so it sits proportionally on each figure.
-const HEAD = { cx: 110, cy: 46, r: 30 } as const;
+// shoulders band so it sits proportionally on each figure. Kept small so the broad shoulders read.
+const HEAD = { cx: 110, cy: 44, r: 25 } as const;
 
 // The head (a warped circle) plus the body-part blob `d` strings for one figure — the
 // silhouette as structured data, so a React consumer can render it as real nodes and the markup
