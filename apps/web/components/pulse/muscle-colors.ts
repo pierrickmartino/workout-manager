@@ -36,3 +36,9 @@ export const GROUP_VAR: Record<string, string> = {
 
 // The fallback fill var, mirroring GROUP_COLOR_FALLBACK for the CSS-var surfaces.
 export const GROUP_VAR_FALLBACK = "var(--color-cyan)";
+
+// The CSS-var fill for a group, with the fallback applied — the one lookup the atlas surfaces
+// share so a group's hue can never drift between the body map, its list, and the drawer.
+export function groupColorVar(group: string): string {
+  return GROUP_VAR[group] ?? GROUP_VAR_FALLBACK;
+}
