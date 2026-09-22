@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 640" role="img" aria-label="Neutral figure, front view — muscle atlas">
+  <style>
+    svg {
+      --atlas-figure-fill: #e2e8f0;
+      --atlas-figure-stroke: #cbd5e1;
+      --atlas-muscle-fill: #cbd5e1;
+      --atlas-muscle-stroke: #94a3b8;
+    }
+    @media (prefers-color-scheme: dark) {
+      svg {
+        --atlas-figure-fill: #1e293b;
+        --atlas-figure-stroke: #334155;
+        --atlas-muscle-fill: #334155;
+        --atlas-muscle-stroke: #475569;
+      }
+    }
+    .atlas-figure { fill: var(--atlas-figure-fill); stroke: var(--atlas-figure-stroke); stroke-width: 1; }
+    .atlas-muscle { fill: var(--atlas-muscle-fill); stroke: var(--atlas-muscle-stroke); stroke-width: 0.75; }
+  </style>
+  <g class="atlas-figure-layer" aria-hidden="true">
+    <circle class="atlas-figure" cx="110" cy="46" r="30" />
+    <path class="atlas-figure" d="M 99 74 C 102.83 69 117.17 69 121 74 C 124.83 79 125.83 99 122 104 C 118.17 109 101.83 109 98 104 C 94.17 99 95.17 79 99 74 Z" />
+    <path class="atlas-figure" d="M 61 118 C 76.83 108.33 143.17 108.33 159 118 C 174.83 127.67 157.5 154 156 176 C 154.5 198 151.67 225.67 150 250 C 148.33 274.33 158.67 310 146 322 C 133.33 334 86.67 334 74 322 C 61.33 310 71.67 274.33 70 250 C 68.33 225.67 65.5 198 64 176 C 62.5 154 45.17 127.67 61 118 Z" />
+    <path class="atlas-figure" d="M 44 122 C 48.5 101.67 64.33 106.67 67 128 C 69.67 149.33 62.5 213 60 250 C 57.5 287 56 333.67 52 350 C 48 366.33 38 364.67 36 348 C 34 331.33 38.67 287.67 40 250 C 41.33 212.33 39.5 142.33 44 122 Z" />
+    <path class="atlas-figure" d="M 176 122 C 171.5 101.67 155.67 106.67 153 128 C 150.33 149.33 157.5 213 160 250 C 162.5 287 164 333.67 168 350 C 172 366.33 182 364.67 184 348 C 186 331.33 181.33 287.67 180 250 C 178.67 212.33 180.5 142.33 176 122 Z" />
+    <path class="atlas-figure" d="M 74 322 C 78.83 297.33 102 297.33 107 322 C 112 346.67 105.5 421 104 470 C 102.5 519 102 591.67 98 616 C 94 640.33 83.33 640.33 80 616 C 76.67 591.67 79 519 78 470 C 77 421 69.17 346.67 74 322 Z" />
+    <path class="atlas-figure" d="M 146 322 C 141.17 297.33 118 297.33 113 322 C 108 346.67 114.5 421 116 470 C 117.5 519 118 591.67 122 616 C 126 640.33 136.67 640.33 140 616 C 143.33 591.67 141 519 142 470 C 143 421 150.83 346.67 146 322 Z" />
+  </g>
+  <g class="atlas-muscle-layer">
+    <path class="atlas-muscle" data-muscle-id="Quadriceps" data-side="left" d="M 74 360 C 80 352 99.33 343.67 104 362 C 108.67 380.33 104.33 448.33 102 470 C 99.67 491.67 94.67 492 90 492 C 85.33 492 77.67 483.67 74 470 C 70.33 456.33 68 428.33 68 410 C 68 391.67 68 368 74 360 Z" />
+    <path class="atlas-muscle" data-muscle-id="Quadriceps" data-side="right" d="M 146 360 C 140 352 120.67 343.67 116 362 C 111.33 380.33 115.67 448.33 118 470 C 120.33 491.67 125.33 492 130 492 C 134.67 492 142.33 483.67 146 470 C 149.67 456.33 152 428.33 152 410 C 152 391.67 152 368 146 360 Z" />
+    <path class="atlas-muscle" data-muscle-id="Tensor Fasciae Latae" data-side="left" d="M 64 330 C 66.33 326 75.67 329 78 334 C 80.33 339 80.33 356 78 360 C 75.67 364 66.33 363 64 358 C 61.67 353 61.67 334 64 330 Z" />
+    <path class="atlas-muscle" data-muscle-id="Tensor Fasciae Latae" data-side="right" d="M 156 330 C 153.67 326 144.33 329 142 334 C 139.67 339 139.67 356 142 360 C 144.33 364 153.67 363 156 358 C 158.33 353 158.33 334 156 330 Z" />
+    <path class="atlas-muscle" data-muscle-id="Hip Adductors" data-side="left" d="M 96 362 C 98.33 354 106 346.33 108 364 C 110 381.67 109.67 450.33 108 468 C 106.33 485.67 100.33 479.33 98 470 C 95.67 460.67 94.33 430 94 412 C 93.67 394 93.67 370 96 362 Z" />
+    <path class="atlas-muscle" data-muscle-id="Hip Adductors" data-side="right" d="M 124 362 C 121.67 354 114 346.33 112 364 C 110 381.67 110.33 450.33 112 468 C 113.67 485.67 119.67 479.33 122 470 C 124.33 460.67 125.67 430 126 412 C 126.33 394 126.33 370 124 362 Z" />
+    <path class="atlas-muscle" data-muscle-id="Hip Flexors" data-side="left" d="M 82 322 C 85.33 317.67 101 320.33 104 326 C 107 331.67 103.33 351.67 100 356 C 96.67 360.33 87 357.67 84 352 C 81 346.33 78.67 326.33 82 322 Z" />
+    <path class="atlas-muscle" data-muscle-id="Hip Flexors" data-side="right" d="M 138 322 C 134.67 317.67 119 320.33 116 326 C 113 331.67 116.67 351.67 120 356 C 123.33 360.33 133 357.67 136 352 C 139 346.33 141.33 326.33 138 322 Z" />
+    <path class="atlas-muscle" data-muscle-id="Sartorius" data-side="left" d="M 72 364 C 73.33 360.67 76.67 347 82 364 C 87.33 381 101.67 448.33 104 466 C 106.33 483.67 101 483.67 96 470 C 91 456.33 78 401.67 74 384 C 70 366.33 70.67 367.33 72 364 Z" />
+    <path class="atlas-muscle" data-muscle-id="Sartorius" data-side="right" d="M 148 364 C 146.67 360.67 143.33 347 138 364 C 132.67 381 118.33 448.33 116 466 C 113.67 483.67 119 483.67 124 470 C 129 456.33 142 401.67 146 384 C 150 366.33 149.33 367.33 148 364 Z" />
+    <path class="atlas-muscle" data-muscle-id="Tibialis Anterior" data-side="left" d="M 80 526 C 82.67 520.67 90.33 515 92 528 C 93.67 541 92 591 90 604 C 88 617 82.33 613.33 80 606 C 77.67 598.67 76 573.33 76 560 C 76 546.67 77.33 531.33 80 526 Z" />
+    <path class="atlas-muscle" data-muscle-id="Tibialis Anterior" data-side="right" d="M 140 526 C 137.33 520.67 129.67 515 128 528 C 126.33 541 128 591 130 604 C 132 617 137.67 613.33 140 606 C 142.33 598.67 144 573.33 144 560 C 144 546.67 142.67 531.33 140 526 Z" />
+    <path class="atlas-muscle" data-muscle-id="Peroneals" data-side="left" d="M 70 530 C 72.33 525 78.33 518.33 80 530 C 81.67 541.67 81.67 589 80 600 C 78.33 611 72.33 602.67 70 596 C 67.67 589.33 66 571 66 560 C 66 549 67.67 535 70 530 Z" />
+    <path class="atlas-muscle" data-muscle-id="Peroneals" data-side="right" d="M 150 530 C 147.67 525 141.67 518.33 140 530 C 138.33 541.67 138.33 589 140 600 C 141.67 611 147.67 602.67 150 596 C 152.33 589.33 154 571 154 560 C 154 549 152.33 535 150 530 Z" />
+    <path class="atlas-muscle" data-muscle-id="Pectoralis Major" data-side="left" d="M 73 152 C 79 150 100.5 149 106 154 C 111.5 159 108.33 175 106 182 C 103.67 189 97 194.67 92 196 C 87 197.33 79.67 195 76 190 C 72.33 185 70.5 172.33 70 166 C 69.5 159.67 67 154 73 152 Z" />
+    <path class="atlas-muscle" data-muscle-id="Pectoralis Major" data-side="right" d="M 147 152 C 141 150 119.5 149 114 154 C 108.5 159 111.67 175 114 182 C 116.33 189 123 194.67 128 196 C 133 197.33 140.33 195 144 190 C 147.67 185 149.5 172.33 150 166 C 150.5 159.67 153 154 147 152 Z" />
+    <path class="atlas-muscle" data-muscle-id="Pectoralis Minor" data-side="left" d="M 80 158 C 83 155.67 95.33 157 98 160 C 100.67 163 99 173.67 96 176 C 93 178.33 82.67 177 80 174 C 77.33 171 77 160.33 80 158 Z" />
+    <path class="atlas-muscle" data-muscle-id="Pectoralis Minor" data-side="right" d="M 140 158 C 137 155.67 124.67 157 122 160 C 119.33 163 121 173.67 124 176 C 127 178.33 137.33 177 140 174 C 142.67 171 143 160.33 140 158 Z" />
+    <path class="atlas-muscle" data-muscle-id="Serratus Anterior" data-side="left" d="M 66 192 C 69 190.67 77.33 192 80 196 C 82.67 200 84 212.67 82 216 C 80 219.33 71.33 218 68 216 C 64.67 214 62.33 208 62 204 C 61.67 200 63 193.33 66 192 Z" />
+    <path class="atlas-muscle" data-muscle-id="Serratus Anterior" data-side="right" d="M 154 192 C 151 190.67 142.67 192 140 196 C 137.33 200 136 212.67 138 216 C 140 219.33 148.67 218 152 216 C 155.33 214 157.67 208 158 204 C 158.33 200 157 193.33 154 192 Z" />
+    <path class="atlas-muscle" data-muscle-id="Deltoids" data-side="left" d="M 50 128 C 52.33 123.67 62.33 120 68 120 C 73.67 120 81.67 123.67 84 128 C 86.33 132.33 84.67 142 82 146 C 79.33 150 72.67 152 68 152 C 63.33 152 57 150 54 146 C 51 142 47.67 132.33 50 128 Z" />
+    <path class="atlas-muscle" data-muscle-id="Deltoids" data-side="right" d="M 170 128 C 167.67 123.67 157.67 120 152 120 C 146.33 120 138.33 123.67 136 128 C 133.67 132.33 135.33 142 138 146 C 140.67 150 147.33 152 152 152 C 156.67 152 163 150 166 146 C 169 142 172.33 132.33 170 128 Z" />
+    <path class="atlas-muscle" data-muscle-id="Biceps Brachii" data-side="left" d="M 46 158 C 49 153.67 59.33 151 62 160 C 64.67 169 64 203 62 212 C 60 221 53 218.33 50 214 C 47 209.67 44.67 195.33 44 186 C 43.33 176.67 43 162.33 46 158 Z" />
+    <path class="atlas-muscle" data-muscle-id="Biceps Brachii" data-side="right" d="M 174 158 C 171 153.67 160.67 151 158 160 C 155.33 169 156 203 158 212 C 160 221 167 218.33 170 214 C 173 209.67 175.33 195.33 176 186 C 176.67 176.67 177 162.33 174 158 Z" />
+    <path class="atlas-muscle" data-muscle-id="Brachialis" data-side="left" d="M 46 214 C 48.33 210 58 209.67 60 214 C 62 218.33 60.33 236 58 240 C 55.67 244 48 242.33 46 238 C 44 233.67 43.67 218 46 214 Z" />
+    <path class="atlas-muscle" data-muscle-id="Brachialis" data-side="right" d="M 174 214 C 171.67 210 162 209.67 160 214 C 158 218.33 159.67 236 162 240 C 164.33 244 172 242.33 174 238 C 176 233.67 176.33 218 174 214 Z" />
+    <path class="atlas-muscle" data-muscle-id="Brachioradialis" data-side="left" d="M 40 242 C 42.67 237.67 52 240 54 246 C 56 252 54.67 273.67 52 278 C 49.33 282.33 40 278 38 272 C 36 266 37.33 246.33 40 242 Z" />
+    <path class="atlas-muscle" data-muscle-id="Brachioradialis" data-side="right" d="M 180 242 C 177.33 237.67 168 240 166 246 C 164 252 165.33 273.67 168 278 C 170.67 282.33 180 278 182 272 C 184 266 182.67 246.33 180 242 Z" />
+    <path class="atlas-muscle" data-muscle-id="Coracobrachialis" data-side="left" d="M 60 152 C 61.67 149.33 68.67 150.67 70 154 C 71.33 157.33 69.67 169.33 68 172 C 66.33 174.67 61.33 173.33 60 170 C 58.67 166.67 58.33 154.67 60 152 Z" />
+    <path class="atlas-muscle" data-muscle-id="Coracobrachialis" data-side="right" d="M 160 152 C 158.33 149.33 151.33 150.67 150 154 C 148.67 157.33 150.33 169.33 152 172 C 153.67 174.67 158.67 173.33 160 170 C 161.33 166.67 161.67 154.67 160 152 Z" />
+    <path class="atlas-muscle" data-muscle-id="Forearms" data-side="left" d="M 38 278 C 41.33 273.67 51.67 269 54 280 C 56.33 291 54.33 333 52 344 C 49.67 355 43 352.33 40 346 C 37 339.67 34.33 317.33 34 306 C 33.67 294.67 34.67 282.33 38 278 Z" />
+    <path class="atlas-muscle" data-muscle-id="Forearms" data-side="right" d="M 182 278 C 178.67 273.67 168.33 269 166 280 C 163.67 291 165.67 333 168 344 C 170.33 355 177 352.33 180 346 C 183 339.67 185.67 317.33 186 306 C 186.33 294.67 185.33 282.33 182 278 Z" />
+    <path class="atlas-muscle" data-muscle-id="Rectus Abdominis" data-side="left" d="M 93 216 C 95.5 200 105.5 200.33 108 216 C 110.5 231.67 110.5 294 108 310 C 105.5 326 95.5 327.67 93 312 C 90.5 296.33 90.5 232 93 216 Z" />
+    <path class="atlas-muscle" data-muscle-id="Rectus Abdominis" data-side="right" d="M 127 216 C 124.5 200 114.5 200.33 112 216 C 109.5 231.67 109.5 294 112 310 C 114.5 326 124.5 327.67 127 312 C 129.5 296.33 129.5 232 127 216 Z" />
+    <path class="atlas-muscle" data-muscle-id="Obliques" data-side="left" d="M 74 224 C 77.67 218 89.33 211.33 92 224 C 94.67 236.67 93 288 90 300 C 87 312 77.33 302.67 74 296 C 70.67 289.33 70 272 70 260 C 70 248 70.33 230 74 224 Z" />
+    <path class="atlas-muscle" data-muscle-id="Obliques" data-side="right" d="M 146 224 C 142.33 218 130.67 211.33 128 224 C 125.33 236.67 127 288 130 300 C 133 312 142.67 302.67 146 296 C 149.33 289.33 150 272 150 260 C 150 248 149.67 230 146 224 Z" />
+    <path class="atlas-muscle" data-muscle-id="Transverse Abdominis" data-side="center" d="M 86 300 C 93.67 296.33 126.33 296.33 134 300 C 141.67 303.67 139.67 318.33 132 322 C 124.33 325.67 95.67 325.67 88 322 C 80.33 318.33 78.33 303.67 86 300 Z" />
+  </g>
+</svg>
