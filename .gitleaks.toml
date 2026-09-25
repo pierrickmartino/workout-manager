@@ -1,0 +1,11 @@
+title = "Workout Manager secret scanning"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "codex-auth-token"
+description = "Codex authentication token stored in JSON"
+regex = '''(?i)"(?:access_token|refresh_token|id_token)"\s*:\s*"([^"\r\n]{16,})"'''
+secretGroup = 1
+keywords = ["access_token", "refresh_token", "id_token"]

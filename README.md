@@ -53,6 +53,16 @@ Open the app at <http://localhost:3000>. The API health endpoint is <http://loca
 
 The test suites use local fakes and SQLite; they do not require live Clerk, Postgres, Redis or an AI provider.
 
+Install [Gitleaks](https://github.com/gitleaks/gitleaks), then enable the
+repository's blocking pre-push hook once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+CI also scans every push and pull request. Local Codex runtime state belongs in
+the ignored `/.codex/` directory and must never be tracked.
+
 ```bash
 # API
 cd apps/api

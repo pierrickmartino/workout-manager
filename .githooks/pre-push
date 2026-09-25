@@ -1,0 +1,39 @@
+#!/bin/sh
+set -eu
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "pre-push: gitleaks is required; install it before pushing" >&2
+  exit 1
+fi
+
+repo_root=$(git rev-parse --show-toplevel)
+remote_name=$1
+zero_oid=0000000000000000000000000000000000000000
+
+while read -r local_ref local_oid _remote_ref remote_oid; do
+  if [ "$local_oid" = "$zero_oid" ]; then
+    continue
+  fi
+
+  if [ "$remote_oid" != "$zero_oid" ]; then
+    scan_range="$remote_oid..$local_oid"
+    introduced_commits=$(git rev-list "$scan_range")
+  else
+    scan_range="$local_oid --not --remotes=$remote_name"
+    introduced_commits=$(git rev-list "$local_oid" --not --remotes="$remote_name")
+  fi
+
+  for commit_oid in $introduced_commits; do
+    if git ls-tree -r --name-only "$commit_oid" -- .codex | grep -q .; then
+      echo "pre-push: $local_ref introduces forbidden .codex runtime state" >&2
+      exit 1
+    fi
+  done
+
+  echo "pre-push: scanning $local_ref for secrets" >&2
+  gitleaks git "$repo_root" \
+    --config "$repo_root/.gitleaks.toml" \
+    --log-opts "$scan_range" \
+    --no-banner \
+    --redact
+done
