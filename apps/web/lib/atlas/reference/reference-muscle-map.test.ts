@@ -3,7 +3,12 @@ import assert from "node:assert/strict";
 
 import { CANONICAL_MUSCLE_IDS } from "../muscle-figure-spec.ts";
 import { REFERENCE_PATHS, REFERENCE_VIEWBOX } from "./reference-data.ts";
-import { REFERENCE_MUSCLE_MAP, canonicalMuscleFor } from "./reference-muscle-map.ts";
+import {
+  REFERENCE_MUSCLE_MAP,
+  REFERENCE_REGION_MUSCLES,
+  canonicalMuscleFor,
+  musclesShownIn,
+} from "./reference-muscle-map.ts";
 
 const CANONICAL = new Set(CANONICAL_MUSCLE_IDS);
 const GENDERS = ["male", "female"] as const;
@@ -35,6 +40,33 @@ test("every mapped target is a canonical Muscle id", () => {
 test("head resolves to no addressable muscle", () => {
   assert.equal(canonicalMuscleFor("head"), null);
   assert.equal(canonicalMuscleFor("quads"), "Quadriceps");
+});
+
+// The exercise figure lights a region when any muscle drawn there is worked. If a canonical Muscle
+// appeared in no region, an exercise whose prime mover it is would render a completely dark
+// figure — so every one of the 40 must be drawn somewhere, on its own shape or its nearest
+// neighbour.
+test("every canonical Muscle is drawn in at least one reference region", () => {
+  const shown = new Set(Object.values(REFERENCE_REGION_MUSCLES).flat());
+  for (const muscle of CANONICAL_MUSCLE_IDS) {
+    assert.ok(shown.has(muscle), `"${muscle}" is drawn in no reference region`);
+  }
+});
+
+test("every muscle in a region roster is a canonical Muscle id", () => {
+  for (const [region, muscles] of Object.entries(REFERENCE_REGION_MUSCLES)) {
+    for (const muscle of muscles) {
+      assert.ok(CANONICAL.has(muscle), `region "${region}" lists unknown muscle "${muscle}"`);
+    }
+  }
+});
+
+test("a region's own muscle is the one the atlas resolves a tap to", () => {
+  assert.deepEqual(musclesShownIn("calves")[0], "Gastrocnemius");
+  assert.equal(canonicalMuscleFor("calves"), "Gastrocnemius");
+  // Deeper muscles ride along on their nearest neighbour.
+  assert.ok(musclesShownIn("calves").includes("Soleus"));
+  assert.ok(musclesShownIn("traps").includes("Rhomboids"));
 });
 
 // The source artwork packs BOTH figures into each nested <svg> and relies on that svg's viewBox
