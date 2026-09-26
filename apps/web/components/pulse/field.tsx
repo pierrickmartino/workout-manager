@@ -8,28 +8,42 @@ interface FieldProps {
   htmlFor?: string;
   // Optional helper text under the control.
   hint?: React.ReactNode;
+  error?: string;
   className?: string;
   children: React.ReactNode;
 }
 
 // A labeled form field: mono micro-label above the control, with optional hint.
-// Wraps in a <label> when no htmlFor is given so the whole block stays clickable.
+// The first child is the control; subsequent children may be auxiliary buttons.
 export function Field({
   label,
   htmlFor,
   hint,
+  error,
   className,
   children,
 }: FieldProps): React.JSX.Element {
-  const Wrapper = htmlFor ? "div" : "label";
+  const generatedId = React.useId();
+  const items = React.Children.toArray(children);
+  const control = items[0] as React.ReactElement<React.HTMLAttributes<HTMLElement>>;
+  const id = htmlFor ?? control.props.id ?? generatedId;
+  const hintId = hint ? `${id}-hint` : undefined;
+  const errorId = error ? `${id}-error` : undefined;
+  const describedBy = [control.props["aria-describedby"], hintId, errorId].filter(Boolean).join(" ");
   return (
-    <Wrapper className={cn("flex flex-col gap-2", className)}>
-      <Label htmlFor={htmlFor}>{label}</Label>
-      {children}
+    <div className={cn("flex flex-col gap-2", className)}>
+      <Label htmlFor={id}>{label}</Label>
+      {React.cloneElement(control, {
+        id,
+        "aria-describedby": describedBy || undefined,
+        "aria-invalid": error ? true : control.props["aria-invalid"],
+      })}
+      {items.slice(1)}
       {hint ? (
-        <span className="font-mono text-[11px] text-text-muted">{hint}</span>
+        <span id={hintId} className="font-mono text-[11px] text-text-muted">{hint}</span>
       ) : null}
-    </Wrapper>
+      {error ? <span id={errorId} className="font-mono text-[11px] text-magenta">{error}</span> : null}
+    </div>
   );
 }
 
@@ -43,9 +57,8 @@ interface FieldLabelProps {
 // fuller `Field` block. Shared so the two prescription editors read identically.
 export function FieldLabel({ label, children }: FieldLabelProps): React.JSX.Element {
   return (
-    <label className="flex flex-col gap-1.5">
-      <span className="label-mono text-[9px] text-text-muted">{label}</span>
+    <Field className="gap-1.5" label={<span className="text-[9px] text-text-muted">{label}</span>}>
       {children}
-    </label>
+    </Field>
   );
 }

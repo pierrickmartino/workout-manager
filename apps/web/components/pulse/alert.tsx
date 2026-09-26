@@ -26,6 +26,7 @@ export function Alert({
   const { wrap, icon: Icon } = TONE[tone];
   return (
     <div
+      role={tone === "error" ? "alert" : "status"}
       className={cn(
         "flex items-start gap-2.5 rounded-sm border px-3.5 py-3 text-sm",
         wrap,

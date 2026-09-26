@@ -10,9 +10,11 @@ import {
   type ProfileInput,
 } from "@/lib/profile";
 import { sanitizeInternalPath } from "@/lib/back-target";
+import { validateProfileForm, type ProfileFieldErrors } from "@/lib/profile-validation";
 
 export interface ProfileFormState {
   error: string | null;
+  fieldErrors?: ProfileFieldErrors;
 }
 
 const VALID_SENSITIVE = new Set<string>(
@@ -99,7 +101,16 @@ export async function submitProfile(
   _prevState: ProfileFormState,
   form: FormData,
 ): Promise<ProfileFormState> {
-  const result = await saveProfile(toProfileInput(form));
+  const fieldErrors = validateProfileForm(form);
+  if (Object.keys(fieldErrors).length > 0) {
+    return { error: "Your profile could not be saved. Correct the highlighted fields.", fieldErrors };
+  }
+  let result;
+  try {
+    result = await saveProfile(toProfileInput(form));
+  } catch {
+    return { error: "Could not save your profile. Please try again." };
+  }
   if (!result.success) {
     return { error: result.error ?? "Could not save your profile." };
   }

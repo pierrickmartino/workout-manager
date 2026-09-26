@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useId, useRef } from "react";
+import { unstable_rethrow } from "next/navigation";
 
 import { submitProfile, type ProfileFormState } from "@/app/profile/actions";
 import {
@@ -36,17 +37,54 @@ export function ProfileForm({
   submitLabel,
   returnTo,
 }: ProfileFormProps) {
+  const submittedValues = useRef<FormData | null>(null);
   const [state, action, pending] = useActionState<ProfileFormState, FormData>(
-    submitProfile,
+    async (previous, form) => {
+      submittedValues.current = form;
+      try {
+        return await submitProfile(previous, form);
+      } catch (error) {
+        unstable_rethrow(error);
+        return { error: "Could not save your profile. Please try again." };
+      }
+    },
     { error: null },
   );
+  const formRef = useRef<HTMLFormElement>(null);
+  const formId = useId();
+  const summaryId = `${formId}-errors`;
+  useEffect(() => {
+    if (pending || !state.error) return;
+    const form = formRef.current;
+    // React resets uncontrolled action forms after resolution, including error
+    // results. Restore the attempted values so users can correct their input.
+    if (submittedValues.current) {
+      form?.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+        'input:not([type="hidden"]), select, textarea',
+      ).forEach((control) => {
+        const values = submittedValues.current!.getAll(control.name);
+        if (control instanceof HTMLInputElement && control.type === "checkbox") {
+          control.checked = values.includes(control.value);
+        } else {
+          control.value = typeof values[0] === "string" ? values[0] : "";
+        }
+      });
+    }
+    const target = form?.querySelector<HTMLElement>('[aria-invalid="true"]')
+      ?? form?.querySelector<HTMLElement>('[data-error-summary]');
+    target?.focus();
+  }, [state, pending]);
 
   return (
-    <form action={action} className="flex flex-col gap-5">
+    <form ref={formRef} action={action} noValidate className="flex flex-col gap-5">
       {returnTo ? (
         <input type="hidden" name="returnTo" value={returnTo} />
       ) : null}
-      {state.error ? <Alert tone="error">{state.error}</Alert> : null}
+      {state.error ? (
+        <Alert id={summaryId} tone="error" tabIndex={-1} data-error-summary>
+          {state.error}
+        </Alert>
+      ) : null}
 
       <Field label="Display name">
         <Input name="display_name" defaultValue={profile?.display_name ?? ""} />
@@ -64,7 +102,7 @@ export function ProfileForm({
       </Field>
 
       <div className="grid grid-cols-3 gap-3">
-        <Field label="Age">
+        <Field label="Age" error={state.fieldErrors?.age}>
           <Input
             name="age"
             type="number"
@@ -73,7 +111,7 @@ export function ProfileForm({
             defaultValue={profile?.age ?? ""}
           />
         </Field>
-        <Field label="Height (cm)">
+        <Field label="Height (cm)" error={state.fieldErrors?.height_cm}>
           <Input
             name="height_cm"
             type="number"
@@ -81,7 +119,7 @@ export function ProfileForm({
             defaultValue={profile?.height_cm ?? ""}
           />
         </Field>
-        <Field label="Weight (kg)">
+        <Field label="Weight (kg)" error={state.fieldErrors?.weight_kg}>
           <Input
             name="weight_kg"
             type="number"
@@ -107,7 +145,11 @@ export function ProfileForm({
         />
       </Field>
 
-      <Field label="Default rest timer (seconds)">
+      <Field
+        label="Default rest timer (seconds)"
+        error={state.fieldErrors?.default_rest_seconds}
+        hint="Leave blank to use each Exercise's prescribed rest."
+      >
         <Input
           name="default_rest_seconds"
           type="number"
@@ -123,10 +165,11 @@ export function ProfileForm({
         </legend>
         <div className="grid grid-cols-2 gap-3">
           {TRAINING_TYPES.map((trainingType) => (
-            <label key={trainingType} className="flex flex-col gap-1.5">
-              <span className="font-sans text-[13px] capitalize text-text-secondary">
-                {trainingType}
-              </span>
+            <Field
+              key={trainingType}
+              label={<span className="capitalize">{trainingType}</span>}
+              error={state.fieldErrors?.[`level_${trainingType}`]}
+            >
               <Select
                 name={`level_${trainingType}`}
                 defaultValue={profile?.fitness_levels?.[trainingType] ?? ""}
@@ -138,7 +181,7 @@ export function ProfileForm({
                   </option>
                 ))}
               </Select>
-            </label>
+            </Field>
           ))}
         </div>
       </fieldset>
@@ -159,10 +202,12 @@ export function ProfileForm({
         <div className="flex flex-col gap-2">
           {SENSITIVE_CONSTRAINT_TYPES.map((constraint) => (
             <label
+              htmlFor={`${formId}-constraint-${constraint.value}`}
               key={constraint.value}
               className="flex items-center gap-3 rounded-sm border border-border bg-surface px-3.5 py-3 text-sm text-text-primary transition-colors hover:border-border-lite has-[:checked]:border-magenta/50 has-[:checked]:bg-magenta-dim"
             >
               <input
+                id={`${formId}-constraint-${constraint.value}`}
                 type="checkbox"
                 name="sensitive_constraints"
                 value={constraint.value}
