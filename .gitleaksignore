@@ -1,0 +1,5 @@
+# Non-secret UUID idempotency keys in recovered author draft retry tests.
+# Pin exceptions to the original commit, file, rule, and line. New findings
+# (including credentials elsewhere in this test file) remain blocking.
+b3d6566dc3ed358706cf8504f7beeb6fe98f9bdc:apps/api/tests/test_authored_session_endpoint.py:generic-api-key:222
+b3d6566dc3ed358706cf8504f7beeb6fe98f9bdc:apps/api/tests/test_authored_session_endpoint.py:generic-api-key:246

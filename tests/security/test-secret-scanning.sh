@@ -16,9 +16,10 @@ git -C "$source_repo" config core.hooksPath .githooks
 git -C "$source_repo" remote add origin "$remote_repo"
 cp -R "$repo_root/.githooks" "$source_repo/.githooks"
 cp "$repo_root/.gitleaks.toml" "$source_repo/.gitleaks.toml"
+cp "$repo_root/.gitleaksignore" "$source_repo/.gitleaksignore"
 
 printf 'clean\n' >"$source_repo/README.md"
-git -C "$source_repo" add README.md .githooks .gitleaks.toml
+git -C "$source_repo" add README.md .githooks .gitleaks.toml .gitleaksignore
 git -C "$source_repo" commit --quiet -m baseline
 git -C "$source_repo" push --quiet --set-upstream origin main
 baseline_oid=$(git --git-dir="$remote_repo" rev-parse refs/heads/main)
