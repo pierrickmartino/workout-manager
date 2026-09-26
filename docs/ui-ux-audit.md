@@ -98,7 +98,7 @@ Method: static source inspection using the freshly retrieved [Web Interface Guid
 ## Follow-up validation
 
 1. Fix shared labels, announcements, modal focus, catalog response ordering, and draft protection first. Add focused regression checks for those behaviors.
-2. Test keyboard-only and screen-reader journeys through sign-in, catalog drawers, profile validation, workout creation, and save/delete feedback.
+2. Test keyboard-only and screen-reader journeys through sign-in, catalog drawers, profile validation, workout creation, and save/delete feedback. Track the agreed scope and runtime evidence in [accessibility journeys](development/accessibility-journeys.md); runtime validation remains outstanding.
 3. Inspect 320px-wide layouts, 200% zoom, long names, large datasets, and both device orientations. Measure contrast across all skins/modes; muted small text needs particular attention, but contrast failure is not asserted here.
 4. Test reduced motion, offline/slow responses, request reordering, refresh/back navigation, and installed-app safe areas.
 5. Validate chart keyboard/screen-reader access and equivalent access to plotted values. Library behavior was not assumed to provide or omit this automatically.
