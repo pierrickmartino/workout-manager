@@ -31,6 +31,44 @@ function halves(svg: string): { front: { viewBox: string; paths: RefPath[] }; ba
   return { front: parseHalf(frontChunk), back: parseHalf(backChunk) };
 }
 
+// The x-extent of a path. The reference uses only absolute M/L/C/V/Z, so x values are every other
+// number of an M/L/C parameter run; V carries a lone y and contributes no x. Parsed by command
+// rather than by naive alternation, which V would otherwise throw off.
+function xExtent(d: string): { min: number; max: number } {
+  const tokens = d.match(/[A-Za-z]|-?\d*\.?\d+(?:e[-+]?\d+)?/gi) ?? [];
+  let min = Infinity;
+  let max = -Infinity;
+  let command = "";
+  let paramIndex = 0;
+  for (const token of tokens) {
+    if (/[A-Za-z]/.test(token)) {
+      command = token.toUpperCase();
+      paramIndex = 0;
+      continue;
+    }
+    const value = Number(token);
+    // M, L and C take (x, y) pairs — x sits at every even parameter index.
+    if ((command === "M" || command === "L" || command === "C") && paramIndex % 2 === 0) {
+      if (value < min) min = value;
+      if (value > max) max = value;
+    }
+    paramIndex += 1;
+  }
+  return { min, max };
+}
+
+// Each nested <svg> in the source carries the paths of BOTH figures and relies on its own viewBox
+// plus overflow="hidden" to crop to its half. We keep only the paths that actually belong to this
+// half — the ones whose horizontal centre falls inside its viewBox — so the emitted data is the
+// half itself rather than a full canvas that only looks right when clipped.
+function belongsToHalf(d: string, viewBox: string): boolean {
+  const [vx, , vw] = viewBox.split(/\s+/).map(Number);
+  const { min, max } = xExtent(d);
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return false;
+  const centre = (min + max) / 2;
+  return centre >= vx && centre <= vx + vw;
+}
+
 function parseHalf(chunk: string): { viewBox: string; paths: RefPath[] } {
   const viewBox = /viewBox="([^"]*)"/.exec(chunk)?.[1] ?? "";
   const paths: RefPath[] = [];
@@ -40,7 +78,7 @@ function parseHalf(chunk: string): { viewBox: string; paths: RefPath[] } {
     const tag = m[0];
     const d = /\sd="([^"]*)"/.exec(tag)?.[1];
     const muscle = /data-muscle="([^"]*)"/.exec(tag)?.[1] ?? "unknown";
-    if (d) paths.push({ muscle, d });
+    if (d && belongsToHalf(d, viewBox)) paths.push({ muscle, d });
   }
   return { viewBox, paths };
 }
