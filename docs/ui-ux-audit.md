@@ -105,6 +105,17 @@ Method: static source inspection using the freshly retrieved [Web Interface Guid
 
 No automated application tests were run for this documentation-only audit. Runtime checks above remain outstanding; source evidence and inferred risks are distinguished throughout.
 
+## Motion and resilience follow-up — 2026-09-26
+
+Follow-up item 4 has a [runtime validation report](development/ui-resilience-validation.md)
+and reproducible isolated browser tooling. The matrix covers reduced motion,
+delayed/reordered responses, draft reload recovery, failed-write retry identity,
+IndexedDB durability, interrupted outbox delivery, service-worker navigation and
+synthetic inset arithmetic. Loading indicators continue animating under reduced
+motion in Chromium and WebKit. Real Next refresh/back probes are provided but
+remain unexecuted without a configured authenticated test stack; physical installed
+iOS/Android checks remain outstanding. Item 4 is partially validated, not closed.
+
 ## Layout and contrast follow-up — 2026-09-26
 
 Follow-up item 3 now has an [isolated runtime validation report](development/ui-layout-validation.md)

@@ -50,3 +50,30 @@ separate checks. This harness is not a conformance certification.
 References: [Playwright extension testing](https://playwright.dev/docs/chrome-extensions),
 [Chrome browser zoom API](https://developer.chrome.com/docs/extensions/reference/api/tabs#method-setZoom),
 [WCAG contrast minimum](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html).
+
+## Motion and resilience validation
+
+With the same loopback server running, use `node audit/resilience.mjs`.
+This mounts additional motion, plan-less log and correction fixtures and enables
+controllable actions only when the runner explicitly requests them. It exercises
+delayed/reordered responses, failure/retry identity, storage recovery, real
+IndexedDB orchestration and production `public/sw.js` with a synthetic public
+offline fallback. It also injects CSS inset values: this is padding arithmetic,
+not physical-device validation. Production builds never load these boundaries.
+
+Evidence defaults to `docs/development/ui-resilience-evidence/results.json`;
+override with `UI_RESILIENCE_OUTPUT`. The runner overwrites results and captures
+failed scenarios. Earlier screenshots may remain from previous runs; only the
+current JSON establishes outcomes. Exit 1 means a failed acceptance check; an
+internal WebKit offline-navigation error is recorded as inconclusive. See
+[the report](../../../docs/development/ui-resilience-validation.md).
+
+For a **real Next app**, run `node audit/resilience-navigation.mjs` with
+`UI_REAL_APP_URL` set to its loopback origin and `UI_REAL_APP_STORAGE_STATE` set
+to a Playwright authentication-state file for a disposable account populated with
+synthetic records. Keep that file outside the repository. Configure mocked
+generation/other external services in the test stack. This probe only reads and
+filters: it verifies URL state after refresh/back/forward for Catalog, Sessions
+and History. It does not establish write delivery, client detail-return paths or
+installed-device behavior. It writes outcome-only evidence without screenshots,
+DOM dumps or credentials. The report contains the remaining real-app/device steps.

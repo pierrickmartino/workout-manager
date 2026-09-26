@@ -1,0 +1,352 @@
+{
+  "baseCommit": "2a1bb9e0c37855292716d8ca1e2472563ffc81bc",
+  "recordedAt": "2026-09-26T18:46:17.531Z",
+  "environment": "isolated Vite production-component harness; mocked actions/navigation/auth",
+  "cases": [
+    {
+      "engine": "chromium",
+      "browserVersion": "153.0.8010.12",
+      "name": "reduced-motion-initial",
+      "status": "fail",
+      "error": "[{\"tag\":\"svg\",\"name\":\"spin\",\"duration\":\"1s\"},{\"tag\":\"DIV\",\"name\":\"pulse-sweep\",\"duration\":\"1.4s\"},{\"tag\":\"DIV\",\"name\":\"pulse\",\"duration\":\"2s\"}]\n\nexpect(received).toEqual(expected) // deep equality\n\n- Expected  -  1\n+ Received  + 17\n\n- Array []\n+ Array [\n+   Object {\n+     \"duration\": \"1s\",\n+     \"name\": \"spin\",\n+     \"tag\": \"svg\",\n+   },\n+   Object {\n+     \"duration\": \"1.4s\",\n+     \"name\": \"pulse-sweep\",\n+     \"tag\": \"DIV\",\n+   },\n+   Object {\n+     \"duration\": \"2s\",\n+     \"name\": \"pulse\",\n+     \"tag\": \"DIV\",\n+   },\n+ ]",
+      "pageErrors": []
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "153.0.8010.12",
+      "name": "reduced-motion-live-change",
+      "status": "fail",
+      "error": "[{\"tag\":\"svg\",\"name\":\"spin\",\"duration\":\"1s\"},{\"tag\":\"DIV\",\"name\":\"pulse-sweep\",\"duration\":\"1.4s\"},{\"tag\":\"DIV\",\"name\":\"pulse\",\"duration\":\"2s\"}]\n\nexpect(received).toEqual(expected) // deep equality\n\n- Expected  -  1\n+ Received  + 17\n\n- Array []\n+ Array [\n+   Object {\n+     \"duration\": \"1s\",\n+     \"name\": \"spin\",\n+     \"tag\": \"svg\",\n+   },\n+   Object {\n+     \"duration\": \"1.4s\",\n+     \"name\": \"pulse-sweep\",\n+     \"tag\": \"DIV\",\n+   },\n+   Object {\n+     \"duration\": \"2s\",\n+     \"name\": \"pulse\",\n+     \"tag\": \"DIV\",\n+   },\n+ ]",
+      "pageErrors": []
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "153.0.8010.12",
+      "name": "stale-success",
+      "status": "pass",
+      "pageErrors": []
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "153.0.8010.12",
+      "name": "stale-error",
+      "status": "pass",
+      "pageErrors": []
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "153.0.8010.12",
+      "name": "catalog-offline-reconnect",
+      "status": "pass",
+      "pageErrors": []
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "153.0.8010.12",
+      "name": "catalog-slow-success",
+      "status": "pass",
+      "evidence": {
+        "delayMs": 1000
+      },
+      "pageErrors": []
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "153.0.8010.12",
+      "name": "adhoc-storage-blocked",
+      "status": "pass",
+      "pageErrors": []
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "153.0.8010.12",
+      "name": "synthetic-shell-insets",
+      "status": "pass",
+      "evidence": {
+        "injectedTop": 47,
+        "injectedBottom": 34,
+        "headerTop": "47px",
+        "mainBottom": "146px",
+        "navBottom": "54px",
+        "physicalDevice": false
+      },
+      "pageErrors": []
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "153.0.8010.12",
+      "name": "creation-reload-recovery",
+      "status": "pass",
+      "pageErrors": []
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "153.0.8010.12",
+      "name": "adhoc-reload-recovery",
+      "status": "pass",
+      "pageErrors": []
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "153.0.8010.12",
+      "name": "correction-reload-recovery",
+      "status": "pass",
+      "pageErrors": []
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "153.0.8010.12",
+      "name": "adhoc-slow-failure-retry",
+      "status": "pass",
+      "evidence": {
+        "stableIdempotencyKey": true,
+        "delayMs": 1000,
+        "backendCommit": "not exercised"
+      },
+      "pageErrors": []
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "153.0.8010.12",
+      "name": "indexeddb-reload-dedupe",
+      "status": "pass",
+      "evidence": {
+        "entries": 1,
+        "delivery": "not exercised"
+      },
+      "pageErrors": []
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "153.0.8010.12",
+      "name": "outbox-interrupted-delivery-retry",
+      "status": "pass",
+      "evidence": {
+        "durable": true,
+        "afterFailure": [
+          {
+            "key": "079455f6-5ff2-4c25-b558-0db970a49a86",
+            "status": "failed"
+          }
+        ],
+        "remaining": 0,
+        "attempts": [
+          "079455f6-5ff2-4c25-b558-0db970a49a86",
+          "079455f6-5ff2-4c25-b558-0db970a49a86"
+        ],
+        "backendCommit": "mocked; not verified"
+      },
+      "pageErrors": []
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "153.0.8010.12",
+      "name": "service-worker-offline-navigation",
+      "status": "pass",
+      "evidence": {
+        "cached": [
+          "http://127.0.0.1:4173/offline"
+        ],
+        "worker": "production public/sw.js",
+        "offlinePage": "synthetic; not production Next page",
+        "navigation": "full document, not RSC"
+      },
+      "pageErrors": []
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "153.0.8010.12",
+      "name": "catalog-reduced-drawer",
+      "status": "pass",
+      "evidence": {
+        "transitions": {
+          "property": "none",
+          "duration": "0.3s"
+        }
+      },
+      "pageErrors": []
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "153.0.8010.12",
+      "name": "analytics-reduced-drawer",
+      "status": "pass",
+      "evidence": {
+        "transitions": {
+          "property": "none",
+          "duration": "0.2s"
+        }
+      },
+      "pageErrors": []
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "26.6",
+      "name": "reduced-motion-initial",
+      "status": "fail",
+      "error": "[{\"tag\":\"svg\",\"name\":\"spin\",\"duration\":\"1s\"},{\"tag\":\"DIV\",\"name\":\"pulse-sweep\",\"duration\":\"1.4s\"},{\"tag\":\"DIV\",\"name\":\"pulse\",\"duration\":\"2s\"}]\n\nexpect(received).toEqual(expected) // deep equality\n\n- Expected  -  1\n+ Received  + 17\n\n- Array []\n+ Array [\n+   Object {\n+     \"duration\": \"1s\",\n+     \"name\": \"spin\",\n+     \"tag\": \"svg\",\n+   },\n+   Object {\n+     \"duration\": \"1.4s\",\n+     \"name\": \"pulse-sweep\",\n+     \"tag\": \"DIV\",\n+   },\n+   Object {\n+     \"duration\": \"2s\",\n+     \"name\": \"pulse\",\n+     \"tag\": \"DIV\",\n+   },\n+ ]",
+      "pageErrors": []
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "26.6",
+      "name": "reduced-motion-live-change",
+      "status": "fail",
+      "error": "[{\"tag\":\"svg\",\"name\":\"spin\",\"duration\":\"1s\"},{\"tag\":\"DIV\",\"name\":\"pulse-sweep\",\"duration\":\"1.4s\"},{\"tag\":\"DIV\",\"name\":\"pulse\",\"duration\":\"2s\"}]\n\nexpect(received).toEqual(expected) // deep equality\n\n- Expected  -  1\n+ Received  + 17\n\n- Array []\n+ Array [\n+   Object {\n+     \"duration\": \"1s\",\n+     \"name\": \"spin\",\n+     \"tag\": \"svg\",\n+   },\n+   Object {\n+     \"duration\": \"1.4s\",\n+     \"name\": \"pulse-sweep\",\n+     \"tag\": \"DIV\",\n+   },\n+   Object {\n+     \"duration\": \"2s\",\n+     \"name\": \"pulse\",\n+     \"tag\": \"DIV\",\n+   },\n+ ]",
+      "pageErrors": []
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "26.6",
+      "name": "stale-success",
+      "status": "pass",
+      "pageErrors": []
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "26.6",
+      "name": "stale-error",
+      "status": "pass",
+      "pageErrors": []
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "26.6",
+      "name": "catalog-offline-reconnect",
+      "status": "pass",
+      "pageErrors": []
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "26.6",
+      "name": "catalog-slow-success",
+      "status": "pass",
+      "evidence": {
+        "delayMs": 1000
+      },
+      "pageErrors": []
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "26.6",
+      "name": "adhoc-storage-blocked",
+      "status": "pass",
+      "pageErrors": []
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "26.6",
+      "name": "synthetic-shell-insets",
+      "status": "pass",
+      "evidence": {
+        "injectedTop": 47,
+        "injectedBottom": 34,
+        "headerTop": "47px",
+        "mainBottom": "146px",
+        "navBottom": "54px",
+        "physicalDevice": false
+      },
+      "pageErrors": []
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "26.6",
+      "name": "creation-reload-recovery",
+      "status": "pass",
+      "pageErrors": []
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "26.6",
+      "name": "adhoc-reload-recovery",
+      "status": "pass",
+      "pageErrors": []
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "26.6",
+      "name": "correction-reload-recovery",
+      "status": "pass",
+      "pageErrors": []
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "26.6",
+      "name": "adhoc-slow-failure-retry",
+      "status": "pass",
+      "evidence": {
+        "stableIdempotencyKey": true,
+        "delayMs": 1000,
+        "backendCommit": "not exercised"
+      },
+      "pageErrors": []
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "26.6",
+      "name": "indexeddb-reload-dedupe",
+      "status": "pass",
+      "evidence": {
+        "entries": 1,
+        "delivery": "not exercised"
+      },
+      "pageErrors": []
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "26.6",
+      "name": "outbox-interrupted-delivery-retry",
+      "status": "pass",
+      "evidence": {
+        "durable": true,
+        "afterFailure": [
+          {
+            "key": "6857561e-ffa1-4af0-bf69-68cbef92c203",
+            "status": "failed"
+          }
+        ],
+        "remaining": 0,
+        "attempts": [
+          "6857561e-ffa1-4af0-bf69-68cbef92c203",
+          "6857561e-ffa1-4af0-bf69-68cbef92c203"
+        ],
+        "backendCommit": "mocked; not verified"
+      },
+      "pageErrors": []
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "26.6",
+      "name": "service-worker-offline-navigation",
+      "status": "inconclusive",
+      "error": "page.goto: WebKit encountered an internal error\nCall log:\n\u001b[2m  - navigating to \"http://127.0.0.1:4173/?journey=adhoc&offline_navigation=1\", waiting until \"load\"\u001b[22m\n",
+      "pageErrors": []
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "26.6",
+      "name": "catalog-reduced-drawer",
+      "status": "pass",
+      "evidence": {
+        "transitions": {
+          "property": "none",
+          "duration": "0.3s"
+        }
+      },
+      "pageErrors": []
+    },
+    {
+      "engine": "webkit",
+      "browserVersion": "26.6",
+      "name": "analytics-reduced-drawer",
+      "status": "pass",
+      "evidence": {
+        "transitions": {
+          "property": "none",
+          "duration": "0.2s"
+        }
+      },
+      "pageErrors": []
+    }
+  ]
+}

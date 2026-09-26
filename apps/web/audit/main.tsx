@@ -9,6 +9,11 @@ import { ExerciseCatalogTaxonomy } from "@/components/ExerciseCatalogTaxonomy";
 import { HandAuthoredSessionForm } from "@/components/HandAuthoredSessionForm";
 import { LogSessionForm } from "@/components/LogSessionForm";
 import { LiveSessionScreen } from "@/components/LiveSessionScreen";
+import { AdhocLogForm } from "@/components/AdhocLogForm";
+import { CorrectLogForm } from "@/components/CorrectLogForm";
+import { correctionFieldsFromRecord } from "@/lib/log-correction";
+import { GenerationProgress } from "@/components/GenerationProgress";
+import { Skeleton } from "@/components/pulse/skeleton";
 import { NavigationGuardProvider } from "@/components/NavigationGuardProvider";
 import { TabBar } from "@/components/pulse/tab-bar";
 import { AtlasDrawer } from "@/components/analytics/atlas-drawer";
@@ -49,6 +54,9 @@ function ContrastSamples() {
 
 function Content() {
   switch (journey) {
+    case "motion": return <><GenerationProgress /><Skeleton className="h-12" /></>;
+    case "adhoc": return <AdhocLogForm today="2026-09-26" unit="kg" />;
+    case "correction": return <CorrectLogForm logId={1} fields={correctionFieldsFromRecord(history(1)[0], "kg")} today="2026-09-26" unit="kg" />;
     case "profile": return <ProfileForm profile={profile} submitLabel="Save profile" />;
     case "sessions": return <SessionsLibrary sessions={count === 0 ? [] : sessions} />;
     case "history": return <HistoryBrowser records={history(count)} unit="kg" />;

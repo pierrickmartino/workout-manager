@@ -9,10 +9,18 @@ const web = resolve(import.meta.dirname, "..");
 // Production Next builds never load this config or expose these fixtures.
 export default defineConfig({
   root: import.meta.dirname,
+  publicDir: resolve(web, "public"),
   plugins: [
     {
       name: "isolated-server-boundaries",
       enforce: "pre",
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (req.url?.split("?")[0] !== "/offline") return next();
+          res.setHeader("Content-Type", "text/html");
+          res.end("<!doctype html><title>Audit offline fixture</title><main>Audit offline fallback — synthetic public page</main>");
+        });
+      },
       resolveId(id) {
         if ((id.startsWith("@/app/") || id.startsWith(`${web}/app/`)) && /action/.test(id)) {
           const path = id.startsWith("@/") ? resolve(web, id.slice(2)) : id;
