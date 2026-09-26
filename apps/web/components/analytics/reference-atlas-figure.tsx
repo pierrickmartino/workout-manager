@@ -113,7 +113,10 @@ export function ReferenceAtlasFigure({
   return (
     <svg
       viewBox={REFERENCE_VIEWBOX[gender][half]}
-      className="h-auto w-full max-w-[220px] overflow-visible"
+      // No `overflow-visible` here: each half is cropped by its own viewBox, exactly as the source
+      // artwork's nested <svg overflow="hidden"> does. Letting it overflow drew the neighbouring
+      // half's figure on top of this one (the "doubled body" bug).
+      className="h-auto w-full max-w-[220px]"
       role="group"
     >
       {groups.map((group) => {
