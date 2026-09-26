@@ -231,7 +231,12 @@ for (const [engine, launcher] of [["chromium", chromium], ["webkit", webkit]]) {
       expect(evidence.attempts).toHaveLength(2);
       expect(evidence.attempts[1]).toBe(evidence.attempts[0]);
       expect(evidence.remaining).toBe(0);
-      return evidence;
+      // Retain the retry proof without publishing random UUIDs that secret
+      // scanners can mistake for credentials in archived evidence.
+      return { durable: evidence.durable,
+        afterFailure: evidence.afterFailure.map(({ status }) => ({ status })),
+        remaining: evidence.remaining, attempts: evidence.attempts.length,
+        stableIdempotencyKey: true, backendCommit: evidence.backendCommit };
     });
     await check("service-worker-offline-navigation", async (page, context) => {
       await open(page, "adhoc");

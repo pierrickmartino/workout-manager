@@ -3,3 +3,7 @@
 # (including credentials elsewhere in this test file) remain blocking.
 b3d6566dc3ed358706cf8504f7beeb6fe98f9bdc:apps/api/tests/test_authored_session_endpoint.py:generic-api-key:222
 b3d6566dc3ed358706cf8504f7beeb6fe98f9bdc:apps/api/tests/test_authored_session_endpoint.py:generic-api-key:246
+# Browser-generated synthetic finish UUIDs, not credentials. Exact historical
+# findings only; future evidence reports retry equality without UUID values.
+527c9c8f8c9629053dcb4efbeebd7b7ed3b6a717:docs/development/ui-resilience-evidence/results.json:generic-api-key:128
+527c9c8f8c9629053dcb4efbeebd7b7ed3b6a717:docs/development/ui-resilience-evidence/results.json:generic-api-key:304
