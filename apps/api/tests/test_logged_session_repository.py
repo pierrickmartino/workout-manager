@@ -16,8 +16,10 @@ from app.domain.quantity import repetitions_of
 from datetime import date
 
 import pytest
+from sqlalchemy import event
 from sqlmodel import Session, SQLModel
 
+from app.db.models import LoggedSet
 from app.domain.exercise import Provenance
 from app.domain.muscle_groups import MuscleEmphasis, emphasis_of
 from app.repositories.exercise_repository import (
@@ -256,7 +258,73 @@ def test_repeating_a_key_returns_the_same_record_without_a_second_row(repos):
 
     # Assert — the repeat upsert-returns the first record; no second row is created
     assert second.id == first.id
+    assert [repetitions_of(item.quantity) for item in second.logged_sets] == [5]
     assert len(logged.list_for_user("user_owner")) == 1
+
+
+def test_failed_set_insert_rolls_back_the_logged_session(tmp_path):
+    # Arrange — inject a failure in the transaction gap after the session row has an id
+    engine = make_fk_engine(f"sqlite:///{tmp_path / 'atomic-finish.db'}")
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as session:
+        logged = SqlLoggedSessionRepository(session)
+        sessions = SqlSessionRepository(session)
+        exercises = SqlExerciseRepository(session)
+        session_view, squat, press = _session_with_two_exercises(sessions, exercises)
+        draft = _log_draft(session_view.id, squat, press)
+
+        @event.listens_for(session, "before_attach")
+        def fail_when_a_logged_set_is_added(_session, instance):
+            if isinstance(instance, LoggedSet):
+                raise RuntimeError("injected set persistence failure")
+
+        # Act
+        with pytest.raises(RuntimeError, match="injected set persistence failure"):
+            logged.create("user_owner", draft)
+        event.remove(session, "before_attach", fail_when_a_logged_set_is_added)
+
+        # Assert — no partial record survives, and the repository remains usable
+        assert logged.list_for_user("user_owner") == []
+
+
+def test_concurrent_same_key_retry_returns_the_complete_winning_record(tmp_path):
+    # Arrange — two SQL sessions race after both have observed the key as absent
+    engine = make_fk_engine(f"sqlite:///{tmp_path / 'concurrent-finish.db'}")
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as setup_session:
+        sessions = SqlSessionRepository(setup_session)
+        exercises = SqlExerciseRepository(setup_session)
+        session_view, squat, press = _session_with_two_exercises(sessions, exercises)
+
+    draft = LoggedSessionDraft(
+        session_id=session_view.id,
+        training_type="strength",
+        performed_on=date(2026, 6, 20),
+        idempotency_key="concurrent-finish-key",
+        logged_sets=[
+            LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(5)),
+            LoggedSetDraft(exercise_id=press.id, quantity=reps_quantity(10)),
+        ],
+    )
+    with Session(engine) as losing_session, Session(engine) as winning_session:
+        losing_repo = SqlLoggedSessionRepository(losing_session)
+        winning_repo = SqlLoggedSessionRepository(winning_session)
+        winning_views = []
+
+        @event.listens_for(losing_session, "before_flush", once=True)
+        def commit_the_competing_request(_session, _flush_context, _instances):
+            winning_views.append(winning_repo.create("user_owner", draft))
+
+        # Act — the losing request must resolve the uniqueness race as a retry
+        resolved = losing_repo.create("user_owner", draft)
+
+        # Assert — both requests resolve to one complete, owner-scoped record
+        assert resolved.id == winning_views[0].id
+        assert resolved.clerk_user_id == "user_owner"
+        assert [repetitions_of(item.quantity) for item in resolved.logged_sets] == [5, 10]
+        history = losing_repo.list_for_user("user_owner")
+        assert [item.id for item in history] == [resolved.id]
+        assert len(history[0].logged_sets) == 2
 
 
 def test_distinct_keys_create_distinct_records(repos):

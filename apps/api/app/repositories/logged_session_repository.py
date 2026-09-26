@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Protocol
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.db.models import Exercise, LoggedSession, LoggedSet
@@ -282,26 +283,37 @@ class SqlLoggedSessionRepository:
             completion_outcome=draft.completion_outcome,
             duration_seconds=draft.duration_seconds,
         )
-        self._session.add(logged)
-        self._session.commit()
-        self._session.refresh(logged)
+        try:
+            self._session.add(logged)
+            self._session.flush()
 
-        for position, logged_set in enumerate(draft.logged_sets):
-            self._session.add(
-                LoggedSet(
-                    logged_session_id=logged.id,
-                    exercise_id=logged_set.exercise_id,
-                    position=position,
-                    quantity=logged_set.quantity,
-                    load=logged_set.load,
-                    perceived_difficulty=logged_set.perceived_difficulty,
-                    effort=logged_set.effort,
-                    body_weight_kg=logged_set.body_weight_kg,
-                    set_type=logged_set.set_type,
-                    note=logged_set.note,
+            for position, logged_set in enumerate(draft.logged_sets):
+                self._session.add(
+                    LoggedSet(
+                        logged_session_id=logged.id,
+                        exercise_id=logged_set.exercise_id,
+                        position=position,
+                        quantity=logged_set.quantity,
+                        load=logged_set.load,
+                        perceived_difficulty=logged_set.perceived_difficulty,
+                        effort=logged_set.effort,
+                        body_weight_kg=logged_set.body_weight_kg,
+                        set_type=logged_set.set_type,
+                        note=logged_set.note,
+                    )
                 )
-            )
-        self._session.commit()
+
+            self._session.commit()
+        except IntegrityError:
+            self._session.rollback()
+            existing = self._existing_by_key(clerk_user_id, draft.idempotency_key)
+            if existing is not None:
+                return self._view(existing)
+            raise
+        except Exception:
+            self._session.rollback()
+            raise
+
         return self._view(logged)
 
     def get(
