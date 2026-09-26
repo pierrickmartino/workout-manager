@@ -1,0 +1,5 @@
+@import "../app/globals.css";
+/* The audit Vite root differs from Next's root; include production utility sources. */
+@source "../components";
+@source "../app";
+@source "../lib";

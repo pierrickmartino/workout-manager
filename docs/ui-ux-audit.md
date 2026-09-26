@@ -105,6 +105,15 @@ Method: static source inspection using the freshly retrieved [Web Interface Guid
 
 No automated application tests were run for this documentation-only audit. Runtime checks above remain outstanding; source evidence and inferred risks are distinguished throughout.
 
+## Layout and contrast follow-up — 2026-09-26
+
+Follow-up item 3 now has an [isolated runtime validation report](development/ui-layout-validation.md)
+with reproducible browser tooling, screenshots, viewport/zoom measurements, all
+six skins and both concrete modes, System resolution, long names and large-data
+fixtures. The report separates measured layout/contrast findings from token-guard
+passes and outstanding authenticated/physical-device checks. Production UI fixes
+remain a subsequent agreed scope; item 3 is not claimed fully validated on devices.
+
 ## Priority 1 implementation follow-up — 2026-09-26
 
 Source: follow-up item 1, confirmed by the user; no separate issue was supplied.
