@@ -1,0 +1,91 @@
+{
+  "date": "2026-09-26T19:14:57.506Z",
+  "revision": "bcb18a1584d7fc3790056a8184368807f35c1917",
+  "versions": {
+    "chromium": "153.0.8010.12",
+    "webkit": "26.6"
+  },
+  "cases": 180,
+  "errors": [],
+  "evidenceRuns": [
+    {
+      "date": "2026-09-26T19:14:57.506Z",
+      "scope": "full matrix",
+      "runnerErrors": [
+        {
+          "browserName": "chromium",
+          "surface": "volume",
+          "variant": "large",
+          "range": 150,
+          "unit": "lb",
+          "error": "locator.scrollIntoViewIfNeeded: Protocol error (DOM.scrollIntoViewIfNeeded): Cannot find context with specified id\nCall log:\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n"
+        }
+      ]
+    },
+    {
+      "date": "2026-09-26T19:17:12.979Z",
+      "scope": "large Volume 150/lb after browser context interruption",
+      "runnerErrors": []
+    },
+    {
+      "date": "2026-09-26T19:18:16.429Z",
+      "scope": "Distance after zero-height mark comparison correction",
+      "runnerErrors": []
+    }
+  ],
+  "nonemptyRecharts": 88,
+  "reachableRecharts": 0,
+  "pointerMatches": 1458,
+  "pointerMismatches": [],
+  "zeroWeekPointerMatches": 6,
+  "atlasInteractions": [
+    {
+      "browserName": "chromium",
+      "variant": "single",
+      "restored": true,
+      "svgRestored": true
+    },
+    {
+      "browserName": "chromium",
+      "variant": "multi",
+      "restored": true,
+      "svgRestored": true
+    },
+    {
+      "browserName": "chromium",
+      "variant": "sparse",
+      "restored": true,
+      "svgRestored": true
+    },
+    {
+      "browserName": "chromium",
+      "variant": "large",
+      "restored": true,
+      "svgRestored": true
+    },
+    {
+      "browserName": "webkit",
+      "variant": "single",
+      "restored": true,
+      "svgRestored": true
+    },
+    {
+      "browserName": "webkit",
+      "variant": "multi",
+      "restored": true,
+      "svgRestored": true
+    },
+    {
+      "browserName": "webkit",
+      "variant": "sparse",
+      "restored": true,
+      "svgRestored": true
+    },
+    {
+      "browserName": "webkit",
+      "variant": "large",
+      "restored": true,
+      "svgRestored": true
+    }
+  ]
+}

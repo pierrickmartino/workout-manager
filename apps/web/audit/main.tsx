@@ -1,3 +1,4 @@
+import { ChartAccessibilityFixture } from "./chart-fixture";
 import { createRoot } from "react-dom/client";
 import { useState } from "react";
 import "./styles.css";
@@ -54,6 +55,7 @@ function ContrastSamples() {
 
 function Content() {
   switch (journey) {
+    case "charts": return <ChartAccessibilityFixture />;
     case "motion": return <><GenerationProgress /><Skeleton className="h-12" /></>;
     case "adhoc": return <AdhocLogForm today="2026-09-26" unit="kg" />;
     case "correction": return <CorrectLogForm logId={1} fields={correctionFieldsFromRecord(history(1)[0], "kg")} today="2026-09-26" unit="kg" />;

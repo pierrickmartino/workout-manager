@@ -149,3 +149,13 @@ Manual keyboard/screen-reader, viewport and installed-app validation in follow-u
 remains outstanding. Browser back/forward blocking remains the guard's existing best-effort gap;
 normal draft recovery covers it when browser storage is available. Blocked/full storage now warns
 that closing or reloading may lose unsaved fields.
+
+## Chart access follow-up — 2026-09-26
+
+Follow-up item 5 has a [chart accessibility validation report](development/chart-accessibility-validation.md)
+and isolated production-component tooling for keyboard focus, accessible value
+exposure and pointer tooltip comparisons. The scope includes Total Volume, Weekly
+Distance, Top-Set Trend, strength miniatures, Muscle Balance, Muscle Split and the
+Muscle Atlas. Actual VoiceOver/Safari and NVDA/Firefox speech and authenticated
+filters/detail-link journeys remain outstanding. Findings are validation evidence;
+production fixes remain a subsequent agreed task. Item 5 remains open.

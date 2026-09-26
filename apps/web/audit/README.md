@@ -77,3 +77,24 @@ filters: it verifies URL state after refresh/back/forward for Catalog, Sessions
 and History. It does not establish write delivery, client detail-return paths or
 installed-device behavior. It writes outcome-only evidence without screenshots,
 DOM dumps or credentials. The report contains the remaining real-app/device steps.
+
+## Chart access validation
+
+With the loopback server running, use `node audit/charts.mjs`. The `charts` journey
+mounts production chart components via `chart-fixture.tsx`; the runner records
+keyboard focus, accessibility snapshots, pointer tooltip values and sampled atlas
+activation/restoration in Chromium and WebKit. Open a manual fixture with, for
+example, `/?journey=charts&surface=distance&variant=sparse&range=90`.
+Surfaces: `volume`, `distance`, `top`, `miniature`, `balance`, `split`, `atlas`.
+Variants: `empty`, `single`, `multi`, `sparse`, `large`; `unit=kg|lb` and
+`figure=neutral|male|female` are available where applicable.
+
+Evidence defaults to `docs/development/chart-accessibility-evidence/`; set
+`UI_CHART_OUTPUT` to preserve another run. `UI_CHART_SURFACES=atlas,split`
+restricts a diagnostic run; use a separate output directory to preserve the full
+matrix. `UI_CHART_CASE=volume/large/150/lb` selects one fixture in both browsers.
+The runner overwrites compressed raw
+results and the summary. Exit 1 means a runner error; accessibility findings are
+recorded separately. Snapshots do not establish actual screen-reader speech,
+production filter navigation or linked detail-page value access. See
+[the report and manual closure matrix](../../../docs/development/chart-accessibility-validation.md).
