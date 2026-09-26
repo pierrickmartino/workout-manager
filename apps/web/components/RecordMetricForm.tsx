@@ -25,8 +25,8 @@ export function RecordMetricForm({ today, defaultMetric }: RecordMetricFormProps
 
   return (
     <form action={action} className="flex flex-col gap-5">
-      {state.error ? <Alert tone="error">{state.error}</Alert> : null}
-      {state.saved ? <Alert tone="success">Reading saved.</Alert> : null}
+      {state.error ? <Alert announce tone="error">{state.error}</Alert> : null}
+      {state.saved ? <Alert announce tone="success">Reading saved.</Alert> : null}
 
       <Field label="Metric">
         <Input

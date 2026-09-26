@@ -86,7 +86,7 @@ export function AppearanceKeepAwakeToggle({
           />
         </button>
       </div>
-      {error ? <Alert tone="error">{error}</Alert> : null}
+      {error ? <Alert announce tone="error">{error}</Alert> : null}
     </div>
   );
 }

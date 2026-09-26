@@ -1,13 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
 import type { MuscleRegion } from "@/lib/muscle-region-atlas-view";
 import { setsWord } from "@/lib/muscle-atlas-labels";
 import { groupColorVar } from "@/components/pulse/muscle-colors";
 import { cn } from "@/lib/utils";
 
-// The elements inside the sheet that keyboard focus can land on, for the focus trap below.
-const FOCUSABLE =
-  'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
+import { useModalFocus } from "@/lib/use-modal-focus";
 
 interface AtlasDrawerProps {
   region: MuscleRegion | null;
@@ -25,43 +23,11 @@ export function AtlasDrawer({ region, weeksLabel, onClose }: AtlasDrawerProps) {
   const open = region !== null;
   const sheetRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const sheet = sheetRef.current;
-    sheet?.focus();
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onClose();
-        return;
-      }
-      if (event.key !== "Tab" || !sheet) return;
-      // Keep Tab / Shift+Tab within the sheet: wrap from the last focusable to the first (and
-      // vice versa), and pull focus back in if it has drifted outside.
-      const focusable = Array.from(sheet.querySelectorAll<HTMLElement>(FOCUSABLE));
-      const first = focusable[0] ?? sheet;
-      const last = focusable[focusable.length - 1] ?? sheet;
-      const activeEl = document.activeElement;
-      if (event.shiftKey) {
-        if (activeEl === first || activeEl === sheet || !sheet.contains(activeEl)) {
-          event.preventDefault();
-          last.focus();
-        }
-      } else if (activeEl === last || !sheet.contains(activeEl)) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-    document.addEventListener("keydown", onKeyDown);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [open, onClose]);
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
+  useModalFocus(sheetRef, open, onClose, surfaceRef);
 
   return (
-    <>
+    <div ref={surfaceRef}>
       <div
         aria-hidden
         onClick={onClose}
@@ -79,14 +45,15 @@ export function AtlasDrawer({ region, weeksLabel, onClose }: AtlasDrawerProps) {
         inert={!open}
         tabIndex={-1}
         className={cn(
-          "fixed bottom-0 left-1/2 z-50 w-full max-w-[26rem] -translate-x-1/2 rounded-t-2xl border border-b-0 border-border bg-surface px-5 pb-7 pt-2 shadow-2xl outline-none transition-transform duration-200 motion-reduce:transition-none",
+          "fixed bottom-0 left-1/2 z-50 max-h-[88dvh] overflow-y-auto overscroll-contain w-full max-w-[26rem] -translate-x-1/2 rounded-t-2xl border border-b-0 border-border bg-surface px-5 pb-[max(1.75rem,env(safe-area-inset-bottom))] pt-2 shadow-2xl outline-none transition-transform duration-200 motion-reduce:transition-none",
           open ? "translate-y-0" : "translate-y-full",
         )}
       >
         <div aria-hidden className="mx-auto mb-4 mt-1.5 h-1 w-9 rounded-full bg-border-lite" />
+        <button type="button" onClick={onClose} className="mb-3 rounded px-3 py-2 text-sm text-text-primary focus-visible:outline focus-visible:outline-2">Close details</button>
         {region ? <RegionDetail region={region} weeksLabel={weeksLabel} /> : null}
       </div>
-    </>
+    </div>
   );
 }
 

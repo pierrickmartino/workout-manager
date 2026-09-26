@@ -377,7 +377,7 @@ function AccountScopedHandAuthoredSessionForm({
     setExercises(restored.exercises);
     setInteracted(true);
   }, []);
-  const { recovery, clearAfterSave } = useFormDraft({
+  const { recovery, storageFailed, clearAfterSave } = useFormDraft({
     draftId,
     data: { idempotencyKey, performedOn, trainingType, exercises },
     isDirty,
@@ -611,8 +611,8 @@ function AccountScopedHandAuthoredSessionForm({
       onChange={() => setInteracted(true)}
       className="flex flex-col gap-6"
     >
-      <FormDraftRecovery recovery={recovery} />
-      {error ? <Alert tone="error">{error}</Alert> : null}
+      <FormDraftRecovery recovery={recovery} storageFailed={storageFailed} />
+      {error ? <Alert announce tone="error">{error}</Alert> : null}
 
       {hasSensitiveConstraint ? (
         <Alert tone="info">
@@ -971,7 +971,7 @@ function ExerciseCard({
             className="grid grid-cols-[1fr_1.5fr_4rem_auto] items-end gap-2"
           >
             {isDistance ? (
-              <FieldLabel label={`Set ${index + 1} distance (${row.unit})`}>
+              <FieldLabel group label={`Set ${index + 1} distance (${row.unit})`}>
                 {/* Distance value plus an optional companion time; a time makes pace a
                     derivable read (ADR-0032, issue #301). */}
                 <div className="grid grid-cols-2 gap-1.5">

@@ -77,7 +77,7 @@ export function AdminExerciseRelationships({
         resolves over first.
       </p>
 
-      {error ? <Alert tone="error">{error}</Alert> : null}
+      {error ? <Alert announce tone="error">{error}</Alert> : null}
 
       <RelationshipGroup
         title="This movement's variations & alternatives"
@@ -302,7 +302,7 @@ function AddRelationship({
         </div>
       ) : null}
 
-      {localError ? <Alert tone="error">{localError}</Alert> : null}
+      {localError ? <Alert announce tone="error">{localError}</Alert> : null}
     </div>
   );
 }

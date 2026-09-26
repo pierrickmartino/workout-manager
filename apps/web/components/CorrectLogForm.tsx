@@ -294,7 +294,7 @@ function AccountScopedCorrectLogForm({
     setInteracted(true);
   }, []);
   const draft = { values: draftValues, addedKinds: addedRows.map((row) => row.kind) };
-  const { recovery, clearAfterSave } = useFormDraft({
+  const { recovery, storageFailed, clearAfterSave } = useFormDraft({
     draftId: `correction:${logId}`,
     data: draft,
     isDirty,
@@ -352,8 +352,8 @@ function AccountScopedCorrectLogForm({
       />
       <input type="hidden" name="set_count" value={baseCount + addedRows.length} />
 
-      <FormDraftRecovery recovery={recovery} />
-      {state.error ? <Alert tone="error">{state.error}</Alert> : null}
+      <FormDraftRecovery recovery={recovery} storageFailed={storageFailed} />
+      {state.error ? <Alert announce tone="error">{state.error}</Alert> : null}
 
       <Field label="Date performed">
         <Input

@@ -81,7 +81,7 @@ export function ProfileForm({
         <input type="hidden" name="returnTo" value={returnTo} />
       ) : null}
       {state.error ? (
-        <Alert id={summaryId} tone="error" tabIndex={-1} data-error-summary>
+        <Alert announce id={summaryId} tone="error" tabIndex={-1} data-error-summary>
           {state.error}
         </Alert>
       ) : null}

@@ -32,7 +32,7 @@ export function RedeemShareButton({ token }: RedeemShareButtonProps) {
   if (state.caveat) {
     return (
       <div className="flex flex-col gap-3">
-        <Alert tone="error" role="alert">
+        <Alert announce tone="error" role="alert">
           <span className="mb-1 block font-semibold uppercase tracking-wide">
             Not tailored to you
           </span>

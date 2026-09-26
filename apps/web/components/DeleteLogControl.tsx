@@ -44,7 +44,7 @@ export function DeleteLogControl({ logId, disabled, reason }: DeleteLogControlPr
         </span>
       ) : null}
       {state.error ? (
-        <span className="w-full font-mono text-[9px] leading-tight text-magenta">
+        <span role="alert" className="w-full font-mono text-[9px] leading-tight text-magenta">
           {state.error}
         </span>
       ) : null}

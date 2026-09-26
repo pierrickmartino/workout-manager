@@ -87,7 +87,7 @@ export function saveFormDraft(
   draftId: string,
   data: unknown,
   savedAt = Date.now(),
-): void {
+): boolean {
   const collection = readCollection(storage);
   const otherDrafts = collection.drafts.filter(
     (draft) => draft.accountId !== accountId || draft.draftId !== draftId,
@@ -97,10 +97,15 @@ export function saveFormDraft(
     drafts: [...otherDrafts, { accountId, draftId, savedAt, data }],
   };
   try {
-    storage.setItem(FORM_DRAFTS_KEY, JSON.stringify(next));
+    const serialized = JSON.stringify(next);
+    // Never replace usable drafts with a collection hydration would reject.
+    if (next.drafts.length > MAX_STORED_DRAFTS || serialized.length > MAX_COLLECTION_CHARACTERS) return false;
+    storage.setItem(FORM_DRAFTS_KEY, serialized);
+    return true;
   } catch {
     // Storage can be unavailable or full. Draft recovery is best-effort and must never
     // prevent the form itself from being used or submitted.
+    return false;
   }
 }
 
@@ -150,9 +155,9 @@ export function writeBrowserFormDraft(
   accountId: string,
   draftId: string,
   data: unknown,
-): void {
+): boolean {
   const storage = browserStorage();
-  if (storage) saveFormDraft(storage, accountId, draftId, data);
+  return storage ? saveFormDraft(storage, accountId, draftId, data) : false;
 }
 
 export function clearBrowserFormDraft(accountId: string, draftId: string): void {

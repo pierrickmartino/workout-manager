@@ -34,6 +34,7 @@ import {
   usageMarker,
   type UsageMarker,
 } from "@/lib/exercise-usage-view";
+import { useModalFocus } from "@/lib/use-modal-focus";
 import { useConnectivity } from "@/lib/use-connectivity";
 import type { ExerciseSearchResult } from "@/lib/exercises-types";
 import type { WeightUnit } from "@/lib/weight-unit";
@@ -143,36 +144,24 @@ export function ExerciseCatalogTaxonomy({
   // The Details drawer: which exercise is open, and its enter/exit animation state.
   const [selected, setSelected] = useState<ExerciseSearchResult | null>(null);
   const [drawerEntered, setDrawerEntered] = useState(false);
-  // The control that opened the drawer (the tapped row), so focus can return to it on close.
-  const openerRef = useRef<HTMLElement | null>(null);
-
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const enterFrame = useRef<number | null>(null);
+  const clearDrawerTimers = () => {
+    if (closeTimer.current !== null) clearTimeout(closeTimer.current);
+    if (enterFrame.current !== null) cancelAnimationFrame(enterFrame.current);
+  };
+  useEffect(() => clearDrawerTimers, []);
   const openDetail = (exercise: ExerciseSearchResult) => {
-    openerRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    clearDrawerTimers();
     setSelected(exercise);
-    requestAnimationFrame(() => setDrawerEntered(true));
+    enterFrame.current = requestAnimationFrame(() => setDrawerEntered(true));
   };
   const closeDetail = () => {
+    clearDrawerTimers();
     setDrawerEntered(false);
-    setTimeout(() => {
-      setSelected(null);
-      // Restore focus to the originating row once the sheet has slid away — but only if it
-      // is still in the document, since the list can re-render behind the drawer.
-      const opener = openerRef.current;
-      openerRef.current = null;
-      if (opener && document.contains(opener)) opener.focus();
-    }, DRAWER_ANIM_MS);
+    const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : DRAWER_ANIM_MS;
+    closeTimer.current = setTimeout(() => setSelected(null), delay);
   };
-
-  useEffect(() => {
-    if (!selected) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeDetail();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -444,59 +433,17 @@ interface DetailDrawerProps {
   children: React.ReactNode;
 }
 
-// Elements that can hold keyboard focus, used to contain Tab within the open dialog.
-const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), ' +
-  'select:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-// The bottom Drawer detail surface: a mobile-first sheet that slides up from the bottom
-// edge over a scrim, with a grab handle. The search and filters stay mounted behind it.
-// It behaves as a modal dialog: focus moves in on open, is contained while open (Escape and
-// focus restoration to the opener are handled by the parent), and the sheet carries an
-// accessible name.
+// The modal remains active through its exit transition, restoring focus on unmount.
 function DetailDrawer({ entered, onClose, label, children }: DetailDrawerProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
-
-  // Move focus into the sheet on open so keyboard users land inside it. The parent mounts
-  // this component only while a detail is open, so mounting is opening.
-  useEffect(() => {
-    dialogRef.current?.focus();
-  }, []);
-
-  // Keep Tab / Shift+Tab cycling within the sheet. Without a portal the dialog renders
-  // inside the page and the app's global chrome sits outside this component, so a trap —
-  // not `inert` on a sibling — is what actually contains focus.
-  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== "Tab") return;
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    const focusables = Array.from(
-      dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
-    ).filter((el) => el.offsetParent !== null || el === document.activeElement);
-    if (focusables.length === 0) {
-      event.preventDefault();
-      dialog.focus();
-      return;
-    }
-    const first = focusables[0];
-    const last = focusables[focusables.length - 1];
-    const activeEl = document.activeElement;
-    if (event.shiftKey) {
-      if (activeEl === first || activeEl === dialog) {
-        event.preventDefault();
-        last.focus();
-      }
-    } else if (activeEl === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  };
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  useModalFocus(dialogRef, true, onClose, surfaceRef);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
+    <div ref={surfaceRef} className="fixed inset-0 z-50 flex items-end justify-center">
       <div
         className={
-          "absolute inset-0 bg-black/60 transition-opacity duration-300 " +
+          "absolute inset-0 bg-black/60 transition-opacity duration-300 motion-reduce:transition-none " +
           (entered ? "opacity-100" : "opacity-0")
         }
         onClick={onClose}
@@ -508,9 +455,8 @@ function DetailDrawer({ entered, onClose, label, children }: DetailDrawerProps) 
         aria-modal="true"
         aria-label={label}
         tabIndex={-1}
-        onKeyDown={onKeyDown}
         className={
-          "relative z-10 max-h-[88vh] w-full max-w-shell overflow-y-auto scrollbar-thin rounded-t-2xl border border-border-lite bg-base px-5 pb-8 pt-3 shadow-2xl shadow-black/50 outline-none transition-transform duration-300 ease-out " +
+          "relative z-10 max-h-[88dvh] w-full max-w-shell overflow-y-auto overscroll-contain scrollbar-thin rounded-t-2xl border border-border-lite bg-base px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl shadow-black/50 outline-none transition-transform duration-300 ease-out motion-reduce:transition-none " +
           (entered ? "translate-y-0" : "translate-y-full")
         }
       >

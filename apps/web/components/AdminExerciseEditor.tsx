@@ -181,8 +181,8 @@ export function AdminExerciseEditor({
         />
       </Field>
 
-      {error ? <Alert tone="error">{error}</Alert> : null}
-      {saved ? <Alert tone="success">Saved.</Alert> : null}
+      {error ? <Alert announce tone="error">{error}</Alert> : null}
+      {saved ? <Alert announce tone="success">Saved.</Alert> : null}
 
       <Button
         type="button"

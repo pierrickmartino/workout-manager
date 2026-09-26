@@ -105,11 +105,12 @@ test("failed profile submissions identify fields, announce errors, and focus on 
   }
 });
 
-test("Alert announces errors assertively and confirmations politely, with an explicit override", () => {
+test("Alert announces dynamic results while static messages stay quiet", () => {
   const { Alert } = loadComponent("components/pulse/alert.tsx");
   for (const [tone, role] of [["error", "alert"], ["success", "status"], ["info", "status"]]) {
-    assert.match(renderToStaticMarkup(React.createElement(Alert, { tone }, "Message")), new RegExp(`role="${role}"`));
+    assert.match(renderToStaticMarkup(React.createElement(Alert, { tone, announce: true }, "Message")), new RegExp(`role="${role}"`));
   }
+  assert.doesNotMatch(renderToStaticMarkup(React.createElement(Alert, { tone: "error" }, "Static message")), /role="(?:alert|status)"/);
   assert.match(renderToStaticMarkup(React.createElement(Alert, { tone: "error", role: "status" }, "Message")), /role="status"/);
 });
 
@@ -144,4 +145,92 @@ test("compact FieldLabel also provides a single explicit label", () => {
   }));
   assert.equal((markup.match(/<label\b/g) ?? []).length, 1);
   assert.match(markup, /<label[^>]*for="load"/);
+});
+
+
+test("a grouped distance/time field uses a legend rather than labeling its layout div", () => {
+  const { FieldLabel } = loadComponent("components/pulse/field.tsx");
+  const markup = renderToStaticMarkup(React.createElement(FieldLabel, {
+    label: "Set 1 distance (km)", group: true,
+    children: React.createElement("div", {},
+      React.createElement("input", { "aria-label": "Set 1 distance" }),
+      React.createElement("input", { "aria-label": "Set 1 time" })),
+  }));
+  const document = new JSDOM(markup).window.document;
+  assert.equal(document.querySelector("fieldset > legend")?.textContent, "Set 1 distance (km)");
+  assert.equal(document.querySelector("label"), null);
+  assert.equal(document.querySelectorAll("input[aria-label]").length, 2);
+});
+
+test("metric save results and deletion failures have announcement semantics", () => {
+  const boundaries = {
+    react: { ...React, useActionState: () => [{ error: "Save failed.", saved: true }, () => {}, false] },
+    "@/app/metrics/actions": { submitMetric: () => {} },
+    "@/app/history/actions": { deleteLogAction: () => {} },
+  };
+  const { RecordMetricForm } = loadComponent("components/RecordMetricForm.tsx", boundaries);
+  const metrics = new JSDOM(renderToStaticMarkup(React.createElement(RecordMetricForm, {
+    today: "2026-09-26", defaultMetric: "weight",
+  }))).window.document;
+  assert.equal(metrics.querySelector('[role="alert"]')?.textContent, "Save failed.");
+  assert.equal(metrics.querySelector('[role="status"]')?.textContent, "Reading saved.");
+  const { DeleteLogControl } = loadComponent("components/DeleteLogControl.tsx", boundaries);
+  const deletion = new JSDOM(renderToStaticMarkup(React.createElement(DeleteLogControl, {
+    logId: 1, disabled: false, reason: null,
+  }))).window.document;
+  assert.equal(deletion.querySelector('[role="alert"]')?.textContent.trim(), "Save failed.");
+});
+
+
+test("dirty forms guard client departures and browser exits, while cancel keeps editing", async () => {
+  const dom = new JSDOM("<main id='root'></main><nav><button>Other control</button></nav>", { url: "http://localhost/sessions/new" });
+  const previous = Object.getOwnPropertyDescriptors(globalThis);
+  const globals = { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement,
+    SVGElement: dom.window.SVGElement, Element: dom.window.Element, IS_REACT_ACT_ENVIRONMENT: true };
+  for (const [key, value] of Object.entries(globals)) Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  const destinations: string[] = [];
+  const router = { push: (href: string) => destinations.push(href) };
+  const { NavigationGuardProvider, useNavigationGuard } = loadComponent("components/NavigationGuardProvider.tsx", {
+    "next/navigation": { useRouter: () => router },
+  });
+  function Form({ dirty }: { dirty: boolean }) {
+    useNavigationGuard(dirty);
+    return React.createElement("a", { href: "/history" }, "History");
+  }
+  const { createRoot } = await import("react-dom/client");
+  const root = createRoot(document.getElementById("root")!);
+  const render = (dirty: boolean) => root.render(React.createElement(NavigationGuardProvider, null, React.createElement(Form, { dirty })));
+  const unload = () => {
+    const event = new dom.window.Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+  try {
+    await React.act(async () => render(true));
+    assert.equal(unload(), true);
+    const link = document.querySelector("a")!;
+    link.focus();
+    await React.act(async () => link.click());
+    assert.equal(destinations.length, 0);
+    assert.ok(document.querySelector('[role="dialog"]'));
+    const cancel = Array.from(document.querySelectorAll("button")).find((button) => button.textContent === "Keep editing")!;
+    await React.act(async () => cancel.click());
+    assert.equal(document.querySelector('[role="dialog"]'), null);
+    assert.equal(document.activeElement, link);
+    assert.equal(unload(), true);
+    await React.act(async () => link.click());
+    const confirm = Array.from(document.querySelectorAll("button")).find((button) => button.textContent === "Discard")!;
+    await React.act(async () => confirm.click());
+    assert.deepEqual(destinations, ["/history"]);
+    assert.equal(unload(), false);
+    await React.act(async () => render(false));
+    assert.equal(unload(), false);
+  } finally {
+    await React.act(async () => root.unmount());
+    dom.window.close();
+    for (const key of Object.keys(globals)) {
+      if (previous[key]) Object.defineProperty(globalThis, key, previous[key]);
+      else Reflect.deleteProperty(globalThis, key);
+    }
+  }
 });

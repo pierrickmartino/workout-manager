@@ -606,7 +606,7 @@ export function LiveSessionScreen({
       </div>
 
       {finishState.error ? (
-        <Alert tone="error">{finishState.error}</Alert>
+        <Alert announce tone="error">{finishState.error}</Alert>
       ) : null}
 
       {following ? (
@@ -672,7 +672,7 @@ function BlockedPrompt({
         action={<Badge variant="magenta">BLOCKED</Badge>}
       />
 
-      {error ? <Alert tone="error">{error}</Alert> : null}
+      {error ? <Alert announce tone="error">{error}</Alert> : null}
 
       <Card className="flex flex-col gap-4 border-magenta/50 p-5">
         <span className="flex h-11 w-11 items-center justify-center rounded-sm bg-magenta-dim">
@@ -751,7 +751,7 @@ function IdleEndedSummary({
         }
       />
 
-      {error ? <Alert tone="error">{error}</Alert> : null}
+      {error ? <Alert announce tone="error">{error}</Alert> : null}
 
       <Card className="flex flex-col gap-4 p-5">
         <div className="flex flex-col gap-1.5">

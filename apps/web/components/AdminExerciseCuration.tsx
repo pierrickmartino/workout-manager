@@ -97,8 +97,8 @@ function ProvenanceControl({
         </Select>
       </Field>
 
-      {error ? <Alert tone="error">{error}</Alert> : null}
-      {saved ? <Alert tone="success">Provenance updated.</Alert> : null}
+      {error ? <Alert announce tone="error">{error}</Alert> : null}
+      {saved ? <Alert announce tone="success">Provenance updated.</Alert> : null}
 
       <Button
         type="button"
@@ -172,8 +172,8 @@ function PrecautionsControl({
         />
       </Field>
 
-      {error ? <Alert tone="error">{error}</Alert> : null}
-      {saved ? <Alert tone="success">Precautions saved.</Alert> : null}
+      {error ? <Alert announce tone="error">{error}</Alert> : null}
+      {saved ? <Alert announce tone="success">Precautions saved.</Alert> : null}
 
       <Button
         type="button"

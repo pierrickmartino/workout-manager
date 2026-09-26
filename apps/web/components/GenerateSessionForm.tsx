@@ -33,7 +33,7 @@ export function GenerateSessionForm({
 
   return (
     <form action={action} className="flex flex-col gap-5">
-      {state.error ? <Alert tone="error">{state.error}</Alert> : null}
+      {state.error ? <Alert announce tone="error">{state.error}</Alert> : null}
       {!online ? (
         <OfflineNotice>
           Generating a session needs a connection — reconnect to generate.

@@ -148,8 +148,8 @@ export function AdminExerciseImage({
         />
       </Field>
 
-      {error ? <Alert tone="error">{error}</Alert> : null}
-      {notice ? <Alert tone="success">{notice}</Alert> : null}
+      {error ? <Alert announce tone="error">{error}</Alert> : null}
+      {notice ? <Alert announce tone="success">{notice}</Alert> : null}
 
       <div className="flex flex-wrap gap-3">
         <Button

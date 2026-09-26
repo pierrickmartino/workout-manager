@@ -151,7 +151,7 @@ export function AddExerciseButton({ sessionId, unit }: AddExerciseButtonProps) {
 
   return (
     <Card className="flex flex-col gap-4 p-4">
-      {error ? <Alert tone="error">{error}</Alert> : null}
+      {error ? <Alert announce tone="error">{error}</Alert> : null}
 
       {editor.exercise === null ? (
         <ExerciseLibrary

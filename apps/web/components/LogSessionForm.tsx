@@ -165,7 +165,7 @@ export function LogSessionForm({
       {/* Rows submit as indexed `set-<i>-…` fields; the reader walks 0…set_count-1. */}
       <input type="hidden" name="set_count" value={rowCount} />
 
-      {state.error ? <Alert tone="error">{state.error}</Alert> : null}
+      {state.error ? <Alert announce tone="error">{state.error}</Alert> : null}
 
       <Field label="Date performed">
         <Input

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
+import { useModalFocus } from "@/lib/use-modal-focus";
 import { Button } from "@/components/ui/button";
 
 interface ConfirmDialogProps {
@@ -30,17 +31,12 @@ export function ConfirmDialog({
 }: ConfirmDialogProps): React.JSX.Element {
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    dialogRef.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onCancel();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onCancel]);
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  useModalFocus(dialogRef, true, onCancel, surfaceRef);
 
   return (
     <div
+      ref={surfaceRef}
       className="fixed inset-0 z-50 flex items-center justify-center bg-base/70 p-6 backdrop-blur-sm"
       onClick={onCancel}
     >
@@ -53,7 +49,7 @@ export function ConfirmDialog({
         tabIndex={-1}
         // Stop clicks inside the card from bubbling to the backdrop's cancel handler.
         onClick={(event) => event.stopPropagation()}
-        className="flex w-full max-w-sm flex-col gap-4 rounded-md border border-border bg-surface p-5 shadow-xl outline-none"
+        className="flex max-h-[88dvh] overflow-y-auto overscroll-contain w-full max-w-sm flex-col gap-4 rounded-md border border-border bg-surface p-5 shadow-xl outline-none"
       >
         <h2
           id="confirm-dialog-title"
@@ -81,7 +77,6 @@ export function ConfirmDialog({
             variant="secondary"
             onClick={onCancel}
             className="w-full sm:w-auto"
-            autoFocus
           >
             {cancelLabel}
           </Button>

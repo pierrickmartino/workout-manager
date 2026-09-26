@@ -173,9 +173,9 @@ export function ProtocolBuilder({
         }
       />
 
-      {error ? <Alert tone="error">{error}</Alert> : null}
+      {error ? <Alert announce tone="error">{error}</Alert> : null}
       {deployed ? (
-        <Alert tone="success">Protocol deployed — your changes are live.</Alert>
+        <Alert announce tone="success">Protocol deployed — your changes are live.</Alert>
       ) : null}
 
       {draft.supersetsSuppressed ? (

@@ -50,8 +50,8 @@ export function AdminExerciseEnrich({
         {view.description}
       </p>
 
-      {error ? <Alert tone="error">{error}</Alert> : null}
-      {message ? <Alert tone="success">{message}</Alert> : null}
+      {error ? <Alert announce tone="error">{error}</Alert> : null}
+      {message ? <Alert announce tone="success">{message}</Alert> : null}
 
       <Button
         type="button"

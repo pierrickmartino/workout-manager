@@ -170,7 +170,7 @@ export function AppearanceSkinPublisher({
         </div>
       ) : null}
 
-      {error ? <Alert tone="error">{error}</Alert> : null}
+      {error ? <Alert announce tone="error">{error}</Alert> : null}
     </div>
   );
 }

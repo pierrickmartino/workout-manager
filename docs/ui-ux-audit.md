@@ -104,3 +104,28 @@ Method: static source inspection using the freshly retrieved [Web Interface Guid
 5. Validate chart keyboard/screen-reader access and equivalent access to plotted values. Library behavior was not assumed to provide or omit this automatically.
 
 No automated application tests were run for this documentation-only audit. Runtime checks above remain outstanding; source evidence and inferred risks are distinguished throughout.
+
+## Priority 1 implementation follow-up — 2026-09-26
+
+Source: follow-up item 1, confirmed by the user; no separate issue was supplied.
+Base commit: `4114c5c7bc1e03d333f840a851157bd2dade5ad8`. Implementation session: Codex.
+
+The existing explicit Field associations, catalog request sequence guard, account/form-scoped
+recovery and departure guards are retained. Composite distance/time fields now use a fieldset
+and legend. Alert announcements are explicit at dynamic call sites, including deletion failures;
+static page messages stay quiet. Catalog, atlas and departure-confirmation modals share focus
+entry/containment/restoration, background inertness and scroll locking; atlas has a Close control
+and SVG region focus restoration. Catalog close timers cannot dismiss a reopened drawer.
+All three draft forms announce storage failures, retain guards and preserve the last usable draft;
+successful writes clear the warning, and acknowledged saves stop lifecycle rewrites.
+
+Regression coverage: `form-accessibility.test.ts`, `modal-focus.test.ts`,
+`latest-catalog-request.test.ts`, `form-draft-storage.test.ts`, `use-form-draft.test.ts`
+and the existing `navigation-guard.test.ts`. Checks using Node 22: full frontend test suite
+(1,279 passing), TypeScript `--noEmit --incremental false`, and `git diff --check`.
+The diff was checked against `REVIEW.md`; the bounded security review found no blockers.
+
+Manual keyboard/screen-reader, viewport and installed-app validation in follow-up items 2–5
+remains outstanding. Browser back/forward blocking remains the guard's existing best-effort gap;
+normal draft recovery covers it when browser storage is available. Blocked/full storage now warns
+that closing or reloading may lose unsaved fields.

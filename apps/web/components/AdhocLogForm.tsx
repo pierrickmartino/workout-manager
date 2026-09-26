@@ -130,7 +130,7 @@ function AccountScopedAdhocLogForm({ today, unit }: AdhocLogFormProps) {
     setDraft(restored);
     setInteracted(true);
   }, []);
-  const { recovery, clearAfterSave } = useFormDraft({
+  const { recovery, storageFailed, clearAfterSave } = useFormDraft({
     draftId: "adhoc-log",
     data: draft,
     isDirty,
@@ -172,8 +172,8 @@ function AccountScopedAdhocLogForm({ today, unit }: AdhocLogFormProps) {
       className="flex flex-col gap-6"
     >
       <input type="hidden" name="idempotency_key" value={draft.idempotencyKey} />
-      <FormDraftRecovery recovery={recovery} />
-      {state.error ? <Alert tone="error">{state.error}</Alert> : null}
+      <FormDraftRecovery recovery={recovery} storageFailed={storageFailed} />
+      {state.error ? <Alert announce tone="error">{state.error}</Alert> : null}
 
       <Field label="Date performed">
         <Input

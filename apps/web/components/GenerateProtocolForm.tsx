@@ -60,7 +60,7 @@ export function GenerateProtocolForm({
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-5">
-      {error ? <Alert tone="error">{error}</Alert> : null}
+      {error ? <Alert announce tone="error">{error}</Alert> : null}
       {!online ? (
         <OfflineNotice>
           Generating a protocol needs a connection — reconnect to generate.

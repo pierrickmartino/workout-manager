@@ -57,7 +57,7 @@ export function AdminExerciseDelete({
       {view.blockingReason ? (
         <Alert tone="info">{view.blockingReason}</Alert>
       ) : null}
-      {error ? <Alert tone="error">{error}</Alert> : null}
+      {error ? <Alert announce tone="error">{error}</Alert> : null}
 
       <Button
         type="button"

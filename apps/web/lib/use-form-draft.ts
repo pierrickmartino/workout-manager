@@ -38,11 +38,13 @@ export function useFormDraft<T>({
   onRestore,
 }: UseFormDraftOptions<T>): {
   recovery: FormDraftRecovery | null;
+  storageFailed: boolean;
   clearAfterSave: () => void;
 } {
   const { userId, isLoaded } = useAuth();
   const [candidate, setCandidate] = useState<ScopedCandidate<T> | null>(null);
   const [activeScope, setActiveScope] = useState<string | null>(null);
+  const [storageFailed, setStorageFailed] = useState(false);
   const scope = userId ? `${userId}\u0000${draftId}` : null;
   const canPersist = scope !== null && activeScope === scope;
   const latest = useRef({ data, isDirty });
@@ -56,6 +58,7 @@ export function useFormDraft<T>({
       persistenceEnabled.current = false;
       setCandidate(null);
       setActiveScope(null);
+      setStorageFailed(false);
     };
     window.addEventListener(FORM_DRAFTS_PURGED_EVENT, stopAfterPurge);
     return () => window.removeEventListener(FORM_DRAFTS_PURGED_EVENT, stopAfterPurge);
@@ -64,6 +67,7 @@ export function useFormDraft<T>({
   useEffect(() => {
     setCandidate(null);
     setActiveScope(null);
+    setStorageFailed(false);
     if (!isLoaded || !userId) return;
     const stored = readBrowserFormDraft<unknown>(userId, draftId);
     if (stored && validate(stored.data)) {
@@ -79,14 +83,14 @@ export function useFormDraft<T>({
 
   useEffect(() => {
     if (!canPersist || !isDirty || !userId) return;
-    writeBrowserFormDraft(userId, draftId, data);
+    setStorageFailed(!writeBrowserFormDraft(userId, draftId, data));
   }, [canPersist, data, draftId, isDirty, userId]);
 
   useEffect(() => {
     if (!canPersist || !userId || typeof window === "undefined") return;
     const flush = () => {
       if (persistenceEnabled.current && latest.current.isDirty) {
-        writeBrowserFormDraft(userId, draftId, latest.current.data);
+        setStorageFailed(!writeBrowserFormDraft(userId, draftId, latest.current.data));
       }
     };
     window.addEventListener("pagehide", flush);
@@ -107,9 +111,11 @@ export function useFormDraft<T>({
   }, [candidate, onRestore, scope]);
 
   const clearAfterSave = useCallback(() => {
+    persistenceEnabled.current = false;
     if (userId) clearBrowserFormDraft(userId, draftId);
     setCandidate(null);
     setActiveScope(null);
+    setStorageFailed(false);
   }, [draftId, userId]);
 
   return {
@@ -117,5 +123,6 @@ export function useFormDraft<T>({
       ? { savedAt: candidate.draft.savedAt, restore, discard }
       : null,
     clearAfterSave,
+    storageFailed: canPersist && storageFailed,
   };
 }
