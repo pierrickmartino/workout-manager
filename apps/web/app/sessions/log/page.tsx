@@ -31,6 +31,7 @@ export default async function LogWorkoutPage() {
       </p>
 
       <HandAuthoredSessionForm
+        draftId="hand-authored:log"
         today={today}
         hasSensitiveConstraint={hasSensitiveConstraint}
         unit={appearance.weight_unit}

@@ -120,6 +120,7 @@ export interface LogSessionInput {
 export interface LogAdhocInput {
   performed_on: string;
   training_type: string;
+  idempotency_key?: string | null;
   logged_sets: LogSetInput[];
 }
 

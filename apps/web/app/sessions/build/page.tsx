@@ -36,6 +36,7 @@ export default async function BuildSessionPage() {
       </p>
 
       <HandAuthoredSessionForm
+        draftId="hand-authored:build"
         today={today}
         hasSensitiveConstraint={hasSensitiveConstraint}
         unit={appearance.weight_unit}

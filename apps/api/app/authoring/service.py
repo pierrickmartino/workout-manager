@@ -113,6 +113,7 @@ class AuthorSessionRequest:
     performed_on: date
     training_type: str
     duration_minutes: int
+    idempotency_key: str | None = None
     prescriptions: list[PrescriptionDraft] = field(default_factory=list)
     logged_sets: list[LoggedSetDraft] = field(default_factory=list)
 
@@ -234,6 +235,13 @@ def author_and_log_session(
     reimplemented. Returns the created Logged Session view.
     """
 
+    # A browser may restore and resubmit after the server committed but its response was
+    # lost. Resolve that retry before authoring another plan, then let log_session carry the
+    # same key through its existing atomic record dedupe (ADR-0060).
+    existing = logged.get_by_idempotency_key(clerk_user_id, request.idempotency_key)
+    if existing is not None:
+        return existing
+
     profile = profiles.get_or_create(clerk_user_id)
     errors = _validation_errors(
         request,
@@ -263,9 +271,10 @@ def author_and_log_session(
     log_request = LogSessionRequest(
         session_id=session.id,
         performed_on=request.performed_on,
+        idempotency_key=request.idempotency_key,
         logged_sets=request.logged_sets,
     )
-    return log_session(
+    view = log_session(
         log_request,
         clerk_user_id,
         sessions=sessions,
@@ -273,6 +282,12 @@ def author_and_log_session(
         logged=logged,
         profiles=profiles,
     )
+    # Two tabs can submit the same restored draft concurrently after both pre-checks miss.
+    # The Logged Session repository's unique key chooses one record; remove the losing
+    # request's now-unreferenced plan so the retry leaves exactly one plan/record pair.
+    if view.session_id != session.id:
+        sessions.delete(session.id, clerk_user_id)
+    return view
 
 
 def author_plan(

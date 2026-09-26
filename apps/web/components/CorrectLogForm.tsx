@@ -1,6 +1,8 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
 
 import {
   submitCorrection,
@@ -12,6 +14,13 @@ import type { WeightUnit } from "@/lib/weight-unit";
 import type { QuantityKind } from "@/lib/quantity";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
 import { useNavigationGuard } from "@/components/NavigationGuardProvider";
+import { FormDraftRecovery } from "@/components/FormDraftRecovery";
+import { useFormDraft } from "@/lib/use-form-draft";
+import {
+  MAX_DRAFT_FIELDS,
+  MAX_DRAFT_ROWS,
+  isBoundedDraftString,
+} from "@/lib/form-draft-validation";
 import { Field } from "@/components/pulse/field";
 import { Alert } from "@/components/pulse/alert";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -39,10 +48,59 @@ interface AddedRow {
   kind: QuantityKind;
 }
 
+interface CorrectionDraft {
+  values: Record<string, string>;
+  addedKinds: QuantityKind[];
+}
+
+function serializeForm(form: HTMLFormElement): Record<string, string> {
+  return Object.fromEntries(
+    Array.from(new FormData(form).entries())
+      .filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+  );
+}
+
+function isCorrectionDraft(value: unknown): value is CorrectionDraft {
+  if (typeof value !== "object" || value === null) return false;
+  const draft = value as Record<string, unknown>;
+  if (
+    typeof draft.values !== "object" ||
+    draft.values === null ||
+    Array.isArray(draft.values)
+  ) return false;
+  const entries = Object.entries(draft.values);
+  if (
+    entries.length > MAX_DRAFT_FIELDS ||
+    !entries.every(([name, field]) =>
+      isBoundedDraftString(name) && isBoundedDraftString(field),
+    )
+  ) return false;
+  return (
+    Array.isArray(draft.addedKinds) &&
+    draft.addedKinds.length <= MAX_DRAFT_ROWS &&
+    draft.addedKinds.every((kind) =>
+      ["repetitions", "distance", "duration"].includes(String(kind)),
+    )
+  );
+}
+
 // The amount field(s) for a set row, shown by its kind (ADR-0032). This slice edits a
 // set's contents within its existing kind, so the kind rides in a hidden field and the
 // matching input is pre-filled. Clearing the amount drops the set on save.
-function AmountFields({ set, index }: { set: CorrectionSetFields; index: number }) {
+type InitialField = (
+  name: string,
+  fallback: string | number | null | undefined,
+) => string;
+
+function AmountFields({
+  set,
+  index,
+  initial,
+}: {
+  set: CorrectionSetFields;
+  index: number;
+  initial: InitialField;
+}) {
   const label = `${set.exerciseName} amount`;
   if (set.kind === "distance") {
     return (
@@ -51,7 +109,7 @@ function AmountFields({ set, index }: { set: CorrectionSetFields; index: number 
           <span className="label-mono text-[9px] text-text-muted">Distance</span>
           <Input
             name={`set-${index}-distance`}
-            defaultValue={set.distance}
+            defaultValue={initial(`set-${index}-distance`, set.distance)}
             aria-label={`Distance for ${set.exerciseName}`}
           />
         </label>
@@ -59,7 +117,7 @@ function AmountFields({ set, index }: { set: CorrectionSetFields; index: number 
           <span className="label-mono text-[9px] text-text-muted">Unit</span>
           <Select
             name={`set-${index}-unit`}
-            defaultValue={set.unit}
+            defaultValue={initial(`set-${index}-unit`, set.unit)}
             aria-label={`Distance unit for ${set.exerciseName}`}
           >
             <option value="km">km</option>
@@ -70,7 +128,7 @@ function AmountFields({ set, index }: { set: CorrectionSetFields; index: number 
           <span className="label-mono text-[9px] text-text-muted">Time</span>
           <Input
             name={`set-${index}-duration`}
-            defaultValue={set.duration}
+            defaultValue={initial(`set-${index}-duration`, set.duration)}
             placeholder="25:00"
             aria-label={`Time for ${set.exerciseName}`}
           />
@@ -85,7 +143,7 @@ function AmountFields({ set, index }: { set: CorrectionSetFields; index: number 
         <span className="label-mono text-[9px] text-text-muted">Time</span>
         <Input
           name={`set-${index}-duration`}
-          defaultValue={set.duration}
+          defaultValue={initial(`set-${index}-duration`, set.duration)}
           placeholder="5:00"
           aria-label={label}
         />
@@ -100,7 +158,7 @@ function AmountFields({ set, index }: { set: CorrectionSetFields; index: number 
         name={`set-${index}-reps`}
         type="number"
         min={0}
-        defaultValue={set.reps}
+        defaultValue={initial(`set-${index}-reps`, set.reps)}
         aria-label={`Reps for ${set.exerciseName}`}
       />
     </label>
@@ -111,10 +169,12 @@ function SetRow({
   set,
   index,
   unit,
+  initial,
 }: {
   set: CorrectionSetFields;
   index: number;
   unit: WeightUnit;
+  initial: InitialField;
 }) {
   return (
     <div className="flex flex-col gap-3 rounded-md border border-border bg-surface p-4">
@@ -126,12 +186,12 @@ function SetRow({
       </span>
 
       <div className="grid grid-cols-[1fr_5rem] gap-2.5">
-        <AmountFields set={set} index={index} />
+        <AmountFields set={set} index={index} initial={initial} />
         <label className="flex flex-col gap-1.5">
           <span className="label-mono text-[9px] text-text-muted">RPE</span>
           <Select
             name={`set-${index}-rpe`}
-            defaultValue={set.perceivedDifficulty ?? ""}
+            defaultValue={initial(`set-${index}-rpe`, set.perceivedDifficulty)}
             aria-label={`RPE for ${set.exerciseName}`}
           >
             <option value="">—</option>
@@ -151,7 +211,7 @@ function SetRow({
           <span className="label-mono text-[9px] text-text-muted">Load kind</span>
           <Select
             name={`set-${index}-load_kind`}
-            defaultValue={set.loadKind || "absolute"}
+            defaultValue={initial(`set-${index}-load_kind`, set.loadKind || "absolute")}
             aria-label={`Load kind for ${set.exerciseName}`}
           >
             {loadKindOptions(unit).map((option) => (
@@ -165,7 +225,7 @@ function SetRow({
           <span className="label-mono text-[9px] text-text-muted">Load</span>
           <Input
             name={`set-${index}-load_value`}
-            defaultValue={set.loadValue}
+            defaultValue={initial(`set-${index}-load_value`, set.loadValue)}
             placeholder="70"
             aria-label={`Load for ${set.exerciseName}`}
           />
@@ -178,7 +238,7 @@ function SetRow({
         <span className="label-mono text-[9px] text-text-muted">Note</span>
         <Input
           name={`set-${index}-note`}
-          defaultValue={set.note}
+          defaultValue={initial(`set-${index}-note`, set.note)}
           placeholder="Optional note (e.g. left knee twinge)"
           aria-label={`Note for ${set.exerciseName}`}
         />
@@ -192,12 +252,27 @@ function SetRow({
 // type is derived from its Session, so it is shown read-only and not sent; a plan-less
 // record's is an editable picker. The hidden `log_id`/`session_id` carry identity the
 // backend treats as authoritative (the Session is never re-parented).
-export function CorrectLogForm({ logId, fields, today, unit }: CorrectLogFormProps) {
+export function CorrectLogForm(props: CorrectLogFormProps) {
+  const { userId, isLoaded } = useAuth();
+  if (!isLoaded || !userId) return null;
+  return <AccountScopedCorrectLogForm key={userId} {...props} />;
+}
+
+function AccountScopedCorrectLogForm({
+  logId,
+  fields,
+  today,
+  unit,
+}: CorrectLogFormProps) {
+  const router = useRouter();
   const [state, action, pending] = useActionState<CorrectLogFormState, FormData>(
     submitCorrection,
-    { error: null },
+    { error: null, redirectTo: null },
   );
   const [addedRows, setAddedRows] = useState<AddedRow[]>([]);
+  const [draftValues, setDraftValues] = useState<Record<string, string>>({});
+  const [draftRevision, setDraftRevision] = useState(0);
+  const formRef = useRef<HTMLFormElement>(null);
   // A monotonic source of React keys for added rows, scoped to this form instance so ids
   // never leak between mounts. Bumped only when a row is added.
   const nextRowId = useRef(0);
@@ -208,11 +283,43 @@ export function CorrectLogForm({ logId, fields, today, unit }: CorrectLogFormPro
   // `interacted`, and any added row is unsaved work; neither resets. This errs toward a
   // harmless extra confirm rather than silently dropping a correction in progress.
   const [interacted, setInteracted] = useState(false);
-  useNavigationGuard(interacted || addedRows.length > 0);
+  const isDirty = interacted || addedRows.length > 0;
+  useNavigationGuard(isDirty);
+
+  const restoreDraft = useCallback((restored: CorrectionDraft) => {
+    nextRowId.current = restored.addedKinds.length;
+    setAddedRows(restored.addedKinds.map((kind, index) => ({ id: index + 1, kind })));
+    setDraftValues(restored.values);
+    setDraftRevision((current) => current + 1);
+    setInteracted(true);
+  }, []);
+  const draft = { values: draftValues, addedKinds: addedRows.map((row) => row.kind) };
+  const { recovery, clearAfterSave } = useFormDraft({
+    draftId: `correction:${logId}`,
+    data: draft,
+    isDirty,
+    validate: isCorrectionDraft,
+    onRestore: restoreDraft,
+  });
+
+  useEffect(() => {
+    if (!interacted || !formRef.current) return;
+    setDraftValues(serializeForm(formRef.current));
+  }, [addedRows, interacted]);
+
+  useEffect(() => {
+    if (!state.redirectTo) return;
+    clearAfterSave();
+    router.replace(state.redirectTo);
+  }, [clearAfterSave, router, state.redirectTo]);
+
+  const initial = (name: string, fallback: string | number | null | undefined) =>
+    draftValues[name] ?? String(fallback ?? "");
 
   const addRow = () => {
     nextRowId.current += 1;
     const id = nextRowId.current;
+    setInteracted(true);
     setAddedRows((current) => [...current, { id, kind: "repetitions" }]);
   };
   const removeRow = (id: number) =>
@@ -228,8 +335,13 @@ export function CorrectLogForm({ logId, fields, today, unit }: CorrectLogFormPro
 
   return (
     <form
+      key={draftRevision}
+      ref={formRef}
       action={action}
-      onChange={() => setInteracted(true)}
+      onChange={(event) => {
+        setInteracted(true);
+        setDraftValues(serializeForm(event.currentTarget));
+      }}
       className="flex flex-col gap-6"
     >
       <input type="hidden" name="log_id" value={logId} />
@@ -240,13 +352,14 @@ export function CorrectLogForm({ logId, fields, today, unit }: CorrectLogFormPro
       />
       <input type="hidden" name="set_count" value={baseCount + addedRows.length} />
 
+      <FormDraftRecovery recovery={recovery} />
       {state.error ? <Alert tone="error">{state.error}</Alert> : null}
 
       <Field label="Date performed">
         <Input
           name="performed_on"
           type="date"
-          defaultValue={fields.performedOn}
+          defaultValue={initial("performed_on", fields.performedOn)}
           max={today}
           required
         />
@@ -257,13 +370,16 @@ export function CorrectLogForm({ logId, fields, today, unit }: CorrectLogFormPro
           name="duration_seconds"
           type="number"
           min={0}
-          defaultValue={fields.durationSeconds ?? ""}
+          defaultValue={initial("duration_seconds", fields.durationSeconds)}
         />
       </Field>
 
       {isPlanLess ? (
         <Field label="Training type">
-          <Select name="training_type" defaultValue={fields.trainingType}>
+          <Select
+            name="training_type"
+            defaultValue={initial("training_type", fields.trainingType)}
+          >
             {TRAINING_TYPES.map((type) => (
               <option key={type} value={type}>
                 {type}
@@ -281,7 +397,13 @@ export function CorrectLogForm({ logId, fields, today, unit }: CorrectLogFormPro
       <fieldset className="flex flex-col gap-3 border-0 p-0">
         <SectionHeader>SETS PERFORMED</SectionHeader>
         {fields.sets.map((set, index) => (
-          <SetRow key={index} set={set} index={index} unit={unit} />
+          <SetRow
+            key={index}
+            set={set}
+            index={index}
+            unit={unit}
+            initial={initial}
+          />
         ))}
 
         {/* Added movements (issue #358): a set performed but never logged, including one
@@ -293,6 +415,7 @@ export function CorrectLogForm({ logId, fields, today, unit }: CorrectLogFormPro
             index={baseCount + offset}
             kind={row.kind}
             unit={unit}
+            initial={initial}
             onKindChange={(kind) => setRowKind(row.id, kind)}
             onRemove={() => removeRow(row.id)}
           />
@@ -319,6 +442,7 @@ interface AddedSetRowProps {
   index: number;
   kind: QuantityKind;
   unit: WeightUnit;
+  initial: InitialField;
   onKindChange: (kind: QuantityKind) => void;
   onRemove: () => void;
 }
@@ -327,7 +451,14 @@ interface AddedSetRowProps {
 // ADR-0033 — the same picker the ad-hoc "Log a movement" flow uses), choose its amount
 // kind, then enter the typed Quantity, typed Load, and perceived difficulty any Logged
 // Set carries. No hidden Exercise id — the action resolves the name; no "off-plan" badge.
-function AddedSetRow({ index, kind, unit, onKindChange, onRemove }: AddedSetRowProps) {
+function AddedSetRow({
+  index,
+  kind,
+  unit,
+  initial,
+  onKindChange,
+  onRemove,
+}: AddedSetRowProps) {
   const prefix = `set-${index}`;
   const rowLabel = `added set ${index + 1}`;
 
@@ -338,6 +469,7 @@ function AddedSetRow({ index, kind, unit, onKindChange, onRemove }: AddedSetRowP
           <span className="label-mono text-[9px] text-text-muted">Movement</span>
           <Input
             name={`${prefix}-movement`}
+            defaultValue={initial(`${prefix}-movement`, "")}
             placeholder="Bicep Curl"
             aria-label={`Movement name, ${rowLabel}`}
           />
@@ -366,14 +498,19 @@ function AddedSetRow({ index, kind, unit, onKindChange, onRemove }: AddedSetRowP
         </Select>
       </label>
 
-      <AddedAmountFields prefix={prefix} kind={kind} rowLabel={rowLabel} />
+      <AddedAmountFields
+        prefix={prefix}
+        kind={kind}
+        rowLabel={rowLabel}
+        initial={initial}
+      />
 
       <div className="grid grid-cols-[7rem_1fr_5rem] gap-2.5">
         <label className="flex flex-col gap-1.5">
           <span className="label-mono text-[9px] text-text-muted">Load kind</span>
           <Select
             name={`${prefix}-load_kind`}
-            defaultValue="bodyweight"
+            defaultValue={initial(`${prefix}-load_kind`, "bodyweight")}
             aria-label={`Load kind, ${rowLabel}`}
           >
             {loadKindOptions(unit).map((option) => (
@@ -387,13 +524,18 @@ function AddedSetRow({ index, kind, unit, onKindChange, onRemove }: AddedSetRowP
           <span className="label-mono text-[9px] text-text-muted">Load</span>
           <Input
             name={`${prefix}-load_value`}
+            defaultValue={initial(`${prefix}-load_value`, "")}
             placeholder="15"
             aria-label={`Load, ${rowLabel}`}
           />
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="label-mono text-[9px] text-text-muted">RPE</span>
-          <Select name={`${prefix}-rpe`} defaultValue="" aria-label={`RPE, ${rowLabel}`}>
+          <Select
+            name={`${prefix}-rpe`}
+            defaultValue={initial(`${prefix}-rpe`, "")}
+            aria-label={`RPE, ${rowLabel}`}
+          >
             <option value="">—</option>
             {RPE_VALUES.map((value) => (
               <option key={value} value={value}>
@@ -408,6 +550,7 @@ function AddedSetRow({ index, kind, unit, onKindChange, onRemove }: AddedSetRowP
         <span className="label-mono text-[9px] text-text-muted">Note</span>
         <Input
           name={`${prefix}-note`}
+          defaultValue={initial(`${prefix}-note`, "")}
           placeholder="Optional note"
           aria-label={`Note, ${rowLabel}`}
         />
@@ -422,10 +565,12 @@ function AddedAmountFields({
   prefix,
   kind,
   rowLabel,
+  initial,
 }: {
   prefix: string;
   kind: QuantityKind;
   rowLabel: string;
+  initial: InitialField;
 }) {
   if (kind === "distance") {
     return (
@@ -434,6 +579,7 @@ function AddedAmountFields({
           <span className="label-mono text-[9px] text-text-muted">Distance</span>
           <Input
             name={`${prefix}-distance`}
+            defaultValue={initial(`${prefix}-distance`, "")}
             type="number"
             min={0}
             step="any"
@@ -445,7 +591,7 @@ function AddedAmountFields({
           <span className="label-mono text-[9px] text-text-muted">Unit</span>
           <Select
             name={`${prefix}-unit`}
-            defaultValue="km"
+            defaultValue={initial(`${prefix}-unit`, "km")}
             aria-label={`Distance unit, ${rowLabel}`}
           >
             <option value="km">km</option>
@@ -456,6 +602,7 @@ function AddedAmountFields({
           <span className="label-mono text-[9px] text-text-muted">Time (opt.)</span>
           <Input
             name={`${prefix}-duration`}
+            defaultValue={initial(`${prefix}-duration`, "")}
             placeholder="mm:ss"
             aria-label={`Time, ${rowLabel}`}
           />
@@ -470,6 +617,7 @@ function AddedAmountFields({
         <span className="label-mono text-[9px] text-text-muted">Time</span>
         <Input
           name={`${prefix}-duration`}
+          defaultValue={initial(`${prefix}-duration`, "")}
           placeholder="mm:ss"
           aria-label={`Duration, ${rowLabel}`}
         />
@@ -482,6 +630,7 @@ function AddedAmountFields({
       <span className="label-mono text-[9px] text-text-muted">Reps</span>
       <Input
         name={`${prefix}-reps`}
+        defaultValue={initial(`${prefix}-reps`, "")}
         type="number"
         min={0}
         aria-label={`Reps, ${rowLabel}`}

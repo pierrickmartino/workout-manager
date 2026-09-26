@@ -11,6 +11,7 @@ responses use the standard envelope."""
 from __future__ import annotations
 
 from datetime import date
+from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -320,6 +321,7 @@ class AuthorSessionBody(BaseModel):
     performed_on: date
     training_type: str = Field(min_length=1)
     duration_minutes: int | None = None
+    idempotency_key: UUID | None = None
     prescriptions: list[AuthorPrescriptionBody] = Field(default_factory=list)
     logged_sets: list[LogSetBody] = Field(default_factory=list)
 
@@ -360,6 +362,9 @@ def author_session(
         performed_on=payload.performed_on,
         training_type=payload.training_type,
         duration_minutes=payload.duration_minutes or DEFAULT_AUTHORED_DURATION_MINUTES,
+        idempotency_key=(
+            str(payload.idempotency_key) if payload.idempotency_key is not None else None
+        ),
         prescriptions=[prescription.to_draft() for prescription in payload.prescriptions],
         logged_sets=[logged_set.to_draft() for logged_set in payload.logged_sets],
     )

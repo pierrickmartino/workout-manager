@@ -1,7 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
-
 import {
   buildCorrectionRequest,
   type CorrectionSetFields,
@@ -13,6 +11,7 @@ import { resolveAppearance } from "@/lib/appearance";
 
 export interface CorrectLogFormState {
   error: string | null;
+  redirectTo: string | null;
 }
 
 // The raw fields a form row carries once its movement is known — everything a
@@ -125,7 +124,7 @@ export async function submitCorrection(
 ): Promise<CorrectLogFormState> {
   const logId = Number(readField(form, "log_id"));
   if (!Number.isInteger(logId)) {
-    return { error: "Could not tell which log to correct." };
+    return { error: "Could not tell which log to correct.", redirectTo: null };
   }
 
   const sessionRaw = readField(form, "session_id").trim();
@@ -145,6 +144,7 @@ export async function submitCorrection(
     if (!resolved.success || !resolved.data) {
       return {
         error: resolved.error ?? `Could not find or create "${row.movementName}".`,
+        redirectTo: null,
       };
     }
     sets.push({
@@ -168,15 +168,19 @@ export async function submitCorrection(
     unit,
   );
   if (!built.ok) {
-    return { error: built.error };
+    return { error: built.error, redirectTo: null };
   }
 
   const result = await correctSession(logId, built.request);
   if (!result.success || !result.data) {
-    return { error: result.error ?? "Could not save your correction." };
+    return {
+      error: result.error ?? "Could not save your correction.",
+      redirectTo: null,
+    };
   }
 
   // Return to the corrected record's detail — the screen the edit was opened from —
   // so the user sees their correction land, rather than bouncing to the History list.
-  redirect(`/history/${logId}`);
+  // Let the client clear the matching durable draft before navigating away.
+  return { error: null, redirectTo: `/history/${logId}` };
 }

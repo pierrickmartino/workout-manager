@@ -163,6 +163,9 @@ export interface AuthorPrescriptionInput {
 export interface AuthorSessionInput {
   performed_on: string;
   training_type: string;
+  // Stable across a restored draft retry, so an acknowledgement lost after commit cannot
+  // create a second plan/record pair.
+  idempotency_key?: string | null;
   prescriptions: AuthorPrescriptionInput[];
   logged_sets: LogSetInput[];
 }

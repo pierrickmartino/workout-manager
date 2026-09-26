@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
 import { ArrowDown, ArrowUp, Link2, Trash2, Unlink } from "lucide-react";
 
 import {
@@ -25,13 +27,27 @@ import {
 } from "@/lib/hand-authored-session";
 import type { CaptureSeed, CaptureSeedExercise } from "@/lib/capture-seed";
 import { dissolveSingletonGroups, remapSelectionAfterReorder } from "@/lib/supersets";
-import { DEFAULT_EFFORT_SCALE, type EffortScale } from "@/lib/effort";
+import {
+  DEFAULT_EFFORT_SCALE,
+  KNOWN_EFFORT_SCALES,
+  type EffortScale,
+} from "@/lib/effort";
+import {
+  MAX_DRAFT_ROWS,
+  hasUniqueKeys,
+  isBoundedDraftString,
+  isDraftDate,
+  isDraftUuid,
+  isPositiveInteger,
+} from "@/lib/form-draft-validation";
 import { weightUnitLabel } from "@/lib/weight-format";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { type DistanceUnit, type QuantityKind } from "@/lib/quantity";
 import type { PickedExercise } from "@/lib/protocol-builder";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
 import { useNavigationGuard } from "@/components/NavigationGuardProvider";
+import { FormDraftRecovery } from "@/components/FormDraftRecovery";
+import { useFormDraft } from "@/lib/use-form-draft";
 import { ExerciseLibrary } from "@/components/ExerciseLibrary";
 import { SessionCompositionStrip } from "@/components/builder/session-composition-strip";
 import { PrescriptionFieldStack } from "@/components/prescription/PrescriptionFieldStack";
@@ -50,6 +66,9 @@ import { Button } from "@/components/ui/button";
 type HandAuthoredSessionMode = "authorAndLog" | "planOnly";
 
 interface HandAuthoredSessionFormProps {
+  // Stable identity within the current account. Capture includes its source record id so
+  // two correction/capture journeys never offer one another's fields.
+  draftId: string;
   today: string;
   // Whether the user carries a Sensitive Constraint (ADR-0023, issue #290). When true the
   // screen pauses Supersets: no grouping control is offered, any grouping in the draft is
@@ -118,6 +137,13 @@ interface ExerciseRow {
   supersetGroup: string | null;
   roundRestSeconds: number | null;
   performedSets: PerformedSetRow[];
+}
+
+interface HandAuthoredDraft {
+  idempotencyKey: string;
+  performedOn: string;
+  trainingType: string;
+  exercises: ExerciseRow[];
 }
 
 const DEFAULT_AMOUNT_KIND: QuantityKind = "repetitions";
@@ -201,6 +227,67 @@ function seededExerciseRow(seed: CaptureSeedExercise): ExerciseRow {
   };
 }
 
+function hasStringFields(value: Record<string, unknown>, fields: string[]): boolean {
+  return fields.every((field) => isBoundedDraftString(value[field]));
+}
+
+function isPerformedSetRow(value: unknown): value is PerformedSetRow {
+  if (typeof value !== "object" || value === null) return false;
+  const row = value as Record<string, unknown>;
+  return (
+    isPositiveInteger(row.key) &&
+    hasStringFields(row, [
+      "reps", "distance", "duration", "loadKind", "loadValue", "perceivedDifficulty",
+    ])
+  );
+}
+
+function isExerciseRow(value: unknown): value is ExerciseRow {
+  if (typeof value !== "object" || value === null) return false;
+  const row = value as Record<string, unknown>;
+  return (
+    isPositiveInteger(row.key) &&
+    isPositiveInteger(row.exerciseId) &&
+    hasStringFields(row, [
+      "exerciseName", "kind", "unit", "sets", "reps", "restSeconds", "tempo",
+      "setType", "note", "targetEffortScale", "targetEffortValue", "loadKind", "loadValue",
+    ]) &&
+    ["repetitions", "distance", "duration"].includes(String(row.kind)) &&
+    ["km", "mi"].includes(String(row.unit)) &&
+    ["absolute", "bodyweight", "percent_1rm", "qualitative", "range"]
+      .includes(String(row.loadKind)) &&
+    KNOWN_EFFORT_SCALES.some((scale) => scale === row.targetEffortScale) &&
+    (row.supersetGroup === null || typeof row.supersetGroup === "string") &&
+    (row.roundRestSeconds === null ||
+      (typeof row.roundRestSeconds === "number" &&
+        Number.isInteger(row.roundRestSeconds) &&
+        row.roundRestSeconds >= 0)) &&
+    Array.isArray(row.performedSets) &&
+    row.performedSets.length > 0 &&
+    row.performedSets.length <= MAX_DRAFT_ROWS &&
+    hasUniqueKeys(row.performedSets as Array<{ key?: number }>) &&
+    row.performedSets.every(isPerformedSetRow)
+  );
+}
+
+function isHandAuthoredDraft(value: unknown): value is HandAuthoredDraft {
+  if (typeof value !== "object" || value === null) return false;
+  const draft = value as Record<string, unknown>;
+  return (
+    isDraftDate(draft.performedOn) &&
+    isDraftUuid(draft.idempotencyKey) &&
+    TRAINING_TYPES.some((type) => type === draft.trainingType) &&
+    Array.isArray(draft.exercises) &&
+    draft.exercises.length <= MAX_DRAFT_ROWS &&
+    hasUniqueKeys(draft.exercises as Array<{ key?: number }>) &&
+    draft.exercises.every(isExerciseRow) &&
+    draft.exercises.reduce(
+      (count, exercise) => count + exercise.performedSets.length,
+      0,
+    ) <= MAX_DRAFT_ROWS
+  );
+}
+
 // A contiguous run of exercises to render together: a bordered Superset container wrapping
 // its members, or a single solo exercise. Derived from the per-row Superset layout so the
 // render brackets each group into one visible box (ADR-0023).
@@ -239,13 +326,21 @@ function renderRuns(layout: SupersetSlot[]): RenderRun[] {
 // Consecutive exercises can be grouped into a Superset with a round-rest (ADR-0023, issue
 // #289), reusing the shared `supersets` vocabulary — grouping rides on the authored plan
 // while the record stays sets-only.
-export function HandAuthoredSessionForm({
+export function HandAuthoredSessionForm(props: HandAuthoredSessionFormProps) {
+  const { userId, isLoaded } = useAuth();
+  if (!isLoaded || !userId) return null;
+  return <AccountScopedHandAuthoredSessionForm key={userId} {...props} />;
+}
+
+function AccountScopedHandAuthoredSessionForm({
+  draftId,
   today,
   hasSensitiveConstraint = false,
   mode = "authorAndLog",
   seed,
   unit,
 }: HandAuthoredSessionFormProps) {
+  const router = useRouter();
   const planOnly = mode === "planOnly";
   const [exercises, setExercises] = useState<ExerciseRow[]>(() =>
     seed ? seed.exercises.map(seededExerciseRow) : [],
@@ -256,9 +351,39 @@ export function HandAuthoredSessionForm({
   // a field or the exercise count diverges from that baseline (adding or removing one).
   const [interacted, setInteracted] = useState(false);
   const baselineExerciseCount = seed ? seed.exercises.length : 0;
-  useNavigationGuard(interacted || exercises.length !== baselineExerciseCount);
+  const isDirty = interacted || exercises.length !== baselineExerciseCount;
+  useNavigationGuard(isDirty);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [performedOn, setPerformedOn] = useState(today);
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  const [trainingType, setTrainingType] = useState(
+    seed?.trainingType ?? DEFAULT_TRAINING_TYPE,
+  );
+
+  const restoreDraft = useCallback((restored: HandAuthoredDraft) => {
+    const highestKey = restored.exercises.reduce(
+      (highest, exercise) => Math.max(
+        highest,
+        exercise.key,
+        ...exercise.performedSets.map((set) => set.key),
+      ),
+      0,
+    );
+    nextKey = Math.max(nextKey, highestKey);
+    setPerformedOn(restored.performedOn);
+    setIdempotencyKey(restored.idempotencyKey);
+    setTrainingType(restored.trainingType);
+    setExercises(restored.exercises);
+    setInteracted(true);
+  }, []);
+  const { recovery, clearAfterSave } = useFormDraft({
+    draftId,
+    data: { idempotencyKey, performedOn, trainingType, exercises },
+    isDirty,
+    validate: isHandAuthoredDraft,
+    onRestore: restoreDraft,
+  });
   // Which exercise the composition strip last focused (ADR-0074) — ephemeral view state, a
   // scroll target, never part of the draft.
   const [selectedPosition, setSelectedPosition] = useState<number | null>(null);
@@ -283,8 +408,10 @@ export function HandAuthoredSessionForm({
     ? suppressAuthoredSupersets(exercises)
     : exercises;
 
-  const addExercise = (exercise: PickedExercise) =>
+  const addExercise = (exercise: PickedExercise) => {
+    setInteracted(true);
     setExercises((current) => [...current, makeExerciseRow(exercise)]);
+  };
 
   // Resolve a typed movement to a catalog Exercise (minting a `user_entered` one on a
   // miss) and add it to the workout. The pure picker view-model has already decided the
@@ -300,10 +427,12 @@ export function HandAuthoredSessionForm({
   // Removing a member can leave a Superset with a single member, which is not a valid
   // group (ADR-0023); dissolve any such leftover so the draft never renders — or submits —
   // a broken one-member "superset".
-  const removeExercise = (key: number) =>
+  const removeExercise = (key: number) => {
+    setInteracted(true);
     setExercises((current) =>
       dissolveSingletonGroups(current.filter((row) => row.key !== key)),
     );
+  };
 
   const updateExercise = (key: number, patch: Partial<ExerciseRow>) =>
     setExercises((current) =>
@@ -313,11 +442,15 @@ export function HandAuthoredSessionForm({
   // Superset editing reuses the shared structural operations (ADR-0023): grouping,
   // ungrouping, round-rest, and a contiguity-preserving reorder — all keyed by list
   // position, so they stay aligned to the rendered order.
-  const handleGroupWithNext = (index: number) =>
+  const handleGroupWithNext = (index: number) => {
+    setInteracted(true);
     setExercises((current) => groupExerciseWithNext(current, index));
+  };
 
-  const ungroupAt = (index: number) =>
+  const ungroupAt = (index: number) => {
+    setInteracted(true);
     setExercises((current) => ungroupExercise(current, index));
+  };
 
   const setRoundRest = (index: number, roundRestSeconds: number | null) =>
     setExercises((current) =>
@@ -328,6 +461,7 @@ export function HandAuthoredSessionForm({
   // points at — mirror the same contiguity-preserving move `reorderExercise` applies so the
   // highlight follows the exercise rather than jumping to whatever slid into the old slot.
   const moveExercise = (from: number, to: number) => {
+    setInteracted(true);
     setSelectedPosition((current) =>
       remapSelectionAfterReorder(exercises, from, to, current),
     );
@@ -340,7 +474,8 @@ export function HandAuthoredSessionForm({
   const canMove = (from: number, to: number) =>
     reorderExercise(effectiveExercises, from, to) !== effectiveExercises;
 
-  const addPerformedSet = (key: number) =>
+  const addPerformedSet = (key: number) => {
+    setInteracted(true);
     setExercises((current) =>
       current.map((row) =>
         row.key === key
@@ -348,6 +483,7 @@ export function HandAuthoredSessionForm({
           : row,
       ),
     );
+  };
 
   const updatePerformedSet = (
     exerciseKey: number,
@@ -367,7 +503,8 @@ export function HandAuthoredSessionForm({
       ),
     );
 
-  const removePerformedSet = (exerciseKey: number, setKey: number) =>
+  const removePerformedSet = (exerciseKey: number, setKey: number) => {
+    setInteracted(true);
     setExercises((current) =>
       current.map((row) =>
         row.key === exerciseKey
@@ -381,6 +518,7 @@ export function HandAuthoredSessionForm({
           : row,
       ),
     );
+  };
 
   // Submit the suppression-aware draft, so a Sensitive-Constraint user never sends grouping
   // even if a stray group reached state; the endpoint stays the backstop. The performed sets
@@ -412,7 +550,6 @@ export function HandAuthoredSessionForm({
   });
 
   const submit = (formData: FormData) => {
-    const trainingType = String(formData.get("training_type") ?? "");
     const authoredExercises = effectiveExercises.map(toAuthoredFields);
 
     // Capture (ADR-0044): author only the plan — no date, no performed sets, no second log.
@@ -431,8 +568,11 @@ export function HandAuthoredSessionForm({
       setError(null);
       startTransition(async () => {
         const outcome = await submitAuthorPlan(result.request);
-        // A successful submit redirects server-side; only a failure returns here.
-        if (outcome?.error) setError(outcome.error);
+        if (outcome.error) setError(outcome.error);
+        else if (outcome.redirectTo) {
+          clearAfterSave();
+          router.replace(outcome.redirectTo);
+        }
       });
       return;
     }
@@ -450,9 +590,15 @@ export function HandAuthoredSessionForm({
     }
     setError(null);
     startTransition(async () => {
-      const outcome = await submitAuthorSession(result.request);
-      // A successful submit redirects server-side; only a failure returns here.
-      if (outcome?.error) setError(outcome.error);
+      const outcome = await submitAuthorSession({
+        ...result.request,
+        idempotency_key: idempotencyKey,
+      });
+      if (outcome.error) setError(outcome.error);
+      else if (outcome.redirectTo) {
+        clearAfterSave();
+        router.replace(outcome.redirectTo);
+      }
     });
   };
 
@@ -465,6 +611,7 @@ export function HandAuthoredSessionForm({
       onChange={() => setInteracted(true)}
       className="flex flex-col gap-6"
     >
+      <FormDraftRecovery recovery={recovery} />
       {error ? <Alert tone="error">{error}</Alert> : null}
 
       {hasSensitiveConstraint ? (
@@ -482,7 +629,8 @@ export function HandAuthoredSessionForm({
           <Input
             name="performed_on"
             type="date"
-            defaultValue={today}
+            value={performedOn}
+            onChange={(event) => setPerformedOn(event.target.value)}
             max={today}
             required
           />
@@ -492,7 +640,8 @@ export function HandAuthoredSessionForm({
       <Field label="Training type">
         <Select
           name="training_type"
-          defaultValue={seed?.trainingType ?? DEFAULT_TRAINING_TYPE}
+          value={trainingType}
+          onChange={(event) => setTrainingType(event.target.value)}
         >
           {TRAINING_TYPES.map((trainingType) => (
             <option key={trainingType} value={trainingType}>

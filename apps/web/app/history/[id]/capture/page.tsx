@@ -53,6 +53,7 @@ export default async function CaptureLogPage({ params }: CaptureLogPageProps) {
       </p>
 
       <HandAuthoredSessionForm
+        draftId={`hand-authored:capture:${logId}`}
         today={today}
         hasSensitiveConstraint={hasSensitiveConstraint}
         mode="planOnly"

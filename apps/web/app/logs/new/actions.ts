@@ -1,7 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
-
 import {
   buildAdhocLogRequest,
   readAdhocFormRows,
@@ -13,6 +11,7 @@ import { resolveAppearance } from "@/lib/appearance";
 
 export interface AdhocLogFormState {
   error: string | null;
+  redirectTo: string | null;
 }
 
 // Records a plan-less performance (ADR-0031) from the ad-hoc form. The form is a
@@ -29,7 +28,7 @@ export async function submitAdhocLog(
 ): Promise<AdhocLogFormState> {
   const rows = readAdhocFormRows(form);
   if (rows.length === 0) {
-    return { error: "Name the movement you performed." };
+    return { error: "Name the movement you performed.", redirectTo: null };
   }
 
   // Resolve each movement to a catalog Exercise id before building the request.
@@ -39,6 +38,7 @@ export async function submitAdhocLog(
     if (!resolved.success || !resolved.data) {
       return {
         error: resolved.error ?? `Could not find or create "${movementName}".`,
+        redirectTo: null,
       };
     }
     sets.push({ exerciseId: resolved.data.id, ...fields });
@@ -56,13 +56,17 @@ export async function submitAdhocLog(
     unit,
   );
   if (!built.ok) {
-    return { error: built.error };
+    return { error: built.error, redirectTo: null };
   }
 
-  const result = await logAdhocSession(built.request);
+  const result = await logAdhocSession({
+    ...built.request,
+    idempotency_key: String(form.get("idempotency_key") ?? "") || null,
+  });
   if (!result.success || !result.data) {
-    return { error: result.error ?? "Could not save your log." };
+    return { error: result.error ?? "Could not save your log.", redirectTo: null };
   }
 
-  redirect("/history");
+  // The client clears its durable draft only after receiving this acknowledged success.
+  return { error: null, redirectTo: "/history" };
 }

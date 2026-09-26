@@ -10,7 +10,9 @@ persisted/returned outcome and the error contract, never internal structure."""
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
+from threading import Barrier
 
 from fastapi.testclient import TestClient
 
@@ -68,11 +70,15 @@ class FakeRegenerator:
         )
 
 
-def build_client(ctx=None, profiles=None):
+def build_client(ctx=None, profiles=None, logged_factory=None):
     ctx = ctx or make_signing_context()
     exercises = InMemoryExerciseRepository()
     sessions = InMemorySessionRepository(exercises)
-    logged = InMemoryLoggedSessionRepository(sessions, exercises)
+    logged = (
+        logged_factory(sessions, exercises)
+        if logged_factory is not None
+        else InMemoryLoggedSessionRepository(sessions, exercises)
+    )
     protocols = InMemoryProtocolRepository(exercises)
     feedback = InMemoryGenerationFeedbackRepository()
     profiles = profiles or InMemoryProfileRepository()
@@ -94,6 +100,20 @@ def build_client(ctx=None, profiles=None):
     client = TestClient(app)
     client.exercises = exercises
     return client, ctx
+
+
+class RacingLoggedSessionRepository(InMemoryLoggedSessionRepository):
+    """Hold two author requests after their owner-scoped retry lookup misses."""
+
+    def __init__(self, sessions, exercises):
+        super().__init__(sessions, exercises)
+        self._author_lookup_barrier = Barrier(2)
+
+    def get_by_idempotency_key(self, clerk_user_id, idempotency_key):
+        existing = super().get_by_idempotency_key(clerk_user_id, idempotency_key)
+        if idempotency_key is not None and existing is None:
+            self._author_lookup_barrier.wait(timeout=5)
+        return existing
 
 
 def _auth(ctx, sub):
@@ -189,6 +209,59 @@ def test_author_creates_user_authored_session_and_its_first_log():
     history = _history(client, headers)
     assert len(history) == 1
     assert history[0]["session_id"] == data["session_id"]
+
+
+def test_retrying_a_recovered_author_draft_does_not_duplicate_plan_or_record():
+    # Arrange — the durable browser draft resends one client-minted key if acknowledgement
+    # was lost after the first write.
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_recovered_author")
+    exercise_id = _create_exercise(client, headers, "Back Squat")
+    body = _author_body(
+        exercise_id,
+        idempotency_key="9e52574d-d9ad-46ef-a55f-38c7d4a94f2f",
+    )
+
+    # Act
+    first = client.post("/api/sessions", headers=headers, json=body)
+    retry = client.post("/api/sessions", headers=headers, json=body)
+
+    # Assert — both acknowledgements resolve to the same record and only one reusable plan
+    # exists, so restoring after a lost response is safe.
+    assert first.status_code == 200
+    assert retry.status_code == 200
+    assert retry.json()["data"]["id"] == first.json()["data"]["id"]
+    assert len(_history(client, headers)) == 1
+    sessions = client.get("/api/sessions?limit=100", headers=headers).json()["data"]
+    assert len(sessions) == 1
+
+
+def test_concurrent_recovered_author_retries_leave_one_plan_and_record():
+    # Arrange — force both requests past the initial retry lookup before either authors.
+    client, ctx = build_client(logged_factory=RacingLoggedSessionRepository)
+    headers = _auth(ctx, "user_concurrent_recovered_author")
+    exercise_id = _create_exercise(client, headers, "Back Squat")
+    body = _author_body(
+        exercise_id,
+        idempotency_key="33a4a01a-c007-4de5-a15b-a74c724b4bda",
+    )
+
+    # Act
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        responses = list(
+            pool.map(
+                lambda _: client.post("/api/sessions", headers=headers, json=body),
+                range(2),
+            )
+        )
+
+    # Assert — record uniqueness chooses one winner and the losing unreferenced plan is
+    # removed, so two tabs restoring the same draft cannot duplicate either side.
+    assert [response.status_code for response in responses] == [200, 200]
+    assert len({response.json()["data"]["id"] for response in responses}) == 1
+    assert len(_history(client, headers)) == 1
+    sessions = client.get("/api/sessions?limit=100", headers=headers).json()["data"]
+    assert len(sessions) == 1
 
 
 def test_authored_session_is_re_loggable_via_existing_log_route():

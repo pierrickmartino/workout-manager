@@ -6,6 +6,7 @@
 // caller falls back to a fresh start rather than crashing on a corrupt slot.
 
 import { clearOutbox } from "./finish-outbox-store.ts";
+import { clearBrowserFormDrafts } from "./form-draft-storage.ts";
 import { clearLastSynced } from "./last-synced-store.ts";
 import type { LiveSessionState, LiveStatus, SetStatus } from "./live-session.ts";
 
@@ -158,6 +159,9 @@ export function clearLiveSessionSlot(): void {
 export function purgeLocalLiveState(): void {
   clearLiveSessionSlot();
   void clearOutbox();
+  // Workout-form drafts are a third, deliberately separate local store. They are still
+  // account data, so explicit sign-out tears them down with the live slot and outbox.
+  clearBrowserFormDrafts();
   // The last-synced stamp (issue #414) is account-guarded on read, but clear it too so a
   // shared browser profile leaves nothing of the prior account behind.
   clearLastSynced();

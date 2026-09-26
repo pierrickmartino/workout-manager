@@ -12,10 +12,9 @@ import { purgeLocalLiveState } from "@/lib/live-session-storage";
 export function SignOutRow(): React.JSX.Element {
   const { signOut } = useClerk();
 
-  // Purge every user-scoped local live store *before* Clerk signs out (ADR-0059), so a
-  // shared browser profile never hands the next signed-in account this account's live
-  // slot. The purge is synchronous `localStorage` teardown, so it completes before the
-  // async `signOut()` redirect.
+  // Purge every account-scoped local store *before* Clerk signs out (ADR-0059/0080), so a
+  // shared browser profile retains neither live state nor workout-form fields. The
+  // `localStorage` teardown is synchronous, so it completes before the async redirect.
   function handleSignOut(): void {
     purgeLocalLiveState();
     void signOut({ redirectUrl: "/" });

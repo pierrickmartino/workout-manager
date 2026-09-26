@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Link from "next/link";
 import {
   Space_Grotesk,
   JetBrains_Mono,
@@ -13,7 +14,6 @@ import {
   SignInButton,
   SignedIn,
   SignedOut,
-  UserButton,
 } from "@clerk/nextjs";
 
 import { TabBar } from "@/components/pulse/tab-bar";
@@ -190,11 +190,15 @@ export default async function RootLayout({
                   </SignInButton>
                 </SignedOut>
                 <SignedIn>
-                  <UserButton
-                    appearance={{
-                      elements: { avatarBox: "h-8 w-8 rounded-sm" },
-                    }}
-                  />
+                  {/* Account actions live on Profile so every sign-out passes through the
+                      account-scoped local-state teardown (ADR-0059/0080). Clerk's default
+                      UserButton sign-out bypasses that teardown, so it is not mounted here. */}
+                  <Link
+                    href="/profile"
+                    className={buttonVariants({ variant: "secondary", size: "sm" })}
+                  >
+                    Account
+                  </Link>
                 </SignedIn>
               </nav>
             </div>

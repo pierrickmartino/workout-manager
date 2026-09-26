@@ -160,6 +160,12 @@ class LoggedSessionRepository(Protocol):
         keyless draft (``idempotency_key is None``) always inserts a fresh record."""
         ...
 
+    def get_by_idempotency_key(
+        self, clerk_user_id: str, idempotency_key: str | None
+    ) -> LoggedSessionView | None:
+        """Return the owner's record for a client-minted retry key, if one exists."""
+        ...
+
     def get(
         self, logged_session_id: int, clerk_user_id: str
     ) -> LoggedSessionView | None:
@@ -315,6 +321,12 @@ class SqlLoggedSessionRepository:
             raise
 
         return self._view(logged)
+
+    def get_by_idempotency_key(
+        self, clerk_user_id: str, idempotency_key: str | None
+    ) -> LoggedSessionView | None:
+        existing = self._existing_by_key(clerk_user_id, idempotency_key)
+        return self._view(existing) if existing is not None else None
 
     def get(
         self, logged_session_id: int, clerk_user_id: str
@@ -497,6 +509,12 @@ class InMemoryLoggedSessionRepository:
             for position, logged_set in enumerate(draft.logged_sets)
         ]
         return self._view(logged)
+
+    def get_by_idempotency_key(
+        self, clerk_user_id: str, idempotency_key: str | None
+    ) -> LoggedSessionView | None:
+        existing = self._existing_by_key(clerk_user_id, idempotency_key)
+        return self._view(existing) if existing is not None else None
 
     def get(
         self, logged_session_id: int, clerk_user_id: str
