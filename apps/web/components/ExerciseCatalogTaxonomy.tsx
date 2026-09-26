@@ -27,6 +27,7 @@ import {
   parseMovementPattern,
 } from "@/lib/movement-pattern";
 import { equipmentLabel } from "@/lib/equipment";
+import { createLatestCatalogRequest } from "@/lib/latest-catalog-request";
 import {
   buildUsageMap,
   usageBadgeText,
@@ -93,23 +94,36 @@ export function ExerciseCatalogTaxonomy({
   // Component. Offline, don't fire a query that can only fail; reconnecting re-queries.
   const filtersKey = JSON.stringify(filters);
   const firstRun = useRef(true);
+  const latestRequest = useRef(createLatestCatalogRequest());
+  const updateFilters = (update: React.SetStateAction<CatalogFilters>) => {
+    latestRequest.current.invalidate();
+    setFilters(update);
+  };
   useEffect(() => {
     if (firstRun.current) {
       firstRun.current = false;
       return;
     }
+    const request = latestRequest.current.begin(filtersKey);
     const handle = setTimeout(() => {
       const search = catalogFiltersToParams(filters).toString();
       const url = search.length > 0 ? `?${search}` : window.location.pathname;
       window.history.replaceState(null, "", url);
       if (!online) return;
       startTransition(async () => {
-        const result = await fetchCatalogTaxonomyForFilters(filters);
-        setError(result.error);
-        setTaxonomy(result.taxonomy);
+        await request.run(
+          () => fetchCatalogTaxonomyForFilters(filters),
+          (result) => {
+            setError(result.error);
+            setTaxonomy(result.taxonomy);
+          },
+        );
       });
     }, SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(handle);
+    return () => {
+      clearTimeout(handle);
+      request.cancel();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtersKey, online]);
 
@@ -117,12 +131,12 @@ export function ExerciseCatalogTaxonomy({
     field: "muscleGroups" | "equipment" | "difficulty",
     value: string,
   ) =>
-    setFilters((current) => ({
+    updateFilters((current) => ({
       ...current,
       [field]: toggleFacetValue(current[field], value),
     }));
   const clearFilters = () =>
-    setFilters({ query: "", muscleGroups: [], equipment: [], difficulty: [] });
+    updateFilters({ query: "", muscleGroups: [], equipment: [], difficulty: [] });
 
   const active = hasActiveFilters(filters);
 
@@ -182,7 +196,7 @@ export function ExerciseCatalogTaxonomy({
             className="pl-9"
             disabled={!online}
             onChange={(event) =>
-              setFilters((current) => ({ ...current, query: event.target.value }))
+              updateFilters((current) => ({ ...current, query: event.target.value }))
             }
           />
         </div>
@@ -220,7 +234,10 @@ export function ExerciseCatalogTaxonomy({
               <button
                 type="button"
                 onClick={() =>
-                  setFilters((current) => ({ ...current, equipment: [...myAvailable] }))
+                  updateFilters((current) => ({
+                    ...current,
+                    equipment: [...myAvailable],
+                  }))
                 }
                 className="label-mono text-[9px] text-cyan hover:underline"
               >
