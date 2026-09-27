@@ -1,19 +1,62 @@
-/* Same families as app/layout.tsx; local audit packages instead of next/font. */
-@import "@fontsource-variable/space-grotesk";
-@import "@fontsource-variable/jetbrains-mono";
-@import "@fontsource-variable/bricolage-grotesque";
-@import "@fontsource-variable/inter";
-@import "@fontsource/ibm-plex-mono/400.css";
-@import "@fontsource/ibm-plex-mono/500.css";
-@import "@fontsource/ibm-plex-mono/600.css";
-@import "@fontsource-variable/geist";
-@import "@fontsource-variable/geist-mono";
+/* Emitted by next/font for app/layout.tsx; regenerate with capture-fonts.mjs. */
+@font-face{font-family:Space Grotesk;font-style:normal;font-weight:300 700;font-display:swap;src:url("./production-fonts/e1aab0933260df4d-s.woff2") format("woff2");unicode-range:u+0102-0103,u+0110-0111,u+0128-0129,u+0168-0169,u+01a0-01a1,u+01af-01b0,u+0300-0301,u+0303-0304,u+0308-0309,u+0323,u+0329,u+1ea0-1ef9,u+20ab}
+@font-face{font-family:Space Grotesk;font-style:normal;font-weight:300 700;font-display:swap;src:url("./production-fonts/b7387a63dd068245-s.woff2") format("woff2");unicode-range:u+0100-02ba,u+02bd-02c5,u+02c7-02cc,u+02ce-02d7,u+02dd-02ff,u+0304,u+0308,u+0329,u+1d00-1dbf,u+1e00-1e9f,u+1ef2-1eff,u+2020,u+20a0-20ab,u+20ad-20c0,u+2113,u+2c60-2c7f,u+a720-a7ff}
+@font-face{font-family:Space Grotesk;font-style:normal;font-weight:300 700;font-display:swap;src:url("./production-fonts/36966cca54120369-s.p.woff2") format("woff2");unicode-range:u+00??,u+0131,u+0152-0153,u+02bb-02bc,u+02c6,u+02da,u+02dc,u+0304,u+0308,u+0329,u+2000-206f,u+20ac,u+2122,u+2191,u+2193,u+2212,u+2215,u+feff,u+fffd}
+@font-face{font-family:Space Grotesk Fallback;src:local("Arial");ascent-override:89.71%;descent-override:26.62%;line-gap-override:0.00%;size-adjust:109.69%}
+@font-face{font-family:JetBrains Mono;font-style:normal;font-weight:100 800;font-display:swap;src:url("./production-fonts/886030b0b59bc5a7-s.woff2") format("woff2");unicode-range:u+0460-052f,u+1c80-1c8a,u+20b4,u+2de0-2dff,u+a640-a69f,u+fe2e-fe2f}
+@font-face{font-family:JetBrains Mono;font-style:normal;font-weight:100 800;font-display:swap;src:url("./production-fonts/0aa834ed78bf6d07-s.woff2") format("woff2");unicode-range:u+0301,u+0400-045f,u+0490-0491,u+04b0-04b1,u+2116}
+@font-face{font-family:JetBrains Mono;font-style:normal;font-weight:100 800;font-display:swap;src:url("./production-fonts/67957d42bae0796d-s.woff2") format("woff2");unicode-range:u+0370-0377,u+037a-037f,u+0384-038a,u+038c,u+038e-03a1,u+03a3-03ff}
+@font-face{font-family:JetBrains Mono;font-style:normal;font-weight:100 800;font-display:swap;src:url("./production-fonts/f911b923c6adde36-s.woff2") format("woff2");unicode-range:u+0102-0103,u+0110-0111,u+0128-0129,u+0168-0169,u+01a0-01a1,u+01af-01b0,u+0300-0301,u+0303-0304,u+0308-0309,u+0323,u+0329,u+1ea0-1ef9,u+20ab}
+@font-face{font-family:JetBrains Mono;font-style:normal;font-weight:100 800;font-display:swap;src:url("./production-fonts/939c4f875ee75fbb-s.woff2") format("woff2");unicode-range:u+0100-02ba,u+02bd-02c5,u+02c7-02cc,u+02ce-02d7,u+02dd-02ff,u+0304,u+0308,u+0329,u+1d00-1dbf,u+1e00-1e9f,u+1ef2-1eff,u+2020,u+20a0-20ab,u+20ad-20c0,u+2113,u+2c60-2c7f,u+a720-a7ff}
+@font-face{font-family:JetBrains Mono;font-style:normal;font-weight:100 800;font-display:swap;src:url("./production-fonts/bb3ef058b751a6ad-s.p.woff2") format("woff2");unicode-range:u+00??,u+0131,u+0152-0153,u+02bb-02bc,u+02c6,u+02da,u+02dc,u+0304,u+0308,u+0329,u+2000-206f,u+20ac,u+2122,u+2191,u+2193,u+2212,u+2215,u+feff,u+fffd}
+@font-face{font-family:JetBrains Mono Fallback;src:local("Arial");ascent-override:75.79%;descent-override:22.29%;line-gap-override:0.00%;size-adjust:134.59%}
+@font-face{font-family:Bricolage Grotesque;font-style:normal;font-weight:200 800;font-stretch:100%;font-display:swap;src:url("./production-fonts/93a6e477e1480c92-s.woff2") format("woff2");unicode-range:u+0102-0103,u+0110-0111,u+0128-0129,u+0168-0169,u+01a0-01a1,u+01af-01b0,u+0300-0301,u+0303-0304,u+0308-0309,u+0323,u+0329,u+1ea0-1ef9,u+20ab}
+@font-face{font-family:Bricolage Grotesque;font-style:normal;font-weight:200 800;font-stretch:100%;font-display:swap;src:url("./production-fonts/c7e0cf6c760983e7-s.woff2") format("woff2");unicode-range:u+0100-02ba,u+02bd-02c5,u+02c7-02cc,u+02ce-02d7,u+02dd-02ff,u+0304,u+0308,u+0329,u+1d00-1dbf,u+1e00-1e9f,u+1ef2-1eff,u+2020,u+20a0-20ab,u+20ad-20c0,u+2113,u+2c60-2c7f,u+a720-a7ff}
+@font-face{font-family:Bricolage Grotesque;font-style:normal;font-weight:200 800;font-stretch:100%;font-display:swap;src:url("./production-fonts/9d5a263311222317-s.p.woff2") format("woff2");unicode-range:u+00??,u+0131,u+0152-0153,u+02bb-02bc,u+02c6,u+02da,u+02dc,u+0304,u+0308,u+0329,u+2000-206f,u+20ac,u+2122,u+2191,u+2193,u+2212,u+2215,u+feff,u+fffd}
+@font-face{font-family:Bricolage Grotesque Fallback;src:local("Arial");ascent-override:88.21%;descent-override:25.61%;line-gap-override:0.00%;size-adjust:105.43%}
+@font-face{font-family:Inter;font-style:normal;font-weight:100 900;font-display:swap;src:url("./production-fonts/ba9851c3c22cd980-s.woff2") format("woff2");unicode-range:u+0460-052f,u+1c80-1c8a,u+20b4,u+2de0-2dff,u+a640-a69f,u+fe2e-fe2f}
+@font-face{font-family:Inter;font-style:normal;font-weight:100 900;font-display:swap;src:url("./production-fonts/21350d82a1f187e9-s.woff2") format("woff2");unicode-range:u+0301,u+0400-045f,u+0490-0491,u+04b0-04b1,u+2116}
+@font-face{font-family:Inter;font-style:normal;font-weight:100 900;font-display:swap;src:url("./production-fonts/c5fe6dc8356a8c31-s.woff2") format("woff2");unicode-range:u+1f??}
+@font-face{font-family:Inter;font-style:normal;font-weight:100 900;font-display:swap;src:url("./production-fonts/19cfc7226ec3afaa-s.woff2") format("woff2");unicode-range:u+0370-0377,u+037a-037f,u+0384-038a,u+038c,u+038e-03a1,u+03a3-03ff}
+@font-face{font-family:Inter;font-style:normal;font-weight:100 900;font-display:swap;src:url("./production-fonts/df0a9ae256c0569c-s.woff2") format("woff2");unicode-range:u+0102-0103,u+0110-0111,u+0128-0129,u+0168-0169,u+01a0-01a1,u+01af-01b0,u+0300-0301,u+0303-0304,u+0308-0309,u+0323,u+0329,u+1ea0-1ef9,u+20ab}
+@font-face{font-family:Inter;font-style:normal;font-weight:100 900;font-display:swap;src:url("./production-fonts/8e9860b6e62d6359-s.woff2") format("woff2");unicode-range:u+0100-02ba,u+02bd-02c5,u+02c7-02cc,u+02ce-02d7,u+02dd-02ff,u+0304,u+0308,u+0329,u+1d00-1dbf,u+1e00-1e9f,u+1ef2-1eff,u+2020,u+20a0-20ab,u+20ad-20c0,u+2113,u+2c60-2c7f,u+a720-a7ff}
+@font-face{font-family:Inter;font-style:normal;font-weight:100 900;font-display:swap;src:url("./production-fonts/e4af272ccee01ff0-s.p.woff2") format("woff2");unicode-range:u+00??,u+0131,u+0152-0153,u+02bb-02bc,u+02c6,u+02da,u+02dc,u+0304,u+0308,u+0329,u+2000-206f,u+20ac,u+2122,u+2191,u+2193,u+2212,u+2215,u+feff,u+fffd}
+@font-face{font-family:Inter Fallback;src:local("Arial");ascent-override:90.44%;descent-override:22.52%;line-gap-override:0.00%;size-adjust:107.12%}
+@font-face{font-family:IBM Plex Mono;font-style:normal;font-weight:400;font-display:swap;src:url("./production-fonts/58f386aa6b1a2a92-s.woff2") format("woff2");unicode-range:u+0460-052f,u+1c80-1c8a,u+20b4,u+2de0-2dff,u+a640-a69f,u+fe2e-fe2f}
+@font-face{font-family:IBM Plex Mono;font-style:normal;font-weight:400;font-display:swap;src:url("./production-fonts/011e180705008d6f-s.woff2") format("woff2");unicode-range:u+0301,u+0400-045f,u+0490-0491,u+04b0-04b1,u+2116}
+@font-face{font-family:IBM Plex Mono;font-style:normal;font-weight:400;font-display:swap;src:url("./production-fonts/7ba5fb2a8c88521c-s.woff2") format("woff2");unicode-range:u+0102-0103,u+0110-0111,u+0128-0129,u+0168-0169,u+01a0-01a1,u+01af-01b0,u+0300-0301,u+0303-0304,u+0308-0309,u+0323,u+0329,u+1ea0-1ef9,u+20ab}
+@font-face{font-family:IBM Plex Mono;font-style:normal;font-weight:400;font-display:swap;src:url("./production-fonts/92eeb95d069020cc-s.woff2") format("woff2");unicode-range:u+0100-02ba,u+02bd-02c5,u+02c7-02cc,u+02ce-02d7,u+02dd-02ff,u+0304,u+0308,u+0329,u+1d00-1dbf,u+1e00-1e9f,u+1ef2-1eff,u+2020,u+20a0-20ab,u+20ad-20c0,u+2113,u+2c60-2c7f,u+a720-a7ff}
+@font-face{font-family:IBM Plex Mono;font-style:normal;font-weight:400;font-display:swap;src:url("./production-fonts/d3ebbfd689654d3a-s.p.woff2") format("woff2");unicode-range:u+00??,u+0131,u+0152-0153,u+02bb-02bc,u+02c6,u+02da,u+02dc,u+0304,u+0308,u+0329,u+2000-206f,u+20ac,u+2122,u+2191,u+2193,u+2212,u+2215,u+feff,u+fffd}
+@font-face{font-family:IBM Plex Mono;font-style:normal;font-weight:500;font-display:swap;src:url("./production-fonts/ef4d5661765d0e49-s.woff2") format("woff2");unicode-range:u+0460-052f,u+1c80-1c8a,u+20b4,u+2de0-2dff,u+a640-a69f,u+fe2e-fe2f}
+@font-face{font-family:IBM Plex Mono;font-style:normal;font-weight:500;font-display:swap;src:url("./production-fonts/d29838c109ef09b4-s.woff2") format("woff2");unicode-range:u+0301,u+0400-045f,u+0490-0491,u+04b0-04b1,u+2116}
+@font-face{font-family:IBM Plex Mono;font-style:normal;font-weight:500;font-display:swap;src:url("./production-fonts/e40af3453d7c920a-s.woff2") format("woff2");unicode-range:u+0102-0103,u+0110-0111,u+0128-0129,u+0168-0169,u+01a0-01a1,u+01af-01b0,u+0300-0301,u+0303-0304,u+0308-0309,u+0323,u+0329,u+1ea0-1ef9,u+20ab}
+@font-face{font-family:IBM Plex Mono;font-style:normal;font-weight:500;font-display:swap;src:url("./production-fonts/99dcf268bda04fe5-s.woff2") format("woff2");unicode-range:u+0100-02ba,u+02bd-02c5,u+02c7-02cc,u+02ce-02d7,u+02dd-02ff,u+0304,u+0308,u+0329,u+1d00-1dbf,u+1e00-1e9f,u+1ef2-1eff,u+2020,u+20a0-20ab,u+20ad-20c0,u+2113,u+2c60-2c7f,u+a720-a7ff}
+@font-face{font-family:IBM Plex Mono;font-style:normal;font-weight:500;font-display:swap;src:url("./production-fonts/98e207f02528a563-s.p.woff2") format("woff2");unicode-range:u+00??,u+0131,u+0152-0153,u+02bb-02bc,u+02c6,u+02da,u+02dc,u+0304,u+0308,u+0329,u+2000-206f,u+20ac,u+2122,u+2191,u+2193,u+2212,u+2215,u+feff,u+fffd}
+@font-face{font-family:IBM Plex Mono;font-style:normal;font-weight:600;font-display:swap;src:url("./production-fonts/73cb51aac9c97f90-s.woff2") format("woff2");unicode-range:u+0460-052f,u+1c80-1c8a,u+20b4,u+2de0-2dff,u+a640-a69f,u+fe2e-fe2f}
+@font-face{font-family:IBM Plex Mono;font-style:normal;font-weight:600;font-display:swap;src:url("./production-fonts/d26bbd13d6b70f89-s.woff2") format("woff2");unicode-range:u+0301,u+0400-045f,u+0490-0491,u+04b0-04b1,u+2116}
+@font-face{font-family:IBM Plex Mono;font-style:normal;font-weight:600;font-display:swap;src:url("./production-fonts/20535187d867b7b9-s.woff2") format("woff2");unicode-range:u+0102-0103,u+0110-0111,u+0128-0129,u+0168-0169,u+01a0-01a1,u+01af-01b0,u+0300-0301,u+0303-0304,u+0308-0309,u+0323,u+0329,u+1ea0-1ef9,u+20ab}
+@font-face{font-family:IBM Plex Mono;font-style:normal;font-weight:600;font-display:swap;src:url("./production-fonts/5356a6a4f2c8c8d8-s.woff2") format("woff2");unicode-range:u+0100-02ba,u+02bd-02c5,u+02c7-02cc,u+02ce-02d7,u+02dd-02ff,u+0304,u+0308,u+0329,u+1d00-1dbf,u+1e00-1e9f,u+1ef2-1eff,u+2020,u+20a0-20ab,u+20ad-20c0,u+2113,u+2c60-2c7f,u+a720-a7ff}
+@font-face{font-family:IBM Plex Mono;font-style:normal;font-weight:600;font-display:swap;src:url("./production-fonts/db96af6b531dc71f-s.p.woff2") format("woff2");unicode-range:u+00??,u+0131,u+0152-0153,u+02bb-02bc,u+02c6,u+02da,u+02dc,u+0304,u+0308,u+0329,u+2000-206f,u+20ac,u+2122,u+2191,u+2193,u+2212,u+2215,u+feff,u+fffd}
+@font-face{font-family:IBM Plex Mono Fallback;src:local("Arial");ascent-override:76.16%;descent-override:20.43%;line-gap-override:0.00%;size-adjust:134.59%}
+@font-face{font-family:Geist;font-style:normal;font-weight:100 900;font-display:swap;src:url("./production-fonts/f639721981034f88-s.woff2") format("woff2");unicode-range:u+0460-052f,u+1c80-1c8a,u+20b4,u+2de0-2dff,u+a640-a69f,u+fe2e-fe2f}
+@font-face{font-family:Geist;font-style:normal;font-weight:100 900;font-display:swap;src:url("./production-fonts/9766a7e9e2e0ad5a-s.woff2") format("woff2");unicode-range:u+0301,u+0400-045f,u+0490-0491,u+04b0-04b1,u+2116}
+@font-face{font-family:Geist;font-style:normal;font-weight:100 900;font-display:swap;src:url("./production-fonts/b66cf8e69499582a-s.woff2") format("woff2");unicode-range:u+0102-0103,u+0110-0111,u+0128-0129,u+0168-0169,u+01a0-01a1,u+01af-01b0,u+0300-0301,u+0303-0304,u+0308-0309,u+0323,u+0329,u+1ea0-1ef9,u+20ab}
+@font-face{font-family:Geist;font-style:normal;font-weight:100 900;font-display:swap;src:url("./production-fonts/aa016aab0e6d1295-s.woff2") format("woff2");unicode-range:u+0100-02ba,u+02bd-02c5,u+02c7-02cc,u+02ce-02d7,u+02dd-02ff,u+0304,u+0308,u+0329,u+1d00-1dbf,u+1e00-1e9f,u+1ef2-1eff,u+2020,u+20a0-20ab,u+20ad-20c0,u+2113,u+2c60-2c7f,u+a720-a7ff}
+@font-face{font-family:Geist;font-style:normal;font-weight:100 900;font-display:swap;src:url("./production-fonts/22a5144ee8d83bca-s.p.woff2") format("woff2");unicode-range:u+00??,u+0131,u+0152-0153,u+02bb-02bc,u+02c6,u+02da,u+02dc,u+0304,u+0308,u+0329,u+2000-206f,u+20ac,u+2122,u+2191,u+2193,u+2212,u+2215,u+feff,u+fffd}
+@font-face{font-family:Geist Fallback;src:local("Arial");ascent-override:95.94%;descent-override:28.16%;line-gap-override:0.00%;size-adjust:104.76%}
+@font-face{font-family:Geist Mono;font-style:normal;font-weight:100 900;font-display:swap;src:url("./production-fonts/013b72fa676f92e0-s.woff2") format("woff2");unicode-range:u+0460-052f,u+1c80-1c8a,u+20b4,u+2de0-2dff,u+a640-a69f,u+fe2e-fe2f}
+@font-face{font-family:Geist Mono;font-style:normal;font-weight:100 900;font-display:swap;src:url("./production-fonts/b9408752a0c24fb9-s.woff2") format("woff2");unicode-range:u+0301,u+0400-045f,u+0490-0491,u+04b0-04b1,u+2116}
+@font-face{font-family:Geist Mono;font-style:normal;font-weight:100 900;font-display:swap;src:url("./production-fonts/65f03d54ccadf4a8-s.woff2") format("woff2");unicode-range:u+2000-2001,u+2004-2008,u+200a,u+23b8-23bd,u+2500-259f}
+@font-face{font-family:Geist Mono;font-style:normal;font-weight:100 900;font-display:swap;src:url("./production-fonts/e038a29029a234f2-s.woff2") format("woff2");unicode-range:u+0102-0103,u+0110-0111,u+0128-0129,u+0168-0169,u+01a0-01a1,u+01af-01b0,u+0300-0301,u+0303-0304,u+0308-0309,u+0323,u+0329,u+1ea0-1ef9,u+20ab}
+@font-face{font-family:Geist Mono;font-style:normal;font-weight:100 900;font-display:swap;src:url("./production-fonts/2b5b02fc7e511755-s.woff2") format("woff2");unicode-range:u+0100-02ba,u+02bd-02c5,u+02c7-02cc,u+02ce-02d7,u+02dd-02ff,u+0304,u+0308,u+0329,u+1d00-1dbf,u+1e00-1e9f,u+1ef2-1eff,u+2020,u+20a0-20ab,u+20ad-20c0,u+2113,u+2c60-2c7f,u+a720-a7ff}
+@font-face{font-family:Geist Mono;font-style:normal;font-weight:100 900;font-display:swap;src:url("./production-fonts/7d4881bb7e1bf84d-s.p.woff2") format("woff2");unicode-range:u+00??,u+0131,u+0152-0153,u+02bb-02bc,u+02c6,u+02da,u+02dc,u+0304,u+0308,u+0329,u+2000-206f,u+20ac,u+2122,u+2191,u+2193,u+2212,u+2215,u+feff,u+fffd}
+@font-face{font-family:Geist Mono Fallback;src:local("Arial");ascent-override:74.67%;descent-override:21.92%;line-gap-override:0.00%;size-adjust:134.59%}
 :root {
-  --font-space-grotesk: "Space Grotesk Variable";
-  --font-jetbrains-mono: "JetBrains Mono Variable";
-  --font-bricolage: "Bricolage Grotesque Variable";
-  --font-inter: "Inter Variable";
-  --font-ibm-plex-mono: "IBM Plex Mono";
-  --font-geist: "Geist Variable";
-  --font-geist-mono: "Geist Mono Variable";
+  --font-space-grotesk: "Space Grotesk","Space Grotesk Fallback";
+  --font-jetbrains-mono: "JetBrains Mono","JetBrains Mono Fallback";
+  --font-bricolage: "Bricolage Grotesque","Bricolage Grotesque Fallback";
+  --font-inter: "Inter","Inter Fallback";
+  --font-ibm-plex-mono: "IBM Plex Mono","IBM Plex Mono Fallback";
+  --font-geist: "Geist","Geist Fallback";
+  --font-geist-mono: "Geist Mono","Geist Mono Fallback";
 }

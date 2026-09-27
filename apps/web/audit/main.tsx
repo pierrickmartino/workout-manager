@@ -23,9 +23,12 @@ import { DistanceChart } from "@/components/pulse/distance-chart";
 import { Alert } from "@/components/pulse/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { exerciseNames, exercises, history, names, prescriptions, profile, sessions, taxonomy, workout } from "./fixtures";
+import { exerciseNames, exercises, history, prescriptions, profile, sessions, taxonomy, workout } from "./fixtures";
 
 const params = new URLSearchParams(location.search);
+if (params.get("fonts") === "fontsource") {
+  await import("./fonts-fontsource.css");
+}
 const journey = params.get("journey") ?? "profile";
 const skin = params.get("skin") ?? "pulse";
 const mode = params.get("mode") ?? "dark";
@@ -48,6 +51,10 @@ function ContrastSamples() {
   return <><div className="flex flex-col gap-4">{["base", "surface", "elevated"].map(surface =>
     <div key={surface} data-surface={surface} style={{ background: `var(--color-${surface})` }} className="p-4">
       {["primary", "secondary", "muted"].map(rung => <p key={rung} data-rung={rung} style={{ color: `var(--color-text-${rung})` }} className="label-mono text-[10px]">{surface} {rung}</p>)}
+      {["cyan", "blue", "violet", "magenta", "amber", "green"].map(accent => <div key={accent}>
+        <p style={{ color: `var(--color-${accent})` }} className="text-sm">{surface} {accent} flat</p>
+        {accent !== "blue" && <p style={{ color: `var(--color-${accent})`, background: `var(--color-${accent}-dim)` }} className="text-sm">{surface} {accent} tint</p>}
+      </div>)}
       <Badge variant="muted">Metadata</Badge><Button>Continue</Button><Button disabled>Disabled</Button>
       <Alert tone="error">Error feedback</Alert>
     </div>)}</div></>;
@@ -75,5 +82,5 @@ function Content() {
 // Shell spacing copied from RootLayout; Clerk chrome is replaced with an inert account label.
 createRoot(document.getElementById("root")!).render(<NavigationGuardProvider>
   <header className="sticky top-0 z-30 border-b border-border bg-base/90 pt-[env(safe-area-inset-top)] backdrop-blur"><div className="mx-auto flex h-14 max-w-shell items-center justify-between px-6"><span className="label-mono text-[13px] font-bold tracking-[0.2em]">PULSE //</span><span className="label-mono text-[10px] text-text-muted">Synthetic account</span></div></header>
-  <main id="main-content" className="mx-auto min-h-[calc(100vh-3.5rem)] w-full max-w-shell px-6 pt-6 pb-[calc(7rem+env(safe-area-inset-bottom))]" data-journey={journey}><Content /><p className="mt-6 text-sm text-text-muted">End of fixture: {names[0]}</p></main><TabBar />
+  <main id="main-content" className="mx-auto min-h-[calc(100vh-3.5rem)] w-full max-w-shell px-6 pt-6 pb-[calc(7rem+env(safe-area-inset-bottom))]" data-journey={journey}><Content /><p className="mt-6 text-sm text-text-muted">End of synthetic fixture</p></main><TabBar />
 </NavigationGuardProvider>);

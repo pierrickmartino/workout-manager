@@ -29,8 +29,9 @@ and 100/1,000/10,000-record histories. The Chromium extension uses `tabs.setZoom
 and records `getZoom`, effective CSS viewport, and DPR at 200%; it does not use CSS
 zoom or pinch-zoom emulation. WebKit checks are at 100%. `extra.mjs` checks drawers,
 group opacity, the unpaged taxonomy at 100/1,000/10,000 rows, and completed-set
-states. Fontsource supplies the same production font families locally; these
-files are not guaranteed byte-identical to Next's generated font subsets.
+states. The harness now uses checked-in next/font payloads and emitted face declarations
+from `app/layout.tsx`; see `production-fonts/manifest.json` for byte hashes and
+provenance. The archived original audit used substituted Fontsource packages.
 
 The states-only run records `completedNotes.prescription` and
 `completedNotes.previous` in `states.json.gz`, including composited colours and
@@ -106,3 +107,49 @@ results and the summary. Exit 1 means a runner error; accessibility findings are
 recorded separately. Snapshots do not establish actual screen-reader speech,
 production filter navigation or linked detail-page value access. See
 [the report and manual closure matrix](../../../docs/development/chart-accessibility-validation.md).
+
+## Split-fixture re-validation (#562)
+
+With Node 22.12+ and the same server, run:
+
+```bash
+node audit/revalidate.mjs
+# Retry only missing captures, preserving earlier runner failures:
+UI_AUDIT_RESUME=1 node audit/revalidate.mjs
+node audit/summarize-revalidation.mjs
+```
+
+Outputs default to `docs/development/ui-layout-revalidation-evidence/`;
+`UI_AUDIT_OUTPUT` overrides it. Resume rejects a different application commit or
+font-payload snapshot instead of relabelling old captures with new provenance.
+The 4,224 cases include both engines, all six
+Skins, both explicit Modes and both simulated orientations. Five separate inputs
+(`fixture=short|session-spaced|session-unbroken|exercise-spaced|exercise-unbroken`)
+run over eight journeys. Only the selected name axis is long; author and profile
+names and the fixture footer stay short. Each default case has a paired
+`fonts=fontsource` control on identical current code to isolate font metrics.
+Additional production-font cases cover drawers, completed cards and rendered
+flat/tinted Accents. Completed cards use DOM button activation because sticky
+chrome can intercept a pointer in the short landscape viewport; their ratios do
+not establish pointer accessibility. This run is at 100% browser zoom; the archived
+200% zoom and large-data checks are not repeated by this issue.
+
+Font files and generated CSS are snapshots of the app's Next font loader output,
+not independent font packages. To refresh from a new compiled app layout:
+
+```bash
+node audit/capture-fonts.mjs .next/dev/static/css/app/layout.css .next/dev/static/media
+```
+
+A production build's combined layout CSS and media directory can also be passed
+as arguments. Preserve the emitted face declarations and fallback metrics. The
+runner verifies the layout and payload hashes and loads all seven families before
+measurement, rejecting fallback-only resolution. The current snapshot comes from a successful production webpack build;
+`cssSource` identifies its combined layout stylesheet. All 45 payload hashes also
+matched the initial development-loader snapshot used during the sweep. The
+production emitted declarations preserve the same faces and fallback metrics;
+this is local production build output, not a capture from a deployed site. Fontsource remains available solely as the explicit comparison control.
+Font licenses are retained beside the snapshots. Raw data includes every text
+sample, composited colours, document width, overflow element and unresolved
+sample; the summary names the exact fixture and separates recovered runner errors
+from application findings.
