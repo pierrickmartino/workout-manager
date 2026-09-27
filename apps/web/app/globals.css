@@ -32,12 +32,10 @@
       @theme defaults, so only Aurora and Vercel restate this group.
   Colours transcribed from docs/design/pulse.pen.
 
-  Contrast Floor (ADR-0070): every rung of a Skin's Text Ramp
-  (text-primary/secondary/muted) must clear WCAG AA (4.5:1) against every surface
-  (base/surface/elevated), in *both* Mode variants. `muted` is the binding rung —
-  its values here are tuned a hair above 4.5:1 against the lightest surface, so it
-  reads darker/lighter than a naive quiet-grey would. Vercel light additionally
-  darkens `secondary` so an AA-passing `muted` still sits a visible step below it.
+  Contrast Floor (ADR-0081): every Text Ramp rung and Accent must clear 4.6:1
+  against every surface in both Modes. Declared text-on-fill pairings clear the
+  same floor after alpha blending. System copies are checked too. Classify new
+  colour tokens and extend the pairing registry for new text/fill conventions.
   lib/skin-contrast.test.ts parses this file and fails CI on any regression.
 */
 @theme {
@@ -59,14 +57,14 @@
   --color-cyan: #29e7e0;
   --color-cyan-dim: #29e7e01f;
   --color-blue: #4c8dff;
-  --color-violet: #9a6bff;
-  --color-violet-dim: #9a6bff1f;
-  --color-magenta: #ff4d9d;
-  --color-magenta-dim: #ff4d9d1f;
+  --color-violet: #b08bff;
+  --color-violet-dim: #b08bff1f;
+  --color-magenta: #ff67ac;
+  --color-magenta-dim: #ff67ac1f;
   /* Amber + green complete the distinct-six Muscle Group palette (ADR-0073): the muscle
      roll-up needs one hue per real group, and cyan/blue/violet/magenta cover only four.
-     Only PULSE tunes these per Mode below; the other Skins inherit these mid-tone base
-     values, which read on both their light and dark surfaces. */
+     Light variants override these against their own surfaces (ADR-0081);
+     dark variants inherit these where the Contrast Floor already passes. */
   --color-amber: #ffb454;
   --color-amber-dim: #ffb4541f;
   --color-green: #35e08b;
@@ -114,18 +112,18 @@
     --color-text-muted: #6d6d76;
 
     /* Accents — darker/richer so they read on light surfaces */
-    --color-cyan: #0891a5;
-    --color-cyan-dim: #0891a51f;
+    --color-cyan: #066d7d;
+    --color-cyan-dim: #066d7d1f;
     --color-blue: #2563eb;
-    --color-violet: #7c3aed;
-    --color-violet-dim: #7c3aed1f;
-    --color-magenta: #db2777;
-    --color-magenta-dim: #db27771f;
+    --color-violet: #7733ec;
+    --color-violet-dim: #7733ec1f;
+    --color-magenta: #b81f63;
+    --color-magenta-dim: #b81f631f;
     /* Amber + green re-saturated to read on light surfaces (ADR-0073) */
-    --color-amber: #b45309;
-    --color-amber-dim: #b453091f;
-    --color-green: #059669;
-    --color-green-dim: #0596691f;
+    --color-amber: #a04a08;
+    --color-amber-dim: #a04a081f;
+    --color-green: #04714f;
+    --color-green-dim: #04714f1f;
     --color-on-accent: #ffffff;
   }
 
@@ -145,18 +143,18 @@
       --color-text-secondary: #52525b;
       --color-text-muted: #6d6d76;
 
-      --color-cyan: #0891a5;
-      --color-cyan-dim: #0891a51f;
+      --color-cyan: #066d7d;
+      --color-cyan-dim: #066d7d1f;
       --color-blue: #2563eb;
-      --color-violet: #7c3aed;
-      --color-violet-dim: #7c3aed1f;
-      --color-magenta: #db2777;
-      --color-magenta-dim: #db27771f;
+      --color-violet: #7733ec;
+      --color-violet-dim: #7733ec1f;
+      --color-magenta: #b81f63;
+      --color-magenta-dim: #b81f631f;
       /* Amber + green re-saturated to read on light surfaces (ADR-0073) */
-      --color-amber: #b45309;
-      --color-amber-dim: #b453091f;
-      --color-green: #059669;
-      --color-green-dim: #0596691f;
+      --color-amber: #a04a08;
+      --color-amber-dim: #a04a081f;
+      --color-green: #04714f;
+      --color-green-dim: #04714f1f;
       --color-on-accent: #ffffff;
     }
   }
@@ -215,14 +213,18 @@
     --color-text-muted: #606d8b;
 
     /* Accents — deepened so they read on light surfaces */
-    --color-cyan: #0f766e;
-    --color-cyan-dim: #0f766e1f;
-    --color-blue: #0284c7;
-    --color-violet: #7c3aed;
-    --color-violet-dim: #7c3aed1f;
-    --color-magenta: #be185d;
-    --color-magenta-dim: #be185d1f;
+    --color-cyan: #0e6d66;
+    --color-cyan-dim: #0e6d661f;
+    --color-blue: #0273ae;
+    --color-violet: #742fec;
+    --color-violet-dim: #742fec1f;
+    --color-magenta: #b8175a;
+    --color-magenta-dim: #b8175a1f;
     --color-on-accent: #ffffff;
+    --color-amber: #925200;
+    --color-amber-dim: #9252001f;
+    --color-green: #117041;
+    --color-green-dim: #1170411f;
   }
 
   /* Aurora System Mode: no `data-mode`, so follow the device. The dark base above
@@ -240,14 +242,18 @@
       --color-text-secondary: #465066;
       --color-text-muted: #606d8b;
 
-      --color-cyan: #0f766e;
-      --color-cyan-dim: #0f766e1f;
-      --color-blue: #0284c7;
-      --color-violet: #7c3aed;
-      --color-violet-dim: #7c3aed1f;
-      --color-magenta: #be185d;
-      --color-magenta-dim: #be185d1f;
+      --color-cyan: #0e6d66;
+      --color-cyan-dim: #0e6d661f;
+      --color-blue: #0273ae;
+      --color-violet: #742fec;
+      --color-violet-dim: #742fec1f;
+      --color-magenta: #b8175a;
+      --color-magenta-dim: #b8175a1f;
       --color-on-accent: #ffffff;
+      --color-amber: #925200;
+      --color-amber-dim: #9252001f;
+      --color-green: #117041;
+      --color-green-dim: #1170411f;
     }
   }
 
@@ -255,7 +261,8 @@
     VERCEL — a minimalist, high-contrast Skin inspired by Vercel's Geist design
     language (ADR-0048). Its signature is a stark monochrome shell — a *true-black*
     page (or pure white in light) under a strict grayscale surface/border/text ramp
-    — carried by a single iconic accent: **Vercel blue (#0070f3)**. That blue is
+    — carried by a single iconic accent: Vercel blue, retuned from #0070f3 to
+    clear the Contrast Floor (ADR-0081). That blue is
     deliberately loaded onto the *lead* accent token (`cyan`: bg-cyan buttons,
     active states, labels, the focus ring) so the whole app visibly shifts off
     PULSE's teal and reads as Vercel at a glance; purple/pink round out the Geist
@@ -280,17 +287,17 @@
     --color-text-secondary: #a1a1a1;
     --color-text-muted: #818181;
 
-    /* Accents — Vercel blue leads (cyan token), with a lighter sky blue plus the
-       Geist purple/pink for the secondary slots. on-accent is white for text on
-       the blue fill. */
-    --color-cyan: #0070f3;
-    --color-cyan-dim: #0070f31f;
+    /* Accents — retuned Vercel blue leads (cyan token), with a lighter sky blue plus the
+       Geist purple/pink for the secondary slots. on-accent is black for text on
+       the lightened blue fill (ADR-0081). */
+    --color-cyan: #258aff;
+    --color-cyan-dim: #258aff1f;
     --color-blue: #66b2ff;
-    --color-violet: #a06bf5;
-    --color-violet-dim: #a06bf51f;
+    --color-violet: #a470f5;
+    --color-violet-dim: #a470f51f;
     --color-magenta: #ff4da6;
     --color-magenta-dim: #ff4da61f;
-    --color-on-accent: #ffffff;
+    --color-on-accent: #000000;
   }
 
   [data-skin="vercel"][data-mode="light"] {
@@ -308,17 +315,21 @@
     --color-text-secondary: #525252;
     --color-text-muted: #6d6d6d;
 
-    /* Accents — Vercel blue leads (cyan token) on white; a deeper blue plus the
+    /* Accents — retuned Vercel blue leads (cyan token) on white; a deeper blue plus the
        Geist purple/pink fill the secondary slots. on-accent is white for text on
        the blue fill. */
-    --color-cyan: #0070f3;
-    --color-cyan-dim: #0070f31f;
+    --color-cyan: #005dc9;
+    --color-cyan-dim: #005dc91f;
     --color-blue: #0761d1;
     --color-violet: #7928ca;
     --color-violet-dim: #7928ca1f;
-    --color-magenta: #d6006f;
-    --color-magenta-dim: #d6006f1f;
+    --color-magenta: #bb0061;
+    --color-magenta-dim: #bb00611f;
     --color-on-accent: #ffffff;
+    --color-amber: #935200;
+    --color-amber-dim: #9352001f;
+    --color-green: #117041;
+    --color-green-dim: #1170411f;
   }
 
   /* Vercel System Mode: no `data-mode`, so follow the device. The true-black base
@@ -336,14 +347,18 @@
       --color-text-secondary: #525252;
       --color-text-muted: #6d6d6d;
 
-      --color-cyan: #0070f3;
-      --color-cyan-dim: #0070f31f;
+      --color-cyan: #005dc9;
+      --color-cyan-dim: #005dc91f;
       --color-blue: #0761d1;
       --color-violet: #7928ca;
       --color-violet-dim: #7928ca1f;
-      --color-magenta: #d6006f;
-      --color-magenta-dim: #d6006f1f;
+      --color-magenta: #bb0061;
+      --color-magenta-dim: #bb00611f;
       --color-on-accent: #ffffff;
+      --color-amber: #935200;
+      --color-amber-dim: #9352001f;
+      --color-green: #117041;
+      --color-green-dim: #1170411f;
     }
   }
 
@@ -377,10 +392,10 @@
     --color-cyan: #8bd6aa;
     --color-cyan-dim: #8bd6aa1f;
     --color-blue: #7fc4e0;
-    --color-violet: #c9a0da;
-    --color-violet-dim: #c9a0da1f;
-    --color-magenta: #f09088;
-    --color-magenta-dim: #f090881f;
+    --color-violet: #caa2db;
+    --color-violet-dim: #caa2db1f;
+    --color-magenta: #f19890;
+    --color-magenta-dim: #f198901f;
     --color-on-accent: #0b1712;
   }
 
@@ -405,9 +420,13 @@
     --color-blue: #2c6e8f;
     --color-violet: #7a4e86;
     --color-violet-dim: #7a4e861f;
-    --color-magenta: #b23a2e;
-    --color-magenta-dim: #b23a2e1f;
+    --color-magenta: #a7362b;
+    --color-magenta-dim: #a7362b1f;
     --color-on-accent: #ffffff;
+    --color-amber: #8c4f00;
+    --color-amber-dim: #8c4f001f;
+    --color-green: #106b3e;
+    --color-green-dim: #106b3e1f;
   }
 
   /* Alpine System Mode: no `data-mode`, so follow the device. The dark base above
@@ -430,9 +449,13 @@
       --color-blue: #2c6e8f;
       --color-violet: #7a4e86;
       --color-violet-dim: #7a4e861f;
-      --color-magenta: #b23a2e;
-      --color-magenta-dim: #b23a2e1f;
+      --color-magenta: #a7362b;
+      --color-magenta-dim: #a7362b1f;
       --color-on-accent: #ffffff;
+      --color-amber: #8c4f00;
+      --color-amber-dim: #8c4f001f;
+      --color-green: #106b3e;
+      --color-green-dim: #106b3e1f;
     }
   }
 
@@ -466,10 +489,10 @@
     --color-cyan: #eba88b;
     --color-cyan-dim: #eba88b1f;
     --color-blue: #93c4c9;
-    --color-violet: #d2a0b6;
-    --color-violet-dim: #d2a0b61f;
-    --color-magenta: #f1908f;
-    --color-magenta-dim: #f1908f1f;
+    --color-violet: #d3a2b7;
+    --color-violet-dim: #d3a2b71f;
+    --color-magenta: #f29695;
+    --color-magenta-dim: #f296951f;
     --color-on-accent: #241611;
   }
 
@@ -489,14 +512,18 @@
     --color-text-muted: #75604f;
 
     /* Accents — deep terracotta leads; a cooler crimson keeps danger distinct */
-    --color-cyan: #98462e;
-    --color-cyan-dim: #98462e1f;
-    --color-blue: #3f6f74;
+    --color-cyan: #93442d;
+    --color-cyan-dim: #93442d1f;
+    --color-blue: #3f6e73;
     --color-violet: #7c4b63;
     --color-violet-dim: #7c4b631f;
-    --color-magenta: #be2f42;
-    --color-magenta-dim: #be2f421f;
+    --color-magenta: #a82a3b;
+    --color-magenta-dim: #a82a3b1f;
     --color-on-accent: #ffffff;
+    --color-amber: #884d00;
+    --color-amber-dim: #884d001f;
+    --color-green: #10693d;
+    --color-green-dim: #10693d1f;
   }
 
   /* Clay System Mode: no `data-mode`, so follow the device. The dark base above
@@ -514,14 +541,18 @@
       --color-text-secondary: #5e4a3d;
       --color-text-muted: #75604f;
 
-      --color-cyan: #98462e;
-      --color-cyan-dim: #98462e1f;
-      --color-blue: #3f6f74;
+      --color-cyan: #93442d;
+      --color-cyan-dim: #93442d1f;
+      --color-blue: #3f6e73;
       --color-violet: #7c4b63;
       --color-violet-dim: #7c4b631f;
-      --color-magenta: #be2f42;
-      --color-magenta-dim: #be2f421f;
+      --color-magenta: #a82a3b;
+      --color-magenta-dim: #a82a3b1f;
       --color-on-accent: #ffffff;
+      --color-amber: #884d00;
+      --color-amber-dim: #884d001f;
+      --color-green: #10693d;
+      --color-green-dim: #10693d1f;
     }
   }
 
@@ -558,8 +589,8 @@
     --color-blue: #7fb4f0;
     --color-violet: #b3a6f5;
     --color-violet-dim: #b3a6f51f;
-    --color-magenta: #f58a96;
-    --color-magenta-dim: #f58a961f;
+    --color-magenta: #f58e99;
+    --color-magenta-dim: #f58e991f;
     --color-on-accent: #0b1220;
   }
 
@@ -581,12 +612,16 @@
     /* Accents — deep cobalt leads on light; sky blue + indigo support, track red */
     --color-cyan: #234ed8;
     --color-cyan-dim: #234ed81f;
-    --color-blue: #2f72c0;
-    --color-violet: #5b4bc4;
-    --color-violet-dim: #5b4bc41f;
-    --color-magenta: #c62b42;
-    --color-magenta-dim: #c62b421f;
+    --color-blue: #2c6ab2;
+    --color-violet: #5a4ac4;
+    --color-violet-dim: #5a4ac41f;
+    --color-magenta: #ae263a;
+    --color-magenta-dim: #ae263a1f;
     --color-on-accent: #ffffff;
+    --color-amber: #8c4e00;
+    --color-amber-dim: #8c4e001f;
+    --color-green: #106b3e;
+    --color-green-dim: #106b3e1f;
   }
 
   /* Track System Mode: no `data-mode`, so follow the device. The dark base above
@@ -606,12 +641,16 @@
 
       --color-cyan: #234ed8;
       --color-cyan-dim: #234ed81f;
-      --color-blue: #2f72c0;
-      --color-violet: #5b4bc4;
-      --color-violet-dim: #5b4bc41f;
-      --color-magenta: #c62b42;
-      --color-magenta-dim: #c62b421f;
+      --color-blue: #2c6ab2;
+      --color-violet: #5a4ac4;
+      --color-violet-dim: #5a4ac41f;
+      --color-magenta: #ae263a;
+      --color-magenta-dim: #ae263a1f;
       --color-on-accent: #ffffff;
+      --color-amber: #8c4e00;
+      --color-amber-dim: #8c4e001f;
+      --color-green: #106b3e;
+      --color-green-dim: #106b3e1f;
     }
   }
 

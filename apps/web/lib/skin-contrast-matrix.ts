@@ -1,5 +1,7 @@
 import { contrastRatio, hexToRgb, WCAG_AA_NORMAL } from "./wcag-contrast.ts";
 
+export const CONTRAST_FLOOR = 4.6;
+
 export const TEXT_RUNGS = ["text-primary", "text-secondary", "text-muted"] as const;
 export const ACCENTS = ["cyan", "blue", "violet", "magenta", "amber", "green"] as const;
 export const TEXT_TOKENS = [...TEXT_RUNGS, ...ACCENTS] as const;
@@ -25,6 +27,25 @@ export const COMPOSITE_PAIRINGS = [
   { text: "green", background: "green-dim" },
   { text: "on-accent", background: "cyan" },
 ] as const;
+
+// Every colour must be classified. on-accent is text only on its declared fill;
+// surfaces, borders and dim fills are not ordinary foreground text.
+export const NON_TEXT_TOKENS = [
+  ...SURFACES, "border", "border-lite",
+  ...COMPOSITE_PAIRINGS.map(({ background }) => background).filter((token) => token.endsWith("-dim")),
+] as const;
+
+function assertTokenClassification(block: TokenBlock): void {
+  const classified = new Set<string>([
+    ...TEXT_TOKENS, ...NON_TEXT_TOKENS,
+    ...COMPOSITE_PAIRINGS.map(({ text }) => text),
+  ]);
+  for (const token of block.colors.keys()) {
+    if (!classified.has(token)) {
+      throw new Error(`${block.skin} ${block.mode}: unclassified --color-${token}`);
+    }
+  }
+}
 
 interface CssBlock { selector: string; body: string; context: readonly string[] }
 
@@ -54,8 +75,15 @@ function leafBlocks(css: string, context: readonly string[] = []): CssBlock[] {
 // from @theme are inherited just as they are in the browser (notably amber/green).
 export function parseColorBlocks(css: string): TokenBlock[] {
   const leaves = leafBlocks(css.replace(/\/\*[\s\S]*?\*\//g, ""));
+  for (const { selector, body, context } of leaves) {
+    if (!/--color-[\w-]+\s*:/.test(body) || /--color-base\s*:/.test(body)) continue;
+    const skin = selector.match(/data-skin="([\w-]+)"/)?.[1] ?? "pulse";
+    const mode = selector.match(/data-mode="(light|dark)"/)?.[1]
+      ?? (context.some((item) => /prefers-color-scheme:\s*light/.test(item)) ? "light" : "dark");
+    throw new Error(`${skin} ${mode}: colour override without --color-base (${selector})`);
+  }
   const variants = leaves.filter(({ body }) => /--color-base\s*:/.test(body));
-  const declarations = (body: string) => [...body.matchAll(/--color-([\w-]+):\s*([^;]+);/g)]
+  const declarations = (body: string) => [...body.matchAll(/--color-([\w-]+)\s*:\s*([^;]+);/g)]
     .map((match) => [match[1], match[2].trim()] as const);
   const defaults = declarations(variants.find(({ selector }) => selector === "@theme")?.body ?? "");
   return variants.map(({ selector, body, context }) => {
@@ -114,7 +142,7 @@ function measurePairing(block: TokenBlock, kind: ContrastPairing["kind"], text: 
   });
   const binding = measurements.reduce((worst, next) => next.ratio < worst.ratio ? next : worst);
   return { kind, text, background, measurements, bindingSurface: binding.surface,
-    ratio: binding.ratio, passes: binding.ratio >= WCAG_AA_NORMAL };
+    ratio: binding.ratio, passes: binding.ratio >= CONTRAST_FLOOR };
 }
 
 export function enumerateFlatPairings(block: TokenBlock): ContrastPairing[] {
@@ -126,8 +154,11 @@ export function enumerateCompositePairings(block: TokenBlock): ContrastPairing[]
 }
 
 export function buildContrastMatrix(css: string) {
-  return parseColorBlocks(css).map((block) => ({ ...block,
-    pairings: [...enumerateFlatPairings(block), ...enumerateCompositePairings(block)] }));
+  return parseColorBlocks(css).map((block) => {
+    assertTokenClassification(block);
+    return { ...block,
+      pairings: [...enumerateFlatPairings(block), ...enumerateCompositePairings(block)] };
+  });
 }
 
 export type ContrastMatrix = ReturnType<typeof buildContrastMatrix>;
@@ -149,7 +180,7 @@ export function formatContrastReport(matrix: ContrastMatrix): string {
   ));
   const lines = [
     "# Skin contrast matrix", "",
-    `WCAG AA normal text: ${WCAG_AA_NORMAL}:1. Totals count the ${variants.length} explicit Skin × Mode variants; System copies appear below separately.`,
+    `WCAG AA normal text: ${WCAG_AA_NORMAL}:1; Contrast Floor: ${CONTRAST_FLOOR}:1. Totals count the ${variants.length} explicit Skin × Mode variants; System copies appear below separately.`,
     "", failureSummary(pairings), "",
     `Earlier audit scope: ${failureSummary(earlierAudit)}. This subtotal excludes inherited text tokens and on-accent button labels.`,
     "", "Ratios are rounded only for display; PASS/FAIL uses the unrounded ratio. Binding marks the worst surface for each pairing.", "",
@@ -158,7 +189,7 @@ export function formatContrastReport(matrix: ContrastMatrix): string {
   ];
   const rows = matrix.flatMap((variant) => variant.pairings.flatMap((pairing) =>
     pairing.measurements.map((measurement) =>
-      `| ${variant.skin} ${variant.mode}${variant.isSystem ? " (System)" : ""} | ${pairing.kind} | ${pairing.text} | ${pairing.background} | ${measurement.surface} | ${measurement.foreground} | ${measurement.background} | ${measurement.ratio.toFixed(2)} | ${measurement.ratio >= WCAG_AA_NORMAL ? "PASS" : "FAIL"} | ${measurement.surface === pairing.bindingSurface ? "yes" : ""} |`,
+      `| ${variant.skin} ${variant.mode}${variant.isSystem ? " (System)" : ""} | ${pairing.kind} | ${pairing.text} | ${pairing.background} | ${measurement.surface} | ${measurement.foreground} | ${measurement.background} | ${measurement.ratio.toFixed(2)} | ${measurement.ratio >= CONTRAST_FLOOR ? "PASS" : "FAIL"} | ${measurement.surface === pairing.bindingSurface ? "yes" : ""} |`,
     ),
   ));
   return [...lines, ...rows, ""].join("\n");

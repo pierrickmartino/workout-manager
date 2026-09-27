@@ -132,3 +132,8 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   if a projection or the partition forgets it (ADR-0069).
 - Frontend logic → put it in `apps/web/lib/` as a view-model with a `*.test.ts`,
   keep components thin.
+
+- New Skin colour token or text/fill convention → classify the token and extend
+  `apps/web/lib/skin-contrast-matrix.ts`'s pairing registry. The Contrast Floor
+  guard checks every flat and declared composite pairing at 4.6:1 in every Skin
+  and Mode, including System copies; unknown colour tokens fail closed (ADR-0081).

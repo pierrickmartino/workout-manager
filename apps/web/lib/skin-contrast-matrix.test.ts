@@ -12,8 +12,8 @@ test("resolves inherited colours and System Mode light overrides from the token 
   assert.equal(blocks.length, 18);
   assert.equal(blocks.filter((block) => block.isSystem).length, 6);
   const aurora = blocks.find((block) => block.skin === "aurora" && block.mode === "light");
-  assert.equal(aurora?.colors.get("amber"), "#ffb454");
-  assert.equal(aurora?.colors.get("cyan"), "#0f766e");
+  assert.equal(aurora?.colors.get("amber"), "#925200");
+  assert.equal(aurora?.colors.get("cyan"), "#0e6d66");
 });
 
 test("preserves System Mode copies when their values differ from explicit Light Mode", () => {
@@ -43,9 +43,9 @@ test("reports every surface measurement and the binding surface as written evide
   // Act
   const report = formatContrastReport(buildContrastMatrix(css));
   // Assert
-  assert.match(report, /50 failing pairings: 18 flat, 32 composite/);
-  assert.match(report, /Earlier audit scope: 29 failing pairings: 8 flat, 21 composite/);
-  assert.match(report, /pulse light \| composite \| magenta \| magenta-dim \| elevated \|.*3\.51 \| FAIL/);
+  assert.match(report, /0 failing pairings: 0 flat, 0 composite/);
+  assert.match(report, /Earlier audit scope: 0 failing pairings: 0 flat, 0 composite/);
+  assert.match(report, /pulse light \| composite \| magenta \| magenta-dim \| elevated \|.*4\.6[0-9] \| PASS/);
   assert.match(report, /pulse light \(System\)/);
 });
 
@@ -62,10 +62,10 @@ test("enumerates the Text Ramp and six text accents against all three surfaces",
   assert.equal(pairings.flatMap(({ measurements }) => measurements).length, 27);
   const cyan = pairings.find(({ text }) => text === "cyan")!;
   assert.deepEqual(cyan.measurements.map(({ surface, ratio }) => [surface, ratio.toFixed(2)]), [
-    ["base", "3.75"], ["surface", "3.59"], ["elevated", "3.41"],
+    ["base", "6.01"], ["surface", "5.76"], ["elevated", "5.47"],
   ]);
   assert.equal(cyan.bindingSurface, "elevated");
-  assert.equal(cyan.passes, false);
+  assert.equal(cyan.passes, true);
 });
 
 test("enumerates declared tint and primary button pairings without inventing a blue tint", () => {
@@ -80,8 +80,8 @@ test("enumerates declared tint and primary button pairings without inventing a b
     ["amber", "amber-dim"], ["green", "green-dim"], ["on-accent", "cyan"],
   ]);
   const button = pairings.find(({ text }) => text === "on-accent")!;
-  assert.equal(button.ratio.toFixed(2), "3.75");
-  assert.deepEqual(button.measurements.map(({ background }) => background), ["#0891a5", "#0891a5", "#0891a5"]);
+  assert.equal(button.ratio.toFixed(2), "6.01");
+  assert.deepEqual(button.measurements.map(({ background }) => background), ["#066d7d", "#066d7d", "#066d7d"]);
 });
 
 test("composites an explicit alpha in sRGB before measuring contrast", () => {
@@ -121,7 +121,7 @@ test("selects the actual binding surface rather than assuming elevated always bi
   assert.equal(cyan.measurements.find(({ surface }) => surface === "elevated")?.ratio, 21);
 });
 
-test("reproduces the browser audit's magenta-on-tint measurements", () => {
+test("retuned magenta-on-tint clears the floor in the browser audit Skins", () => {
   // Arrange
   const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
   // Act
@@ -130,7 +130,7 @@ test("reproduces the browser audit's magenta-on-tint measurements", () => {
   // Assert
   assert.deepEqual(matrix.map(({ skin, pairings }) => [skin,
     pairings.find(({ kind, text }) => kind === "composite" && text === "magenta")!.ratio.toFixed(2)]), [
-    ["pulse", "3.51"], ["vercel", "3.74"], ["track", "3.85"],
+    ["pulse", "4.61"], ["vercel", "4.60"], ["track", "4.62"],
   ]);
 });
 
@@ -150,4 +150,29 @@ test("rejects an unclosed token block rather than reporting a truncated matrix",
   const css = "@theme { --color-base: #000;";
   // Act / Assert
   assert.throws(() => parseColorBlocks(css), /Unclosed CSS block/);
+});
+
+test("unclassified colour tokens fail closed instead of escaping the registry", () => {
+  const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+  for (const declaration of ["--color-new-accent: #fff;", "--color-new-accent : #fff;"]) {
+    assert.throws(() => buildContrastMatrix(css.replace("@theme {", `@theme { ${declaration}`)),
+      /pulse dark: unclassified --color-new-accent/);
+  }
+});
+
+test("the Contrast Floor rejects an AA-passing pairing below its safety margin", () => {
+  const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+  const pulse = parseColorBlocks(css)[0];
+  const block = { ...pulse, colors: new Map([...pulse.colors,
+    ["base", "#fff"], ["surface", "#fff"], ["elevated", "#fff"], ["cyan", "#767676"]]) };
+  const cyan = enumerateFlatPairings(block).find(({ text }) => text === "cyan")!;
+  assert.ok(cyan.ratio >= 4.5 && cyan.ratio < 4.6);
+  assert.equal(cyan.passes, false);
+});
+
+test("colour overrides outside complete variants cannot bypass the guard", () => {
+  const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.throws(() => buildContrastMatrix(css +
+    '\n[data-skin="pulse"][data-mode="light"] { --color-new-text: #fff; }'),
+    /pulse light: colour override without --color-base/);
 });

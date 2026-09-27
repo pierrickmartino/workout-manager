@@ -1,0 +1,557 @@
+[
+  {
+    "skin": "pulse",
+    "mode": "dark",
+    "token": "violet",
+    "original": "#9a6bff",
+    "retuned": "#b08bff",
+    "surfaces": {
+      "base": "#09090b",
+      "surface": "#18181b",
+      "elevated": "#27272a"
+    },
+    "originalLightness": 0.7098039215686275,
+    "targetLightness": 0.7716039215686274,
+    "minimumRatio": 4.62745763622508
+  },
+  {
+    "skin": "pulse",
+    "mode": "dark",
+    "token": "magenta",
+    "original": "#ff4d9d",
+    "retuned": "#ff67ac",
+    "surfaces": {
+      "base": "#09090b",
+      "surface": "#18181b",
+      "elevated": "#27272a"
+    },
+    "originalLightness": 0.6509803921568628,
+    "targetLightness": 0.7026803921568627,
+    "minimumRatio": 4.601454375211963
+  },
+  {
+    "skin": "pulse",
+    "mode": "light",
+    "token": "cyan",
+    "original": "#0891a5",
+    "retuned": "#066d7d",
+    "surfaces": {
+      "base": "#ffffff",
+      "surface": "#fafafa",
+      "elevated": "#f4f4f5"
+    },
+    "originalLightness": 0.3392156862745098,
+    "targetLightness": 0.2561156862745098,
+    "minimumRatio": 4.6198429168701525
+  },
+  {
+    "skin": "pulse",
+    "mode": "light",
+    "token": "violet",
+    "original": "#7c3aed",
+    "retuned": "#7733ec",
+    "surfaces": {
+      "base": "#ffffff",
+      "surface": "#fafafa",
+      "elevated": "#f4f4f5"
+    },
+    "originalLightness": 0.5784313725490197,
+    "targetLightness": 0.5639313725490197,
+    "minimumRatio": 4.606471754569592
+  },
+  {
+    "skin": "pulse",
+    "mode": "light",
+    "token": "magenta",
+    "original": "#db2777",
+    "retuned": "#b81f63",
+    "surfaces": {
+      "base": "#ffffff",
+      "surface": "#fafafa",
+      "elevated": "#f4f4f5"
+    },
+    "originalLightness": 0.5058823529411764,
+    "targetLightness": 0.4219823529411765,
+    "minimumRatio": 4.6097233835515325
+  },
+  {
+    "skin": "pulse",
+    "mode": "light",
+    "token": "amber",
+    "original": "#b45309",
+    "retuned": "#a04a08",
+    "surfaces": {
+      "base": "#ffffff",
+      "surface": "#fafafa",
+      "elevated": "#f4f4f5"
+    },
+    "originalLightness": 0.37058823529411766,
+    "targetLightness": 0.33038823529411765,
+    "minimumRatio": 4.613672547832866
+  },
+  {
+    "skin": "pulse",
+    "mode": "light",
+    "token": "green",
+    "original": "#059669",
+    "retuned": "#04714f",
+    "surfaces": {
+      "base": "#ffffff",
+      "surface": "#fafafa",
+      "elevated": "#f4f4f5"
+    },
+    "originalLightness": 0.303921568627451,
+    "targetLightness": 0.229921568627451,
+    "minimumRatio": 4.618818584424176
+  },
+  {
+    "skin": "aurora",
+    "mode": "light",
+    "token": "cyan",
+    "original": "#0f766e",
+    "retuned": "#0e6d66",
+    "surfaces": {
+      "base": "#f6f8fc",
+      "surface": "#ffffff",
+      "elevated": "#eef2f9"
+    },
+    "originalLightness": 0.2607843137254902,
+    "targetLightness": 0.2419843137254902,
+    "minimumRatio": 4.650462152599201
+  },
+  {
+    "skin": "aurora",
+    "mode": "light",
+    "token": "blue",
+    "original": "#0284c7",
+    "retuned": "#0273ae",
+    "surfaces": {
+      "base": "#f6f8fc",
+      "surface": "#ffffff",
+      "elevated": "#eef2f9"
+    },
+    "originalLightness": 0.3941176470588235,
+    "targetLightness": 0.3448176470588235,
+    "minimumRatio": 4.600062641135549
+  },
+  {
+    "skin": "aurora",
+    "mode": "light",
+    "token": "violet",
+    "original": "#7c3aed",
+    "retuned": "#742fec",
+    "surfaces": {
+      "base": "#f6f8fc",
+      "surface": "#ffffff",
+      "elevated": "#eef2f9"
+    },
+    "originalLightness": 0.5784313725490197,
+    "targetLightness": 0.5542313725490197,
+    "minimumRatio": 4.615250009440511
+  },
+  {
+    "skin": "aurora",
+    "mode": "light",
+    "token": "magenta",
+    "original": "#be185d",
+    "retuned": "#b8175a",
+    "surfaces": {
+      "base": "#f6f8fc",
+      "surface": "#ffffff",
+      "elevated": "#eef2f9"
+    },
+    "originalLightness": 0.4196078431372549,
+    "targetLightness": 0.4074078431372549,
+    "minimumRatio": 4.612869520523664
+  },
+  {
+    "skin": "aurora",
+    "mode": "light",
+    "token": "amber",
+    "original": "#ffb454",
+    "retuned": "#925200",
+    "surfaces": {
+      "base": "#f6f8fc",
+      "surface": "#ffffff",
+      "elevated": "#eef2f9"
+    },
+    "originalLightness": 0.6647058823529411,
+    "targetLightness": 0.28720588235294114,
+    "minimumRatio": 4.620475027698036
+  },
+  {
+    "skin": "aurora",
+    "mode": "light",
+    "token": "green",
+    "original": "#35e08b",
+    "retuned": "#117041",
+    "surfaces": {
+      "base": "#f6f8fc",
+      "surface": "#ffffff",
+      "elevated": "#eef2f9"
+    },
+    "originalLightness": 0.5431372549019607,
+    "targetLightness": 0.25443725490196073,
+    "minimumRatio": 4.610385917976103
+  },
+  {
+    "skin": "vercel",
+    "mode": "dark",
+    "token": "cyan",
+    "original": "#0070f3",
+    "retuned": "#258aff",
+    "surfaces": {
+      "base": "#000000",
+      "surface": "#0a0a0a",
+      "elevated": "#161616"
+    },
+    "originalLightness": 0.4764705882352941,
+    "targetLightness": 0.572670588235294,
+    "minimumRatio": 4.605026017644097
+  },
+  {
+    "skin": "vercel",
+    "mode": "dark",
+    "token": "violet",
+    "original": "#a06bf5",
+    "retuned": "#a470f5",
+    "surfaces": {
+      "base": "#000000",
+      "surface": "#0a0a0a",
+      "elevated": "#161616"
+    },
+    "originalLightness": 0.6901960784313725,
+    "targetLightness": 0.7016960784313725,
+    "minimumRatio": 4.609754261605347
+  },
+  {
+    "skin": "vercel",
+    "mode": "light",
+    "token": "cyan",
+    "original": "#0070f3",
+    "retuned": "#005dc9",
+    "surfaces": {
+      "base": "#ffffff",
+      "surface": "#fafafa",
+      "elevated": "#f2f2f2"
+    },
+    "originalLightness": 0.4764705882352941,
+    "targetLightness": 0.39507058823529406,
+    "minimumRatio": 4.609470291035211
+  },
+  {
+    "skin": "vercel",
+    "mode": "light",
+    "token": "magenta",
+    "original": "#d6006f",
+    "retuned": "#bb0061",
+    "surfaces": {
+      "base": "#ffffff",
+      "surface": "#fafafa",
+      "elevated": "#f2f2f2"
+    },
+    "originalLightness": 0.4196078431372549,
+    "targetLightness": 0.3676078431372549,
+    "minimumRatio": 4.60391506133393
+  },
+  {
+    "skin": "vercel",
+    "mode": "light",
+    "token": "amber",
+    "original": "#ffb454",
+    "retuned": "#935200",
+    "surfaces": {
+      "base": "#ffffff",
+      "surface": "#fafafa",
+      "elevated": "#f2f2f2"
+    },
+    "originalLightness": 0.6647058823529411,
+    "targetLightness": 0.28810588235294116,
+    "minimumRatio": 4.6063432083407285
+  },
+  {
+    "skin": "vercel",
+    "mode": "light",
+    "token": "green",
+    "original": "#35e08b",
+    "retuned": "#117041",
+    "surfaces": {
+      "base": "#ffffff",
+      "surface": "#fafafa",
+      "elevated": "#f2f2f2"
+    },
+    "originalLightness": 0.5431372549019607,
+    "targetLightness": 0.25443725490196073,
+    "minimumRatio": 4.623227085914581
+  },
+  {
+    "skin": "alpine",
+    "mode": "dark",
+    "token": "violet",
+    "original": "#c9a0da",
+    "retuned": "#caa2db",
+    "surfaces": {
+      "base": "#101b17",
+      "surface": "#1b2b23",
+      "elevated": "#25382e"
+    },
+    "originalLightness": 0.7411764705882353,
+    "targetLightness": 0.7452764705882353,
+    "minimumRatio": 4.606408230122849
+  },
+  {
+    "skin": "alpine",
+    "mode": "dark",
+    "token": "magenta",
+    "original": "#f09088",
+    "retuned": "#f19890",
+    "surfaces": {
+      "base": "#101b17",
+      "surface": "#1b2b23",
+      "elevated": "#25382e"
+    },
+    "originalLightness": 0.7372549019607844,
+    "targetLightness": 0.7550549019607844,
+    "minimumRatio": 4.603543541235848
+  },
+  {
+    "skin": "alpine",
+    "mode": "light",
+    "token": "magenta",
+    "original": "#b23a2e",
+    "retuned": "#a7362b",
+    "surfaces": {
+      "base": "#f2f5ef",
+      "surface": "#ffffff",
+      "elevated": "#e8ede3"
+    },
+    "originalLightness": 0.4392156862745098,
+    "targetLightness": 0.4126156862745098,
+    "minimumRatio": 4.607863537833172
+  },
+  {
+    "skin": "alpine",
+    "mode": "light",
+    "token": "amber",
+    "original": "#ffb454",
+    "retuned": "#8c4f00",
+    "surfaces": {
+      "base": "#f2f5ef",
+      "surface": "#ffffff",
+      "elevated": "#e8ede3"
+    },
+    "originalLightness": 0.6647058823529411,
+    "targetLightness": 0.27540588235294117,
+    "minimumRatio": 4.616599998771621
+  },
+  {
+    "skin": "alpine",
+    "mode": "light",
+    "token": "green",
+    "original": "#35e08b",
+    "retuned": "#106b3e",
+    "surfaces": {
+      "base": "#f2f5ef",
+      "surface": "#ffffff",
+      "elevated": "#e8ede3"
+    },
+    "originalLightness": 0.5431372549019607,
+    "targetLightness": 0.24303725490196076,
+    "minimumRatio": 4.653983646983805
+  },
+  {
+    "skin": "clay",
+    "mode": "dark",
+    "token": "violet",
+    "original": "#d2a0b6",
+    "retuned": "#d3a2b7",
+    "surfaces": {
+      "base": "#211b18",
+      "surface": "#302621",
+      "elevated": "#3d302a"
+    },
+    "originalLightness": 0.7254901960784313,
+    "targetLightness": 0.7298901960784313,
+    "minimumRatio": 4.615480007019484
+  },
+  {
+    "skin": "clay",
+    "mode": "dark",
+    "token": "magenta",
+    "original": "#f1908f",
+    "retuned": "#f29695",
+    "surfaces": {
+      "base": "#211b18",
+      "surface": "#302621",
+      "elevated": "#3d302a"
+    },
+    "originalLightness": 0.7529411764705882,
+    "targetLightness": 0.7652411764705882,
+    "minimumRatio": 4.625682163250814
+  },
+  {
+    "skin": "clay",
+    "mode": "light",
+    "token": "cyan",
+    "original": "#98462e",
+    "retuned": "#93442d",
+    "surfaces": {
+      "base": "#f8f1e9",
+      "surface": "#fffcf7",
+      "elevated": "#f0e6da"
+    },
+    "originalLightness": 0.38823529411764707,
+    "targetLightness": 0.37673529411764706,
+    "minimumRatio": 4.6231450815458395
+  },
+  {
+    "skin": "clay",
+    "mode": "light",
+    "token": "blue",
+    "original": "#3f6f74",
+    "retuned": "#3f6e73",
+    "surfaces": {
+      "base": "#f8f1e9",
+      "surface": "#fffcf7",
+      "elevated": "#f0e6da"
+    },
+    "originalLightness": 0.3509803921568627,
+    "targetLightness": 0.34938039215686273,
+    "minimumRatio": 4.617742460010811
+  },
+  {
+    "skin": "clay",
+    "mode": "light",
+    "token": "magenta",
+    "original": "#be2f42",
+    "retuned": "#a82a3b",
+    "surfaces": {
+      "base": "#f8f1e9",
+      "surface": "#fffcf7",
+      "elevated": "#f0e6da"
+    },
+    "originalLightness": 0.4647058823529412,
+    "targetLightness": 0.4121058823529412,
+    "minimumRatio": 4.624454611917922
+  },
+  {
+    "skin": "clay",
+    "mode": "light",
+    "token": "amber",
+    "original": "#ffb454",
+    "retuned": "#884d00",
+    "surfaces": {
+      "base": "#f8f1e9",
+      "surface": "#fffcf7",
+      "elevated": "#f0e6da"
+    },
+    "originalLightness": 0.6647058823529411,
+    "targetLightness": 0.26760588235294114,
+    "minimumRatio": 4.612085796365152
+  },
+  {
+    "skin": "clay",
+    "mode": "light",
+    "token": "green",
+    "original": "#35e08b",
+    "retuned": "#10693d",
+    "surfaces": {
+      "base": "#f8f1e9",
+      "surface": "#fffcf7",
+      "elevated": "#f0e6da"
+    },
+    "originalLightness": 0.5431372549019607,
+    "targetLightness": 0.23853725490196076,
+    "minimumRatio": 4.621830383914533
+  },
+  {
+    "skin": "track",
+    "mode": "dark",
+    "token": "magenta",
+    "original": "#f58a96",
+    "retuned": "#f58e99",
+    "surfaces": {
+      "base": "#101520",
+      "surface": "#1b2435",
+      "elevated": "#273245"
+    },
+    "originalLightness": 0.7509803921568627,
+    "targetLightness": 0.7584803921568627,
+    "minimumRatio": 4.609531475828867
+  },
+  {
+    "skin": "track",
+    "mode": "light",
+    "token": "blue",
+    "original": "#2f72c0",
+    "retuned": "#2c6ab2",
+    "surfaces": {
+      "base": "#f3f5f8",
+      "surface": "#ffffff",
+      "elevated": "#e7ebf1"
+    },
+    "originalLightness": 0.46862745098039216,
+    "targetLightness": 0.43562745098039213,
+    "minimumRatio": 4.6047302930796015
+  },
+  {
+    "skin": "track",
+    "mode": "light",
+    "token": "violet",
+    "original": "#5b4bc4",
+    "retuned": "#5a4ac4",
+    "surfaces": {
+      "base": "#f3f5f8",
+      "surface": "#ffffff",
+      "elevated": "#e7ebf1"
+    },
+    "originalLightness": 0.5313725490196078,
+    "targetLightness": 0.5298725490196079,
+    "minimumRatio": 4.605738559554382
+  },
+  {
+    "skin": "track",
+    "mode": "light",
+    "token": "magenta",
+    "original": "#c62b42",
+    "retuned": "#ae263a",
+    "surfaces": {
+      "base": "#f3f5f8",
+      "surface": "#ffffff",
+      "elevated": "#e7ebf1"
+    },
+    "originalLightness": 0.4725490196078431,
+    "targetLightness": 0.41644901960784314,
+    "minimumRatio": 4.623869680854634
+  },
+  {
+    "skin": "track",
+    "mode": "light",
+    "token": "amber",
+    "original": "#ffb454",
+    "retuned": "#8c4e00",
+    "surfaces": {
+      "base": "#f3f5f8",
+      "surface": "#ffffff",
+      "elevated": "#e7ebf1"
+    },
+    "originalLightness": 0.6647058823529411,
+    "targetLightness": 0.27410588235294114,
+    "minimumRatio": 4.6230524198241705
+  },
+  {
+    "skin": "track",
+    "mode": "light",
+    "token": "green",
+    "original": "#35e08b",
+    "retuned": "#106b3e",
+    "surfaces": {
+      "base": "#f3f5f8",
+      "surface": "#ffffff",
+      "elevated": "#e7ebf1"
+    },
+    "originalLightness": 0.5431372549019607,
+    "targetLightness": 0.24303725490196076,
+    "minimumRatio": 4.617481370895315
+  }
+]

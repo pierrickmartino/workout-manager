@@ -387,7 +387,7 @@ The rendered appearance of the app for one user at one moment — always the *co
 _Avoid_: Style, look, colour scheme (as the concept name)
 
 **Skin**:
-A named **visual identity** — the coordinated **colour, typography, and shape** the whole app draws with (ADR-0050). Skins come from a **fixed, curated catalog** (never user- or AI-authored). A Skin's **colour** is polarity-dependent, so each Skin defines **both a light and a dark variant** and composes with any Mode; its **typography** (typefaces) and **shape** (corner roundness) are Mode-invariant, defined once per Skin. Every rung of a well-formed Skin's **Text Ramp** clears the **Contrast Floor** in both variants. Exactly one Skin is live app-wide at a time (the Active Skin); an ordinary user never chooses a Skin. Distinct from Mode, which is the light/dark polarity chosen *within* a Skin.
+A named **visual identity** — the coordinated **colour, typography, and shape** the whole app draws with (ADR-0050). Skins come from a **fixed, curated catalog** (never user- or AI-authored). A Skin's **colour** is polarity-dependent, so each Skin defines **both a light and a dark variant** and composes with any Mode; its **typography** (typefaces) and **shape** (corner roundness) are Mode-invariant, defined once per Skin. Every text-bearing token of a well-formed Skin clears the **Contrast Floor** in both variants, including Accents and declared text-on-fill pairings. Exactly one Skin is live app-wide at a time (the Active Skin); an ordinary user never chooses a Skin. Distinct from Mode, which is the light/dark polarity chosen *within* a Skin.
 _Avoid_: Theme (bare), palette / colour scheme (a Skin is more than its colours; palette names only the colour group)
 
 **Mode**:
@@ -399,11 +399,15 @@ The single Skin currently published for the whole app — what every user's Mode
 _Avoid_: Current theme, global theme, default skin (that is only the Active Skin's starting value)
 
 **Text Ramp**:
-The ordered three-rung set of text colours every Skin defines, descending in prominence: **primary** (headings and headline values), **secondary** (supporting copy), and **muted** (quiet metadata — the mono micro-labels, captions, and data labels that carry the app's structure). "Muted" is the quietest rung, never an illegible one: every rung must clear the **Contrast Floor**. Distinct from the accent colours (cyan, violet…), which are not part of the ramp.
+The ordered three-rung set of text colours every Skin defines, descending in prominence: **primary** (headings and headline values), **secondary** (supporting copy), and **muted** (quiet metadata — the mono micro-labels, captions, and data labels that carry the app's structure). "Muted" is the quietest rung, never an illegible one: every rung must clear the **Contrast Floor**. Distinct from **Accents** (cyan, violet…), which are not part of the ramp but are also under the Contrast Floor.
 _Avoid_: label colour (a rung is a Skin-wide role, not one component's colour), greyed-out text
 
+**Accent**:
+A semantic colour slot a Skin defines (cyan, blue, violet, magenta, amber, green), used for emphasis, links, overlines, chips, badges, alerts and fills. Distinct from the three-rung **Text Ramp** but subject to the same **Contrast Floor**. Dim variants are translucent fills; **on-accent** is the text colour specifically for the primary Accent fill, checked on that fill rather than neutral surfaces. Hue and saturation carry meaning while lightness adjusts to the Skin's surfaces.
+_Avoid_: Highlight colour (as a replacement term)
+
 **Contrast Floor**:
-The accessibility invariant on a Skin's **Text Ramp**: every rung reaches **WCAG AA** contrast (4.5:1) against **every** surface (base, surface, elevated), in **both** Mode variants. The smallest labels never qualify as "large text", so 4.5:1 is the single bar for all body-size text — a smaller label earns no lighter threshold. A hard requirement of a well-formed Skin, enforced as an invariant rather than left to review (ADR-0070).
+The accessibility invariant on **all text-bearing tokens** of a Skin: Text Ramp rungs and ordinary Accents reach at least **4.6:1** against every surface (base, surface, elevated), and every declared composite pairing (Accent on its own tint; on-accent button label on its fill) clears the same floor after sRGB alpha blending over each surface, in both Mode variants including System copies. This enforces **WCAG AA** normal-text contrast (4.5:1) with ADR-0070's safety margin; the smallest labels never qualify as large text. A hard requirement of a well-formed Skin, mechanized over the token source and a fail-closed pairing classification (ADR-0081, superseding ADR-0070). New text/fill conventions must extend the registry. Ancestor opacity is outside this token-only invariant and remains the browser harness's responsibility.
 _Avoid_: contrast ratio (bare), a11y pass
 
 **Interface Preference**:
