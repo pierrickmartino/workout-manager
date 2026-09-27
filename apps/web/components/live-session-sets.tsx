@@ -196,7 +196,7 @@ function SetRow({ set, isCurrent, weightUnit, onComplete, onSkip }: SetRowProps)
     <Card
       className={
         completed
-          ? "flex flex-col gap-3 border-cyan/40 bg-surface p-4 opacity-80"
+          ? "flex flex-col gap-3 border-cyan/40 bg-surface p-4"
           : isCurrent
             ? "flex flex-col gap-3 border-cyan p-4"
             : "flex flex-col gap-3 p-4"

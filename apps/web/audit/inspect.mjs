@@ -1,8 +1,18 @@
 // Runs inside a browser, with no fixture-specific selectors for measurements.
 export function inspect() {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 1;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
   const rgba = value => {
     const match = value.match(/^rgba?\(([^)]+)\)$/);
-    if (!match) return null;
+    if (!match) {
+      if (!context || !CSS.supports("color", value)) return null;
+      context.clearRect(0, 0, 1, 1);
+      context.fillStyle = value;
+      context.fillRect(0, 0, 1, 1);
+      const [r, g, b, alpha] = context.getImageData(0, 0, 1, 1).data;
+      return [r, g, b, alpha / 255];
+    }
     const parts = match[1].split(/[, /]+/).map(Number);
     return [parts[0], parts[1], parts[2], parts[3] ?? 1];
   };

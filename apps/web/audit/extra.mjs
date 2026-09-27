@@ -35,12 +35,23 @@ for (const [engine, type] of [["chromium", chromium], ["webkit", webkit]]) {
         page.off("pageerror", handler);
         if (errors.length) throw new Error(errors.join("; "));
         const result = { ...meta, ...await page.evaluate(inspect) };
+        if (statesOnly) {
+          const completedCard = page.locator("main div").filter({ has: page.getByText("DONE", { exact: true }) })
+            .filter({ has: page.getByText(/^Prescribed:/) }).last();
+          const notes = await completedCard.locator("p").allTextContents();
+          const prescription = result.texts.find(text => text.text === notes.find(note => note.startsWith("Prescribed:")));
+          const previous = result.texts.find(text => text.text === notes.find(note => note.startsWith("Previous:")));
+          if (!prescription || !previous) throw new Error("Completed card notes were not measured");
+          result.completedNotes = { prescription, previous };
+          results.push(result);
+          if (prescription.ratio < 4.5) throw new Error(`Completed prescription contrast ${prescription.ratio.toFixed(2)} is below 4.5`);
+        }
         if (skin === "pulse" && mode === "light") {
           const name = `${engine}-pulse-light-${journey}-320x568-z1-${meta.state}.png`;
           await page.screenshot({ path: resolve(output, "screenshots", name) });
           result.screenshot = `screenshots/${name}`;
         }
-        results.push(result);
+        if (!statesOnly) results.push(result);
       } catch (error) { failures.push({ ...meta, error: error.message }); }
     }
     console.log(`${engine}: supplementary ${skin}/${mode}`);

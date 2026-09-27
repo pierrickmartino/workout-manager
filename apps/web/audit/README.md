@@ -32,9 +32,17 @@ group opacity, the unpaged taxonomy at 100/1,000/10,000 rows, and completed-set
 states. Fontsource supplies the same production font families locally; these
 files are not guaranteed byte-identical to Next's generated font subsets.
 
+The states-only run records `completedNotes.prescription` and
+`completedNotes.previous` in `states.json.gz`, including composited colours and
+ratios. It fails when either note cannot be measured or the completed prescription
+note falls below 4.5:1. Previous-attempt contrast is reported without enforcing a
+floor here. Fixtures include synthetic previous performance for this check.
+
 Contrast calculations composite solid backgrounds, alpha foregrounds and nested
 opacity groups. Images, gradients, filters/backdrop blur, blend modes, and unsupported
-color representations are recorded as unresolved rather than scored. Disabled
+color representations are recorded as unresolved rather than scored. Browser-supported
+CSS colours such as `color-mix()` are resolved through an sRGB canvas pixel before
+compositing. Disabled
 controls are recorded separately and excluded from failure counts. New runs
 sample the first 4,000 elements for contrast, while recording the entire DOM
 and actual rendered row counts. The recorded original history matrix used an

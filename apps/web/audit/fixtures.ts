@@ -31,7 +31,9 @@ export const prescriptions: ExercisePrescription[] = exercises.slice(0, 3).map((
   prescribed_quantity: { kind: "repetitions", count: 12, text: "12" },
   exercise_id: exercise.id, exercise_name: exercise.name, exercise_description: null,
   targeted_muscles: exercise.targeted_muscles, required_equipment: exercise.required_equipment,
-  provenance: "curated", previous_performance: [],
+  provenance: "curated", previous_performance: [
+    { reps: 8, load: { kind: "absolute", text: "65 kg", kg: 65 } },
+  ],
 }));
 export const workout: WorkoutSession = {
   id: 1, clerk_user_id: "audit-synthetic-account", training_type: "strength", duration_minutes: 30,
