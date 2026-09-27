@@ -1,5 +1,8 @@
 # Layout, scale, large-data and contrast validation
 
+**Superseded by [v2 validation](ui-layout-validation-v2.md).** This archived report
+retains its original measurements and priorities; use v2 for current findings.
+
 **Historical evidence:** [#562's split-fixture re-validation](ui-layout-revalidation.md)
 supersedes this report's layout input attribution, font-payload limitation and
 completed-card/rendered-Accent measurements. Original captures and numbers below

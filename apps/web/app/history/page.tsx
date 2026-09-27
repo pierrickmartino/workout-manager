@@ -11,8 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import { HistoryBrowser } from "@/components/HistoryBrowser";
 
 // Lists the user's Logged Sessions — the record side of the plan/record split — newest first.
-// The Server Component fetches the whole feed once (ADR-0031); the interactive search-by-
-// exercise and Training Type filter run entirely client-side over it in `HistoryBrowser`.
+// Reads use the server-only transport seam (ADR-0022). This screen currently fetches
+// the whole feed once; exercise search and Training Type filtering run client-side
+// over it in `HistoryBrowser`. No ADR requires this unbounded fetch strategy.
 export default async function HistoryPage() {
   const [envelope, appearance] = await Promise.all([
     fetchHistory(),
