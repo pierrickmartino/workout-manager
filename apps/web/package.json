@@ -10,7 +10,8 @@
     "lint": "next lint",
     "test": "node --test --experimental-test-module-mocks",
     "audit:serve": "vite --config audit/vite.config.ts",
-    "audit:ui": "node audit/run.mjs"
+    "audit:ui": "node audit/run.mjs",
+    "contrast:report": "node scripts/skin-contrast-report.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.39.2",
