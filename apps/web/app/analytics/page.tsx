@@ -395,7 +395,7 @@ function RangeToggle({
               aria-disabled="true"
               aria-label={option.hint ?? undefined}
               title={option.hint ?? undefined}
-              className="flex-1 cursor-not-allowed rounded-sm py-1.5 text-center label-mono text-[11px] font-semibold text-text-muted/40"
+              className="flex-1 cursor-not-allowed rounded-sm py-1.5 text-center label-mono text-[11px] font-semibold text-text-muted"
             >
               {option.label}
             </span>

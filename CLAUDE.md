@@ -138,6 +138,13 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   guard checks every flat and declared composite pairing at 4.6:1 in every Skin
   and Mode, including System copies; unknown colour tokens fail closed (ADR-0081).
 
+- Fading text at a call site (`text-cyan/80`, or an `opacity-*` on the same element)
+  → don't, unless the *rendered* result still clears 4.6:1 on the worst surface in
+  every Skin and Mode. ADR-0081 guarantees the token, not what you render from it.
+  The guard in `apps/web/lib/faded-text-policy.ts` sweeps every component and fails
+  closed on unknown colour tokens; `disabled:` fades are exempt by rule, and the
+  exemption registry is otherwise empty (ADR-0083).
+
 - New animation or transform transition → pair it with `motion-reduce:animate-none`
   or `motion-reduce:transition-none` **in the same class string**. Colour and
   opacity transitions move nothing and are exempt by rule. The guard in

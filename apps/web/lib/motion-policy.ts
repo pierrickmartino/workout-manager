@@ -76,7 +76,7 @@ export function isMotionBearingTransition(utility: string): boolean {
   return arbitrary !== null && MOTION_PROPERTIES.some((property) => arbitrary[1].includes(property));
 }
 
-interface ClassString {
+export interface ClassString {
   readonly text: string;
   readonly line: number;
   // True inside a `className` attribute or a class-builder call, where a bare
@@ -87,7 +87,9 @@ interface ClassString {
 // Collects every string and template literal, noting which sit in a class
 // context. Comments are not literals, so prose about `prefers-reduced-motion`
 // never reaches the rule — the reason this reads TypeScript rather than bytes.
-function collectClassStrings(source: string, file: string): readonly ClassString[] {
+// Exported because `faded-text-policy.ts` needs the same literals; forking the
+// TSX walk would let two sweeps disagree about what a class string is.
+export function collectClassStrings(source: string, file: string): readonly ClassString[] {
   const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const found: ClassString[] = [];
   const visit = (node: ts.Node, isClassContext: boolean): void => {

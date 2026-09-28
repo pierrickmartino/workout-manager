@@ -234,7 +234,7 @@ function MatrixCellButton({
             ? "border-cyan ring-2 ring-cyan/30"
             : "border-border hover:border-cyan/50",
           cell.performed
-            ? "bg-base/50 text-text-muted opacity-70"
+            ? "bg-base/50 text-text-muted"
             : "bg-surface text-text-primary",
         )}
       >
