@@ -19,6 +19,7 @@ import {
   PATTERN_LABEL,
   parseMovementPattern,
 } from "@/lib/movement-pattern";
+import { SkeletonText } from "@/components/pulse/skeleton";
 import { plainMuscleSummary } from "@/lib/plain-muscle-summary";
 import { appendFrom } from "@/lib/back-target";
 import { toStatTiles } from "@/lib/exercise-stats-view";
@@ -81,7 +82,7 @@ export function CatalogDetail({ exercise, unit }: CatalogDetailProps): React.JSX
       </p>
 
       {detail === null ? (
-        <LoadingRows />
+        <SkeletonText lines={4} />
       ) : detail.error ? (
         <p className="label-mono text-[11px] text-magenta">{detail.error}</p>
       ) : (
@@ -214,7 +215,7 @@ function Alternatives({ items }: { items: { id: number; name: string }[] }) {
             }
           >
             <span className="font-sans text-[13px] text-text-primary">{item.name}</span>
-            <ChevronRight className="h-4 w-4 text-text-muted transition-transform group-hover:translate-x-0.5" />
+            <ChevronRight className="h-4 w-4 text-text-muted transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
           </Link>
         ))}
       </div>
@@ -233,17 +234,6 @@ function SectionLabel({
     <div className="flex items-center gap-1.5 text-text-muted">
       {icon}
       <span className="label-mono text-[10px]">{children}</span>
-    </div>
-  );
-}
-
-function LoadingRows() {
-  return (
-    <div className="flex flex-col gap-3" aria-hidden>
-      {[0, 1, 2].map((row) => (
-        <div key={row} className="h-4 w-full animate-pulse rounded bg-elevated" />
-      ))}
-      <div className="h-4 w-2/3 animate-pulse rounded bg-elevated" />
     </div>
   );
 }

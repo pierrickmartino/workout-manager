@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 // (ADR-0028: skeletons over spinners). Compose these into a route's loading.tsx
 // so the placeholder matches the final layout's dimensions — a skeleton that
 // mismatches the rendered size trades a perceived-perf win for a CLS regression.
+// Under prefers-reduced-motion the pulse stops and the block holds its size, so
+// the placeholder keeps doing its layout job without the movement (ADR-0082).
 export function Skeleton({
   className,
   ...props
@@ -15,7 +17,7 @@ export function Skeleton({
     <div
       aria-hidden
       className={cn(
-        "animate-pulse rounded-md bg-elevated/70",
+        "animate-pulse rounded-md bg-elevated/70 motion-reduce:animate-none",
         className,
       )}
       {...props}

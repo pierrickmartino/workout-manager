@@ -15,7 +15,7 @@ export function GenerationProgress() {
       className="flex flex-col gap-4 p-6"
     >
       <div className="flex items-center gap-2.5">
-        <Loader2 className="h-4 w-4 animate-spin text-cyan" aria-hidden />
+        <Loader2 className="h-4 w-4 animate-spin text-cyan motion-reduce:animate-none" aria-hidden />
         <Overline>GENERATING PROTOCOL…</Overline>
       </div>
 
@@ -23,12 +23,17 @@ export function GenerationProgress() {
         Building your multi-week plan
       </p>
 
-      {/* Indeterminate track: a cyan segment sweeps across the elevated bar. */}
-      <div
-        className="h-1 w-full overflow-hidden rounded-full bg-elevated"
-        aria-label="Generating protocol"
-      >
-        <div className="h-full w-1/3 animate-[pulse-sweep_1.4s_ease-in-out_infinite] rounded-full bg-cyan" />
+      {/* Indeterminate track: a cyan segment sweeps across the elevated bar. The
+          bar is decoration — the role="status" region above already announces the
+          state — so it is hidden from assistive technology rather than carrying a
+          progressbar role it could not give a value for (ADR-0082).
+
+          Under prefers-reduced-motion the segment stops. A stopped third would sit
+          at the left edge and read as a determinate "33% done", a number this app
+          cannot know, so the fill spans the track at reduced strength instead: same
+          box, no movement, no implied progress. */}
+      <div className="h-1 w-full overflow-hidden rounded-full bg-elevated" aria-hidden>
+        <div className="h-full w-1/3 animate-[pulse-sweep_1.4s_ease-in-out_infinite] rounded-full bg-cyan motion-reduce:w-full motion-reduce:animate-none motion-reduce:bg-cyan/40" />
       </div>
 
       <p className="font-mono text-[13px] leading-relaxed text-text-muted">
