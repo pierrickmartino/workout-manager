@@ -315,7 +315,7 @@ function RelatedList({
             <span className="font-sans text-[14px] text-text-primary">
               {item.name}
             </span>
-            <ChevronRight className="h-[18px] w-[18px] text-text-muted transition-transform group-hover:translate-x-0.5" />
+            <ChevronRight className="h-[18px] w-[18px] text-text-muted transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
           </Link>
         ))}
       </Card>

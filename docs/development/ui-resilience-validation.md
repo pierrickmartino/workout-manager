@@ -246,3 +246,47 @@ Remaining findings: P2 reduced-motion loading defect; inconclusive WebKit worker
 navigation; authenticated checklist and physical installed-device matrix outstanding.
 Next fix scope should address the loading primitives and rerun those four failed
 checks, while tracking real-app/device evidence separately.
+
+## Remediation — 28 September 2026
+
+The four reduced-motion failures above are fixed and the two checks that produced them
+now pass. This section is appended rather than edited into the original findings: the
+matrix above remains the record of what was true at `2a1bb9e`.
+
+Scope was wider than the reproduced finding. The source risk this report recorded named
+`GenerationProgress` and `Skeleton`; a mechanized sweep of the component tree found
+**14** declarations that move under the preference — six animations and eight
+`transition-transform` declarations — including `SyncStatusBanner`'s sync icon and a pair
+of hand-rolled placeholders in `catalog-detail` that duplicated the shared `Skeleton`.
+All 14 are paired; the duplicated placeholders were replaced by the primitive.
+[ADR-0082](../adr/0082-movement-does-not-survive-the-reduced-motion-preference.md) records
+the rule, including why 48 `transition-colors` and one `transition-opacity` declaration
+are exempt: they change nothing's position.
+
+This report's own observation that "button color transitions are outside spatial-motion
+criterion" (the reduced-motion sheet row) is the same judgement, now written down as a
+rule rather than applied case by case.
+
+| Scenario | Chromium | WebKit | Evidence boundary |
+| --- | --- | --- | --- |
+| Initial reduced motion, both live regions keep their copy | Pass | **Not run** | Production loading components/CSS; WebKit absent from the remediating container |
+| Changing preference while mounted | Pass | **Not run** | Four animations recorded active at no-preference (`spin` 1s ×2, `pulse-sweep` 1.4s, `pulse` 2s), none after `reduce` |
+
+The probe was not weakened to produce these passes. It still rejects any element under
+`main` whose computed `animation-name` is not `none` and whose duration is not `0s` — so
+the common `animation-duration: 0.01ms` idiom would still fail it, and the fix does not
+use that idiom. One assertion did change: the `motion` journey now renders a syncing
+`SyncStatusBanner` beside the generation card, which put two `role="status"` regions on
+the page and made the original single-region locator a strict-mode violation. The check
+now asserts both regions are present and that each keeps its text, which is a stronger
+claim than the one it replaces, not a looser one.
+
+**What is still unverified.** WebKit was not run, so the two-engine criterion is half-met;
+the fix is CSS-only (`motion-reduce:` variants, no JavaScript preference read), which has
+no engine-specific behaviour to speak of, but that is an argument, not evidence.
+Transitions have no browser evidence by design — the probe reads computed
+`animation-name` and is structurally blind to them, and a transition's computed style is
+identical whether or not it would move. Their enforcement is the source guard
+([`motion-policy.ts`](../../apps/web/lib/motion-policy.ts)), which runs in the existing
+`web` CI job. No physical device, installed app, or real screen-reader pass is claimed
+here either; the outstanding items in the sections above are unchanged.

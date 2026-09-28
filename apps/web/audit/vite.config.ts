@@ -41,6 +41,9 @@ export default defineConfig({
   ],
   resolve: { alias: [
     { find: "next/navigation", replacement: resolve(import.meta.dirname, "boundaries.tsx") },
+    // Before the "@" catch-all: the sync hook is a device/network boundary the
+    // isolated server cannot satisfy, so the motion journey supplies its state.
+    { find: "@/lib/use-sync-status", replacement: resolve(import.meta.dirname, "boundaries.tsx") },
     { find: "next/link", replacement: resolve(import.meta.dirname, "link.tsx") },
     { find: "@clerk/nextjs", replacement: resolve(import.meta.dirname, "boundaries.tsx") },
     { find: "@", replacement: web },

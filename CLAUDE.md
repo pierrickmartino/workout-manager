@@ -137,3 +137,9 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   `apps/web/lib/skin-contrast-matrix.ts`'s pairing registry. The Contrast Floor
   guard checks every flat and declared composite pairing at 4.6:1 in every Skin
   and Mode, including System copies; unknown colour tokens fail closed (ADR-0081).
+
+- New animation or transform transition → pair it with `motion-reduce:animate-none`
+  or `motion-reduce:transition-none` **in the same class string**. Colour and
+  opacity transitions move nothing and are exempt by rule. The guard in
+  `apps/web/lib/motion-policy.ts` sweeps every component and fails closed; an
+  entry in its `MOTION_EXEMPTIONS` registry needs a written reason (ADR-0082).

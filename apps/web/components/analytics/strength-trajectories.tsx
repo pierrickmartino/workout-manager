@@ -62,7 +62,7 @@ function TrajectoryTile({
             {tile.exercise}
           </span>
           <ChevronRight
-            className="h-4 w-4 shrink-0 text-text-muted transition-transform group-hover:translate-x-0.5"
+            className="h-4 w-4 shrink-0 text-text-muted transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
             aria-hidden
           />
         </div>

@@ -50,7 +50,7 @@ export function TrainingRouteCard({
       {route.weeks.length > 1 ? (
         <details className="group">
           <summary className="flex cursor-pointer list-none items-center gap-2 pt-1 [&::-webkit-details-marker]:hidden">
-            <ChevronRight className="h-3.5 w-3.5 text-cyan transition-transform group-open:rotate-90" />
+            <ChevronRight className="h-3.5 w-3.5 text-cyan transition-transform group-open:rotate-90 motion-reduce:transition-none" />
             <span className="label-mono text-[11px] text-text-secondary transition-colors group-hover:text-cyan">
               Full plan &middot; {route.totalWeeks} weeks
             </span>

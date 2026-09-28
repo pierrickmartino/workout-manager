@@ -104,7 +104,10 @@ function BannerBody({
         accent,
       )}
     >
-      <Icon className={cn("h-4 w-4 shrink-0", spin && "animate-spin")} aria-hidden />
+      {/* The rotation is decoration: each state already has its own icon, accent
+          and copy, so stopping it under prefers-reduced-motion loses nothing a
+          reader relies on (ADR-0082). */}
+      <Icon className={cn("h-4 w-4 shrink-0", spin && "animate-spin motion-reduce:animate-none")} aria-hidden />
       <div className="min-w-0 flex-1 font-mono text-[12px] leading-snug">
         {renderMessage(state, {
           pendingCount,

@@ -372,7 +372,7 @@ export function PrescriptionFieldStack({
           className="label-mono flex items-center gap-1 self-start rounded-sm text-[10px] text-text-muted transition-colors hover:text-text-primary"
         >
           <ChevronDown
-            className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")}
+            className={cn("h-3.5 w-3.5 transition-transform motion-reduce:transition-none", open && "rotate-180")}
             aria-hidden
           />
           {open ? "Less" : "More"}

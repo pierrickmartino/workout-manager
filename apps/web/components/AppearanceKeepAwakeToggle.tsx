@@ -78,7 +78,7 @@ export function AppearanceKeepAwakeToggle({
           <span
             aria-hidden="true"
             className={cn(
-              "inline-block h-4 w-4 rounded-full transition-transform",
+              "inline-block h-4 w-4 rounded-full transition-transform motion-reduce:transition-none",
               control.enabled
                 ? "translate-x-[22px] bg-cyan"
                 : "translate-x-1 bg-text-secondary",
