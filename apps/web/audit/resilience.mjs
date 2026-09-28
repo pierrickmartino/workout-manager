@@ -56,7 +56,12 @@ for (const [engine, launcher] of [["chromium", chromium], ["webkit", webkit]]) {
       await page.emulateMedia({ reducedMotion: "reduce" });
       await open(page, "motion");
       const active = await animations(page);
-      await expect(page.getByRole("status")).toContainText("GENERATING PROTOCOL");
+      // Two live regions render in this journey — the generation card and the sync
+      // banner. Stopping the movement must not cost either of them its copy.
+      const regions = page.getByRole("status");
+      await expect(regions).toHaveCount(2);
+      await expect(regions.filter({ hasText: "GENERATING PROTOCOL" })).toHaveCount(1);
+      await expect(regions.filter({ hasText: "Syncing" })).toHaveCount(1);
       expect(active, JSON.stringify(active)).toEqual([]);
     });
     await check("reduced-motion-live-change", async page => {

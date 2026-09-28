@@ -9,6 +9,17 @@ export const useSearchParams = () => new URLSearchParams();
 export const unstable_rethrow = () => {};
 export const useAuth = () => ({ userId: "audit-synthetic-account", isLoaded: true });
 
+// The motion journey needs SyncStatusBanner in `syncing`, its one animated state.
+// The real hook reads the on-device outbox, connectivity and a server action, none
+// of which exist in an isolated fixture, so the state is supplied directly.
+export const useSyncStatus = () => ({
+  state: "syncing" as const,
+  online: true,
+  summary: { pending: 0, syncing: 1, failed: 0 },
+  lastSyncedAt: null,
+  retry: () => {},
+});
+
 type AuditRequest = { id: number; name: string; args: unknown[] };
 const requests: AuditRequest[] = [];
 const waiting = new Map<number, (value: unknown) => void>();
