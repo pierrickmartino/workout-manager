@@ -215,7 +215,7 @@ function PagerLink({
     "label-mono text-[11px]",
     enabled
       ? "text-cyan hover:underline"
-      : "pointer-events-none text-text-muted opacity-40",
+      : "pointer-events-none text-text-muted",
   );
 
   return enabled ? (
@@ -223,6 +223,8 @@ function PagerLink({
       {children}
     </Link>
   ) : (
-    <span className={className}>{children}</span>
+    <span aria-disabled="true" className={className}>
+      {children}
+    </span>
   );
 }

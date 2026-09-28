@@ -387,7 +387,7 @@ The rendered appearance of the app for one user at one moment — always the *co
 _Avoid_: Style, look, colour scheme (as the concept name)
 
 **Skin**:
-A named **visual identity** — the coordinated **colour, typography, and shape** the whole app draws with (ADR-0050). Skins come from a **fixed, curated catalog** (never user- or AI-authored). A Skin's **colour** is polarity-dependent, so each Skin defines **both a light and a dark variant** and composes with any Mode; its **typography** (typefaces) and **shape** (corner roundness) are Mode-invariant, defined once per Skin. Every text-bearing token of a well-formed Skin clears the **Contrast Floor** in both variants, including Accents and declared text-on-fill pairings. Exactly one Skin is live app-wide at a time (the Active Skin); an ordinary user never chooses a Skin. Distinct from Mode, which is the light/dark polarity chosen *within* a Skin.
+A named **visual identity** — the coordinated **colour, typography, and shape** the whole app draws with (ADR-0050). Skins come from a **fixed, curated catalog** (never user- or AI-authored). A Skin's **colour** is polarity-dependent, so each Skin defines **both a light and a dark variant** and composes with any Mode; its **typography** (typefaces) and **shape** (corner roundness) are Mode-invariant, defined once per Skin. Every text-bearing token of a well-formed Skin clears the **Contrast Floor** in both variants, including Accents and declared text-on-fill pairings. The Floor binds on *rendered* text, not only on palette values: a fade applied where a token is used cannot take it below the Floor (ADR-0083). Exactly one Skin is live app-wide at a time (the Active Skin); an ordinary user never chooses a Skin. Distinct from Mode, which is the light/dark polarity chosen *within* a Skin.
 _Avoid_: Theme (bare), palette / colour scheme (a Skin is more than its colours; palette names only the colour group)
 
 **Mode**:
@@ -399,7 +399,7 @@ The single Skin currently published for the whole app — what every user's Mode
 _Avoid_: Current theme, global theme, default skin (that is only the Active Skin's starting value)
 
 **Text Ramp**:
-The ordered three-rung set of text colours every Skin defines, descending in prominence: **primary** (headings and headline values), **secondary** (supporting copy), and **muted** (quiet metadata — the mono micro-labels, captions, and data labels that carry the app's structure). "Muted" is the quietest rung, never an illegible one: every rung must clear the **Contrast Floor**. Distinct from **Accents** (cyan, violet…), which are not part of the ramp but are also under the Contrast Floor.
+The ordered three-rung set of text colours every Skin defines, descending in prominence: **primary** (headings and headline values), **secondary** (supporting copy), and **muted** (quiet metadata — the mono micro-labels, captions, and data labels that carry the app's structure). "Muted" is the quietest rung, never an illegible one: every rung must clear the **Contrast Floor**, both as a token and as rendered — fading a rung at its call site to quieten it further is how a legible rung becomes an illegible one (ADR-0083). Distinct from **Accents** (cyan, violet…), which are not part of the ramp but are also under the Contrast Floor.
 _Avoid_: label colour (a rung is a Skin-wide role, not one component's colour), greyed-out text
 
 **Accent**:
