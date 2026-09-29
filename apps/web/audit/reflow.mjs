@@ -39,7 +39,10 @@ const MODES = ["light", "dark"];
 const FIXTURES = ["short", "session-spaced", "session-unbroken", "exercise-spaced", "exercise-unbroken"];
 // The eight from the recorded matrix, then the two this sweep adds.
 const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation", "logging", "live", "analytics"];
-const NOVEL_JOURNEYS = ["correction", "creation-logged"];
+// `home` joins them with ADR-0088's wide Home: the page is converted to the wide content
+// column, so the narrow sweep is what proves the conversion moved nothing at 320px — the
+// desktop-only blocks are `hidden` below `lg:` and must cost a phone no width at all.
+const NOVEL_JOURNEYS = ["correction", "creation-logged", "home"];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and
 // `creation-logged` were listed here because each held a `rem`-sized grid track in a form field

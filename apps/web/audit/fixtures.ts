@@ -3,6 +3,8 @@ import type { SessionSummary } from "@/lib/session-library";
 import type { ExerciseSearchResult } from "@/lib/exercises-types";
 import type { ExercisePrescription, WorkoutSession } from "@/lib/sessions-types";
 import type { Profile } from "@/lib/profile-types";
+import type { ProtocolProgress } from "@/lib/protocols-types";
+import type { PersonalRecordEntry, VolumePoint } from "@/lib/analytics-types";
 
 const originalNames = ["Long workout name with spaces ".repeat(5).slice(0, 120), "W".repeat(120)];
 const originalExerciseNames = ["Long exercise name with spaces ".repeat(4).slice(0, 100), "W".repeat(100)];
@@ -51,3 +53,60 @@ export const profile: Profile = {
   default_rest_seconds: 120, default_equipment: ["barbell"], default_equipment_canonical: ["barbell"],
   fitness_levels: { strength: 10 }, preferences: [], sensitive_constraints: [], is_sensitive: false,
 };
+
+// --- Home at the shell's wide width (ADR-0088) ---
+//
+// The `home` journey is the sweep's only page that opts in with `data-shell="wide"`, so it is
+// the one case exercising the wide *column* rather than the wide *frame*. Names come from the
+// same `names`/`exerciseNames` axes as every other journey, so a long authored Session title
+// stresses the two-column layout exactly as it stresses the narrow one.
+export const protocolProgress: ProtocolProgress = {
+  id: 1,
+  clerk_user_id: "audit-synthetic-account",
+  training_type: "strength",
+  objective: "build strength",
+  sessions_per_week: 3,
+  weeks: 4,
+  duration_minutes: 45,
+  name: names[0],
+  label: names[0],
+  sessions: Array.from({ length: 12 }, (_, i) => ({
+    session_id: i + 1,
+    position: i + 1,
+    week: Math.floor(i / 3) + 1,
+    day: (i % 3) + 1,
+    title: names[i % names.length],
+    performed: i < 4,
+    logged_session_id: i < 4 ? i + 1 : null,
+    prescriptions,
+  })),
+  next_session: {
+    session_id: 5,
+    position: 5,
+    week: 2,
+    day: 2,
+    title: names[0],
+    performed: false,
+    logged_session_id: null,
+    prescriptions,
+  },
+  completed_count: 4,
+};
+
+// A month of daily volume, so the chart carries a realistic point count and its ChartValues
+// table a realistic row count — the payload the wide Home actually ships (ADR-0088's budget).
+export const volumePoints: VolumePoint[] = Array.from({ length: 30 }, (_, i) => ({
+  date: `2026-09-${String(i + 1).padStart(2, "0")}`,
+  volume_kg: 800 + i * 25,
+}));
+
+// Eight records, the cap the backend feed serves.
+export const personalRecords: PersonalRecordEntry[] = Array.from({ length: 8 }, (_, i) => ({
+  exercise: exerciseNames[i % exerciseNames.length],
+  estimated_1rm: 100 + i * 5,
+  gain: i === 7 ? 0 : 2.5,
+  date: `2026-09-${String(28 - i).padStart(2, "0")}`,
+  reps: 5,
+  is_bodyweight: i % 4 === 3,
+  added_kg: i % 4 === 3 ? 20 : null,
+}));

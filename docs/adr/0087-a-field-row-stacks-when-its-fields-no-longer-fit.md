@@ -99,6 +99,33 @@ result, and with this change its 200% ratchet is gone: both text sizes are now
 gated the same way — **0 of 600 cases overflow at 100% text and 0 at 200%**, in
 every journey, Skin, Mode and name fixture.
 
+## Amendment (ADR-0088): a stat row stacks too, and asks for 4rem
+
+The mechanism above is not specific to form fields. `pulse/stat-row.tsx` — the
+DURATION / EXERCISES / SETS cluster — held three `flex-1` cells whose automatic
+minimum is their content, and a one-word mono label like "EXERCISES" has nowhere
+to break, so at 200% text three cells could not fit a 320px screen and the
+document went to 379px. It is now a wrapping row with a width ask per cell, for
+exactly the reasons this ADR gives.
+
+The ask is **4rem, not 5rem**, and the difference is measured. Inside a hero Card
+on a 320px screen the row has ~230px: three 5rem asks plus two rules came to 242px
+and wrapped **at 100% text**, changing the phone layout — the one thing the
+mechanism must not do. Three 4rem asks come to 194px, fit on one line, and `grow`
+then splits the row equally, which is the same three equal cells `flex-1` gave.
+
+5rem remains the floor for a form **control**, which spends 2–3.5rem of its width
+on its own padding and chevron furniture. A stat cell holds a short number and a
+9px mono label and has no furniture to pay for, so the floor that matters for it
+is lower. Two numbers, two different things being sized.
+
+One cosmetic cost, stated: a wrapped line can begin with one of the row's vertical
+rules, because CSS cannot tell a sibling it is now first on its line. A thin stray
+rule at 200% text is a better trade than a page that scrolls sideways.
+
+This defect lived on Home, which no audit journey rendered until ADR-0088 added
+one — the same blind spot that hid two ADR-0085 violations. See ADR-0088.
+
 ## Still open
 
 The **authenticated 200% real-app check** the original finding asks for remains

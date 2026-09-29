@@ -43,6 +43,11 @@ const FIXTURES = ["short", "session-spaced", "session-unbroken", "exercise-space
 const ALL_JOURNEYS = [
   "profile", "sessions", "history", "catalog", "creation",
   "logging", "live", "analytics", "correction", "creation-logged",
+  // The first page converted to the wide content column (ADR-0088). It is the only journey
+  // that opts in with `data-shell="wide"`, so it is the only one exercising the wide column
+  // rather than just the wide frame — and the only one whose `columnOverNarrow` gate is
+  // expected to be inapplicable rather than merely satisfied.
+  "home",
 ];
 // A comma-separated subset, for iterating on one screen without paying for the full sweep.
 // The gated run is the unfiltered one.

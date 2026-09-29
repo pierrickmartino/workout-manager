@@ -191,6 +191,14 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   Primary navigation renders from `lib/sidebar-nav.ts` over the `tab-nav` registry, never a
   hand-written link list. `audit/wide.mjs` gates the frame at 1440px (ADR-0088).
 
+- Converting a page to the wide column → stamp `data-shell="wide"` on its root, put the grid in
+  a component the audit harness can mount (see `pulse/home-columns.tsx`) rather than classes
+  inline on the page, and **add the page as a journey to both `audit/wide.mjs` and
+  `audit/reflow.mjs`**. A page no journey renders is unverified however many guards are green:
+  adding `home` surfaced three pre-existing defects at 320px and 200% text in components it had
+  always rendered. Anything the wide layout adds must be a read-time projection, never an
+  action — the click budget (ADR-0071) governs actions (ADR-0088).
+
 - New animation or transform transition → pair it with `motion-reduce:animate-none`
   or `motion-reduce:transition-none` **in the same class string**. Colour and
   opacity transitions move nothing and are exempt by rule. The guard in

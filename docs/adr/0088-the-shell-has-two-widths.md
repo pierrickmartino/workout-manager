@@ -161,6 +161,33 @@ that stretches by accident is the failure mode this change actually has.
 As ever it proves the frame, not the design. That a wide page reads well is not
 something a runner can tell you.
 
+## Converting a page means adding it to the sweeps
+
+Home is the first converted page, and converting it taught the rule: **a page that
+opts in gains a journey in both sweeps**, wide *and* narrow. Wide, because the
+opted-in column is a different measurement from the frame — Home is the only case
+where `columnOverNarrow` is inapplicable rather than merely satisfied. Narrow,
+because "below `lg:` nothing moves" is a claim about 320px, and only the 320px
+runner can check it.
+
+That turned out to matter more than expected. Home had **never** appeared in any
+audit journey, and adding it surfaced three pre-existing defects in components it
+has always rendered — none of them caused by the two-column layout, all of them
+invisible for want of a journey:
+
+- `SessionHero`'s title had no break opportunity, so an unbroken 120-character
+  Session name painted 2,586px outside its box and took the document to 2,707px
+  **at 320px**. ADR-0085's first clause is that an authored name wraps; `min-w-0`
+  was already there, and a zero floor does not help text that cannot break.
+- `TrainingRouteCard`'s stop rows were missing `min-w-0` on two of the flex boxes
+  between the page and a `truncate`d title, making a row 1,523px wide.
+- `StatRow` could not fit three cells on a 320px screen **at 200% text** (document
+  379px), because a one-word mono label like "EXERCISES" has nowhere to break.
+
+The lesson is about the guards, not about Home: a class-string guard proves a
+pattern is absent, and a runner proves a page fits — but only for the pages it
+renders. An unswept page is unverified no matter how many guards are green.
+
 ## Consequences
 
 - Two spacing tokens where there was one, and a `data-shell="wide"` contract
