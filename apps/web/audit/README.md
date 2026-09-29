@@ -141,6 +141,34 @@ chrome can intercept a pointer in the short landscape viewport; their ratios do
 not establish pointer accessibility. This run is at 100% browser zoom; the archived
 200% zoom and large-data checks are not repeated by this issue.
 
+## Narrow-screen reflow sweep
+
+`reflow.mjs` is a separate, lean runner for one question: does the document
+overflow a 320px viewport (ADR-0085). It is re-runnable in about a minute, which
+is what `revalidate.mjs` — a 4,224-capture evidence artefact with a resume mode —
+is not.
+
+```bash
+npm run audit:serve
+# In a second terminal:
+node audit/reflow.mjs                      # gates: zero document overflow at 100% text
+UI_REFLOW_BASELINE=1 node audit/reflow.mjs # inverts the gate: the defects must reproduce
+```
+
+It mounts the same journeys and `fixtures.ts` names as the matrix, plus two the
+matrix never captured: `correction`, and `creation-logged` (the Hand-Authored
+form in its default `authorAndLog` flow, whose performed-set grid `planOnly`
+hides). Both are tagged `novel` in the summary so the comparable eight stay
+extractable. Each case is measured twice: at 100% text and at 200% text (root
+16px → 32px, viewport unchanged — WCAG 1.4.4 resize-text, *not* browser zoom,
+which `run.mjs` covers through the extension).
+
+The gate is document overflow at 100%. Element overflow and the 200% count are
+reported without gating: the remaining 200% failures are `rem`-sized grid tracks,
+a different defect named as open work. Output defaults to
+`docs/development/ui-reflow-evidence/`. Chromium only, and it falls back to the
+container's installed browser when the pinned Playwright build is absent.
+
 Font files and generated CSS are snapshots of the app's Next font loader output,
 not independent font packages. To refresh from a new compiled app layout:
 
