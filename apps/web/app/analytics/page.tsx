@@ -383,7 +383,7 @@ function RangeToggle({
               className={cn(
                 "flex-1 rounded-sm py-1.5 text-center label-mono text-[11px] font-semibold transition-colors",
                 option.active
-                  ? "bg-cyan/15 text-cyan"
+                  ? "bg-cyan-dim text-cyan"
                   : "text-text-muted hover:text-text-secondary",
               )}
             >

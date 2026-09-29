@@ -17,16 +17,78 @@ export interface TokenBlock {
   readonly declaredTokens: readonly string[];
 }
 
+// A fill a component paints behind text: a colour token, optionally at a
+// call-site alpha. A `-dim` token carries its alpha in its own hex, so it needs
+// none here; `alpha` exists for the fills Tailwind spells `bg-cyan/90`, which
+// composite against whichever surface the element sits on (ADR-0086).
+export interface CompositeFill {
+  readonly background: string;
+  readonly alpha?: number;
+}
+
+export interface CompositePairing extends CompositeFill {
+  readonly text: string;
+}
+
+// How a fill reads in a failure message and in the report, matching the Tailwind
+// utility an author would write for it.
+export function fillLabel({ background, alpha }: CompositeFill): string {
+  return alpha === undefined ? background : `${background}/${Math.round(alpha * 100)}`;
+}
+
 // Pairing conventions live in components, not CSS. Extend this declared registry
 // when a new text-on-fill convention is introduced. Dim tokens carry their alpha.
-export const COMPOSITE_PAIRINGS = [
+// `accent-tint-policy.ts` holds every call-site accent fill to this list, so an
+// undeclared tint cannot reach a component (ADR-0086).
+export const COMPOSITE_PAIRINGS: readonly CompositePairing[] = [
   { text: "cyan", background: "cyan-dim" },
   { text: "violet", background: "violet-dim" },
   { text: "magenta", background: "magenta-dim" },
   { text: "amber", background: "amber-dim" },
   { text: "green", background: "green-dim" },
   { text: "on-accent", background: "cyan" },
-] as const;
+  // The primary button's hover fill. The dim chips have no such headroom — each
+  // is tuned to land just above the Floor — so this is the one accent fill an
+  // alpha deepens, and it deepens toward the accent rather than away from it.
+  { text: "on-accent", background: "cyan", alpha: 0.9 },
+];
+
+// An accent fill that carries no text at all. Nothing here is measured against
+// the Contrast Floor, because the Floor governs text: a swatch with no text in
+// it is a graphical object under WCAG 1.4.11. That is a claim about a specific
+// call site, so it needs a reason a reviewer can weigh (ADR-0086).
+export interface GraphicFill {
+  readonly file: string;
+  readonly utility: string;
+  readonly reason: string;
+}
+
+export const GRAPHIC_FILLS: readonly GraphicFill[] = [
+  {
+    file: "components/pulse/training-heatmap.tsx",
+    utility: "bg-cyan/25",
+    reason: "Heatmap density cell. The cells are empty spans; each day's fact reaches "
+      + "every user as an aria-label, a title and the mirrored caption, never as text "
+      + "printed on the shade.",
+  },
+  {
+    file: "components/pulse/training-heatmap.tsx",
+    utility: "bg-cyan/50",
+    reason: "Heatmap density cell, as bg-cyan/25 above — the ramp's middle step.",
+  },
+  {
+    file: "components/pulse/training-heatmap.tsx",
+    utility: "bg-cyan/75",
+    reason: "Heatmap density cell, as bg-cyan/25 above — the ramp's top tinted step.",
+  },
+  {
+    file: "components/GenerationProgress.tsx",
+    utility: "bg-cyan/40",
+    reason: "The indeterminate progress track's segment under prefers-reduced-motion. "
+      + "The bar is an empty aria-hidden div; the state it reports is announced by the "
+      + "role=\"status\" region above it (ADR-0082).",
+  },
+];
 
 // Every colour must be classified. on-accent is text only on its declared fill;
 // surfaces, borders and dim fills are not ordinary foreground text.
@@ -115,7 +177,10 @@ export function compositeTint(tint: string, surface: string, alpha: number): str
   ).toString(16).padStart(2, "0")).join("");
 }
 
-function backgroundOnSurface(background: string, surface: string): string {
+// A declared alpha wins over any the token's own hex carries: `bg-cyan/90` is
+// the opaque accent at 90%, not the dim chip's 0x1f.
+function backgroundOnSurface(background: string, surface: string, alpha?: number): string {
+  if (alpha !== undefined) return compositeTint(background.slice(0, 7), surface, alpha);
   if (/^#[\da-f]{8}$/i.test(background)) {
     return compositeTint(background.slice(0, 7), surface, parseInt(background.slice(7), 16) / 255);
   }
@@ -127,21 +192,27 @@ export interface ContrastPairing {
   readonly kind: "flat" | "composite";
   readonly text: string;
   readonly background: string;
+  readonly alpha?: number;
+  // The fill as an author writes it — `cyan-dim`, `cyan`, `cyan/90`.
+  readonly fill: string;
   readonly measurements: readonly { surface: Surface; foreground: string; background: string; ratio: number }[];
   readonly bindingSurface: Surface;
   readonly ratio: number;
   readonly passes: boolean;
 }
 
-function measurePairing(block: TokenBlock, kind: ContrastPairing["kind"], text: string, background: string): ContrastPairing {
+function measurePairing(
+  block: TokenBlock, kind: ContrastPairing["kind"], text: string, background: string, alpha?: number,
+): ContrastPairing {
   const foreground = color(block, text);
   const measurements = SURFACES.map((surface) => {
     const bg = kind === "flat" ? color(block, surface)
-      : backgroundOnSurface(color(block, background), color(block, surface));
+      : backgroundOnSurface(color(block, background), color(block, surface), alpha);
     return { surface, foreground, background: bg, ratio: contrastRatio(foreground, bg) };
   });
   const binding = measurements.reduce((worst, next) => next.ratio < worst.ratio ? next : worst);
-  return { kind, text, background, measurements, bindingSurface: binding.surface,
+  return { kind, text, background, alpha, fill: kind === "flat" ? background : fillLabel({ background, alpha }),
+    measurements, bindingSurface: binding.surface,
     ratio: binding.ratio, passes: binding.ratio >= CONTRAST_FLOOR };
 }
 
@@ -149,8 +220,10 @@ export function enumerateFlatPairings(block: TokenBlock): ContrastPairing[] {
   return TEXT_TOKENS.map((text) => measurePairing(block, "flat", text, "surfaces"));
 }
 
-export function enumerateCompositePairings(block: TokenBlock): ContrastPairing[] {
-  return COMPOSITE_PAIRINGS.map(({ text, background }) => measurePairing(block, "composite", text, background));
+export function enumerateCompositePairings(
+  block: TokenBlock, pairings: readonly CompositePairing[] = COMPOSITE_PAIRINGS,
+): ContrastPairing[] {
+  return pairings.map(({ text, background, alpha }) => measurePairing(block, "composite", text, background, alpha));
 }
 
 export function buildContrastMatrix(css: string) {
@@ -189,7 +262,7 @@ export function formatContrastReport(matrix: ContrastMatrix): string {
   ];
   const rows = matrix.flatMap((variant) => variant.pairings.flatMap((pairing) =>
     pairing.measurements.map((measurement) =>
-      `| ${variant.skin} ${variant.mode}${variant.isSystem ? " (System)" : ""} | ${pairing.kind} | ${pairing.text} | ${pairing.background} | ${measurement.surface} | ${measurement.foreground} | ${measurement.background} | ${measurement.ratio.toFixed(2)} | ${measurement.ratio >= CONTRAST_FLOOR ? "PASS" : "FAIL"} | ${measurement.surface === pairing.bindingSurface ? "yes" : ""} |`,
+      `| ${variant.skin} ${variant.mode}${variant.isSystem ? " (System)" : ""} | ${pairing.kind} | ${pairing.text} | ${pairing.fill} | ${measurement.surface} | ${measurement.foreground} | ${measurement.background} | ${measurement.ratio.toFixed(2)} | ${measurement.ratio >= CONTRAST_FLOOR ? "PASS" : "FAIL"} | ${measurement.surface === pairing.bindingSurface ? "yes" : ""} |`,
     ),
   ));
   return [...lines, ...rows, ""].join("\n");

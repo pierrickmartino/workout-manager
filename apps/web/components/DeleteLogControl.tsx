@@ -34,7 +34,7 @@ export function DeleteLogControl({ logId, disabled, reason }: DeleteLogControlPr
             event.preventDefault();
           }
         }}
-        className="label-mono inline-flex items-center rounded-md border border-border bg-elevated px-3 py-1.5 text-[10px] text-magenta transition-colors hover:border-magenta hover:bg-magenta/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-magenta/60 disabled:cursor-not-allowed disabled:opacity-50 disabled:text-text-muted disabled:hover:border-border disabled:hover:bg-elevated motion-reduce:transition-none"
+        className="label-mono inline-flex items-center rounded-md border border-border bg-elevated px-3 py-1.5 text-[10px] text-magenta transition-colors hover:border-magenta hover:bg-magenta-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-magenta/60 disabled:cursor-not-allowed disabled:opacity-50 disabled:text-text-muted disabled:hover:border-border disabled:hover:bg-elevated motion-reduce:transition-none"
       >
         {pending ? "Deleting…" : "Delete"}
       </button>

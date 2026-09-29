@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { parseColorBlocks, compositeTint, enumerateFlatPairings, enumerateCompositePairings, buildContrastMatrix, formatContrastReport } from "./skin-contrast-matrix.ts";
+import { parseColorBlocks, compositeTint, enumerateFlatPairings, enumerateCompositePairings, buildContrastMatrix, formatContrastReport, fillLabel, COMPOSITE_PAIRINGS, GRAPHIC_FILLS } from "./skin-contrast-matrix.ts";
 
 test("resolves inherited colours and System Mode light overrides from the token source", () => {
   // Arrange
@@ -75,13 +75,68 @@ test("enumerates declared tint and primary button pairings without inventing a b
   // Act
   const pairings = enumerateCompositePairings(pulse);
   // Assert
-  assert.deepEqual(pairings.map(({ text, background }) => [text, background]), [
+  assert.deepEqual(pairings.map(({ text, fill }) => [text, fill]), [
     ["cyan", "cyan-dim"], ["violet", "violet-dim"], ["magenta", "magenta-dim"],
     ["amber", "amber-dim"], ["green", "green-dim"], ["on-accent", "cyan"],
+    ["on-accent", "cyan/90"],
   ]);
-  const button = pairings.find(({ text }) => text === "on-accent")!;
+  const button = pairings.find(({ text, fill }) => text === "on-accent" && fill === "cyan")!;
   assert.equal(button.ratio.toFixed(2), "6.01");
   assert.deepEqual(button.measurements.map(({ background }) => background), ["#066d7d", "#066d7d", "#066d7d"]);
+});
+
+test("measures a declared fill alpha as a tint composited over each surface", () => {
+  // Arrange: the primary button's hover fill is the same token at 90%, so it
+  // resolves differently on each surface rather than to the flat accent.
+  const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+  const pulse = parseColorBlocks(css).find(({ skin, mode }) => skin === "pulse" && mode === "light")!;
+  // Act
+  const hover = enumerateCompositePairings(pulse).find(({ fill }) => fill === "cyan/90")!;
+  // Assert
+  assert.deepEqual(hover.measurements.map(({ background }) => background),
+    ["#1f7c8a", "#1e7b8a", "#1e7b89"]);
+  assert.equal(hover.passes, true);
+  assert.equal(hover.ratio.toFixed(2), "4.87");
+});
+
+test("labels a fill by its token, and by token and alpha when one is declared", () => {
+  // Arrange
+  const fills = [{ background: "cyan-dim" }, { background: "cyan" }, { background: "cyan", alpha: 0.9 }];
+  // Act
+  const labels = fills.map(fillLabel);
+  // Assert
+  assert.deepEqual(labels, ["cyan-dim", "cyan", "cyan/90"]);
+});
+
+test("rejects a declared pairing whose alpha is not a fraction of a fill", () => {
+  // Arrange
+  const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+  const pulse = parseColorBlocks(css)[0];
+  // Act / Assert
+  assert.throws(() => enumerateCompositePairings(pulse, [{ text: "cyan", background: "cyan", alpha: 1.5 }]),
+    /Alpha must be between 0 and 1/);
+});
+
+test("every declared composite pairing names a text token and a fill the Skins carry", () => {
+  // Arrange
+  const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+  const blocks = parseColorBlocks(css);
+  // Act / Assert
+  for (const { text, background } of COMPOSITE_PAIRINGS) {
+    for (const block of blocks) {
+      assert.ok(block.colors.has(text), `${block.skin} ${block.mode}: missing --color-${text}`);
+      assert.ok(block.colors.has(background), `${block.skin} ${block.mode}: missing --color-${background}`);
+    }
+  }
+});
+
+test("every graphic fill carries a reason a reviewer can weigh", () => {
+  // Arrange & Act & Assert: a graphic fill asserts that no text renders on it,
+  // which WCAG 1.4.11 governs rather than the Contrast Floor.
+  assert.ok(GRAPHIC_FILLS.length > 0);
+  for (const fill of GRAPHIC_FILLS) {
+    assert.ok(fill.reason.trim().length > 0, `${fill.file}: ${fill.utility} has no reason`);
+  }
 });
 
 test("composites an explicit alpha in sRGB before measuring contrast", () => {

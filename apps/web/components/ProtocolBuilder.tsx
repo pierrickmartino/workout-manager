@@ -662,7 +662,7 @@ function SessionEditor({
             type="button"
             onClick={onRemoveSession}
             aria-label={`Remove week ${session.week}, slot ${session.day}`}
-            className="flex h-8 w-8 items-center justify-center rounded-sm border border-border text-text-muted transition-colors hover:border-danger/60 hover:text-danger"
+            className="flex h-8 w-8 items-center justify-center rounded-sm border border-border text-text-muted transition-colors hover:border-magenta/60 hover:text-magenta"
           >
             <Trash2 className="h-4 w-4" aria-hidden />
           </button>

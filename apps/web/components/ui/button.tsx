@@ -19,7 +19,7 @@ const buttonVariants = cva(
           "border border-border text-text-secondary hover:border-border-lite hover:text-text-primary",
         ghost: "text-text-secondary hover:bg-surface hover:text-text-primary",
         destructive:
-          "bg-magenta-dim text-magenta font-mono font-semibold uppercase tracking-wider hover:bg-magenta/20",
+          "bg-magenta-dim text-magenta font-mono font-semibold uppercase tracking-wider border border-magenta-dim hover:border-magenta",
         link: "text-cyan underline-offset-4 hover:underline",
       },
       size: {

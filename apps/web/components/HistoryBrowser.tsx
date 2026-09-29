@@ -242,7 +242,7 @@ function LoggedSessionCard({
   // The reuse shortcut wears the cyan accent (matching the record detail page's reuse action)
   // so it reads as the highlighted "do this again" affordance, not just another link.
   const reusePillClass =
-    "label-mono inline-flex items-center gap-1.5 rounded-md border border-cyan/40 bg-cyan/[0.06] px-3 py-1.5 text-[10px] text-cyan transition-colors hover:bg-cyan/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan/60 motion-reduce:transition-none";
+    "label-mono inline-flex items-center gap-1.5 rounded-md border border-cyan/40 bg-cyan-dim px-3 py-1.5 text-[10px] text-cyan transition-colors hover:border-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan/60 motion-reduce:transition-none";
 
   // One reuse affordance per record, from the shared seam — so the row and the detail page can
   // never disagree (ADR-0031/0044). Plan-backed → Repeat its existing plan (no copy); plan-less
