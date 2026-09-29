@@ -2,16 +2,15 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 
 import type { StrengthTrajectoryTile } from "@/lib/strength-trajectories-view";
-import type { WeightUnit } from "@/lib/weight-unit";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { TopSetTrendChart } from "@/components/exercise/top-set-trend-chart";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 interface StrengthTrajectoriesProps {
+  // Already projected into the reader's Weight Unit by `toStrengthTrajectories` (#417):
+  // each row carries its own formatted text, so this component needs no unit of its own.
   tiles: StrengthTrajectoryTile[];
-  // The reader's Weight Unit, forwarded to each tile's Top-Set chart tooltip (#417).
-  unit: WeightUnit;
 }
 
 // The ranked strength small-multiples (issue #177 / ADR-0024): the user's top qualifying
@@ -21,7 +20,7 @@ interface StrengthTrajectoriesProps {
 // hides when there are no qualifying lifts (the view-model returns no tiles), so a
 // bodyweight-only user never meets an empty grid. A thin renderer: all shaping, the
 // headline estimate, and the accessible label live in `strength-trajectories-view`.
-export function StrengthTrajectories({ tiles, unit }: StrengthTrajectoriesProps) {
+export function StrengthTrajectories({ tiles }: StrengthTrajectoriesProps) {
   if (tiles.length === 0) {
     return null;
   }
@@ -33,7 +32,7 @@ export function StrengthTrajectories({ tiles, unit }: StrengthTrajectoriesProps)
       </SectionHeader>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {tiles.map((tile) => (
-          <TrajectoryTile key={tile.exerciseId} tile={tile} unit={unit} />
+          <TrajectoryTile key={tile.exerciseId} tile={tile} />
         ))}
       </div>
     </div>
@@ -43,13 +42,7 @@ export function StrengthTrajectories({ tiles, unit }: StrengthTrajectoriesProps)
 // One small-multiple: a single focusable link to the Exercise's full chart, labelled for
 // screen readers (the bar chart itself is decorative and hidden from them). The visible
 // focus ring keeps keyboard navigation legible against the dark surface.
-function TrajectoryTile({
-  tile,
-  unit,
-}: {
-  tile: StrengthTrajectoryTile;
-  unit: WeightUnit;
-}) {
+function TrajectoryTile({ tile }: { tile: StrengthTrajectoryTile }) {
   return (
     <Link
       href={tile.href}
@@ -75,7 +68,7 @@ function TrajectoryTile({
           ) : null}
         </div>
         <div aria-hidden>
-          <TopSetTrendChart rows={tile.trend.rows} unit={unit} heightClass="h-28" />
+          <TopSetTrendChart rows={tile.trend.rows} heightClass="h-28" showValues={false} />
         </div>
       </Card>
     </Link>

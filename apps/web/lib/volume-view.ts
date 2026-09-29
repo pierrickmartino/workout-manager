@@ -1,29 +1,25 @@
 import type { VolumePoint } from "./analytics-types";
 import type { WeightUnit } from "./weight-unit";
-import { kgToUnit } from "./weight-format.ts";
+import { formatWholeWeight, kgToUnit } from "./weight-format.ts";
+import { formatDayLabel, formatFullDayLabel } from "./chart-date-label.ts";
 
 // A daily volume point prepared for the Recharts line: the ISO `date` kept for the
 // axis and keys, a short human `label` for the tick, and the raw `volume` projected into
-// the reader's Weight Unit (unrounded, so the line stays proportional; the tooltip carries
-// the unit label). Total volume is a tonnage — a weight surface — so it tracks the reader's
-// unit like every other weight (#417).
+// the reader's Weight Unit (unrounded, so the line stays proportional). Total volume is a
+// tonnage — a weight surface — so it tracks the reader's unit like every other weight (#417).
+//
+// `dateText` and `valueText` are the same point as *retrievable text*: the date with its
+// year, and the figure at the precision the chart displays, with its unit. They live here
+// rather than in the component (ADR-0084) so the tooltip and the accessible values table
+// render one string built once — a rounding rule duplicated at two call sites is a parity
+// bug waiting for someone to edit one of them. This is where the proportional plot value
+// and the spoken value formally part ways: `volume` stays raw, `valueText` is rounded.
 export interface VolumeChartRow {
   date: string;
   label: string;
   volume: number;
-}
-
-const MONTHS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
-// Format an ISO `yyyy-mm-dd` date as a short "Mon D" label. Parsed from the string
-// parts so it is timezone-safe — never shifted a day by a Date constructor's local
-// offset — and deterministic across environments.
-function formatDayLabel(iso: string): string {
-  const [, month, day] = iso.split("-").map(Number);
-  return `${MONTHS[month - 1]} ${day}`;
+  dateText: string;
+  valueText: string;
 }
 
 // Turn the API's daily volume points into chart rows, preserving the series'
@@ -36,8 +32,17 @@ export function toVolumeRows(
     date: point.date,
     label: formatDayLabel(point.date),
     volume: kgToUnit(point.volume_kg, unit),
+    dateText: formatFullDayLabel(point.date),
+    valueText: formatWholeWeight(point.volume_kg, unit),
   }));
 }
+
+// What one row of the Volume values table means. The series carries a point only for a day
+// the reader actually logged — `volume-view` invents no zeros — so an absent date is a day
+// without training, not a missing record. Said plainly, because a two-column table cannot
+// say it and a reader comparing the table against their own history will wonder.
+export const VOLUME_VALUES_CAPTION =
+  "One row per logged day, in order. Days with no logged training have no row.";
 
 // The trend badge: the window's volume against the immediately preceding equal-length
 // window, as a signed whole percent ("+25%", "-8%"). Returns `null` when the API sends

@@ -175,3 +175,88 @@ the two evidence files and the UI/UX audit follow-up link. Next work: perform th
 manual/authenticated closure cases and agree a separate production fix scope for
 CH-F1 through CH-F4. Do not mark item 5 closed or infer screen-reader success from
 the automated value-exposure passes.
+
+## Remediation — 29 September 2026 (CH-F1, CH-F2)
+
+Shipped. CH-F1 and CH-F2 are fixed in production components; **CH-F3 and CH-F4 are not
+closed by this change**, and the two real screen-reader cases this report requires for
+closure were **not run**. Item 5 stays open. What follows separates what was verified
+from what was not, because the acceptance criterion this finding set is only half-met.
+
+### What changed
+
+Every plot now renders the same series as text. `ChartValues`
+([`chart-values.tsx`](../../apps/web/components/pulse/chart-values.tsx)) is a native
+`<details>` over a real `<table>` with a `<caption>` and two `<th scope="col">`, rendered
+**inside** each chart component from the identical `rows` array handed to Recharts — so
+parity is structural rather than asserted. It is visible to everyone, not `sr-only`: the
+measured barrier is pointer access, which affects a sighted keyboard user equally.
+
+Displayed precision and date text moved out of the components into the `lib/` view-models
+as `valueText` and `dateText`/`weekText`, so the tooltip and the table render one string
+built once. The duplicated `MONTHS`/`formatDayLabel` in three view-models became
+[`chart-date-label.ts`](../../apps/web/lib/chart-date-label.ts), and the year — missing
+from every copy — now appears wherever a datum is retrieved: the tables, the three
+tooltips, and Muscle Balance's accessible name (CH-F2). Axis ticks keep the short form.
+
+Each `<caption>` states what one row means. The Distance caption distinguishes an **absent**
+week (no distance logged — `distance_series` buckets only weeks a distance set landed in,
+it does not fill the window) from a **`0 km`** row (distance work covering none). The
+Top-Set caption restates the ADR-0017 qualification rules and names the value an estimate.
+No gap-filling was added; both projections still refuse zero-padding.
+
+Two defects found on the way, neither named by the finding: the Top-Set chart keyed its
+bars on `row.date`, which duplicates when two Logged Sessions share a date in a
+calendar-free app and would drop a bar (now the series index); and `TopSetTrendChart`'s
+`unit` prop became dead once formatting moved, as did `VolumeChart`'s, so both are gone.
+
+[ADR-0084](../adr/0084-every-plotted-datum-is-retrievable-as-text.md) records the
+invariant, the visible-not-hidden decision, and what the guard does **not** prove.
+
+### Evidence, and its boundary
+
+**Guard.** [`chart-values-policy.ts`](../../apps/web/lib/chart-values-policy.ts) reproduced
+all three CH-F1 violations against the pre-fix sources at
+`8171439747c699029db3879fdf7c6ab47fec7fa6` and reports none after. It keys on classified
+`recharts` imports and fails closed on an unclassified one. 11 unit tests, in the existing
+`web` CI job. It proves a table is **rendered**, not that its rows match the plot.
+
+**Per-point parity.** `audit/charts.mjs` gained a values block that expands each disclosure
+**by keyboard** (focus `<summary>`, press Enter) and compares every row's date and value
+text against the fixture's own input rows, in order. Run at 900×900 over the four
+value-bearing surfaces: **65 cases, 695 plotted points, zero parity failures, zero keyboard
+failures**, including the 150-point large-Volume window, both kg and lb, the sparse zero
+week and the 2025/2026 boundary. The 10 miniature cases assert the **absence** of a
+disclosure and pass. Pointer parity was re-pointed at the same `valueText`, so the harness
+no longer reimplements the rounding rule: **729 matches, 0 mismatches**.
+
+**Tab reachability.** The prior run recorded zero of 88 non-empty Recharts cases reachable
+by Tab. **44 of the value-bearing cases now register a chart-interior tab stop** — the
+`<summary>`. The SVG itself still carries no role or tabindex; that is unchanged and
+intended, since the disclosure is the keyboard route, not the plot.
+
+**320px.** The matrix re-ran at 320×640 (`UI_CHART_VIEWPORT`): 55 cases, **zero document
+overflow with every table expanded**, parity intact. This matters because the audit's rank 2
+is a 320px reflow defect and an uncapped table could have widened the document. That run
+also recorded **70 pointer mismatches, all in `volume/large`**: 150 points across ~260px of
+plot, where the harness's hover resolves to the neighbouring point — off by one, real value,
+wrong point. That is a hover-resolution artefact of the width, not a product defect, and it
+is an argument for the table: at 320px a dense series is unreliable to read *with* a pointer.
+
+**Not verified.** Actual VoiceOver/Safari and NVDA/Firefox remain **untested** — this report
+requires both for closure and neither was run. **WebKit is not installed in the remediating
+container**, so every runtime number above is **Chromium 141 only** and the two-engine
+criterion is half-met; the run records the blocked engine rather than omitting it.
+`audit/charts.mjs` also gained `UI_CHROMIUM_EXECUTABLE`/`UI_WEBKIT_EXECUTABLE`, because the
+container's Chromium build predates this Playwright's pinned one. Authenticated cases
+CH-1..CH-8 remain **blocked**. Evidence for this run is in
+[`chart-accessibility-evidence/remediation-2026-09-29/`](chart-accessibility-evidence/remediation-2026-09-29/);
+the original 2026-09-26 two-engine evidence is **kept, not overwritten**, because it holds
+the WebKit record this run cannot reproduce.
+
+**Still open.** CH-F3 (atlas heat magnitude: the accessible name says `sets` while the heat
+is emphasis-weighted volume normalized to the busiest muscle) is untouched — deciding what
+number to speak needs a term decision, not a mechanism. CH-F4's link is now backed by a
+destination with complete value access, but real fetched-dataset parity and authenticated
+navigation stay blocked. Same-date Top-Set rows read identically and cannot be
+disambiguated without session identity from the API.

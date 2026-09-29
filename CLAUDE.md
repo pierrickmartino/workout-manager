@@ -145,6 +145,15 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   closed on unknown colour tokens; `disabled:` fades are exempt by rule, and the
   exemption registry is otherwise empty (ADR-0083).
 
+- New chart, or a new series on one → render `ChartValues` from the **same rows** you hand
+  the plot, and put the date/value formatting in the `lib/` view-model (`dateText`,
+  `valueText`), never in the component. Every plotted datum must be retrievable as text, with
+  its year and unit, and the `<caption>` says what an absent row means. The guard in
+  `apps/web/lib/chart-values-policy.ts` sweeps every component, keys on classified `recharts`
+  imports and fails closed on unknown ones; an entry in `CHART_VALUES_EXEMPTIONS` needs a
+  written reason. It proves the table is rendered, not that it matches — `audit/charts.mjs`
+  asserts per-point parity (ADR-0084).
+
 - New animation or transform transition → pair it with `motion-reduce:animate-none`
   or `motion-reduce:transition-none` **in the same class string**. Colour and
   opacity transitions move nothing and are exempt by rule. The guard in

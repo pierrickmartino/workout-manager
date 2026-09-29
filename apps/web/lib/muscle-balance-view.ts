@@ -1,4 +1,5 @@
 import type { WeeklyMuscleComposition } from "./strength-analytics-types.ts";
+import { formatDayLabel, formatFullWeekLabel } from "./chart-date-label.ts";
 
 // One colored segment of a week's stacked bar: the Muscle Group, its exact share as the
 // fill `width` (0–100) so the bar stays proportional even as labels round, and a rounded
@@ -29,19 +30,6 @@ export interface MuscleBalanceView {
   isEmpty: boolean;
 }
 
-const MONTHS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
-// Format an ISO `yyyy-mm-dd` Monday as a short "Mon D" label. Parsed from the string
-// parts so it is timezone-safe — never shifted a day by a Date constructor's local
-// offset — mirroring `records-view`'s date formatting.
-function formatWeekLabel(iso: string): string {
-  const [, month, day] = iso.split("-").map(Number);
-  return `${MONTHS[month - 1]} ${day}`;
-}
-
 // Turn the API's per-week composition series into stacked-bar rows, preserving the
 // server's week order and canonical group order (the view never reshuffles either).
 // Each week's `ariaLabel` enumerates its composition so the bars are screen-reader
@@ -63,26 +51,29 @@ function toWeek(composition: WeeklyMuscleComposition): MuscleBalanceWeek {
     width: share.pct,
     label: `${Math.round(share.pct)}%`,
   }));
-  const weekLabel = formatWeekLabel(composition.week);
   return {
     week: composition.week,
-    weekLabel,
+    // The visible axis label stays short — it is a tick with a neighbour either side.
+    weekLabel: formatDayLabel(composition.week),
     segments,
     isEmpty: segments.length === 0,
-    ariaLabel: buildLabel(weekLabel, segments),
+    // The accessible name is read one row at a time, with no neighbours to supply the
+    // context, so it carries the year (CH-F2, ADR-0084). A reader met "Week of Dec 29"
+    // followed by "Week of Jan 5" with no way to order them.
+    ariaLabel: buildLabel(formatFullWeekLabel(composition.week), segments),
   };
 }
 
-// The row's accessible name: "Week of Jul 6" plus each group's rounded share, or an
+// The row's accessible name: "Week of Jul 6, 2026" plus each group's rounded share, or an
 // honest "no training logged" for an untrained week — the data the decorative colored
 // bar cannot convey aurally.
 function buildLabel(
-  weekLabel: string,
+  weekText: string,
   segments: readonly MuscleBalanceSegment[],
 ): string {
   if (segments.length === 0) {
-    return `Week of ${weekLabel}: no training logged`;
+    return `${weekText}: no training logged`;
   }
   const parts = segments.map((s) => `${s.group} ${s.label}`).join(", ");
-  return `Week of ${weekLabel}: ${parts}`;
+  return `${weekText}: ${parts}`;
 }

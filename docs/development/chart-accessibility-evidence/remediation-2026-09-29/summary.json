@@ -1,0 +1,25 @@
+{
+  "date": "2026-09-29T05:54:26.290Z",
+  "revision": "2299acfeb21d2f3121e23eaebedfa0a0034e9e2b",
+  "versions": {
+    "chromium": "141.0.7390.37"
+  },
+  "cases": 65,
+  "errors": [
+    {
+      "browserName": "webkit",
+      "blocked": "browserType.launch: Executable doesn't exist at /opt/pw-browsers/webkit-2359/pw_run.sh\n╔════════════════════════════════════════════════════════════╗\n║ Looks like Playwright was just installed or updated.       ║\n║ Please run the following command to download new browsers: ║\n║                                                            ║\n║     npx playwright install                                 ║\n║                                                            ║\n║ <3 Playwright Team                                         ║\n╚════════════════════════════════════════════════════════════╝"
+    }
+  ],
+  "nonemptyRecharts": 44,
+  "reachableRecharts": 44,
+  "pointerMatches": 729,
+  "pointerMismatches": [],
+  "atlasInteractions": [],
+  "valueCases": 65,
+  "valueParityPasses": 65,
+  "valuePoints": 695,
+  "valueParityFailures": [],
+  "valueKeyboardFailures": [],
+  "valueOverflowFailures": []
+}

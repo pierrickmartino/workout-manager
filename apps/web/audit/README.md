@@ -92,7 +92,10 @@ DOM dumps or credentials. The report contains the remaining real-app/device step
 With the loopback server running, use `node audit/charts.mjs`. The `charts` journey
 mounts production chart components via `chart-fixture.tsx`; the runner records
 keyboard focus, accessibility snapshots, pointer tooltip values and sampled atlas
-activation/restoration in Chromium and WebKit. Open a manual fixture with, for
+activation/restoration in Chromium and WebKit. It also asserts **per-point parity**
+(ADR-0084): each chart's `ChartValues` disclosure is opened by keyboard and every row's
+date and value text compared with the fixture's own input rows, with the miniature
+asserted to carry no disclosure at all. Open a manual fixture with, for
 example, `/?journey=charts&surface=distance&variant=sparse&range=90`.
 Surfaces: `volume`, `distance`, `top`, `miniature`, `balance`, `split`, `atlas`.
 Variants: `empty`, `single`, `multi`, `sparse`, `large`; `unit=kg|lb` and
@@ -102,7 +105,11 @@ Evidence defaults to `docs/development/chart-accessibility-evidence/`; set
 `UI_CHART_OUTPUT` to preserve another run. `UI_CHART_SURFACES=atlas,split`
 restricts a diagnostic run; use a separate output directory to preserve the full
 matrix. `UI_CHART_CASE=volume/large/150/lb` selects one fixture in both browsers.
-The runner overwrites compressed raw
+`UI_CHART_VIEWPORT=320x640` re-runs the matrix at the narrowest supported width and
+records whether any expanded values table widens the document.
+`UI_CHROMIUM_EXECUTABLE` / `UI_WEBKIT_EXECUTABLE` point an engine at a browser the
+container already has, for a runner whose pinned Playwright build differs from the
+installed one; unset, Playwright resolves its own. The runner overwrites compressed raw
 results and the summary. Exit 1 means a runner error; accessibility findings are
 recorded separately. Snapshots do not establish actual screen-reader speech,
 production filter navigation or linked detail-page value access. See
