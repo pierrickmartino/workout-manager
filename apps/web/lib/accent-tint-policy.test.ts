@@ -8,10 +8,11 @@ import {
   findAccentTintViolations,
   findColourUses,
   formatTintViolations,
+  GRAPHIC_FILLS,
   readColourUtility,
   UNIVERSAL_COLOURS,
 } from "./accent-tint-policy.ts";
-import { ACCENTS, GRAPHIC_FILLS, parseColorBlocks } from "./skin-contrast-matrix.ts";
+import { ACCENTS, parseColorBlocks } from "./skin-contrast-matrix.ts";
 
 const webRoot = resolve(import.meta.dirname, "..");
 
@@ -71,7 +72,7 @@ test("classifies a call-site alpha by whether the colour beneath it is decidable
     ["surface", 0.95], ["base", 0.4], ["black", 0.6], ["text-muted", null],
   ];
   // Act
-  const classes = backgrounds.map(([token, alpha]) => classifyBackground(token, alpha).kind);
+  const classes = backgrounds.map(([token, alpha]) => classifyBackground(token, alpha));
   // Assert
   assert.deepEqual(classes, [
     "accent-tint", "opaque", "opaque", "harness", "harness", "harness", "opaque",
@@ -139,6 +140,38 @@ test("pairs a fill only with text that can render in the same state", () => {
   assert.deepEqual(violations, []);
 });
 
+test("measures the text on a declared dim fill, which is itself a tint", () => {
+  // Arrange: ADR-0081 measures the *declared* text on `cyan-dim`, not whatever a
+  // call site puts there — muted text on that chip is nobody's guarantee.
+  const source = `export const A = () => <span className="bg-cyan-dim text-text-muted">Rest</span>;`;
+  // Act
+  const violations = findAccentTintViolations(source, "a.tsx", skinBlocks());
+  // Assert
+  assert.deepEqual(violations.map(({ failure }) => failure),
+    [{ kind: "undeclared-pairing", text: "text-muted" }]);
+});
+
+test("asks nothing of a declared dim fill with no text beside it", () => {
+  // Arrange: its value is already measured; the registry is for fills nobody declared.
+  const source = `export const A = () => <span className="h-1 w-8 rounded-full bg-amber-dim" />;`;
+  // Act
+  const violations = findAccentTintViolations(source, "a.tsx", skinBlocks());
+  // Assert
+  assert.deepEqual(violations, []);
+});
+
+test("does not pair classes from separate strings that share a line", () => {
+  // Arrange: a colour map's entries are different elements, and a ternary's arms
+  // never render together — grouping by line invented cyan text on solid cyan.
+  const map = `const META = { text: "text-cyan", dot: "bg-cyan", bar: "bg-cyan-dim" };`;
+  const ternary = `export const A = ({ on }) => <b className={\`p-1 \${on ? "bg-cyan text-on-accent" : "bg-base text-cyan"}\`} />;`;
+  // Act
+  const violations = [map, ternary].flatMap((source) =>
+    findAccentTintViolations(source, "a.tsx", skinBlocks()));
+  // Assert
+  assert.deepEqual(violations, []);
+});
+
 test("rejects an accent tint with no text beside it unless it is a registered graphic", () => {
   // Arrange: text can arrive from a descendant, which one class string cannot see.
   const source = `export const A = () => <div className="rounded-lg border border-cyan/40 bg-cyan/5" />;`;
@@ -146,7 +179,7 @@ test("rejects an accent tint with no text beside it unless it is a registered gr
   const violations = findAccentTintViolations(source, "a.tsx", skinBlocks());
   // Assert
   assert.equal(violations.length, 1);
-  assert.deepEqual(violations[0].failure, { kind: "undeclared-pairing", text: null });
+  assert.deepEqual(violations[0].failure, { kind: "undeclared-tint" });
   assert.match(formatTintViolations(violations), /bg-cyan\/5/);
 });
 
@@ -210,7 +243,7 @@ test("records the translucent chrome it leaves to the harness instead of omittin
   // Act
   const harness = files.flatMap((file) =>
     findColourUses(readFileSync(resolve(webRoot, file), "utf8"), file)
-      .filter((use) => use.prefix === "bg" && classifyBackground(use.token, use.alpha).kind === "harness"));
+      .filter((use) => use.prefix === "bg" && classifyBackground(use.token, use.alpha) === "harness"));
   // Assert
   const tokens = [...new Set(harness.map(({ token }) => token))].sort();
   assert.deepEqual(tokens, ["base", "black", "elevated", "surface"]);
@@ -226,11 +259,14 @@ test("the Skins declare more colours than the accents this rule measures", () =>
   assert.equal(declared.has("danger"), false);
 });
 
-test("every registered graphic fill still names a component that carries it", () => {
-  // Arrange
+test("every registered graphic fill carries a reason and still names its call site", () => {
+  // Arrange: a graphic fill asserts that no text renders on it, which WCAG 1.4.11
+  // governs rather than the Contrast Floor — a claim a reviewer must be able to weigh.
   const files = componentSources();
   // Act & Assert
-  for (const { file, utility } of GRAPHIC_FILLS) {
+  assert.ok(GRAPHIC_FILLS.length > 0);
+  for (const { file, utility, reason } of GRAPHIC_FILLS) {
+    assert.ok(reason.trim().length > 0, `${file}: ${utility} has no reason`);
     assert.ok(files.includes(file), `${file} is not a component source`);
     assert.ok(readFileSync(resolve(webRoot, file), "utf8").includes(utility),
       `${file} no longer carries ${utility}`);

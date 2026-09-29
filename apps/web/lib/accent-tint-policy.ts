@@ -1,7 +1,7 @@
 import { parseAlpha, readTextColour } from "./faded-text-policy.ts";
 import { collectClassStrings, parseClassToken, type ClassToken } from "./motion-policy.ts";
 import {
-  ACCENTS, COMPOSITE_PAIRINGS, fillLabel, GRAPHIC_FILLS, type TokenBlock,
+  ACCENTS, COMPOSITE_PAIRINGS, fillLabel, type TokenBlock,
 } from "./skin-contrast-matrix.ts";
 
 // ADR-0086: an accent tint a component mixes itself is a pairing nobody measured.
@@ -41,6 +41,43 @@ export interface ColourUtility {
 // Colours that belong to no Skin: CSS keywords and the two absolutes Tailwind
 // ships. They are not measurable against a Skin surface and never a Skin's job.
 export const UNIVERSAL_COLOURS = ["transparent", "current", "inherit", "black", "white"] as const;
+
+// An accent fill that carries no text at all. Nothing here is measured against
+// the Contrast Floor, because the Floor governs text: a swatch with no text in
+// it is a graphical object under WCAG 1.4.11. That is a claim about a specific
+// call site, so it needs a reason a reviewer can weigh (ADR-0086).
+export interface GraphicFill {
+  readonly file: string;
+  readonly utility: string;
+  readonly reason: string;
+}
+
+export const GRAPHIC_FILLS: readonly GraphicFill[] = [
+  {
+    file: "components/pulse/training-heatmap.tsx",
+    utility: "bg-cyan/25",
+    reason: "Heatmap density cell. The cells are empty spans; each day's fact reaches "
+      + "every user as an aria-label, a title and the mirrored caption, never as text "
+      + "printed on the shade.",
+  },
+  {
+    file: "components/pulse/training-heatmap.tsx",
+    utility: "bg-cyan/50",
+    reason: "Heatmap density cell, as bg-cyan/25 above — the ramp's middle step.",
+  },
+  {
+    file: "components/pulse/training-heatmap.tsx",
+    utility: "bg-cyan/75",
+    reason: "Heatmap density cell, as bg-cyan/25 above — the ramp's top tinted step.",
+  },
+  {
+    file: "components/GenerationProgress.tsx",
+    utility: "bg-cyan/40",
+    reason: "The indeterminate progress track's segment under prefers-reduced-motion. "
+      + "The bar is an empty aria-hidden div; the state it reports is announced by the "
+      + "role=\"status\" region above it (ADR-0082).",
+  },
+];
 
 // Each prefix is overloaded: `border-2` is a width, `border-dashed` a style,
 // `border-cyan` a colour. These patterns are the non-colour forms, so anything
@@ -97,9 +134,9 @@ export type BackgroundKind = "opaque" | "accent-tint" | "harness";
 // at a call-site alpha composites against a Skin surface, which is known. A
 // surface or universal colour at a call-site alpha composites against whatever
 // scrolls beneath it, which is not — that stays the browser harness's job.
-export function classifyBackground(token: string, alpha: number | null): { readonly kind: BackgroundKind } {
-  if (alpha === null) return { kind: "opaque" };
-  return { kind: (ACCENTS as readonly string[]).includes(token) ? "accent-tint" : "harness" };
+export function classifyBackground(token: string, alpha: number | null): BackgroundKind {
+  if (alpha === null) return "opaque";
+  return (ACCENTS as readonly string[]).includes(token) ? "accent-tint" : "harness";
 }
 
 export interface ColourUse extends ColourUtility {
@@ -107,14 +144,22 @@ export interface ColourUse extends ColourUtility {
   readonly line: number;
   readonly utility: string;
   readonly variants: readonly string[];
+  // Which class string this came from. A fill pairs only with text in the same
+  // one: separate literals are separate elements or exclusive branches — the four
+  // `{ text, dot, bar }` strings of a section's colour map are not one element's
+  // classes, and `isNext ? "bg-cyan text-on-accent" : "bg-base text-cyan"` never
+  // renders both. Grouping by line merged both and invented pairings.
+  readonly group: number;
 }
 
 export type TintFailure =
   | { readonly kind: "undeclared-colour" }
   | { readonly kind: "unreadable-alpha"; readonly raw: string }
-  // `text` is the text token beside the fill, or null when none is — in which
-  // case the text arrives from a descendant this rule cannot see.
-  | { readonly kind: "undeclared-pairing"; readonly text: string | null };
+  // Text sits beside the fill, but that pairing is not one the registry declares.
+  | { readonly kind: "undeclared-pairing"; readonly text: string }
+  // No text sits beside the fill, so it can only arrive from a descendant this
+  // rule cannot see. A declared fill or a graphic registration is the way out.
+  | { readonly kind: "undeclared-tint" };
 
 export interface TintViolation {
   readonly use: ColourUse;
@@ -129,10 +174,10 @@ export function declaredColourTokens(blocks: readonly TokenBlock[]): ReadonlySet
 }
 
 export function findColourUses(source: string, file: string): readonly ColourUse[] {
-  return collectClassStrings(source, file).flatMap(({ text, line }) =>
+  return collectClassStrings(source, file).flatMap(({ text, line }, group) =>
     text.split(/\s+/).filter(Boolean).map(parseClassToken).flatMap(({ variants, utility }) => {
       const colour = readColourUtility(utility);
-      return colour === null ? [] : [{ ...colour, file, line, utility, variants }];
+      return colour === null ? [] : [{ ...colour, file, line, utility, variants, group }];
     }));
 }
 
@@ -146,20 +191,29 @@ function canRenderTogether(fill: ColourUse, text: ColourUse): boolean {
   return wider.variants.every((variant) => narrower.variants.includes(variant));
 }
 
-function isDeclaredPairing(text: string, token: string, alpha: number): boolean {
+function isDeclaredPairing(text: string, token: string, alpha: number | undefined): boolean {
   return COMPOSITE_PAIRINGS.some((pairing) =>
     pairing.text === text && pairing.background === token && pairing.alpha === alpha);
+}
+
+// A fill token the registry already declares: a `-dim` chip, or the solid accent
+// behind the on-accent label. Its *value* is ADR-0081's business — but which text
+// sits on it is still this one's, because a `-dim` token is itself a 0x1f tint.
+function isDeclaredFillToken(token: string): boolean {
+  return COMPOSITE_PAIRINGS.some(({ background, alpha }) => background === token && alpha === undefined);
 }
 
 function isRegisteredGraphic(use: ColourUse): boolean {
   return GRAPHIC_FILLS.some(({ file, utility }) => file === use.file && utility === use.utility);
 }
 
-function tintFailure(fill: ColourUse, sameString: readonly ColourUse[]): TintFailure | null {
-  if (isRegisteredGraphic(fill)) return null;
-  const alpha = fill.alpha as number;
-  const texts = sameString.filter((use) => use.prefix === "text" && canRenderTogether(fill, use));
-  if (texts.length === 0) return { kind: "undeclared-pairing", text: null };
+function pairableText(fill: ColourUse, sameString: readonly ColourUse[]): readonly ColourUse[] {
+  return sameString.filter((use) => use.prefix === "text" && canRenderTogether(fill, use));
+}
+
+function undeclaredPairing(
+  fill: ColourUse, alpha: number | undefined, texts: readonly ColourUse[],
+): TintFailure | null {
   const undeclared = texts.find(({ token }) => !isDeclaredPairing(token, fill.token, alpha));
   return undeclared === undefined ? null : { kind: "undeclared-pairing", text: undeclared.token };
 }
@@ -174,13 +228,22 @@ export function findAccentTintViolations(
     if (use.alpha !== null && Number.isNaN(use.alpha)) {
       return [{ use, failure: { kind: "unreadable-alpha", raw: use.raw } as const }];
     }
-    if (use.prefix !== "bg" || classifyBackground(use.token, use.alpha).kind !== "accent-tint") return [];
-    // A fill and its text pair when they can end up on the same element. Every
-    // token in one class string shares that string's line, and separate strings
-    // that a `cn()` joins on one line really are one element's classes. A fill
-    // written a line away from its text sees no text and fails closed, which is
-    // the right direction: the author then reaches for a declared fill.
-    const failure = tintFailure(use, uses.filter((other) => other.line === use.line));
+    if (use.prefix !== "bg" || classifyBackground(use.token, use.alpha) === "harness") return [];
+    if (isRegisteredGraphic(use)) return [];
+    // A fill and its text pair when they can end up on the same element.
+    const texts = pairableText(use, uses.filter((other) => other.group === use.group));
+    if (use.alpha === null) {
+      // A declared fill token. Its value is measured, so only the text on it is
+      // open — and a fill with no text beside it is simply a fill nobody has
+      // written text on here.
+      const failure = isDeclaredFillToken(use.token) ? undeclaredPairing(use, undefined, texts) : null;
+      return failure === null ? [] : [{ use, failure }];
+    }
+    // A tint the call site mixed itself. With no text beside it this fails closed:
+    // text can still reach it from a descendant, which one class string cannot see.
+    const failure = texts.length === 0
+      ? { kind: "undeclared-tint" } as const
+      : undeclaredPairing(use, use.alpha, texts);
     return failure === null ? [] : [{ use, failure }];
   });
 }
@@ -194,10 +257,11 @@ export function formatTintViolations(violations: readonly TintViolation[]): stri
     if (failure.kind === "unreadable-alpha") {
       return `${where} has an alpha this rule cannot read (${failure.raw})`;
     }
+    if (failure.kind === "undeclared-tint") {
+      return `${where} mixes a tint no declared pairing covers, and text can reach it from a`
+        + ` descendant. Use a declared fill, or register it as a graphic that carries no text`;
+    }
     const fill = fillLabel({ background: use.token, alpha: use.alpha ?? undefined });
-    return failure.text === null
-      ? `${where} tints a fill no declared pairing covers; text can reach it from a descendant.`
-        + ` Use a declared fill, or register it as a graphic that carries no text`
-      : `${where} paints text-${failure.text} on ${fill}, which is not a declared pairing`;
+    return `${where} paints text-${failure.text} on ${fill}, which is not a declared pairing`;
   }).join("\n");
 }

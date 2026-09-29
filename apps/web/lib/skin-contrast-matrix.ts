@@ -47,47 +47,13 @@ export const COMPOSITE_PAIRINGS: readonly CompositePairing[] = [
   { text: "amber", background: "amber-dim" },
   { text: "green", background: "green-dim" },
   { text: "on-accent", background: "cyan" },
+  // A selected Sensitive Constraint row: the magenta chip marks the selection
+  // while the row keeps reading as body copy, so primary text sits on the tint.
+  { text: "text-primary", background: "magenta-dim" },
   // The primary button's hover fill. The dim chips have no such headroom — each
   // is tuned to land just above the Floor — so this is the one accent fill an
   // alpha deepens, and it deepens toward the accent rather than away from it.
   { text: "on-accent", background: "cyan", alpha: 0.9 },
-];
-
-// An accent fill that carries no text at all. Nothing here is measured against
-// the Contrast Floor, because the Floor governs text: a swatch with no text in
-// it is a graphical object under WCAG 1.4.11. That is a claim about a specific
-// call site, so it needs a reason a reviewer can weigh (ADR-0086).
-export interface GraphicFill {
-  readonly file: string;
-  readonly utility: string;
-  readonly reason: string;
-}
-
-export const GRAPHIC_FILLS: readonly GraphicFill[] = [
-  {
-    file: "components/pulse/training-heatmap.tsx",
-    utility: "bg-cyan/25",
-    reason: "Heatmap density cell. The cells are empty spans; each day's fact reaches "
-      + "every user as an aria-label, a title and the mirrored caption, never as text "
-      + "printed on the shade.",
-  },
-  {
-    file: "components/pulse/training-heatmap.tsx",
-    utility: "bg-cyan/50",
-    reason: "Heatmap density cell, as bg-cyan/25 above — the ramp's middle step.",
-  },
-  {
-    file: "components/pulse/training-heatmap.tsx",
-    utility: "bg-cyan/75",
-    reason: "Heatmap density cell, as bg-cyan/25 above — the ramp's top tinted step.",
-  },
-  {
-    file: "components/GenerationProgress.tsx",
-    utility: "bg-cyan/40",
-    reason: "The indeterminate progress track's segment under prefers-reduced-motion. "
-      + "The bar is an empty aria-hidden div; the state it reports is announced by the "
-      + "role=\"status\" region above it (ADR-0082).",
-  },
 ];
 
 // Every colour must be classified. on-accent is text only on its declared fill;

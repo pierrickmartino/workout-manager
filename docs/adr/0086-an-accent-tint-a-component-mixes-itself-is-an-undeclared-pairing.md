@@ -74,16 +74,32 @@ Unknown colours fail closed, as in ADR-0081 and ADR-0083.
 
 ## What pairs with what
 
-A fill pairs with the text in the same class string, and only when the two can
+A fill pairs with the text in the **same class string**, and only when the two can
 render in the same state: a bare utility applies always, so it pairs with
 anything, while two differently-qualified utilities need not ever meet. A
 disabled control is never hovered, so its muted label and a hover fill are not a
 pairing, and demanding one would be a false failure — a guard that cries wolf
-teaches people to register exemptions mechanically.
+teaches people to register exemptions mechanically. That rule pays for itself
+immediately: the logbook's delete control pairs `disabled:text-text-muted` with
+`hover:bg-magenta-dim`, which measures 3.73:1 and never renders.
 
-A tint with no text beside it fails closed, because text can still reach it from
-a descendant. The way out is a declared fill, or the graphic registry below — not
-an exemption.
+The unit is the class string and not the line. Grouping by line merged a section
+colour map's four separate strings (`{ text: "text-cyan", dot: "bg-cyan", bar:
+"bg-cyan-dim" }`) into one element's classes, and merged both arms of
+`isNext ? "bg-cyan text-on-accent" : "bg-base text-cyan"`, inventing a pairing of
+cyan text on a solid cyan fill that nothing renders.
+
+A **declared** fill token — a `-dim` chip, or the solid accent behind the
+on-accent label — is measured for the text beside it too, because a `-dim` token
+is itself a 0x1f tint and ADR-0081 measures only the *declared* text on it, not
+whatever a call site puts there. That found one undeclared pairing, primary text
+on the selected Sensitive Constraint row's magenta chip, at 8.80:1; it is now
+declared. Such a token with no text beside it needs nothing: its value is already
+measured, and the registry exists to catch fills nobody declared.
+
+A **mixed** tint with no text beside it fails closed, because text can still
+reach it from a descendant. The way out is a declared fill, or the graphic
+registry below — not an exemption.
 
 ## Graphic fills are a claim, and carry a reason
 
@@ -101,13 +117,25 @@ reason and a test asserts the call site still exists.
 
 **Translucent chrome stays the browser harness's job**, as the issue that raised
 this required be said out loud rather than quietly omitted. `bg-surface/95` on
-the tab bar, `bg-base/40` behind a table head, `bg-black/60` under a sheet:
-twenty-eight such fills composite against whatever scrolls beneath them, which is
-not statically decidable. The guard **classifies** them `harness` rather than
-skipping them, and a test asserts that classification covers exactly the surface
-and universal colours and never an accent — so the boundary is enforced, not
-assumed. Listing them as exemptions in a static registry would be false
-assurance, the same reason ADR-0083 gives for ancestor fades.
+the tab bar, `bg-base/90` on the app header, `bg-black/60` under a sheet: these
+composite against whatever scrolls beneath them, which is not statically
+decidable. The guard **classifies** all twenty-eight surface-family and universal
+fills `harness` rather than skipping them, and a test asserts that classification
+covers exactly the surface and universal colours and never an accent — so the
+boundary is enforced, not assumed. Listing them as exemptions in a static
+registry would be false assurance, the same reason ADR-0083 gives for ancestor
+fades.
+
+Be precise about where that line actually falls: it is drawn by **colour family,
+not by whether the element is chrome**. A `bg-elevated/50` row hover or a
+`bg-base/40` table head is in normal flow over a known Skin surface, so it *would*
+be decidable by the same arithmetic as an accent tint — it is out of scope because
+#567 scoped it out (it names `bg-base/50` among the cases it excludes), not
+because it cannot be measured. Drawing the line at the token family keeps one
+rule instead of a positioned-versus-in-flow heuristic that would itself need
+guarding. Bringing the in-flow surface fades under the Floor is a separate piece
+of work, and this paragraph exists so whoever picks it up finds the reason
+written down rather than inferring that it was impossible.
 
 **Blue still has no dim fill.** `bg-blue/15 text-blue` was the one hand-rolled
 tint with no declared token to move to — and a failing one, at 3.77:1. Measured
