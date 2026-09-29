@@ -26,7 +26,10 @@ export function TabBar(): React.JSX.Element {
   return (
     <nav
       aria-label={NAV_LABELS.primary}
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 backdrop-blur"
+      // `lg:hidden` hands primary navigation to the sidebar at the shell's wide width
+      // (ADR-0088). `display: none` removes this from the accessibility tree outright, so the
+      // two never present as duplicate landmarks despite sharing a label.
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 backdrop-blur lg:hidden"
     >
       {/* `pb` keeps the tabs above the home indicator by adding the bottom safe-area inset to
           the 1.25rem base; env() is 0 on non-notched devices, so layout is unchanged there.

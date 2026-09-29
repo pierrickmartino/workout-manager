@@ -11,6 +11,7 @@
     "test": "node --test --experimental-test-module-mocks",
     "audit:serve": "vite --config audit/vite.config.ts",
     "audit:ui": "node audit/run.mjs",
+    "audit:wide": "node audit/wide.mjs",
     "contrast:report": "node scripts/skin-contrast-report.ts"
   },
   "dependencies": {

@@ -30,3 +30,19 @@ per-page feature inventory, and click budget live in
 - Global navigation is reshaped (Home gains a quick-action row and sheds duplicated
   content; a new `/admin` route appears), which is why this decision is recorded rather than
   left implicit.
+
+## Amendment (ADR-0088): admin gets a sidebar entry at `lg:` and above
+
+The rejection of an admin tab above reasons from **four slots in a bottom bar**: "a
+persistent tab for a role most users never have is a mobile-nav smell". The desktop shell
+([ADR-0088](0088-the-shell-has-two-widths.md)) introduces a sidebar, which has no slot
+pressure, and admin is one of the three intents that shell exists to serve.
+
+So at `lg:` and above an admin sees an **Admin entry in the sidebar**. Below `lg:` nothing
+changes: the tab bar keeps its four tabs and admin stays one hop behind Profile, as decided
+here. The entry is gated on the same server-side `role=admin` claim (ADR-0046) and is an
+affordance only — the backend gates every underlying action independently.
+
+Everything else in this ADR stands: one unified UI, intents rather than persona modes,
+intent-first defaults, and the click budget. Only the *placement* of admin is amended, and
+only at a width this decision did not consider.

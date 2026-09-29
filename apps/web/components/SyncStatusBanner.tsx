@@ -60,7 +60,9 @@ export function SyncStatusBanner(): React.JSX.Element | null {
 
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 bottom-20 z-40 flex justify-center px-6"
+      // `bottom-20` clears the fixed TabBar. At `lg:` the TabBar is gone (ADR-0088), so the
+      // clearance goes with it and the toast sits at the bottom edge like any other.
+      className="pointer-events-none fixed inset-x-0 bottom-20 z-40 flex justify-center px-6 lg:bottom-6"
       // A status region: announced politely, never stealing focus.
       role="status"
       aria-live="polite"

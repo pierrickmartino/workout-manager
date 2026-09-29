@@ -181,6 +181,16 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   The same guard flags every bare-length track and fails closed; `audit/reflow.mjs` now gates
   100% *and* 200% text, with no ratchet (ADR-0087).
 
+- New desktop layout, or widening a page → the shell has two widths: `--spacing-shell` (26rem)
+  and `--spacing-shell-wide` (72rem), switched at `lg:` by CSS alone — never by UA detection,
+  and never below `lg:`, where the mobile layout is frozen. The frame is app-wide; a page's
+  content column stays 26rem until it opts in by stamping `data-shell="wide"` on its own root,
+  which `:has()` in `app/layout.tsx` answers to. Write the desktop layout in `lg:grid-cols-N`
+  and flex only — **never** bracket track syntax, because `reflow-policy.ts` flattens variants
+  by design and a `lg:grid-cols-[1fr_20rem]` is a rigid track it will (correctly) refuse.
+  Primary navigation renders from `lib/sidebar-nav.ts` over the `tab-nav` registry, never a
+  hand-written link list. `audit/wide.mjs` gates the frame at 1440px (ADR-0088).
+
 - New animation or transform transition → pair it with `motion-reduce:animate-none`
   or `motion-reduce:transition-none` **in the same class string**. Colour and
   opacity transitions move nothing and are exempt by rule. The guard in
