@@ -14,6 +14,13 @@ import { parseClassToken, type ClassToken } from "./motion-policy.ts";
 //      content, wrapping a subtree that contains such a box or a `nowrap` value. Tailwind's
 //      own `grid-cols-2` expands to `minmax(0,1fr)` and is safe; only the bracket syntax can
 //      spell the floored form.
+//   3. A length in an arbitrary grid track list — `grid-cols-[7rem_1fr]` (ADR-0087). A `rem`
+//      track keeps its font-relative size while the viewport keeps its pixels, so at 200% text
+//      it is a 224px column inside a 320px screen and the row cannot fit however well its
+//      contents shrink. This one needs no risky descendant: the track is rigid whatever it
+//      holds, which is exactly what makes it decidable from a class string. It reads the length
+//      wherever it sits — `minmax(7rem,1fr)`, `repeat(2,_7rem)` — and exempts only
+//      `minmax(0,…)`, whose floor is zero.
 //
 // **Two patterns are deliberately absent, and their absence is the point.** A `nowrap` value
 // and a `shrink-0` child in a rigid row were both in this guard's first draft and both came
@@ -50,7 +57,8 @@ export const REFLOW_EXEMPTIONS: readonly ReflowExemption[] = [];
 
 export type ReflowViolation =
   | { readonly kind: "fieldset-min-width"; readonly file: string; readonly line: number; readonly detail: string }
-  | { readonly kind: "content-floored-grid"; readonly file: string; readonly line: number; readonly detail: string };
+  | { readonly kind: "content-floored-grid"; readonly file: string; readonly line: number; readonly detail: string }
+  | { readonly kind: "rigid-grid-track"; readonly file: string; readonly line: number; readonly detail: string };
 
 // Utilities that make an element refuse to shrink its inline size.
 const NOWRAP_UTILITIES = new Set(["truncate", "whitespace-nowrap", "text-nowrap"]);
@@ -59,16 +67,54 @@ export function isNowrapUtility(utility: string): boolean {
   return NOWRAP_UTILITIES.has(utility);
 }
 
-// A grid track list is content-floored when it names a bare `fr` unit: `1fr` means
+// The tracks of an arbitrary track list. Tailwind spells the spaces between tracks `_`, and
+// *also* the spaces inside a function's arguments — `minmax(0,_1fr)` is one track, not two — so
+// the split has to respect parentheses or both rules below read a fragment and miss the track.
+function trackList(utility: string): readonly string[] {
+  const match = utility.match(/^grid-cols-\[(.+)]$/);
+  if (!match) return [];
+  const tracks: string[] = [];
+  let depth = 0;
+  let current = "";
+  for (const character of match[1]) {
+    if (character === "(") depth += 1;
+    if (character === ")") depth -= 1;
+    if (character === "_" && depth === 0) {
+      tracks.push(current);
+      current = "";
+      continue;
+    }
+    current += character;
+  }
+  return [...tracks, current].filter(Boolean);
+}
+
+// A grid track is content-floored when it names a bare `fr` unit: `1fr` means
 // `minmax(auto, 1fr)`, whose floor is the content's min-content size. `minmax(0,1fr)` is the
 // spelling that can actually shrink. Tailwind's own `grid-cols-2` already expands to the
 // safe form, so only the arbitrary bracket syntax is inspected here.
 export function contentFlooredTracks(utility: string): readonly string[] {
-  const match = utility.match(/^grid-cols-\[(.+)]$/);
-  if (!match) return [];
-  return match[1]
-    .split("_")
-    .filter((track) => /^[\d.]+fr$/.test(track));
+  return trackList(utility).filter((track) => /^[\d.]+fr$/.test(track));
+}
+
+// A `<length>`: a size decided before the viewport is consulted. A percentage resolves against
+// the container and shrinks with it, and `auto`/`fr`/`min-content` are content- or space-driven,
+// so neither is a length here.
+const LENGTH = /\d*\.?\d+(px|rem|em|ch|ex|pt|pc|cm|mm|in|q)\b/gi;
+
+// Exactly one shape makes a length safe: `minmax(0, 7rem)`, whose *floor* is zero, so the track
+// gives the width up under pressure. Everything else keeps it — a bare `7rem`, a `minmax` with a
+// non-zero floor, a length inside `repeat()` or `fit-content()` — and the rule reads the length
+// wherever it sits rather than matching one spelling, which is what makes it fail closed.
+const SHRINKABLE_MAX = /^minmax\(0,_?[^)]*\)$/i;
+
+// The rigid lengths in an arbitrary track list, in source order. Tailwind's own `grid-cols-N`
+// expands to repeated `minmax(0,1fr)` and can hold no length at all, so only the bracket
+// syntax is inspected — the same boundary `contentFlooredTracks` draws.
+export function rigidTracks(utility: string): readonly string[] {
+  return trackList(utility)
+    .filter((track) => !SHRINKABLE_MAX.test(track))
+    .flatMap((track) => track.match(LENGTH) ?? []);
 }
 
 interface Element {
@@ -188,6 +234,14 @@ export function findReflowViolations(source: string, file: string): readonly Ref
       violations.push({
         kind: "fieldset-min-width", file, line: element.line,
         detail: "a <fieldset> inherits `min-inline-size: min-content` from the UA stylesheet; add an unconditional `min-w-0`",
+      });
+    }
+
+    const rigid = [...set].flatMap(rigidTracks);
+    if (rigid.length > 0) {
+      violations.push({
+        kind: "rigid-grid-track", file, line: element.line,
+        detail: `track(s) \`${rigid.join(" ")}\` are fixed widths the viewport cannot argue with; at 200% text a \`rem\` track is a column wider than a 320px screen. Wrap the row (\`flex flex-wrap\` with a \`basis-*\` per field) so it stacks, or spell the track \`minmax(0,…)\` so it can shrink`,
       });
     }
 

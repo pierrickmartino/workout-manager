@@ -52,6 +52,7 @@ import { ExerciseLibrary } from "@/components/ExerciseLibrary";
 import { SessionCompositionStrip } from "@/components/builder/session-composition-strip";
 import { PrescriptionFieldStack } from "@/components/prescription/PrescriptionFieldStack";
 import { Field, FieldLabel } from "@/components/pulse/field";
+import { FieldRow, FIELD_WIDTH } from "@/components/pulse/field-row";
 import { Alert } from "@/components/pulse/alert";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { Card } from "@/components/ui/card";
@@ -976,16 +977,18 @@ function ExerciseCard({
       <div className="flex flex-col gap-2.5">
         <SectionHeader>SETS PERFORMED</SectionHeader>
         {row.performedSets.map((set, index) => (
-          <div
-            key={set.key}
-            className="grid grid-cols-[1fr_1.5fr_4rem_auto] items-end gap-2"
-          >
+          <FieldRow key={set.key} className="items-end gap-2">
             {isDistance ? (
-              <FieldLabel group label={`Set ${index + 1} distance (${row.unit})`}>
+              <FieldLabel
+                group
+                className={FIELD_WIDTH}
+                label={`Set ${index + 1} distance (${row.unit})`}
+              >
                 {/* Distance value plus an optional companion time; a time makes pace a
                     derivable read (ADR-0032, issue #301). */}
-                <div className="grid grid-cols-2 gap-1.5">
+                <FieldRow className="gap-1.5">
                   <Input
+                    className={FIELD_WIDTH}
                     type="number"
                     min={0}
                     step="any"
@@ -997,6 +1000,7 @@ function ExerciseCard({
                     aria-label={`Set ${index + 1} distance for ${row.exerciseName}`}
                   />
                   <Input
+                    className={FIELD_WIDTH}
                     value={set.duration}
                     placeholder="mm:ss"
                     onChange={(event) =>
@@ -1004,10 +1008,10 @@ function ExerciseCard({
                     }
                     aria-label={`Set ${index + 1} time for ${row.exerciseName}`}
                   />
-                </div>
+                </FieldRow>
               </FieldLabel>
             ) : isDuration ? (
-              <FieldLabel label={`Set ${index + 1} hold`}>
+              <FieldLabel className={FIELD_WIDTH} label={`Set ${index + 1} hold`}>
                 <Input
                   value={set.duration}
                   placeholder="0:45"
@@ -1018,7 +1022,7 @@ function ExerciseCard({
                 />
               </FieldLabel>
             ) : (
-              <FieldLabel label={`Set ${index + 1} reps`}>
+              <FieldLabel className={FIELD_WIDTH} label={`Set ${index + 1} reps`}>
                 <Input
                   type="number"
                   min={0}
@@ -1030,7 +1034,7 @@ function ExerciseCard({
                 />
               </FieldLabel>
             )}
-            <FieldLabel label="Load">
+            <FieldLabel className={FIELD_WIDTH} label="Load">
               <Input
                 value={set.loadValue}
                 placeholder={`60 ${weightUnitLabel(unit)}`}
@@ -1040,7 +1044,7 @@ function ExerciseCard({
                 aria-label={`Set ${index + 1} load for ${row.exerciseName}`}
               />
             </FieldLabel>
-            <FieldLabel label="RPE">
+            <FieldLabel className={FIELD_WIDTH} label="RPE">
               <Input
                 type="number"
                 min={1}
@@ -1056,6 +1060,7 @@ function ExerciseCard({
             </FieldLabel>
             {row.performedSets.length > 1 ? (
               <Button
+                className="shrink-0"
                 type="button"
                 variant="ghost"
                 onClick={() => onRemoveSet(set.key)}
@@ -1063,10 +1068,8 @@ function ExerciseCard({
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
-            ) : (
-              <span aria-hidden />
-            )}
-          </div>
+            ) : null}
+          </FieldRow>
         ))}
         <Button
           type="button"

@@ -18,6 +18,12 @@ import {
 import type { DistanceUnit } from "@/lib/quantity";
 import type { ExercisePrescription } from "@/lib/sessions-types";
 import { Field } from "@/components/pulse/field";
+import {
+  FieldRow,
+  FIELD_CELL,
+  FULL_FIELD_CELL,
+  WIDE_FIELD_CELL,
+} from "@/components/pulse/field-row";
 import { Alert } from "@/components/pulse/alert";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { Input } from "@/components/ui/input";
@@ -322,7 +328,7 @@ function SetRow({
       <input type="hidden" name={`${prefix}-exercise_id`} value={row.exerciseId} />
       <input type="hidden" name={`${prefix}-kind`} value={row.kind} />
 
-      <div className="grid grid-cols-2 gap-2.5">
+      <FieldRow>
         <QuantityField
           prefix={prefix}
           row={row}
@@ -330,7 +336,7 @@ function SetRow({
           disabled={disabled}
           onChange={onChange}
         />
-        <label className="flex flex-col gap-1.5">
+        <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">RPE</span>
           <Select
             name={`${prefix}-rpe`}
@@ -347,7 +353,7 @@ function SetRow({
             ))}
           </Select>
         </label>
-      </div>
+      </FieldRow>
 
       {/* Load is the orthogonal "how hard" axis (ADR-0010/0050): shown by default for reps,
           omitted for a plain run/hold, and opt-in for a loaded carry. */}
@@ -405,8 +411,8 @@ function QuantityField({
 }) {
   if (row.kind === "distance") {
     return (
-      <div className="col-span-2 grid grid-cols-[1fr_5rem_1fr] gap-2.5">
-        <label className="flex flex-col gap-1.5">
+      <FieldRow className="basis-full">
+        <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Distance</span>
           <Input
             name={`${prefix}-distance`}
@@ -420,7 +426,7 @@ function QuantityField({
             aria-label={`Distance for set ${row.setNumber}`}
           />
         </label>
-        <label className="flex flex-col gap-1.5">
+        <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Unit</span>
           <Select
             name={`${prefix}-unit`}
@@ -435,7 +441,7 @@ function QuantityField({
             <option value="mi">mi</option>
           </Select>
         </label>
-        <label className="flex flex-col gap-1.5">
+        <label className={FIELD_CELL}>
           {/* Time is optional (ADR-0032): given, pace becomes a derivable read. */}
           <span className="label-mono text-[9px] text-text-muted">Time (opt.)</span>
           <Input
@@ -447,13 +453,13 @@ function QuantityField({
             aria-label={`Time for set ${row.setNumber}`}
           />
         </label>
-      </div>
+      </FieldRow>
     );
   }
 
   if (row.kind === "duration") {
     return (
-      <label className="col-span-2 flex flex-col gap-1.5">
+      <label className={FULL_FIELD_CELL}>
         <span className="label-mono text-[9px] text-text-muted">Time</span>
         <Input
           name={`${prefix}-duration`}
@@ -468,7 +474,7 @@ function QuantityField({
   }
 
   return (
-    <label className="flex flex-col gap-1.5">
+    <label className={FIELD_CELL}>
       <span className="label-mono text-[9px] text-text-muted">Reps</span>
       <Input
         name={`${prefix}-reps`}
@@ -500,8 +506,8 @@ function LoadFields({
   onChange: (patch: Partial<LogSetRow>) => void;
 }) {
   return (
-    <div className="grid grid-cols-[7rem_1fr] gap-2.5">
-      <label className="flex flex-col gap-1.5">
+    <FieldRow>
+      <label className={WIDE_FIELD_CELL}>
         <span className="label-mono text-[9px] text-text-muted">Load kind</span>
         <Select
           name={`${prefix}-load_kind`}
@@ -519,7 +525,7 @@ function LoadFields({
           ))}
         </Select>
       </label>
-      <label className="flex flex-col gap-1.5">
+      <label className={FIELD_CELL}>
         <span className="label-mono text-[9px] text-text-muted">Load</span>
         <Input
           name={`${prefix}-load_value`}
@@ -530,6 +536,6 @@ function LoadFields({
           aria-label={`Load for set ${row.setNumber}`}
         />
       </label>
-    </div>
+    </FieldRow>
   );
 }

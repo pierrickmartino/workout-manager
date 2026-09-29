@@ -151,7 +151,7 @@ is not.
 ```bash
 npm run audit:serve
 # In a second terminal:
-node audit/reflow.mjs                      # gates: zero document overflow at 100% text
+node audit/reflow.mjs                      # gates: zero document overflow at 100% and 200% text
 UI_REFLOW_BASELINE=1 node audit/reflow.mjs # inverts the gate: the defects must reproduce
 ```
 
@@ -163,11 +163,13 @@ extractable. Each case is measured twice: at 100% text and at 200% text (root
 16px → 32px, viewport unchanged — WCAG 1.4.4 resize-text, *not* browser zoom,
 which `run.mjs` covers through the extension).
 
-Two gates. Document overflow at 100% text must be zero. At 200% text a ratchet
-applies: any journey outside `KNOWN_200_TEXT_OVERFLOW` that overflows is a
-regression, and any journey inside it that stops overflowing is a stale entry —
-both fail the run, so that list can only shrink. Element overflow is recorded
-without gating. Output defaults to
+One gate at both sizes: document overflow must be zero at 100% text and zero at
+200% text. The 200% ratchet (`KNOWN_200_TEXT_OVERFLOW`) is gone — the four
+journeys it held were the `rem`-sized grid tracks in form field rows, which are
+wrapping rows now (#572, ADR-0087). A third clause covers the other half of that
+criterion: every rendered text input and select is measured, and none may be left
+with less than one character of room for its value at 200% text. Element overflow
+is recorded without gating. Output defaults to
 `docs/development/ui-reflow-evidence/`. Chromium only, and it falls back to the
 container's installed browser when the pinned Playwright build is absent.
 

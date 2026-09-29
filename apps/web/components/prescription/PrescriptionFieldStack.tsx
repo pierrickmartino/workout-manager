@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { weightUnitLabel } from "@/lib/weight-format";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { FieldLabel } from "@/components/pulse/field";
+import { FieldRow, FIELD_WIDTH } from "@/components/pulse/field-row";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -266,8 +267,8 @@ export function PrescriptionFieldStack({
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-2.5">
-        <FieldLabel label="Quantity">
+      <FieldRow>
+        <FieldLabel className={FIELD_WIDTH} label="Quantity">
           <Select
             value={kind}
             onChange={(event) => onChangeKind(event.target.value as QuantityKind)}
@@ -283,7 +284,7 @@ export function PrescriptionFieldStack({
         {/* A distance movement reads in one unit, chosen once here and applied to every set
             (ADR-0032). Hidden for the other kinds, which carry no unit. */}
         {isDistance ? (
-          <FieldLabel label="Unit">
+          <FieldLabel className={FIELD_WIDTH} label="Unit">
             <Select
               value={unit}
               onChange={(event) => onChangeUnit(event.target.value as DistanceUnit)}
@@ -297,7 +298,7 @@ export function PrescriptionFieldStack({
             </Select>
           </FieldLabel>
         ) : null}
-        <FieldLabel label="Sets">
+        <FieldLabel className={FIELD_WIDTH} label="Sets">
           <Input
             type="number"
             min={1}
@@ -306,7 +307,7 @@ export function PrescriptionFieldStack({
             aria-label={`Sets for ${name}`}
           />
         </FieldLabel>
-        <FieldLabel label={targetLabel}>
+        <FieldLabel className={FIELD_WIDTH} label={targetLabel}>
           <Input
             value={target}
             placeholder={targetPlaceholderFor(kind)}
@@ -316,7 +317,7 @@ export function PrescriptionFieldStack({
         </FieldLabel>
         {/* Load is a typed value (ADR-0010): pick the kind, then give the value that kind
             carries — the same picker the log form uses. On the frequent path (ADR-0067). */}
-        <FieldLabel label="Load kind">
+        <FieldLabel className={FIELD_WIDTH} label="Load kind">
           <Select
             value={loadKind}
             onChange={(event) => onChangeLoadKind(event.target.value)}
@@ -329,7 +330,7 @@ export function PrescriptionFieldStack({
             ))}
           </Select>
         </FieldLabel>
-        <FieldLabel label="Load">
+        <FieldLabel className={FIELD_WIDTH} label="Load">
           <Input
             value={loadValue}
             placeholder={`60 ${weightUnitLabel(weightUnit)}`}
@@ -337,7 +338,7 @@ export function PrescriptionFieldStack({
             aria-label={`Load for ${name}`}
           />
         </FieldLabel>
-      </div>
+      </FieldRow>
 
       <div className="flex flex-col gap-2.5">
         {/* Prescription Summary (#465): compact chips for the non-default advanced values,
@@ -383,11 +384,11 @@ export function PrescriptionFieldStack({
           hidden={!open}
           className="flex flex-col gap-2.5 border-l border-border pl-2.5"
         >
-          <div className="grid grid-cols-2 gap-2.5">
+          <FieldRow>
             {/* A grouped member rests once per round at the group level, so its own rest is
                 dormant while grouped — hidden here and restored on ungroup (ADR-0023). */}
             {showRest ? (
-              <FieldLabel label="Rest (sec)">
+              <FieldLabel className={FIELD_WIDTH} label="Rest (sec)">
                 <Input
                   type="number"
                   min={0}
@@ -398,7 +399,7 @@ export function PrescriptionFieldStack({
                 />
               </FieldLabel>
             ) : null}
-            <FieldLabel label="Tempo">
+            <FieldLabel className={FIELD_WIDTH} label="Tempo">
               <Input
                 value={tempo}
                 placeholder="3-1-1"
@@ -411,7 +412,7 @@ export function PrescriptionFieldStack({
                 (it feeds no progression); leaving it Working keeps the set a plain working
                 set and shows no summary chip. The value resolves for display so an unset
                 (or legacy) value reads as Working rather than a blank option. */}
-            <FieldLabel label="Set type">
+            <FieldLabel className={FIELD_WIDTH} label="Set type">
               <Select
                 value={resolveSetType(setType)}
                 onChange={(event) => onChangeSetType(event.target.value)}
@@ -431,7 +432,7 @@ export function PrescriptionFieldStack({
                 boundary. Rendered only for a surface that authors Target Effort. */}
             {onChangeTargetEffort ? (
               <>
-                <FieldLabel label="Target effort scale">
+                <FieldLabel className={FIELD_WIDTH} label="Target effort scale">
                   <Select
                     value={effortScale}
                     onChange={(event) => {
@@ -448,7 +449,7 @@ export function PrescriptionFieldStack({
                     ))}
                   </Select>
                 </FieldLabel>
-                <FieldLabel label="Target effort">
+                <FieldLabel className={FIELD_WIDTH} label="Target effort">
                   <Input
                     value={targetEffortValue}
                     placeholder={effortScale === "rir" ? "e.g. 2" : "e.g. 8"}
@@ -460,7 +461,7 @@ export function PrescriptionFieldStack({
                 </FieldLabel>
               </>
             ) : null}
-          </div>
+          </FieldRow>
           {/* Exercise Note (ADR-0065, #468): an optional plan-side coaching cue as free text —
               "pause on the chest". A blank value authors no note; the backend length-caps and
               HTML-escapes it at the write boundary. Full-width below the two-column grid so a

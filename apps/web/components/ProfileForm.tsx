@@ -11,6 +11,11 @@ import {
   type Profile,
 } from "@/lib/profile-types";
 import { Field } from "@/components/pulse/field";
+import {
+  FieldRow,
+  FIELD_WIDTH,
+  WIDE_FIELD_WIDTH,
+} from "@/components/pulse/field-row";
 import { Alert } from "@/components/pulse/alert";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -101,8 +106,8 @@ export function ProfileForm({
         </Select>
       </Field>
 
-      <div className="grid grid-cols-3 gap-3">
-        <Field label="Age" error={state.fieldErrors?.age}>
+      <FieldRow className="gap-3">
+        <Field className={FIELD_WIDTH} label="Age" error={state.fieldErrors?.age}>
           <Input
             name="age"
             type="number"
@@ -111,7 +116,11 @@ export function ProfileForm({
             defaultValue={profile?.age ?? ""}
           />
         </Field>
-        <Field label="Height (cm)" error={state.fieldErrors?.height_cm}>
+        <Field
+          className={FIELD_WIDTH}
+          label="Height (cm)"
+          error={state.fieldErrors?.height_cm}
+        >
           <Input
             name="height_cm"
             type="number"
@@ -119,7 +128,11 @@ export function ProfileForm({
             defaultValue={profile?.height_cm ?? ""}
           />
         </Field>
-        <Field label="Weight (kg)" error={state.fieldErrors?.weight_kg}>
+        <Field
+          className={FIELD_WIDTH}
+          label="Weight (kg)"
+          error={state.fieldErrors?.weight_kg}
+        >
           <Input
             name="weight_kg"
             type="number"
@@ -127,7 +140,7 @@ export function ProfileForm({
             defaultValue={profile?.weight_kg ?? ""}
           />
         </Field>
-      </div>
+      </FieldRow>
 
       <Field label="Training habits">
         <Textarea
@@ -163,10 +176,11 @@ export function ProfileForm({
         <legend className={legendClass}>
           Fitness level per training type (1–10)
         </legend>
-        <div className="grid grid-cols-2 gap-3">
+        <FieldRow className="gap-3">
           {TRAINING_TYPES.map((trainingType) => (
             <Field
               key={trainingType}
+              className={WIDE_FIELD_WIDTH}
               label={<span className="capitalize">{trainingType}</span>}
               error={state.fieldErrors?.[`level_${trainingType}`]}
             >
@@ -183,7 +197,7 @@ export function ProfileForm({
               </Select>
             </Field>
           ))}
-        </div>
+        </FieldRow>
       </fieldset>
 
       <Field label="Preferences / limitations (non-medical)">

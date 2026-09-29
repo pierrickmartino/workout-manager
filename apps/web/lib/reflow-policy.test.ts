@@ -10,6 +10,7 @@ import {
   isExempt,
   isNowrapUtility,
   REFLOW_EXEMPTIONS,
+  rigidTracks,
 } from "./reflow-policy.ts";
 
 const webRoot = resolve(import.meta.dirname, "..");
@@ -94,14 +95,75 @@ test("does not flag a shrink-0 child of a rigid row, because fitting is a width 
 
 test("flags a content-floored grid only when its subtree cannot shrink", () => {
   // Arrange
-  const risky = `export const A = ({ n }: { n: string }) => <div className="grid grid-cols-[1fr_4rem]"><span className="truncate">{n}</span></div>;`;
-  const bounded = `export const A = ({ n }: { n: string }) => <div className="grid grid-cols-[1fr_4rem]"><span>{n}</span></div>;`;
-  const safeSpelling = `export const A = ({ n }: { n: string }) => <div className="grid grid-cols-[minmax(0,1fr)_4rem]"><span className="truncate">{n}</span></div>;`;
+  const risky = `export const A = ({ n }: { n: string }) => <div className="grid grid-cols-[1fr_auto]"><span className="truncate">{n}</span></div>;`;
+  const bounded = `export const A = ({ n }: { n: string }) => <div className="grid grid-cols-[1fr_auto]"><span>{n}</span></div>;`;
+  const safeSpelling = `export const A = ({ n }: { n: string }) => <div className="grid grid-cols-[minmax(0,1fr)_auto]"><span className="truncate">{n}</span></div>;`;
   // Act & Assert
   assert.equal(findReflowViolations(risky, "a.tsx").length, 1);
   assert.equal(findReflowViolations(risky, "a.tsx")[0].kind, "content-floored-grid");
   assert.deepEqual(findReflowViolations(bounded, "a.tsx"), []);
   assert.deepEqual(findReflowViolations(safeSpelling, "a.tsx"), []);
+});
+
+// ADR-0087. A `rem` track keeps its font-relative size while the viewport keeps its pixels, so
+// at 200% text `grid-cols-[7rem_1fr]` is a 224px column inside a 320px screen and the row cannot
+// fit however well its contents shrink. Unlike the floored-track rule this one needs no risky
+// descendant: the track is rigid whatever it holds, which is what makes it decidable from source.
+test("reads a bare length track as rigid and minmax(0,…) as safe", () => {
+  // Arrange & Act & Assert
+  assert.deepEqual(rigidTracks("grid-cols-[7rem_1fr]"), ["7rem"]);
+  assert.deepEqual(rigidTracks("grid-cols-[1fr_5rem_1fr]"), ["5rem"]);
+  assert.deepEqual(rigidTracks("grid-cols-[120px_auto]"), ["120px"]);
+  assert.deepEqual(rigidTracks("grid-cols-[minmax(0,2.5rem)_1fr]"), []);
+  assert.deepEqual(rigidTracks("grid-cols-[1fr_auto]"), []);
+  assert.deepEqual(rigidTracks("grid-cols-[50%_1fr]"), []);
+  assert.deepEqual(rigidTracks("grid-cols-2"), []);
+});
+
+// The rule is about a length the viewport cannot argue with, not about a spelling. Only a
+// `minmax(0,…)` is safe: its floor is zero. A length anywhere else — as a `minmax` floor, inside
+// a `repeat()`, behind Tailwind's `_` separator — is the same 224px column at 200% text, and a
+// guard that reads one spelling and misses its siblings fails open.
+test("finds a rigid length wherever the track list hides it", () => {
+  // Arrange & Act & Assert
+  assert.deepEqual(rigidTracks("grid-cols-[minmax(7rem,1fr)]"), ["7rem"]);
+  assert.deepEqual(rigidTracks("grid-cols-[repeat(2,_7rem)]"), ["7rem"]);
+  assert.deepEqual(rigidTracks("grid-cols-[fit-content(7rem)_1fr]"), ["7rem"]);
+  assert.deepEqual(rigidTracks("grid-cols-[minmax(0,_2.5rem)_minmax(0,_1fr)]"), []);
+});
+
+// The floored-track rule splits the same list, so it reads `_` inside an arbitrary value the
+// same way — `minmax(0,_1fr)` is one track, not two.
+test("reads an underscore-spaced minmax as one track, not two", () => {
+  // Arrange & Act & Assert
+  assert.deepEqual(contentFlooredTracks("grid-cols-[minmax(0,_1fr)_5rem]"), []);
+  assert.deepEqual(contentFlooredTracks("grid-cols-[1fr_minmax(0,_5rem)]"), ["1fr"]);
+});
+
+test("flags a rigid track whatever the row holds, and accepts the shrinkable spelling", () => {
+  // Arrange
+  const rigid = `export const A = () => <div className="grid grid-cols-[7rem_1fr] gap-2.5"><label>a</label><label>b</label></div>;`;
+  const shrinkable = `export const A = () => <div className="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)] gap-2.5"><label>a</label><label>b</label></div>;`;
+  const wrapping = `export const A = () => <div className="flex flex-wrap gap-2.5"><label className="flex min-w-0 flex-1 basis-28">a</label></div>;`;
+  // Act
+  const violations = findReflowViolations(rigid, "a.tsx");
+  // Assert
+  assert.equal(violations.length, 1);
+  assert.equal(violations[0].kind, "rigid-grid-track");
+  assert.deepEqual(findReflowViolations(shrinkable, "a.tsx"), []);
+  assert.deepEqual(findReflowViolations(wrapping, "a.tsx"), []);
+});
+
+// Flattening variants fails closed for a hazard: a track that is rigid only from `sm:` up is
+// still rigid somewhere, and naming it costs nothing.
+test("flags a rigid track introduced by a breakpoint variant", () => {
+  // Arrange
+  const source = `export const A = () => <div className="grid grid-cols-1 sm:grid-cols-[4rem_1fr]"><p>x</p></div>;`;
+  // Act
+  const violations = findReflowViolations(source, "a.tsx");
+  // Assert
+  assert.equal(violations.length, 1);
+  assert.equal(violations[0].kind, "rigid-grid-track");
 });
 
 test("flags a fieldset nested in a content-floored track, the shape that reached 789px", () => {

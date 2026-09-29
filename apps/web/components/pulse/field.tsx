@@ -51,23 +51,28 @@ interface FieldLabelProps {
   label: string;
   // Composite controls each provide their own accessible name.
   group?: boolean;
+  // The width the field asks for in a wrapping row — see `FIELD_WIDTH` (ADR-0087).
+  className?: string;
   children: React.ReactNode;
 }
 
 // A compact inline label wrapper for dense grids (the Hand-Authored build-and-log editor and
 // the Insert "Add exercise" editor): a mono micro-label above the control, tighter than the
 // fuller `Field` block. Shared so the two prescription editors read identically.
-export function FieldLabel({ label, children, group = false }: FieldLabelProps): React.JSX.Element {
+export function FieldLabel({ label, children, group = false, className }: FieldLabelProps): React.JSX.Element {
   if (group) {
     return (
-      <fieldset className="min-w-0">
+      <fieldset className={cn("min-w-0", className)}>
         <legend className="mb-1.5 font-mono text-[9px] text-text-muted">{label}</legend>
         {children}
       </fieldset>
     );
   }
   return (
-    <Field className="gap-1.5" label={<span className="text-[9px] text-text-muted">{label}</span>}>
+    <Field
+      className={cn("gap-1.5", className)}
+      label={<span className="text-[9px] text-text-muted">{label}</span>}
+    >
       {children}
     </Field>
   );
