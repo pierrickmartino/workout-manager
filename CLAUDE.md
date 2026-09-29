@@ -138,6 +138,16 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   guard checks every flat and declared composite pairing at 4.6:1 in every Skin
   and Mode, including System copies; unknown colour tokens fail closed (ADR-0081).
 
+- New accent tint behind text, or any new colour token at a call site → use a declared
+  fill (`bg-cyan-dim`, `bg-cyan`), never a hand-mixed `bg-cyan/15`: the `-dim` fills are
+  tuned to sit *at* the Floor, so nothing deeper clears it and a hover state must move
+  the border, ring or text. A new text-on-fill convention extends `COMPOSITE_PAIRINGS`
+  (a token, optionally with an alpha); a fill that carries no text goes in `GRAPHIC_FILLS`
+  with a written reason. The guard in `apps/web/lib/accent-tint-policy.ts` sweeps every
+  component, also checks that every colour a `bg-`/`border-`/`ring-`/`text-` utility names
+  is one the Skins declare, and fails closed. Translucent chrome (`bg-surface/95`,
+  `bg-black/60`) is classified harness-only, not measured (ADR-0086).
+
 - Fading text at a call site (`text-cyan/80`, or an `opacity-*` on the same element)
   → don't, unless the *rendered* result still clears 4.6:1 on the worst surface in
   every Skin and Mode. ADR-0081 guarantees the token, not what you render from it.

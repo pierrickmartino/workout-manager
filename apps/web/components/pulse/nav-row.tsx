@@ -17,9 +17,9 @@ interface NavRowProps {
 
 const ICON_TILE: Record<NonNullable<NavRowProps["accent"]>, string> = {
   cyan: "bg-cyan-dim text-cyan",
-  violet: "bg-violet/15 text-violet",
+  violet: "bg-violet-dim text-violet",
   magenta: "bg-magenta-dim text-magenta",
-  blue: "bg-blue/15 text-blue",
+  blue: "bg-elevated text-blue",
   neutral: "bg-elevated text-text-secondary",
 };
 

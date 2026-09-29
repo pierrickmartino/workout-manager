@@ -510,7 +510,7 @@ function FacetChip({ label, active, disabled = false, onToggle }: FacetChipProps
       className={
         "rounded-full border px-3 py-1 font-sans text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-50 " +
         (active
-          ? "border-cyan bg-cyan/10 text-cyan"
+          ? "border-cyan bg-cyan-dim text-cyan"
           : "border-border bg-surface text-text-secondary hover:border-text-muted")
       }
     >

@@ -18,9 +18,10 @@ import { contrastRatio } from "./wcag-contrast.ts";
 //
 // Scope, deliberately: the faded foreground is measured against the bare Skin
 // surfaces, ignoring any tint the element paints behind itself. Element
-// backgrounds are #567's subject — an undeclared `bg-cyan/15` is a *pairing*
-// question for ADR-0081's composite registry, not an alpha question — and
-// guessing at them here would make this module wrong in a way nobody could see.
+// backgrounds are `accent-tint-policy.ts`'s subject — an undeclared `bg-cyan/15`
+// is a *pairing* question for ADR-0081's composite registry, not an alpha
+// question (ADR-0086) — and guessing at them here would make this module wrong
+// in a way nobody could see.
 // Ancestor fades stay out too: `opacity-70` on a card whose text colour lives on
 // a descendant is not decidable from one class string, and ADR-0083 names the
 // two such sites rather than implying they are covered.

@@ -782,8 +782,10 @@ function SupersetContainer({
   onUngroup: () => void;
   children: React.ReactNode;
 }) {
+  // Border and cyan label only: an accent wash would composite under every field
+  // inside the group, which no declared pairing covers (ADR-0086).
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-cyan/40 bg-cyan/[0.03] p-3">
+    <div className="flex flex-col gap-3 rounded-md border border-cyan/40 p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="label-mono text-[10px] text-cyan">SUPERSET</span>
         <Button
@@ -873,7 +875,7 @@ function ExerciseCard({
         <div className="flex min-w-0 items-center gap-2">
           {slot.memberLabel ? (
             <span
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm bg-cyan/15 font-mono text-[11px] font-bold text-cyan"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm bg-cyan-dim font-mono text-[11px] font-bold text-cyan"
               aria-label={`Superset member ${slot.memberLabel}`}
             >
               {slot.memberLabel}

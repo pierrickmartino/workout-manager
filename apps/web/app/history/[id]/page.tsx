@@ -102,7 +102,7 @@ export default async function LogDetailPage({ params }: LogDetailPageProps) {
             </p>
             <Link
               href={detail.repeatHref}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-cyan/40 bg-cyan/[0.06] px-4 py-2.5 font-mono text-[13px] text-cyan hover:bg-cyan/[0.12]"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-cyan/40 bg-cyan-dim px-4 py-2.5 font-mono text-[13px] text-cyan hover:border-cyan"
             >
               <Repeat className="h-4 w-4" />
               Repeat
@@ -117,7 +117,7 @@ export default async function LogDetailPage({ params }: LogDetailPageProps) {
             </p>
             <Link
               href={detail.captureHref}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-cyan/40 bg-cyan/[0.06] px-4 py-2.5 font-mono text-[13px] text-cyan hover:bg-cyan/[0.12]"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-cyan/40 bg-cyan-dim px-4 py-2.5 font-mono text-[13px] text-cyan hover:border-cyan"
             >
               <Copy className="h-4 w-4" />
               Save as reusable session

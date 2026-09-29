@@ -291,7 +291,7 @@ function CompositionTile({
       >
         {slot.memberLabel ? (
           <span
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-cyan/15 font-mono text-[10px] font-bold text-cyan"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-cyan-dim font-mono text-[10px] font-bold text-cyan"
             aria-label={`Superset member ${slot.memberLabel}`}
           >
             {slot.memberLabel}
@@ -340,8 +340,10 @@ function SupersetBracket({
   draggable,
   onSelect,
 }: SupersetBracketProps) {
+  // The bracket is drawn by its border and cyan label; an accent wash would composite
+  // under every tile inside it, which no declared pairing covers (ADR-0086).
   return (
-    <li className="flex flex-col gap-1.5 rounded-lg border border-cyan/40 bg-cyan/5 p-2">
+    <li className="flex flex-col gap-1.5 rounded-lg border border-cyan/40 p-2">
       <div className="flex items-center justify-between px-0.5">
         <span className="label-mono flex items-center gap-1 text-[9px] text-cyan">
           <Link2 className="h-3 w-3" aria-hidden />

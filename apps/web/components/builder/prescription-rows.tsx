@@ -405,7 +405,7 @@ function InsertionLine({
       )}
     >
       {label ? (
-        <span className="label-mono absolute left-0 -top-2 z-10 max-w-full truncate rounded-sm bg-cyan px-1.5 py-0.5 text-[9px] text-bg-primary shadow-sm">
+        <span className="label-mono absolute left-0 -top-2 z-10 max-w-full truncate rounded-sm bg-cyan px-1.5 py-0.5 text-[9px] text-on-accent shadow-sm">
           {label}
         </span>
       ) : null}
@@ -582,12 +582,15 @@ function SupersetContainer({
       <div
         ref={setNodeRef}
         className={cn(
+          // The box states are carried by its border and ring, never by an accent wash:
+          // a wash composites under every label inside it, and the dim fills already sit
+          // at the Contrast Floor with no headroom beneath them (ADR-0086).
           "flex flex-col gap-3 rounded-lg border p-2.5 transition-colors",
           joinActive
-            ? "border-cyan bg-cyan/20 ring-2 ring-cyan/60"
+            ? "border-cyan ring-2 ring-cyan/60"
             : losingMember
-              ? "border-dashed border-magenta/60 bg-magenta/5 ring-1 ring-magenta/30"
-              : "border-cyan/40 bg-cyan/5",
+              ? "border-dashed border-magenta/60 ring-1 ring-magenta/30"
+              : "border-cyan/40",
         )}
       >
         <div className="flex items-center justify-between px-0.5">
@@ -606,7 +609,7 @@ function SupersetContainer({
         {joinActive && foreshadow ? (
           <p
             aria-hidden
-            className="label-mono truncate rounded-sm bg-cyan px-1.5 py-1 text-[9px] text-bg-primary"
+            className="label-mono truncate rounded-sm bg-cyan px-1.5 py-1 text-[9px] text-on-accent"
           >
             {foreshadow}
           </p>
@@ -889,7 +892,7 @@ function SupersetLinkChip({
       className={cn(
         "label-mono flex h-11 items-center justify-center gap-1.5 rounded-md border text-[10px] transition-colors touch-none",
         active
-          ? "border-solid border-cyan bg-cyan/20 text-cyan ring-1 ring-cyan/50"
+          ? "border-solid border-cyan bg-cyan-dim text-cyan ring-1 ring-cyan/50"
           : "border-dashed border-border/70 text-text-muted",
       )}
     >
@@ -1022,7 +1025,7 @@ export function PrescriptionReadOnly({
 function SupersetBadge({ label }: { label: string }) {
   return (
     <span
-      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-cyan/15 font-mono text-[10px] font-bold text-cyan"
+      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-cyan-dim font-mono text-[10px] font-bold text-cyan"
       aria-label={`Superset member ${label}`}
     >
       {label}

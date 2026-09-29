@@ -47,7 +47,7 @@ function TrajectoryTile({ tile }: { tile: StrengthTrajectoryTile }) {
     <Link
       href={tile.href}
       aria-label={tile.ariaLabel}
-      className="group rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+      className="group rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-base"
     >
       <Card className="flex h-full flex-col gap-3 p-4 transition-colors group-hover:border-cyan/40">
         <div className="flex items-center justify-between gap-2">

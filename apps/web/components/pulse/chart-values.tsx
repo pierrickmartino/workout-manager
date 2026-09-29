@@ -62,7 +62,7 @@ export function ChartValues({
           "label-mono cursor-pointer rounded-sm text-[10px] text-text-secondary " +
           "outline-none transition-colors hover:text-text-primary " +
           "focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2 " +
-          "focus-visible:ring-offset-bg"
+          "focus-visible:ring-offset-base"
         }
       >
         {`SHOW ALL ${rows.length} VALUES`}
