@@ -41,6 +41,18 @@ const FIXTURES = ["short", "session-spaced", "session-unbroken", "exercise-space
 const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation", "logging", "live", "analytics"];
 const NOVEL_JOURNEYS = ["correction", "creation-logged"];
 
+// Journeys known to overflow at 200% text, and why. Every one is a `rem`-sized grid track in a
+// form field row: `grid-cols-[7rem_1fr]` is a 224px column once the root font doubles, so the
+// row cannot fit 320px however well its contents shrink. That is a fixed-track defect, not an
+// unshrinkable-box one, and fixing it means those rows stack at narrow widths — a change to
+// four forms' layout that belongs to its own issue, not to this one.
+//
+// This list is a **ratchet, not an excuse**: every journey outside it must pass at 200%, so a
+// new 200% regression fails the run; and an entry that stops overflowing fails the run too, so
+// the list can only shrink. It is the honest middle between gating on a defect we have chosen
+// not to fix here (permanently red, therefore worthless) and reporting it in prose nobody runs.
+const KNOWN_200_TEXT_OVERFLOW = ["logging", "live", "correction", "creation-logged"];
+
 // The repo pins a Playwright whose Chromium build this container does not carry, so the
 // bundled resolver fails. Prefer whatever Playwright resolves; fall back to the installed
 // browser rather than downloading one.
@@ -163,6 +175,7 @@ const summary = {
     at100: failing(at(1)).length,
     at200Text: failing(at(TEXT_SCALE)).length,
   },
+  known200TextOverflow: KNOWN_200_TEXT_OVERFLOW,
   byJourney: Object.fromEntries(
     [...MATRIX_JOURNEYS, ...NOVEL_JOURNEYS].map(journey => {
       const mine = results.filter(result => result.journey === journey);
@@ -208,21 +221,29 @@ if (failures.length) {
 // The gate is document overflow. `UI_REFLOW_BASELINE=1` inverts it: a baseline run is
 // expected to reproduce the defects, and a clean baseline means the runner is not looking
 // at what the recorded matrix looked at.
-// The gate is document overflow at 100% text — the measure ADR-0085 asserts and the one the
-// success criteria name. The 200% pass is reported, not gated: its remaining failures are all
-// `rem`-sized grid tracks in form field rows (a 7rem column is 224px once the root font
-// doubles), which is a different defect from an unshrinkable box and is named as open work
-// rather than quietly folded into this one. Gating on it would make the runner permanently
-// red and so worth nothing.
+// Two gates. Document overflow at 100% text must be zero everywhere — the measure ADR-0085
+// asserts. At 200% text the ratchet applies: a journey outside `KNOWN_200_TEXT_OVERFLOW` that
+// overflows is a regression, and a journey inside it that no longer overflows is a stale entry
+// to delete.
+const regressed200 = Object.entries(summary.byJourney)
+  .filter(([journey, entry]) => entry.at200Text.overflowing > 0 && !KNOWN_200_TEXT_OVERFLOW.includes(journey))
+  .map(([journey]) => journey);
+const stale200 = Object.entries(summary.byJourney)
+  .filter(([journey, entry]) => entry.at200Text.overflowing === 0 && KNOWN_200_TEXT_OVERFLOW.includes(journey))
+  .map(([journey]) => journey);
 if (summary.documentOverflow.at200Text > 0) {
-  console.log(`\nKnown open: ${summary.documentOverflow.at200Text} cases still overflow at 200% text (fixed rem-sized grid tracks). Reported, not gated.`);
+  console.log(`\nKnown open at 200% text: ${KNOWN_200_TEXT_OVERFLOW.join(", ")} (fixed rem-sized grid tracks in form field rows).`);
 }
+for (const journey of regressed200) console.error(`200% text regression: ${journey} is not on the known-overflow list but overflows.`);
+for (const journey of stale200) console.error(`Stale known-overflow entry: ${journey} passes at 200% text — remove it from KNOWN_200_TEXT_OVERFLOW.`);
+
 if (process.env.UI_REFLOW_BASELINE === "1") {
   if (summary.documentOverflow.at100 === 0) {
     console.error("\nBaseline reproduced no document overflow — the runner is not exercising the recorded defects.");
     process.exit(1);
   }
   console.log("\nBaseline reproduced the defects, as expected.");
-} else if (summary.documentOverflow.at100 > 0 || failures.length > 0) {
+} else if (summary.documentOverflow.at100 > 0 || failures.length > 0
+  || regressed200.length > 0 || stale200.length > 0) {
   process.exit(1);
 }

@@ -96,8 +96,13 @@ And at **200% text** (WCAG 1.4.4, root 16px → 32px, viewport unchanged), 240 o
 field row, where `grid-cols-[7rem_1fr]` becomes a 224px fixed column inside a
 320px viewport. That is a fixed-track defect, not an unshrinkable-box one; it
 wants those rows to stack, which is a redesign of four forms and belongs to its
-own issue. The runner reports it on every run instead of gating on it, because a
-permanently red runner is worth nothing.
+own issue.
+
+Rather than gate on a defect this change does not fix — a permanently red runner
+is worth nothing — or bury it in prose nobody runs, the four journeys are a named
+**ratchet** in the runner. Every journey outside the list must pass at 200%, so a
+new regression fails the run; and an entry that stops overflowing also fails it,
+so the list can only shrink.
 
 The authenticated 200% check the finding names as its success criterion was
 **not** run: a fixture pass at doubled root font size is not a signed-in phone.

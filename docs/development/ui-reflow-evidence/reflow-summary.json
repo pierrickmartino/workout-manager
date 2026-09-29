@@ -1,7 +1,7 @@
 {
   "issue": 570,
-  "revision": "dfdd90af39b9046ee19aab31e4f8e37bcc9549ba",
-  "timestamp": "2026-09-29T07:31:19.844Z",
+  "revision": "cdba981a63a4c16039249d9d3d3cfc28013a2f34",
+  "timestamp": "2026-09-29T07:49:56.571Z",
   "node": "v22.22.2",
   "platform": "linux",
   "engine": "chromium 141.0.7390.37 (playwright 1.63.0)",
@@ -16,6 +16,12 @@
     "at100": 0,
     "at200Text": 240
   },
+  "known200TextOverflow": [
+    "logging",
+    "live",
+    "correction",
+    "creation-logged"
+  ],
   "byJourney": {
     "profile": {
       "novel": false,

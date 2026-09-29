@@ -52,11 +52,6 @@ export type ReflowViolation =
   | { readonly kind: "fieldset-min-width"; readonly file: string; readonly line: number; readonly detail: string }
   | { readonly kind: "content-floored-grid"; readonly file: string; readonly line: number; readonly detail: string };
 
-// `flex-col` stacks, so a child that will not shrink costs height, not width. Only a row can
-// push sideways.
-const ROW_DIRECTIONS = new Set(["flex-row", "flex-row-reverse"]);
-const COLUMN_DIRECTIONS = new Set(["flex-col", "flex-col-reverse"]);
-
 // Utilities that make an element refuse to shrink its inline size.
 const NOWRAP_UTILITIES = new Set(["truncate", "whitespace-nowrap", "text-nowrap"]);
 
@@ -111,22 +106,20 @@ function classTokens(node: ts.JsxOpeningLikeElement): readonly ClassToken[] {
   return literals.flatMap((literal) => literal.split(/\s+/).filter(Boolean).map(parseClassToken));
 }
 
+// Every utility an element can carry, variants flattened. Correct for spotting a **hazard**,
+// where flattening fails closed: a `sm:grid-cols-[1fr_4rem]` is a floored track somewhere, and
+// naming it costs nothing.
 function utilities(tokens: readonly ClassToken[]): ReadonlySet<string> {
-  // Responsive and state variants are deliberately flattened: `sm:shrink-0` still refuses to
-  // shrink somewhere, and this guard is about whether the escape hatch exists at all.
   return new Set(tokens.map((token) => token.utility));
 }
 
-function isRow(tokens: readonly ClassToken[]): boolean {
-  const set = utilities(tokens);
-  if (!set.has("flex") && !set.has("inline-flex")) return false;
-  if ([...set].some((utility) => COLUMN_DIRECTIONS.has(utility))) return false;
-  return true;
-}
-
-function wraps(tokens: readonly ClassToken[]): boolean {
-  const set = utilities(tokens);
-  return set.has("flex-wrap") || set.has("flex-wrap-reverse");
+// Only the utilities that apply **unconditionally**. This is the set a **remedy** must come
+// from, where flattening would fail open: the guarded width is 320px, every min-width
+// breakpoint is inactive there — more so at 200% text, since Tailwind's breakpoints are in
+// `rem` — so a `sm:min-w-0` is no escape hatch on the one screen this rule protects. A state
+// variant (`hover:`, `focus:`) is conditional for the same reason.
+function unconditional(tokens: readonly ClassToken[]): ReadonlySet<string> {
+  return new Set(tokens.filter((token) => token.variants.length === 0).map((token) => token.utility));
 }
 
 function subtree(element: Element): readonly Element[] {
@@ -141,8 +134,10 @@ const SHRINKABLE = new Set([
   "overflow-auto", "overflow-x-auto", "overflow-scroll", "overflow-x-scroll",
 ]);
 
+// A remedy, so it reads the unconditional set: a `sm:min-w-0` does not let this box shrink at
+// the width the rule protects.
 function canShrink(element: Element): boolean {
-  return [...utilities(element.tokens)].some((utility) => SHRINKABLE.has(utility));
+  return [...unconditional(element.tokens)].some((utility) => SHRINKABLE.has(utility));
 }
 
 // Parse one file into the JSX elements it renders, keeping the nesting, the class tokens and
@@ -189,10 +184,10 @@ export function findReflowViolations(source: string, file: string): readonly Ref
   for (const { element, ancestors } of visited) {
     const set = utilities(element.tokens);
 
-    if (element.tag === "fieldset" && !set.has("min-w-0")) {
+    if (element.tag === "fieldset" && !unconditional(element.tokens).has("min-w-0")) {
       violations.push({
         kind: "fieldset-min-width", file, line: element.line,
-        detail: "a <fieldset> inherits `min-inline-size: min-content` from the UA stylesheet; add `min-w-0`",
+        detail: "a <fieldset> inherits `min-inline-size: min-content` from the UA stylesheet; add an unconditional `min-w-0`",
       });
     }
 

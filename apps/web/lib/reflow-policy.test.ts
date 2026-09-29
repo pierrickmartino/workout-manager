@@ -57,6 +57,21 @@ test("accepts a fieldset that carries min-w-0", () => {
   assert.deepEqual(violations, []);
 });
 
+// The guarded width is 320px, where every min-width breakpoint is inactive — and at 200% text
+// they are inactive further still, since Tailwind's breakpoints are in `rem`. A remedy that
+// only applies from `sm:` up is therefore no remedy at all on the screen this rule protects,
+// so the escape hatch must be unconditional. (Flattening variants stays right for *hazards*,
+// where it fails closed; for a remedy it fails open.)
+test("rejects a fieldset whose min-w-0 only applies above the guarded width", () => {
+  // Arrange
+  const source = `export const A = () => <fieldset className="flex sm:min-w-0 flex-col border-0 p-0"><p>x</p></fieldset>;`;
+  // Act
+  const violations = findReflowViolations(source, "a.tsx");
+  // Assert
+  assert.equal(violations.length, 1);
+  assert.equal(violations[0].kind, "fieldset-min-width");
+});
+
 // The deliberate absences (ADR-0085). Both were in this guard's first draft; both are
 // undecidable from a class string, and a test is a better record of that than a comment alone.
 test("does not flag a nowrap value on its own, because truncate clips rather than widens", () => {

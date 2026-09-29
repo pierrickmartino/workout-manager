@@ -110,6 +110,9 @@ produced 77 findings, nearly all false.
    doubles; the measured culprits are 224px, 160px and 128px columns in
    `logging`, `live`, `correction` and `creation-logged`. Fixing it means those
    rows stack at narrow widths: a redesign of four forms, its own issue.
+   Those four are a named ratchet (`KNOWN_200_TEXT_OVERFLOW`) rather than a
+   silent exclusion — every other journey must pass at 200%, and an entry that
+   stops overflowing fails the run, so the list can only shrink.
 2. **The authenticated 200% real-app check** named in the audit's success
    criteria was not run. A doubled root font size on a fixture is not a signed-in
    phone, and this run does not stand in for it.
