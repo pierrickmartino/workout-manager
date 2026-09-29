@@ -48,9 +48,9 @@ export function Sidebar({ isAdmin }: SidebarProps): React.JSX.Element {
       data-shell-nav="sidebar"
       className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-1 border-r border-border bg-surface px-3 py-6 lg:flex"
     >
-      <span className="label-mono mb-4 px-3 text-[13px] font-bold tracking-[0.2em] text-text-primary">
-        PULSE<span className="text-cyan"> //</span>
-      </span>
+      {/* No wordmark here: the header carries the one brand mark at every width, because this
+          sidebar is not rendered for a signed-out visitor and a desktop sign-in screen would
+          otherwise be unbranded (#575 review). This is navigation only. */}
       {entries.map((entry) => {
         const Icon = ICONS[entry.label];
         return (

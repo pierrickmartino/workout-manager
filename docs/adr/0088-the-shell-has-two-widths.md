@@ -87,6 +87,13 @@ exactly one is in the DOM's accessibility tree at a time — `lg:hidden` and
 share the `NAV_LABELS.primary` landmark label for the same reason: it is one
 landmark, rendered twice.
 
+The **wordmark stays in the header at every width**, and the sidebar carries
+none. The first draft moved it into the sidebar and hid the header's with
+`lg:hidden`, which is wrong for a reason the signed-in case never shows: the
+sidebar is inside `<SignedIn>`, so a signed-out visitor on a desktop `/sign-in`
+got an unbranded shell. One wordmark, no conditional, and the sidebar is
+navigation only.
+
 The sidebar is a **flex sibling**, not a fixed overlay with a padding offset on
 everything else. Clerk's `<SignedIn>` renders nothing when signed out, so a
 sibling simply isn't there on the sign-in screen and the content fills the width

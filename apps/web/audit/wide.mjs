@@ -93,13 +93,12 @@ function measure(tokens) {
   })();
 
   const main = document.querySelector("main");
-  const inner = (el) => {
-    if (!el) return null;
-    const style = getComputedStyle(el);
-    return el.getBoundingClientRect().width
-      - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
-      - parseFloat(style.borderLeftWidth) - parseFloat(style.borderRightWidth);
-  };
+  // The **border** box, because that is the box `max-width` bounds: `box-sizing: border-box`
+  // is set globally in `globals.css`. Measuring the content box instead would hand the gate
+  // the element's own horizontal padding as slack — at 1440px `<main>`'s `px-6` is 48px of it,
+  // enough to hide an uncapped 1184px frame under the 1152px token and make the check
+  // unfalsifiable (#575 review).
+  const box = el => (el ? el.getBoundingClientRect().width : null);
 
   // The content column is an explicit contract element — `data-shell-column`, stamped by the
   // shell in both the real layout and this harness — rather than "whatever div comes first".
@@ -126,8 +125,8 @@ function measure(tokens) {
     viewport: { width: innerWidth, height: innerHeight },
     documentWidth: document.documentElement.scrollWidth,
     shell,
-    frameWidth: inner(main),
-    columnWidth: inner(column),
+    frameWidth: box(main),
+    columnWidth: box(column),
     // Whether this page opted into the wide column. A converted page is *allowed* the frame;
     // an unconverted one is not, and that asymmetry is the whole point of the per-route
     // opt-in, so the gate has to read the declaration rather than assume one answer.

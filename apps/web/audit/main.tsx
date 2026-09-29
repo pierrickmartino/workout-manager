@@ -95,7 +95,7 @@ createRoot(document.getElementById("root")!).render(<NavigationGuardProvider>
   <div className="lg:flex">
     <Sidebar isAdmin={isAdmin} />
     <div className="flex min-w-0 flex-1 flex-col">
-      <header className="sticky top-0 z-30 border-b border-border bg-base/90 pt-[env(safe-area-inset-top)] backdrop-blur"><div className="mx-auto flex h-14 max-w-shell items-center justify-between px-6 lg:max-w-shell-wide lg:justify-end"><span className="label-mono text-[13px] font-bold tracking-[0.2em] lg:hidden">PULSE //</span><span className="label-mono text-[10px] text-text-muted">Synthetic account</span></div></header>
+      <header className="sticky top-0 z-30 border-b border-border bg-base/90 pt-[env(safe-area-inset-top)] backdrop-blur"><div className="mx-auto flex h-14 max-w-shell items-center justify-between px-6 lg:max-w-shell-wide"><span className="label-mono text-[13px] font-bold tracking-[0.2em]">PULSE //</span><span className="label-mono text-[10px] text-text-muted">Synthetic account</span></div></header>
       <main id="main-content" className="mx-auto min-h-[calc(100vh-3.5rem)] w-full max-w-shell px-6 pt-6 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:max-w-shell-wide lg:pb-16" data-journey={journey}>
         {/* The content column. No journey here opts in with `data-shell="wide"`, which is the
             point: `audit/wide.mjs` gates on an unconverted page staying 26rem inside the wide

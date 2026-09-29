@@ -189,12 +189,13 @@ export default async function RootLayout({
           <div className="flex min-w-0 flex-1 flex-col">
             {/* Slim branded top bar — the web analogue of the app status bar. `pt` carries the
                 top safe-area inset so the bar clears the notch/status bar in iOS standalone
-                (statusBarStyle: black-translucent); env() is 0 on non-notched devices. At `lg:`
-                the sidebar carries the brand mark, so this bar keeps only the account actions
-                and stops being a status-bar analogue at a width that has no status bar. */}
+                (statusBarStyle: black-translucent); env() is 0 on non-notched devices. The
+                wordmark lives here at *every* width and the sidebar carries none: hiding it at
+                `lg:` left a signed-out desktop visitor — for whom the sidebar is not rendered
+                at all — with an unbranded shell (#575 review). One wordmark, no conditional. */}
             <header className="sticky top-0 z-30 border-b border-border bg-base/90 pt-[env(safe-area-inset-top)] backdrop-blur">
-              <div className="mx-auto flex h-14 max-w-shell items-center justify-between px-6 lg:max-w-shell-wide lg:justify-end">
-                <span className="label-mono text-[13px] font-bold tracking-[0.2em] text-text-primary lg:hidden">
+              <div className="mx-auto flex h-14 max-w-shell items-center justify-between px-6 lg:max-w-shell-wide">
+                <span className="label-mono text-[13px] font-bold tracking-[0.2em] text-text-primary">
                   PULSE<span className="text-cyan"> //</span>
                 </span>
                 <nav aria-label={NAV_LABELS.account} className="flex items-center gap-3">

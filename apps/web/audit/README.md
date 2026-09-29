@@ -186,9 +186,13 @@ npm run audit:wide
 ```
 
 Same journeys, same `fixtures.ts` names, at 1440×900. Three gates, all of which
-must be zero: the document may not overflow the viewport; `<main>`'s content box
-may not exceed `--spacing-shell-wide`; and an **unconverted** page's content
+must be zero: the document may not overflow the viewport; `<main>`'s **border**
+box may not exceed `--spacing-shell-wide`; and an **unconverted** page's content
 column — the `[data-shell-column]` wrapper — may not exceed `--spacing-shell`.
+Border box, because that is the box `max-width` bounds under the global
+`box-sizing: border-box`. Measuring the content box would hand the gate
+`<main>`'s own 48px of `px-6` as slack — enough to hide an uncapped 1184px frame
+beneath the 1152px token and make the check unfalsifiable.
 That last one is the failure this change actually has: a route authored as a
 416px column that stretches because someone widened a shared ancestor. Both
 widths are read from the live stylesheet, so retuning a token cannot leave the
