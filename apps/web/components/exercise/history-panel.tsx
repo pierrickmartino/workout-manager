@@ -61,7 +61,7 @@ function ProgressPoint({
       <h2 className="label-mono text-[11px] text-cyan">{point.performed_on}</h2>
 
       <div className="flex flex-col gap-1.5">
-        <div className="grid grid-cols-[2.5rem_1fr_1fr_1fr] gap-2 px-1">
+        <div className="grid grid-cols-[minmax(0,2.5rem)_1fr_1fr_1fr] gap-2 px-1">
           <span className="label-mono text-[9px] text-text-muted">Set</span>
           <span className="label-mono text-right text-[9px] text-text-muted">
             Reps
@@ -76,7 +76,7 @@ function ProgressPoint({
         {point.sets.map((set) => (
           <div
             key={set.position}
-            className="grid grid-cols-[2.5rem_1fr_1fr_1fr] items-center gap-2 rounded-sm border border-border bg-base/40 px-3 py-2.5"
+            className="grid grid-cols-[minmax(0,2.5rem)_1fr_1fr_1fr] items-center gap-2 rounded-sm border border-border bg-base/40 px-3 py-2.5"
           >
             <span className="font-mono text-[13px] font-bold text-cyan">
               {set.position + 1}

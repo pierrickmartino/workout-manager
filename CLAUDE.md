@@ -172,6 +172,15 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   every journey at 320px and asserts that. An authored name wraps and is never truncated; a
   header or action cluster wraps rather than overflowing (ADR-0085).
 
+- New row of form fields → build it as a `FieldRow` (`components/pulse/field-row.tsx`) with a
+  width ask per field (`FIELD_CELL` / `FIELD_WIDTH`, 5rem; the `WIDE_*` pair, 7rem), never a
+  `grid-cols-[7rem_1fr]`. A `rem` track keeps its size while the viewport keeps its pixels, so
+  at 200% text it is a column wider than a 320px screen; a wrapping row stacks instead, and a
+  `sm:` variant is no remedy because Tailwind's breakpoints are `rem` too. A genuinely tabular
+  grid whose columns align across rows keeps its grid and spells the track `minmax(0,2.5rem)`.
+  The same guard flags every bare-length track and fails closed; `audit/reflow.mjs` now gates
+  100% *and* 200% text, with no ratchet (ADR-0087).
+
 - New animation or transform transition → pair it with `motion-reduce:animate-none`
   or `motion-reduce:transition-none` **in the same class string**. Colour and
   opacity transitions move nothing and are exempt by rule. The guard in

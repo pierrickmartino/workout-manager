@@ -41,17 +41,12 @@ const FIXTURES = ["short", "session-spaced", "session-unbroken", "exercise-space
 const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation", "logging", "live", "analytics"];
 const NOVEL_JOURNEYS = ["correction", "creation-logged"];
 
-// Journeys known to overflow at 200% text, and why. Every one is a `rem`-sized grid track in a
-// form field row: `grid-cols-[7rem_1fr]` is a 224px column once the root font doubles, so the
-// row cannot fit 320px however well its contents shrink. That is a fixed-track defect, not an
-// unshrinkable-box one, and fixing it means those rows stack at narrow widths — a change to
-// four forms' layout that belongs to its own issue, not to this one.
-//
-// This list is a **ratchet, not an excuse**: every journey outside it must pass at 200%, so a
-// new 200% regression fails the run; and an entry that stops overflowing fails the run too, so
-// the list can only shrink. It is the honest middle between gating on a defect we have chosen
-// not to fix here (permanently red, therefore worthless) and reporting it in prose nobody runs.
-const KNOWN_200_TEXT_OVERFLOW = ["logging", "live", "correction", "creation-logged"];
+// The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and
+// `creation-logged` were listed here because each held a `rem`-sized grid track in a form field
+// row — `grid-cols-[7rem_1fr]` is a 224px column once the root font doubles, so the row could
+// not fit 320px however well its contents shrank. Those rows are wrapping flex rows now: each
+// field asks for a width and the row stacks when the asks no longer fit. Both text sizes are
+// therefore gated the same way, and the list that could only shrink has shrunk to nothing.
 
 // The repo pins a Playwright whose Chromium build this container does not carry, so the
 // bundled resolver fails. Prefer whatever Playwright resolves; fall back to the installed
@@ -70,6 +65,34 @@ function executablePath() {
 // Runs in the page. Deliberately does no colour work: this is a layout measure, and keeping
 // it cheap is what makes the runner re-runnable. The overflow predicate matches
 // `inspect.mjs` exactly (`rect.right > innerWidth + 1`) so both reports mean the same thing.
+// A row that stacks must leave each field able to show what it holds, which is the half of the
+// 200% criterion document width cannot see (#572). A control counts as **cramped** when its
+// border box, minus its own padding and border, leaves less than one mono character — that is
+// how a `Select` whose chevron gutter was `pr-10` (80px at 200% text) showed nothing at all
+// inside a 114px field. Checkboxes and radios have no value to show, and a control that is not
+// rendered has no width to measure.
+function measureControls() {
+  const cramped = [];
+  let total = 0;
+  for (const el of document.querySelectorAll("main input, main select")) {
+    if (["hidden", "checkbox", "radio"].includes(el.type)) continue;
+    const width = el.getBoundingClientRect().width;
+    if (!width) continue;
+    total += 1;
+    const style = getComputedStyle(el);
+    const room = width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+      - parseFloat(style.borderLeftWidth) - parseFloat(style.borderRightWidth);
+    if (room < parseFloat(style.fontSize) * 0.6) {
+      cramped.push({
+        control: el.getAttribute("aria-label") ?? el.getAttribute("name") ?? el.tagName.toLowerCase(),
+        width: Math.round(width),
+        room: Math.round(room),
+      });
+    }
+  }
+  return { controls: total, cramped };
+}
+
 function measure() {
   const descriptor = el =>
     `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ""}.${String(el.getAttribute("class") ?? "").split(/\s+/).slice(0, 5).join(".")}`;
@@ -114,11 +137,14 @@ async function capture(page, meta) {
     await page.evaluate(() => new Promise(requestAnimationFrame));
   }
   const measured = await page.evaluate(measure);
+  const controls = await page.evaluate(measureControls);
   return {
     ...meta,
     ...measured,
+    ...controls,
     documentOverflow: measured.documentWidth > measured.viewport.width,
     elementOverflow: measured.overflow.length,
+    crampedControls: controls.cramped.length,
   };
 }
 
@@ -158,8 +184,9 @@ const chromeVersion = await (async () => {
 
 const at = scale => results.filter(result => result.textScale === scale);
 const failing = list => list.filter(result => result.documentOverflow);
+const cramped = list => list.reduce((total, result) => total + result.crampedControls, 0);
 const summary = {
-  issue: 570,
+  issues: [570, 572],
   revision: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(),
   timestamp: new Date().toISOString(),
   node: process.version,
@@ -175,7 +202,12 @@ const summary = {
     at100: failing(at(1)).length,
     at200Text: failing(at(TEXT_SCALE)).length,
   },
-  known200TextOverflow: KNOWN_200_TEXT_OVERFLOW,
+  // The other half of the 200% criterion: a stacked row still has to show what its fields hold.
+  crampedControls: {
+    at100: cramped(at(1)),
+    at200Text: cramped(at(TEXT_SCALE)),
+    controls: at(TEXT_SCALE).reduce((total, result) => total + result.controls, 0),
+  },
   byJourney: Object.fromEntries(
     [...MATRIX_JOURNEYS, ...NOVEL_JOURNEYS].map(journey => {
       const mine = results.filter(result => result.journey === journey);
@@ -193,6 +225,7 @@ const summary = {
         at200Text: {
           overflowing: failing(mine.filter(result => result.textScale === TEXT_SCALE)).length,
           cells: mine.filter(result => result.textScale === TEXT_SCALE).length,
+          cramped: cramped(mine.filter(result => result.textScale === TEXT_SCALE)),
         },
         // Reported, never gated (the Atlas-drawer lesson).
         maxElementOverflow: Math.max(0, ...mine.map(result => result.elementOverflow)),
@@ -208,42 +241,40 @@ await writeFile(resolve(OUTPUT, "reflow-summary.json"), `${JSON.stringify(summar
 // rather than merely counted — compressed, as the existing evidence directories are.
 await writeFile(resolve(OUTPUT, "reflow-results.json.gz"), gzipSync(JSON.stringify(results)));
 
-const label = `${summary.documentOverflow.at100} of ${at(1).length} cases overflow at 100% text, ${summary.documentOverflow.at200Text} of ${at(TEXT_SCALE).length} at 200%`;
+const label = `${summary.documentOverflow.at100} of ${at(1).length} cases overflow at 100% text, ${summary.documentOverflow.at200Text} of ${at(TEXT_SCALE).length} at 200%; ${summary.crampedControls.at200Text} of ${summary.crampedControls.controls} controls at 200% have no room for their value`;
 console.log(label);
 for (const [journey, entry] of Object.entries(summary.byJourney)) {
   const widths = FIXTURES.map(fixture => `${fixture}=${entry.perFixture[fixture].maxDocumentWidth}(${entry.perFixture[fixture].overflowing}/${entry.perFixture[fixture].cells})`);
-  console.log(`  ${journey}${entry.novel ? " [novel]" : ""}: ${widths.join(" ")} | 200%: ${entry.at200Text.overflowing}/${entry.at200Text.cells} | maxElementOverflow=${entry.maxElementOverflow}`);
+  console.log(`  ${journey}${entry.novel ? " [novel]" : ""}: ${widths.join(" ")} | 200%: ${entry.at200Text.overflowing}/${entry.at200Text.cells} | cramped@200%: ${entry.at200Text.cramped} | maxElementOverflow=${entry.maxElementOverflow}`);
 }
 if (failures.length) {
   console.log(`\n${failures.length} capture failures:`);
   for (const failure of failures.slice(0, 10)) console.log(`  ${failure.journey}/${failure.skin}/${failure.mode}/${failure.fixture}: ${failure.error}`);
 }
-// The gate is document overflow. `UI_REFLOW_BASELINE=1` inverts it: a baseline run is
-// expected to reproduce the defects, and a clean baseline means the runner is not looking
-// at what the recorded matrix looked at.
-// Two gates. Document overflow at 100% text must be zero everywhere — the measure ADR-0085
-// asserts. At 200% text the ratchet applies: a journey outside `KNOWN_200_TEXT_OVERFLOW` that
-// overflows is a regression, and a journey inside it that no longer overflows is a stale entry
-// to delete.
-const regressed200 = Object.entries(summary.byJourney)
-  .filter(([journey, entry]) => entry.at200Text.overflowing > 0 && !KNOWN_200_TEXT_OVERFLOW.includes(journey))
-  .map(([journey]) => journey);
-const stale200 = Object.entries(summary.byJourney)
-  .filter(([journey, entry]) => entry.at200Text.overflowing === 0 && KNOWN_200_TEXT_OVERFLOW.includes(journey))
-  .map(([journey]) => journey);
-if (summary.documentOverflow.at200Text > 0) {
-  console.log(`\nKnown open at 200% text: ${KNOWN_200_TEXT_OVERFLOW.join(", ")} (fixed rem-sized grid tracks in form field rows).`);
+// One gate at both text sizes (#572): document overflow must be zero at 100% text — the measure
+// ADR-0085 asserts — and zero at 200% text, which ADR-0087's wrapping rows are what make
+// enforceable. A third clause guards the other half of the 200% criterion, that stacking loses
+// nothing: no control may be left without room to show its value, which is what would let a
+// field's own padding creep back to a `rem` that eats the whole column.
+// `UI_REFLOW_BASELINE=1` inverts the first two: a baseline run against a pre-fix revision is
+// expected to reproduce the defects at one size or the other, and a clean baseline means the
+// runner is not looking at what the recorded matrix looked at.
+for (const [journey, entry] of Object.entries(summary.byJourney)) {
+  if (entry.at200Text.overflowing > 0) {
+    console.error(`200% text overflow: ${journey} widens the document in ${entry.at200Text.overflowing} of ${entry.at200Text.cells} cases.`);
+  }
+  if (entry.at200Text.cramped > 0) {
+    console.error(`200% text crowding: ${journey} leaves ${entry.at200Text.cramped} control(s) with no room for their value.`);
+  }
 }
-for (const journey of regressed200) console.error(`200% text regression: ${journey} is not on the known-overflow list but overflows.`);
-for (const journey of stale200) console.error(`Stale known-overflow entry: ${journey} passes at 200% text — remove it from KNOWN_200_TEXT_OVERFLOW.`);
 
 if (process.env.UI_REFLOW_BASELINE === "1") {
-  if (summary.documentOverflow.at100 === 0) {
+  if (summary.documentOverflow.at100 === 0 && summary.documentOverflow.at200Text === 0) {
     console.error("\nBaseline reproduced no document overflow — the runner is not exercising the recorded defects.");
     process.exit(1);
   }
   console.log("\nBaseline reproduced the defects, as expected.");
-} else if (summary.documentOverflow.at100 > 0 || failures.length > 0
-  || regressed200.length > 0 || stale200.length > 0) {
+} else if (summary.documentOverflow.at100 > 0 || summary.documentOverflow.at200Text > 0
+  || summary.crampedControls.at200Text > 0 || failures.length > 0) {
   process.exit(1);
 }

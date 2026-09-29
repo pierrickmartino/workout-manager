@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { FieldRow, FIELD_CELL, WIDE_FIELD_CELL } from "@/components/pulse/field-row";
 
 const RPE_VALUES = Array.from({ length: 10 }, (_, index) => index + 1);
 
@@ -229,8 +230,8 @@ function SetRow({ set, isCurrent, weightUnit, onComplete, onSkip }: SetRowProps)
         </p>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-2.5">
-        <label className="flex flex-col gap-1.5">
+      <FieldRow>
+        <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Reps</span>
           <Input
             type="number"
@@ -241,7 +242,7 @@ function SetRow({ set, isCurrent, weightUnit, onComplete, onSkip }: SetRowProps)
             aria-label={`Reps for ${label}`}
           />
         </label>
-        <label className="flex flex-col gap-1.5">
+        <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">RPE</span>
           <Select
             value={rpe}
@@ -257,10 +258,10 @@ function SetRow({ set, isCurrent, weightUnit, onComplete, onSkip }: SetRowProps)
             ))}
           </Select>
         </label>
-      </div>
+      </FieldRow>
 
-      <div className="grid grid-cols-[7rem_1fr] gap-2.5">
-        <label className="flex flex-col gap-1.5">
+      <FieldRow>
+        <label className={WIDE_FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">
             Load kind
           </span>
@@ -277,7 +278,7 @@ function SetRow({ set, isCurrent, weightUnit, onComplete, onSkip }: SetRowProps)
             ))}
           </Select>
         </label>
-        <label className="flex flex-col gap-1.5">
+        <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Load</span>
           <Input
             value={loadValue}
@@ -287,7 +288,7 @@ function SetRow({ set, isCurrent, weightUnit, onComplete, onSkip }: SetRowProps)
             aria-label={`Load for ${label}`}
           />
         </label>
-      </div>
+      </FieldRow>
 
       {!completed ? (
         <div className="flex flex-wrap items-center gap-2">

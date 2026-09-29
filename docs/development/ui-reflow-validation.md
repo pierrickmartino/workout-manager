@@ -113,6 +113,8 @@ produced 77 findings, nearly all false.
    Those four are a named ratchet (`KNOWN_200_TEXT_OVERFLOW`) rather than a
    silent exclusion — every other journey must pass at 200%, and an entry that
    stops overflowing fails the run, so the list can only shrink.
+   **Closed since, by [#572](ui-reflow-200-text-validation.md)**: the rows wrap,
+   the ratchet is gone, and 0 of 600 cases overflow at 200% text.
 2. **The authenticated 200% real-app check** named in the audit's success
    criteria was not run. A doubled root font size on a fixture is not a signed-in
    phone, and this run does not stand in for it.

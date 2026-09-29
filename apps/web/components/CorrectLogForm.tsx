@@ -22,6 +22,7 @@ import {
   isBoundedDraftString,
 } from "@/lib/form-draft-validation";
 import { Field } from "@/components/pulse/field";
+import { FieldRow, FIELD_CELL, WIDE_FIELD_CELL } from "@/components/pulse/field-row";
 import { Alert } from "@/components/pulse/alert";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { Input } from "@/components/ui/input";
@@ -104,8 +105,8 @@ function AmountFields({
   const label = `${set.exerciseName} amount`;
   if (set.kind === "distance") {
     return (
-      <div className="grid grid-cols-[1fr_5rem_1fr] gap-2.5">
-        <label className="flex flex-col gap-1.5">
+      <FieldRow className="basis-full">
+        <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Distance</span>
           <Input
             name={`set-${index}-distance`}
@@ -113,7 +114,7 @@ function AmountFields({
             aria-label={`Distance for ${set.exerciseName}`}
           />
         </label>
-        <label className="flex flex-col gap-1.5">
+        <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Unit</span>
           <Select
             name={`set-${index}-unit`}
@@ -124,7 +125,7 @@ function AmountFields({
             <option value="mi">mi</option>
           </Select>
         </label>
-        <label className="flex flex-col gap-1.5">
+        <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Time</span>
           <Input
             name={`set-${index}-duration`}
@@ -133,13 +134,13 @@ function AmountFields({
             aria-label={`Time for ${set.exerciseName}`}
           />
         </label>
-      </div>
+      </FieldRow>
     );
   }
 
   if (set.kind === "duration") {
     return (
-      <label className="flex flex-col gap-1.5">
+      <label className={FIELD_CELL}>
         <span className="label-mono text-[9px] text-text-muted">Time</span>
         <Input
           name={`set-${index}-duration`}
@@ -152,7 +153,7 @@ function AmountFields({
   }
 
   return (
-    <label className="flex flex-col gap-1.5">
+    <label className={FIELD_CELL}>
       <span className="label-mono text-[9px] text-text-muted">Reps</span>
       <Input
         name={`set-${index}-reps`}
@@ -185,9 +186,9 @@ function SetRow({
         {set.exerciseName}
       </span>
 
-      <div className="grid grid-cols-[1fr_5rem] gap-2.5">
+      <FieldRow>
         <AmountFields set={set} index={index} initial={initial} />
-        <label className="flex flex-col gap-1.5">
+        <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">RPE</span>
           <Select
             name={`set-${index}-rpe`}
@@ -202,12 +203,12 @@ function SetRow({
             ))}
           </Select>
         </label>
-      </div>
+      </FieldRow>
 
       {/* Load is a typed value (ADR-0010): the picked kind is sent as-is so the record
           keeps the load's meaning at the boundary. */}
-      <div className="grid grid-cols-[7rem_1fr] gap-2.5">
-        <label className="flex flex-col gap-1.5">
+      <FieldRow>
+        <label className={WIDE_FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Load kind</span>
           <Select
             name={`set-${index}-load_kind`}
@@ -221,7 +222,7 @@ function SetRow({
             ))}
           </Select>
         </label>
-        <label className="flex flex-col gap-1.5">
+        <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Load</span>
           <Input
             name={`set-${index}-load_value`}
@@ -230,7 +231,7 @@ function SetRow({
             aria-label={`Load for ${set.exerciseName}`}
           />
         </label>
-      </div>
+      </FieldRow>
 
       {/* Set Note (ADR-0065, #451): editable per-set remark, pre-filled decoded from the record.
           Rides as raw text under `set-<i>-note`; the backend re-escapes it once on save. */}
@@ -505,8 +506,8 @@ function AddedSetRow({
         initial={initial}
       />
 
-      <div className="grid grid-cols-[7rem_1fr_5rem] gap-2.5">
-        <label className="flex flex-col gap-1.5">
+      <FieldRow>
+        <label className={WIDE_FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Load kind</span>
           <Select
             name={`${prefix}-load_kind`}
@@ -520,7 +521,7 @@ function AddedSetRow({
             ))}
           </Select>
         </label>
-        <label className="flex flex-col gap-1.5">
+        <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Load</span>
           <Input
             name={`${prefix}-load_value`}
@@ -529,7 +530,7 @@ function AddedSetRow({
             aria-label={`Load, ${rowLabel}`}
           />
         </label>
-        <label className="flex flex-col gap-1.5">
+        <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">RPE</span>
           <Select
             name={`${prefix}-rpe`}
@@ -544,7 +545,7 @@ function AddedSetRow({
             ))}
           </Select>
         </label>
-      </div>
+      </FieldRow>
       {/* Set Note (ADR-0065, #451): optional per-set remark on the added set, sent raw. */}
       <label className="flex flex-col gap-1.5">
         <span className="label-mono text-[9px] text-text-muted">Note</span>
@@ -574,8 +575,8 @@ function AddedAmountFields({
 }) {
   if (kind === "distance") {
     return (
-      <div className="grid grid-cols-[1fr_5rem_1fr] gap-2.5">
-        <label className="flex flex-col gap-1.5">
+      <FieldRow>
+        <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Distance</span>
           <Input
             name={`${prefix}-distance`}
@@ -587,7 +588,7 @@ function AddedAmountFields({
             aria-label={`Distance, ${rowLabel}`}
           />
         </label>
-        <label className="flex flex-col gap-1.5">
+        <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Unit</span>
           <Select
             name={`${prefix}-unit`}
@@ -598,7 +599,7 @@ function AddedAmountFields({
             <option value="mi">mi</option>
           </Select>
         </label>
-        <label className="flex flex-col gap-1.5">
+        <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Time (opt.)</span>
           <Input
             name={`${prefix}-duration`}
@@ -607,7 +608,7 @@ function AddedAmountFields({
             aria-label={`Time, ${rowLabel}`}
           />
         </label>
-      </div>
+      </FieldRow>
     );
   }
 

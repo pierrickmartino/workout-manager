@@ -20,6 +20,7 @@ import {
   isDraftUuid,
 } from "@/lib/form-draft-validation";
 import { Field } from "@/components/pulse/field";
+import { FieldRow, FIELD_CELL, WIDE_FIELD_CELL } from "@/components/pulse/field-row";
 import { Alert } from "@/components/pulse/alert";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { Input } from "@/components/ui/input";
@@ -297,8 +298,8 @@ function SetRowFields({ index, row, unit, onKindChange, onChange, onRemove }: Se
 
       {/* Load is a typed value (ADR-0010): pick its kind, then give the value that kind
           carries. Left blank, the set records no load. */}
-      <div className="grid grid-cols-[7rem_1fr] gap-2.5">
-        <label className="flex flex-col gap-1.5">
+      <FieldRow>
+        <label className={WIDE_FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Load kind</span>
           <Select
             name={`${prefix}-load_kind`}
@@ -313,7 +314,7 @@ function SetRowFields({ index, row, unit, onKindChange, onChange, onRemove }: Se
             ))}
           </Select>
         </label>
-        <label className="flex flex-col gap-1.5">
+        <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Load</span>
           <Input
             name={`${prefix}-load_value`}
@@ -323,7 +324,7 @@ function SetRowFields({ index, row, unit, onKindChange, onChange, onRemove }: Se
             aria-label={`Load, set ${index + 1}`}
           />
         </label>
-      </div>
+      </FieldRow>
     </div>
   );
 }
@@ -355,8 +356,8 @@ interface AmountFieldProps {
 
 function DistanceFields({ prefix, index, row, onChange }: AmountFieldProps) {
   return (
-    <div className="grid grid-cols-[1fr_5rem_1fr] gap-2.5">
-      <label className="flex flex-col gap-1.5">
+    <FieldRow>
+      <label className={FIELD_CELL}>
         <span className="label-mono text-[9px] text-text-muted">Distance</span>
         <Input
           name={`${prefix}-distance`}
@@ -369,7 +370,7 @@ function DistanceFields({ prefix, index, row, onChange }: AmountFieldProps) {
           aria-label={`Distance, set ${index + 1}`}
         />
       </label>
-      <label className="flex flex-col gap-1.5">
+      <label className={FIELD_CELL}>
         <span className="label-mono text-[9px] text-text-muted">Unit</span>
         <Select
           name={`${prefix}-unit`}
@@ -381,7 +382,7 @@ function DistanceFields({ prefix, index, row, onChange }: AmountFieldProps) {
           <option value="mi">mi</option>
         </Select>
       </label>
-      <label className="flex flex-col gap-1.5">
+      <label className={FIELD_CELL}>
         {/* Time is optional (ADR-0032): given, pace becomes a derivable read. */}
         <span className="label-mono text-[9px] text-text-muted">Time (opt.)</span>
         <Input
@@ -392,7 +393,7 @@ function DistanceFields({ prefix, index, row, onChange }: AmountFieldProps) {
           aria-label={`Time, set ${index + 1}`}
         />
       </label>
-    </div>
+    </FieldRow>
   );
 }
 

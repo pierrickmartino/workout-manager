@@ -5,6 +5,11 @@ import { cn } from "@/lib/utils";
 
 // Native <select> kept for zero-dependency form behavior, styled to match the
 // pulse input treatment with a mono value and a custom chevron.
+//
+// The chevron and the gutter reserved for it are sized in **px, not rem** (ADR-0087). They are
+// the control's own furniture, not text: at 200% text a `pr-10` gutter is 80px, which on a
+// 320px screen leaves a field no room at all to show the value it holds. Pinning them keeps
+// 100% text pixel-identical and keeps the value legible once the text doubles.
 export function Select({
   className,
   children,
@@ -14,7 +19,7 @@ export function Select({
     <div className="relative">
       <select
         className={cn(
-          "flex h-11 w-full appearance-none rounded-sm border border-border-lite bg-surface px-4 pr-10 font-mono text-sm text-text-primary focus-visible:border-cyan focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan disabled:cursor-not-allowed disabled:opacity-50",
+          "flex h-11 w-full appearance-none rounded-sm border border-border-lite bg-surface px-4 pr-[40px] font-mono text-sm text-text-primary focus-visible:border-cyan focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan disabled:cursor-not-allowed disabled:opacity-50",
           className,
         )}
         {...props}
@@ -23,7 +28,7 @@ export function Select({
       </select>
       <ChevronDown
         aria-hidden
-        className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted"
+        className="pointer-events-none absolute right-[12px] top-1/2 h-[16px] w-[16px] -translate-y-1/2 text-text-muted"
       />
     </div>
   );
