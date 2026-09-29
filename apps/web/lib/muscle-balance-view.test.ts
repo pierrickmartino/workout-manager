@@ -68,10 +68,11 @@ test("labels a week's bar with its composition for screen readers", () => {
     ]),
   ]);
 
-  // Assert — the accessible label names the week and each share, not color alone
+  // Assert — the accessible label names the week (with its year, CH-F2) and each
+  // share, not color alone
   assert.equal(
     view.weeks[0].ariaLabel,
-    "Week of Jul 6: Legs 60%, Chest 40%",
+    "Week of Jul 6, 2026: Legs 60%, Chest 40%",
   );
 });
 
@@ -83,7 +84,7 @@ test("marks an untrained week as empty and labels it honestly", () => {
   const [row] = view.weeks;
   assert.deepEqual(row.segments, []);
   assert.equal(row.isEmpty, true);
-  assert.equal(row.ariaLabel, "Week of Jul 6: no training logged");
+  assert.equal(row.ariaLabel, "Week of Jul 6, 2026: no training logged");
 });
 
 test("formats the week label timezone-safely from the ISO Monday", () => {

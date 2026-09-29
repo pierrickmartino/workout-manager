@@ -5,6 +5,7 @@ import {
   toVolumeRows,
   formatVolumeDelta,
   formatCoverageCaption,
+  VOLUME_VALUES_CAPTION,
 } from "./volume-view.ts";
 import type { VolumePoint } from "./analytics-types.ts";
 
@@ -21,10 +22,17 @@ test("maps points to chart rows with a short day label, preserving order", () =>
   // Arrange / Act
   const rows = toVolumeRows(POINTS, "kg");
 
-  // Assert — ISO date kept for the axis, plus a human "Mon D" label and the kg volume
+  // Assert — ISO date kept for the axis, a short "Mon D" tick, the raw kg volume, and
+  // the retrievable text pair the tooltip and the values table both render (ADR-0084)
   assert.deepEqual(rows, [
-    { date: "2026-07-04", label: "Jul 4", volume: 400 },
-    { date: "2026-07-05", label: "Jul 5", volume: 1000 },
+    {
+      date: "2026-07-04", label: "Jul 4", volume: 400,
+      dateText: "Jul 4, 2026", valueText: "400 kg",
+    },
+    {
+      date: "2026-07-05", label: "Jul 5", volume: 1000,
+      dateText: "Jul 5, 2026", valueText: "1000 kg",
+    },
   ]);
 });
 
@@ -63,4 +71,46 @@ test("caption discloses the coverage as a whole percent of logged volume", () =>
     formatCoverageCaption(82.4),
     "from 82% of your logged volume",
   );
+});
+
+// --- Retrievable values (ADR-0084) -----------------------------------------------------
+
+test("rounds the retrievable value to the precision the chart displays", () => {
+  // Arrange — a tonnage with a fraction the line plots but no surface shows
+  const points: VolumePoint[] = [{ date: "2026-07-04", volume_kg: 1247.3916 }];
+
+  // Act
+  const [row] = toVolumeRows(points, "kg");
+
+  // Assert — the plotted height keeps the fraction; the retrievable text does not
+  assert.equal(row.volume, 1247.3916);
+  assert.equal(row.valueText, "1247 kg");
+});
+
+test("projects the retrievable value into the reader's pounds with its unit", () => {
+  // Arrange / Act — 400 kg ≈ 882 lb at whole-figure precision
+  const [row] = toVolumeRows(POINTS, "lb");
+
+  // Assert
+  assert.equal(row.valueText, "882 lb");
+});
+
+test("gives every point a date that can be placed without its neighbours", () => {
+  // Arrange — a series crossing a year boundary, where "Dec 29" and "Jan 5" cannot be ordered
+  const points: VolumePoint[] = [
+    { date: "2025-12-29", volume_kg: 400 },
+    { date: "2026-01-05", volume_kg: 500 },
+  ];
+
+  // Act
+  const rows = toVolumeRows(points, "kg");
+
+  // Assert
+  assert.deepEqual(rows.map((row) => row.dateText), ["Dec 29, 2025", "Jan 5, 2026"]);
+});
+
+test("says in its caption that an absent day logged no training", () => {
+  // Arrange / Act / Assert — the series is sparse by design, so the table must say so
+  // rather than let a reader read a missing day as a missing record
+  assert.match(VOLUME_VALUES_CAPTION, /no logged training have no row/);
 });

@@ -8,7 +8,8 @@ import { MuscleRegionAtlas } from "@/components/analytics/muscle-region-atlas";
 import { toMuscleBalance } from "@/lib/muscle-balance-view";
 import { toStrengthTrajectories } from "@/lib/strength-trajectories-view";
 import { toMuscleBars } from "@/lib/muscle-distribution";
-import { kgToUnit } from "@/lib/weight-format";
+import { toVolumeRows } from "@/lib/volume-view";
+import { toDistanceBars } from "@/lib/distance-view";
 import type { Figure } from "@/lib/atlas/atlas-geometry";
 import type { MuscleRegionAtlasView } from "@/lib/muscle-region-atlas-view";
 
@@ -20,10 +21,9 @@ const unit = params.get("unit") === "lb" ? "lb" : "kg";
 const figure: Figure = params.get("figure") === "female" ? "female" : params.get("figure") === "male" ? "male" : "neutral";
 const length = variant === "empty" ? 0 : variant === "single" ? 1 : variant === "large" ? range : 4;
 const iso = (offset: number) => new Date(Date.UTC(2025, 11, 22 + offset)).toISOString().slice(0, 10);
-const label = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 const dates = Array.from({ length }, (_, i) => iso(i * (variant === "sparse" ? 7 : 1)));
-const volume = dates.map((date, i) => ({ date, label: label(date), volume: kgToUnit(1234.6 + i * 97.3, unit) }));
-const distance = Array.from({ length: length === 0 ? 0 : variant === "large" ? Math.ceil(range / 7) : length }, (_, i) => ({ week: iso(i * 7), label: label(iso(i * 7)), km: variant === "sparse" && i === 1 ? 0 : 1.125 + i * 0.375 }));
+const volume = toVolumeRows(dates.map((date, i) => ({ date, volume_kg: 1234.6 + i * 97.3 })), unit);
+const distance = toDistanceBars(Array.from({ length: length === 0 ? 0 : variant === "large" ? Math.ceil(range / 7) : length }, (_, i) => ({ week: iso(i * 7), km: variant === "sparse" && i === 1 ? 0 : 1.125 + i * 0.375 })));
 // Top-set production is capped at eight qualifying sessions; large means its maximum.
 const series = dates.slice(0, 8).map((date, i) => ({ date, estimated_1rm: 80.6 + i * 2.25 }));
 const tiles = toStrengthTrajectories(series.length ? [{ exercise_id: 1, exercise: "Synthetic Squat", series }] : [], unit);
@@ -45,10 +45,10 @@ const atlas: MuscleRegionAtlasView = { weeksLabel: "last 8 weeks", regions, grou
 export function ChartAccessibilityFixture() {
   const surface = params.get("surface") ?? "volume";
   const components = {
-    volume: <VolumeChart rows={volume} unit={unit} />,
+    volume: <VolumeChart rows={volume} />,
     distance: <DistanceChart rows={distance} />,
-    top: tiles.length ? <TopSetTrendChart rows={tiles[0].trend.rows} unit={unit} /> : <p>No qualifying strength history.</p>,
-    miniature: <StrengthTrajectories tiles={tiles} unit={unit} />,
+    top: tiles.length ? <TopSetTrendChart rows={tiles[0].trend.rows} /> : <p>No qualifying strength history.</p>,
+    miniature: <StrengthTrajectories tiles={tiles} />,
     balance: <MuscleBalance view={balance} />,
     split: <MuscleSplit bars={toMuscleBars(shares)} emptyMessage="No muscle data." />,
     atlas: <MuscleRegionAtlas view={atlas} figure={figure} />,

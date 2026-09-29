@@ -83,7 +83,7 @@ export default async function StrengthAnalyticsPage({
         <StrengthEmptyState />
       ) : (
         <>
-          <StrengthTrajectories tiles={trajectories} unit={unit} />
+          <StrengthTrajectories tiles={trajectories} />
           <MuscleBalance view={muscleBalance} />
           <PersonalRecordTimeline view={view} offset={offset} from={from} />
         </>

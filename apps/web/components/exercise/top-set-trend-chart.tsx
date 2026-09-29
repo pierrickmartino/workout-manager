@@ -12,19 +12,23 @@ import {
 } from "recharts";
 
 import { useChartTheme } from "@/lib/use-chart-theme";
-import type { TopSetTrendRow } from "@/lib/top-set-trend-view";
-import type { WeightUnit } from "@/lib/weight-unit";
-import { weightUnitLabel } from "@/lib/weight-format";
+import { TOP_SET_VALUES_CAPTION, type TopSetTrendRow } from "@/lib/top-set-trend-view";
+import { ChartValues } from "@/components/pulse/chart-values";
 
 interface TopSetTrendChartProps {
   rows: TopSetTrendRow[];
-  // The reader's Weight Unit — the row `estimate`s are already projected to it (raw), so the
-  // tooltip only needs the matching label (#417).
-  unit: WeightUnit;
   // The chart body height. Defaults to the full `h-48` used on Exercise Detail; the
   // Strength Analytics small-multiples pass a shorter class so a grid of them stays
   // compact. Any other styling is unchanged, so the two surfaces read as one chart.
   heightClass?: string;
+  // Whether the plot is paired with its `ChartValues` table (ADR-0084). On by default:
+  // a chart owes its reader the values it plots. The one caller that passes `false` is
+  // the Strength Analytics miniature, which is a *teaser* — hidden from the accessibility
+  // tree and wrapped in a `<Link>` to the canonical chart (ADR-0024, CH-F4). A disclosure
+  // there would be a focusable control inside `aria-hidden` and a `<details>` nested in an
+  // `<a>`: an accessibility defect and invalid markup. That call site is registered, with
+  // its reason, in `chart-values-policy.ts`'s exemption registry.
+  showValues?: boolean;
 }
 
 // The Top-Set Trend bar chart (F6 Slice 3): one bar per qualifying session, the best
@@ -40,68 +44,78 @@ interface TopSetTrendChartProps {
 // sit back in the translucent `cyan-dim` token so the trend reads toward "now".
 export function TopSetTrendChart({
   rows,
-  unit,
   heightClass = "h-48",
+  showValues = true,
 }: TopSetTrendChartProps) {
   const { cyan, cyanDim, muted, border } = useChartTheme();
   return (
-    <div className={`${heightClass} w-full`}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart
-          data={rows}
-          margin={{ top: 8, right: 8, bottom: 0, left: -12 }}
-        >
-          <XAxis
-            dataKey="label"
-            tick={{ fill: muted, fontSize: 11 }}
-            tickLine={false}
-            axisLine={{ stroke: border }}
-            minTickGap={8}
-          />
-          <YAxis
-            tick={{ fill: muted, fontSize: 11 }}
-            tickLine={false}
-            axisLine={false}
-            width={48}
-            domain={["dataMin - 10", "dataMax + 5"]}
-            tickFormatter={(value: number) => `${Math.round(value)}`}
-          />
-          <Tooltip
-            cursor={{ fill: cyanDim }}
-            content={<TrendTooltip unit={unit} />}
-          />
-          <Bar
-            dataKey="estimate"
-            radius={[2, 2, 0, 0]}
-            isAnimationActive={false}
+    <div>
+      <div className={`${heightClass} w-full`}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={rows}
+            margin={{ top: 8, right: 8, bottom: 0, left: -12 }}
           >
-            {rows.map((row) => (
-              <Cell key={row.date} fill={row.isLatest ? cyan : cyanDim} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+            <XAxis
+              dataKey="label"
+              tick={{ fill: muted, fontSize: 11 }}
+              tickLine={false}
+              axisLine={{ stroke: border }}
+              minTickGap={8}
+            />
+            <YAxis
+              tick={{ fill: muted, fontSize: 11 }}
+              tickLine={false}
+              axisLine={false}
+              width={48}
+              domain={["dataMin - 10", "dataMax + 5"]}
+              tickFormatter={(value: number) => `${Math.round(value)}`}
+            />
+            <Tooltip cursor={{ fill: cyanDim }} content={<TrendTooltip />} />
+            <Bar
+              dataKey="estimate"
+              radius={[2, 2, 0, 0]}
+              isAnimationActive={false}
+            >
+              {/* Keyed on the row's series index, not its date: two Logged Sessions can be
+                  performed on one date in a calendar-free app, and a duplicated key would
+                  drop a bar. */}
+              {rows.map((row) => (
+                <Cell key={row.key} fill={row.isLatest ? cyan : cyanDim} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      {showValues ? (
+        <ChartValues
+          caption={TOP_SET_VALUES_CAPTION}
+          labelHeading="SESSION"
+          valueHeading="EST. 1RM"
+          rows={rows.map((row) => ({
+            key: row.key,
+            label: row.dateText,
+            value: row.valueText,
+          }))}
+        />
+      ) : null}
     </div>
   );
 }
 
-// A themed tooltip: the session date and its Top Set as a whole figure in the reader's
-// Weight Unit, matching the card surfaces rather than Recharts' default white box. The
-// row `estimate` is already projected to the reader's unit; only the label is appended.
-function TrendTooltip({
-  active,
-  payload,
-  unit,
-}: TooltipProps<number, string> & { unit: WeightUnit }) {
+// A themed tooltip: the session date and its Top Set, matching the card surfaces rather
+// than Recharts' default white box. Both strings come from the row, so the pointer and the
+// values table state the same date — with its year — and the same estimate.
+function TrendTooltip({ active, payload }: TooltipProps<number, string>) {
   if (!active || !payload || payload.length === 0) {
     return null;
   }
   const row = payload[0].payload as TopSetTrendRow;
   return (
     <div className="rounded-md border border-border bg-elevated px-3 py-2 shadow-lg">
-      <p className="label-mono text-[11px] text-text-muted">{row.label}</p>
+      <p className="label-mono text-[11px] text-text-muted">{row.dateText}</p>
       <p className="font-display text-sm font-semibold text-text-primary tabular-nums">
-        {Math.round(row.estimate)} {weightUnitLabel(unit)}
+        {row.valueText}
       </p>
     </div>
   );

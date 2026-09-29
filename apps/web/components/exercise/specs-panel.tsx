@@ -131,7 +131,7 @@ function TopSetTrend({ series, unit }: { series: TopSetPoint[]; unit: WeightUnit
         {trend.delta ? <Badge variant="cyan">{trend.delta}</Badge> : null}
       </div>
       <Card className="p-5">
-        <TopSetTrendChart rows={trend.rows} unit={unit} />
+        <TopSetTrendChart rows={trend.rows} />
       </Card>
     </div>
   );

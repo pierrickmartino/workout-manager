@@ -242,7 +242,7 @@ function TotalVolume({
                 </span>
               </div>
             ) : null}
-            <VolumeChart rows={rows} unit={unit} />
+            <VolumeChart rows={rows} />
             <p className="label-mono text-[11px] text-text-muted">
               {formatCoverageCaption(volume.coverage)}
             </p>

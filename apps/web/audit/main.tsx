@@ -21,6 +21,8 @@ import { TabBar } from "@/components/pulse/tab-bar";
 import { AtlasDrawer } from "@/components/analytics/atlas-drawer";
 import { VolumeChart } from "@/components/pulse/volume-chart";
 import { DistanceChart } from "@/components/pulse/distance-chart";
+import { toVolumeRows } from "@/lib/volume-view";
+import { toDistanceBars } from "@/lib/distance-view";
 import { Alert } from "@/components/pulse/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,8 +41,8 @@ const count = Math.min(10000, Math.max(0, Number(params.get("count") ?? 2)));
 
 function Analytics() {
   const [open, setOpen] = useState(false);
-  return <><VolumeChart unit="kg" rows={Array.from({ length: 20 }, (_, i) => ({ date: `2026-09-${String(i + 1).padStart(2, "0")}`, label: `Sep ${i + 1}`, volume: (i + 1) * 100 }))} />
-    <DistanceChart rows={Array.from({ length: 12 }, (_, i) => ({ week: `2026-07-${String(i + 1).padStart(2, "0")}`, label: `Week ${i + 1}`, km: i + 1 }))} />
+  return <><VolumeChart rows={toVolumeRows(Array.from({ length: 20 }, (_, i) => ({ date: `2026-09-${String(i + 1).padStart(2, "0")}`, volume_kg: (i + 1) * 100 })), "kg")} />
+    <DistanceChart rows={toDistanceBars(Array.from({ length: 12 }, (_, i) => ({ week: `2026-07-${String(i + 1).padStart(2, "0")}`, km: i + 1 })))} />
     <Button onClick={() => setOpen(true)}>Open muscle details</Button>
     <AtlasDrawer onClose={() => setOpen(false)} weeksLabel="last 8 weeks" region={open ? {
       muscle: "Quadriceps", group: "Legs", covered: true, stateLabel: "Trained", sets: 1000,
