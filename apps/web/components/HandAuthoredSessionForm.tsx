@@ -651,7 +651,12 @@ function AccountScopedHandAuthoredSessionForm({
         </Select>
       </Field>
 
-      <fieldset className="flex flex-col gap-4 border-0 p-0">
+      {/* `min-w-0` is load-bearing, not tidying (ADR-0085): the UA stylesheet gives every
+          `fieldset` `min-inline-size: min-content`, which `border-0 p-0` does not override. A
+          single `nowrap` descendant therefore sized this box to the full width of an exercise
+          name and carried the whole document past the viewport. `pulse/field.tsx` already
+          carried this class; the authoring forms did not. */}
+      <fieldset className="flex min-w-0 flex-col gap-4 border-0 p-0">
         <SectionHeader>EXERCISES</SectionHeader>
 
         {exercises.length === 0 ? (
@@ -864,8 +869,8 @@ function ExerciseCard({
   const isDistance = row.kind === "distance";
   return (
     <Card id={anchorId} className="flex flex-col gap-4 p-4">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           {slot.memberLabel ? (
             <span
               className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm bg-cyan/15 font-mono text-[11px] font-bold text-cyan"
@@ -874,11 +879,14 @@ function ExerciseCard({
               {slot.memberLabel}
             </span>
           ) : null}
-          <h3 className="font-display text-base font-bold text-text-primary">
+          {/* An authored name is never truncated (ADR-0085), so it wraps — and breaks inside a
+              word when the word itself cannot fit, which is the only thing that keeps an
+              unbroken 100-character name from setting this card's min-content width. */}
+          <h3 className="min-w-0 break-words font-display text-base font-bold text-text-primary">
             {row.exerciseName}
           </h3>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center justify-end gap-1">
           <Button
             type="button"
             variant="ghost"

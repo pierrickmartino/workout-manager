@@ -154,6 +154,14 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   written reason. It proves the table is rendered, not that it matches — `audit/charts.mjs`
   asserts per-point parity (ADR-0084).
 
+- New `<fieldset>`, or an arbitrary grid track → give the fieldset `min-w-0` and spell the
+  track `minmax(0,1fr)`, never a bare `1fr`. Both are boxes CSS floors at their content's
+  minimum width, which is how one `nowrap` name widened the whole document to 789px at 320px.
+  The guard in `apps/web/lib/reflow-policy.ts` sweeps every component; its registry is empty.
+  It proves those boxes are declared, **not** that a page fits — `audit/reflow.mjs` renders
+  every journey at 320px and asserts that. An authored name wraps and is never truncated; a
+  header or action cluster wraps rather than overflowing (ADR-0085).
+
 - New animation or transform transition → pair it with `motion-reduce:animate-none`
   or `motion-reduce:transition-none` **in the same class string**. Colour and
   opacity transitions move nothing and are exempt by rule. The guard in

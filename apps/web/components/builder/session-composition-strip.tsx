@@ -300,7 +300,12 @@ function CompositionTile({
           <span className={cn("h-6 w-1 shrink-0 rounded-full", meta.dot)} aria-hidden />
         )}
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate font-display text-[13px] font-semibold text-text-primary">
+          {/* The name wraps rather than truncating (ADR-0085). `truncate` is
+              `white-space: nowrap`, which makes this span's min-content the whole name and
+              propagates it up to the form's fieldset — that is what widened the document to
+              789px at a 320px viewport. It is also the wrong read: the strip is this
+              Session's map, and three rows of "Long exercise name wi…" name nothing. */}
+          <span className="break-words font-display text-[13px] font-semibold text-text-primary">
             {exercise.exerciseName}
           </span>
           <span className="label-mono text-[9px] text-text-muted">

@@ -181,7 +181,7 @@ function SetRow({
       <input type="hidden" name={`set-${index}-exercise_id`} value={set.exerciseId} />
       <input type="hidden" name={`set-${index}-exercise_name`} value={set.exerciseName} />
       <input type="hidden" name={`set-${index}-kind`} value={set.kind} />
-      <span className="font-display text-[15px] font-semibold text-text-primary">
+      <span className="min-w-0 break-words font-display text-[15px] font-semibold text-text-primary">
         {set.exerciseName}
       </span>
 
@@ -394,7 +394,7 @@ function AccountScopedCorrectLogForm({
         </p>
       )}
 
-      <fieldset className="flex flex-col gap-3 border-0 p-0">
+      <fieldset className="flex min-w-0 flex-col gap-3 border-0 p-0">
         <SectionHeader>SETS PERFORMED</SectionHeader>
         {fields.sets.map((set, index) => (
           <SetRow
