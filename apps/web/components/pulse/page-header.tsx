@@ -22,16 +22,22 @@ export function PageHeader({
   className,
 }: PageHeaderProps): React.JSX.Element {
   return (
+    // The action wraps to its own line when it genuinely does not fit beside the title, and
+    // stays inline everywhere it does (ADR-0085). It used to be `shrink-0` in a non-wrapping
+    // row, so an action cluster wider than the leftover space pushed the whole document past
+    // the viewport — History's link-plus-badge did exactly that at 320px, in every Skin and
+    // Mode, whatever the record names were. A wrapped action sits at the start of its line,
+    // under the title it belongs to.
     <header
-      className={cn("flex items-center justify-between gap-4", className)}
+      className={cn("flex flex-wrap items-center justify-between gap-4", className)}
     >
-      <div className="flex flex-col gap-1.5">
+      <div className="flex min-w-0 flex-col gap-1.5">
         <Overline>{overline}</Overline>
         <h1 className="font-display text-2xl font-bold leading-tight tracking-tight text-text-primary">
           {title}
         </h1>
       </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
+      {action ? <div className="min-w-0">{action}</div> : null}
     </header>
   );
 }

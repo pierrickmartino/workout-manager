@@ -91,7 +91,7 @@ export function HistoryBrowser({
         overline="PULSE // STATS"
         title="Training history"
         action={
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Link
               href="/logs/new"
               className="label-mono text-[11px] text-cyan hover:underline"

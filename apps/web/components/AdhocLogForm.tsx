@@ -204,7 +204,7 @@ function AccountScopedAdhocLogForm({ today, unit }: AdhocLogFormProps) {
         </Select>
       </Field>
 
-      <fieldset className="flex flex-col gap-3 border-0 p-0">
+      <fieldset className="flex min-w-0 flex-col gap-3 border-0 p-0">
         <SectionHeader>SETS PERFORMED</SectionHeader>
 
         {/* The parser reads rows by contiguous index 0…set_count-1 (readAdhocFormRows),

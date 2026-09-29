@@ -159,7 +159,7 @@ export function ProfileForm({
         />
       </Field>
 
-      <fieldset className="flex flex-col gap-3 border-0 p-0">
+      <fieldset className="flex min-w-0 flex-col gap-3 border-0 p-0">
         <legend className={legendClass}>
           Fitness level per training type (1–10)
         </legend>
@@ -195,7 +195,7 @@ export function ProfileForm({
         />
       </Field>
 
-      <fieldset className="flex flex-col gap-2.5 border-0 p-0">
+      <fieldset className="flex min-w-0 flex-col gap-2.5 border-0 p-0">
         <legend className={legendClass}>
           Sensitive constraints (trigger extra caution)
         </legend>

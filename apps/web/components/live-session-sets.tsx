@@ -207,7 +207,7 @@ function SetRow({ set, isCurrent, weightUnit, onComplete, onSkip }: SetRowProps)
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-base font-mono text-[12px] font-bold text-cyan">
             {set.setNumber}/{set.moduleSetCount}
           </span>
-          <span className="font-display text-[15px] font-semibold text-text-primary">
+          <span className="min-w-0 break-words font-display text-[15px] font-semibold text-text-primary">
             {set.exerciseName}
           </span>
         </div>
@@ -290,7 +290,7 @@ function SetRow({ set, isCurrent, weightUnit, onComplete, onSkip }: SetRowProps)
       </div>
 
       {!completed ? (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
             variant="outline"

@@ -177,7 +177,7 @@ export function LogSessionForm({
         />
       </Field>
 
-      <fieldset className="flex flex-col gap-4 border-0 p-0">
+      <fieldset className="flex min-w-0 flex-col gap-4 border-0 p-0">
         <SectionHeader>SETS PERFORMED</SectionHeader>
 
         {groups.map((group, groupIndex) => (
@@ -186,7 +186,7 @@ export function LogSessionForm({
             className="flex flex-col gap-3 rounded-md border border-border bg-surface p-4"
           >
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-display text-[15px] font-semibold text-text-primary">
+              <span className="min-w-0 break-words font-display text-[15px] font-semibold text-text-primary">
                 {group.exerciseName}
               </span>
               {group.superset.group !== null ? (
