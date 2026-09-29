@@ -84,6 +84,11 @@
 
   /* Max content column — the pulse.pen frames are 390px mobile shells */
   --spacing-shell: 26rem;
+  /* The shell's second width, used at `lg:` and above (ADR-0088). The frame widens
+     app-wide; a page's content column stays `--spacing-shell` until it opts in with
+     `data-shell="wide"`. 72rem is a cap, not a fill: the Skins' type scale was tuned
+     in a 390px frame and an unbounded measure wrecks it. */
+  --spacing-shell-wide: 72rem;
 }
 
 /*

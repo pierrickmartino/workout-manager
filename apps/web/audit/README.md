@@ -173,6 +173,42 @@ is recorded without gating. Output defaults to
 `docs/development/ui-reflow-evidence/`. Chromium only, and it falls back to the
 container's installed browser when the pinned Playwright build is absent.
 
+## Wide-viewport shell sweep
+
+`wide.mjs` is the mirror of the narrow sweep, for the width the app gained in
+ADR-0088. Until that decision the shell had exactly one width (26rem) and nothing
+in this repo had ever measured above 416px.
+
+```bash
+npm run audit:serve
+# In a second terminal:
+npm run audit:wide
+```
+
+Same journeys, same `fixtures.ts` names, at 1440×900. Three gates, all of which
+must be zero: the document may not overflow the viewport; `<main>`'s **border**
+box may not exceed `--spacing-shell-wide`; and an **unconverted** page's content
+column — the `[data-shell-column]` wrapper — may not exceed `--spacing-shell`.
+Border box, because that is the box `max-width` bounds under the global
+`box-sizing: border-box`. Measuring the content box would hand the gate
+`<main>`'s own 48px of `px-6` as slack — enough to hide an uncapped 1184px frame
+beneath the 1152px token and make the check unfalsifiable.
+That last one is the failure this change actually has: a route authored as a
+416px column that stretches because someone widened a shared ancestor. Both
+widths are read from the live stylesheet, so retuning a token cannot leave the
+runner asserting a stale number.
+
+The run aborts a case if the sidebar is not the rendered navigation at that
+viewport, or if the `[data-shell-column]` contract element is missing — either
+means the sweep is no longer measuring the shell it claims to. `?admin=1` mounts
+the sidebar's admin entry, which the real shell resolves from a server-side role
+claim this harness cannot hold. Element overflow is recorded without gating, as
+in the narrow sweep. Output defaults to `docs/development/ui-wide-evidence/`.
+Chromium only, with the same fallback to the container's installed browser.
+
+It proves the frame, not the design: that a wide page *reads* well is not
+something a runner can tell you.
+
 Font files and generated CSS are snapshots of the app's Next font loader output,
 not independent font packages. To refresh from a new compiled app layout:
 
