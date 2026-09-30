@@ -48,7 +48,14 @@ export function SessionHero({ protocol }: SessionHeroProps): React.JSX.Element {
           size={60}
         />
         <div className="flex min-w-0 flex-col gap-1.5">
-          <h2 className="font-display text-2xl font-bold capitalize text-text-primary">
+          {/* `break-words` because this is an authored name, and ADR-0085's first clause is
+              that such a name wraps: an unbroken 120-character Session title has no space to
+              wrap at, so without a mid-word break opportunity it paints 2,586px outside this
+              box and took the document to 2,707px in a 320px viewport. The box already had
+              `min-w-0`; a zero floor does not help text that cannot break. Measured once Home
+              became a sweep journey (ADR-0088) — the same `min-w-0 break-words` pairing eight
+              other authored-name call sites already use. */}
+          <h2 className="min-w-0 break-words font-display text-2xl font-bold capitalize text-text-primary">
             {heading}
           </h2>
           <p className="label-mono text-[11px] capitalize text-text-secondary">

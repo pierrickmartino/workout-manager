@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Dumbbell, History, LineChart, Trophy } from "lucide-react";
+import { Dumbbell, History, LineChart } from "lucide-react";
 
 import {
   fetchAnalytics,
@@ -17,6 +17,7 @@ import { NavRow } from "@/components/pulse/nav-row";
 import { Bento, BentoTile } from "@/components/pulse/bento";
 import { Alert } from "@/components/pulse/alert";
 import { VolumeChart } from "@/components/pulse/volume-chart";
+import { RecentRecords } from "@/components/pulse/recent-records";
 import { DistanceChart } from "@/components/pulse/distance-chart";
 import { MuscleSplit } from "@/components/pulse/muscle-split";
 import { MuscleRegionAtlas } from "@/components/analytics/muscle-region-atlas";
@@ -28,8 +29,6 @@ import { fetchProfile } from "@/lib/profile";
 import {
   toRecordRows,
   toRecentRecordsTeaser,
-  type RecordRow,
-  type RecentRecordsTeaser,
 } from "@/lib/records-view";
 import {
   toVolumeRows,
@@ -293,64 +292,6 @@ function WeeklyDistance({
             <DistanceChart rows={rows} />
           </>
         )}
-      </Card>
-    </div>
-  );
-}
-
-// The Recent Records feed (F3 Slice 4): the last 8 Personal Records all-time, newest
-// first, each a row of Exercise · new Estimated 1RM · gain over the prior PR · date.
-// Deliberately decoupled from the range toggle so genuine strength milestones stay
-// visible even on a quiet week. PRs are derived read-time from Logged Sets — a
-// heavier estimated max at more reps outranks a lighter true single. When the user has
-// qualifying strength history, the section header carries a teaser into the full,
-// all-time PR timeline on the Strength Analytics screen (ADR-0011): the 8-cap feed is a
-// teaser here, not the only PR-history surface.
-function RecentRecords({
-  rows,
-  teaser,
-}: {
-  rows: RecordRow[];
-  teaser: RecentRecordsTeaser | null;
-}) {
-  return (
-    <div className="flex flex-col gap-4">
-      <SectionHeader
-        meta={
-          teaser ? (
-            <Link
-              href={teaser.href}
-              className="text-cyan hover:underline"
-            >
-              {teaser.label}
-            </Link>
-          ) : null
-        }
-      >
-        RECENT RECORDS
-      </SectionHeader>
-      <Card className="divide-y divide-border overflow-hidden py-0">
-        {rows.map((row, index) => (
-          <div
-            key={`${row.exercise}-${row.date}-${index}`}
-            className="flex items-center gap-3.5 px-4 py-3.5"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm bg-cyan-dim text-cyan">
-              <Trophy className="h-[18px] w-[18px]" aria-hidden />
-            </span>
-            <div className="flex flex-1 flex-col gap-0.5">
-              <span className="font-sans text-[15px] font-medium text-text-primary">
-                {row.exercise}
-              </span>
-              <span className="label-mono text-[11px] text-text-muted">
-                {row.gain} · {row.date}
-              </span>
-            </div>
-            <span className="font-display text-lg font-semibold text-text-primary tabular-nums">
-              {row.estimate}
-            </span>
-          </div>
-        ))}
       </Card>
     </div>
   );

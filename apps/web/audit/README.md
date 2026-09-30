@@ -155,11 +155,12 @@ node audit/reflow.mjs                      # gates: zero document overflow at 10
 UI_REFLOW_BASELINE=1 node audit/reflow.mjs # inverts the gate: the defects must reproduce
 ```
 
-It mounts the same journeys and `fixtures.ts` names as the matrix, plus two the
-matrix never captured: `correction`, and `creation-logged` (the Hand-Authored
-form in its default `authorAndLog` flow, whose performed-set grid `planOnly`
-hides). Both are tagged `novel` in the summary so the comparable eight stay
-extractable. Each case is measured twice: at 100% text and at 200% text (root
+It mounts the same journeys and `fixtures.ts` names as the matrix, plus three the
+matrix never captured: `correction`, `creation-logged` (the Hand-Authored form in
+its default `authorAndLog` flow, whose performed-set grid `planOnly` hides), and
+`home` (added with ADR-0088's wide Home — the page had never been rendered by any
+journey, and adding it surfaced three pre-existing defects). All are tagged `novel`
+in the summary so the comparable eight stay extractable. Each case is measured twice: at 100% text and at 200% text (root
 16px → 32px, viewport unchanged — WCAG 1.4.4 resize-text, *not* browser zoom,
 which `run.mjs` covers through the extension).
 
@@ -185,7 +186,11 @@ npm run audit:serve
 npm run audit:wide
 ```
 
-Same journeys, same `fixtures.ts` names, at 1440×900. Three gates, all of which
+Same journeys, same `fixtures.ts` names, at 1440×900 — including `home`, the only
+journey that opts in with `data-shell="wide"` and so the only one exercising the
+wide content *column* rather than only the wide frame. It renders through the same
+`HomeColumns` the real page uses, so the sweep measures Home's layout rather than a
+copy that would drift. Three gates, all of which
 must be zero: the document may not overflow the viewport; `<main>`'s **border**
 box may not exceed `--spacing-shell-wide`; and an **unconverted** page's content
 column — the `[data-shell-column]` wrapper — may not exceed `--spacing-shell`.
@@ -197,6 +202,9 @@ That last one is the failure this change actually has: a route authored as a
 416px column that stretches because someone widened a shared ancestor. Both
 widths are read from the live stylesheet, so retuning a token cannot leave the
 runner asserting a stale number.
+
+`UI_WIDE_JOURNEYS=home,profile` limits the run to a subset while iterating; the
+gated run is the unfiltered one.
 
 The run aborts a case if the sidebar is not the rendered navigation at that
 viewport, or if the `[data-shell-column]` contract element is missing — either

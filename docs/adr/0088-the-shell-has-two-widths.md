@@ -130,11 +130,40 @@ anything; a projection is just information that finally has somewhere to sit.
 
 The cost is named rather than hidden. A server component cannot see the viewport,
 so anything a desktop page adds is rendered and hidden with `hidden lg:block`,
-and a phone pays for markup it will never paint. The budget is **~10KB
-compressed and no meaningful cold-mobile latency**; past that the block becomes a
-`matchMedia`-gated client component fetching through a route handler, which costs
-a loading state and buys the payload back. This is the price of refusing UA
-detection. It is the right price and it is not zero.
+and a phone pays for it without ever painting it. The budget is **~10KB
+compressed and no meaningful cold-mobile latency**. This is the price of refusing
+UA detection. It is the right price and it is not zero.
+
+### The budget is about JavaScript, not markup
+
+That clause originally said the remedy past the budget was a `matchMedia`-gated
+client component *fetching through a route handler*, on the assumption that the
+weight was the data. Converting Home measured it, and the assumption was wrong by
+an order of magnitude.
+
+`hidden lg:flex` hides a subtree but still **renders and hydrates** it. One
+`"use client"` chart inside such a block therefore put Recharts in the route's
+client chunk graph for every visitor: measured on `/dashboard`, 2 chunks, 402KB
+raw / **110KB gzipped** against a 10KB budget — 11× over, all of it JavaScript a
+phone downloads and never uses. The extra API read and its markup, the thing the
+route handler was meant to avoid, were a few KB.
+
+So the remedy is aimed at the JavaScript:
+
+- **A dynamic import**, because a static one puts the library in the graph whether
+  or not the component ever renders.
+- **A mount gate** (`useWideViewport`, the same 64rem threshold in JS that the CSS
+  uses), because hiding is not the same as not shipping.
+
+The rows still come from the server render, so no route handler and no client
+fetch are needed. `/dashboard` carries **5KB gzipped** over a comparable
+chart-free page after that change, inside the budget.
+
+The general rule, which is easy to get wrong in the other direction too: **a
+desktop-only block may be CSS-hidden when it is markup, and must be mount-gated
+when it is JavaScript.** And the budget is measurable offline — the per-route
+client chunk graph is in `.next/server/app/<route>/page_client-reference-manifest.js`,
+so there is no excuse for deferring it to a deploy.
 
 ## The guards keep their teeth
 
@@ -160,6 +189,33 @@ that stretches by accident is the failure mode this change actually has.
 
 As ever it proves the frame, not the design. That a wide page reads well is not
 something a runner can tell you.
+
+## Converting a page means adding it to the sweeps
+
+Home is the first converted page, and converting it taught the rule: **a page that
+opts in gains a journey in both sweeps**, wide *and* narrow. Wide, because the
+opted-in column is a different measurement from the frame — Home is the only case
+where `columnOverNarrow` is inapplicable rather than merely satisfied. Narrow,
+because "below `lg:` nothing moves" is a claim about 320px, and only the 320px
+runner can check it.
+
+That turned out to matter more than expected. Home had **never** appeared in any
+audit journey, and adding it surfaced three pre-existing defects in components it
+has always rendered — none of them caused by the two-column layout, all of them
+invisible for want of a journey:
+
+- `SessionHero`'s title had no break opportunity, so an unbroken 120-character
+  Session name painted 2,586px outside its box and took the document to 2,707px
+  **at 320px**. ADR-0085's first clause is that an authored name wraps; `min-w-0`
+  was already there, and a zero floor does not help text that cannot break.
+- `TrainingRouteCard`'s stop rows were missing `min-w-0` on two of the flex boxes
+  between the page and a `truncate`d title, making a row 1,523px wide.
+- `StatRow` could not fit three cells on a 320px screen **at 200% text** (document
+  379px), because a one-word mono label like "EXERCISES" has nowhere to break.
+
+The lesson is about the guards, not about Home: a class-string guard proves a
+pattern is absent, and a runner proves a page fits — but only for the pages it
+renders. An unswept page is unverified no matter how many guards are green.
 
 ## Consequences
 

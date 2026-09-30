@@ -134,10 +134,16 @@ function StopRow({
       <Link
         href={`/sessions/${stop.sessionId}`}
         aria-current={stop.state === "next" ? "step" : undefined}
-        className="group/stop -mt-1 mb-3 flex flex-1 items-center gap-2"
+        className="group/stop -mt-1 mb-3 flex min-w-0 flex-1 items-center gap-2"
       >
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <div className="flex items-center gap-2">
+          {/* `min-w-0` here and on the Link above: the title below is `truncate`, i.e.
+              `white-space: nowrap`, so its min-content is the whole authored name. Without a
+              zero floor on every flex box between it and the page, an unbroken 120-character
+              Session name made this row 1,523px and the document 2,707px inside a 320px
+              viewport — ADR-0085's mechanism exactly, on the one page no sweep had rendered
+              until `audit/wide.mjs` gained a `home` journey (ADR-0088). */}
+          <div className="flex min-w-0 items-center gap-2">
             <span
               className={cn(
                 "truncate font-display text-sm font-semibold capitalize",

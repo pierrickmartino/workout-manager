@@ -19,6 +19,17 @@ import { SyncStatusBanner } from "@/components/SyncStatusBanner";
 import { NavigationGuardProvider } from "@/components/NavigationGuardProvider";
 import { TabBar } from "@/components/pulse/tab-bar";
 import { Sidebar } from "@/components/pulse/sidebar";
+import { HomeColumns } from "@/components/pulse/home-columns";
+import { SessionHero } from "@/components/pulse/session-hero";
+import { TrainingRouteCard } from "@/components/pulse/training-route";
+import { QuickActions } from "@/components/pulse/quick-actions";
+import { LevelBadge } from "@/components/pulse/level-badge";
+import { Bento, BentoTile } from "@/components/pulse/bento";
+import { SectionHeader } from "@/components/pulse/section-header";
+import { RecentRecords } from "@/components/pulse/recent-records";
+import { homeReview } from "@/lib/home-review";
+import { quickActions } from "@/lib/quick-actions";
+import { Card } from "@/components/ui/card";
 import { AtlasDrawer } from "@/components/analytics/atlas-drawer";
 import { VolumeChart } from "@/components/pulse/volume-chart";
 import { DistanceChart } from "@/components/pulse/distance-chart";
@@ -27,7 +38,7 @@ import { toDistanceBars } from "@/lib/distance-view";
 import { Alert } from "@/components/pulse/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { exerciseNames, exercises, history, prescriptions, profile, sessions, taxonomy, workout } from "./fixtures";
+import { exerciseNames, exercises, history, personalRecords, prescriptions, profile, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
 
 const params = new URLSearchParams(location.search);
 if (params.get("fonts") === "fontsource") {
@@ -64,6 +75,62 @@ function ContrastSamples() {
     </div>)}</div></>;
 }
 
+// Home at the shell's wide width (ADR-0088). Mounted through the *same* `HomeColumns` the real
+// page uses, so this measures Home's layout rather than a copy that would drift; the review
+// column's blocks come from the same `homeReview` view-model over synthetic analytics data.
+// The journey's root carries `data-shell="wide"`, making it the one case in the sweep that
+// exercises the wide content column rather than only the wide frame.
+const operatorLevel = { level: 7, xp_into_level: 200, xp_span_of_level: 800, xp_to_next: 600 };
+
+function Home() {
+  const review = homeReview(
+    { success: true, data: {
+      range: "30d", available_ranges: ["30d"], sessions: 12, active_days: 9, total_sets: 120,
+      muscle_distribution: [], recent_records: personalRecords, new_prs: 3,
+      volume: { points: volumePoints, coverage: 78, delta: 12 },
+      distance: { weeks: [], delta: null, has_distance: false },
+      coverage: { weeks: 8, groups: [], unclassified_present: false, unclassified_sets: 0,
+        muscles: { items: [], unclassified_present: false, unclassified_volume: 0 } },
+    } },
+    "kg",
+  );
+  return (
+    <div data-shell="wide" className="flex flex-col gap-7">
+      <HomeColumns
+        main={<>
+          <SessionHero protocol={protocolProgress} />
+          <TrainingRouteCard protocol={protocolProgress} />
+          <QuickActions actions={quickActions({
+            readiness: "READY", current_protocol: protocolProgress,
+            gamification: { xp: 4200, level: operatorLevel, streak: 3 }, latest_pr: null,
+          })} />
+          {review.volume ? (
+            <div className="hidden flex-col gap-4 lg:flex">
+              <SectionHeader>TOTAL VOLUME</SectionHeader>
+              <Card className="flex flex-col gap-4 p-6">
+                <VolumeChart rows={review.volume.rows} />
+                <p className="label-mono text-[11px] text-text-muted">{review.volume.coverageCaption}</p>
+              </Card>
+            </div>
+          ) : null}
+          {review.records ? (
+            <div className="hidden lg:block">
+              <RecentRecords rows={review.records.rows} teaser={review.records.teaser} />
+            </div>
+          ) : null}
+        </>}
+        rail={<>
+          <SectionHeader>OPERATOR STATUS</SectionHeader>
+          <LevelBadge xp={4200} level={operatorLevel} />
+          <Bento>
+            <BentoTile label="STREAK" value={3} caption="WEEKS" span="full" />
+          </Bento>
+        </>}
+      />
+    </div>
+  );
+}
+
 function Content() {
   switch (journey) {
     case "charts": return <ChartAccessibilityFixture />;
@@ -82,6 +149,7 @@ function Content() {
     case "logging": return <LogSessionForm sessionId={1} prescriptions={prescriptions} today="2026-09-26" unit="kg" />;
     case "live": return <LiveSessionScreen session={workout} today="2026-09-26" defaultRestSeconds={60} keepScreenAwake={false} unit="kg" />;
     case "analytics": return <Analytics />;
+    case "home": return <Home />;
     case "contrast": return <ContrastSamples />;
     default: throw new Error(`Unknown audit journey: ${journey}`);
   }
