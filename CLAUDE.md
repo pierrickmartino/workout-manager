@@ -222,6 +222,16 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   than returning an unsuccessful envelope, so an uncaught one in a `Promise.all` takes the
   whole page down over a bonus block (ADR-0088).
 
+- New per-second tick, or any `setInterval` in a component → put it in the leaf that renders
+  the figure, never in a screen that renders anything else. `useSecondTick` is that tick;
+  `ElapsedClock` and `RestCountdown` are what it drives, and they return bare strings so the
+  caller keeps the styling and the accessible name. Held in the Live Session shell it
+  re-rendered an 830-line component and every set card's inputs sixty times a minute, on a
+  phone with the Wake Lock held. A `React.memo` on a heavy list is worth nothing on its own:
+  land it together with `useMemo` on the array and `useCallback` on every handler, or a fresh
+  identity defeats it on every render and the memo reads as working.
+  `lib/live-session-tick.test.ts` holds this for the Live Session; there is no sweep (ADR-0091).
+
 - New animation or transform transition → pair it with `motion-reduce:animate-none`
   or `motion-reduce:transition-none` **in the same class string**. Colour and
   opacity transitions move nothing and are exempt by rule. The guard in

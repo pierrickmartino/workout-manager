@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Check, ChevronDown, RotateCcw, SkipForward } from "lucide-react";
 
 import { liveSetDomId, type LiveSet, type LiveUnit } from "@/lib/live-session";
@@ -48,7 +48,13 @@ export interface LiveSessionSetsProps {
 // current and upcoming units render their full set rows so the user's place is never
 // hidden. Extracted from LiveSessionScreen to keep that shell small and this list's
 // grouping logic cohesive in one file.
-export function LiveSessionSets({
+//
+// Memoized (see the export below): this is the heaviest subtree on the app's most
+// re-render-sensitive screen — one card per set, each with its own inputs, select and
+// local edit state. Its owner keeps every prop's identity stable across a re-render the
+// performance did not cause, which is what makes the boundary hold rather than being
+// defeated on each render by a fresh array or a fresh arrow.
+function LiveSessionSetsList({
   units,
   currentIndex,
   expandedUnits,
@@ -91,6 +97,8 @@ export function LiveSessionSets({
     </div>
   );
 }
+
+export const LiveSessionSets = memo(LiveSessionSetsList);
 
 interface CollapsedUnitCardProps {
   unit: LiveUnit;
