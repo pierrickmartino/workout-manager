@@ -11,6 +11,10 @@ or derived from static import-graph reachability. Findings B1 and B2 should be c
 `.next/server/app/<route>/page_client-reference-manifest.js` before and after any fix, per the
 procedure CLAUDE.md already prescribes.
 
+**Update (B1, B2 — fixed):** that confirmation has since been run. B1's reachability estimate
+held and the measured before/after numbers are in its section below; B2's zero-reference claim
+held too. The rest of this document is unrevised and still carries the caveat above.
+
 ---
 
 ## Summary
@@ -27,22 +31,22 @@ The findings that remain concentrate in two places:
 1. **A per-second full re-render of the Live Session screen** — the most performance-sensitive
    surface in the app (a phone, mid-workout, with the screen held awake). This is the single
    highest-impact finding.
-2. **Recharts reaching three routes through static imports**, when the project has already
-   built and documented the pattern for avoiding exactly that on a fourth.
+2. ~~**Recharts reaching three routes through static imports**~~, when the project has already
+   built and documented the pattern for avoiding exactly that on a fourth. **Fixed** — see B1.
 
 Everything else is minor.
 
 | ID | Severity | Category | Finding |
 |----|----------|----------|---------|
 | R1 | **High** | Re-render | 1 Hz `setNow` re-renders all of `LiveSessionScreen` + the full set table |
-| B1 | **High** | Bundle | Recharts statically imported on `/exercises/[id]`, `/analytics`, `/analytics/strength` |
+| B1 | ~~High~~ **Fixed** | Bundle | ~~Recharts statically imported on `/exercises/[id]`, `/analytics`, `/analytics/strength`~~ — ADR-0090 |
 | A1 | **High** | Waterfall | `/exercises/[id]` serializes 4–5 round trips |
 | A2 | Medium | Waterfall | `/admin/exercises/[id]` serializes 4 round trips |
 | A3 | Medium | Waterfall | `/sessions/[id]/live` serializes 3 round trips |
 | A4 | Medium | Waterfall | `/train` blocks all paint on a 2-stage fetch chain; no Suspense, no `loading.tsx` |
 | R2 | Medium | Re-render | No `React.memo` anywhere; unstable props defeat any future memoization |
 | R3 | Low-Med | Re-render | Rest-timer effect re-runs every second to test a derived condition |
-| B2 | Low | Bundle | `@tanstack/react-query` is a dependency with zero source references |
+| B2 | ~~Low~~ **Fixed** | Bundle | ~~`@tanstack/react-query` is a dependency with zero source references~~ |
 | C1 | Low | Client data | Live Session `localStorage` slot carries no schema version |
 
 ---
@@ -190,7 +194,26 @@ latency, a batch endpoint is the structural fix, not a frontend change.
 
 ## 2. Bundle Size Optimization (CRITICAL)
 
-### B1 — Recharts statically imported on three routes · **High**
+### B1 — Recharts statically imported on three routes · ~~**High**~~ · **Fixed**
+
+> **Resolved** — [ADR-0090](../../../adr/0090-a-chart-is-reached-only-through-a-dynamic-import.md).
+> Each chart now has one `*-lazy.tsx` `next/dynamic` wrapper and every surface goes through
+> it (`volume-chart-wide.tsx` included, which keeps only its mount gate). Measured from the
+> per-route client-reference manifests, before → after, gzipped client JS:
+>
+> | Route | Before | of which charting | After | of which charting |
+> |---|---|---|---|---|
+> | `/analytics` | 221.4 KB | 144.4 KB | **114.4 KB** | 0 KB |
+> | `/analytics/strength` | 180.0 KB | 103.0 KB | **77.7 KB** | 0 KB |
+> | `/exercises/[id]` | 180.0 KB | 103.0 KB | **77.7 KB** | 0 KB |
+> | `/dashboard` (control) | 81.7 KB | 0 KB | 81.8 KB | 0 KB |
+>
+> The guardrail this section's closing note asked for landed with it:
+> `apps/web/lib/recharts-import-policy.ts` fails on any static import of a chart module,
+> with an empty exemption registry. It reproduced all four violations before the fix.
+
+The original finding follows.
+
 
 The project has already measured this cost and written it down. From
 `components/pulse/volume-chart-wide.tsx:13-16`:
@@ -253,7 +276,14 @@ case: `ChartValues` ships *inside* each chart component from the same rows, so w
 mounts the text table mounts beside it, and where neither mounts there is no plotted datum to
 make retrievable. Worth restating in the ADR trail if you make the change.
 
-### B2 — `@tanstack/react-query` is an unused dependency · **Low**
+### B2 — `@tanstack/react-query` is an unused dependency · ~~**Low**~~ · **Fixed**
+
+> **Resolved** — removed from `apps/web/package.json` and `package-lock.json`
+> (`@tanstack/react-query` and its `@tanstack/query-core` transitive). `npm ci` and both
+> suites pass without it, confirming the zero-reference finding.
+
+The original finding follows.
+
 
 `apps/web/package.json:20` declares `@tanstack/react-query@^5.59.0`. A repo-wide search across
 `.ts`, `.tsx`, `.mjs` and `.js` (excluding `node_modules`/`.next`) finds **zero** references.
@@ -562,12 +592,13 @@ arrays.
    and the fix (two small clock components) is self-contained. Fixes R3 as a byproduct.
 2. **A1** — `/exercises/[id]` parallelization. One-line-shaped change, 4–5 RTTs → 1, on a
    frequently-reached browse surface. Remember the `.catch()` on the best-effort reads.
-3. **B1** — dynamic-import the three remaining Recharts call sites, reusing the pattern
-   `volume-chart-wide.tsx` already proves. Measure the manifest before and after.
+3. ~~**B1**~~ — **done** (ADR-0090): the three remaining Recharts call sites are behind
+   `next/dynamic`, reusing the pattern `volume-chart-wide.tsx` proved, measured before and
+   after.
 4. **A3, A2** — the remaining two waterfalls; same shape as A1.
 5. **A4 + `loading.tsx` coverage** — stream `/train`, then backfill `loading.tsx` on the
    data-heavy routes that lack one.
-6. **C1, B2** — the storage version field and the unused dependency. Small, low risk.
+6. **C1**, ~~**B2**~~ — the storage version field; the unused dependency is **removed**.
 7. **R2** — revisit memoization on the large builder/form components only after profiling.
 
 ## Guardrail suggestions
@@ -576,11 +607,12 @@ This repo's habit is to make invariants executable (`terminology_guard.py`, `mot
 `reflow-policy.ts`, `chart-values-policy.ts`, `accent-tint-policy.ts`). Two findings here fit
 that mould and would stay fixed:
 
-- **A Recharts import guard.** A sweep asserting that `recharts` is imported only from a
-  module that is itself behind `next/dynamic`, with a written-reason exemption registry —
-  the same shape as `chart-values-policy.ts`, which already classifies `recharts` imports and
-  fails closed on unknown ones. B1 is a regression of a lesson ADR-0088 already paid for once;
-  a guard is what stops it being paid a third time.
+- ~~**A Recharts import guard.**~~ **Landed with B1** as
+  [`recharts-import-policy.ts`](../../../../apps/web/lib/recharts-import-policy.ts) (ADR-0090):
+  a sweep asserting that `recharts` is imported only from a module reached through
+  `next/dynamic`, with a written-reason exemption registry that is empty — the same shape as
+  `chart-values-policy.ts`. B1 was a regression of a lesson ADR-0088 already paid for once;
+  the guard is what stops it being paid a third time.
 - **A bundle-budget assertion in `audit/`.** The `#576` review measured the Dashboard client
   manifest by hand. Asserting a per-route gzipped client-chunk budget in CI would have caught
   B1 at the commit that introduced it.

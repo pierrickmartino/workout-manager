@@ -19,7 +19,7 @@ import type { View } from "@/lib/atlas/atlas-geometry";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { DataList } from "@/components/pulse/data-list";
-import { TopSetTrendChart } from "@/components/exercise/top-set-trend-chart";
+import { TopSetTrendChartLazy } from "@/components/exercise/top-set-trend-chart-lazy";
 import { ExerciseMuscleFigure } from "@/components/exercise/muscle-figure";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -131,7 +131,7 @@ function TopSetTrend({ series, unit }: { series: TopSetPoint[]; unit: WeightUnit
         {trend.delta ? <Badge variant="cyan">{trend.delta}</Badge> : null}
       </div>
       <Card className="p-5">
-        <TopSetTrendChart rows={trend.rows} />
+        <TopSetTrendChartLazy rows={trend.rows} />
       </Card>
     </div>
   );
