@@ -10,6 +10,7 @@ import { latestPrLine, operatorStatus } from "@/lib/home-view";
 import { HOME_VOLUME_RANGE, homeReview } from "@/lib/home-review";
 import { quickActions } from "@/lib/quick-actions";
 import { resolveAppearance } from "@/lib/appearance";
+import { settleBestEffort } from "@/lib/best-effort-read";
 import { appendFrom } from "@/lib/back-target";
 import { Alert } from "@/components/pulse/alert";
 import { PageHeader } from "@/components/pulse/page-header";
@@ -48,12 +49,14 @@ export default async function DashboardPage() {
       fetchProfile(),
       fetchHome(),
       resolveAppearance(),
-      // The review column's one extra read, and the `.catch` is load-bearing: `apiGet`
-      // *rejects* on a transport failure or a non-JSON response rather than returning an
-      // unsuccessful envelope, and an uncaught rejection in this `Promise.all` would take Home
-      // down over a block that is explicitly a bonus (#576 review). Settled here, mapped to
-      // "no review column" by `homeReview`.
-      fetchAnalytics(HOME_VOLUME_RANGE).catch(() => null),
+      // The review column's one extra read, and settling it is load-bearing: `apiGet` *rejects*
+      // on a transport failure or a non-JSON response rather than returning an unsuccessful
+      // envelope, and an uncaught rejection in this `Promise.all` would take Home down over a
+      // block that is explicitly a bonus (#576 review). `settleBestEffort` is this file's own
+      // `.catch(() => null)`, named and shared once the other three waterfall fixes needed the
+      // same guard (`lib/best-effort-read.ts`); `homeReview` maps the `null` to "no review
+      // column".
+      settleBestEffort(fetchAnalytics(HOME_VOLUME_RANGE)),
     ]);
 
   if (!profileEnvelope.success || !profileEnvelope.data) {

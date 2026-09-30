@@ -112,3 +112,27 @@ export function buildRecentSessionRow(
     startHref: startLiveHref(selection.session.id),
   };
 }
+
+// Just the prescriptions a plan's detail read carries — all this module needs of it, so the
+// whole `SessionDetail` type (and its server-only neighbours) stays out.
+export interface RecentSessionDetail {
+  prescriptions: readonly Pick<ExercisePrescription, "exercise_name">[];
+}
+
+// Pair each selection with its plan-detail read and drop the ones that came back empty.
+//
+// This is the panel's **degradation rule**, and it lives here rather than in the fetching
+// component so it is pinned by a test: a plan whose detail could not be read has no honest
+// preview and no verified prescription count, so its row is dropped — the panel shows the four
+// plans it could read, never a fifth with a blank body or a fabricated count. `details` is
+// positional against `selections`, which is how the caller's `Promise.all` returns it.
+export function toRecentSessionRows(
+  selections: readonly RecentSessionSelection[],
+  details: readonly (RecentSessionDetail | null)[],
+): RecentSessionRow[] {
+  return selections.flatMap((selection, index) => {
+    const detail = details[index];
+    if (!detail) return [];
+    return [buildRecentSessionRow(selection, detail.prescriptions)];
+  });
+}
