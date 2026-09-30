@@ -1,12 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { homeReview, HOME_VOLUME_RANGE } from "./home-review.ts";
+import { homeReview, HOME_VOLUME_RANGE, type AnalyticsReadResult } from "./home-review.ts";
 import type { AnalyticsOverview, PersonalRecordEntry, VolumePoint } from "./analytics-types.ts";
 
 // Home's review column is a *bonus*: its job is to add what a 26rem column has no room for,
 // never to put Home's launch surface at risk. These tests pin that — every degradation path
 // yields `null` for the affected block rather than an error, an empty frame, or a zero.
+
+// A successful read carrying `patch` over the baseline overview.
+function read(patch: Partial<AnalyticsOverview> = {}): AnalyticsReadResult {
+  return { success: true, data: overview(patch) };
+}
 
 function overview(patch: Partial<AnalyticsOverview> = {}): AnalyticsOverview {
   return {
@@ -46,8 +51,10 @@ const record: PersonalRecordEntry = {
   added_kg: null,
 };
 
-test("a failed analytics read costs Home nothing", () => {
-  // Arrange — the page passes null when the envelope did not succeed.
+test("a rejected analytics read costs Home nothing", () => {
+  // Arrange — `apiGet` rejects (not returns) on a transport failure or a non-JSON response,
+  // so the page settles it to null. That path must degrade, not throw: the read sits in a
+  // Promise.all beside the reads Home genuinely needs (#576 review).
   // Act
   const review = homeReview(null, "kg");
   // Assert — no throw, no error state, simply no review column.
@@ -55,9 +62,25 @@ test("a failed analytics read costs Home nothing", () => {
   assert.equal(review.records, null);
 });
 
+test("an unsuccessful envelope costs Home nothing", () => {
+  // Arrange — the backend answered, but with `success: false`.
+  // Act
+  const review = homeReview({ success: false, data: null }, "kg");
+  // Assert
+  assert.equal(review.volume, null);
+  assert.equal(review.records, null);
+});
+
+test("a successful envelope with no data costs Home nothing", () => {
+  // The shape a 204 or a malformed success would produce.
+  const review = homeReview({ success: true, data: null }, "kg");
+  assert.equal(review.volume, null);
+  assert.equal(review.records, null);
+});
+
 test("a window with nothing convertible renders no chart rather than an empty axis", () => {
   // Arrange — a bodyweight-only trainee converts no volume at all.
-  const data = overview({ volume: { points: [], coverage: 0, delta: null } });
+  const data = read({ volume: { points: [], coverage: 0, delta: null } });
   // Act
   const review = homeReview(data, "kg");
   // Assert
@@ -65,13 +88,13 @@ test("a window with nothing convertible renders no chart rather than an empty ax
 });
 
 test("an account with no Personal Records renders no records feed", () => {
-  const review = homeReview(overview({ recent_records: [] }), "kg");
+  const review = homeReview(read({ recent_records: [] }), "kg");
   assert.equal(review.records, null);
 });
 
 test("a convertible window yields chart rows with text for every point", () => {
   // Arrange
-  const data = overview({ volume: { points, coverage: 80, delta: 12 } });
+  const data = read({ volume: { points, coverage: 80, delta: 12 } });
   // Act
   const review = homeReview(data, "kg");
   // Assert — ADR-0084: every plotted datum must be retrievable as text.
@@ -85,7 +108,7 @@ test("a convertible window yields chart rows with text for every point", () => {
 
 test("a first window shows the line with no delta rather than a fabricated +0%", () => {
   // Arrange — `delta: null` means there is no prior window to compare against.
-  const data = overview({ volume: { points, coverage: 100, delta: null } });
+  const data = read({ volume: { points, coverage: 100, delta: null } });
   // Act
   const review = homeReview(data, "kg");
   // Assert
@@ -95,7 +118,7 @@ test("a first window shows the line with no delta rather than a fabricated +0%",
 });
 
 test("records carry a teaser into the full timeline once a PR exists", () => {
-  const review = homeReview(overview({ recent_records: [record] }), "kg");
+  const review = homeReview(read({ recent_records: [record] }), "kg");
   assert.ok(review.records);
   assert.equal(review.records.rows.length, 1);
   assert.ok(review.records.teaser);
@@ -104,7 +127,7 @@ test("records carry a teaser into the full timeline once a PR exists", () => {
 
 test("both blocks project into the reader's weight unit", () => {
   // Arrange — the same read, rendered for a lb reader.
-  const data = overview({
+  const data = read({
     volume: { points, coverage: 100, delta: null },
     recent_records: [record],
   });

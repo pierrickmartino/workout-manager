@@ -46,16 +46,33 @@ export interface HomeReview {
 // Nothing to show — the shape returned whenever the read failed or carried nothing.
 const EMPTY: HomeReview = { volume: null, records: null };
 
-// Project one analytics read into Home's review column. `overview` is `null` when the read
-// failed — the envelope unwrap stays at the call site, as it does for every other read in
-// `lib/` (see the transport seam's note in `api.ts`), which also keeps this module free of
-// the server-only import that type would drag in. `unit` is the reader's Weight Unit; both
-// the volume line and the record headlines are converted into it.
+// The envelope this module needs, structurally. `Envelope<T>` itself lives in the server-only
+// transport seam (`api.ts`), and naming it here would drag `server-only` into a module the
+// tests load directly.
+export interface AnalyticsReadResult {
+  readonly success: boolean;
+  readonly data: AnalyticsOverview | null;
+}
+
+// Project one analytics read into Home's review column.
+//
+// The unwrap happens **here**, not at the call site, and `null` is an accepted input — which is
+// the opposite of where this started. The transport seam's convention is that callers unwrap
+// (`api.ts`), but `apiGet` *rejects* rather than returning an unsuccessful envelope when the
+// transport fails or the response is not JSON: a connection reset, or an HTML proxy error page.
+// Home's read sits in a `Promise.all`, so an unwrap-at-the-call-site design meant one rejected
+// optional read took the whole page down — over a block explicitly described as a bonus (#576
+// review). With every failure shape funnelled through one function, "this never risks Home" is
+// a property of this module rather than a promise the page has to keep.
+//
+// `unit` is the reader's Weight Unit; both the volume line and the record headlines convert into
+// it.
 export function homeReview(
-  overview: AnalyticsOverview | null,
+  result: AnalyticsReadResult | null,
   unit: WeightUnit,
 ): HomeReview {
-  if (!overview) return EMPTY;
+  if (!result || !result.success || !result.data) return EMPTY;
+  const overview = result.data;
 
   const volumeRows = toVolumeRows(overview.volume.points, unit);
   const recordRows = toRecordRows(overview.recent_records, unit);

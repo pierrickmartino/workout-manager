@@ -199,6 +199,16 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   always rendered. Anything the wide layout adds must be a read-time projection, never an
   action — the click budget (ADR-0071) governs actions (ADR-0088).
 
+- Desktop-only content a phone must not pay for → `hidden lg:block` is enough for **markup**,
+  and never enough for **JavaScript**: a hidden subtree still renders and hydrates, so one
+  `"use client"` chart behind it put 110KB gzipped of Recharts in the mobile Dashboard bundle.
+  A client-side block gets a dynamic import *and* a mount gate (`useWideViewport`, the same
+  64rem as `lg:`), not CSS. Measure it offline before claiming a number:
+  `.next/server/app/<route>/page_client-reference-manifest.js` lists the route's client chunks.
+  An optional read also needs `.catch()` — `apiGet` *rejects* on a transport failure rather
+  than returning an unsuccessful envelope, so an uncaught one in a `Promise.all` takes the
+  whole page down over a bonus block (ADR-0088).
+
 - New animation or transform transition → pair it with `motion-reduce:animate-none`
   or `motion-reduce:transition-none` **in the same class string**. Colour and
   opacity transitions move nothing and are exempt by rule. The guard in

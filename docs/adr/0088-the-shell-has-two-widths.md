@@ -130,11 +130,40 @@ anything; a projection is just information that finally has somewhere to sit.
 
 The cost is named rather than hidden. A server component cannot see the viewport,
 so anything a desktop page adds is rendered and hidden with `hidden lg:block`,
-and a phone pays for markup it will never paint. The budget is **~10KB
-compressed and no meaningful cold-mobile latency**; past that the block becomes a
-`matchMedia`-gated client component fetching through a route handler, which costs
-a loading state and buys the payload back. This is the price of refusing UA
-detection. It is the right price and it is not zero.
+and a phone pays for it without ever painting it. The budget is **~10KB
+compressed and no meaningful cold-mobile latency**. This is the price of refusing
+UA detection. It is the right price and it is not zero.
+
+### The budget is about JavaScript, not markup
+
+That clause originally said the remedy past the budget was a `matchMedia`-gated
+client component *fetching through a route handler*, on the assumption that the
+weight was the data. Converting Home measured it, and the assumption was wrong by
+an order of magnitude.
+
+`hidden lg:flex` hides a subtree but still **renders and hydrates** it. One
+`"use client"` chart inside such a block therefore put Recharts in the route's
+client chunk graph for every visitor: measured on `/dashboard`, 2 chunks, 402KB
+raw / **110KB gzipped** against a 10KB budget — 11× over, all of it JavaScript a
+phone downloads and never uses. The extra API read and its markup, the thing the
+route handler was meant to avoid, were a few KB.
+
+So the remedy is aimed at the JavaScript:
+
+- **A dynamic import**, because a static one puts the library in the graph whether
+  or not the component ever renders.
+- **A mount gate** (`useWideViewport`, the same 64rem threshold in JS that the CSS
+  uses), because hiding is not the same as not shipping.
+
+The rows still come from the server render, so no route handler and no client
+fetch are needed. `/dashboard` carries **5KB gzipped** over a comparable
+chart-free page after that change, inside the budget.
+
+The general rule, which is easy to get wrong in the other direction too: **a
+desktop-only block may be CSS-hidden when it is markup, and must be mount-gated
+when it is JavaScript.** And the budget is measurable offline — the per-route
+client chunk graph is in `.next/server/app/<route>/page_client-reference-manifest.js`,
+so there is no excuse for deferring it to a deploy.
 
 ## The guards keep their teeth
 

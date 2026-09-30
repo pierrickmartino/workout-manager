@@ -22,7 +22,7 @@ import { Bento, BentoTile } from "@/components/pulse/bento";
 import { QuickActions } from "@/components/pulse/quick-actions";
 import { HomeColumns } from "@/components/pulse/home-columns";
 import { GenerateTrainingLaunchpad } from "@/components/pulse/generate-training-launchpad";
-import { VolumeChart } from "@/components/pulse/volume-chart";
+import { VolumeChartWide } from "@/components/pulse/volume-chart-wide";
 import { RecentRecords } from "@/components/pulse/recent-records";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -48,10 +48,12 @@ export default async function DashboardPage() {
       fetchProfile(),
       fetchHome(),
       resolveAppearance(),
-      // The review column's one extra read. Deliberately *not* awaited separately or gated:
-      // it is the same call Analytics makes, and a failure here degrades to no review column
-      // rather than to a broken Home (see `homeReview`).
-      fetchAnalytics(HOME_VOLUME_RANGE),
+      // The review column's one extra read, and the `.catch` is load-bearing: `apiGet`
+      // *rejects* on a transport failure or a non-JSON response rather than returning an
+      // unsuccessful envelope, and an uncaught rejection in this `Promise.all` would take Home
+      // down over a block that is explicitly a bonus (#576 review). Settled here, mapped to
+      // "no review column" by `homeReview`.
+      fetchAnalytics(HOME_VOLUME_RANGE).catch(() => null),
     ]);
 
   if (!profileEnvelope.success || !profileEnvelope.data) {
@@ -88,10 +90,7 @@ export default async function DashboardPage() {
   const status = operatorStatus(homeEnvelope.data.gamification);
   const latestPr = latestPrLine(homeEnvelope.data.latest_pr, appearance.weight_unit);
   const actions = quickActions(homeEnvelope.data);
-  const review = homeReview(
-    analyticsEnvelope.success ? analyticsEnvelope.data : null,
-    appearance.weight_unit,
-  );
+  const review = homeReview(analyticsEnvelope, appearance.weight_unit);
 
   return (
     // `data-shell="wide"` is the opt-in the shell's content column answers to with `:has()`
@@ -156,11 +155,12 @@ export default async function DashboardPage() {
                       </span>
                     </div>
                   ) : null}
-                  {/* The plot and its `ChartValues` table read one array, so every plotted
-                      datum is retrievable as text with its year and unit (ADR-0084). Reusing
-                      the Analytics chart is what keeps that guarantee rather than restating
-                      it here. */}
-                  <VolumeChart rows={review.volume.rows} />
+                  {/* Mount-gated and dynamically imported, not merely CSS-hidden: a hidden
+                      subtree still renders and hydrates, which put 110 KB gzipped of chart
+                      library in the mobile Dashboard bundle (#576 review). The plot and its
+                      `ChartValues` table still read one array, so every plotted datum is
+                      retrievable as text with its year and unit (ADR-0084). */}
+                  <VolumeChartWide rows={review.volume.rows} />
                   <p className="label-mono text-[11px] text-text-muted">
                     {review.volume.coverageCaption}
                   </p>

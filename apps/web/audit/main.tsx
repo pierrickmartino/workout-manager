@@ -84,14 +84,14 @@ const operatorLevel = { level: 7, xp_into_level: 200, xp_span_of_level: 800, xp_
 
 function Home() {
   const review = homeReview(
-    {
+    { success: true, data: {
       range: "30d", available_ranges: ["30d"], sessions: 12, active_days: 9, total_sets: 120,
       muscle_distribution: [], recent_records: personalRecords, new_prs: 3,
       volume: { points: volumePoints, coverage: 78, delta: 12 },
       distance: { weeks: [], delta: null, has_distance: false },
       coverage: { weeks: 8, groups: [], unclassified_present: false, unclassified_sets: 0,
         muscles: { items: [], unclassified_present: false, unclassified_volume: 0 } },
-    },
+    } },
     "kg",
   );
   return (
