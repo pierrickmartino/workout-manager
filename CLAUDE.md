@@ -199,6 +199,19 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   always rendered. Anything the wide layout adds must be a read-time projection, never an
   action — the click budget (ADR-0071) governs actions (ADR-0088).
 
+- New chart call site, or a new charting component → import `recharts` in exactly one module and
+  reach it only through its `*-lazy.tsx` `next/dynamic` wrapper — never a static import, on any
+  route. Recharts is ~102KB gzipped and a static import puts it in the route's client chunk graph
+  whether the chart renders or not, which is how three routes shipped it to visits that drew
+  nothing (`/exercises/[id]` paid it on all three tabs). An early `return null` for an empty
+  series does not help: the bytes arrive before the branch runs. Declare the boundary once per
+  chart so every surface shares it — `volume-chart-wide.tsx` composes `VolumeChartLazy` and keeps
+  only its mount gate. The guard in `apps/web/lib/recharts-import-policy.ts` sweeps every
+  component and page; `import type` is erased and so exempt, `audit/` is out of scope, and its
+  exemption registry is empty. It proves no module statically names a chart, **not** that a route
+  is under budget — measure `.next/server/app/<route>/page_client-reference-manifest.js` for that
+  (ADR-0090).
+
 - Desktop-only content a phone must not pay for → `hidden lg:block` is enough for **markup**,
   and never enough for **JavaScript**: a hidden subtree still renders and hydrates, so one
   `"use client"` chart behind it put 110KB gzipped of Recharts in the mobile Dashboard bundle.

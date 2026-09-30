@@ -16,9 +16,9 @@ import { SectionHeader } from "@/components/pulse/section-header";
 import { NavRow } from "@/components/pulse/nav-row";
 import { Bento, BentoTile } from "@/components/pulse/bento";
 import { Alert } from "@/components/pulse/alert";
-import { VolumeChart } from "@/components/pulse/volume-chart";
+import { VolumeChartLazy } from "@/components/pulse/volume-chart-lazy";
 import { RecentRecords } from "@/components/pulse/recent-records";
-import { DistanceChart } from "@/components/pulse/distance-chart";
+import { DistanceChartLazy } from "@/components/pulse/distance-chart-lazy";
 import { MuscleSplit } from "@/components/pulse/muscle-split";
 import { MuscleRegionAtlas } from "@/components/analytics/muscle-region-atlas";
 import { Card } from "@/components/ui/card";
@@ -241,7 +241,7 @@ function TotalVolume({
                 </span>
               </div>
             ) : null}
-            <VolumeChart rows={rows} />
+            <VolumeChartLazy rows={rows} />
             <p className="label-mono text-[11px] text-text-muted">
               {formatCoverageCaption(volume.coverage)}
             </p>
@@ -289,7 +289,7 @@ function WeeklyDistance({
                 </span>
               </div>
             ) : null}
-            <DistanceChart rows={rows} />
+            <DistanceChartLazy rows={rows} />
           </>
         )}
       </Card>
