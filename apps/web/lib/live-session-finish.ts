@@ -83,6 +83,33 @@ export function decideFinishOutcome(attempt: FinishAttempt): FinishOutcome {
   }
 }
 
+// How many sets a finish would leave unrecorded: every set still un-attempted, whether
+// it was skipped or reopened (ADR-0089). The finish mapper writes one Logged Set per
+// *completed* set, so these rows — and any reps/load the user entered on them before
+// reopening — do not reach the record.
+export function pendingSetCount(state: LiveSessionState): number {
+  return state.sets.filter((set) => set.status !== "completed").length;
+}
+
+// The advisory shown above Finish when a finish would leave real work out, or null when
+// it would not. Deliberately **non-blocking** copy rather than a confirmation dialog:
+// stopping early is a legitimate thing to do, and a modal on the way out would tax it. It
+// names both the loss (the sets that will not be recorded) and the consequence (the
+// Completion Outcome that follows — ADR-0013).
+//
+// It speaks only once at least one set has been completed, for two reasons. On arrival
+// every set is pending and nothing has been entered, so there is nothing to lose and the
+// line would be noise at exactly the moment it means least. And with no completed set the
+// copy would be false: `mapFinishToLog` returns null, so such a finish records *nothing*
+// at all rather than an Incomplete Logged Session.
+export function finishAdvisory(state: LiveSessionState): string | null {
+  const pending = pendingSetCount(state);
+  if (pending === 0) return null;
+  if (pending === state.sets.length) return null;
+  const sets = pending === 1 ? "1 set" : `${pending} sets`;
+  return `${sets} won't be recorded — this session will be logged as Incomplete.`;
+}
+
 // Effect shell: the browser's UUID source, injected into `resolveFinishKey` at the
 // call site. Kept out of the pure functions so tests never touch `crypto`.
 export function browserMintKey(): string {

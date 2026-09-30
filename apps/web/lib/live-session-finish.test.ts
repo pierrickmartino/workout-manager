@@ -5,6 +5,8 @@ import { initLiveSession, liveSessionReducer } from "./live-session.ts";
 import type { LiveSessionState } from "./live-session.ts";
 import {
   decideFinishOutcome,
+  finishAdvisory,
+  pendingSetCount,
   resolveFinishKey,
   stampFinishKey,
   stampWithFreshKey,
@@ -141,4 +143,113 @@ test("decideFinishOutcome retains the slot with a reassuring offline message", (
     kind: "retain",
     error: FINISH_UNREACHABLE_MESSAGE,
   });
+});
+
+// The finish advisory (ADR-0089). Only completed sets become Logged Sets, so anything
+// still pending at Finish is silently dropped — a hazard that predates Reopen (a Skip
+// drops a set just as quietly) and that Reopen makes easier to hit: reopen a set to fix
+// its load, get distracted, tap Finish, and real numbers vanish. The advisory is
+// non-blocking on purpose: deliberately stopping early is legitimate, so it informs
+// rather than confirms.
+
+// A three-set Session, so the advisory's plural can be exercised.
+const THREE_SET_SESSION: WorkoutSession = {
+  ...SESSION,
+  prescriptions: [{ ...SESSION.prescriptions[0], sets: 3 }],
+};
+
+function threeSetsStarted(): LiveSessionState {
+  return liveSessionReducer(initLiveSession(THREE_SET_SESSION, "kg"), {
+    type: "START",
+    now: 1_000_000,
+    accountId: "user_1",
+  });
+}
+
+function completeAt(state: LiveSessionState, index: number): LiveSessionState {
+  return liveSessionReducer(state, {
+    type: "COMPLETE_SET",
+    index,
+    reps: 5,
+    loadKind: "absolute",
+    loadValue: "70",
+    rpe: 7,
+  });
+}
+
+test("pendingSetCount counts the sets a finish would leave unrecorded", () => {
+  // Arrange
+  let state = threeSetsStarted();
+  assert.equal(pendingSetCount(state), 3);
+
+  // Act
+  state = completeAt(state, 0);
+
+  // Assert
+  assert.equal(pendingSetCount(state), 2);
+});
+
+test("a reopened set counts as pending again", () => {
+  // Arrange — every set attempted, so nothing would be dropped
+  let state = threeSetsStarted();
+  for (const index of [0, 1, 2]) state = completeAt(state, index);
+  assert.equal(pendingSetCount(state), 0);
+
+  // Act — the user reopens one to correct it
+  state = liveSessionReducer(state, { type: "REOPEN_SET", index: 1 });
+
+  // Assert — until re-completed it is un-attempted, and the finish would drop it
+  assert.equal(pendingSetCount(state), 1);
+});
+
+test("finishAdvisory is silent when every set has been attempted", () => {
+  // Nothing would be dropped, so the finish needs no caveat.
+  let state = threeSetsStarted();
+  for (const index of [0, 1, 2]) state = completeAt(state, index);
+  assert.equal(finishAdvisory(state), null);
+});
+
+test("finishAdvisory names how many sets a finish would leave out, in the singular", () => {
+  // Arrange — two of three done
+  let state = threeSetsStarted();
+  state = completeAt(state, 0);
+  state = completeAt(state, 1);
+
+  // Act / Assert — singular copy, and it names the Completion Outcome that follows
+  assert.equal(
+    finishAdvisory(state),
+    "1 set won't be recorded — this session will be logged as Incomplete.",
+  );
+});
+
+test("finishAdvisory pluralizes the count", () => {
+  // Arrange — one of three done
+  const state = completeAt(threeSetsStarted(), 0);
+
+  // Act / Assert
+  assert.equal(
+    finishAdvisory(state),
+    "2 sets won't be recorded — this session will be logged as Incomplete.",
+  );
+});
+
+test("finishAdvisory is silent before any set has been completed", () => {
+  // On arrival every set is pending and nothing has been entered, so there is nothing to
+  // lose — and the copy would be false anyway: with no completed set a finish records
+  // nothing at all (mapFinishToLog returns null), not an Incomplete Logged Session.
+  const state = threeSetsStarted();
+  assert.equal(pendingSetCount(state), 3);
+  assert.equal(finishAdvisory(state), null);
+});
+
+test("finishAdvisory falls silent again if every completed set is reopened", () => {
+  // Arrange — one set done, so the advisory speaks
+  let state = completeAt(threeSetsStarted(), 0);
+  assert.notEqual(finishAdvisory(state), null);
+
+  // Act — the user takes that one back
+  state = liveSessionReducer(state, { type: "REOPEN_SET", index: 0 });
+
+  // Assert — nothing is recorded by such a finish, so the Incomplete wording would lie
+  assert.equal(finishAdvisory(state), null);
 });

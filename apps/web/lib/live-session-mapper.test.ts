@@ -273,3 +273,20 @@ test("finishing with zero completed sets writes nothing (null payload)", () => {
   // Assert — no submission at all
   assert.equal(payload, null);
 });
+
+test("a reopened set does not reach the record (ADR-0089)", () => {
+  // Arrange — all five sets completed, so every one would be logged
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
+  for (const index of [0, 1, 2, 3, 4]) state = complete(state, index, 8, "70", 7);
+  assert.equal(mapFinishToLog(state, "2026-01-05", "kg")?.logged_sets.length, 5);
+
+  // Act — the user reopens one to correct it, then finishes without re-completing it
+  state = liveSessionReducer(state, { type: "REOPEN_SET", index: 1 });
+  const payload = mapFinishToLog(state, "2026-01-05", "kg");
+
+  // Assert — a reopened set is un-attempted, so it is dropped and the performance
+  // records Incomplete. This is exactly the silent loss the finish advisory warns
+  // about before the user commits to it.
+  assert.equal(payload?.logged_sets.length, 4);
+  assert.equal(payload?.completion_outcome, "incomplete");
+});

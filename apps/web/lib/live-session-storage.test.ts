@@ -236,3 +236,30 @@ test("saveLiveSession keeps a single slot — a second save overwrites the first
   assert.equal(storage.size(), 1);
   assert.deepEqual(loadLiveSession(storage), advanced);
 });
+
+test("a performance with a reopened set round-trips through the slot unchanged", () => {
+  // Reopen (ADR-0089) adds no field to the state: a reopened set is simply pending
+  // again, with its entered values retained. So the slot's shape — and the validator
+  // that guards it — is untouched, and a performance started on an older build needs
+  // no migration and is never purged for shape. This asserts that property rather
+  // than leaving it assumed.
+  const storage = fakeStorage();
+  let state = liveSessionReducer(inProgress(), {
+    type: "COMPLETE_SET",
+    index: 0,
+    reps: 9,
+    loadKind: "absolute",
+    loadValue: "72.5",
+    rpe: 8,
+  });
+  state = liveSessionReducer(state, { type: "REOPEN_SET", index: 0 });
+
+  saveLiveSession(storage, state);
+
+  // The slot deserializes (the shape guard still accepts it) and is identical — the
+  // reopened row keeps its status and the values the user will correct from.
+  const restored = loadLiveSession(storage);
+  assert.deepEqual(restored, state);
+  assert.equal(restored?.sets[0].status, "pending");
+  assert.equal(restored?.sets[0].loadValue, "72.5");
+});
