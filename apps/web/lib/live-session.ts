@@ -107,6 +107,12 @@ export type LiveEvent =
       now?: number;
     }
   | { type: "ADVANCE" }
+  // Reopen a Set (CONTEXT 'Reopen', ADR-0089): return a completed set to un-attempted
+  // so the user can correct what they entered and complete it again. Client-only and
+  // pre-finish — nothing has left the device yet, so the whole performance is still a
+  // draft. Like a completion it carries the activity instant; unlike one it never moves
+  // the current-set pointer.
+  | { type: "REOPEN_SET"; index: number; now?: number }
   | { type: "FINISH"; now?: number }
   // Restore a persisted Live Session wholesale (issue #91 — F2·S6). Used on the
   // next foreground to resume the single `localStorage` slot exactly where the user
@@ -421,7 +427,7 @@ export function liveSessionReducer(
       return {
         ...state,
         sets,
-        currentIndex: firstPendingIndex(sets),
+        currentIndex: nextPendingFrom(sets, state.currentIndex),
         lastActivityAt: event.now ?? state.lastActivityAt,
       };
     }
@@ -429,8 +435,34 @@ export function liveSessionReducer(
     case "ADVANCE":
       return {
         ...state,
-        currentIndex: Math.min(state.currentIndex + 1, state.sets.length),
+        currentIndex: nextPendingFrom(state.sets, state.currentIndex + 1),
       };
+
+    case "REOPEN_SET": {
+      // Only a completed set of an in-progress performance can be taken back: a pending
+      // set is already un-attempted, and a finished performance is on its way to being
+      // settled record (ADR-0060) — from there the path is Log Correction (ADR-0034),
+      // never a reopen. An out-of-range index is a no-op for the same reason.
+      const target = state.sets[event.index];
+      if (state.status !== "in_progress") return state;
+      if (target === undefined || target.status !== "completed") return state;
+
+      // The entered reps/load/effort are *retained*: correcting "60 when I meant 70" is
+      // the case this exists for, so the row reopens on the values to fix rather than
+      // back on the plan's pre-fill.
+      const sets = state.sets.map((set, index) =>
+        index === event.index ? { ...set, status: "pending" as const } : set,
+      );
+      // The pointer stays put — it is forward-only (see nextPendingFrom), so reopening a
+      // set the user has physically left never drags the header, rest cue or "next up"
+      // line back to it. A reopen *is* an interaction, though, so it resets the idle
+      // clock (ADR-0014) rather than letting a session being corrected be auto-ended.
+      return {
+        ...state,
+        sets,
+        lastActivityAt: event.now ?? state.lastActivityAt,
+      };
+    }
 
     case "FINISH":
       return { ...state, status: "finished" };
@@ -445,12 +477,23 @@ export function liveSessionReducer(
   }
 }
 
-// The index of the earliest still-pending set, or the list length when every set
-// is done — the honest "current set" after a completion, regardless of the order
-// sets were completed in.
-function firstPendingIndex(sets: readonly LiveSet[]): number {
-  const index = sets.findIndex((set) => set.status === "pending");
-  return index === -1 ? sets.length : index;
+// The earliest still-pending set at or after `from`, or the list length when none
+// remains ahead — the honest "current set" after a completion or a skip.
+//
+// The scan is deliberately **forward-only**: the pointer never travels backwards during
+// a performance. That one rule covers three cases at once. A set completed out of order
+// leaves the pointer on the earliest pending set at or after where it already was; a
+// deliberately skipped set is left behind instead of recapturing the pointer on the next
+// completion; and a reopened set (which does not call this at all) never drags the
+// header back to a part of the workout the user has physically finished. The cost is
+// explicit: sets left pending *behind* the pointer stay behind, the pointer can run off
+// the end while they do, and the performance then records Incomplete — which is true.
+function nextPendingFrom(sets: readonly LiveSet[], from: number): number {
+  const start = Math.max(from, 0);
+  for (let index = start; index < sets.length; index += 1) {
+    if (sets[index].status === "pending") return index;
+  }
+  return sets.length;
 }
 
 // The set the current-set pointer sits on, clamped to the last row once the

@@ -512,3 +512,200 @@ test("nextExercise previews the exercise of the upcoming module", () => {
   // Assert — no module after the last, so no preview
   assert.equal(nextExercise(state), null);
 });
+
+// Reopen a Set (CONTEXT 'Reopen', ADR-0089): before the finish, the whole performance
+// is a draft, so a completed set can be returned to un-attempted and re-completed with
+// corrected values. The pointer rule that makes this safe is forward-only — it never
+// travels backwards, so neither a reopen nor a skip can drag the header back to a part
+// of the workout the user has physically left.
+
+test("REOPEN_SET returns a completed set to pending and keeps its recorded values", () => {
+  // Arrange — the user logged 10 reps at 72.5 kg, effort 8, on the first set
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
+  state = liveSessionReducer(state, {
+    type: "COMPLETE_SET",
+    index: 0,
+    reps: 10,
+    loadKind: "absolute",
+    loadValue: "72.5",
+    rpe: 8,
+  });
+
+  // Act — they reopen it, having meant 75 kg
+  const reopened = liveSessionReducer(state, { type: "REOPEN_SET", index: 0 });
+
+  // Assert — un-attempted again, with the entered values retained to correct from
+  const set = reopened.sets[0];
+  assert.equal(set.status, "pending");
+  assert.equal(set.reps, 10);
+  assert.equal(set.loadValue, "72.5");
+  assert.equal(set.rpe, 8);
+  // Immutability — the completed row on the prior state is untouched.
+  assert.equal(state.sets[0].status, "completed");
+});
+
+test("REOPEN_SET leaves the current-set pointer where it is", () => {
+  // Arrange — three sets done, so the pointer sits on the fourth (the push-up module)
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
+  for (const index of [0, 1, 2]) state = complete(state, index);
+  assert.equal(state.currentIndex, 3);
+
+  // Act — reopen the *first* set, far behind the pointer
+  const reopened = liveSessionReducer(state, { type: "REOPEN_SET", index: 0 });
+
+  // Assert — the pointer does not travel backwards: the user is still on set 4, and
+  // the header, rest cue and "next up" line keep telling the truth about that.
+  assert.equal(reopened.currentIndex, 3);
+  assert.equal(reopened.sets[reopened.currentIndex].exerciseName, "Push-up");
+});
+
+test("REOPEN_SET flips the Completion Outcome back to incomplete", () => {
+  // Arrange — every set attempted, so the performance would record Completed
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
+  for (const index of [0, 1, 2, 3, 4]) state = complete(state, index);
+  assert.equal(completionOutcome(state), "completed");
+  assert.equal(progressPercent(state), 100);
+
+  // Act
+  const reopened = liveSessionReducer(state, { type: "REOPEN_SET", index: 4 });
+
+  // Assert — a pending set is an un-attempted set (ADR-0013), derived, not stored
+  assert.equal(completionOutcome(reopened), "incomplete");
+  assert.equal(progressPercent(reopened), 80);
+});
+
+test("re-completing a reopened set restores the prior state exactly", () => {
+  // Arrange — a completed performance, then one set reopened
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
+  for (const index of [0, 1, 2, 3, 4]) state = complete(state, index);
+  const before = state;
+  state = liveSessionReducer(state, { type: "REOPEN_SET", index: 2 });
+
+  // Act — re-complete it with the same values
+  const after = complete(state, 2);
+
+  // Assert — the reopen round-trips: reopen is its own undo, which is why the
+  // affordance needs no confirmation.
+  assert.deepEqual(after, before);
+});
+
+test("REOPEN_SET moves last activity when given a timestamp", () => {
+  // A reopen is a real interaction, so it resets the idle clock (ADR-0014) rather than
+  // letting a session the user is actively correcting be auto-ended as Incomplete.
+  const start = 1_000;
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), {
+    type: "START",
+    now: start,
+  });
+  state = liveSessionReducer(state, {
+    type: "COMPLETE_SET",
+    index: 0,
+    reps: 8,
+    loadKind: "absolute",
+    loadValue: "70",
+    rpe: 7,
+    now: start + 60_000,
+  });
+
+  const reopened = liveSessionReducer(state, {
+    type: "REOPEN_SET",
+    index: 0,
+    now: start + 120_000,
+  });
+
+  assert.equal(reopened.lastActivityAt, start + 120_000);
+});
+
+test("REOPEN_SET without a timestamp leaves last activity unchanged", () => {
+  // Timing stays opt-in, exactly as it is on COMPLETE_SET.
+  const start = 1_000;
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), {
+    type: "START",
+    now: start,
+  });
+  state = liveSessionReducer(state, {
+    type: "COMPLETE_SET",
+    index: 0,
+    reps: 8,
+    loadKind: "absolute",
+    loadValue: "70",
+    rpe: 7,
+    now: start + 60_000,
+  });
+
+  const reopened = liveSessionReducer(state, { type: "REOPEN_SET", index: 0 });
+
+  assert.equal(reopened.lastActivityAt, start + 60_000);
+});
+
+test("REOPEN_SET ignores a set that was never completed", () => {
+  // Nothing to take back — a pending set is already un-attempted.
+  const state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
+  const reopened = liveSessionReducer(state, { type: "REOPEN_SET", index: 0 });
+  assert.equal(reopened, state);
+});
+
+test("REOPEN_SET ignores an index outside the set list", () => {
+  const state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
+  assert.equal(liveSessionReducer(state, { type: "REOPEN_SET", index: 99 }), state);
+  assert.equal(liveSessionReducer(state, { type: "REOPEN_SET", index: -1 }), state);
+});
+
+test("REOPEN_SET cannot reopen a set once the performance is finished", () => {
+  // A finished performance is on its way to being settled record (ADR-0060): from here
+  // the correction path is Log Correction, not a reopen.
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
+  state = complete(state, 0);
+  const finished = liveSessionReducer(state, { type: "FINISH" });
+
+  const reopened = liveSessionReducer(finished, { type: "REOPEN_SET", index: 0 });
+
+  assert.equal(reopened, finished);
+  assert.equal(reopened.sets[0].status, "completed");
+});
+
+test("the current-set pointer never moves backwards onto a skipped set", () => {
+  // Arrange — the user deliberately skips the first squat set, then performs the second
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
+  state = liveSessionReducer(state, { type: "ADVANCE" });
+  assert.equal(state.currentIndex, 1);
+
+  // Act
+  state = complete(state, 1);
+
+  // Assert — the pointer moves on to set 3, leaving the skipped set behind rather than
+  // snapping back onto the set the user chose not to do.
+  assert.equal(state.currentIndex, 2);
+  assert.equal(state.sets[0].status, "pending");
+});
+
+test("ADVANCE lands the pointer on a pending set, stepping over completed ones", () => {
+  // Arrange — sets 2 and 3 are already done (completed out of order), pointer on set 1
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
+  state = complete(state, 1);
+  state = complete(state, 2);
+  assert.equal(state.currentIndex, 0);
+
+  // Act — skip set 1
+  state = liveSessionReducer(state, { type: "ADVANCE" });
+
+  // Assert — the pointer sits on the next *pending* set (the push-up module), never on
+  // an already-completed row.
+  assert.equal(state.currentIndex, 3);
+});
+
+test("the pointer runs off the end when nothing pending remains ahead of it", () => {
+  // Arrange — everything done, then an earlier set reopened
+  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
+  for (const index of [0, 1, 2, 3, 4]) state = complete(state, index);
+  assert.equal(state.currentIndex, state.sets.length);
+
+  // Act
+  const reopened = liveSessionReducer(state, { type: "REOPEN_SET", index: 1 });
+
+  // Assert — forward-only: the pointer stays off the end, so the screen prompts Finish
+  // (with an advisory naming what will not be recorded) rather than sending the user
+  // back to the top of a workout they have finished performing.
+  assert.equal(reopened.currentIndex, reopened.sets.length);
+  assert.equal(completionOutcome(reopened), "incomplete");
+});

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronDown, SkipForward } from "lucide-react";
+import { Check, ChevronDown, RotateCcw, SkipForward } from "lucide-react";
 
 import { liveSetDomId, type LiveSet, type LiveUnit } from "@/lib/live-session";
 import { loadKindOptions, type LoadKind } from "@/lib/load";
@@ -32,6 +32,12 @@ export interface LiveSessionSetsProps {
     rpe: number | null,
   ) => void;
   onSkipSet: (index: number) => void;
+  // Reopen a completed set (ADR-0089) — hand it back to the user as un-attempted, with
+  // its entered values retained, so they can correct it and complete it again.
+  onReopenSet: (index: number) => void;
+  // A finish is in flight. The outbox has already taken the sets (ADR-0060), so a reopen
+  // racing it would change what is being written — the control is disabled until it lands.
+  isFinishing: boolean;
   // The reader's Weight Unit (#417): the per-set Load picker names it. Named `weightUnit`
   // to avoid colliding with the `LiveUnit` values mapped as `unit` below.
   weightUnit: WeightUnit;
@@ -49,6 +55,8 @@ export function LiveSessionSets({
   onExpandUnit,
   onCompleteSet,
   onSkipSet,
+  onReopenSet,
+  isFinishing,
   weightUnit,
 }: LiveSessionSetsProps): React.JSX.Element {
   return (
@@ -74,6 +82,8 @@ export function LiveSessionSets({
             currentIndex={currentIndex}
             onCompleteSet={onCompleteSet}
             onSkipSet={onSkipSet}
+            onReopenSet={onReopenSet}
+            isFinishing={isFinishing}
             weightUnit={weightUnit}
           />
         );
@@ -116,6 +126,8 @@ interface ExpandedUnitProps {
   currentIndex: number;
   onCompleteSet: LiveSessionSetsProps["onCompleteSet"];
   onSkipSet: LiveSessionSetsProps["onSkipSet"];
+  onReopenSet: LiveSessionSetsProps["onReopenSet"];
+  isFinishing: boolean;
   weightUnit: WeightUnit;
 }
 
@@ -127,6 +139,8 @@ function ExpandedUnit({
   currentIndex,
   onCompleteSet,
   onSkipSet,
+  onReopenSet,
+  isFinishing,
   weightUnit,
 }: ExpandedUnitProps): React.JSX.Element {
   return (
@@ -140,13 +154,21 @@ function ExpandedUnit({
         {unit.sets.map(({ set, index }) => (
           <li key={liveSetDomId(set)} id={liveSetDomId(set)}>
             <SetRow
+              // Keyed on `status` so a reopen remounts the row, re-seeding its inputs
+              // from the retained record values rather than whatever was last typed
+              // into them. The row's edit state is local `useState` seeded at mount,
+              // which does not re-seed on a prop change — so this is deliberate, not
+              // incidental: a reopened set must open on the numbers it was completed with.
+              key={set.status}
               set={set}
               isCurrent={index === currentIndex}
               weightUnit={weightUnit}
+              isFinishing={isFinishing}
               onComplete={(reps, loadKind, loadValue, rpe) =>
                 onCompleteSet(index, reps, loadKind, loadValue, rpe)
               }
               onSkip={() => onSkipSet(index)}
+              onReopen={() => onReopenSet(index)}
             />
           </li>
         ))}
@@ -159,6 +181,7 @@ interface SetRowProps {
   set: LiveSet;
   isCurrent: boolean;
   weightUnit: WeightUnit;
+  isFinishing: boolean;
   onComplete: (
     reps: number,
     loadKind: LoadKind,
@@ -166,14 +189,25 @@ interface SetRowProps {
     rpe: number | null,
   ) => void;
   onSkip: () => void;
+  onReopen: () => void;
 }
 
 // One prescribed set. Its edited reps/load/RPE live as local input state, seeded
 // from the prescription pre-fill; "Complete" folds those values into a
-// COMPLETE_SET event (the engine's only editing path). "Skip" leaves the set
-// un-attempted (ADVANCE) — finishing with any skipped set records the performance
-// Incomplete (ADR-0013).
-function SetRow({ set, isCurrent, weightUnit, onComplete, onSkip }: SetRowProps) {
+// COMPLETE_SET event. "Skip" leaves the set un-attempted (ADVANCE) — finishing with
+// any skipped set records the performance Incomplete (ADR-0013). A completed set is
+// not settled: "Reopen" hands it back as un-attempted with its values intact
+// (ADR-0089), so a mis-tap or a wrong weight is correctable during the performance
+// rather than only afterwards via Log Correction.
+function SetRow({
+  set,
+  isCurrent,
+  weightUnit,
+  isFinishing,
+  onComplete,
+  onSkip,
+  onReopen,
+}: SetRowProps) {
   const [reps, setReps] = useState(String(set.reps));
   const [loadKind, setLoadKind] = useState<LoadKind>(set.loadKind);
   const [loadValue, setLoadValue] = useState(set.loadValue);
@@ -290,29 +324,46 @@ function SetRow({ set, isCurrent, weightUnit, onComplete, onSkip }: SetRowProps)
         </label>
       </FieldRow>
 
-      {!completed ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleComplete}
-          >
-            <Check className="h-3.5 w-3.5" />
-            Complete set
-          </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        {completed ? (
+          // No confirmation: the act *is* an undo, and re-completing the set restores it
+          // exactly, so a dialog here would only tax the recovery path. The label is
+          // per-set because a screen of identical rows makes a bare "Reopen" ambiguous.
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            onClick={onSkip}
-            aria-label={`Skip ${label}`}
+            onClick={onReopen}
+            disabled={isFinishing}
+            aria-label={`Reopen ${label}`}
           >
-            <SkipForward className="h-3.5 w-3.5" />
-            Skip
+            <RotateCcw className="h-3.5 w-3.5" />
+            Reopen
           </Button>
-        </div>
-      ) : null}
+        ) : (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleComplete}
+            >
+              <Check className="h-3.5 w-3.5" />
+              Complete set
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onSkip}
+              aria-label={`Skip ${label}`}
+            >
+              <SkipForward className="h-3.5 w-3.5" />
+              Skip
+            </Button>
+          </>
+        )}
+      </div>
     </Card>
   );
 }

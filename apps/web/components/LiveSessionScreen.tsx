@@ -39,6 +39,7 @@ import { mapFinishToLog } from "@/lib/live-session-mapper";
 import {
   browserMintKey,
   decideFinishOutcome,
+  finishAdvisory,
   stampWithFreshKey,
   FINISH_SAVE_FAILED_MESSAGE,
   type FinishAttempt,
@@ -349,6 +350,9 @@ export function LiveSessionScreen({
       : null;
   const completedCount = state.sets.filter((s) => s.status === "completed").length;
   const elapsed = formatElapsed(elapsedSeconds(state.startedAt, now));
+  // What a finish right now would leave out (ADR-0089) — null when nothing is pending.
+  // The copy lives in lib/live-session-finish so it is unit-tested, not asserted by eye.
+  const advisory = finishAdvisory(state);
 
   // Scroll the current on-deck set into view — the sticky "Next up" line's action, so
   // the user can glance at the pinned timer and jump back to their place in one tap.
@@ -387,15 +391,18 @@ export function LiveSessionScreen({
       rpe,
       now: completedAt,
     });
-    // Auto-start a rest countdown, but only while sets remain and this set actually
-    // rests after it. A Superset rests only at the round boundary (ADR-0023), so a
-    // set in the middle of a round (`restsAfter` false) flows straight to its
-    // co-member; the engine also carries the rest to use (round-rest vs the module's
-    // own), with the user's default taking precedence.
+    // Auto-start a rest countdown, but only while sets remain, this set actually rests
+    // after it, and it is the set the pointer sits on. A Superset rests only at the round
+    // boundary (ADR-0023), so a set in the middle of a round (`restsAfter` false) flows
+    // straight to its co-member; the engine also carries the rest to use (round-rest vs
+    // the module's own), with the user's default taking precedence. The pointer condition
+    // is what keeps a *re*-completion quiet (ADR-0089): correcting a set finished ten
+    // minutes ago is a record edit, not the end of physical work, so it starts no rest —
+    // and leaves a running one alone.
     const morePending = state.sets.some(
       (s, i) => i !== index && s.status === "pending",
     );
-    if (morePending && set.restsAfter) {
+    if (morePending && set.restsAfter && index === state.currentIndex) {
       // A round boundary carries the Superset's own round-rest, which wins over the
       // global default (ADR-0023 — "the Superset owns its round-rest"); a solo set
       // still lets the user's global default take precedence.
@@ -406,6 +413,15 @@ export function LiveSessionScreen({
       );
       setRestEndAt(restTargetEnd(completedAt, rest));
     }
+  }
+
+  // Reopen a completed set (ADR-0089): it returns to un-attempted with its entered
+  // reps/load/effort retained, so the user corrects and completes it again. Nothing has
+  // reached the server yet, so this is pure client state — the timestamp is passed
+  // because a reopen is a real interaction and resets the idle clock (ADR-0014). Any
+  // running rest is left alone: it is tracking the user's physical rest, not the record.
+  function handleReopenSet(index: number) {
+    dispatch({ type: "REOPEN_SET", index, now: Date.now() });
   }
 
   // The `−15 / +15` controls shift the running rest's target-end; a shift never
@@ -626,9 +642,22 @@ export function LiveSessionScreen({
           onExpandUnit={expandUnit}
           onCompleteSet={handleCompleteSet}
           onSkipSet={() => dispatch({ type: "ADVANCE" })}
+          onReopenSet={handleReopenSet}
+          isFinishing={pending}
           weightUnit={weightUnit}
         />
       </div>
+
+      {advisory ? (
+        // Only completed sets become Logged Sets, so anything still un-attempted —
+        // skipped, or reopened and not yet redone — is dropped by the finish. Say so
+        // before the user commits, without blocking a deliberate early finish (ADR-0089).
+        // `announce` because the line appears in response to a skip or a reopen: a
+        // screen-reader user learns the finish would now drop a set, politely (role=status).
+        <Alert announce tone="info">
+          {advisory}
+        </Alert>
+      ) : null}
 
       <Button
         type="button"
