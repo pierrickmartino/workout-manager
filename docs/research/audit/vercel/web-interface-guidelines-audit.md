@@ -22,6 +22,11 @@ The findings below are real gaps, grouped by how much they cost.
 > clock) and ADR-0097 (the admin catalog is kept off the keystroke path). One part of #2 is
 > closed as *won't fix* with a reason — the `mm:ss` fields — and is called out in its note.
 > #7–#15 are untouched.
+>
+> The Exercise detail page and the admin screens were in **no** audit journey, so nothing
+> #4–#6 touched had ever been rendered at 320px, at 200% text, or at 1440px. Two journeys
+> (`exercise`, `admin`) now cover them in `audit/reflow.mjs` and `audit/wide.mjs`: 0 of 780
+> cases overflow at each. Adding them surfaced one pre-existing defect, noted under #4.
 
 | # | Finding | Severity | Status |
 |---|---|---|---|
@@ -245,6 +250,19 @@ comparison instead of passing it vacuously.
 
 `decoding` is deliberately outside the guard — it changes when a loaded image paints, never the
 space it occupies — though the component sets `decoding="async"` anyway.
+
+**Measured.** The Exercise detail page is now an audit journey (`exercise`), with its fixture
+pointing at an app route the isolated audit server does not serve, so the image never arrives —
+the case worth measuring. With `naturalWidth === 0` the old `max-h-80 w-full object-contain`
+box is **270 × 0** at a 320px viewport and **414 × 0** at 1440px; the reserved box is 270 × 203
+and 414 × 311.
+
+Adding the journey also surfaced a defect this change did not cause, in the same file: the
+Variations / Alternatives rows render an authored name in a bare `<span>`, and an unbroken
+80-character name measured **1225px inside a 320px screen** — invisible to every report because
+the `Card` clips it, and a silent failure of ADR-0085's first clause. Fixed with the
+`min-w-0 break-words` pairing `session-hero.tsx` already carries, plus `shrink-0` on the
+chevron.
 
 ### 5. Admin audit timestamp uses the server's locale and timezone — MEDIUM
 

@@ -305,10 +305,16 @@ function RelatedList({
             href={appendFrom(`/exercises/${item.id}`, from)}
             className="group flex items-center justify-between gap-3 px-4 py-3.5 transition-colors hover:bg-elevated/50"
           >
-            <span className="font-sans text-[14px] text-text-primary">
+            {/* An authored movement name, so it wraps rather than setting the width of the row
+                around it (ADR-0085, clause 1). `break-words` and not only `min-w-0`: a zero
+                floor does nothing for text with no break opportunity, and an unbroken
+                80-character name measured 1225px inside a 320px screen — clipped by the Card's
+                `overflow-hidden` rather than visible, which is why the document width never
+                reported it. Surfaced by making this lens a sweep journey. */}
+            <span className="min-w-0 break-words font-sans text-[14px] text-text-primary">
               {item.name}
             </span>
-            <ChevronRight className="h-[18px] w-[18px] text-text-muted transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
+            <ChevronRight className="h-[18px] w-[18px] shrink-0 text-text-muted transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
           </Link>
         ))}
       </Card>

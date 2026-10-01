@@ -84,3 +84,34 @@ which compares the two declarations rather than reading the source.
 `decoding` is deliberately outside the guard: it changes when a loaded image paints,
 never the space it occupies. The component sets `decoding="async"` anyway, because
 there is no reason for either of these to block the main thread.
+
+## Measured, not reasoned about
+
+The Exercise detail page was in no audit journey, so none of this had ever been
+rendered in a browser. It is one now (`exercise`, in both `audit/reflow.mjs` and
+`audit/wide.mjs`), and its fixture points the illustration at an app route the
+isolated audit server does not serve — the image never arrives, which is exactly the
+case worth measuring. In that page, with `naturalWidth === 0`:
+
+| | 320px viewport | 1440px viewport |
+|---|---|---|
+| the old `max-h-80 w-full object-contain` | 270 × **0** | 414 × **0** |
+| the reserved box | 270 × 203 | 414 × 311 |
+
+Both gates stay green with the journey added: 0 of 780 cases overflow at 320px, at
+100% and 200% text, and 0 of 780 at 1440px.
+
+## What the journey surfaced
+
+Adding it found a defect this change did not cause, in the same file. The
+Variations / Alternatives rows render an authored movement name in a bare `<span>`,
+and an unbroken 80-character name measured **1225px inside a 320px screen**. It never
+reached a report because the `Card` around it carries `overflow-hidden`, so the
+document width stayed 320 and the name was simply cut off — which is the first clause
+of ADR-0085 ("a name the user authored wraps; it is never truncated") failing
+silently.
+
+The fix is the pairing `session-hero.tsx` already carries for the same reason:
+`min-w-0 break-words` on the name, `shrink-0` on the chevron beside it. `min-w-0`
+alone would not have done it — a zero floor does nothing for text with no break
+opportunity.

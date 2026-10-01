@@ -82,3 +82,16 @@ doing — a sort whose input never changed, a render that blocked a keystroke, a
 of rows nobody could see — and the tests hold each of those properties. Whether the
 screen *feels* different at 500 rows is a question for a profile on a real device, and
 no number here should be read as one.
+
+## The screen is now rendered somewhere
+
+No audit journey mounted any admin screen, so the browser had never laid this one out
+at 320px, at 200% text, or at 1440px — the facet grid, the badge cluster on each row
+and the deferred rows included. The `admin` journey mounts it over 60 rows, past the
+>50 threshold the audit cares about and past the width where the facets go three-up.
+Both gates are clean with it added: 0 of 780 at 320px (100% and 200% text) and 0 of
+780 at 1440px.
+
+That is a layout result and nothing more. It says the rows fit; it says nothing about
+whether deferring them made the screen faster, which still wants a profile on a real
+device.

@@ -79,3 +79,12 @@ not really mean. The registry is empty.
 The audit that prompted this also suggested memoizing an `Intl.NumberFormat` for the
 XP counters. That is a different change — a measured one, about allocation per render,
 not about correctness — and it is not made here.
+
+## Rendered in a browser, once
+
+The admin editor was in no audit journey, so the trail row had never been laid out at
+320px or at 200% text. The `admin` journey replicates that one row — its markup lives
+in a Server Component page, so it is rebuilt from the page's own classes rather than
+imported — because the instant is the longest text in it, and the reader's-locale
+form is longer than the `toLocaleString()` default it replaced. Both gates are clean
+with it added: 0 of 780 at 320px (100% and 200% text) and 0 of 780 at 1440px.

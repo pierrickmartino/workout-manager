@@ -300,6 +300,10 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   so the hint and the aspect cannot drift — `illustration-box.test.ts` holds them to one number.
   It is deliberately `loading="lazy"` only, because both its surfaces are below the fold; an
   above-the-fold image declares its own three attributes instead of bending the frame. The guard
+  The `exercise` journey renders it in a browser with the image deliberately unavailable, which
+  is how the box is verified rather than argued — that journey also surfaced an authored name
+  measuring 1225px inside a 320px screen in the same file, clipped and so invisible to every
+  report. The guard
   in `apps/web/lib/image-policy.ts` sweeps every component and page and fails a raw `<img>` that
   declares no `width`, `height` or `loading` (`loading="eager"` passes — it asks for the
   decision, not one answer); a `{...props}` spread declares nothing, and its registry is empty.
