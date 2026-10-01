@@ -14,23 +14,29 @@ No instance of `transition: all`, `user-scalable=no`, `onPaste` + `preventDefaul
 
 The findings below are real gaps, grouped by how much they cost.
 
-| # | Finding | Severity |
-|---|---|---|
-| 1 | 122 form controls, zero `autocomplete` | HIGH |
-| 2 | Numeric inputs have no `inputmode` | HIGH |
-| 3 | `SectionHeader` is not a heading — 29 files, no `<h2>` outline | HIGH |
-| 4 | `<img>` without `width`/`height` (CLS) and without `loading` | MEDIUM |
-| 5 | Admin audit-log timestamp renders in *server* locale/timezone | MEDIUM |
-| 6 | `limit=500` admin catalog, unvirtualized, filtered per keystroke | MEDIUM |
-| 7 | Admin browser filter state not in URL | MEDIUM |
-| 8 | `window.confirm` in 3 places while `ConfirmDialog` exists | MEDIUM |
-| 9 | No `touch-action: manipulation` anywhere | LOW |
-| 10 | No `text-wrap: balance`/`pretty` on headings | LOW |
-| 11 | Placeholders don't end with `…`; two use a straight apostrophe | LOW |
-| 12 | `themeColor` hardcoded to one Skin's dark background | LOW |
-| 13 | `autoFocus` on a mobile-reachable inline rename field | LOW |
-| 14 | No `spellCheck={false}` on code-ish fields | LOW |
-| 15 | Interactive SVG `<g>` focus relies on fill tint only | LOW |
+> **Status (2026-10-01).** The three HIGH findings (#1, #2, #3) are fixed; each carries a
+> `**Resolution:**` note saying what landed and what deliberately did not. The conventions they
+> set are ADR-0093 (a control's autofill and keypad come from the primitive) and ADR-0094 (a
+> section divider is a heading). One part of #2 is closed as *won't fix* with a reason — the
+> `mm:ss` fields — and is called out in its note. #4–#15 are untouched.
+
+| # | Finding | Severity | Status |
+|---|---|---|---|
+| 1 | 122 form controls, zero `autocomplete` | HIGH | Fixed — ADR-0093 |
+| 2 | Numeric inputs have no `inputmode` | HIGH | Fixed — ADR-0093, except `mm:ss` (see note) |
+| 3 | `SectionHeader` is not a heading — 29 files, no `<h2>` outline | HIGH | Fixed — ADR-0094 |
+| 4 | `<img>` without `width`/`height` (CLS) and without `loading` | MEDIUM | Open |
+| 5 | Admin audit-log timestamp renders in *server* locale/timezone | MEDIUM | Open |
+| 6 | `limit=500` admin catalog, unvirtualized, filtered per keystroke | MEDIUM | Open |
+| 7 | Admin browser filter state not in URL | MEDIUM | Open |
+| 8 | `window.confirm` in 3 places while `ConfirmDialog` exists | MEDIUM | Open |
+| 9 | No `touch-action: manipulation` anywhere | LOW | Open |
+| 10 | No `text-wrap: balance`/`pretty` on headings | LOW | Open |
+| 11 | Placeholders don't end with `…`; two use a straight apostrophe | LOW | Open |
+| 12 | `themeColor` hardcoded to one Skin's dark background | LOW | Open |
+| 13 | `autoFocus` on a mobile-reachable inline rename field | LOW | Open |
+| 14 | No `spellCheck={false}` on code-ish fields | LOW | Open |
+| 15 | Interactive SVG `<g>` focus relies on fill tint only | LOW | Open |
 
 ---
 
@@ -63,6 +69,25 @@ password managers from offering to fill workout numbers. That is the bulk of the
 then set the real tokens on the handful of profile fields. One primitive edit covers ~115
 of the 122 sites.
 
+**Resolution:** done exactly as the fix shape describes, and recorded as ADR-0093.
+`autoComplete="off"` is now a default in all three primitives, so every control that goes
+through them declares it and a call site can still override. `display_name` carries
+`autoComplete="name"` — it is the only field in the app a browser genuinely has on file. The
+profile's age/height/weight keep `off`: no standard token means "body measurement", and the
+audit's own table asks for `off` there.
+
+`lib/form-input-policy.ts` guards the bypass rather than the primitive: a hand-rolled native
+`<input>`/`<select>`/`<textarea>` that declares no `autoComplete` fails the sweep. It fails
+closed on a computed `type` and on a `{...props}` spread, and exempts by rule the types no
+browser fills (`hidden`, `checkbox`, `radio`, `file`, the buttons, `range`, `color`) — which
+is every raw control in the app but one. That one,
+`components/SchemeControl.tsx`'s compact inline `<select>`, states its own `autoComplete="off"`
+rather than being reshaped to fit the primitive's chevron gutter. The registry is empty.
+
+What the primitives *render* is asserted separately, by rendering them:
+`lib/form-affordances.test.ts` reads the markup a browser would receive, because a guard over
+source could not tell a declared attribute from a correct one.
+
 ### 2. Numeric inputs have no `inputmode` — HIGH
 
 `inputMode` appears once in the entire app. Every `type="number"` below opens the full
@@ -93,6 +118,35 @@ for integer counts (reps, sets, seconds, weeks, level).
 The `mm:ss` duration fields are `type="text"` and want `inputMode="numeric"` too:
 `components/CorrectLogForm.tsx:392,411,449,466`, `components/HandAuthoredSessionForm.tsx:1005,1017`.
 
+**Resolution:** done for every `type="number"` field, derived rather than declared, and
+recorded as ADR-0093. All 27 of them already route through `<Input>`, so `lib/input-mode.ts`
+reads the rule this item states — `decimal` where the `step` admits a fraction, `numeric`
+otherwise — and the primitive applies it. The derivation lands on this item's hand-written
+answer at every one of the 27 sites, because a field that takes decimals in this app always
+says so with `step="any"` or `step="0.1"`. `lib/form-input-policy.ts` fails a native
+`type="number"` that declares no `inputMode`, so a control that skips the primitive is caught.
+
+**The `mm:ss` fields are deliberately left alone.** A numeric pad carries no colon, so
+`inputMode="numeric"` would make `1:30` untypable on iOS against a placeholder that reads
+`mm:ss`. `lib/quantity.ts` does accept bare seconds, so the field would still *work* — which
+is what makes it the wrong fix: it narrows what a user can enter in order to repair a
+keyboard. If this is pursued, it needs a real answer (two `mm` / `ss` fields, or dropping the
+colon from the format), not an `inputmode`.
+
+The typed-Load value field is a case this item's table reads as "load → decimal" but which is
+subtler: one `type="text"` input serves all five Load kinds (ADR-0010), and a decimal pad has
+neither the hyphen a `range` needs nor the letters a `qualitative` Load needs. So
+`loadValueInputMode` in `lib/load.ts` keys the pad on the picked kind, applied at the five
+sites that hold that kind in state (`LogSessionForm`, `AdhocLogForm`, `live-session-sets`,
+`HandAuthoredSessionForm`, `PrescriptionFieldStack`). `CorrectLogForm`'s two kind pickers are
+uncontrolled; their *initial* kind is readable at render, so a pad was available there and was
+rejected — it would survive a switch to `qualitative` and leave the user on a keyboard with no
+letters, which is worse than an unhelpful one. Fixing it properly means putting the kind in
+state, in a form whose draft recovery depends on those `defaultValue`s; not worth it for a
+keypad.
+
+`spellCheck={false}` (#14) is a separate item and was not part of this pass.
+
 ### 3. `SectionHeader` renders no heading element — HIGH
 
 ```text
@@ -115,6 +169,36 @@ Related level skips, worth fixing in the same pass:
 components/ui/card.tsx:34      - CardTitle is <h3> under an <h1>, no <h2> between
 components/SessionCard.tsx:52  - <h3> under an <h1>, no <h2> between
 ```
+
+**Resolution:** done as described, and recorded as ADR-0094. The label is an `<h2>` by
+default, carrying the classes the `<span>` carried; the marker stays `aria-hidden` and the
+meta counter stays a sibling, so the accessible name is the section's name alone. A `level`
+prop (2 or 3) is there for a divider nested inside a section another divider opened; every
+current call site is top-level, so every one renders an `<h2>`.
+
+The visual claim was checked, not asserted: `audit/reflow.mjs` (0 of 660 cases overflow at
+320px, at 100% *and* 200% text) and `audit/wide.mjs` (0 of 660 at 1440px) both still pass, and
+`lib/section-heading.test.ts` pins the row's classes, the rule element and the accessible
+name.
+
+Of the two related skips: `SessionCard` is now an `<h2>`, matching `HistoryBrowser.tsx:259` for
+the same list-item role — neither list that renders the card sits under a divider, so the
+`<h3>` really did skip a level from the page's `<h1>`. `CardTitle` has **no call site anywhere
+in the app**, so it skips nothing on any rendered page and is left as it is. Measured over all
+11 journeys the audit harness mounts: **0 level skips**, down from 1.
+
+One finding beyond this item's text, surfaced by making the cards headings: Train labels its
+groups with a `TRAIN // …` eyebrow rather than the ▸ rule, and those were plain `<span>`s. Three
+of them are `<h2>` now (`RecentSessions`, My Library, Explore), and `SessionCard` takes a `level`
+so the cards in that panel are `<h3>` under their panel's heading — otherwise the outline would
+have named the sessions and not the group holding them.
+
+The guard is narrow on purpose — a page's outline is a property of what it renders, which only
+a browser can judge. What is mechanized is the thing that would rot: no component outside
+`section-header.tsx` may *render* the `▸` marker (read from JSX text and string literals through
+the AST, so a comment about the rule is not a breach of it), so a second hand-rolled divider
+cannot reappear beside the real one. The eyebrow form has no guard: `label-mono text-[11px]` is
+also how stat labels and chart ticks are styled, so there is no signature to key on.
 
 ### 4. `<img>` without dimensions or loading hint — MEDIUM
 

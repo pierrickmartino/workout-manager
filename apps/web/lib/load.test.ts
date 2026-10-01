@@ -5,6 +5,7 @@ import {
   formatBodyWeight,
   formatLoad,
   loadKindOptions,
+  loadValueInputMode,
   loadToFields,
   loadValueToKg,
   NO_LOAD,
@@ -213,4 +214,18 @@ test("loadKindOptions labels the absolute kind with the active unit", () => {
   // Act / Assert — the hardcoded "(kg)" is replaced by the reader's unit.
   assert.equal(loadKindOptions("kg")[0].label, "Weight (kg)");
   assert.equal(loadKindOptions("lb")[0].label, "Weight (lb)");
+});
+
+test("loadValueInputMode asks for the decimal pad only where the kind holds a number", () => {
+  // Arrange & Act & Assert — the three kinds whose value is a single quantity.
+  assert.equal(loadValueInputMode("absolute"), "decimal");
+  assert.equal(loadValueInputMode("bodyweight"), "decimal");
+  assert.equal(loadValueInputMode("percent_1rm"), "decimal");
+});
+
+test("loadValueInputMode leaves the keyboard alone where the value is not one number", () => {
+  // Arrange & Act & Assert — a decimal pad carries no hyphen and no letters, so a
+  // `low-high` range and a descriptive Load would be untypable behind one.
+  assert.equal(loadValueInputMode("range"), undefined);
+  assert.equal(loadValueInputMode("qualitative"), undefined);
 });

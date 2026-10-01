@@ -18,13 +18,16 @@ export function RecentSessions({
 
   return (
     <div className="flex flex-col gap-2">
-      <span className="label-mono text-[11px] text-text-muted">
+      {/* The panel's own heading (ADR-0094). Train labels a group with a `TRAIN // …` eyebrow
+          rather than the ▸ rule, but it is still what opens the section, so it is an <h2> and
+          the cards under it are <h3> — the group lands in the outline, not just its items. */}
+      <h2 className="label-mono text-[11px] text-text-muted">
         TRAIN // PICK UP AGAIN
-      </span>
+      </h2>
       <ol className="flex list-none flex-col gap-3 p-0">
         {rows.map((row) => (
           <li key={row.id}>
-            <SessionCard model={recentSessionCardModel(row)} />
+            <SessionCard model={recentSessionCardModel(row)} level={3} />
           </li>
         ))}
       </ol>

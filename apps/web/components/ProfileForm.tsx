@@ -92,7 +92,13 @@ export function ProfileForm({
       ) : null}
 
       <Field label="Display name">
-        <Input name="display_name" defaultValue={profile?.display_name ?? ""} />
+        {/* The one field here a browser genuinely has on file; every other control
+            keeps the primitive's `autoComplete="off"` (ADR-0093). */}
+        <Input
+          name="display_name"
+          autoComplete="name"
+          defaultValue={profile?.display_name ?? ""}
+        />
       </Field>
 
       <Field label="Gender">

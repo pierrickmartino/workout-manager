@@ -10,14 +10,19 @@ import { cn } from "@/lib/utils";
 // the control's own furniture, not text: at 200% text a `pr-10` gutter is 80px, which on a
 // 320px screen leaves a field no room at all to show the value it holds. Pinning them keeps
 // 100% text pixel-identical and keeps the value legible once the text doubles.
+//
+// Autofill is off by default (ADR-0093): a Load kind or a distance unit is not
+// something a browser has on file, and a call site that names a real token wins.
 export function Select({
   className,
   children,
+  autoComplete = "off",
   ...props
 }: React.SelectHTMLAttributes<HTMLSelectElement>): React.JSX.Element {
   return (
     <div className="relative">
       <select
+        autoComplete={autoComplete}
         className={cn(
           "flex h-11 w-full appearance-none rounded-sm border border-border-lite bg-surface px-4 pr-[40px] font-mono text-sm text-text-primary focus-visible:border-cyan focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan disabled:cursor-not-allowed disabled:opacity-50",
           className,

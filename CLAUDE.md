@@ -265,6 +265,33 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   documented exception and says so at the `useState` — it writes the URL with
   `history.replaceState` precisely so the Server Component does not re-run.
 
+- New form control → render it with `components/ui/input.tsx`, `select.tsx` or `textarea.tsx`,
+  never a bare `<input>`/`<select>`/`<textarea>`. They declare `autoComplete="off"` (a field a
+  browser genuinely has on file names its real token at the call site — today only
+  `display_name`) and `Input` *derives* the keypad from `type` + `step`: `decimal` where the
+  step admits a fraction, `numeric` otherwise, which is why a decimal field must spell
+  `step="any"`/`step="0.1"`. Never force a numeric pad on a text field whose value carries a
+  colon, a hyphen or letters — the `mm:ss` durations and the `range`/`qualitative` Loads would
+  become untypable on a phone; the typed-Load field keys its pad on the picked kind
+  (`loadValueInputMode`) and only where that kind is in state. The guard in
+  `apps/web/lib/form-input-policy.ts` sweeps every component and page for native controls, fails
+  closed on a computed `type` (both questions — it could be `text` or `number`) and on a
+  `{...props}` spread, and its registry is empty.
+  It proves the attribute is *declared*, not correct — `lib/form-affordances.test.ts` renders
+  the primitives and reads what a browser would get (ADR-0093).
+
+- New section divider → `SectionHeader`, which is a heading (`<h2>`, or `level={3}` inside a
+  section another divider opened). It is the app's only ▸ divider and the only outline the pages
+  below the `<h1>` have, so a hand-rolled `▸ …` rule is a hole in that outline and a test
+  rejects the *rendered* marker anywhere else (read from the AST, so a comment about the rule is
+  fine). Anything else that opens a group is a heading too, whatever it looks like: Train's
+  `TRAIN // …` eyebrows are `<h2>`, and a card inside such a group takes `level={3}`
+  (`SessionCard`) so the outline names the group and not only its items. Don't skip a level on
+  the way down: a list-item title under no group heading is an `<h2>` (`HistoryBrowser`), not an
+  `<h3>`. `lib/section-heading.test.ts` holds the ranks, the accessible name (the `▸` stays
+  `aria-hidden`, the meta counter stays a sibling) and the row's classes — the divider's
+  appearance is unchanged, which `audit/reflow.mjs` and `audit/wide.mjs` confirm (ADR-0094).
+
 - New animation or transform transition → pair it with `motion-reduce:animate-none`
   or `motion-reduce:transition-none` **in the same class string**. Colour and
   opacity transitions move nothing and are exempt by rule. The guard in

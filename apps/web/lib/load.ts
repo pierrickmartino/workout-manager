@@ -162,6 +162,27 @@ export function loadValueToKg(
   }
 }
 
+// The keypad the single `loadValue` field asks for, given the kind currently picked
+// (ADR-0093). One input serves all five kinds, so the keyboard has to follow the kind:
+// `absolute`, `bodyweight` (added load) and `percent_1rm` each hold one number, so the
+// decimal pad is right. A `range` holds `low-high` and `qualitative` holds prose — a
+// decimal pad offers neither a hyphen nor letters, so those keep the full keyboard
+// rather than becoming untypable on a phone.
+// The kind is the raw picker string, as `loadValueToKg` takes it, so a surface that holds
+// its draft as plain text needs no cast.
+export function loadValueInputMode(
+  kind: string,
+): "decimal" | undefined {
+  switch (kind) {
+    case "absolute":
+    case "bodyweight":
+    case "percent_1rm":
+      return "decimal";
+    default:
+      return undefined;
+  }
+}
+
 // The kinds offered by the log form's picker, paired with a human label. The absolute kind's
 // label carries the reader's active Weight Unit — "Weight (kg)" / "Weight (lb)" — replacing the
 // old hardcoded "(kg)" so the picker names the unit the field is actually entered in (#417).

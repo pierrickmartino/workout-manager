@@ -60,9 +60,9 @@ export default function TrainPage(): React.JSX.Element {
           Sessions, issue #397). Distinct from generation (starting something new) and from
           Browse the Catalog (movement discovery). */}
       <div className="flex flex-col gap-2">
-        <span className="label-mono text-[11px] text-text-muted">
+        <h2 className="label-mono text-[11px] text-text-muted">
           TRAIN // MY LIBRARY
-        </span>
+        </h2>
         <Link
           href="/sessions"
           className={buttonVariants({ variant: "secondary", className: "w-full" })}
@@ -75,9 +75,9 @@ export default function TrainPage(): React.JSX.Element {
       {/* Discovery, distinct from generation: browse the whole shared Catalog to find
           movements, without starting a plan (ADR-0042). */}
       <div className="flex flex-col gap-2">
-        <span className="label-mono text-[11px] text-text-muted">
+        <h2 className="label-mono text-[11px] text-text-muted">
           TRAIN // EXPLORE
-        </span>
+        </h2>
         <Link
           href="/exercises"
           className={buttonVariants({ variant: "secondary", className: "w-full" })}
