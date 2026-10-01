@@ -44,10 +44,13 @@ not substituted for it. Confirming calls `requestSubmit()` on the form rather th
 rebuilding the payload, so the confirmed delete travels the same path as the
 unguarded one and the hidden `log_id` stays the single place the record is named.
 
-**The admin hard delete** gained nothing structural; the copy moved. `window.confirm`
-has one slot and the dialog has two, so `deleteControlView` now returns a
-`confirmTitle` (the question) beside its `confirmMessage` (what accepting it costs).
-The guard itself is unchanged and the backend remains the real one (409 if unmet).
+**The admin hard delete** gained nothing structural; the copy was re-cut.
+`window.confirm` has one slot and the dialog has two, so `deleteControlView` now
+returns a `confirmTitle` (the question) beside its `confirmMessage` (what accepting
+it costs) — and the message, no longer sharing a line with the question, says the
+thing the one-slot version had no room for: that this removes the movement from the
+shared catalog outright rather than retiring it. The guard itself is unchanged and
+the backend remains the real one (409 if unmet).
 
 **The supersede** is the one that needed state. The generate form is uncontrolled, so
 the submitted values are read at submit time and held in `awaitingSupersede` while
@@ -92,4 +95,9 @@ like a handler that was never wired. The harness now installs
 - Copy for a confirmation is written as a question and a consequence, because that
   is the shape the dialog has.
 - A confirmation is now part of the rendered page, so it is subject to every other
-  rule here: the Contrast Floor, the reflow sweep, the motion pairing.
+  rule here: the Contrast Floor, the reflow sweep, the motion pairing. That is only
+  true of the *sweeps* if something renders one — a dialog exists only while it is
+  open, so no journey had ever mounted one and the static guards would have passed
+  over an unmeasured surface (ADR-0088). `audit/main.tsx` now has a `confirm`
+  journey carrying the longest copy of the three, and it is in both
+  `audit/reflow.mjs` and `audit/wide.mjs`.

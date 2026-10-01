@@ -60,6 +60,15 @@ renders an `<a>`, so `<Link role="tab">` is covered — and **anything else capi
 is reported**. What a component renders is not decidable from its call site, and
 guessing is the one answer that would hide a `<div>` behind a friendly name.
 
+A computed role is read where it can be. A conditional contributes every branch and
+nests freely, which is how the app writes all three of its computed roles
+(`role={interactive ? "button" : undefined}` on the atlas region;
+`role={announce ? (tone === "error" ? "alert" : "status") : undefined}` on `Alert`),
+so each is answered exactly rather than waved through. Anything else — `role={props.role}` —
+is reported, on the same reasoning as an unknown component tag: the benign assumption
+is the only one that can be silently wrong. The exception is an element whose own tag
+the rule already covers, where no role it could carry changes the answer.
+
 What neither proves is that a tap *feels* immediate. That is a property of a device
 and a browser, and no offline test can see it.
 

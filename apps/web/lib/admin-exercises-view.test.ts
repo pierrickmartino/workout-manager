@@ -247,6 +247,19 @@ test("parseAdminFilters drops a facet value the catalog's vocabulary does not co
   assert.deepEqual(filters, EMPTY_ADMIN_FILTERS);
 });
 
+test("parseAdminFilters does not mistake an Object.prototype key for a vocabulary", () => {
+  // Arrange — the vocabularies are object literals, so a membership test written with `in`
+  // answers yes for `constructor`, `toString` and every other inherited key, and the URL that
+  // names one sails through the check meant to stop it.
+  const params = new URLSearchParams("provenance=constructor&completeness=toString");
+
+  // Act
+  const filters = parseAdminFilters(params);
+
+  // Assert
+  assert.deepEqual(filters, EMPTY_ADMIN_FILTERS);
+});
+
 test("parseAdminFilters collapses a whitespace-only query to no query", () => {
   // Arrange / Act
   const filters = parseAdminFilters(new URLSearchParams("q=%20%20"));

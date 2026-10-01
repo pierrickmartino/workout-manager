@@ -79,26 +79,49 @@ export function tapActionSelectors(css: string): readonly string[] {
   return selectors;
 }
 
-// The literal value of a JSX attribute, or null when it is computed — a `role={expr}` could
-// be anything, so it is not read as a widget role here. The elements in this app all spell
-// their role out.
-function literalAttribute(
-  element: ts.JsxOpeningLikeElement,
-  name: string,
-): string | null {
-  for (const attribute of element.attributes.properties) {
-    if (!ts.isJsxAttribute(attribute) || !ts.isIdentifier(attribute.name)) continue;
-    if (attribute.name.text !== name) continue;
-    const { initializer } = attribute;
-    if (initializer && ts.isStringLiteral(initializer)) return initializer.text;
-    return null;
+// Every role an expression can evaluate to, or null when any of them cannot be read. A
+// conditional contributes both branches and nests freely — `alert.tsx` writes
+// `announce ? (tone === "error" ? "alert" : "status") : undefined`, which is three
+// possibilities and no control among them. An absent role (`undefined` / `null`) is `""`.
+function rolesFromExpression(node: ts.Expression): readonly string[] | null {
+  if (ts.isParenthesizedExpression(node)) return rolesFromExpression(node.expression);
+  if (ts.isStringLiteral(node)) return [node.text];
+  if (node.kind === ts.SyntaxKind.NullKeyword) return [""];
+  if (ts.isIdentifier(node) && node.text === "undefined") return [""];
+  if (ts.isConditionalExpression(node)) {
+    const whenTrue = rolesFromExpression(node.whenTrue);
+    const whenFalse = rolesFromExpression(node.whenFalse);
+    if (whenTrue === null || whenFalse === null) return null;
+    return [...whenTrue, ...whenFalse];
   }
   return null;
 }
 
+// Every role an element can end up with: `[]` when it declares none, and `null` when at
+// least one possibility cannot be read. A `role={interactive ? "button" : undefined}` is
+// answered exactly; an opaque `role={props.role}` is not, and the caller fails closed on it
+// rather than assuming the benign answer.
+function declaredRoles(element: ts.JsxOpeningLikeElement): readonly string[] | null {
+  for (const attribute of element.attributes.properties) {
+    if (!ts.isJsxAttribute(attribute) || !ts.isIdentifier(attribute.name)) continue;
+    if (attribute.name.text !== "role") continue;
+    const { initializer } = attribute;
+    if (initializer === undefined) return null;
+    if (ts.isStringLiteral(initializer)) return [initializer.text];
+    if (!ts.isJsxExpression(initializer) || initializer.expression === undefined) return null;
+    return rolesFromExpression(initializer.expression);
+  }
+  return [];
+}
+
+// The marker a violation carries when the element's role could not be read at all.
+export const UNREADABLE_ROLE = "(unreadable)";
+
 // Every element carrying a widget role that neither its tag name nor `[role="…"]` is covered
 // for. A role written on a component tag is resolved through `COMPONENT_ELEMENTS` and
-// otherwise reported, since what that component renders is not readable here.
+// otherwise reported, since what that component renders is not readable here. A role that
+// cannot be read is reported the same way, on the same reasoning — unless the element's own
+// tag is covered, in which case no role it could carry changes the answer.
 export function findUncoveredTapTargets(
   source: string,
   file: string,
@@ -107,23 +130,28 @@ export function findUncoveredTapTargets(
   const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const reach = new Set(covered);
   const violations: TapTargetViolation[] = [];
+  const report = (node: ts.Node, element: string, role: string): void => {
+    violations.push({
+      file,
+      line: tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1,
+      element,
+      role,
+    });
+  };
   const visit = (node: ts.Node): void => {
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
       const tag = node.tagName.getText(tree);
       const element = COMPONENT_ELEMENTS[tag] ?? tag;
-      const role = literalAttribute(node, "role");
-      if (
-        role !== null &&
-        WIDGET_ROLES.has(role) &&
-        !reach.has(element) &&
-        !reach.has(`[role="${role}"]`)
-      ) {
-        violations.push({
-          file,
-          line: tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1,
-          element,
-          role,
-        });
+      const roles = declaredRoles(node);
+      if (!reach.has(element)) {
+        if (roles === null) report(node, element, UNREADABLE_ROLE);
+        else {
+          for (const role of roles) {
+            if (WIDGET_ROLES.has(role) && !reach.has(`[role="${role}"]`)) {
+              report(node, element, role);
+            }
+          }
+        }
       }
     }
     ts.forEachChild(node, visit);

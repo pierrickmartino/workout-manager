@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 
 import {
   NATIVE_TAP_TARGETS,
+  UNREADABLE_ROLE,
   findUncoveredTapTargets,
   formatTapTargetViolations,
   tapActionSelectors,
@@ -97,6 +98,42 @@ test("a role on any other component is reported rather than guessed at", () => {
   assert.deepEqual(
     findUncoveredTapTargets(source, "a.tsx", ["a", "button"]).map(({ element }) => element),
     ["Pill"],
+  );
+});
+
+test("a conditional role is read through both of its branches", () => {
+  // Arrange — the shape three components use. Neither branch here is a control.
+  const glyph = `export const A = () => <svg role={title ? "img" : "presentation"} />;`;
+  // ...including nested, which is how `alert.tsx` spells three possibilities.
+  const alert = `export const A = () => <div role={announce ? (tone === "error" ? "alert" : "status") : undefined} />;`;
+  // ...and one where a branch is.
+  const region = `export const A = () => <g role={interactive ? "button" : undefined} />;`;
+
+  // Act / Assert
+  assert.deepEqual(findUncoveredTapTargets(glyph, "a.tsx", ["button"]), []);
+  assert.deepEqual(findUncoveredTapTargets(alert, "a.tsx", ["button"]), []);
+  assert.deepEqual(
+    findUncoveredTapTargets(region, "a.tsx", ["button"]).map(({ role }) => role),
+    ["button"],
+  );
+  // The same element is clean once a selector reaches the role it can take.
+  assert.deepEqual(findUncoveredTapTargets(region, "a.tsx", ['[role="button"]']), []);
+});
+
+test("a role that cannot be read is reported, not assumed harmless", () => {
+  // Arrange — an opaque role on an element no selector reaches. Guessing "probably not a
+  // control" is the one answer that would let a tap target through.
+  const source = `export const A = (props) => <div role={props.role} />;`;
+
+  // Act / Assert
+  assert.deepEqual(
+    findUncoveredTapTargets(source, "a.tsx", ["button"]).map(({ role }) => role),
+    [UNREADABLE_ROLE],
+  );
+  // On an element the rule already covers, no role it could carry changes the answer.
+  assert.deepEqual(
+    findUncoveredTapTargets(`export const A = (p) => <button role={p.role} />;`, "a.tsx", ["button"]),
+    [],
   );
 });
 

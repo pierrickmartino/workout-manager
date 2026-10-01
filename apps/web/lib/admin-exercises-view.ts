@@ -166,12 +166,16 @@ const STATUSES: ReadonlySet<string> = new Set<AdminExerciseStatus>([
 // `provenanceLabel`, which renders an unknown token a *row* carries so a future value still
 // appears: a filter value the dropdown cannot display would select nothing while the control
 // read "All provenance", which is a filtered list nobody can see the reason for.
-function knownFacet(
+//
+// `Object.hasOwn`, not `in`: the vocabularies are object literals, so `in` also answers yes
+// for every key on `Object.prototype` and `?provenance=constructor` would sail through the
+// check meant to stop exactly that.
+function facetIfKnown(
   value: string | null,
   vocabulary: Record<string, string>,
 ): string {
   const token = value?.trim() ?? "";
-  return token in vocabulary ? token : "";
+  return Object.hasOwn(vocabulary, token) ? token : "";
 }
 
 // Read the filter state out of the URL — the inverse of `adminFiltersToQuery`. The query
@@ -181,8 +185,8 @@ export function parseAdminFilters(params: URLSearchParams): AdminExerciseFilters
   const status = params.get(STATUS_PARAM)?.trim() ?? "";
   return {
     query: params.get(QUERY_PARAM)?.trim() ?? "",
-    provenance: knownFacet(params.get(PROVENANCE_PARAM), PROVENANCE_LABELS),
-    completeness: knownFacet(params.get(COMPLETENESS_PARAM), COMPLETENESS_LABELS),
+    provenance: facetIfKnown(params.get(PROVENANCE_PARAM), PROVENANCE_LABELS),
+    completeness: facetIfKnown(params.get(COMPLETENESS_PARAM), COMPLETENESS_LABELS),
     status: STATUSES.has(status) ? (status as AdminExerciseStatus) : "all",
   };
 }

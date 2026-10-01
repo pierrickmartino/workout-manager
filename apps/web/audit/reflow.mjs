@@ -46,7 +46,10 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // the Exercise detail page and the admin catalog were never in any journey, so the illustration
 // box, the reader's-clock instant and the deferred catalog rows were all unverified in a
 // browser however green their guards were.
-const NOVEL_JOURNEYS = ["correction", "creation-logged", "home", "exercise", "admin"];
+// `confirm` joins them with ADR-0098: the themed dialog replaced `window.confirm` at three
+// destructive actions, and a dialog renders only while it is open, so no existing journey ever
+// mounted one. Its message is the app's longest confirmation copy, in a `max-w-sm` box.
+const NOVEL_JOURNEYS = ["correction", "creation-logged", "home", "exercise", "admin", "confirm"];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and
 // `creation-logged` were listed here because each held a `rem`-sized grid track in a form field

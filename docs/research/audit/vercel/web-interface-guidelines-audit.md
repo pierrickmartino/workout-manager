@@ -27,8 +27,10 @@ The findings below are real gaps, grouped by how much they cost.
 > The Exercise detail page and the admin screens were in **no** audit journey, so nothing
 > #4–#6 touched had ever been rendered at 320px, at 200% text, or at 1440px. Two journeys
 > (`exercise`, `admin`) now cover them in `audit/reflow.mjs` and `audit/wide.mjs`: 0 of 780
-> cases overflow at each. Adding them surfaced one pre-existing defect, noted under #4. Both
-> sweeps still pass unchanged after #7–#9.
+> cases overflow at each. Adding them surfaced one pre-existing defect, noted under #4.
+>
+> #8 had the same hole for the same reason: a dialog renders only while it is open, so no
+> journey had ever mounted one. A third journey (`confirm`) now covers it in both sweeps.
 
 | # | Finding | Severity | Status |
 |---|---|---|---|
@@ -394,9 +396,22 @@ so a future value still appears: a filter value the dropdown cannot display woul
 empty catalog under a control reading "All provenance", with nothing on screen explaining the
 emptiness.
 
+The first draft of that strictness did not have it: the membership test was `token in
+vocabulary` against an object literal, so `?provenance=constructor` passed the check written
+to stop exactly that, and the test passed because it tried `marketing`. It is `Object.hasOwn`
+now, with a case for the prototype keys.
+
 `admin-exercises-view.test.ts` holds the round-trip and the dropping; `admin-catalog-list.test.ts`
 holds the two halves a view-model cannot — that the component opens filtered when the URL says
-so, and that typing reaches the address bar without a navigation.
+so, and that typing reaches the address bar. "Without a navigation" is held structurally rather
+than asserted: that mount's `useRouter` throws, so a screen that reached for the router to write
+its URL would not mount.
+
+This item is the one of the three with no ADR of its own at first; it has one now
+(**ADR-0100**), because the bullet it put in `CLAUDE.md` is a repo-wide rule and every other
+bullet in that list cites a decision record. Writing it also turned up a fourth copy of the
+mirror — `ExerciseCatalogTaxonomy` — so the `replaceState` half now lives once, in
+`lib/filter-url.ts`, with each screen keeping its own `*FiltersToQuery`.
 
 ### 8. Native `window.confirm` for destructive actions — MEDIUM
 
@@ -439,6 +454,11 @@ cannot see whether a confirmation is asked at all, so `destructive-confirm.test.
 three and holds that opening performs nothing, cancelling performs nothing, and only
 confirming acts — with `window.confirm` made to **throw**, so a forgotten call cannot read as
 a quiet cancel.
+
+A dialog renders only while it is open, so **no audit journey had ever mounted one** — the
+static guards would have passed over three unmeasured surfaces, which is the hole ADR-0088
+names. `audit/main.tsx` now has a `confirm` journey carrying the longest of the three copies,
+and it is in both `audit/reflow.mjs` and `audit/wide.mjs`.
 
 One correction to this item's text: `components/DeleteSessionControl.tsx` does **not** use the
 real dialog. It uses a two-step inline confirm (the `RemoveExerciseButton` idiom), which is a
@@ -485,8 +505,13 @@ against a copy of the rule's text, and returns `[]` when nothing declares it —
 pass. The sweep then looks for an ARIA widget role on an element no selector reaches, which is
 how a tap target escapes an element-name rule; a role on a component tag resolves through a
 one-entry map (`next/link` renders an `<a>`) and anything else capitalized is reported rather
-than guessed at. It proves the declaration *reaches* every tap target, not that a tap feels
-fast — that is a property of a device.
+than guessed at. A computed role is read through every branch of its conditional, nested ones
+included — that is how all three of the app's computed roles are written — and anything it
+cannot read is reported, not assumed harmless.
+
+Two things it does **not** prove. That a tap feels immediate is a property of a device. And it
+keys on a *declared role*, so a tappable element that declares none — a `<div onClick>`, which
+this app has none of (see *Verified clean*) — is invisible to it.
 
 ### 10. No `text-wrap: balance` / `pretty` on headings — LOW
 
@@ -510,11 +535,11 @@ Only 4 of ~40 placeholders end with `…`. Most are example patterns (`mm:ss`, `
 ones should get the ellipsis:
 
 ```text
-components/AdminExerciseBrowser.tsx:86   "Search by name…"        ✓ already correct
-components/SessionsLibrary.tsx:105       "Search by name or type" → "…"
+components/AdminExerciseBrowser.tsx:126  "Search by name…"        ✓ already correct
+components/SessionsLibrary.tsx:104       "Search by name or type" → "…"
 components/HandAuthoredSessionForm.tsx:128 "Any exercise"         → "Any exercise…"
 components/GenerateSessionForm.tsx:207   "no running, no jumping in the apartment" → "…"
-components/GenerateProtocolForm.tsx:84   "e.g. gain muscle mass"  → "…"
+components/GenerateProtocolForm.tsx:96   "e.g. gain muscle mass"  → "…"
 ```
 
 Two placeholders use a straight apostrophe:
@@ -564,14 +589,14 @@ a focus call gated on a pointer/viewport check, or nothing at all, is safer.
 Zero occurrences. Red squiggles under tempo codes, equipment slugs and duration strings:
 
 ```text
-components/HandAuthoredSessionForm.tsx:1005,1017  mm:ss / 0:45
+components/HandAuthoredSessionForm.tsx:1006,1018  mm:ss / 0:45
 components/CorrectLogForm.tsx:392,411,449,466     mm:ss
 components/prescription/PrescriptionFieldStack.tsx tempo "3-1-1"
 components/ProfileForm.tsx:156                    "dumbbells, pull-up bar"
 ```
 
 Search inputs too — `spellCheck={false}` on the `type="search"` fields at
-`SessionsLibrary.tsx:104`, `HistoryBrowser.tsx:126`, `AdminExerciseBrowser.tsx:83`.
+`SessionsLibrary.tsx:103`, `HistoryBrowser.tsx:125`, `AdminExerciseBrowser.tsx:123`.
 
 ### 15. Interactive SVG group focus relies on fill tint — LOW
 

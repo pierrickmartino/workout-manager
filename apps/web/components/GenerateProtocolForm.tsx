@@ -40,7 +40,7 @@ export function GenerateProtocolForm({
   // The submitted values, held while the one-way-door question is on screen. The form is
   // uncontrolled, so what the user filled in has to be read at submit time and kept — the
   // alternative, re-reading the form on confirm, would depend on it still being mounted.
-  const [awaitingSupersede, setAwaitingSupersede] =
+  const [pendingGeneration, setPendingGeneration] =
     useState<GenerateProtocolInput | null>(null);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -60,7 +60,7 @@ export function GenerateProtocolForm({
     // the app's own dialog rather than `window.confirm` (#8): a browser that has been told
     // to suppress further dialogs would otherwise answer this one-way door for the user.
     if (supersedeWarning !== null) {
-      setAwaitingSupersede(input);
+      setPendingGeneration(input);
       return;
     }
     await start(input);
@@ -129,16 +129,16 @@ export function GenerateProtocolForm({
         Generate protocol
       </Button>
 
-      {awaitingSupersede !== null && supersedeWarning !== null ? (
+      {pendingGeneration !== null && supersedeWarning !== null ? (
         <ConfirmDialog
           title="Set aside your current protocol?"
           message={supersedeWarning}
           confirmLabel="Generate anyway"
           cancelLabel="Keep current"
-          onCancel={() => setAwaitingSupersede(null)}
+          onCancel={() => setPendingGeneration(null)}
           onConfirm={() => {
-            const input = awaitingSupersede;
-            setAwaitingSupersede(null);
+            const input = pendingGeneration;
+            setPendingGeneration(null);
             void start(input);
           }}
         />

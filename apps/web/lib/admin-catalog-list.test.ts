@@ -52,8 +52,15 @@ async function mountBrowser(): Promise<{
       },
       // The component seeds its filters from the URL (#7). The real hook needs the App
       // Router runtime, so it reads the mounted document's own query string here.
+      //
+      // `useRouter` throws rather than returning a stub: the mirror must be a
+      // `replaceState`, and a router push would re-run the Server Component and re-fetch the
+      // whole catalog on every keystroke. Reaching for the router at all fails the mount.
       "next/navigation": {
         useSearchParams: () => new URLSearchParams(window.location.search),
+        useRouter: () => {
+          throw new Error("the filter mirror is a replaceState, never a navigation");
+        },
       },
       "next/link": {
         __esModule: true,

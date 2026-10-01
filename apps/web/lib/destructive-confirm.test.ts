@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
 
-import { loadTsx, mountDom, type ModuleBoundaries } from "./tsx-harness.ts";
+import { loadTsx, mountDom, setFieldValue, type ModuleBoundaries } from "./tsx-harness.ts";
 
 // #8: three irreversible actions asked for confirmation with `window.confirm`, a browser
 // dialog that ignores the Skin, cannot be styled or focus-managed, and — the part that makes
@@ -240,7 +240,10 @@ test("superseding the current protocol asks in the themed dialog before generati
     assert.deepEqual(started, []);
     assert.ok(document.querySelector("form"));
 
-    // Act — going through with it
+    // Act — going through with it, having first typed an objective of their own, so what
+    // arrives is the filled-in form and not the defaults it was mounted with.
+    const objective = document.querySelector<HTMLInputElement>('input[name="objective"]')!;
+    await React.act(async () => setFieldValue(objective, "build a bigger squat"));
     await React.act(async () =>
       document
         .querySelector("form")!
@@ -248,9 +251,10 @@ test("superseding the current protocol asks in the themed dialog before generati
     );
     await React.act(async () => dialogButton("Generate anyway").click());
 
-    // Assert — the values the admin filled in reach generation, not an empty payload.
+    // Assert — the values held across the dialog are the submitted ones. Re-reading the form
+    // on confirm would be the same assertion; holding a stale or empty payload would not.
     assert.equal(started.length, 1);
-    assert.equal((started[0] as { objective: string }).objective, "gain muscle mass");
+    assert.equal((started[0] as { objective: string }).objective, "build a bigger squat");
 
     await React.act(async () => unmount());
   } finally {

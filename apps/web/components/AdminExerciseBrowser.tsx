@@ -17,6 +17,7 @@ import {
   type AdminExerciseRowView,
 } from "@/lib/admin-exercises-view";
 import { Badge } from "@/components/ui/badge";
+import { replaceFilterQuery } from "@/lib/filter-url";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -89,12 +90,7 @@ export function AdminExerciseBrowser({
   // exists to remove. The URL is not a rendered surface, so writing the live value rather than
   // the deferred one cannot desynchronize anything on screen.
   useEffect(() => {
-    const search = adminFiltersToQuery(filters).toString();
-    window.history.replaceState(
-      null,
-      "",
-      search.length > 0 ? `?${search}` : window.location.pathname,
-    );
+    replaceFilterQuery(adminFiltersToQuery(filters));
   }, [filters]);
 
   // The order never depends on the filters, so the sort — 500 `localeCompare`s — happens once
