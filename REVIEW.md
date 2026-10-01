@@ -171,6 +171,13 @@ The plan model has **no calendar and no "today"** (ADR-0001).
 - 🟡 A focus indicator is drawn, not tinted (ADR-0104): an `outline-none` is only defensible
   beside a ring of its own. On an SVG surface, reject a fill/colour change as the indicator and
   reject a stroke on a path whose stroke is an inline style — the stylesheet cannot win there.
+- 🟠 Shared row state travels by context, not through intermediaries (ADR-0105): reject a callback
+  a component only forwards, and reject the same prop block re-declared at two levels. The contract
+  is `{ state, actions, meta }` with **one** `dispatch` over a vocabulary derived from the reducer's
+  event union — reject a hand-re-declared copy of it, and reject a row that names a `sessionId`
+  (addressing belongs to the screen). Props stay where each is a leaf's own closure over one
+  position, or the component is shared presentation. A context is not sweepable, so reject one
+  whose deepest consumer no test mounts.
 
 ## 9. Baseline quality & security
 

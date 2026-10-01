@@ -425,6 +425,27 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   style, which no stylesheet rule can override. `lib/atlas-focus-ring.test.ts` holds the markup by
   rendering it and the rule by reading the stylesheet; there is no sweep (ADR-0104).
 
+- A third component on the way between the state and the control that edits it → that is a
+  context, not another prop. The Protocol Builder's rows reached their `dispatch` through three
+  intermediaries, which cost **52 callback props** in one file — the same block of 13 re-declared
+  in four interfaces, `onEditField` alone written 16 times — and the two middle components
+  declared, destructured and forwarded props they never read. The contract is
+  `PrescriptionDraftContext`'s `{ state, actions, meta }` (`components/builder/`): `state` is the
+  open Session, `actions` is **one** `dispatch` over a vocabulary whose payloads are derived from
+  the reducer's own union (`WithoutSessionId<Extract<BuilderEvent, …>>`, so a new field reaches the
+  rows with no second edit), and `meta` is the live drag gesture — shared, but neither draft nor
+  action. *Membership* in that vocabulary is a judgement, so it is a declared registry — and
+  `as const satisfies readonly BuilderEvent["type"][]`, or a renamed event drops silently out of
+  the union instead of failing. A row addresses a `position` and cannot name a Session, so
+  `toBuilderEvent` in the screen that holds the reducer is the one place an edit is addressed.
+  Keep props where each is a leaf's own closure over one position (`PrescriptionControls`, the five
+  that survive) or where the component is shared presentation (`PrescriptionFieldStack`, ADR-0067),
+  and don't memoize a context value no `React.memo` is reading — that is ADR-0091's failure wearing
+  a different hat. A context is not sweepable, so
+  `lib/prescription-draft-context.test.ts` mounts the real list and asserts a **member** row's edit
+  carries its own position, which is the thing 13 drilled callbacks proved by their shape
+  (ADR-0105).
+
 - New animation or transform transition → pair it with `motion-reduce:animate-none`
   or `motion-reduce:transition-none` **in the same class string**. Colour and
   opacity transitions move nothing and are exempt by rule. The guard in

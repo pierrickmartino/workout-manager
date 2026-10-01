@@ -14,13 +14,13 @@ import {
   toSimulatePayload,
   type BuilderDraft,
   type DraftSession,
-  type DropIntent,
   type PickedExercise,
 } from "@/lib/protocol-builder";
+import {
+  toBuilderEvent,
+  type PrescriptionEvent,
+} from "@/lib/prescription-draft";
 import { remapSelectionAfterReorder } from "@/lib/supersets";
-import { type LoadKind } from "@/lib/load";
-import type { Effort } from "@/lib/effort";
-import type { DistanceUnit, QuantityKind } from "@/lib/quantity";
 import type { WeightUnit } from "@/lib/weight-unit";
 import type { BalancePreview, ProtocolProgress } from "@/lib/protocols-types";
 import { toMuscleBars } from "@/lib/muscle-distribution";
@@ -221,114 +221,18 @@ export function ProtocolBuilder({
               sessionId: selectedSession.sessionId,
             })
           }
-          onEditField={(position, field, value) =>
-            dispatch({
-              type: "EDIT_PRESCRIPTION",
-              sessionId: selectedSession.sessionId,
-              position,
-              field,
-              value,
-            })
-          }
-          onEditLoad={(position, loadKind, loadValue) =>
-            dispatch({
-              type: "EDIT_LOAD",
-              sessionId: selectedSession.sessionId,
-              position,
-              loadKind,
-              loadValue,
-            })
-          }
-          onSetScheme={(position, scheme) =>
-            dispatch({
-              type: "SET_SCHEME",
-              sessionId: selectedSession.sessionId,
-              position,
-              scheme,
-            })
-          }
-          onSetSetType={(position, setType) =>
-            dispatch({
-              type: "SET_SET_TYPE",
-              sessionId: selectedSession.sessionId,
-              position,
-              setType,
-            })
-          }
-          onSetTargetEffort={(position, targetEffort) =>
-            dispatch({
-              type: "SET_TARGET_EFFORT",
-              sessionId: selectedSession.sessionId,
-              position,
-              targetEffort,
-            })
-          }
-          onSetNote={(position, note) =>
-            dispatch({
-              type: "SET_NOTE",
-              sessionId: selectedSession.sessionId,
-              position,
-              note,
-            })
-          }
-          onSetQuantity={(position, quantityKind, quantityUnit) =>
-            dispatch({
-              type: "SET_QUANTITY",
-              sessionId: selectedSession.sessionId,
-              position,
-              quantityKind,
-              quantityUnit,
-            })
+          // Every per-Prescription edit the rows raise rides one seam (ADR-0105): they address
+          // a `position`, and the open Session's id is attached here — the only place that
+          // knows which Session the matrix has open. Thirteen one-per-concern callbacks used to
+          // say the same thing, each re-declared at four levels below this call.
+          dispatch={(event) =>
+            dispatch(toBuilderEvent(selectedSession.sessionId, event))
           }
           onAdd={(exercise) =>
             dispatch({
               type: "ADD_PRESCRIPTION",
               sessionId: selectedSession.sessionId,
               exercise,
-            })
-          }
-          onRemove={(position) =>
-            dispatch({
-              type: "REMOVE_PRESCRIPTION",
-              sessionId: selectedSession.sessionId,
-              position,
-            })
-          }
-          onReorder={(from, to) =>
-            dispatch({
-              type: "REORDER_PRESCRIPTION",
-              sessionId: selectedSession.sessionId,
-              from,
-              to,
-            })
-          }
-          onGroupWithNext={(position) =>
-            dispatch({
-              type: "GROUP_WITH_NEXT",
-              sessionId: selectedSession.sessionId,
-              position,
-            })
-          }
-          onUngroup={(position) =>
-            dispatch({
-              type: "UNGROUP",
-              sessionId: selectedSession.sessionId,
-              position,
-            })
-          }
-          onEditRoundRest={(position, roundRestSeconds) =>
-            dispatch({
-              type: "EDIT_ROUND_REST",
-              sessionId: selectedSession.sessionId,
-              position,
-              roundRestSeconds,
-            })
-          }
-          onResolveDrop={(intent) =>
-            dispatch({
-              type: "RESOLVE_DROP",
-              sessionId: selectedSession.sessionId,
-              intent,
             })
           }
           onRemoveSession={() => {
@@ -560,28 +464,10 @@ interface SessionEditorProps {
   // Session.
   queuedExerciseName: string | null;
   onPlaceQueued: () => void;
-  onEditField: (
-    position: number,
-    field: "sets" | "reps" | "restSeconds" | "tempo",
-    value: string | number | null,
-  ) => void;
-  onEditLoad: (position: number, loadKind: LoadKind, loadValue: string) => void;
-  onSetScheme: (position: number, scheme: string | null) => void;
-  onSetSetType: (position: number, setType: string | null) => void;
-  onSetTargetEffort: (position: number, targetEffort: Effort | null) => void;
-  onSetNote: (position: number, note: string | null) => void;
-  onSetQuantity: (
-    position: number,
-    quantityKind: QuantityKind,
-    quantityUnit: DistanceUnit,
-  ) => void;
+  // The row-scoped edit seam (ADR-0105): one verb for every per-Prescription edit, reorder,
+  // group and classified drop, already addressed to this Session by the caller.
+  dispatch: (event: PrescriptionEvent) => void;
   onAdd: (exercise: PickedExercise) => void;
-  onRemove: (position: number) => void;
-  onReorder: (from: number, to: number) => void;
-  onGroupWithNext: (position: number) => void;
-  onUngroup: (position: number) => void;
-  onEditRoundRest: (position: number, roundRestSeconds: number | null) => void;
-  onResolveDrop: (intent: DropIntent) => void;
   onRemoveSession: () => void;
 }
 
@@ -593,20 +479,8 @@ function SessionEditor({
   unit,
   queuedExerciseName,
   onPlaceQueued,
-  onEditField,
-  onEditLoad,
-  onSetScheme,
-  onSetSetType,
-  onSetTargetEffort,
-  onSetNote,
-  onSetQuantity,
+  dispatch,
   onAdd,
-  onRemove,
-  onReorder,
-  onGroupWithNext,
-  onUngroup,
-  onEditRoundRest,
-  onResolveDrop,
   onRemoveSession,
 }: SessionEditorProps) {
   const locked = session.performed;
@@ -630,14 +504,24 @@ function SessionEditor({
     }
   }
 
-  // Selection is position-based, so a reorder must move it with the exercise it points at
-  // (ADR-0074) — otherwise the highlight jumps to whatever slid into the old slot. Remap it
-  // against the same contiguity-preserving move the reducer applies, then dispatch.
-  function handleReorder(from: number, to: number) {
-    setSelectedPosition((current) =>
-      remapSelectionAfterReorder(session.prescriptions, from, to, current),
-    );
-    onReorder(from, to);
+  // Every row event passes through here on its way to the reducer, which is what lets one place
+  // keep the composition strip's selection honest. Selection is position-based, so a reorder
+  // must move it with the exercise it points at (ADR-0074) — otherwise the highlight jumps to
+  // whatever slid into the old slot. Remap it against the same contiguity-preserving move the
+  // reducer applies, then dispatch. (A drag-resolved reorder — `RESOLVE_DROP` — has never been
+  // remapped, and this refactor deliberately does not change that.)
+  function dispatchRowEvent(event: PrescriptionEvent) {
+    if (event.type === "REORDER_PRESCRIPTION") {
+      setSelectedPosition((current) =>
+        remapSelectionAfterReorder(
+          session.prescriptions,
+          event.from,
+          event.to,
+          current,
+        ),
+      );
+    }
+    dispatch(event);
   }
   return (
     <Card
@@ -683,7 +567,12 @@ function SessionEditor({
         onSelect={focusPrescription}
         // Dragging a tile reorders the Prescription (ADR-0074): warm-up/cooldown follow the
         // new position. A performed Session is settled record, so it gets no reorder.
-        onReorder={locked ? undefined : handleReorder}
+        onReorder={
+          locked
+            ? undefined
+            : (from, to) =>
+                dispatchRowEvent({ type: "REORDER_PRESCRIPTION", from, to })
+        }
       />
 
       <PrescriptionList
@@ -691,19 +580,7 @@ function SessionEditor({
         layout={layout}
         locked={locked}
         unit={unit}
-        onEditField={onEditField}
-        onEditLoad={onEditLoad}
-        onSetScheme={onSetScheme}
-        onSetSetType={onSetSetType}
-        onSetTargetEffort={onSetTargetEffort}
-        onSetNote={onSetNote}
-        onSetQuantity={onSetQuantity}
-        onEditRoundRest={onEditRoundRest}
-        onReorder={handleReorder}
-        onGroupWithNext={onGroupWithNext}
-        onUngroup={onUngroup}
-        onRemove={onRemove}
-        onResolveDrop={onResolveDrop}
+        dispatch={dispatchRowEvent}
       />
 
       {locked || !queuedExerciseName ? null : (
