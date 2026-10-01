@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Copy, PenLine, Repeat } from "lucide-react";
+import { Copy, PenLine, Repeat } from "@/components/pulse/icons";
 
 import { fetchLog } from "@/lib/logs";
 import { loggedSessionDetail } from "@/lib/logged-session-detail";

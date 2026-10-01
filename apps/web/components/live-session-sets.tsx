@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useState } from "react";
-import { Check, ChevronDown, RotateCcw, SkipForward } from "lucide-react";
+import { Check, ChevronDown, RotateCcw, SkipForward } from "@/components/pulse/icons";
 
 import { liveSetDomId, type LiveSet, type LiveUnit } from "@/lib/live-session";
 import { loadKindOptions, type LoadKind } from "@/lib/load";

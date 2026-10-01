@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown } from "@/components/pulse/icons";
 
 import type {
   MuscleGroupSection,

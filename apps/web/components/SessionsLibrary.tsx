@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Star } from "lucide-react";
+import { Star } from "@/components/pulse/icons";
 
 import {
   ALL_SESSIONS_CHIP,

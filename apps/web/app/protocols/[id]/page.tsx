@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, CheckCircle2, Play } from "lucide-react";
+import { ArrowRight, CheckCircle2, Play } from "@/components/pulse/icons";
 
 import { fetchProtocol } from "@/lib/protocols";
 import { fetchHome } from "@/lib/home";

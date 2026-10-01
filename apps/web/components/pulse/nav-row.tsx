@@ -1,6 +1,6 @@
 import * as React from "react";
 import Link from "next/link";
-import { ChevronRight, type LucideIcon } from "lucide-react";
+import { ChevronRight, type LucideIcon } from "@/components/pulse/icons";
 
 import { cn } from "@/lib/utils";
 

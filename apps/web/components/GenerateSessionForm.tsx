@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Zap } from "lucide-react";
+import { Zap } from "@/components/pulse/icons";
 
 import { submitGenerate, type GenerateFormState } from "@/app/sessions/actions";
 import { EquipmentField } from "@/components/EquipmentField";

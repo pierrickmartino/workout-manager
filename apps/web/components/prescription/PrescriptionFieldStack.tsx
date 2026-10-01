@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, StickyNote } from "lucide-react";
+import { ChevronDown, StickyNote } from "@/components/pulse/icons";
 
 import { loadKindOptions } from "@/lib/load";
 import {

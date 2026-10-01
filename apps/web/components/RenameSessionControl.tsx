@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Pencil } from "lucide-react";
+import { Pencil } from "@/components/pulse/icons";
 
 import {
   submitRename,

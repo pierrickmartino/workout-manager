@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Check, ChevronRight } from "lucide-react";
+import { Check, ChevronRight } from "@/components/pulse/icons";
 
 import type { ProtocolProgress } from "@/lib/protocols-types";
 import {

@@ -8,7 +8,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ChevronRight, TrendingUp } from "lucide-react";
+import { ChevronRight, TrendingUp } from "@/components/pulse/icons";
 
 import {
   fetchCatalogEntryDetail,

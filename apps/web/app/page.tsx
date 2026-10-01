@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Zap } from "lucide-react";
+import { Zap } from "@/components/pulse/icons";
 import { SignedOut, SignInButton } from "@clerk/nextjs";
 
 import { resolveLandingRedirect } from "@/lib/landing-redirect";

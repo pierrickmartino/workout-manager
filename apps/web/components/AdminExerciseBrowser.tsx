@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, Search } from "lucide-react";
+import { ChevronRight, Search } from "@/components/pulse/icons";
 
 import {
   EMPTY_ADMIN_FILTERS,

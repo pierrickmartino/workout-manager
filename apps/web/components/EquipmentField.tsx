@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus } from "@/components/pulse/icons";
 
 import { Field } from "@/components/pulse/field";
 import { Input } from "@/components/ui/input";

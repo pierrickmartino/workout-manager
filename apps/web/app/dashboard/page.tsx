@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Trophy } from "lucide-react";
+import { Trophy } from "@/components/pulse/icons";
 
 import { fetchProfile, isProfileComplete } from "@/lib/profile";
 import { READINESS_BADGE, fetchHome } from "@/lib/home";

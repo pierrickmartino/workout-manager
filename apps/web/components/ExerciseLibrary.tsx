@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search } from "@/components/pulse/icons";
 
 import { searchExerciseLibrary } from "@/app/protocols/[id]/edit/actions";
 import type { ExerciseSearchResult } from "@/lib/exercises-types";

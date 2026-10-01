@@ -1,7 +1,7 @@
 "use client";
 
 import { useClerk } from "@clerk/nextjs";
-import { LogOut } from "lucide-react";
+import { LogOut } from "@/components/pulse/icons";
 
 import { purgeLocalLiveState } from "@/lib/live-session-storage";
 

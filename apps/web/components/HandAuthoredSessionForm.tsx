@@ -3,7 +3,7 @@
 import { useCallback, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
-import { ArrowDown, ArrowUp, Link2, Trash2, Unlink } from "lucide-react";
+import { ArrowDown, ArrowUp, Link2, Trash2, Unlink } from "@/components/pulse/icons";
 
 import {
   resolveAuthoredExercise,

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Zap, BarChart3, User, type LucideIcon } from "lucide-react";
+import { LayoutGrid, Zap, BarChart3, User, type LucideIcon } from "@/components/pulse/icons";
 
 import { cn } from "@/lib/utils";
 import { TABS, isActive, type TabLabel } from "@/lib/tab-nav";

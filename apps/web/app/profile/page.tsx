@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck, User } from "lucide-react";
+import { ShieldCheck, User } from "@/components/pulse/icons";
 
 import { fetchProfile } from "@/lib/profile";
 import { fetchProfileProgress } from "@/lib/profile-progress";

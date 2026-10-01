@@ -13,7 +13,7 @@ import {
   PersonStanding,
   Circle,
   type LucideIcon,
-} from "lucide-react";
+} from "@/components/pulse/icons";
 
 import { equipmentLabel } from "@/lib/equipment";
 

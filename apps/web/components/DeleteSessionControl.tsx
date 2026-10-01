@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2 } from "@/components/pulse/icons";
 
 import { Button } from "@/components/ui/button";
 

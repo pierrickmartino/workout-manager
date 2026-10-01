@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, ClipboardCheck, Play } from "lucide-react";
+import { ArrowRight, ClipboardCheck, Play } from "@/components/pulse/icons";
 
 import { SubstituteButton } from "@/components/SubstituteButton";
 import { DuplicateButton } from "@/components/DuplicateButton";
