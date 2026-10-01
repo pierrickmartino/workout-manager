@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, PencilLine, PencilRuler, Zap } from "lucide-react";
+import { ArrowRight, PencilLine, PencilRuler, Zap } from "@/components/pulse/icons";
 
 import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";

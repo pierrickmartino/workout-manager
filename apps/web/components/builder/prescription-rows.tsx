@@ -9,7 +9,7 @@ import {
   Link2,
   Unlink,
   Trash2,
-} from "lucide-react";
+} from "@/components/pulse/icons";
 import {
   DndContext,
   DragOverlay,

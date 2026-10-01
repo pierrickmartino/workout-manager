@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 
 import { updateExerciseAction } from "@/app/admin/exercises/actions";
 import {
+  applyEditorEdit,
   buildExercisePatch,
   hasEditorChanges,
+  overlayEditorEdits,
   toEditorFields,
   validateEditorFields,
   MAX_DIFFICULTY,
@@ -21,32 +23,38 @@ import { Textarea } from "@/components/ui/textarea";
 
 // The admin Exercise editor (issue #502): a thin Client Component. All parsing, validation,
 // and the partial-patch diff live in the pure `lib/admin-exercise-editor` (unit-tested
-// without a browser); this holds only the form state and drives the save action. It tracks
-// the last-saved `initial` fields against the `current` edits so it can send *only the
-// changed fields* and disable Save when nothing changed. The 409 name-collision error (and
-// any other) is surfaced straight from the action's `error`. The backend is the real gate.
+// without a browser); this holds only the form state and drives the save action. It diffs
+// the server's current fields against the admin's edits so it can send *only the changed
+// fields* and disable Save when nothing changed. The 409 name-collision error (and any
+// other) is surfaced straight from the action's `error`. The backend is the real gate.
+//
+// The baseline is the `exercise` prop, not a mount-time snapshot of it: every sibling
+// control on this page revalidates the route when it writes, so the Server Component can
+// hand this form newer values while it is mounted (`overlayEditorEdits` explains why that
+// has to win for an untouched field). `edits` therefore holds only the fields the admin
+// touched, and a successful save clears it — the saved values arrive as fresh props.
 export function AdminExerciseEditor({
   exercise,
 }: {
   exercise: ExerciseDetail;
 }): React.JSX.Element {
-  const [initial, setInitial] = useState<ExerciseEditorFields>(() =>
-    toEditorFields(exercise),
-  );
-  const [fields, setFields] = useState<ExerciseEditorFields>(initial);
+  const server = useMemo(() => toEditorFields(exercise), [exercise]);
+  const [edits, setEdits] = useState<Partial<ExerciseEditorFields>>({});
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [isSaving, startSaving] = useTransition();
+
+  const fields = overlayEditorEdits(server, edits);
 
   function set<K extends keyof ExerciseEditorFields>(
     key: K,
     value: ExerciseEditorFields[K],
   ): void {
     setSaved(false);
-    setFields((current) => ({ ...current, [key]: value }));
+    setEdits((current) => applyEditorEdit(server, current, key, value));
   }
 
-  const dirty = hasEditorChanges(initial, fields);
+  const dirty = hasEditorChanges(server, fields);
 
   function save(): void {
     setError(null);
@@ -58,7 +66,7 @@ export function AdminExerciseEditor({
       return;
     }
 
-    const patch = buildExercisePatch(initial, fields);
+    const patch = buildExercisePatch(server, fields);
     if (Object.keys(patch).length === 0) return;
 
     startSaving(async () => {
@@ -68,11 +76,9 @@ export function AdminExerciseEditor({
           setError(result.error ?? "Could not save the exercise.");
           return;
         }
-        // Re-baseline to the saved state so the diff resets and Save disables until the
-        // next edit.
-        const next = toEditorFields(result.exercise);
-        setInitial(next);
-        setFields(next);
+        // Drop the edits: the action revalidated this route, so the saved values come back
+        // as fresh props and the diff resets with Save disabled until the next edit.
+        setEdits({});
         setSaved(true);
       } catch {
         setError("Could not save the exercise. Try again.");

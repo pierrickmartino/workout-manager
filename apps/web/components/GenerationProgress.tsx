@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/components/pulse/icons";
 
 import { Card } from "@/components/ui/card";
 import { Overline } from "@/components/pulse/overline";

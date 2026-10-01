@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Repeat2 } from "lucide-react";
+import { Repeat2 } from "@/components/pulse/icons";
 
 import {
   submitSubstitute,

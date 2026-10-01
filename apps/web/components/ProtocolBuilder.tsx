@@ -2,7 +2,7 @@
 
 import { useEffect, useReducer, useState, useTransition } from "react";
 import Link from "next/link";
-import { Lock, Plus, Trash2 } from "lucide-react";
+import { Lock, Plus, Trash2 } from "@/components/pulse/icons";
 
 import { runSimulation, submitDeploy } from "@/app/protocols/[id]/edit/actions";
 import {

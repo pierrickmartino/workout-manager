@@ -1,4 +1,4 @@
-import { WifiOff } from "lucide-react";
+import { WifiOff } from "@/components/pulse/icons";
 
 interface OfflineNoticeProps {
   // What the user can't do right now and why — e.g. "Generating a session needs a

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Copy, Repeat } from "lucide-react";
+import { Copy, Repeat } from "@/components/pulse/icons";
 
 import type { LoggedSession } from "@/lib/logs-types";
 import type { WeightUnit } from "@/lib/weight-unit";

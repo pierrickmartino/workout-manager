@@ -1,12 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import {
-  ChevronDown,
-  ChevronRight,
-  Search,
-  X,
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Search, X } from "@/components/pulse/icons";
 
 import { fetchCatalogTaxonomyForFilters } from "@/app/exercises/actions";
 import {
@@ -21,29 +16,17 @@ import {
   hasActiveFilters,
   toggleFacetValue,
 } from "@/lib/exercise-browse-query";
-import {
-  PATTERN_BLURB,
-  PATTERN_LABEL,
-  parseMovementPattern,
-} from "@/lib/movement-pattern";
 import { equipmentLabel } from "@/lib/equipment";
 import { createLatestCatalogRequest } from "@/lib/latest-catalog-request";
-import {
-  buildUsageMap,
-  usageBadgeText,
-  usageMarker,
-  type UsageMarker,
-} from "@/lib/exercise-usage-view";
+import { buildUsageMap } from "@/lib/exercise-usage-view";
 import { useModalFocus } from "@/lib/use-modal-focus";
 import { useConnectivity } from "@/lib/use-connectivity";
 import type { ExerciseSearchResult } from "@/lib/exercises-types";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { OfflineNotice } from "@/components/pulse/offline-notice";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MovementGlyph } from "@/components/exercise/movement-glyph";
-import { EquipmentSymbol } from "@/components/exercise/equipment-symbol";
+import { PatternSection } from "@/components/exercise/pattern-section";
 import { CatalogDetail } from "@/components/exercise/catalog-detail";
 
 interface ExerciseCatalogTaxonomyProps {
@@ -74,6 +57,10 @@ export function ExerciseCatalogTaxonomy({
   referenceIso,
   unit,
 }: ExerciseCatalogTaxonomyProps): React.JSX.Element {
+  // Seeded once from the server, then owned here — deliberately, unlike the admin editors,
+  // which track their `exercise` prop (`overlayEditorEdits`). This screen writes the URL with
+  // `history.replaceState` precisely so the Server Component does *not* re-run, so these two
+  // props cannot change under it and there is no later server value to follow.
   const [filters, setFilters] = useState<CatalogFilters>(initialFilters);
   const [taxonomy, setTaxonomy] = useState<CatalogTaxonomy>(initialTaxonomy);
   const [error, setError] = useState<string | null>(null);
@@ -128,6 +115,10 @@ export function ExerciseCatalogTaxonomy({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtersKey, online]);
 
+  // Not `useCallback`'d, deliberately: every consumer wraps these in a fresh arrow anyway
+  // (`onToggle={() => toggle(…)}`) and no facet control is memoized, so a stable identity
+  // here would buy nothing and imply a memo boundary that does not exist. Only the handlers
+  // that actually cross one are stabilised — see `openDetail` below.
   const toggle = (
     field: "muscleGroups" | "equipment" | "difficulty",
     value: string,
@@ -146,22 +137,29 @@ export function ExerciseCatalogTaxonomy({
   const [drawerEntered, setDrawerEntered] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const enterFrame = useRef<number | null>(null);
-  const clearDrawerTimers = () => {
+  const clearDrawerTimers = useCallback(() => {
     if (closeTimer.current !== null) clearTimeout(closeTimer.current);
     if (enterFrame.current !== null) cancelAnimationFrame(enterFrame.current);
-  };
-  useEffect(() => clearDrawerTimers, []);
-  const openDetail = (exercise: ExerciseSearchResult) => {
-    clearDrawerTimers();
-    setSelected(exercise);
-    enterFrame.current = requestAnimationFrame(() => setDrawerEntered(true));
-  };
-  const closeDetail = () => {
+  }, []);
+  useEffect(() => clearDrawerTimers, [clearDrawerTimers]);
+  // `onOpen` crosses the memo boundary on every `PatternSection`, so its identity has to
+  // survive a re-render of this screen — a fresh arrow here would re-render every section
+  // and every row of the whole unpaged catalog each time the drawer opens or closes, and
+  // the memo would read as working (ADR-0091).
+  const openDetail = useCallback(
+    (exercise: ExerciseSearchResult) => {
+      clearDrawerTimers();
+      setSelected(exercise);
+      enterFrame.current = requestAnimationFrame(() => setDrawerEntered(true));
+    },
+    [clearDrawerTimers],
+  );
+  const closeDetail = useCallback(() => {
     clearDrawerTimers();
     setDrawerEntered(false);
     const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : DRAWER_ANIM_MS;
     closeTimer.current = setTimeout(() => setSelected(null), delay);
-  };
+  }, [clearDrawerTimers]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -300,127 +298,6 @@ export function ExerciseCatalogTaxonomy({
       ) : null}
     </div>
   );
-}
-
-interface PatternSectionProps {
-  pattern: string;
-  count: number;
-  exercises: ExerciseSearchResult[];
-  usageMap: Map<number, string>;
-  referenceIso: string;
-  onOpen: (exercise: ExerciseSearchResult) => void;
-}
-
-// One collapsible Movement Pattern section: its family plate, label, count, and blurb over
-// a list of the exercises that classify into it. Starts open so the whole catalog is
-// scannable; the header toggles it shut.
-function PatternSection({
-  pattern,
-  count,
-  exercises,
-  usageMap,
-  referenceIso,
-  onOpen,
-}: PatternSectionProps) {
-  const [open, setOpen] = useState(true);
-  const resolved = parseMovementPattern(pattern);
-
-  return (
-    <section className="overflow-hidden rounded-lg border border-border bg-surface">
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-elevated/50"
-      >
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border bg-base text-cyan">
-          <MovementGlyph pattern={resolved} className="h-7 w-7" />
-        </span>
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span className="flex items-center gap-2">
-            <span className="font-display text-[15px] font-semibold text-text-primary">
-              {PATTERN_LABEL[resolved]}
-            </span>
-            <span className="label-mono text-[9px] text-text-muted">{count}</span>
-          </span>
-          <span className="truncate font-sans text-[11px] text-text-muted">
-            {PATTERN_BLURB[resolved]}
-          </span>
-        </span>
-        {open ? (
-          <ChevronDown className="h-4 w-4 shrink-0 text-text-muted" aria-hidden />
-        ) : (
-          <ChevronRight className="h-4 w-4 shrink-0 text-text-muted" aria-hidden />
-        )}
-      </button>
-
-      {open ? (
-        <ul className="border-t border-border">
-          {exercises.map((exercise) => (
-            <li key={exercise.id}>
-              <TaxonomyRow
-                exercise={exercise}
-                lastPerformedOn={usageMap.get(exercise.id) ?? null}
-                referenceIso={referenceIso}
-                onOpen={onOpen}
-              />
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </section>
-  );
-}
-
-interface TaxonomyRowProps {
-  exercise: ExerciseSearchResult;
-  lastPerformedOn: string | null;
-  referenceIso: string;
-  onOpen: (exercise: ExerciseSearchResult) => void;
-}
-
-function TaxonomyRow({
-  exercise,
-  lastPerformedOn,
-  referenceIso,
-  onOpen,
-}: TaxonomyRowProps) {
-  const pattern = parseMovementPattern(exercise.movement_pattern);
-  const marker = usageMarker(lastPerformedOn, referenceIso);
-
-  return (
-    <button
-      type="button"
-      onClick={() => onOpen(exercise)}
-      className="flex w-full items-center gap-3 border-b border-border px-3 py-2.5 text-left transition-colors last:border-b-0 hover:bg-elevated/40"
-    >
-      <MovementGlyph
-        pattern={pattern}
-        className="h-5 w-5 shrink-0 text-text-muted"
-      />
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="flex items-center gap-2">
-          <span className="truncate font-sans text-[13px] text-text-primary">
-            {exercise.name}
-          </span>
-          <UsageBadge marker={marker} />
-        </span>
-      </span>
-      <EquipmentSymbol equipment={exercise.equipment} />
-      <ChevronRight className="h-4 w-4 shrink-0 text-text-muted" aria-hidden />
-    </button>
-  );
-}
-
-// The strictly descriptive usage marker (ADR-0042): NEW when never trained, else a neutral
-// "TRAINED · <recency>". Preserved from the flat browse so the redesign loses none of its
-// signal. No call to action, no "overdue" styling.
-function UsageBadge({ marker }: { marker: UsageMarker }) {
-  const text = usageBadgeText(marker);
-  if (!marker.trained) {
-    return <Badge variant="outline">{text}</Badge>;
-  }
-  return <span className="label-mono text-[9px] text-text-muted">{text}</span>;
 }
 
 interface DetailDrawerProps {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { TrendingUp } from "lucide-react";
+import { TrendingUp } from "@/components/pulse/icons";
 
 import {
   submitAdvanceVariation,

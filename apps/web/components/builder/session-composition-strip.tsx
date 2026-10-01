@@ -1,6 +1,6 @@
 "use client";
 
-import { GripVertical, Link2 } from "lucide-react";
+import { GripVertical, Link2 } from "@/components/pulse/icons";
 import {
   DndContext,
   PointerSensor,

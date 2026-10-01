@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { Dumbbell } from "lucide-react";
+import { Dumbbell } from "@/components/pulse/icons";
 
 import { resolveIsAdmin } from "@/lib/admin";
 import { resolveActiveSkin } from "@/lib/active-skin";

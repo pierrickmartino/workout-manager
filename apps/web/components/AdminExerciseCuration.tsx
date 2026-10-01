@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 
 import {
   setPrecautionsAction,
@@ -40,21 +40,29 @@ export function AdminExerciseCuration({
   );
 }
 
+// The tier the control shows is the server's, until the admin picks another one: a sibling
+// control's write revalidates this route, so a mount-time snapshot would show a tier the
+// movement no longer carries (see `overlayEditorEdits` for the same reasoning on the
+// descriptive editor). `choice` is therefore null until they pick a *different* tier —
+// re-picking the server's own is not a pending change, so it clears rather than pinning the
+// control — and a successful save clears it too, the saved tier arriving as a fresh prop.
 function ProvenanceControl({
   exercise,
 }: {
   exercise: ExerciseDetail;
 }): React.JSX.Element {
-  const [initial, setInitial] = useState(exercise.provenance);
-  const [value, setValue] = useState(exercise.provenance);
+  const [choice, setChoice] = useState<ExerciseDetail["provenance"] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [isSaving, startSaving] = useTransition();
 
+  const value = choice ?? exercise.provenance;
+  const dirty = value !== exercise.provenance;
+
   function save(): void {
     setError(null);
     setSaved(false);
-    if (value === initial) return;
+    if (!dirty) return;
 
     startSaving(async () => {
       try {
@@ -63,8 +71,7 @@ function ProvenanceControl({
           setError(result.error ?? "Could not change the provenance.");
           return;
         }
-        setInitial(result.exercise.provenance);
-        setValue(result.exercise.provenance);
+        setChoice(null);
         setSaved(true);
       } catch {
         setError("Could not change the provenance. Try again.");
@@ -85,7 +92,8 @@ function ProvenanceControl({
           value={value}
           onChange={(event) => {
             setSaved(false);
-            setValue(event.target.value);
+            const picked = event.target.value;
+            setChoice(picked === exercise.provenance ? null : picked);
           }}
           className="sm:w-64"
         >
@@ -103,7 +111,7 @@ function ProvenanceControl({
       <Button
         type="button"
         variant="primary"
-        disabled={value === initial || isSaving}
+        disabled={!dirty || isSaving}
         onClick={save}
         className="self-start"
       >
@@ -113,20 +121,26 @@ function ProvenanceControl({
   );
 }
 
+// Same shape as the Provenance control above: the server's precautions until the admin
+// types, so a sibling write's revalidation is not lost behind a mount-time snapshot, and a
+// `draft` that outranks it so their typing is never discarded — cleared again when they
+// type the server's own text back, which is an undone edit rather than a pending one.
 function PrecautionsControl({
   exercise,
 }: {
   exercise: ExerciseDetail;
 }): React.JSX.Element {
-  const [initial, setInitial] = useState(() =>
-    precautionsToField(exercise.precautions),
-  );
-  const [field, setField] = useState(initial);
+  const [draft, setDraft] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [isSaving, startSaving] = useTransition();
 
-  const dirty = hasPrecautionsChanges(initial, field);
+  const server = useMemo(
+    () => precautionsToField(exercise.precautions),
+    [exercise.precautions],
+  );
+  const field = draft ?? server;
+  const dirty = hasPrecautionsChanges(server, field);
 
   function save(): void {
     setError(null);
@@ -143,9 +157,9 @@ function PrecautionsControl({
           setError(result.error ?? "Could not save the precautions.");
           return;
         }
-        const next = precautionsToField(result.exercise.precautions);
-        setInitial(next);
-        setField(next);
+        // Drop the draft: the action revalidated this route, so the saved precautions come
+        // back as a fresh prop.
+        setDraft(null);
         setSaved(true);
       } catch {
         setError("Could not save the precautions. Try again.");
@@ -167,7 +181,8 @@ function PrecautionsControl({
           value={field}
           onChange={(event) => {
             setSaved(false);
-            setField(event.target.value);
+            const typed = event.target.value;
+            setDraft(typed === server ? null : typed);
           }}
         />
       </Field>

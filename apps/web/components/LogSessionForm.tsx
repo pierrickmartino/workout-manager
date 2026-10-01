@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Plus, Trash2 } from "lucide-react";
+import { Check, Plus, Trash2 } from "@/components/pulse/icons";
 
 import { submitLog, type LogFormState } from "@/app/sessions/[id]/log/actions";
 import { loadKindOptions } from "@/lib/load";

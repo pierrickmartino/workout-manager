@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Star } from "lucide-react";
+import { Star } from "@/components/pulse/icons";
 
 import {
   submitFavorite,

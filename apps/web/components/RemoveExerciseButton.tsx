@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2 } from "@/components/pulse/icons";
 
 import { submitRemovePrescription } from "@/app/sessions/[id]/actions";
 import { Button } from "@/components/ui/button";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus } from "lucide-react";
+import { Plus } from "@/components/pulse/icons";
 
 import { resolveAuthoredExercise } from "@/app/sessions/log/actions";
 import { submitInsertPrescription } from "@/app/sessions/[id]/actions";

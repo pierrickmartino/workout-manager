@@ -2,8 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  applyEditorEdit,
   buildExercisePatch,
   hasEditorChanges,
+  overlayEditorEdits,
   parseDifficultyInput,
   parseListInput,
   parseStepsInput,
@@ -135,4 +137,65 @@ test("buildExercisePatch sends a same-identity casing fix of the name", () => {
   const initial = toEditorFields(exercise({ name: "walking lunge" }));
   const patch = buildExercisePatch(initial, { ...initial, name: "Walking Lunge" });
   assert.deepEqual(patch, { name: "Walking Lunge" });
+});
+
+test("overlayEditorEdits takes an untouched field from the server", () => {
+  // Arrange
+  const server = toEditorFields(exercise({ description: "An enriched description." }));
+  const edits = { name: "Reverse Lunge" };
+
+  // Act
+  const fields = overlayEditorEdits(server, edits);
+
+  // Assert
+  assert.equal(fields.description, "An enriched description.");
+  assert.equal(fields.name, "Reverse Lunge");
+});
+
+test("overlayEditorEdits keeps a touched field even when the server disagrees", () => {
+  // Arrange — the admin has typed a name the server has since changed under them.
+  const server = toEditorFields(exercise({ name: "Walking Lunge (barbell)" }));
+  const edits = { name: "Reverse Lunge" };
+
+  // Act
+  const fields = overlayEditorEdits(server, edits);
+
+  // Assert — their typing is never discarded by a refresh.
+  assert.equal(fields.name, "Reverse Lunge");
+});
+
+test("applyEditorEdit drops an edit typed back to the server's value", () => {
+  // Arrange — the admin edits the name, then retypes what the server already has. That is
+  // not a pending change, and holding it as one would pin the field against later refreshes.
+  const server = toEditorFields(exercise());
+  const edited = applyEditorEdit(server, {}, "name", "Reverse Lunge");
+
+  // Act
+  const reverted = applyEditorEdit(server, edited, "name", server.name);
+
+  // Assert
+  assert.deepEqual(edited, { name: "Reverse Lunge" });
+  assert.deepEqual(reverted, {});
+});
+
+test("applyEditorEdit keeps an edit that only differs by whitespace", () => {
+  // Arrange — the patch builder treats a whitespace-only list edit as no change, but the
+  // *field* did change, so the admin must keep seeing what they typed.
+  const server = toEditorFields(exercise());
+
+  // Act
+  const edits = applyEditorEdit(server, {}, "targetedMuscles", `${server.targetedMuscles}\n`);
+
+  // Assert
+  assert.equal(edits.targetedMuscles, `${server.targetedMuscles}\n`);
+  assert.equal(hasEditorChanges(server, overlayEditorEdits(server, edits)), false);
+});
+
+test("overlayEditorEdits with no edits is the server's own fields", () => {
+  // Arrange
+  const server = toEditorFields(exercise());
+
+  // Act / Assert
+  assert.deepEqual(overlayEditorEdits(server, {}), server);
+  assert.equal(hasEditorChanges(server, overlayEditorEdits(server, {})), false);
 });

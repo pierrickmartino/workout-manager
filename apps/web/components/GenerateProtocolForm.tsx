@@ -1,6 +1,6 @@
 "use client";
 
-import { Zap } from "lucide-react";
+import { Zap } from "@/components/pulse/icons";
 
 import { GenerationProgress } from "@/components/GenerationProgress";
 import { EquipmentField } from "@/components/EquipmentField";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, Copy, Share2 } from "lucide-react";
+import { Check, Copy, Share2 } from "@/components/pulse/icons";
 
 import { submitRevokeShare, submitShare } from "@/app/sessions/[id]/actions";
 import { Button } from "@/components/ui/button";

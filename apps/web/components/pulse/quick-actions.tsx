@@ -5,7 +5,7 @@ import {
   PencilRuler,
   Play,
   type LucideIcon,
-} from "lucide-react";
+} from "@/components/pulse/icons";
 
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Dumbbell, Play } from "lucide-react";
+import { Dumbbell, Play } from "@/components/pulse/icons";
 
 import type { SessionCardModel } from "@/lib/session-card";
 import { loggedCountBadge } from "@/lib/session-delete";

@@ -37,12 +37,12 @@ guards — it is this external ruleset applied to a web codebase it was not writ
 | 4 | `state-ground-truth` | **PASS** | — |
 | 5 | `js-hoist-intl` | **PASS** (no `Intl` use) + related note | INFO |
 | 6 | `scroll-position-no-state` | **PASS** — no scroll position in state | — |
-| 7 | `list-performance-item-memo` | **DEVIATION** — 0 `React.memo` in 116 components | MEDIUM |
-| 8 | `list-performance-callbacks` | **DEVIATION** — unstable handler refs | MEDIUM (paired with #7) |
-| 9 | `list-performance-virtualize` | **WATCH** — one unpaged list, bounded by design | LOW–MEDIUM |
-| 10 | `imports-design-system-folder` | **DEVIATION** — 65 files import `lucide-react` directly | LOW |
-| 11 | `react-state-fallback` | **DEVIATION** — 4 props-seeded `useState` | LOW |
-| 12 | `monorepo-single-dependency-versions` | **PARTIAL** — caret ranges throughout | LOW |
+| 7 | `list-performance-item-memo` | **DEVIATION** → resolved | MEDIUM |
+| 8 | `list-performance-callbacks` | **DEVIATION** → resolved | MEDIUM (paired with #7) |
+| 9 | `list-performance-virtualize` | **WATCH** → recorded, no behaviour change | LOW–MEDIUM |
+| 10 | `imports-design-system-folder` | **DEVIATION** → resolved (ADR-0092) | LOW |
+| 11 | `react-state-fallback` | **DEVIATION** → resolved; was a live defect | LOW |
+| 12 | `monorepo-single-dependency-versions` | **PARTIAL** → resolved for `apps/web` | LOW |
 | 13 | `design-system-compound-components` | **N/A in effect** — web-valid, see note | INFO |
 | 14 | `react-compiler-destructure-functions` | **N/A** — React Compiler not enabled | INFO |
 
@@ -85,6 +85,11 @@ constructs a formatter internally, which is the cost the rule exists to avoid. I
 
 ## Deviations
 
+> **Resolved.** #7–#12 were implemented together; each item below carries a
+> `**Resolution:**` note saying what landed and what deliberately did not. The one
+> item in this report still open is the ESLint gap at the end, which is not a
+> deviation and was never part of the ruleset.
+
 ### MEDIUM — no memoized list items, and handler refs are unstable (#7, #8)
 
 `React.memo` appears **zero times** across 116 components, against 158 `.map()` render
@@ -113,6 +118,19 @@ Files with the densest inline handler props, if this is pursued further:
 `HandAuthoredSessionForm.tsx` (40), `builder/prescription-rows.tsx` (26),
 `ProtocolBuilder.tsx` (26).
 
+**Resolution:** the pair landed on the catalog, as the clearest case. `PatternSection`
+moved into its own module (`components/exercise/pattern-section.tsx`) behind
+`React.memo`, `TaxonomyRow` with it, and `openDetail` / `closeDetail` became
+`useCallback` — per ADR-0091, which already says the two are one change.
+`lib/catalog-list-memo.test.ts` holds both halves and fails if either is removed.
+The three dense-handler files above are deliberately untouched: this item's own
+calibration ("scaling headroom … not a live defect") gates them on "if this is
+pursued further", and none has a timer driving it.
+
+Two `useCallback`s were added and then removed in review: `toggle` and `clearFilters`
+cross no memo boundary, every consumer wraps them in a fresh arrow anyway, and a
+stable identity there would imply a boundary that does not exist.
+
 ### LOW–MEDIUM — one deliberately unpaged list (#9)
 
 `GET /exercises/taxonomy` (`apps/api/app/routes/exercises.py:228`) returns the **whole**
@@ -129,6 +147,17 @@ virtualization rule would eventually have a web analogue (`react-window` or simi
 catalog ever stops being small. The bound is a product fact, not a code invariant, so it is
 worth knowing it is load-bearing.
 
+**Resolution:** no behaviour changed, as recommended. What landed is the record, made
+executable: `test_taxonomy_stays_unpaged_even_when_a_client_asks_for_a_page` pins that a
+caller's `limit`/`offset` is ignored, so a future pagination of this read fails a test
+that explains why rather than silently making every per-pattern count a lie. The
+docstring now also points at where the bound has already been measured
+(`apps/web/audit/extra.mjs` renders the catalog screen at 100/1000/10000 rows) and at the
+remedy when it stops holding (virtualize the client list, never paginate this read).
+
+This is more than "no change recommended" strictly invited, and it is the minimum that
+makes the item's own closing sentence true. Nothing about the endpoint's behaviour moved.
+
 ### LOW — third-party imports bypass the design-system folder (#10)
 
 The project has a real design system at `components/pulse/` (36 components), which satisfies
@@ -141,6 +170,21 @@ which is consistent with ADR-0084 routing charts through classified imports.
 Consequence: swapping or wrapping the icon set means touching 65 files. A one-line
 re-export module would reduce that to one. Genuinely low priority — `lucide-react` is
 stable and this is refactoring insurance, not a defect.
+
+**Resolution:** done, and recorded as ADR-0092. `components/pulse/icons.ts` is now the
+only module naming the package (63 icons plus the `LucideIcon` type, all pure
+re-exports); 66 call sites import from it. `lib/icon-import-policy.ts` sweeps the whole
+web root and fails closed on the package, so re-exports, `import type` and deep imports
+are all caught and the next direct import is a test failure rather than a thing someone
+has to notice.
+
+The bundle risk this shape carries was measured rather than argued, per ADR-0090's
+precedent: a production build before and after shows every route's client chunk weight
+byte-for-byte identical, and ADR-0092 records both why (Next's `optimizePackageImports`
+plus pure re-exports) and what would break it (any wrapper component in that module).
+
+A barrel over `pulse/` itself was considered and rejected — see ADR-0092. The "no
+`components/pulse/index.ts`" half of this finding stays deliberately unresolved.
 
 ### LOW — four `useState` seeded from props (#11)
 
@@ -162,6 +206,23 @@ The two admin editors are worth a look on their own merits — if a server refet
 deliver new `initial` values while the editor is mounted, the current code will show stale
 fields.
 
+**Resolution:** it can, and it did. Every sibling control on that page calls
+`revalidateExercise`, which revalidates `/admin/exercises/{id}` — so setting the
+Provenance, retiring, or uploading an image re-runs the Server Component and hands the
+mounted editor fresh values it was ignoring. So this was a live defect, not a style
+preference: the admin read stale text and edited from it.
+
+Both editors now overlay only the fields the admin has *changed* on the `exercise` prop,
+so an untouched field follows the server and their typing is never discarded
+(`overlayEditorEdits` / `applyEditorEdit`, `draft ?? server`). `AdminExerciseCuration`
+turned out to hold **two** props-seeded controls, not the one line cited here; both were
+converted. `lib/admin-editor-props-refresh.test.ts` covers it, including the case review
+caught: an edit typed and then undone must stop outranking the server, or the fix
+reintroduces the same staleness one keystroke at a time.
+
+The two `ExerciseCatalogTaxonomy` cases are left as is, as this item recommends, and the
+reason is now stated at the `useState` itself rather than only here.
+
 ### LOW — caret ranges on every dependency (#12)
 
 The rule's "single version across packages" half is **moot**: there is one `package.json`,
@@ -170,6 +231,17 @@ exact versions" half does apply — all 14 runtime and 22 dev dependencies use `
 `next: ^16.2.6` and `react: ^19.0.0`. With no lockfile-pinned overrides, two installs at
 different times can resolve differently. Standard practice for a web app and not a finding
 I would push; noted because the rule is explicit about it.
+
+**Resolution:** `apps/web/package.json` is pinned. Every declared version is the one the
+committed lockfile already resolved, so nothing about the install changed — the diff
+*looks* like upgrades (`next` `^16.2.6` → `16.2.12`, `react` `^19.0.0` → `19.2.7`) because
+those are the versions CI has been testing all along; the declaration now records them
+instead of a range that happened to reach them.
+
+`apps/api/pyproject.toml` deliberately keeps its `>=` floors: it has no lockfile, and
+several of those floors are documented CVE minimums rather than preferred versions, so
+pinning them would change what they mean. The "single version across packages" half stays
+moot, as this item says.
 
 ---
 

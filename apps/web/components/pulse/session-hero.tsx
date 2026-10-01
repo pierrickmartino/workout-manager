@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Play } from "lucide-react";
+import { ArrowRight, Play } from "@/components/pulse/icons";
 
 import type { ProtocolProgress } from "@/lib/protocols-types";
 import { heroStats } from "@/lib/home-view";

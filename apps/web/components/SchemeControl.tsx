@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { TrendingUp, RotateCcw } from "lucide-react";
+import { TrendingUp, RotateCcw } from "@/components/pulse/icons";
 
 import {
   submitChooseScheme,

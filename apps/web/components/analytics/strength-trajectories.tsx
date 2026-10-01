@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight } from "@/components/pulse/icons";
 
 import type { StrengthTrajectoryTile } from "@/lib/strength-trajectories-view";
 import { SectionHeader } from "@/components/pulse/section-header";

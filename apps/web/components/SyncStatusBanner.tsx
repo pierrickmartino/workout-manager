@@ -7,7 +7,7 @@ import {
   RefreshCw,
   Save,
   WifiOff,
-} from "lucide-react";
+} from "@/components/pulse/icons";
 
 import { useSyncStatus } from "@/lib/use-sync-status";
 import { hasQueuedWork, type SyncState } from "@/lib/sync-state";

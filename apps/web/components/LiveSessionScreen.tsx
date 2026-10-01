@@ -21,7 +21,7 @@ import {
   Play,
   SkipForward,
   Timer,
-} from "lucide-react";
+} from "@/components/pulse/icons";
 
 import {
   recordLiveSession,

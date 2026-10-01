@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { WifiOff } from "lucide-react";
+import { WifiOff } from "@/components/pulse/icons";
 
 import { Overline } from "@/components/pulse/overline";
 import { buttonVariants } from "@/components/ui/button";

@@ -1,4 +1,4 @@
-import ts from "typescript";
+import { moduleSpecifiers } from "./module-specifiers.ts";
 
 // ADR-0090, and the bundle budget ADR-0088 sets, made executable. Recharts costs ~102 KB
 // gzipped in a route's client chunk graph — against that ~10 KB budget — and a *static*
@@ -52,22 +52,13 @@ export interface ModuleImport {
   readonly isTypeOnly: boolean;
 }
 
-// Every static `import … from "…"` in this file. Reads the AST rather than the bytes, so a
-// module path inside a comment, a string, or a `dynamic(() => import(…))` callback never
-// counts — the last of those being the whole point.
+// Every static `import … from "…"` in this file. The shared `moduleSpecifiers` walk reads
+// the AST rather than the bytes, so a module path inside a comment, a string, or a
+// `dynamic(() => import(…))` callback never counts — the last of those being the whole
+// point. A re-export is dropped here: this rule is about what a *route* pulls into its chunk
+// graph, and a barrel re-exporting a chart is itself a plot module, caught as one.
 export function staticImports(source: string, file: string): readonly ModuleImport[] {
-  const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const found: ModuleImport[] = [];
-  for (const statement of tree.statements) {
-    if (!ts.isImportDeclaration(statement)) continue;
-    if (!ts.isStringLiteral(statement.moduleSpecifier)) continue;
-    found.push({
-      specifier: statement.moduleSpecifier.text,
-      line: tree.getLineAndCharacterOfPosition(statement.getStart(tree)).line + 1,
-      isTypeOnly: statement.importClause?.isTypeOnly === true,
-    });
-  }
-  return found;
+  return moduleSpecifiers(source, file).filter(({ isReExport }) => !isReExport);
 }
 
 // Whether this file imports `recharts` — which is what makes it a plot module, and so a

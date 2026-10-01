@@ -1,4 +1,4 @@
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal } from "@/components/pulse/icons";
 
 interface OverflowMenuProps {
   children: React.ReactNode;

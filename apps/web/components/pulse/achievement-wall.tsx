@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Lock, Trophy } from "lucide-react";
+import { Lock, Trophy } from "@/components/pulse/icons";
 
 import type { AchievementCard } from "@/lib/achievements-view";
 import { SegmentedBar } from "@/components/pulse/segmented-bar";

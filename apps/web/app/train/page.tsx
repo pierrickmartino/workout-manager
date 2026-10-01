@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { LibraryBig, ListChecks } from "lucide-react";
+import { LibraryBig, ListChecks } from "@/components/pulse/icons";
 
 import { GenerateTrainingLaunchpad } from "@/components/pulse/generate-training-launchpad";
 import { PageHeader } from "@/components/pulse/page-header";

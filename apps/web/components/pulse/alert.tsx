@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info } from "@/components/pulse/icons";
 
 import { cn } from "@/lib/utils";
 

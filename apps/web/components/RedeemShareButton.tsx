@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
-import { ArrowRight, Download } from "lucide-react";
+import { ArrowRight, Download } from "@/components/pulse/icons";
 
 import { submitRedeem, type RedeemFormState } from "@/app/shared/[token]/actions";
 import { Alert } from "@/components/pulse/alert";

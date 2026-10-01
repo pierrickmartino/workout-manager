@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Copy } from "lucide-react";
+import { Copy } from "@/components/pulse/icons";
 
 import {
   submitDuplicate,

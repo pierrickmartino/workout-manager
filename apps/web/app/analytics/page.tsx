@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Dumbbell, History, LineChart } from "lucide-react";
+import { Dumbbell, History, LineChart } from "@/components/pulse/icons";
 
 import {
   fetchAnalytics,

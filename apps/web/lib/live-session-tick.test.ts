@@ -1,13 +1,25 @@
 import { test, mock } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { resolve } from "node:path";
-import ts from "typescript";
 import React from "react";
-import { JSDOM } from "jsdom";
 
+import { loadTsx, mountDom } from "./tsx-harness.ts";
 import type { WorkoutSession } from "./sessions-types.ts";
+
+type ClockComponent = (props: { startedAt: number }) => React.JSX.Element;
+type CountdownComponent = (props: {
+  endAt: number;
+  onElapsed: () => void;
+}) => React.JSX.Element;
+type ScreenComponent = (props: {
+  session: WorkoutSession;
+  today: string;
+  defaultRestSeconds: number;
+  keepScreenAwake: boolean;
+  unit: string;
+}) => React.JSX.Element;
+// The props the set list is handed. Only their *identity* is under test, never their
+// contents, so an opaque bag is the honest shape.
+type SetListProps = Record<string, unknown>;
 
 // The Live Session is the one screen in the app that runs a wall-clock tick while the
 // user works — a phone, mid-workout, with a Screen Wake Lock deliberately held. The
@@ -16,65 +28,14 @@ import type { WorkoutSession } from "./sessions-types.ts";
 // `now` lifted back into `LiveSessionScreen` would re-render the whole set table sixty
 // times a minute and nothing would fail.
 //
-// They render the real TSX offline with the existing Node runner (no browser, no
-// build), the way form-accessibility.test.ts does, and drive time with mocked timers.
-
-const require = createRequire(import.meta.url);
-function load(path: string, boundaries: Record<string, unknown> = {}): any {
-  const filename = resolve(import.meta.dirname, "..", path);
-  const source = ts.transpileModule(readFileSync(filename, "utf8"), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
-  }).outputText;
-  const module = { exports: {} };
-  const localRequire = (name: string): any => {
-    if (name in boundaries) return boundaries[name];
-    if (!name.startsWith("@/")) return require(name);
-    const base = name.slice(2);
-    const extension = existsSync(resolve(import.meta.dirname, "..", `${base}.ts`))
-      ? ".ts"
-      : ".tsx";
-    return load(`${base}${extension}`, boundaries);
-  };
-  new Function("require", "module", "exports", source)(localRequire, module, module.exports);
-  return module.exports;
-}
-
-// Install a JSDOM window plus the act environment, and freeze the clock at 0 so every
-// assertion below reads an exact timer face. Returns the teardown.
-function mountDom(): { dom: JSDOM; restore: () => void } {
-  const dom = new JSDOM("<!doctype html><div id='root'></div>", {
-    url: "http://localhost",
-  });
-  const previous = Object.getOwnPropertyDescriptors(globalThis);
-  const globals: Record<string, unknown> = {
-    window: dom.window,
-    document: dom.window.document,
-    Event: dom.window.Event,
-    HTMLElement: dom.window.HTMLElement,
-    IS_REACT_ACT_ENVIRONMENT: true,
-  };
-  for (const [key, value] of Object.entries(globals)) {
-    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
-  }
-  mock.timers.enable({ apis: ["setInterval", "Date"] });
-  return {
-    dom,
-    restore: () => {
-      mock.timers.reset();
-      dom.window.close();
-      for (const key of Object.keys(globals)) {
-        if (previous[key]) Object.defineProperty(globalThis, key, previous[key]);
-        else Reflect.deleteProperty(globalThis, key);
-      }
-    },
-  };
-}
+// They render the real TSX offline through `tsx-harness` (no browser, no build) and drive
+// time with its mocked timers, so every assertion below reads an exact timer face.
 
 test("the elapsed clock advances every second without re-rendering its owner", async () => {
   // Arrange — an owner that counts its own renders around the clock leaf.
-  const { restore } = mountDom();
+  const { restore } = mountDom({ timers: true });
   try {
-    const { ElapsedClock } = load("components/pulse/elapsed-clock.tsx");
+    const { ElapsedClock } = loadTsx<{ ElapsedClock: ClockComponent }>("components/pulse/elapsed-clock.tsx");
     const { createRoot } = await import("react-dom/client");
     let ownerRenders = 0;
     function Owner(): React.JSX.Element {
@@ -109,9 +70,9 @@ test("the rest countdown reports reaching zero exactly once", async () => {
   // *fresh* `onElapsed` arrow each time (the shape a caller written without useCallback
   // gives it). Both halves matter: the countdown must not re-fire on its own tick, and
   // must not re-fire because the handler it was given has a new identity.
-  const { restore } = mountDom();
+  const { restore } = mountDom({ timers: true });
   try {
-    const { RestCountdown } = load("components/pulse/rest-countdown.tsx");
+    const { RestCountdown } = loadTsx<{ RestCountdown: CountdownComponent }>("components/pulse/rest-countdown.tsx");
     const { createRoot } = await import("react-dom/client");
     let elapsedCalls = 0;
     let rerenderOwner = () => {};
@@ -187,35 +148,38 @@ const SESSION: WorkoutSession = {
 // Mount the real LiveSessionScreen with its I/O boundaries stubbed and the set list
 // replaced by a probe that records every render and the props it was handed.
 async function mountLiveScreen(): Promise<{
-  renders: Record<string, any>[];
-  root: any;
+  renders: SetListProps[];
+  root: { unmount: () => void };
 }> {
-  const renders: Record<string, any>[] = [];
-  const { LiveSessionScreen } = load("components/LiveSessionScreen.tsx", {
-    "@clerk/nextjs": { useAuth: () => ({ userId: "user_1", isLoaded: true }) },
-    "next/navigation": { useRouter: () => ({ push: () => {} }) },
-    "next/link": {
-      __esModule: true,
-      default: ({ children }: { children: React.ReactNode }) =>
-        React.createElement("a", null, children),
-    },
-    "@/app/sessions/[id]/live/actions": {
-      recordLiveSession: async () => ({ error: null }),
-    },
-    "@/app/actions/outbox": { deliverQueuedFinish: async () => {} },
-    "@/lib/finish-outbox-sync": {
-      drainOutbox: async () => {},
-      enqueueFinish: async () => true,
-    },
-    "@/components/live-session-sets": {
-      // Deliberately NOT memoized: this probe must observe every render its parent
-      // performs, so a re-rendering parent cannot hide behind a memo boundary.
-      LiveSessionSets: (props: Record<string, any>) => {
-        renders.push(props);
-        return null;
+  const renders: SetListProps[] = [];
+  const { LiveSessionScreen } = loadTsx<{ LiveSessionScreen: ScreenComponent }>(
+    "components/LiveSessionScreen.tsx",
+    {
+      "@clerk/nextjs": { useAuth: () => ({ userId: "user_1", isLoaded: true }) },
+      "next/navigation": { useRouter: () => ({ push: () => {} }) },
+      "next/link": {
+        __esModule: true,
+        default: ({ children }: { children: React.ReactNode }) =>
+          React.createElement("a", null, children),
+      },
+      "@/app/sessions/[id]/live/actions": {
+        recordLiveSession: async () => ({ error: null }),
+      },
+      "@/app/actions/outbox": { deliverQueuedFinish: async () => {} },
+      "@/lib/finish-outbox-sync": {
+        drainOutbox: async () => {},
+        enqueueFinish: async () => true,
+      },
+      "@/components/live-session-sets": {
+        // Deliberately NOT memoized: this probe must observe every render its parent
+        // performs, so a re-rendering parent cannot hide behind a memo boundary.
+        LiveSessionSets: (props: SetListProps) => {
+          renders.push(props);
+          return null;
+        },
       },
     },
-  });
+  );
   const { createRoot } = await import("react-dom/client");
   const root = createRoot(document.getElementById("root")!);
   await React.act(async () =>
@@ -234,7 +198,7 @@ async function mountLiveScreen(): Promise<{
 
 test("a live session tick advances the elapsed face without re-rendering the set list", async () => {
   // Arrange — a started performance, with the set list rendered at least once.
-  const { restore } = mountDom();
+  const { restore } = mountDom({ timers: true });
   try {
     const { renders, root } = await mountLiveScreen();
     const face = () => document.querySelector('[aria-label="Elapsed time"]')!.textContent;
@@ -261,13 +225,18 @@ test("a live session tick advances the elapsed face without re-rendering the set
 
 test("a re-render that leaves the performance untouched hands the set list identical props", async () => {
   // Arrange — complete the first set, which starts a rest countdown.
-  const { restore } = mountDom();
+  const { restore } = mountDom({ timers: true });
   try {
     const { renders, root } = await mountLiveScreen();
     const last = () => renders[renders.length - 1];
-    await React.act(async () =>
-      last().onCompleteSet(0, 8, "absolute", "70", null),
-    );
+    const completeSet = last().onCompleteSet as (
+      index: number,
+      reps: number,
+      kind: string,
+      load: string,
+      rir: number | null,
+    ) => void;
+    await React.act(async () => completeSet(0, 8, "absolute", "70", null));
     const settled = last();
     assert.ok(
       document.querySelector('[aria-label="Rest remaining"]'),
@@ -305,7 +274,7 @@ test("a re-render that leaves the performance untouched hands the set list ident
 
 test("the set list is memoized, so stable props skip its subtree entirely", () => {
   // Arrange / Act — the export itself carries the memo boundary.
-  const { LiveSessionSets } = load("components/live-session-sets.tsx");
+  const { LiveSessionSets } = loadTsx<{ LiveSessionSets: unknown }>("components/live-session-sets.tsx");
 
   // Assert
   assert.equal(
