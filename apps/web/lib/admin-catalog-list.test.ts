@@ -50,6 +50,11 @@ async function mountBrowser(): Promise<{
           return viewModel.sortAdminExercises(rows);
         },
       },
+      // The component seeds its filters from the URL (#7). The real hook needs the App
+      // Router runtime, so it reads the mounted document's own query string here.
+      "next/navigation": {
+        useSearchParams: () => new URLSearchParams(window.location.search),
+      },
       "next/link": {
         __esModule: true,
         default: ({ children, href, className }: {
@@ -165,6 +170,91 @@ test("every catalog row defers its own layout and paint", async () => {
         `row is missing list-row-defer: ${link.className}`,
       );
     }
+
+    await React.act(async () => root.unmount());
+  } finally {
+    restore();
+  }
+});
+
+// #7: the filter state is the catalog's address. These hold the two halves a view-model
+// cannot — that the component seeds itself from the URL it was opened at, and that it writes
+// the URL back as the admin filters, without a navigation that would re-run the page.
+
+test("the browser opens filtered when the URL says so", async () => {
+  // Arrange — a shared or bookmarked link into the narrowed catalog.
+  const { restore } = mountDom({ url: `${CATALOG_URL}?q=squat&provenance=curated` });
+  try {
+    // Act
+    const { root } = await mountBrowser();
+
+    // Assert — the field, the facet and the rows all show the shared view, not the whole
+    // catalog with a stale address above it.
+    assert.equal(searchField().value, "squat");
+    assert.deepEqual(rowNames(), ["Back Squat", "Front Squat"]);
+    const provenance = document.querySelector<HTMLSelectElement>(
+      'select[aria-label="Filter by provenance"]',
+    )!;
+    assert.equal(provenance.value, "curated");
+
+    await React.act(async () => root.unmount());
+  } finally {
+    restore();
+  }
+});
+
+test("a facet the catalog's vocabulary does not contain is ignored, not applied", async () => {
+  // Arrange — a hand-mangled URL. Honouring it would show an empty catalog under a dropdown
+  // reading "All provenance".
+  const { restore } = mountDom({ url: `${CATALOG_URL}?provenance=marketing` });
+  try {
+    // Act
+    const { root } = await mountBrowser();
+
+    // Assert
+    assert.equal(rowNames().length, ROWS.length);
+
+    await React.act(async () => root.unmount());
+  } finally {
+    restore();
+  }
+});
+
+test("typing mirrors the filters into the URL without a navigation", async () => {
+  // Arrange — a router push would re-run the Server Component and re-fetch 500 rows per
+  // keystroke, so the mirror is a `replaceState`: the document never changes.
+  const { restore } = mountDom({ url: CATALOG_URL });
+  try {
+    const { root } = await mountBrowser();
+
+    // Act
+    await React.act(async () => setFieldValue(searchField(), "squat"));
+
+    // Assert
+    assert.equal(window.location.search, "?q=squat");
+    assert.equal(window.location.pathname, "/admin/exercises");
+
+    await React.act(async () => root.unmount());
+  } finally {
+    restore();
+  }
+});
+
+test("clearing the filters leaves a bare URL behind", async () => {
+  // Arrange
+  const { restore } = mountDom({ url: `${CATALOG_URL}?q=squat` });
+  try {
+    const { root } = await mountBrowser();
+
+    // Act
+    const clear = [...document.querySelectorAll("button")].find(
+      (button) => button.textContent === "Clear filters",
+    )!;
+    await React.act(async () => clear.dispatchEvent(new window.Event("click", { bubbles: true })));
+
+    // Assert — no `?q=` left dangling, so the cleared catalog shares as the whole catalog.
+    assert.equal(window.location.search, "");
+    assert.equal(window.location.pathname, "/admin/exercises");
 
     await React.act(async () => root.unmount());
   } finally {

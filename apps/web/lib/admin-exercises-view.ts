@@ -148,6 +148,60 @@ export function projectAdminExerciseRows(
   return filterAdminExercises(sorted, filters).map(toAdminExerciseRowView);
 }
 
+// The URL params the filter state lives under (#7). Short names because an admin shares
+// these by hand: `?q=squat&provenance=ai_generated&completeness=stub`.
+const QUERY_PARAM = "q";
+const PROVENANCE_PARAM = "provenance";
+const COMPLETENESS_PARAM = "completeness";
+const STATUS_PARAM = "status";
+
+const STATUSES: ReadonlySet<string> = new Set<AdminExerciseStatus>([
+  "all",
+  "active",
+  "retired",
+]);
+
+// Narrow an untrusted facet value against the closed vocabulary the dropdown offers,
+// collapsing anything else to "no filter on that axis". Deliberately stricter than
+// `provenanceLabel`, which renders an unknown token a *row* carries so a future value still
+// appears: a filter value the dropdown cannot display would select nothing while the control
+// read "All provenance", which is a filtered list nobody can see the reason for.
+function knownFacet(
+  value: string | null,
+  vocabulary: Record<string, string>,
+): string {
+  const token = value?.trim() ?? "";
+  return token in vocabulary ? token : "";
+}
+
+// Read the filter state out of the URL — the inverse of `adminFiltersToQuery`. The query
+// string is untrusted input, so an unknown facet or status is dropped rather than trusted and
+// a blank query collapses to "no query": a bare or hand-mangled URL is the unfiltered catalog.
+export function parseAdminFilters(params: URLSearchParams): AdminExerciseFilters {
+  const status = params.get(STATUS_PARAM)?.trim() ?? "";
+  return {
+    query: params.get(QUERY_PARAM)?.trim() ?? "",
+    provenance: knownFacet(params.get(PROVENANCE_PARAM), PROVENANCE_LABELS),
+    completeness: knownFacet(params.get(COMPLETENESS_PARAM), COMPLETENESS_LABELS),
+    status: STATUSES.has(status) ? (status as AdminExerciseStatus) : "all",
+  };
+}
+
+// Serialize filter state back into a query string for `history.replaceState` — the inverse of
+// `parseAdminFilters`. An axis that imposes no constraint contributes nothing, so a cleared
+// filter yields "" and the browser is left at a bare `/admin/exercises`.
+export function adminFiltersToQuery(
+  filters: AdminExerciseFilters,
+): URLSearchParams {
+  const params = new URLSearchParams();
+  const query = filters.query.trim();
+  if (query.length > 0) params.set(QUERY_PARAM, query);
+  if (filters.provenance !== "") params.set(PROVENANCE_PARAM, filters.provenance);
+  if (filters.completeness !== "") params.set(COMPLETENESS_PARAM, filters.completeness);
+  if (filters.status !== "all") params.set(STATUS_PARAM, filters.status);
+  return params;
+}
+
 // Whether any filter is active — drives the "showing the whole catalog" vs "N of M" copy
 // and the "Clear filters" affordance.
 export function hasActiveAdminFilters(filters: AdminExerciseFilters): boolean {

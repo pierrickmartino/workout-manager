@@ -14,19 +14,21 @@ No instance of `transition: all`, `user-scalable=no`, `onPaste` + `preventDefaul
 
 The findings below are real gaps, grouped by how much they cost.
 
-> **Status (2026-10-01).** The three HIGH findings (#1, #2, #3) and the first three MEDIUM ones
-> (#4, #5, #6) are fixed; each carries a `**Resolution:**` note saying what landed and what
-> deliberately did not. The conventions they set are ADR-0093 (a control's autofill and keypad
-> come from the primitive), ADR-0094 (a section divider is a heading), ADR-0095 (an image
-> reserves its box before its bytes arrive), ADR-0096 (an instant is written in the reader's
-> clock) and ADR-0097 (the admin catalog is kept off the keystroke path). One part of #2 is
-> closed as *won't fix* with a reason — the `mm:ss` fields — and is called out in its note.
-> #7–#15 are untouched.
+> **Status (2026-10-01).** The three HIGH findings (#1, #2, #3), all five MEDIUM ones
+> (#4–#8) and the first LOW one (#9) are fixed; each carries a `**Resolution:**` note saying
+> what landed and what deliberately did not. The conventions they set are ADR-0093 (a
+> control's autofill and keypad come from the primitive), ADR-0094 (a section divider is a
+> heading), ADR-0095 (an image reserves its box before its bytes arrive), ADR-0096 (an instant
+> is written in the reader's clock), ADR-0097 (the admin catalog is kept off the keystroke
+> path), ADR-0098 (a destructive confirmation is the app's own dialog) and ADR-0099 (every tap
+> target answers the first tap). One part of #2 is closed as *won't fix* with a reason — the
+> `mm:ss` fields — and is called out in its note. #10–#15 are untouched.
 >
 > The Exercise detail page and the admin screens were in **no** audit journey, so nothing
 > #4–#6 touched had ever been rendered at 320px, at 200% text, or at 1440px. Two journeys
 > (`exercise`, `admin`) now cover them in `audit/reflow.mjs` and `audit/wide.mjs`: 0 of 780
-> cases overflow at each. Adding them surfaced one pre-existing defect, noted under #4.
+> cases overflow at each. Adding them surfaced one pre-existing defect, noted under #4. Both
+> sweeps still pass unchanged after #7–#9.
 
 | # | Finding | Severity | Status |
 |---|---|---|---|
@@ -36,9 +38,9 @@ The findings below are real gaps, grouped by how much they cost.
 | 4 | `<img>` without `width`/`height` (CLS) and without `loading` | MEDIUM | Fixed — ADR-0095 |
 | 5 | Admin audit-log timestamp renders in *server* locale/timezone | MEDIUM | Fixed — ADR-0096 |
 | 6 | `limit=500` admin catalog, unvirtualized, filtered per keystroke | MEDIUM | Fixed — ADR-0097 |
-| 7 | Admin browser filter state not in URL | MEDIUM | Open |
-| 8 | `window.confirm` in 3 places while `ConfirmDialog` exists | MEDIUM | Open |
-| 9 | No `touch-action: manipulation` anywhere | LOW | Open |
+| 7 | Admin browser filter state not in URL | MEDIUM | Fixed |
+| 8 | `window.confirm` in 3 places while `ConfirmDialog` exists | MEDIUM | Fixed — ADR-0098 |
+| 9 | No `touch-action: manipulation` anywhere | LOW | Fixed — ADR-0099 |
 | 10 | No `text-wrap: balance`/`pretty` on headings | LOW | Open |
 | 11 | Placeholders don't end with `…`; two use a straight apostrophe | LOW | Open |
 | 12 | `themeColor` hardcoded to one Skin's dark background | LOW | Open |
@@ -371,6 +373,31 @@ and a refresh drops the filter. `components/SessionsLibrary.tsx:40` and
 `components/HistoryBrowser.tsx:49` both read `useSearchParams` and are the in-repo
 precedent to copy.
 
+**Resolution:** done by copying that precedent, which is why it has no ADR of its own — the
+pattern is already twice-stated and this is the third screen to follow it. `parseAdminFilters`
+and `adminFiltersToQuery` join the pure view-model in `lib/admin-exercises-view.ts`; the
+browser seeds its state from `useSearchParams` once and mirrors it back with
+`history.replaceState`, never a router navigation. A push would re-run the Server Component
+and re-fetch the whole 500-row catalog on every keystroke, which is precisely the cost
+ADR-0097 removed a week earlier. The page now wraps the browser in `Suspense`, as History and
+My Sessions do, per the App Router's contract for `useSearchParams`.
+
+Two decisions inside it are worth naming. **The URL is written from the live filters, not the
+deferred ones.** ADR-0097 reads the summary copy and the Clear-filters affordance off the
+deferred pass so the header always describes the list underneath it; the URL is not a rendered
+surface, so it can carry what the admin has actually typed without any risk of disagreeing
+with the screen. **Parsing is where a bogus facet dies.** The query string is untrusted input,
+so a `provenance` or `completeness` value outside the closed vocabulary — and any `status`
+that is not `all`/`active`/`retired` — collapses to "no filter on that axis". This is
+deliberately stricter than `provenanceLabel`, which renders an unknown token a *row* carries
+so a future value still appears: a filter value the dropdown cannot display would show an
+empty catalog under a control reading "All provenance", with nothing on screen explaining the
+emptiness.
+
+`admin-exercises-view.test.ts` holds the round-trip and the dropping; `admin-catalog-list.test.ts`
+holds the two halves a view-model cannot — that the component opens filtered when the URL says
+so, and that typing reaches the address bar without a navigation.
+
 ### 8. Native `window.confirm` for destructive actions — MEDIUM
 
 ```text
@@ -386,6 +413,42 @@ dialogs". `components/DeleteSessionControl.tsx` already uses the real dialog.
 
 `components/DeleteLogControl.tsx:33` also carries a straight apostrophe in
 `"This can't be undone."` → `can’t`.
+
+**Resolution:** all three swapped, the apostrophe fixed, and recorded as ADR-0098 — which
+restates the reason more sharply than this item does. The decisive fault is not that browser
+chrome ignores the Skin but that **the browser owns the answer**: after the first dialog on a
+page every browser offers "prevent additional dialogs", and once it is ticked every later
+`window.confirm` returns without asking. The guard becomes a standing yes or a standing no
+depending on the browser, with nothing on screen to say which and nothing in the code able to
+tell. The straight apostrophe is downstream of the same thing — a one-slot plain-text dialog
+has no typography.
+
+Each control keeps its own shape. The logged-session delete keeps `type="submit"` and only
+`preventDefault`s, so the form still posts with JavaScript off exactly as before, and
+confirming calls `requestSubmit()` rather than rebuilding the payload. The admin delete's copy
+split into the dialog's two slots (`confirmTitle` beside `confirmMessage` in the pure
+`deleteControlView`). The supersede had to hold the submitted values in state while the
+question is on screen, because the generate form is uncontrolled and re-reading it on confirm
+would depend on it still being mounted.
+
+`lib/native-dialog-policy.ts` sweeps every component and page for `alert`, `confirm` and
+`prompt` — bare or via `window`/`globalThis`/`self` — read from the AST so the three
+components that now explain why they avoid it do not trip the rule they document. Its registry
+is empty, because no destructive question in this app should be answered by a browser. It
+cannot see whether a confirmation is asked at all, so `destructive-confirm.test.ts` mounts all
+three and holds that opening performs nothing, cancelling performs nothing, and only
+confirming acts — with `window.confirm` made to **throw**, so a forgotten call cannot read as
+a quiet cancel.
+
+One correction to this item's text: `components/DeleteSessionControl.tsx` does **not** use the
+real dialog. It uses a two-step inline confirm (the `RemoveExerciseButton` idiom), which is a
+deliberate different answer for a non-modal row action and was left alone.
+
+Fixing this also exposed a hole in the test harness rather than in the app: `mountDom`
+installed JSDOM's `window` and `document` but not its `FormData`, so a component calling
+`new FormData(form)` reached Node's own, which rejects an `HTMLFormElement` and throws inside
+the event handler — a form action then did nothing and looked exactly like an unwired one.
+The harness now installs it with the other globals.
 
 ### 9. No `touch-action: manipulation` — LOW
 
@@ -403,6 +466,27 @@ button, a, summary, [role="button"], input, select, textarea {
 
 `-webkit-tap-highlight-color` is likewise never set, so the platform default grey flash
 lands on every custom-styled control. Set it intentionally in the same rule.
+
+**Resolution:** done as the fix shape describes, and recorded as ADR-0099. Two notes on what
+the rule does and does not give up. `manipulation` disables double-tap zoom on those elements
+and nothing else — panning and pinch-zoom still work, so the page stays zoomable — and because
+it is in `@layer base` a utility outranks it, so the @dnd-kit drag handles that already spell
+`touch-none` keep `touch-action: none` and their touch drags are unchanged.
+
+The tap highlight is deliberately **not** `transparent`. That is only safe beside an `:active`
+state of one's own, and this app styles `:hover` and `:focus-visible` but not `:active` — and
+`:hover` is synthesized and often sticky on touch. A transparent highlight would leave a tap
+unacknowledged until the next screen paints, which is the opposite of this item's point. It is
+set to a soft accent wash built with `color-mix`, so it re-tints per Skin.
+
+`lib/tap-target-policy.ts` guards both halves. `tapActionSelectors` reads the selector list the
+stylesheet actually declares, so the test holds it against the native controls rather than
+against a copy of the rule's text, and returns `[]` when nothing declares it — a finding, not a
+pass. The sweep then looks for an ARIA widget role on an element no selector reaches, which is
+how a tap target escapes an element-name rule; a role on a component tag resolves through a
+one-entry map (`next/link` renders an `<a>`) and anything else capitalized is reported rather
+than guessed at. It proves the declaration *reaches* every tap target, not that a tap feels
+fast — that is a property of a device.
 
 ### 10. No `text-wrap: balance` / `pretty` on headings — LOW
 

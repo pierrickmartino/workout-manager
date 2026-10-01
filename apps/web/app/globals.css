@@ -868,6 +868,34 @@
     color-scheme: inherit;
   }
 
+  /* Every tappable surface answers the first tap (#9). Without this a touch browser
+     waits ~300ms after a tap to see whether a second one is coming (double-tap zoom)
+     before dispatching the click — felt on every control in a PWA whose point is
+     logging sets between efforts. `manipulation` gives up double-tap zoom and nothing
+     else: panning and pinch-zoom still work, so the page stays zoomable (the viewport
+     sets no `user-scalable=no` either).
+
+     This is the base layer, so a utility still wins: the drag handles that spell
+     `touch-none` for @dnd-kit keep `touch-action: none` and their touch drags are
+     unaffected.
+
+     The tap highlight is set here rather than left to the platform, which paints an
+     untinted grey box that belongs to no Skin. It is deliberately *not* `transparent`:
+     that is only safe beside an `:active` state of one's own, and this app styles
+     `:hover` and `:focus-visible` but not `:active`, so a transparent highlight would
+     leave a tap unacknowledged until the next screen paints. A soft accent wash
+     re-tints per Skin and reads as the app's own. */
+  a,
+  button,
+  summary,
+  input,
+  select,
+  textarea,
+  [role="button"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: color-mix(in srgb, var(--color-cyan) 20%, transparent);
+  }
+
   /* Themed selection + focus ring baseline. */
   ::selection {
     background-color: var(--color-cyan-dim);

@@ -20,7 +20,11 @@ export interface DeleteControlView {
   // The action button's resting and in-flight labels.
   actionLabel: string;
   busyLabel: string;
-  // The confirmation the admin must accept before the irreversible act fires.
+  // The confirmation the admin must accept before the irreversible act fires, as the two
+  // slots the themed dialog has (#8): the question it is titled with, and the consequence
+  // underneath it. Two fields rather than one sentence because `window.confirm` had one slot
+  // and the dialog that replaced it has two.
+  confirmTitle: string;
   confirmMessage: string;
   // The message shown after a successful delete.
   successMessage: string;
@@ -31,8 +35,11 @@ const DESCRIPTION =
   "allowed only once the exercise is retired and no longer referenced by any prescription, " +
   "logged set, or relationship. Retire hides a movement reversibly; delete does not.";
 
+const CONFIRM_TITLE = "Permanently delete this exercise?";
+
 const CONFIRM_MESSAGE =
-  "Permanently delete this exercise? This cannot be undone.";
+  "This cannot be undone. The movement is removed from the shared catalog outright, not " +
+  "retired.";
 
 const SUCCESS_MESSAGE = "Exercise permanently deleted.";
 
@@ -57,6 +64,7 @@ export function deleteControlView(
     description: DESCRIPTION,
     actionLabel: "Delete permanently",
     busyLabel: "Deleting…",
+    confirmTitle: CONFIRM_TITLE,
     confirmMessage: CONFIRM_MESSAGE,
     successMessage: SUCCESS_MESSAGE,
   };

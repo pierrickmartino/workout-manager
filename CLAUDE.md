@@ -332,6 +332,39 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   `lib/admin-catalog-list.test.ts` holds what is observable: the sort runs once per catalog, and
   settling leaves the field, the rows and the count consistent (ADR-0097).
 
+- Confirming something irreversible → mount `components/pulse/confirm-dialog.tsx`, never
+  `window.confirm`. The decisive fault is not the Skin: after one dialog a browser offers
+  "prevent additional dialogs", and every later `confirm` then returns without asking — the
+  guard becomes a standing yes or no, with nothing on screen saying which. Write the copy as
+  the dialog's two slots (a question, then what accepting costs), the way `deleteControlView`
+  does. Where the action is a `<form action>`, keep the submit button a submit and only
+  `preventDefault` it, so the no-JS post survives, and confirm with `requestSubmit()` rather
+  than a hand-built payload. The guard in `apps/web/lib/native-dialog-policy.ts` sweeps every
+  component and page for `alert`/`confirm`/`prompt` — bare or via `window` — reads them from
+  the AST so a comment about the rule is fine, and its registry is empty. It cannot see
+  whether a confirmation is asked at all; `lib/destructive-confirm.test.ts` mounts the three
+  controls for that (ADR-0098).
+
+- New interactive surface → it is a native control (`a`, `button`, `summary`, `input`,
+  `select`, `textarea`) or a `[role="button"]`, because that is the selector list in
+  `globals.css` that gives tap targets `touch-action: manipulation` — without it every tap
+  carries the ~300ms double-tap-zoom delay. A widget role on anything else (`role="switch"` on
+  a `<div>`) must extend that base rule. A control needing a custom gesture spells `touch-none`
+  as a utility at the call site, where it outranks the base layer — which is why the @dnd-kit
+  handles are unaffected. The guard in `apps/web/lib/tap-target-policy.ts` reads the selector
+  list out of the stylesheet, fails closed on a role written on an unknown component tag, and
+  treats "no rule declares it" as a finding rather than a clean sweep (ADR-0099).
+
+- A client-side filter over an already-fetched list → mirror it into the URL, so the narrowed
+  view is shareable and survives a refresh. Put `parse*Filters` / `*FiltersToQuery` in the
+  `lib/` view-model, seed component state from `useSearchParams` **once**, write back with
+  `window.history.replaceState` (a router push re-runs the Server Component and re-fetches on
+  every keystroke), and wrap the component in `Suspense` on its page. Parsing is where an
+  untrusted value dies: a facet outside the closed vocabulary collapses to "no filter", or the
+  control reads "All" above an empty list. `HistoryBrowser`, `SessionsLibrary` and
+  `AdminExerciseBrowser` are the three that do this; where a deferred pass exists (ADR-0097)
+  the URL follows the *live* filters, since it is not a rendered surface.
+
 - New animation or transform transition → pair it with `motion-reduce:animate-none`
   or `motion-reduce:transition-none` **in the same class string**. Colour and
   opacity transitions move nothing and are exempt by rule. The guard in
