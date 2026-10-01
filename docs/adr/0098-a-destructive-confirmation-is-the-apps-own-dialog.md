@@ -100,4 +100,6 @@ like a handler that was never wired. The harness now installs
   open, so no journey had ever mounted one and the static guards would have passed
   over an unmeasured surface (ADR-0088). `audit/main.tsx` now has a `confirm`
   journey carrying the longest copy of the three, and it is in both
-  `audit/reflow.mjs` and `audit/wide.mjs`.
+  `audit/reflow.mjs` and `audit/wide.mjs` — 840 cases each, 0 overflowing at
+  320px (100% and 200% text) and 0 at 1440px, where the `max-w-sm` box stays
+  416px rather than stretching with the frame.

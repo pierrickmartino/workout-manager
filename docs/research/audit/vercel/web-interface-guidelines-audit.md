@@ -30,7 +30,9 @@ The findings below are real gaps, grouped by how much they cost.
 > cases overflow at each. Adding them surfaced one pre-existing defect, noted under #4.
 >
 > #8 had the same hole for the same reason: a dialog renders only while it is open, so no
-> journey had ever mounted one. A third journey (`confirm`) now covers it in both sweeps.
+> journey had ever mounted one. A third journey (`confirm`) now covers it in both sweeps,
+> which measure **840** cases each: 0 overflow at 320px (100% *and* 200% text) and 0 at
+> 1440px, where the dialog's `max-w-sm` box holds at 416px inside the wide frame.
 
 | # | Finding | Severity | Status |
 |---|---|---|---|
