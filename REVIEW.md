@@ -156,6 +156,21 @@ The plan model has **no calendar and no "today"** (ADR-0001).
   view-model, seeded once from `useSearchParams`, mirrored with `replaceFilterQuery`, the
   component under `Suspense`. Reject a router push (it re-fetches per keystroke), and reject a
   parse that admits a value outside the facet's closed vocabulary.
+- 🟡 Authored text is typeset (ADR-0101, enforced by `display-heading-policy.ts` and
+  `copy-typography-policy.ts`): a `font-display` heading states `text-balance`, and an apostrophe
+  in **any** authored string — rendered copy, a `lib/` view-model, a guard's own failure message —
+  is `’`. A placeholder reading as an instruction ends in `…`; one showing a value or a single
+  token (`mm:ss`, `70`, `e.g. 2`) does not; a placeholder restating its own `hint` is deleted.
+- 🟡 The browser chrome follows the rendered Theme (ADR-0102): a new or re-tuned Skin updates
+  `SKIN_BASE_COLORS` beside `--color-base`, and `theme-color.test.ts` holds the two to one number.
+  Reject a hardcoded `themeColor`, and reject reading the Skin anywhere but the cached resolvers.
+- 🟡 A field arrives quiet (ADR-0103, enforced by `autofocus-policy.ts` and
+  `spellcheck-policy.ts`): reject `autoFocus`, including one gated on a viewport check, and reject
+  a value field (tempo, duration, Load, authored name) that does not declare `spellCheck`. A set
+  note and a movement cue are prose — reject turning the checker off on those.
+- 🟡 A focus indicator is drawn, not tinted (ADR-0104): an `outline-none` is only defensible
+  beside a ring of its own. On an SVG surface, reject a fill/colour change as the indicator and
+  reject a stroke on a path whose stroke is an inline style — the stylesheet cannot win there.
 
 ## 9. Baseline quality & security
 

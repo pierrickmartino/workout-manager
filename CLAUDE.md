@@ -374,6 +374,57 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   `AdminExerciseBrowser` are the four that do this; where a deferred pass exists (ADR-0097)
   the URL follows the *live* filters, since it is not a rendered surface (ADR-0100).
 
+- New heading set in the display face → give it `text-balance` (or `text-pretty`), so the title
+  decides its own wrap instead of leaving a widow wherever the line box ran out. The guard in
+  `apps/web/lib/display-heading-policy.ts` sweeps every component and page for an `<h1>`–`<h6>`
+  whose classes name `font-display` and no wrap decision, reads them through `cn()`, conditionals
+  and templates, and **fails closed** on a className it cannot read. Exempt by rule: a heading
+  that cannot wrap (`truncate`, `line-clamp-1`) — a `line-clamp-2` still wraps, so it still
+  balances. It cannot see a capitalized tag (`SessionCard`'s `<Title>`), and balancing changes no
+  minimum content width, so ADR-0085's `min-w-0 break-words` pairing is still what keeps an
+  authored name inside the viewport (ADR-0101).
+
+- New authored string, anywhere → the apostrophe is `’`, not `'`. The guard in
+  `apps/web/lib/copy-typography-policy.ts` sweeps components, pages **and** `lib/` view-models
+  (copy lives there by design — ADR-0098 put a dialog's two slots in `deleteControlView`) for a
+  straight apostrophe between letters, read from the AST so a comment about the rule is fine.
+  **Every** string, not only the rendered ones: a failure message, a registry `reason:` and a
+  placeholder are one node kind, so telling them apart would be guessing. Its registry holds the
+  two `lib/session-section.ts` keywords matched against *authored* Exercise names, each entry
+  naming the one word in the one file; the guard's own module is the one file the sweep skips,
+  because a registry must be able to spell what it exempts. The ellipsis half is **not**
+  mechanized: a placeholder that reads as an instruction or a phrase ends in `…`, one showing a
+  value or a single token (`mm:ss`, `3-1-1`, `e.g. 2`, `dumbbells, pull-up bar`) does not — a
+  judgement per field. A placeholder restating its own `hint` is deleted, not punctuated
+  (ADR-0101).
+
+- New Skin, or a re-tuned `--color-base` → update `SKIN_BASE_COLORS` in
+  `apps/web/lib/theme-color.ts` in the same change. The browser chrome is the rendered Theme's own
+  page colour: `app/layout.tsx` resolves it per request in `generateViewport()` from the same
+  React-`cache`d Active Skin and Mode the `<html>` attributes come from, and System Mode emits both
+  `prefers-color-scheme` branches because that is the one Mode whose polarity the server does not
+  know. The registry restates the stylesheet, so `theme-color.test.ts` parses `globals.css` with
+  `parseColorBlocks` and holds the twelve values — plus each Skin's System-light copy — to one
+  number, and fails on a catalog Skin with no page colour rather than falling back (ADR-0102).
+
+- New form control → nothing takes focus on arrival (`apps/web/lib/autofocus-policy.ts` sweeps for
+  `autoFocus` anywhere, conditional included, registry empty) and a field whose value is not a word
+  says so. `type="search"` gets `spellCheck={false}` from the `Input` primitive; a value field — a
+  tempo, a duration, a Load, an authored *name* — declares it at the call site; a set note or a
+  movement cue is prose and keeps the browser's checker. The guard in
+  `apps/web/lib/spellcheck-policy.ts` keys on a **placeholder showing a value pattern** (digits,
+  separators, the `hh`/`mm`/`ss` mask), accepts either answer, and fails closed on a computed
+  placeholder. A placeholder made of words, or none at all, is outside it (ADR-0103).
+
+- New focusable surface that is not a DOM control → its focus indicator is **drawn**, never a tint
+  on something already tinted. The Reference Atlas figure's regions are SVG `<g>`s, where an
+  `outline` traces the bounding box and not the muscle, so each renders a stroke-only copy of its
+  own paths (`.atlas-region-ring`, `fill: none`, `pointer-events: none`,
+  `vector-effect: non-scaling-stroke`) that `globals.css` paints `var(--color-cyan)` at 2px under
+  `.atlas-region:focus-visible`. Not a stroke on the overlay path: that one's stroke is an inline
+  style, which no stylesheet rule can override. `lib/atlas-focus-ring.test.ts` holds the markup by
+  rendering it and the rule by reading the stylesheet; there is no sweep (ADR-0104).
+
 - New animation or transform transition → pair it with `motion-reduce:animate-none`
   or `motion-reduce:transition-none` **in the same class string**. Colour and
   opacity transitions move nothing and are exempt by rule. The guard in

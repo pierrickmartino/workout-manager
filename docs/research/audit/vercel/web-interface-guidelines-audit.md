@@ -14,15 +14,17 @@ No instance of `transition: all`, `user-scalable=no`, `onPaste` + `preventDefaul
 
 The findings below are real gaps, grouped by how much they cost.
 
-> **Status (2026-10-01).** The three HIGH findings (#1, #2, #3), all five MEDIUM ones
-> (#4–#8) and the first LOW one (#9) are fixed; each carries a `**Resolution:**` note saying
-> what landed and what deliberately did not. The conventions they set are ADR-0093 (a
+> **Status (2026-10-01).** **Every finding is fixed.** Each carries a `**Resolution:**` note
+> saying what landed and what deliberately did not. The conventions they set are ADR-0093 (a
 > control's autofill and keypad come from the primitive), ADR-0094 (a section divider is a
 > heading), ADR-0095 (an image reserves its box before its bytes arrive), ADR-0096 (an instant
 > is written in the reader's clock), ADR-0097 (the admin catalog is kept off the keystroke
-> path), ADR-0098 (a destructive confirmation is the app's own dialog) and ADR-0099 (every tap
-> target answers the first tap). One part of #2 is closed as *won't fix* with a reason — the
-> `mm:ss` fields — and is called out in its note. #10–#15 are untouched.
+> path), ADR-0098 (a destructive confirmation is the app's own dialog), ADR-0099 (every tap
+> target answers the first tap), ADR-0101 (rendered copy is typeset), ADR-0102 (the browser
+> chrome is the rendered Theme's page colour), ADR-0103 (a field arrives quiet) and ADR-0104
+> (a focus indicator is drawn, not tinted). Two parts are closed as *won't fix* with reasons —
+> the `mm:ss` keypad in #2 and the per-field ellipsis classification in #11 — and each is
+> called out in its note.
 >
 > The Exercise detail page and the admin screens were in **no** audit journey, so nothing
 > #4–#6 touched had ever been rendered at 320px, at 200% text, or at 1440px. Two journeys
@@ -45,12 +47,12 @@ The findings below are real gaps, grouped by how much they cost.
 | 7 | Admin browser filter state not in URL | MEDIUM | Fixed |
 | 8 | `window.confirm` in 3 places while `ConfirmDialog` exists | MEDIUM | Fixed — ADR-0098 |
 | 9 | No `touch-action: manipulation` anywhere | LOW | Fixed — ADR-0099 |
-| 10 | No `text-wrap: balance`/`pretty` on headings | LOW | Open |
-| 11 | Placeholders don't end with `…`; two use a straight apostrophe | LOW | Open |
-| 12 | `themeColor` hardcoded to one Skin's dark background | LOW | Open |
-| 13 | `autoFocus` on a mobile-reachable inline rename field | LOW | Open |
-| 14 | No `spellCheck={false}` on code-ish fields | LOW | Open |
-| 15 | Interactive SVG `<g>` focus relies on fill tint only | LOW | Open |
+| 10 | No `text-wrap: balance`/`pretty` on headings | LOW | Fixed — ADR-0101 |
+| 11 | Placeholders don't end with `…`; two use a straight apostrophe | LOW | Fixed — ADR-0101 |
+| 12 | `themeColor` hardcoded to one Skin's dark background | LOW | Fixed — ADR-0102 |
+| 13 | `autoFocus` on a mobile-reachable inline rename field | LOW | Fixed — ADR-0103 |
+| 14 | No `spellCheck={false}` on code-ish fields | LOW | Fixed — ADR-0103 |
+| 15 | Interactive SVG `<g>` focus relies on fill tint only | LOW | Fixed — ADR-0104 |
 
 ---
 
@@ -530,6 +532,38 @@ components/exercise/catalog-detail.tsx:63 - <h2>, add text-balance
 Note `session-hero.tsx:58` already carries `break-words` for ADR-0085; `text-balance` is
 compatible and does not change the minimum content width the reflow guard measures.
 
+**Resolution:** done, and recorded as ADR-0101 — for **fifteen** headings rather than the four
+listed, because the four are not a category. The category is a heading set in the display face,
+and sweeping for that found eleven more: the landing and offline `<h1>`s, `HistoryBrowser`'s
+list-item title, `LiveSessionScreen`'s two panel headings, `AddExerciseButton`'s and
+`HandAuthoredSessionForm`'s card titles, the confirm dialog's title, the history detail page's,
+and `ui/card.tsx`'s `CardTitle` — which has no call site today but is a heading primitive, so a
+future call site should inherit the decision rather than rediscover it.
+
+`text-pretty` is accepted as the other answer: it fixes only the last line, which is the right
+call for a title long enough that balancing would centre a two-word tail. The guard asks for the
+decision, not for one of its values.
+
+The claim that balancing changes no reflow floor was checked rather than repeated:
+`audit/reflow.mjs` reports **0 of 840** cases overflowing at 320px at 100% text and 0 of 840 at
+200%, and `audit/wide.mjs` 0 of 840 at 1440px. That is a clean result, not a before/after
+comparison — the recorded `reflow-summary.json` in the repo held 780 cases per text size, taken
+before the `confirm` journey existed, so there is no like-for-like baseline to compare against
+and none is claimed. (Both evidence files are refreshed by this change, which is how the stale
+one came to light: the previous commit's message quoted 840 while the artefact still said 780.)
+
+The reasoning behind the claim is the part that holds generally: `balance` picks among the break
+opportunities a line already has, and cannot make a box narrower than its longest unbreakable
+word — so `session-hero`'s `min-w-0 break-words` is still doing the load-bearing work.
+
+`lib/display-heading-policy.ts` keeps it: a heading whose classes name `font-display` and no
+wrap utility fails the sweep. It reads the classes through `cn()`, conditionals and template
+literals, and **fails closed** on a className it cannot read at all — a `font-display` heading is
+not detectable from a variable. Exempt by rule: a heading that cannot wrap (`truncate`,
+`line-clamp-1`); a `line-clamp-2` still wraps, so it still balances. Its registry is empty. It is
+blind to a capitalized tag — what `SessionCard`'s `<Title>` renders is a property of that
+component, not of its call site — and that one truncates, so it is exempt either way.
+
 ### 11. Placeholder copy — LOW
 
 Only 4 of ~40 placeholders end with `…`. Most are example patterns (`mm:ss`, `70`, `3-1-1`,
@@ -554,6 +588,42 @@ components/AdminExerciseRelationships.tsx:83 title="This movement's variations &
 `components/ProfileForm.tsx:170` is also redundant — the `hint` on line 167 says the same
 sentence, correctly punctuated. Drop the placeholder and keep the hint.
 
+**Resolution:** both halves done, and recorded as ADR-0101. Two of this item's file:line
+references had gone stale by the time it was worked: `"Any exercise"` is
+`HistoryBrowser.tsx:127`, not `HandAuthoredSessionForm.tsx:128`, and the apartment-constraints
+placeholder is `ProfileForm.tsx:217`, not `GenerateSessionForm.tsx:207`. Both strings are the
+ones meant, and both are fixed.
+
+The four prose placeholders carry the ellipsis, and the redundant one is **deleted** rather
+than punctuated: a hint is in the
+control's `aria-describedby`, a screen reader reads it, and it survives the first keystroke, so
+the placeholder was a second copy of one sentence to keep in step — and, by the time this audit
+ran, the copy that had drifted.
+
+The apostrophe turned out to be **33 strings, not two**. The two this item names are real, but
+the sweep that found them also reached `CatalogCompletenessBreakdown`, `CorrectLogForm`'s hint,
+the analytics empty state, and — the interesting part — thirteen `lib/` view-models: the finish
+advisory, the supersede warning, the scheme preview, the shared-session notice, the delete
+guard. Copy lives there by design (ADR-0098 moved a dialog's two slots into `deleteControlView`),
+so a guard that only read components would have missed the place the convention most needs
+holding. `lib/copy-typography-policy.ts` sweeps components, pages and view-models, reading JSX
+text, string literals and template spans from the AST — so a comment about the rule is not a
+breach of it.
+
+Its registry is **not** empty, and the entries are the reason the shape is `{file, excerpt,
+reason}` rather than per-file: `lib/session-section.ts` matches `world's greatest` and
+`child's pose` against *authored Exercise names*, which a curator types with the typewriter
+apostrophe. There the straight quote is data, not copy, and a curly one would match nothing. The
+guard's own module is the single file the sweep skips — a registry has to be able to spell the
+strings it exempts.
+
+**The ellipsis is deliberately not mechanized.** This item does the classification by hand and
+is right to: `mm:ss`, `3-1-1` and `70` are example patterns the guideline permits as they are,
+`Search by name…` is prose, and nothing in a placeholder's syntax separates the two reliably. A
+guard that guessed would be wrong on about half the app's forty placeholders, so the four
+changes are held by review and by this note. Straight double quotes are out of scope for the
+same reason: a `"` in a string is as likely to be a CSS selector as a quotation mark.
+
 ### 12. `themeColor` is a single hardcoded hex — LOW
 
 ```text
@@ -574,6 +644,32 @@ themeColor: [
 That covers Mode. Covering Skin too means emitting the tag from the resolved theme in the
 layout body rather than from static metadata — worth it only if Skin switching is common.
 
+**Resolution:** done the second way — the resolved Theme, not the media array — and recorded as
+ADR-0102. The cost this item weighs was already paid: `app/layout.tsx` resolves the Active Skin
+and the user's Mode on every request to stamp `data-skin` / `data-mode`, both reads are React-
+`cache`d, and so `generateViewport()` reading the same two values adds no round-trip. With the
+Skin in hand there is no reason to cover only Mode.
+
+The media array is still there, for the one case it is actually the answer: **System Mode**
+stamps no `data-mode` precisely so `prefers-color-scheme` decides, so the chrome emits both
+branches and lets the device resolve them exactly as the stylesheet does. A stamped Mode gets a
+single colour.
+
+`--color-base` cannot be read from `globals.css` at request time — it is a build artifact of the
+stylesheet, not a module — so `lib/theme-color.ts` restates all twelve values and
+`theme-color.test.ts` holds the two declarations to one number, parsing the stylesheet with
+`parseColorBlocks`, the reader the Contrast Floor already uses (ADR-0081). It checks the System
+pair against the two blocks a device would really resolve, including the
+`prefers-color-scheme: light` copy globals.css restates because CSS cannot share a block across
+`@media` — the value most able to drift alone. A catalog Skin with no page colour **fails** the
+test rather than inheriting another Skin's chrome; at runtime an unrecognised wire id still falls
+back to PULSE, matching `resolveActiveSkin`'s own defensive tail.
+
+`appleWebApp.statusBarStyle` stays `black-translucent` (ADR-0028): it takes a keyword, not a
+colour, and translucency is what lets the page's background — now the same colour as the chrome —
+show through. Whether a given device honours `themeColor` at all is not verifiable offline; what
+is verified is that the colour the tag carries is the colour the stylesheet paints.
+
 ### 13. `autoFocus` on an inline rename field — LOW
 
 ```text
@@ -585,6 +681,19 @@ PWA and the field sits inside an `OverflowMenu` disclosure, so on a phone the ke
 springs up and scrolls the panel out from under the user's thumb the moment they open
 "More actions". The control is already the first focusable element in the revealed panel —
 a focus call gated on a pointer/viewport check, or nothing at all, is safer.
+
+**Resolution:** nothing at all, and recorded as ADR-0103. The viewport-gated alternative this
+item offers is worth naming as rejected: it is a second rendering path to save one Tab on a field
+that is already the first focusable element in the panel it appears in.
+
+`lib/autofocus-policy.ts` sweeps every component and page for the attribute — on anything, not
+only on a field, since it works on anything focusable and the keyboard it raises does not care
+which element asked. A conditional `autoFocus={isDesktop}` is reported too: that is a decision to
+argue in review, not one to pass unseen. Its registry is empty.
+
+It says nothing about managed focus, which is the opposite case and stays: `lib/use-modal-focus.ts`
+moves focus into a dialog on open and restores it to the opener on close, and `ProfileForm`
+focuses the first invalid field on a failed submit — both are answers to the reader's own action.
 
 ### 14. No `spellCheck={false}` — LOW
 
@@ -600,6 +709,40 @@ components/ProfileForm.tsx:156                    "dumbbells, pull-up bar"
 Search inputs too — `spellCheck={false}` on the `type="search"` fields at
 `SessionsLibrary.tsx:103`, `HistoryBrowser.tsx:125`, `AdminExerciseBrowser.tsx:123`.
 
+**Resolution:** done in three parts, and recorded as ADR-0103, because the app's single-line
+fields are not one kind of thing.
+
+**Derived** for the search boxes: `type="search"` gets `spellCheck={false}` from
+`components/ui/input.tsx`, joining the `autoComplete` and `inputMode` defaults already there
+(ADR-0093). That covers the three this item names at once. Three more search boxes are typed
+`text` rather than `search` (`ExerciseLibrary`, `ExerciseCatalogTaxonomy`,
+`AdminExerciseRelationships`), so they declare it themselves — retyping them is a behavioural
+change (native clear affordance, Escape handling) and not this item's business.
+
+**Declared** at 24 value fields: every `mm:ss` duration, the tempo, the typed-Load value fields,
+the effort target, the equipment slug lists this item names, and the authored *name* fields
+(Session Name, Protocol name, and the two Movement-name inputs in `CorrectLogForm` and
+`AdhocLogForm`) — a label like `Push A`, `W1D2` or `Bicep Curl` is a proper noun or a shorthand
+far more often than a sentence. The last two are the ones the guard cannot see, because their
+placeholders are words; they were missed on the first pass and found by the review, which is
+exactly the boundary named below.
+
+**Left alone** for prose, which is the reason there is no blanket default on `Input`: a set note
+("felt easy", "left knee twinge") and a movement cue ("pause on the chest") are sentences a
+person writes in a single-line field, and the browser underlining a misspelled one is the browser
+doing its job. Only `Textarea` keeps the checker unconditionally.
+
+`lib/spellcheck-policy.ts` mechanizes the part that has a signature: a **placeholder showing a
+value pattern** — digits, separators and the `hh`/`mm`/`ss` mask — means the field holds no
+prose, so it must declare `spellCheck`. Either answer passes, as `loading="eager"` passes the
+image guard: a stated "check this one" is a different claim from silence. It fails closed on a
+computed placeholder, since `` `60 ${unit}` `` and `` `${objective} · ${trainingType}` `` want
+opposite answers. Out of scope by rule: `type="number"` (no browser spell-checks one),
+`type="search"` (the primitive answers), and a placeholder made of words — the equipment field
+reads `dumbbells, pull-up bar`, so its `spellCheck={false}` is a judgement review holds and the
+guard does not. What the primitive renders is asserted by rendering it, in
+`lib/form-affordances.test.ts`.
+
 ### 15. Interactive SVG group focus relies on fill tint — LOW
 
 ```text
@@ -613,6 +756,42 @@ selectable regions. Every other interactive surface in the app uses
 `focus-visible:ring-2 focus-visible:ring-cyan`. An SVG equivalent (a `stroke` +
 `stroke-width` under `:focus-visible`, which does not disturb the `fill-box` geometry) would
 match.
+
+**Resolution:** done as that equivalent, with one correction to where the stroke goes, and
+recorded as ADR-0104. It cannot go on the overlay path this item is looking at: that path's
+`stroke` is an **inline style**, which no stylesheet rule can override, and it is already
+carrying the selected and hovered states. So the ring is its own stroke-only copy of the
+region's paths — `fill: none`, `stroke: transparent`, `stroke-width: 0` at rest,
+`pointer-events: none` so it cannot swallow a tap — painted `var(--color-cyan)` at 2px by one
+rule in `globals.css` under `.atlas-region:focus-visible`. `vector-effect: non-scaling-stroke`
+keeps that 2px on screen: the figure is at most 220px wide across ~500 user units, so a scaled
+stroke would be sub-pixel.
+
+This item's diagnosis is sharper than its severity suggests, and the ADR keeps the reason: the
+fill shift is *also* what pointer hover produces, and a trained muscle is already tinted at an
+intensity encoding volume (ADR-0025) — so the signal was largest on untrained muscles and
+smallest on the ones a reader is most likely navigating toward.
+
+`outline-none` stays on the group, which is only defensible now that a ring is drawn.
+`lib/atlas-focus-ring.test.ts` holds both halves apart: the figure renders one ring per region
+path with no inline style (asserted by rendering it), and the stylesheet makes the ring visible
+on focus and inert at rest (asserted by reading `globals.css`, the `tapActionSelectors` idiom
+from ADR-0099). There is no sweep — a focus indicator is a property of a rendered surface, and
+this was the one surface in the app whose `outline-none` had no ring beside it.
+
+**Measured, because neither half proves `:focus-visible` matches an SVG `<g>` at all** — the
+assumption the design rests on. The atlas figure is in no audit journey, and the reflow/wide
+sweeps would measure nothing new here (the ring takes no space and no taps), so it was checked by
+a **one-off Chromium probe — not a checked-in harness**, unlike every other `audit/*` number in
+this file. The probe loaded the compiled stylesheet (`styles.css?direct` off the audit server)
+beside the component's markup shape, then read `getComputedStyle` on the ring at rest, after a
+`Tab`, and after blur; reproducing it takes those three reads and nothing else. At rest the ring
+computes `stroke: rgba(0, 0, 0, 0)` at `0px`; after a `Tab` the group matches `:focus-visible` and
+the ring computes `rgb(41, 231, 224)` — PULSE's cyan, resolved from the token — at **`2px`**,
+confirming the non-scaling stroke; after blur it is transparent again, with `pointer-events: none`
+throughout. Whether the ring is *perceivable* over a heat-tinted muscle in all six Skins is still
+a question for an eye on a screen: the Contrast Floor matrix covers text and fills, not strokes
+over artwork.
 
 ---
 
