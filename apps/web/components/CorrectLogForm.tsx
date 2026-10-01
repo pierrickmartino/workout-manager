@@ -9,9 +9,17 @@ import {
   type CorrectLogFormState,
 } from "@/app/history/[id]/edit/actions";
 import type { CorrectionFormFields, CorrectionSetFields } from "@/lib/log-correction";
-import { loadKindOptions } from "@/lib/load";
 import type { WeightUnit } from "@/lib/weight-unit";
 import type { QuantityKind } from "@/lib/quantity";
+import {
+  SET_ENTRY_CARD,
+  seededSetEntryValues,
+  setEntryPrefix,
+  type SetEntryFallbacks,
+  type SetEntryPreFill,
+  type SetEntrySubject,
+} from "@/lib/set-entry";
+import { SetEntry, SetEntryFormProvider } from "@/components/pulse/set-entry";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
 import { useNavigationGuard } from "@/components/NavigationGuardProvider";
 import { FormDraftRecovery } from "@/components/FormDraftRecovery";
@@ -22,14 +30,12 @@ import {
   isBoundedDraftString,
 } from "@/lib/form-draft-validation";
 import { Field } from "@/components/pulse/field";
-import { FieldRow, FIELD_CELL, WIDE_FIELD_CELL } from "@/components/pulse/field-row";
+import { FieldRow } from "@/components/pulse/field-row";
 import { Alert } from "@/components/pulse/alert";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-
-const RPE_VALUES = Array.from({ length: 10 }, (_, index) => index + 1);
 
 interface CorrectLogFormProps {
   logId: number;
@@ -85,87 +91,27 @@ function isCorrectionDraft(value: unknown): value is CorrectionDraft {
   );
 }
 
-// The amount field(s) for a set row, shown by its kind (ADR-0032). This slice edits a
-// set's contents within its existing kind, so the kind rides in a hidden field and the
-// matching input is pre-filled. Clearing the amount drops the set on save.
-type InitialField = (
-  name: string,
-  fallback: string | number | null | undefined,
-) => string;
+// Every field in this form is seeded from its pre-fill — the recovered draft's value for that
+// submitted name, or the record's own — and then owned by the DOM: the form reads its values back
+// out of the FormData on save, which is why its rows take the seeded provider. `SetEntryPreFill`
+// is that reader's shape, shared so the rows and the field family agree on it.
 
-function AmountFields({
-  set,
-  index,
-  initial,
-}: {
-  set: CorrectionSetFields;
-  index: number;
-  initial: InitialField;
-}) {
-  const label = `${set.exerciseName} amount`;
-  if (set.kind === "distance") {
-    return (
-      <FieldRow className="basis-full">
-        <label className={FIELD_CELL}>
-          <span className="label-mono text-[9px] text-text-muted">Distance</span>
-          <Input
-            name={`set-${index}-distance`}
-            defaultValue={initial(`set-${index}-distance`, set.distance)}
-            aria-label={`Distance for ${set.exerciseName}`}
-          />
-        </label>
-        <label className={FIELD_CELL}>
-          <span className="label-mono text-[9px] text-text-muted">Unit</span>
-          <Select
-            name={`set-${index}-unit`}
-            defaultValue={initial(`set-${index}-unit`, set.unit)}
-            aria-label={`Distance unit for ${set.exerciseName}`}
-          >
-            <option value="km">km</option>
-            <option value="mi">mi</option>
-          </Select>
-        </label>
-        <label className={FIELD_CELL}>
-          <span className="label-mono text-[9px] text-text-muted">Time</span>
-          <Input
-            spellCheck={false}
-            name={`set-${index}-duration`}
-            defaultValue={initial(`set-${index}-duration`, set.duration)}
-            placeholder="25:00"
-            aria-label={`Time for ${set.exerciseName}`}
-          />
-        </label>
-      </FieldRow>
-    );
-  }
-
-  if (set.kind === "duration") {
-    return (
-      <label className={FIELD_CELL}>
-        <span className="label-mono text-[9px] text-text-muted">Time</span>
-        <Input
-          spellCheck={false}
-          name={`set-${index}-duration`}
-          defaultValue={initial(`set-${index}-duration`, set.duration)}
-          placeholder="5:00"
-          aria-label={label}
-        />
-      </label>
-    );
-  }
-
-  return (
-    <label className={FIELD_CELL}>
-      <span className="label-mono text-[9px] text-text-muted">Reps</span>
-      <Input
-        name={`set-${index}-reps`}
-        type="number"
-        min={0}
-        defaultValue={initial(`set-${index}-reps`, set.reps)}
-        aria-label={`Reps for ${set.exerciseName}`}
-      />
-    </label>
-  );
+// A pre-filled row's fallbacks, read through the form's one pre-fill function (ADR-0106). This
+// slice edits a set's contents within its existing kind, so the kind rides in a hidden field
+// rather than a picker. Clearing the amount drops the set on save.
+function setFallbacks(set: CorrectionSetFields): SetEntryFallbacks {
+  return {
+    kind: set.kind,
+    reps: set.reps,
+    distance: set.distance,
+    unit: set.unit,
+    duration: set.duration,
+    // A record with no Load kind on file reads as absolute, the kind a bare weight means.
+    load_kind: set.loadKind || "absolute",
+    load_value: set.loadValue,
+    rpe: set.perceivedDifficulty,
+    note: set.note,
+  };
 }
 
 function SetRow({
@@ -177,77 +123,43 @@ function SetRow({
   set: CorrectionSetFields;
   index: number;
   unit: WeightUnit;
-  initial: InitialField;
+  initial: SetEntryPreFill;
 }) {
+  const prefix = setEntryPrefix(index);
+  const subject: SetEntrySubject = { joiner: "for", name: set.exerciseName };
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-border bg-surface p-4">
-      <input type="hidden" name={`set-${index}-exercise_id`} value={set.exerciseId} />
-      <input type="hidden" name={`set-${index}-exercise_name`} value={set.exerciseName} />
-      <input type="hidden" name={`set-${index}-kind`} value={set.kind} />
-      <span className="min-w-0 break-words font-display text-[15px] font-semibold text-text-primary">
-        {set.exerciseName}
-      </span>
+    <SetEntryFormProvider
+      values={seededSetEntryValues(prefix, setFallbacks(set), initial)}
+      unit={unit}
+      prefix={prefix}
+      subject={subject}
+    >
+      <div className={SET_ENTRY_CARD}>
+        <input type="hidden" name={`${prefix}-exercise_id`} value={set.exerciseId} />
+        <input type="hidden" name={`${prefix}-exercise_name`} value={set.exerciseName} />
+        <input type="hidden" name={`${prefix}-kind`} value={set.kind} />
+        <span className="min-w-0 break-words font-display text-[15px] font-semibold text-text-primary">
+          {set.exerciseName}
+        </span>
 
-      <FieldRow>
-        <AmountFields set={set} index={index} initial={initial} />
-        <label className={FIELD_CELL}>
-          <span className="label-mono text-[9px] text-text-muted">RPE</span>
-          <Select
-            name={`set-${index}-rpe`}
-            defaultValue={initial(`set-${index}-rpe`, set.perceivedDifficulty)}
-            aria-label={`RPE for ${set.exerciseName}`}
-          >
-            <option value="">—</option>
-            {RPE_VALUES.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </Select>
-        </label>
-      </FieldRow>
+        {/* The distance block asks for the whole line, so the effort picker wraps below it
+            rather than squeezing a four-field row onto a phone (ADR-0087). */}
+        <FieldRow>
+          <SetEntry.Quantity rowClassName="basis-full" />
+          <SetEntry.Effort />
+        </FieldRow>
 
-      {/* Load is a typed value (ADR-0010): the picked kind is sent as-is so the record
-          keeps the load's meaning at the boundary. */}
-      <FieldRow>
-        <label className={WIDE_FIELD_CELL}>
-          <span className="label-mono text-[9px] text-text-muted">Load kind</span>
-          <Select
-            name={`set-${index}-load_kind`}
-            defaultValue={initial(`set-${index}-load_kind`, set.loadKind || "absolute")}
-            aria-label={`Load kind for ${set.exerciseName}`}
-          >
-            {loadKindOptions(unit).map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <label className={FIELD_CELL}>
-          <span className="label-mono text-[9px] text-text-muted">Load</span>
-          <Input
-            spellCheck={false}
-            name={`set-${index}-load_value`}
-            defaultValue={initial(`set-${index}-load_value`, set.loadValue)}
-            placeholder="70"
-            aria-label={`Load for ${set.exerciseName}`}
-          />
-        </label>
-      </FieldRow>
+        {/* Load is a typed value (ADR-0010): the picked kind is sent as-is so the record
+            keeps the load's meaning at the boundary. */}
+        <FieldRow>
+          <SetEntry.Load />
+        </FieldRow>
 
-      {/* Set Note (ADR-0065, #451): editable per-set remark, pre-filled decoded from the record.
-          Rides as raw text under `set-<i>-note`; the backend re-escapes it once on save. */}
-      <label className="flex flex-col gap-1.5">
-        <span className="label-mono text-[9px] text-text-muted">Note</span>
-        <Input
-          name={`set-${index}-note`}
-          defaultValue={initial(`set-${index}-note`, set.note)}
-          placeholder="Optional note (e.g. left knee twinge)"
-          aria-label={`Note for ${set.exerciseName}`}
-        />
-      </label>
-    </div>
+        {/* Set Note (ADR-0065, #451): editable per-set remark, pre-filled decoded from the
+            record. Rides as raw text; the backend re-escapes it once on save. */}
+        <SetEntry.Note placeholder="Optional note (e.g. left knee twinge)" />
+      </div>
+    </SetEntryFormProvider>
   );
 }
 
@@ -442,17 +354,31 @@ function AccountScopedCorrectLogForm({
   );
 }
 
+// An added row starts empty, on a rep count, with a bodyweight Load and kilometres as the
+// distance unit — so the only pre-fill that can exist for one is a recovered draft's.
+const ADDED_ROW_FALLBACKS: SetEntryFallbacks = {
+  movement: "",
+  reps: "",
+  distance: "",
+  unit: "km",
+  duration: "",
+  load_kind: "bodyweight",
+  load_value: "",
+  rpe: "",
+  note: "",
+};
+
 interface AddedSetRowProps {
   index: number;
   kind: QuantityKind;
   unit: WeightUnit;
-  initial: InitialField;
+  initial: SetEntryPreFill;
   onKindChange: (kind: QuantityKind) => void;
   onRemove: () => void;
 }
 
 // A newly added set: pick a movement from the Catalog by name (search-and-create,
-// ADR-0033 — the same picker the ad-hoc "Log a movement" flow uses), choose its amount
+// ADR-0033 — the same picker the ad-hoc "Log a movement" flow uses), choose its Quantity
 // kind, then enter the typed Quantity, typed Load, and perceived difficulty any Logged
 // Set carries. No hidden Exercise id — the action resolves the name; no "off-plan" badge.
 function AddedSetRow({
@@ -463,186 +389,49 @@ function AddedSetRow({
   onKindChange,
   onRemove,
 }: AddedSetRowProps) {
-  const prefix = `set-${index}`;
+  const prefix = setEntryPrefix(index);
   const rowLabel = `added set ${index + 1}`;
 
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-border bg-surface p-4">
-      <div className="flex items-end gap-2.5">
-        <label className="flex flex-1 flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">Movement</span>
-          <Input
-            name={`${prefix}-movement`}
-            spellCheck={false}
-            defaultValue={initial(`${prefix}-movement`, "")}
-            placeholder="Bicep Curl"
-            aria-label={`Movement name, ${rowLabel}`}
-          />
-        </label>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={onRemove}
-          aria-label={`Remove ${rowLabel}`}
-        >
-          Remove
-        </Button>
+    <SetEntryFormProvider
+      // The picked kind is the one value this row holds in React state — it decides which
+      // Quantity fields exist, so the row has to re-render when it changes. It therefore
+      // overrides the seed rather than being read back out of the DOM.
+      values={{ ...seededSetEntryValues(prefix, ADDED_ROW_FALLBACKS, initial), kind }}
+      unit={unit}
+      prefix={prefix}
+      subject={{ joiner: "comma", name: rowLabel }}
+      onKindChange={onKindChange}
+    >
+      <div className={SET_ENTRY_CARD}>
+        <div className="flex items-end gap-2.5">
+          <SetEntry.Movement placeholder="Bicep Curl" />
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onRemove}
+            aria-label={`Remove ${rowLabel}`}
+          >
+            Remove
+          </Button>
+        </div>
+
+        <SetEntry.Kind />
+
+        {/* The amount input(s) for the picked kind (ADR-0032). Blank on save, the row was
+            left un-performed and is dropped — the cleared-row behaviour. */}
+        <FieldRow>
+          <SetEntry.Quantity />
+        </FieldRow>
+
+        <FieldRow>
+          <SetEntry.Load placeholder="15" />
+          <SetEntry.Effort />
+        </FieldRow>
+
+        {/* Set Note (ADR-0065, #451): optional per-set remark on the added set, sent raw. */}
+        <SetEntry.Note placeholder="Optional note" />
       </div>
-
-      <label className="flex flex-col gap-1.5">
-        <span className="label-mono text-[9px] text-text-muted">Quantity</span>
-        <Select
-          name={`${prefix}-kind`}
-          value={kind}
-          onChange={(event) => onKindChange(event.target.value as QuantityKind)}
-          aria-label={`Quantity kind, ${rowLabel}`}
-        >
-          <option value="repetitions">Reps</option>
-          <option value="distance">Distance</option>
-          <option value="duration">Duration</option>
-        </Select>
-      </label>
-
-      <AddedAmountFields
-        prefix={prefix}
-        kind={kind}
-        rowLabel={rowLabel}
-        initial={initial}
-      />
-
-      <FieldRow>
-        <label className={WIDE_FIELD_CELL}>
-          <span className="label-mono text-[9px] text-text-muted">Load kind</span>
-          <Select
-            name={`${prefix}-load_kind`}
-            defaultValue={initial(`${prefix}-load_kind`, "bodyweight")}
-            aria-label={`Load kind, ${rowLabel}`}
-          >
-            {loadKindOptions(unit).map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <label className={FIELD_CELL}>
-          <span className="label-mono text-[9px] text-text-muted">Load</span>
-          <Input
-            spellCheck={false}
-            name={`${prefix}-load_value`}
-            defaultValue={initial(`${prefix}-load_value`, "")}
-            placeholder="15"
-            aria-label={`Load, ${rowLabel}`}
-          />
-        </label>
-        <label className={FIELD_CELL}>
-          <span className="label-mono text-[9px] text-text-muted">RPE</span>
-          <Select
-            name={`${prefix}-rpe`}
-            defaultValue={initial(`${prefix}-rpe`, "")}
-            aria-label={`RPE, ${rowLabel}`}
-          >
-            <option value="">—</option>
-            {RPE_VALUES.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </Select>
-        </label>
-      </FieldRow>
-      {/* Set Note (ADR-0065, #451): optional per-set remark on the added set, sent raw. */}
-      <label className="flex flex-col gap-1.5">
-        <span className="label-mono text-[9px] text-text-muted">Note</span>
-        <Input
-          name={`${prefix}-note`}
-          defaultValue={initial(`${prefix}-note`, "")}
-          placeholder="Optional note"
-          aria-label={`Note, ${rowLabel}`}
-        />
-      </label>
-    </div>
-  );
-}
-
-// The amount input(s) for an added row, shown by its picked kind (ADR-0032). Blank on
-// save, the row was left un-performed and is dropped — the cleared-row behavior.
-function AddedAmountFields({
-  prefix,
-  kind,
-  rowLabel,
-  initial,
-}: {
-  prefix: string;
-  kind: QuantityKind;
-  rowLabel: string;
-  initial: InitialField;
-}) {
-  if (kind === "distance") {
-    return (
-      <FieldRow>
-        <label className={FIELD_CELL}>
-          <span className="label-mono text-[9px] text-text-muted">Distance</span>
-          <Input
-            name={`${prefix}-distance`}
-            defaultValue={initial(`${prefix}-distance`, "")}
-            type="number"
-            min={0}
-            step="any"
-            placeholder="5"
-            aria-label={`Distance, ${rowLabel}`}
-          />
-        </label>
-        <label className={FIELD_CELL}>
-          <span className="label-mono text-[9px] text-text-muted">Unit</span>
-          <Select
-            name={`${prefix}-unit`}
-            defaultValue={initial(`${prefix}-unit`, "km")}
-            aria-label={`Distance unit, ${rowLabel}`}
-          >
-            <option value="km">km</option>
-            <option value="mi">mi</option>
-          </Select>
-        </label>
-        <label className={FIELD_CELL}>
-          <span className="label-mono text-[9px] text-text-muted">Time (opt.)</span>
-          <Input
-            spellCheck={false}
-            name={`${prefix}-duration`}
-            defaultValue={initial(`${prefix}-duration`, "")}
-            placeholder="mm:ss"
-            aria-label={`Time, ${rowLabel}`}
-          />
-        </label>
-      </FieldRow>
-    );
-  }
-
-  if (kind === "duration") {
-    return (
-      <label className="flex flex-col gap-1.5">
-        <span className="label-mono text-[9px] text-text-muted">Time</span>
-        <Input
-          spellCheck={false}
-          name={`${prefix}-duration`}
-          defaultValue={initial(`${prefix}-duration`, "")}
-          placeholder="mm:ss"
-          aria-label={`Duration, ${rowLabel}`}
-        />
-      </label>
-    );
-  }
-
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="label-mono text-[9px] text-text-muted">Reps</span>
-      <Input
-        name={`${prefix}-reps`}
-        defaultValue={initial(`${prefix}-reps`, "")}
-        type="number"
-        min={0}
-        aria-label={`Reps, ${rowLabel}`}
-      />
-    </label>
+    </SetEntryFormProvider>
   );
 }

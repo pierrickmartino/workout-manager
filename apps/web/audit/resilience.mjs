@@ -170,7 +170,7 @@ for (const [engine, launcher] of [["chromium", chromium], ["webkit", webkit]]) {
       await open(page, "adhoc");
       await control(page);
       await page.getByRole("textbox", { name: "Movement name, set 1" }).fill("Synthetic exercise");
-      await page.getByLabel("Amount kind, set 1", { exact: true }).selectOption("repetitions");
+      await page.getByLabel("Quantity kind, set 1", { exact: true }).selectOption("repetitions");
       await page.getByLabel("Reps, set 1", { exact: true }).fill("12");
       const submit = page.locator("button[type=submit]");
       await submit.click();

@@ -446,6 +446,42 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   carries its own position, which is the thing 13 drilled callbacks proved by their shape
   (ADR-0105).
 
+- A field that enters part of a Logged Set — an amount, a Load, an effort, a note → compose it
+  from `components/pulse/set-entry.tsx`, never a new copy. That UI was written four times across
+  `AdhocLogForm`, `CorrectLogForm` (twice), `LogSessionForm` and `live-session-sets`, eleven field
+  blocks between them, and the copies had already drifted: two of the five typed-Load fields asked
+  for **no keypad**, one distance field was not a `type="number"` at all, and three of the four
+  captioned the kind picker with the word CONTEXT 'Quantity' puts under _Avoid_ — a pre-existing
+  terminology-guard violation the guard could not see, because a JSX *text node* is not the quoted
+  label its regex matches. Merging the copies put that caption in a string literal and the guard
+  failed at once; the caption is "Quantity" and the accessible noun "Quantity kind".
+  `SetEntry.Load` is now the one place a Load kind is added (ADR-0010) and `SetEntry.Quantity` the
+  one place a Quantity kind's fields are (ADR-0032) — the correctness the duplication endangered,
+  since a kind missing from one of five copies degrades a typed value silently in exactly one form.
+  The axis that let the copies exist is **controlled vs uncontrolled**, so it is two providers over
+  one `{ state, actions, meta }` contract (ADR-0105's shape): `SetEntryProvider` where a holder
+  drives the row, `SetEntryFormProvider` where the DOM owns it under a server action. Every branch
+  on that mode lives in `useSetEntryField`, which is what lets a field stay blind to which form it
+  is in; `setEntryValueBinding` returns **one** key, because `value: undefined` beside a
+  `defaultValue` reads as uncontrolled to React and the reverse warns. The vocabulary in
+  `lib/set-entry.ts` *is* the wire contract — one word per field serving both the `name=` and the
+  values record, so there is no mapping table to drift — and `setEntryValues` keeps the record
+  total, because a controlled `value={undefined}` silently discards every keystroke. A row maps to
+  it through a **declared table**, never a pair of hand-written mappers (`SetEntryRowMap` for a form
+  holding a row object, `seededSetEntryValues` for one holding only a pre-fill reader): two mappers
+  drift, and a field present in one direction but not the other discards that field in silence. The
+  seeded provider takes its one honourable edit **by name** (`onKindChange`, since the pick decides
+  which fields exist) and throws on any other, for the same reason. A caller states its width ask
+  per shape (`durationClassName`, `rowClassName`) rather than re-branching on the kind, which would
+  be back to four copies of the branch — and no part carries a `className` knob no call site passes.
+  There is deliberately **no** new sweep: a guard cannot see whether copies *agree*, which is why
+  they had drifted — `lib/set-entry.test.ts` and `lib/set-entry-fields.test.ts` hold it instead,
+  every rendered claim made against **both** providers, including the one the family cannot keep
+  alone (a seeded row's keypad follows the *picked* kind only because `CorrectLogForm`
+  re-serializes its form on every change, so that is asserted against the real form). `adhoc` is
+  now a journey in `audit/reflow.mjs` and `audit/wide.mjs`: it was renderable and swept by neither,
+  so that form was unverified at every width (ADR-0106).
+
 - New animation or transform transition → pair it with `motion-reduce:animate-none`
   or `motion-reduce:transition-none` **in the same class string**. Colour and
   opacity transitions move nothing and are exempt by rule. The guard in

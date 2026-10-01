@@ -49,7 +49,14 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // `confirm` joins them with ADR-0098: the themed dialog replaced `window.confirm` at three
 // destructive actions, and a dialog renders only while it is open, so no existing journey ever
 // mounted one. Its message is the app's longest confirmation copy, in a `max-w-sm` box.
-const NOVEL_JOURNEYS = ["correction", "creation-logged", "home", "exercise", "admin", "confirm"];
+// `adhoc` joins them with ADR-0106: it was a renderable case no journey swept, so the ad-hoc
+// log's form was unverified at every width while its three sibling log forms were gated — and
+// it is the one of the four whose field rows changed shape when they moved onto the shared
+// set-entry family, a lone amount field having sat in a two-column grid that gave it half a row
+// and left the other half empty.
+const NOVEL_JOURNEYS = [
+  "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc",
+];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and
 // `creation-logged` were listed here because each held a `rem`-sized grid track in a form field
