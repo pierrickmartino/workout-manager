@@ -129,12 +129,12 @@ function doubleSentence(reps: string, axis: Axis): string {
   if (floor < ceiling) {
     return `Aim for ${phrase}; when every set reaches ${ceiling} at ${rpePhrase()}, add a rep to the target next time.`;
   }
-  return `Aim for ${phrase}; when every set reaches ${ceiling} at ${rpePhrase()}, you'll be offered a harder variation rather than more reps.`;
+  return `Aim for ${phrase}; when every set reaches ${ceiling} at ${rpePhrase()}, you’ll be offered a harder variation rather than more reps.`;
 }
 
 function greyskullSentence(reps: string, axis: Axis): string {
   if (axis !== "weight") {
-    return "Greyskull-style Linear only steps a weighted movement, so it can't adjust this load.";
+    return "Greyskull-style Linear only steps a weighted movement, so it can’t adjust this load.";
   }
   const floor = greyskullFloor(reps);
   if (floor === null) {

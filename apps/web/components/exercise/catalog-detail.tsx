@@ -60,7 +60,7 @@ export function CatalogDetail({ exercise, unit }: CatalogDetailProps): React.JSX
           <MovementGlyph pattern={pattern} className="h-11 w-11" />
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <h2 className="font-display text-xl font-semibold leading-tight text-text-primary">
+          <h2 className="text-balance font-display text-xl font-semibold leading-tight text-text-primary">
             {exercise.name}
           </h2>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">

@@ -127,7 +127,7 @@ export function formatRechartsImportViolations(
 ): string {
   return violations.map(({ file, line, imported }) =>
     `${file}:${line} — ${imported} imports recharts, so a static import puts ~102 KB ` +
-    "gzipped in this route's client chunk graph whether the chart renders or not; reach it " +
+    "gzipped in this route’s client chunk graph whether the chart renders or not; reach it " +
     "through a next/dynamic wrapper instead, or make this an `import type` if you only need " +
     "its row shape (ADR-0090)").join("\n");
 }

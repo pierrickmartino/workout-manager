@@ -886,7 +886,7 @@ function ExerciseCard({
           {/* An authored name is never truncated (ADR-0085), so it wraps — and breaks inside a
               word when the word itself cannot fit, which is the only thing that keeps an
               unbroken 100-character name from setting this card's min-content width. */}
-          <h3 className="min-w-0 break-words font-display text-base font-bold text-text-primary">
+          <h3 className="min-w-0 break-words text-balance font-display text-base font-bold text-text-primary">
             {row.exerciseName}
           </h3>
         </div>
@@ -1001,6 +1001,7 @@ function ExerciseCard({
                     aria-label={`Set ${index + 1} distance for ${row.exerciseName}`}
                   />
                   <Input
+                    spellCheck={false}
                     className={FIELD_WIDTH}
                     value={set.duration}
                     placeholder="mm:ss"
@@ -1014,6 +1015,7 @@ function ExerciseCard({
             ) : isDuration ? (
               <FieldLabel className={FIELD_WIDTH} label={`Set ${index + 1} hold`}>
                 <Input
+                  spellCheck={false}
                   value={set.duration}
                   placeholder="0:45"
                   onChange={(event) =>
@@ -1037,6 +1039,7 @@ function ExerciseCard({
             )}
             <FieldLabel className={FIELD_WIDTH} label="Load">
               <Input
+                spellCheck={false}
                 value={set.loadValue}
                 inputMode={loadValueInputMode(set.loadKind)}
                 placeholder={`60 ${weightUnitLabel(unit)}`}

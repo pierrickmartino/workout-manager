@@ -27,7 +27,7 @@ export async function CatalogCompletenessBreakdown(): Promise<React.JSX.Element>
   if (!result.success || !result.data) {
     return (
       <Alert tone="error">
-        {result.error ?? "Couldn't load the completeness breakdown."}
+        {result.error ?? "Couldn’t load the completeness breakdown."}
       </Alert>
     );
   }

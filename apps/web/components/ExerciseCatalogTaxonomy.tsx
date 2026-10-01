@@ -177,6 +177,7 @@ export function ExerciseCatalogTaxonomy({
           />
           <Input
             value={filters.query}
+            spellCheck={false}
             placeholder="Search an exercise…"
             aria-label="Search the exercise catalog"
             className="pl-9"

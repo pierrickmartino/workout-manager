@@ -255,6 +255,7 @@ function SetRowFields({ index, row, unit, onKindChange, onChange, onRemove }: Se
           <span className="label-mono text-[9px] text-text-muted">Movement</span>
           <Input
             name={`${prefix}-movement`}
+            spellCheck={false}
             value={row.movement}
             onChange={(event) => onChange({ movement: event.target.value })}
             placeholder="Running"
@@ -317,6 +318,7 @@ function SetRowFields({ index, row, unit, onKindChange, onChange, onRemove }: Se
         <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Load</span>
           <Input
+            spellCheck={false}
             name={`${prefix}-load_value`}
             value={row.loadValue}
             inputMode={loadValueInputMode(row.loadKind)}
@@ -387,6 +389,7 @@ function DistanceFields({ prefix, index, row, onChange }: AmountFieldProps) {
         {/* Time is optional (ADR-0032): given, pace becomes a derivable read. */}
         <span className="label-mono text-[9px] text-text-muted">Time (opt.)</span>
         <Input
+          spellCheck={false}
           name={`${prefix}-duration`}
           value={row.duration}
           onChange={(event) => onChange({ duration: event.target.value })}
@@ -406,6 +409,7 @@ function DurationFields({ prefix, index, row, onChange }: AmountFieldProps) {
             session): the time is the amount, entered as mm:ss or bare seconds (ADR-0032). */}
         <span className="label-mono text-[9px] text-text-muted">Time</span>
         <Input
+          spellCheck={false}
           name={`${prefix}-duration`}
           value={row.duration}
           onChange={(event) => onChange({ duration: event.target.value })}

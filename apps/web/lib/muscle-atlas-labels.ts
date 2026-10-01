@@ -9,7 +9,7 @@ export const NOT_TRAINED_LABEL = "Not trained";
 
 // The neutral, non-prescriptive disclosure copy (ADR-0025): it names that some recent work
 // rolls up outside the mapped groups/muscles without ranking, flagging, or nudging.
-export const UNCLASSIFIED_FOOTNOTE = "Some recent sets list muscles we don't map yet.";
+export const UNCLASSIFIED_FOOTNOTE = "Some recent sets list muscles we don’t map yet.";
 
 export function setsWord(sets: number): string {
   return sets === 1 ? "set" : "sets";

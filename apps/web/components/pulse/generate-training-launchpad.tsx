@@ -38,7 +38,7 @@ export function GenerateTrainingLaunchpad({
     <Card className="flex flex-col gap-5 p-5">
       <span className="label-mono text-[11px] text-cyan">{eyebrow}</span>
       <div className="flex flex-col gap-1.5">
-        <h2 className="font-display text-2xl font-bold text-text-primary">
+        <h2 className="text-balance font-display text-2xl font-bold text-text-primary">
           Generate training
         </h2>
         <p className="label-mono text-[11px] text-text-secondary">

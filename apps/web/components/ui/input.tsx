@@ -6,14 +6,21 @@ import { numericInputMode } from "@/lib/input-mode";
 // pulse.pen text fields: surface background, lighter border, small radius, with
 // the entered value shown in mono — the "operator terminal" input treatment.
 //
-// Two affordances come from here rather than from 100+ call sites (ADR-0093):
-// autofill is **off** unless a field names the token it really carries, and a
-// `type="number"` field asks for the keypad its `step` implies. Both are plain
-// defaults — a call site that passes `autoComplete` or `inputMode` wins.
+// Three affordances come from here rather than from 100+ call sites (ADR-0093,
+// ADR-0103): autofill is **off** unless a field names the token it really carries, a
+// `type="number"` field asks for the keypad its `step` implies, and a search box is not
+// spell-checked — a query is not prose, and a red underline under half of a movement
+// name typed so far is noise on every search screen in the app. All three are plain
+// defaults; a call site that passes the attribute wins.
+//
+// Spelling is derived for `type="search"` only. A single-line field here can hold a
+// tempo code or a set note, and the two want opposite answers, so a value field declares
+// `spellCheck` where it stands (`lib/spellcheck-policy.ts` holds that).
 export function Input({
   className,
   autoComplete = "off",
   inputMode,
+  spellCheck,
   type,
   step,
   ...props
@@ -26,6 +33,7 @@ export function Input({
       )}
       autoComplete={autoComplete}
       inputMode={inputMode ?? numericInputMode({ type, step })}
+      spellCheck={spellCheck ?? (type === "search" ? false : undefined)}
       type={type}
       step={step}
       {...props}

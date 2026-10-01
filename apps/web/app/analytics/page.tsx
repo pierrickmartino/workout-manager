@@ -196,7 +196,7 @@ function MuscleDistribution({ bars }: { bars: MuscleBar[] }) {
       <Card className="flex flex-col gap-3 p-6">
         <MuscleSplit
           bars={bars}
-          emptyMessage="No muscle data yet — the sets logged in this window don't list targeted muscles."
+          emptyMessage="No muscle data yet — the sets logged in this window don’t list targeted muscles."
         />
       </Card>
     </div>

@@ -123,6 +123,6 @@ export function formatServerClockViolations(
   violations: readonly ServerClockViolation[],
 ): string {
   return violations.map(({ file, line, method }) =>
-    `${file}:${line} — ${method} in a Server Component resolves against the container's clock,`
-    + " not the reader's; render the instant with components/pulse/local-instant.tsx").join("\n");
+    `${file}:${line} — ${method} in a Server Component resolves against the container’s clock,`
+    + " not the reader’s; render the instant with components/pulse/local-instant.tsx").join("\n");
 }

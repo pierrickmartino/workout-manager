@@ -22,7 +22,7 @@ export default async function HomePage() {
     <section className="flex flex-col gap-8 pt-4">
       <div className="flex flex-col gap-4">
         <Overline>PULSE // WELCOME</Overline>
-        <h1 className="font-display text-4xl font-bold leading-tight tracking-tight text-text-primary">
+        <h1 className="text-balance font-display text-4xl font-bold leading-tight tracking-tight text-text-primary">
           Train with an
           <br />
           <span className="text-cyan">AI protocol.</span>
@@ -38,7 +38,7 @@ export default async function HomePage() {
           <Zap className="h-5 w-5 text-cyan" aria-hidden />
         </span>
         <div className="flex flex-col gap-1.5">
-          <h2 className="font-display text-lg font-semibold text-text-primary">
+          <h2 className="text-balance font-display text-lg font-semibold text-text-primary">
             Your command center
           </h2>
           <p className="font-mono text-[13px] leading-relaxed text-text-muted">

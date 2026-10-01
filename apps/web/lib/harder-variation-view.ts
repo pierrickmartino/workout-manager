@@ -44,7 +44,7 @@ export function toHarderVariationOffer(
     exerciseId: suggestion.exercise_id,
     name,
     headline: "Ready to progress this movement",
-    body: `You're topping out the rep range. Advance to ${name} for a harder Variation.`,
+    body: `You’re topping out the rep range. Advance to ${name} for a harder Variation.`,
     acceptLabel: `Advance to ${name}`,
     dismissLabel: "Not yet",
   };

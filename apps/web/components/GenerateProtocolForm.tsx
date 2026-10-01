@@ -93,7 +93,7 @@ export function GenerateProtocolForm({
         <Input
           name="objective"
           required
-          placeholder="e.g. gain muscle mass"
+          placeholder="e.g. gain muscle mass…"
           defaultValue="gain muscle mass"
         />
       </Field>

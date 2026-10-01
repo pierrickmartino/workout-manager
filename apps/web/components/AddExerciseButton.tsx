@@ -164,7 +164,7 @@ export function AddExerciseButton({ sessionId, unit }: AddExerciseButtonProps) {
       ) : (
         <>
           <div className="flex items-center justify-between gap-2">
-            <h3 className="font-display text-base font-bold text-text-primary">
+            <h3 className="text-balance font-display text-base font-bold text-text-primary">
               {exerciseName}
             </h3>
             <Button

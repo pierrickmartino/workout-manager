@@ -103,6 +103,7 @@ export function ExerciseLibrary({ onPick, onCreate }: ExerciseLibraryProps) {
           />
           <Input
             value={query}
+            spellCheck={false}
             placeholder="Search an exercise…"
             aria-label="Search the Exercise Library"
             className="pl-9"
