@@ -142,7 +142,10 @@ export function ReferenceAtlasFigure({
             tabIndex={interactive ? 0 : undefined}
             aria-label={region?.ariaLabel ?? canonical}
             aria-pressed={interactive ? isSelected : undefined}
-            className={cn(interactive && "cursor-pointer outline-none")}
+            // `atlas-region` is what the drawn focus ring below keys on. The
+            // `outline-none` beside it is only defensible *because* that ring exists
+            // (ADR-0104).
+            className={cn(interactive && "atlas-region cursor-pointer outline-none")}
             onClick={interactive ? () => onSelectMuscle(canonical) : undefined}
             onKeyDown={interactive ? (event) => onKeyDown(event, canonical) : undefined}
             onFocus={interactive ? () => setActive(canonical) : undefined}
@@ -162,6 +165,16 @@ export function ReferenceAtlasFigure({
                   style={overlay}
                   className="transition-[fill-opacity,stroke,stroke-width] duration-150 motion-reduce:transition-none"
                 />
+                {/* The focus indicator (ADR-0104): a stroke-only copy of this path,
+                    styled from `globals.css` and invisible until the region takes focus
+                    from the keyboard. It is a third path rather than a stroke on the
+                    overlay above, because that one's stroke is an inline style — which no
+                    stylesheet rule can override — and is already in use for the selected
+                    and hovered states. */}
+                {/* No `fillRule`: the ring has no fill for a rule to apply to. */}
+                {interactive ? (
+                  <path d={p.d} className="atlas-region-ring" aria-hidden />
+                ) : null}
               </g>
             ))}
           </g>
