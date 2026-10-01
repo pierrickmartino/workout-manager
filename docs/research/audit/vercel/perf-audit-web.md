@@ -15,6 +15,15 @@ procedure CLAUDE.md already prescribes.
 held and the measured before/after numbers are in its section below; B2's zero-reference claim
 held too. The rest of this document is unrevised and still carries the caveat above.
 
+**Update (R1, R3 — fixed; R2 — narrowed, still open):** the Live Session tick now lives in two
+leaf clock components and the set table is memoized behind stable props
+([ADR-0091](../../../adr/0091-the-live-tick-lives-in-the-leaf-that-displays-it.md)). R3 was
+subsumed, as this document predicted. R2 is fixed only for the set table; its four
+builder/form candidates remain open pending a profile. Held by
+`apps/web/lib/live-session-tick.test.ts`, which renders the real screen offline and asserts
+the tick reaches no part of the set table — a structural assertion, not a measurement; no
+frame timing or battery figure was taken.
+
 ---
 
 ## Summary
@@ -28,9 +37,9 @@ deferred past `load`.
 
 The findings that remain concentrate in two places:
 
-1. **A per-second full re-render of the Live Session screen** — the most performance-sensitive
-   surface in the app (a phone, mid-workout, with the screen held awake). This is the single
-   highest-impact finding.
+1. ~~**A per-second full re-render of the Live Session screen**~~ — the most
+   performance-sensitive surface in the app (a phone, mid-workout, with the screen held
+   awake). This was the single highest-impact finding. **Fixed** — see R1.
 2. ~~**Recharts reaching three routes through static imports**~~, when the project has already
    built and documented the pattern for avoiding exactly that on a fourth. **Fixed** — see B1.
 
@@ -38,14 +47,14 @@ Everything else is minor.
 
 | ID | Severity | Category | Finding |
 |----|----------|----------|---------|
-| R1 | **High** | Re-render | 1 Hz `setNow` re-renders all of `LiveSessionScreen` + the full set table |
+| R1 | ~~High~~ **Fixed** | Re-render | ~~1 Hz `setNow` re-renders all of `LiveSessionScreen` + the full set table~~ — ADR-0091 |
 | B1 | ~~High~~ **Fixed** | Bundle | ~~Recharts statically imported on `/exercises/[id]`, `/analytics`, `/analytics/strength`~~ — ADR-0090 |
 | A1 | **High** | Waterfall | `/exercises/[id]` serializes 4–5 round trips |
 | A2 | Medium | Waterfall | `/admin/exercises/[id]` serializes 4 round trips |
 | A3 | Medium | Waterfall | `/sessions/[id]/live` serializes 3 round trips |
 | A4 | Medium | Waterfall | `/train` blocks all paint on a 2-stage fetch chain; no Suspense, no `loading.tsx` |
-| R2 | Medium | Re-render | No `React.memo` anywhere; unstable props defeat any future memoization |
-| R3 | Low-Med | Re-render | Rest-timer effect re-runs every second to test a derived condition |
+| R2 | Medium → **Low** | Re-render | ~~No `React.memo` anywhere; unstable props defeat any future memoization~~ — the set table is memoized with stable props (ADR-0091). The four builder/form candidates are **still open**, pending a profile |
+| R3 | ~~Low-Med~~ **Fixed** | Re-render | ~~Rest-timer effect re-runs every second to test a derived condition~~ — ADR-0091 |
 | B2 | ~~Low~~ **Fixed** | Bundle | ~~`@tanstack/react-query` is a dependency with zero source references~~ |
 | C1 | Low | Client data | Live Session `localStorage` slot carries no schema version |
 
@@ -389,7 +398,24 @@ today's.
 
 ## 5. Re-render Optimization (MEDIUM)
 
-### R1 — 1 Hz timer re-renders the entire Live Session screen · **High**
+### R1 — 1 Hz timer re-renders the entire Live Session screen · ~~**High**~~ · **Fixed**
+
+> **Resolved** — [ADR-0091](../../../adr/0091-the-live-tick-lives-in-the-leaf-that-displays-it.md),
+> by the leaf-component route this section recommends. `now` no longer exists in
+> `LiveSessionScreen`; `ElapsedClock` and `RestCountdown` own their own tick through
+> `lib/use-second-tick.ts`. R2 and R3 landed with it — R3 subsumed exactly as predicted
+> below, R2 as `React.memo` on `LiveSessionSets` plus the `useMemo`/`useCallback` that
+> makes it hold.
+>
+> `apps/web/lib/live-session-tick.test.ts` renders the real screen offline (JSDOM,
+> mocked timers) with an un-memoized probe in place of the set table, and asserts five
+> seconds of wall-clock advance the elapsed face with **zero** renders of the table. That
+> is a structural assertion, not a measurement: no frame timing and no battery figure
+> were taken, and the ADR says so.
+
+The original finding follows.
+
+
 
 `components/LiveSessionScreen.tsx:225-228`
 
@@ -467,7 +493,18 @@ This also fixes R3 below for free: the countdown owns its own "hit zero" transit
 the cascade into the set rows but still re-renders the shell every second. The leaf-component
 fix is strictly better and roughly the same amount of code.
 
-### R2 — No `React.memo` anywhere in the codebase · **Medium**
+### R2 — No `React.memo` anywhere in the codebase · **Medium** → **Low, still open**
+
+> **Resolved for the case that mattered, and only that one** — `LiveSessionSets` is
+> memoized, and the `useMemo`/`useCallback` that keeps its props stable landed in the
+> same change (ADR-0091), as this section insists it must. The four candidates listed
+> below are **deliberately unchanged and still open**: none has a timer driving it, and
+> this section's own "worth a profile before changing anything" is both the reason they
+> were skipped and the next step. See item 7 of the recommended order.
+
+The original finding follows.
+
+
 
 A repo-wide grep for `React.memo` / `memo(` (excluding `useMemo`) across `components/` and
 `lib/` returns **nothing**. 64 Client Components, none memoized.
@@ -493,7 +530,15 @@ with list children:
 None of these has a timer driving it, so they re-render only on user input — much lower
 priority than R1. Worth a profile before changing anything.
 
-### R3 — Rest-timer effect re-runs every second to test a derived condition · **Low-Medium**
+### R3 — Rest-timer effect re-runs every second to test a derived condition · ~~**Low-Medium**~~ · **Fixed**
+
+> **Resolved** — subsumed by R1's leaf-component fix, as predicted. `RestCountdown`
+> keys its effect on the `remaining === 0` boolean it already computes, so it fires once
+> per rest instead of sixty times a minute (ADR-0091).
+
+The original finding follows.
+
+
 
 `components/LiveSessionScreen.tsx:329-333`
 
@@ -588,8 +633,8 @@ arrays.
 
 ## Recommended order of work
 
-1. **R1** — the Live Session tick. Highest user-visible impact, on the most sensitive screen,
-   and the fix (two small clock components) is self-contained. Fixes R3 as a byproduct.
+1. ~~**R1**~~ — **done** (ADR-0091): the tick moved into two leaf clock components, and R3
+   and R2's one load-bearing case landed with it.
 2. **A1** — `/exercises/[id]` parallelization. One-line-shaped change, 4–5 RTTs → 1, on a
    frequently-reached browse surface. Remember the `.catch()` on the best-effort reads.
 3. ~~**B1**~~ — **done** (ADR-0090): the three remaining Recharts call sites are behind
@@ -599,7 +644,11 @@ arrays.
 5. **A4 + `loading.tsx` coverage** — stream `/train`, then backfill `loading.tsx` on the
    data-heavy routes that lack one.
 6. **C1**, ~~**B2**~~ — the storage version field; the unused dependency is **removed**.
-7. **R2** — revisit memoization on the large builder/form components only after profiling.
+7. **R2** — **still open**, narrowed. The one case that mattered (the set table) landed with
+   R1 (ADR-0091). What remains is this section's own recommendation: profile
+   `prescription-rows.tsx`, `HandAuthoredSessionForm.tsx`, `ProtocolBuilder.tsx` and
+   `CorrectLogForm.tsx` before memoizing any of them — none has a timer driving it, so
+   memoizing on suspicion would be the mistake `rerender-simple-expression-in-memo` names.
 
 ## Guardrail suggestions
 
