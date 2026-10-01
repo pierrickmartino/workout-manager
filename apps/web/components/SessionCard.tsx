@@ -17,6 +17,10 @@ interface SessionCardProps {
   // The footer actions slot — the My Sessions ⋯ overflow menu (Favorite + conditional Delete).
   // Absent on Train, whose card has no per-row actions.
   actions?: React.ReactNode;
+  // Where the card's title sits in the page outline (ADR-0094). 2 for a list that heads itself
+  // with nothing but the page's <h1> (My Sessions); 3 inside a group that carries its own
+  // heading (Train's "PICK UP AGAIN" panel).
+  level?: 2 | 3;
 }
 
 // The shared Session card (CONTEXT: Recent Sessions, My Sessions): the one presentational format
@@ -29,7 +33,9 @@ export function SessionCard({
   model,
   isFavorite = false,
   actions,
+  level = 2,
 }: SessionCardProps): React.JSX.Element {
+  const Title = level === 3 ? "h3" : "h2";
   const loggedBadge =
     model.loggedCount === null ? null : loggedCountBadge(model.loggedCount);
   // The fact row (exercise count + Logged Count) is a library-only footer — Train carries no
@@ -49,9 +55,13 @@ export function SessionCard({
         size={44}
       />
       <div className="flex min-w-0 flex-col gap-2">
-        <h3 className="truncate font-display text-base font-semibold text-text-primary">
+        {/* A heading, not a styled <span> (ADR-0094). An <h2> by default: My Sessions heads its
+            list with nothing but the page's <h1>, so an <h3> there skipped a level — and
+            `HistoryBrowser` already titles the same list-item role at this rank. A group that
+            carries its own heading passes `level={3}`. */}
+        <Title className="truncate font-display text-base font-semibold text-text-primary">
           {model.displayName}
-        </h3>
+        </Title>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={model.badgeVariant} className="capitalize">
             {model.trainingType}

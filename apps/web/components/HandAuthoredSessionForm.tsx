@@ -40,6 +40,7 @@ import {
   isDraftUuid,
   isPositiveInteger,
 } from "@/lib/form-draft-validation";
+import { loadValueInputMode } from "@/lib/load";
 import { weightUnitLabel } from "@/lib/weight-format";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { type DistanceUnit, type QuantityKind } from "@/lib/quantity";
@@ -1037,6 +1038,7 @@ function ExerciseCard({
             <FieldLabel className={FIELD_WIDTH} label="Load">
               <Input
                 value={set.loadValue}
+                inputMode={loadValueInputMode(set.loadKind)}
                 placeholder={`60 ${weightUnitLabel(unit)}`}
                 onChange={(event) =>
                   onChangeSet(set.key, { loadValue: event.target.value })

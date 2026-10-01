@@ -120,6 +120,15 @@ The plan model has **no calendar and no "today"** (ADR-0001).
   a server action revalidates, the form follows the prop and overlays only the
   fields the user touched, or it shows stale text and edits from it (see CLAUDE.md,
   `lib/admin-editor-props-refresh.test.ts`).
+- 🟡 Form controls come from `components/ui/input.tsx` / `select.tsx` /
+  `textarea.tsx`, which declare `autoComplete` and derive the numeric keypad from
+  `type`/`step` (ADR-0093, enforced by `form-input-policy.ts`). A hand-rolled native
+  control states both itself; a numeric pad is never forced on a field whose value
+  carries a colon, a hyphen or letters.
+- 🟡 Anything that opens a section is a heading (ADR-0094): a `SectionHeader` (the ▸
+  rule — reject a hand-rolled one) or a group eyebrow like Train's `TRAIN // …`. Reject
+  a level skip, and reject card titles promoted above the label of the group that holds
+  them (`SessionCard` takes `level={3}` inside a headed group).
 
 ## 9. Baseline quality & security
 

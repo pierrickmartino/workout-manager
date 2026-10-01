@@ -520,9 +520,10 @@ function ShapeField({ label, value, min, max, onChange }: ShapeFieldProps) {
   return (
     <label className="flex flex-col gap-1.5">
       <span className="label-mono text-[9px] text-text-muted">{label}</span>
+      {/* The keypad comes from the primitive, derived from type + step (ADR-0093) — this was
+          the app's one hand-declared `inputMode` before that default existed. */}
       <Input
         type="number"
-        inputMode="numeric"
         min={min}
         max={max}
         value={value}

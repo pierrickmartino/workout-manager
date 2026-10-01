@@ -4,7 +4,7 @@ import { memo, useState } from "react";
 import { Check, ChevronDown, RotateCcw, SkipForward } from "@/components/pulse/icons";
 
 import { liveSetDomId, type LiveSet, type LiveUnit } from "@/lib/live-session";
-import { loadKindOptions, type LoadKind } from "@/lib/load";
+import { loadKindOptions, loadValueInputMode, type LoadKind } from "@/lib/load";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -324,6 +324,7 @@ function SetRow({
           <span className="label-mono text-[9px] text-text-muted">Load</span>
           <Input
             value={loadValue}
+            inputMode={loadValueInputMode(loadKind)}
             onChange={(event) => setLoadValue(event.target.value)}
             disabled={completed}
             placeholder="70"

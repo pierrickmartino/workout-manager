@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 
 import { submitAdhocLog, type AdhocLogFormState } from "@/app/logs/new/actions";
-import { loadKindOptions } from "@/lib/load";
+import { loadKindOptions, loadValueInputMode } from "@/lib/load";
 import type { WeightUnit } from "@/lib/weight-unit";
 import type { QuantityKind } from "@/lib/quantity";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
@@ -319,6 +319,7 @@ function SetRowFields({ index, row, unit, onKindChange, onChange, onRemove }: Se
           <Input
             name={`${prefix}-load_value`}
             value={row.loadValue}
+            inputMode={loadValueInputMode(row.loadKind)}
             onChange={(event) => onChange({ loadValue: event.target.value })}
             placeholder="0"
             aria-label={`Load, set ${index + 1}`}

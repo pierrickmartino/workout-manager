@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Check, Plus, Trash2 } from "@/components/pulse/icons";
 
 import { submitLog, type LogFormState } from "@/app/sessions/[id]/log/actions";
-import { loadKindOptions } from "@/lib/load";
+import { loadKindOptions, loadValueInputMode } from "@/lib/load";
 import type { WeightUnit } from "@/lib/weight-unit";
 import {
   buildLogForm,
@@ -527,9 +527,12 @@ function LoadFields({
       </label>
       <label className={FIELD_CELL}>
         <span className="label-mono text-[9px] text-text-muted">Load</span>
+        {/* The keypad follows the picked kind (ADR-0093): a number for the weight-bearing
+            kinds, the full keyboard for a `low-high` range or a descriptive Load. */}
         <Input
           name={`${prefix}-load_value`}
           placeholder="70"
+          inputMode={loadValueInputMode(row.loadKind)}
           value={row.loadValue}
           disabled={disabled}
           onChange={(event) => onChange({ loadValue: event.target.value })}
