@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 
 import {
   EMPTY_ADMIN_FILTERS,
+  adminFiltersToQuery,
   filterAdminExercises,
   hasActiveAdminFilters,
   matchesAdminFilters,
+  parseAdminFilters,
   projectAdminExerciseRows,
   sortAdminExercises,
   toAdminExerciseRowView,
@@ -198,4 +200,111 @@ test("projectAdminExerciseRows leaves the sorted list it was handed alone", () =
 
   // Assert
   assert.deepEqual(sorted, before);
+});
+
+// The filters round-trip through the URL (#7): an admin can share or bookmark a narrowed
+// catalog, and a refresh restores it. The query string is untrusted input, so parsing is
+// where a bogus facet has to die — a value the dropdown does not offer would otherwise
+// select nothing and leave the control showing a facet nobody picked.
+
+test("parseAdminFilters reads an empty query string as the unfiltered catalog", () => {
+  // Arrange / Act
+  const filters = parseAdminFilters(new URLSearchParams());
+
+  // Assert
+  assert.deepEqual(filters, EMPTY_ADMIN_FILTERS);
+});
+
+test("parseAdminFilters reads every facet the browser offers", () => {
+  // Arrange
+  const params = new URLSearchParams(
+    "q=back+squat&provenance=ai_generated&completeness=stub&status=retired",
+  );
+
+  // Act
+  const filters = parseAdminFilters(params);
+
+  // Assert
+  assert.deepEqual(filters, {
+    query: "back squat",
+    provenance: "ai_generated",
+    completeness: "stub",
+    status: "retired",
+  });
+});
+
+test("parseAdminFilters drops a facet value the catalog's vocabulary does not contain", () => {
+  // Arrange — a hand-edited or stale URL. Keeping `provenance=marketing` would filter the
+  // list to nothing while the dropdown displayed "All provenance".
+  const params = new URLSearchParams(
+    "provenance=marketing&completeness=perfect&status=archived",
+  );
+
+  // Act
+  const filters = parseAdminFilters(params);
+
+  // Assert
+  assert.deepEqual(filters, EMPTY_ADMIN_FILTERS);
+});
+
+test("parseAdminFilters does not mistake an Object.prototype key for a vocabulary", () => {
+  // Arrange — the vocabularies are object literals, so a membership test written with `in`
+  // answers yes for `constructor`, `toString` and every other inherited key, and the URL that
+  // names one sails through the check meant to stop it.
+  const params = new URLSearchParams("provenance=constructor&completeness=toString");
+
+  // Act
+  const filters = parseAdminFilters(params);
+
+  // Assert
+  assert.deepEqual(filters, EMPTY_ADMIN_FILTERS);
+});
+
+test("parseAdminFilters collapses a whitespace-only query to no query", () => {
+  // Arrange / Act
+  const filters = parseAdminFilters(new URLSearchParams("q=%20%20"));
+
+  // Assert
+  assert.equal(filters.query, "");
+  assert.equal(hasActiveAdminFilters(filters), false);
+});
+
+test("adminFiltersToQuery writes nothing for the unfiltered catalog", () => {
+  // Arrange / Act
+  const query = adminFiltersToQuery(EMPTY_ADMIN_FILTERS).toString();
+
+  // Assert — a cleared filter leaves a bare URL rather than `?q=&status=all`.
+  assert.equal(query, "");
+});
+
+test("adminFiltersToQuery omits the axes that impose no constraint", () => {
+  // Arrange
+  const filters: AdminExerciseFilters = {
+    ...EMPTY_ADMIN_FILTERS,
+    provenance: "curated",
+  };
+
+  // Act
+  const query = adminFiltersToQuery(filters).toString();
+
+  // Assert
+  assert.equal(query, "provenance=curated");
+});
+
+test("a filter state survives the round-trip through the URL", () => {
+  // Arrange — every axis set at once, including a query needing escaping.
+  const filters: AdminExerciseFilters = {
+    query: "overhead press",
+    provenance: "user_entered",
+    completeness: "listable",
+    status: "active",
+  };
+
+  // Act
+  const restored = parseAdminFilters(
+    new URLSearchParams(adminFiltersToQuery(filters).toString()),
+  );
+
+  // Assert
+  assert.deepEqual(restored, filters);
 });

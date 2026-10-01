@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 
 import { resolveIsAdmin } from "@/lib/admin";
@@ -41,7 +42,12 @@ export default async function AdminExercisesPage() {
       </p>
 
       {result.success && result.data ? (
-        <AdminExerciseBrowser rows={result.data} />
+        // `AdminExerciseBrowser` reads the URL via `useSearchParams` (to restore a shared or
+        // refreshed filtered view, #7), so it lives under a Suspense boundary per the App
+        // Router contract — the same wrapping History and My Sessions use.
+        <Suspense fallback={null}>
+          <AdminExerciseBrowser rows={result.data} />
+        </Suspense>
       ) : (
         <Alert tone="error">
           Could not load the catalog: {result.error ?? "unknown error"}

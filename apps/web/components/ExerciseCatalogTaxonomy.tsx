@@ -17,6 +17,7 @@ import {
   toggleFacetValue,
 } from "@/lib/exercise-browse-query";
 import { equipmentLabel } from "@/lib/equipment";
+import { replaceFilterQuery } from "@/lib/filter-url";
 import { createLatestCatalogRequest } from "@/lib/latest-catalog-request";
 import { buildUsageMap } from "@/lib/exercise-usage-view";
 import { useModalFocus } from "@/lib/use-modal-focus";
@@ -94,9 +95,7 @@ export function ExerciseCatalogTaxonomy({
     }
     const request = latestRequest.current.begin(filtersKey);
     const handle = setTimeout(() => {
-      const search = catalogFiltersToParams(filters).toString();
-      const url = search.length > 0 ? `?${search}` : window.location.pathname;
-      window.history.replaceState(null, "", url);
+      replaceFilterQuery(catalogFiltersToParams(filters));
       if (!online) return;
       startTransition(async () => {
         await request.run(

@@ -96,6 +96,10 @@ export function mountDom({ url = "http://localhost", timers = false }: MountOpti
     HTMLElement: dom.window.HTMLElement,
     HTMLInputElement: dom.window.HTMLInputElement,
     HTMLTextAreaElement: dom.window.HTMLTextAreaElement,
+    // Node ships its own `FormData` (undici's), which rejects an HTMLFormElement and throws
+    // inside the event handler that built it — a form action then silently does nothing.
+    // JSDOM's is the one a form and React DOM both mean.
+    FormData: dom.window.FormData,
     // JSDOM implements these on its window, not on `globalThis`, and a component calls them
     // bare. A `setTimeout` stand-in is enough: no test here asserts frame timing.
     requestAnimationFrame: (callback: () => void) => dom.window.setTimeout(callback, 0),

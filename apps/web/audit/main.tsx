@@ -41,6 +41,7 @@ import { Button } from "@/components/ui/button";
 import { SpecsPanel } from "@/components/exercise/specs-panel";
 import { AdminExerciseBrowser } from "@/components/AdminExerciseBrowser";
 import { LocalInstant } from "@/components/pulse/local-instant";
+import { ConfirmDialog } from "@/components/pulse/confirm-dialog";
 import { adminExerciseRows, auditEntry, exerciseDetail, exerciseNames, exercises, history, personalRecords, prescriptions, profile, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
 
 const params = new URLSearchParams(location.search);
@@ -152,6 +153,22 @@ function AdminAudit() {
   </div>;
 }
 
+// The themed confirmation that replaced `window.confirm` at the three destructive actions
+// (ADR-0098). It is `fixed inset-0` and renders only while mounted, so no other journey ever
+// shows one — and an unrendered surface is an unmeasured one, whatever the static guards say
+// (ADR-0088). The copy is the longest of the three in each slot: the supersede's warning names
+// a Protocol, and the admin delete's two-line consequence is the longest message.
+function ConfirmSurface() {
+  return <ConfirmDialog
+    title="Permanently delete this exercise?"
+    message={'This cannot be undone. The movement is removed from the shared catalog outright, not retired. You\u2019re partway through \u201CPosterior Chain Rebuild \u2014 Weeks 1\u20134\u201D.'}
+    confirmLabel="Delete permanently"
+    cancelLabel="Keep current"
+    onConfirm={() => {}}
+    onCancel={() => {}}
+  />;
+}
+
 function Content() {
   switch (journey) {
     case "charts": return <ChartAccessibilityFixture />;
@@ -179,6 +196,7 @@ function Content() {
     // the admin editor renders it — the reader's-clock instant (ADR-0096) is the longest text
     // in that row. Neither admin screen was in any journey before.
     case "admin": return <AdminAudit />;
+    case "confirm": return <ConfirmSurface />;
     case "contrast": return <ContrastSamples />;
     default: throw new Error(`Unknown audit journey: ${journey}`);
   }

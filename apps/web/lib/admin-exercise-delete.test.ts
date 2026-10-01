@@ -9,7 +9,9 @@ test("a retired, unreferenced exercise can be deleted with no blocking reason", 
   assert.equal(view.blockingReason, null);
   assert.equal(view.actionLabel, "Delete permanently");
   assert.equal(view.busyLabel, "Deleting…");
-  assert.match(view.confirmMessage, /permanently/i);
+  // The dialog's two slots (#8): the question it asks, and what accepting it costs.
+  assert.match(view.confirmTitle, /permanently/i);
+  assert.match(view.confirmMessage, /cannot be undone/i);
   assert.match(view.successMessage, /deleted/i);
 });
 

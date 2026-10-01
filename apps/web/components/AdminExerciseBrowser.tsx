@@ -1,12 +1,15 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ChevronRight, Search } from "@/components/pulse/icons";
 
 import {
   EMPTY_ADMIN_FILTERS,
+  adminFiltersToQuery,
   hasActiveAdminFilters,
+  parseAdminFilters,
   projectAdminExerciseRows,
   sortAdminExercises,
   type AdminExerciseFilters,
@@ -14,6 +17,7 @@ import {
   type AdminExerciseRowView,
 } from "@/lib/admin-exercises-view";
 import { Badge } from "@/components/ui/badge";
+import { replaceFilterQuery } from "@/lib/filter-url";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -58,16 +62,36 @@ const PROVENANCE_BADGE: Record<string, "cyan" | "violet" | "muted"> = {
 // keystroke path in three ways (ADR-0097): the sort is hoisted out of the filter pass, the
 // filter pass itself runs against `useDeferredValue` so a keystroke paints before the list
 // does, and each row defers its own layout and paint until it is near the viewport.
+//
+// The filters are also the view's address (#7): seeded from the URL on mount and mirrored back
+// into it as they change, so "all AI-provenance movements with incomplete metadata" is a link
+// an admin can paste to a colleague, and a refresh or a Back from an editor lands on the same
+// narrowed list rather than on 500 rows.
 export function AdminExerciseBrowser({
   rows,
 }: {
   rows: AdminExerciseRow[];
 }): React.JSX.Element {
-  const [filters, setFilters] = useState<AdminExerciseFilters>(EMPTY_ADMIN_FILTERS);
+  // Seed once from the URL, then own the state locally — the filtering is client-side over the
+  // already-fetched catalog, so re-reading the hook on every change would be answering a
+  // question this component is the authority on (the History/My Sessions pattern).
+  const initialParams = useSearchParams();
+  const [filters, setFilters] = useState<AdminExerciseFilters>(() =>
+    parseAdminFilters(new URLSearchParams(initialParams.toString())),
+  );
   // The field follows the keystroke; the list follows the field. React renders the typed
   // character first and the re-filtered catalog in a second, interruptible pass, so a fast
   // typist is never waiting on 500 rows between characters.
   const deferredFilters = useDeferredValue(filters);
+
+  // Mirror the live filters — what the admin has typed, which is what they would share — into
+  // the address bar. `replaceState`, not a router navigation: a push would re-run the Server
+  // Component and re-fetch the whole catalog on every keystroke, which is the cost ADR-0097
+  // exists to remove. The URL is not a rendered surface, so writing the live value rather than
+  // the deferred one cannot desynchronize anything on screen.
+  useEffect(() => {
+    replaceFilterQuery(adminFiltersToQuery(filters));
+  }, [filters]);
 
   // The order never depends on the filters, so the sort — 500 `localeCompare`s — happens once
   // per catalog rather than once per keystroke.

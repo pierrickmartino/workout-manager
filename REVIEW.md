@@ -143,6 +143,19 @@ The plan model has **no calendar and no "today"** (ADR-0001).
   filters don't affect, defer the filter pass with `useDeferredValue` (not a debounce —
   there is no request to collapse), give rows `.list-row-defer`, and read the summary copy
   off the deferred value so the header never describes a list that is not on screen.
+- 🟠 A destructive or one-way-door action confirms through
+  `components/pulse/confirm-dialog.tsx` (ADR-0098, enforced by `native-dialog-policy.ts`) —
+  reject `window.confirm`, whose answer the browser takes over once the reader suppresses
+  further dialogs. Reject a new dialog surface that no audit journey mounts: it is unmeasured
+  at 320px, 200% text and 1440px.
+- 🟡 A tap target is reached by the `touch-action: manipulation` rule in `globals.css`
+  (ADR-0099, enforced by `tap-target-policy.ts`): a native control or a `[role="button"]`.
+  Reject a widget role on an element the rule does not name, and reject a
+  `-webkit-tap-highlight-color: transparent` that replaces the flash with nothing.
+- 🟡 A client-side filter is in the URL (ADR-0100): `parse*Filters`/`*FiltersToQuery` in the
+  view-model, seeded once from `useSearchParams`, mirrored with `replaceFilterQuery`, the
+  component under `Suspense`. Reject a router push (it re-fetches per keystroke), and reject a
+  parse that admits a value outside the facet's closed vocabulary.
 
 ## 9. Baseline quality & security
 

@@ -22,6 +22,7 @@ import {
   UNCOMPLETE_TAIL_FIRST_REASON,
 } from "@/lib/log-correction-reasons";
 import { cn } from "@/lib/utils";
+import { replaceFilterQuery } from "@/lib/filter-url";
 import { PageHeader } from "@/components/pulse/page-header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -63,11 +64,9 @@ export function HistoryBrowser({
 
   function apply(next: HistoryFilters): void {
     setFilters(next);
-    const query = historyFiltersToQuery(next).toString();
-    const url = query.length > 0 ? `?${query}` : window.location.pathname;
     // Update the shareable URL without a navigation, so the Server Component and its
     // one-shot history fetch are never re-run by a filter change (Q4/Q8).
-    window.history.replaceState(null, "", url);
+    replaceFilterQuery(historyFiltersToQuery(next));
   }
 
   function setExercise(value: string): void {
