@@ -134,14 +134,18 @@ export function sortAdminExercises(
   });
 }
 
-// The one call the thin component makes: filter, sort, then project to display rows.
-export function selectAdminExerciseRows(
-  rows: readonly AdminExerciseRow[],
+// Filter an already-sorted list and project it, without sorting again (ADR-0097). The browser
+// holds the whole Catalog and refilters it on every keystroke, while the order never depends on
+// the filters — so the sort is hoisted out of that path and only this runs per keystroke.
+//
+// The two orders agree because `filterAdminExercises` preserves order and the sort is stable:
+// filtering a sorted list is the same list as sorting a filtered one, which
+// `admin-exercises-view.test.ts` asserts directly rather than leaving to reasoning.
+export function projectAdminExerciseRows(
+  sorted: readonly AdminExerciseRow[],
   filters: AdminExerciseFilters,
 ): AdminExerciseRowView[] {
-  return sortAdminExercises(filterAdminExercises(rows, filters)).map(
-    toAdminExerciseRowView,
-  );
+  return filterAdminExercises(sorted, filters).map(toAdminExerciseRowView);
 }
 
 // Whether any filter is active — drives the "showing the whole catalog" vs "N of M" copy

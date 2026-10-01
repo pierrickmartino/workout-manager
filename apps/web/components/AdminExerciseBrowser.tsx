@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronRight, Search } from "@/components/pulse/icons";
 
 import {
   EMPTY_ADMIN_FILTERS,
   hasActiveAdminFilters,
-  selectAdminExerciseRows,
+  projectAdminExerciseRows,
+  sortAdminExercises,
   type AdminExerciseFilters,
   type AdminExerciseRow,
   type AdminExerciseRowView,
@@ -49,20 +50,35 @@ const PROVENANCE_BADGE: Record<string, "cyan" | "violet" | "muted"> = {
 // included) and both retired and active rows — and names the internal Completeness tier and
 // the retired tombstone, both absent from the user-facing catalog. A thin Client Component:
 // it holds only the filter state and delegates all filter/sort/projection to the pure
-// `selectAdminExerciseRows` in `lib/`, so the logic is unit-tested without a browser. Each
-// row links toward the (later) editor. The backend is the real gate (`require_admin`).
+// `sortAdminExercises` and `projectAdminExerciseRows` in `lib/`, so the logic is unit-tested
+// without a browser. Each row links toward the editor. The backend is the real gate
+// (`require_admin`).
+//
+// It holds the whole Catalog — one generous page, up to 500 rows — so the list is kept off the
+// keystroke path in three ways (ADR-0097): the sort is hoisted out of the filter pass, the
+// filter pass itself runs against `useDeferredValue` so a keystroke paints before the list
+// does, and each row defers its own layout and paint until it is near the viewport.
 export function AdminExerciseBrowser({
   rows,
 }: {
   rows: AdminExerciseRow[];
 }): React.JSX.Element {
   const [filters, setFilters] = useState<AdminExerciseFilters>(EMPTY_ADMIN_FILTERS);
+  // The field follows the keystroke; the list follows the field. React renders the typed
+  // character first and the re-filtered catalog in a second, interruptible pass, so a fast
+  // typist is never waiting on 500 rows between characters.
+  const deferredFilters = useDeferredValue(filters);
 
+  // The order never depends on the filters, so the sort — 500 `localeCompare`s — happens once
+  // per catalog rather than once per keystroke.
+  const sorted = useMemo(() => sortAdminExercises(rows), [rows]);
   const views = useMemo(
-    () => selectAdminExerciseRows(rows, filters),
-    [rows, filters],
+    () => projectAdminExerciseRows(sorted, deferredFilters),
+    [sorted, deferredFilters],
   );
-  const filtered = hasActiveAdminFilters(filters);
+  // Read off the deferred filters, not the live ones, so the summary row always describes the
+  // list underneath it rather than the one being computed.
+  const filtered = hasActiveAdminFilters(deferredFilters);
 
   function update<K extends keyof AdminExerciseFilters>(
     key: K,
@@ -199,7 +215,7 @@ function AdminExerciseRowLink({
   return (
     <Link
       href={view.href}
-      className="group flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-elevated/50"
+      className="group list-row-defer flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-elevated/50"
     >
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <span className="truncate font-sans text-[15px] font-medium text-text-primary">

@@ -18,6 +18,7 @@ import { toExerciseHighlight } from "@/lib/atlas/exercise-highlight";
 import type { View } from "@/lib/atlas/atlas-geometry";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { SectionHeader } from "@/components/pulse/section-header";
+import { Illustration } from "@/components/pulse/illustration";
 import { DataList } from "@/components/pulse/data-list";
 import { TopSetTrendChartLazy } from "@/components/exercise/top-set-trend-chart-lazy";
 import { ExerciseMuscleFigure } from "@/components/exercise/muscle-figure";
@@ -95,7 +96,8 @@ export function SpecsPanel({
 // `resolveExerciseImageSrc` (the same-origin `/api/exercises/{id}/image` proxy when an image
 // was uploaded, else the legacy curated URL); when there is neither, `src` is `null` and this
 // renders nothing, so a movement with no picture stays fully usable and never shows a broken
-// image. A plain <img> (not next/image) — no remote-image host is configured (issue #504).
+// image. The frame — and the box it reserves before the bytes land (ADR-0095) — is the design
+// system's `Illustration`.
 function ExerciseImage({
   src,
   name,
@@ -104,16 +106,7 @@ function ExerciseImage({
   name: string;
 }) {
   if (!src) return null;
-  return (
-    <Card className="overflow-hidden p-0">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={src}
-        alt={`Illustration of ${name}`}
-        className="max-h-80 w-full object-contain"
-      />
-    </Card>
-  );
+  return <Illustration src={src} alt={`Illustration of ${name}`} />;
 }
 
 // The Top-Set Trend (ADR-0017): a bar chart of the best Estimated 1RM per qualifying

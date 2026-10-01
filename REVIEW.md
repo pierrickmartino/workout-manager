@@ -129,6 +129,20 @@ The plan model has **no calendar and no "today"** (ADR-0001).
   rule — reject a hand-rolled one) or a group eyebrow like Train's `TRAIN // …`. Reject
   a level skip, and reject card titles promoted above the label of the group that holds
   them (`SessionCard` takes `level={3}` inside a headed group).
+- 🟡 An image reserves its box before its bytes arrive (ADR-0095, enforced by
+  `image-policy.ts`): render it through `components/pulse/illustration.tsx`, and reject a
+  raw `<img>` with no `width`/`height` ratio hint and no `loading`. A `max-h-*` is not a
+  height.
+- 🟠 An **instant** is written in the reader's clock (ADR-0096, enforced by
+  `server-locale-policy.ts`): reject `toLocaleString()` on a `Date` in a Server Component,
+  and reject parsing an API timestamp with a bare `new Date(...)` — the offsetless strings
+  the API emits parse as *local* time, so the moment is wrong before it is formatted. Use
+  `lib/instant.ts` + `components/pulse/local-instant.tsx`; calendar dates stay with
+  `lib/date-format.ts`.
+- 🟡 A filter over an unpaged list stays off the keystroke (ADR-0097): hoist what the
+  filters don't affect, defer the filter pass with `useDeferredValue` (not a debounce —
+  there is no request to collapse), give rows `.list-row-defer`, and read the summary copy
+  off the deferred value so the header never describes a list that is not on screen.
 
 ## 9. Baseline quality & security
 
