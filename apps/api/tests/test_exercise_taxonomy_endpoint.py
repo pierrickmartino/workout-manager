@@ -87,6 +87,29 @@ def test_counts_reflect_every_matching_exercise_not_a_page():
     assert len(squat["exercises"]) == 25
 
 
+def test_taxonomy_stays_unpaged_even_when_a_client_asks_for_a_page():
+    # Arrange — a catalog larger than any page size a caller might send.
+    client, ctx, exercises = build_client()
+    for index in range(25):
+        _listable(exercises, f"Squat Variant {index}", targeted_muscles=["quads"])
+
+    # Act — a caller sends the pagination every sibling endpoint accepts.
+    response = client.get(
+        "/api/exercises/taxonomy?limit=5&offset=10", headers=_auth(ctx)
+    )
+
+    # Assert — ignored. This endpoint is deliberately unpaged (ADR-0072): grouping needs the
+    # whole filtered set, and a page would make every per-pattern count a lie. The premise
+    # is that the catalog is a bounded *shared* set — a product fact, not a code invariant,
+    # so this test is where it is load-bearing. The day it stops holding, the answer is to
+    # virtualize the client list (see `audit/extra.mjs`, which already renders the catalog
+    # screen at 100/1000/10000 rows), not to paginate this read.
+    squat = response.json()["data"]["groups"][0]
+    assert squat["count"] == 25
+    assert len(squat["exercises"]) == 25
+    assert response.json()["meta"]["total"] == 25
+
+
 def test_facets_narrow_the_taxonomy():
     # Arrange
     client, ctx, exercises = build_client()

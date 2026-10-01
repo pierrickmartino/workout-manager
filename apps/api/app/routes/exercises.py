@@ -249,6 +249,13 @@ def browse_taxonomy(
     ranked exercises (curated → completeness → name) and an accurate ``count``; the pattern
     is a read-time projection, so this endpoint owns no new state. Unpaged: the taxonomy
     needs the whole filtered set to group it, and the catalog is a bounded shared set.
+    That bound is a product fact, not a code invariant — the catalog is shared and curated
+    so it does not grow per user, but it is not fixed either. ``limit``/``offset`` are
+    deliberately absent and ignored (pinned by
+    ``test_taxonomy_stays_unpaged_even_when_a_client_asks_for_a_page``); the client renders
+    the whole set, and ``apps/web/audit/extra.mjs`` measures that screen at 100/1000/10000
+    rows. When the bound stops holding, the answer is to virtualize the client list, not to
+    paginate this read — a page makes every per-pattern count a lie.
     Declared before ``/exercises/{exercise_id}`` so the literal path wins. Read-only."""
 
     muscle_groups = [
