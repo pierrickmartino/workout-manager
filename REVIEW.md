@@ -114,6 +114,12 @@ The plan model has **no calendar and no "today"** (ADR-0001).
 - 🟡 Domain logic that could be pure belongs in `app/domain/` (no I/O) so it is
   unit-testable; frontend logic belongs in `apps/web/lib/` view-models with a
   co-located `*.test.ts`.
+- 🟡 Icons come from `@/components/pulse/icons`, never from `lucide-react` — the
+  design system owns the icon set (ADR-0092, enforced by `icon-import-policy.ts`).
+- 🟡 A `useState` seeded from a prop must be a prop that cannot change. On a route
+  a server action revalidates, the form follows the prop and overlays only the
+  fields the user touched, or it shows stale text and edits from it (see CLAUDE.md,
+  `lib/admin-editor-props-refresh.test.ts`).
 
 ## 9. Baseline quality & security
 

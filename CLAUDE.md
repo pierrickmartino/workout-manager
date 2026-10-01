@@ -113,6 +113,12 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   names. Domain logic belongs in `app/domain/` (pure) so it's trivially testable.
 - **Conventional commits** (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`,
   `chore:`).
+- **Exact dependency versions in `apps/web/package.json`** — no `^`, so two installs at
+  different times resolve identically and a dependency moves in a reviewable diff rather
+  than on whoever installed last. Upgrade with `npm install <pkg>@<version>` (which writes
+  the exact version) and let CI judge it. `apps/api/pyproject.toml` deliberately keeps
+  `>=` floors instead: it has no lockfile, and several of those floors are documented
+  security minimums, not preferred versions.
 - Explicit error handling; validate at system boundaries; no hardcoded secrets
   (env vars only).
 
@@ -231,6 +237,33 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   land it together with `useMemo` on the array and `useCallback` on every handler, or a fresh
   identity defeats it on every render and the memo reads as working.
   `lib/live-session-tick.test.ts` holds this for the Live Session; there is no sweep (ADR-0091).
+  The catalog taxonomy is the other place that pair is load-bearing — it is the one unpaged
+  nested list in the app, so `PatternSection` (its own module, memoized) and the screen's
+  `useCallback`'d `openDetail` land together; `lib/catalog-list-memo.test.ts` holds both halves.
+
+- New icon, anywhere → import it from `@/components/pulse/icons`, never from `lucide-react`.
+  Icons are design-system surface like everything else in `pulse/`, and reaching past the
+  design system for them is what made the icon set a 66-file edit. If the icon is not
+  re-exported yet, add a line to `components/pulse/icons.ts` — keep it a *pure re-export*,
+  because a wrapper component there would stop the per-icon tree-shaking the measurement
+  relies on. The guard in `apps/web/lib/icon-import-policy.ts` sweeps the whole web root —
+  `audit/` and `scripts/` included, unlike the chart guards — counts re-exports and
+  `import type` too, and fails closed on the package (so a deep import is caught); its
+  exemption registry is empty. It proves nothing names the
+  package, **not** that the barrel is weightless — measure the per-route client-reference
+  manifest for that, as ADR-0092 did (ADR-0092).
+
+- Props-seeded `useState` in a form → only where the prop genuinely cannot change. The admin
+  Exercise editor page revalidates its own route whenever any control on it writes, so a
+  mount-time snapshot shows stale text and edits from it: the editors overlay the admin's
+  *changed* fields on the `exercise` prop (`overlayEditorEdits`, `draft ?? server`) so an
+  untouched field follows the server and typing is never discarded. "Changed", not
+  "touched" — `applyEditorEdit` drops an edit typed back to the server's own value, or a
+  field the admin edited and undid stays pinned against every later refresh, which is the
+  same staleness one keystroke at a time.
+  `lib/admin-editor-props-refresh.test.ts` holds it. `ExerciseCatalogTaxonomy` is the
+  documented exception and says so at the `useState` — it writes the URL with
+  `history.replaceState` precisely so the Server Component does not re-run.
 
 - New animation or transform transition → pair it with `motion-reduce:animate-none`
   or `motion-reduce:transition-none` **in the same class string**. Colour and
