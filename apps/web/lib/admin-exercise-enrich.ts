@@ -35,6 +35,6 @@ export function enrichControlView(): EnrichControlView {
     actionLabel: "Enrich now",
     busyLabel: "Queuing…",
     acceptedMessage:
-      "Enrichment queued — the movement's fields will be filled in the background shortly.",
+      "Enrichment queued — the movement’s fields will be filled in the background shortly.",
   };
 }

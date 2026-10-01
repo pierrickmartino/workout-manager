@@ -309,6 +309,7 @@ export function PrescriptionFieldStack({
         </FieldLabel>
         <FieldLabel className={FIELD_WIDTH} label={targetLabel}>
           <Input
+            spellCheck={false}
             value={target}
             placeholder={targetPlaceholderFor(kind)}
             onChange={(event) => onChangeTarget(event.target.value)}
@@ -332,6 +333,7 @@ export function PrescriptionFieldStack({
         </FieldLabel>
         <FieldLabel className={FIELD_WIDTH} label="Load">
           <Input
+            spellCheck={false}
             value={loadValue}
             inputMode={loadValueInputMode(loadKind)}
             placeholder={`60 ${weightUnitLabel(weightUnit)}`}
@@ -402,6 +404,7 @@ export function PrescriptionFieldStack({
             ) : null}
             <FieldLabel className={FIELD_WIDTH} label="Tempo">
               <Input
+                spellCheck={false}
                 value={tempo}
                 placeholder="3-1-1"
                 onChange={(event) => onChangeTempo(event.target.value)}
@@ -452,6 +455,7 @@ export function PrescriptionFieldStack({
                 </FieldLabel>
                 <FieldLabel className={FIELD_WIDTH} label="Target effort">
                   <Input
+                    spellCheck={false}
                     value={targetEffortValue}
                     placeholder={effortScale === "rir" ? "e.g. 2" : "e.g. 8"}
                     onChange={(event) =>

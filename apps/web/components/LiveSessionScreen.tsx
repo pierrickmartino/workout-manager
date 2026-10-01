@@ -714,7 +714,7 @@ function BlockedPrompt({
           <AlertTriangle className="h-5 w-5 text-magenta" aria-hidden />
         </span>
         <div className="flex flex-col gap-1.5">
-          <h2 className="font-display text-lg font-semibold text-text-primary">
+          <h2 className="text-balance font-display text-lg font-semibold text-text-primary">
             Another session is in progress
           </h2>
           <p className="font-mono text-[13px] leading-relaxed text-text-muted">
@@ -790,7 +790,7 @@ function IdleEndedSummary({
 
       <Card className="flex flex-col gap-4 p-5">
         <div className="flex flex-col gap-1.5">
-          <h2 className="font-display text-lg font-semibold text-text-primary">
+          <h2 className="text-balance font-display text-lg font-semibold text-text-primary">
             Session ended after inactivity
           </h2>
           <p className="font-mono text-[13px] leading-relaxed text-text-muted">

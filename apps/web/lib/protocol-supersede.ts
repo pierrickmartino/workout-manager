@@ -22,5 +22,5 @@ export function supersedeWarning(
   }
   // In progress: warn at the one-way door, naming the Protocol (its resolved display
   // label, ADR-0021) that will be set aside.
-  return `You're partway through "${currentProtocol.label}". Starting a new protocol will set it aside — you won't be able to return to it.`;
+  return `You’re partway through "${currentProtocol.label}". Starting a new protocol will set it aside — you won’t be able to return to it.`;
 }

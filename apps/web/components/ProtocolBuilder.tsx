@@ -464,7 +464,9 @@ function ConfigPanel({
 
       <label className="flex flex-col gap-1.5">
         <span className="label-mono text-[9px] text-text-muted">Protocol name</span>
+        {/* An authored Protocol name is a label, as the Session Name is (ADR-0103). */}
         <Input
+          spellCheck={false}
           value={name ?? ""}
           aria-label="Protocol name"
           placeholder={`${objective} · ${trainingType}`}

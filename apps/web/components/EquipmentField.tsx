@@ -34,6 +34,7 @@ export function EquipmentField({
     <Field label="Equipment" hint="Leave blank for bodyweight.">
       <Input
         name="equipment"
+        spellCheck={false}
         placeholder="dumbbells, pull-up bar"
         value={equipment}
         onChange={(event) => setEquipment(event.target.value)}

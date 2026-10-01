@@ -445,6 +445,7 @@ function QuantityField({
           {/* Time is optional (ADR-0032): given, pace becomes a derivable read. */}
           <span className="label-mono text-[9px] text-text-muted">Time (opt.)</span>
           <Input
+            spellCheck={false}
             name={`${prefix}-duration`}
             placeholder="mm:ss"
             value={row.duration}
@@ -462,6 +463,7 @@ function QuantityField({
       <label className={FULL_FIELD_CELL}>
         <span className="label-mono text-[9px] text-text-muted">Time</span>
         <Input
+          spellCheck={false}
           name={`${prefix}-duration`}
           placeholder="mm:ss"
           value={row.duration}
@@ -530,6 +532,7 @@ function LoadFields({
         {/* The keypad follows the picked kind (ADR-0093): a number for the weight-bearing
             kinds, the full keyboard for a `low-high` range or a descriptive Load. */}
         <Input
+          spellCheck={false}
           name={`${prefix}-load_value`}
           placeholder="70"
           inputMode={loadValueInputMode(row.loadKind)}

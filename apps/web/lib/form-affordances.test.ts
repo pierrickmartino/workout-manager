@@ -78,6 +78,33 @@ test("a text field keeps the platform keyboard unless its call site asks otherwi
   assert.equal(time.querySelector("input")!.getAttribute("inputmode"), "numeric");
 });
 
+test("a search box is not spell-checked, and a text field is left to its call site", () => {
+  // Arrange
+  const { Input } = importComponent("components/ui/input.tsx");
+
+  // Act
+  const search = render(React.createElement(Input, { type: "search", placeholder: "Search by name…" }));
+  const note = render(React.createElement(Input, { placeholder: "Optional note (e.g. felt easy)" }));
+  const tempo = render(React.createElement(Input, { placeholder: "3-1-1", spellCheck: false }));
+
+  // Assert — a half-typed query is not a misspelling (ADR-0103); a set note is prose and
+  // keeps the browser's own answer; a value field states it where it stands.
+  assert.equal(search.querySelector("input")!.getAttribute("spellcheck"), "false");
+  assert.equal(note.querySelector("input")!.getAttribute("spellcheck"), null);
+  assert.equal(tempo.querySelector("input")!.getAttribute("spellcheck"), "false");
+});
+
+test("a call site can ask for its field to be checked after all", () => {
+  // Arrange
+  const { Input } = importComponent("components/ui/input.tsx");
+
+  // Act — the derivation is a default, like the other two.
+  const searched = render(React.createElement(Input, { type: "search", spellCheck: true }));
+
+  // Assert
+  assert.equal(searched.querySelector("input")!.getAttribute("spellcheck"), "true");
+});
+
 test("the profile fields a browser can genuinely fill carry their real tokens", () => {
   // Arrange
   const { ProfileForm } = importComponent("components/ProfileForm.tsx", {

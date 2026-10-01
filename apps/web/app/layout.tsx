@@ -33,6 +33,7 @@ import { resolveActiveSkin } from "@/lib/active-skin";
 import { resolveIsAdmin } from "@/lib/admin";
 import { resolveUserMode } from "@/lib/appearance";
 import { resolveTheme } from "@/lib/theme";
+import { themeColorFor } from "@/lib/theme-color";
 
 import "./globals.css";
 
@@ -123,11 +124,20 @@ export const metadata: Metadata = {
   },
 };
 
-export const viewport: Viewport = {
-  themeColor: "#09090b",
-  width: "device-width",
-  initialScale: 1,
-};
+// The browser chrome is painted in the rendered Theme's own page colour (ADR-0102), so
+// this is resolved per request rather than stated as a constant: the Active Skin decides
+// which `--color-base` the page carries, and a stamped Mode decides its polarity. System
+// Mode leaves the polarity to the device, exactly as `globals.css` does, so it emits both
+// media-conditioned branches. Both reads are React-`cache`d and the layout below makes
+// the same two, so this costs no extra round-trip.
+export async function generateViewport(): Promise<Viewport> {
+  const [activeSkin, mode] = await Promise.all([resolveActiveSkin(), resolveUserMode()]);
+  return {
+    themeColor: themeColorFor(activeSkin, mode),
+    width: "device-width",
+    initialScale: 1,
+  };
+}
 
 export default async function RootLayout({
   children,

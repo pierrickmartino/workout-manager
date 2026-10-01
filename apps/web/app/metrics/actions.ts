@@ -19,7 +19,7 @@ export async function submitMetric(
   const metric =
     typeof form.get("metric") === "string" ? String(form.get("metric")).trim() : "";
   if (metric === "") {
-    return { error: "Name the metric you're recording (e.g. weight).", saved: false };
+    return { error: "Name the metric you’re recording (e.g. weight).", saved: false };
   }
 
   const rawValue =

@@ -55,7 +55,7 @@ export function SessionHero({ protocol }: SessionHeroProps): React.JSX.Element {
               `min-w-0`; a zero floor does not help text that cannot break. Measured once Home
               became a sweep journey (ADR-0088) — the same `min-w-0 break-words` pairing eight
               other authored-name call sites already use. */}
-          <h2 className="min-w-0 break-words font-display text-2xl font-bold capitalize text-text-primary">
+          <h2 className="min-w-0 break-words text-balance font-display text-2xl font-bold capitalize text-text-primary">
             {heading}
           </h2>
           <p className="label-mono text-[11px] capitalize text-text-secondary">

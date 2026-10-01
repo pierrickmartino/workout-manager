@@ -67,14 +67,23 @@ export function RenameSessionControl({
       <input type="hidden" name="session_id" value={sessionId} />
       <label className="flex flex-col gap-1.5">
         <span className="label-mono text-[9px] text-text-muted">Session name</span>
+        {/* An authored Session Name is a label, not prose — "Push A", "W1D2", a gym's
+            own shorthand — so the checker is off rather than underlining every one of
+            them (ADR-0103).
+
+            No `autoFocus` (ADR-0103): this editor opens inside the `OverflowMenu`
+            disclosure, so on a phone the attribute raised the keyboard and scrolled the
+            panel out from under the thumb that had just opened it. The field is already
+            the first focusable element in the revealed panel, so a reader who wants it
+            is one Tab — or one tap — away. */}
         <Input
+          spellCheck={false}
           name="name"
           value={name}
           onChange={(event) => setName(event.target.value)}
           placeholder={displayName}
           aria-label="Session name"
           maxLength={MAX_SESSION_NAME_LENGTH}
-          autoFocus
         />
       </label>
       <div className="flex flex-wrap items-center gap-3">

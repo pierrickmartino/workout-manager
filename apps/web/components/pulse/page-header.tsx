@@ -33,7 +33,7 @@ export function PageHeader({
     >
       <div className="flex min-w-0 flex-col gap-1.5">
         <Overline>{overline}</Overline>
-        <h1 className="font-display text-2xl font-bold leading-tight tracking-tight text-text-primary">
+        <h1 className="text-balance font-display text-2xl font-bold leading-tight tracking-tight text-text-primary">
           {title}
         </h1>
       </div>

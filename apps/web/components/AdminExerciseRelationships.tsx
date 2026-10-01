@@ -80,7 +80,7 @@ export function AdminExerciseRelationships({
       {error ? <Alert announce tone="error">{error}</Alert> : null}
 
       <RelationshipGroup
-        title="This movement's variations & alternatives"
+        title="This movement’s variations & alternatives"
         empty="No outgoing links yet."
         rows={grouped.outgoing}
         exerciseId={exerciseId}
@@ -234,6 +234,7 @@ function AddRelationship({
           <Input
             id="relationship-search"
             value={query}
+            spellCheck={false}
             placeholder="Search the catalog…"
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {

@@ -323,6 +323,7 @@ function SetRow({
         <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Load</span>
           <Input
+            spellCheck={false}
             value={loadValue}
             inputMode={loadValueInputMode(loadKind)}
             onChange={(event) => setLoadValue(event.target.value)}

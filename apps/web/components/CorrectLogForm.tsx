@@ -128,6 +128,7 @@ function AmountFields({
         <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Time</span>
           <Input
+            spellCheck={false}
             name={`set-${index}-duration`}
             defaultValue={initial(`set-${index}-duration`, set.duration)}
             placeholder="25:00"
@@ -143,6 +144,7 @@ function AmountFields({
       <label className={FIELD_CELL}>
         <span className="label-mono text-[9px] text-text-muted">Time</span>
         <Input
+          spellCheck={false}
           name={`set-${index}-duration`}
           defaultValue={initial(`set-${index}-duration`, set.duration)}
           placeholder="5:00"
@@ -225,6 +227,7 @@ function SetRow({
         <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Load</span>
           <Input
+            spellCheck={false}
             name={`set-${index}-load_value`}
             defaultValue={initial(`set-${index}-load_value`, set.loadValue)}
             placeholder="70"
@@ -366,7 +369,7 @@ function AccountScopedCorrectLogForm({
         />
       </Field>
 
-      <Field label="Duration (seconds)" hint="Leave blank if it wasn't timed.">
+      <Field label="Duration (seconds)" hint="Leave blank if it wasn’t timed.">
         <Input
           name="duration_seconds"
           type="number"
@@ -470,6 +473,7 @@ function AddedSetRow({
           <span className="label-mono text-[9px] text-text-muted">Movement</span>
           <Input
             name={`${prefix}-movement`}
+            spellCheck={false}
             defaultValue={initial(`${prefix}-movement`, "")}
             placeholder="Bicep Curl"
             aria-label={`Movement name, ${rowLabel}`}
@@ -524,6 +528,7 @@ function AddedSetRow({
         <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Load</span>
           <Input
+            spellCheck={false}
             name={`${prefix}-load_value`}
             defaultValue={initial(`${prefix}-load_value`, "")}
             placeholder="15"
@@ -602,6 +607,7 @@ function AddedAmountFields({
         <label className={FIELD_CELL}>
           <span className="label-mono text-[9px] text-text-muted">Time (opt.)</span>
           <Input
+            spellCheck={false}
             name={`${prefix}-duration`}
             defaultValue={initial(`${prefix}-duration`, "")}
             placeholder="mm:ss"
@@ -617,6 +623,7 @@ function AddedAmountFields({
       <label className="flex flex-col gap-1.5">
         <span className="label-mono text-[9px] text-text-muted">Time</span>
         <Input
+          spellCheck={false}
           name={`${prefix}-duration`}
           defaultValue={initial(`${prefix}-duration`, "")}
           placeholder="mm:ss"

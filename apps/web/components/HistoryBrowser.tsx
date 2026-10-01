@@ -124,7 +124,7 @@ export function HistoryBrowser({
             id="history-exercise"
             type="search"
             list="history-exercise-options"
-            placeholder="Any exercise"
+            placeholder="Any exercise…"
             value={filters.exercise ?? ""}
             onChange={(event) => setExercise(event.target.value)}
           />
@@ -255,7 +255,7 @@ function LoggedSessionCard({
           never collide or interleave on a narrow phone. */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
-          <h2 className="font-display text-lg font-semibold capitalize text-text-primary">
+          <h2 className="text-balance font-display text-lg font-semibold capitalize text-text-primary">
             {entry.training_type} session
           </h2>
           <span className="label-mono whitespace-nowrap text-[10px] text-text-muted">

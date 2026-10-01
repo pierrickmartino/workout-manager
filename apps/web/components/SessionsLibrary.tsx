@@ -101,7 +101,7 @@ export function SessionsLibrary({
           <Input
             id="sessions-search"
             type="search"
-            placeholder="Search by name or type"
+            placeholder="Search by name or type…"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
