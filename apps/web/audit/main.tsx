@@ -38,7 +38,10 @@ import { toDistanceBars } from "@/lib/distance-view";
 import { Alert } from "@/components/pulse/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { exerciseNames, exercises, history, personalRecords, prescriptions, profile, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
+import { SpecsPanel } from "@/components/exercise/specs-panel";
+import { AdminExerciseBrowser } from "@/components/AdminExerciseBrowser";
+import { LocalInstant } from "@/components/pulse/local-instant";
+import { adminExerciseRows, auditEntry, exerciseDetail, exerciseNames, exercises, history, personalRecords, prescriptions, profile, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
 
 const params = new URLSearchParams(location.search);
 if (params.get("fonts") === "fontsource") {
@@ -131,6 +134,24 @@ function Home() {
   );
 }
 
+// The two admin surfaces this change touched, in one journey. The audit trail's row markup
+// lives in a Server Component page, so the row is replicated here from its classes rather than
+// imported — what is measured is `LocalInstant`'s own text, which is the longest thing in it.
+function AdminAudit() {
+  return <div className="flex flex-col gap-8">
+    <AdminExerciseBrowser rows={adminExerciseRows} />
+    <div className="flex flex-col gap-4">
+      <SectionHeader meta="1 change">Audit trail</SectionHeader>
+      <ul className="flex flex-col gap-2">
+        <li className="flex flex-col gap-1 rounded-sm border border-border bg-surface px-3.5 py-2.5 font-mono text-[13px] sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-text-primary">Provenance: AI-generated → Curated</span>
+          <span className="text-[11px] text-text-muted">{auditEntry.actor} &middot; <LocalInstant iso={auditEntry.createdAt} /></span>
+        </li>
+      </ul>
+    </div>
+  </div>;
+}
+
 function Content() {
   switch (journey) {
     case "charts": return <ChartAccessibilityFixture />;
@@ -150,6 +171,14 @@ function Content() {
     case "live": return <LiveSessionScreen session={workout} today="2026-09-26" defaultRestSeconds={60} keepScreenAwake={false} unit="kg" />;
     case "analytics": return <Analytics />;
     case "home": return <Home />;
+    // The Exercise detail page's SPECS lens, which carries the framed illustration (ADR-0095).
+    // Its box is reserved by the layout rather than by the image, so this measures the box the
+    // page actually holds open while the bytes never arrive.
+    case "exercise": return <SpecsPanel exercise={exerciseDetail} topSetSeries={[]} unit="kg" />;
+    // The admin catalog browser (ADR-0097) and, beneath it, one audit-trail row in the shape
+    // the admin editor renders it — the reader's-clock instant (ADR-0096) is the longest text
+    // in that row. Neither admin screen was in any journey before.
+    case "admin": return <AdminAudit />;
     case "contrast": return <ContrastSamples />;
     default: throw new Error(`Unknown audit journey: ${journey}`);
   }

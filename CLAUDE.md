@@ -292,6 +292,46 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   `aria-hidden`, the meta counter stays a sibling) and the row's classes — the divider's
   appearance is unchanged, which `audit/reflow.mjs` and `audit/wide.mjs` confirm (ADR-0094).
 
+- New `<img>`, anywhere → it must reserve its box before the bytes arrive. A
+  `max-h-* w-full object-contain` image is **zero tall** until it decodes, which is how one
+  illustration dropped the whole SPECS lens down the page when it landed. For an Exercise
+  picture that frame already exists: render `components/pulse/illustration.tsx`, whose box
+  (aspect, height cap, matching `width`/`height` ratio hint) lives in `lib/illustration-box.ts`
+  so the hint and the aspect cannot drift — `illustration-box.test.ts` holds them to one number.
+  It is deliberately `loading="lazy"` only, because both its surfaces are below the fold; an
+  above-the-fold image declares its own three attributes instead of bending the frame. The guard
+  The `exercise` journey renders it in a browser with the image deliberately unavailable, which
+  is how the box is verified rather than argued — that journey also surfaced an authored name
+  measuring 1225px inside a 320px screen in the same file, clipped and so invisible to every
+  report. The guard
+  in `apps/web/lib/image-policy.ts` sweeps every component and page and fails a raw `<img>` that
+  declares no `width`, `height` or `loading` (`loading="eager"` passes — it asks for the
+  decision, not one answer); a `{...props}` spread declares nothing, and its registry is empty.
+  It proves the attributes are *declared*, not that the numbers are right (ADR-0095).
+
+- Rendering an **instant** — a moment on the clock, as opposed to a `yyyy-mm-dd` calendar date
+  → `components/pulse/local-instant.tsx`, never `toLocaleString()` in a Server Component, where
+  "the reader's locale" is the container's. Parse with `lib/instant.ts`, which reads a missing
+  offset as UTC: the API's `created_at` columns are `TIMESTAMP WITHOUT TIME ZONE`, so
+  `.isoformat()` emits an offsetless string that ES parses as *local* time — the moment is wrong
+  before anything formats it. `LocalInstant` renders a zone-explicit UTC text on the server and
+  in the first client paint (byte-identical, so no hydration mismatch) and swaps to the reader's
+  locale after mount. The guard in `apps/web/lib/server-locale-policy.ts` fails a non-client
+  module that calls `toLocaleDateString`/`toLocaleTimeString`, constructs an `Intl.DateTimeFormat`,
+  or calls `toLocaleString` on a `Date`; a number's grouping is deliberately out of scope, and the
+  registry is empty. Calendar dates stay with `lib/date-format.ts` (ADR-0096).
+
+- A list over an unpaged set, or a filter driven by a controlled input → keep all three off the
+  keystroke: hoist anything the filters don't affect (the admin catalog re-sorted 500 rows with
+  `localeCompare` per character, though the order never depended on the query), run the filter
+  pass through `useDeferredValue` rather than a debounce (a debounce is for collapsing *requests*;
+  deferring delays nothing and merely lets local work be interrupted), and give each row
+  `.list-row-defer` so an off-screen row costs nothing. Read the summary copy and any
+  clear-filters affordance off the **deferred** value, or the header describes a list that is not
+  on screen yet. The deferral itself is not mechanized — `act()` flushes both passes — so
+  `lib/admin-catalog-list.test.ts` holds what is observable: the sort runs once per catalog, and
+  settling leaves the field, the rows and the count consistent (ADR-0097).
+
 - New animation or transform transition → pair it with `motion-reduce:animate-none`
   or `motion-reduce:transition-none` **in the same class string**. Colour and
   opacity transitions move nothing and are exempt by rule. The guard in

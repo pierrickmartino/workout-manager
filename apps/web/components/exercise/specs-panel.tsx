@@ -18,6 +18,7 @@ import { toExerciseHighlight } from "@/lib/atlas/exercise-highlight";
 import type { View } from "@/lib/atlas/atlas-geometry";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { SectionHeader } from "@/components/pulse/section-header";
+import { Illustration } from "@/components/pulse/illustration";
 import { DataList } from "@/components/pulse/data-list";
 import { TopSetTrendChartLazy } from "@/components/exercise/top-set-trend-chart-lazy";
 import { ExerciseMuscleFigure } from "@/components/exercise/muscle-figure";
@@ -95,7 +96,8 @@ export function SpecsPanel({
 // `resolveExerciseImageSrc` (the same-origin `/api/exercises/{id}/image` proxy when an image
 // was uploaded, else the legacy curated URL); when there is neither, `src` is `null` and this
 // renders nothing, so a movement with no picture stays fully usable and never shows a broken
-// image. A plain <img> (not next/image) — no remote-image host is configured (issue #504).
+// image. The frame — and the box it reserves before the bytes land (ADR-0095) — is the design
+// system's `Illustration`.
 function ExerciseImage({
   src,
   name,
@@ -104,16 +106,7 @@ function ExerciseImage({
   name: string;
 }) {
   if (!src) return null;
-  return (
-    <Card className="overflow-hidden p-0">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={src}
-        alt={`Illustration of ${name}`}
-        className="max-h-80 w-full object-contain"
-      />
-    </Card>
-  );
+  return <Illustration src={src} alt={`Illustration of ${name}`} />;
 }
 
 // The Top-Set Trend (ADR-0017): a bar chart of the best Estimated 1RM per qualifying
@@ -312,10 +305,16 @@ function RelatedList({
             href={appendFrom(`/exercises/${item.id}`, from)}
             className="group flex items-center justify-between gap-3 px-4 py-3.5 transition-colors hover:bg-elevated/50"
           >
-            <span className="font-sans text-[14px] text-text-primary">
+            {/* An authored movement name, so it wraps rather than setting the width of the row
+                around it (ADR-0085, clause 1). `break-words` and not only `min-w-0`: a zero
+                floor does nothing for text with no break opportunity, and an unbroken
+                80-character name measured 1225px inside a 320px screen — clipped by the Card's
+                `overflow-hidden` rather than visible, which is why the document width never
+                reported it. Surfaced by making this lens a sweep journey. */}
+            <span className="min-w-0 break-words font-sans text-[14px] text-text-primary">
               {item.name}
             </span>
-            <ChevronRight className="h-[18px] w-[18px] text-text-muted transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
+            <ChevronRight className="h-[18px] w-[18px] shrink-0 text-text-muted transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
           </Link>
         ))}
       </Card>

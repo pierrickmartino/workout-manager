@@ -7,9 +7,9 @@ import { resolveExerciseImageSrc, validateImageUpload } from "@/lib/exercise-ima
 import type { ExerciseDetail } from "@/lib/sessions-types";
 import { Alert } from "@/components/pulse/alert";
 import { Field } from "@/components/pulse/field";
+import { Illustration } from "@/components/pulse/illustration";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 
 // The curator Exercise Image control on the admin editor (issue #504, ADR-0041): upload (or
 // replace), preview, and remove the one illustration a curator sets for a movement — the picture
@@ -202,14 +202,9 @@ function ImagePreview({
       <span className="label-mono text-[10px] tracking-wider text-text-muted">
         {label}
       </span>
-      <Card className="overflow-hidden p-0">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={src}
-          alt={`Illustration of ${name}`}
-          className="max-h-64 w-full object-contain"
-        />
-      </Card>
+      {/* The same framed box the Exercise page renders (ADR-0095), so the preview shows the
+          curator what a reader will actually see — letterboxing included. */}
+      <Illustration src={src} alt={`Illustration of ${name}`} />
     </div>
   );
 }

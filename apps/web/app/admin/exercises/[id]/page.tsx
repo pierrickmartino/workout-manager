@@ -15,6 +15,7 @@ import { AdminExerciseEnrich } from "@/components/AdminExerciseEnrich";
 import { AdminExerciseRelationships } from "@/components/AdminExerciseRelationships";
 import { AdminExerciseRetire } from "@/components/AdminExerciseRetire";
 import { AdminExerciseDelete } from "@/components/AdminExerciseDelete";
+import { LocalInstant } from "@/components/pulse/local-instant";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { BackLink } from "@/components/pulse/back-link";
@@ -26,7 +27,8 @@ import { BackLink } from "@/components/pulse/back-link";
 // changes. The admin gate is resolved server-side; a non-admin gets a 404 rather than a
 // revealed-but-denied page, and the backend independently gates every write (`require_admin`,
 // ADR-0046). The detail and the audit trail are fetched server-side (the JWT never reaches the
-// browser); the thin Client Components own the edits.
+// browser); the thin Client Components own the edits. Each trail entry's instant is written by
+// `LocalInstant`, so it reads in the admin's own clock and not the container's (ADR-0096).
 export default async function AdminExerciseEditorPage({
   params,
 }: {
@@ -106,7 +108,7 @@ export default async function AdminExerciseEditorPage({
                   {summarizeAuditEntry(entry)}
                 </span>
                 <span className="text-[11px] text-text-muted">
-                  {entry.actor} &middot; {new Date(entry.created_at).toLocaleString()}
+                  {entry.actor} &middot; <LocalInstant iso={entry.created_at} />
                 </span>
               </li>
             ))}

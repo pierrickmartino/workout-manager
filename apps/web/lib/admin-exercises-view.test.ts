@@ -6,9 +6,10 @@ import {
   filterAdminExercises,
   hasActiveAdminFilters,
   matchesAdminFilters,
-  selectAdminExerciseRows,
+  projectAdminExerciseRows,
   sortAdminExercises,
   toAdminExerciseRowView,
+  type AdminExerciseFilters,
   type AdminExerciseRow,
 } from "./admin-exercises-view.ts";
 
@@ -123,14 +124,14 @@ test("sort orders by name A→Z with a stable id tiebreak, without mutating inpu
   assert.deepEqual(rows, original, "input array is not reordered");
 });
 
-test("selectAdminExerciseRows filters, sorts, and projects in one call", () => {
-  const rows = [
+test("projectAdminExerciseRows filters and projects in one call", () => {
+  const rows = sortAdminExercises([
     row({ id: 3, name: "Overhead Press", provenance: "ai_generated" }),
     row({ id: 1, name: "Back Squat", provenance: "curated" }),
     row({ id: 2, name: "Front Squat", provenance: "curated" }),
-  ];
+  ]);
 
-  const views = selectAdminExerciseRows(rows, {
+  const views = projectAdminExerciseRows(rows, {
     ...EMPTY_ADMIN_FILTERS,
     provenance: "curated",
   });
@@ -148,4 +149,53 @@ test("hasActiveAdminFilters is false only for the empty state", () => {
   assert.equal(hasActiveAdminFilters(EMPTY_ADMIN_FILTERS), false);
   assert.equal(hasActiveAdminFilters({ ...EMPTY_ADMIN_FILTERS, query: "x" }), true);
   assert.equal(hasActiveAdminFilters({ ...EMPTY_ADMIN_FILTERS, status: "retired" }), true);
+});
+
+test("sorting once up front gives the same rows as sorting after every filter", () => {
+  // Arrange — the browser holds the whole Catalog and refilters it on each keystroke, so the
+  // sort is hoisted out of that path (ADR-0097). That is only safe while the two orders agree:
+  // the filter preserves order, and the sort is stable, so filtering a sorted list must equal
+  // sorting a filtered one. Names chosen to exercise the case-insensitive compare and the id
+  // tiebreak between two movements sharing a name.
+  const rows = [
+    row({ id: 5, name: "front squat", provenance: "curated" }),
+    row({ id: 2, name: "Back Squat", provenance: "ai_generated" }),
+    row({ id: 9, name: "Back Squat", provenance: "curated" }),
+    row({ id: 4, name: "Overhead Press", provenance: "curated" }),
+    row({ id: 7, name: "Front Squat", provenance: "curated" }),
+  ];
+  const sorted = sortAdminExercises(rows);
+  // The order the component replaced: sort *after* filtering, once per keystroke.
+  const sortPerPass = (filters: AdminExerciseFilters) =>
+    sortAdminExercises(filterAdminExercises(rows, filters)).map(toAdminExerciseRowView);
+
+  for (const filters of [
+    EMPTY_ADMIN_FILTERS,
+    { ...EMPTY_ADMIN_FILTERS, provenance: "curated" },
+    { ...EMPTY_ADMIN_FILTERS, query: "squat" },
+    { ...EMPTY_ADMIN_FILTERS, query: "nothing matches this" },
+  ]) {
+    // Act / Assert
+    assert.deepEqual(
+      projectAdminExerciseRows(sorted, filters),
+      sortPerPass(filters),
+      JSON.stringify(filters),
+    );
+  }
+});
+
+test("projectAdminExerciseRows leaves the sorted list it was handed alone", () => {
+  // Arrange — the component memoizes that array across every keystroke, so a projection that
+  // mutated it would corrupt every later filter pass.
+  const sorted = sortAdminExercises([
+    row({ id: 2, name: "Back Squat" }),
+    row({ id: 1, name: "Front Squat" }),
+  ]);
+  const before = [...sorted];
+
+  // Act
+  projectAdminExerciseRows(sorted, { ...EMPTY_ADMIN_FILTERS, query: "front" });
+
+  // Assert
+  assert.deepEqual(sorted, before);
 });

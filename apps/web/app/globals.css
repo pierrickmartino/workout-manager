@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Test files are never rendered, so the class strings in them must never reach the
+   stylesheet. The `*-policy.ts` guards hold whole components as source fixtures — a
+   deliberately malformed `aspect-[a/b]`, a `className="h-11"` — and Tailwind's automatic
+   source detection was compiling those into real rules nothing could ever use. */
+@source not "../lib/**/*.test.ts";
+
 /*
   PULSE design system — a "tactical command-center" fitness theme.
 
@@ -886,6 +892,24 @@
     font-family: var(--font-mono);
     letter-spacing: 0.08em;
     text-transform: uppercase;
+  }
+
+  /* A row in a long, unpaged list (ADR-0097). `content-visibility: auto` lets the
+     browser skip style, layout and paint for the rows that are off-screen, so the
+     admin catalog's 500 rows cost roughly what the dozen on screen cost. The
+     `contain-intrinsic-size` is the placeholder size a skipped row claims; `auto`
+     means "remember the real one once you have measured it", so the scrollbar
+     settles instead of jumping as rows come into view. 74px is an estimate read off
+     the row's own classes — `px-4 py-3.5` around a 15px name, a 6px gap and a badge
+     line — not a measurement, and it only has to be close: the `auto` keyword
+     replaces it with the browser's own number the first time a row renders, so the
+     estimate affects nothing after the first layout.
+
+     Not `display: none` and not virtualization — the rows stay in the DOM, in the
+     accessibility tree, and findable by the browser's own find-in-page. */
+  .list-row-defer {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 74px;
   }
 
   /* Thin custom scrollbar so long lists stay on-theme. */

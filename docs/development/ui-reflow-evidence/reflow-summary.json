@@ -1,8 +1,11 @@
 {
-  "issue": 570,
-  "revision": "cdba981a63a4c16039249d9d3d3cfc28013a2f34",
-  "timestamp": "2026-09-29T07:49:56.571Z",
-  "node": "v22.22.2",
+  "issues": [
+    570,
+    572
+  ],
+  "revision": "f7f13e69af51081498a16bf9853bc170135e06dd",
+  "timestamp": "2026-10-01T09:11:07.631Z",
+  "node": "v22.22.0",
   "platform": "linux",
   "engine": "chromium 141.0.7390.37 (playwright 1.63.0)",
   "engineBoundary": "Chromium only; WebKit is not installed in this container. Widths are not expected to match the macOS Chromium 153 matrix exactly.",
@@ -10,18 +13,17 @@
     "width": 320,
     "height": 568
   },
-  "cases": 1200,
+  "cases": 1560,
   "failures": 0,
   "documentOverflow": {
     "at100": 0,
-    "at200Text": 240
+    "at200Text": 0
   },
-  "known200TextOverflow": [
-    "logging",
-    "live",
-    "correction",
-    "creation-logged"
-  ],
+  "crampedControls": {
+    "at100": 0,
+    "at200Text": 0,
+    "controls": 9180
+  },
   "byJourney": {
     "profile": {
       "novel": false,
@@ -54,7 +56,8 @@
       },
       "at200Text": {
         "overflowing": 0,
-        "cells": 60
+        "cells": 60,
+        "cramped": 0
       },
       "maxElementOverflow": 0
     },
@@ -89,7 +92,8 @@
       },
       "at200Text": {
         "overflowing": 0,
-        "cells": 60
+        "cells": 60,
+        "cramped": 0
       },
       "maxElementOverflow": 0
     },
@@ -124,7 +128,8 @@
       },
       "at200Text": {
         "overflowing": 0,
-        "cells": 60
+        "cells": 60,
+        "cramped": 0
       },
       "maxElementOverflow": 0
     },
@@ -159,7 +164,8 @@
       },
       "at200Text": {
         "overflowing": 0,
-        "cells": 60
+        "cells": 60,
+        "cramped": 0
       },
       "maxElementOverflow": 0
     },
@@ -194,7 +200,8 @@
       },
       "at200Text": {
         "overflowing": 0,
-        "cells": 60
+        "cells": 60,
+        "cramped": 0
       },
       "maxElementOverflow": 0
     },
@@ -228,10 +235,11 @@
         }
       },
       "at200Text": {
-        "overflowing": 60,
-        "cells": 60
+        "overflowing": 0,
+        "cells": 60,
+        "cramped": 0
       },
-      "maxElementOverflow": 63
+      "maxElementOverflow": 0
     },
     "live": {
       "novel": false,
@@ -263,10 +271,11 @@
         }
       },
       "at200Text": {
-        "overflowing": 60,
-        "cells": 60
+        "overflowing": 0,
+        "cells": 60,
+        "cramped": 0
       },
-      "maxElementOverflow": 27
+      "maxElementOverflow": 0
     },
     "analytics": {
       "novel": false,
@@ -299,7 +308,8 @@
       },
       "at200Text": {
         "overflowing": 0,
-        "cells": 60
+        "cells": 60,
+        "cramped": 0
       },
       "maxElementOverflow": 0
     },
@@ -333,10 +343,11 @@
         }
       },
       "at200Text": {
-        "overflowing": 60,
-        "cells": 60
+        "overflowing": 0,
+        "cells": 60,
+        "cramped": 0
       },
-      "maxElementOverflow": 7
+      "maxElementOverflow": 0
     },
     "creation-logged": {
       "novel": true,
@@ -368,10 +379,119 @@
         }
       },
       "at200Text": {
-        "overflowing": 60,
-        "cells": 60
+        "overflowing": 0,
+        "cells": 60,
+        "cramped": 0
       },
-      "maxElementOverflow": 9
+      "maxElementOverflow": 0
+    },
+    "home": {
+      "novel": true,
+      "perFixture": {
+        "short": {
+          "maxDocumentWidth": 320,
+          "overflowing": 0,
+          "cells": 12
+        },
+        "session-spaced": {
+          "maxDocumentWidth": 320,
+          "overflowing": 0,
+          "cells": 12
+        },
+        "session-unbroken": {
+          "maxDocumentWidth": 320,
+          "overflowing": 0,
+          "cells": 12
+        },
+        "exercise-spaced": {
+          "maxDocumentWidth": 320,
+          "overflowing": 0,
+          "cells": 12
+        },
+        "exercise-unbroken": {
+          "maxDocumentWidth": 320,
+          "overflowing": 0,
+          "cells": 12
+        }
+      },
+      "at200Text": {
+        "overflowing": 0,
+        "cells": 60,
+        "cramped": 0
+      },
+      "maxElementOverflow": 0
+    },
+    "exercise": {
+      "novel": true,
+      "perFixture": {
+        "short": {
+          "maxDocumentWidth": 320,
+          "overflowing": 0,
+          "cells": 12
+        },
+        "session-spaced": {
+          "maxDocumentWidth": 320,
+          "overflowing": 0,
+          "cells": 12
+        },
+        "session-unbroken": {
+          "maxDocumentWidth": 320,
+          "overflowing": 0,
+          "cells": 12
+        },
+        "exercise-spaced": {
+          "maxDocumentWidth": 320,
+          "overflowing": 0,
+          "cells": 12
+        },
+        "exercise-unbroken": {
+          "maxDocumentWidth": 320,
+          "overflowing": 0,
+          "cells": 12
+        }
+      },
+      "at200Text": {
+        "overflowing": 0,
+        "cells": 60,
+        "cramped": 0
+      },
+      "maxElementOverflow": 0
+    },
+    "admin": {
+      "novel": true,
+      "perFixture": {
+        "short": {
+          "maxDocumentWidth": 320,
+          "overflowing": 0,
+          "cells": 12
+        },
+        "session-spaced": {
+          "maxDocumentWidth": 320,
+          "overflowing": 0,
+          "cells": 12
+        },
+        "session-unbroken": {
+          "maxDocumentWidth": 320,
+          "overflowing": 0,
+          "cells": 12
+        },
+        "exercise-spaced": {
+          "maxDocumentWidth": 320,
+          "overflowing": 0,
+          "cells": 12
+        },
+        "exercise-unbroken": {
+          "maxDocumentWidth": 320,
+          "overflowing": 0,
+          "cells": 12
+        }
+      },
+      "at200Text": {
+        "overflowing": 0,
+        "cells": 60,
+        "cramped": 0
+      },
+      "maxElementOverflow": 0
     }
   },
   "failureDetail": []

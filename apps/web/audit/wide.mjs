@@ -48,6 +48,11 @@ const ALL_JOURNEYS = [
   // rather than just the wide frame — and the only one whose `columnOverNarrow` gate is
   // expected to be inapplicable rather than merely satisfied.
   "home",
+  // The Exercise detail lens and the admin catalog (ADR-0095/0096/0097). Neither was ever in a
+  // journey, so neither had been rendered at any width by this harness. Both stay unconverted —
+  // no `data-shell="wide"` — so they also widen the evidence that the frame leaves an
+  // unconverted page at 26rem.
+  "exercise", "admin",
 ];
 // A comma-separated subset, for iterating on one screen without paying for the full sweep.
 // The gated run is the unfiltered one.

@@ -1,7 +1,8 @@
 import type { LoggedSession } from "@/lib/logs-types";
 import type { SessionSummary } from "@/lib/session-library";
 import type { ExerciseSearchResult } from "@/lib/exercises-types";
-import type { ExercisePrescription, WorkoutSession } from "@/lib/sessions-types";
+import type { ExerciseDetail, ExercisePrescription, WorkoutSession } from "@/lib/sessions-types";
+import type { AdminExerciseRow } from "@/lib/admin-exercises-view";
 import type { Profile } from "@/lib/profile-types";
 import type { ProtocolProgress } from "@/lib/protocols-types";
 import type { PersonalRecordEntry, VolumePoint } from "@/lib/analytics-types";
@@ -110,3 +111,53 @@ export const personalRecords: PersonalRecordEntry[] = Array.from({ length: 8 }, 
   is_bodyweight: i % 4 === 3,
   added_kg: i % 4 === 3 ? 20 : null,
 }));
+
+// The Exercise detail page's SPECS lens (ADR-0017), mounted so the illustration's reserved box
+// (ADR-0095) is measured at 320px and at 200% text like everything else. The image src is a
+// real app route the isolated audit server does not serve, which is the useful case rather than
+// a defect: a box that only holds its space once the bytes arrive is exactly the CLS this is
+// here to catch, and here they never arrive.
+export const exerciseDetail: ExerciseDetail = {
+  id: 1,
+  name: exerciseNames[0],
+  description: "A synthetic description long enough to wrap on a narrow screen. ".repeat(3),
+  provenance: "curated",
+  targeted_muscles: ["quadriceps", "glutes"],
+  primary_muscles: ["quadriceps"],
+  secondary_muscles: ["glutes"],
+  muscle_highlight: {
+    primary: { muscles: ["quadriceps"], groups: [] },
+    secondary: { muscles: ["glutes"], groups: [] },
+  },
+  required_equipment: ["barbell", "squat rack"],
+  instructions: [
+    "Set the bar at mid-chest height and brace before unracking.",
+    "Descend until the hip crease passes the knee, then drive up.",
+  ],
+  difficulty: 5,
+  precautions: ["Stop if the knee tracks inward under load."],
+  image: null,
+  has_image: true,
+  retired: false,
+  reference_count: null,
+  variations: [{ id: 2, name: exerciseNames[1] }],
+  alternatives: [{ id: 3, name: "Synthetic squat 3" }],
+};
+
+// The admin catalog browser's rows (ADR-0097). Deliberately over the 50-item threshold the
+// audit cares about and over the >426px column where the facet grid goes three-up, with the
+// long authored names in the first two slots so the row's truncation and the badge cluster are
+// measured against the same names every other journey uses.
+export const adminExerciseRows: AdminExerciseRow[] = Array.from({ length: 60 }, (_, i) => ({
+  id: i + 1,
+  name: i < 2 ? exerciseNames[i] : `Synthetic squat ${i + 1}`,
+  provenance: ["curated", "ai_generated", "user_entered"][i % 3],
+  completeness: ["stub", "listable", "enriched"][i % 3],
+  retired: i % 7 === 0,
+}));
+
+// One admin audit-trail entry, in the row shape `app/admin/exercises/[id]/page.tsx` renders it
+// in (ADR-0096). The page itself is a Server Component, so the row is replicated here rather
+// than imported — what is under measurement is the instant's own text, which is the longest
+// thing in that row and the part this change made longer.
+export const auditEntry = { actor: "operator@example.com", createdAt: "2026-09-30T14:03:22.123456" };

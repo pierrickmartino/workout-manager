@@ -14,20 +14,28 @@ No instance of `transition: all`, `user-scalable=no`, `onPaste` + `preventDefaul
 
 The findings below are real gaps, grouped by how much they cost.
 
-> **Status (2026-10-01).** The three HIGH findings (#1, #2, #3) are fixed; each carries a
-> `**Resolution:**` note saying what landed and what deliberately did not. The conventions they
-> set are ADR-0093 (a control's autofill and keypad come from the primitive) and ADR-0094 (a
-> section divider is a heading). One part of #2 is closed as *won't fix* with a reason — the
-> `mm:ss` fields — and is called out in its note. #4–#15 are untouched.
+> **Status (2026-10-01).** The three HIGH findings (#1, #2, #3) and the first three MEDIUM ones
+> (#4, #5, #6) are fixed; each carries a `**Resolution:**` note saying what landed and what
+> deliberately did not. The conventions they set are ADR-0093 (a control's autofill and keypad
+> come from the primitive), ADR-0094 (a section divider is a heading), ADR-0095 (an image
+> reserves its box before its bytes arrive), ADR-0096 (an instant is written in the reader's
+> clock) and ADR-0097 (the admin catalog is kept off the keystroke path). One part of #2 is
+> closed as *won't fix* with a reason — the `mm:ss` fields — and is called out in its note.
+> #7–#15 are untouched.
+>
+> The Exercise detail page and the admin screens were in **no** audit journey, so nothing
+> #4–#6 touched had ever been rendered at 320px, at 200% text, or at 1440px. Two journeys
+> (`exercise`, `admin`) now cover them in `audit/reflow.mjs` and `audit/wide.mjs`: 0 of 780
+> cases overflow at each. Adding them surfaced one pre-existing defect, noted under #4.
 
 | # | Finding | Severity | Status |
 |---|---|---|---|
 | 1 | 122 form controls, zero `autocomplete` | HIGH | Fixed — ADR-0093 |
 | 2 | Numeric inputs have no `inputmode` | HIGH | Fixed — ADR-0093, except `mm:ss` (see note) |
 | 3 | `SectionHeader` is not a heading — 29 files, no `<h2>` outline | HIGH | Fixed — ADR-0094 |
-| 4 | `<img>` without `width`/`height` (CLS) and without `loading` | MEDIUM | Open |
-| 5 | Admin audit-log timestamp renders in *server* locale/timezone | MEDIUM | Open |
-| 6 | `limit=500` admin catalog, unvirtualized, filtered per keystroke | MEDIUM | Open |
+| 4 | `<img>` without `width`/`height` (CLS) and without `loading` | MEDIUM | Fixed — ADR-0095 |
+| 5 | Admin audit-log timestamp renders in *server* locale/timezone | MEDIUM | Fixed — ADR-0096 |
+| 6 | `limit=500` admin catalog, unvirtualized, filtered per keystroke | MEDIUM | Fixed — ADR-0097 |
 | 7 | Admin browser filter state not in URL | MEDIUM | Open |
 | 8 | `window.confirm` in 3 places while `ConfirmDialog` exists | MEDIUM | Open |
 | 9 | No `touch-action: manipulation` anywhere | LOW | Open |
@@ -213,6 +221,49 @@ Give the wrapping `<Card>` an `aspect-[4/3]` (or whatever the catalog standardiz
 put `width`/`height` on the `<img>` as the ratio hint, plus `loading="lazy"` — the exercise
 illustration sits well below the fold on the detail page.
 
+**Resolution:** done as the fix shape describes, and recorded as ADR-0095. The box is now a
+property of the layout rather than of the picture, which is the only thing it can be: both
+images are proxied or legacy URLs of unknown and unequal intrinsic size.
+`lib/illustration-box.ts` holds the whole shape — `aspect-[4/3]`, a `max-h-80` cap, and the
+matching `width`/`height` pair — and `components/pulse/illustration.tsx` is the one thing that
+reads them. Both call sites render it, so the admin preview now shows the curator exactly what
+a reader sees, letterboxing included, instead of a different box at a different cap.
+
+The cap is not cosmetic: the aspect alone would make the illustration 864px tall in the 72rem
+wide shell (ADR-0088). Past ~427px of column — in practice only that shell — the cap binds and
+the box is 320px tall rather than 4:3, with the picture letterboxing horizontally. That costs no
+stability, because both the aspect and the cap are lengths known before the image is; it does
+mean the ratio hint describes the **uncapped** box, which is the one a browser lays out from
+before the stylesheet applies.
+
+Two things are mechanized, and they answer different questions. `lib/image-policy.ts` sweeps
+every component and page and fails a raw `<img>` that declares no `width`, `height` or
+`loading` (`{...props}` declares nothing; `loading="eager"` passes — the guard asks for the
+decision, not for one answer); its registry is empty. `Illustration` itself only ever says
+`lazy` — both its surfaces are below the fold — and an above-the-fold image declares its own
+three attributes rather than bending the frame, which is precisely what the guard accepts.
+
+That the ratio hint and the reserved *aspect* describe the same shape is a different question,
+and `illustration-box.test.ts` answers it by comparing the two declarations, with
+`aspectClassRatio` returning `null` rather than a guessed `1` so an unreadable class fails the
+comparison instead of passing it vacuously.
+
+`decoding` is deliberately outside the guard — it changes when a loaded image paints, never the
+space it occupies — though the component sets `decoding="async"` anyway.
+
+**Measured.** The Exercise detail page is now an audit journey (`exercise`), with its fixture
+pointing at an app route the isolated audit server does not serve, so the image never arrives —
+the case worth measuring. With `naturalWidth === 0` the old `max-h-80 w-full object-contain`
+box is **270 × 0** at a 320px viewport and **414 × 0** at 1440px; the reserved box is 270 × 203
+and 414 × 311.
+
+Adding the journey also surfaced a defect this change did not cause, in the same file: the
+Variations / Alternatives rows render an authored name in a bare `<span>`, and an unbroken
+80-character name measured **1225px inside a 320px screen** — invisible to every report because
+the `Card` clips it, and a silent failure of ADR-0085's first clause. Fixed with the
+`min-w-0 break-words` pairing `session-hero.tsx` already carries, plus `shrink-0` on the
+chevron.
+
 ### 5. Admin audit timestamp uses the server's locale and timezone — MEDIUM
 
 ```text
@@ -236,6 +287,33 @@ calls in `components/pulse/level-badge.tsx:34,42,43,46` are acceptable, but an
 `Intl.NumberFormat` memoized once would be cheaper than re-resolving the formatter on every
 XP render.
 
+**Resolution:** done, and recorded as ADR-0096 — and fixing the output exposed a second,
+worse fault underneath it. `created_at` is written as UTC but stored in a
+`TIMESTAMP WITHOUT TIME ZONE` column, so `.isoformat()` emits an offsetless string, which ES
+parses as **local** time. A reader in Paris was not seeing a UTC moment in US format; they were
+seeing a moment shifted two hours, correctly formatted. So `lib/instant.ts` owns the reading as
+well as the writing: a missing offset is read as UTC (silence, not an override), a stated one is
+kept, and anything that is not an instant returns `null` rather than `NaN` or the epoch.
+
+`components/pulse/local-instant.tsx` renders the zone-explicit text (`2026-09-30 14:03 UTC`,
+built from the UTC getters so it is byte-identical everywhere) on the server and in the first
+client paint, then swaps to the reader's locale after mount. The first render is not a
+placeholder — it is a correct reading that names its clock, so it is right with JavaScript off
+and can never be mistaken for the reader's own time. The output is a `<time dateTime>` carrying
+the normalized string, so the machine-readable moment is right whichever text is showing.
+`local-instant.test.ts` asserts both renders by rendering them.
+
+`lib/server-locale-policy.ts` guards the rule: a module that is not a Client Component may not
+call `toLocaleDateString`/`toLocaleTimeString`, construct an `Intl.DateTimeFormat`, or call
+`toLocaleString` on a `Date` — written in place or bound to a local first. Its registry is empty.
+It is about the **clock**, not locale in general: `level-badge`'s number grouping is left alone,
+because a separator resolved in the container is cosmetic where a timestamp resolved there is a
+wrong moment, and conflating them would have forced an exemption that made the registry a list
+of things the rule does not really mean.
+
+The `Intl.NumberFormat` memoization this item suggests is **not** done. It is a different
+change — about allocation per render, not correctness — and it wants a measurement, not a guess.
+
 ### 6. 500-row catalog rendered unvirtualized and refiltered per keystroke — MEDIUM
 
 ```text
@@ -249,6 +327,38 @@ debounce. `components/ExerciseLibrary.tsx:59` shows the pattern the app already 
 `SEARCH_DEBOUNCE_MS` plus a superseded-request guard. Either reuse that debounce here, or
 add `content-visibility: auto` with a `contain-intrinsic-size` on the row wrapper, which is
 a one-class change and needs no new dependency.
+
+**Resolution:** done, and recorded as ADR-0097 — as three changes, because the keystroke was
+paying for three separate things.
+
+The **sort** was the largest and is not mentioned above: `selectAdminExerciseRows` sorted 500
+rows with `localeCompare` on every pass, though the order never depends on the filters. The
+component now memoizes `sortAdminExercises(rows)` on `rows` alone and the per-keystroke pass is
+the new `projectAdminExerciseRows`. That is correct only because the filter preserves order and
+the sort is stable, so `admin-exercises-view.test.ts` asserts the equivalence directly rather
+than leaving it to reasoning.
+
+The **filter** goes through `useDeferredValue`, not the `SEARCH_DEBOUNCE_MS` this item points
+at: that pattern exists to collapse network requests, and there is no request here — a debounce
+would add latency to a local computation to avoid doing it twice, where deferring delays nothing
+and merely lets the work be interrupted. The summary line and the Clear-filters affordance read
+off the *deferred* filters, so the field, the rows and the count always describe the same settled
+pass; a deferred list whose header described the pending one would be a new bug for an old one.
+
+The **rows** carry `.list-row-defer` — the `content-visibility: auto` /
+`contain-intrinsic-size: auto 74px` pair this item suggests. Not virtualization: every row stays
+in the DOM, in the accessibility tree and findable by find-in-page. The 74px is an estimate read
+off the row's own classes, not a measurement, and `auto` replaces it with the browser's real
+number the first time a row renders.
+
+`admin-catalog-list.test.ts` mounts the real browser and holds the two component-level
+properties: the catalog is sorted once however many characters are typed (counted through a
+wrapped view-model), and every row carries the class. The deferral itself is **not** mechanized
+and the ADR says so — `act()` flushes the urgent and deferred passes together, so a test can
+only see the settled result; what is held is that settling leaves the screen consistent.
+
+None of the three is a measured number. They remove work that provably did not need doing; what
+the screen *feels* like at 500 rows is a question for a profile on a real device.
 
 ### 7. Admin browser filter state is not deep-linkable — MEDIUM
 

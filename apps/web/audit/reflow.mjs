@@ -42,7 +42,11 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // `home` joins them with ADR-0088's wide Home: the page is converted to the wide content
 // column, so the narrow sweep is what proves the conversion moved nothing at 320px — the
 // desktop-only blocks are `hidden` below `lg:` and must cost a phone no width at all.
-const NOVEL_JOURNEYS = ["correction", "creation-logged", "home"];
+// `exercise` and `admin` join them with the three MEDIUM audit findings (ADR-0095/0096/0097):
+// the Exercise detail page and the admin catalog were never in any journey, so the illustration
+// box, the reader's-clock instant and the deferred catalog rows were all unverified in a
+// browser however green their guards were.
+const NOVEL_JOURNEYS = ["correction", "creation-logged", "home", "exercise", "admin"];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and
 // `creation-logged` were listed here because each held a `rem`-sized grid track in a form field
