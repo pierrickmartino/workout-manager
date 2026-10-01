@@ -37,10 +37,29 @@ export type ModuleBoundaries = Readonly<Record<string, unknown>>;
 // The caller names the exports it expects via `T`, which is how this stays honest about a
 // value that is, unavoidably, an untyped module namespace at runtime.
 export function loadTsx<T>(path: string, boundaries: ModuleBoundaries = {}): T {
+  // One module registry per load, so the graph behaves the way Node and the bundler do: a
+  // module two importers share is evaluated **once** and they get the same exports. Without
+  // it, a module-level singleton — a `createContext` object, most of all — silently becomes
+  // one copy per importer, and a provider in one file cannot be read by a consumer in
+  // another. Keeping the registry per call rather than global is what keeps two tests (and
+  // two sets of `boundaries`) from leaking into each other.
+  return loadModule<T>(path, boundaries, new Map());
+}
+
+function loadModule<T>(
+  path: string,
+  boundaries: ModuleBoundaries,
+  registry: Map<string, unknown>,
+): T {
+  const loaded = registry.get(path);
+  if (loaded !== undefined) return loaded as T;
   const source = ts.transpileModule(readFileSync(resolve(webRoot, path), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
   const module = { exports: {} };
+  // Registered before evaluation, as Node does, so an import cycle sees the partially-filled
+  // exports object instead of re-entering the module forever.
+  registry.set(path, module.exports);
   const localRequire = (name: string): unknown => {
     if (name in boundaries) return boundaries[name];
     const base = name.startsWith("@/")
@@ -50,11 +69,15 @@ export function loadTsx<T>(path: string, boundaries: ModuleBoundaries = {}): T {
         : null;
     // A real package (react, lucide-react, next/link) — hand it to Node.
     if (base === null) return require(name);
-    if (base.endsWith(".ts") || base.endsWith(".tsx")) return loadTsx(base, boundaries);
+    if (base.endsWith(".ts") || base.endsWith(".tsx"))
+      return loadModule(base, boundaries, registry);
     const extension = existsSync(resolve(webRoot, `${base}.ts`)) ? ".ts" : ".tsx";
-    return loadTsx(`${base}${extension}`, boundaries);
+    return loadModule(`${base}${extension}`, boundaries, registry);
   };
   new Function("require", "module", "exports", source)(localRequire, module, module.exports);
+  // Re-registered after evaluation: the entry above is the *pre*-evaluation exports object, which
+  // is the right thing for a cycle but stale if a module replaced `module.exports` outright.
+  registry.set(path, module.exports);
   return module.exports as T;
 }
 

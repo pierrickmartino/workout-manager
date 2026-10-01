@@ -22,9 +22,9 @@ places pay for that heavily, and both are the files that exceed the repo's own
 | `react19-no-forwardref` | ✅ Pass — 0 occurrences |
 | `patterns-children-over-render-props` | ✅ Pass — 0 `renderX` props |
 | `architecture-avoid-boolean-props` | ✅ Pass (2 minor exceptions, #5/#6) |
-| `state-lift-state` | ⚠️ One correct implementation, not applied where needed (#1) |
-| `state-decouple-implementation` | ⚠️ Same (#1) |
-| `state-context-interface` | ❌ No `{state, actions, meta}` interface anywhere (#1, #2) |
+| `state-lift-state` | ✅ Fixed for #1 — ADR-0105 |
+| `state-decouple-implementation` | ✅ Fixed for #1 — the rows no longer know how the draft is held (ADR-0105) |
+| `state-context-interface` | ⚠️ `PrescriptionDraftContext` implements it (#1, ADR-0105), but `PrescriptionList` still welds the one provider to the list; #2 still open |
 | `architecture-compound-components` | ❌ No compound components anywhere (#2, #3) |
 | `patterns-explicit-variants` | ⚠️ Two boolean-mode components (#4, #5) |
 | `react19-use-over-usecontext` | ⚠️ Single occurrence, not migrated (#6) |
@@ -47,6 +47,13 @@ Worth stating explicitly, because these are load-bearing and should not regress:
   components is what makes the component layer thin enough to refactor safely.
 
 ## Findings
+
+> **Status (2026-10-01).** #1 is fixed and carries a `**Resolution:**` note saying what landed and
+> what deliberately did not; the convention it sets is ADR-0105 (a Prescription row reads the draft
+> it edits). #2–#6 are untouched. The suggested order below still holds for the rest, with one
+> correction: #6 was listed first so the contexts added in #1 and #2 would be written against the
+> current React 19 API — #1's context is written that way regardless, so #6 remains a two-line
+> change to one file and nothing is now blocked on it.
 
 ### 1. HIGH — 13 callbacks drilled 4 levels deep in `prescription-rows.tsx`
 
@@ -84,6 +91,71 @@ instead of receiving it through three intermediaries. `SupersetContainer` and
 
 This collapses all 52 declarations, and is the mechanism that brings the file
 under the repo's 800-line maximum (`CLAUDE.md` → Conventions).
+
+**Resolution:** done, and recorded as ADR-0105. The reading that the reducer makes the provider
+nearly free was correct: `ProtocolBuilder.tsx:75` holds the draft, the 13 callbacks were each an
+arrow adding a `type` and a `sessionId` to one `dispatch`, and no state management changed.
+
+Three parts of the suggested shape were adjusted, each for a reason:
+
+- **The event vocabulary is derived, not declared.** `PrescriptionEvent` is
+  `WithoutSessionId<Extract<BuilderEvent, { type: RowScopedEventType }>>` in
+  `lib/prescription-draft.ts`, so a new field on `EDIT_LOAD` reaches the rows with no second
+  edit. The `Omit` has to distribute member by member — a bare `Omit<A | B, "sessionId">`
+  collapses the union into the intersection of its fields and the discriminant stops narrowing,
+  which would make `event.position` read as possibly-absent at every call site.
+- **`meta` holds the drag gesture, not `selectedPosition`.** The suggested `selectedPosition` is
+  `SessionEditor`'s and is not threaded into the rows at all, so putting it in the contract would
+  have been inventing a consumer. What *was* being forwarded through `SupersetContainer` is the
+  live gesture — `draggingId`, the classified `feedback`, the `foreshadow` — so that is `meta`,
+  and each row now derives its own slice (`insertionEdgeFor` had been called twice with the same
+  arguments, once per call site).
+- **The screen attaches the address.** A row cannot name a Session, so it cannot send an edit to
+  the wrong one; `toBuilderEvent(sessionId, event)` is called once, in `ProtocolBuilder`, which
+  holds both the reducer and the open Session's id. Membership in the vocabulary stays declared
+  (which events are a row's is a judgement), but is held from both sides: `as const satisfies
+  readonly BuilderEvent["type"][]` so a renamed event stops compiling instead of silently dropping
+  out of the union, and a test holding the samples to that registry so a 14th cannot arrive
+  unexercised.
+
+Collapsing the plumbing took the file to ~1020 lines, **not** under 800 as the finding predicted
+— ~380 of the 1197 lines were prop plumbing, and removing it left the editor card, the drag
+chrome and the row parts still co-located. So the four pieces that were only ever beside the rows
+moved out (`prescription-draft-context.tsx`, `prescription-editor.tsx`,
+`prescription-drag-chrome.tsx`, `prescription-row-parts.tsx`), and `prescription-rows.tsx` is
+**625** lines holding what its name says: the list, the container, the sortable row.
+`ProtocolBuilder.tsx` went 751 → 628, since its 13 feeding arrows became one.
+
+Not quite *all* 52: exactly **five** callback declarations survive in the row tree, all of them
+`PrescriptionControls`', kept on purpose — each is one row's `dispatch` closed over one position,
+and a button floor that names its effect at the call site is what makes it legible.
+`PrescriptionFieldStack` likewise keeps its props, being presentation shared with three other
+authoring surfaces (ADR-0067). Beyond the 52, `SessionEditor`'s own 19 props are now 7.
+
+One part of the rule is **not** delivered and should not be read as delivered: the `swap the
+provider, keep the UI` illustration in `state-context-interface`. The rows are written against the
+interface, but `PrescriptionList` still takes the draft as props and wires its own provider, so it
+is the single entry point to the row tree and no alternative provider can be injected from
+outside. Lifting the provider out is what a second caller would need, and there is no second
+caller — #2 is where two providers are actually asked for, and where the shape should be proven.
+
+The context value is deliberately **not** memoized. Nothing in the row tree is behind a
+`React.memo`, so a consumer re-renders with `PrescriptionList` whatever the value's identity is; a
+`useMemo` there would read as saving renders while saving none (ADR-0091), and `feedback` is a
+fresh descriptor on every drag-over regardless. Re-render volume is unchanged from the prop drill.
+
+The context is written against React 19 (`<Context value>`, `use()`), so #6 is no longer a
+prerequisite for anything — see the status note above.
+
+Two things surfaced that the audit could not have seen. `lib/tsx-harness.ts` evaluated every
+module **per importer**, so a `createContext` object imported by two files became two contexts
+and no cross-file provider could be read; it now keeps a module registry per load, as Node does
+(registered before evaluation for cycles, re-registered after it in case a module replaces its
+`exports`).
+And a pre-existing gap is left as it was, deliberately: a **drag**-resolved reorder does not
+remap the composition strip's selected tile while the button-path reorder does (ADR-0074). Both
+now pass through one funnel, so closing it is a one-line change — but it is a behaviour change,
+and this was a refactor.
 
 ### 2. HIGH — The set-entry field family is duplicated across four forms
 
@@ -230,7 +302,8 @@ writes, not parent-state syncing.
 
 1. **#6** (2 lines) — sets the API baseline for the contexts below.
 2. **#1** `PrescriptionDraftContext` — highest value, and the reducer already
-   exists. Brings `prescription-rows.tsx` under the 800-line limit.
+   exists. Brings `prescription-rows.tsx` under the 800-line limit. **Done — ADR-0105**
+   (the collapse alone left ~1020 lines; a four-way split finished the job).
 3. **#2** `SetEntry` compound family — largest correctness win; de-duplicates the
    typed-`Load` selector across four forms.
 4. **#3** `Field.Root`/`Field.Control` — do after #2, its biggest consumer.
