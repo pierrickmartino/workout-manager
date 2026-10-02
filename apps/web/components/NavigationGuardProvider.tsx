@@ -2,8 +2,8 @@
 
 import {
   createContext,
+  use,
   useCallback,
-  useContext,
   useEffect,
   useRef,
   useState,
@@ -39,7 +39,7 @@ const NavigationGuardContext = createContext<NavigationGuardContextValue | null>
 // Pass the form's coarse "has unsaved work" flag; the guard prompts before any in-app
 // navigation or tab-close while it is true, and stands down on cleanup.
 export function useNavigationGuard(isDirty: boolean): void {
-  const context = useContext(NavigationGuardContext);
+  const context = use(NavigationGuardContext);
   if (context === null) {
     throw new Error("useNavigationGuard must be used within NavigationGuardProvider");
   }
@@ -149,7 +149,7 @@ export function NavigationGuardProvider({
   const cancelDiscard = useCallback(() => setPendingHref(null), []);
 
   return (
-    <NavigationGuardContext.Provider value={{ setDirty }}>
+    <NavigationGuardContext value={{ setDirty }}>
       {children}
       {pendingHref !== null ? (
         <ConfirmDialog
@@ -161,6 +161,6 @@ export function NavigationGuardProvider({
           onCancel={cancelDiscard}
         />
       ) : null}
-    </NavigationGuardContext.Provider>
+    </NavigationGuardContext>
   );
 }

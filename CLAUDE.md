@@ -517,6 +517,20 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   `lib/generate-training-launchpad.test.ts` renders both compositions and reads the props interface
   through the AST, because a flag added and not yet passed renders as nothing (ADR-0109).
 
+- A new React context → read it with `use(Ctx)` and provide it by rendering the context itself
+  (`<Ctx value={…}>`), never `useContext` or `<Ctx.Provider>`. React 19 still accepts the 18-era
+  pair and never warns, which is how the app's oldest and only app-wide context — the one a reader
+  is likeliest to copy — stayed on it while the two added after it used `use()`. Keep the contract
+  `{ state, actions, meta }` (ADR-0105) and name the value's parts, not a bag of callbacks. The
+  guard in `apps/web/lib/context-api-policy.ts` sweeps the whole web root — `lib/` included, where
+  a consumer hook belongs — reports the `useContext` *import* (so an alias cannot slip past), a
+  `*.useContext` namespace call, and any `*.Provider` or `*.Consumer` property access (so both JSX
+  tags and a lifted-out element report), reads them from the AST so a comment about the rule is
+  fine, and has no exemption registry. `createContext` is untouched: it is still how a context is
+  made. It proves no module *names* the old API, **not** that a context is provided above its
+  consumers — a missing provider throws, and `lib/form-accessibility.test.ts` mounts the one
+  app-wide provider for the rest (ADR-0110).
+
 - New animation or transform transition → pair it with `motion-reduce:animate-none`
   or `motion-reduce:transition-none` **in the same class string**. Colour and
   opacity transitions move nothing and are exempt by rule. The guard in
