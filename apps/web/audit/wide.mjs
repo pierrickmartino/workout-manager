@@ -61,6 +61,9 @@ const ALL_JOURNEYS = [
   // four that now compose the shared set-entry family, so it is the one whose field rows
   // changed shape (two half-width grid cells became wrapping rows that ask for their width).
   "adhoc",
+  // Both launchpad compositions (ADR-0109), which no journey rendered in either harness. It stays
+  // unconverted, so its card must hold 26rem inside the wide frame.
+  "launchpad",
 ];
 // A comma-separated subset, for iterating on one screen without paying for the full sweep.
 // The gated run is the unfiltered one.

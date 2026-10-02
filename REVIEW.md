@@ -183,6 +183,14 @@ The plan model has **no calendar and no "today"** (ADR-0001).
   each control naming itself), a caption over one is `FieldLabel`. Reject re-adding a flag the
   field-control guard would then have to evaluate from source. `FieldGroup` publishes no wiring, so
   reject reading one as a boundary: controls nested in one inside a `Field` claim that field's id.
+- 🟡 An extra card is composed, not flagged (ADR-0109): reject a `show*` boolean gating a whole
+  child one caller offers and another does not — that child is written at the call site that offers
+  it, in a `children` slot. Two flags are four states and three are eight, and the corners nobody
+  renders exist only in the type. A flag toggling a detail *inside* a component's own rendering
+  (`showBodyWeight`, `showValues`, `showOverflowCount`) is a different thing and stays. There is no
+  sweep: reject a flag whose absence no test reads from the props interface, since one added and not
+  yet passed renders as nothing. And reject a new surface that no `audit/` journey renders — that
+  is the fourth finding in a row whose real cost was the missing journey, not the refactor.
 
 ## 9. Baseline quality & security
 

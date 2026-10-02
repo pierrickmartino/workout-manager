@@ -10,7 +10,8 @@ Scope: 116 components, 43 app-router files, 164 `lib/` modules.
 The codebase is **already compliant with the two rules that most codebases fail**
 — it has no `forwardRef` and no render props at all. There is no boolean-prop
 proliferation either: 19 boolean props exist across ~160 files, and no component
-declares more than two.
+declares more than two. (17 since #5 — ADR-0109 removed the two that gated whole
+children rather than a detail of one rendering.)
 
 The real gap is the opposite of prop proliferation: **callback drilling**. With
 only one React context in the entire app, shared state is threaded by hand. Two
@@ -21,12 +22,12 @@ places pay for that heavily, and both are the files that exceed the repo's own
 | --- | --- |
 | `react19-no-forwardref` | ✅ Pass — 0 occurrences |
 | `patterns-children-over-render-props` | ✅ Pass — 0 `renderX` props |
-| `architecture-avoid-boolean-props` | ✅ Pass (2 minor exceptions, #5/#6) |
+| `architecture-avoid-boolean-props` | ✅ Pass — #5's two exceptions are gone (ADR-0109); #6 is a context-API question, not a boolean one |
 | `state-lift-state` | ✅ Fixed for #1 — ADR-0105 |
 | `state-decouple-implementation` | ✅ Fixed for #1 — the rows no longer know how the draft is held (ADR-0105) |
 | `state-context-interface` | ✅ Fixed — `SetEntry`'s two providers over one contract are the `swap the provider, keep the UI` case #1 could not prove (#2, ADR-0106) |
 | `architecture-compound-components` | ⚠️ `SetEntry.*` is the first (#2, ADR-0106). `Field`'s positional contract is gone and its wiring is a context (#3, ADR-0107) — but `Field` is deliberately **not** a compound namespace, so this rule's illustration is answered in substance, not in shape |
-| `patterns-explicit-variants` | ⚠️ One boolean-mode component left — `FieldLabel({ group })` is now `FieldLabel` + `FieldGroup` (#4, ADR-0108); #5 remains |
+| `patterns-explicit-variants` | ✅ Fixed — no boolean-mode component left: `FieldLabel({ group })` is `FieldLabel` + `FieldGroup` (#4, ADR-0108) and the launchpad's two gating flags are composed cards (#5, ADR-0109) |
 | `react19-use-over-usecontext` | ⚠️ Single occurrence, not migrated (#6) |
 
 ## What is already right
@@ -48,11 +49,12 @@ Worth stating explicitly, because these are load-bearing and should not regress:
 
 ## Findings
 
-> **Status (2026-10-02).** #1, #2, #3 and #4 are fixed; each carries a `**Resolution:**` note saying
-> what landed and what deliberately did not. The conventions they set are ADR-0105 (a Prescription
-> row reads the draft it edits), ADR-0106 (a set-entry field is written once), ADR-0107 (a field
-> publishes its wiring and the control claims it) and ADR-0108 (two renderings are two names).
-> #5 and #6 are untouched.
+> **Status (2026-10-02).** #1, #2, #3, #4 and #5 are fixed; each carries a `**Resolution:**` note
+> saying what landed and what deliberately did not. The conventions they set are ADR-0105 (a
+> Prescription row reads the draft it edits), ADR-0106 (a set-entry field is written once),
+> ADR-0107 (a field publishes its wiring and the control claims it), ADR-0108 (two renderings are
+> two names) and ADR-0109 (an extra card is composed, not flagged).
+> #6 is untouched, and is the two-line change it always was.
 > The suggested order below still holds for the rest, with three corrections: #6 was listed first so
 > the contexts added in #1 and #2 would be written against the current React 19 API — all three are
 > written that way regardless, so #6 remains a two-line change to one file and nothing is blocked on
@@ -439,6 +441,42 @@ extra cards it wants, and the "which combination is this?" question disappears:
 </GenerateTrainingLaunchpad>
 ```
 
+**Resolution:** done, and recorded as ADR-0109. The suggested shape landed verbatim, names
+included: `children` after the two generation links, and the two cards exported from the
+launchpad's own module taking no props, since each is one fixed destination with one authored
+label. `/dashboard` did not change at all — passing no children is what passing neither flag was —
+and both rendered compositions are byte-identical to what the flags produced.
+
+Two things are worth adding to the finding:
+
+- **The chip is now named once.** Both generation links and both cards ask for
+  `buttonVariants({ variant: "secondary", className: "w-full" })`, which is where four call sites
+  of the same variant arguments would start to drift; `LAUNCH_LINK` is the same move ADR-0106 made
+  with `SET_ENTRY_CARD`. The primary protocol CTA keeps its inline call, being deliberately the one
+  chip that differs.
+- **The regression this invites is invisible to a rendering test.** A flag added and not yet passed
+  renders as nothing, so `lib/generate-training-launchpad.test.ts` reads the props interface
+  through the TypeScript AST and requires no boolean member, alongside rendering both
+  compositions.
+
+And one thing the finding could not have seen, which is the fourth time this repo has paid for it
+(ADR-0098's `confirm`, ADR-0106's `adhoc`, ADR-0108's performed-set fieldset): **neither
+composition was rendered by any audit journey.** The `home` journey mounts Home's
+*protocol-present* path, so the branch that renders a launchpad at all never rendered, and `/train`
+had no journey — leaving a stack of full-width buttons with authored sentences for labels unmeasured
+at 320px, 200% text and 1440px. `launchpad` is now a journey in both harnesses, holding the TRAIN
+stack of four above the Home stack of two in one capture. Both sweeps are clean (0 of 960 reflow
+cases at each text size, 0 of 60 wide cases, the column holding 26rem inside the wide frame) — and
+the journey immediately surfaced a pre-existing app-wide defect the harness does not gate: at 200%
+text a wrapped button label needs 103px in `buttonVariants`' fixed 88px `h-11` box, which the
+already-gated `creation` journey shows too. ADR-0109 records the measurement and deliberately does
+not fix it, a button-height change being app-wide rather than this finding's.
+
+The three `show*` booleans left in the app are deliberately **not** read as instances of this
+finding: `showValues`, `showBodyWeight` and `showOverflowCount` each toggle one detail inside a
+component's own rendering rather than selecting which independent children fill a slot, so
+`children` is not an answer for any of them.
+
 ### 6. LOW — React 19 context API not adopted
 
 `apps/web/components/NavigationGuardProvider.tsx` — the app's only context:
@@ -479,7 +517,9 @@ writes, not parent-state syncing.
    consumer at all).
 5. **#4** `FieldGroup` / `FieldLabel`. **Done — ADR-0108** (one `group` call site to move; the
    `undecidable-group` problem class it let the #3 guard need is gone by construction).
-6. **#5** — small, independent, safe any time.
+6. **#5** — small, independent, safe any time. **Done — ADR-0109** (the suggested shape verbatim;
+   the cost was not the refactor but the journey neither harness had, since no audit case rendered
+   a launchpad at all).
 
 Each step is independently shippable. #1 and #2 touch files with existing
 `lib/` test coverage (`lib/protocol-builder.test.ts`,

@@ -2,7 +2,11 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { LibraryBig, ListChecks } from "@/components/pulse/icons";
 
-import { GenerateTrainingLaunchpad } from "@/components/pulse/generate-training-launchpad";
+import {
+  BuildWorkoutLink,
+  GenerateTrainingLaunchpad,
+  LogPastWorkoutLink,
+} from "@/components/pulse/generate-training-launchpad";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
 import { RecentSessionsPanel } from "@/components/recent-sessions-panel";
@@ -35,12 +39,12 @@ export default function TrainPage(): React.JSX.Element {
         Generate a full multi-week protocol or a single standalone workout — or build one
         by hand to run later, or log a past workout you did yourself, no AI.
       </p>
-      <GenerateTrainingLaunchpad
-        eyebrow="TRAIN // START SOMETHING NEW"
-        from="/train"
-        showBuild
-        showLogPastWorkout
-      />
+      {/* The two no-AI entry points are composed here rather than selected by flags: this page
+          offers both, and Home's empty state offers neither (ADR-0109). */}
+      <GenerateTrainingLaunchpad eyebrow="TRAIN // START SOMETHING NEW" from="/train">
+        <BuildWorkoutLink />
+        <LogPastWorkoutLink />
+      </GenerateTrainingLaunchpad>
 
       {/* Pick up where you left off: the user's up-to-five most-recently-performed standalone
           Sessions, each a one-tap Start into a Live Session (CONTEXT: Recent Sessions). Sits just
