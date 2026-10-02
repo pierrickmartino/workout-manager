@@ -56,10 +56,10 @@ export function Field({
   );
 }
 
-interface FieldLabelProps {
+// The ask both compact wrappers take. Which one a call site renders is the decision, so the
+// shape is shared and the choice is the component name (ADR-0108).
+interface CompactFieldProps {
   label: string;
-  // Composite controls each provide their own accessible name.
-  group?: boolean;
   // The width the field asks for in a wrapping row — see `FIELD_WIDTH` (ADR-0087).
   className?: string;
   children: React.ReactNode;
@@ -68,15 +68,10 @@ interface FieldLabelProps {
 // A compact inline label wrapper for dense grids (the Hand-Authored build-and-log editor and
 // the Insert "Add exercise" editor): a mono micro-label above the control, tighter than the
 // fuller `Field` block. Shared so the two prescription editors read identically.
-export function FieldLabel({ label, children, group = false, className }: FieldLabelProps): React.JSX.Element {
-  if (group) {
-    return (
-      <fieldset className={cn("min-w-0", className)}>
-        <legend className="mb-1.5 font-mono text-[9px] text-text-muted">{label}</legend>
-        {children}
-      </fieldset>
-    );
-  }
+//
+// One control, which claims the field's id the usual way (ADR-0107). For a composite —
+// several controls under one caption — render `FieldGroup`.
+export function FieldLabel({ label, children, className }: CompactFieldProps): React.JSX.Element {
   return (
     <Field
       className={cn("gap-1.5", className)}
@@ -84,5 +79,24 @@ export function FieldLabel({ label, children, group = false, className }: FieldL
     >
       {children}
     </Field>
+  );
+}
+
+// The same micro-label over a *composite* control: several inputs under one caption, as
+// ADR-0032's distance-and-time pair is. There is no single element for a `<label for>` to point
+// at, so this is a `<fieldset>` and `<legend>` naming the group, and each control inside carries
+// its own accessible name. It publishes no field wiring — nothing here claims an id.
+//
+// This used to be `FieldLabel({ group })`, one flag selecting between two renderings that share
+// no markup and no a11y semantics (ADR-0108).
+//
+// `min-w-0` because the UA stylesheet floors every fieldset at its content's minimum width, and
+// `border-0 p-0` does not override it (ADR-0085).
+export function FieldGroup({ label, children, className }: CompactFieldProps): React.JSX.Element {
+  return (
+    <fieldset className={cn("min-w-0", className)}>
+      <legend className="mb-1.5 font-mono text-[9px] text-text-muted">{label}</legend>
+      {children}
+    </fieldset>
   );
 }

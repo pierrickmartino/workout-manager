@@ -16,6 +16,14 @@ import ts from "typescript";
 // It proves a claimant is *present*, not that the wiring is right — the attributes a
 // primitive actually emits inside a field are asserted by rendering one, in
 // `form-accessibility.test.ts`.
+//
+// `FieldGroup` is deliberately **not** a field element here (ADR-0108): it is a `<fieldset>` and
+// `<legend>` publishing no wiring, so there is no id for a control inside it to claim and two
+// controls under one caption is the normal case (ADR-0032's distance-and-time pair). Nor does
+// the descent stop at one — a `FieldGroup` nested inside a `Field` provides no context of its
+// own, so the controls in it really do claim that field's id, and stopping would hide it. This
+// replaced reading a `group` flag off `FieldLabel`, which the guard also had to fail closed on
+// when the flag was an expression it could not evaluate.
 
 // Declared once and the type derived from it, so renaming one cannot leave the other behind
 // (ADR-0105's `as const satisfies` reasoning: a second, untyped declaration of a union drops
@@ -26,7 +34,6 @@ export type FieldElement = (typeof FIELD_ELEMENTS)[number];
 export type FieldControlProblem =
   | "unclaimed"
   | "ambiguous"
-  | "undecidable-group"
   | "competing-id";
 
 export interface FieldControlViolation {
@@ -68,8 +75,6 @@ const CLAIM_HOOKS = new Set<string>(["useFieldControl", "useFieldControlProps"])
 // subject.
 const DEFINING_MODULE = "components/pulse/field.tsx";
 
-type GroupMode = "field" | "group" | "unknown";
-
 function elementTag(node: ts.Node, tree: ts.SourceFile): string | null {
   if (ts.isJsxElement(node)) return node.openingElement.tagName.getText(tree);
   if (ts.isJsxSelfClosingElement(node)) return node.tagName.getText(tree);
@@ -80,26 +85,6 @@ function attributesOf(node: ts.Node): ts.JsxAttributes | null {
   if (ts.isJsxElement(node)) return node.openingElement.attributes;
   if (ts.isJsxSelfClosingElement(node)) return node.attributes;
   return null;
-}
-
-// `group` picks between a `<fieldset>`+`<legend>`, which has no single id to claim, and a
-// `Field`, which has exactly one. A flag the guard cannot evaluate is both call sites at
-// once, so it is reported rather than assumed either way.
-function readGroup(node: ts.Node): GroupMode {
-  const attributes = attributesOf(node);
-  if (attributes === null) return "field";
-  for (const attribute of attributes.properties) {
-    if (!ts.isJsxAttribute(attribute) || !ts.isIdentifier(attribute.name)) continue;
-    if (attribute.name.text !== "group") continue;
-    const initializer = attribute.initializer;
-    if (initializer === undefined) return "group";
-    if (ts.isJsxExpression(initializer) && initializer.expression !== undefined) {
-      if (initializer.expression.kind === ts.SyntaxKind.TrueKeyword) return "group";
-      if (initializer.expression.kind === ts.SyntaxKind.FalseKeyword) return "field";
-    }
-    return "unknown";
-  }
-  return "field";
 }
 
 // What the hook's result can be reached through: the identifier it was assigned to, so
@@ -270,11 +255,7 @@ function lineOf(node: ts.Node, tree: ts.SourceFile): number {
   return tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
 }
 
-function problemFor(group: GroupMode, { claims }: Subtree): FieldControlProblem | null {
-  if (group === "unknown") return "undecidable-group";
-  // A fieldset names each control inside it, so two of them is the normal case and there is
-  // no single id for one of them to take.
-  if (group === "group") return null;
+function problemFor({ claims }: Subtree): FieldControlProblem | null {
   if (claims === 0) return "unclaimed";
   return claims > 1 ? "ambiguous" : null;
 }
@@ -292,17 +273,13 @@ export function findFieldControlViolations(
     if (tag !== null && isFieldTag(tag)) {
       const subtree = inspectAll(
         ts.isJsxElement(node) ? node.children : [], claimers, tree);
-      const group = readGroup(node);
-      const problem = problemFor(group, subtree);
+      const problem = problemFor(subtree);
       const field = { file, element: tag, controls: subtree.claims };
       if (problem !== null) violations.push({ ...field, line: lineOf(node, tree), problem });
       // Reported at the control's own line rather than the field's, because the control is
-      // what has to change — and only where a field owns an id at all: a grouped `FieldLabel`
-      // is a fieldset, where each control naming itself is the point.
-      if (group === "field") {
-        for (const line of subtree.competingIds) {
-          violations.push({ ...field, line, problem: "competing-id" });
-        }
+      // what has to change.
+      for (const line of subtree.competingIds) {
+        violations.push({ ...field, line, problem: "competing-id" });
       }
     }
     ts.forEachChild(node, visit);
@@ -319,10 +296,7 @@ const REMEDIES: Record<FieldControlProblem, (controls: number) => string> = {
     + " spread useFieldControl() onto it",
   ambiguous: (controls) =>
     `holds ${controls} controls, which would claim the same id; give each its own field, or`
-    + " use the grouped FieldLabel, whose fieldset names every control inside it",
-  "undecidable-group": () =>
-    "has a `group` flag this guard cannot read, so it is a fieldset wanting several controls"
-    + " and a field wanting exactly one at the same time; split the call site",
+    + " use FieldGroup, whose fieldset names every control inside it",
   "competing-id": () =>
     "holds a control naming its own id, which the field’s label does not point at; name the"
     + " id once, as htmlFor on the field, and let the control claim it",

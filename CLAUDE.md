@@ -493,10 +493,18 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   control, where the field's `<label for>` would no longer point at it. The guard in
   `apps/web/lib/field-control-policy.ts` sweeps every component and page for a field with no
   claimant or two of them, traces a claim into a component declared in the same file, fails closed on
-  one from another file and on a `group` flag it cannot read, and its registry is empty. It proves a
+  one from another file, and its registry is empty. It proves a
   claimant is *present*, not that the wiring is right — `lib/form-accessibility.test.ts` renders the
   three shapes that used to break for that. A grouped `FieldLabel` is a `<fieldset>`/`<legend>` with
   no single id, so it is outside all of this (ADR-0107).
+
+- A caption over *several* controls → `FieldGroup`, not `FieldLabel`: a `<fieldset>`/`<legend>` naming
+  the group, each control carrying its own accessible name, and no field wiring to claim. These were
+  one component and a `group` flag, which is two disjoint renderings — different element, different
+  a11y contract, no shared markup — behind one name; the flag was also something the field-control
+  guard had to evaluate from source and fail closed on when it could not, a problem class now gone by
+  construction. `FieldGroup` provides no context, so a control nested in one inside a `Field` still
+  claims **that** field's id and the guard counts it (ADR-0108).
 
 - New animation or transform transition → pair it with `motion-reduce:animate-none`
   or `motion-reduce:transition-none` **in the same class string**. Colour and
