@@ -2,6 +2,7 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 import { numericInputMode } from "@/lib/input-mode";
+import { useFieldControlProps } from "@/components/pulse/field-control";
 
 // pulse.pen text fields: surface background, lighter border, small radius, with
 // the entered value shown in mono — the "operator terminal" input treatment.
@@ -16,6 +17,11 @@ import { numericInputMode } from "@/lib/input-mode";
 // Spelling is derived for `type="search"` only. A single-line field here can hold a
 // tempo code or a set note, and the two want opposite answers, so a value field declares
 // `spellCheck` where it stands (`lib/spellcheck-policy.ts` holds that).
+//
+// A fourth affordance comes from here for the same reason (ADR-0107): inside a `Field`, this
+// claims the field's id, hint and error, so the label association does not depend on where in
+// the field the control happens to sit. Outside one the hook answers nothing and the three
+// attributes stay exactly as the call site wrote them.
 export function Input({
   className,
   autoComplete = "off",
@@ -25,6 +31,7 @@ export function Input({
   step,
   ...props
 }: React.InputHTMLAttributes<HTMLInputElement>): React.JSX.Element {
+  const [field, rest] = useFieldControlProps(props);
   return (
     <input
       className={cn(
@@ -36,7 +43,8 @@ export function Input({
       spellCheck={spellCheck ?? (type === "search" ? false : undefined)}
       type={type}
       step={step}
-      {...props}
+      {...field}
+      {...rest}
     />
   );
 }

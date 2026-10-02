@@ -2,9 +2,12 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
+import { FieldControlProvider } from "@/components/pulse/field-control";
 
 interface FieldProps {
   label: React.ReactNode;
+  // The id the label points at and the control claims. Omitted, the field generates one —
+  // which is the usual case, since almost nothing else needs to name it.
   htmlFor?: string;
   // Optional helper text under the control.
   hint?: React.ReactNode;
@@ -14,7 +17,15 @@ interface FieldProps {
 }
 
 // A labeled form field: mono micro-label above the control, with optional hint.
-// The first child is the control; subsequent children may be auxiliary buttons.
+//
+// The children are rendered as written, in any shape and any order. The field *publishes* the
+// id, the description ids and the invalid state, and the control inside claims them — by being
+// one of the design-system primitives, or by spreading `useFieldControl()` where it is not one
+// (ADR-0107). So a control wrapped in a layout div, placed after another child or preceded by
+// a conditional is wired exactly the same, and an auxiliary button beside it claims nothing.
+//
+// This used to read `children[0]` as the control and `cloneElement` the wiring onto it, which
+// made all three of those shapes silently unlabel the field.
 export function Field({
   label,
   htmlFor,
@@ -24,26 +35,24 @@ export function Field({
   children,
 }: FieldProps): React.JSX.Element {
   const generatedId = React.useId();
-  const items = React.Children.toArray(children);
-  const control = items[0] as React.ReactElement<React.HTMLAttributes<HTMLElement>>;
-  const id = htmlFor ?? control.props.id ?? generatedId;
+  const id = htmlFor ?? generatedId;
   const hintId = hint ? `${id}-hint` : undefined;
   const errorId = error ? `${id}-error` : undefined;
-  const describedBy = [control.props["aria-describedby"], hintId, errorId].filter(Boolean).join(" ");
   return (
-    <div className={cn("flex flex-col gap-2", className)}>
-      <Label htmlFor={id}>{label}</Label>
-      {React.cloneElement(control, {
-        id,
-        "aria-describedby": describedBy || undefined,
-        "aria-invalid": error ? true : control.props["aria-invalid"],
-      })}
-      {items.slice(1)}
-      {hint ? (
-        <span id={hintId} className="font-mono text-[11px] text-text-muted">{hint}</span>
-      ) : null}
-      {error ? <span id={errorId} className="font-mono text-[11px] text-magenta">{error}</span> : null}
-    </div>
+    <FieldControlProvider
+      id={id}
+      describedBy={[hintId, errorId].filter(Boolean).join(" ") || undefined}
+      invalid={Boolean(error)}
+    >
+      <div className={cn("flex flex-col gap-2", className)}>
+        <Label htmlFor={id}>{label}</Label>
+        {children}
+        {hint ? (
+          <span id={hintId} className="font-mono text-[11px] text-text-muted">{hint}</span>
+        ) : null}
+        {error ? <span id={errorId} className="font-mono text-[11px] text-magenta">{error}</span> : null}
+      </div>
+    </FieldControlProvider>
   );
 }
 

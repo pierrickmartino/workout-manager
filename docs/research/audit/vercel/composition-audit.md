@@ -25,7 +25,7 @@ places pay for that heavily, and both are the files that exceed the repo's own
 | `state-lift-state` | ✅ Fixed for #1 — ADR-0105 |
 | `state-decouple-implementation` | ✅ Fixed for #1 — the rows no longer know how the draft is held (ADR-0105) |
 | `state-context-interface` | ✅ Fixed — `SetEntry`'s two providers over one contract are the `swap the provider, keep the UI` case #1 could not prove (#2, ADR-0106) |
-| `architecture-compound-components` | ⚠️ `SetEntry.*` is the first (#2, ADR-0106); `Field`'s positional-children contract is still open (#3) |
+| `architecture-compound-components` | ⚠️ `SetEntry.*` is the first (#2, ADR-0106). `Field`'s positional contract is gone and its wiring is a context (#3, ADR-0107) — but `Field` is deliberately **not** a compound namespace, so this rule's illustration is answered in substance, not in shape |
 | `patterns-explicit-variants` | ⚠️ Two boolean-mode components (#4, #5) |
 | `react19-use-over-usecontext` | ⚠️ Single occurrence, not migrated (#6) |
 
@@ -48,14 +48,17 @@ Worth stating explicitly, because these are load-bearing and should not regress:
 
 ## Findings
 
-> **Status (2026-10-01).** #1 and #2 are fixed; each carries a `**Resolution:**` note saying what
-> landed and what deliberately did not. The conventions they set are ADR-0105 (a Prescription row
-> reads the draft it edits) and ADR-0106 (a set-entry field is written once). #3–#6 are untouched.
-> The suggested order below still holds for the rest, with two corrections: #6 was listed first so
-> the contexts added in #1 and #2 would be written against the current React 19 API — both are
+> **Status (2026-10-02).** #1, #2 and #3 are fixed; each carries a `**Resolution:**` note saying
+> what landed and what deliberately did not. The conventions they set are ADR-0105 (a Prescription
+> row reads the draft it edits), ADR-0106 (a set-entry field is written once) and ADR-0107 (a field
+> publishes its wiring and the control claims it). #4–#6 are untouched.
+> The suggested order below still holds for the rest, with three corrections: #6 was listed first so
+> the contexts added in #1 and #2 would be written against the current React 19 API — all three are
 > written that way regardless, so #6 remains a two-line change to one file and nothing is blocked on
-> it. And #2's own note records that the finding *understated* its correctness case: the drift it
-> predicted had already happened, in four separate places.
+> it. #2's own note records that the finding *understated* its correctness case: the drift it
+> predicted had already happened, in four separate places. And #3 was ordered after #2 on the
+> expectation that `SetEntry` would be `Field`'s largest consumer — it turned out not to use `Field`
+> at all, so the two were independent and the ordering cost nothing either way.
 
 ### 1. HIGH — 13 callbacks drilled 4 levels deep in `prescription-rows.tsx`
 
@@ -296,6 +299,75 @@ Position stops mattering, and the a11y wiring becomes explicit rather than
 inferred. Given `Field` is used across the form surface, this is worth doing
 after #2 — the `SetEntry` work will be its largest consumer.
 
+**Resolution:** done, and recorded as ADR-0107. The diagnosis was exactly right — "the first child
+is the control" is unenforceable, and what it breaks is the label association, which nothing
+reports. The direction is now inverted: the field publishes its id, its hint/error ids and its
+invalid state, and the control claims them.
+
+Four parts of the suggested shape were adjusted, each for its own reason:
+
+- **No `Field.Control` render prop.** The illustration in `architecture-compound-components` is
+  `<Field.Control>{(props) => <Input {...props} />}</Field.Control>`, which is a render prop — and
+  `patterns-children-over-render-props` is one of the two rules this codebase passes with **zero**
+  occurrences, which this audit's own verdict calls load-bearing and says should not regress.
+  Taking the syntax would have traded a MEDIUM finding for a regression in a clean rule, across
+  ~60 call sites, to arrive at the same place. The claim is `useFieldControl()` instead, which the
+  three form primitives make on the call site's behalf: ADR-0093 already routes every control
+  through `Input`/`Select`/`Textarea`, so **using the design system is the claim** and no call site
+  changed.
+- **No `<Field.Hint />` / `<Field.Error />`.** As elements whose content comes from the `Root`'s
+  props they are strictly worse than the `hint`/`error` props they replace: forget one and the
+  text silently disappears, which is the same class of unreported failure the finding is about.
+- **No `Field.Root` / `Field.Label` namespace either**, and this one is *not* covered by the
+  render-prop argument — a children-based `Root`/`Label` pair would have regressed nothing. It
+  was declined because it buys no mechanism: once the control claims its own wiring, splitting
+  `label` into a child element changes ~60 call sites and removes no failure mode. The rule's
+  purpose here was the positional contract, and that is what was paid off; `Field` keeps its
+  props and is not a compound component, which the rule table above now says rather than
+  claiming a clean pass.
+- **The id is named once.** `htmlFor ?? control.props.id ?? generatedId` scavenged the first
+  child's id, which a context cannot see and must not: a control naming its own id leaves the
+  field's `<label for>` pointing at nothing. `htmlFor` on the field is now the only way to pick
+  one, and 14 controls that were naming an id their field already named — all of them in the four
+  admin editors — stopped.
+
+One word in the finding deserves a qualification. "The a11y wiring becomes explicit rather than
+inferred" is true of the *mechanism* and not of the call sites: `<Field label="Name"><Input
+/></Field>` is byte-identical before and after, so nothing there became explicit. What changed is
+that the inference is no longer from **position** — which a call site could break without touching
+the field, and which neither the type system nor any sweep could see — but from **component
+identity**, which both can. The literal explicitness exists where it has to: in the primitive, in
+the guard, and at a control that is not a primitive, which does write the claim where it stands.
+
+The prediction that "the `SetEntry` work will be its largest consumer" turned out **false**, and
+usefully so. `SetEntry` (#2, ADR-0106) does not use `Field` at all: it nests each control inside
+its own `<label>` with a `Caption`, which is the same problem solved by containment rather than by
+wiring. So #3's consumers are the ~60 call sites that were already there, and the two
+`cloneElement`/`Children.toArray` uses the finding counted are now zero.
+
+Two things the finding could not have seen:
+
+- **Inverting the direction moves the silent failure rather than removing it.** A field with no
+  claimant has a label pointing at nothing; one with two has both claiming a single id. Neither
+  throws, so `lib/field-control-policy.ts` requires exactly one claimant per field, fails closed,
+  and ships with an empty registry. It found precisely one real violation on first run — the file
+  picker in `AdminExerciseImage`, the one control in the app that sits in a field without being a
+  primitive, and before this change the one field whose hint reached its control only because the
+  control happened to be written first. No field anywhere held two, so nothing had been relying on
+  "first child wins".
+- **The older of the two test harnesses could not have tested this.** `lib/offline-tsx.ts` had no
+  module registry — the gap ADR-0105 fixed in `lib/tsx-harness.ts` after a shared `createContext`
+  became one copy per importer — and a `Field` and an `Input` reaching one context across two
+  modules is that shape exactly. The provider and the control would have read different contexts
+  and the wiring would have reported itself absent. The four files on the old loader moved over,
+  `offline-tsx.ts` is gone, and `loadTsxGraph` was added because two `loadTsx` calls are likewise
+  two registries. Only one of those four files needed to move for this change; migrating the other
+  three and deleting the module is cleanup beyond the finding, taken because leaving a second
+  loader alive would leave the exact gap that would have hidden this change's own failure.
+
+#4 is untouched and is now slightly cheaper: splitting `FieldLabel({ group })` into `FieldGroup`
+and `FieldLabel` would make this guard's two `group` branches unnecessary.
+
 ### 4. MEDIUM — `FieldLabel({ group })` selects between two disjoint renderings
 
 `apps/web/components/pulse/field.tsx:53,62`. The `group?: boolean` prop picks
@@ -362,7 +434,9 @@ writes, not parent-state syncing.
 3. **#2** `SetEntry` compound family — largest correctness win; de-duplicates the
    typed-`Load` selector across four forms. **Done — ADR-0106** (and the drift it
    predicted turned out to have already happened, four times over).
-4. **#3** `Field.Root`/`Field.Control` — do after #2, its biggest consumer.
+4. **#3** `Field`'s positional-children contract. **Done — ADR-0107** (by a published context and a
+   claimed wiring; the render-prop illustration was declined, and `SetEntry` turned out not to be a
+   consumer at all).
 5. **#4**, **#5** — small, independent, safe any time.
 
 Each step is independently shippable. #1 and #2 touch files with existing

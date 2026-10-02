@@ -232,7 +232,6 @@ function AddRelationship({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <Field label="Find a movement" htmlFor="relationship-search" className="flex-1">
           <Input
-            id="relationship-search"
             value={query}
             spellCheck={false}
             placeholder="Search the catalog…"
@@ -266,7 +265,6 @@ function AddRelationship({
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <Field label="Movement" htmlFor="relationship-target" className="flex-1">
             <Select
-              id="relationship-target"
               value={selectedId ?? ""}
               onChange={(event) => setSelectedId(Number(event.target.value))}
             >
@@ -279,7 +277,6 @@ function AddRelationship({
           </Field>
           <Field label="Kind" htmlFor="relationship-kind">
             <Select
-              id="relationship-kind"
               value={kind}
               onChange={(event) => setKind(event.target.value as RelationshipKind)}
               className="sm:w-44"

@@ -90,7 +90,6 @@ export function AdminExerciseEditor({
     <div className="flex flex-col gap-5">
       <Field label="Name" htmlFor="exercise-name">
         <Input
-          id="exercise-name"
           value={fields.name}
           onChange={(event) => set("name", event.target.value)}
         />
@@ -98,7 +97,6 @@ export function AdminExerciseEditor({
 
       <Field label="Description" htmlFor="exercise-description">
         <Textarea
-          id="exercise-description"
           rows={3}
           value={fields.description}
           onChange={(event) => set("description", event.target.value)}
@@ -111,7 +109,6 @@ export function AdminExerciseEditor({
         hint="One step per line."
       >
         <Textarea
-          id="exercise-instructions"
           rows={4}
           value={fields.instructions}
           onChange={(event) => set("instructions", event.target.value)}
@@ -124,7 +121,6 @@ export function AdminExerciseEditor({
         hint="One per line."
       >
         <Textarea
-          id="exercise-targeted"
           rows={3}
           value={fields.targetedMuscles}
           onChange={(event) => set("targetedMuscles", event.target.value)}
@@ -138,7 +134,6 @@ export function AdminExerciseEditor({
           hint="Emphasis split — one per line."
         >
           <Textarea
-            id="exercise-primary"
             rows={3}
             value={fields.primaryMuscles}
             onChange={(event) => set("primaryMuscles", event.target.value)}
@@ -150,7 +145,6 @@ export function AdminExerciseEditor({
           hint="Emphasis split — one per line."
         >
           <Textarea
-            id="exercise-secondary"
             rows={3}
             value={fields.secondaryMuscles}
             onChange={(event) => set("secondaryMuscles", event.target.value)}
@@ -164,7 +158,6 @@ export function AdminExerciseEditor({
         hint="One per line."
       >
         <Textarea
-          id="exercise-equipment"
           rows={2}
           value={fields.requiredEquipment}
           onChange={(event) => set("requiredEquipment", event.target.value)}
@@ -177,7 +170,6 @@ export function AdminExerciseEditor({
         hint={`${MIN_DIFFICULTY}–${MAX_DIFFICULTY}, or blank for none.`}
       >
         <Input
-          id="exercise-difficulty"
           type="number"
           min={MIN_DIFFICULTY}
           max={MAX_DIFFICULTY}

@@ -35,8 +35,14 @@ export type ModuleBoundaries = Readonly<Record<string, unknown>>;
 // ("components/pulse/elapsed-clock.tsx").
 //
 // The caller names the exports it expects via `T`, which is how this stays honest about a
-// value that is, unavoidably, an untyped module namespace at runtime.
-export function loadTsx<T>(path: string, boundaries: ModuleBoundaries = {}): T {
+// value that is, unavoidably, an untyped module namespace at runtime. A caller that only
+// destructures a component and renders it says nothing, and gets the namespace — the one
+// place `any` is the truthful element type, since the module's exports are untyped by
+// construction.
+export function loadTsx<T = Record<string, any>>(
+  path: string,
+  boundaries: ModuleBoundaries = {},
+): T {
   // One module registry per load, so the graph behaves the way Node and the bundler do: a
   // module two importers share is evaluated **once** and they get the same exports. Without
   // it, a module-level singleton — a `createContext` object, most of all — silently becomes
@@ -44,6 +50,19 @@ export function loadTsx<T>(path: string, boundaries: ModuleBoundaries = {}): T {
   // another. Keeping the registry per call rather than global is what keeps two tests (and
   // two sets of `boundaries`) from leaking into each other.
   return loadModule<T>(path, boundaries, new Map());
+}
+
+// Several entry modules into **one** registry, for a test that composes a tree by hand out of
+// parts that live in different files. Two `loadTsx` calls are two graphs, so a context object
+// the parts share would be one object per call and a provider from the first could not be read
+// by a consumer from the second — the same failure the registry exists to prevent, just moved
+// up to the call site.
+export function loadTsxGraph(
+  paths: readonly string[],
+  boundaries: ModuleBoundaries = {},
+): readonly Record<string, any>[] {
+  const registry = new Map<string, unknown>();
+  return paths.map((path) => loadModule<Record<string, any>>(path, boundaries, registry));
 }
 
 function loadModule<T>(

@@ -88,7 +88,6 @@ function ProvenanceControl({
       </p>
       <Field label="Provenance" htmlFor="exercise-provenance">
         <Select
-          id="exercise-provenance"
           value={value}
           onChange={(event) => {
             setSaved(false);
@@ -176,7 +175,6 @@ function PrecautionsControl({
         hint="One precaution per line. Shown on the Exercise page — important for injury/rehab cases."
       >
         <Textarea
-          id="exercise-precautions"
           rows={4}
           value={field}
           onChange={(event) => {

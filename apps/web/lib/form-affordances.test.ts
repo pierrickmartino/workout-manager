@@ -4,7 +4,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { JSDOM } from "jsdom";
 
-import { importComponent } from "./offline-tsx.ts";
+import { loadTsx as importComponent } from "./tsx-harness.ts";
 
 // ADR-0093: autofill and the on-screen keyboard are the primitive's job. Asserted on the
 // rendered markup rather than on the source, because what reaches the browser is the only
