@@ -3,8 +3,8 @@
     570,
     572
   ],
-  "revision": "2f2c205f10df586c94948e2b3611ab84917129ae",
-  "timestamp": "2026-10-02T06:44:54.047Z",
+  "revision": "b44fd2847d7145c82cb1e3c3f698ac66dce26a03",
+  "timestamp": "2026-10-02T07:17:11.626Z",
   "node": "v22.22.0",
   "platform": "linux",
   "engine": "chromium 141.0.7390.37 (playwright 1.63.0)",
@@ -13,7 +13,7 @@
     "width": 320,
     "height": 568
   },
-  "cases": 1800,
+  "cases": 1920,
   "failures": 0,
   "documentOverflow": {
     "at100": 0,
@@ -530,6 +530,42 @@
       "maxElementOverflow": 0
     },
     "adhoc": {
+      "novel": true,
+      "perFixture": {
+        "short": {
+          "maxDocumentWidth": 320,
+          "overflowing": 0,
+          "cells": 12
+        },
+        "session-spaced": {
+          "maxDocumentWidth": 320,
+          "overflowing": 0,
+          "cells": 12
+        },
+        "session-unbroken": {
+          "maxDocumentWidth": 320,
+          "overflowing": 0,
+          "cells": 12
+        },
+        "exercise-spaced": {
+          "maxDocumentWidth": 320,
+          "overflowing": 0,
+          "cells": 12
+        },
+        "exercise-unbroken": {
+          "maxDocumentWidth": 320,
+          "overflowing": 0,
+          "cells": 12
+        }
+      },
+      "at200Text": {
+        "overflowing": 0,
+        "cells": 60,
+        "cramped": 0
+      },
+      "maxElementOverflow": 0
+    },
+    "launchpad": {
       "novel": true,
       "perFixture": {
         "short": {
