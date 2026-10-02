@@ -143,6 +143,26 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
         ),
     ),
     BannedTerm(
+        name="difficulty / intensity level",
+        # The Calibration naming regressions (ADR-0111). Scoped to the compound
+        # identifier forms so the catalog Exercise's own ``difficulty`` column, the
+        # legacy ``perceived_difficulty``, and ``DifficultyBand`` all stay legal — it is
+        # the *level / score* framing that is banned, not the word.
+        pattern=re.compile(
+            r"difficulty_level|difficultyLevel|session_difficulty|sessionDifficulty"
+            r"|intensity_level|intensityLevel|calibration_score|calibrationScore"
+        ),
+        guidance=(
+            "A Calibration is a *relative offset* from a Protocol's authored values, "
+            "never a level or a score (CONTEXT 'Calibration', ADR-0111) — the same "
+            "reasoning that keeps Readiness a three-state signal rather than a recovery "
+            "percentage. 'difficulty' is also already spoken for three times (a catalog "
+            "Exercise's own difficulty, the legacy perceived_difficulty, and Effort's "
+            "_Avoid_ list) and 'intensity' is on Effort's _Avoid_ list. Use "
+            "'calibration' (app.domain.calibration)."
+        ),
+    ),
+    BannedTerm(
         name="mileage",
         pattern=re.compile(r"mileage|Mileage"),
         guidance=(
