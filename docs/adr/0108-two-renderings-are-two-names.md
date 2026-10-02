@@ -63,8 +63,13 @@ Two consequences are deliberate rather than incidental:
 - `lib/field-control-policy.test.ts` holds the guard's new shape: a control inside a `FieldGroup`
   may name its own id, a `FieldGroup` is outside the contract entirely, and one nested inside a
   `Field` makes that field's claimants ambiguous.
-- `audit/reflow.mjs` and `audit/wide.mjs` stay clean at 320px (100% and 200% text) and 1440px.
-  That took a **journey change**, which is the part worth recording: the one call site that moved
+- `audit/reflow.mjs` and `audit/wide.mjs` stay clean with the fieldset rendered: 0 of 900 cases
+  overflow at 320px/100% text, 0 of 900 at 200%, 0 of 9,840 controls cramped at 200%, and 0 of 900
+  overflow a 1440px viewport. That the branch is *rendered* rather than merely swept was checked
+  the only way it can be — in the browser, reading the DOM: one `<fieldset><legend>Set 1 distance
+  (km)</legend>` carrying its two inputs at 115px inside a 320px viewport, beside the two reps
+  rows, `document.scrollWidth` 320.
+  Getting there took a **journey change**, which is the part worth recording: the one call site that moved
   sits behind `isDistance`, and every Hand-Authored seed in `audit/main.tsx` was `repetitions` —
   `creation` renders no performed sets at all (`planOnly`), and `creation-logged` rendered three
   reps rows. So the `<fieldset>` branch was renderable and rendered by no journey, at any width, in
