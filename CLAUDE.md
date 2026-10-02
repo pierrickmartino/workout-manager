@@ -520,16 +520,20 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
 - A new React context → read it with `use(Ctx)` and provide it by rendering the context itself
   (`<Ctx value={…}>`), never `useContext` or `<Ctx.Provider>`. React 19 still accepts the 18-era
   pair and never warns, which is how the app's oldest and only app-wide context — the one a reader
-  is likeliest to copy — stayed on it while the two added after it used `use()`. Keep the contract
-  `{ state, actions, meta }` (ADR-0105) and name the value's parts, not a bag of callbacks. The
-  guard in `apps/web/lib/context-api-policy.ts` sweeps the whole web root — `lib/` included, where
-  a consumer hook belongs — reports the `useContext` *import* (so an alias cannot slip past), a
-  `*.useContext` namespace call, and any `*.Provider` or `*.Consumer` property access (so both JSX
-  tags and a lifted-out element report), reads them from the AST so a comment about the rule is
-  fine, and has no exemption registry. `createContext` is untouched: it is still how a context is
-  made. It proves no module *names* the old API, **not** that a context is provided above its
-  consumers — a missing provider throws, and `lib/form-accessibility.test.ts` mounts the one
-  app-wide provider for the rest (ADR-0110).
+  is likeliest to open and copy — stayed on it while the three added after it used `use()`. Keep
+  the contract `{ state, actions, meta }` (ADR-0105) and name the value's parts, not a bag of
+  callbacks. The guard in `apps/web/lib/context-api-policy.ts` sweeps the whole web root — `lib/`
+  included, where a consumer hook belongs — for three names by any of the four routes a module has
+  to one: the `useContext` *import specifier* (so an alias cannot slip past), a property access
+  (`React.useContext`, and both tags of `<Ctx.Provider>`), a literal element access
+  (`Ctx["Provider"]`), and a destructure (`const { Provider } = Ctx`). A **computed** key is
+  deliberately not read. It keys on the member's name with no check on the receiver — a context
+  object has no canonical name — so don't name a compound family's member `Provider` or `Consumer`
+  (ADR-0106's two providers are top-level exports, one naming decision from tripping it); there is
+  no exemption registry, and a genuine third-party `.Provider` is where one would be added.
+  `createContext` is untouched: it is still how a context is made. It proves no module *names* the
+  old API, **not** that a context is provided above its consumers — a missing provider throws, and
+  `lib/form-accessibility.test.ts` mounts the one app-wide provider for the rest (ADR-0110).
 
 - New animation or transform transition → pair it with `motion-reduce:animate-none`
   or `motion-reduce:transition-none` **in the same class string**. Colour and

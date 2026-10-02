@@ -488,27 +488,34 @@ component's own rendering rather than selecting which independent children fill 
 Two-line change, no behaviour difference. Worth doing now so the contexts added
 in #1 and #2 are written against the current API rather than copying the old one.
 
-**Resolution:** done, and recorded as ADR-0110. The count and the line numbers were exact — three
-lines in one file (the import, the read, and both tags of the provider element), and the sweep that
-now holds it found nothing else anywhere in the web root. No behaviour difference, as the finding
-says: `use(Ctx)` subscribes as `useContext(Ctx)` did and `<Ctx value>` renders what
-`<Ctx.Provider value>` rendered.
+**Resolution:** done, and recorded as ADR-0110. The finding's count was exact: three sites in one
+file, and the sweep that now holds it finds nothing else anywhere in the web root — one `useContext`
+(reported at its import, since that is the binding the guard keys on) and both tags of the provider
+element. No behaviour difference, as the finding says: `use(Ctx)` subscribes as `useContext(Ctx)`
+did and `<Ctx value>` renders what `<Ctx.Provider value>` rendered.
 
-Two things to add, one of them a correction to the finding's own reasoning:
+Three things to add, one of them a correction to the finding's own reasoning:
 
 - **The stated reason for doing it was overtaken, and the real one is better.** "So the contexts
   added in #1 and #2 are written against the current API" did not apply: both were written against
-  `use()` without this landing first, and each said so. What remained is the inverse — the app's
-  **oldest** context, the only app-wide one and so the one a reader is likeliest to open and copy,
-  was the one on the old API, and nothing reported that the codebase read a context two ways. That
-  is also why the fix is not cosmetic: React 19 accepts the 18-era pair and never warns.
-- **The guard takes one shape the finding did not ask for.** `lib/context-api-policy.ts` sweeps the
-  whole web root for the `useContext` import (the binding, so an alias cannot slip past), a
-  `*.useContext` namespace call, and any `*.Provider` **or `*.Consumer`** property access.
-  `Consumer` is in scope because it is the third member of the same trio and is a render prop —
-  `patterns-children-over-render-props` is one of the two rules this audit's verdict records as a
-  zero-occurrence pass and calls load-bearing, and nothing else in the repo sweeps for it. There is
-  no `Consumer` to migrate; the guard is what keeps that zero.
+  `use()` without this landing first, and each said so — as was #3's `FieldControlContext`, which
+  the finding predates. So of the app's **four** contexts the three newest were already current, and
+  what remained is the inverse of the stated reason: the **oldest** context, the only app-wide one
+  and so the one a reader is likeliest to open and copy, was the one on the old API, and nothing
+  reported that the codebase read a context two ways. That is also why the fix is not cosmetic:
+  React 19 accepts the 18-era pair and never warns.
+- **The guard takes one name the finding did not ask for.** `lib/context-api-policy.ts` sweeps the
+  whole web root for `useContext`, `Provider` **and `Consumer`**, by each of the four routes a
+  module has to a member (import specifier, property access, literal element access, destructure —
+  a computed key is deliberately not read). `Consumer` is in scope because it is the third member of
+  the same trio and is a render prop — `patterns-children-over-render-props` is one of the two rules
+  this audit's verdict records as a zero-occurrence pass and calls load-bearing, and nothing else in
+  the repo sweeps for it. There is no `Consumer` to migrate; the guard is what keeps that zero.
+- **The guard came within one naming decision of a false positive, and that is #2's doing.** It
+  keys on the member's name with no check on the receiver, because a context object has no canonical
+  name. The shape #2 suggested for `SetEntry` put its providers *in* the namespace (`Provider`,
+  `FormProvider`); ADR-0106 left them top-level exports for reasons of its own, and had it not,
+  every `<SetEntry.Provider>` call site would report here.
 
 Unlike the five findings before it, this one adds no rendered surface — a context element renders no
 markup of its own — so no audit journey is implicated, which is the first time in this series that

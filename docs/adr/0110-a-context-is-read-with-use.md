@@ -23,12 +23,13 @@ and React 19 does not warn on it.
 
 ## What the cost actually was
 
-Not the old API. The **disagreement**: by the time this landed the app had three contexts, and the
-two added since the audit were written against `use()` — `PrescriptionDraftContext` (ADR-0105) and
-`SetEntry`'s two providers (ADR-0106), each of which recorded that it was written that way
-deliberately so #6 would not become a prerequisite. So the one context a reader was most likely to
-copy from, being the oldest and the only app-wide one, was the one written the old way, and nothing
-reported that the codebase read a context two different ways.
+Not the old API. The **disagreement**: by the time this landed the app had **four** contexts, and
+the three added since the audit were written against `use()` — `PrescriptionDraftContext`
+(ADR-0105), `SetEntryContext` (ADR-0106) and `FieldControlContext` (ADR-0107), the first two
+recording that they were written that way deliberately so #6 would not become a prerequisite. So
+the one context a reader was most likely to open and copy from, being the oldest and the only
+app-wide one, was the one written the old way, and nothing reported that the codebase read a
+context two different ways.
 
 `createContext` is untouched: it is still how a context is made. Only its reader and its provider
 element moved.
@@ -64,38 +65,76 @@ the context-as-provider element had provided nothing, that test fails at its fir
 
 **The convention** is `lib/context-api-policy.ts`, swept by its own test over the whole web root
 (`native-dialog-policy.ts`'s scope, not the chart guards' — a context's consumer hook can live in
-`lib/`). It reports three shapes, each chosen for what it closes rather than for what it is:
+`lib/`). Its subject is three **names** — `useContext`, `Provider`, `Consumer` — reached by any of
+the four routes a module has to one:
 
-- a **named import of `useContext` from `"react"`** — the binding, not the call, because
-  `useContext as read` would read as any other function at its call site;
-- a **property access named `useContext`** — the namespace path (`React.useContext`), which has no
-  named specifier to catch;
-- a **property access named `Provider`** — which covers both tags of `<Ctx.Provider>` (TypeScript
-  parses a dotted JSX tag name as a property access, so the closing tag reports its own line, and
-  both lines do have to change) and `const P = Ctx.Provider`, the one shape a JSX-only sweep would
-  miss;
-- a **property access named `Consumer`**, which is scope the finding did not ask for and is taken
-  anyway: it is the third member of the same trio, React's reference marks it legacy, and it is a
-  render prop — one of the two rules the composition audit found this codebase passing with **zero**
-  occurrences and called load-bearing. There is none to migrate, so the sweep is not a fix; it is
-  what keeps that count at zero when the next context arrives.
+- an **import specifier** — `import { useContext } from "react"`, reported at the specifier rather
+  than at the call, because `useContext as read` reads as any other function at its call site. In
+  practice only `useContext` arrives this way; a `Provider` is reached through a context object;
+- a **property access** — the namespace path (`React.useContext`), and both tags of
+  `<Ctx.Provider>`, since TypeScript parses a dotted JSX tag name as a property access and both
+  lines do have to change;
+- a **literal element access** — `Ctx["Provider"]`;
+- a **binding element** — `const { Provider } = Ctx`, with or without a rename.
+
+The last two exist because the first draft of this guard had only the first two, and a review found
+both holes: a `Provider` lifted out of its context object by destructuring, or read by a literal
+key, was invisible to a sweep that keyed on property access alone. A **computed** key (`Ctx[name]`)
+is still not read, and is not pretended to be — that is a context member picked at runtime, which
+nothing here writes and no static sweep resolves. A test states each of these, including the one
+that is deliberately not caught.
+
+`Consumer` is scope the finding did not ask for and is taken anyway: it is the third member of the
+same trio, React's reference marks it legacy, and it is a render prop — one of the two rules the
+composition audit found this codebase passing with **zero** occurrences and called load-bearing,
+with nothing else in the repo sweeping for it. There is none to migrate, so the sweep is not a fix;
+it is what keeps that count at zero when the next context arrives.
 
 It is read from the AST, so this ADR's own prose and the module's comment may name the legacy API
-without tripping it, and it has **no exemption registry** — there is no reading under which one of
-these is the right call in this app. On first run it reported exactly the three lines the audit
-named, in exactly the one file, which is also the evidence that the audit's count was complete.
+without tripping it.
+
+**It keys on the member's name, with no check on what the member is read from** — unlike
+`native-dialog-policy.ts`, which gates `confirm` on a known global. A context object has no
+canonical name, so there is nothing to gate on, and the price of that breadth is that an unrelated
+`x.Provider` would report. That price came within one naming decision of being paid: the audit's
+suggested shape for `SetEntry` (#2) put its two providers *in* the namespace as `Provider` and
+`FormProvider`, and ADR-0106 left them top-level exports for its own reasons — had it taken the
+suggestion, every `<SetEntry.Provider>` call site would report here. The guard carries **no
+exemption registry** all the same, because nothing in the app has such a member today and a
+mechanism standing empty for a caller that does not exist is worse than the one-line addition a
+genuine third-party `.Provider` would need.
+
+Run against the pre-change file the guard reports `components/NavigationGuardProvider.tsx` at lines
+**6, 152 and 164** — the import specifier and both provider tags. The finding named "line 42" for
+the read, which the guard reaches through the binding and deliberately never names, so this is the
+same three sites counted at a different one of them: one file, nothing else in the web root, which
+is the evidence that the finding's "single occurrence" was accurate.
 
 What the guard proves is that no module *names* the old API. It cannot prove a context is read in
 the right component, or provided above its consumers — that is what the behavioural test above is
 for, and what a missing provider throws for at runtime.
 
+### The sweep itself is now shared
+
+`sweptSources`, its two constants and the three assertions proving it had reached anything were
+byte-identical in `icon-import-policy.test.ts` and `native-dialog-policy.test.ts`; this guard would
+have been the third copy, which is where that stops being a coincidence. The walk is
+`lib/swept-web-sources.ts` and the claim the three were each making separately — that it reaches
+the web root rather than silently matching nothing, which is how a clean sweep lies — is
+`swept-web-sources.test.ts`'s, asserted once and more strictly than any of the three did.
+
+What is swept stays each guard's own decision, stated in each guard's own comment: the chart guards
+(ADR-0084, ADR-0090) exclude `audit/`, which must import a chart statically to mount it for the
+parity assertion, and so do not use this module. Only the walk the whole-root guards agree on
+moved.
+
 ## Consequences
 
-The app's three contexts are now read one way. The composition audit's findings are closed: #6 was
-the last of the six, and the four `react19-*` / `patterns-*` / `state-*` rows that had warnings are
-now pass rows (`architecture-compound-components` stays qualified, for the reason ADR-0107
-records — `Field` answers the rule in substance and deliberately not in shape).
+The app's four contexts are now read one way. The composition audit's findings are closed: #6 was
+the last of the six, and the `react19-*` / `patterns-*` / `state-*` rows that had warnings are now
+pass rows (`architecture-compound-components` stays qualified, for the reason ADR-0107 records —
+`Field` answers the rule in substance and deliberately not in shape).
 
-The change itself is three lines in one file. The 105-line guard and the 128-line test beside it are
-the part worth having: without them the next context is written by copying whichever one its author
-opened first, and this finding comes back as a LOW in the next audit.
+The change itself is three lines in one file. The guard and its test beside it are the part worth
+having: without them the next context is written by copying whichever one its author opened first,
+and this finding comes back as a LOW in the next audit.

@@ -1,27 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
 
 import {
   findLegacyContextApiUses,
   formatLegacyContextApiUses,
 } from "./context-api-policy.ts";
-
-const webRoot = resolve(import.meta.dirname, "..");
-
-// Swept over the whole web root, following `native-dialog-policy.ts` rather than the chart
-// guards: a context is read wherever its consumer hook is written, and a `lib/use-*.ts` hook
-// is the obvious next place for one.
-const SWEPT_EXTENSIONS = [".ts", ".tsx", ".mts", ".mjs", ".js", ".jsx"];
-const SKIPPED_DIRECTORIES = new Set(["node_modules", ".next", "public"]);
-
-function sweptSources(): readonly string[] {
-  return readdirSync(resolve(webRoot), { recursive: true, encoding: "utf8" })
-    .map((entry) => entry.split("\\").join("/"))
-    .filter((entry) => !entry.split("/").some((part) => SKIPPED_DIRECTORIES.has(part)))
-    .filter((entry) => SWEPT_EXTENSIONS.some((extension) => entry.endsWith(extension)));
-}
+// The whole web root, following `native-dialog-policy.ts` rather than the chart guards: a
+// context is read wherever its consumer hook is written, and a `lib/use-*.ts` hook is the
+// obvious next place for one. `swept-web-sources.test.ts` holds the sweep's own reach.
+import { sweptWebSources, sweptWebSourcePath } from "./swept-web-sources.ts";
 
 test("reports a useContext imported from react", () => {
   // Arrange — the binding is the hook wherever it is later called, so the import is the
@@ -61,14 +49,51 @@ test("reports both tags of a Context.Provider element", () => {
   );
 });
 
-test("reports a Provider lifted out of its context object", () => {
-  // Arrange — aliasing the element is the one way a JSX sweep alone would miss it.
-  const source = `const P = Ctx.Provider;\nconst A = () => <P value={v}>{children}</P>;`;
+test("reports a Provider lifted out of its context object, by any of the three routes", () => {
+  // Arrange — aliasing the element is what a JSX-only sweep misses, and it can be written as
+  // a property access, a literal key, or a destructure with or without a rename.
+  const lifted = [
+    `const P = Ctx.Provider;`,
+    `const P = Ctx["Provider"];`,
+    `const { Provider } = Ctx;`,
+    `const { Provider: P } = Ctx;`,
+  ];
 
   // Act / Assert
-  assert.deepEqual(findLegacyContextApiUses(source, "a.tsx"), [
-    { file: "a.tsx", line: 1, api: "Provider" },
-  ]);
+  for (const source of lifted) {
+    assert.deepEqual(
+      findLegacyContextApiUses(source, "a.tsx"),
+      [{ file: "a.tsx", line: 1, api: "Provider" }],
+      source,
+    );
+  }
+});
+
+test("reports useContext destructured or read by literal key off the namespace", () => {
+  // Arrange — the two routes that reach the hook without a named specifier to catch.
+  const sources = [
+    `import * as React from "react";\nconst { useContext } = React;`,
+    `const a = () => React["useContext"](Ctx);`,
+  ];
+
+  // Act / Assert
+  for (const source of sources) {
+    assert.deepEqual(
+      findLegacyContextApiUses(source, "a.tsx").map(({ api }) => api),
+      ["useContext"],
+      source,
+    );
+  }
+});
+
+test("a member picked at runtime is not read, and is not pretended to be", () => {
+  // Arrange — a computed key is a context member chosen at runtime; no static sweep resolves
+  // it, nothing in this app writes one, and claiming otherwise would be the false confidence
+  // the fail-closed guards exist to avoid.
+  const source = `const P = Ctx[name];`;
+
+  // Act / Assert
+  assert.deepEqual(findLegacyContextApiUses(source, "a.tsx"), []);
 });
 
 test("reports a Context.Consumer, the trio's render prop", () => {
@@ -108,21 +133,13 @@ test("a comment or a string naming the legacy API is not a use of it", () => {
 
 test("nothing in the app reads a context with React 18's API", () => {
   // Arrange
-  const files = sweptSources();
+  const files = sweptWebSources();
 
   // Act
   const uses = files.flatMap((file) =>
-    findLegacyContextApiUses(readFileSync(resolve(webRoot, file), "utf8"), file));
+    findLegacyContextApiUses(readFileSync(sweptWebSourcePath(file), "utf8"), file));
 
   // Assert — React 19 reads a context with `use()` and renders the context itself as the
   // provider; the 18-era pair still works, so nothing reports a mixed codebase (#6).
   assert.equal(uses.length, 0, `\n${formatLegacyContextApiUses(uses)}\n`);
-  assert.ok(files.length > 100, `expected the sweep to cover the web root, saw ${files.length} files`);
-  assert.ok(
-    !files.some((file) => file.includes("node_modules/")),
-    "node_modules must not be swept",
-  );
-  // Wider than the components, for the same reason the native-dialog sweep is: a context's
-  // consumer hook can live in `lib/`.
-  assert.ok(files.some((file) => file.startsWith("lib/")), "lib/ must be swept");
 });
