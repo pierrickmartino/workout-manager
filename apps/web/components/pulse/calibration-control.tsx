@@ -72,7 +72,12 @@ export function CalibrationControl({
           </span>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        {/* The action cluster wraps and may shrink (ADR-0085/0087). It must not be
+            `shrink-0`: the buttons are sized in `rem`, so at 200% text they double while the
+            viewport keeps its 320 pixels, and a rigid three-button row cannot fit. The rail
+            state is the worst case — it is the one that renders the third button — so this
+            stacks rather than widening the document. */}
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <PitchButton
             label="Make remaining sessions easier"
             short="Easier"
