@@ -106,6 +106,12 @@ def _protocol(view: ProtocolView) -> dict:
         "sessions_per_week": view.sessions_per_week,
         "weeks": view.weeks,
         "duration_minutes": view.duration_minutes,
+        # The standing Calibration (ADR-0111), normalized so an uncalibrated Protocol
+        # exports 0 — "as authored" — rather than a null the reader must interpret. The
+        # re-pitched values themselves are already in the prescriptions below: the
+        # Calibration is materialised, so the export is faithful either way, and this is
+        # the user's *intent* alongside it.
+        "calibration": view.calibration or 0,
         "sessions": [_protocol_session(s) for s in view.sessions],
     }
 

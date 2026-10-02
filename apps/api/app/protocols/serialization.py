@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from types import MappingProxyType
 
+from app.domain.calibration import MAX_CALIBRATION, MIN_CALIBRATION
 from app.domain.protocol import protocol_label
 from app.domain.session_section import sectionize
 from app.protocols.balance_preview import BalancePreview
@@ -107,6 +108,14 @@ def serialize_protocol(
         # so an unnamed adopted Protocol reads sensibly with no backfill.
         "name": view.name,
         "label": protocol_label(view.name, view.objective, view.training_type),
+        # The standing Calibration (ADR-0111): the user's relative offset from the plan's
+        # authored values, emitted as a plain integer with ``None`` normalized to 0 — "as
+        # authored" — so a client never has to decide what an absent offset means. The
+        # bounds travel with it so the control can go inert at the rail without hard-coding
+        # the clamp, which the server owns.
+        "calibration": view.calibration or 0,
+        "calibration_min": MIN_CALIBRATION,
+        "calibration_max": MAX_CALIBRATION,
         "sessions": [
             serialize_session(
                 s,
