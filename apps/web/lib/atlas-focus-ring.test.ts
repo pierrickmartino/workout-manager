@@ -5,7 +5,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { JSDOM } from "jsdom";
 
-import { importComponent } from "./offline-tsx.ts";
+import { loadTsx as importComponent } from "./tsx-harness.ts";
 
 // ADR-0104: a focus indicator is drawn, not tinted. The Reference Atlas figure's
 // selectable regions are SVG groups, and their only feedback used to be the overlay fill

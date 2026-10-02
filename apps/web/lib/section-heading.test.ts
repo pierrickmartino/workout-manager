@@ -7,7 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { JSDOM } from "jsdom";
 import ts from "typescript";
 
-import { importComponent } from "./offline-tsx.ts";
+import { loadTsx as importComponent } from "./tsx-harness.ts";
 
 // ADR-0094: the app's section divider is the outline. `SectionHeader` is the only divider
 // in use, so what it emits decides whether screen-reader heading navigation finds anything

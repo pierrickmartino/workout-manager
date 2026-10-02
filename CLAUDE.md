@@ -482,6 +482,22 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   now a journey in `audit/reflow.mjs` and `audit/wide.mjs`: it was renderable and swept by neither,
   so that form was unverified at every width (ADR-0106).
 
+- A control inside a `Field`, or a new `Field` → the field *publishes* its id, its hint/error ids and
+  its invalid state, and the control **claims** them. Rendering one of the three form primitives
+  (ADR-0093) *is* the claim, so an ordinary call site writes nothing; a control that is not one of
+  them — today only `AdminExerciseImage`'s file picker — spreads `useFieldControl()` from a component
+  of its own, since the hook reads the field and must run below the provider. Position is irrelevant
+  by design: this used to be `Children.toArray(children)[0]` plus a `cloneElement`, so wrapping the
+  control in a div, rendering anything before it, or reordering silently unlabelled the field, and
+  nothing reported it. The id is named **once**, as `htmlFor` on the field — never again on the
+  control, where the field's `<label for>` would no longer point at it. The guard in
+  `apps/web/lib/field-control-policy.ts` sweeps every component and page for a field with no
+  claimant or two of them, traces a claim into a component declared in the same file, fails closed on
+  one from another file and on a `group` flag it cannot read, and its registry is empty. It proves a
+  claimant is *present*, not that the wiring is right — `lib/form-accessibility.test.ts` renders the
+  three shapes that used to break for that. A grouped `FieldLabel` is a `<fieldset>`/`<legend>` with
+  no single id, so it is outside all of this (ADR-0107).
+
 - New animation or transform transition → pair it with `motion-reduce:animate-none`
   or `motion-reduce:transition-none` **in the same class string**. Colour and
   opacity transitions move nothing and are exempt by rule. The guard in

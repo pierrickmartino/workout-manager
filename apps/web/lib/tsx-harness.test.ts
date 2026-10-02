@@ -4,16 +4,23 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { JSDOM } from "jsdom";
 
-import { importComponent } from "./offline-tsx.ts";
+import { loadTsx as importComponent } from "./tsx-harness.ts";
 
-// The loader three render-test files depend on. Its own correctness is worth pinning rather
-// than inferring from theirs: a `@/` specifier that silently resolved to the wrong module, or a
+// The loader every render test depends on. Its own correctness is worth pinning rather than
+// inferring from theirs: a `@/` specifier that silently resolved to the wrong module, or a
 // boundary that was never substituted, would make every one of them assert something about a
 // module nobody meant to load — and report a primitive's default as present when it is not.
 //
 // It is exercised against real components rather than written fixtures. A fixture tree would
 // have to live under the web root for `@/` to resolve against it, where `icon-import-policy`'s
 // whole-root sweep would read it mid-write on a parallel test run.
+//
+// There was a second loader (`offline-tsx.ts`) that four of these files used, written before
+// this one and never given its module registry — the fix ADR-0105 made here after a shared
+// `createContext` object became one copy per importer. A context that crosses two modules is
+// exactly what `Field` now is (ADR-0107), so the older copy could not have tested it: the
+// provider and the control would have read different contexts and the wiring would have
+// reported itself absent. One loader, so there is one answer.
 
 const model = {
   id: 7, displayName: "Upper Push", trainingType: "strength", lastPerformedOn: "2026-09-14",
