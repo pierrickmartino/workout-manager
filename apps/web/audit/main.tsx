@@ -42,6 +42,7 @@ import { SpecsPanel } from "@/components/exercise/specs-panel";
 import { AdminExerciseBrowser } from "@/components/AdminExerciseBrowser";
 import { LocalInstant } from "@/components/pulse/local-instant";
 import { ConfirmDialog } from "@/components/pulse/confirm-dialog";
+import { BuildWorkoutLink, GenerateTrainingLaunchpad, LogPastWorkoutLink } from "@/components/pulse/generate-training-launchpad";
 import { adminExerciseRows, auditEntry, exerciseDetail, exerciseNames, exercises, history, personalRecords, prescriptions, profile, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
 
 const params = new URLSearchParams(location.search);
@@ -169,6 +170,23 @@ function ConfirmSurface() {
   />;
 }
 
+// Both of the launchpad's compositions, in one capture (ADR-0109): the TRAIN tab's four cards
+// above the Home empty state's two. Neither was in any journey — the `home` journey mounts the
+// *protocol-present* path, so the empty state's launchpad never rendered either — and this is a
+// stack of full-width buttons whose labels are authored sentences, the shape a doubled root font
+// is most likely to push past a 320px viewport. It does not: the labels wrap (142px chips at 200%
+// text, document still 320) — but at that size a wrapped label needs 103px inside `h-11`'s fixed
+// 88px box, which this harness does not gate and `creation` has always shown too (ADR-0109).
+function LaunchpadSurface() {
+  return <div className="flex flex-col gap-6">
+    <GenerateTrainingLaunchpad eyebrow="TRAIN // START SOMETHING NEW" from="/train">
+      <BuildWorkoutLink />
+      <LogPastWorkoutLink />
+    </GenerateTrainingLaunchpad>
+    <GenerateTrainingLaunchpad eyebrow="GET STARTED // NO ACTIVE PROTOCOL" from="/dashboard" />
+  </div>;
+}
+
 function Content() {
   switch (journey) {
     case "charts": return <ChartAccessibilityFixture />;
@@ -204,6 +222,7 @@ function Content() {
     // in that row. Neither admin screen was in any journey before.
     case "admin": return <AdminAudit />;
     case "confirm": return <ConfirmSurface />;
+    case "launchpad": return <LaunchpadSurface />;
     case "contrast": return <ContrastSamples />;
     default: throw new Error(`Unknown audit journey: ${journey}`);
   }

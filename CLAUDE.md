@@ -506,6 +506,17 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   construction. `FieldGroup` provides no context, so a control nested in one inside a `Field` still
   claims **that** field's id and the guard counts it (ADR-0108).
 
+- An optional card, link or block one caller offers and another does not → a `children` slot the
+  caller composes, never a `show*` boolean. Two flags describe four states and a third makes eight,
+  while the corners nobody renders exist only in the type: `GenerateTrainingLaunchpad`'s `showBuild`
+  and `showLogPastWorkout` are `<BuildWorkoutLink />` and `<LogPastWorkoutLink />` written at the one
+  call site that offers them. A flag toggling a detail *inside* a component's own rendering
+  (`showBodyWeight`, `showValues`, `showOverflowCount`) is a different thing and stays. The shared
+  chip is named once (`LAUNCH_LINK`), since four call sites of the same `buttonVariants` arguments
+  are where one link starts to disagree with its neighbours. There is no sweep:
+  `lib/generate-training-launchpad.test.ts` renders both compositions and reads the props interface
+  through the AST, because a flag added and not yet passed renders as nothing (ADR-0109).
+
 - New animation or transform transition → pair it with `motion-reduce:animate-none`
   or `motion-reduce:transition-none` **in the same class string**. Colour and
   opacity transitions move nothing and are exempt by rule. The guard in

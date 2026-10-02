@@ -54,8 +54,11 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // it is the one of the four whose field rows changed shape when they moved onto the shared
 // set-entry family, a lone amount field having sat in a two-column grid that gave it half a row
 // and left the other half empty.
+// `launchpad` joins them with ADR-0109: no journey rendered a launchpad at all, in either
+// composition, so a stack of full-width buttons with authored sentences for labels had never been
+// measured. See `LaunchpadSurface` in `main.tsx` for what the case holds.
 const NOVEL_JOURNEYS = [
-  "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc",
+  "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc", "launchpad",
 ];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and

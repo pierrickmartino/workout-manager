@@ -1,7 +1,7 @@
 {
   "adr": "0088",
-  "revision": "2f2c205f10df586c94948e2b3611ab84917129ae",
-  "timestamp": "2026-10-02T06:51:06.779Z",
+  "revision": "514cad842a5c88172776dde3d99607dbd890bf72",
+  "timestamp": "2026-10-02T07:38:19.942Z",
   "node": "v22.22.0",
   "platform": "linux",
   "engine": "chromium 141.0.7390.37 (playwright 1.63.0)",
@@ -10,7 +10,7 @@
     "width": 1440,
     "height": 900
   },
-  "cases": 900,
+  "cases": 960,
   "failures": 0,
   "documentOverflow": 0,
   "frameOverCap": 0,
@@ -157,6 +157,16 @@
       "maxElementOverflow": 0
     },
     "adhoc": {
+      "cells": 60,
+      "maxDocumentWidth": 1440,
+      "maxFrameWidth": 1152,
+      "maxColumnWidth": 416,
+      "overflowing": 0,
+      "frameOverCap": 0,
+      "columnOverNarrow": 0,
+      "maxElementOverflow": 0
+    },
+    "launchpad": {
       "cells": 60,
       "maxDocumentWidth": 1440,
       "maxFrameWidth": 1152,
