@@ -33,11 +33,10 @@ export function FieldRow({ className, children }: FieldRowProps): React.JSX.Elem
 // The micro-label column a bare `<label>` needs around its ask: caption over control.
 const CAPTIONED = "flex flex-col gap-1.5";
 
-// The ask on its own, for a field that already lays itself out — a `FieldLabel`, a `FieldGroup`,
-// or a nested
-// `FieldRow`. 5rem is the narrowest a pulse control stays readable at (an `Input` spends 2rem of
-// it on its own padding, a `Select` 3.5rem), and it is this ask that makes a three-field row
-// stack rather than squeeze each field to the 56px a 320px phone gave it before.
+// The ask on its own, for a field that already lays itself out — a `FieldLabel`, a `FieldGroup`, or
+// a nested `FieldRow`. 5rem is the narrowest a pulse control stays readable at (an `Input` spends
+// 2rem of it on its own padding, a `Select` 3.5rem), and it is this ask that makes a three-field
+// row stack rather than squeeze each field to the 56px a 320px phone gave it before.
 export const FIELD_WIDTH = "min-w-0 grow basis-20";
 
 // The same ask, captioned, for a bare `<label>`.

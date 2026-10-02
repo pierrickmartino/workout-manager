@@ -178,6 +178,11 @@ The plan model has **no calendar and no "today"** (ADR-0001).
   (addressing belongs to the screen). Props stay where each is a leaf's own closure over one
   position, or the component is shared presentation. A context is not sweepable, so reject one
   whose deepest consumer no test mounts.
+- 🟡 Two renderings are two names (ADR-0108): reject a boolean that selects between renderings
+  sharing no markup — a caption over several controls is `FieldGroup` (a `<fieldset>`/`<legend>`,
+  each control naming itself), a caption over one is `FieldLabel`. Reject re-adding a flag the
+  field-control guard would then have to evaluate from source. `FieldGroup` publishes no wiring, so
+  reject reading one as a boundary: controls nested in one inside a `Field` claim that field's id.
 
 ## 9. Baseline quality & security
 

@@ -397,7 +397,16 @@ Where the finding is sold short is the guard. ADR-0107's `lib/field-control-poli
 was a fieldset wanting several controls and a field wanting exactly one at once — so it carried a
 fourth problem class, `undecidable-group`, purely to report that. Splitting the component deletes
 the class by construction: there is no flag to read, and no call site that can be both. The guard
-is 27 lines shorter, and its two `group` branches are gone as #3's note predicted.
+is 26 lines shorter, and its two `group` branches are gone as #3's note predicted.
+
+One thing the split **exposes without changing**: the two captions have never rendered alike.
+`FieldLabel`'s reaches the `Label` primitive and so is uppercased and letter-spaced by
+`label-mono`; `FieldGroup`'s `<legend>` carries plain `font-mono` and renders as authored, so
+`SET 1 DISTANCE (KM)` sits beside `Set 1 hold` in one row. That is verbatim what the `group`
+branch did. Unifying it is a change to text a user reads, not a refactor — the same judgement
+ADR-0106 made about the amount-kind picker's option order — so it is recorded in ADR-0108 and
+left alone. Note that the shared `CompactFieldProps` invites the opposite inference: the ask is
+shared, the caption treatment is not.
 
 One behaviour the split *gains*, which is why it is an ADR and not a rename. A grouped `FieldLabel`
 was a field tag, so the guard stopped its descent there and looked no further inside. `FieldGroup`

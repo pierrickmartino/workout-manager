@@ -24,6 +24,17 @@ its content's minimum width, and `border-0 p-0` does not override it), and there
 `group` call site to move: the distance-and-time pair in `HandAuthoredSessionForm`'s performed-set
 rows (ADR-0032).
 
+**The two captions do not render alike, and this change deliberately does not make them.**
+`FieldLabel`'s goes through `Field` to the `Label` primitive, which adds `label-mono` — uppercase
+and letter-spaced, the design system's micro-label grammar. `FieldGroup`'s `<legend>` carries
+plain `font-mono`, so it renders as authored: `SET 1 DISTANCE (KM)` beside `Set 1 hold` in the
+same row. That is verbatim what the `group` branch did, and unifying it changes text a user reads
+— ADR-0106 left the amount-kind picker's option order alone for the same reason, and for the same
+reason this is now stated in one place rather than implied by two call sites. It is named here
+because the shared props type invites the opposite inference: the *ask* is shared, the caption
+treatment is not, so a future reader should not DRY the two captions into one constant on the
+assumption that they already agree.
+
 ## The flag was load-bearing in the guard, which is the part worth recording
 
 `lib/field-control-policy.ts` reads a field's subtree and requires exactly one claimant. A
@@ -58,6 +69,6 @@ Two consequences are deliberate rather than incidental:
 
 ## Consequences
 
-`field.tsx` is 102 lines where it was 88, and the guard is 27 lines shorter with one fewer
-problem class. A call site now says which structure it wants, and the audit's remaining finding
+`field.tsx` is 102 lines where it was 88, and the guard is 26 lines shorter (336 → 310) with one
+fewer problem class. A call site now says which structure it wants, and the audit's remaining finding
 (#5, `GenerateTrainingLaunchpad`'s two booleans) is the same rule applied to a different shape.
