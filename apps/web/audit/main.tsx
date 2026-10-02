@@ -21,6 +21,7 @@ import { TabBar } from "@/components/pulse/tab-bar";
 import { Sidebar } from "@/components/pulse/sidebar";
 import { HomeColumns } from "@/components/pulse/home-columns";
 import { SessionHero } from "@/components/pulse/session-hero";
+import { CalibrationControl } from "@/components/pulse/calibration-control";
 import { TrainingRouteCard } from "@/components/pulse/training-route";
 import { QuickActions } from "@/components/pulse/quick-actions";
 import { LevelBadge } from "@/components/pulse/level-badge";
@@ -104,6 +105,18 @@ function Home() {
       <HomeColumns
         main={<>
           <SessionHero protocol={protocolProgress} />
+          {/* The Calibration control (ADR-0111), mounted in *both* of its states, because the
+              rail is the one that renders prose: at the authored pitch the card is a label plus
+              two single-word buttons, while at the rail it adds a multi-sentence note and a
+              third button — the shape that actually stresses 320px and 200% text. A surface
+              only one of whose states is rendered here is only half measured, which is the
+              lesson the `confirm` journey records. */}
+          <Card className="p-5">
+            <CalibrationControl protocol={protocolProgress} />
+          </Card>
+          <Card className="p-5">
+            <CalibrationControl protocol={{ ...protocolProgress, calibration: -3 }} />
+          </Card>
           <TrainingRouteCard protocol={protocolProgress} />
           <QuickActions actions={quickActions({
             readiness: "READY", current_protocol: protocolProgress,

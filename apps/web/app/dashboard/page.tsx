@@ -16,6 +16,7 @@ import { Alert } from "@/components/pulse/alert";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { SessionHero } from "@/components/pulse/session-hero";
+import { CalibrationControl } from "@/components/pulse/calibration-control";
 import { ResumeSessionBanner } from "@/components/pulse/resume-session-banner";
 import { TrainingRouteCard } from "@/components/pulse/training-route";
 import { LevelBadge } from "@/components/pulse/level-badge";
@@ -121,6 +122,15 @@ export default async function DashboardPage() {
             {currentProtocol ? (
               <>
                 <SessionHero protocol={currentProtocol} />
+                {/* The Calibration control (ADR-0111): two taps that re-pitch the whole
+                    un-performed tail relative to what the plan already says. Composed here
+                    rather than flagged into SessionHero (ADR-0109) — it is this call site's
+                    card, and the hero stays the Next Session's own focal surface. It sits
+                    directly under the hero because the complaint it answers ("this asks too
+                    much / too little") is formed while reading those numbers. */}
+                <Card className="p-5">
+                  <CalibrationControl protocol={currentProtocol} />
+                </Card>
                 {/* The training route: the current week as named stops (done / next /
                     upcoming) with a WEEK n/total overline and an expandable full plan —
                     purely positional, no calendar (ADR-0008). Replaces the old dots and

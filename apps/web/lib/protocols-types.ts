@@ -65,6 +65,19 @@ export interface ProtocolProgress {
   sessions: ProtocolSession[];
   next_session: ProtocolSession | null;
   completed_count: number;
+  // The standing Calibration (ADR-0111): the user's *relative offset* from this plan's
+  // authored values, re-pitching its un-performed tail. Normalized server-side, so an
+  // uncalibrated Protocol arrives as 0 — "as authored" — never null.
+  calibration: number;
+  // The clamp's bounds, served alongside the value so the control can go inert at the rail
+  // without hard-coding ±3. The server owns the clamp (ADR-0111); this is a UX affordance.
+  calibration_min: number;
+  calibration_max: number;
+  // Present only on a Calibrate response, never on a plain Protocol read. `at_rail` is the
+  // one moment a Calibration is not silent; `sensitive_caveat` is ADR-0058's
+  // caveat-not-refusal for a user with a Sensitive Constraint, in either direction.
+  calibration_at_rail?: boolean;
+  calibration_sensitive_caveat?: boolean;
 }
 
 // The non-predictive balance preview behind SIMULATE (Module C, ADR-0021): the size
