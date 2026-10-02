@@ -191,6 +191,15 @@ The plan model has **no calendar and no "today"** (ADR-0001).
   sweep: reject a flag whose absence no test reads from the props interface, since one added and not
   yet passed renders as nothing. And reject a new surface that no `audit/` journey renders — that
   is the fourth finding in a row whose real cost was the missing journey, not the refactor.
+- 🟡 A context is read with `use()` (ADR-0110, enforced by `context-api-policy.ts`): reject
+  `useContext`, `<Ctx.Provider>` and `<Ctx.Consumer>` — React 19 reads a context with `use(Ctx)`
+  and renders the context itself as the provider, and the 18-era pair draws no warning, so a
+  codebase reading a context two ways reports nothing. `createContext` is unchanged. The guard
+  keys on the member's **name** with no receiver check, since a context object has no canonical
+  one: reject naming a compound family's member `Provider` or `Consumer` (ADR-0106's two
+  providers are top-level exports for this reason) rather than adding the exemption registry it
+  deliberately does not have. It cannot see whether a context is provided above its consumers —
+  reject one whose provider no test mounts.
 
 ## 9. Baseline quality & security
 

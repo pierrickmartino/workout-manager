@@ -28,7 +28,7 @@ places pay for that heavily, and both are the files that exceed the repo's own
 | `state-context-interface` | ✅ Fixed — `SetEntry`'s two providers over one contract are the `swap the provider, keep the UI` case #1 could not prove (#2, ADR-0106) |
 | `architecture-compound-components` | ⚠️ `SetEntry.*` is the first (#2, ADR-0106). `Field`'s positional contract is gone and its wiring is a context (#3, ADR-0107) — but `Field` is deliberately **not** a compound namespace, so this rule's illustration is answered in substance, not in shape |
 | `patterns-explicit-variants` | ✅ Fixed — no boolean-mode component left: `FieldLabel({ group })` is `FieldLabel` + `FieldGroup` (#4, ADR-0108) and the launchpad's two gating flags are composed cards (#5, ADR-0109) |
-| `react19-use-over-usecontext` | ⚠️ Single occurrence, not migrated (#6) |
+| `react19-use-over-usecontext` | ✅ Fixed — the single occurrence is migrated and a guard holds it (#6, ADR-0110) |
 
 ## What is already right
 
@@ -49,16 +49,17 @@ Worth stating explicitly, because these are load-bearing and should not regress:
 
 ## Findings
 
-> **Status (2026-10-02).** #1, #2, #3, #4 and #5 are fixed; each carries a `**Resolution:**` note
-> saying what landed and what deliberately did not. The conventions they set are ADR-0105 (a
+> **Status (2026-10-02).** **All six are fixed**; each carries a `**Resolution:**` note saying what
+> landed and what deliberately did not. The conventions they set are ADR-0105 (a
 > Prescription row reads the draft it edits), ADR-0106 (a set-entry field is written once),
 > ADR-0107 (a field publishes its wiring and the control claims it), ADR-0108 (two renderings are
-> two names) and ADR-0109 (an extra card is composed, not flagged).
-> #6 is untouched, and is the two-line change it always was.
-> The suggested order below still holds for the rest, with three corrections: #6 was listed first so
-> the contexts added in #1 and #2 would be written against the current React 19 API — all three are
-> written that way regardless, so #6 remains a two-line change to one file and nothing is blocked on
-> it. #2's own note records that the finding *understated* its correctness case: the drift it
+> two names), ADR-0109 (an extra card is composed, not flagged) and ADR-0110 (a context is read
+> with `use()`).
+> Three corrections to the suggested order, recorded because they are what the sequencing got
+> wrong: #6 was listed first so the contexts added in #1 and #2 would be written against the
+> current React 19 API — both were written that way regardless, so #6 was never a prerequisite and
+> went last, which cost nothing but did leave the app's oldest context as the odd one out for the
+> duration. #2's own note records that the finding *understated* its correctness case: the drift it
 > predicted had already happened, in four separate places. And #3 was ordered after #2 on the
 > expectation that `SetEntry` would be `Field`'s largest consumer — it turned out not to use `Field`
 > at all, so the two were independent and the ordering cost nothing either way.
@@ -487,6 +488,42 @@ component's own rendering rather than selecting which independent children fill 
 Two-line change, no behaviour difference. Worth doing now so the contexts added
 in #1 and #2 are written against the current API rather than copying the old one.
 
+**Resolution:** done, and recorded as ADR-0110. The finding's count was exact: three sites in one
+file, and the sweep that now holds it finds nothing else anywhere in the web root — one `useContext`
+(reported at its import, since that is the binding the guard keys on) and both tags of the provider
+element. No behaviour difference, as the finding says: `use(Ctx)` subscribes as `useContext(Ctx)`
+did and `<Ctx value>` renders what `<Ctx.Provider value>` rendered.
+
+Three things to add, one of them a correction to the finding's own reasoning:
+
+- **The stated reason for doing it was overtaken, and the real one is better.** "So the contexts
+  added in #1 and #2 are written against the current API" did not apply: both were written against
+  `use()` without this landing first, and each said so — as was #3's `FieldControlContext`, which
+  the finding predates. So of the app's **four** contexts the three newest were already current, and
+  what remained is the inverse of the stated reason: the **oldest** context, the only app-wide one
+  and so the one a reader is likeliest to open and copy, was the one on the old API, and nothing
+  reported that the codebase read a context two ways. That is also why the fix is not cosmetic:
+  React 19 accepts the 18-era pair and never warns.
+- **The guard takes one name the finding did not ask for.** `lib/context-api-policy.ts` sweeps the
+  whole web root for `useContext`, `Provider` **and `Consumer`**, by each of the four routes a
+  module has to a member (import specifier, property access, literal element access, destructure —
+  a computed key is deliberately not read). `Consumer` is in scope because it is the third member of
+  the same trio and is a render prop — `patterns-children-over-render-props` is one of the two rules
+  this audit's verdict records as a zero-occurrence pass and calls load-bearing, and nothing else in
+  the repo sweeps for it. There is no `Consumer` to migrate; the guard is what keeps that zero.
+- **The guard came within one naming decision of a false positive, and that is #2's doing.** It
+  keys on the member's name with no check on the receiver, because a context object has no canonical
+  name. The shape #2 suggested for `SetEntry` put its providers *in* the namespace (`Provider`,
+  `FormProvider`); ADR-0106 left them top-level exports for reasons of its own, and had it not,
+  every `<SetEntry.Provider>` call site would report here.
+
+Unlike the five findings before it, this one adds no rendered surface — a context element renders no
+markup of its own — so no audit journey is implicated, which is the first time in this series that
+sentence has been true. The behaviour was already pinned by
+`lib/form-accessibility.test.ts`'s "dirty forms guard client departures and browser exits" test,
+which mounts the real provider around a `useNavigationGuard` consumer and drives the whole guard
+through the DOM, so no test was added for it.
+
 ## Explicitly not a finding
 
 **`hasSensitiveConstraint` is correct as-is.** It appears as a boolean prop on
@@ -505,7 +542,9 @@ writes, not parent-state syncing.
 
 ## Suggested order
 
-1. **#6** (2 lines) — sets the API baseline for the contexts below.
+1. **#6** (2 lines) — sets the API baseline for the contexts below. **Done — ADR-0110**, and done
+   last rather than first: the baseline was set without it, so what the migration bought was one
+   reading of a context across all three, plus the guard that keeps it.
 2. **#1** `PrescriptionDraftContext` — highest value, and the reducer already
    exists. Brings `prescription-rows.tsx` under the 800-line limit. **Done — ADR-0105**
    (the collapse alone left ~1020 lines; a four-way split finished the job).

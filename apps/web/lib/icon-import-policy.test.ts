@@ -1,7 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
 
 import {
   findIconImportViolations,
@@ -12,8 +11,7 @@ import {
   ICON_MODULE,
   ICON_SPECIFIER,
 } from "./icon-import-policy.ts";
-
-const webRoot = resolve(import.meta.dirname, "..");
+import { sweptWebSources, sweptWebSourcePath } from "./swept-web-sources.ts";
 
 // The **whole** web root, in every source extension — not just `components/` and `app/` the
 // way the chart guards sweep. An icon import costs nothing to write anywhere, and the
@@ -21,16 +19,8 @@ const webRoot = resolve(import.meta.dirname, "..");
 // to carve out: `scripts/`, `prototypes/` and the `audit/` harness are all swept. (`audit/`
 // is exempt from the *chart* guards because it must import a chart statically to mount it
 // for the parity assertion; no such need exists for an icon, which it can take from the
-// design system like anything else.)
-const SWEPT_EXTENSIONS = [".ts", ".tsx", ".mts", ".mjs", ".js", ".jsx"];
-const SKIPPED_DIRECTORIES = new Set(["node_modules", ".next", "public"]);
-
-function sweptSources(): readonly string[] {
-  return readdirSync(resolve(webRoot), { recursive: true, encoding: "utf8" })
-    .map((entry) => entry.split("\\").join("/"))
-    .filter((entry) => !entry.split("/").some((part) => SKIPPED_DIRECTORIES.has(part)))
-    .filter((entry) => SWEPT_EXTENSIONS.some((extension) => entry.endsWith(extension)));
-}
+// design system like anything else.) The walk itself, and the assertions on its reach, are
+// `swept-web-sources.test.ts`'s — this guard was one of the three copies.
 
 test("flags a direct package import at a call site", () => {
   // Arrange — the shape all 66 call sites had before this guard
@@ -133,32 +123,13 @@ test("every exemption carries a reason a reviewer can weigh", () => {
   }
 });
 
-test("the sweep reaches every source directory, not just the component tree", () => {
-  // Arrange / Act — a sanity check on the sweep's own reach: `scripts/` and `audit/` were
-  // once outside it, which made "fails closed" an overclaim.
-  const files = sweptSources();
-
-  // Assert
-  for (const directory of ["components/", "app/", "lib/", "scripts/", "audit/"]) {
-    assert.ok(
-      files.some((file) => file.startsWith(directory)),
-      `${directory} must be swept`,
-    );
-  }
-  assert.ok(files.includes("proxy.ts"), "a module at the web root must be swept");
-  assert.ok(
-    !files.some((file) => file.includes("node_modules/")),
-    "node_modules must not be swept",
-  );
-});
-
 test("the design system's icon module is in the swept set and does name the package", () => {
   // Arrange — a sanity check on the sweep's own subject: if the icon module stopped
   // existing, or stopped re-exporting, the sweep below would pass for the wrong reason.
-  const files = sweptSources();
+  const files = sweptWebSources();
 
   // Act
-  const source = readFileSync(resolve(webRoot, ICON_MODULE), "utf8");
+  const source = readFileSync(sweptWebSourcePath(ICON_MODULE), "utf8");
 
   // Assert
   assert.ok(files.includes(ICON_MODULE), `${ICON_MODULE} must be swept`);
@@ -171,11 +142,11 @@ test("the design system's icon module is in the swept set and does name the pack
 
 test("nothing outside the design system's icon module names the icon package", () => {
   // Arrange
-  const files = sweptSources();
+  const files = sweptWebSources();
 
   // Act
   const violations = files.flatMap((file) => findIconImportViolations(
-    readFileSync(resolve(webRoot, file), "utf8"), file));
+    readFileSync(sweptWebSourcePath(file), "utf8"), file));
 
   // Assert
   assert.deepEqual(violations, [], `\n${formatIconImportViolations(violations)}`);

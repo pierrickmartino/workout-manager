@@ -1,28 +1,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
 
 import {
   findNativeDialogCalls,
   formatNativeDialogCalls,
 } from "./native-dialog-policy.ts";
-
-const webRoot = resolve(import.meta.dirname, "..");
+import { sweptWebSources, sweptWebSourcePath } from "./swept-web-sources.ts";
 
 // Swept over the whole web root, not just `components/` and `app/`: a `confirm()` asks the
 // browser the question wherever it is written, and the obvious next place to write one is a
 // `lib/use-*.ts` hook. This follows `icon-import-policy.ts` rather than the chart guards,
-// which carve out `audit/` for a reason that has no analogue here.
-const SWEPT_EXTENSIONS = [".ts", ".tsx", ".mts", ".mjs", ".js", ".jsx"];
-const SKIPPED_DIRECTORIES = new Set(["node_modules", ".next", "public"]);
-
-function sweptSources(): readonly string[] {
-  return readdirSync(resolve(webRoot), { recursive: true, encoding: "utf8" })
-    .map((entry) => entry.split("\\").join("/"))
-    .filter((entry) => !entry.split("/").some((part) => SKIPPED_DIRECTORIES.has(part)))
-    .filter((entry) => SWEPT_EXTENSIONS.some((extension) => entry.endsWith(extension)));
-}
+// which carve out `audit/` for a reason that has no analogue here. The walk itself, and the
+// assertions on its reach, are `swept-web-sources.test.ts`'s — this guard was one of the
+// three copies.
 
 test("reports a window.confirm guarding a destructive action", () => {
   // Arrange
@@ -66,20 +57,13 @@ test("a method named confirm on something else is left alone", () => {
 
 test("nothing in the app asks a question in browser chrome", () => {
   // Arrange
-  const files = sweptSources();
+  const files = sweptWebSources();
 
   // Act
   const calls = files.flatMap((file) =>
-    findNativeDialogCalls(readFileSync(resolve(webRoot, file), "utf8"), file));
+    findNativeDialogCalls(readFileSync(sweptWebSourcePath(file), "utf8"), file));
 
   // Assert — a browser dialog ignores the Skin, traps no focus of ours, and can be switched
   // off for the rest of the page, which turns a guard into a standing answer (#8).
   assert.equal(calls.length, 0, `\n${formatNativeDialogCalls(calls)}\n`);
-  assert.ok(files.length > 100, `expected the sweep to cover the web root, saw ${files.length} files`);
-  assert.ok(
-    !files.some((file) => file.includes("node_modules/")),
-    "node_modules must not be swept",
-  );
-  // The sweep is wider than the components: a hook is where the next one would be written.
-  assert.ok(files.some((file) => file.startsWith("lib/")), "lib/ must be swept");
 });
