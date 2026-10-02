@@ -52,7 +52,7 @@ import { useFormDraft } from "@/lib/use-form-draft";
 import { ExerciseLibrary } from "@/components/ExerciseLibrary";
 import { SessionCompositionStrip } from "@/components/builder/session-composition-strip";
 import { PrescriptionFieldStack } from "@/components/prescription/PrescriptionFieldStack";
-import { Field, FieldLabel } from "@/components/pulse/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/pulse/field";
 import { FieldRow, FIELD_WIDTH } from "@/components/pulse/field-row";
 import { Alert } from "@/components/pulse/alert";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -980,8 +980,7 @@ function ExerciseCard({
         {row.performedSets.map((set, index) => (
           <FieldRow key={set.key} className="items-end gap-2">
             {isDistance ? (
-              <FieldLabel
-                group
+              <FieldGroup
                 className={FIELD_WIDTH}
                 label={`Set ${index + 1} distance (${row.unit})`}
               >
@@ -1011,7 +1010,7 @@ function ExerciseCard({
                     aria-label={`Set ${index + 1} time for ${row.exerciseName}`}
                   />
                 </FieldRow>
-              </FieldLabel>
+              </FieldGroup>
             ) : isDuration ? (
               <FieldLabel className={FIELD_WIDTH} label={`Set ${index + 1} hold`}>
                 <Input

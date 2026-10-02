@@ -183,10 +183,10 @@ test("naming the id on the field is how a call site picks one", () => {
   assert.deepEqual(findFieldControlViolations(source, "a.tsx"), []);
 });
 
-test("a control inside a grouped FieldLabel may name itself, since no label points at it", () => {
+test("a control inside a FieldGroup may name itself, since no label points at it", () => {
   // Arrange — a fieldset's controls carry their own names, so an id there competes with
   // nothing.
-  const source = `export const A = () => <FieldLabel group label="Distance"><Input id="low" /></FieldLabel>;`;
+  const source = `export const A = () => <FieldGroup label="Distance"><Input id="low" /></FieldGroup>;`;
 
   // Act / Assert
   assert.deepEqual(findFieldControlViolations(source, "a.tsx"), []);
@@ -202,26 +202,32 @@ test("the compact FieldLabel is held to the same contract", () => {
   assert.deepEqual(findFieldControlViolations(bare, "a.tsx").map(({ element }) => element), ["FieldLabel"]);
 });
 
-test("a grouped FieldLabel is a fieldset and legend, so it has no id to claim", () => {
-  // Arrange — the `group` branch renders no `Field` and no `<label htmlFor>`: each control
-  // inside carries its own accessible name, and two of them is the normal case (ADR-0032's
-  // distance-and-time pair).
-  const source = `export const A = () => <FieldLabel group label="Set 1 distance (km)">
+test("a FieldGroup is a fieldset and legend, so it has no id to claim", () => {
+  // Arrange — ADR-0108: the composite rendering is its own component, which renders no
+  // `Field` and no `<label htmlFor>`. Each control inside carries its own accessible name,
+  // and two of them is the normal case (ADR-0032's distance-and-time pair). It is not a field
+  // tag at all, so the guard has nothing to say about it — where it used to be a `group` flag
+  // this guard had to read, and could be handed one it could not.
+  const source = `export const A = () => <FieldGroup label="Set 1 distance (km)">
     <FieldRow><Input aria-label="Set 1 distance" /><Input aria-label="Set 1 time" /></FieldRow>
-  </FieldLabel>;`;
+  </FieldGroup>;`;
 
   // Act / Assert
   assert.deepEqual(findFieldControlViolations(source, "a.tsx"), []);
 });
 
-test("fails closed on a group flag it cannot read", () => {
-  // Arrange — `group={composite}` is both call sites at once: a fieldset wanting two
-  // controls, or a field wanting exactly one. The guard cannot pick, so it asks.
-  const source = `export const A = ({ composite }) => <FieldLabel group={composite} label="Load"><Input /></FieldLabel>;`;
+test("a FieldGroup publishes no wiring, so a control inside one claims the field around it", () => {
+  // Arrange — a `FieldGroup` is a bare fieldset: no provider, so a control nested in one
+  // inside a `Field` reads *that* field's context and really does claim its id. Two of them
+  // is the ambiguity, and stopping the descent at the fieldset would hide it. A grouped
+  // `FieldLabel` was a field tag, so the old guard stopped there and could not see this.
+  const source = `export const A = () => <Field label="Pace">
+    <FieldGroup label="Distance"><Input name="low" /><Input name="high" /></FieldGroup>
+  </Field>;`;
 
   // Act / Assert
-  assert.deepEqual(findFieldControlViolations(source, "a.tsx").map(({ problem }) => problem),
-    ["undecidable-group"]);
+  assert.deepEqual(findFieldControlViolations(source, "a.tsx").map(({ element, problem, controls }) =>
+    ({ element, problem, controls })), [{ element: "Field", problem: "ambiguous", controls: 2 }]);
 });
 
 test("a nested field owns its own control rather than lending it to the outer one", () => {

@@ -279,9 +279,11 @@ test("profile action targets validation failures and returns announced failures 
 });
 
 test("a grouped distance/time field uses a legend rather than labeling its layout div", () => {
-  const { FieldLabel } = loadComponent("components/pulse/field.tsx");
-  const markup = renderToStaticMarkup(React.createElement(FieldLabel, {
-    label: "Set 1 distance (km)", group: true,
+  // ADR-0108: the composite rendering is `FieldGroup`, a name of its own rather than a flag on
+  // `FieldLabel` — the two renderings share no markup.
+  const { FieldGroup } = loadComponent("components/pulse/field.tsx");
+  const markup = renderToStaticMarkup(React.createElement(FieldGroup, {
+    label: "Set 1 distance (km)",
     children: React.createElement("div", {},
       React.createElement("input", { "aria-label": "Set 1 distance" }),
       React.createElement("input", { "aria-label": "Set 1 time" })),

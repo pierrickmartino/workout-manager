@@ -26,7 +26,7 @@ places pay for that heavily, and both are the files that exceed the repo's own
 | `state-decouple-implementation` | ✅ Fixed for #1 — the rows no longer know how the draft is held (ADR-0105) |
 | `state-context-interface` | ✅ Fixed — `SetEntry`'s two providers over one contract are the `swap the provider, keep the UI` case #1 could not prove (#2, ADR-0106) |
 | `architecture-compound-components` | ⚠️ `SetEntry.*` is the first (#2, ADR-0106). `Field`'s positional contract is gone and its wiring is a context (#3, ADR-0107) — but `Field` is deliberately **not** a compound namespace, so this rule's illustration is answered in substance, not in shape |
-| `patterns-explicit-variants` | ⚠️ Two boolean-mode components (#4, #5) |
+| `patterns-explicit-variants` | ⚠️ One boolean-mode component left — `FieldLabel({ group })` is now `FieldLabel` + `FieldGroup` (#4, ADR-0108); #5 remains |
 | `react19-use-over-usecontext` | ⚠️ Single occurrence, not migrated (#6) |
 
 ## What is already right
@@ -48,10 +48,11 @@ Worth stating explicitly, because these are load-bearing and should not regress:
 
 ## Findings
 
-> **Status (2026-10-02).** #1, #2 and #3 are fixed; each carries a `**Resolution:**` note saying
+> **Status (2026-10-02).** #1, #2, #3 and #4 are fixed; each carries a `**Resolution:**` note saying
 > what landed and what deliberately did not. The conventions they set are ADR-0105 (a Prescription
-> row reads the draft it edits), ADR-0106 (a set-entry field is written once) and ADR-0107 (a field
-> publishes its wiring and the control claims it). #4–#6 are untouched.
+> row reads the draft it edits), ADR-0106 (a set-entry field is written once), ADR-0107 (a field
+> publishes its wiring and the control claims it) and ADR-0108 (two renderings are two names).
+> #5 and #6 are untouched.
 > The suggested order below still holds for the rest, with three corrections: #6 was listed first so
 > the contexts added in #1 and #2 would be written against the current React 19 API — all three are
 > written that way regardless, so #6 remains a two-line change to one file and nothing is blocked on
@@ -366,7 +367,8 @@ Two things the finding could not have seen:
   loader alive would leave the exact gap that would have hidden this change's own failure.
 
 #4 is untouched and is now slightly cheaper: splitting `FieldLabel({ group })` into `FieldGroup`
-and `FieldLabel` would make this guard's two `group` branches unnecessary.
+and `FieldLabel` would make this guard's two `group` branches unnecessary. (Since done — ADR-0108;
+it did, and took the `undecidable-group` problem class with them.)
 
 ### 4. MEDIUM — `FieldLabel({ group })` selects between two disjoint renderings
 
@@ -382,6 +384,27 @@ export function FieldLabel({ label, children, className })    // Field
 
 Small, mechanical, and self-documenting at every call site. Keep the `min-w-0` on
 the fieldset (ADR-0085).
+
+**Resolution:** done, and recorded as ADR-0108. Both suggested names landed with the suggested
+signatures, the `min-w-0` stayed, and the rendered output of both branches is unchanged. It was
+as mechanical as the finding says at the call sites: exactly **one** existed —
+`HandAuthoredSessionForm`'s performed-set distance-and-time pair (ADR-0032) — against 16 ungrouped
+`FieldLabel` uses, so the flag was false at 16 of its 17 call sites. The two components share one
+`CompactFieldProps`, since the ask is identical and the decision is which name is written.
+
+Where the finding is sold short is the guard. ADR-0107's `lib/field-control-policy.ts` had to read
+`group` from source to know whether a field owned an id at all, and a flag it could not evaluate
+was a fieldset wanting several controls and a field wanting exactly one at once — so it carried a
+fourth problem class, `undecidable-group`, purely to report that. Splitting the component deletes
+the class by construction: there is no flag to read, and no call site that can be both. The guard
+is 27 lines shorter, and its two `group` branches are gone as #3's note predicted.
+
+One behaviour the split *gains*, which is why it is an ADR and not a rename. A grouped `FieldLabel`
+was a field tag, so the guard stopped its descent there and looked no further inside. `FieldGroup`
+renders a bare fieldset with **no provider**, so a control nested in one inside a `Field` really
+does read that field's context and claim its id — two of them is a genuine ambiguity that the old
+shape would have hidden and the new one reports. Nothing in the app has that shape today; the
+guard holds it so nothing acquires it quietly.
 
 ### 5. LOW — `GenerateTrainingLaunchpad` gates two cards with two booleans
 
@@ -437,7 +460,9 @@ writes, not parent-state syncing.
 4. **#3** `Field`'s positional-children contract. **Done — ADR-0107** (by a published context and a
    claimed wiring; the render-prop illustration was declined, and `SetEntry` turned out not to be a
    consumer at all).
-5. **#4**, **#5** — small, independent, safe any time.
+5. **#4** `FieldGroup` / `FieldLabel`. **Done — ADR-0108** (one `group` call site to move; the
+   `undecidable-group` problem class it let the #3 guard need is gone by construction).
+6. **#5** — small, independent, safe any time.
 
 Each step is independently shippable. #1 and #2 touch files with existing
 `lib/` test coverage (`lib/protocol-builder.test.ts`,
