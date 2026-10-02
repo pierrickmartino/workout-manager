@@ -408,6 +408,14 @@ ADR-0106 made about the amount-kind picker's option order — so it is recorded 
 left alone. Note that the shared `CompactFieldProps` invites the opposite inference: the ask is
 shared, the caption treatment is not.
 
+And one thing the audit could not have seen, which the finding's "mechanical at every call site"
+hides: that one call site sits behind `isDistance`, and **no audit journey rendered it** — every
+Hand-Authored seed was `repetitions`, and `creation` renders no performed sets at all. So the
+`<fieldset>` branch was unverified at 320px, 200% text and 1440px, which is the widest of the three
+branches and the one box ADR-0085 floors at its content's minimum width. `creation-logged`'s third
+row is now a distance, beside the reps rows, so one capture holds both. The same hole `adhoc`
+(ADR-0106) and `confirm` (ADR-0098) were added to close.
+
 One behaviour the split *gains*, which is why it is an ADR and not a rename. A grouped `FieldLabel`
 was a field tag, so the guard stopped its descent there and looked no further inside. `FieldGroup`
 renders a bare fieldset with **no provider**, so a control nested in one inside a `Field` really

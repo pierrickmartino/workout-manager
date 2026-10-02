@@ -63,9 +63,17 @@ Two consequences are deliberate rather than incidental:
 - `lib/field-control-policy.test.ts` holds the guard's new shape: a control inside a `FieldGroup`
   may name its own id, a `FieldGroup` is outside the contract entirely, and one nested inside a
   `Field` makes that field's claimants ambiguous.
-- `audit/reflow.mjs` and `audit/wide.mjs` are unchanged and still clean, which is how the claim
-  that the rendered output did not move is made rather than argued — the `hand-authored` journey
-  renders the one call site that moved.
+- `audit/reflow.mjs` and `audit/wide.mjs` stay clean at 320px (100% and 200% text) and 1440px.
+  That took a **journey change**, which is the part worth recording: the one call site that moved
+  sits behind `isDistance`, and every Hand-Authored seed in `audit/main.tsx` was `repetitions` —
+  `creation` renders no performed sets at all (`planOnly`), and `creation-logged` rendered three
+  reps rows. So the `<fieldset>` branch was renderable and rendered by no journey, at any width, in
+  either harness. It is the widest of the three branches (three controls under one caption) and a
+  fieldset is exactly the box ADR-0085 floors at its content's minimum width, so "the markup did
+  not change" was the only claim available for it. `creation-logged`'s third row is now a distance,
+  with the reps rows beside it, so one capture holds both shapes. This is the same lesson ADR-0106
+  recorded for `adhoc` and ADR-0098 for `confirm`: a case no journey renders is unverified however
+  green the static guards are.
 
 ## Consequences
 

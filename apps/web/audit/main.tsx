@@ -183,7 +183,14 @@ function Content() {
     // The same Hand-Authored form in its default `authorAndLog` flow. The matrix only ever
     // mounted `planOnly` (Capture), which hides the "SETS PERFORMED" half — so the performed-set
     // grid was never rendered in any recorded capture. This case measures it.
-    case "creation-logged": return <HandAuthoredSessionForm draftId="audit-only-logged" today="2026-09-26" unit="kg" seed={{ trainingType: "strength", exercises: exercises.slice(0, 3).map(exercise => ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "repetitions", unit: "km", sets: "3", reps: "12", loadKind: "bodyweight", loadValue: "" })) }} />;
+    //
+    // The third row is a **distance**, which is what renders the performed-set `<fieldset>`
+    // (ADR-0108's `FieldGroup`, holding ADR-0032's distance-and-time pair). Every row here was
+    // `repetitions`, so that branch — the widest of the three, three controls under one caption —
+    // was renderable and rendered by no journey, and a fieldset is precisely the box ADR-0085
+    // floors at its content's minimum width. The reps rows stay beside it, so one capture holds
+    // both shapes.
+    case "creation-logged": return <HandAuthoredSessionForm draftId="audit-only-logged" today="2026-09-26" unit="kg" seed={{ trainingType: "strength", exercises: exercises.slice(0, 3).map((exercise, index) => index === 2 ? ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "distance" as const, unit: "km" as const, sets: "3", reps: "5", loadKind: "bodyweight" as const, loadValue: "" }) : ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "repetitions" as const, unit: "km" as const, sets: "3", reps: "12", loadKind: "bodyweight" as const, loadValue: "" })) }} />;
     case "logging": return <LogSessionForm sessionId={1} prescriptions={prescriptions} today="2026-09-26" unit="kg" />;
     case "live": return <LiveSessionScreen session={workout} today="2026-09-26" defaultRestSeconds={60} keepScreenAwake={false} unit="kg" />;
     case "analytics": return <Analytics />;
