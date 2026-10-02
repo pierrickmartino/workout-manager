@@ -24,8 +24,8 @@ places pay for that heavily, and both are the files that exceed the repo's own
 | `architecture-avoid-boolean-props` | ✅ Pass (2 minor exceptions, #5/#6) |
 | `state-lift-state` | ✅ Fixed for #1 — ADR-0105 |
 | `state-decouple-implementation` | ✅ Fixed for #1 — the rows no longer know how the draft is held (ADR-0105) |
-| `state-context-interface` | ⚠️ `PrescriptionDraftContext` implements it (#1, ADR-0105), but `PrescriptionList` still welds the one provider to the list; #2 still open |
-| `architecture-compound-components` | ❌ No compound components anywhere (#2, #3) |
+| `state-context-interface` | ✅ Fixed — `SetEntry`'s two providers over one contract are the `swap the provider, keep the UI` case #1 could not prove (#2, ADR-0106) |
+| `architecture-compound-components` | ⚠️ `SetEntry.*` is the first (#2, ADR-0106); `Field`'s positional-children contract is still open (#3) |
 | `patterns-explicit-variants` | ⚠️ Two boolean-mode components (#4, #5) |
 | `react19-use-over-usecontext` | ⚠️ Single occurrence, not migrated (#6) |
 
@@ -48,12 +48,14 @@ Worth stating explicitly, because these are load-bearing and should not regress:
 
 ## Findings
 
-> **Status (2026-10-01).** #1 is fixed and carries a `**Resolution:**` note saying what landed and
-> what deliberately did not; the convention it sets is ADR-0105 (a Prescription row reads the draft
-> it edits). #2–#6 are untouched. The suggested order below still holds for the rest, with one
-> correction: #6 was listed first so the contexts added in #1 and #2 would be written against the
-> current React 19 API — #1's context is written that way regardless, so #6 remains a two-line
-> change to one file and nothing is now blocked on it.
+> **Status (2026-10-01).** #1 and #2 are fixed; each carries a `**Resolution:**` note saying what
+> landed and what deliberately did not. The conventions they set are ADR-0105 (a Prescription row
+> reads the draft it edits) and ADR-0106 (a set-entry field is written once). #3–#6 are untouched.
+> The suggested order below still holds for the rest, with two corrections: #6 was listed first so
+> the contexts added in #1 and #2 would be written against the current React 19 API — both are
+> written that way regardless, so #6 remains a two-line change to one file and nothing is blocked on
+> it. And #2's own note records that the finding *understated* its correctness case: the drift it
+> predicted had already happened, in four separate places.
 
 ### 1. HIGH — 13 callbacks drilled 4 levels deep in `prescription-rows.tsx`
 
@@ -206,6 +208,59 @@ const SetEntry = {
 Each form then reads as an explicit variant (`patterns-explicit-variants`) and
 composes only the fields it offers.
 
+**Resolution:** done, and recorded as ADR-0106. The reading was right on the part that mattered
+most: the controlled/uncontrolled split was the *only* real difference between the copies, so two
+providers over one `{ state, actions, meta }` contract (ADR-0105's shape) let all four forms share
+the fields. `SetEntry.Load` is the one place a Load kind is added; `SetEntry.Quantity` the one place
+a Quantity kind's fields are.
+
+The finding called this "a correctness risk, not a DRY nit" and **understated it** — the drift had
+already happened, in four places no type could catch:
+
+- `CorrectLogForm` declared no `inputMode` on **either** of its Load value fields, so the same
+  field offered a decimal pad in two forms and a full QWERTY in the third (ADR-0093).
+- Its pre-filled distance input declared no `type` and no `step`, so a 5 km run was typed on an
+  alphabetic keyboard in that one form.
+- The kind picker was captioned two different ways, and the majority spelling is the word
+  CONTEXT 'Quantity' lists under _Avoid_ — a standing terminology-guard violation (issue #345)
+  the guard had never been able to see, because in all four forms the caption was a JSX **text
+  node** rather than the quoted label its regex matches. Merging the copies moved it into a string
+  literal and the guard failed immediately. The minority spelling was the lawful one, so the
+  majority moved: the caption is "Quantity" and the accessible noun "Quantity kind".
+- The duration field had **four** different accessible names for the same thing, one of them
+  (`Back Squat amount`) matching neither its caption nor its field.
+
+Three parts of the suggested shape were adjusted:
+
+- **No `SetEntry.Row`.** Only three of the five rows share a card — a skipped log row dims and
+  tightens its padding, a Live Session set is a `Card` — and a shell three callers use while two
+  override it with a flag is the `patterns-explicit-variants` trap the same rule set warns about.
+  The shared string is a constant (`SET_ENTRY_CARD`), not a component.
+- **`Load` returns its two cells bare**, not wrapped in a row, because `AddedSetRow` puts the
+  effort picker on the same line. `Distance` is the opposite — three cells, so it owns its row, and
+  `basis-full` is the ask that row makes where it nests beside the effort picker (ADR-0087).
+- **`Kind` is controlled under both providers.** The picked kind decides which fields exist below
+  it, so a form that seeded it and walked away could not re-render its own row — which is precisely
+  what `CorrectLogForm`'s added rows hold React state for. `SetEntryFormProvider` therefore takes
+  that one edit *by name* (`onKindChange`) and throws on any other, rather than accepting a general
+  `edit` it would only partly honour.
+
+This did *not* reduce line count: the four forms went 1996 → 1486 while the shared family is 687,
+so it is 177 lines *more* source in total, before the tests. The win is that eleven field blocks
+are one.
+
+Also worth naming, since the audit could not have seen it: `adhoc` was a renderable audit case
+that **neither** `reflow.mjs` nor `wide.mjs` swept, so the ad-hoc log form was unverified at every
+width while its three sibling log forms were gated — and it is the one of the four whose field rows
+changed shape (a lone amount field had sat in a two-column grid, taking half a row and leaving the
+other half empty). Both journeys now render it.
+
+One judgement was deliberately left alone: the kind picker's option **order**. `lib/quantity.ts`'s
+`AMOUNT_KIND_OPTIONS` orders them Reps / Duration / Distance for the authoring surfaces and these
+forms have always shown Reps / Distance / Duration. Silently reordering a picker in four forms is a
+change to what users see, not a refactor, so the inconsistency is now stated once rather than
+spread across four files.
+
 ### 3. MEDIUM — `Field` has an implicit positional-children contract
 
 `apps/web/components/pulse/field.tsx:27-36`:
@@ -305,7 +360,8 @@ writes, not parent-state syncing.
    exists. Brings `prescription-rows.tsx` under the 800-line limit. **Done — ADR-0105**
    (the collapse alone left ~1020 lines; a four-way split finished the job).
 3. **#2** `SetEntry` compound family — largest correctness win; de-duplicates the
-   typed-`Load` selector across four forms.
+   typed-`Load` selector across four forms. **Done — ADR-0106** (and the drift it
+   predicted turned out to have already happened, four times over).
 4. **#3** `Field.Root`/`Field.Control` — do after #2, its biggest consumer.
 5. **#4**, **#5** — small, independent, safe any time.
 

@@ -4,16 +4,14 @@ import { memo, useState } from "react";
 import { Check, ChevronDown, RotateCcw, SkipForward } from "@/components/pulse/icons";
 
 import { liveSetDomId, type LiveSet, type LiveUnit } from "@/lib/live-session";
-import { loadKindOptions, loadValueInputMode, type LoadKind } from "@/lib/load";
+import type { LoadKind } from "@/lib/load";
 import type { WeightUnit } from "@/lib/weight-unit";
+import { setEntryValues, type SetEntryValues } from "@/lib/set-entry";
+import { SetEntry, SetEntryProvider } from "@/components/pulse/set-entry";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { FieldRow, FIELD_CELL, WIDE_FIELD_CELL } from "@/components/pulse/field-row";
-
-const RPE_VALUES = Array.from({ length: 10 }, (_, index) => index + 1);
+import { FieldRow } from "@/components/pulse/field-row";
 
 export interface LiveSessionSetsProps {
   // The Session's sets grouped into units for display (solo Prescription or whole
@@ -216,21 +214,32 @@ function SetRow({
   onSkip,
   onReopen,
 }: SetRowProps) {
-  const [reps, setReps] = useState(String(set.reps));
-  const [loadKind, setLoadKind] = useState<LoadKind>(set.loadKind);
-  const [loadValue, setLoadValue] = useState(set.loadValue);
-  const [rpe, setRpe] = useState(set.rpe === null ? "" : String(set.rpe));
+  // The row's edited values, seeded at mount from the prescription pre-fill. Held as the
+  // set-entry vocabulary rather than four `useState`s so the shared fields can read them
+  // directly; a Live Session set posts nothing, so these are the only copy there is until
+  // "Complete" folds them into an event. The `kind` is stated though this surface renders
+  // `Reps` directly rather than through `Amount`: a live set is a rep count against its
+  // prescription, and recording that is cheaper than leaving the field to be inferred.
+  const [entry, setEntry] = useState<SetEntryValues>(() =>
+    setEntryValues({
+      kind: "repetitions",
+      reps: String(set.reps),
+      load_kind: set.loadKind,
+      load_value: set.loadValue,
+      rpe: set.rpe === null ? "" : String(set.rpe),
+    }),
+  );
 
   const completed = set.status === "completed";
   const label = `${set.exerciseName}, set ${set.setNumber}`;
 
   function handleComplete() {
-    const repsValue = Number.parseInt(reps, 10);
-    const rpeValue = rpe === "" ? null : Number.parseInt(rpe, 10);
+    const repsValue = Number.parseInt(entry.reps, 10);
+    const rpeValue = entry.rpe === "" ? null : Number.parseInt(entry.rpe, 10);
     onComplete(
       Number.isInteger(repsValue) && repsValue >= 0 ? repsValue : 0,
-      loadKind,
-      loadValue.trim(),
+      entry.load_kind as LoadKind,
+      entry.load_value.trim(),
       rpeValue !== null && Number.isInteger(rpeValue) ? rpeValue : null,
     );
   }
@@ -272,67 +281,28 @@ function SetRow({
         </p>
       ) : null}
 
-      <FieldRow>
-        <label className={FIELD_CELL}>
-          <span className="label-mono text-[9px] text-text-muted">Reps</span>
-          <Input
-            type="number"
-            min={0}
-            value={reps}
-            onChange={(event) => setReps(event.target.value)}
-            disabled={completed}
-            aria-label={`Reps for ${label}`}
-          />
-        </label>
-        <label className={FIELD_CELL}>
-          <span className="label-mono text-[9px] text-text-muted">RPE</span>
-          <Select
-            value={rpe}
-            onChange={(event) => setRpe(event.target.value)}
-            disabled={completed}
-            aria-label={`RPE for ${label}`}
-          >
-            <option value="">—</option>
-            {RPE_VALUES.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </Select>
-        </label>
-      </FieldRow>
+      {/* The shared set-entry fields (ADR-0106). The provider sits *inside* the row, not above
+          the memoized list: its value is built from this row's own state, so no new context
+          value crosses the `memo` boundary that keeps this screen's re-renders down
+          (ADR-0091). `prefix` is null because a Live Session is ephemeral and client-side
+          until it is finished (ADR-0012) — these fields are in no form. */}
+      <SetEntryProvider
+        values={entry}
+        unit={weightUnit}
+        prefix={null}
+        subject={{ joiner: "for", name: label }}
+        disabled={completed}
+        onEdit={(patch) => setEntry((current) => ({ ...current, ...patch }))}
+      >
+        <FieldRow>
+          <SetEntry.Reps />
+          <SetEntry.Effort />
+        </FieldRow>
 
-      <FieldRow>
-        <label className={WIDE_FIELD_CELL}>
-          <span className="label-mono text-[9px] text-text-muted">
-            Load kind
-          </span>
-          <Select
-            value={loadKind}
-            onChange={(event) => setLoadKind(event.target.value as LoadKind)}
-            disabled={completed}
-            aria-label={`Load kind for ${label}`}
-          >
-            {loadKindOptions(weightUnit).map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <label className={FIELD_CELL}>
-          <span className="label-mono text-[9px] text-text-muted">Load</span>
-          <Input
-            spellCheck={false}
-            value={loadValue}
-            inputMode={loadValueInputMode(loadKind)}
-            onChange={(event) => setLoadValue(event.target.value)}
-            disabled={completed}
-            placeholder="70"
-            aria-label={`Load for ${label}`}
-          />
-        </label>
-      </FieldRow>
+        <FieldRow>
+          <SetEntry.Load />
+        </FieldRow>
+      </SetEntryProvider>
 
       <div className="flex flex-wrap items-center gap-2">
         {completed ? (

@@ -56,6 +56,11 @@ const ALL_JOURNEYS = [
   // no `data-shell="wide"` — so they also widen the evidence that the frame leaves an
   // unconverted page at 26rem.
   "exercise", "admin",
+  // The ad-hoc log (ADR-0106). It was a renderable case that no journey swept, so its form was
+  // unverified at every width while three sibling log forms were gated — and it is one of the
+  // four that now compose the shared set-entry family, so it is the one whose field rows
+  // changed shape (two half-width grid cells became wrapping rows that ask for their width).
+  "adhoc",
 ];
 // A comma-separated subset, for iterating on one screen without paying for the full sweep.
 // The gated run is the unfiltered one.
