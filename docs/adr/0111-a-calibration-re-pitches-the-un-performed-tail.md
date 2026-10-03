@@ -92,13 +92,22 @@ record enter:
 ## The rule for work that arrives later
 
 Under a materialised model the Calibration lives in the numbers, so anything added afterwards
-arrives un-calibrated. One rule covers every case:
+could arrive un-calibrated. One rule covers every case:
 
 > **The resolver applies to numbers the system chose, never to numbers the user typed.**
 
-A **Substitution**'s replacement is resolved at the standing Calibration — the user picked a
-movement, not a load. A Prescription **hand-authored** through the Builder is persisted verbatim:
-silently re-pitching what someone typed is the one genuinely dishonest behaviour available here.
+As the code stands, that rule **needs no implementation** — a fact worth recording, because it
+looks like it should. A **Substitution** changes only the Prescription's `exercise_id`
+(`evolve_prescription_row(p, exercise_id=…)`), preserving its sets, Quantity and Load, which
+already carry the standing Calibration; a replacement therefore inherits the re-pitch by
+construction. A Prescription **hand-authored** through the Builder is persisted verbatim,
+which is the other half of the rule and equally free — silently re-pitching what someone typed
+is the one genuinely dishonest behaviour available here.
+
+The rule becomes live code only if Substitution ever starts supplying its *own* Load or
+Quantity. At that point the replacement must be resolved from the **authored** pitch
+(`standing=0, desired=<the stored offset>`) before it is written, because it arrives at the
+plan's authored pitch rather than at the one the rest of the tail carries.
 
 ## Bounds, safety, and disclosure
 

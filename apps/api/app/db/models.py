@@ -287,6 +287,14 @@ class Protocol(SQLModel, table=True):
     # here at adoption so operator feedback can trace back to the exact call. Nullable —
     # absent when no monitoring backend was configured. Never mutated after creation.
     trace_id: str | None = Field(default=None)
+    # The standing Calibration (ADR-0111): the user's *relative offset* from this
+    # Protocol's authored values, re-pitching its un-performed tail. Nullable and never
+    # backfilled — ``None`` reads as 0, "as authored". It stores the user's *intent*, not
+    # the result: the resolved values are materialised onto the un-performed Prescription
+    # rows, so this is what the ±3 clamp clamps, what a second nudge stacks onto, and what
+    # the Fitness Level fold reads. A stored user *choice* (the species of a Prescription's
+    # ``scheme``), never a derived ledger (ADR-0018).
+    calibration: int | None = Field(default=None)
     created_at: datetime = Field(default_factory=_utcnow)
 
 

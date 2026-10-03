@@ -92,6 +92,12 @@ export const protocolProgress: ProtocolProgress = {
     prescriptions,
   },
   completed_count: 4,
+  // The standing Calibration and the clamp's bounds (ADR-0111). Stated rather than
+  // defaulted: the server always sends all three, and a fixture that omitted them would
+  // let a control render against a shape the API never produces.
+  calibration: 0,
+  calibration_min: -3,
+  calibration_max: 3,
 };
 
 // A month of daily volume, so the chart carries a realistic point count and its ChartValues

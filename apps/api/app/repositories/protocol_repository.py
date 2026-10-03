@@ -54,6 +54,31 @@ class DeploySessionSpec:
 
 
 @dataclass(frozen=True)
+class CalibrationSpec:
+    """One un-performed Prescription's re-pitched spine fields (ADR-0111).
+
+    Addressed by ``session_id``/``position`` rather than by prescription id, because a
+    Calibration changes **no shape** — no Session or Prescription is added, removed or
+    reordered — so the rows it rewrites are exactly the ones already there. That is the whole
+    difference from a ``DeploySessionSpec``, which carries a *replacement* tail: this carries
+    an *edit* to the tail in place, so every ``session_id`` and prescription ``id`` survives
+    and no re-enumeration is involved.
+
+    Deliberately only the calibratable subset of the spine (ADR-0069): the exercise
+    reference, Superset overlay, tempo, scheme, Set Type and Note are untouched by a
+    re-pitch, so carrying them would invite a mapper to write back a stale copy.
+    """
+
+    session_id: int
+    position: int
+    sets: int
+    recommended_load: dict | None
+    prescribed_quantity: dict | None
+    rest_seconds: int | None
+    target_effort: dict | None
+
+
+@dataclass(frozen=True)
 class ProtocolDraft:
     """A multi-week Protocol to persist: the parameter set plus ordered Sessions."""
 
@@ -99,6 +124,9 @@ class ProtocolView:
     # The user-editable name, or ``None`` when unnamed — resolved to a display label
     # (with the derived fallback) by ``app.domain.protocol.protocol_label``.
     name: str | None = None
+    # The standing Calibration offset (ADR-0111), or ``None`` for "as authored". Carried on
+    # the read so a client can render the current offset and disable the control at the rail.
+    calibration: int | None = None
 
 
 class ProtocolRepository(Interface):
@@ -153,6 +181,32 @@ class ProtocolRepository(Interface):
         ``None`` if it is missing or owned by another user."""
         ...
 
+    def calibrate_tail(
+        self,
+        protocol_id: int,
+        clerk_user_id: str,
+        *,
+        calibration: int,
+        performed_session_ids: set[int],
+        pitches: list[CalibrationSpec],
+    ) -> ProtocolView | None:
+        """Atomically store a Calibration and materialise it onto the un-performed tail
+        (ADR-0111).
+
+        The sibling of :meth:`deploy_tail`, and deliberately *not* it: a Calibration changes
+        no shape, so nothing is deleted, inserted or re-enumerated. Each ``pitches`` entry
+        rewrites the calibratable spine fields of the row already at its
+        ``session_id``/``position``, so every Session id and prescription id survives and no
+        Logged Session, Personal Record or Progression overlay can be orphaned.
+
+        ``calibration`` is the user's standing offset, stored on the Protocol as their
+        *intent*. A pitch addressing a Session in ``performed_session_ids`` is **ignored**:
+        the frozen performed prefix (ADR-0020) is enforced here as well as in the service
+        tier, the same defence-in-depth ``deploy_tail`` applies. The whole write commits in
+        one transaction, so a failure persists nothing. Owner-scoped: returns the updated
+        Protocol, or ``None`` if it is missing or owned by another user."""
+        ...
+
 
 class SqlProtocolRepository:
     def __init__(self, session: Session) -> None:
@@ -192,6 +246,7 @@ class SqlProtocolRepository:
             weeks=protocol.weeks,
             duration_minutes=protocol.duration_minutes,
             name=protocol.name,
+            calibration=protocol.calibration,
             sessions=[self._session_view(w) for w in workouts],
         )
 
@@ -328,6 +383,39 @@ class SqlProtocolRepository:
         self._session.commit()
         return self._view(protocol)
 
+    def calibrate_tail(
+        self,
+        protocol_id: int,
+        clerk_user_id: str,
+        *,
+        calibration: int,
+        performed_session_ids: set[int],
+        pitches: list[CalibrationSpec],
+    ) -> ProtocolView | None:
+        protocol = self._session.get(Protocol, protocol_id)
+        if protocol is None or protocol.clerk_user_id != clerk_user_id:
+            return None
+
+        protocol.calibration = calibration
+        self._session.add(protocol)
+
+        by_session = _pitches_by_session(pitches, performed_session_ids)
+        for session_id, by_position in by_session.items():
+            rows = self._session.exec(
+                select(ExercisePrescription).where(
+                    ExercisePrescription.session_id == session_id
+                )
+            ).all()
+            for row in rows:
+                pitch = by_position.get(row.position)
+                if pitch is None:
+                    continue
+                _apply_pitch(row, pitch)
+                self._session.add(row)
+
+        self._session.commit()
+        return self._view(protocol)
+
 
 class InMemoryProtocolRepository:
     def __init__(self, exercises: ExerciseRepository) -> None:
@@ -368,6 +456,7 @@ class InMemoryProtocolRepository:
             weeks=protocol.weeks,
             duration_minutes=protocol.duration_minutes,
             name=protocol.name,
+            calibration=protocol.calibration,
             sessions=[self._session_view(w) for w in workouts],
         )
 
@@ -500,8 +589,68 @@ class InMemoryProtocolRepository:
         self._sessions[protocol_id] = kept
         return self._view(protocol)
 
+    def calibrate_tail(
+        self,
+        protocol_id: int,
+        clerk_user_id: str,
+        *,
+        calibration: int,
+        performed_session_ids: set[int],
+        pitches: list[CalibrationSpec],
+    ) -> ProtocolView | None:
+        protocol = self._protocols.get(protocol_id)
+        if protocol is None or protocol.clerk_user_id != clerk_user_id:
+            return None
+
+        protocol.calibration = calibration
+
+        by_session = _pitches_by_session(pitches, performed_session_ids)
+        for session_id, by_position in by_session.items():
+            for row in self._prescriptions.get(session_id, []):
+                pitch = by_position.get(row.position)
+                if pitch is not None:
+                    _apply_pitch(row, pitch)
+
+        return self._view(protocol)
+
+
+def _pitches_by_session(
+    pitches: list[CalibrationSpec], performed_session_ids: set[int]
+) -> dict[int, dict[int, CalibrationSpec]]:
+    """Index the pitches by Session then position, dropping the frozen performed prefix.
+
+    Shared by both adapters so the ADR-0020 guard — a pitch addressing a performed Session
+    is ignored, never applied — is written once and cannot drift between them. Indexing also
+    turns the per-row lookup into a dict hit rather than a scan per prescription.
+    """
+
+    indexed: dict[int, dict[int, CalibrationSpec]] = {}
+    for pitch in pitches:
+        if pitch.session_id in performed_session_ids:
+            continue
+        indexed.setdefault(pitch.session_id, {})[pitch.position] = pitch
+    return indexed
+
+
+def _apply_pitch(row: ExercisePrescription, pitch: CalibrationSpec) -> None:
+    """Write one pitch's calibratable fields onto its persisted row.
+
+    Mutates the row because that *is* the persistence mechanism for an attached ORM
+    instance, exactly as the Substitution and scheme-selection writes do — the immutability
+    rule governs domain values, of which ``CalibrationSpec`` is one and is never touched
+    here. Only the calibratable subset is assigned, so a field a re-pitch does not own
+    (tempo, Set Type, Note, the Superset overlay) can never be written back stale.
+    """
+
+    row.sets = pitch.sets
+    row.recommended_load = pitch.recommended_load
+    row.prescribed_quantity = pitch.prescribed_quantity
+    row.rest_seconds = pitch.rest_seconds
+    row.target_effort = pitch.target_effort
+
 
 __all__ = [
+    "CalibrationSpec",
     "ProtocolSessionDraft",
     "DeploySessionSpec",
     "ProtocolDraft",
