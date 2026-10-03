@@ -100,7 +100,12 @@ subset of hard regressions is enforced automatically by
 `app/quality/terminology_guard.py` (Program→Protocol, daily streak, personal
 best, max weight, readiness/recovery score). It runs as a pytest test. When you
 retire or rename a domain term, add it to the guard's `BANNED_TERMS` registry so
-the regression is caught forever — that's a one-line addition.
+the regression is caught forever — that's a one-line addition. A **domain** term:
+renaming a private identifier earns no entry, and neither does splitting a term
+into qualified readings while the umbrella survives (ADR-0112's Declared /
+Effective Fitness Level pair is the worked example), because padding the
+registry with what no `_Avoid_` line names dulls the user-facing signal it
+protects.
 
 ## Conventions
 

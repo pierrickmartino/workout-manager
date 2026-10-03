@@ -27,8 +27,8 @@ bought is unchanged. Only the fold's reading rule is decided here.
 
 `CONTEXT.md` carried one **Fitness Level** entry for two concepts the code already treated
 differently. It splits into a qualified pair, shaped exactly like the **Default Equipment** /
-**Available Equipment** pair two entries above it — a saved base versus what one use actually
-runs with:
+**Available Equipment** pair that sits just above it in the same section — a saved base versus
+what one use actually runs with:
 
 - **Declared Fitness Level** — the stored 1–10 per Training Type the user states about
   themselves. A mutable snapshot of "now", theirs to edit, and the **only** level ever written
@@ -50,9 +50,10 @@ Per Training Type, over a **window of the most recent Logged Sessions of that Tr
   `progression.py` already "never reads a clock". The session-count framing is the precedent
   ADR-0064's **Session-Count-Based** scheme set for the calendar-free reading of "recent".
 - **Evidence is the Completion Outcome plus graded perceived effort, and nothing else.** A
-  Session declared **Completed** whose rated sets all sat at or below the low-effort threshold
-  counts *for* the user; one declared **Incomplete**, or carrying any set rated at or above a
-  high-effort threshold, counts *against*.
+  Session counts *for* the user when it is declared **Completed**, **at least one of its sets is
+  rated**, and every rated set sat at or below the low-effort threshold — all three conjuncts,
+  so a Session with nothing rated is never comfortable by vacuous truth. It counts *against* when
+  it is declared **Incomplete**, or carries any set rated at or above a high-effort threshold.
 - **An unrated set abstains rather than disqualifying.** This is the single biggest accuracy
   lever, and it is the precedent the codebase set twice already: the Calibration's lever
   resolution skips an undeclared Completion Outcome rather than reading it as Completed, and the
@@ -90,7 +91,6 @@ Recorded here so that an implementer does not helpfully add them back:
 - **Volume as evidence.** Confounded: more work at higher effort is not more ability. Volume
   rises with a longer session, a lighter day's higher reps, and with simply trying harder at the
   same capacity.
-- **Hysteresis or any deadband** against notch oscillation — see below. Ruled out, not deferred.
 - **Coarsening the Effective level to the three bands before it reaches the cache key.** That
   would reverse ADR-0004's explicit purchase of a continuous climb to buy back hit rate 0004
   already decided to spend.
@@ -102,8 +102,9 @@ defects later:
 
 - **No hysteresis; the notch count can oscillate.** Net evidence parked on a boundary flips as
   one Session enters the window and another leaves, changing the cache key and possibly the
-  Calibration band. A deadband is not available to us: it needs the **previous** value, and
-  storing that value is precisely the write-hooked ledger ADR-0018 forbids. The integer division
+  Calibration band. A deadband is **ruled out, not deferred**, and not available to us at all:
+  it needs the **previous** value, and storing that value is precisely the write-hooked ledger
+  ADR-0018 forbids. The integer division
   that turns net evidence into notches already gives every notch a multi-session plateau, which
   is the stability we can have for free; more would cost a far more load-bearing invariant.
 - **A wider cache spread.** The Effective level reaches the cache key at full 1–10 resolution,
@@ -140,6 +141,27 @@ two qualified readings, and the fold's rename is a private identifier that no `C
 user-facing signal it protects, so the registry is left alone; a future user-facing phrase such
 as "fitness score" would earn an entry, and this does not.
 
+## Considered options
+
+- **Make the effort rating mandatory at the log boundary** — rejected: the whole point is that an
+  optional field stops being load-bearing. Forcing it would trade a silent fold for an obstructed
+  log, and the record is the one thing in the domain that must stay cheap to write honestly.
+- **Positional decay over all-time history** (weight each Session by how far back it sits)
+  instead of a hard window — rejected: it is arithmetic no user can predict from the screen, and
+  a window is explainable in one sentence ("your last N sessions of this type").
+- **A time-decayed window** — rejected outright: it needs a clock, and there is no "today"
+  (ADR-0001).
+- **Store the folded level on the Fitness Profile** and update it on log write — rejected: it is
+  the stored, write-hooked ledger ADR-0018 exists to forbid, and it is what makes the current
+  behaviour irreversible.
+- **A second, separate level for the Calibration band**, responsive where the cache key's is
+  stable — rejected: two notions of "level" drift apart, which is what the band registry's
+  pinning to the cache's cut points already exists to prevent.
+- **Leave the fold alone and let the user correct their Declared level instead** — rejected as
+  the primary remedy: ADR-0004 §2 promised that the app notices, and a feature that reads as
+  broken rather than conservative is not fixed by asking the user to do its job. Editing the
+  Declared level remains available and now takes effect at once, keeping earned evidence.
+
 ## Consequences
 
 - **`CONTEXT.md` gains two entries and keeps the third.** Every existing cross-reference to the
@@ -162,24 +184,3 @@ as "fitness score" would earn an entry, and this does not.
   and the user's own are legible side by side — and the equal case is stated rather than rendered
   as an absence, because "we read your record and found no change" is not the same message as
   "we failed to read it".
-
-## Considered options
-
-- **Make the effort rating mandatory at the log boundary** — rejected: the whole point is that an
-  optional field stops being load-bearing. Forcing it would trade a silent fold for an obstructed
-  log, and the record is the one thing in the domain that must stay cheap to write honestly.
-- **Positional decay over all-time history** (weight each Session by how far back it sits)
-  instead of a hard window — rejected: it is arithmetic no user can predict from the screen, and
-  a window is explainable in one sentence ("your last N sessions of this type").
-- **A time-decayed window** — rejected outright: it needs a clock, and there is no "today"
-  (ADR-0001).
-- **Store the folded level on the Fitness Profile** and update it on log write — rejected: it is
-  the stored, write-hooked ledger ADR-0018 exists to forbid, and it is what makes the current
-  behaviour irreversible.
-- **A second, separate level for the Calibration band**, responsive where the cache key's is
-  stable — rejected: two notions of "level" drift apart, which is what the band registry's
-  pinning to the cache's cut points already exists to prevent.
-- **Leave the fold alone and let the user correct their Declared level instead** — rejected as
-  the primary remedy: ADR-0004 §2 promised that the app notices, and a feature that reads as
-  broken rather than conservative is not fixed by asking the user to do its job. Editing the
-  Declared level remains available and now takes effect at once, keeping earned evidence.
