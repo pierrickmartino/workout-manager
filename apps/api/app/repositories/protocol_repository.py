@@ -11,7 +11,8 @@ another. SQLModel-backed and in-memory implementations honor the same contract."
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Protocol as Interface
+from typing import Any
+from typing import Protocol as Interface
 
 from sqlmodel import Session, select
 
@@ -72,6 +73,10 @@ class CalibrationSpec:
     session_id: int
     position: int
     sets: int
+    # The free-text amount line — the representation every call site renders as
+    # ``sets × reps``. It travels with the typed ``prescribed_quantity`` derived from it, so a
+    # re-pitch can never move one without the other.
+    reps: str
     recommended_load: dict | None
     prescribed_quantity: dict | None
     rest_seconds: int | None
@@ -643,6 +648,7 @@ def _apply_pitch(row: ExercisePrescription, pitch: CalibrationSpec) -> None:
     """
 
     row.sets = pitch.sets
+    row.reps = pitch.reps
     row.recommended_load = pitch.recommended_load
     row.prescribed_quantity = pitch.prescribed_quantity
     row.rest_seconds = pitch.rest_seconds
@@ -651,12 +657,12 @@ def _apply_pitch(row: ExercisePrescription, pitch: CalibrationSpec) -> None:
 
 __all__ = [
     "CalibrationSpec",
-    "ProtocolSessionDraft",
     "DeploySessionSpec",
+    "InMemoryProtocolRepository",
     "ProtocolDraft",
+    "ProtocolRepository",
+    "ProtocolSessionDraft",
     "ProtocolSessionView",
     "ProtocolView",
-    "ProtocolRepository",
     "SqlProtocolRepository",
-    "InMemoryProtocolRepository",
 ]

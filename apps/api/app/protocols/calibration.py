@@ -163,6 +163,7 @@ def plan_calibration(
                         session_id=session.session_id,
                         position=prescription.position,
                         sets=pitched.sets,
+                        reps=pitched.reps,
                         recommended_load=pitched.recommended_load,
                         prescribed_quantity=pitched.prescribed_quantity,
                         rest_seconds=pitched.rest_seconds,

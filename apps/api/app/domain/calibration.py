@@ -41,6 +41,7 @@ something else.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from enum import Enum
@@ -48,7 +49,7 @@ from enum import Enum
 from app.domain.completion import CompletionOutcome
 from app.domain.effort import RIR_MAX, RIR_MIN, RPE_MAX, RPE_MIN, Effort, EffortScale
 from app.domain.load import LoadKind, ParsedLoad, parse_load
-from app.domain.quantity import Quantity, QuantityKind
+from app.domain.quantity import Quantity, QuantityKind, quantity_from_text
 
 # The offset is bounded *intent*: a user pressed against the rail is saying their declared
 # Fitness Level is wrong, which the level fold — not a wider clamp — is what fixes.
@@ -88,14 +89,33 @@ MAX_SET_DELTA = 1
 #: A Session must keep at least one set of each movement — Deploy's own validation floor.
 MIN_SETS = 1
 
+#: And at least one repetition: Deploy rejects an empty rep target, and "0 reps" is not a
+#: prescription. An easier re-pitch floors here rather than counting down past it.
+MIN_REPS = 1
+
 # Rest moves for coherence: harder trains with less of it. Floored so a re-pitch can never
 # prescribe a rest too short to be a rest.
 REST_STEP_SECONDS = 15
 MIN_REST_SECONDS = 15
 
-# A Quantity moves by a proportion rather than a fixed amount: 5 km and 60 s share no unit,
-# so there is no single number to add. One notch is this fraction of the authored amount.
-QUANTITY_STEP_FRACTION = 0.1
+# Fixed per-notch steps for the **amount** axis, one per Quantity kind. Fixed rather than
+# proportional for two reasons. The first is the one ``progression.py`` already records for
+# kilograms: "a fixed-increment step keeps the rule simple and auditable (vs. percentage math
+# on noisy free-text loads)". The second is **path-independence** — scaling the current value
+# twice is not scaling the authored value once (a 10%-per-notch rule took 5 km to 6.05 km
+# stacked but 6.0 km in one jump), and a materialised re-pitch only ever sees the current
+# value, so a proportional rule cannot be made to agree with itself.
+#
+# Whole reps per notch also keeps every press legible: a proportional step rounded a target
+# of 6 to 7 for *both* +1 and +2, so a second press of "harder" appeared to do nothing.
+# A rep *range* ("8-12") carries two numbers and no single count, so it is read here
+# rather than through ``quantity_from_text`` (which types it as repetitions with no
+# count). Both ends shift together, so the range keeps its width.
+_RANGE_REPS_RE = re.compile(r"^\s*(\d+)\s*-\s*(\d+)\s*$")
+
+REPS_STEP_PER_NOTCH = 1
+DISTANCE_STEP_M_PER_NOTCH = 250.0
+DURATION_STEP_S_PER_NOTCH = 15.0
 
 # Target Effort steps for coherence only — it is descriptive in v1 and feeds no Progression
 # (ADR-0066). RPE moves in its own half-steps; RIR moves whole reps, and *downward* for a
@@ -206,11 +226,14 @@ def calibrate_prescription(
     # and the amounts can never disagree about which axis is carrying the offset.
     effective = _effective_lever(prescription, lever)
 
-    load, quantity = _calibrated_amounts(prescription, start, end, effective, band)
+    load, reps, quantity = _calibrated_amounts(
+        prescription, start, end, effective, band
+    )
 
     return replace(
         prescription,
         sets=_calibrated_sets(prescription.sets, start, end, effective),
+        reps=reps,
         recommended_load=load,
         prescribed_quantity=quantity,
         rest_seconds=_calibrated_rest(prescription.rest_seconds, start, end),
@@ -237,7 +260,7 @@ def _effective_lever(
         return lever
     if _movable_load(prescription.recommended_load) is not None:
         return lever
-    if _movable_quantity(prescription.prescribed_quantity) is not None:
+    if _scaled_amount(prescription.reps, None, 1) is not None:
         return lever
     return CalibrationLever.VOLUME
 
@@ -300,39 +323,105 @@ def _calibrated_amounts(
     end: int,
     lever: CalibrationLever,
     band: str,
-) -> tuple[dict | None, dict | None]:
-    """Resolve the Load and the Quantity together, because which one moves depends on both.
+) -> tuple[dict | None, str, dict | None]:
+    """Resolve the Load and the amount together, because which one moves depends on both.
 
     The order of preference is what keeps the rule **total**:
 
     1. a Load with a movable number (``absolute``, or ``bodyweight`` carrying added
        kilograms) takes the step — the axis Progression itself moves;
-    2. otherwise a typed **Quantity** that carries a number takes it — shortening a run is
-       what "one notch easier" means for a 5 km prescription, where dropping its single set
-       would delete the work entirely;
+    2. otherwise the **amount** takes it — shortening a run, or adding a rep to a
+       pure-bodyweight movement, is what "one notch" means where no weight can move
+       (ADR-0026 puts a pure-bodyweight movement's difficulty on the reps axis, and
+       Progression's own ``_step_reps_up`` steps exactly that);
     3. otherwise the **set count** takes it, which ``_calibrated_sets`` has already applied
-       by forcing the volume lever below.
+       because ``_effective_lever`` forced the volume lever.
 
     A Load with no clean value — ``percent_1rm``, ``range``, ``qualitative`` — is left
     **verbatim** rather than mangled, exactly as ``next_prescription`` leaves it.
     """
 
     load = prescription.recommended_load
+    reps = prescription.reps
     quantity = prescription.prescribed_quantity
 
     parsed = _movable_load(load)
     if parsed is not None:
-        return _stepped_load(parsed, start, end, lever, band), quantity
+        return _stepped_load(parsed, start, end, lever, band), reps, quantity
 
-    movable = _movable_quantity(quantity)
-    if movable is not None:
-        return load, _stepped_quantity(movable, start, end, lever)
+    notches = _amount_notches(end, lever) - _amount_notches(start, lever)
+    stepped = _scaled_amount(reps, quantity, notches)
+    if stepped is not None:
+        return (load, *stepped)
 
-    # Neither amount axis carries a number: the set count is taking the whole offset, and
-    # ``_effective_lever`` has already forced the volume lever so that it does. Both values
-    # pass through verbatim — an unmovable Load is left exactly as authored rather than
-    # mangled, the same choice ``next_prescription`` makes.
-    return load, quantity
+    # Nothing numeric to move on either axis: the set count is taking the whole offset. Every
+    # value passes through verbatim — an unmovable Load and an unscalable amount line are left
+    # exactly as authored rather than mangled, the same choice ``next_prescription`` makes.
+    return load, reps, quantity
+
+
+def _scaled_amount(
+    reps: str, stored: dict | None, notches: int
+) -> tuple[str, dict | None] | None:
+    """Step the free-text amount line, and the typed Quantity derived from it.
+
+    ``reps`` is the amount representation the app **renders** — every call site prints
+    ``sets × reps`` — so it is the one a re-pitch has to move. ``prescribed_quantity`` is
+    then re-derived from the stepped text through ``quantity_from_text``, the same primitive
+    the generation fallback and the ADR-0050 backfill use, so the two representations of one
+    fact cannot drift apart. The first implementation moved only the typed value, which left
+    a bodyweight "3 sets of 6" reading "3 × 6" on screen after a re-pitch had changed it.
+
+    An absent Quantity stays absent: a re-pitch moves what the plan says and never invents a
+    typed value its author never wrote, the same reasoning that leaves an absent rest alone.
+
+    Returns ``None`` when the line carries no number to move (``AMRAP``, prose), which is
+    what hands the whole offset to the set count.
+    """
+
+    text = _scaled_amount_text(reps, notches)
+    if text is None:
+        return None
+    return text, (None if stored is None else quantity_from_text(text).to_dict())
+
+
+def _scaled_amount_text(reps: str, notches: int) -> str | None:
+    """The amount line with its number(s) stepped, or ``None`` if it carries none.
+
+    Each kind steps by its own **fixed** amount per notch, never a proportion — see the step
+    constants for why a proportional rule cannot be path-independent under a materialised
+    re-pitch. Floors keep every result a real prescription: at least one rep, and never a
+    zero-length run or hold.
+    """
+
+    if notches == 0:
+        return reps
+
+    ranged = _RANGE_REPS_RE.match(reps)
+    if ranged is not None:
+        step = REPS_STEP_PER_NOTCH * notches
+        low = max(int(ranged.group(1)) + step, MIN_REPS)
+        high = max(int(ranged.group(2)) + step, low)
+        return f"{low}-{high}"
+
+    quantity = quantity_from_text(reps)
+
+    if quantity.kind is QuantityKind.REPETITIONS and quantity.count is not None:
+        return str(max(quantity.count + REPS_STEP_PER_NOTCH * notches, MIN_REPS))
+
+    if quantity.kind is QuantityKind.DISTANCE and quantity.metres is not None:
+        metres = quantity.metres + DISTANCE_STEP_M_PER_NOTCH * notches
+        return _quantity_text(
+            replace(quantity, metres=max(metres, DISTANCE_STEP_M_PER_NOTCH))
+        )
+
+    if quantity.kind is QuantityKind.DURATION and quantity.seconds is not None:
+        seconds = quantity.seconds + DURATION_STEP_S_PER_NOTCH * notches
+        return _quantity_text(
+            replace(quantity, seconds=max(seconds, DURATION_STEP_S_PER_NOTCH))
+        )
+
+    return None
 
 
 def _movable_load(stored: dict | None) -> ParsedLoad | None:
@@ -355,25 +444,6 @@ def _movable_load(stored: dict | None) -> ParsedLoad | None:
     return None
 
 
-def _movable_quantity(stored: dict | None) -> Quantity | None:
-    """The typed Quantity if it carries a number a step can scale, else ``None``.
-
-    A ``repetitions`` Quantity with no count — a range (``"8-12"``), an ``AMRAP`` — carries
-    no single number, so it declines the step and the set count takes the offset instead.
-    """
-
-    if stored is None:
-        return None
-
-    quantity = Quantity.from_dict(stored)
-    carries = {
-        QuantityKind.DISTANCE: quantity.metres,
-        QuantityKind.DURATION: quantity.seconds,
-        QuantityKind.REPETITIONS: quantity.count,
-    }.get(quantity.kind)
-    return quantity if carries is not None else None
-
-
 def _stepped_load(
     parsed: ParsedLoad,
     start: int,
@@ -391,45 +461,6 @@ def _stepped_load(
 
     kilograms = max((parsed.kg or 0.0) + delta, 0.0)
     return parse_load(_format_kg(kilograms)).to_dict()
-
-
-def _stepped_quantity(
-    quantity: Quantity, start: int, end: int, lever: CalibrationLever
-) -> dict:
-    """Scale a movable Quantity's number by the offset.
-
-    Proportional rather than a fixed amount, because the kinds share no unit — there is no
-    single number to add to both 5 km and 60 s, while 10% of each is "one notch" of either.
-    """
-
-    factor = 1.0 + QUANTITY_STEP_FRACTION * (
-        _amount_notches(end, lever) - _amount_notches(start, lever)
-    )
-
-    if quantity.kind is QuantityKind.DISTANCE:
-        return _rendered_quantity(
-            quantity, metres=max((quantity.metres or 0.0) * factor, 0.0)
-        )
-    if quantity.kind is QuantityKind.DURATION:
-        return _rendered_quantity(
-            quantity, seconds=max((quantity.seconds or 0.0) * factor, 0.0)
-        )
-    # A counted ``repetitions`` Quantity: reps are whole, and never fewer than one.
-    return _rendered_quantity(
-        quantity, count=max(round((quantity.count or 0) * factor), 1)
-    )
-
-
-def _rendered_quantity(quantity: Quantity, **payload) -> dict:
-    """A stepped Quantity with its ``text`` re-rendered to match its new number.
-
-    The stored ``text`` is the display-ready form (ADR-0032), so leaving it at the authored
-    value would show a 5 km run that is really 4.5 km — the one way a materialised re-pitch
-    could lie on screen.
-    """
-
-    stepped = replace(quantity, **payload)
-    return replace(stepped, text=_quantity_text(stepped)).to_dict()
 
 
 def _quantity_text(quantity: Quantity) -> str:
