@@ -97,7 +97,9 @@ def profiles() -> InMemoryProfileRepository:
     return InMemoryProfileRepository()
 
 
-def _prescription(exercise_id: int, *, sets: int = 3, load: str = "60 kg") -> PrescriptionDraft:
+def _prescription(
+    exercise_id: int, *, sets: int = 3, load: str = "60 kg"
+) -> PrescriptionDraft:
     return PrescriptionDraft(
         exercise_id=exercise_id,
         sets=sets,
@@ -229,7 +231,10 @@ class TestPlanCalibration:
         progress = protocol_progress(USER, 1, protocols=protocols, logged=logged)
 
         assert plan_calibration(
-            progress, desired=MIN_CALIBRATION, lever=CalibrationLever.LOAD, band="beginner"
+            progress,
+            desired=MIN_CALIBRATION,
+            lever=CalibrationLever.LOAD,
+            band="beginner",
         ).at_rail
         assert not plan_calibration(
             progress, desired=1, lever=CalibrationLever.LOAD, band="beginner"
@@ -298,9 +303,7 @@ class TestCalibrateProtocol:
         )
 
         assert protocols.get(1, USER).calibration == 2
-        assert _loads(result.protocol.protocol) == [
-            60 + 2 * HARDER_STEP_KG["beginner"]
-        ]
+        assert _loads(result.protocol.protocol) == [60 + 2 * HARDER_STEP_KG["beginner"]]
 
     def test_returning_to_zero_restores_the_authored_load(
         self, protocols, logged, profiles
@@ -348,7 +351,9 @@ class TestCalibrateProtocol:
         assert _loads(stored)[0] == 60.0
         assert _loads(stored)[1] == 60 - EASIER_STEP_KG["beginner"]
 
-    def test_an_unknown_protocol_is_not_found(self, protocols, logged, profiles) -> None:
+    def test_an_unknown_protocol_is_not_found(
+        self, protocols, logged, profiles
+    ) -> None:
         result = calibrate_protocol(
             USER, 404, -1, protocols=protocols, logged=logged, profiles=profiles
         )
@@ -458,6 +463,59 @@ class TestSensitiveConstraint:
         assert result.sensitive_caveat is False
 
 
+# ------------------------------------------------------------- the rendered amount
+
+
+def test_a_bodyweight_rep_target_is_re_pitched_where_the_screen_reads_it(
+    protocols, logged, profiles
+) -> None:
+    """The reported bug: "pull-ups 3 sets of 6" re-pitched harder and the screen still read
+    "3 × 6". The typed Quantity had moved and the free-text ``reps`` line — the one every
+    call site renders — had not. This asserts the *rendered* field through the real write.
+    """
+
+    # Arrange — a pure-bodyweight Session, the class with no kilograms to move (ADR-0026)
+    protocols.create(
+        USER,
+        ProtocolDraft(
+            training_type="strength",
+            objective="get stronger",
+            sessions_per_week=1,
+            weeks=1,
+            duration_minutes=30,
+            sessions=[
+                ProtocolSessionDraft(
+                    week=1,
+                    day=1,
+                    prescriptions=[
+                        PrescriptionDraft(
+                            exercise_id=1,
+                            sets=3,
+                            reps="6",
+                            recommended_load=parse_load("bodyweight").to_dict(),
+                            prescribed_quantity=quantity_from_text("6").to_dict(),
+                        )
+                    ],
+                )
+            ],
+        ),
+    )
+    profiles.get_or_create(USER)
+
+    # Act
+    calibrate_protocol(
+        USER, 1, 1, protocols=protocols, logged=logged, profiles=profiles
+    )
+
+    # Assert — the rendered line moved, and the typed Quantity agrees with it
+    stored = protocols.get(1, USER).sessions[0].prescriptions[0]
+    assert stored.reps == "7"
+    assert stored.prescribed_quantity["text"] == "7"
+    assert stored.prescribed_quantity["count"] == 7
+    # The set count is untouched: the amount axis could carry the offset, so structure stays.
+    assert stored.sets == 3
+
+
 # ------------------------------------------------------------- repository guard
 
 
@@ -483,6 +541,7 @@ def test_the_repository_ignores_a_pitch_aimed_at_a_performed_session(
                 session_id=frozen,
                 position=0,
                 sets=1,
+                reps="1",
                 recommended_load=parse_load("5 kg").to_dict(),
                 prescribed_quantity=None,
                 rest_seconds=10,

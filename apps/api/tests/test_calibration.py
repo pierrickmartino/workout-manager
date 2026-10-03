@@ -24,6 +24,8 @@ from __future__ import annotations
 import pytest
 
 from app.domain.calibration import (
+    DISTANCE_STEP_M_PER_NOTCH,
+    DURATION_STEP_S_PER_NOTCH,
     EASIER_STEP_KG,
     HARDER_STEP_KG,
     MAX_CALIBRATION,
@@ -284,6 +286,92 @@ class TestVolumeLever:
 # ------------------------------------------------------- totality: no silent no-ops
 
 
+class TestAmountAxis:
+    """The amount axis moves the **free-text ``reps`` line**, because that is what every
+    call site renders (`sets × reps`), and re-derives the typed Quantity from it so the two
+    representations of one fact can never disagree.
+
+    This class exists because the first implementation moved only ``prescribed_quantity``:
+    a bodyweight "3 sets of 6" re-pitched its typed count 6 → 7 while the screen kept
+    showing "3 × 6", so the control looked broken. Pure bodyweight is exactly the class
+    Progression also steps on the reps axis (``_step_reps_up``).
+    """
+
+    def test_a_bodyweight_rep_target_moves_the_rendered_line(self) -> None:
+        source = pitch(sets=3, reps="6", load="bodyweight", quantity="6")
+
+        result = calibrated(source, to=1)
+
+        assert result.reps == "7"
+
+    def test_every_notch_is_visible_on_a_small_rep_target(self) -> None:
+        """A proportional step rounds 6 → 7 for both +1 and +2, so two presses of "harder"
+        would show one change. Whole reps per notch keeps each press legible."""
+
+        source = pitch(sets=3, reps="6", load="bodyweight", quantity="6")
+
+        assert [calibrated(source, to=n).reps for n in (1, 2, 3)] == ["7", "8", "9"]
+
+    def test_easier_lowers_the_rep_target(self) -> None:
+        source = pitch(sets=3, reps="10", load="bodyweight", quantity="10")
+
+        assert calibrated(source, to=-2).reps == "8"
+
+    def test_a_rep_range_shifts_both_ends(self) -> None:
+        source = pitch(reps="8-12", load="bodyweight", quantity=None)
+
+        assert calibrated(source, to=1).reps == "9-13"
+
+    def test_a_rep_target_never_falls_below_one(self) -> None:
+        source = pitch(sets=3, reps="1", load="bodyweight", quantity="1")
+
+        assert calibrated(source, to=-3).reps == "1"
+
+    def test_the_typed_quantity_follows_the_rendered_line(self) -> None:
+        source = pitch(sets=3, reps="6", load="bodyweight", quantity="6")
+
+        result = calibrated(source, to=1)
+
+        assert result.prescribed_quantity["text"] == result.reps
+        assert result.prescribed_quantity["count"] == 7
+
+    def test_a_prescription_with_no_typed_quantity_gains_none(self) -> None:
+        """A re-pitch moves what the plan says; it never invents a typed value the author
+        never wrote — the same reasoning that leaves an absent rest absent."""
+
+        source = pitch(sets=3, reps="6", load="bodyweight", quantity=None)
+
+        result = calibrated(source, to=1)
+
+        assert result.reps == "7"
+        assert result.prescribed_quantity is None
+
+    def test_a_distance_line_moves_by_a_fixed_step(self) -> None:
+        source = pitch(sets=1, reps="5 km", load=None, quantity="5 km")
+
+        result = calibrated(source, to=1)
+
+        assert result.prescribed_quantity["metres"] == 5000 + DISTANCE_STEP_M_PER_NOTCH
+
+    def test_a_duration_line_moves_by_a_fixed_step(self) -> None:
+        source = pitch(sets=1, reps="60s", load=None, quantity="60s")
+
+        result = calibrated(source, to=1)
+
+        assert result.prescribed_quantity["seconds"] == 60 + DURATION_STEP_S_PER_NOTCH
+
+    @pytest.mark.parametrize("amount", ["AMRAP", "to failure"])
+    def test_an_unscalable_line_is_left_verbatim_and_the_sets_move(
+        self, amount: str
+    ) -> None:
+        source = pitch(sets=3, reps=amount, load="bodyweight", quantity=None)
+
+        result = calibrated(source, to=-1)
+
+        assert result.reps == amount
+        assert result.sets == 2
+
+
 class TestTotality:
     """Every Prescription is re-pitched. A Load with no movable number is exactly what
     Progression leaves alone, so Calibration moves the Quantity or the sets instead —
@@ -291,35 +379,27 @@ class TestTotality:
 
     @pytest.mark.parametrize("load", ["70% 1RM", "60-70 kg", "moderate"])
     def test_an_unmovable_load_is_left_verbatim(self, load: str) -> None:
-        result = calibrated(pitch(load=load, sets=3), to=-1)
+        result = calibrated(pitch(load=load, sets=3, reps="AMRAP"), to=-1)
 
         assert result.recommended_load["text"] == load
 
     @pytest.mark.parametrize("load", ["70% 1RM", "60-70 kg", "moderate"])
     def test_an_unmovable_load_moves_the_sets_instead(self, load: str) -> None:
-        result = calibrated(pitch(load=load, sets=3), to=-1)
+        result = calibrated(pitch(load=load, sets=3, reps="AMRAP"), to=-1)
 
         assert result.sets == 2
 
     def test_a_prescription_with_no_load_at_all_still_moves(self) -> None:
-        result = calibrated(pitch(load=None, sets=3), to=1)
+        result = calibrated(pitch(load=None, sets=3, reps="AMRAP"), to=1)
 
         assert result.sets == 4
 
-    def test_a_distance_quantity_moves_its_metres(self) -> None:
-        result = calibrated(pitch(load=None, quantity="5 km"), to=-1)
-
-        assert result.prescribed_quantity["metres"] < 5000
-
-    def test_a_duration_quantity_moves_its_seconds(self) -> None:
-        result = calibrated(pitch(load=None, quantity="60s"), to=1)
-
-        assert result.prescribed_quantity["seconds"] > 60
-
-    def test_a_quantity_prescription_prefers_its_quantity_over_its_sets(self) -> None:
+    def test_a_quantity_prescription_prefers_its_amount_over_its_sets(self) -> None:
         """Halving a run's set count is not "easier by one notch"; shortening it is."""
 
-        result = calibrated(pitch(load=None, quantity="5 km", sets=1), to=-1)
+        result = calibrated(
+            pitch(load=None, reps="5 km", quantity="5 km", sets=1), to=-1
+        )
 
         assert result.sets == 1
         assert result.prescribed_quantity["metres"] < 5000
@@ -420,6 +500,33 @@ class TestPathIndependence:
         source = pitch(load="60 kg")
 
         assert calibrated(source, frm=2, to=2) == source
+
+    def test_stacking_matches_one_jump_on_a_rep_target(self) -> None:
+        """The axis the original proportional step broke: scaling a current value twice is
+        not scaling the authored value once."""
+
+        source = pitch(sets=3, reps="6", load="bodyweight", quantity="6")
+
+        once = calibrated(source, to=2)
+        twice = calibrated(calibrated(source, to=1), frm=1, to=2)
+
+        assert twice == once
+
+    def test_stacking_matches_one_jump_on_a_distance(self) -> None:
+        source = pitch(sets=1, reps="5 km", load=None, quantity="5 km")
+
+        once = calibrated(source, to=2)
+        twice = calibrated(calibrated(source, to=1), frm=1, to=2)
+
+        assert twice == once
+
+    def test_stacking_matches_one_jump_on_a_duration(self) -> None:
+        source = pitch(sets=1, reps="60s", load=None, quantity="60s")
+
+        once = calibrated(source, to=2)
+        twice = calibrated(calibrated(source, to=1), frm=1, to=2)
+
+        assert twice == once
 
     def test_crossing_zero_honours_both_asymmetric_step_sizes(self) -> None:
         """−1 → +1 must undo one *easier* step and add one *harder* one, not two of either."""
