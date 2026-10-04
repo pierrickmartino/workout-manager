@@ -64,6 +64,10 @@ const ALL_JOURNEYS = [
   // Both launchpad compositions (ADR-0109), which no journey rendered in either harness. It stays
   // unconverted, so its card must hold 26rem inside the wide frame.
   "launchpad",
+  // The Profile view's Fitness Level section (ADR-0112). The Profile view page is in no journey
+  // at all — `profile` is the edit form — so this is the first thing on it either harness has
+  // rendered. It stays unconverted, so its card must hold 26rem inside the wide frame.
+  "levels",
 ];
 // A comma-separated subset, for iterating on one screen without paying for the full sweep.
 // The gated run is the unfiltered one.

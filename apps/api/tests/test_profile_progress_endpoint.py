@@ -3,9 +3,14 @@ verification, the record-side repository, and the response envelope wired throug
 FastAPI. Repositories are injected via dependency overrides so tests run offline.
 
 ``GET /api/profile/progress`` returns the honest Profile read model — the weekly
-Streak and lifetime Total Sessions / Total Sets — scoped to the authenticated user.
-A user who has logged nothing sees zeros, not an error; an unauthenticated request is
-rejected. Mirrors ``test_analytics_endpoint.py``."""
+Streak, the lifetime Total Sessions / Total Sets, and the Fitness Level standing —
+scoped to the authenticated user. A user who has logged nothing sees zeros, not an
+error; an unauthenticated request is rejected. Mirrors ``test_analytics_endpoint.py``.
+
+The last block is the ADR-0112 placement: the Effective Fitness Level is served here,
+and a **negative** test asserts the Profile endpoint does not carry it — the structural
+reason it cannot be written back into the declared baseline, pinned as a test rather
+than left as a comment."""
 
 from __future__ import annotations
 
@@ -17,14 +22,24 @@ from fastapi.testclient import TestClient
 
 from app.auth.dependencies import get_jwks
 from app.config import Settings, get_settings
+from app.domain.completion import CompletionOutcome
 from app.domain.exercise import Provenance
+from app.domain.fitness_profile import DEFAULT_STRONG_SESSIONS_PER_LEVEL
+from app.domain.progression import LOW_EFFORT_MAX
 from app.main import create_app
-from app.repositories.deps import get_logged_session_repository
+from app.repositories.deps import (
+    get_logged_session_repository,
+    get_profile_repository,
+)
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.logged_session_repository import (
     InMemoryLoggedSessionRepository,
     LoggedSessionDraft,
     LoggedSetDraft,
+)
+from app.repositories.profile_repository import (
+    InMemoryProfileRepository,
+    ProfileUpdate,
 )
 from app.repositories.session_repository import (
     InMemorySessionRepository,
@@ -53,37 +68,87 @@ def build_client(ctx=None):
     )
     sessions = InMemorySessionRepository(exercises)
     logged = InMemoryLoggedSessionRepository(sessions, exercises)
+    # The Fitness Level standing's second input: the stored Declared levels (ADR-0112).
+    # The progress read is the *only* thing this repository serves here — it is read, and
+    # nothing on this route ever writes to it.
+    profiles = InMemoryProfileRepository()
     app = create_app()
     app.dependency_overrides[get_jwks] = lambda: ctx.jwks
     app.dependency_overrides[get_settings] = lambda: Settings(clerk_issuer=ISSUER)
     app.dependency_overrides[get_logged_session_repository] = lambda: logged
-    return TestClient(app), ctx, sessions, logged
+    app.dependency_overrides[get_profile_repository] = lambda: profiles
+    return TestClient(app), ctx, sessions, logged, profiles
 
 
 def _auth(ctx, sub):
     return {"Authorization": f"Bearer {ctx.mint(sub=sub)}"}
 
 
-def _perform(sessions, logged, user, performed_on, set_count):
+def _declare(profiles, user, levels):
+    """Save ``user``'s per-Training-Type Declared Fitness Levels."""
+
+    profiles.update(user, ProfileUpdate(fitness_levels=levels))
+
+
+def _perform(
+    sessions,
+    logged,
+    user,
+    performed_on,
+    set_count,
+    *,
+    training_type="strength",
+    outcome=None,
+    effort=None,
+):
+    """Record one performance, optionally carrying the two signals the Effective
+    Fitness Level reads: the declared Completion Outcome and the rated Effort."""
+
     session_view = sessions.create(
         user,
-        SessionDraft(training_type="strength", duration_minutes=45, prescriptions=[]),
+        SessionDraft(
+            training_type=training_type, duration_minutes=45, prescriptions=[]
+        ),
     )
     logged.create(
         user,
         LoggedSessionDraft(
             session_id=session_view.id,
+            # Restated on the record, as the log service does for a plan-backed write.
+            training_type=training_type,
             performed_on=performed_on,
+            completion_outcome=outcome,
             logged_sets=[
-                LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(5)) for _ in range(set_count)
+                LoggedSetDraft(
+                    exercise_id=SQUAT,
+                    quantity=reps_quantity(5),
+                    perceived_difficulty=effort,
+                )
+                for _ in range(set_count)
             ],
         ),
     )
 
 
+def _perform_comfortable(sessions, logged, user, count):
+    """``count`` Completed Sessions whose every rated set sat at low Effort — the
+    evidence the Effective level reads *for* the user (ADR-0112)."""
+
+    for index in range(count):
+        _perform(
+            sessions,
+            logged,
+            user,
+            date.today() - timedelta(days=index),
+            1,
+            outcome=CompletionOutcome.COMPLETED.value,
+            effort=LOW_EFFORT_MAX,
+        )
+
+
 def test_returns_streak_and_lifetime_counts_in_the_envelope():
     # Arrange — two sessions this week and last week, five sets in all
-    client, ctx, sessions, logged = build_client()
+    client, ctx, sessions, logged, _ = build_client()
     this_week = _monday_of(date.today())
     _perform(sessions, logged, "user_a", this_week, 3)
     _perform(sessions, logged, "user_a", this_week - _WEEK, 2)
@@ -111,6 +176,8 @@ def test_returns_streak_and_lifetime_counts_in_the_envelope():
         "streak": 2,
         "total_sessions": 2,
         "total_sets": 5,
+        # No Declared level is on file, so there is no standing to read against one.
+        "fitness_levels": [],
     }
     # Two Logged Sessions is short of every threshold, so the wall is all locked.
     assert achievements and all(a["unlocked"] is False for a in achievements)
@@ -118,7 +185,7 @@ def test_returns_streak_and_lifetime_counts_in_the_envelope():
 
 def test_empty_user_sees_zero_states_not_an_error():
     # Arrange — a brand-new user with no logged history
-    client, ctx, _, _ = build_client()
+    client, ctx, _, _, _ = build_client()
 
     # Act
     response = client.get("/api/profile/progress", headers=_auth(ctx, "newcomer"))
@@ -140,6 +207,7 @@ def test_empty_user_sees_zero_states_not_an_error():
         "streak": 0,
         "total_sessions": 0,
         "total_sets": 0,
+        "fitness_levels": [],
     }
     # A brand-new user sees the whole catalog locked at 0 progress, no unlock dates.
     assert achievements
@@ -151,7 +219,7 @@ def test_empty_user_sees_zero_states_not_an_error():
 
 def test_projection_is_scoped_to_the_authenticated_user():
     # Arrange — another user's history must not leak into mine
-    client, ctx, sessions, logged = build_client()
+    client, ctx, sessions, logged, _ = build_client()
     _perform(sessions, logged, "theirs", date.today(), 9)
 
     # Act — I have logged nothing
@@ -169,7 +237,7 @@ def test_projection_is_scoped_to_the_authenticated_user():
 
 def test_serializes_an_unlocked_achievement_with_its_earned_date():
     # Arrange — five Logged Sessions unlock the 5-session badge; the fifth is dated
-    client, ctx, sessions, logged = build_client()
+    client, ctx, sessions, logged, _ = build_client()
     first_five = [date(2026, 6, 1) + timedelta(days=i) for i in range(5)]
     for day in first_five:
         _perform(sessions, logged, "user_e", day, 1)
@@ -199,10 +267,96 @@ def test_serializes_an_unlocked_achievement_with_its_earned_date():
 
 def test_requires_authentication():
     # Arrange
-    client, _, _, _ = build_client()
+    client, _, _, _, _ = build_client()
 
     # Act — no token
     response = client.get("/api/profile/progress")
 
     # Assert
     assert response.status_code == 401
+
+
+# --- the Fitness Level standing, and where it is *not* served (ADR-0112, #606) ---
+
+
+def test_serves_the_declared_level_against_the_effective_one_per_training_type():
+    # Arrange — a notch's worth of comfortable strength work; yoga is declared, untrained
+    client, ctx, sessions, logged, profiles = build_client()
+    _declare(profiles, "standing", {"strength": 5, "yoga": 2})
+    _perform_comfortable(sessions, logged, "standing", DEFAULT_STRONG_SESSIONS_PER_LEVEL)
+
+    # Act
+    response = client.get("/api/profile/progress", headers=_auth(ctx, "standing"))
+
+    # Assert — both readings ride in the standard envelope, one row per declared type
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert body["error"] is None
+    assert body["data"]["fitness_levels"] == [
+        {"training_type": "strength", "declared": 5, "effective": 6},
+        {"training_type": "yoga", "declared": 2, "effective": 2},
+    ]
+
+
+def test_the_equal_case_is_served_as_a_standing_not_an_omission():
+    # Arrange — levels declared, nothing logged against them
+    client, ctx, _, _, profiles = build_client()
+    _declare(profiles, "quiet", {"cardio": 6})
+
+    # Act
+    response = client.get("/api/profile/progress", headers=_auth(ctx, "quiet"))
+
+    # Assert — the row is present with both figures equal, so the screen can say the
+    # record was read and showed no change rather than render a blank
+    assert response.json()["data"]["fitness_levels"] == [
+        {"training_type": "cardio", "declared": 6, "effective": 6}
+    ]
+
+
+def test_the_profile_endpoint_does_not_carry_the_effective_level():
+    # Arrange — a history that demonstrably raises the Effective level one notch
+    client, ctx, sessions, logged, profiles = build_client()
+    _declare(profiles, "pinned", {"strength": 5})
+    _perform_comfortable(sessions, logged, "pinned", DEFAULT_STRONG_SESSIONS_PER_LEVEL)
+
+    # Act — read both halves of the Profile screen
+    progress = client.get(
+        "/api/profile/progress", headers=_auth(ctx, "pinned")
+    ).json()["data"]
+    profile = client.get("/api/profile", headers=_auth(ctx, "pinned")).json()["data"]
+
+    # Assert — the projection is served by the progress read model...
+    assert progress["fitness_levels"] == [
+        {"training_type": "strength", "declared": 5, "effective": 6}
+    ]
+    # ...and the Profile endpoint still carries only the *declared* baseline. Its
+    # `fitness_levels` field is a validated request field as well as a response field and
+    # the Profile form writes it back, so a derived value placed there round-trips and the
+    # first careless save would persist a projection into the baseline — the stored-ledger
+    # failure ADR-0018 exists to prevent, arriving through the front door. The placement
+    # is what structurally prevents it; this is the pin (ADR-0112).
+    assert profile["fitness_levels"] == {"strength": 5}
+    assert not [key for key in profile if "effective" in key]
+
+
+def test_editing_the_declared_level_re_reads_the_standing_with_evidence_intact():
+    # Arrange — a notch earned at a Declared level of 5
+    client, ctx, sessions, logged, profiles = build_client()
+    _declare(profiles, "editor", {"strength": 5})
+    _perform_comfortable(sessions, logged, "editor", DEFAULT_STRONG_SESSIONS_PER_LEVEL)
+
+    # Act — the user edits their Declared level through the Profile form, then re-reads
+    edit = client.put(
+        "/api/profile",
+        headers=_auth(ctx, "editor"),
+        json={"fitness_levels": {"strength": 7}},
+    )
+    reread = client.get("/api/profile/progress", headers=_auth(ctx, "editor"))
+
+    # Assert — the earned notch rides on the new baseline: re-derived from the record on
+    # every read, never accumulated onto the previous reading
+    assert edit.status_code == 200
+    assert reread.json()["data"]["fitness_levels"] == [
+        {"training_type": "strength", "declared": 7, "effective": 8}
+    ]

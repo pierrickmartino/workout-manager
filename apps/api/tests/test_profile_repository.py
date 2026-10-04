@@ -152,3 +152,23 @@ def test_update_round_trips_the_default_rest_seconds(repo):
     # Assert — it persists and reads back
     assert updated.default_rest_seconds == 120
     assert repo.get_or_create("user_rest").default_rest_seconds == 120
+
+
+def test_declared_fitness_levels_reads_the_saved_levels(repo):
+    # Arrange
+    repo.update("user_levels", _full_update())
+
+    # Act
+    levels = repo.declared_fitness_levels("user_levels")
+
+    # Assert
+    assert levels == {"strength": 8, "yoga": 2}
+
+
+def test_declared_fitness_levels_is_empty_for_a_user_with_no_profile(repo):
+    # Act — a read-only lookup: an absent profile is an empty mapping, not a created row
+    levels = repo.declared_fitness_levels("user_absent")
+
+    # Assert — and nothing was written, so a later get still creates the profile fresh
+    assert levels == {}
+    assert repo.get_or_create("user_absent").fitness_levels == {}

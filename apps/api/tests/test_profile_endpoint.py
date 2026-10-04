@@ -293,3 +293,41 @@ def test_put_requires_authentication():
     # Assert
     assert response.status_code == 401
     assert response.json()["success"] is False
+
+
+def test_the_profile_shape_carries_the_declared_level_and_nothing_derived_from_it():
+    # Arrange — a saved profile with two Declared Fitness Levels
+    client, ctx, _ = build_client()
+    headers = {"Authorization": f"Bearer {ctx.mint(sub='user_declared')}"}
+    client.put("/api/profile", headers=headers, json=full_payload())
+
+    # Act
+    data = client.get("/api/profile", headers=headers).json()["data"]
+
+    # Assert — the whole served shape, pinned. ``fitness_levels`` here is the **Declared**
+    # level and only that: the field is one shape in both directions — a validated request
+    # field as well as a response field, which the Profile form writes back — so an
+    # Effective Fitness Level placed beside it would round-trip and the first careless save
+    # would persist a projection into the declared baseline. That is the stored-ledger
+    # failure ADR-0018 exists to prevent, arriving through the front door. The Effective
+    # level is served from the progress read model instead (ADR-0112), and this negative
+    # assertion is what keeps the boundary a test rather than a comment.
+    assert data["fitness_levels"] == {"strength": 8, "yoga": 2}
+    assert set(data) == {
+        "id",
+        "clerk_user_id",
+        "display_name",
+        "gender",
+        "age",
+        "height_cm",
+        "weight_kg",
+        "training_habits",
+        "recent_workout",
+        "default_rest_seconds",
+        "default_equipment",
+        "default_equipment_canonical",
+        "fitness_levels",
+        "preferences",
+        "sensitive_constraints",
+        "is_sensitive",
+    }
