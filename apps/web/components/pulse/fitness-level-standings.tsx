@@ -20,11 +20,15 @@ import { Card } from "@/components/ui/card";
 // Sits beside the Operator Level badge on purpose — the account-wide investment number and the
 // per-type ability numbers are the one pair a reader is most likely to confuse (CONTEXT:
 // Operator Level), so they are legible next to each other rather than on separate screens.
+interface FitnessLevelStandingsProps {
+  // One row per declared Training Type, already ordered and worded by
+  // `toFitnessLevelRows`.
+  rows: FitnessLevelRow[];
+}
+
 export function FitnessLevelStandings({
   rows,
-}: {
-  rows: FitnessLevelRow[];
-}): React.JSX.Element {
+}: FitnessLevelStandingsProps): React.JSX.Element {
   return (
     <div className="flex flex-col gap-4">
       <SectionHeader>FITNESS LEVEL</SectionHeader>
@@ -46,7 +50,7 @@ export function FitnessLevelStandings({
                   which is what keeps a 320px viewport whole at 200% text (ADR-0085/0087). */}
               <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
                 <h3 className="label-mono min-w-0 break-words text-[11px] text-text-secondary">
-                  {row.label}
+                  {row.trainingType}
                 </h3>
                 <dl className="flex flex-wrap items-end gap-x-4 gap-y-1">
                   <div className="flex min-w-0 flex-col gap-0.5">

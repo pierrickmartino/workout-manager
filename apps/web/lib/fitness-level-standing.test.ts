@@ -26,7 +26,6 @@ test("reads both figures out of one standing", () => {
   ]);
 
   assert.equal(row.trainingType, "strength");
-  assert.equal(row.label, "strength");
   assert.equal(row.declaredText, "5/10");
   assert.equal(row.effectiveText, "8/10");
   assert.equal(row.raised, true);
@@ -58,15 +57,18 @@ test("states the equal case plainly instead of leaving it blank", () => {
   assert.notEqual(row.note, "");
 });
 
-test("reads a standing below the declared level as no change rather than inventing copy", () => {
+test("captions a standing below the declared level truthfully rather than as no change", () => {
   // The Declared level is a floor the projection never breaches, so this cannot arrive from
-  // the read model. The note is still true of it — the app is not planning *above* what the
-  // user declared — and both figures render, so the screen never asserts something false.
+  // the read model — but the view-model is handed response data like any other untrusted
+  // input. Folding it in with the equal case would print "nothing in your recent record moves
+  // it" beside two different numbers, so the row says only what is observably true and claims
+  // no cause. Both figures still render: the screen never hides a number it was given.
   const [row] = toFitnessLevelRows([standing({ declared: 5, effective: 4 })]);
 
   assert.equal(row.raised, false);
+  assert.equal(row.declaredText, "5/10");
   assert.equal(row.effectiveText, "4/10");
-  assert.match(row.note, /nothing in your recent record moves it/);
+  assert.equal(row.note, "1 level below what you declared.");
 });
 
 test("orders rows by the curated Training Type order, not the served order", () => {

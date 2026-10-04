@@ -27,15 +27,14 @@ const CURATED_TYPE_ORDER: readonly string[] = [
   "mobility",
 ];
 
-// One Training Type's standing, ready to render. `label` is the Training Type as authored —
-// the row's mono label uppercases it in CSS, as every other Training Type label in the app
-// does. `declaredText` / `effectiveText` are both always present: the equal case is a stated
-// row, never a blank. `raised` is whether the app is planning above what the user declared,
-// which is the only thing the component branches on. `note` is the one sentence that says how
-// the two figures relate, and is never empty.
+// One Training Type's standing, ready to render. `trainingType` is both the row's key and
+// what it names — the Training Type as authored, which the row's mono label uppercases in CSS
+// as every other Training Type label in the app does. `declaredText` / `effectiveText` are
+// both always present: the equal case is a stated row, never a blank. `raised` is whether the
+// app is planning above what the user declared, which is the only thing the component branches
+// on. `note` is the one sentence that says how the two figures relate, and is never empty.
 export interface FitnessLevelRow {
   trainingType: string;
-  label: string;
   declaredText: string;
   effectiveText: string;
   raised: boolean;
@@ -49,49 +48,52 @@ function levelText(level: number): string {
 // How the two readings relate, in one sentence.
 //
 // A positive difference is earned evidence: net comfortable Sessions in the recent window,
-// read on top of the Declared floor. Everything else reads as "no change" — which is the
-// equal case the ticket asks to be stated plainly, and stays true of a reading *below* the
-// Declared level too. That reading cannot arrive from the projection (Declared is a floor it
-// never breaches), so the view-model declines to invent copy for it rather than asserting
-// something false; both figures still render, so the screen never hides a number it was given.
+// read on top of the Declared floor. Equal is the common case, and the one the ticket asks to
+// be stated plainly rather than left blank.
+//
+// The third branch is for a reading *below* the Declared level, which the projection cannot
+// produce — Declared is a floor it never breaches — but which this view-model is handed as
+// untrusted response data like anything else. It is captioned in the same shape as the raised
+// case and says nothing about a cause, because the alternative is not silence: folding it in
+// with "no change" would print that sentence beside two different numbers, and a false
+// sentence is worse than a plain one for a state that should never arrive.
 function relationNote(declared: number, effective: number): string {
   const earned = effective - declared;
-  if (earned <= 0) {
+  if (earned === 0) {
     return "Matches what you declared — nothing in your recent record moves it.";
   }
-  const levels = earned === 1 ? "level" : "levels";
-  return `${earned} ${levels} above what you declared, earned from your recent record.`;
+  const magnitude = Math.abs(earned);
+  const levels = magnitude === 1 ? "level" : "levels";
+  return earned > 0
+    ? `${magnitude} ${levels} above what you declared, earned from your recent record.`
+    : `${magnitude} ${levels} below what you declared.`;
+}
+
+// Where a Training Type sorts. A type the curated list does not name sorts after every one it
+// does; the sort is stable, so those keep the order they were served in. Drift is graceful: a
+// declared level is never silently dropped from the screen that explains the app's reading.
+function curatedIndex(trainingType: string): number {
+  const position = CURATED_TYPE_ORDER.indexOf(trainingType);
+  return position === -1 ? CURATED_TYPE_ORDER.length : position;
 }
 
 // Turn the read model's standings into display rows, ordered by the curated Training Type
 // order so strength and yoga always read in the same place regardless of how the profile
-// happened to be saved. Pure and server-free.
+// happened to be saved. Pure and server-free; the input is copied before sorting, never
+// mutated.
 export function toFitnessLevelRows(
   standings: readonly FitnessLevelStanding[],
 ): FitnessLevelRow[] {
-  const curated = CURATED_TYPE_ORDER.filter((type) =>
-    standings.some((standing) => standing.training_type === type),
-  );
-  const seen = new Set(curated);
-  const order = [...curated];
-  for (const { training_type: type } of standings) {
-    if (seen.has(type)) continue;
-    seen.add(type);
-    order.push(type);
-  }
-
-  return order.flatMap((type) => {
-    const standing = standings.find((entry) => entry.training_type === type);
-    if (standing === undefined) return [];
-    return [
-      {
-        trainingType: standing.training_type,
-        label: standing.training_type,
-        declaredText: levelText(standing.declared),
-        effectiveText: levelText(standing.effective),
-        raised: standing.effective > standing.declared,
-        note: relationNote(standing.declared, standing.effective),
-      },
-    ];
-  });
+  return [...standings]
+    .sort(
+      (left, right) =>
+        curatedIndex(left.training_type) - curatedIndex(right.training_type),
+    )
+    .map((standing) => ({
+      trainingType: standing.training_type,
+      declaredText: levelText(standing.declared),
+      effectiveText: levelText(standing.effective),
+      raised: standing.effective > standing.declared,
+      note: relationNote(standing.declared, standing.effective),
+    }));
 }

@@ -207,9 +207,13 @@ function LaunchpadSurface() {
 // mounts the edit form — so this is the harness's first look at it. Both of the section's
 // states are in one mount, because the rows differ by construction: strength has earned
 // notches (the accented reading plus the longer sentence), yoga reads at exactly its declared
-// level (the equal case, which is stated rather than blank), and the third row is a Training
-// Type outside the curated five, which is the longest label the section can be handed and the
-// one that stresses the row's `min-w-0 break-words` pairing (ADR-0085).
+// level (the equal case, which is stated rather than blank), and the third row is a long label.
+//
+// That third row is a robustness probe, not a vocabulary claim: the Training Type set is
+// curated and fixed (CONTEXT §Training Type), and the API validates a declared level's *range*
+// but not its key, so an over-long type is reachable from response data and unreachable from
+// the form. It is here because it is the only thing on this surface that can stress the row's
+// `min-w-0 break-words` pairing (ADR-0085) — the curated five are all one short word.
 function FitnessLevelSurface() {
   return <FitnessLevelStandings rows={toFitnessLevelRows([
     { training_type: "strength", declared: 6, effective: 10 },

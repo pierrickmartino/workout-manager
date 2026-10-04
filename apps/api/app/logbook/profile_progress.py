@@ -25,14 +25,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Mapping
+from typing import Mapping, Sequence
 
 from app.config import get_settings
 from app.domain.achievements import Achievement, evaluate_achievements
 from app.domain.experience import OperatorLevel
 from app.domain.fitness_profile import effective_fitness_levels
 from app.logbook.gamification import project_gamification
-from app.repositories.logged_session_repository import LoggedSessionRepository
+from app.repositories.logged_session_repository import (
+    LoggedSessionRepository,
+    LoggedSessionView,
+)
 
 
 @dataclass(frozen=True)
@@ -113,7 +116,7 @@ def profile_progress(
 
 
 def _standings(
-    declared_levels: Mapping[str, int], history: list
+    declared_levels: Mapping[str, int], history: Sequence[LoggedSessionView]
 ) -> list[FitnessLevelStanding]:
     """One standing per **declared** Training Type, ordered by Training Type.
 
