@@ -13,8 +13,9 @@ over an already-loaded ``ProtocolProgressView`` and does no I/O, and a thin **se
 
 Three facts the service reads, each answering a different question (ADR-0111):
 
-- the **Fitness Profile**'s per-type Fitness Level, with logged progress folded in exactly as
-  generation folds it (``advance_level``), gives the band and so the *magnitude*;
+- the **Fitness Profile**'s per-type **Declared** Fitness Level, read into the **Effective**
+  one exactly as generation reads it (``effective_fitness_levels``), gives the band and so the
+  *magnitude*;
 - the user's **recent Completion Outcomes** give the *lever*;
 - ``is_sensitive`` gives the **caveat** — never a refusal. A Sensitive Constraint does not gate
   either direction, on ADR-0058's precedent; it is disclosed and the act proceeds.
@@ -49,7 +50,7 @@ from app.domain.calibration import (
     level_band,
     resolve_lever,
 )
-from app.domain.fitness_profile import advance_level, is_sensitive
+from app.domain.fitness_profile import effective_fitness_levels, is_sensitive
 from app.protocols.deploy_validation import DeployError
 from app.protocols.progress import (
     ProtocolProgressView,
@@ -63,6 +64,14 @@ from app.repositories.protocol_repository import CalibrationSpec, ProtocolReposi
 #: How many of the user's most recent Logged Sessions the lever reads. A short window, so a
 #: single bad week stops steering the plan once it is behind the user — the same posture as
 #: Progression reading only the latest exposure rather than the whole history.
+#:
+#: Deliberately **not** the Effective Fitness Level's window (ADR-0112), and not to be
+#: unified with it: the two answer different questions. *Which lever moves* is a reading of
+#: what just happened — one recent Incomplete Session means capacity ran out right now, and a
+#: month-old one says nothing about which dial to turn today. *How big a step is* is a reading
+#: of standing ability, which needs a long enough window that a single bad week cannot erase
+#: a month of earned credit. A window short enough for the first is too twitchy for the
+#: second, and one long enough for the second is too slow for the first.
 RECENT_WINDOW = 3
 
 
@@ -231,12 +240,15 @@ def calibrate_protocol(
     profile = profiles.get_or_create(clerk_user_id)
     history = logged.list_for_user(clerk_user_id)
 
-    # The same fold generation uses, so a user who has progressed is re-pitched in the band
-    # their next Protocol would be cached at — never a second, divergent notion of "level".
-    levels = advance_level(
+    # The same read generation uses, so a user is re-pitched in the band their next Protocol
+    # would be cached at — never a second, divergent notion of "level". ``history`` is
+    # newest-performed first, which both this read's window and the lever's below rely on.
+    settings = get_settings()
+    levels = effective_fitness_levels(
         profile.fitness_levels,
         history,
-        sessions_per_notch=get_settings().strong_sessions_per_level,
+        sessions_per_notch=settings.strong_sessions_per_level,
+        window=settings.effective_level_window,
     )
     band = level_band(levels.get(progress.protocol.training_type, 0))
     lever = resolve_lever(_recent_outcomes(history))

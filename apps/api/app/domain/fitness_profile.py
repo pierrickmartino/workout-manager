@@ -7,18 +7,24 @@ as standalone values:
   rehabilitation, postpartum, flagged medical) is never served shared/cached
   content (ADR-0003). The specific constraint *types* are stored; the boolean gate
   is derived from them.
-- *Level folding*: ``advance_level`` folds sustained strong logged progress into the
-  per-training-type Fitness Level (ADR-0004). The advanced level is derived from the
-  baseline level plus the logged history each time it is needed (chiefly when keying
-  generation), so the baseline stays the user's declared "now" and re-deriving from
-  the same history is idempotent — no double counting. No raw logged history ever
-  reaches AI generation; adaptation flows only through this coarse level."""
+- The **Effective Fitness Level**: ``effective_fitness_levels`` reads, per training type,
+  the **Declared Fitness Level** plus net evidence from a window of the most recent
+  Logged Sessions *of that type* (ADR-0004 §2, settled by ADR-0112). It is a read-time
+  projection — nothing is stored, no write hook fires — so re-reading one history is
+  idempotent and correcting a mis-logged Session corrects the level in the same instant.
+  No raw logged history ever reaches AI generation; adaptation flows only through this
+  coarse level.
+
+The module is **pure**: no ORM, no HTTP, and no clock. The window is counted in sessions
+and never in days, because there is no "today" (ADR-0001)."""
 
 from __future__ import annotations
 
 from enum import Enum
 from typing import Mapping, Protocol, Sequence
 
+from app.domain.completion import CompletionOutcome
+from app.domain.effort import HIGH_EFFORT_MIN
 from app.domain.progression import LOW_EFFORT_MAX
 
 
@@ -85,70 +91,154 @@ def resolve_equipment(
     return list(request_equipment)
 
 
-# Fitness Level is a 1–10 score; folding never pushes a type past the ceiling.
+# Fitness Level is a 1–10 score; earned notches never push a type past the ceiling.
 MAX_FITNESS_LEVEL = 10
 
-# "Sustained" defaults to this many strong logged sessions of a training type per
-# one Fitness Level notch. Tunable from the environment (see ``config.Settings``)
-# so the folding cadence can be adjusted without a code change.
+# How many *net* comfortable Logged Sessions of a training type earn one Fitness Level
+# notch, and equally the quorum below which a window is read as no evidence at all.
+# Tunable from the environment (``STRONG_SESSIONS_PER_LEVEL``, see ``config.Settings``)
+# so the cadence can be adjusted without a code change; the env name predates ADR-0112's
+# two-directional rule and is kept for the deployments that already set it.
 DEFAULT_STRONG_SESSIONS_PER_LEVEL = 3
+
+# How many of a training type's most recent Logged Sessions the Effective level reads.
+# Twelve is four notches' worth at the default cadence — long enough that a single bad
+# week cannot erase a month of earned credit, short enough that a detrained user stops
+# being planned for at their peak. Counted in sessions, never in days (ADR-0001).
+DEFAULT_EFFECTIVE_LEVEL_WINDOW = 12
 
 
 class _LoggedSetSignal(Protocol):
+    """The one field the effort axis reads: the logged Effort as an RPE number.
+
+    No scale branch is needed here. The log write boundary dual-writes a typed Effort
+    (ADR-0066) and mirrors its RPE-equivalent into ``perceived_difficulty``, so a set
+    logged as "1 RIR" already reads as RPE 9 by the time it reaches this module."""
+
     perceived_difficulty: int | None
 
 
 class _LoggedSessionRecord(Protocol):
+    """The Logged Session fields the Effective level reads: its type, its declared
+    Completion Outcome (ADR-0013), and its sets."""
+
     training_type: str
+    completion_outcome: str | None
     logged_sets: Sequence[_LoggedSetSignal]
 
 
-def advance_level(
-    fitness_levels: Mapping[str, int],
+def effective_fitness_levels(
+    declared_levels: Mapping[str, int],
     logged_sessions: Sequence[_LoggedSessionRecord],
     *,
     sessions_per_notch: int = DEFAULT_STRONG_SESSIONS_PER_LEVEL,
+    window: int = DEFAULT_EFFECTIVE_LEVEL_WINDOW,
 ) -> dict[str, int]:
-    """Return per-type Fitness Levels with sustained strong progress folded in.
+    """Read each training type's **Effective Fitness Level** from the recent record.
 
-    Returns a new mapping (the baseline is never mutated). Types with no logged
-    progress keep their baseline level.
+    **Precondition: ``logged_sessions`` is ordered newest-performed first** — the flat,
+    all-types history ``LoggedSessionRepository.list_for_user`` returns. This function
+    does its own per-type grouping and windowing, so it takes that history exactly as
+    both call sites already hold it; but it reads the *first* ``window`` Sessions of each
+    type as "the most recent", and so a change to that ordering would silently mis-window
+    every user rather than fail. Asserted by a test, not trusted to a docstring.
 
-    A logged session counts as *strong* when it was performed comfortably — every
-    Logged Set at low perceived effort (the same ``LOW_EFFORT_MAX`` RPE threshold
-    Progression uses to add load). Every ``sessions_per_notch`` strong sessions of a
-    training type folds into one Fitness Level notch, capped at ``MAX_FITNESS_LEVEL``.
+    Returns a new mapping — the Declared baseline is never mutated — so the projection is
+    idempotent over one history and nothing is ever written back (ADR-0018).
+
+    Per training type, over its window of most recent Sessions (ADR-0112):
+
+    - **Quorum** — fewer Sessions in the window than ``sessions_per_notch`` means the
+      Effective level *is* the Declared level. A type with no history keeps its Declared
+      level, so a user's first day reads at exactly what they stated.
+    - **Comfortable** — declared ``Completed``, **and** at least one set rated, **and**
+      every rated set at or below ``LOW_EFFORT_MAX``. All three conjuncts, so a Session
+      with nothing rated is never comfortable by vacuous truth: finishing the prescribed
+      work says the level is *right*, not that it is too low.
+    - **Strained** — declared ``Incomplete``, **or** any set rated at or above
+      ``HIGH_EFFORT_MIN``. Mutually exclusive with comfortable by construction.
+    - **Notches** — comfortable minus strained, divided by ``sessions_per_notch``, floored
+      at zero. The integer division is also the only stability on offer: it gives every
+      notch a multi-session plateau, where a deadband would need the *previous* value and
+      so the stored ledger ADR-0018 forbids.
+    - **Effective** — Declared plus those notches, capped at ``MAX_FITNESS_LEVEL``. The
+      Declared level is a **floor**: strained Sessions withdraw earned credit and never
+      read a user as less able than they say they are.
+
+    An unrated set **abstains** rather than disqualifying its Session, because the rating
+    is optional at the log boundary; a wholly unrated Session is neutral on effort yet
+    still counted on its Completion Outcome — "no effort evidence" is not "no session".
     """
 
-    advanced = dict(fitness_levels)
-    strong_counts: dict[str, int] = {}
-    for session in logged_sessions:
-        if _is_strong(session):
-            strong_counts[session.training_type] = (
-                strong_counts.get(session.training_type, 0) + 1
-            )
+    effective = dict(declared_levels)
 
-    for training_type, count in strong_counts.items():
-        earned = count // sessions_per_notch
-        if earned == 0:
+    for training_type, recent in _windows(logged_sessions, window).items():
+        notches = _earned_notches(recent, sessions_per_notch)
+        if notches == 0:
             continue
-        baseline = advanced.get(training_type, 0)
-        advanced[training_type] = min(baseline + earned, MAX_FITNESS_LEVEL)
+        declared = effective.get(training_type, 0)
+        effective[training_type] = min(declared + notches, MAX_FITNESS_LEVEL)
 
-    return advanced
+    return effective
 
 
-def _is_strong(session: _LoggedSessionRecord) -> bool:
-    """Whether a logged session was performed comfortably at low perceived effort.
+def _windows(
+    logged_sessions: Sequence[_LoggedSessionRecord], window: int
+) -> dict[str, list[_LoggedSessionRecord]]:
+    """Group a flat newest-first history into each type's own window of recent Sessions.
 
-    Empty sessions never count; a single hard or unrated set is enough to disqualify
-    one — advancement is the optimistic direction, so it demands clean evidence.
+    One type's Sessions never consume another's window: the cap is applied per type, so a
+    user who trains strength and yoga alternately is read on a full window of each.
     """
 
-    if not session.logged_sets:
-        return False
-    return all(
-        logged_set.perceived_difficulty is not None
-        and logged_set.perceived_difficulty <= LOW_EFFORT_MAX
-        for logged_set in session.logged_sets
+    windows: dict[str, list[_LoggedSessionRecord]] = {}
+    for session in logged_sessions:
+        recent = windows.setdefault(session.training_type, [])
+        if len(recent) < window:
+            recent.append(session)
+    return windows
+
+
+def _earned_notches(
+    recent: Sequence[_LoggedSessionRecord], sessions_per_notch: int
+) -> int:
+    """Net evidence over one type's window, as whole Fitness Level notches."""
+
+    if len(recent) < sessions_per_notch:
+        return 0
+
+    net = sum(1 for session in recent if _is_comfortable(session)) - sum(
+        1 for session in recent if _is_strained(session)
     )
+    # Floor the *net* before dividing: Python's integer division rounds toward negative
+    # infinity, so dividing a negative net first would read -1 as a whole notch lost.
+    return max(net, 0) // sessions_per_notch
+
+
+def _is_comfortable(session: _LoggedSessionRecord) -> bool:
+    """Whether a Session is evidence the level is too low: finished, rated, and easy."""
+
+    if session.completion_outcome != CompletionOutcome.COMPLETED.value:
+        return False
+    rated = _rated_efforts(session)
+    if not rated:
+        return False
+    return all(effort <= LOW_EFFORT_MAX for effort in rated)
+
+
+def _is_strained(session: _LoggedSessionRecord) -> bool:
+    """Whether a Session is evidence the level is too high: unfinished, or ground out."""
+
+    if session.completion_outcome == CompletionOutcome.INCOMPLETE.value:
+        return True
+    return any(effort >= HIGH_EFFORT_MIN for effort in _rated_efforts(session))
+
+
+def _rated_efforts(session: _LoggedSessionRecord) -> list[int]:
+    """The Session's rated efforts, as RPE numbers. An unrated set simply abstains."""
+
+    return [
+        logged_set.perceived_difficulty
+        for logged_set in session.logged_sets
+        if logged_set.perceived_difficulty is not None
+    ]

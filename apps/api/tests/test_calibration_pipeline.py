@@ -16,8 +16,8 @@ The invariants under test:
 - nothing is written when the offset does not move, and ``UNCHANGED`` says so honestly;
 - a Sensitive Constraint yields a **caveat, never a refusal**, in both directions
   (ADR-0058's precedent);
-- the band comes from the **folded** Fitness Level — the same fold generation keys on — so a
-  user is never re-pitched in one band and cached in another;
+- the band comes from the **Effective** Fitness Level — the same read generation keys on
+  (ADR-0112) — so a user is never re-pitched in one band and cached in another;
 - the Calibration **survives a re-read** and stacks.
 """
 
@@ -35,8 +35,14 @@ from app.domain.calibration import (
     CalibrationLever,
 )
 from app.domain.completion import CompletionOutcome
+from app.domain.effort import HIGH_EFFORT_MIN
 from app.domain.exercise import Provenance
+from app.domain.fitness_profile import (
+    DEFAULT_EFFECTIVE_LEVEL_WINDOW,
+    DEFAULT_STRONG_SESSIONS_PER_LEVEL,
+)
 from app.domain.load import parse_load
+from app.domain.progression import LOW_EFFORT_MAX
 from app.domain.quantity import quantity_from_text
 from app.protocols.calibration import (
     CalibrationStatus,
@@ -156,6 +162,41 @@ def _perform(
             ],
         ),
     )
+
+
+def _log_plan_less(
+    logged: InMemoryLoggedSessionRepository,
+    count: int,
+    *,
+    effort: int,
+    on: date,
+) -> None:
+    """``count`` plan-less Completed strength logs, each one set rated at ``effort``.
+
+    Plan-less (no ``session_id``) so this history is read by the level without consuming
+    any of the Protocol's own Sessions — the performed prefix stays where the test put it.
+    Declared Completed throughout, so the *lever* stays ``LOAD`` and the kilogram step is
+    what the assertion can read.
+    """
+
+    for _ in range(count):
+        logged.create(
+            USER,
+            LoggedSessionDraft(
+                session_id=None,
+                training_type="strength",
+                performed_on=on,
+                completion_outcome=CompletionOutcome.COMPLETED.value,
+                logged_sets=[
+                    LoggedSetDraft(
+                        exercise_id=1,
+                        quantity=quantity_from_text("10").to_dict(),
+                        load=parse_load("60 kg").to_dict(),
+                        perceived_difficulty=effort,
+                    )
+                ],
+            ),
+        )
 
 
 def _loads(protocol) -> list[float | None]:
@@ -392,7 +433,7 @@ class TestCalibrateProtocol:
 
 
 class TestBandAndLever:
-    def test_the_band_comes_from_the_declared_fitness_level(
+    def test_with_no_record_the_band_comes_from_the_declared_fitness_level(
         self, protocols, logged, profiles
     ) -> None:
         _protocol(protocols, sessions=1, load="100 kg")
@@ -403,6 +444,55 @@ class TestBandAndLever:
         )
 
         assert _loads(result.protocol.protocol) == [100 + HARDER_STEP_KG["advanced"]]
+
+    def test_a_notch_steps_by_the_effective_levels_band_not_the_declared_ones(
+        self, protocols, logged, profiles
+    ) -> None:
+        # Declared 7 bands as intermediate; a quorum of comfortable Sessions earns the
+        # notch that carries the Effective level to 8, which bands as advanced.
+        _protocol(protocols, sessions=1, load="100 kg")
+        profiles.update(USER, _with_levels({"strength": 7}))
+        _log_plan_less(
+            logged,
+            DEFAULT_STRONG_SESSIONS_PER_LEVEL,
+            effort=LOW_EFFORT_MAX,
+            on=date(2026, 9, 1),
+        )
+
+        result = calibrate_protocol(
+            USER, 1, 1, protocols=protocols, logged=logged, profiles=profiles
+        )
+
+        assert HARDER_STEP_KG["intermediate"] != HARDER_STEP_KG["advanced"]
+        assert _loads(result.protocol.protocol) == [100 + HARDER_STEP_KG["advanced"]]
+
+    def test_credit_the_recent_record_withdrew_steps_by_the_declared_band(
+        self, protocols, logged, profiles
+    ) -> None:
+        # A long comfortable past, then a window of Sessions ground out at near-maximum
+        # effort: the earned notches are withdrawn and the Declared floor sets the band.
+        _protocol(protocols, sessions=1, load="100 kg")
+        profiles.update(USER, _with_levels({"strength": 7}))
+        _log_plan_less(
+            logged,
+            4 * DEFAULT_EFFECTIVE_LEVEL_WINDOW,
+            effort=LOW_EFFORT_MAX,
+            on=date(2026, 8, 1),
+        )
+        _log_plan_less(
+            logged,
+            DEFAULT_EFFECTIVE_LEVEL_WINDOW,
+            effort=HIGH_EFFORT_MIN,
+            on=date(2026, 9, 1),
+        )
+
+        result = calibrate_protocol(
+            USER, 1, 1, protocols=protocols, logged=logged, profiles=profiles
+        )
+
+        assert _loads(result.protocol.protocol) == [
+            100 + HARDER_STEP_KG["intermediate"]
+        ]
 
     def test_recent_incomplete_work_moves_the_sets_instead_of_the_load(
         self, protocols, logged, profiles

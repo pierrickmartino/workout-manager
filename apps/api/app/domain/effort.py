@@ -44,6 +44,15 @@ RPE_STEP = 0.5
 RIR_MIN = 0
 RIR_MAX = 5
 
+# The logged Effort, read as an RPE number, at or above which a set was ground out at
+# near-maximum effort — the signal the Effective Fitness Level reads *against* the user
+# (ADR-0112). It sits on the scale, not on one reader's rule, which is why it lives here
+# beside the bounds it is expressed in: ``RPE 9`` is "one rep left", ``RIR 1`` logged is the
+# same set and normalizes to it. Deliberately two steps clear of Progression's low-effort
+# ceiling (``progression.LOW_EFFORT_MAX`` 7), so RPE 8 — hard, honest working effort — is
+# evidence in neither direction rather than straddling both.
+HIGH_EFFORT_MIN = 9
+
 #: The scale a value with no declared scale is read as — the conventional RPE, so an
 #: rpe-only client (and the legacy ``perceived_difficulty`` int) needs no scale to log.
 DEFAULT_EFFORT_SCALE = EffortScale.RPE
@@ -191,6 +200,7 @@ def logged_effort_rpe(
 
 __all__ = [
     "DEFAULT_EFFORT_SCALE",
+    "HIGH_EFFORT_MIN",
     "Effort",
     "EffortScale",
     "effort_from_input",

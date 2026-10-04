@@ -86,10 +86,13 @@ class Settings(BaseSettings):
                 f"expected one of {sorted(DEFAULT_MODELS)}"
             ) from exc
 
-    # Profile & Level folding (ADR-0004): how many strong logged sessions of a
-    # training type fold into one Fitness Level notch. Tunable so the adaptation
-    # cadence can change without a code edit.
+    # Effective Fitness Level (ADR-0004 §2, ADR-0112): how many *net* comfortable Logged
+    # Sessions of a training type earn one Fitness Level notch, and how many of that
+    # type's most recent Sessions the read looks at. Both tunable so the adaptation
+    # cadence and the length of "recent" can change without a code edit; the sessions-per-
+    # notch env name predates ADR-0112's two-directional rule and is kept as it is.
     strong_sessions_per_level: int = 3
+    effective_level_window: int = 12
 
 
 @lru_cache
