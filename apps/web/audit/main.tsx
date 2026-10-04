@@ -44,6 +44,8 @@ import { AdminExerciseBrowser } from "@/components/AdminExerciseBrowser";
 import { LocalInstant } from "@/components/pulse/local-instant";
 import { ConfirmDialog } from "@/components/pulse/confirm-dialog";
 import { BuildWorkoutLink, GenerateTrainingLaunchpad, LogPastWorkoutLink } from "@/components/pulse/generate-training-launchpad";
+import { FitnessLevelStandings } from "@/components/pulse/fitness-level-standings";
+import { toFitnessLevelRows } from "@/lib/fitness-level-standing";
 import { adminExerciseRows, auditEntry, exerciseDetail, exerciseNames, exercises, history, personalRecords, prescriptions, profile, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
 
 const params = new URLSearchParams(location.search);
@@ -200,6 +202,22 @@ function LaunchpadSurface() {
   </div>;
 }
 
+// The Profile view's Fitness Level section (ADR-0112): Declared read against Effective, per
+// Training Type. Nothing on the Profile *view* page had ever been in a journey — `profile`
+// mounts the edit form — so this is the harness's first look at it. Both of the section's
+// states are in one mount, because the rows differ by construction: strength has earned
+// notches (the accented reading plus the longer sentence), yoga reads at exactly its declared
+// level (the equal case, which is stated rather than blank), and the third row is a Training
+// Type outside the curated five, which is the longest label the section can be handed and the
+// one that stresses the row's `min-w-0 break-words` pairing (ADR-0085).
+function FitnessLevelSurface() {
+  return <FitnessLevelStandings rows={toFitnessLevelRows([
+    { training_type: "strength", declared: 6, effective: 10 },
+    { training_type: "yoga", declared: 2, effective: 2 },
+    { training_type: "handstand and tumbling conditioning", declared: 4, effective: 5 },
+  ])} />;
+}
+
 function Content() {
   switch (journey) {
     case "charts": return <ChartAccessibilityFixture />;
@@ -236,6 +254,7 @@ function Content() {
     case "admin": return <AdminAudit />;
     case "confirm": return <ConfirmSurface />;
     case "launchpad": return <LaunchpadSurface />;
+    case "levels": return <FitnessLevelSurface />;
     case "contrast": return <ContrastSamples />;
     default: throw new Error(`Unknown audit journey: ${journey}`);
   }

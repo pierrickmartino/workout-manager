@@ -362,7 +362,9 @@ def test_home_gamification_agrees_with_profile_progress_for_the_same_user():
 
     from app.logbook.profile_progress import profile_progress
 
-    progress = profile_progress("user_parity", logged=h.logged, today=_date.today())
+    progress = profile_progress(
+        "user_parity", logged=h.logged, declared_levels={}, today=_date.today()
+    )
     gamification = h.fetch_home("user_parity").json()["data"]["gamification"]
 
     # Assert — Home and Profile can never disagree on the same account

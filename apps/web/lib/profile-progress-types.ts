@@ -28,11 +28,25 @@ export interface Achievement {
   unlocked_on: string | null;
 }
 
+// One Training Type's Fitness Level read both ways (ADR-0112). `declared` is the stored
+// Declared Fitness Level the user states about themselves on their Fitness Profile;
+// `effective` is the Effective Fitness Level the app actually plans with — the Declared level
+// plus net evidence from a window of recent Logged Sessions of that type, never below
+// Declared. Served from the progress read model and deliberately never from the Profile
+// endpoint, whose `fitness_levels` field the Profile form writes back. The two figures are
+// equal far more often than not, and that case is a row like any other.
+export interface FitnessLevelStanding {
+  training_type: string;
+  declared: number;
+  effective: number;
+}
+
 // The honest Profile read model (F5 Slices 1–3): the account's `xp` and Operator `level`,
 // the weekly `streak` — consecutive weeks ending at the current week in which at least one
 // Session was logged — the lifetime `total_sessions` / `total_sets` counts, and the
-// `achievements` wall. Every figure is derived read-time from the user's Logged Sessions,
-// so a brand-new user projects to all zeros, Level 1, and an all-locked wall.
+// `achievements` wall, and one `fitness_levels` standing per *declared* Training Type. Every
+// figure is derived read-time from the user's Logged Sessions, so a brand-new user projects to
+// all zeros, Level 1, an all-locked wall, and every standing at exactly its Declared level.
 export interface ProfileProgress {
   xp: number;
   level: OperatorLevel;
@@ -40,4 +54,5 @@ export interface ProfileProgress {
   total_sessions: number;
   total_sets: number;
   achievements: Achievement[];
+  fitness_levels: FitnessLevelStanding[];
 }

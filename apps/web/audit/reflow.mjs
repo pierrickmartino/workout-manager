@@ -57,8 +57,12 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // `launchpad` joins them with ADR-0109: no journey rendered a launchpad at all, in either
 // composition, so a stack of full-width buttons with authored sentences for labels had never been
 // measured. See `LaunchpadSurface` in `main.tsx` for what the case holds.
+// `levels` joins them with ADR-0112: the Profile *view* page is swept by nothing — the `profile`
+// journey mounts the edit form — so its new Fitness Level section would otherwise be a surface
+// no journey renders, which is unverified however green its guards are (ADR-0088).
 const NOVEL_JOURNEYS = [
   "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc", "launchpad",
+  "levels",
 ];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and

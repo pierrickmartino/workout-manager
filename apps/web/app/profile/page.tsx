@@ -8,6 +8,7 @@ import { toHeatmapGrid } from "@/lib/heatmap-view";
 import { resolveAppearance } from "@/lib/appearance";
 import { resolveIsAdmin } from "@/lib/admin";
 import { toAchievementCards } from "@/lib/achievements-view";
+import { toFitnessLevelRows } from "@/lib/fitness-level-standing";
 import { AppearanceModePicker } from "@/components/AppearanceModePicker";
 import { AppearanceKeepAwakeToggle } from "@/components/AppearanceKeepAwakeToggle";
 import { AppearanceWeightUnitToggle } from "@/components/AppearanceWeightUnitToggle";
@@ -19,6 +20,7 @@ import { LevelBadge } from "@/components/pulse/level-badge";
 import { AchievementWall } from "@/components/pulse/achievement-wall";
 import { TrainingHeatmap } from "@/components/pulse/training-heatmap";
 import { FitnessProfileSummary } from "@/components/pulse/fitness-profile-summary";
+import { FitnessLevelStandings } from "@/components/pulse/fitness-level-standings";
 import { Bento, BentoTile } from "@/components/pulse/bento";
 import { Alert } from "@/components/pulse/alert";
 import { Card } from "@/components/ui/card";
@@ -65,9 +67,21 @@ export default async function ProfilePage() {
     );
   }
 
-  const { xp, level, streak, total_sessions, total_sets, achievements } =
-    envelope.data;
+  const {
+    xp,
+    level,
+    streak,
+    total_sessions,
+    total_sets,
+    achievements,
+    fitness_levels,
+  } = envelope.data;
   const cards = toAchievementCards(achievements);
+  // The Fitness Level standing (ADR-0112): one row per *declared* Training Type. It comes from
+  // the progress read model, beside Operator Level, and never from the Profile endpoint —
+  // whose `fitness_levels` field the edit form writes back, so a derived level placed there
+  // would round-trip into the declared baseline on the first save (ADR-0018).
+  const fitnessLevelRows = toFitnessLevelRows(fitness_levels);
   // The Heatmap is a secondary read on its own endpoint (ADR-0054); a failure there must
   // not blank the whole Profile, so it simply omits the mosaic when it can't load.
   const heatmapGrid =
@@ -81,6 +95,13 @@ export default async function ProfilePage() {
       <PageHeader overline="PULSE // OPERATOR" title="Profile" />
 
       <LevelBadge xp={xp} level={level} />
+
+      {/* Declared against Effective, per Training Type. Omitted only when the user has
+          declared no level at all — there is then nothing to read a projection against, and
+          "Edit fitness profile" below is where a level is declared in the first place. */}
+      {fitnessLevelRows.length > 0 ? (
+        <FitnessLevelStandings rows={fitnessLevelRows} />
+      ) : null}
 
       <div className="flex flex-col gap-4">
         <SectionHeader>LIFETIME</SectionHeader>
