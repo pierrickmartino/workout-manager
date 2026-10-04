@@ -46,11 +46,10 @@ RIR_MAX = 5
 
 # The logged Effort, read as an RPE number, at or above which a set was ground out at
 # near-maximum effort — the signal the Effective Fitness Level reads *against* the user
-# (ADR-0112). It sits on the scale, not on one reader's rule, which is why it lives here
-# beside the bounds it is expressed in: ``RPE 9`` is "one rep left", ``RIR 1`` logged is the
-# same set and normalizes to it. Deliberately two steps clear of Progression's low-effort
-# ceiling (``progression.LOW_EFFORT_MAX`` 7), so RPE 8 — hard, honest working effort — is
-# evidence in neither direction rather than straddling both.
+# (ADR-0112). It sits on the scale rather than on one reader's rule, which is why it lives
+# here beside the bounds it is expressed in: ``RPE 9`` is "one rep left", and a set logged
+# as ``RIR 1`` normalizes to the same number. With Progression's ``LOW_EFFORT_MAX`` at 7 the
+# scale reads ≤7 comfortable · 8 neutral · ≥9 strained; the neutral middle is deliberate.
 HIGH_EFFORT_MIN = 9
 
 #: The scale a value with no declared scale is read as — the conventional RPE, so an

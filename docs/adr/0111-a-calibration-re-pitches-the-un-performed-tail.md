@@ -220,7 +220,5 @@ a limitation to engineer around.
   cache-key dimension, so it needs its own slice, its own evidence threshold and its own tests.
   The evidence rule is the **standing Calibration weighted by Sessions performed under it** —
   mirroring `DEFAULT_STRONG_SESSIONS_PER_LEVEL`'s three-sessions-per-notch cadence — because a
-  Calibration nobody has trained against is an opinion, not evidence. *(Superseded by
-  ADR-0112, which shipped that slice as `effective_fitness_levels` and settled the evidence as
-  the **Completion Outcome plus graded perceived effort** over a window of recent Sessions,
-  keeping the three-sessions-per-notch cadence. The standing Calibration is not an input.)*
+  Calibration nobody has trained against is an opinion, not evidence. *(That slice shipped as
+  `effective_fitness_levels`; ADR-0112 is where its reading rule is settled.)*

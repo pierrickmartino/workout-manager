@@ -296,6 +296,20 @@ def test_a_wholly_unrated_session_still_counts_on_its_completion_outcome():
     assert effective["strength"] == 5
 
 
+def test_a_wholly_unrated_session_occupies_its_place_in_the_window():
+    # Arrange — a full window of Completed-but-unrated work above an older comfortable run
+    declared = {"strength": 5}
+    history = _repeat(_unrated(), DEFAULT_EFFECTIVE_LEVEL_WINDOW)
+    history += _repeat(_comfortable(), DEFAULT_EFFECTIVE_LEVEL_WINDOW)
+
+    # Act
+    effective = effective_fitness_levels(declared, history)
+
+    # Assert — "no effort evidence" is not "no session": the unrated Sessions fill the
+    # window and push the older credit out of it rather than being skipped over
+    assert effective["strength"] == 5
+
+
 def test_an_undeclared_completion_outcome_is_neither_comfortable_nor_strained():
     # Arrange — a log-after-the-fact record that declared no outcome, rated comfortably
     declared = {"strength": 5}

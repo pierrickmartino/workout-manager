@@ -102,9 +102,10 @@ MAX_FITNESS_LEVEL = 10
 DEFAULT_STRONG_SESSIONS_PER_LEVEL = 3
 
 # How many of a training type's most recent Logged Sessions the Effective level reads.
-# Twelve is four notches' worth at the default cadence — long enough that a single bad
-# week cannot erase a month of earned credit, short enough that a detrained user stops
-# being planned for at their peak. Counted in sessions, never in days (ADR-0001).
+# Settled at twelve by ADR-0112 — four notches' worth at the default cadence, which is the
+# "at most four notches above a Declared floor" bound that ADR records as the accepted cost
+# of the wider cache spread. Counted in sessions, never in days (ADR-0001). Tunable from
+# the environment (``EFFECTIVE_LEVEL_WINDOW``, see ``config.Settings``).
 DEFAULT_EFFECTIVE_LEVEL_WINDOW = 12
 
 
@@ -149,8 +150,9 @@ def effective_fitness_levels(
     Per training type, over its window of most recent Sessions (ADR-0112):
 
     - **Quorum** — fewer Sessions in the window than ``sessions_per_notch`` means the
-      Effective level *is* the Declared level. A type with no history keeps its Declared
-      level, so a user's first day reads at exactly what they stated.
+      Effective level *is* the Declared level; it falls out of the notch arithmetic rather
+      than needing a guard (see ``_earned_notches``). A type with no history keeps its
+      Declared level, so a user's first day reads at exactly what they stated.
     - **Comfortable** — declared ``Completed``, **and** at least one set rated, **and**
       every rated set at or below ``LOW_EFFORT_MAX``. All three conjuncts, so a Session
       with nothing rated is never comfortable by vacuous truth: finishing the prescribed
@@ -202,14 +204,24 @@ def _windows(
 def _earned_notches(
     recent: Sequence[_LoggedSessionRecord], sessions_per_notch: int
 ) -> int:
-    """Net evidence over one type's window, as whole Fitness Level notches."""
+    """Net evidence over one type's window, as whole Fitness Level notches.
 
-    if len(recent) < sessions_per_notch:
-        return 0
+    The **quorum** needs no guard of its own: a window yields at most one verdict per
+    Session, so net evidence can never exceed the window's own length, and a window
+    shorter than ``sessions_per_notch`` therefore divides to zero notches by arithmetic.
 
-    net = sum(1 for session in recent if _is_comfortable(session)) - sum(
-        1 for session in recent if _is_strained(session)
-    )
+    The two verdicts are read independently rather than as an ``if``/``else``, so their
+    mutual exclusion stays a property of the predicates — which a test asserts — instead
+    of being imposed here, where an overlap would be silently absorbed.
+    """
+
+    net = 0
+    for session in recent:
+        if _is_comfortable(session):
+            net += 1
+        if _is_strained(session):
+            net -= 1
+
     # Floor the *net* before dividing: Python's integer division rounds toward negative
     # infinity, so dividing a negative net first would read -1 as a whole notch lost.
     return max(net, 0) // sessions_per_notch
