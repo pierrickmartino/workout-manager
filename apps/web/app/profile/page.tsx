@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { ShieldCheck, User } from "@/components/pulse/icons";
 
@@ -21,6 +22,8 @@ import { AchievementWall } from "@/components/pulse/achievement-wall";
 import { TrainingHeatmap } from "@/components/pulse/training-heatmap";
 import { FitnessProfileSummary } from "@/components/pulse/fitness-profile-summary";
 import { FitnessLevelStandings } from "@/components/pulse/fitness-level-standings";
+// PROTOTYPE (throwaway) — the ?variant= switcher for the Fitness Level section.
+import { FitnessLevelPrototype } from "@/components/prototype/fitness-level-prototype";
 import { Bento, BentoTile } from "@/components/pulse/bento";
 import { Alert } from "@/components/pulse/alert";
 import { Card } from "@/components/ui/card";
@@ -98,9 +101,18 @@ export default async function ProfilePage() {
 
       {/* Declared against Effective, per Training Type. Omitted only when the user has
           declared no level at all — there is then nothing to read a projection against, and
-          "Edit fitness profile" below is where a level is declared in the first place. */}
+          "Edit fitness profile" below is where a level is declared in the first place.
+
+          PROTOTYPE (throwaway): the section is rendered through
+          `components/prototype/fitness-level-prototype.tsx`, which switches between the
+          shipped "6/10" pair and three visual renderings on `?variant=0|A|B|C`. It reads the
+          URL, so it sits under a Suspense boundary like every other client filter on this
+          app (ADR-0100). Revert this block to `<FitnessLevelStandings rows={...} />` when
+          the question is settled. */}
       {fitnessLevelRows.length > 0 ? (
-        <FitnessLevelStandings rows={fitnessLevelRows} />
+        <Suspense fallback={<FitnessLevelStandings rows={fitnessLevelRows} />}>
+          <FitnessLevelPrototype standings={fitness_levels} />
+        </Suspense>
       ) : null}
 
       <div className="flex flex-col gap-4">

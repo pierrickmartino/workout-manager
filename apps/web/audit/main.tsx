@@ -46,6 +46,11 @@ import { ConfirmDialog } from "@/components/pulse/confirm-dialog";
 import { BuildWorkoutLink, GenerateTrainingLaunchpad, LogPastWorkoutLink } from "@/components/pulse/generate-training-launchpad";
 import { FitnessLevelStandings } from "@/components/pulse/fitness-level-standings";
 import { toFitnessLevelRows } from "@/lib/fitness-level-standing";
+// PROTOTYPE (throwaway) — the three visual Fitness Level variants, mounted as one journey.
+import { toFitnessLevelVisualRows } from "@/lib/fitness-level-visual.prototype";
+import { FitnessLevelRail } from "@/components/prototype/fitness-level-rail.prototype";
+import { FitnessLevelDials } from "@/components/prototype/fitness-level-dials.prototype";
+import { FitnessLevelLadder } from "@/components/prototype/fitness-level-ladder.prototype";
 import { adminExerciseRows, auditEntry, exerciseDetail, exerciseNames, exercises, history, personalRecords, prescriptions, profile, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
 
 const params = new URLSearchParams(location.search);
@@ -222,6 +227,25 @@ function FitnessLevelSurface() {
   ])} />;
 }
 
+// PROTOTYPE (throwaway) — all three visual variants of the Fitness Level section over the same
+// three fixture rows the `levels` journey uses (one earned, one equal, one over-long label), so
+// one capture at 320px / 200% text / 1440px shows what each shape does under pressure. Delete
+// with the rest of the prototype once a variant wins.
+const PROTOTYPE_LEVEL_ROWS = toFitnessLevelVisualRows([
+  { training_type: "strength", declared: 6, effective: 10 },
+  { training_type: "cardio", declared: 4, effective: 5 },
+  { training_type: "yoga", declared: 2, effective: 2 },
+  { training_type: "handstand and tumbling conditioning", declared: 4, effective: 5 },
+]);
+
+function FitnessLevelPrototypeSurface() {
+  return <div className="flex flex-col gap-8">
+    <FitnessLevelRail rows={PROTOTYPE_LEVEL_ROWS} />
+    <FitnessLevelDials rows={PROTOTYPE_LEVEL_ROWS} />
+    <FitnessLevelLadder rows={PROTOTYPE_LEVEL_ROWS} />
+  </div>;
+}
+
 function Content() {
   switch (journey) {
     case "charts": return <ChartAccessibilityFixture />;
@@ -259,6 +283,8 @@ function Content() {
     case "confirm": return <ConfirmSurface />;
     case "launchpad": return <LaunchpadSurface />;
     case "levels": return <FitnessLevelSurface />;
+    // PROTOTYPE (throwaway).
+    case "levels-visual": return <FitnessLevelPrototypeSurface />;
     case "contrast": return <ContrastSamples />;
     default: throw new Error(`Unknown audit journey: ${journey}`);
   }
