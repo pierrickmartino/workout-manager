@@ -13,7 +13,10 @@ too easy or too hard, the app's three existing adaptation mechanisms all decline
 - **Fitness Level folding** (ADR-0004 §2) reaches only the *next* generation, because the level
   is a cache-key dimension. It also only ever moves **up**: `advance_level` computes
   `min(baseline + earned, MAX_FITNESS_LEVEL)` and `_is_strong` requires *every* set at low
-  effort, so a Protocol that is too **hard** produces no signal at all.
+  effort, so a Protocol that is too **hard** produces no signal at all. *(Both faults were
+  since settled by ADR-0112, which renamed the fold `effective_fitness_levels` and made it
+  bidirectional over a window of recent Sessions; the reasoning above describes the state
+  this ADR was written against.)*
 - **Regeneration** replaces a Session's *content* on negative Generation Feedback, once. It is
   the wrong instrument for "the numbers are wrong but the movements are right", and generating
   a fresh Protocol instead **supersedes** the Current Protocol (CONTEXT 'Current Protocol') —
@@ -33,7 +36,8 @@ read against whatever the plan already says.
   original request ("let me adjust it" / "base it on my profile and recent sessions") are true
   at once only in this shape.
 - **No AI.** It is a pure function in `app/domain/`, the same species as `next_prescription`
-  and `advance_level`. It makes no Generation Call, touches no cache, and needs no job queue.
+  and the level fold (`advance_level`, since ADR-0112 `effective_fitness_levels`). It makes no
+  Generation Call, touches no cache, and needs no job queue.
   ADR-0004 §3's deferral of history-aware AI generation is untouched.
 - **It never swaps a movement.** `progression.py`'s invariant — "it **never auto-swaps** a
   movement … the swap stays a user-initiated **Substitution**" — holds across Calibration too.
@@ -216,4 +220,5 @@ a limitation to engineer around.
   cache-key dimension, so it needs its own slice, its own evidence threshold and its own tests.
   The evidence rule is the **standing Calibration weighted by Sessions performed under it** —
   mirroring `DEFAULT_STRONG_SESSIONS_PER_LEVEL`'s three-sessions-per-notch cadence — because a
-  Calibration nobody has trained against is an opinion, not evidence.
+  Calibration nobody has trained against is an opinion, not evidence. *(That slice shipped as
+  `effective_fitness_levels`; ADR-0112 is where its reading rule is settled.)*

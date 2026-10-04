@@ -18,7 +18,7 @@ from typing import Protocol, Sequence
 
 from app.adoption.service import adopt
 from app.config import get_settings
-from app.domain.fitness_profile import advance_level
+from app.domain.fitness_profile import effective_fitness_levels
 from app.generation.cache import CacheRequest, GenerationCache
 from app.generation.protocol_generator import (
     ProtocolGenerationRequest,
@@ -29,7 +29,11 @@ from app.repositories.protocol_repository import ProtocolRepository, ProtocolVie
 
 
 class _ProfileForCache(Protocol):
-    """The Profile fields the coarse cache key (and bypass) are derived from."""
+    """The Profile fields the coarse cache key (and bypass) are derived from.
+
+    ``fitness_levels`` holds the **Declared** Fitness Levels — the stored 1–10 the user
+    states per training type. The Effective level is read from them and never stored
+    back (ADR-0112)."""
 
     fitness_levels: dict[str, int]
     preferences: list[str]
@@ -40,9 +44,10 @@ class _ProfileForCache(Protocol):
 
 
 class _LoggedSessionForFolding(Protocol):
-    """The Logged Session fields ``advance_level`` reads to fold in progress."""
+    """The Logged Session fields ``effective_fitness_levels`` reads."""
 
     training_type: str
+    completion_outcome: str | None
     logged_sets: Sequence[object]
 
 
@@ -55,16 +60,23 @@ def cache_request_for(
     input: the per-training-type Fitness Level and the constraint fields come
     from the profile; the continuous values are carried but excluded from the key.
 
-    The Fitness Level is the user's baseline with sustained strong logged progress
-    *folded in* (ADR-0004), so a user who has progressed keys into — and caches at —
-    the right difficulty for their next Protocol. Only this coarse, folded level
-    reaches generation; the raw ``logged_sessions`` never do.
+    The level on the key is the **Effective Fitness Level** — the user's Declared level
+    plus net evidence from their recent Logged Sessions of that type (ADR-0004 §2,
+    ADR-0112) — so a user who has progressed keys into, and caches at, the right
+    difficulty for their next Protocol, and a user who has recently struggled stops being
+    planned for at their peak. Only that coarse level reaches generation; the raw
+    ``logged_sessions`` never do.
+
+    ``logged_sessions`` must be newest-performed first, which is the order the repository
+    documents and returns — the window depends on it (see ``effective_fitness_levels``).
     """
 
-    levels = advance_level(
+    settings = get_settings()
+    levels = effective_fitness_levels(
         profile.fitness_levels,
         logged_sessions,
-        sessions_per_notch=get_settings().strong_sessions_per_level,
+        sessions_per_notch=settings.strong_sessions_per_level,
+        window=settings.effective_level_window,
     )
 
     return CacheRequest(

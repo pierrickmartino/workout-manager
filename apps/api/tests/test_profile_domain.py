@@ -1,9 +1,15 @@
 """Behavior of the Profile & Level domain module: the derived ``is_sensitive``
-predicate that gates the generation safety bypass (ADR-0003), and ``advance_level``
-which folds sustained strong logged progress into the per-training-type Fitness
-Level (ADR-0004). The bypass is *derived* from the stored specific constraint
-types, never a standalone boolean; the advanced level is likewise *derived* from
-the baseline level plus logged history, never persisted in place of the baseline."""
+predicate that gates the generation safety bypass (ADR-0003), and
+``effective_fitness_levels``, which reads the **Effective Fitness Level** per training
+type from a window of the most recent Logged Sessions of that type (ADR-0112).
+
+Both are *derived*: the bypass from the stored specific constraint types, never a
+standalone boolean; the Effective level from the **Declared** level plus net recent
+evidence, never persisted in place of the Declared baseline (ADR-0018).
+
+These tests assert external behaviour only — given this history and this Declared level,
+this is the level the app plans with — never that a helper ran or how an intermediate is
+shaped."""
 
 from __future__ import annotations
 
@@ -11,11 +17,14 @@ from dataclasses import dataclass, field
 
 import pytest
 
+from app.domain.completion import CompletionOutcome
+from app.domain.effort import HIGH_EFFORT_MIN
 from app.domain.fitness_profile import (
+    DEFAULT_EFFECTIVE_LEVEL_WINDOW,
     DEFAULT_STRONG_SESSIONS_PER_LEVEL,
     MAX_FITNESS_LEVEL,
     SensitiveConstraintType,
-    advance_level,
+    effective_fitness_levels,
     is_sensitive,
     resolve_equipment,
 )
@@ -113,175 +122,392 @@ def test_unrecognized_constraint_string_does_not_make_profile_sensitive():
     assert is_sensitive(profile) is False
 
 
-# --- advance_level: folding logged progress into the per-type Fitness Level ---
+# --- effective_fitness_levels: reading the recent record (ADR-0112) ---
+
+#: The most notches a full window of nothing but comfortable Sessions can earn.
+MAX_NOTCHES = DEFAULT_EFFECTIVE_LEVEL_WINDOW // DEFAULT_STRONG_SESSIONS_PER_LEVEL
 
 
 @dataclass
 class _SetStub:
-    """A logged set carrying only the Performance Feedback ``advance_level`` reads."""
+    """A logged set carrying only the rated effort the fold reads.
 
-    perceived_difficulty: int | None
+    ``None`` is an *unrated* set — the field is optional at the log boundary, which is
+    the whole reason the fold abstains on it rather than disqualifying its Session."""
+
+    perceived_difficulty: int | None = None
 
 
 @dataclass
 class _SessionStub:
-    """A logged session: its prescribing training type and the sets performed."""
+    """A Logged Session: its training type, its Completion Outcome, and its sets."""
 
     training_type: str
+    completion_outcome: str | None = None
     logged_sets: list[_SetStub] = field(default_factory=list)
 
 
-def _strong_session(training_type: str, sets: int = 1) -> _SessionStub:
-    """A logged session of ``training_type`` performed comfortably (low effort)."""
+def _comfortable(training_type: str = "strength") -> _SessionStub:
+    """Completed, and every rated set sat at or below the low-effort threshold."""
 
     return _SessionStub(
         training_type=training_type,
-        logged_sets=[_SetStub(perceived_difficulty=5) for _ in range(sets)],
+        completion_outcome=CompletionOutcome.COMPLETED.value,
+        logged_sets=[_SetStub(perceived_difficulty=LOW_EFFORT_MAX)],
     )
 
 
-def test_no_logged_sessions_leaves_levels_unchanged():
-    # Arrange
-    levels = {"strength": 5, "yoga": 2}
+def _strained_by_effort(training_type: str = "strength") -> _SessionStub:
+    """Completed, but a set was ground out at or above the high-effort threshold."""
 
-    # Act
-    advanced = advance_level(levels, [])
-
-    # Assert
-    assert advanced == {"strength": 5, "yoga": 2}
-
-
-def test_sustained_strong_sessions_advance_that_types_level_one_notch():
-    # Arrange — exactly the threshold of strong strength sessions
-    levels = {"strength": 5}
-    sessions = [
-        _strong_session("strength") for _ in range(DEFAULT_STRONG_SESSIONS_PER_LEVEL)
-    ]
-
-    # Act
-    advanced = advance_level(levels, sessions)
-
-    # Assert
-    assert advanced["strength"] == 6
-
-
-def test_progress_below_the_threshold_does_not_advance():
-    # Arrange — one short of the threshold
-    levels = {"strength": 5}
-    sessions = [
-        _strong_session("strength")
-        for _ in range(DEFAULT_STRONG_SESSIONS_PER_LEVEL - 1)
-    ]
-
-    # Act
-    advanced = advance_level(levels, sessions)
-
-    # Assert — not yet "sustained"
-    assert advanced["strength"] == 5
-
-
-def test_level_advances_per_training_type_independently():
-    # Arrange — sustained strong strength work; yoga only logged, never strong-enough
-    levels = {"strength": 5, "yoga": 2}
-    sessions = [
-        _strong_session("strength") for _ in range(DEFAULT_STRONG_SESSIONS_PER_LEVEL)
-    ] + [_strong_session("yoga")]
-
-    # Act
-    advanced = advance_level(levels, sessions)
-
-    # Assert — strength moved, yoga did not
-    assert advanced["strength"] == 6
-    assert advanced["yoga"] == 2
-
-
-def test_a_hard_set_disqualifies_a_session_from_counting_as_strong():
-    # Arrange — three strength sessions, but each carries one near-maximal-effort set
-    levels = {"strength": 5}
-    hard = _SessionStub(
-        training_type="strength",
-        logged_sets=[
-            _SetStub(perceived_difficulty=5),
-            _SetStub(perceived_difficulty=LOW_EFFORT_MAX + 1),
-        ],
+    return _SessionStub(
+        training_type=training_type,
+        completion_outcome=CompletionOutcome.COMPLETED.value,
+        logged_sets=[_SetStub(perceived_difficulty=HIGH_EFFORT_MIN)],
     )
-    sessions = [hard for _ in range(DEFAULT_STRONG_SESSIONS_PER_LEVEL)]
-
-    # Act
-    advanced = advance_level(levels, sessions)
-
-    # Assert — none counted, so no advancement
-    assert advanced["strength"] == 5
 
 
-def test_a_set_without_perceived_effort_disqualifies_the_session():
-    # Arrange — strong-looking reps but the user never rated the effort
-    levels = {"strength": 5}
-    unrated = _SessionStub(
-        training_type="strength",
+def _strained_by_outcome(training_type: str = "strength") -> _SessionStub:
+    """Declared Incomplete — prescribed work was left un-attempted."""
+
+    return _SessionStub(
+        training_type=training_type,
+        completion_outcome=CompletionOutcome.INCOMPLETE.value,
+        logged_sets=[_SetStub(perceived_difficulty=LOW_EFFORT_MAX)],
+    )
+
+
+def _unrated(
+    training_type: str = "strength",
+    *,
+    outcome: str | None = CompletionOutcome.COMPLETED.value,
+) -> _SessionStub:
+    """A Session whose sets carry no effort rating at all."""
+
+    return _SessionStub(
+        training_type=training_type,
+        completion_outcome=outcome,
         logged_sets=[_SetStub(perceived_difficulty=None)],
     )
-    sessions = [unrated for _ in range(DEFAULT_STRONG_SESSIONS_PER_LEVEL)]
+
+
+def _repeat(session: _SessionStub, count: int) -> list[_SessionStub]:
+    return [session for _ in range(count)]
+
+
+# --- quorum: too little record reads as exactly the Declared level ---
+
+
+def test_a_training_type_with_no_history_reads_at_the_declared_level():
+    # Arrange
+    declared = {"strength": 5, "yoga": 2}
 
     # Act
-    advanced = advance_level(levels, sessions)
-
-    # Assert — unrated effort is not evidence of comfort
-    assert advanced["strength"] == 5
-
-
-def test_a_session_with_no_logged_sets_is_not_strong():
-    # Arrange — a logged-but-empty session is not "training performed comfortably"
-    levels = {"strength": 5}
-    sessions = [
-        _SessionStub(training_type="strength", logged_sets=[])
-        for _ in range(DEFAULT_STRONG_SESSIONS_PER_LEVEL)
-    ]
-
-    # Act
-    advanced = advance_level(levels, sessions)
+    effective = effective_fitness_levels(declared, [])
 
     # Assert
-    assert advanced["strength"] == 5
+    assert effective == {"strength": 5, "yoga": 2}
 
 
-def test_repeated_thresholds_fold_into_multiple_notches():
-    # Arrange — twice the threshold of strong sessions
-    levels = {"strength": 5}
-    sessions = [
-        _strong_session("strength")
-        for _ in range(2 * DEFAULT_STRONG_SESSIONS_PER_LEVEL)
-    ]
+def test_a_window_below_quorum_reads_at_exactly_the_declared_level():
+    # Arrange — comfortable work, but one Session short of the quorum
+    declared = {"strength": 5}
+    history = _repeat(_comfortable(), DEFAULT_STRONG_SESSIONS_PER_LEVEL - 1)
 
     # Act
-    advanced = advance_level(levels, sessions)
+    effective = effective_fitness_levels(declared, history)
+
+    # Assert — not enough record to read anything into
+    assert effective["strength"] == 5
+
+
+def test_quorum_is_counted_per_training_type():
+    # Arrange — strength clears the quorum, yoga does not, in one history
+    declared = {"strength": 5, "yoga": 2}
+    history = _repeat(_comfortable("strength"), DEFAULT_STRONG_SESSIONS_PER_LEVEL)
+    history += _repeat(_comfortable("yoga"), DEFAULT_STRONG_SESSIONS_PER_LEVEL - 1)
+
+    # Act
+    effective = effective_fitness_levels(declared, history)
 
     # Assert
-    assert advanced["strength"] == 7
+    assert effective["strength"] == 6
+    assert effective["yoga"] == 2
 
 
-def test_folding_never_pushes_a_level_past_the_ceiling():
-    # Arrange — already near the top, with far more than enough strong work
-    levels = {"strength": MAX_FITNESS_LEVEL - 1}
-    sessions = [
-        _strong_session("strength")
-        for _ in range(10 * DEFAULT_STRONG_SESSIONS_PER_LEVEL)
-    ]
-
-    # Act
-    advanced = advance_level(levels, sessions)
-
-    # Assert — capped at the 1–10 ceiling
-    assert advanced["strength"] == MAX_FITNESS_LEVEL
+# --- comfortable: earned credit ---
 
 
-def test_sessions_per_notch_is_configurable():
-    # Arrange — three strong sessions, but a stricter "sustained" bar of five
-    levels = {"strength": 5}
-    sessions = [_strong_session("strength") for _ in range(3)]
+def test_a_quorum_of_comfortable_sessions_earns_one_notch():
+    # Arrange
+    declared = {"strength": 5}
+    history = _repeat(_comfortable(), DEFAULT_STRONG_SESSIONS_PER_LEVEL)
 
     # Act
-    advanced = advance_level(levels, sessions, sessions_per_notch=5)
+    effective = effective_fitness_levels(declared, history)
 
-    # Assert — below the configured bar, so no advancement
-    assert advanced["strength"] == 5
+    # Assert
+    assert effective["strength"] == 6
+
+
+def test_an_unrated_set_abstains_rather_than_voiding_its_session():
+    # Arrange — each Session rates one set comfortably and leaves the other blank
+    declared = {"strength": 5}
+    partly_rated = _SessionStub(
+        training_type="strength",
+        completion_outcome=CompletionOutcome.COMPLETED.value,
+        logged_sets=[
+            _SetStub(perceived_difficulty=LOW_EFFORT_MAX),
+            _SetStub(perceived_difficulty=None),
+        ],
+    )
+    history = _repeat(partly_rated, DEFAULT_STRONG_SESSIONS_PER_LEVEL)
+
+    # Act
+    effective = effective_fitness_levels(declared, history)
+
+    # Assert — read from the sets they did rate
+    assert effective["strength"] == 6
+
+
+def test_a_completed_but_wholly_unrated_window_reads_at_the_declared_level():
+    # Arrange — a full window finished, with not one set rated
+    declared = {"strength": 5}
+    history = _repeat(_unrated(), DEFAULT_EFFECTIVE_LEVEL_WINDOW)
+
+    # Act
+    effective = effective_fitness_levels(declared, history)
+
+    # Assert — no credit for mere adherence
+    assert effective["strength"] == 5
+
+
+def test_a_wholly_unrated_session_still_counts_on_its_completion_outcome():
+    # Arrange — half the window comfortable, half Incomplete with nothing rated
+    half = DEFAULT_EFFECTIVE_LEVEL_WINDOW // 2
+    declared = {"strength": 5}
+    history = _repeat(_comfortable(), half)
+    history += _repeat(_unrated(outcome=CompletionOutcome.INCOMPLETE.value), half)
+
+    # Act
+    effective = effective_fitness_levels(declared, history)
+
+    # Assert — neutral on effort, yet the Incomplete outcome still cancels the credit
+    assert effective["strength"] == 5
+
+
+def test_a_wholly_unrated_session_occupies_its_place_in_the_window():
+    # Arrange — a full window of Completed-but-unrated work above an older comfortable run
+    declared = {"strength": 5}
+    history = _repeat(_unrated(), DEFAULT_EFFECTIVE_LEVEL_WINDOW)
+    history += _repeat(_comfortable(), DEFAULT_EFFECTIVE_LEVEL_WINDOW)
+
+    # Act
+    effective = effective_fitness_levels(declared, history)
+
+    # Assert — "no effort evidence" is not "no session": the unrated Sessions fill the
+    # window and push the older credit out of it rather than being skipped over
+    assert effective["strength"] == 5
+
+
+def test_an_undeclared_completion_outcome_is_neither_comfortable_nor_strained():
+    # Arrange — a log-after-the-fact record that declared no outcome, rated comfortably
+    declared = {"strength": 5}
+    history = _repeat(
+        _SessionStub(
+            training_type="strength",
+            completion_outcome=None,
+            logged_sets=[_SetStub(perceived_difficulty=LOW_EFFORT_MAX)],
+        ),
+        DEFAULT_EFFECTIVE_LEVEL_WINDOW,
+    )
+
+    # Act
+    effective = effective_fitness_levels(declared, history)
+
+    # Assert — comfort requires a declared Completed, so this is no evidence either way
+    assert effective["strength"] == 5
+
+
+# --- strained: withdrawn credit, floored at the Declared level ---
+
+
+def test_comfortable_and_strained_are_mutually_exclusive():
+    # Arrange — half the window comfortable, half Completed but with one set ground out
+    half = DEFAULT_EFFECTIVE_LEVEL_WINDOW // 2
+    declared = {"strength": 5}
+    mixed_effort = _SessionStub(
+        training_type="strength",
+        completion_outcome=CompletionOutcome.COMPLETED.value,
+        logged_sets=[
+            _SetStub(perceived_difficulty=LOW_EFFORT_MAX),
+            _SetStub(perceived_difficulty=HIGH_EFFORT_MIN),
+        ],
+    )
+    history = _repeat(_comfortable(), half) + _repeat(mixed_effort, half)
+
+    # Act
+    effective = effective_fitness_levels(declared, history)
+
+    # Assert — the hard Session is strained *only*; counted as both it would net +2
+    assert effective["strength"] == 5
+
+
+def test_strained_sessions_withdraw_earned_credit():
+    # Arrange — six comfortable Sessions would be two notches on their own
+    declared = {"strength": 5}
+    history = _repeat(_comfortable(), 2 * DEFAULT_STRONG_SESSIONS_PER_LEVEL)
+    history += _repeat(_strained_by_outcome(), DEFAULT_STRONG_SESSIONS_PER_LEVEL)
+
+    # Act
+    effective = effective_fitness_levels(declared, history)
+
+    # Assert — one notch's worth of credit withdrawn
+    assert effective["strength"] == 6
+
+
+def test_a_strained_window_never_reads_below_the_declared_level():
+    # Arrange — a full window of Incomplete work
+    declared = {"strength": 5}
+    history = _repeat(_strained_by_outcome(), DEFAULT_EFFECTIVE_LEVEL_WINDOW)
+
+    # Act
+    effective = effective_fitness_levels(declared, history)
+
+    # Assert — the Declared level is a floor, never a starting point to fall from
+    assert effective["strength"] == 5
+
+
+def test_near_maximum_effort_strains_a_session_that_was_completed():
+    # Arrange — every Session finished, every Session ground out
+    declared = {"strength": 5}
+    history = _repeat(_strained_by_effort(), DEFAULT_EFFECTIVE_LEVEL_WINDOW)
+
+    # Act
+    effective = effective_fitness_levels(declared, history)
+
+    # Assert
+    assert effective["strength"] == 5
+
+
+# --- the bound, the ceiling, and idempotence ---
+
+
+def test_a_full_comfortable_window_reads_at_most_four_notches_above_declared():
+    # Arrange — far more comfortable work than the window can hold
+    declared = {"strength": 5}
+    history = _repeat(_comfortable(), 10 * DEFAULT_EFFECTIVE_LEVEL_WINDOW)
+
+    # Act
+    effective = effective_fitness_levels(declared, history)
+
+    # Assert — bounded by the window, not by the length of the record
+    assert MAX_NOTCHES == 4
+    assert effective["strength"] == 5 + MAX_NOTCHES
+
+
+def test_the_effective_level_never_passes_the_scale_ceiling():
+    # Arrange — already near the top, with a full comfortable window
+    declared = {"strength": MAX_FITNESS_LEVEL - 1}
+    history = _repeat(_comfortable(), DEFAULT_EFFECTIVE_LEVEL_WINDOW)
+
+    # Act
+    effective = effective_fitness_levels(declared, history)
+
+    # Assert
+    assert effective["strength"] == MAX_FITNESS_LEVEL
+
+
+def test_re_reading_one_history_yields_the_same_levels_and_never_mutates_declared():
+    # Arrange
+    declared = {"strength": 5}
+    history = _repeat(_comfortable(), DEFAULT_EFFECTIVE_LEVEL_WINDOW)
+
+    # Act — the read-time projection, taken twice over the same record
+    first = effective_fitness_levels(declared, history)
+    second = effective_fitness_levels(declared, history)
+
+    # Assert — no double counting, and the Declared baseline is untouched
+    assert first == second
+    assert declared == {"strength": 5}
+
+
+# --- per-type isolation ---
+
+
+def test_each_training_type_is_read_from_its_own_sessions():
+    # Arrange — comfortable strength work alongside Incomplete yoga work
+    declared = {"strength": 5, "yoga": 2}
+    history = _repeat(_comfortable("strength"), DEFAULT_EFFECTIVE_LEVEL_WINDOW)
+    history += _repeat(_strained_by_outcome("yoga"), DEFAULT_EFFECTIVE_LEVEL_WINDOW)
+
+    # Act
+    effective = effective_fitness_levels(declared, history)
+
+    # Assert
+    assert effective["strength"] == 5 + MAX_NOTCHES
+    assert effective["yoga"] == 2
+
+
+def test_one_types_sessions_never_consume_anothers_window():
+    # Arrange — a full comfortable strength window, interleaved with unrelated yoga work
+    declared = {"strength": 5, "yoga": 2}
+    history: list[_SessionStub] = []
+    for _ in range(DEFAULT_EFFECTIVE_LEVEL_WINDOW):
+        history.append(_comfortable("strength"))
+        history.append(_unrated("yoga"))
+
+    # Act
+    effective = effective_fitness_levels(declared, history)
+
+    # Assert — strength's window is full of its own Sessions, not crowded out
+    assert effective["strength"] == 5 + MAX_NOTCHES
+
+
+# --- the newest-first ordering precondition ---
+
+
+def test_the_window_reads_the_newest_sessions_the_history_is_handed_in_order():
+    # Arrange — a strained recent run above an older comfortable one, newest first
+    declared = {"strength": 5}
+    recent_strain = _repeat(_strained_by_outcome(), DEFAULT_EFFECTIVE_LEVEL_WINDOW)
+    older_comfort = _repeat(_comfortable(), DEFAULT_EFFECTIVE_LEVEL_WINDOW)
+
+    # Act
+    newest_first = effective_fitness_levels(declared, recent_strain + older_comfort)
+    oldest_first = effective_fitness_levels(declared, older_comfort + recent_strain)
+
+    # Assert — the order is load-bearing: newest-first reads the strain and floors,
+    # the same history handed oldest-first reads the stale credit instead
+    assert newest_first["strength"] == 5
+    assert oldest_first["strength"] == 5 + MAX_NOTCHES
+
+
+# --- the tunable parameters ---
+
+
+def test_the_window_length_is_tunable():
+    # Arrange — a short window drops the older comfortable Sessions out of sight
+    declared = {"strength": 5}
+    history = _repeat(_strained_by_outcome(), DEFAULT_STRONG_SESSIONS_PER_LEVEL)
+    history += _repeat(_comfortable(), DEFAULT_EFFECTIVE_LEVEL_WINDOW)
+
+    # Act
+    effective = effective_fitness_levels(
+        declared, history, window=DEFAULT_STRONG_SESSIONS_PER_LEVEL
+    )
+
+    # Assert — only the strained Sessions are in the window
+    assert effective["strength"] == 5
+
+
+def test_sessions_per_notch_is_tunable():
+    # Arrange — three comfortable Sessions against a stricter bar of five
+    declared = {"strength": 5}
+    history = _repeat(_comfortable(), 3)
+
+    # Act
+    effective = effective_fitness_levels(declared, history, sessions_per_notch=5)
+
+    # Assert — below the configured quorum
+    assert effective["strength"] == 5
