@@ -2,6 +2,8 @@
 
 The idea doc (§7) says logged data "can then be used to adjust future AI recommendations." Taken literally — feeding each user's detailed history into generation — this conflicts with ADR 0003, where generation is cached by a coarse key that excludes per-user specifics: every history is unique, so the cache would never hit. Recommendations are therefore adjusted through three mechanisms, only one of which uses AI.
 
+**Refined by ADR-0112, not superseded:** all three mechanisms stand and mechanism 2 still folds a coarse level into the cache key — ADR-0112 settles only *how* that fold reads the record, splitting the term into a **Declared** and an **Effective** Fitness Level.
+
 **1. Deterministic in-Program Progression (no AI).** A cached Program's recommended load is a *starting* number. As the user logs Sets, a progression rule adjusts the recommended load for upcoming Prescriptions of that Exercise (e.g. all reps hit at low perceived effort → increase load; missed reps → hold or reduce). This is the primary "adjusts over time" mechanism, costs no AI, and mutates only the user's own copy — the cached artifact is untouched.
 
 **2. Folding progress into the coarse Profile.** Logged progress updates the Fitness Profile snapshot — chiefly the **Fitness Level**. Because the cache key reads the coarsened Profile, a user who has progressed simply starts hitting the cache at the appropriate level for their *next* Program. History thus influences future generations indirectly, through the coarse key, and caching keeps working.
