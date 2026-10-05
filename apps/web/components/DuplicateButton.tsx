@@ -10,7 +10,7 @@ import {
 import {
   ActionSheetItemText,
   actionSheetItemClass,
-} from "@/components/pulse/action-sheet";
+} from "@/components/pulse/action-sheet-item";
 
 interface DuplicateButtonProps {
   sessionId: number;

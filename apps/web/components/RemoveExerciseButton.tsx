@@ -6,12 +6,12 @@ import { Trash2 } from "@/components/pulse/icons";
 import { submitRemovePrescription } from "@/app/sessions/[id]/actions";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useActionSheet } from "@/components/pulse/action-sheet";
 import {
   ACTION_SHEET_EDITOR,
   ActionSheetItemText,
   actionSheetItemClass,
-  useActionSheet,
-} from "@/components/pulse/action-sheet";
+} from "@/components/pulse/action-sheet-item";
 
 interface RemoveExerciseButtonProps {
   sessionId: number;

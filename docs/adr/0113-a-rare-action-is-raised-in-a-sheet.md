@@ -66,6 +66,21 @@ real branches (Protocol member, trained, never trained) and both Modes — kept 
 
 - **It is a client component, where the `<details>` was not.** A Server Component page still
   passes its controls in as `children`; only the sheet's open state is client-side.
+- **The rows live apart from the sheet, with no directive.** `actionSheetItemClass`,
+  `ActionSheetItemText`, `ActionSheetSeparator` and `ACTION_SHEET_EDITOR` are in
+  `components/pulse/action-sheet-item.tsx`; `action-sheet.tsx` keeps only what holds state. The
+  first cut filed them in the client module, and the Session detail page — a Server Component —
+  calls `actionSheetItemClass()` for its "Generate another" row. On the server an export of a
+  `"use client"` module is a reference, not the function, so the call threw while the page
+  rendered and **no Session detail page opened**. `next build` passed (it does not render a dynamic
+  route), the tests mounted the sheet but not the page, and the audit harness renders
+  client-side, so nothing in the repo could see it. `lib/client-boundary-policy.ts` now can: it
+  walks the import graph from every route under `app/` until it crosses a `"use client"`
+  boundary, and fails any module on that side that *calls* a client module's export. Rendering
+  one, or passing it as a prop, is what a client reference is for and stays allowed. Having no
+  directive is not what makes a module server-side — `components/ui/input.tsx` has none and calls a
+  client hook correctly, because only client code imports it — so the guard follows the graph
+  rather than the directive, and has no exemption registry.
 - **An action renders only while its sheet is open,** so it starts from its closed state each time
   the sheet is raised, and an abandoned Rename or a produced Share link does not linger.
 - **An action that leaves the page as it was must close its own sheet**, through
