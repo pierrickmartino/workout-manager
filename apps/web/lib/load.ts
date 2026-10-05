@@ -183,6 +183,27 @@ export function loadValueInputMode(
   }
 }
 
+// What a Load value field is *in*, shown inside it, and what it shows when empty (ADR-0114).
+// For bodyweight the value is the added load, so its unit carries a "+" and an empty field
+// reads as zero; a range and a descriptive Load are typed, so their placeholder shows the shape.
+export function loadValueHint(
+  kind: string,
+  unit: WeightUnit,
+): { suffix: string; placeholder: string } {
+  switch (kind) {
+    case "bodyweight":
+      return { suffix: `+${weightUnitLabel(unit)}`, placeholder: "0" };
+    case "absolute":
+      return { suffix: weightUnitLabel(unit), placeholder: "—" };
+    case "range":
+      return { suffix: weightUnitLabel(unit), placeholder: "60-70" };
+    case "percent_1rm":
+      return { suffix: "%", placeholder: "—" };
+    default:
+      return { suffix: "", placeholder: "light" };
+  }
+}
+
 // The kinds offered by the log form's picker, paired with a human label. The absolute kind's
 // label carries the reader's active Weight Unit — "Weight (kg)" / "Weight (lb)" — replacing the
 // old hardcoded "(kg)" so the picker names the unit the field is actually entered in (#417).

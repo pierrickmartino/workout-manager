@@ -561,3 +561,41 @@ test("a seeded row's Load keypad follows the kind the user picks, not the one it
     restore();
   }
 });
+
+for (const mode of ["controlled", "uncontrolled"] as const) {
+  test(`the table cells are the same fields, uncaptioned (${mode})`, async () => {
+    // ADR-0114: the Live Session set table renders a row's fields under a column header, so its
+    // parts drop the caption — and nothing else. Each must answer to the same accessible name
+    // and ask for the same keypad as the captioned field it stands in for, or the table would
+    // be the fifth copy this family exists to prevent.
+    await withRow(
+      { mode, parts: ["RepsCell", "LoadValueCell", "EffortCell", "LoadKind"], values: { load_kind: "absolute" } },
+      async () => {
+        // Assert — the accessible names are the vocabulary's.
+        assert.equal(control("Reps, set 1").getAttribute("type"), "number");
+        assert.equal(control("Load, set 1").getAttribute("inputmode"), "decimal");
+        const effort = control("RPE, set 1") as HTMLSelectElement;
+        assert.equal(effort.querySelectorAll("option").length, 11);
+        const kinds = Array.from((control("Load kind, set 1") as HTMLSelectElement).querySelectorAll("option"))
+          .map((option) => option.value);
+        assert.deepEqual(kinds, loadKindOptions("kg").map(({ value }) => value));
+        // And no caption: the column header is the caption.
+        assert.equal(document.querySelectorAll(".label-mono").length, 0);
+      },
+    );
+  });
+}
+
+test("a table Load cell says what its value is in, and a bodyweight value is the added load", async () => {
+  // The kind is asked once per exercise, so the value field carries its unit from the inside.
+  await withRow({ parts: ["LoadValueCell"], values: { load_kind: "bodyweight" } }, async () => {
+    const field = control("Load, set 1") as HTMLInputElement;
+    assert.equal(field.placeholder, "0");
+    assert.equal(field.parentElement?.textContent, "+kg");
+  });
+  await withRow({ parts: ["LoadValueCell"], values: { load_kind: "range" } }, async () => {
+    const field = control("Load, set 1") as HTMLInputElement;
+    assert.equal(field.placeholder, "60-70");
+    assert.equal(field.getAttribute("inputmode"), null);
+  });
+});

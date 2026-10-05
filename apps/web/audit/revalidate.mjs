@@ -42,11 +42,13 @@ let evidence = {
 };
 await mkdir(output, { recursive: true });
 async function measureCompletedNotes(page, measured) {
-  const card = page.locator("main div").filter({ has: page.getByText("DONE", { exact: true }) })
-    .filter({ has: page.getByText(/^Prescribed:/) }).last();
-  const notes = await card.locator("p").allTextContents();
-  const prescription = measured.texts.find(text => text.text === notes.find(note => note.startsWith("Prescribed:")));
-  const previous = measured.texts.find(text => text.text === notes.find(note => note.startsWith("Previous:")));
+  // The set table (ADR-0114) reads each member's prescription and last time once, in its
+  // header; the card holding a completed row is the one measured.
+  const card = page.locator("[data-set-table]").filter({ has: page.getByRole("button", { name: /^Reopen / }) }).first();
+  const notes = { prescription: await card.locator("[data-member-prescription]").first().textContent(),
+    previous: await card.locator("[data-member-last]").first().textContent() };
+  const prescription = measured.texts.find(text => text.text === notes.prescription);
+  const previous = measured.texts.find(text => text.text === notes.previous);
   if (!prescription || !previous) throw new Error("Completed card notes were not measured");
   return { prescription, previous };
 }
@@ -71,7 +73,7 @@ async function capture(page, meta) {
       else await page.getByRole("button", { name: "Open muscle details" }).click();
       await page.getByRole("dialog").waitFor();
     }
-    if (meta.state === "completed-set") await page.getByRole("button", { name: "Complete set", exact: true }).first().evaluate(button => button.click());
+    if (meta.state === "completed-set") await page.getByRole("button", { name: /^Complete / }).first().evaluate(button => button.click());
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     if (errors.length) throw new Error(errors.join("; "));
     if (!await page.evaluate(() => getComputedStyle(document.querySelector("nav")).position === "fixed" && getComputedStyle(document.querySelector("main")).paddingLeft === "24px")) throw new Error("Production utility stylesheet did not load");

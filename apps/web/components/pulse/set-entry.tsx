@@ -15,13 +15,14 @@ import {
   type SetEntrySubject,
   type SetEntryValues,
 } from "@/lib/set-entry";
-import { loadKindOptions, loadValueInputMode } from "@/lib/load";
+import { loadKindOptions, loadValueHint, loadValueInputMode } from "@/lib/load";
 import { DISTANCE_UNIT_OPTIONS } from "@/lib/quantity";
 import type { QuantityKind } from "@/lib/quantity";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { FieldRow, FIELD_CELL, WIDE_FIELD_CELL } from "@/components/pulse/field-row";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 // The one contract a Logged Set's entry fields are rendered through (ADR-0106). Shaped as
 // `state` / `actions` / `meta` like `PrescriptionDraftContext` (ADR-0105), so it is a contract
@@ -420,6 +421,85 @@ export function SetEntryEffort() {
   );
 }
 
+// --- The table parts (ADR-0114) -------------------------------------------------------------
+//
+// The Live Session set table puts a row's fields in a grid whose column headers are the
+// captions, so these parts render the same fields as the ones above — the same names, the same
+// accessible names, the same keypads — with no caption and a 36px control. They are not copies
+// of the fields: every one resolves through `useSetEntryField`, so the vocabulary, the label and
+// the controlled/uncontrolled binding are still decided in exactly one place.
+
+// The table cell's control: a 36px box with the value centred, since a column of numbers reads
+// down its middle.
+const CELL_CONTROL = "h-9 px-1 text-center";
+
+// A rep count, in a table row.
+export function SetEntryRepsCell() {
+  const { control } = useSetEntryField<HTMLInputElement>("reps");
+  return <Input type="number" min={0} className={CELL_CONTROL} {...control} />;
+}
+
+// The Load *value*, in a table row. Its kind is asked once per exercise (`SetEntryLoadKind`), so
+// the field says what it is in from the inside — "kg", "%", or "+kg" for bodyweight, where the
+// value is the added load — and keeps the keypad the kind implies (ADR-0093).
+export function SetEntryLoadValueCell() {
+  const { control } = useSetEntryField<HTMLInputElement>("load_value");
+  const { state } = useSetEntry();
+  const hint = loadValueHint(state.values.load_kind, state.unit);
+  return (
+    <div className="relative min-w-0">
+      <Input
+        spellCheck={false}
+        className={cn(CELL_CONTROL, hint.suffix ? "pr-6" : null)}
+        placeholder={hint.placeholder}
+        inputMode={loadValueInputMode(state.values.load_kind)}
+        {...control}
+      />
+      {hint.suffix ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 font-mono text-[9px] text-text-muted"
+        >
+          {hint.suffix}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+// Perceived difficulty, in a table row. The chevron's gutter is narrowed to the cell's room.
+export function SetEntryEffortCell() {
+  const { control } = useSetEntryField<HTMLSelectElement>("rpe");
+  return (
+    <Select className={cn(CELL_CONTROL, "pr-[18px]")} {...control}>
+      <option value="">—</option>
+      {SET_ENTRY_EFFORT_VALUES.map((value) => (
+        <option key={value} value={value}>
+          {value}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
+// The Load *kind* on its own, uncaptioned and compact, for a holder that asks it once for many
+// rows — the set table asks it per exercise and fans the pick out to that exercise's sets still
+// to do. The options are `loadKindOptions`, as in `SetEntryLoad`, so a kind added to the typed
+// Load (ADR-0010) reaches both.
+export function SetEntryLoadKind() {
+  const { control } = useSetEntryField<HTMLSelectElement>("load_kind");
+  const { state } = useSetEntry();
+  return (
+    <Select className="h-8 px-2.5 pr-[30px] text-[11px]" {...control}>
+      {loadKindOptions(state.unit).map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
 // A per-set remark (ADR-0065). Rides as raw text; the backend length-caps and HTML-escapes it
 // at the write boundary.
 export function SetEntryNote({ placeholder }: { placeholder: string }) {
@@ -445,4 +525,8 @@ export const SetEntry = {
   Load: SetEntryLoad,
   Effort: SetEntryEffort,
   Note: SetEntryNote,
+  RepsCell: SetEntryRepsCell,
+  LoadValueCell: SetEntryLoadValueCell,
+  EffortCell: SetEntryEffortCell,
+  LoadKind: SetEntryLoadKind,
 };

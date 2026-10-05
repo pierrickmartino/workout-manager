@@ -1,17 +1,22 @@
 "use client";
 
 import { memo, useState } from "react";
-import { Check, ChevronDown, RotateCcw, SkipForward } from "@/components/pulse/icons";
+import { Check, ChevronDown, SkipForward } from "@/components/pulse/icons";
 
 import { liveSetDomId, type LiveSet, type LiveUnit } from "@/lib/live-session";
 import type { LoadKind } from "@/lib/load";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { setEntryValues, type SetEntryValues } from "@/lib/set-entry";
+import {
+  setTableView,
+  type SetTableMember,
+  type SetTableRow,
+} from "@/lib/live-set-table";
 import { SetEntry, SetEntryProvider } from "@/components/pulse/set-entry";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FieldRow } from "@/components/pulse/field-row";
+import { cn } from "@/lib/utils";
 
 export interface LiveSessionSetsProps {
   // The Session's sets grouped into units for display (solo Prescription or whole
@@ -36,20 +41,21 @@ export interface LiveSessionSetsProps {
   // A finish is in flight. The outbox has already taken the sets (ADR-0060), so a reopen
   // racing it would change what is being written — the control is disabled until it lands.
   isFinishing: boolean;
-  // The reader's Weight Unit (#417): the per-set Load picker names it. Named `weightUnit`
+  // The reader's Weight Unit (#417): the Load kind picker names it. Named `weightUnit`
   // to avoid colliding with the `LiveUnit` values mapped as `unit` below.
   weightUnit: WeightUnit;
 }
 
 // The grouped, collapsible set list (issue: always-on live timer + collapse). A
 // completed unit renders as a one-line summary (tap to re-expand and review); the
-// current and upcoming units render their full set rows so the user's place is never
-// hidden. Extracted from LiveSessionScreen to keep that shell small and this list's
-// grouping logic cohesive in one file.
+// current and upcoming units render as a set table — one card per unit, one row per
+// set (ADR-0114) — so the user's place is never hidden. Extracted from
+// LiveSessionScreen to keep that shell small and this list's grouping logic cohesive
+// in one file.
 //
 // Memoized (see the export below): this is the heaviest subtree on the app's most
-// re-render-sensitive screen — one card per set, each with its own inputs, select and
-// local edit state. Its owner keeps every prop's identity stable across a re-render the
+// re-render-sensitive screen — a row of inputs per set, and each card's local edit
+// state. Its owner keeps every prop's identity stable across a re-render the
 // performance did not cause, which is what makes the boundary hold rather than being
 // defeated on each render by a fresh array or a fresh arrow.
 function LiveSessionSetsList({
@@ -80,7 +86,7 @@ function LiveSessionSetsList({
             onExpand={() => onExpandUnit(unit.unitIndex)}
           />
         ) : (
-          <ExpandedUnit
+          <SetTableCard
             key={unit.unitIndex}
             unit={unit}
             currentIndex={currentIndex}
@@ -127,7 +133,7 @@ function CollapsedUnitCard({
   );
 }
 
-interface ExpandedUnitProps {
+interface SetTableCardProps {
   unit: LiveUnit;
   currentIndex: number;
   onCompleteSet: LiveSessionSetsProps["onCompleteSet"];
@@ -137,10 +143,45 @@ interface ExpandedUnitProps {
   weightUnit: WeightUnit;
 }
 
-// An expanded unit: its full set rows, under a lightweight "SUPERSET A" label when
-// the unit is a Superset (so its interleaved members read as one group). Solo units
-// carry no header — the set rows already name their exercise.
-function ExpandedUnit({
+// A row's edited values, by the set's absolute index.
+type Entries = Readonly<Record<number, SetEntryValues>>;
+type EditSet = (index: number, patch: Partial<SetEntryValues>) => void;
+
+// A set's values as the entry fields hold them, seeded from what the set carries: the
+// prescription pre-fill, or — for a completed or reopened set — what it was completed with
+// (ADR-0089). Held as the set-entry vocabulary so the shared fields read them directly; a
+// Live Session set posts nothing, so these are the only copy there is until a completion
+// folds them into an event. The `kind` is stated though no field renders it: a live set is
+// a rep count against its prescription.
+function seedEntry(set: LiveSet): SetEntryValues {
+  return setEntryValues({
+    kind: "repetitions",
+    reps: String(set.reps),
+    load_kind: set.loadKind,
+    load_value: set.loadValue,
+    rpe: set.rpe === null ? "" : String(set.rpe),
+  });
+}
+
+// The row every set and the column header share (ADR-0087). Not a grid: each cell states the
+// width it asks for, and the row keeps them on one line while the asks fit and wraps when they
+// do not. At 320px and 100% text the asks fit with room to spare, and since every row (and the
+// header) makes the same asks, its cells grow to the same widths and the columns align down the
+// card. At 200% text the asks double while the card keeps its pixels, so a row wraps instead of
+// squeezing a reps field to nothing — fixed `rem` tracks did exactly that (2,700 controls at
+// 200% left with no room for their value).
+const ROW = "flex min-w-0 flex-wrap items-center gap-1.5";
+const TAG_CELL = "w-7 shrink-0";
+const REPS_CELL = "min-w-0 grow basis-10";
+const LOAD_CELL = "min-w-0 grow basis-13";
+const RPE_CELL = "min-w-0 grow basis-10";
+const ACTION_CELL = "w-9 shrink-0";
+
+// One unit as a set table (ADR-0114): the unit's members — each with its prescription, last
+// time and Load kind — then one row per set, a Superset's grouped by round. The rows' edited
+// values live here rather than in each row, because a member's Load kind is one pick that
+// several rows take.
+function SetTableCard({
   unit,
   currentIndex,
   onCompleteSet,
@@ -148,202 +189,273 @@ function ExpandedUnit({
   onReopenSet,
   isFinishing,
   weightUnit,
-}: ExpandedUnitProps): React.JSX.Element {
-  return (
-    <div className="flex flex-col gap-3">
-      {unit.supersetLabel ? (
-        <span className="label-mono text-[11px] text-cyan">
-          SUPERSET {unit.supersetLabel}
-        </span>
-      ) : null}
-      <ol className="flex list-none flex-col gap-3 p-0">
-        {unit.sets.map(({ set, index }) => (
-          <li key={liveSetDomId(set)} id={liveSetDomId(set)}>
-            <SetRow
-              // Keyed on `status` so a reopen remounts the row, re-seeding its inputs
-              // from the retained record values rather than whatever was last typed
-              // into them. The row's edit state is local `useState` seeded at mount,
-              // which does not re-seed on a prop change — so this is deliberate, not
-              // incidental: a reopened set must open on the numbers it was completed with.
-              key={set.status}
-              set={set}
-              isCurrent={index === currentIndex}
-              weightUnit={weightUnit}
-              isFinishing={isFinishing}
-              onComplete={(reps, loadKind, loadValue, rpe) =>
-                onCompleteSet(index, reps, loadKind, loadValue, rpe)
-              }
-              onSkip={() => onSkipSet(index)}
-              onReopen={() => onReopenSet(index)}
-            />
-          </li>
-        ))}
-      </ol>
-    </div>
+}: SetTableCardProps): React.JSX.Element {
+  const view = setTableView(unit, currentIndex);
+  const [entries, setEntries] = useState<Entries>(() =>
+    Object.fromEntries(unit.sets.map(({ set, index }) => [index, seedEntry(set)])),
   );
-}
+  const edit: EditSet = (index, patch) =>
+    setEntries((current) => ({ ...current, [index]: { ...current[index], ...patch } }));
 
-interface SetRowProps {
-  set: LiveSet;
-  isCurrent: boolean;
-  weightUnit: WeightUnit;
-  isFinishing: boolean;
-  onComplete: (
-    reps: number,
-    loadKind: LoadKind,
-    loadValue: string,
-    rpe: number | null,
-  ) => void;
-  onSkip: () => void;
-  onReopen: () => void;
-}
-
-// One prescribed set. Its edited reps/load/RPE live as local input state, seeded
-// from the prescription pre-fill; "Complete" folds those values into a
-// COMPLETE_SET event. "Skip" leaves the set un-attempted (ADVANCE) — finishing with
-// any skipped set records the performance Incomplete (ADR-0013). A completed set is
-// not settled: "Reopen" hands it back as un-attempted with its values intact
-// (ADR-0089), so a mis-tap or a wrong weight is correctable during the performance
-// rather than only afterwards via Log Correction.
-function SetRow({
-  set,
-  isCurrent,
-  weightUnit,
-  isFinishing,
-  onComplete,
-  onSkip,
-  onReopen,
-}: SetRowProps) {
-  // The row's edited values, seeded at mount from the prescription pre-fill. Held as the
-  // set-entry vocabulary rather than four `useState`s so the shared fields can read them
-  // directly; a Live Session set posts nothing, so these are the only copy there is until
-  // "Complete" folds them into an event. The `kind` is stated though this surface renders
-  // `Reps` directly rather than through `Amount`: a live set is a rep count against its
-  // prescription, and recording that is cheaper than leaving the field to be inferred.
-  const [entry, setEntry] = useState<SetEntryValues>(() =>
-    setEntryValues({
-      kind: "repetitions",
-      reps: String(set.reps),
-      load_kind: set.loadKind,
-      load_value: set.loadValue,
-      rpe: set.rpe === null ? "" : String(set.rpe),
-    }),
-  );
-
-  const completed = set.status === "completed";
-  const label = `${set.exerciseName}, set ${set.setNumber}`;
-
-  function handleComplete() {
-    const repsValue = Number.parseInt(entry.reps, 10);
-    const rpeValue = entry.rpe === "" ? null : Number.parseInt(entry.rpe, 10);
-    onComplete(
-      Number.isInteger(repsValue) && repsValue >= 0 ? repsValue : 0,
+  function complete(index: number) {
+    const entry = entries[index];
+    const reps = Number.parseInt(entry.reps, 10);
+    const rpe = entry.rpe === "" ? null : Number.parseInt(entry.rpe, 10);
+    onCompleteSet(
+      index,
+      Number.isInteger(reps) && reps >= 0 ? reps : 0,
       entry.load_kind as LoadKind,
       entry.load_value.trim(),
-      rpeValue !== null && Number.isInteger(rpeValue) ? rpeValue : null,
+      rpe !== null && Number.isInteger(rpe) ? rpe : null,
     );
   }
 
   return (
     <Card
-      className={
-        completed
-          ? "flex flex-col gap-3 border-cyan/40 p-4"
-          : isCurrent
-            ? "flex flex-col gap-3 border-cyan p-4"
-            : "flex flex-col gap-3 p-4"
-      }
+      data-set-table=""
+      className={cn("flex flex-col gap-2.5 p-3", view.holdsCurrent ? "border-cyan" : null)}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-base font-mono text-[12px] font-bold text-cyan">
-            {set.setNumber}/{set.moduleSetCount}
-          </span>
-          <span className="min-w-0 break-words font-display text-[15px] font-semibold text-text-primary">
-            {set.exerciseName}
-          </span>
-        </div>
-        {completed ? (
-          <Badge variant="cyan">
-            <Check className="h-3 w-3" aria-hidden />
-            DONE
-          </Badge>
-        ) : null}
+      <div className="flex items-start justify-between gap-3">
+        {view.supersetLabel ? (
+          <h3 className="label-mono pt-1 text-[11px] text-cyan">{view.title}</h3>
+        ) : (
+          <h3 className="min-w-0 break-words text-pretty font-display text-[15px] font-semibold leading-tight text-text-primary">
+            {view.title}
+          </h3>
+        )}
+        <Badge variant={view.done === view.total ? "cyan" : "muted"}>
+          {view.done}/{view.total}
+        </Badge>
       </div>
 
-      <p className="font-mono text-[11px] text-text-muted">
-        Prescribed: {set.prescribedReps} reps · {set.prescribedLoadText}
-      </p>
+      <div className={cn("flex flex-col", view.supersetLabel ? "gap-2.5" : null)}>
+        {view.members.map((member) => (
+          <MemberLine
+            key={member.modulePosition}
+            member={member}
+            entries={entries}
+            edit={edit}
+            weightUnit={weightUnit}
+            inHand={unit.sets.some(
+              ({ set, index }) => index === currentIndex && set.modulePosition === member.modulePosition,
+            )}
+          />
+        ))}
+      </div>
 
-      {set.previous ? (
-        <p className="font-mono text-[11px] text-cyan">
-          Previous: {set.previous.reps} reps · {set.previous.loadText}
-        </p>
-      ) : null}
+      {/* The column header: the captions the row cells do not repeat. Hidden from the
+          accessibility tree because every cell already names itself in full ("Reps for
+          Ring dip, set 2"). */}
+      <div className={cn(ROW, "label-mono text-[9px] text-text-muted")} aria-hidden>
+        <span className={cn(TAG_CELL, "text-center")}>{view.supersetLabel ? "" : "SET"}</span>
+        <span className={cn(REPS_CELL, "text-center")}>REPS</span>
+        <span className={cn(LOAD_CELL, "text-center")}>LOAD</span>
+        <span className={cn(RPE_CELL, "text-center")}>RPE</span>
+        <span className={ACTION_CELL} />
+      </div>
 
-      {/* The shared set-entry fields (ADR-0106). The provider sits *inside* the row, not above
-          the memoized list: its value is built from this row's own state, so no new context
-          value crosses the `memo` boundary that keeps this screen's re-renders down
-          (ADR-0091). `prefix` is null because a Live Session is ephemeral and client-side
-          until it is finished (ADR-0012) — these fields are in no form. */}
-      <SetEntryProvider
-        values={entry}
-        unit={weightUnit}
-        prefix={null}
-        subject={{ joiner: "for", name: label }}
-        disabled={completed}
-        onEdit={(patch) => setEntry((current) => ({ ...current, ...patch }))}
-      >
-        <FieldRow>
-          <SetEntry.Reps />
-          <SetEntry.Effort />
-        </FieldRow>
+      <div className="flex flex-col gap-1">
+        {view.rounds.map(({ round, rows }) => (
+          <div key={round ?? 0} className="flex flex-col gap-1">
+            {round !== null ? (
+              <span className="label-mono flex items-center gap-2 pt-1 text-[9px] text-text-muted">
+                ROUND {round}/{view.roundCount}
+                <span className="h-px grow bg-border" aria-hidden />
+              </span>
+            ) : null}
+            <ol className="flex list-none flex-col gap-1 p-0">
+              {rows.map((row) => (
+                <SetTableRowItem
+                  key={liveSetDomId(row.set)}
+                  row={row}
+                  entry={entries[row.index]}
+                  edit={edit}
+                  weightUnit={weightUnit}
+                  isFinishing={isFinishing}
+                  onComplete={() => complete(row.index)}
+                  onReopen={() => onReopenSet(row.index)}
+                />
+              ))}
+            </ol>
+          </div>
+        ))}
+      </div>
 
-        <FieldRow>
-          <SetEntry.Load />
-        </FieldRow>
-      </SetEntryProvider>
-
-      <div className="flex flex-wrap items-center gap-2">
-        {completed ? (
-          // No confirmation: the act *is* an undo, and re-completing the set restores it
-          // exactly, so a dialog here would only tax the recovery path. The label is
-          // per-set because a screen of identical rows makes a bare "Reopen" ambiguous.
+      {view.skip ? (
+        <div className="flex justify-end">
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            onClick={onReopen}
-            disabled={isFinishing}
-            aria-label={`Reopen ${label}`}
+            className="h-7 px-2"
+            onClick={() => onSkipSet(view.skip!.index)}
+            aria-label={view.skip.ariaLabel}
           >
-            <RotateCcw className="h-3.5 w-3.5" />
-            Reopen
+            <SkipForward className="h-3.5 w-3.5" aria-hidden />
+            {view.skip.text}
           </Button>
-        ) : (
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleComplete}
-            >
-              <Check className="h-3.5 w-3.5" />
-              Complete set
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onSkip}
-              aria-label={`Skip ${label}`}
-            >
-              <SkipForward className="h-3.5 w-3.5" />
-              Skip
-            </Button>
-          </>
-        )}
-      </div>
+        </div>
+      ) : null}
     </Card>
+  );
+}
+
+interface MemberLineProps {
+  member: SetTableMember;
+  entries: Entries;
+  edit: EditSet;
+  weightUnit: WeightUnit;
+  inHand: boolean;
+}
+
+// One member of the unit: its tag and name inside a Superset, its prescription and last time,
+// and its Load kind. The kind is asked once per member and applies to the member's sets still
+// to do — so the picker is a set-entry row whose values are the first such set and whose edit
+// fans out to all of them. A done member's picker is disabled and shows the kind it was
+// performed with.
+function MemberLine({ member, entries, edit, weightUnit, inHand }: MemberLineProps) {
+  const shown = member.pendingIndexes[0] ?? member.indexes[0];
+  return (
+    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+      <div className="flex min-w-0 grow basis-40 items-start gap-2">
+        {member.tag ? <RowTag tone={inHand ? "current" : "muted"}>{member.tag}</RowTag> : null}
+        <div className="flex min-w-0 flex-col">
+          {member.tag ? (
+            <span className="break-words font-display text-[14px] font-semibold leading-tight text-text-primary">
+              {member.name}
+            </span>
+          ) : null}
+          <p className="font-mono text-[11px]">
+            <span data-member-prescription="" className="text-text-muted">
+              {member.prescriptionText}
+            </span>
+            {member.lastText ? (
+              <>
+                <span className="text-text-muted"> · </span>
+                <span data-member-last="" className="text-cyan">
+                  {member.lastText}
+                </span>
+              </>
+            ) : null}
+          </p>
+        </div>
+      </div>
+      {/* A 7.5rem ask that may shrink: beside the name while both fit, on its own line when
+          they do not — and never wider than the card, which a fixed width was at 200% text. */}
+      <div className="min-w-0 basis-30">
+        <SetEntryProvider
+          values={entries[shown]}
+          unit={weightUnit}
+          prefix={null}
+          subject={{ joiner: "for", name: member.name }}
+          disabled={member.pendingIndexes.length === 0}
+          onEdit={(patch) => member.pendingIndexes.forEach((index) => edit(index, patch))}
+        >
+          <SetEntry.LoadKind />
+        </SetEntryProvider>
+      </div>
+    </div>
+  );
+}
+
+function RowTag({ tone, children }: { tone: "muted" | "current"; children: React.ReactNode }) {
+  return (
+    <span
+      className={cn(
+        "flex h-7 min-w-7 shrink-0 items-center justify-center rounded-sm px-1 font-mono text-[11px] font-bold",
+        tone === "current" ? "bg-cyan-dim text-cyan" : "bg-base text-text-muted",
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+interface SetTableRowItemProps {
+  row: SetTableRow;
+  entry: SetEntryValues;
+  edit: EditSet;
+  weightUnit: WeightUnit;
+  isFinishing: boolean;
+  onComplete: () => void;
+  onReopen: () => void;
+}
+
+// One prescribed set as one row: its tag, then reps, Load value and RPE through the shared
+// set-entry cells (ADR-0106), then its ✓. A completed row is read-only and its filled ✓ is the
+// Reopen (ADR-0089): no confirmation, since the act *is* an undo and re-completing restores it
+// exactly. The row carries the set's DOM id, which the sticky "Next up" line scrolls to.
+function SetTableRowItem({
+  row,
+  entry,
+  edit,
+  weightUnit,
+  isFinishing,
+  onComplete,
+  onReopen,
+}: SetTableRowItemProps) {
+  const { set, isCompleted, isCurrent, subject } = row;
+  return (
+    <li
+      id={liveSetDomId(set)}
+      className={cn(
+        ROW,
+        "rounded-sm py-0.5",
+        isCompleted ? "bg-cyan-dim" : null,
+        isCurrent ? "outline outline-1 outline-cyan" : null,
+      )}
+    >
+      <span
+        className={cn(
+          TAG_CELL,
+          "text-center font-mono text-[12px] font-bold",
+          isCompleted || isCurrent ? "text-cyan" : "text-text-muted",
+        )}
+      >
+        {row.tag}
+      </span>
+      <SetEntryProvider
+        values={entry}
+        unit={weightUnit}
+        prefix={null}
+        subject={{ joiner: "for", name: subject }}
+        disabled={isCompleted}
+        onEdit={(patch) => edit(row.index, patch)}
+      >
+        <div className={REPS_CELL}>
+          <SetEntry.RepsCell />
+        </div>
+        <div className={LOAD_CELL}>
+          <SetEntry.LoadValueCell />
+        </div>
+        <div className={RPE_CELL}>
+          <SetEntry.EffortCell />
+        </div>
+      </SetEntryProvider>
+      {isCompleted ? (
+        <Button
+          type="button"
+          variant="primary"
+          size="icon"
+          className={cn(ACTION_CELL, "h-9")}
+          onClick={onReopen}
+          disabled={isFinishing}
+          aria-label={`Reopen ${subject}`}
+        >
+          <Check className="h-4 w-4" aria-hidden />
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className={cn(ACTION_CELL, "h-9")}
+          onClick={onComplete}
+          aria-label={`Complete ${subject}`}
+        >
+          <Check className="h-4 w-4" aria-hidden />
+        </Button>
+      )}
+    </li>
   );
 }
