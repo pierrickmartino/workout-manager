@@ -4,7 +4,14 @@ import { useState, useTransition } from "react";
 import { Trash2 } from "@/components/pulse/icons";
 
 import { submitRemovePrescription } from "@/app/sessions/[id]/actions";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import {
+  ACTION_SHEET_EDITOR,
+  ActionSheetItemText,
+  actionSheetItemClass,
+  useActionSheet,
+} from "@/components/pulse/action-sheet";
 
 interface RemoveExerciseButtonProps {
   sessionId: number;
@@ -27,7 +34,9 @@ const LAST_MOVEMENT_HINT = "A session must keep at least one exercise.";
 // inline confirm (no modal); the confirm names the Superset-dissolve consequence when
 // removing this movement would ungroup its partner. On confirm it posts to the remove
 // server action and lets the revalidated Session page drop the movement and re-number the
-// survivors in place.
+// survivors in place. It lives in the card's action sheet (ADR-0113), and closes it on success:
+// the card is keyed by position, so once the survivors re-number the same card shows the *next*
+// movement, and a sheet left open would offer to remove one the reader never chose.
 export function RemoveExerciseButton({
   sessionId,
   position,
@@ -37,39 +46,33 @@ export function RemoveExerciseButton({
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const sheet = useActionSheet();
 
   if (!canRemove) {
     return (
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled
-        title={LAST_MOVEMENT_HINT}
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-        Remove
-      </Button>
+      <button type="button" disabled className={actionSheetItemClass("danger")}>
+        <Trash2 className="h-4 w-4 shrink-0" aria-hidden />
+        <ActionSheetItemText label="Remove" description={LAST_MOVEMENT_HINT} />
+      </button>
     );
   }
 
   if (!confirming) {
     return (
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
+      <div className="flex flex-col">
+        <button
           type="button"
-          variant="outline"
-          size="sm"
+          className={actionSheetItemClass("danger")}
           onClick={() => {
             setError(null);
             setConfirming(true);
           }}
         >
-          <Trash2 className="h-3.5 w-3.5" />
-          Remove
-        </Button>
+          <Trash2 className="h-4 w-4 shrink-0" aria-hidden />
+          <ActionSheetItemText label="Remove" description="Take this movement out of the session" />
+        </button>
         {error ? (
-          <span role="alert" className="font-mono text-[12px] text-magenta">
+          <span role="alert" className="px-4 pb-2 font-mono text-[12px] text-magenta">
             {error}
           </span>
         ) : null}
@@ -90,12 +93,13 @@ export function RemoveExerciseButton({
         setConfirming(false);
         return;
       }
-      // On success the revalidated page re-renders without this row; nothing else to do.
+      // On success the revalidated page re-renders without this movement.
+      sheet?.actions.close();
     });
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className={cn(ACTION_SHEET_EDITOR, "flex flex-wrap items-center gap-3")}>
       <span className="font-mono text-[12px] text-text-secondary">
         {confirmPrompt}
       </span>

@@ -43,6 +43,14 @@ import { SpecsPanel } from "@/components/exercise/specs-panel";
 import { AdminExerciseBrowser } from "@/components/AdminExerciseBrowser";
 import { LocalInstant } from "@/components/pulse/local-instant";
 import { ConfirmDialog } from "@/components/pulse/confirm-dialog";
+import { ActionSheetItemText, ActionSheetPanel, ActionSheetSeparator, actionSheetItemClass } from "@/components/pulse/action-sheet";
+import { RenameSessionControl } from "@/components/RenameSessionControl";
+import { ShareSessionControl } from "@/components/ShareSessionControl";
+import { DuplicateButton } from "@/components/DuplicateButton";
+import { DeleteSessionControl } from "@/components/DeleteSessionControl";
+import { submitDeleteSession } from "@/app/sessions/[id]/actions";
+import { DELETE_DISABLED_HINT } from "@/lib/session-delete";
+import { ArrowRight } from "@/components/pulse/icons";
 import { BuildWorkoutLink, GenerateTrainingLaunchpad, LogPastWorkoutLink } from "@/components/pulse/generate-training-launchpad";
 import { FitnessLevelStandings } from "@/components/pulse/fitness-level-standings";
 import { toFitnessLevelRows } from "@/lib/fitness-level-standing";
@@ -185,6 +193,25 @@ function ConfirmSurface() {
   />;
 }
 
+// The action sheet that replaced the ⋯ More / ⋯ Actions disclosure (ADR-0113). It renders only
+// while open, so — like `confirm` — no other journey ever shows one. The case is the worst of both
+// call sites at once: the Session detail's five actions, Delete disabled so its row carries the
+// longest description, under the longest title a sheet carries — a My Sessions row's authored
+// name, which in the default fixture is 120 unbroken characters.
+function SheetSurface() {
+  return <ActionSheetPanel title={sessions[1].display_name} onClose={() => {}}>
+    <RenameSessionControl sessionId={1} displayName={sessions[1].display_name} isUserNamed editValue={sessions[1].display_name} />
+    <ShareSessionControl sessionId={1} />
+    <DuplicateButton sessionId={1} />
+    <a href="/sessions/new" className={actionSheetItemClass()}>
+      <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+      <ActionSheetItemText label="Generate another" description="Ask for a new standalone session" />
+    </a>
+    <ActionSheetSeparator />
+    <DeleteSessionControl sessionId={1} action={submitDeleteSession} disabledHint={DELETE_DISABLED_HINT} />
+  </ActionSheetPanel>;
+}
+
 // Both of the launchpad's compositions, in one capture (ADR-0109): the TRAIN tab's four cards
 // above the Home empty state's two. Neither was in any journey — the `home` journey mounts the
 // *protocol-present* path, so the empty state's launchpad never rendered either — and this is a
@@ -257,6 +284,7 @@ function Content() {
     // in that row. Neither admin screen was in any journey before.
     case "admin": return <AdminAudit />;
     case "confirm": return <ConfirmSurface />;
+    case "sheet": return <SheetSurface />;
     case "launchpad": return <LaunchpadSurface />;
     case "levels": return <FitnessLevelSurface />;
     case "contrast": return <ContrastSamples />;

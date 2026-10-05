@@ -6,6 +6,11 @@ import { Check, Copy, Share2 } from "@/components/pulse/icons";
 import { submitRevokeShare, submitShare } from "@/app/sessions/[id]/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  ACTION_SHEET_EDITOR,
+  ActionSheetItemText,
+  actionSheetItemClass,
+} from "@/components/pulse/action-sheet";
 
 interface ShareSessionControlProps {
   sessionId: number;
@@ -19,6 +24,8 @@ interface ShareSessionControlProps {
 // Revoke. Producing is idempotent server-side (re-sharing returns the same live link), and Revoke
 // is the sharer's off-switch — it stops future Redeems but never reaches copies already taken. A
 // thin renderer: the token, the URL, and the ownership/standalone guards are all owned server-side.
+// A row of the Session detail's action sheet (ADR-0113); the link opens in place of the row, and
+// the sheet stays up so it can be copied.
 export function ShareSessionControl({ sessionId }: ShareSessionControlProps) {
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -64,19 +71,16 @@ export function ShareSessionControl({ sessionId }: ShareSessionControlProps) {
 
   if (url === null) {
     return (
-      <div className="flex flex-col gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={produce}
-          disabled={pending}
-        >
-          <Share2 className="h-3.5 w-3.5" />
-          {pending ? "Creating link…" : "Share"}
-        </Button>
+      <div className="flex flex-col">
+        <button type="button" className={actionSheetItemClass()} onClick={produce} disabled={pending}>
+          <Share2 className="h-4 w-4 shrink-0" aria-hidden />
+          <ActionSheetItemText
+            label={pending ? "Creating link…" : "Share"}
+            description="Publish a link anyone can save a copy from"
+          />
+        </button>
         {error ? (
-          <span role="alert" className="font-mono text-[12px] text-magenta">
+          <span role="alert" className="px-4 pb-2 font-mono text-[12px] text-magenta">
             {error}
           </span>
         ) : null}
@@ -85,7 +89,7 @@ export function ShareSessionControl({ sessionId }: ShareSessionControlProps) {
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className={`${ACTION_SHEET_EDITOR} flex flex-col gap-2`}>
       <span className="label-mono text-[9px] text-text-muted">
         Anyone with this link can save a copy
       </span>

@@ -51,6 +51,9 @@ const ALL_JOURNEYS = [
   // The themed confirmation (ADR-0098), which no other journey mounts because a dialog exists
   // only while it is open. Its `max-w-sm` box must not stretch with the wide frame.
   "confirm",
+  // The action sheet (ADR-0113), a modal for the same reason. It is capped at the shell's 26rem,
+  // so at 1440px it must stay a centred bottom sheet rather than a 72rem strip.
+  "sheet",
   // The Exercise detail lens and the admin catalog (ADR-0095/0096/0097). Neither was ever in a
   // journey, so neither had been rendered at any width by this harness. Both stay unconverted —
   // no `data-shell="wide"` — so they also widen the evidence that the frame leaves an
