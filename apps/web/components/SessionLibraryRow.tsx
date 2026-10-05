@@ -19,11 +19,13 @@ import { SessionCard } from "@/components/SessionCard";
 import { DeleteSessionControl } from "@/components/DeleteSessionControl";
 import {
   ActionSheet,
+  useActionSheet,
+} from "@/components/pulse/action-sheet";
+import {
   ActionSheetItemText,
   ActionSheetSeparator,
   actionSheetItemClass,
-  useActionSheet,
-} from "@/components/pulse/action-sheet";
+} from "@/components/pulse/action-sheet-item";
 import { useLongPress } from "@/components/use-long-press";
 
 // One My Sessions library row: the shared `SessionCard` plus the interactions the library adds on

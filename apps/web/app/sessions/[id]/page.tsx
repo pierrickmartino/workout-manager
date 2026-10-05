@@ -10,12 +10,12 @@ import { FavoriteSessionControl } from "@/components/FavoriteSessionControl";
 import { ShareSessionControl } from "@/components/ShareSessionControl";
 import { DeleteSessionControl } from "@/components/DeleteSessionControl";
 import { AddExerciseButton } from "@/components/AddExerciseButton";
+import { ActionSheet } from "@/components/pulse/action-sheet";
 import {
-  ActionSheet,
   ActionSheetItemText,
   ActionSheetSeparator,
   actionSheetItemClass,
-} from "@/components/pulse/action-sheet";
+} from "@/components/pulse/action-sheet-item";
 import { resolveAppearance } from "@/lib/appearance";
 import { formatLoad } from "@/lib/load";
 import type { WeightUnit } from "@/lib/weight-unit";

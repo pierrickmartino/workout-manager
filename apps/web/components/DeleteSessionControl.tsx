@@ -9,7 +9,7 @@ import {
   ACTION_SHEET_EDITOR,
   ActionSheetItemText,
   actionSheetItemClass,
-} from "@/components/pulse/action-sheet";
+} from "@/components/pulse/action-sheet-item";
 
 // The `{ error }` state both Delete server actions resolve to (Delete, ADR-0063). Named here so
 // this control can drive either the detail-page action (which redirects on success) or the

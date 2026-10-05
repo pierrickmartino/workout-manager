@@ -357,12 +357,14 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
 - A page's rare or destructive actions → an `ActionSheet` (`components/pulse/action-sheet.tsx`): a ⋯
   icon on a line the page already has, never beside a truncating title, its `aria-label` naming
   whose actions they are. Each action renders its closed state as a sheet row
-  (`actionSheetItemClass()`), the destructive one last below `ActionSheetSeparator`, and a disabled
-  one states its reason as the row's description. An action that leaves the page as it was — or
-  whose card survives it showing something else, as a position-keyed `PrescriptionCard` does after a
-  Remove — closes its own sheet through `useActionSheet()`. `lib/action-sheet.test.ts` mounts those
-  obligations; the `sheet` audit journey measures the panel, since it renders only while open
-  (ADR-0113).
+  (`actionSheetItemClass()`, from `action-sheet-item.tsx` — the directive-less half, because a
+  Server Component calls it; `lib/client-boundary-policy.ts` fails any server-reached module that
+  calls a `"use client"` export), the destructive one last below `ActionSheetSeparator`, and a
+  disabled one states its reason as the row's description. An action that leaves the page as it was
+  — or whose card survives it showing something else, as a position-keyed `PrescriptionCard` does
+  after a Remove — closes its own sheet through `useActionSheet()`. `lib/action-sheet.test.ts`
+  mounts those obligations; the `sheet` audit journey measures the panel, since it renders only
+  while open (ADR-0113).
 
 - New interactive surface → it is a native control (`a`, `button`, `summary`, `input`,
   `select`, `textarea`) or a `[role="button"]`, because that is the selector list in

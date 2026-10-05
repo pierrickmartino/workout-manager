@@ -13,7 +13,7 @@ import {
   ACTION_SHEET_EDITOR,
   ActionSheetItemText,
   actionSheetItemClass,
-} from "@/components/pulse/action-sheet";
+} from "@/components/pulse/action-sheet-item";
 
 // Matches the backend's Session Name length cap so the field never submits a value the
 // server would reject at the boundary.

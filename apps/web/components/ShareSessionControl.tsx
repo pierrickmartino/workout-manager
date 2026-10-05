@@ -10,7 +10,7 @@ import {
   ACTION_SHEET_EDITOR,
   ActionSheetItemText,
   actionSheetItemClass,
-} from "@/components/pulse/action-sheet";
+} from "@/components/pulse/action-sheet-item";
 
 interface ShareSessionControlProps {
   sessionId: number;
