@@ -48,6 +48,26 @@ export const workout: WorkoutSession = {
   id: 1, clerk_user_id: "audit-synthetic-account", training_type: "strength", duration_minutes: 30,
   has_been_regenerated: false, provenance: "user_authored", name: names[0], prescriptions,
 };
+// The live journey's Session: the shared prescriptions plus a two-member Superset with mixed
+// Load kinds, so the set table's member legend and round grouping (ADR-0114) are measured at
+// every width and text size, not only its solo card.
+export const liveWorkout: WorkoutSession = {
+  ...workout,
+  prescriptions: [
+    ...prescriptions,
+    ...exercises.slice(3, 5).map((exercise, i): ExercisePrescription => ({
+      ...prescriptions[0],
+      position: prescriptions.length + i + 1,
+      exercise_id: exercise.id,
+      exercise_name: exercise.name,
+      recommended_load: i === 0
+        ? { kind: "absolute", text: "12 kg", kg: 12 }
+        : { kind: "bodyweight", text: "bodyweight + 10 kg", added_kg: 10 },
+      superset_group: "audit-superset",
+      round_rest_seconds: 90,
+    })),
+  ],
+};
 export const profile: Profile = {
   id: 1, clerk_user_id: "audit-synthetic-account", display_name: nameFixture === "mixed" ? names[0] : "Synthetic account", gender: null,
   age: 100, height_cm: 199.9, weight_kg: 199.9, training_habits: null, recent_workout: null,

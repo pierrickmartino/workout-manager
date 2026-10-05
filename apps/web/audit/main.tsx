@@ -55,7 +55,7 @@ import { ArrowRight } from "@/components/pulse/icons";
 import { BuildWorkoutLink, GenerateTrainingLaunchpad, LogPastWorkoutLink } from "@/components/pulse/generate-training-launchpad";
 import { FitnessLevelStandings } from "@/components/pulse/fitness-level-standings";
 import { toFitnessLevelRows } from "@/lib/fitness-level-standing";
-import { adminExerciseRows, auditEntry, exerciseDetail, exerciseNames, exercises, history, personalRecords, prescriptions, profile, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
+import { adminExerciseRows, auditEntry, exerciseDetail, exerciseNames, exercises, history, liveWorkout, personalRecords, prescriptions, profile, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
 
 const params = new URLSearchParams(location.search);
 if (params.get("fonts") === "fontsource") {
@@ -273,7 +273,7 @@ function Content() {
     // both shapes.
     case "creation-logged": return <HandAuthoredSessionForm draftId="audit-only-logged" today="2026-09-26" unit="kg" seed={{ trainingType: "strength", exercises: exercises.slice(0, 3).map((exercise, index) => index === 2 ? ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "distance" as const, unit: "km" as const, sets: "3", reps: "5", loadKind: "bodyweight" as const, loadValue: "" }) : ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "repetitions" as const, unit: "km" as const, sets: "3", reps: "12", loadKind: "bodyweight" as const, loadValue: "" })) }} />;
     case "logging": return <LogSessionForm sessionId={1} prescriptions={prescriptions} today="2026-09-26" unit="kg" />;
-    case "live": return <LiveSessionScreen session={workout} today="2026-09-26" defaultRestSeconds={60} keepScreenAwake={false} unit="kg" />;
+    case "live": return <LiveSessionScreen session={liveWorkout} today="2026-09-26" defaultRestSeconds={60} keepScreenAwake={false} unit="kg" />;
     case "analytics": return <Analytics />;
     case "home": return <Home />;
     // The Exercise detail page's SPECS lens, which carries the framed illustration (ADR-0095).

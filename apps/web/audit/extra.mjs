@@ -27,7 +27,7 @@ for (const [engine, type] of [["chromium", chromium], ["webkit", webkit]]) {
         await page.waitForSelector("main");
         if (await page.locator("main").getAttribute("data-journey") !== journey) throw new Error("Fixture navigation did not reach requested journey");
         await page.evaluate(() => document.fonts.ready);
-        if (statesOnly) await page.getByRole("button", { name: "Complete set", exact: true }).first().click();
+        if (statesOnly) await page.getByRole("button", { name: /^Complete / }).first().click();
         if (journey === "catalog") await page.getByRole("button", { name: /Long exercise name/ }).first().click();
         if (journey === "analytics") await page.getByRole("button", { name: "Open muscle details" }).click();
         if (meta.state === "drawer") await page.getByRole("dialog").waitFor({ timeout: 3000 });
@@ -36,11 +36,13 @@ for (const [engine, type] of [["chromium", chromium], ["webkit", webkit]]) {
         if (errors.length) throw new Error(errors.join("; "));
         const result = { ...meta, ...await page.evaluate(inspect) };
         if (statesOnly) {
-          const completedCard = page.locator("main div").filter({ has: page.getByText("DONE", { exact: true }) })
-            .filter({ has: page.getByText(/^Prescribed:/) }).last();
-          const notes = await completedCard.locator("p").allTextContents();
-          const prescription = result.texts.find(text => text.text === notes.find(note => note.startsWith("Prescribed:")));
-          const previous = result.texts.find(text => text.text === notes.find(note => note.startsWith("Previous:")));
+          // The set table (ADR-0114) reads each member's prescription and last time once, in
+          // its header; the card holding a completed row is the one measured.
+          const completedCard = page.locator("[data-set-table]").filter({ has: page.getByRole("button", { name: /^Reopen / }) }).first();
+          const notes = { prescription: await completedCard.locator("[data-member-prescription]").first().textContent(),
+            previous: await completedCard.locator("[data-member-last]").first().textContent() };
+          const prescription = result.texts.find(text => text.text === notes.prescription);
+          const previous = result.texts.find(text => text.text === notes.previous);
           if (!prescription || !previous) throw new Error("Completed card notes were not measured");
           result.completedNotes = { prescription, previous };
           results.push(result);

@@ -463,6 +463,15 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   carries its own position, which is the thing 13 drilled callbacks proved by their shape
   (ADR-0105).
 
+- A per-set field or act in the Live Session → it is a cell in the set table's row
+  (`components/live-session-sets.tsx`), built from a captionless `SetEntry.*Cell` part, never a
+  new captioned field per set — the old per-set card was 1,296px for four sets. What does not
+  vary per set (prescription, last time, Load kind) is asked once per member in the card's
+  header; the Load kind fans out to that member's sets still to do. The row is a wrapping flex
+  row of width asks, **not** a grid: rem tracks left 2,700 controls valueless at 200% text in
+  `audit/reflow.mjs` while every static guard passed. `lib/live-set-table.ts` is the projection,
+  `lib/live-set-table-card.test.ts` mounts the card (ADR-0114).
+
 - A field that enters part of a Logged Set — an amount, a Load, an effort, a note → compose it
   from `components/pulse/set-entry.tsx`, never a new copy. That UI was written four times across
   `AdhocLogForm`, `CorrectLogForm` (twice), `LogSessionForm` and `live-session-sets`, eleven field
