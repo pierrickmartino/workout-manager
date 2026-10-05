@@ -1,11 +1,25 @@
+import { useEffect, useState } from "react";
 import { taxonomy, exercises } from "./fixtures";
 import * as auditOutbox from "@/lib/finish-outbox-store";
 import * as auditSync from "@/lib/finish-outbox-sync";
 
-const router = { push: (url: string) => { window.location.href = url; }, refresh: () => {} };
+// PROTOTYPE: `replace` + live search params so the `?variant=` switcher works in the harness.
+const router = {
+  push: (url: string) => { window.location.href = url; },
+  replace: (url: string) => { window.history.replaceState(null, "", url); window.dispatchEvent(new Event("prototype:url")); },
+  refresh: () => {},
+};
 export const useRouter = () => router;
 export const usePathname = () => "/train";
-export const useSearchParams = () => new URLSearchParams();
+export function useSearchParams() {
+  const [search, setSearch] = useState(location.search);
+  useEffect(() => {
+    const sync = () => setSearch(location.search);
+    window.addEventListener("prototype:url", sync);
+    return () => window.removeEventListener("prototype:url", sync);
+  }, []);
+  return new URLSearchParams(search);
+}
 export const unstable_rethrow = () => {};
 export const useAuth = () => ({ userId: "audit-synthetic-account", isLoaded: true });
 

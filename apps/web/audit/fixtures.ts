@@ -167,3 +167,32 @@ export const adminExerciseRows: AdminExerciseRow[] = Array.from({ length: 60 }, 
 // than imported — what is under measurement is the instant's own text, which is the longest
 // thing in that row and the part this change made longer.
 export const auditEntry = { actor: "operator@example.com", createdAt: "2026-09-30T14:03:22.123456" };
+
+// --- PROTOTYPE (live set density, throwaway) ---
+// A realistic Session for judging the `?variant=` set-card prototypes: a bodyweight hold, a
+// bodyweight pull, a loaded barbell lift with history, and a two-member Superset.
+function prototypePrescription(
+  position: number, exercise_id: number, exercise_name: string, sets: number, reps: string,
+  recommended_load: ExercisePrescription["recommended_load"],
+  previous: ExercisePrescription["previous_performance"] = [], superset_group: string | null = null,
+): ExercisePrescription {
+  return {
+    position, sets, reps, rest_seconds: 90, tempo: null, recommended_load,
+    prescribed_quantity: { kind: "repetitions", count: Number.parseInt(reps, 10) || 0, text: reps },
+    exercise_id, exercise_name, exercise_description: null, targeted_muscles: [], required_equipment: [],
+    provenance: "curated", previous_performance: previous, superset_group, round_rest_seconds: superset_group ? 90 : null,
+  };
+}
+const bw = { kind: "bodyweight" as const, text: "bodyweight" };
+export const prototypeWorkout: WorkoutSession = {
+  id: 2, clerk_user_id: "audit-synthetic-account", training_type: "strength", duration_minutes: 45,
+  has_been_regenerated: false, provenance: "user_authored", name: "Pull day",
+  prescriptions: [
+    prototypePrescription(1, 101, "Dead hang", 2, "45", bw, [{ reps: 45, load: bw }, { reps: 40, load: bw }]),
+    prototypePrescription(2, 102, "Explosive pull-up", 4, "5", bw, [{ reps: 5, load: bw }, { reps: 5, load: bw }, { reps: 4, load: bw }]),
+    prototypePrescription(3, 103, "Barbell row", 4, "8", { kind: "absolute", text: "70 kg", kg: 70 },
+      [1, 2, 3, 4].map(() => ({ reps: 8, load: { kind: "absolute" as const, text: "67.5 kg", kg: 67.5 } }))),
+    prototypePrescription(4, 104, "Incline dumbbell curl", 3, "12", { kind: "absolute", text: "12 kg", kg: 12 }, [], "ss1"),
+    prototypePrescription(5, 105, "Face pull", 3, "15", { kind: "absolute", text: "20 kg", kg: 20 }, [], "ss1"),
+  ],
+};

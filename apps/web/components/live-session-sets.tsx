@@ -12,6 +12,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FieldRow } from "@/components/pulse/field-row";
+// PROTOTYPE — throwaway: `?variant=` swaps the expanded unit's rendering.
+import { PrototypeSwitcher, usePrototypeVariant } from "@/components/pulse/prototype-switcher";
+import { LIVE_SETS_VARIANTS, PrototypeUnit } from "@/components/live-session-sets.prototype";
 
 export interface LiveSessionSetsProps {
   // The Session's sets grouped into units for display (solo Prescription or whole
@@ -63,8 +66,10 @@ function LiveSessionSetsList({
   isFinishing,
   weightUnit,
 }: LiveSessionSetsProps): React.JSX.Element {
+  const variant = usePrototypeVariant(LIVE_SETS_VARIANTS);
   return (
     <div className="flex flex-col gap-3">
+      <PrototypeSwitcher variants={LIVE_SETS_VARIANTS} />
       {units.map((unit) => {
         // Only a fully-completed unit collapses, and only until re-expanded. The
         // current unit never collapses (it holds the pointer), so the user's place
@@ -78,6 +83,18 @@ function LiveSessionSetsList({
             key={unit.unitIndex}
             unit={unit}
             onExpand={() => onExpandUnit(unit.unitIndex)}
+          />
+        ) : variant !== "A" ? (
+          <PrototypeUnit
+            key={`${variant}-${unit.unitIndex}`}
+            variant={variant}
+            unit={unit}
+            currentIndex={currentIndex}
+            onCompleteSet={onCompleteSet}
+            onSkipSet={onSkipSet}
+            onReopenSet={onReopenSet}
+            isFinishing={isFinishing}
+            weightUnit={weightUnit}
           />
         ) : (
           <ExpandedUnit
