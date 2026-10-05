@@ -1,0 +1,1241 @@
+<!doctype html>
+<!--
+  ============================================================================
+  PROTOTYPE — THROWAWAY. Not production. Not imported anywhere. Delete freely.
+  ============================================================================
+
+  QUESTION IT ANSWERS
+    "What should replace the ⋯ More / ⋯ Actions disclosure?"
+    (components/pulse/overflow-menu.tsx, used by app/sessions/[id]/page.tsx and
+    components/SessionLibraryRow.tsx.)
+
+    The two attached screenshots show the same pathology from both call sites:
+
+      1. The TRIGGER is a full-width bordered box with the same radius, border
+         and surface as a Card. So "⋯ More" reads as *content*, at the same
+         visual weight as the thing it hides.
+      2. OPENING it adds a SECOND bordered box inside the flow, so you get two
+         stacked identical rectangles — and in both screenshots the inner one
+         holds exactly ONE item. The chrome outweighs the payload.
+      3. "More" / "Actions" carry no information scent: you cannot tell whether
+         1 or 6 things are behind it, nor whether Delete is one of them. You
+         must spend the tap to find out, which is the opposite of what the
+         click budget (ADR-0071) is buying.
+      4. On a list row the panel pushes every row below it down on open.
+
+  HOW TO RUN
+    Double-click this file (open in any browser). No install, no backend.
+      - Flip VARIANTS with the floating bottom bar, the ← / → arrow keys, or
+        ?variant=now|A|B|C|D in the URL.
+      - Flip SCENARIOS with the segmented control at the top. The scenarios are
+        the real conditional branches from the code, and two of them reproduce
+        the screenshots exactly:
+          member  -> Protocol member: the menu holds only "Generate another"
+                     (screenshot 1)
+          trained -> standalone, Trained 1×: the row menu holds only
+                     "Favorite session", Delete is withheld (screenshot 2)
+          fresh   -> standalone, never trained: everything is offered (5 items
+                     on the detail, 2 on the row) — the case the current design
+                     was drawn for
+      - Flip MODE (light / dark) with the same control. The screenshots are
+        light; the Contrast Floor (ADR-0081) applies in both.
+    Rename, Share and Delete really expand, because what they expand into is
+    the whole reason the current component is a <details> and not a dropdown.
+
+  WHY A STANDALONE HTML FILE (stated assumption, per the prototype skill)
+    The skill's UI branch prefers variants mounted on the real route behind a
+    ?variant= param. Here both host routes are Server Components gated by
+    <ClerkProvider> + a live FastAPI/Postgres backend, and apps/web/node_modules
+    is not installed — so an in-app route is NOT trivially runnable, and it
+    could only show ONE of the three branches above. This file mirrors the PULSE
+    tokens, fonts and chrome (apps/web/app/globals.css, components/ui/*,
+    components/pulse/*) in a single double-click artifact, and renders BOTH host
+    surfaces at once so a variant can't win on one and lose on the other. Same
+    precedent as prototypes/training-route.html and prototypes/training-atlas.html.
+
+  CONSTRAINTS BAKED IN (from the repo, not invented here)
+    - The items are NOT plain menu items. Rename opens an inline text editor,
+      Share reveals a link + copy, Delete is a two-step inline confirm. A
+      floating dropdown would clip them — that is exactly why OverflowMenu is a
+      native <details> today. Every variant here must still host them.
+    - ADR-0071: rare / destructive actions sit ONE tap behind disclosure.
+      Variant A deliberately challenges that for the 1–2 item case; the rest
+      keep it. That disagreement is the point of the prototype.
+    - ADR-0099: every tappable thing is a native control (button / a / summary),
+      so it gets `touch-action: manipulation` from the base layer.
+    - ADR-0085 / 0087: no rigid tracks, no bare `1fr`, nothing that stops a name
+      from wrapping. Everything here wraps; the phone frame is 360px wide.
+    - CONTEXT: Favorite lists "Star" among the words to avoid — the glow edge
+      carries the state, the control is worded "Favorite session".
+    - Delete on a performed Session is shown DISABLED with a hint, not hidden
+      (ADR-0063); on a Protocol member it is withheld entirely.
+
+  THE FIVE VARIANTS
+    now  Current design, transcribed. The control group.
+    A    ACTION RAIL — no disclosure at all. Rare actions become a wrapping row
+         of small ghost chips, always visible; expansions open beneath the rail.
+         "Generate another" leaves the menu entirely (it is not an action ON
+         this session) and becomes a page-footer action.
+    B    BOTTOM SHEET — the trigger shrinks to a 40px ⋯ icon button docked in
+         the header row (zero vertical cost). Tapping raises a sheet that can
+         grow and scroll, which is the one container the inline editors never
+         outgrow.
+    C    COUNTED FLAT LIST — keeps the disclosure but gives the trigger a live
+         count ("4 more actions"), and the panel is not a second box: it is a
+         full-bleed divided list continuing the same card.
+    D    PROMOTE THE LONE ACTION — the rule changes: a disclosure never holds
+         fewer than two items. One item => render it as a real chip, no chrome.
+         Two or more => a shrink-to-fit ⋯ chip, never a full-width box. This is
+         the minimal fix aimed straight at both screenshots.
+  ============================================================================
+-->
+<html lang="en" data-skin="pulse" data-mode="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PROTOTYPE // Overflow actions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+  rel="stylesheet"
+/>
+<style>
+  /* ---- PULSE tokens, transcribed from apps/web/app/globals.css ------------ */
+  html[data-mode="dark"] {
+    --color-base: #09090b;
+    --color-surface: #18181b;
+    --color-elevated: #27272a;
+    --color-border: #27272a;
+    --color-border-lite: #3f3f46;
+    --color-text-primary: #fafafa;
+    --color-text-secondary: #a1a1aa;
+    --color-text-muted: #8f8f97;
+    --color-cyan: #29e7e0;
+    --color-cyan-dim: #29e7e01f;
+    --color-violet: #b08bff;
+    --color-violet-dim: #b08bff1f;
+    --color-magenta: #ff67ac;
+    --color-magenta-dim: #ff67ac1f;
+    --color-amber: #ffb454;
+    --color-green: #35e08b;
+    --color-on-accent: #04121a;
+  }
+  html[data-mode="light"] {
+    --color-base: #ffffff;
+    --color-surface: #fafafa;
+    --color-elevated: #f4f4f5;
+    --color-border: #e4e4e7;
+    --color-border-lite: #d4d4d8;
+    --color-text-primary: #18181b;
+    --color-text-secondary: #52525b;
+    --color-text-muted: #6d6d76;
+    --color-cyan: #066d7d;
+    --color-cyan-dim: #066d7d1f;
+    --color-violet: #7733ec;
+    --color-violet-dim: #7733ec1f;
+    --color-magenta: #b81f63;
+    --color-magenta-dim: #b81f631f;
+    --color-amber: #a04a08;
+    --color-green: #04714f;
+    --color-on-accent: #ffffff;
+  }
+
+  :root {
+    --font-display: "Space Grotesk", system-ui, sans-serif;
+    --font-sans: "Space Grotesk", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+    --radius-sm: 4px;
+    --radius-md: 8px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 24px 16px 150px;
+    background: color-mix(in srgb, var(--color-base) 92%, var(--color-text-primary));
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; touch-action: manipulation; }
+  a { color: inherit; text-decoration: none; touch-action: manipulation; }
+
+  /* ---- Harness chrome (deliberately NOT part of the design under test) ---- */
+  .harness {
+    max-width: 1180px;
+    margin: 0 auto 20px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 18px;
+  }
+  .harness h1 {
+    font-family: var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 11px;
+    font-weight: 700;
+    margin: 0;
+    color: var(--color-text-muted);
+  }
+  .seg { display: flex; flex-wrap: wrap; gap: 4px; }
+  .seg > span {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    align-self: center;
+    margin-right: 2px;
+  }
+  .seg button {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  .seg button[aria-pressed="true"] {
+    border-color: var(--color-cyan);
+    color: var(--color-cyan);
+    background: var(--color-cyan-dim);
+  }
+
+  .stage {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 28px;
+    align-items: flex-start;
+  }
+  .surface-wrap { display: flex; flex-direction: column; gap: 8px; }
+  .surface-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+  .phone {
+    position: relative;
+    width: 360px;
+    min-height: 420px;
+    overflow: hidden;
+    background: var(--color-base);
+    border: 1px solid var(--color-border-lite);
+    border-radius: 20px;
+    padding: 18px 16px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* ---- PULSE primitives, transcribed ------------------------------------- */
+  .label-mono {
+    font-family: var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .overline {
+    font-family: var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 11px;
+    color: var(--color-cyan);
+  }
+  .h1 {
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+    text-wrap: balance;
+    min-width: 0;
+    overflow-wrap: break-word;
+  }
+  .h2 {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: break-word;
+  }
+  .card {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    border-radius: var(--radius-md);
+    color: var(--color-text-primary);
+  }
+  .glow-favorite {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--color-cyan) 55%, transparent),
+      0 0 14px 0 color-mix(in srgb, var(--color-cyan) 28%, transparent);
+  }
+  .badge {
+    font-family: var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: var(--radius-sm);
+    padding: 4px 8px;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .badge-magenta { background: var(--color-magenta-dim); color: var(--color-magenta); }
+  .badge-cyan { background: var(--color-cyan-dim); color: var(--color-cyan); }
+  .badge-muted { background: var(--color-elevated); color: var(--color-text-muted); }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+    border: 1px solid transparent;
+    transition: background-color .15s, border-color .15s, color .15s;
+    height: 36px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+  .btn-secondary {
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+    border-color: var(--color-border-lite);
+  }
+  .btn-secondary:hover { background: var(--color-elevated); }
+  .btn-ghost { color: var(--color-text-secondary); background: transparent; }
+  .btn-ghost:hover { background: var(--color-surface); color: var(--color-text-primary); }
+  .btn-primary {
+    background: var(--color-cyan);
+    color: var(--color-on-accent);
+    font-family: var(--font-mono);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 12px;
+  }
+  .btn-destructive {
+    background: var(--color-magenta-dim);
+    color: var(--color-magenta);
+    border-color: var(--color-magenta-dim);
+    font-family: var(--font-mono);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 11px;
+  }
+  .btn-destructive:hover { border-color: var(--color-magenta); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn:focus-visible,
+  .rowbtn:focus-visible,
+  summary:focus-visible,
+  .iconbtn:focus-visible {
+    outline: 2px solid var(--color-cyan);
+    outline-offset: 2px;
+  }
+
+  .icon { width: 16px; height: 16px; flex: none; }
+  .icon-sm { width: 14px; height: 14px; flex: none; }
+  .hairline { height: 1px; background: var(--color-border); border: 0; margin: 0; }
+
+  .sigil-box {
+    width: 44px; height: 44px; flex: none;
+    border: 1px solid var(--color-cyan-dim);
+    border-radius: var(--radius-sm);
+    background: var(--color-cyan-dim);
+    display: grid; place-items: center;
+  }
+
+  .stack { display: flex; flex-direction: column; gap: 12px; }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .wrap { flex-wrap: wrap; }
+  .between { justify-content: space-between; }
+  .grow { flex: 1 1 auto; min-width: 0; }
+  .muted { color: var(--color-text-muted); }
+  .secondary { color: var(--color-text-secondary); }
+  .mono12 { font-family: var(--font-mono); font-size: 12px; }
+
+  /* The inline editors every variant has to host (rename / share / confirm). */
+  .editor {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+  .editor input {
+    width: 100%;
+    height: 38px;
+    padding: 0 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border-lite);
+    background: var(--color-base);
+  }
+  .editor input:focus-visible { outline: 2px solid var(--color-cyan); outline-offset: 1px; }
+  .field-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+
+  /* ===== "now" — current design, transcribed from overflow-menu.tsx ======== */
+  .now-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 36px;
+    width: 100%;
+    list-style: none;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    border-radius: var(--radius-sm);
+    padding: 0 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+  }
+  .now-summary::-webkit-details-marker { display: none; }
+  .now-panel {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    border-radius: var(--radius-md);
+    padding: 12px;
+  }
+
+  /* ===== A — action rail ================================================== */
+  .rail { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .rail .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 13px;
+  }
+  .rail .chip:hover { background: var(--color-elevated); color: var(--color-text-primary); }
+  .rail .chip[aria-pressed="true"] { color: var(--color-cyan); }
+  .rail .chip.danger { color: var(--color-magenta); }
+  .rail .chip.danger:hover { background: var(--color-magenta-dim); color: var(--color-magenta); }
+  .rail .sep {
+    width: 1px;
+    height: 18px;
+    background: var(--color-border);
+    margin: 0 2px;
+  }
+  .rail-expand {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--color-border);
+  }
+  .iconbtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--color-text-secondary);
+  }
+  .iconbtn:hover { background: var(--color-elevated); color: var(--color-text-primary); }
+  .iconbtn.danger:hover { background: var(--color-magenta-dim); color: var(--color-magenta); }
+  .iconbtn[aria-pressed="true"] { color: var(--color-cyan); }
+
+  /* ===== B — bottom sheet ================================================= */
+  .sheet-scrim {
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, #000 55%, transparent);
+    border: 0;
+    border-radius: 20px;
+    padding: 0;
+    z-index: 5;
+  }
+  .sheet {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    z-index: 6;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border-lite);
+    border-radius: 16px 16px 20px 20px;
+    padding: 10px 0 14px;
+    max-height: 86%;
+    overflow-y: auto;
+    box-shadow: 0 -12px 32px rgba(0,0,0,.28);
+  }
+  .sheet-grip {
+    width: 36px; height: 4px;
+    border-radius: 2px;
+    background: var(--color-border-lite);
+    margin: 2px auto 10px;
+  }
+  .sheet-title {
+    padding: 0 16px 10px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    justify-content: space-between;
+  }
+  .sheet-group { padding: 6px 0; }
+  .sheet-group + .sheet-group { border-top: 1px solid var(--color-border); margin-top: 4px; }
+  .rowbtn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 52px;
+    padding: 8px 16px;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    color: var(--color-text-primary);
+    font-size: 14px;
+  }
+  .rowbtn:hover { background: var(--color-elevated); }
+  .rowbtn:disabled { opacity: .5; cursor: not-allowed; }
+  .rowbtn.danger { color: var(--color-magenta); }
+  .rowbtn.danger:hover { background: var(--color-magenta-dim); }
+  .rowbtn .desc {
+    display: block;
+    font-size: 11.5px;
+    color: var(--color-text-muted);
+    margin-top: 2px;
+    font-weight: 400;
+  }
+  .rowbtn .label { font-weight: 500; }
+  .sheet-editor { padding: 4px 16px 12px; }
+
+  /* ===== C — counted flat list ============================================ */
+  .count-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 8px;
+    margin-left: auto;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    list-style: none;
+  }
+  .count-trigger::-webkit-details-marker { display: none; }
+  .count-trigger:hover { color: var(--color-cyan); }
+  details[open] > .count-trigger .chev { transform: rotate(180deg); }
+  .chev { transition: transform .15s; }
+  @media (prefers-reduced-motion: reduce) { .chev { transition: none; } }
+  .flat-list {
+    margin-top: 8px;
+    border-top: 1px solid var(--color-border);
+  }
+  .flat-list .rowbtn { padding-left: 2px; padding-right: 2px; min-height: 46px; }
+  .flat-list .rowbtn + .rowbtn,
+  .flat-list .flat-editor + .rowbtn { border-top: 1px solid var(--color-border); }
+  .flat-list .rowbtn.danger { background: var(--color-magenta-dim); border-radius: var(--radius-sm); }
+  .flat-editor { padding: 10px 2px; border-top: 1px solid var(--color-border); }
+
+  /* ===== D — promote the lone action ====================================== */
+  .d-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    list-style: none;
+    width: fit-content;
+  }
+  .d-chip::-webkit-details-marker { display: none; }
+  .d-chip:hover { border-color: var(--color-border-lite); color: var(--color-text-primary); }
+  .d-chip[aria-pressed="true"] { color: var(--color-cyan); border-color: var(--color-cyan); }
+  .d-panel {
+    margin-top: 8px;
+    padding-left: 10px;
+    border-left: 2px solid var(--color-border-lite);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
+  }
+
+  /* ---- Floating variant switcher (harness, not design) ------------------- */
+  .switcher {
+    position: fixed;
+    left: 50%;
+    bottom: 18px;
+    transform: translateX(-50%);
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: #111;
+    color: #fff;
+    border: 1px solid #444;
+    border-radius: 999px;
+    padding: 6px 8px;
+    box-shadow: 0 8px 28px rgba(0,0,0,.45);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    max-width: calc(100vw - 24px);
+  }
+  .switcher button {
+    background: #222;
+    color: #fff;
+    border: 1px solid #555;
+    border-radius: 999px;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+  }
+  .switcher button:hover { background: #333; }
+  .switcher .vlabel { padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .readout {
+    position: fixed;
+    left: 50%;
+    bottom: 60px;
+    transform: translateX(-50%);
+    z-index: 50;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: #fff;
+    background: rgba(0,0,0,.72);
+    border-radius: 999px;
+    padding: 4px 12px;
+    white-space: nowrap;
+    max-width: calc(100vw - 24px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .note {
+    max-width: 1180px;
+    margin: 20px auto 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--color-text-secondary);
+    border-left: 2px solid var(--color-cyan);
+    padding-left: 12px;
+  }
+  .note b { color: var(--color-text-primary); }
+</style>
+</head>
+<body>
+
+<div class="harness">
+  <h1>Prototype // Overflow actions</h1>
+  <div class="seg" id="scenario-seg"><span>Scenario</span></div>
+  <div class="seg" id="mode-seg"><span>Mode</span></div>
+</div>
+
+<div class="stage" id="stage"></div>
+<p class="note" id="note"></p>
+
+<div class="readout" id="readout"></div>
+<div class="switcher">
+  <button type="button" id="prev" aria-label="Previous variant">&#8592;</button>
+  <span class="vlabel" id="vlabel"></span>
+  <button type="button" id="next" aria-label="Next variant">&#8594;</button>
+</div>
+
+<script>
+/* ========================================================================== *
+ * ICONS — lucide paths, inlined. In the real app these come from
+ * components/pulse/icons (ADR-0092: never import lucide-react directly).
+ * ========================================================================== */
+const P = {
+  more:  '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  pencil:'<path d="M21.2 6.8a1 1 0 0 0-4-4L3.8 16.2a2 2 0 0 0-.5.8l-1.3 4.4a.5.5 0 0 0 .6.6l4.4-1.3a2 2 0 0 0 .8-.5z"/><path d="m15 5 4 4"/>',
+  share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4"/><path d="M15.4 6.5l-6.8 4"/>',
+  copy:  '<rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+  arrow: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/>',
+  star:  '<path d="M11.5 2.3a.5.5 0 0 1 1 0l2.3 4.7a2 2 0 0 0 1.6 1.2l5.2.7a.5.5 0 0 1 .3.9l-3.8 3.7a2 2 0 0 0-.6 1.9l.9 5.1a.5.5 0 0 1-.8.6l-4.6-2.4a2 2 0 0 0-2 0L6.4 20a.5.5 0 0 1-.8-.6l.9-5.1a2 2 0 0 0-.6-1.9L2.2 8.8a.5.5 0 0 1 .3-.9l5.2-.7a2 2 0 0 0 1.6-1.2z"/>',
+  play:  '<polygon points="6 3 20 12 6 21 6 3"/>',
+  dumb:  '<path d="M14.4 14.4 9.6 9.6"/><path d="M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z"/><path d="m21.5 21.5-1.4-1.4"/><path d="M3.9 3.9 2.5 2.5"/><path d="M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z"/>',
+  chev:  '<path d="m6 9 6 6 6-6"/>',
+  x:     '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+};
+function ic(name, cls) {
+  return '<svg class="' + (cls || 'icon') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + P[name] + '</svg>';
+}
+// A stand-in for components/pulse/workout-sigil — shape only, not the real algorithm.
+function sigil(size) {
+  const s = size || 26;
+  return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 40 40" aria-hidden="true">' +
+    '<polygon points="20,4 36,16 30,35 10,35 4,16" fill="none" stroke="var(--color-cyan)" stroke-opacity=".55" stroke-width="1.5"/>' +
+    '<polygon points="20,11 29,18 25,29 14,28 11,17" fill="var(--color-cyan)" fill-opacity=".18" stroke="var(--color-cyan)" stroke-width="1.5"/>' +
+    '<circle cx="20" cy="11" r="2.4" fill="var(--color-cyan)"/><circle cx="29" cy="18" r="2.4" fill="var(--color-cyan)"/>' +
+    '<circle cx="25" cy="29" r="2.4" fill="var(--color-cyan)"/><circle cx="14" cy="28" r="2.4" fill="var(--color-cyan)"/>' +
+    '<circle cx="11" cy="17" r="2.4" fill="var(--color-cyan)"/></svg>';
+}
+
+/* ========================================================================== *
+ * MODEL — the real conditional branches, read off the two call sites.
+ *   app/sessions/[id]/page.tsx       (detail: Favorite visible + ⋯ More)
+ *   components/SessionLibraryRow.tsx (row:    ⋯ Actions)
+ * ========================================================================== */
+const SCENARIOS = {
+  member: {
+    key: 'member', label: 'Protocol member',
+    note: 'Screenshot 1. The server withholds Rename / Share / Duplicate / Delete and the Favorite marker, so the menu holds ONE item.',
+    isMember: true, loggedCount: 0, isFavorite: false,
+    name: 'strength · 2026-10-04', type: 'strength', minutes: 60, exercises: 5,
+    rowName: 'Short Basic Upper',
+  },
+  trained: {
+    key: 'trained', label: 'Standalone · trained 1×',
+    note: 'Screenshot 2. Delete is withheld on the row (it has logged training) and shown DISABLED with a hint on the detail, so the row menu holds ONE item.',
+    isMember: false, loggedCount: 1, isFavorite: false,
+    name: 'Short Basic Upper', type: 'strength', minutes: 45, exercises: 3,
+    rowName: 'Short Basic Upper',
+  },
+  fresh: {
+    key: 'fresh', label: 'Standalone · never trained',
+    note: 'The case the current design was drawn for: 5 items on the detail, 2 on the row. Judge every variant here too — a fix for the 1-item case must not break this one.',
+    isMember: false, loggedCount: 0, isFavorite: true,
+    name: 'Push A', type: 'strength', minutes: 50, exercises: 6,
+    rowName: 'Push A',
+  },
+};
+
+// Detail-page actions, in the order app/sessions/[id]/page.tsx renders them.
+function detailActions(sc) {
+  const out = [];
+  if (!sc.isMember) {
+    out.push({ id: 'rename',    icon: 'pencil', label: 'Rename',           desc: 'Give this session your own name' });
+    out.push({ id: 'share',     icon: 'share',  label: 'Share',            desc: 'Publish a revocable share link' });
+    out.push({ id: 'duplicate', icon: 'copy',   label: 'Duplicate',        desc: 'Fork a separate editable copy' });
+  }
+  out.push({ id: 'generate',    icon: 'arrow',  label: 'Generate another', desc: 'Ask for a new standalone session', away: true });
+  if (!sc.isMember) {
+    out.push({
+      id: 'delete', icon: 'trash', label: 'Delete', danger: true,
+      disabled: sc.loggedCount > 0,
+      desc: sc.loggedCount > 0
+        ? 'Unavailable — this session has logged training'
+        : 'Permanently remove this session',
+    });
+  }
+  return out;
+}
+// The Favorite control is rendered OUTSIDE the menu on the detail today, and
+// withheld on a Protocol member.
+function detailFavorite(sc) {
+  return sc.isMember ? null
+    : { id: 'favorite', icon: 'star', label: sc.isFavorite ? 'Unfavorite' : 'Favorite', desc: 'Pin it to the top of My Sessions', pressed: sc.isFavorite };
+}
+// My Sessions row actions, from SessionLibraryRow.tsx.
+function rowActions(sc) {
+  const out = [{
+    id: 'favorite', icon: 'star', pressed: sc.isFavorite,
+    label: sc.isFavorite ? 'Unfavorite session' : 'Favorite session',
+    desc: 'Pin it to the top of My Sessions',
+  }];
+  if (sc.loggedCount === 0) {
+    out.push({ id: 'delete', icon: 'trash', label: 'Delete', danger: true, desc: 'Permanently remove this session' });
+  }
+  return out;
+}
+
+/* ========================================================================== *
+ * STATE
+ * ========================================================================== */
+const VARIANTS = [
+  { key: 'now', name: 'Current (control)' },
+  { key: 'A',   name: 'Action rail — no disclosure' },
+  { key: 'B',   name: 'Bottom sheet from a ⋯ icon' },
+  { key: 'C',   name: 'Counted flat list' },
+  { key: 'D',   name: 'Promote the lone action' },
+];
+const NOTES = {
+  now: 'The control group, transcribed from <b>components/pulse/overflow-menu.tsx</b>. Trigger and panel are two stacked bordered boxes at Card weight; in the <b>member</b> and <b>trained</b> scenarios the chrome wraps a single item.',
+  A: '<b>No disclosure at all.</b> Rare actions become a wrapping rail of ghost chips — 0 taps to see them, 1 to act instead of 2, and the row loses a whole block of height (icon-only buttons ride the fact row). Expansions open beneath the rail, still in flow. “Generate another” leaves the menu: it is not an action <i>on</i> this session, so it becomes a page-footer action. <b>This variant deliberately contradicts ADR-0071</b> (“rare or destructive actions move exactly one tap behind progressive disclosure”) — Delete is one tap away, guarded only by its existing two-step confirm. If you like A, that ADR needs an amendment.',
+  B: '<b>A 40px ⋯ icon button docked in the header row</b>, so disclosure costs zero vertical space. The sheet is the one container the inline editors never outgrow — it can grow and scroll, which the current in-flow panel cannot. Costs: a client component + portal + focus trap on a surface that is a Server Component today, and the sheet is heavy for a 1-item menu (look at <b>member</b>).',
+  C: '<b>Keeps the disclosure, fixes its two tells.</b> The trigger carries a live count (“4 more actions”) so you know the size of what is hidden before spending the tap, and the panel is not a second box — it is a full-bleed divided list continuing the same card. Still a native &lt;details&gt;, so it stays server-rendered and works with no JS. In <b>member</b>/<b>trained</b> the trigger names the single item outright instead of saying “More”. On the row it goes further: the <i>fact line itself</i> is the summary, so a closed card gains no block at all — at the cost of a full-row tap target that needs an explicit accessible name and forbids anything else in that line ever becoming interactive.',
+  D: '<b>The minimal fix, aimed straight at both screenshots.</b> New rule: a disclosure never holds fewer than two items. One item → render it as a real chip with no disclosure chrome at all. Two or more → a shrink-to-fit ⋯ chip (never full-width) whose panel is an inset list with a rule, not a box. Compare <b>member</b> (chrome disappears) with <b>fresh</b> (disclosure earns its place).',
+};
+
+const state = {
+  variant: new URLSearchParams(location.search).get('variant') || 'now',
+  scenario: new URLSearchParams(location.search).get('scenario') || 'member',
+  mode: new URLSearchParams(location.search).get('mode') || 'light',
+  open: { detail: false, row: false },   // disclosure / sheet open per surface
+  expand: { detail: null, row: null },   // which action's inline editor is open
+  draft: '',                             // rename field value, survives re-render
+};
+// ?open=detail,row pre-opens a surface, so an opened state is shareable and a
+// headless screenshot can capture one. Harness only, not part of the design.
+(new URLSearchParams(location.search).get('open') || '').split(',').forEach(s => {
+  if (s === 'detail' || s === 'row') state.open[s] = true;
+});
+if (!VARIANTS.some(v => v.key === state.variant)) state.variant = 'now';
+if (!SCENARIOS[state.scenario]) state.scenario = 'member';
+
+/* ========================================================================== *
+ * INLINE EDITORS — the three things a floating dropdown would clip. Every
+ * variant hosts the same markup, so the comparison is about the container.
+ * ========================================================================== */
+function editorFor(actionId, surface) {
+  if (actionId === 'rename') {
+    return '<div class="editor">' +
+      '<span class="field-label">Session name</span>' +
+      '<input data-draft value="' + escapeAttr(state.draft) + '" placeholder="Short Basic Upper" spellcheck="false" aria-label="Session name" />' +
+      '<div class="row wrap" style="gap:8px">' +
+        '<button class="btn btn-primary" data-act="close" data-surface="' + surface + '">Save name</button>' +
+        '<button class="btn btn-secondary" data-act="close" data-surface="' + surface + '">Cancel</button>' +
+      '</div></div>';
+  }
+  if (actionId === 'share') {
+    return '<div class="editor">' +
+      '<span class="field-label">Share link</span>' +
+      '<input readonly value="https://pulse.app/shared/4f2a-91c0" aria-label="Share link" />' +
+      '<div class="row wrap" style="gap:8px">' +
+        '<button class="btn btn-secondary" data-act="close" data-surface="' + surface + '">Copy link</button>' +
+        '<button class="btn btn-ghost" data-act="close" data-surface="' + surface + '">Revoke</button>' +
+      '</div></div>';
+  }
+  if (actionId === 'delete') {
+    return '<div class="row wrap" style="gap:10px">' +
+      '<span class="mono12 secondary">Delete this session?</span>' +
+      '<button class="btn btn-destructive" data-act="close" data-surface="' + surface + '">' + ic('trash', 'icon-sm') + 'Delete</button>' +
+      '<button class="btn btn-secondary" data-act="close" data-surface="' + surface + '">Cancel</button>' +
+    '</div>';
+  }
+  return '';
+}
+const EXPANDS = { rename: true, share: true, delete: true };
+function escapeAttr(s) { return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+
+// One click handler shape for every variant: actions that expand toggle an
+// editor; the rest are no-ops (read-only prototype — no real mutations).
+function actAttrs(a, surface) {
+  if (a.disabled) return 'disabled title="' + escapeAttr(a.desc) + '"';
+  const kind = EXPANDS[a.id] ? 'expand' : 'noop';
+  return 'data-act="' + kind + '" data-id="' + a.id + '" data-surface="' + surface + '"' +
+    (a.pressed !== undefined ? ' aria-pressed="' + a.pressed + '"' : '');
+}
+
+/* ========================================================================== *
+ * SHARED PAGE CHROME (identical in every variant — only the actions swap)
+ * ========================================================================== */
+function detailHeader(sc) {
+  return '<div class="stack" style="gap:10px">' +
+    '<span class="overline">PULSE // SESSION</span>' +
+    '<div class="row" style="gap:12px;align-items:flex-start">' +
+      '<span class="sigil-box">' + sigil(30) + '</span>' +
+      '<h1 class="h1 grow">' + sc.name + '</h1>' +
+    '</div>' +
+    '<div class="row wrap" style="gap:8px">' +
+      '<span class="badge badge-magenta">' + sc.type + '</span>' +
+      '<span class="badge badge-cyan">' + sc.minutes + ' MIN</span>' +
+    '</div>' +
+  '</div>';
+}
+function detailBody(sc) {
+  return '<div class="stack" style="gap:8px">' +
+    '<div class="row between" style="border-bottom:1px solid var(--color-border);padding-bottom:6px">' +
+      '<span class="label-mono" style="font-size:11px;color:var(--color-cyan)">&#9656; PROTOCOL</span>' +
+      '<span class="label-mono muted" style="font-size:10px">' + sc.exercises + ' EXERCISES</span>' +
+    '</div>' +
+    '<div class="card" style="padding:12px"><div class="row between"><span class="h2">Bench Press</span>' +
+      '<span class="badge badge-muted">3 × 8</span></div></div>' +
+    '<div class="card" style="padding:12px"><div class="row between"><span class="h2">Barbell Row</span>' +
+      '<span class="badge badge-muted">3 × 10</span></div></div>' +
+  '</div>';
+}
+function rowCardOpen(sc, extraClass) {
+  return '<div class="card ' + (sc.isFavorite ? 'glow-favorite ' : '') + (extraClass || '') +
+    '" style="padding:16px;display:flex;flex-direction:column;gap:12px">';
+}
+function rowHeading(sc, trailing) {
+  return '<div class="row between" style="align-items:flex-start;gap:10px">' +
+    '<div class="row grow" style="gap:12px;align-items:flex-start">' +
+      '<span class="sigil-box">' + sigil(28) + '</span>' +
+      '<div class="stack grow" style="gap:8px">' +
+        '<span class="h2">' + sc.rowName + '</span>' +
+        '<span class="badge badge-cyan" style="width:fit-content">' + sc.type + '</span>' +
+      '</div>' +
+    '</div>' +
+    '<div class="row" style="gap:4px;flex:none">' +
+      '<a class="btn btn-secondary" href="#">' + ic('play', 'icon-sm') + 'Start</a>' +
+      (trailing || '') +
+    '</div>' +
+  '</div>';
+}
+function rowFacts(sc, trailing) {
+  const badge = sc.loggedCount > 0
+    ? '<span class="badge badge-muted">Trained ' + sc.loggedCount + '&times;</span>' : '';
+  return '<div class="row between wrap" style="gap:8px;border-top:1px solid var(--color-border);padding-top:12px">' +
+    '<span class="label-mono secondary row" style="font-size:11px;gap:6px">' +
+      ic('dumb', 'icon-sm') + sc.exercises + ' exercises</span>' +
+    '<div class="row" style="gap:6px">' + badge + (trailing || '') + '</div>' +
+  '</div>';
+}
+function footerGenerate() {
+  return '<a class="btn btn-secondary" href="#" style="width:100%">Generate another' + ic('arrow', 'icon-sm') + '</a>';
+}
+
+/* ========================================================================== *
+ * VARIANT: now — the current design, transcribed
+ * ========================================================================== */
+function nowMenu(actions, surface, label) {
+  const open = state.open[surface];
+  const exp = state.expand[surface];
+  let items = '';
+  actions.forEach(a => {
+    if (exp === a.id && EXPANDS[a.id]) { items += editorFor(a.id, surface); return; }
+    items += '<button class="btn btn-ghost" style="padding-left:0" ' + actAttrs(a, surface) + '>' +
+      ic(a.icon, 'icon-sm') + a.label + '</button>';
+  });
+  return '<details ' + (open ? 'open' : '') + ' style="width:100%">' +
+    '<summary class="now-summary" data-act="toggle" data-surface="' + surface + '">' +
+      ic('more') + label + '</summary>' +
+    '<div class="now-panel">' + items + '</div>' +
+  '</details>';
+}
+function nowDetail(sc) {
+  const fav = detailFavorite(sc);
+  return detailHeader(sc) +
+    '<div class="row wrap" style="gap:8px">' +
+      (fav ? '<button class="btn btn-secondary" ' + actAttrs(fav, 'detail') + '>' + ic('star', 'icon-sm') + fav.label + '</button>' : '') +
+      nowMenu(detailActions(sc), 'detail', 'More') +
+    '</div>' +
+    detailBody(sc);
+}
+function nowRow(sc) {
+  return rowCardOpen(sc) + rowHeading(sc) + rowFacts(sc) +
+    '<div style="width:100%">' + nowMenu(rowActions(sc), 'row', 'Actions') + '</div></div>';
+}
+
+/* ========================================================================== *
+ * VARIANT A — action rail, no disclosure
+ * ========================================================================== */
+function railChips(actions, surface) {
+  let html = '';
+  let dangerSeen = false;
+  actions.forEach(a => {
+    if (a.danger && !dangerSeen) { html += '<span class="sep" aria-hidden="true"></span>'; dangerSeen = true; }
+    html += '<button class="chip' + (a.danger ? ' danger' : '') + '" ' + actAttrs(a, surface) + '>' +
+      ic(a.icon, 'icon-sm') + a.label + '</button>';
+  });
+  return '<div class="rail">' + html + '</div>';
+}
+function aDetail(sc) {
+  const fav = detailFavorite(sc);
+  // "Generate another" is NOT an action on this session, so it leaves the rail.
+  const actions = detailActions(sc).filter(a => !a.away);
+  const all = fav ? [fav].concat(actions) : actions;
+  const exp = state.expand.detail;
+  return detailHeader(sc) +
+    '<div>' + railChips(all, 'detail') +
+      (exp ? '<div class="rail-expand">' + editorFor(exp, 'detail') + '</div>' : '') +
+    '</div>' +
+    detailBody(sc) +
+    footerGenerate();
+}
+function aRow(sc) {
+  // Icon-only buttons ride the fact row: the card loses a whole block of height.
+  const actions = rowActions(sc);
+  let trailing = '';
+  actions.forEach(a => {
+    trailing += '<button class="iconbtn' + (a.danger ? ' danger' : '') + '" aria-label="' + escapeAttr(a.label) + '" title="' +
+      escapeAttr(a.label) + '" ' + actAttrs(a, 'row') + '>' + ic(a.icon, 'icon-sm') + '</button>';
+  });
+  const exp = state.expand.row;
+  return rowCardOpen(sc) + rowHeading(sc) + rowFacts(sc, trailing) +
+    (exp ? '<div style="border-top:1px solid var(--color-border);padding-top:10px">' + editorFor(exp, 'row') + '</div>' : '') +
+    '</div>';
+}
+
+/* ========================================================================== *
+ * VARIANT B — bottom sheet from a compact ⋯ icon button
+ * ========================================================================== */
+function sheetTrigger(surface) {
+  return '<button class="iconbtn" aria-label="Session actions" aria-haspopup="dialog" aria-expanded="' +
+    state.open[surface] + '" data-act="toggle" data-surface="' + surface + '">' + ic('more') + '</button>';
+}
+function sheet(sc, actions, surface, title) {
+  if (!state.open[surface]) return '';
+  const exp = state.expand[surface];
+  const safe = actions.filter(a => !a.danger);
+  const danger = actions.filter(a => a.danger);
+  function group(list) {
+    if (!list.length) return '';
+    let html = '<div class="sheet-group">';
+    list.forEach(a => {
+      if (exp === a.id && EXPANDS[a.id]) {
+        html += '<div class="sheet-editor">' + editorFor(a.id, surface) + '</div>';
+        return;
+      }
+      html += '<button class="rowbtn' + (a.danger ? ' danger' : '') + '" ' + actAttrs(a, surface) + '>' +
+        ic(a.icon) + '<span><span class="label">' + a.label + '</span>' +
+        '<span class="desc">' + a.desc + '</span></span></button>';
+    });
+    return html + '</div>';
+  }
+  return '<button class="sheet-scrim" aria-label="Close" data-act="toggle" data-surface="' + surface + '"></button>' +
+    '<div class="sheet" role="dialog" aria-label="' + escapeAttr(title) + '">' +
+      '<div class="sheet-grip"></div>' +
+      '<div class="sheet-title">' +
+        '<span class="label-mono muted" style="font-size:10px">' + title + '</span>' +
+        '<button class="iconbtn" style="width:28px;height:28px" aria-label="Close" data-act="toggle" data-surface="' + surface + '">' +
+          ic('x', 'icon-sm') + '</button>' +
+      '</div>' + group(safe) + group(danger) +
+    '</div>';
+}
+function bDetail(sc) {
+  const fav = detailFavorite(sc);
+  return detailHeader(sc) +
+    '<div class="row wrap" style="gap:8px">' +
+      (fav ? '<button class="btn btn-secondary" ' + actAttrs(fav, 'detail') + '>' + ic('star', 'icon-sm') + fav.label + '</button>' : '') +
+      sheetTrigger('detail') +
+    '</div>' +
+    detailBody(sc);
+}
+function bRow(sc) {
+  return rowCardOpen(sc) + rowHeading(sc, sheetTrigger('row')) + rowFacts(sc) + '</div>';
+}
+
+/* ========================================================================== *
+ * VARIANT C — counted flat list inside the same card
+ * ========================================================================== */
+function countedTrigger(actions, surface) {
+  // The trigger says how many, and when there is only one it says WHICH.
+  const text = actions.length === 1
+    ? actions[0].label
+    : actions.length + ' more action' + (actions.length === 1 ? '' : 's');
+  return '<summary class="count-trigger" data-act="toggle" data-surface="' + surface + '">' +
+    ic('more', 'icon-sm') + text + ic('chev', 'icon-sm chev') + '</summary>';
+}
+function flatList(actions, surface) {
+  const exp = state.expand[surface];
+  let html = '<div class="flat-list">';
+  actions.forEach(a => {
+    if (exp === a.id && EXPANDS[a.id]) { html += '<div class="flat-editor">' + editorFor(a.id, surface) + '</div>'; return; }
+    html += '<button class="rowbtn' + (a.danger ? ' danger' : '') + '" ' + actAttrs(a, surface) + '>' +
+      ic(a.icon, 'icon-sm') + '<span class="label grow">' + a.label + '</span>' +
+      (a.disabled ? '<span class="mono12 muted" style="font-size:10px">locked</span>' : '') + '</button>';
+  });
+  return html + '</div>';
+}
+function cDisclosure(actions, surface) {
+  return '<details ' + (state.open[surface] ? 'open' : '') + ' style="width:100%">' +
+    countedTrigger(actions, surface) + flatList(actions, surface) + '</details>';
+}
+function cDetail(sc) {
+  const fav = detailFavorite(sc);
+  // Favorite keeps its own line (it is a primary, frequent toggle); the disclosure
+  // is a full-width block below it, so the opened list spans the column instead of
+  // squeezing into whatever width the chip left behind.
+  return detailHeader(sc) +
+    (fav ? '<div class="row wrap" style="gap:8px">' +
+      '<button class="btn btn-secondary" ' + actAttrs(fav, 'detail') + '>' +
+      ic('star', 'icon-sm') + fav.label + '</button></div>' : '') +
+    cDisclosure(detailActions(sc), 'detail') +
+    detailBody(sc);
+}
+function cRow(sc) {
+  const actions = rowActions(sc);
+  const badge = sc.loggedCount > 0 ? '<span class="badge badge-muted">Trained ' + sc.loggedCount + '&times;</span>' : '';
+  const text = actions.length === 1 ? actions[0].label : actions.length + ' actions';
+  // On the row the fact line IS the summary, so the closed card gains NO block at
+  // all — the whole trade-off of this variant on a list. The cost: the disclosure's
+  // tap target is the full row, so it needs an explicit accessible name (the facts
+  // would otherwise be read out as part of it) and nothing else in the line may
+  // ever become interactive.
+  return rowCardOpen(sc) + rowHeading(sc) +
+    '<details ' + (state.open.row ? 'open' : '') + ' style="border-top:1px solid var(--color-border);padding-top:10px">' +
+      '<summary class="count-trigger" style="width:100%;margin-left:0;padding:0;height:auto;min-height:34px;' +
+        'flex-wrap:wrap;row-gap:6px" ' +
+        'aria-label="' + escapeAttr(text) + '" data-act="toggle" data-surface="row">' +
+        '<span class="row" style="gap:6px;white-space:nowrap;text-transform:none;letter-spacing:0;' +
+          'font-family:var(--font-sans);font-size:12px">' + ic('dumb', 'icon-sm') + sc.exercises + ' exercises</span>' +
+        badge +
+        // Pushed right while it fits on the fact line; drops to its own line rather
+        // than squeezing the facts when the lone action's name is long (ADR-0085).
+        '<span class="row" style="gap:4px;margin-left:auto">' + ic('more', 'icon-sm') + text + ic('chev', 'icon-sm chev') + '</span>' +
+      '</summary>' +
+      flatList(actions, 'row') +
+    '</details></div>';
+}
+
+/* ========================================================================== *
+ * VARIANT D — a disclosure never holds fewer than two items
+ * ========================================================================== */
+function dChip(a, surface) {
+  return '<button class="d-chip" ' + actAttrs(a, surface) + '>' + ic(a.icon, 'icon-sm') + a.label + '</button>';
+}
+function dActions(actions, surface) {
+  const exp = state.expand[surface];
+  // THE RULE: 0 items -> nothing. 1 item -> a real chip, no disclosure chrome.
+  // 2+ -> a shrink-to-fit ⋯ chip over an inset list.
+  if (actions.length === 0) return '';
+  if (actions.length === 1) {
+    return '<div style="width:100%">' + dChip(actions[0], surface) +
+      (exp ? '<div class="d-panel">' + editorFor(exp, surface) + '</div>' : '') + '</div>';
+  }
+  let items = '';
+  actions.forEach(a => {
+    if (exp === a.id && EXPANDS[a.id]) { items += editorFor(a.id, surface); return; }
+    items += '<button class="btn btn-ghost' + (a.danger ? '' : '') + '" style="padding-left:6px;' +
+      (a.danger ? 'color:var(--color-magenta)' : '') + '" ' + actAttrs(a, surface) + '>' +
+      ic(a.icon, 'icon-sm') + a.label + '</button>';
+  });
+  return '<details ' + (state.open[surface] ? 'open' : '') + '>' +
+    '<summary class="d-chip" data-act="toggle" data-surface="' + surface + '">' +
+      ic('more', 'icon-sm') + actions.length + ic('chev', 'icon-sm chev') + '</summary>' +
+    '<div class="d-panel">' + items + '</div></details>';
+}
+function dDetail(sc) {
+  const fav = detailFavorite(sc);
+  // Favorite keeps its own line so the ⋯ chip anchors at the column's left edge and
+  // its inset list hangs directly under it. The chip stays shrink-to-fit either way —
+  // "never a full-width box" is this variant's claim, not "never its own line".
+  return detailHeader(sc) +
+    (fav ? '<div class="row wrap" style="gap:8px">' + dChip(fav, 'detail') + '</div>' : '') +
+    dActions(detailActions(sc), 'detail') +
+    detailBody(sc);
+}
+function dRow(sc) {
+  return rowCardOpen(sc) + rowHeading(sc) + rowFacts(sc) +
+    dActions(rowActions(sc), 'row') + '</div>';
+}
+
+/* ========================================================================== *
+ * RENDER
+ * ========================================================================== */
+const RENDER = {
+  now: { detail: nowDetail, row: nowRow },
+  A:   { detail: aDetail,   row: aRow },
+  B:   { detail: bDetail,   row: bRow },
+  C:   { detail: cDetail,   row: cRow },
+  D:   { detail: dDetail,   row: dRow },
+};
+
+function render() {
+  document.documentElement.setAttribute('data-mode', state.mode);
+  const sc = SCENARIOS[state.scenario];
+  const r = RENDER[state.variant];
+
+  // Scenario + mode segmented controls.
+  document.getElementById('scenario-seg').innerHTML = '<span>Scenario</span>' +
+    Object.values(SCENARIOS).map(s =>
+      '<button type="button" data-scenario="' + s.key + '" aria-pressed="' + (s.key === state.scenario) + '">' +
+      s.label + '</button>').join('');
+  document.getElementById('mode-seg').innerHTML = '<span>Mode</span>' +
+    ['light', 'dark'].map(m =>
+      '<button type="button" data-mode="' + m + '" aria-pressed="' + (m === state.mode) + '">' + m + '</button>').join('');
+
+  const detailSheet = state.variant === 'B' ? sheet(sc, detailActions(sc), 'detail', 'Session actions') : '';
+  const rowSheet    = state.variant === 'B' ? sheet(sc, rowActions(sc), 'row', sc.rowName) : '';
+
+  document.getElementById('stage').innerHTML =
+    '<div class="surface-wrap"><span class="surface-label">Session detail &mdash; app/sessions/[id]/page.tsx</span>' +
+      '<div class="phone">' + r.detail(sc) + detailSheet + '</div></div>' +
+    '<div class="surface-wrap"><span class="surface-label">My Sessions row &mdash; components/SessionLibraryRow.tsx</span>' +
+      '<div class="phone" style="min-height:260px">' + r.row(sc) + rowSheet + '</div></div>';
+
+  const v = VARIANTS.find(x => x.key === state.variant);
+  document.getElementById('vlabel').textContent = v.key + ' — ' + v.name;
+  document.getElementById('note').innerHTML = NOTES[state.variant] + ' <br><b>Scenario:</b> ' + sc.note;
+
+  // Surface the full state, per the prototype skill.
+  document.getElementById('readout').textContent =
+    'variant=' + state.variant + '  scenario=' + state.scenario + '  mode=' + state.mode +
+    '  detail{open:' + state.open.detail + ', expand:' + state.expand.detail + '}' +
+    '  row{open:' + state.open.row + ', expand:' + state.expand.row + '}' +
+    '  items{detail:' + detailActions(sc).length + ', row:' + rowActions(sc).length + '}';
+
+  const url = new URL(location.href);
+  url.searchParams.set('variant', state.variant);
+  url.searchParams.set('scenario', state.scenario);
+  url.searchParams.set('mode', state.mode);
+  history.replaceState(null, '', url);
+}
+
+/* ---- Events -------------------------------------------------------------- */
+document.addEventListener('click', (e) => {
+  const scBtn = e.target.closest('[data-scenario]');
+  if (scBtn) { state.scenario = scBtn.dataset.scenario; reset(); return render(); }
+
+  const mBtn = e.target.closest('[data-mode]');
+  if (mBtn) { state.mode = mBtn.dataset.mode; return render(); }
+
+  const act = e.target.closest('[data-act]');
+  if (!act) return;
+  e.preventDefault();                       // we drive <details> from state
+  const surface = act.dataset.surface;
+
+  if (act.dataset.act === 'toggle') {
+    state.open[surface] = !state.open[surface];
+    if (!state.open[surface]) state.expand[surface] = null;
+  } else if (act.dataset.act === 'expand') {
+    state.expand[surface] = state.expand[surface] === act.dataset.id ? null : act.dataset.id;
+    state.draft = '';
+    if (state.variant === 'now' || state.variant === 'C' || state.variant === 'D') state.open[surface] = true;
+  } else if (act.dataset.act === 'close') {
+    state.expand[surface] = null;
+  }
+  render();
+});
+
+// Keep the rename draft across re-renders without re-rendering per keystroke.
+document.addEventListener('input', (e) => {
+  if (e.target.matches('[data-draft]')) state.draft = e.target.value;
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.matches('input, textarea, [contenteditable]')) return;
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  step(e.key === 'ArrowRight' ? 1 : -1);
+});
+document.getElementById('prev').addEventListener('click', () => step(-1));
+document.getElementById('next').addEventListener('click', () => step(1));
+
+function step(delta) {
+  const i = VARIANTS.findIndex(v => v.key === state.variant);
+  state.variant = VARIANTS[(i + delta + VARIANTS.length) % VARIANTS.length].key;
+  reset();
+  render();
+}
+function reset() {
+  state.open = { detail: false, row: false };
+  state.expand = { detail: null, row: null };
+  state.draft = '';
+}
+
+render();
+</script>
+</body>
+</html>
