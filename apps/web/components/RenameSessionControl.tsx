@@ -9,6 +9,11 @@ import {
 } from "@/app/sessions/[id]/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  ACTION_SHEET_EDITOR,
+  ActionSheetItemText,
+  actionSheetItemClass,
+} from "@/components/pulse/action-sheet";
 
 // Matches the backend's Session Name length cap so the field never submits a value the
 // server would reject at the boundary.
@@ -30,7 +35,8 @@ interface RenameSessionControlProps {
 // Closed, it shows the display label and a Rename/Name affordance; open, an inline editor sets or
 // clears the Session Name through the rename action. Submitting an empty field clears the name, so
 // the read falls back to the derived label. A thin renderer: normalization and the standalone-only
-// and ownership guards live server-side.
+// and ownership guards live server-side. A row of the Session detail's action sheet (ADR-0113), whose
+// editor opens in place of the row.
 export function RenameSessionControl({
   sessionId,
   displayName,
@@ -46,24 +52,26 @@ export function RenameSessionControl({
 
   if (!open) {
     return (
-      <Button
+      <button
         type="button"
-        variant="ghost"
-        size="sm"
         aria-label={isUserNamed ? "Rename session" : "Name session"}
+        className={actionSheetItemClass()}
         onClick={() => {
           setName(editValue);
           setOpen(true);
         }}
       >
-        <Pencil className="h-3.5 w-3.5" />
-        {isUserNamed ? "Rename" : "Name session"}
-      </Button>
+        <Pencil className="h-4 w-4 shrink-0" aria-hidden />
+        <ActionSheetItemText
+          label={isUserNamed ? "Rename" : "Name session"}
+          description="Give this session your own name"
+        />
+      </button>
     );
   }
 
   return (
-    <form action={action} className="flex flex-col gap-2">
+    <form action={action} className={`${ACTION_SHEET_EDITOR} flex flex-col gap-2`}>
       <input type="hidden" name="session_id" value={sessionId} />
       <label className="flex flex-col gap-1.5">
         <span className="label-mono text-[9px] text-text-muted">Session name</span>
@@ -71,11 +79,11 @@ export function RenameSessionControl({
             own shorthand — so the checker is off rather than underlining every one of
             them (ADR-0103).
 
-            No `autoFocus` (ADR-0103): this editor opens inside the `OverflowMenu`
-            disclosure, so on a phone the attribute raised the keyboard and scrolled the
-            panel out from under the thumb that had just opened it. The field is already
-            the first focusable element in the revealed panel, so a reader who wants it
-            is one Tab — or one tap — away. */}
+            No `autoFocus` (ADR-0103): this editor opens inside the action sheet
+            (ADR-0113; an `OverflowMenu` disclosure when that ADR was written), so on a
+            phone the attribute raised the keyboard and scrolled the panel out from under
+            the thumb that had just opened it. A reader who wants the field is one Tab —
+            or one tap — away. */}
         <Input
           spellCheck={false}
           name="name"

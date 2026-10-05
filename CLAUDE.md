@@ -354,6 +354,16 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   renders only while it is open, so a new one that is not in the `confirm` audit journey is
   unmeasured at 320px, 200% text and 1440px however green the static guards are (ADR-0098).
 
+- A page's rare or destructive actions → an `ActionSheet` (`components/pulse/action-sheet.tsx`): a ⋯
+  icon on a line the page already has, never beside a truncating title, its `aria-label` naming
+  whose actions they are. Each action renders its closed state as a sheet row
+  (`actionSheetItemClass()`), the destructive one last below `ActionSheetSeparator`, and a disabled
+  one states its reason as the row's description. An action that leaves the page as it was — or
+  whose card survives it showing something else, as a position-keyed `PrescriptionCard` does after a
+  Remove — closes its own sheet through `useActionSheet()`. `lib/action-sheet.test.ts` mounts those
+  obligations; the `sheet` audit journey measures the panel, since it renders only while open
+  (ADR-0113).
+
 - New interactive surface → it is a native control (`a`, `button`, `summary`, `input`,
   `select`, `textarea`) or a `[role="button"]`, because that is the selector list in
   `globals.css` that gives tap targets `touch-action: manipulation` — without it every tap
