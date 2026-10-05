@@ -192,7 +192,8 @@ export const prototypeWorkout: WorkoutSession = {
     prototypePrescription(2, 102, "Explosive pull-up", 4, "5", bw, [{ reps: 5, load: bw }, { reps: 5, load: bw }, { reps: 4, load: bw }]),
     prototypePrescription(3, 103, "Barbell row", 4, "8", { kind: "absolute", text: "70 kg", kg: 70 },
       [1, 2, 3, 4].map(() => ({ reps: 8, load: { kind: "absolute" as const, text: "67.5 kg", kg: 67.5 } }))),
-    prototypePrescription(4, 104, "Incline dumbbell curl", 3, "12", { kind: "absolute", text: "12 kg", kg: 12 }, [], "ss1"),
-    prototypePrescription(5, 105, "Face pull", 3, "15", { kind: "absolute", text: "20 kg", kg: 20 }, [], "ss1"),
+    prototypePrescription(4, 104, "Incline dumbbell curl", 3, "12", { kind: "absolute", text: "12 kg", kg: 12 },
+      [1, 2, 3].map(() => ({ reps: 12, load: { kind: "absolute" as const, text: "10 kg", kg: 10 } })), "ss1"),
+    prototypePrescription(5, 105, "Ring dip", 3, "8", { kind: "bodyweight", text: "bodyweight +10 kg", added_kg: 10 }, [], "ss1"),
   ],
 };
