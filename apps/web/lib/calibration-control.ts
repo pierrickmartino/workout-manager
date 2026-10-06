@@ -29,6 +29,9 @@ export interface CalibrationControlView {
   value: number;
   // The offset in words — the control's only readout, deliberately not a number on a dial.
   summary: string;
+  // The same offset split for the stepper: the count between its − and + ends, and the
+  // direction under it, said against the written plan.
+  readout: CalibrationReadout;
   // The two directions.
   easier: CalibrationStep;
   harder: CalibrationStep;
@@ -39,6 +42,20 @@ export interface CalibrationControlView {
   // and the rail is where the Fitness Level fold takes over.
   railNote: string | null;
 }
+
+// The stepper's readout. Two lines rather than the one-line `summary`, because the count sits
+// in the narrow cell between the two ends of the control and must not wrap there.
+export interface CalibrationReadout {
+  headline: string;
+  direction: string;
+}
+
+// What a Calibration changes, in the user's words: ADR-0111's levers, and ADR-0020's promise
+// that a performed Session is settled record. Shown under the control so the first tap is not
+// the way a user finds out that it re-pitches the whole remaining plan.
+export const CALIBRATION_EFFECT =
+  "Adjusts load, sets or rest on every session you haven’t done yet. Done sessions stay as " +
+  "they are.";
 
 // The caveat a user with a Sensitive Constraint sees — a caveat, never a refusal
 // (ADR-0058's precedent, carried into ADR-0111). Both directions stay available.
@@ -58,15 +75,28 @@ const AT_HARDEST =
 
 // The offset in words. Written as a *relative* phrase in every case, because the number is an
 // offset from what the plan already says and reading it as a level would be the one thing
-// CONTEXT's _Avoid_ list forbids.
+// CONTEXT's _Avoid_ list forbids. A user-facing "step" is ADR-0111's notch.
 export function calibrationSummary(value: number): string {
   if (value === 0) {
-    return "Pitched as written";
+    return "As written";
   }
-  const notches = Math.abs(value);
-  const unit = notches === 1 ? "notch" : "notches";
-  const direction = value < 0 ? "easier" : "harder";
-  return `Pitched ${notches} ${unit} ${direction}`;
+  return `${stepCount(value)} ${value < 0 ? "easier" : "harder"}`;
+}
+
+// The stepper's two-line readout of the same offset.
+export function calibrationReadout(value: number): CalibrationReadout {
+  if (value === 0) {
+    return { headline: "As written", direction: "The plan as generated" };
+  }
+  return {
+    headline: stepCount(value),
+    direction: value < 0 ? "Easier than written" : "Harder than written",
+  };
+}
+
+function stepCount(value: number): string {
+  const steps = Math.abs(value);
+  return `${steps} ${steps === 1 ? "step" : "steps"}`;
 }
 
 // Build the control's whole state from a Protocol read.
@@ -88,6 +118,7 @@ export function calibrationControlView(
   return {
     value,
     summary: calibrationSummary(value),
+    readout: calibrationReadout(value),
     easier: step(atEasiest ? null : value - 1),
     harder: step(atHardest ? null : value + 1),
     // Offered only when there is something to return from; posting 0 at 0 is a no-op the

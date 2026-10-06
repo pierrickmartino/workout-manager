@@ -2,8 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  CALIBRATION_EFFECT,
   SENSITIVE_CAVEAT,
   calibrationControlView,
+  calibrationReadout,
   calibrationSummary,
 } from "./calibration-control.ts";
 import type { ProtocolProgress } from "./protocols-types.ts";
@@ -37,22 +39,63 @@ function makeProtocol(
 // --- the readout: a relative phrase, never a score -------------------------------------
 
 test("an uncalibrated plan reads as written, not as a zero", () => {
-  assert.equal(calibrationSummary(0), "Pitched as written");
+  assert.equal(calibrationSummary(0), "As written");
 });
 
-test("one notch reads in the singular", () => {
-  assert.equal(calibrationSummary(-1), "Pitched 1 notch easier");
+test("one step reads in the singular", () => {
+  assert.equal(calibrationSummary(-1), "1 step easier");
 });
 
-test("several notches read in the plural", () => {
-  assert.equal(calibrationSummary(2), "Pitched 2 notches harder");
+test("several steps read in the plural", () => {
+  assert.equal(calibrationSummary(2), "2 steps harder");
+});
+
+// The stepper's readout splits the summary in two: a count the eye lands on between the − and
+// + ends, and the direction under it, said *against the written plan* so it stays relative.
+
+test("an uncalibrated readout names the plan itself", () => {
+  assert.deepEqual(calibrationReadout(0), {
+    headline: "As written",
+    direction: "The plan as generated",
+  });
+});
+
+test("an eased readout counts the steps and says easier than written", () => {
+  assert.deepEqual(calibrationReadout(-1), {
+    headline: "1 step",
+    direction: "Easier than written",
+  });
+});
+
+test("a pushed readout counts the steps and says harder than written", () => {
+  assert.deepEqual(calibrationReadout(3), {
+    headline: "3 steps",
+    direction: "Harder than written",
+  });
+});
+
+test("the view carries the readout for its own clamped offset", () => {
+  const view = calibrationControlView(makeProtocol({ calibration: 2 }));
+
+  assert.deepEqual(view.readout, calibrationReadout(2));
+});
+
+test("the effect line says what moves and that the record does not", () => {
+  // ADR-0111's levers, in the user's words, and ADR-0020's promise that a performed Session
+  // is settled record — the two things a user needs before tapping a control that re-pitches
+  // the whole remaining plan.
+  assert.match(CALIBRATION_EFFECT, /load/i);
+  assert.match(CALIBRATION_EFFECT, /sets/i);
+  assert.match(CALIBRATION_EFFECT, /rest/i);
+  assert.match(CALIBRATION_EFFECT, /done sessions stay/i);
 });
 
 test("the readout never names a level or a score", () => {
   // CONTEXT 'Calibration' puts "difficulty level" and "calibration score" under _Avoid_;
   // the offset is relative to what the plan already says, so the copy must stay relative.
   for (const value of [-3, -1, 0, 1, 3]) {
-    const summary = calibrationSummary(value).toLowerCase();
+    const { headline, direction } = calibrationReadout(value);
+    const summary = [calibrationSummary(value), headline, direction].join(" ").toLowerCase();
     assert.ok(!summary.includes("level"), `"${summary}" names a level`);
     assert.ok(!summary.includes("score"), `"${summary}" names a score`);
   }
@@ -173,6 +216,7 @@ test("every string the control shows is typeset with a real apostrophe", () => {
     calibrationControlView(makeProtocol({ calibration: -3 })).railNote ?? "",
     calibrationControlView(makeProtocol({ calibration: 3 })).railNote ?? "",
     calibrationSummary(0),
+    CALIBRATION_EFFECT,
   ].join(" ");
 
   assert.ok(!/[a-z]'[a-z]/i.test(copy), "a straight apostrophe is present");
