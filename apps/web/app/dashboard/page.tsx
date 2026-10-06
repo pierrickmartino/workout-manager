@@ -17,6 +17,8 @@ import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { SessionHero } from "@/components/pulse/session-hero";
 import { CalibrationControl } from "@/components/pulse/calibration-control";
+// PROTOTYPE — throwaway: the `?variant=` switch for the Calibration control redesign.
+import { CalibrationControlPrototype } from "@/components/pulse/calibration-control-prototype";
 import { ResumeSessionBanner } from "@/components/pulse/resume-session-banner";
 import { TrainingRouteCard } from "@/components/pulse/training-route";
 import { LevelBadge } from "@/components/pulse/level-badge";
@@ -44,7 +46,14 @@ import { cn } from "@/lib/utils";
 // hidden rather than branched on, which is the cost ADR-0088 names for refusing UA detection.
 // Nothing below `lg:` moves, and nothing added is an action — read-time projections only, so
 // ADR-0071's click budget is untouched.
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  // PROTOTYPE — throwaway: which Calibration variant to render (dev builds only).
+  const { variant } = await searchParams;
+  const calibrationVariant = typeof variant === "string" ? variant : "current";
   const [profileEnvelope, homeEnvelope, appearance, analyticsEnvelope] =
     await Promise.all([
       fetchProfile(),
@@ -128,9 +137,16 @@ export default async function DashboardPage() {
                     card, and the hero stays the Next Session's own focal surface. It sits
                     directly under the hero because the complaint it answers ("this asks too
                     much / too little") is formed while reading those numbers. */}
-                <Card className="p-5">
-                  <CalibrationControl protocol={currentProtocol} />
-                </Card>
+                {process.env.NODE_ENV !== "production" ? (
+                  <CalibrationControlPrototype
+                    protocol={currentProtocol}
+                    variant={calibrationVariant}
+                  />
+                ) : (
+                  <Card className="p-5">
+                    <CalibrationControl protocol={currentProtocol} />
+                  </Card>
+                )}
                 {/* The training route: the current week as named stops (done / next /
                     upcoming) with a WEEK n/total overline and an expandable full plan —
                     purely positional, no calendar (ADR-0008). Replaces the old dots and

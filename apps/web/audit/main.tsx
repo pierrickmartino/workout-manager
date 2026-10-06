@@ -22,6 +22,7 @@ import { Sidebar } from "@/components/pulse/sidebar";
 import { HomeColumns } from "@/components/pulse/home-columns";
 import { SessionHero } from "@/components/pulse/session-hero";
 import { CalibrationControl } from "@/components/pulse/calibration-control";
+import { CalibrationControlPrototype } from "@/components/pulse/calibration-control-prototype";
 import { TrainingRouteCard } from "@/components/pulse/training-route";
 import { QuickActions } from "@/components/pulse/quick-actions";
 import { LevelBadge } from "@/components/pulse/level-badge";
@@ -276,6 +277,8 @@ function Content() {
     case "live": return <LiveSessionScreen session={liveWorkout} today="2026-09-26" defaultRestSeconds={60} keepScreenAwake={false} unit="kg" />;
     case "analytics": return <Analytics />;
     case "home": return <Home />;
+    // PROTOTYPE — throwaway: the Calibration redesign variants under the real hero.
+    case "calibration-prototype": return <div className="flex flex-col gap-7"><SessionHero protocol={protocolProgress} /><CalibrationControlPrototype protocol={{ ...protocolProgress, calibration: Number(params.get("offset") ?? 2) }} variant={params.get("variant") ?? "current"} /></div>;
     // The Exercise detail page's SPECS lens, which carries the framed illustration (ADR-0095).
     // Its box is reserved by the layout rather than by the image, so this measures the box the
     // page actually holds open while the bytes never arrive.
