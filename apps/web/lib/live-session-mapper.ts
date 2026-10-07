@@ -4,12 +4,28 @@
 // the payload to the server action. No schema change: the Logged Session record
 // already carries N Logged Sets per Exercise via its flat, ordered list.
 
-import { completionOutcome, type LiveSessionState } from "./live-session.ts";
+import { completionOutcome, type LiveSessionState, type LiveSet } from "./live-session.ts";
 import { durationSeconds } from "./live-timer.ts";
-import { loadValueToKg } from "./load.ts";
-import { repetitionsInput } from "./quantity.ts";
+import { buildLoggedSets, type LoggedSetRow } from "./logged-set.ts";
+import { setEntryValues } from "./set-entry.ts";
 import type { WeightUnit } from "./weight-unit";
-import type { LogSessionInput, LogSetInput } from "./logs-types";
+import type { LogSessionInput } from "./logs-types";
+
+// A completed live set as a Logged Set row (ADR-0115). A live set is a rep count against its
+// prescription (ADR-0114), so its kind is repetitions; the Load was entered in the reader's
+// Weight Unit and the shared builder converts it to canonical kilograms (#417).
+function liveSetRow(set: LiveSet): LoggedSetRow {
+  return {
+    exerciseId: set.exerciseId,
+    values: setEntryValues({
+      kind: "repetitions",
+      reps: String(set.reps),
+      load_kind: set.loadKind,
+      load_value: set.loadValue,
+      rpe: set.rpe === null ? "" : String(set.rpe),
+    }),
+  };
+}
 
 // Map a finished Live Session to the log request. Returns null when no set was
 // completed, so an abandoned Live Session writes nothing. Only completed sets
@@ -24,21 +40,17 @@ export function mapFinishToLog(
   performedOn: string,
   unit: WeightUnit,
 ): LogSessionInput | null {
-  const loggedSets: LogSetInput[] = state.sets
-    .filter((set) => set.status === "completed")
-    .map((set) => {
-      // The load was entered in the reader's Weight Unit; convert it back to canonical,
-      // exact kilograms for storage (#417). A blank value is "no load recorded" → null.
-      const loadValueKg = loadValueToKg(set.loadKind, set.loadValue, unit);
-      return {
-        exercise_id: set.exerciseId,
-        // The live set's reps become a repetitions Quantity via the shared mapper.
-        ...repetitionsInput(set.reps),
-        load_kind: set.loadKind,
-        load_value: loadValueKg === "" ? null : loadValueKg,
-        perceived_difficulty: set.rpe,
-      };
-    });
+  // A completed set is the performed mark, so a blank rep count would log as 0. The row's reps
+  // are a whole, non-negative number by construction (the set table clamps them), so the build
+  // cannot reject one; if it ever does, the invariant broke and failing loudly beats saving a
+  // record with sets silently missing.
+  const built = buildLoggedSets(
+    state.sets.filter((set) => set.status === "completed").map(liveSetRow),
+    unit,
+    { performedMark: true },
+  );
+  if (!built.ok) throw new Error(`Live Session finish could not be logged: ${built.error}`);
+  const loggedSets = built.sets;
 
   if (loggedSets.length === 0) return null;
 

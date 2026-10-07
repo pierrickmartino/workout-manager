@@ -9,6 +9,7 @@ import {
   type CorrectLogFormState,
 } from "@/app/history/[id]/edit/actions";
 import type { CorrectionFormFields, CorrectionSetFields } from "@/lib/log-correction";
+import { CARRIED_EFFORT_FIELD, carriedEffortValue } from "@/lib/logged-set";
 import type { WeightUnit } from "@/lib/weight-unit";
 import type { QuantityKind } from "@/lib/quantity";
 import {
@@ -136,8 +137,16 @@ function SetRow({
     >
       <div className={SET_ENTRY_CARD}>
         <input type="hidden" name={`${prefix}-exercise_id`} value={set.exerciseId} />
-        <input type="hidden" name={`${prefix}-exercise_name`} value={set.exerciseName} />
         <input type="hidden" name={`${prefix}-kind`} value={set.kind} />
+        {/* The record's typed Effort rides back so an untouched RIR or half-step value
+            survives the full replace (ADR-0115); nothing renders it. */}
+        {set.carriedEffort ? (
+          <input
+            type="hidden"
+            name={`${prefix}-${CARRIED_EFFORT_FIELD}`}
+            value={carriedEffortValue(set.carriedEffort)}
+          />
+        ) : null}
         <span className="min-w-0 break-words font-display text-[15px] font-semibold text-text-primary">
           {set.exerciseName}
         </span>

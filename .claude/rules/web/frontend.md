@@ -83,6 +83,9 @@ is **declared**, not that it renders right: the `audit/` journeys (`reflow.mjs` 
   holder drives the row, `SetEntryFormProvider` under a server action; rows map through a declared
   table (`SetEntryRowMap`, `seededSetEntryValues`) (`set-entry.test.ts`, `set-entry-fields.test.ts`,
   ADR-0106).
+- Performed-set row → `LogSetInput` → `buildLoggedSets` / `readPostedSetRows` in `lib/logged-set.ts`,
+  never a per-path builder; a path keeps only which posted rows count. Blank skips, garbage errors;
+  options are `performedMark` and `defaultLoadKind` only (`logged-set.test.ts`, ADR-0115).
 - Live Session per-set field → a cell in the row in `live-session-sets.tsx` from a `SetEntry.*Cell`;
   what doesn't vary per set goes in the card header; the row is a wrapping flex row, not a grid
   (`live-set-table-card.test.ts`, ADR-0114).

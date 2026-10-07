@@ -81,6 +81,8 @@ test("maps a plan and its first performance into the author-and-log payload", ()
         load_kind: "absolute",
         load_value: "100",
         perceived_difficulty: 8,
+        effort_scale: "rpe",
+        effort_value: 8,
       },
     ],
   });
@@ -223,23 +225,6 @@ test("records every performed set of an exercise", () => {
   );
 });
 
-test("skips performed-set rows left blank", () => {
-  // Arrange — the middle set row was never filled in.
-  const input = fields({
-    exercises: [
-      exercise({ performedSets: [{ reps: "5" }, { reps: "" }, { reps: "4" }] }),
-    ],
-  });
-
-  // Act
-  const result = buildAuthorSessionRequest(input, "kg", TODAY);
-
-  // Assert — only the two performed rows survive.
-  assert.equal(result.ok, true);
-  if (!result.ok) return;
-  assert.equal(result.request.logged_sets.length, 2);
-});
-
 test("defaults an empty load to a null absolute load", () => {
   // Arrange — no load entered on the plan or the recorded set.
   const input = fields({
@@ -326,21 +311,6 @@ test("rejects a session where nothing was performed", () => {
   assert.equal(result.ok, false);
   if (result.ok) return;
   assert.match(result.error, /at least one set/i);
-});
-
-test("drops an out-of-range perceived difficulty rather than sending it", () => {
-  // Arrange — an RPE above the 1–10 scale.
-  const input = fields({
-    exercises: [exercise({ performedSets: [{ reps: "5", perceivedDifficulty: "99" }] })],
-  });
-
-  // Act
-  const result = buildAuthorSessionRequest(input, "kg", TODAY);
-
-  // Assert — the set is still recorded, with no perceived difficulty.
-  assert.equal(result.ok, true);
-  if (!result.ok) return;
-  assert.equal(result.request.logged_sets[0].perceived_difficulty, null);
 });
 
 // --- Per-exercise Amount kind: Duration (ADR-0032, ADR-0040, issue #300) ---
@@ -453,51 +423,6 @@ test("a duration exercise with a blank target errors without mentioning reps", (
   if (result.ok) return;
   assert.match(result.error, /target/i);
   assert.doesNotMatch(result.error, /rep/i);
-});
-
-test("skips a blank performed set on a duration exercise", () => {
-  // Arrange — the middle set row was never filled in.
-  const input = fields({
-    exercises: [
-      durationExercise({
-        performedSets: [{ duration: "0:45" }, { duration: "" }, { duration: "1:00" }],
-      }),
-    ],
-  });
-
-  // Act
-  const result = buildAuthorSessionRequest(input, "kg", TODAY);
-
-  // Assert — only the two performed rows survive.
-  assert.equal(result.ok, true);
-  if (!result.ok) return;
-  assert.equal(result.request.logged_sets.length, 2);
-});
-
-test("rejects a malformed duration on a performed set", () => {
-  // Arrange — a non-numeric hold time is a clear mistake, not a skip.
-  const input = fields({
-    exercises: [durationExercise({ performedSets: [{ duration: "a while" }] })],
-  });
-
-  // Act
-  const result = buildAuthorSessionRequest(input, "kg", TODAY);
-
-  // Assert
-  assert.equal(result.ok, false);
-  if (result.ok) return;
-  assert.match(result.error, /time/i);
-});
-
-test("rejects a non-positive duration on a performed set", () => {
-  // Arrange — a zero-second hold is meaningless.
-  const input = fields({
-    exercises: [durationExercise({ performedSets: [{ duration: "0" }] })],
-  });
-
-  // Act / Assert
-  const result = buildAuthorSessionRequest(input, "kg", TODAY);
-  assert.equal(result.ok, false);
 });
 
 test("an all-blank duration form yields the kind-neutral no-set error", () => {
@@ -628,37 +553,6 @@ test("defaults a distance exercise's unit to km when none is chosen", () => {
   assert.equal(result.request.logged_sets[0].quantity_unit, "km");
 });
 
-test("a distance set with a companion time yields a derivable pace read", () => {
-  // Arrange — a timed run: the distance and a companion time both ride through, so pace
-  // stays derivable at read time (the backend canonicalises distance to metres).
-  const input = fields({
-    exercises: [distanceExercise({ performedSets: [{ distance: "5", duration: "25:00" }] })],
-  });
-
-  // Act
-  const result = buildAuthorSessionRequest(input, "kg", TODAY);
-
-  // Assert — the companion time rides through, keeping pace a derivable read-time projection.
-  assert.equal(result.ok, true);
-  if (!result.ok) return;
-  assert.equal(result.request.logged_sets[0].quantity_duration, "25:00");
-});
-
-test("a distance-only set leaves pace underivable with a null companion time", () => {
-  // Arrange — a run logged without a time; pace stays underivable (never stored).
-  const input = fields({
-    exercises: [distanceExercise({ performedSets: [{ distance: "5" }] })],
-  });
-
-  // Act
-  const result = buildAuthorSessionRequest(input, "kg", TODAY);
-
-  // Assert — the companion time is null, not an empty string.
-  assert.equal(result.ok, true);
-  if (!result.ok) return;
-  assert.equal(result.request.logged_sets[0].quantity_duration, null);
-});
-
 test("defaults a distance exercise's Load to bodyweight on both plan and record", () => {
   // Arrange — no load entered; the kind, not the field, chooses the default (a run is
   // bodyweight-borne), consistent with the Duration default.
@@ -694,51 +588,6 @@ test("respects an explicit Load override on a distance exercise", () => {
   if (!result.ok) return;
   assert.equal(result.request.prescriptions[0].load_value, "10");
   assert.equal(result.request.logged_sets[0].load_value, "10");
-});
-
-test("skips a blank performed set on a distance exercise", () => {
-  // Arrange — the middle set row was never filled in.
-  const input = fields({
-    exercises: [
-      distanceExercise({
-        performedSets: [{ distance: "5" }, { distance: "" }, { distance: "3" }],
-      }),
-    ],
-  });
-
-  // Act
-  const result = buildAuthorSessionRequest(input, "kg", TODAY);
-
-  // Assert — only the two performed rows survive.
-  assert.equal(result.ok, true);
-  if (!result.ok) return;
-  assert.equal(result.request.logged_sets.length, 2);
-});
-
-test("rejects a malformed distance on a performed set", () => {
-  // Arrange — a non-numeric distance is a clear mistake, not a skip.
-  const input = fields({
-    exercises: [distanceExercise({ performedSets: [{ distance: "five" }] })],
-  });
-
-  // Act
-  const result = buildAuthorSessionRequest(input, "kg", TODAY);
-
-  // Assert
-  assert.equal(result.ok, false);
-  if (result.ok) return;
-  assert.match(result.error, /distance/i);
-});
-
-test("rejects a non-positive distance on a performed set", () => {
-  // Arrange — a zero-distance run is meaningless.
-  const input = fields({
-    exercises: [distanceExercise({ performedSets: [{ distance: "0" }] })],
-  });
-
-  // Act / Assert
-  const result = buildAuthorSessionRequest(input, "kg", TODAY);
-  assert.equal(result.ok, false);
 });
 
 test("a distance exercise with a blank target errors without mentioning reps", () => {

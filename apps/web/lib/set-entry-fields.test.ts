@@ -537,6 +537,7 @@ test("a seeded row's Load keypad follows the kind the user picks, not the one it
                 loadKind: "absolute",
                 loadValue: "60",
                 perceivedDifficulty: 8,
+                carriedEffort: null,
                 note: "",
               },
             ],

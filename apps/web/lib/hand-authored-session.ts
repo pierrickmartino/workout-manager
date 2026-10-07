@@ -13,15 +13,10 @@
 // the grouping travels only on the prescriptions. Create-by-name (ADR-0033, issue #288) is
 // resolved upstream in the picker, so the payload still carries only real `exercise_id`s.
 
-import {
-  distanceInput,
-  durationInput,
-  parseDurationSeconds,
-  repetitionsInput,
-  type DistanceUnit,
-  type QuantityKind,
-} from "./quantity.ts";
+import type { DistanceUnit, QuantityKind } from "./quantity.ts";
 import { loadValueToKg, type LoadKind } from "./load.ts";
+import { buildLoggedSets, type LoggedSetRow } from "./logged-set.ts";
+import { setEntryValues } from "./set-entry.ts";
 import { planSetType } from "./set-type-view.ts";
 import type { WeightUnit } from "./weight-unit";
 import type { LogSetInput } from "./logs-types";
@@ -46,9 +41,6 @@ const DEFAULT_AMOUNT_KIND: QuantityKind = "repetitions";
 // A distance exercise's unit is chosen once for the whole exercise (a run is logged in km
 // or miles, not a mix), defaulting to km — the same default the ad-hoc log uses (ADR-0032).
 const DEFAULT_DISTANCE_UNIT: DistanceUnit = "km";
-
-const MIN_PERCEIVED_DIFFICULTY = 1;
-const MAX_PERCEIVED_DIFFICULTY = 10;
 
 // One performed set the user recorded for an exercise: the amount done (a rep count or, on
 // a duration exercise, a held time), the load, and an optional perceived difficulty (the
@@ -257,95 +249,6 @@ function targetEffortFields(
   };
 }
 
-// A performed set built from a row: a typed amount, or one of two non-set outcomes — the
-// row was left blank (skip it silently) or its amount is malformed (reject the whole form
-// with a clear message). Reps skip on both blank and malformed (regression: unchanged);
-// duration and distance distinguish a blank row (skip) from a garbled amount (reject), so a
-// mistake is never silently dropped (issues #300/#301). The `fields` widen to the distance
-// shape (unit + optional companion time); other kinds simply omit those keys.
-type AmountResult =
-  | {
-      status: "amount";
-      fields: Pick<
-        LogSetInput,
-        "quantity_kind" | "quantity_value" | "quantity_unit" | "quantity_duration"
-      >;
-    }
-  | { status: "skip" }
-  | { status: "error"; error: string };
-
-// A performed set after mapping: the built payload, a silent skip, or a form-level error.
-type PerformedSetResult =
-  | { status: "set"; set: LogSetInput }
-  | { status: "skip" }
-  | { status: "error"; error: string };
-
-// The reps amount for a performed set, or a skip when the row is blank or malformed — the
-// behavior repetition-based logging has always had (a whole, non-negative count).
-function repetitionsPerformedAmount(set: PerformedSetFields): AmountResult {
-  const reps = wholeNonNegative(set.reps ?? "");
-  if (reps === null) return { status: "skip" };
-  return { status: "amount", fields: repetitionsInput(reps) };
-}
-
-// The duration amount for a performed set: a blank hold is skipped, a malformed or
-// non-positive time is rejected outright, and a valid time rides through verbatim as a
-// `duration` Quantity (the backend canonicalises to seconds).
-function durationPerformedAmount(set: PerformedSetFields): AmountResult {
-  const raw = (set.duration ?? "").trim();
-  if (raw === "") return { status: "skip" };
-
-  const seconds = parseDurationSeconds(raw);
-  if (seconds === null || seconds <= 0) {
-    return {
-      status: "error",
-      error: "Enter a valid hold time (like 45 or 1:30) for each duration set, or leave it blank.",
-    };
-  }
-  return { status: "amount", fields: durationInput(raw) };
-}
-
-// The distance amount for a performed set: a blank distance is skipped, a malformed or
-// non-positive value is rejected outright, and a valid distance rides through as a
-// `distance` Quantity carrying the exercise's unit (canonicalised to metres by the backend)
-// and the optional companion time from which pace becomes a derivable read (issue #301). A
-// blank time is sent as null, so pace stays underivable for a distance-only set.
-function distancePerformedAmount(
-  set: PerformedSetFields,
-  unit: DistanceUnit,
-): AmountResult {
-  const raw = (set.distance ?? "").trim();
-  if (raw === "") return { status: "skip" };
-
-  const value = Number(raw);
-  if (!Number.isFinite(value) || value <= 0) {
-    return {
-      status: "error",
-      error: "Enter a valid distance (like 5 or 3.1) for each distance set, or leave it blank.",
-    };
-  }
-  return { status: "amount", fields: distanceInput(raw, unit, set.duration ?? "") };
-}
-
-// Dispatch to the amount mapper for the exercise's Amount kind. Reuses the shared quantity
-// request builders (`repetitionsInput` / `distanceInput` / `durationInput`), the same ones
-// the ad-hoc log uses, so the two forms type the amount identically (ADR-0032). Distance
-// also needs the exercise's chosen unit — the one field that lives on the exercise, not the set.
-function performedAmount(
-  kind: QuantityKind,
-  unit: DistanceUnit,
-  set: PerformedSetFields,
-): AmountResult {
-  switch (kind) {
-    case "duration":
-      return durationPerformedAmount(set);
-    case "distance":
-      return distancePerformedAmount(set, unit);
-    default:
-      return repetitionsPerformedAmount(set);
-  }
-}
-
 // A whole, non-negative integer parsed from raw text, or null when blank or malformed.
 // Exported so the build-and-log screen parses its numeric inputs (e.g. a Superset's
 // round-rest) by the same rule the payload mapper uses, rather than re-deriving it.
@@ -357,36 +260,27 @@ export function wholeNonNegative(raw: string): number | null {
   return value;
 }
 
-// Build one performed logged-set payload from a row, dispatching on the exercise's Amount
-// kind. Returns the built set, a skip (the row was left un-performed), or an error (the
-// amount is malformed). The typed amount rides as a Quantity; the load kind+value (with
-// the kind's default) and an in-range perceived difficulty ride alongside.
-function toLoggedSet(
+// One performed set as a Logged Set row (ADR-0115). The Quantity kind and distance unit are the
+// exercise's — a structured exercise's sets are homogeneous (ADR-0032, ADR-0040) — so they ride
+// into every row from the exercise rather than from the set.
+function performedSetRow(
   exerciseId: number,
   kind: QuantityKind,
   unit: DistanceUnit,
   set: PerformedSetFields,
-  weightUnit: WeightUnit,
-): PerformedSetResult {
-  const amount = performedAmount(kind, unit, set);
-  if (amount.status !== "amount") return amount;
-
-  const raw = (set.perceivedDifficulty ?? "").trim();
-  const perceived = raw === "" ? null : Number(raw);
-  const inRange =
-    perceived === null ||
-    (Number.isInteger(perceived) &&
-      perceived >= MIN_PERCEIVED_DIFFICULTY &&
-      perceived <= MAX_PERCEIVED_DIFFICULTY);
-
+): LoggedSetRow {
   return {
-    status: "set",
-    set: {
-      exercise_id: exerciseId,
-      ...amount.fields,
-      ...loadFields(set.loadKind, set.loadValue, kind, weightUnit),
-      perceived_difficulty: inRange ? perceived : null,
-    },
+    exerciseId,
+    values: setEntryValues({
+      kind,
+      unit,
+      reps: set.reps,
+      distance: set.distance,
+      duration: set.duration,
+      load_kind: set.loadKind,
+      load_value: set.loadValue,
+      rpe: set.perceivedDifficulty,
+    }),
   };
 }
 
@@ -498,11 +392,15 @@ export function buildAuthorSessionRequest(
     if (!built.ok) return built;
     prescriptions.push(built.prescription);
 
-    for (const set of exercise.performedSets) {
-      const outcome = toLoggedSet(exercise.exerciseId, kind, unit, set, weightUnit);
-      if (outcome.status === "error") return { ok: false, error: outcome.error };
-      if (outcome.status === "set") loggedSets.push(outcome.set);
-    }
+    // The shared builder types each set; a blank Load kind falls back to the exercise's
+    // Amount-kind default (a hold or a run is usually bodyweight-borne).
+    const performed = buildLoggedSets(
+      exercise.performedSets.map((set) => performedSetRow(exercise.exerciseId, kind, unit, set)),
+      weightUnit,
+      { defaultLoadKind: defaultLoadKindForAmount(kind) },
+    );
+    if (!performed.ok) return performed;
+    loggedSets.push(...performed.sets);
   }
 
   if (loggedSets.length === 0) {

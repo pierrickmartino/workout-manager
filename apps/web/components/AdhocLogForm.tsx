@@ -213,7 +213,7 @@ function AccountScopedAdhocLogForm({ today, unit }: AdhocLogFormProps) {
       <fieldset className="flex min-w-0 flex-col gap-3 border-0 p-0">
         <SectionHeader>SETS PERFORMED</SectionHeader>
 
-        {/* The parser reads rows by contiguous index 0…set_count-1 (readAdhocFormRows),
+        {/* The reader walks rows by contiguous index 0…set_count-1 (readPostedSetRows),
             so field indices follow the array position, not the React key. */}
         <input type="hidden" name="set_count" value={draft.rows.length} />
 

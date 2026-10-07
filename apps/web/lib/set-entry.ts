@@ -15,8 +15,8 @@ import type { QuantityKind } from "./quantity.ts";
 // Every field a set row can carry, named exactly as it is submitted. One vocabulary serves
 // both the `name=` attribute and the values record, so there is no mapping table between the
 // two and therefore nothing for them to drift against. These words are the wire contract the
-// server actions' readers walk (`readAdhocFormRows`, `readLogFormRows`, the correction
-// reader): all four forms post `set-<i>-<field>` under a `set_count` header.
+// one reader walks (`readPostedSetRows` in `logged-set`, ADR-0115): every server-action form
+// posts `set-<i>-<field>` under a `set_count` header.
 export const SET_ENTRY_FIELDS = [
   "movement",
   "kind",

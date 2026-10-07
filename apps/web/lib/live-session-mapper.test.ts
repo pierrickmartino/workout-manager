@@ -8,7 +8,8 @@ import type { WorkoutSession } from "./sessions-types.ts";
 
 // The finish→payload mapper turns a finished Live Session into the request the
 // existing log endpoint accepts (issue #86): one Logged Set per *completed* set,
-// reps/load/RPE preserved, and nothing at all when no set was completed.
+// reps/load/RPE preserved, and nothing at all when no set was completed. How each set is
+// typed is the shared `logged-set` module's policy (ADR-0115), tested there.
 
 const SESSION: WorkoutSession = {
   id: 42,
@@ -86,6 +87,8 @@ test("maps every completed set to a Logged Set, preserving reps/load/RPE", () =>
     load_kind: "absolute",
     load_value: "70",
     perceived_difficulty: 7,
+    effort_scale: "rpe",
+    effort_value: 7,
   });
   assert.deepEqual(payload.logged_sets[1], {
     exercise_id: 100,
@@ -94,6 +97,8 @@ test("maps every completed set to a Logged Set, preserving reps/load/RPE", () =>
     load_kind: "absolute",
     load_value: "72.5",
     perceived_difficulty: 9,
+    effort_scale: "rpe",
+    effort_value: 9,
   });
 });
 
@@ -155,28 +160,6 @@ test("only completed sets are logged — skipped/pending sets are dropped", () =
   assert.ok(payload);
   assert.equal(payload.logged_sets.length, 1);
   assert.equal(payload.logged_sets[0].exercise_id, 100);
-});
-
-test("an empty load value maps to a null load, not the empty string", () => {
-  // Arrange — complete a push-up set (no prescribed load) without entering one
-  let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });
-  state = liveSessionReducer(state, {
-    type: "COMPLETE_SET",
-    index: 3,
-    reps: 12,
-    loadKind: "absolute",
-    loadValue: "",
-    rpe: null,
-  });
-  state = liveSessionReducer(state, { type: "FINISH" });
-
-  // Act
-  const payload = mapFinishToLog(state, "2026-07-06", "kg");
-
-  // Assert — the backend reads null as "no load recorded"
-  assert.ok(payload);
-  assert.equal(payload.logged_sets[0].load_value, null);
-  assert.equal(payload.logged_sets[0].perceived_difficulty, null);
 });
 
 test("records the Session Duration as start → last activity, excluding the idle tail", () => {

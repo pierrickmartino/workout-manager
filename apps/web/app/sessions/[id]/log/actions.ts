@@ -2,7 +2,8 @@
 
 import { logSession } from "@/lib/logs";
 import type { CompletionOutcome } from "@/lib/logs-types";
-import { buildLoggedSets, readLogFormRows } from "@/lib/log-session-form";
+import { loggedSetRowsFromForm } from "@/lib/log-session-form";
+import { buildLoggedSets } from "@/lib/logged-set";
 import { resolveAppearance } from "@/lib/appearance";
 
 export interface LogFormState {
@@ -38,14 +39,13 @@ export async function submitLog(
     return { error: "Pick the date you performed this session." };
   }
 
-  // Reading the rows and typing the per-set Quantity by kind live in the pure lib
-  // (`readLogFormRows` / `buildLoggedSets`, ADR-0050): the action stays a thin caller and the
-  // "which kind, reject-or-skip?" rules are unit-tested. A malformed distance/duration
-  // rejects the whole submission with a clear message; a malformed reps set drops silently.
+  // Which posted rows count (the Done ones) is this path's rule (`loggedSetRowsFromForm`);
+  // building each into a Logged Set is the shared module's (ADR-0115), called with the Done
+  // mark so a blank rep count logs as 0. A garbled amount rejects the whole submission.
   // The Load values arrive in the user's Weight Unit; resolve it server-side so each entered
   // Load is stored as canonical kilograms (#417). A signed-out/unreachable read defaults to kg.
   const { weight_unit: unit } = await resolveAppearance();
-  const built = buildLoggedSets(readLogFormRows(form), unit);
+  const built = buildLoggedSets(loggedSetRowsFromForm(form), unit, { performedMark: true });
   if (!built.ok) {
     return { error: built.error };
   }

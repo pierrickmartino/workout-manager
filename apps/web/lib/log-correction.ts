@@ -6,28 +6,31 @@
 // *edit* path.
 
 import {
-  distanceInput,
   distanceUnitFromText,
-  durationInput,
-  repetitionsInput,
   type DistanceUnit,
   type Quantity,
   type QuantityKind,
 } from "./quantity.ts";
-import { loadToFields as reverseLoadFields, loadValueToKg } from "./load.ts";
+import { loadToFields as reverseLoadFields } from "./load.ts";
+import {
+  buildLoggedSets,
+  hasAmount,
+  readPostedSetRows,
+  type CarriedEffort,
+  type LoggedSetRow,
+} from "./logged-set.ts";
 import { noteText } from "./note-view.ts";
+import { setEntryValues, type SetEntryValues } from "./set-entry.ts";
 import type { WeightUnit } from "./weight-unit";
 import type {
   CompletionOutcome,
   LogCorrectionInput,
   LoggedSession,
-  LogSetInput,
 } from "./logs-types";
 import { TRAINING_TYPES } from "./sessions-types.ts";
 
 const VALID_TRAINING_TYPES = new Set<string>(TRAINING_TYPES);
 
-const DEFAULT_LOAD_KIND = "absolute";
 const DEFAULT_DISTANCE_UNIT: DistanceUnit = "km";
 const METRES_PER_MILE = 1609.344;
 const METRES_PER_KM = 1000;
@@ -48,6 +51,10 @@ export interface CorrectionSetFields {
   loadKind: string;
   loadValue: string;
   perceivedDifficulty: number | null;
+  // The record's typed Effort (ADR-0066), carried so a correction re-sends it unchanged while
+  // its cell is untouched — the cell shows RPE only, so an RIR or half-step Effort could not
+  // otherwise survive the full replace (ADR-0115). Null when the set has no typed Effort.
+  carriedEffort: CarriedEffort | null;
   // The Set Note (ADR-0065, #451), as editable raw text. Pre-filled decoded from the stored
   // (escaped) value so the user edits what they typed; blank means "no note". Re-sent raw and
   // re-escaped once by the backend, so correcting a set never double-escapes or drops its note.
@@ -64,6 +71,12 @@ export interface CorrectionFormFields {
   trainingType: string;
   durationSeconds: number | null;
   sets: CorrectionSetFields[];
+}
+
+// What a correction request is built from: the form's header, and its rows as Logged Set rows
+// (ADR-0115) — whether they came off the pre-fill or back off a posted form.
+export interface CorrectionRequestFields extends Omit<CorrectionFormFields, "sets"> {
+  sets: LoggedSetRow[];
   // The corrected Completion Outcome (ADR-0013), or omitted/`null` to leave the record's
   // unchanged. Only the outcome-toggle path sets it; the contents-edit form leaves it out
   // so a save preserves the record's outcome server-side.
@@ -146,6 +159,11 @@ export function correctionFieldsFromRecord(
       ...quantityToFields(loggedSet.quantity),
       ...reverseLoadFields(loggedSet.load, unit),
       perceivedDifficulty: loggedSet.perceived_difficulty,
+      // The Effort cell is seeded with `perceived_difficulty` (the backend's RPE mirror), so
+      // that text is what "untouched" means for the carried Effort.
+      carriedEffort: loggedSet.effort
+        ? { effort: loggedSet.effort, shownAs: String(loggedSet.perceived_difficulty ?? "") }
+        : null,
       // Pre-fill the note decoded from its stored (escaped) form, so the edit field shows the
       // text the user typed rather than raw entities. `noteText` returns null for no note → "".
       note: noteText(loggedSet.note) ?? "",
@@ -153,85 +171,56 @@ export function correctionFieldsFromRecord(
   };
 }
 
-// The load fields for a row: the picked kind (defaulting to absolute) and its value,
-// or null when the row records no load.
-function loadFields(
-  row: CorrectionSetFields,
-  unit: WeightUnit,
-): Pick<LogSetInput, "load_kind" | "load_value"> {
-  const loadKind = row.loadKind || DEFAULT_LOAD_KIND;
-  // The value was edited in the reader's Weight Unit; convert it back to canonical kilograms
-  // for storage (#417). Blank stays "no load recorded" → null.
-  const loadValue = loadValueToKg(loadKind, row.loadValue.trim(), unit);
+// A pre-filled set as a Logged Set row: its fields in the entry vocabulary, plus the carried
+// Effort. A record with no Load kind on file reads as absolute, the kind a bare weight means.
+export function correctionSetRow(set: CorrectionSetFields): LoggedSetRow {
   return {
-    load_kind: loadKind as LogSetInput["load_kind"],
-    load_value: loadValue === "" ? null : loadValue,
+    exerciseId: set.exerciseId,
+    values: setEntryValues({
+      kind: set.kind,
+      reps: set.reps,
+      distance: set.distance,
+      unit: set.unit,
+      duration: set.duration,
+      load_kind: set.loadKind,
+      load_value: set.loadValue,
+      rpe: set.perceivedDifficulty === null ? "" : String(set.perceivedDifficulty),
+      note: set.note,
+    }),
+    carriedEffort: set.carriedEffort,
   };
 }
 
-// Parse a time value into total seconds — `mm:ss` / `hh:mm:ss` summed in base-60, or a
-// bare number of seconds — or null for any non-numeric segment. Mirrors the backend so
-// the boundary rejects here exactly what it would there.
-function parseDurationSeconds(raw: string): number | null {
-  let seconds = 0;
-  for (const segment of raw.split(":")) {
-    const value = Number(segment);
-    if (segment.trim() === "" || !Number.isFinite(value) || value < 0)
-      return null;
-    seconds = seconds * 60 + value;
-  }
-  return seconds;
-}
+// One posted correction row. An `existing` row edits a set already on the record — its Exercise
+// id rides in a hidden field (ADR-0034 keeps the movement fixed). An `added` row is a newly
+// added movement (issue #358) whose name the action resolves to a catalog Exercise
+// (search-and-create, ADR-0033).
+export type CorrectionPostedRow =
+  | { added: false; row: LoggedSetRow }
+  | { added: true; movementName: string; values: SetEntryValues };
 
-// The typed amount fields for a row, or null when it was left un-performed or malformed
-// (a blank/malformed row is dropped, letting a user clear a set to remove it). Mirrors
-// the ad-hoc form's per-kind validation so the two record paths agree at the boundary.
-function amountFor(
-  row: CorrectionSetFields,
-): Pick<
-  LogSetInput,
-  "quantity_kind" | "quantity_value" | "quantity_unit" | "quantity_duration"
-> | null {
-  if (row.kind === "distance") {
-    const raw = row.distance.trim();
-    const value = Number(raw);
-    if (raw === "" || !Number.isFinite(value) || value <= 0) return null;
-    return distanceInput(
-      raw,
-      row.unit ?? DEFAULT_DISTANCE_UNIT,
-      row.duration ?? "",
-    );
-  }
-  if (row.kind === "duration") {
-    const raw = row.duration.trim();
-    if (raw === "") return null;
-    const seconds = parseDurationSeconds(raw);
-    if (seconds === null || seconds <= 0) return null;
-    return durationInput(raw);
-  }
-  const raw = row.reps.trim();
-  if (raw === "") return null;
-  const reps = Number(raw);
-  if (!Number.isInteger(reps) || reps < 0) return null;
-  return repetitionsInput(reps);
-}
-
-// Build one logged-set payload from a row, or null when the row was left un-performed or
-// is malformed. The perceived difficulty rides through so the correction preserves it.
-function toSet(row: CorrectionSetFields, unit: WeightUnit): LogSetInput | null {
-  if (!Number.isInteger(row.exerciseId)) return null;
-  const amount = amountFor(row);
-  if (amount === null) return null;
-  const note = row.note.trim();
-  return {
-    exercise_id: row.exerciseId,
-    ...amount,
-    ...loadFields(row, unit),
-    perceived_difficulty: row.perceivedDifficulty,
-    // Re-send the note only when non-blank; the backend re-escapes it once. A cleared field
-    // sends no note, so a correction can also remove a note by blanking it.
-    ...(note !== "" ? { note } : {}),
-  };
+// Read the correction form's rows in order. A row with a hidden Exercise id is an existing set;
+// a row naming a movement instead is an added one. An added row with no amount is dropped here,
+// *before* its movement is resolved, so it never mints an orphan catalog Exercise (ADR-0033) —
+// the same "a cleared row is removed" rule the build applies to an existing set.
+export function correctionRowsFromForm(form: FormData): CorrectionPostedRow[] {
+  return readPostedSetRows(form).flatMap((posted): CorrectionPostedRow[] => {
+    if (posted.exerciseId !== null) {
+      return [
+        {
+          added: false,
+          row: {
+            exerciseId: posted.exerciseId,
+            values: posted.values,
+            carriedEffort: posted.carriedEffort,
+          },
+        },
+      ];
+    }
+    const movementName = posted.values.movement.trim();
+    if (movementName === "" || !hasAmount(posted.values)) return [];
+    return [{ added: true, movementName, values: posted.values }];
+  });
 }
 
 // Assemble a `LogCorrectionInput` PUT payload from the edited fields, validating at the
@@ -240,7 +229,7 @@ function toSet(row: CorrectionSetFields, unit: WeightUnit): LogSetInput | null {
 // training type — the server derives it from the Session (ADR-0034). A Completion
 // Outcome is never sent; the server preserves the record's.
 export function buildCorrectionRequest(
-  fields: CorrectionFormFields,
+  fields: CorrectionRequestFields,
   unit: WeightUnit,
 ): CorrectionResult {
   const performedOn = fields.performedOn.trim();
@@ -254,9 +243,9 @@ export function buildCorrectionRequest(
     return { ok: false, error: "Pick a training type." };
   }
 
-  const loggedSets = fields.sets
-    .map((row) => toSet(row, unit))
-    .filter((set): set is LogSetInput => set !== null);
+  const built = buildLoggedSets(fields.sets, unit);
+  if (!built.ok) return built;
+  const loggedSets = built.sets;
   if (loggedSets.length === 0) {
     return {
       ok: false,
@@ -293,9 +282,11 @@ export function buildOutcomeCorrection(
   // This is a pure round-trip of the record's own kilogram contents — the reversed fields
   // are never shown to the user — so it converts in canonical kilograms end to end, keeping
   // every stored Load byte-for-byte unchanged regardless of the reader's Weight Unit (#417).
+  const fields = correctionFieldsFromRecord(record, "kg");
   return buildCorrectionRequest(
     {
-      ...correctionFieldsFromRecord(record, "kg"),
+      ...fields,
+      sets: fields.sets.map(correctionSetRow),
       completionOutcome: outcome,
     },
     "kg",
