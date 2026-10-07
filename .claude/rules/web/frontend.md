@@ -65,6 +65,8 @@ is **declared**, not that it renders right: the `audit/` journeys (`reflow.mjs` 
 - New chart or series → render `ChartValues` from the same rows as the plot, with formatting
   (`dateText`, `valueText`) in the `lib/` view-model; the `<caption>` says what an absent row
   means (`chart-values-policy.ts`, `audit/charts.mjs`, ADR-0084).
+- Recharts plot root → `accessibilityLayer={false}`; Recharts 3's default makes the SVG an unnamed
+  tab stop (`chart-values-policy.ts`, ADR-0084).
 
 ## Forms
 
