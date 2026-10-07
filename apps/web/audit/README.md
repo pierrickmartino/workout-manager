@@ -240,3 +240,11 @@ Font licenses are retained beside the snapshots. Raw data includes every text
 sample, composited colours, document width, overflow element and unresolved
 sample; the summary names the exact fixture and separates recovered runner errors
 from application findings.
+
+## Trusted Types (ADR-0036)
+
+`node audit/trusted-types.mjs` mounts every journey under a report-only
+`require-trusted-types-for 'script'` header and prints each violation. Set `UI_TT_BASE`
+(and `UI_TT_PATHS`) to probe a running `next start` instead, where `proxy.ts` sends the
+header itself. The last run is in
+[`docs/development/trusted-types-react-19.3.md`](../../../docs/development/trusted-types-react-19.3.md).
