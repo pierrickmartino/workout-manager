@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 
 // Clerk Core 3 (`@clerk/nextjs` 7) removed the `<SignedIn>`, `<SignedOut>` and `<Protect>`
 // control components in favour of `<Show when=…>`. It still exports the three names, as stubs

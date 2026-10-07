@@ -98,6 +98,8 @@ is **declared**, not that it renders right: the `audit/` journeys (`reflow.mjs` 
 
 ## Components and structure
 
+- Guard or harness that walks or transpiles TypeScript → `import ts from "@typescript/typescript6"`;
+  `typescript` 7 has no JS API and is only the compiler (`npm run typecheck`, ADR-0116).
 - Signed-in / signed-out branch → Clerk's `<Show when="signed-in">`; Core 3 removed `SignedIn`,
   `SignedOut` and `Protect`, which still import but throw on render (`clerk-import-policy.ts`).
 - Section divider → `SectionHeader`, a heading (`level={3}` inside another section). Anything that
