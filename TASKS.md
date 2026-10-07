@@ -73,14 +73,69 @@ Sources: [research 2026-10-05](docs/research/2026-10-05.md), [market report 08-2
 
 Source: [research 2026-10-05](docs/research/2026-10-05.md) → Next action 8. One issue per item.
 
-- ⬜ React 19.2.7 → 19.3 (re-run the ADR-0036 Trusted Types check).
-- ⬜ recharts 2.15.4 → 3.x (gate on parity with `audit/charts.mjs`).
-- ⬜ TypeScript 5.9.3 → 6 → 7 (add a CI `tsc --noEmit` job first).
-- ⬜ Clerk Core 3 (`@clerk/nextjs` 7). Core 2 LTS ends around March 2027. Offline `getToken()` now throws, so audit every `apiSend`/`apiGet` catch path.
-- ⬜ Node 24/26 for Docker and CI.
-- ⬜ Python 3.13/3.14 for the API image.
-- ⬜ lucide-react 1.23 → 1.52.
-- ⬜ Redis 7 → 8, and a Postgres 16 → 18/19 decision (Q6).
+Status on **2026-10-07**: each item is done on its own pushed branch, **not yet merged**. The
+issues were not opened, because the GitHub connector was unavailable. Together the branches pass
+typecheck, the 1821 web tests, `next build` and `audit/charts.mjs` parity.
+
+**Merge order:**
+1. Merge `chore/typescript-7` first. On `chore/clerk-core-3`, `lib/clerk-import-policy.ts`
+   must then import `ts` from `@typescript/typescript6` (ADR-0116), or the type-check fails.
+2. Resolve `package.json` / lockfile conflicts by re-running each branch's `npm install`, not by
+   hand.
+3. `README.md` (node vs python) and `.claude/rules/web/frontend.md` (TS vs Clerk) conflict on
+   adjacent lines; keep both sides.
+
+- 🟡 React 19.2.7 → 19.3 (re-run the ADR-0036 Trusted Types check). **Branch `chore/react-19.3`.**
+  - Next 16.3.8 already bundles React `19.3.0-canary` for the App Router, so the pin aligns the
+    tests, the harness and the types.
+  - Trusted Types (new `audit/trusted-types.mjs`, [write-up](docs/development/trusted-types-react-19.3.md)):
+    React adds no violations. The blockers are Clerk's script injection and our own
+    `serviceWorker.register('/sw.js')`, which needs a TT policy.
+  - Still to do: post the result on #254, and re-run over the signed-in flows (sign-in modal,
+    dashboard, Live Session, builder DnD) with a real Clerk instance.
+- 🟡 recharts 2.15.4 → 3.x (gate on parity with `audit/charts.mjs`). **Branch `chore/recharts-3`, 3.10.1.**
+  - Parity in Chromium: 729/729 tooltips, 695 value points, 65/65 tables, the same tab stops.
+  - Recharts 3's default `accessibilityLayer` made every chart SVG an unnamed tab stop. It is
+    switched off, and `chart-values-policy` now fails a plot root that leaves it on, even in an
+    exempt file.
+  - Accepted differences: the tooltip comes before the SVG in DOM order, and 7 top-set cases get
+    one extra Y tick. Chart chunks grew about +21 KB gz and stay lazy.
+  - Still to do: the WebKit half of `charts.mjs` (not available in the sandbox).
+- 🟡 TypeScript 5.9.3 → 6 → 7 (add a CI `tsc --noEmit` job first). **Branch `chore/typescript-7`, 7.0.2.**
+  - The new `npm run typecheck` CI job runs `next typegen && tsc --noEmit` on Node 24.
+  - TS 7 ships no JS compiler API, so the `lib/*-policy.ts` guards and the tsx harness use
+    `@typescript/typescript6` (ADR-0116).
+  - Still to do: make the job a required check. `main` has no branch protection, so a red run
+    doesn't block a merge.
+- 🟡 Clerk Core 3 (`@clerk/nextjs` 7). Core 2 LTS ends around March 2027. Offline `getToken()` now throws, so audit every `apiSend`/`apiGet` catch path. **Branch `chore/clerk-core-3`, 7.9.11.**
+  - `SignedIn`/`SignedOut` still import but throw on render. They are replaced with `<Show>`, and
+    `clerk-import-policy` guards against them.
+  - Audit ([write-up](docs/development/clerk-core-3-upgrade.md)): the only `getToken()` is
+    server-side and makes no network call, so `ClerkOfflineError` can't reach the transport, and
+    no caller catches a Clerk error class.
+  - Still to do: a real sign-in, refresh and sign-out against a live instance, and an offline
+    cold start of the installed PWA (add it to the §2 matrix).
+- 🟡 Node 24/26 for Docker and CI. **Branch `chore/node-24`.**
+  - 24 is Active LTS; 26 isn't LTS until late October.
+  - npm 11 gates install scripts, and `@clerk/shared`'s telemetry postinstall is denied in
+    `allowScripts`.
+  - Verified: the image builds and serves `/` with a 200.
+- 🟡 Python 3.13/3.14 for the API image. **Branch `chore/python-3.13`, chose 3.14.**
+  - 2783/2783 tests pass on both 3.13 and 3.14.
+  - The image migrates 0001 → 0044 on Postgres 16 and authenticates a real RS256 token.
+  - CI now tests only 3.14, so the `requires-python >=3.11` floor goes untested.
+- 🟡 lucide-react 1.23 → 1.52. **Branch `chore/lucide-1.52`.** None of the 62 icons is renamed or deprecated. Only the merge is left.
+- 🟡 Redis 7 → 8, and a Postgres 16 → 18/19 decision (Q6). **Branch `chore/redis-8`.**
+  - The app's Redis moves to `redis:8-alpine`. Cache and RQ were checked on 8.10.2, and a
+    Redis 7 AOF loads in place.
+  - Postgres: ADR-0117 is **proposed**. It recommends staying on 16 and doing one 16 → 19
+    dump/restore after 19.1 ships, with the restore drill. **Needs the owner's sign-off.**
+
+### Found during the majors work
+
+- ⬜ **Every authenticated API request fetches the JWKS first**, even without a token (`get_jwks` is a FastAPI dependency). If Clerk's JWKS is unreachable, every call returns 500 instead of 401/503.
+- ⬜ **A Trusted Types policy for the service-worker registration** (`components/ServiceWorkerRegistrar.tsx`), needed before ADR-0036 enforcement.
+- ⬜ **Make the CI checks required** with branch protection or a ruleset on `main`.
 
 ## 5. Builder (visual workout builder)
 
@@ -150,7 +205,7 @@ Source: [future-improvements](docs/design/future-improvements.md).
 - ✅ §10 **Accessibility through shared components** (ADR-0093/0103/0104/0107, form accessibility, contrast floor, reduced motion).
 - ✅ §11 **One design system before more skins:** semantic tokens, skins (Pulse, Alpine, Clay, Track, Aurora, Vercel), contrast floor (ADR-0050/0070/0081).
 - 🟡 §12 **CI around user-visible failures:**
-  - ⬜ A **blocking** production build and type-check (`next build` only runs in the advisory Lighthouse job).
+  - 🟡 A **blocking** production build and type-check (`next build` only runs in the advisory Lighthouse job). A `tsc --noEmit` job is on `chore/typescript-7`, but it isn't a required check yet. `next build` is still advisory.
   - 🟡 Browser journeys exist in `apps/web/audit/` but don't run in CI.
   - ⬜ An integration lane against real Postgres.
 - 🟡 §13 **Measure performance on real screens:** #585–#587 removed serial reads and deferred chart bundles. No authenticated measurements yet.
