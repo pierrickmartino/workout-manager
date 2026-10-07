@@ -17,9 +17,13 @@ class AuthError(Exception):
 
 
 def verify_clerk_jwt(token: str, *, jwks: dict, issuer: str) -> dict[str, Any]:
+    # The header is attacker-controlled and parsed before any signature check,
+    # so any failure to decode it (e.g. RecursionError on a deeply nested JSON
+    # header, which older PyJWT does not wrap) must surface as AuthError -> 401,
+    # never as an unhandled 500.
     try:
         kid = jwt.get_unverified_header(token).get("kid")
-    except jwt.PyJWTError as exc:
+    except (jwt.PyJWTError, ValueError, RecursionError) as exc:
         raise AuthError("malformed token header") from exc
 
     signing_key = _find_signing_key(jwks, kid)
@@ -31,7 +35,7 @@ def verify_clerk_jwt(token: str, *, jwks: dict, issuer: str) -> dict[str, Any]:
             algorithms=["RS256"],
             issuer=issuer,
         )
-    except jwt.PyJWTError as exc:
+    except (jwt.PyJWTError, ValueError, RecursionError) as exc:
         raise AuthError(str(exc)) from exc
 
 
