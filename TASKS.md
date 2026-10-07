@@ -34,7 +34,7 @@ Sources: [research 2026-10-05](docs/research/2026-10-05.md) → *Next actions*,
 - ✅ **Broaden the `except` in `verify_clerk_jwt`** to catch any decode error (e.g. `RecursionError`), and add a unit test with a deeply nested header. It caught only `jwt.PyJWTError`; raw decode errors now map to a fixed-message `AuthError`.
 - ✅ **Make `apps/web/Dockerfile` use the lockfile** (`COPY package-lock.json` + `npm ci`). It ran `npm install`.
 - ✅ **Pin the `ghcr.io/astral-sh/uv` image tag.** Was `:latest`; now `0.12.23` by tag and digest.
-- ❔ **Re-pull `postgres:16-alpine` (≥16.15) and `redis:7-alpine` on the next deploy.**
+- ❔ **Re-pull `postgres:16-alpine` (≥16.15) and `redis:7-alpine` on the next deploy.** Once `chore/redis-8` (#627) merges, move Redis to 8 instead, following the VPS guide's "Moving an existing install to Redis 8" steps. A rollback then needs an empty Redis volume.
 - ⬜ **Decide on dependency automation:** Renovate or Dependabot with exact-pin PRs, a weekly `npm audit` / `pip-audit` job, and maybe `uv lock` for the API (open since 08-14, Q2). There is no `.github/dependabot.yml`.
 - 🟡 **Close the 09-25 credential incident.** Repository containment is done: `.codex` was removed, Gitleaks added, and a pre-push hook installed. Four owner items are still open:
   - ❔ Confirm the exposed refresh credential was revoked at the provider.
