@@ -41,7 +41,7 @@
     "@tailwindcss/postcss": "4.3.2",
     "@tailwindcss/vite": "4.3.3",
     "@types/jsdom": "30.0.0",
-    "@types/node": "22.20.0",
+    "@types/node": "24.19.1",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.1.1",
@@ -49,5 +49,8 @@
     "tailwindcss": "4.3.2",
     "typescript": "5.9.3",
     "vite": "8.3.1"
+  },
+  "allowScripts": {
+    "@clerk/shared": false
   }
 }
