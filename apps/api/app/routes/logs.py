@@ -104,9 +104,9 @@ class LogSetBody(BaseModel):
     effort_value: float | None = None
     # Set Type annotation (ADR-0065, #449): a chosen ``SetType`` value tagging what this
     # performed set *was*, or ``None``/blank for "unset" (reads as working). Descriptive
-    # only — echoed back per Logged Set, never a Progression input. Rides the finish, the
-    # static log form, the ad-hoc log, and Log Correction (all share this body). Membership
-    # is checked at the boundary and never coerced.
+    # only — echoed back per Logged Set, never a Progression input. Every record write
+    # shares this body, but no web logging path sends a Set Type yet (ADR-0115), so today's
+    # web records store it unset. Membership is checked at the boundary and never coerced.
     set_type: str | None = None
     # Set Note (ADR-0065, #451): an optional record-side remark on this performed set, or
     # ``None``/blank for "no note". Sanitized at the boundary by ``parse_note`` (below): blank →

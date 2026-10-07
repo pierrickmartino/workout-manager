@@ -1,10 +1,7 @@
 "use server";
 
-import {
-  buildAdhocLogRequest,
-  readAdhocFormRows,
-  type AdhocSetFields,
-} from "@/lib/adhoc-log";
+import { buildAdhocLogRequest, readAdhocFormRows } from "@/lib/adhoc-log";
+import type { LoggedSetRow } from "@/lib/logged-set";
 import { resolveExercise } from "@/lib/exercises";
 import { logAdhocSession } from "@/lib/logs";
 import { resolveAppearance } from "@/lib/appearance";
@@ -21,7 +18,7 @@ export interface AdhocLogFormState {
 // `user_entered` one — so every set posts a real `exercise_id`, exactly like a
 // plan-backed set. The request shape (date, known training type, at least one performed
 // set, no Completion Outcome) is validated by the shared `buildAdhocLogRequest`
-// view-model; row parsing lives in the pure `readAdhocFormRows` seam.
+// view-model, which builds each row through the shared `logged-set` module (ADR-0115).
 export async function submitAdhocLog(
   _prevState: AdhocLogFormState,
   form: FormData,
@@ -32,8 +29,8 @@ export async function submitAdhocLog(
   }
 
   // Resolve each movement to a catalog Exercise id before building the request.
-  const sets: AdhocSetFields[] = [];
-  for (const { movementName, fields } of rows) {
+  const sets: LoggedSetRow[] = [];
+  for (const { movementName, values } of rows) {
     const resolved = await resolveExercise(movementName);
     if (!resolved.success || !resolved.data) {
       return {
@@ -41,7 +38,7 @@ export async function submitAdhocLog(
         redirectTo: null,
       };
     }
-    sets.push({ exerciseId: resolved.data.id, ...fields });
+    sets.push({ exerciseId: resolved.data.id, values });
   }
 
   // Load values arrive in the user's Weight Unit; resolve it server-side so each entered

@@ -54,8 +54,8 @@ test("every field carries a caption, so no part renders an unlabelled control", 
 });
 
 test("a field's submitted name is its row prefix and its own vocabulary word", () => {
-  // Assert — the indexed shape every form's parser reads (`readAdhocFormRows` and friends
-  // walk `set-<i>-<field>` for i in 0…set_count-1), so the vocabulary *is* the wire contract.
+  // Assert — the indexed shape the one reader walks (`readPostedSetRows` in `logged-set` reads
+  // `set-<i>-<field>` for i in 0…set_count-1), so the vocabulary *is* the wire contract.
   assert.equal(setEntryPrefix(0), "set-0");
   assert.equal(setEntryPrefix(11), "set-11");
   assert.equal(setEntryName("set-3", "load_kind"), "set-3-load_kind");

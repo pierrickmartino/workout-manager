@@ -16,25 +16,18 @@
 // failure is still attempted — and a Session is Completed only when every prescribed set was
 // attempted.
 
-import type { CompletionOutcome, LogSetInput } from "./logs-types";
-import {
-  loadToFields,
-  loadValueToKg,
-  type LoadKind,
-} from "./load.ts";
+import type { CompletionOutcome } from "./logs-types";
+import { loadToFields, type LoadKind } from "./load.ts";
 import type { WeightUnit } from "./weight-unit";
 import {
-  distanceInput,
   distanceValueFromMetres,
   distanceUnitFromText,
-  durationInput,
   formatSecondsAsClock,
-  parseDurationSeconds,
-  repetitionsInput,
   type DistanceUnit,
   type Quantity,
   type QuantityKind,
 } from "./quantity.ts";
+import { readPostedSetRows, type LoggedSetRow } from "./logged-set.ts";
 import { supersetLayout, type SupersetSlot } from "./supersets.ts";
 import type { ExercisePrescription } from "./sessions-types";
 
@@ -43,26 +36,9 @@ import type { ExercisePrescription } from "./sessions-types";
 const MIN_ROWS = 1;
 const INTEGER = /^\d+$/;
 
-// The upper bound on rows `readLogFormRows` will walk for one submission — a real Session,
-// even a very long circuit, never comes close. The client sends the row count in a hidden
-// field, so the reader clamps to this ceiling before looping: a forged, absurdly large
-// `set_count` is bounded to a fixed amount of work rather than driving an unbounded loop.
-const MAX_SET_ROWS = 500;
-
 // A `distance` set's unit falls back to km when none can be read — the same default the
 // ad-hoc and Hand-Authored logs use (ADR-0032).
 const DEFAULT_DISTANCE_UNIT: DistanceUnit = "km";
-
-// The kinds a log row may carry, defaulting to `repetitions` — the quantity the plan-backed
-// form has always collected — for a blank or unrecognized value (ADR-0032/0050).
-const QUANTITY_KINDS = new Set<string>(["repetitions", "distance", "duration"]);
-
-function normalizeKind(kind: string): QuantityKind {
-  return (QUANTITY_KINDS.has(kind) ? kind : "repetitions") as QuantityKind;
-}
-
-const MIN_RPE = 1;
-const MAX_RPE = 10;
 
 // One editable set-row in the log form. `prescriptionPosition` ties the row back to the
 // prescription it came from so Completion Outcome can compare attempted vs prescribed per
@@ -288,204 +264,15 @@ export function skippedSetCount(
   return skipped;
 }
 
-// --- Per-set payload building (ADR-0050). The plan-backed log's twin of
-// `hand-authored-session`'s `performedAmount`/`buildPerformedSet`: a pure, kind-dispatching
-// builder that turns a submitted row into a typed `LogSetInput` via the *shared* quantity
-// request builders (`repetitionsInput`/`distanceInput`/`durationInput`) — the same ones the
-// ad-hoc and Hand-Authored paths use. Moving it here leaves the log server action a thin
-// caller and puts the "which field, which kind, reject-or-skip?" rules under unit test.
-
-// The quantity fields a submitted row carries. Only the field its `kind` names is meaningful;
-// the rest ride as they came off the form. This is the reader's output and the builder's
-// input — the record-side `LogSetInput` is assembled from it plus the load and RPE.
-export interface LogRowFields {
-  exerciseId: number;
-  kind: QuantityKind;
-  reps: string;
-  distance: string;
-  unit: DistanceUnit;
-  duration: string;
-  loadKind: string;
-  loadValue: string;
-  rpe: string;
-  // The user's optional per-set Set Note (ADR-0065), as typed. Blank means no note.
-  note: string;
-}
-
-// The three log-set request builders return the same quantity-field slice the record
-// endpoint accepts; distance widens it with unit + optional companion time.
-type QuantityFields = Pick<
-  LogSetInput,
-  "quantity_kind" | "quantity_value" | "quantity_unit" | "quantity_duration"
->;
-
-// A row's quantity after mapping: the typed fields, a silent skip (the row is not a real
-// set), or a form-level error (a garbled value the user must fix before anything saves).
-type QuantityResult =
-  | { status: "quantity"; fields: QuantityFields }
-  | { status: "skip" }
-  | { status: "error"; error: string };
-
-// The repetitions quantity — unchanged from the old server action (regression guard): a Done
-// row with a blank reps field logs as 0 reps (a set ground out to failure is still attempted,
-// CONTEXT 'Completion Outcome'), and a non-integer/negative value drops the set silently.
-function repetitionsQuantity(row: LogRowFields): QuantityResult {
-  const raw = row.reps.trim();
-  const reps = raw === "" ? 0 : Number(raw);
-  if (!Number.isInteger(reps) || reps < 0) return { status: "skip" };
-  return { status: "quantity", fields: repetitionsInput(reps) };
-}
-
-// The distance quantity: a blank distance means the row was not performed and is skipped —
-// so an added-but-unfilled extra set never blocks the log — while a *garbled* or non-positive
-// value (the user typed something, but nonsense) is rejected with a clear message rather than
-// silently dropped. This mirrors the ad-hoc/Hand-Authored distinction (blank → skip, garbage
-// → error). The companion time stays optional: blank leaves pace underivable for a
-// distance-only run, which logs fine (issue #343).
-function distanceQuantity(row: LogRowFields): QuantityResult {
-  const raw = row.distance.trim();
-  if (raw === "") return { status: "skip" };
-
-  const value = Number(raw);
-  if (!Number.isFinite(value) || value <= 0) {
-    return {
-      status: "error",
-      error: "Enter a valid distance (like 5 or 3.1) for each distance set you did.",
-    };
-  }
-  return { status: "quantity", fields: distanceInput(raw, row.unit, row.duration) };
-}
-
-// The duration quantity: a blank hold time skips the row (an unfilled extra set never blocks
-// the log); a garbled or non-positive time is rejected outright. The text rides verbatim as a
-// `duration` Quantity the backend canonicalises to seconds.
-function durationQuantity(row: LogRowFields): QuantityResult {
-  const raw = row.duration.trim();
-  if (raw === "") return { status: "skip" };
-
-  const seconds = parseDurationSeconds(raw);
-  if (seconds === null || seconds <= 0) {
-    return {
-      status: "error",
-      error: "Enter a valid hold time (like 45 or 1:30) for each duration set you did.",
-    };
-  }
-  return { status: "quantity", fields: durationInput(raw) };
-}
-
-// Dispatch to the quantity mapper for the row's kind (ADR-0050), defaulting to repetitions.
-function quantityFor(row: LogRowFields): QuantityResult {
-  switch (row.kind) {
-    case "distance":
-      return distanceQuantity(row);
-    case "duration":
-      return durationQuantity(row);
-    default:
-      return repetitionsQuantity(row);
-  }
-}
-
-// The in-range perceived difficulty (the 1–10 "RPE" scale) for a row, or null when blank or
-// out of range — the same tolerance the old server action kept.
-function perceivedDifficulty(rpe: string): number | null {
-  const raw = rpe.trim();
-  if (raw === "") return null;
-  const value = Number(raw);
-  return Number.isInteger(value) && value >= MIN_RPE && value <= MAX_RPE ? value : null;
-}
-
-// A built set, a silent skip (the row was not a real set), or a form-level error.
-export type LogSetResult =
-  | { status: "set"; set: LogSetInput }
-  | { status: "skip" }
-  | { status: "error"; error: string };
-
-// Build one logged-set payload from a submitted row, dispatching on its kind. The typed
-// quantity rides as a Quantity (distance also carrying its unit + optional companion time);
-// the load kind+value (blank value → no load recorded) and an in-range RPE ride alongside.
-// Load is passed through whenever a value is present — a distance/duration set omits it by
-// default on screen, but a loaded carry the user entered still reaches the record.
-export function buildLogSet(row: LogRowFields, unit: WeightUnit): LogSetResult {
-  if (!Number.isInteger(row.exerciseId)) return { status: "skip" };
-
-  const quantity = quantityFor(row);
-  if (quantity.status !== "quantity") return quantity;
-
-  const loadKind = row.loadKind || "absolute";
-  // The load was entered in the reader's Weight Unit; convert it to canonical, exact
-  // kilograms for storage (#417). A blank value stays "no load recorded" → null.
-  const loadValue = loadValueToKg(loadKind, row.loadValue.trim(), unit);
-  // Effort (ADR-0066): the form's RPE input logs the typed value in the `rpe` scale so a new
-  // write dual-writes — the backend stores the typed `effort` and mirrors an RPE value into
-  // `perceived_difficulty`. When no in-range effort was entered, neither field is sent (an
-  // absent effort, not a fabricated one).
-  const effort = perceivedDifficulty(row.rpe);
-  // The Set Note (ADR-0065): send it only when non-blank, so an untouched row records no note
-  // (the backend stores a blank note as unset anyway). It rides as raw text; the backend
-  // length-caps and HTML-escapes it at the write boundary.
-  const note = row.note.trim();
-  return {
-    status: "set",
-    set: {
-      exercise_id: row.exerciseId,
-      ...quantity.fields,
-      load_kind: loadKind as LogSetInput["load_kind"],
-      load_value: loadValue === "" ? null : loadValue,
-      perceived_difficulty: effort,
-      ...(effort !== null ? { effort_scale: "rpe", effort_value: effort } : {}),
-      ...(note !== "" ? { note } : {}),
-    },
-  };
-}
-
-// Build the whole logged-set list from the submitted rows, or the first form-level error. A
-// garbled distance/duration rejects the entire submission so nothing corrupt is saved; a
-// silently-skipped row (malformed reps, non-integer exercise) is simply omitted. `unit` is the
-// reader's Weight Unit, so each entered Load is stored as canonical kilograms (#417).
-export function buildLoggedSets(
-  rows: readonly LogRowFields[],
-  unit: WeightUnit,
-): { ok: true; sets: LogSetInput[] } | { ok: false; error: string } {
-  const sets: LogSetInput[] = [];
-  for (const row of rows) {
-    const result = buildLogSet(row, unit);
-    if (result.status === "error") return { ok: false, error: result.error };
-    if (result.status === "set") sets.push(result.set);
-  }
-  return { ok: true, sets };
-}
-
-function readField(form: FormData, name: string): string {
-  const value = form.get(name);
-  return typeof value === "string" ? value : "";
-}
-
-// Read the kind-aware log form into typed rows. Fields are indexed by row
-// (`set-<i>-exercise_id`, `set-<i>-kind`, `set-<i>-distance`, …) under a `set_count` header —
-// the same indexed shape the heterogeneous ad-hoc form uses, needed here because a hybrid
-// run-then-squats Session mixes kinds and the old row-parallel `getAll` arrays would misalign.
-// A row not marked done was skipped by the user (Model B, Q10) and is dropped, so only
-// attempted sets reach the payload builder.
-export function readLogFormRows(form: FormData): LogRowFields[] {
-  const count = Number(readField(form, "set_count"));
-  if (!Number.isInteger(count) || count <= 0) return [];
-
-  const rows: LogRowFields[] = [];
-  const bounded = Math.min(count, MAX_SET_ROWS);
-  for (let index = 0; index < bounded; index += 1) {
-    if (readField(form, `set-${index}-done`) !== "true") continue;
-    rows.push({
-      exerciseId: Number(readField(form, `set-${index}-exercise_id`)),
-      kind: normalizeKind(readField(form, `set-${index}-kind`)),
-      reps: readField(form, `set-${index}-reps`),
-      distance: readField(form, `set-${index}-distance`),
-      unit: (readField(form, `set-${index}-unit`) || DEFAULT_DISTANCE_UNIT) as DistanceUnit,
-      duration: readField(form, `set-${index}-duration`),
-      loadKind: readField(form, `set-${index}-load_kind`),
-      loadValue: readField(form, `set-${index}-load_value`),
-      rpe: readField(form, `set-${index}-rpe`),
-      note: readField(form, `set-${index}-note`),
-    });
-  }
-  return rows;
+// --- The submitted form → Logged Set rows. Turning a row into a request is the shared
+// `logged-set` module's job (ADR-0115); what is particular to this path is which posted rows
+// count. A row not marked Done was skipped by the user (Model B, Q10) and is dropped, so only
+// attempted sets reach the builder, which this path calls with `performedMark` — a Done row
+// with a blank rep count logs as 0 reps.
+export function loggedSetRowsFromForm(form: FormData): LoggedSetRow[] {
+  return readPostedSetRows(form).flatMap((posted) =>
+    posted.done === true && posted.exerciseId !== null
+      ? [{ exerciseId: posted.exerciseId, values: posted.values }]
+      : [],
+  );
 }

@@ -53,8 +53,8 @@ interface LogSessionFormProps {
 //
 // Rows submit as indexed fields (`set-<i>-…`) under a `set_count` header — the same shape the
 // heterogeneous ad-hoc log uses — because a hybrid run-then-squats Session mixes kinds and
-// the old row-parallel arrays would misalign. The pure `readLogFormRows`/`buildLoggedSets`
-// (lib/log-session-form) read and type the payload; the server action is a thin caller.
+// the old row-parallel arrays would misalign. The shared `logged-set` module reads and types
+// the payload (ADR-0115); the server action is a thin caller.
 export function LogSessionForm({
   sessionId,
   prescriptions,
