@@ -22,7 +22,8 @@ dependencies = [
     # curator Exercise Image upload (the one multipart endpoint; issue #504). Without
     # it FastAPI raises at route-registration time for any UploadFile/Form parameter.
     # Security floor: 7 advisories (two High DoS) at 0.0.12, fixed across
-    # 0.0.18-0.0.31. The upload route's body is parsed *before* require_admin
+    # 0.0.18-0.0.31 (CVE-2024-53981 ... CVE-2026-53540 / GHSA-v9pg-7xvm-68hf,
+    # the last fixed in 0.0.31). The upload route's body is parsed *before* require_admin
     # runs, so a vulnerable parser is reachable unauthenticated
     # (docs/research/2026-10-05.md, Sec #3).
     "python-multipart>=0.0.31",
