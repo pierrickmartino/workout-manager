@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { Zap } from "@/components/pulse/icons";
-import { SignedOut, SignInButton } from "@clerk/nextjs";
+import { Show, SignInButton } from "@clerk/nextjs";
 
 import { resolveLandingRedirect } from "@/lib/landing-redirect";
 import { Overline } from "@/components/pulse/overline";
@@ -47,7 +47,7 @@ export default async function HomePage() {
           </p>
         </div>
 
-        <SignedOut>
+        <Show when="signed-out">
           {/* Clerk's SignInButton requires the trigger to hold a single text
               child (no nested icon element), so this CTA stays icon-free.
               forceRedirectUrl sends a fresh modal sign-in to the dashboard, so
@@ -61,7 +61,7 @@ export default async function HomePage() {
               Initiate session
             </button>
           </SignInButton>
-        </SignedOut>
+        </Show>
       </Card>
     </section>
   );

@@ -8,7 +8,7 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-  type TooltipProps,
+  type TooltipContentProps,
 } from "recharts";
 
 import { useChartTheme } from "@/lib/use-chart-theme";
@@ -52,9 +52,12 @@ export function TopSetTrendChart({
     <div>
       <div className={`${heightClass} w-full`}>
         <ResponsiveContainer width="100%" height="100%">
+          {/* No accessibility layer: Recharts 3 would make the SVG an unnamed tab stop, and
+              inside the miniature's aria-hidden a focusable one (ADR-0084). */}
           <BarChart
             data={rows}
             margin={{ top: 8, right: 8, bottom: 0, left: -12 }}
+            accessibilityLayer={false}
           >
             <XAxis
               dataKey="label"
@@ -71,7 +74,7 @@ export function TopSetTrendChart({
               domain={["dataMin - 10", "dataMax + 5"]}
               tickFormatter={(value: number) => `${Math.round(value)}`}
             />
-            <Tooltip cursor={{ fill: cyanDim }} content={<TrendTooltip />} />
+            <Tooltip cursor={{ fill: cyanDim }} content={TrendTooltip} />
             <Bar
               dataKey="estimate"
               radius={[2, 2, 0, 0]}
@@ -106,7 +109,7 @@ export function TopSetTrendChart({
 // A themed tooltip: the session date and its Top Set, matching the card surfaces rather
 // than Recharts' default white box. Both strings come from the row, so the pointer and the
 // values table state the same date — with its year — and the same estimate.
-function TrendTooltip({ active, payload }: TooltipProps<number, string>) {
+function TrendTooltip({ active, payload }: TooltipContentProps) {
   if (!active || !payload || payload.length === 0) {
     return null;
   }
