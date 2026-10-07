@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 
 // #9: a touch browser holds a tap for ~300ms to see whether a second one is coming
 // (double-tap zoom) before it dispatches the click. `touch-action: manipulation` gives up
