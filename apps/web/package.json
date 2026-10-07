@@ -16,13 +16,13 @@
     "contrast:report": "node scripts/skin-contrast-report.ts"
   },
   "dependencies": {
-    "@clerk/nextjs": "6.39.7",
+    "@clerk/nextjs": "7.9.11",
     "@dnd-kit/core": "6.3.1",
     "@dnd-kit/sortable": "10.0.0",
     "@dnd-kit/utilities": "3.2.2",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
-    "lucide-react": "1.23.0",
+    "lucide-react": "1.52.0",
     "next": "16.3.8",
     "react": "19.2.7",
     "react-dom": "19.2.7",
@@ -43,7 +43,7 @@
     "@tailwindcss/postcss": "4.3.2",
     "@tailwindcss/vite": "4.3.3",
     "@types/jsdom": "30.0.0",
-    "@types/node": "22.20.0",
+    "@types/node": "24.19.1",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "@typescript/typescript6": "6.0.2",
@@ -52,5 +52,8 @@
     "tailwindcss": "4.3.2",
     "typescript": "7.0.2",
     "vite": "8.3.1"
+  },
+  "allowScripts": {
+    "@clerk/shared": false
   }
 }
