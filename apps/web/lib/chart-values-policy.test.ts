@@ -152,6 +152,21 @@ test("flags an accessibility layer switched on explicitly, through an alias", ()
     [{ kind: "focusable-plot", plot: "BarChart" }, { kind: "focusable-plot", plot: "BarChart" }]);
 });
 
+test("an exemption from the values table does not excuse a focusable plot", () => {
+  // Arrange — the exempt file is the aria-hidden miniature, where a tab stop does the most harm
+  const exempt = CHART_VALUES_EXEMPTIONS[0].file;
+  const source = `
+    import { BarChart } from "recharts";
+    export function Mini({ rows }: { rows: Row[] }) { return <BarChart data={rows} />; }`;
+
+  // Act
+  const violations = findChartValuesViolations(source, exempt);
+
+  // Assert
+  assert.deepEqual(violations.map((violation) => violation.failure),
+    [{ kind: "focusable-plot", plot: "BarChart" }]);
+});
+
 test("names the switch to turn off in its focusable-plot message", () => {
   // Arrange
   const source = `import { BarChart } from "recharts";

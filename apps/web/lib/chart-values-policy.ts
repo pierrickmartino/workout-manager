@@ -146,12 +146,17 @@ function turnsAccessibilityLayerOff(element: ts.JsxOpeningLikeElement): boolean 
 }
 
 // Every rendered plot root that leaves Recharts' accessibility layer on.
+interface PlotElement {
+  readonly plot: string;
+  readonly line: number;
+}
+
 function focusablePlots(
   tree: ts.SourceFile,
   plots: readonly RechartsImport[],
-): readonly { readonly plot: string; readonly line: number }[] {
+): readonly PlotElement[] {
   const byLocal = new Map(plots.map((plot) => [plot.local, plot.name]));
-  const found: { plot: string; line: number }[] = [];
+  const found: PlotElement[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
       const plot = ts.isIdentifier(node.tagName) ? byLocal.get(node.tagName.text) : undefined;
@@ -196,8 +201,11 @@ export function findChartValuesViolations(
     violations.push({ file, line, failure: { kind: "focusable-plot", plot } });
   }
 
+  // An exemption excuses a missing values table only: a focusable plot is a defect anywhere,
+  // and worst in the exempt aria-hidden miniature.
   return violations.filter(
-    (violation) => !CHART_VALUES_EXEMPTIONS.some((exemption) => exemption.file === violation.file),
+    (violation) => violation.failure.kind !== "missing-values"
+      || !CHART_VALUES_EXEMPTIONS.some((exemption) => exemption.file === violation.file),
   );
 }
 
