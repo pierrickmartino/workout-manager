@@ -16,8 +16,14 @@ concurrency:
 
 jobs:
   api:
-    name: API (pytest + terminology guard)
+    name: API (pytest + terminology guard, Python ${{ matrix.python }})
     runs-on: ubuntu-latest
+    # 3.14 is what the image runs; 3.11 is the requires-python floor the README's
+    # local setup uses. Testing both keeps the floor honest.
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.14"]
     defaults:
       run:
         working-directory: apps/api
@@ -26,7 +32,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: ${{ matrix.python }}
           cache: pip
 
       - name: Install dependencies
