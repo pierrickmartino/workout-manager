@@ -25,15 +25,15 @@ Sources: [research 2026-10-05](docs/research/2026-10-05.md) → *Next actions*,
 [audit 2026-10-05](docs/research/audit/2026-10-05.md) → rank 1–2,
 [incident 2026-09-25](docs/security/incidents/2026-09-25-codex-tool-state.md).
 
-- ⬜ **Bump `next` 16.2.12 → 16.3.8.** Fixes 3 critical advisories (GHSA-2xp9, GHSA-p293, GHSA-vcvr) plus 7 others. `package.json` still pins 16.2.12.
-- ⬜ **Patch `@clerk/nextjs` 6.39.5 → 6.39.7** in the same PR.
-- ⬜ **Set `images: { unoptimized: true }` in `next.config.js`.** We only render plain `<img>` (ADR-0095).
-- ⬜ **Raise the `pyjwt[crypto]` floor to `>=2.15.1`.** Still `>=2.9`, which allows 15 advisories. The stale floor was first flagged in the 08-14 report.
-- ⬜ **Raise the `python-multipart` floor to `>=0.0.31`.** Still `>=0.0.12`, and the image upload parses the body before admin auth runs.
-- ⬜ **Optionally set a `cryptography>=49` runtime floor.**
-- ⬜ **Broaden the `except` in `verify_clerk_jwt`** to catch any decode error (e.g. `RecursionError`), and add a unit test with a deeply nested header. It still catches only `jwt.PyJWTError`.
-- ⬜ **Make `apps/web/Dockerfile` use the lockfile** (`COPY package-lock.json` + `npm ci`). It still runs `npm install`.
-- ⬜ **Pin the `ghcr.io/astral-sh/uv` image tag.** Still `:latest`.
+- ✅ **Bump `next` 16.2.12 → 16.3.8.** Fixes 3 critical advisories (GHSA-2xp9, GHSA-p293, GHSA-vcvr) plus 7 others. `package.json` pinned 16.2.12.
+- ✅ **Patch `@clerk/nextjs` 6.39.5 → 6.39.7** in the same PR.
+- ✅ **Set `images: { unoptimized: true }` in `next.config.js`.** We only render plain `<img>` (ADR-0095).
+- ✅ **Raise the `pyjwt[crypto]` floor to `>=2.15.1`.** It was `>=2.9`, which allowed 15 advisories. The stale floor was first flagged in the 08-14 report.
+- ✅ **Raise the `python-multipart` floor to `>=0.0.31`.** It was `>=0.0.12`, and the image upload parses the body before admin auth runs.
+- ✅ **Optionally set a `cryptography>=49` runtime floor.**
+- ✅ **Broaden the `except` in `verify_clerk_jwt`** to catch any decode error (e.g. `RecursionError`), and add a unit test with a deeply nested header. It caught only `jwt.PyJWTError`; raw decode errors now map to a fixed-message `AuthError`.
+- ✅ **Make `apps/web/Dockerfile` use the lockfile** (`COPY package-lock.json` + `npm ci`). It ran `npm install`.
+- ✅ **Pin the `ghcr.io/astral-sh/uv` image tag.** Was `:latest`; now `0.12.23` by tag and digest.
 - ❔ **Re-pull `postgres:16-alpine` (≥16.15) and `redis:7-alpine` on the next deploy.**
 - ⬜ **Decide on dependency automation:** Renovate or Dependabot with exact-pin PRs, a weekly `npm audit` / `pip-audit` job, and maybe `uv lock` for the API (open since 08-14, Q2). There is no `.github/dependabot.yml`.
 - 🟡 **Close the 09-25 credential incident.** Repository containment is done: `.codex` was removed, Gitleaks added, and a pre-push hook installed. Four owner items are still open:

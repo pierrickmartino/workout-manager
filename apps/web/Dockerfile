@@ -1,8 +1,9 @@
 # syntax=docker/dockerfile:1
 FROM node:22-slim AS deps
 WORKDIR /app
-COPY package.json ./
-RUN npm install
+# Install exactly what the lockfile pins (what CI tested), never a fresh resolve.
+COPY package.json package-lock.json ./
+RUN npm ci
 
 FROM node:22-slim AS builder
 WORKDIR /app
