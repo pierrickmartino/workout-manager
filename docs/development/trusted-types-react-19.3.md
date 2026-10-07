@@ -16,7 +16,10 @@ up with what ships.
 ## Method
 
 `audit/trusted-types.mjs` listens for `securitypolicyviolation`, loads each page, opens
-every `<details>` and presses the first four buttons in `main`.
+every `<details>` and presses the first four buttons in `main`. A press that fails is
+recorded in `pressFailures` rather than skipped. On the re-run, one press failed: the fourth
+button on `home` timed out. That journey's report may therefore miss a violation only that
+press would raise.
 
 - **Harness mode:** every `audit/` journey (Live Session, logging, Hand-Authored
   creation, builder-adjacent forms, charts, catalog, sheets, dialogs…), with the

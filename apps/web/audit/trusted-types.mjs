@@ -15,6 +15,11 @@ import { chromium } from "@playwright/test";
 const HARNESS_JOURNEYS = ["charts", "motion", "adhoc", "correction", "profile", "sessions", "history", "catalog",
   "creation", "creation-logged", "logging", "live", "analytics", "home", "exercise", "admin", "confirm", "sheet",
   "launchpad", "levels"];
+// How much of each page the probe exercises after load.
+const PRESSED_BUTTONS = 4;
+const PRESS_TIMEOUT_MS = 1000;
+const SETTLE_MS = 300;
+
 const base = process.env.UI_TT_BASE;
 const isServer = Boolean(base);
 const targets = isServer
@@ -44,13 +49,20 @@ for (const { name, url } of targets) {
   await page.goto(url, { waitUntil: "networkidle" });
   // Exercise the client a little: open every <details>, press the first few buttons.
   await page.evaluate(() => document.querySelectorAll("details").forEach(details => { details.open = true; }));
+  // A press that fails (disabled, covered, detached, slow) is recorded, not skipped: a violation
+  // only that press would raise is otherwise missed while the report still looks complete.
   const buttons = page.locator("main button:visible");
-  for (let i = 0; i < Math.min(await buttons.count(), 4); i++) await buttons.nth(i).click({ timeout: 1000 }).catch(() => {});
-  await page.waitForTimeout(300);
-  results[name] = { violations: await page.evaluate(() => window.__trustedTypesViolations), errors };
+  const pressFailures = [];
+  for (let i = 0; i < Math.min(await buttons.count(), PRESSED_BUTTONS); i++) {
+    await buttons.nth(i).click({ timeout: PRESS_TIMEOUT_MS })
+      .catch(error => pressFailures.push({ button: i, error: error.message.split("\n")[0] }));
+  }
+  await page.waitForTimeout(SETTLE_MS);
+  results[name] = { violations: await page.evaluate(() => window.__trustedTypesViolations), errors, pressFailures };
   page.off("pageerror", onError);
 }
 await browser.close();
 
 const total = Object.values(results).reduce((sum, result) => sum + result.violations.length, 0);
-console.log(JSON.stringify({ mode: isServer ? "server" : "harness", total, results }, null, 2));
+const failedPresses = Object.values(results).reduce((sum, result) => sum + result.pressFailures.length, 0);
+console.log(JSON.stringify({ mode: isServer ? "server" : "harness", total, failedPresses, results }, null, 2));
