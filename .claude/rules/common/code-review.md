@@ -59,16 +59,14 @@ Before marking code complete:
 
 ## Agent Usage
 
-Use these agents for code review:
+The repo defines two agents in `.claude/agents/`:
 
 | Agent | Purpose |
 |-------|---------|
-| **code-reviewer** | General code quality, patterns, best practices |
 | **security-reviewer** | Security vulnerabilities, OWASP Top 10 |
-| **typescript-reviewer** | TypeScript/JavaScript specific issues |
-| **python-reviewer** | Python specific issues |
-| **go-reviewer** | Go specific issues |
-| **rust-reviewer** | Rust specific issues |
+| **tdd-guide** | Write-tests-first for features and bug fixes |
+
+For a general review of a branch, use the `code-review` skill.
 
 ## Review Workflow
 
@@ -121,4 +119,3 @@ This rule works with:
 - [testing.md](testing.md) - Test coverage requirements
 - [security.md](security.md) - Security checklist
 - [git-workflow.md](git-workflow.md) - Commit standards
-- [agents.md](agents.md) - Agent delegation

@@ -10,7 +10,7 @@ import {
   ChevronRight,
   Lock,
   Plus,
-} from "lucide-react";
+} from "@/components/pulse/icons";
 
 import {
   sessionMoveOptions,

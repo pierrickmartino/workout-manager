@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { TrendingUp, RotateCcw } from "lucide-react";
+import { TrendingUp, RotateCcw } from "@/components/pulse/icons";
 
 import {
   submitChooseScheme,
@@ -53,9 +53,13 @@ export function SchemeControl({ sessionId, position, model }: SchemeControlProps
           <span className="label-mono text-[9px] text-text-muted">
             Progression scheme
           </span>
+          {/* Hand-rolled rather than the `Select` primitive: this inline control is a
+              compact 9-unit picker with no chevron gutter, so it states its own autofill
+              intent (ADR-0093). */}
           <select
             id={selectId}
             name="scheme"
+            autoComplete="off"
             value={choice}
             onChange={(event) => setChoice(event.target.value)}
             aria-label="Progression scheme"

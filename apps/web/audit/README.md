@@ -155,11 +155,15 @@ node audit/reflow.mjs                      # gates: zero document overflow at 10
 UI_REFLOW_BASELINE=1 node audit/reflow.mjs # inverts the gate: the defects must reproduce
 ```
 
-It mounts the same journeys and `fixtures.ts` names as the matrix, plus three the
+It mounts the same journeys and `fixtures.ts` names as the matrix, plus the eight the
 matrix never captured: `correction`, `creation-logged` (the Hand-Authored form in
-its default `authorAndLog` flow, whose performed-set grid `planOnly` hides), and
+its default `authorAndLog` flow, whose performed-set grid `planOnly` hides),
 `home` (added with ADR-0088's wide Home — the page had never been rendered by any
-journey, and adding it surfaced three pre-existing defects). All are tagged `novel`
+journey, and adding it surfaced three pre-existing defects), `exercise`, `admin`
+(ADR-0095/0096/0097), `confirm` (ADR-0098 — a dialog renders only while it is open),
+`adhoc` (ADR-0106) and `launchpad` (ADR-0109). Each was added for the same reason, and
+each `NOVEL_JOURNEYS` entry says which: the surface was renderable and no journey
+rendered it. All are tagged `novel`
 in the summary so the comparable eight stay extractable. Each case is measured twice: at 100% text and at 200% text (root
 16px → 32px, viewport unchanged — WCAG 1.4.4 resize-text, *not* browser zoom,
 which `run.mjs` covers through the extension).

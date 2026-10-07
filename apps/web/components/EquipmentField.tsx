@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus } from "@/components/pulse/icons";
 
 import { Field } from "@/components/pulse/field";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,7 @@ export function EquipmentField({
     <Field label="Equipment" hint="Leave blank for bodyweight.">
       <Input
         name="equipment"
+        spellCheck={false}
         placeholder="dumbbells, pull-up bar"
         value={equipment}
         onChange={(event) => setEquipment(event.target.value)}

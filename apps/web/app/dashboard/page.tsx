@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Trophy } from "lucide-react";
+import { Trophy } from "@/components/pulse/icons";
 
 import { fetchProfile, isProfileComplete } from "@/lib/profile";
 import { READINESS_BADGE, fetchHome } from "@/lib/home";
@@ -10,11 +10,13 @@ import { latestPrLine, operatorStatus } from "@/lib/home-view";
 import { HOME_VOLUME_RANGE, homeReview } from "@/lib/home-review";
 import { quickActions } from "@/lib/quick-actions";
 import { resolveAppearance } from "@/lib/appearance";
+import { settleBestEffort } from "@/lib/best-effort-read";
 import { appendFrom } from "@/lib/back-target";
 import { Alert } from "@/components/pulse/alert";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { SessionHero } from "@/components/pulse/session-hero";
+import { CalibrationControl } from "@/components/pulse/calibration-control";
 import { ResumeSessionBanner } from "@/components/pulse/resume-session-banner";
 import { TrainingRouteCard } from "@/components/pulse/training-route";
 import { LevelBadge } from "@/components/pulse/level-badge";
@@ -48,12 +50,14 @@ export default async function DashboardPage() {
       fetchProfile(),
       fetchHome(),
       resolveAppearance(),
-      // The review column's one extra read, and the `.catch` is load-bearing: `apiGet`
-      // *rejects* on a transport failure or a non-JSON response rather than returning an
-      // unsuccessful envelope, and an uncaught rejection in this `Promise.all` would take Home
-      // down over a block that is explicitly a bonus (#576 review). Settled here, mapped to
-      // "no review column" by `homeReview`.
-      fetchAnalytics(HOME_VOLUME_RANGE).catch(() => null),
+      // The review column's one extra read, and settling it is load-bearing: `apiGet` *rejects*
+      // on a transport failure or a non-JSON response rather than returning an unsuccessful
+      // envelope, and an uncaught rejection in this `Promise.all` would take Home down over a
+      // block that is explicitly a bonus (#576 review). `settleBestEffort` is this file's own
+      // `.catch(() => null)`, named and shared once the other three waterfall fixes needed the
+      // same guard (`lib/best-effort-read.ts`); `homeReview` maps the `null` to "no review
+      // column".
+      settleBestEffort(fetchAnalytics(HOME_VOLUME_RANGE)),
     ]);
 
   if (!profileEnvelope.success || !profileEnvelope.data) {
@@ -118,6 +122,15 @@ export default async function DashboardPage() {
             {currentProtocol ? (
               <>
                 <SessionHero protocol={currentProtocol} />
+                {/* The Calibration control (ADR-0111): two taps that re-pitch the whole
+                    un-performed tail relative to what the plan already says. Composed here
+                    rather than flagged into SessionHero (ADR-0109) — it is this call site's
+                    card, and the hero stays the Next Session's own focal surface. It sits
+                    directly under the hero because the complaint it answers ("this asks too
+                    much / too little") is formed while reading those numbers. */}
+                <Card className="p-5">
+                  <CalibrationControl protocol={currentProtocol} />
+                </Card>
                 {/* The training route: the current week as named stops (done / next /
                     upcoming) with a WEEK n/total overline and an expandable full plan —
                     purely positional, no calendar (ADR-0008). Replaces the old dots and

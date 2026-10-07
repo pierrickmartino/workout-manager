@@ -134,14 +134,76 @@ export function sortAdminExercises(
   });
 }
 
-// The one call the thin component makes: filter, sort, then project to display rows.
-export function selectAdminExerciseRows(
-  rows: readonly AdminExerciseRow[],
+// Filter an already-sorted list and project it, without sorting again (ADR-0097). The browser
+// holds the whole Catalog and refilters it on every keystroke, while the order never depends on
+// the filters — so the sort is hoisted out of that path and only this runs per keystroke.
+//
+// The two orders agree because `filterAdminExercises` preserves order and the sort is stable:
+// filtering a sorted list is the same list as sorting a filtered one, which
+// `admin-exercises-view.test.ts` asserts directly rather than leaving to reasoning.
+export function projectAdminExerciseRows(
+  sorted: readonly AdminExerciseRow[],
   filters: AdminExerciseFilters,
 ): AdminExerciseRowView[] {
-  return sortAdminExercises(filterAdminExercises(rows, filters)).map(
-    toAdminExerciseRowView,
-  );
+  return filterAdminExercises(sorted, filters).map(toAdminExerciseRowView);
+}
+
+// The URL params the filter state lives under (#7). Short names because an admin shares
+// these by hand: `?q=squat&provenance=ai_generated&completeness=stub`.
+const QUERY_PARAM = "q";
+const PROVENANCE_PARAM = "provenance";
+const COMPLETENESS_PARAM = "completeness";
+const STATUS_PARAM = "status";
+
+const STATUSES: ReadonlySet<string> = new Set<AdminExerciseStatus>([
+  "all",
+  "active",
+  "retired",
+]);
+
+// Narrow an untrusted facet value against the closed vocabulary the dropdown offers,
+// collapsing anything else to "no filter on that axis". Deliberately stricter than
+// `provenanceLabel`, which renders an unknown token a *row* carries so a future value still
+// appears: a filter value the dropdown cannot display would select nothing while the control
+// read "All provenance", which is a filtered list nobody can see the reason for.
+//
+// `Object.hasOwn`, not `in`: the vocabularies are object literals, so `in` also answers yes
+// for every key on `Object.prototype` and `?provenance=constructor` would sail through the
+// check meant to stop exactly that.
+function facetIfKnown(
+  value: string | null,
+  vocabulary: Record<string, string>,
+): string {
+  const token = value?.trim() ?? "";
+  return Object.hasOwn(vocabulary, token) ? token : "";
+}
+
+// Read the filter state out of the URL — the inverse of `adminFiltersToQuery`. The query
+// string is untrusted input, so an unknown facet or status is dropped rather than trusted and
+// a blank query collapses to "no query": a bare or hand-mangled URL is the unfiltered catalog.
+export function parseAdminFilters(params: URLSearchParams): AdminExerciseFilters {
+  const status = params.get(STATUS_PARAM)?.trim() ?? "";
+  return {
+    query: params.get(QUERY_PARAM)?.trim() ?? "",
+    provenance: facetIfKnown(params.get(PROVENANCE_PARAM), PROVENANCE_LABELS),
+    completeness: facetIfKnown(params.get(COMPLETENESS_PARAM), COMPLETENESS_LABELS),
+    status: STATUSES.has(status) ? (status as AdminExerciseStatus) : "all",
+  };
+}
+
+// Serialize filter state back into a query string for `history.replaceState` — the inverse of
+// `parseAdminFilters`. An axis that imposes no constraint contributes nothing, so a cleared
+// filter yields "" and the browser is left at a bare `/admin/exercises`.
+export function adminFiltersToQuery(
+  filters: AdminExerciseFilters,
+): URLSearchParams {
+  const params = new URLSearchParams();
+  const query = filters.query.trim();
+  if (query.length > 0) params.set(QUERY_PARAM, query);
+  if (filters.provenance !== "") params.set(PROVENANCE_PARAM, filters.provenance);
+  if (filters.completeness !== "") params.set(COMPLETENESS_PARAM, filters.completeness);
+  if (filters.status !== "all") params.set(STATUS_PARAM, filters.status);
+  return params;
 }
 
 // Whether any filter is active — drives the "showing the whole catalog" vs "N of M" copy

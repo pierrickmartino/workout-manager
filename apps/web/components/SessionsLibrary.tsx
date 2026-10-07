@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Star } from "lucide-react";
+import { Star } from "@/components/pulse/icons";
 
 import {
   ALL_SESSIONS_CHIP,
@@ -16,6 +16,7 @@ import {
   type SessionSummary,
 } from "@/lib/session-library";
 import { cn } from "@/lib/utils";
+import { replaceFilterQuery } from "@/lib/filter-url";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
 import { SessionLibraryRow } from "@/components/SessionLibraryRow";
@@ -52,9 +53,7 @@ export function SessionsLibrary({
   // `replaceState` (not a router push) keeps the Server Component and its one-shot library
   // fetch from re-running on a keystroke or chip tap.
   useEffect(() => {
-    const search = sessionFiltersToQuery(filters).toString();
-    const url = search.length > 0 ? `?${search}` : window.location.pathname;
-    window.history.replaceState(null, "", url);
+    replaceFilterQuery(sessionFiltersToQuery(filters));
   }, [filters]);
   const filtered = useMemo(
     () => filterSessions(sessions, filters),
@@ -102,7 +101,7 @@ export function SessionsLibrary({
           <Input
             id="sessions-search"
             type="search"
-            placeholder="Search by name or type"
+            placeholder="Search by name or type…"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />

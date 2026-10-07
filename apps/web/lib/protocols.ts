@@ -43,6 +43,18 @@ export async function deployProtocol(
   return apiSend(`/api/protocols/${id}/deploy`, "POST", payload);
 }
 
+// Calibrate a Protocol (ADR-0111): re-pitch its un-performed tail to the offset the user
+// wants to **stand at**. The target is absolute, not a delta, so the call is idempotent and a
+// retry is harmless; an out-of-range value is clamped to the rail server-side and reported
+// there rather than rejected. The response is the progressed Protocol — the calibrated plan
+// with the Progression overlay already on top — plus the two disclosures the control reads.
+export async function calibrateProtocol(
+  id: number,
+  calibration: number,
+): Promise<Envelope<ProtocolProgress>> {
+  return apiSend(`/api/protocols/${id}/calibrate`, "POST", { calibration });
+}
+
 // Preview an edited Protocol's balance (SIMULATE, ADR-0021): send the whole draft and
 // get back per-week Session/Set counts plus the curated Muscle-Group distribution.
 // Read-only and non-predictive — nothing is written and no fatigue/recovery/volume

@@ -5,9 +5,16 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 
 import { submitAdhocLog, type AdhocLogFormState } from "@/app/logs/new/actions";
-import { loadKindOptions } from "@/lib/load";
 import type { WeightUnit } from "@/lib/weight-unit";
 import type { QuantityKind } from "@/lib/quantity";
+import {
+  SET_ENTRY_CARD,
+  rowToSetEntryValues,
+  setEntryPatchToRow,
+  setEntryPrefix,
+  type SetEntryRowMap,
+} from "@/lib/set-entry";
+import { SetEntry, SetEntryProvider } from "@/components/pulse/set-entry";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
 import { useNavigationGuard } from "@/components/NavigationGuardProvider";
 import { FormDraftRecovery } from "@/components/FormDraftRecovery";
@@ -20,7 +27,7 @@ import {
   isDraftUuid,
 } from "@/lib/form-draft-validation";
 import { Field } from "@/components/pulse/field";
-import { FieldRow, FIELD_CELL, WIDE_FIELD_CELL } from "@/components/pulse/field-row";
+import { FieldRow } from "@/components/pulse/field-row";
 import { Alert } from "@/components/pulse/alert";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { Input } from "@/components/ui/input";
@@ -145,8 +152,6 @@ function AccountScopedAdhocLogForm({ today, unit }: AdhocLogFormProps) {
     router.replace(state.redirectTo);
   }, [clearAfterSave, router, state.redirectTo]);
 
-  const setRowKind = (id: number, kind: QuantityKind) =>
-    updateRow(id, { kind });
   const updateRow = (id: number, patch: Partial<SetRow>) => {
     setInteracted(true);
     setDraft((current) => ({
@@ -218,7 +223,6 @@ function AccountScopedAdhocLogForm({ today, unit }: AdhocLogFormProps) {
             index={index}
             row={row}
             unit={unit}
-            onKindChange={(kind) => setRowKind(row.id, kind)}
             onChange={(patch) => updateRow(row.id, patch)}
             onRemove={draft.rows.length > 1 ? () => removeRow(row.id) : undefined}
           />
@@ -240,178 +244,64 @@ interface SetRowFieldsProps {
   index: number;
   row: SetRow;
   unit: WeightUnit;
-  onKindChange: (kind: QuantityKind) => void;
   onChange: (patch: Partial<SetRow>) => void;
   onRemove?: () => void;
 }
 
-function SetRowFields({ index, row, unit, onKindChange, onChange, onRemove }: SetRowFieldsProps) {
-  const prefix = `set-${index}`;
-
+// One ad-hoc set: an authored movement, a typed Quantity whose fields follow the picked kind,
+// and a typed Load. Every field comes from the shared set-entry family (ADR-0106) — this form
+// had its own copy of all of them, and the copies across the four log forms had drifted.
+function SetRowFields({ index, row, unit, onChange, onRemove }: SetRowFieldsProps) {
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-border bg-surface p-4">
-      <div className="flex items-end gap-2.5">
-        <label className="flex flex-1 flex-col gap-1.5">
-          <span className="label-mono text-[9px] text-text-muted">Movement</span>
-          <Input
-            name={`${prefix}-movement`}
-            value={row.movement}
-            onChange={(event) => onChange({ movement: event.target.value })}
-            placeholder="Running"
-            aria-label={`Movement name, set ${index + 1}`}
-            required
-          />
-        </label>
-        {onRemove ? (
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={onRemove}
-            aria-label={`Remove set ${index + 1}`}
-          >
-            Remove
-          </Button>
-        ) : null}
+    <SetEntryProvider
+      values={rowToSetEntryValues(row, DRAFT_FIELDS)}
+      unit={unit}
+      prefix={setEntryPrefix(index)}
+      subject={{ joiner: "comma", name: `set ${index + 1}` }}
+      onEdit={(patch) => onChange(setEntryPatchToRow(patch, DRAFT_FIELDS))}
+    >
+      <div className={SET_ENTRY_CARD}>
+        <div className="flex items-end gap-2.5">
+          <SetEntry.Movement placeholder="Running" required />
+          {onRemove ? (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onRemove}
+              aria-label={`Remove set ${index + 1}`}
+            >
+              Remove
+            </Button>
+          ) : null}
+        </div>
+
+        <SetEntry.Kind />
+
+        <FieldRow>
+          <SetEntry.Quantity />
+        </FieldRow>
+
+        {/* Load is a typed value (ADR-0010): pick its kind, then give the value that kind
+            carries. Left blank, the set records no load. */}
+        <FieldRow>
+          <SetEntry.Load placeholder="0" />
+        </FieldRow>
       </div>
-
-      <label className="flex flex-col gap-1.5">
-        <span className="label-mono text-[9px] text-text-muted">Amount</span>
-        <Select
-          name={`${prefix}-kind`}
-          value={row.kind}
-          onChange={(event) => onKindChange(event.target.value as QuantityKind)}
-          aria-label={`Amount kind, set ${index + 1}`}
-        >
-          <option value="repetitions">Reps</option>
-          <option value="distance">Distance</option>
-          <option value="duration">Duration</option>
-        </Select>
-      </label>
-
-      {row.kind === "distance" ? (
-        <DistanceFields prefix={prefix} index={index} row={row} onChange={onChange} />
-      ) : row.kind === "duration" ? (
-        <DurationFields prefix={prefix} index={index} row={row} onChange={onChange} />
-      ) : (
-        <RepetitionsFields prefix={prefix} index={index} row={row} onChange={onChange} />
-      )}
-
-      {/* Load is a typed value (ADR-0010): pick its kind, then give the value that kind
-          carries. Left blank, the set records no load. */}
-      <FieldRow>
-        <label className={WIDE_FIELD_CELL}>
-          <span className="label-mono text-[9px] text-text-muted">Load kind</span>
-          <Select
-            name={`${prefix}-load_kind`}
-            value={row.loadKind}
-            onChange={(event) => onChange({ loadKind: event.target.value })}
-            aria-label={`Load kind, set ${index + 1}`}
-          >
-            {loadKindOptions(unit).map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <label className={FIELD_CELL}>
-          <span className="label-mono text-[9px] text-text-muted">Load</span>
-          <Input
-            name={`${prefix}-load_value`}
-            value={row.loadValue}
-            onChange={(event) => onChange({ loadValue: event.target.value })}
-            placeholder="0"
-            aria-label={`Load, set ${index + 1}`}
-          />
-        </label>
-      </FieldRow>
-    </div>
+    </SetEntryProvider>
   );
 }
 
-function RepetitionsFields({ prefix, index, row, onChange }: AmountFieldProps) {
-  return (
-    <div className="grid grid-cols-2 gap-2.5">
-      <label className="flex flex-col gap-1.5">
-        <span className="label-mono text-[9px] text-text-muted">Reps</span>
-        <Input
-          name={`${prefix}-reps`}
-          type="number"
-          min={0}
-          value={row.reps}
-          onChange={(event) => onChange({ reps: event.target.value })}
-          aria-label={`Reps, set ${index + 1}`}
-        />
-      </label>
-    </div>
-  );
-}
-
-interface AmountFieldProps {
-  prefix: string;
-  index: number;
-  row: SetRow;
-  onChange: (patch: Partial<SetRow>) => void;
-}
-
-function DistanceFields({ prefix, index, row, onChange }: AmountFieldProps) {
-  return (
-    <FieldRow>
-      <label className={FIELD_CELL}>
-        <span className="label-mono text-[9px] text-text-muted">Distance</span>
-        <Input
-          name={`${prefix}-distance`}
-          type="number"
-          min={0}
-          step="any"
-          value={row.distance}
-          onChange={(event) => onChange({ distance: event.target.value })}
-          placeholder="5"
-          aria-label={`Distance, set ${index + 1}`}
-        />
-      </label>
-      <label className={FIELD_CELL}>
-        <span className="label-mono text-[9px] text-text-muted">Unit</span>
-        <Select
-          name={`${prefix}-unit`}
-          value={row.unit}
-          onChange={(event) => onChange({ unit: event.target.value })}
-          aria-label={`Distance unit, set ${index + 1}`}
-        >
-          <option value="km">km</option>
-          <option value="mi">mi</option>
-        </Select>
-      </label>
-      <label className={FIELD_CELL}>
-        {/* Time is optional (ADR-0032): given, pace becomes a derivable read. */}
-        <span className="label-mono text-[9px] text-text-muted">Time (opt.)</span>
-        <Input
-          name={`${prefix}-duration`}
-          value={row.duration}
-          onChange={(event) => onChange({ duration: event.target.value })}
-          placeholder="mm:ss"
-          aria-label={`Time, set ${index + 1}`}
-        />
-      </label>
-    </FieldRow>
-  );
-}
-
-function DurationFields({ prefix, index, row, onChange }: AmountFieldProps) {
-  return (
-    <div className="grid grid-cols-2 gap-2.5">
-      <label className="flex flex-col gap-1.5">
-        {/* A duration is timed, non-locomotion work (a hold, a distance-unknown treadmill
-            session): the time is the amount, entered as mm:ss or bare seconds (ADR-0032). */}
-        <span className="label-mono text-[9px] text-text-muted">Time</span>
-        <Input
-          name={`${prefix}-duration`}
-          value={row.duration}
-          onChange={(event) => onChange({ duration: event.target.value })}
-          placeholder="mm:ss"
-          aria-label={`Duration, set ${index + 1}`}
-        />
-      </label>
-    </div>
-  );
-}
+// This draft row's keys against the set-entry vocabulary. The two spellings differ because the
+// draft is also what gets persisted for recovery, so it cannot simply adopt the wire's
+// `snake_case`. One table, read in both directions — two mapping functions would be free to
+// drift, and a field present in one but not the other discards that field's edits in silence.
+const DRAFT_FIELDS: SetEntryRowMap<SetRow> = {
+  movement: "movement",
+  kind: "kind",
+  reps: "reps",
+  distance: "distance",
+  unit: "unit",
+  duration: "duration",
+  load_kind: "loadKind",
+  load_value: "loadValue",
+};

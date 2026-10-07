@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Copy, PenLine, Repeat } from "lucide-react";
+import { Copy, PenLine, Repeat } from "@/components/pulse/icons";
 
 import { fetchLog } from "@/lib/logs";
 import { loggedSessionDetail } from "@/lib/logged-session-detail";
@@ -91,7 +91,7 @@ export default async function LogDetailPage({ params }: LogDetailPageProps) {
           an ad-hoc one is Captured into a new reusable plan (ADR-0044). Forking a separate
           editable copy (Duplicate) lives on the Session view, not here. */}
       <Card className="flex flex-col gap-3 p-5">
-        <h2 className="font-display text-sm font-semibold text-text-primary">
+        <h2 className="text-balance font-display text-sm font-semibold text-text-primary">
           Reuse this workout
         </h2>
         {detail.canRepeat && detail.repeatHref !== null ? (

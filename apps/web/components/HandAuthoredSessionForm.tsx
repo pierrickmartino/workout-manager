@@ -3,7 +3,7 @@
 import { useCallback, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
-import { ArrowDown, ArrowUp, Link2, Trash2, Unlink } from "lucide-react";
+import { ArrowDown, ArrowUp, Link2, Trash2, Unlink } from "@/components/pulse/icons";
 
 import {
   resolveAuthoredExercise,
@@ -40,6 +40,7 @@ import {
   isDraftUuid,
   isPositiveInteger,
 } from "@/lib/form-draft-validation";
+import { loadValueInputMode } from "@/lib/load";
 import { weightUnitLabel } from "@/lib/weight-format";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { type DistanceUnit, type QuantityKind } from "@/lib/quantity";
@@ -51,7 +52,7 @@ import { useFormDraft } from "@/lib/use-form-draft";
 import { ExerciseLibrary } from "@/components/ExerciseLibrary";
 import { SessionCompositionStrip } from "@/components/builder/session-composition-strip";
 import { PrescriptionFieldStack } from "@/components/prescription/PrescriptionFieldStack";
-import { Field, FieldLabel } from "@/components/pulse/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/pulse/field";
 import { FieldRow, FIELD_WIDTH } from "@/components/pulse/field-row";
 import { Alert } from "@/components/pulse/alert";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -885,7 +886,7 @@ function ExerciseCard({
           {/* An authored name is never truncated (ADR-0085), so it wraps — and breaks inside a
               word when the word itself cannot fit, which is the only thing that keeps an
               unbroken 100-character name from setting this card's min-content width. */}
-          <h3 className="min-w-0 break-words font-display text-base font-bold text-text-primary">
+          <h3 className="min-w-0 break-words text-balance font-display text-base font-bold text-text-primary">
             {row.exerciseName}
           </h3>
         </div>
@@ -979,8 +980,7 @@ function ExerciseCard({
         {row.performedSets.map((set, index) => (
           <FieldRow key={set.key} className="items-end gap-2">
             {isDistance ? (
-              <FieldLabel
-                group
+              <FieldGroup
                 className={FIELD_WIDTH}
                 label={`Set ${index + 1} distance (${row.unit})`}
               >
@@ -1000,6 +1000,7 @@ function ExerciseCard({
                     aria-label={`Set ${index + 1} distance for ${row.exerciseName}`}
                   />
                   <Input
+                    spellCheck={false}
                     className={FIELD_WIDTH}
                     value={set.duration}
                     placeholder="mm:ss"
@@ -1009,10 +1010,11 @@ function ExerciseCard({
                     aria-label={`Set ${index + 1} time for ${row.exerciseName}`}
                   />
                 </FieldRow>
-              </FieldLabel>
+              </FieldGroup>
             ) : isDuration ? (
               <FieldLabel className={FIELD_WIDTH} label={`Set ${index + 1} hold`}>
                 <Input
+                  spellCheck={false}
                   value={set.duration}
                   placeholder="0:45"
                   onChange={(event) =>
@@ -1036,7 +1038,9 @@ function ExerciseCard({
             )}
             <FieldLabel className={FIELD_WIDTH} label="Load">
               <Input
+                spellCheck={false}
                 value={set.loadValue}
+                inputMode={loadValueInputMode(set.loadKind)}
                 placeholder={`60 ${weightUnitLabel(unit)}`}
                 onChange={(event) =>
                   onChangeSet(set.key, { loadValue: event.target.value })

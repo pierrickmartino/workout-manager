@@ -218,7 +218,7 @@ test("finishAdvisory names how many sets a finish would leave out, in the singul
   // Act / Assert — singular copy, and it names the Completion Outcome that follows
   assert.equal(
     finishAdvisory(state),
-    "1 set won't be recorded — this session will be logged as Incomplete.",
+    "1 set won’t be recorded — this session will be logged as Incomplete.",
   );
 });
 
@@ -229,7 +229,7 @@ test("finishAdvisory pluralizes the count", () => {
   // Act / Assert
   assert.equal(
     finishAdvisory(state),
-    "2 sets won't be recorded — this session will be logged as Incomplete.",
+    "2 sets won’t be recorded — this session will be logged as Incomplete.",
   );
 });
 

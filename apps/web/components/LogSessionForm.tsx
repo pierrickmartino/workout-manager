@@ -2,10 +2,9 @@
 
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Plus, Trash2 } from "lucide-react";
+import { Check, Plus, Trash2 } from "@/components/pulse/icons";
 
 import { submitLog, type LogFormState } from "@/app/sessions/[id]/log/actions";
-import { loadKindOptions } from "@/lib/load";
 import type { WeightUnit } from "@/lib/weight-unit";
 import {
   buildLogForm,
@@ -15,26 +14,24 @@ import {
   type LogPrescriptionGroup,
   type LogSetRow,
 } from "@/lib/log-session-form";
-import type { DistanceUnit } from "@/lib/quantity";
+import {
+  rowToSetEntryValues,
+  setEntryPatchToRow,
+  setEntryPrefix,
+  type SetEntryRowMap,
+} from "@/lib/set-entry";
+import { SetEntry, SetEntryProvider } from "@/components/pulse/set-entry";
 import type { ExercisePrescription } from "@/lib/sessions-types";
 import { Field } from "@/components/pulse/field";
-import {
-  FieldRow,
-  FIELD_CELL,
-  FULL_FIELD_CELL,
-  WIDE_FIELD_CELL,
-} from "@/components/pulse/field-row";
+import { FieldRow, FULL_FIELD_CELL } from "@/components/pulse/field-row";
 import { Alert } from "@/components/pulse/alert";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 // Where the log flow lands once the log is saved.
 const AFTER_LOG_HREF = "/history";
-
-const RPE_VALUES = Array.from({ length: 10 }, (_, index) => index + 1);
 
 interface LogSessionFormProps {
   sessionId: number;
@@ -285,257 +282,110 @@ function SetRow({
   onChange: (patch: Partial<LogSetRow>) => void;
   onRemove: () => void;
 }) {
-  const prefix = `set-${index}`;
+  const prefix = setEntryPrefix(index);
   const disabled = !row.done;
   return (
-    <div
-      className={`flex flex-col gap-3 rounded-md border border-border/60 p-3 ${
-        disabled ? "opacity-50" : ""
-      }`}
+    <SetEntryProvider
+      values={rowToSetEntryValues(row, LOG_ROW_FIELDS)}
+      unit={unit}
+      prefix={prefix}
+      subject={{ joiner: "for", name: `set ${row.setNumber}` }}
+      disabled={disabled}
+      onEdit={(patch) => onChange(setEntryPatchToRow(patch, LOG_ROW_FIELDS))}
     >
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onToggleDone}
-          aria-pressed={row.done}
-          aria-label={`Set ${row.setNumber} ${row.done ? "done" : "skipped"}`}
-          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border ${
-            row.done
-              ? "border-cyan bg-cyan text-on-accent"
-              : "border-border bg-transparent text-text-muted"
-          }`}
-        >
-          {row.done ? <Check className="h-3.5 w-3.5" /> : null}
-        </button>
-        <span className="label-mono text-[11px] text-text-secondary">
-          SET {String(row.setNumber).padStart(2, "0")}
-        </span>
-        {canRemove ? (
+      <div
+        className={`flex flex-col gap-3 rounded-md border border-border/60 p-3 ${
+          disabled ? "opacity-50" : ""
+        }`}
+      >
+        <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={onRemove}
-            aria-label={`Remove set ${row.setNumber}`}
-            className="ml-auto text-text-muted transition-colors hover:text-magenta"
+            onClick={onToggleDone}
+            aria-pressed={row.done}
+            aria-label={`Set ${row.setNumber} ${row.done ? "done" : "skipped"}`}
+            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border ${
+              row.done
+                ? "border-cyan bg-cyan text-on-accent"
+                : "border-border bg-transparent text-text-muted"
+            }`}
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            {row.done ? <Check className="h-3.5 w-3.5" /> : null}
           </button>
-        ) : null}
+          <span className="label-mono text-[11px] text-text-secondary">
+            SET {String(row.setNumber).padStart(2, "0")}
+          </span>
+          {canRemove ? (
+            <button
+              type="button"
+              onClick={onRemove}
+              aria-label={`Remove set ${row.setNumber}`}
+              className="ml-auto text-text-muted transition-colors hover:text-magenta"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+        </div>
+
+        {/* Always submitted, never disabled: the reader indexes every row by these and drops
+            the ones whose `done` is not "true", keeping the indexed fields aligned. */}
+        <input type="hidden" name={`${prefix}-done`} value={row.done ? "true" : "false"} />
+        <input type="hidden" name={`${prefix}-exercise_id`} value={row.exerciseId} />
+        <input type="hidden" name={`${prefix}-kind`} value={row.kind} />
+
+        {/* The amount matching the row's kind (ADR-0050): a distance value + unit + optional
+            companion time, a single hold time, or the numeric reps — seeded with the prescribed
+            hint as a placeholder, never as an answer the user did not give. The distance block
+            asks for the whole line, so the effort picker wraps below it rather than squeezing a
+            four-field row onto a phone (ADR-0087). */}
+        <FieldRow>
+          <SetEntry.Quantity
+            durationClassName={FULL_FIELD_CELL}
+            rowClassName="basis-full"
+            repsPlaceholder={hint}
+          />
+          <SetEntry.Effort />
+        </FieldRow>
+
+        {/* Load is the orthogonal "how hard" axis (ADR-0010/0050): shown by default for reps,
+            omitted for a plain run/hold, and opt-in for a loaded carry. */}
+        {row.showLoad ? (
+          <FieldRow>
+            <SetEntry.Load />
+          </FieldRow>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onChange({ showLoad: true })}
+            disabled={disabled}
+            className="inline-flex items-center gap-1.5 self-start font-mono text-[12px] text-cyan hover:underline disabled:opacity-50"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add load
+          </button>
+        )}
+
+        {/* Set Note (ADR-0065, #451): an optional per-set remark. Rides as raw text under
+            `set-<i>-note`; the backend length-caps and HTML-escapes it at the write boundary. */}
+        <SetEntry.Note placeholder="Optional note (e.g. felt easy)" />
       </div>
-
-      {/* Always submitted, never disabled: the reader indexes every row by these and drops
-          the ones whose `done` is not "true", keeping the indexed fields aligned. */}
-      <input type="hidden" name={`${prefix}-done`} value={row.done ? "true" : "false"} />
-      <input type="hidden" name={`${prefix}-exercise_id`} value={row.exerciseId} />
-      <input type="hidden" name={`${prefix}-kind`} value={row.kind} />
-
-      <FieldRow>
-        <QuantityField
-          prefix={prefix}
-          row={row}
-          hint={hint}
-          disabled={disabled}
-          onChange={onChange}
-        />
-        <label className={FIELD_CELL}>
-          <span className="label-mono text-[9px] text-text-muted">RPE</span>
-          <Select
-            name={`${prefix}-rpe`}
-            value={row.rpe}
-            disabled={disabled}
-            onChange={(event) => onChange({ rpe: event.target.value })}
-            aria-label={`RPE for set ${row.setNumber}`}
-          >
-            <option value="">—</option>
-            {RPE_VALUES.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </Select>
-        </label>
-      </FieldRow>
-
-      {/* Load is the orthogonal "how hard" axis (ADR-0010/0050): shown by default for reps,
-          omitted for a plain run/hold, and opt-in for a loaded carry. */}
-      {row.showLoad ? (
-        <LoadFields
-          prefix={prefix}
-          row={row}
-          unit={unit}
-          disabled={disabled}
-          onChange={onChange}
-        />
-      ) : (
-        <button
-          type="button"
-          onClick={() => onChange({ showLoad: true })}
-          disabled={disabled}
-          className="inline-flex items-center gap-1.5 self-start font-mono text-[12px] text-cyan hover:underline disabled:opacity-50"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Add load
-        </button>
-      )}
-
-      {/* Set Note (ADR-0065, #451): an optional per-set remark. Rides as raw text under
-          `set-<i>-note`; the backend length-caps and HTML-escapes it at the write boundary. */}
-      <label className="flex flex-col gap-1.5">
-        <span className="label-mono text-[9px] text-text-muted">Note</span>
-        <Input
-          name={`${prefix}-note`}
-          value={row.note}
-          disabled={disabled}
-          onChange={(event) => onChange({ note: event.target.value })}
-          placeholder="Optional note (e.g. felt easy)"
-          aria-label={`Note for set ${row.setNumber}`}
-        />
-      </label>
-    </div>
+    </SetEntryProvider>
   );
 }
 
-// The quantity input matching the row's kind (ADR-0050): a distance value + unit + optional
-// companion time, a single hold time, or the existing numeric reps.
-function QuantityField({
-  prefix,
-  row,
-  hint,
-  disabled,
-  onChange,
-}: {
-  prefix: string;
-  row: LogSetRow;
-  hint: string;
-  disabled: boolean;
-  onChange: (patch: Partial<LogSetRow>) => void;
-}) {
-  if (row.kind === "distance") {
-    return (
-      <FieldRow className="basis-full">
-        <label className={FIELD_CELL}>
-          <span className="label-mono text-[9px] text-text-muted">Distance</span>
-          <Input
-            name={`${prefix}-distance`}
-            type="number"
-            min={0}
-            step="any"
-            value={row.distance}
-            placeholder="5"
-            disabled={disabled}
-            onChange={(event) => onChange({ distance: event.target.value })}
-            aria-label={`Distance for set ${row.setNumber}`}
-          />
-        </label>
-        <label className={FIELD_CELL}>
-          <span className="label-mono text-[9px] text-text-muted">Unit</span>
-          <Select
-            name={`${prefix}-unit`}
-            value={row.unit}
-            disabled={disabled}
-            onChange={(event) =>
-              onChange({ unit: event.target.value as DistanceUnit })
-            }
-            aria-label={`Distance unit for set ${row.setNumber}`}
-          >
-            <option value="km">km</option>
-            <option value="mi">mi</option>
-          </Select>
-        </label>
-        <label className={FIELD_CELL}>
-          {/* Time is optional (ADR-0032): given, pace becomes a derivable read. */}
-          <span className="label-mono text-[9px] text-text-muted">Time (opt.)</span>
-          <Input
-            name={`${prefix}-duration`}
-            placeholder="mm:ss"
-            value={row.duration}
-            disabled={disabled}
-            onChange={(event) => onChange({ duration: event.target.value })}
-            aria-label={`Time for set ${row.setNumber}`}
-          />
-        </label>
-      </FieldRow>
-    );
-  }
-
-  if (row.kind === "duration") {
-    return (
-      <label className={FULL_FIELD_CELL}>
-        <span className="label-mono text-[9px] text-text-muted">Time</span>
-        <Input
-          name={`${prefix}-duration`}
-          placeholder="mm:ss"
-          value={row.duration}
-          disabled={disabled}
-          onChange={(event) => onChange({ duration: event.target.value })}
-          aria-label={`Hold time for set ${row.setNumber}`}
-        />
-      </label>
-    );
-  }
-
-  return (
-    <label className={FIELD_CELL}>
-      <span className="label-mono text-[9px] text-text-muted">Reps</span>
-      <Input
-        name={`${prefix}-reps`}
-        type="number"
-        min={0}
-        value={row.reps}
-        placeholder={hint}
-        disabled={disabled}
-        onChange={(event) => onChange({ reps: event.target.value })}
-        aria-label={`Reps for set ${row.setNumber}`}
-      />
-    </label>
-  );
-}
-
-// The typed-Load block (ADR-0010): pick the kind, then give the value that kind carries.
-// Seeded from the prescribed load, both editable per set.
-function LoadFields({
-  prefix,
-  row,
-  unit,
-  disabled,
-  onChange,
-}: {
-  prefix: string;
-  row: LogSetRow;
-  unit: WeightUnit;
-  disabled: boolean;
-  onChange: (patch: Partial<LogSetRow>) => void;
-}) {
-  return (
-    <FieldRow>
-      <label className={WIDE_FIELD_CELL}>
-        <span className="label-mono text-[9px] text-text-muted">Load kind</span>
-        <Select
-          name={`${prefix}-load_kind`}
-          value={row.loadKind}
-          disabled={disabled}
-          onChange={(event) =>
-            onChange({ loadKind: event.target.value as LogSetRow["loadKind"] })
-          }
-          aria-label={`Load kind for set ${row.setNumber}`}
-        >
-          {loadKindOptions(unit).map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </Select>
-      </label>
-      <label className={FIELD_CELL}>
-        <span className="label-mono text-[9px] text-text-muted">Load</span>
-        <Input
-          name={`${prefix}-load_value`}
-          placeholder="70"
-          value={row.loadValue}
-          disabled={disabled}
-          onChange={(event) => onChange({ loadValue: event.target.value })}
-          aria-label={`Load for set ${row.setNumber}`}
-        />
-      </label>
-    </FieldRow>
-  );
-}
+// This row's keys against the set-entry vocabulary, read in both directions. `showLoad` is
+// deliberately absent, and its absence is load-bearing: it is not a field the set submits but a
+// disclosure this row owns, so it stays on the row's own patch and cannot arrive through the
+// entry contract. `kind` is here for the amount branch to read, and is never raised — this form
+// has no kind picker, the kind coming from the Prescription (ADR-0050).
+const LOG_ROW_FIELDS: SetEntryRowMap<LogSetRow> = {
+  kind: "kind",
+  reps: "reps",
+  distance: "distance",
+  unit: "unit",
+  duration: "duration",
+  load_kind: "loadKind",
+  load_value: "loadValue",
+  rpe: "rpe",
+  note: "note",
+};

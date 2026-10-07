@@ -22,7 +22,7 @@ export interface StrengthTimelineView {
 // repo whose frontend tests run over `lib/*.ts` (no component render harness).
 export const STRENGTH_EMPTY_STATE_COPY =
   "No strength records yet. A strength record comes from a set in the 1–12 rep " +
-  "range — logged with a weight in kilograms, or a bodyweight set once you've " +
+  "range — logged with a weight in kilograms, or a bodyweight set once you’ve " +
   "recorded your body weight — enough to estimate a one-rep max. Log a few working " +
   "sets and your Personal Record timeline will build here.";
 

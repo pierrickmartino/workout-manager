@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight } from "@/components/pulse/icons";
 
 import type { StrengthTrajectoryTile } from "@/lib/strength-trajectories-view";
 import { SectionHeader } from "@/components/pulse/section-header";
-import { TopSetTrendChart } from "@/components/exercise/top-set-trend-chart";
+import { TopSetTrendChartLazy } from "@/components/exercise/top-set-trend-chart-lazy";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -68,7 +68,7 @@ function TrajectoryTile({ tile }: { tile: StrengthTrajectoryTile }) {
           ) : null}
         </div>
         <div aria-hidden>
-          <TopSetTrendChart rows={tile.trend.rows} heightClass="h-28" showValues={false} />
+          <TopSetTrendChartLazy rows={tile.trend.rows} heightClass="h-28" showValues={false} />
         </div>
       </Card>
     </Link>

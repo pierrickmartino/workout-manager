@@ -55,6 +55,16 @@ class ProfileRepository(Protocol):
         so the fallback rule lives in one place."""
         ...
 
+    def declared_fitness_levels(self, clerk_user_id: str) -> dict[str, int]:
+        """The user's stored **Declared Fitness Level** per training type (ADR-0112).
+
+        A read-only lookup, like ``display_name``: it never creates a profile, and a user
+        who has none reads as an empty mapping. That matters here because its caller is the
+        Profile *progress* read model, which reads these levels as the floor the **Effective
+        Fitness Level** is projected from — a read path has no business writing a row, and
+        this method cannot write a level at all by construction (ADR-0018)."""
+        ...
+
 
 def _apply_update(profile: Profile, update: ProfileUpdate) -> None:
     profile.display_name = update.display_name
@@ -107,6 +117,10 @@ class SqlProfileRepository:
         profile = self._find(clerk_user_id)
         return profile.display_name if profile is not None else None
 
+    def declared_fitness_levels(self, clerk_user_id: str) -> dict[str, int]:
+        profile = self._find(clerk_user_id)
+        return dict(profile.fitness_levels) if profile is not None else {}
+
 
 class InMemoryProfileRepository:
     def __init__(self) -> None:
@@ -134,6 +148,11 @@ class InMemoryProfileRepository:
     def display_name(self, clerk_user_id: str) -> str | None:
         profile = self._by_user.get(clerk_user_id)
         return profile.display_name if profile is not None else None
+
+    def declared_fitness_levels(self, clerk_user_id: str) -> dict[str, int]:
+        profile = self._by_user.get(clerk_user_id)
+        # A copy, so a caller can never mutate the stored baseline through the read.
+        return dict(profile.fitness_levels) if profile is not None else {}
 
 
 __all__ = [

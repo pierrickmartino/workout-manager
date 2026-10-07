@@ -5,6 +5,10 @@ Read this first, then [`CONTEXT.md`](./CONTEXT.md) for the domain **language** a
 [`docs/adr/`](./docs/adr) for the **why** behind every invariant. When you change
 behaviour, [`REVIEW.md`](./REVIEW.md) is the checklist your change must survive.
 
+> **Keeping this file small.** It loads into every session. A new rule gets **one line**
+> here or in a path-scoped file under `.claude/rules/`: trigger → rule (guard · ADR). The
+> reasoning and the incident that motivated it go in the ADR, never here.
+
 ## What this is
 
 An AI-assisted app for creating, following, and tracking fitness workouts. The
@@ -32,7 +36,10 @@ Monorepo with two deployables under `apps/`:
   - `app/` — routes/pages (server components fetch server-side; JWT never
     reaches the browser). `components/` — UI, incl. the `pulse/` design system.
   - `lib/` — view-model mappers with co-located `*.test.ts` (the frontend's
-    logic lives here, deliberately, so it's unit-testable without a browser).
+    logic lives here, deliberately, so it's unit-testable without a browser),
+    and the `*-policy.ts` guards that sweep components for the frontend rules.
+  - `audit/` — browser journeys (`reflow.mjs` at 320px and 200% text, `wide.mjs`
+    at 1440px, `charts.mjs`) that verify what the static guards can only declare.
 
 ## Run & test
 
@@ -48,7 +55,7 @@ pytest --cov --cov-report=term-missing
 # Frontend
 cd apps/web
 npm ci
-npm test                          # node --test over lib/*.test.ts
+npm test                          # node --test over lib/*.test.ts (incl. the policy guards)
 
 # Full stack (needs Clerk keys in .env — see README.md)
 docker compose up --build         # api runs `alembic upgrade head` on start
@@ -96,11 +103,11 @@ These are enforced by review (`REVIEW.md`) and, where mechanizable, by tests.
 ## Terminology discipline
 
 `CONTEXT.md` is the law for naming; each term lists the words to **_Avoid_**. A
-subset of hard regressions is enforced automatically by
-`app/quality/terminology_guard.py` (Program→Protocol, daily streak, personal
-best, max weight, readiness/recovery score). It runs as a pytest test. When you
-retire or rename a domain term, add it to the guard's `BANNED_TERMS` registry so
-the regression is caught forever — that's a one-line addition.
+subset of hard regressions is enforced by `app/quality/terminology_guard.py`
+(runs as a pytest test). When you retire or rename a **domain** term, add it to
+the guard's `BANNED_TERMS` registry (one line). Renaming a private identifier, or
+splitting a term into qualified readings while the umbrella survives (ADR-0112),
+earns no entry — padding the registry dulls the signal it protects.
 
 ## Conventions
 
@@ -113,6 +120,9 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   names. Domain logic belongs in `app/domain/` (pure) so it's trivially testable.
 - **Conventional commits** (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`,
   `chore:`).
+- **Exact dependency versions in `apps/web/package.json`** (no `^`); upgrade with
+  `npm install <pkg>@<version>`. `apps/api/pyproject.toml` deliberately keeps `>=`
+  floors: it has no lockfile, and several floors are documented security minimums.
 - Explicit error handling; validate at system boundaries; no hardcoded secrets
   (env vars only).
 
@@ -127,90 +137,14 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   with the fake LLM.
 - New Exercise Prescription field → add it to the spine in
   `app/repositories/prescription_mapping.py` (`PrescriptionDraft` + its ORM
-  column) and classify it in the authorship partition; every persistence mapper
-  routes through the one manifest, and `tests/test_prescription_spine.py` fails
-  if a projection or the partition forgets it (ADR-0069).
+  column) and classify it in the authorship partition;
+  `tests/test_prescription_spine.py` fails if a projection forgets it (ADR-0069).
 - Frontend logic → put it in `apps/web/lib/` as a view-model with a `*.test.ts`,
   keep components thin.
-
-- New Skin colour token or text/fill convention → classify the token and extend
-  `apps/web/lib/skin-contrast-matrix.ts`'s pairing registry. The Contrast Floor
-  guard checks every flat and declared composite pairing at 4.6:1 in every Skin
-  and Mode, including System copies; unknown colour tokens fail closed (ADR-0081).
-
-- New accent tint behind text, or any new colour token at a call site → use a declared
-  fill (`bg-cyan-dim`, `bg-cyan`), never a hand-mixed `bg-cyan/15`: the `-dim` fills are
-  tuned to sit *at* the Floor, so nothing deeper clears it and a hover state must move
-  the border, ring or text. A new text-on-fill convention extends `COMPOSITE_PAIRINGS`
-  (a token, optionally with an alpha); a fill that carries no text goes in `GRAPHIC_FILLS`
-  with a written reason. The guard in `apps/web/lib/accent-tint-policy.ts` sweeps every
-  component, also checks that every colour a `bg-`/`border-`/`ring-`/`text-` utility names
-  is one the Skins declare, and fails closed. Translucent chrome (`bg-surface/95`,
-  `bg-black/60`) is classified harness-only, not measured (ADR-0086).
-
-- Fading text at a call site (`text-cyan/80`, or an `opacity-*` on the same element)
-  → don't, unless the *rendered* result still clears 4.6:1 on the worst surface in
-  every Skin and Mode. ADR-0081 guarantees the token, not what you render from it.
-  The guard in `apps/web/lib/faded-text-policy.ts` sweeps every component and fails
-  closed on unknown colour tokens; `disabled:` fades are exempt by rule, and the
-  exemption registry is otherwise empty (ADR-0083).
-
-- New chart, or a new series on one → render `ChartValues` from the **same rows** you hand
-  the plot, and put the date/value formatting in the `lib/` view-model (`dateText`,
-  `valueText`), never in the component. Every plotted datum must be retrievable as text, with
-  its year and unit, and the `<caption>` says what an absent row means. The guard in
-  `apps/web/lib/chart-values-policy.ts` sweeps every component, keys on classified `recharts`
-  imports and fails closed on unknown ones; an entry in `CHART_VALUES_EXEMPTIONS` needs a
-  written reason. It proves the table is rendered, not that it matches — `audit/charts.mjs`
-  asserts per-point parity (ADR-0084).
-
-- New `<fieldset>`, or an arbitrary grid track → give the fieldset `min-w-0` and spell the
-  track `minmax(0,1fr)`, never a bare `1fr`. Both are boxes CSS floors at their content's
-  minimum width, which is how one `nowrap` name widened the whole document to 789px at 320px.
-  The guard in `apps/web/lib/reflow-policy.ts` sweeps every component; its registry is empty.
-  It proves those boxes are declared, **not** that a page fits — `audit/reflow.mjs` renders
-  every journey at 320px and asserts that. An authored name wraps and is never truncated; a
-  header or action cluster wraps rather than overflowing (ADR-0085).
-
-- New row of form fields → build it as a `FieldRow` (`components/pulse/field-row.tsx`) with a
-  width ask per field (`FIELD_CELL` / `FIELD_WIDTH`, 5rem; the `WIDE_*` pair, 7rem), never a
-  `grid-cols-[7rem_1fr]`. A `rem` track keeps its size while the viewport keeps its pixels, so
-  at 200% text it is a column wider than a 320px screen; a wrapping row stacks instead, and a
-  `sm:` variant is no remedy because Tailwind's breakpoints are `rem` too. A genuinely tabular
-  grid whose columns align across rows keeps its grid and spells the track `minmax(0,2.5rem)`.
-  The same guard flags every bare-length track and fails closed; `audit/reflow.mjs` now gates
-  100% *and* 200% text, with no ratchet (ADR-0087).
-
-- New desktop layout, or widening a page → the shell has two widths: `--spacing-shell` (26rem)
-  and `--spacing-shell-wide` (72rem), switched at `lg:` by CSS alone — never by UA detection,
-  and never below `lg:`, where the mobile layout is frozen. The frame is app-wide; a page's
-  content column stays 26rem until it opts in by stamping `data-shell="wide"` on its own root,
-  which `:has()` in `app/layout.tsx` answers to. Write the desktop layout in `lg:grid-cols-N`
-  and flex only — **never** bracket track syntax, because `reflow-policy.ts` flattens variants
-  by design and a `lg:grid-cols-[1fr_20rem]` is a rigid track it will (correctly) refuse.
-  Primary navigation renders from `lib/sidebar-nav.ts` over the `tab-nav` registry, never a
-  hand-written link list. `audit/wide.mjs` gates the frame at 1440px (ADR-0088).
-
-- Converting a page to the wide column → stamp `data-shell="wide"` on its root, put the grid in
-  a component the audit harness can mount (see `pulse/home-columns.tsx`) rather than classes
-  inline on the page, and **add the page as a journey to both `audit/wide.mjs` and
-  `audit/reflow.mjs`**. A page no journey renders is unverified however many guards are green:
-  adding `home` surfaced three pre-existing defects at 320px and 200% text in components it had
-  always rendered. Anything the wide layout adds must be a read-time projection, never an
-  action — the click budget (ADR-0071) governs actions (ADR-0088).
-
-- Desktop-only content a phone must not pay for → `hidden lg:block` is enough for **markup**,
-  and never enough for **JavaScript**: a hidden subtree still renders and hydrates, so one
-  `"use client"` chart behind it put 110KB gzipped of Recharts in the mobile Dashboard bundle.
-  A client-side block gets a dynamic import *and* a mount gate (`useWideViewport`, the same
-  64rem as `lg:`), not CSS. Measure it offline before claiming a number:
-  `.next/server/app/<route>/page_client-reference-manifest.js` lists the route's client chunks.
-  An optional read also needs `.catch()` — `apiGet` *rejects* on a transport failure rather
-  than returning an unsuccessful envelope, so an uncaught one in a `Promise.all` takes the
-  whole page down over a bonus block (ADR-0088).
-
-- New animation or transform transition → pair it with `motion-reduce:animate-none`
-  or `motion-reduce:transition-none` **in the same class string**. Colour and
-  opacity transitions move nothing and are exempt by rule. The guard in
-  `apps/web/lib/motion-policy.ts` sweeps every component and fails closed; an
-  entry in its `MOTION_EXEMPTIONS` registry needs a written reason (ADR-0082).
+- Anything in `apps/web` → the frontend rules in
+  [`.claude/rules/web/frontend.md`](./.claude/rules/web/frontend.md) load
+  automatically when you touch those files. The `lib/*-policy.ts` guards fail
+  closed, so a broken rule shows up in `npm test`.
+- A bundle-size claim → measure it:
+  `.next/server/app/<route>/page_client-reference-manifest.js` lists a route's
+  client chunks. A green guard is not a measurement.

@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Test files are never rendered, so the class strings in them must never reach the
+   stylesheet. The `*-policy.ts` guards hold whole components as source fixtures — a
+   deliberately malformed `aspect-[a/b]`, a `className="h-11"` — and Tailwind's automatic
+   source detection was compiling those into real rules nothing could ever use. */
+@source not "../lib/**/*.test.ts";
+
 /*
   PULSE design system — a "tactical command-center" fitness theme.
 
@@ -862,6 +868,34 @@
     color-scheme: inherit;
   }
 
+  /* Every tappable surface answers the first tap (#9). Without this a touch browser
+     waits ~300ms after a tap to see whether a second one is coming (double-tap zoom)
+     before dispatching the click — felt on every control in a PWA whose point is
+     logging sets between efforts. `manipulation` gives up double-tap zoom and nothing
+     else: panning and pinch-zoom still work, so the page stays zoomable (the viewport
+     sets no `user-scalable=no` either).
+
+     This is the base layer, so a utility still wins: the drag handles that spell
+     `touch-none` for @dnd-kit keep `touch-action: none` and their touch drags are
+     unaffected.
+
+     The tap highlight is set here rather than left to the platform, which paints an
+     untinted grey box that belongs to no Skin. It is deliberately *not* `transparent`:
+     that is only safe beside an `:active` state of one's own, and this app styles
+     `:hover` and `:focus-visible` but not `:active`, so a transparent highlight would
+     leave a tap unacknowledged until the next screen paints. A soft accent wash
+     re-tints per Skin and reads as the app's own. */
+  a,
+  button,
+  summary,
+  input,
+  select,
+  textarea,
+  [role="button"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: color-mix(in srgb, var(--color-cyan) 20%, transparent);
+  }
+
   /* Themed selection + focus ring baseline. */
   ::selection {
     background-color: var(--color-cyan-dim);
@@ -886,6 +920,52 @@
     font-family: var(--font-mono);
     letter-spacing: 0.08em;
     text-transform: uppercase;
+  }
+
+  /* A row in a long, unpaged list (ADR-0097). `content-visibility: auto` lets the
+     browser skip style, layout and paint for the rows that are off-screen, so the
+     admin catalog's 500 rows cost roughly what the dozen on screen cost. The
+     `contain-intrinsic-size` is the placeholder size a skipped row claims; `auto`
+     means "remember the real one once you have measured it", so the scrollbar
+     settles instead of jumping as rows come into view. 74px is an estimate read off
+     the row's own classes — `px-4 py-3.5` around a 15px name, a 6px gap and a badge
+     line — not a measurement, and it only has to be close: the `auto` keyword
+     replaces it with the browser's own number the first time a row renders, so the
+     estimate affects nothing after the first layout.
+
+     Not `display: none` and not virtualization — the rows stay in the DOM, in the
+     accessibility tree, and findable by the browser's own find-in-page. */
+  .list-row-defer {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 74px;
+  }
+
+  /* The Reference Atlas figure's keyboard focus indicator (ADR-0104). A selectable muscle
+     group is an SVG `<g>`, and the figure's own feedback for it is a fill tint — which is
+     a colour shift on an already-tinted shape, indistinguishable from the heat overlay a
+     trained muscle carries, and it was the only signal a keyboard reader got while
+     traversing ~20 regions.
+
+     So the indicator is *drawn*: a stroke-only copy of the region's own paths, invisible
+     until the group takes focus from the keyboard. It traces the muscle rather than the
+     bounding box an `outline` would draw around it, it is inert at rest, and because the
+     copy carries no fill it cannot alter the figure's colours.
+
+     `non-scaling-stroke` keeps the ring 2px on screen whatever the viewBox is scaled to —
+     the figure is 220px wide at most and ~500 user units across, so a scaled stroke would
+     be sub-pixel. `pointer-events: none` keeps the copy out of hit-testing, so the region
+     underneath stays tappable. */
+  .atlas-region-ring {
+    fill: none;
+    stroke: transparent;
+    stroke-width: 0;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+  }
+
+  .atlas-region:focus-visible .atlas-region-ring {
+    stroke: var(--color-cyan);
+    stroke-width: 2;
   }
 
   /* Thin custom scrollbar so long lists stay on-theme. */

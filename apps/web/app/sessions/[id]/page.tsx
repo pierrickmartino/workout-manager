@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, ClipboardCheck, Play } from "lucide-react";
+import { ArrowRight, ClipboardCheck, Play } from "@/components/pulse/icons";
 
 import { SubstituteButton } from "@/components/SubstituteButton";
 import { DuplicateButton } from "@/components/DuplicateButton";
@@ -10,7 +10,12 @@ import { FavoriteSessionControl } from "@/components/FavoriteSessionControl";
 import { ShareSessionControl } from "@/components/ShareSessionControl";
 import { DeleteSessionControl } from "@/components/DeleteSessionControl";
 import { AddExerciseButton } from "@/components/AddExerciseButton";
-import { OverflowMenu } from "@/components/pulse/overflow-menu";
+import { ActionSheet } from "@/components/pulse/action-sheet";
+import {
+  ActionSheetItemText,
+  ActionSheetSeparator,
+  actionSheetItemClass,
+} from "@/components/pulse/action-sheet-item";
 import { resolveAppearance } from "@/lib/appearance";
 import { formatLoad } from "@/lib/load";
 import type { WeightUnit } from "@/lib/weight-unit";
@@ -167,10 +172,11 @@ export default async function SessionPage({
       ) : null}
 
       {/* Header controls. Favorite — a frequent, cheap toggle — stays visible; the rare and
-          destructive actions (Rename, Share, Delete, Duplicate, Generate another) collapse
-          behind an "⋯ More" disclosure so the primary Start / Log verbs dominate the page
-          (docs/redesign-ia.md, ADR-0071). Each control is standalone-only unless noted; on a
-          Protocol member the menu holds only "Generate another". */}
+          destructive actions (Rename, Share, Duplicate, Generate another, Delete) sit one tap
+          behind a ⋯ icon beside it, in an action sheet, so the primary Start / Log verbs
+          dominate the page (docs/redesign-ia.md, ADR-0071, ADR-0113). Each control is
+          standalone-only unless noted; on a Protocol member the sheet holds only "Generate
+          another". */}
       <div className="flex flex-wrap items-center gap-2">
         {/* Favorite (issue #396): mark/unmark this standalone Session as a Favorite — a stored,
             per-user, per-copy preference used to filter My Sessions. Hidden here on a Protocol
@@ -181,7 +187,7 @@ export default async function SessionPage({
             isFavorite={favoriteView.isFavorite}
           />
         ) : null}
-        <OverflowMenu label="More">
+        <ActionSheet label="Session actions" title="Session actions">
           {/* Rename (issue #394): name, rename, or clear the Session Name on a standalone Session. */}
           {session.is_protocol_member ? null : (
             <RenameSessionControl
@@ -205,24 +211,31 @@ export default async function SessionPage({
           {/* Generate another standalone Session — a periodic action, not a per-session verb. */}
           <Link
             href={appendFrom("/sessions/new", `/sessions/${session.id}`)}
-            className={buttonVariants({ variant: "secondary" })}
+            className={actionSheetItemClass()}
           >
-            Generate another
-            <ArrowRight className="h-4 w-4" />
+            <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+            <ActionSheetItemText
+              label="Generate another"
+              description="Ask for a new standalone session"
+            />
           </Link>
           {/* Delete (CONTEXT: Delete, ADR-0063): permanently remove this standalone Session, offered
-              only when it has no logged training. Shown disabled with a hint when the Session has
-              been performed (deleteView.canDelete false); hidden entirely on a Protocol member or a
-              read that omits the Logged Count (deleteView.show false). Last in the menu — the one
-              destructive action, one tap deeper than the rest. */}
+              only when it has no logged training. Shown disabled, with the reason as its
+              description, when the Session has been performed (deleteView.canDelete false); hidden
+              entirely on a Protocol member or a read that omits the Logged Count (deleteView.show
+              false). Last in the sheet, below a rule — the one destructive action, and a two-step
+              confirm deeper than the rest. */}
           {deleteView.show ? (
-            <DeleteSessionControl
-              sessionId={session.id}
-              action={submitDeleteSession}
-              disabledHint={deleteView.canDelete ? null : DELETE_DISABLED_HINT}
-            />
+            <>
+              <ActionSheetSeparator />
+              <DeleteSessionControl
+                sessionId={session.id}
+                action={submitDeleteSession}
+                disabledHint={deleteView.canDelete ? null : DELETE_DISABLED_HINT}
+              />
+            </>
           ) : null}
-        </OverflowMenu>
+        </ActionSheet>
       </div>
 
       <div className="flex flex-col gap-4">
@@ -443,19 +456,22 @@ function PrescriptionCard({
         {/* Substitute stays on the primary surface — an in-context, non-destructive edit. */}
         <SubstituteButton sessionId={sessionId} position={prescription.position} />
         {/* Remove (ADR-0052): withdraw this movement from a standalone Session — Insert's
-            symmetric partner. Destructive, so demoted one tap behind a per-row disclosure
-            (docs/redesign-ia.md, ADR-0071). The disclosure is rendered only when Remove is
+            symmetric partner. Destructive, so demoted one tap behind a per-row action sheet
+            (docs/redesign-ia.md, ADR-0071, ADR-0113). The sheet is rendered only when Remove is
             offered — withheld on a Protocol member (removing inside a Protocol stays Deploy's
-            job), so most rows carry no "⋯ More" at all. */}
+            job), so most rows carry no ⋯ at all. Every row's trigger names its movement. */}
         {showRemove ? (
-          <OverflowMenu label="More">
+          <ActionSheet
+            label={`More actions for ${prescription.exercise_name}`}
+            title={prescription.exercise_name}
+          >
             <RemoveExerciseButton
               sessionId={sessionId}
               position={prescription.position}
               canRemove={canRemove}
               dissolvesSuperset={dissolvesSuperset}
             />
-          </OverflowMenu>
+          </ActionSheet>
         ) : null}
       </div>
     </Card>

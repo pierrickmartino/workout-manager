@@ -1,7 +1,8 @@
 import type { LoggedSession } from "@/lib/logs-types";
 import type { SessionSummary } from "@/lib/session-library";
 import type { ExerciseSearchResult } from "@/lib/exercises-types";
-import type { ExercisePrescription, WorkoutSession } from "@/lib/sessions-types";
+import type { ExerciseDetail, ExercisePrescription, WorkoutSession } from "@/lib/sessions-types";
+import type { AdminExerciseRow } from "@/lib/admin-exercises-view";
 import type { Profile } from "@/lib/profile-types";
 import type { ProtocolProgress } from "@/lib/protocols-types";
 import type { PersonalRecordEntry, VolumePoint } from "@/lib/analytics-types";
@@ -47,6 +48,26 @@ export const workout: WorkoutSession = {
   id: 1, clerk_user_id: "audit-synthetic-account", training_type: "strength", duration_minutes: 30,
   has_been_regenerated: false, provenance: "user_authored", name: names[0], prescriptions,
 };
+// The live journey's Session: the shared prescriptions plus a two-member Superset with mixed
+// Load kinds, so the set table's member legend and round grouping (ADR-0114) are measured at
+// every width and text size, not only its solo card.
+export const liveWorkout: WorkoutSession = {
+  ...workout,
+  prescriptions: [
+    ...prescriptions,
+    ...exercises.slice(3, 5).map((exercise, i): ExercisePrescription => ({
+      ...prescriptions[0],
+      position: prescriptions.length + i + 1,
+      exercise_id: exercise.id,
+      exercise_name: exercise.name,
+      recommended_load: i === 0
+        ? { kind: "absolute", text: "12 kg", kg: 12 }
+        : { kind: "bodyweight", text: "bodyweight + 10 kg", added_kg: 10 },
+      superset_group: "audit-superset",
+      round_rest_seconds: 90,
+    })),
+  ],
+};
 export const profile: Profile = {
   id: 1, clerk_user_id: "audit-synthetic-account", display_name: nameFixture === "mixed" ? names[0] : "Synthetic account", gender: null,
   age: 100, height_cm: 199.9, weight_kg: 199.9, training_habits: null, recent_workout: null,
@@ -91,6 +112,12 @@ export const protocolProgress: ProtocolProgress = {
     prescriptions,
   },
   completed_count: 4,
+  // The standing Calibration and the clamp's bounds (ADR-0111). Stated rather than
+  // defaulted: the server always sends all three, and a fixture that omitted them would
+  // let a control render against a shape the API never produces.
+  calibration: 0,
+  calibration_min: -3,
+  calibration_max: 3,
 };
 
 // A month of daily volume, so the chart carries a realistic point count and its ChartValues
@@ -110,3 +137,53 @@ export const personalRecords: PersonalRecordEntry[] = Array.from({ length: 8 }, 
   is_bodyweight: i % 4 === 3,
   added_kg: i % 4 === 3 ? 20 : null,
 }));
+
+// The Exercise detail page's SPECS lens (ADR-0017), mounted so the illustration's reserved box
+// (ADR-0095) is measured at 320px and at 200% text like everything else. The image src is a
+// real app route the isolated audit server does not serve, which is the useful case rather than
+// a defect: a box that only holds its space once the bytes arrive is exactly the CLS this is
+// here to catch, and here they never arrive.
+export const exerciseDetail: ExerciseDetail = {
+  id: 1,
+  name: exerciseNames[0],
+  description: "A synthetic description long enough to wrap on a narrow screen. ".repeat(3),
+  provenance: "curated",
+  targeted_muscles: ["quadriceps", "glutes"],
+  primary_muscles: ["quadriceps"],
+  secondary_muscles: ["glutes"],
+  muscle_highlight: {
+    primary: { muscles: ["quadriceps"], groups: [] },
+    secondary: { muscles: ["glutes"], groups: [] },
+  },
+  required_equipment: ["barbell", "squat rack"],
+  instructions: [
+    "Set the bar at mid-chest height and brace before unracking.",
+    "Descend until the hip crease passes the knee, then drive up.",
+  ],
+  difficulty: 5,
+  precautions: ["Stop if the knee tracks inward under load."],
+  image: null,
+  has_image: true,
+  retired: false,
+  reference_count: null,
+  variations: [{ id: 2, name: exerciseNames[1] }],
+  alternatives: [{ id: 3, name: "Synthetic squat 3" }],
+};
+
+// The admin catalog browser's rows (ADR-0097). Deliberately over the 50-item threshold the
+// audit cares about and over the >426px column where the facet grid goes three-up, with the
+// long authored names in the first two slots so the row's truncation and the badge cluster are
+// measured against the same names every other journey uses.
+export const adminExerciseRows: AdminExerciseRow[] = Array.from({ length: 60 }, (_, i) => ({
+  id: i + 1,
+  name: i < 2 ? exerciseNames[i] : `Synthetic squat ${i + 1}`,
+  provenance: ["curated", "ai_generated", "user_entered"][i % 3],
+  completeness: ["stub", "listable", "enriched"][i % 3],
+  retired: i % 7 === 0,
+}));
+
+// One admin audit-trail entry, in the row shape `app/admin/exercises/[id]/page.tsx` renders it
+// in (ADR-0096). The page itself is a Server Component, so the row is replicated here rather
+// than imported — what is under measurement is the instant's own text, which is the longest
+// thing in that row and the part this change made longer.
+export const auditEntry = { actor: "operator@example.com", createdAt: "2026-09-30T14:03:22.123456" };

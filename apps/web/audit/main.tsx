@@ -21,6 +21,7 @@ import { TabBar } from "@/components/pulse/tab-bar";
 import { Sidebar } from "@/components/pulse/sidebar";
 import { HomeColumns } from "@/components/pulse/home-columns";
 import { SessionHero } from "@/components/pulse/session-hero";
+import { CalibrationControl } from "@/components/pulse/calibration-control";
 import { TrainingRouteCard } from "@/components/pulse/training-route";
 import { QuickActions } from "@/components/pulse/quick-actions";
 import { LevelBadge } from "@/components/pulse/level-badge";
@@ -38,7 +39,23 @@ import { toDistanceBars } from "@/lib/distance-view";
 import { Alert } from "@/components/pulse/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { exerciseNames, exercises, history, personalRecords, prescriptions, profile, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
+import { SpecsPanel } from "@/components/exercise/specs-panel";
+import { AdminExerciseBrowser } from "@/components/AdminExerciseBrowser";
+import { LocalInstant } from "@/components/pulse/local-instant";
+import { ConfirmDialog } from "@/components/pulse/confirm-dialog";
+import { ActionSheetPanel } from "@/components/pulse/action-sheet";
+import { ActionSheetItemText, ActionSheetSeparator, actionSheetItemClass } from "@/components/pulse/action-sheet-item";
+import { RenameSessionControl } from "@/components/RenameSessionControl";
+import { ShareSessionControl } from "@/components/ShareSessionControl";
+import { DuplicateButton } from "@/components/DuplicateButton";
+import { DeleteSessionControl } from "@/components/DeleteSessionControl";
+import { submitDeleteSession } from "@/app/sessions/[id]/actions";
+import { DELETE_DISABLED_HINT } from "@/lib/session-delete";
+import { ArrowRight } from "@/components/pulse/icons";
+import { BuildWorkoutLink, GenerateTrainingLaunchpad, LogPastWorkoutLink } from "@/components/pulse/generate-training-launchpad";
+import { FitnessLevelStandings } from "@/components/pulse/fitness-level-standings";
+import { toFitnessLevelRows } from "@/lib/fitness-level-standing";
+import { adminExerciseRows, auditEntry, exerciseDetail, exerciseNames, exercises, history, liveWorkout, personalRecords, prescriptions, profile, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
 
 const params = new URLSearchParams(location.search);
 if (params.get("fonts") === "fontsource") {
@@ -99,6 +116,18 @@ function Home() {
       <HomeColumns
         main={<>
           <SessionHero protocol={protocolProgress} />
+          {/* The Calibration control (ADR-0111), mounted in *both* of its states, because the
+              rail is the one that renders prose: at the authored pitch the card is a label plus
+              two single-word buttons, while at the rail it adds a multi-sentence note and a
+              third button — the shape that actually stresses 320px and 200% text. A surface
+              only one of whose states is rendered here is only half measured, which is the
+              lesson the `confirm` journey records. */}
+          <Card className="p-5">
+            <CalibrationControl protocol={protocolProgress} />
+          </Card>
+          <Card className="p-5">
+            <CalibrationControl protocol={{ ...protocolProgress, calibration: -3 }} />
+          </Card>
           <TrainingRouteCard protocol={protocolProgress} />
           <QuickActions actions={quickActions({
             readiness: "READY", current_protocol: protocolProgress,
@@ -131,6 +160,96 @@ function Home() {
   );
 }
 
+// The two admin surfaces this change touched, in one journey. The audit trail's row markup
+// lives in a Server Component page, so the row is replicated here from its classes rather than
+// imported — what is measured is `LocalInstant`'s own text, which is the longest thing in it.
+function AdminAudit() {
+  return <div className="flex flex-col gap-8">
+    <AdminExerciseBrowser rows={adminExerciseRows} />
+    <div className="flex flex-col gap-4">
+      <SectionHeader meta="1 change">Audit trail</SectionHeader>
+      <ul className="flex flex-col gap-2">
+        <li className="flex flex-col gap-1 rounded-sm border border-border bg-surface px-3.5 py-2.5 font-mono text-[13px] sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-text-primary">Provenance: AI-generated → Curated</span>
+          <span className="text-[11px] text-text-muted">{auditEntry.actor} &middot; <LocalInstant iso={auditEntry.createdAt} /></span>
+        </li>
+      </ul>
+    </div>
+  </div>;
+}
+
+// The themed confirmation that replaced `window.confirm` at the three destructive actions
+// (ADR-0098). It is `fixed inset-0` and renders only while mounted, so no other journey ever
+// shows one — and an unrendered surface is an unmeasured one, whatever the static guards say
+// (ADR-0088). The copy is the longest of the three in each slot: the supersede's warning names
+// a Protocol, and the admin delete's two-line consequence is the longest message.
+function ConfirmSurface() {
+  return <ConfirmDialog
+    title="Permanently delete this exercise?"
+    message={'This cannot be undone. The movement is removed from the shared catalog outright, not retired. You\u2019re partway through \u201CPosterior Chain Rebuild \u2014 Weeks 1\u20134\u201D.'}
+    confirmLabel="Delete permanently"
+    cancelLabel="Keep current"
+    onConfirm={() => {}}
+    onCancel={() => {}}
+  />;
+}
+
+// The action sheet that replaced the ⋯ More / ⋯ Actions disclosure (ADR-0113). It renders only
+// while open, so — like `confirm` — no other journey ever shows one. The case is the worst of both
+// call sites at once: the Session detail's five actions, Delete disabled so its row carries the
+// longest description, under the longest title a sheet carries — a My Sessions row's authored
+// name, which in the default fixture is 120 unbroken characters.
+function SheetSurface() {
+  return <ActionSheetPanel title={sessions[1].display_name} onClose={() => {}}>
+    <RenameSessionControl sessionId={1} displayName={sessions[1].display_name} isUserNamed editValue={sessions[1].display_name} />
+    <ShareSessionControl sessionId={1} />
+    <DuplicateButton sessionId={1} />
+    <a href="/sessions/new" className={actionSheetItemClass()}>
+      <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+      <ActionSheetItemText label="Generate another" description="Ask for a new standalone session" />
+    </a>
+    <ActionSheetSeparator />
+    <DeleteSessionControl sessionId={1} action={submitDeleteSession} disabledHint={DELETE_DISABLED_HINT} />
+  </ActionSheetPanel>;
+}
+
+// Both of the launchpad's compositions, in one capture (ADR-0109): the TRAIN tab's four cards
+// above the Home empty state's two. Neither was in any journey — the `home` journey mounts the
+// *protocol-present* path, so the empty state's launchpad never rendered either — and this is a
+// stack of full-width buttons whose labels are authored sentences, the shape a doubled root font
+// is most likely to push past a 320px viewport. It does not: the labels wrap (142px chips at 200%
+// text, document still 320) — but at that size a wrapped label needs 103px inside `h-11`'s fixed
+// 88px box, which this harness does not gate and `creation` has always shown too (ADR-0109).
+function LaunchpadSurface() {
+  return <div className="flex flex-col gap-6">
+    <GenerateTrainingLaunchpad eyebrow="TRAIN // START SOMETHING NEW" from="/train">
+      <BuildWorkoutLink />
+      <LogPastWorkoutLink />
+    </GenerateTrainingLaunchpad>
+    <GenerateTrainingLaunchpad eyebrow="GET STARTED // NO ACTIVE PROTOCOL" from="/dashboard" />
+  </div>;
+}
+
+// The Profile view's Fitness Level section (ADR-0112): Declared read against Effective, per
+// Training Type. Nothing on the Profile *view* page had ever been in a journey — `profile`
+// mounts the edit form — so this is the harness's first look at it. Both of the section's
+// states are in one mount, because the rows differ by construction: strength has earned
+// notches (the accented reading plus the longer sentence), yoga reads at exactly its declared
+// level (the equal case, which is stated rather than blank), and the third row is a long label.
+//
+// That third row is a robustness probe, not a vocabulary claim: the Training Type set is
+// curated and fixed (CONTEXT §Training Type), and the API validates a declared level's *range*
+// but not its key, so an over-long type is reachable from response data and unreachable from
+// the form. It is here because it is the only thing on this surface that can stress the row's
+// `min-w-0 break-words` pairing (ADR-0085) — the curated five are all one short word.
+function FitnessLevelSurface() {
+  return <FitnessLevelStandings rows={toFitnessLevelRows([
+    { training_type: "strength", declared: 6, effective: 10 },
+    { training_type: "yoga", declared: 2, effective: 2 },
+    { training_type: "handstand and tumbling conditioning", declared: 4, effective: 5 },
+  ])} />;
+}
+
 function Content() {
   switch (journey) {
     case "charts": return <ChartAccessibilityFixture />;
@@ -145,11 +264,30 @@ function Content() {
     // The same Hand-Authored form in its default `authorAndLog` flow. The matrix only ever
     // mounted `planOnly` (Capture), which hides the "SETS PERFORMED" half — so the performed-set
     // grid was never rendered in any recorded capture. This case measures it.
-    case "creation-logged": return <HandAuthoredSessionForm draftId="audit-only-logged" today="2026-09-26" unit="kg" seed={{ trainingType: "strength", exercises: exercises.slice(0, 3).map(exercise => ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "repetitions", unit: "km", sets: "3", reps: "12", loadKind: "bodyweight", loadValue: "" })) }} />;
+    //
+    // The third row is a **distance**, which is what renders the performed-set `<fieldset>`
+    // (ADR-0108's `FieldGroup`, holding ADR-0032's distance-and-time pair). Every row here was
+    // `repetitions`, so that branch — the widest of the three, three controls under one caption —
+    // was renderable and rendered by no journey, and a fieldset is precisely the box ADR-0085
+    // floors at its content's minimum width. The reps rows stay beside it, so one capture holds
+    // both shapes.
+    case "creation-logged": return <HandAuthoredSessionForm draftId="audit-only-logged" today="2026-09-26" unit="kg" seed={{ trainingType: "strength", exercises: exercises.slice(0, 3).map((exercise, index) => index === 2 ? ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "distance" as const, unit: "km" as const, sets: "3", reps: "5", loadKind: "bodyweight" as const, loadValue: "" }) : ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "repetitions" as const, unit: "km" as const, sets: "3", reps: "12", loadKind: "bodyweight" as const, loadValue: "" })) }} />;
     case "logging": return <LogSessionForm sessionId={1} prescriptions={prescriptions} today="2026-09-26" unit="kg" />;
-    case "live": return <LiveSessionScreen session={workout} today="2026-09-26" defaultRestSeconds={60} keepScreenAwake={false} unit="kg" />;
+    case "live": return <LiveSessionScreen session={liveWorkout} today="2026-09-26" defaultRestSeconds={60} keepScreenAwake={false} unit="kg" />;
     case "analytics": return <Analytics />;
     case "home": return <Home />;
+    // The Exercise detail page's SPECS lens, which carries the framed illustration (ADR-0095).
+    // Its box is reserved by the layout rather than by the image, so this measures the box the
+    // page actually holds open while the bytes never arrive.
+    case "exercise": return <SpecsPanel exercise={exerciseDetail} topSetSeries={[]} unit="kg" />;
+    // The admin catalog browser (ADR-0097) and, beneath it, one audit-trail row in the shape
+    // the admin editor renders it — the reader's-clock instant (ADR-0096) is the longest text
+    // in that row. Neither admin screen was in any journey before.
+    case "admin": return <AdminAudit />;
+    case "confirm": return <ConfirmSurface />;
+    case "sheet": return <SheetSurface />;
+    case "launchpad": return <LaunchpadSurface />;
+    case "levels": return <FitnessLevelSurface />;
     case "contrast": return <ContrastSamples />;
     default: throw new Error(`Unknown audit journey: ${journey}`);
   }

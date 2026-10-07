@@ -1,46 +1,186 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { resolve } from "node:path";
-import ts from "typescript";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { JSDOM } from "jsdom";
 import { validateProfileForm } from "./profile-validation.ts";
 import * as profileTypes from "./profile-types.ts";
+import { loadTsx as loadComponent, loadTsxGraph } from "./tsx-harness.ts";
 
-// Render real TSX with the existing offline Node runner, without a browser or build.
-const require = createRequire(import.meta.url);
-function loadComponent(path: string, boundaries: Record<string, unknown> = {}): any {
-  const filename = resolve(import.meta.dirname, "..", path);
-  const source = ts.transpileModule(readFileSync(filename, "utf8"), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
-  }).outputText;
-  const module = { exports: {} };
-  const localRequire = (name: string): any => {
-    if (name in boundaries) return boundaries[name];
-    if (!name.startsWith("@/")) return require(name);
-    const base = name.slice(2);
-    const extension = existsSync(resolve(import.meta.dirname, "..", `${base}.ts`)) ? ".ts" : ".tsx";
-    return loadComponent(`${base}${extension}`, boundaries);
+// ADR-0107: a field publishes its id and descriptions and the control claims them. Loaded as
+// one graph, because `Field` and `Input` only agree if the context object they reach is the
+// same one — which is the whole subject here.
+function fieldParts(): {
+  Field: any; FieldLabel: any; Input: any; Select: any; Textarea: any; useFieldControl: any;
+} {
+  const [field, control, input, select, textarea] = loadTsxGraph([
+    "components/pulse/field.tsx",
+    "components/pulse/field-control.tsx",
+    "components/ui/input.tsx",
+    "components/ui/select.tsx",
+    "components/ui/textarea.tsx",
+  ]);
+  return {
+    Field: field.Field, FieldLabel: field.FieldLabel, Input: input.Input,
+    Select: select.Select, Textarea: textarea.Textarea,
+    useFieldControl: control.useFieldControl,
   };
-  new Function("require", "module", "exports", source)(localRequire, module, module.exports);
-  return module.exports;
+}
+
+function control(markup: string): Element {
+  return new JSDOM(markup).window.document.querySelector("input, select, textarea")!;
 }
 
 test("Field renders one explicit label and associates its hint without losing descriptions", () => {
-  const { Field } = loadComponent("components/pulse/field.tsx");
+  // Arrange
+  const { Field, Input } = fieldParts();
+
+  // Act
   const markup = renderToStaticMarkup(React.createElement(Field, {
-    label: "Equipment", hint: "Leave blank for bodyweight.",
-    children: [React.createElement("input", { key: "input", id: "equipment", "aria-describedby": "existing" }),
+    label: "Equipment", htmlFor: "equipment", hint: "Leave blank for bodyweight.",
+    children: [React.createElement(Input, { key: "input", "aria-describedby": "existing" }),
       React.createElement("button", { key: "button", type: "button" }, "Preset")],
   }));
+
+  // Assert
   assert.equal((markup.match(/<label\b/g) ?? []).length, 1);
   assert.match(markup, /<label[^>]*for="equipment"/);
   assert.match(markup, /aria-describedby="existing equipment-hint"/);
   assert.match(markup, /id="equipment-hint"/);
+  // An auxiliary button beside the control claims none of the wiring.
   assert.doesNotMatch(markup, /<button[^>]*aria-describedby/);
+  assert.doesNotMatch(markup, /<button[^>]*id="equipment"/);
+});
+
+test("a field's control is wired wherever it sits, not because it came first", () => {
+  // Arrange — the three shapes that silently broke the positional contract: the control
+  // wrapped in a layout div, placed after another child, and preceded by a conditional that
+  // rendered nothing. Each one used to move the id onto the wrong element, or onto no element.
+  const { Field, Input } = fieldParts();
+  const shapes = {
+    wrapped: React.createElement("div", { className: "flex" }, React.createElement(Input, {})),
+    second: [React.createElement("p", { key: "p" }, "Read this first"),
+      React.createElement(Input, { key: "input" })],
+    conditional: [false, React.createElement(Input, { key: "input" })],
+  };
+
+  for (const [shape, children] of Object.entries(shapes)) {
+    // Act
+    const markup = renderToStaticMarkup(React.createElement(Field, {
+      label: "Load", htmlFor: `load-${shape}`, hint: "Kilograms.", children,
+    }));
+
+    // Assert — the label points at the control, and the hint describes it.
+    const field = control(markup);
+    assert.equal(field.getAttribute("id"), `load-${shape}`, shape);
+    assert.equal(field.getAttribute("aria-describedby"), `load-${shape}-hint`, shape);
+    assert.match(markup, new RegExp(`<label[^>]*for="load-${shape}"`), shape);
+  }
+});
+
+test("a field with no named id generates one and both ends use it", () => {
+  // Arrange — `htmlFor` is how a call site picks the id; without one the field makes it, and
+  // the label and the control still have to agree.
+  const { Field, Input } = fieldParts();
+
+  // Act
+  const markup = renderToStaticMarkup(React.createElement(Field, {
+    label: "Objective", children: React.createElement(Input, {}),
+  }));
+
+  // Assert
+  const id = control(markup).getAttribute("id");
+  assert.ok(id, "the control took no id");
+  assert.match(markup, new RegExp(`<label[^>]*for="${id}"`));
+});
+
+test("an error marks the control invalid and is described through that same control", () => {
+  // Arrange
+  const { Field, Input } = fieldParts();
+
+  // Act
+  const markup = renderToStaticMarkup(React.createElement(Field, {
+    label: "Age", htmlFor: "age", error: "Enter a whole age.", hint: "Years.",
+    children: React.createElement(Input, { type: "number" }),
+  }));
+
+  // Assert — hint before error, as the two spans render, so a reader hears them in the
+  // order they appear.
+  const field = control(markup);
+  assert.equal(field.getAttribute("aria-invalid"), "true");
+  assert.equal(field.getAttribute("aria-describedby"), "age-hint age-error");
+  assert.match(markup, /id="age-error"[^>]*>Enter a whole age\./);
+});
+
+test("every primitive claims the wiring, not only the text input", () => {
+  // Arrange — a picker and a free-text area are labelled the same way, and `Select` wraps
+  // its control in a positioning div, so this is the wrapped case from the inside too.
+  const { Field, Input, Select, Textarea } = fieldParts();
+
+  for (const [name, Primitive] of Object.entries({ Input, Select, Textarea })) {
+    // Act
+    const markup = renderToStaticMarkup(React.createElement(Field, {
+      label: name, htmlFor: "picked", error: "Pick one.",
+      children: React.createElement(Primitive, {}),
+    }));
+
+    // Assert
+    const field = control(markup);
+    assert.equal(field.getAttribute("id"), "picked", name);
+    assert.equal(field.getAttribute("aria-describedby"), "picked-error", name);
+    assert.equal(field.getAttribute("aria-invalid"), "true", name);
+  }
+});
+
+test("a primitive outside any field is untouched by the wiring", () => {
+  // Arrange — the hook answers "nothing" outside a provider rather than throwing, because
+  // most of these controls render outside a `Field`: a search box, a filter, a row cell.
+  const { Input } = fieldParts();
+
+  // Act
+  const markup = renderToStaticMarkup(React.createElement(Input, { name: "query", type: "search" }));
+
+  // Assert
+  const field = control(markup);
+  assert.equal(field.getAttribute("id"), null);
+  assert.equal(field.getAttribute("aria-describedby"), null);
+  assert.equal(field.getAttribute("aria-invalid"), null);
+});
+
+test("a control that is not a primitive claims the wiring by spreading the hook", () => {
+  // Arrange — the escape hatch, and the shape `AdminExerciseImage`'s file picker uses: not
+  // one of the three primitives, so it says so at the call site.
+  const { Field, useFieldControl } = fieldParts();
+  function FilePicker(): React.JSX.Element {
+    return React.createElement("input", { type: "file", ...useFieldControl() });
+  }
+
+  // Act
+  const markup = renderToStaticMarkup(React.createElement(Field, {
+    label: "Choose image", htmlFor: "exercise-image", hint: "2 MB max.",
+    children: React.createElement(FilePicker),
+  }));
+
+  // Assert
+  const picker = control(markup);
+  assert.equal(picker.getAttribute("id"), "exercise-image");
+  assert.equal(picker.getAttribute("aria-describedby"), "exercise-image-hint");
+});
+
+test("the compact FieldLabel provides a single explicit label and wires its control", () => {
+  // Arrange — it renders a `Field`, so the claim has to reach through it.
+  const { FieldLabel, Input } = fieldParts();
+
+  // Act
+  const markup = renderToStaticMarkup(React.createElement(FieldLabel, {
+    label: "Sets", children: React.createElement(Input, { type: "number" }),
+  }));
+
+  // Assert
+  const id = control(markup).getAttribute("id");
+  assert.ok(id, "the control took no id");
+  assert.equal((markup.match(/<label\b/g) ?? []).length, 1);
+  assert.match(markup, new RegExp(`<label[^>]*for="${id}"`));
 });
 
 test("failed profile submissions identify fields, announce errors, and focus on each failure", async () => {
@@ -138,20 +278,12 @@ test("profile action targets validation failures and returns announced failures 
   assert.deepEqual(await submitProfile(invalid, form), { error: "Save rejected." });
 });
 
-test("compact FieldLabel also provides a single explicit label", () => {
-  const { FieldLabel } = loadComponent("components/pulse/field.tsx");
-  const markup = renderToStaticMarkup(React.createElement(FieldLabel, {
-    label: "Load", children: React.createElement("input", { id: "load" }),
-  }));
-  assert.equal((markup.match(/<label\b/g) ?? []).length, 1);
-  assert.match(markup, /<label[^>]*for="load"/);
-});
-
-
 test("a grouped distance/time field uses a legend rather than labeling its layout div", () => {
-  const { FieldLabel } = loadComponent("components/pulse/field.tsx");
-  const markup = renderToStaticMarkup(React.createElement(FieldLabel, {
-    label: "Set 1 distance (km)", group: true,
+  // ADR-0108: the composite rendering is `FieldGroup`, a name of its own rather than a flag on
+  // `FieldLabel` — the two renderings share no markup.
+  const { FieldGroup } = loadComponent("components/pulse/field.tsx");
+  const markup = renderToStaticMarkup(React.createElement(FieldGroup, {
+    label: "Set 1 distance (km)",
     children: React.createElement("div", {},
       React.createElement("input", { "aria-label": "Set 1 distance" }),
       React.createElement("input", { "aria-label": "Set 1 time" })),

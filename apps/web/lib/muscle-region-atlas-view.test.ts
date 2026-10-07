@@ -205,7 +205,7 @@ test("surfaces a neutral footnote and the off-map volume when unclassified work 
       { unclassifiedVolume: 3.5 },
     ),
   );
-  assert.equal(view.footnote, "Some recent sets list muscles we don't map yet.");
+  assert.equal(view.footnote, "Some recent sets list muscles we don’t map yet.");
   assert.equal(view.unclassifiedVolume, 3.5);
 });
 
@@ -219,5 +219,5 @@ test("reads only-unclassified history as all-not-trained regions with the footno
   // Real work exists, it just maps to no muscle — not the "log a few sessions" empty state
   assert.equal(view.isEmpty, false);
   assert.ok(view.regions.every((region) => !region.covered));
-  assert.equal(view.footnote, "Some recent sets list muscles we don't map yet.");
+  assert.equal(view.footnote, "Some recent sets list muscles we don’t map yet.");
 });

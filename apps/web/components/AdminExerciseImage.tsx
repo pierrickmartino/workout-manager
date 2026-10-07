@@ -7,9 +7,10 @@ import { resolveExerciseImageSrc, validateImageUpload } from "@/lib/exercise-ima
 import type { ExerciseDetail } from "@/lib/sessions-types";
 import { Alert } from "@/components/pulse/alert";
 import { Field } from "@/components/pulse/field";
+import { useFieldControl } from "@/components/pulse/field-control";
+import { Illustration } from "@/components/pulse/illustration";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 
 // The curator Exercise Image control on the admin editor (issue #504, ADR-0041): upload (or
 // replace), preview, and remove the one illustration a curator sets for a movement — the picture
@@ -138,14 +139,7 @@ export function AdminExerciseImage({
         htmlFor="exercise-image"
         hint="JPEG, PNG, or WebP — 2 MB max."
       >
-        <input
-          ref={inputRef}
-          id="exercise-image"
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          onChange={onSelect}
-          className="block w-full text-sm text-text-secondary file:mr-4 file:rounded-sm file:border-0 file:bg-surface file:px-4 file:py-2 file:font-mono file:text-xs file:uppercase file:tracking-wider file:text-text-primary hover:file:bg-elevated"
-        />
+        <ImageFilePicker inputRef={inputRef} onSelect={onSelect} />
       </Field>
 
       {error ? <Alert announce tone="error">{error}</Alert> : null}
@@ -188,6 +182,31 @@ export function AdminExerciseImage({
   );
 }
 
+// The one control in this app that sits in a `Field` without being one of the three form
+// primitives: a file picker has no value to autofill and no keypad to choose, so ADR-0093
+// leaves it to the platform. It therefore claims the field’s id and hint itself (ADR-0107),
+// which is also why it is its own component — the hook reads the field, so it has to be
+// called below the provider rather than beside the `<Field>`.
+function ImageFilePicker({
+  inputRef,
+  onSelect,
+}: {
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  onSelect: (event: React.ChangeEvent<HTMLInputElement>) => void;
+}): React.JSX.Element {
+  const field = useFieldControl();
+  return (
+    <input
+      ref={inputRef}
+      type="file"
+      accept="image/jpeg,image/png,image/webp"
+      onChange={onSelect}
+      className="block w-full text-sm text-text-secondary file:mr-4 file:rounded-sm file:border-0 file:bg-surface file:px-4 file:py-2 file:font-mono file:text-xs file:uppercase file:tracking-wider file:text-text-primary hover:file:bg-elevated"
+      {...field}
+    />
+  );
+}
+
 function ImagePreview({
   src,
   name,
@@ -202,14 +221,9 @@ function ImagePreview({
       <span className="label-mono text-[10px] tracking-wider text-text-muted">
         {label}
       </span>
-      <Card className="overflow-hidden p-0">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={src}
-          alt={`Illustration of ${name}`}
-          className="max-h-64 w-full object-contain"
-        />
-      </Card>
+      {/* The same framed box the Exercise page renders (ADR-0095), so the preview shows the
+          curator what a reader will actually see — letterboxing included. */}
+      <Illustration src={src} alt={`Illustration of ${name}`} />
     </div>
   );
 }

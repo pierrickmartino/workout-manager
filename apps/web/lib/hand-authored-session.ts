@@ -473,7 +473,7 @@ export function buildAuthorSessionRequest(
     return { ok: false, error: "Pick the date you performed this." };
   }
   if (performedOn > today) {
-    return { ok: false, error: "The performed-on date can't be in the future." };
+    return { ok: false, error: "The performed-on date can’t be in the future." };
   }
 
   const trainingType = fields.trainingType.trim();

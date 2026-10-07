@@ -9,7 +9,7 @@ export const REDEEM_FALLBACK_ERROR = "Could not redeem this share link.";
 // without the backend's message. The safety hold keys on `applies` alone, so a constrained
 // redeemer is never silently redirected into the plan even if the message is missing.
 export const RECEIVED_SHARE_CAVEAT_FALLBACK =
-  "This session was built for another user and isn't tailored to your constraints.";
+  "This session was built for another user and isn’t tailored to your constraints.";
 
 // The recipient's pre-Redeem display model (ADR-0057). A valid link resolves to the linked
 // Session's name, Training Type, and an Author byline; an invalid one (revoked or unknown token,

@@ -7,6 +7,7 @@ import {
   fetchAdminExerciseRelationships,
 } from "@/lib/admin-exercises";
 import { summarizeAuditEntry } from "@/lib/admin-exercise-curation";
+import { bestEffortData, settleBestEffort } from "@/lib/best-effort-read";
 import { AdminExerciseEditor } from "@/components/AdminExerciseEditor";
 import { AdminExerciseCuration } from "@/components/AdminExerciseCuration";
 import { AdminExerciseImage } from "@/components/AdminExerciseImage";
@@ -14,6 +15,7 @@ import { AdminExerciseEnrich } from "@/components/AdminExerciseEnrich";
 import { AdminExerciseRelationships } from "@/components/AdminExerciseRelationships";
 import { AdminExerciseRetire } from "@/components/AdminExerciseRetire";
 import { AdminExerciseDelete } from "@/components/AdminExerciseDelete";
+import { LocalInstant } from "@/components/pulse/local-instant";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { BackLink } from "@/components/pulse/back-link";
@@ -25,7 +27,8 @@ import { BackLink } from "@/components/pulse/back-link";
 // changes. The admin gate is resolved server-side; a non-admin gets a 404 rather than a
 // revealed-but-denied page, and the backend independently gates every write (`require_admin`,
 // ADR-0046). The detail and the audit trail are fetched server-side (the JWT never reaches the
-// browser); the thin Client Components own the edits.
+// browser); the thin Client Components own the edits. Each trail entry's instant is written by
+// `LocalInstant`, so it reads in the admin's own clock and not the container's (ADR-0096).
 export default async function AdminExerciseEditorPage({
   params,
 }: {
@@ -38,25 +41,27 @@ export default async function AdminExerciseEditorPage({
   const exerciseId = Number(id);
   if (!Number.isInteger(exerciseId)) notFound();
 
-  const envelope = await fetchAdminExercise(exerciseId);
+  // Three independent reads, settled together rather than in sequence (perf audit A2). The
+  // admin gate above stays sequential on purpose — it must pass before anything admin-only is
+  // fetched — but these three only take the id, so awaiting them one at a time bought nothing.
+  // Only the detail read may reject; the other two are best-effort and `settleBestEffort` keeps
+  // a flaky one from rejecting the whole settle (see `lib/best-effort-read.ts`):
+  //
+  //   - The audit trail is admin-only and best-effort for the page: if it fails to load, the
+  //     editor still works — the trail simply renders empty rather than blocking the whole page.
+  //   - The typed relationships (both directions) are likewise best-effort: if they fail to
+  //     load, the rest of the editor still works — the manager simply starts empty.
+  const [envelope, auditResult, relationshipsResult] = await Promise.all([
+    fetchAdminExercise(exerciseId),
+    settleBestEffort(fetchAdminExerciseAudit(exerciseId)),
+    settleBestEffort(fetchAdminExerciseRelationships(exerciseId)),
+  ]);
+
   if (!envelope.success || !envelope.data) notFound();
 
   const exercise = envelope.data;
-  // The audit trail is admin-only and best-effort for the page: if it fails to load, the
-  // editor still works — the trail simply renders empty rather than blocking the whole page.
-  const auditEnvelope = await fetchAdminExerciseAudit(exerciseId);
-  const auditTrail = auditEnvelope.success && auditEnvelope.data
-    ? auditEnvelope.data
-    : [];
-
-  // The typed relationships (both directions) are admin-only and best-effort for the page: if
-  // they fail to load, the rest of the editor still works — the manager simply starts empty.
-  const relationshipsEnvelope =
-    await fetchAdminExerciseRelationships(exerciseId);
-  const relationships =
-    relationshipsEnvelope.success && relationshipsEnvelope.data
-      ? relationshipsEnvelope.data
-      : [];
+  const auditTrail = bestEffortData(auditResult) ?? [];
+  const relationships = bestEffortData(relationshipsResult) ?? [];
 
   return (
     <section className="flex flex-col gap-8">
@@ -103,7 +108,7 @@ export default async function AdminExerciseEditorPage({
                   {summarizeAuditEntry(entry)}
                 </span>
                 <span className="text-[11px] text-text-muted">
-                  {entry.actor} &middot; {new Date(entry.created_at).toLocaleString()}
+                  {entry.actor} &middot; <LocalInstant iso={entry.created_at} />
                 </span>
               </li>
             ))}

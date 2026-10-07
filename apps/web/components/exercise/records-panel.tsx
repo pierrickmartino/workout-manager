@@ -1,4 +1,4 @@
-import { Trophy } from "lucide-react";
+import { Trophy } from "@/components/pulse/icons";
 
 import type { PersonalRecordEntry } from "@/lib/analytics-types";
 import { toRecordRows } from "@/lib/records-view";

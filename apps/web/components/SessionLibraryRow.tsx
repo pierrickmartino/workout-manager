@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useCallback } from "react";
-import { Star } from "lucide-react";
+import { Star } from "@/components/pulse/icons";
 
 import type { SessionSummary } from "@/lib/session-library";
 import {
@@ -17,13 +17,21 @@ import {
 import { cn } from "@/lib/utils";
 import { SessionCard } from "@/components/SessionCard";
 import { DeleteSessionControl } from "@/components/DeleteSessionControl";
-import { OverflowMenu } from "@/components/pulse/overflow-menu";
+import {
+  ActionSheet,
+  useActionSheet,
+} from "@/components/pulse/action-sheet";
+import {
+  ActionSheetItemText,
+  ActionSheetSeparator,
+  actionSheetItemClass,
+} from "@/components/pulse/action-sheet-item";
 import { useLongPress } from "@/components/use-long-press";
 
 // One My Sessions library row: the shared `SessionCard` plus the interactions the library adds on
 // top of Train's read-only card (CONTEXT: My Sessions, Favorite, Delete). Favoriting has no star on
 // the card face any more (Q6) — the Glow Edge carries the state — so the write lives in two places
-// that share one action: the ⋯ overflow menu (the accessible, cross-platform home) and a
+// that share one action: the ⋯ action sheet (the accessible, cross-platform home) and a
 // press-and-hold shortcut on the card. Both dispatch the same `submitToggleFavorite`; a 404/409
 // (e.g. a Protocol member) or transport failure surfaces inline below the card, and nothing toggles.
 export function SessionLibraryRow({
@@ -72,10 +80,10 @@ export function SessionLibraryRow({
   );
 }
 
-// The row's ⋯ overflow menu: Favorite/Unfavorite always, Delete only for a never-performed plan
-// (CONTEXT: Delete, ADR-0063). Reuses the native <details> `OverflowMenu` (keyboard- and
-// screen-reader-accessible) and the existing two-step inline `DeleteSessionControl`, so the delete
-// flow is byte-for-byte the one the row used before — only its home moved into the menu.
+// The row's ⋯ action sheet (ADR-0113): Favorite/Unfavorite always, Delete only for a
+// never-performed plan (CONTEXT: Delete, ADR-0063). Its trigger sits beside Start, so a closed row
+// spends no line on it; the sheet is titled with the plan's name, and the trigger names it too,
+// since every row on the screen carries one.
 function SessionRowMenu({
   session,
   onToggleFavorite,
@@ -85,35 +93,50 @@ function SessionRowMenu({
   onToggleFavorite: () => void;
   favoritePending: boolean;
 }): React.JSX.Element {
-  const label = favoriteActionLabel(session.is_favorite);
+  return (
+    <ActionSheet label={`Actions for ${session.display_name}`} title={session.display_name}>
+      <FavoriteItem
+        isFavorite={session.is_favorite}
+        onToggle={onToggleFavorite}
+        pending={favoritePending}
+      />
+      {canDeleteSessionRow(session.logged_count) ? (
+        <>
+          <ActionSheetSeparator />
+          <DeleteSessionControl sessionId={session.id} action={submitDeleteSessionRow} />
+        </>
+      ) : null}
+    </ActionSheet>
+  );
+}
+
+// Favorite is a one-tap action that leaves the list as it was, so it closes its own sheet: the
+// Glow Edge on the card then shows the result, and a failure surfaces below the card (outside the
+// sheet), so nothing is lost by closing.
+function FavoriteItem({
+  isFavorite,
+  onToggle,
+  pending,
+}: {
+  isFavorite: boolean;
+  onToggle: () => void;
+  pending: boolean;
+}): React.JSX.Element {
+  const sheet = useActionSheet();
 
   return (
-    <OverflowMenu label="Actions">
-      <button
-        type="button"
-        onClick={onToggleFavorite}
-        disabled={favoritePending}
-        aria-pressed={session.is_favorite}
-        className={cn(
-          "inline-flex items-center gap-2 rounded-sm text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan/60 disabled:opacity-50 motion-reduce:transition-none",
-          session.is_favorite
-            ? "text-cyan"
-            : "text-text-secondary hover:text-cyan",
-        )}
-      >
-        <Star
-          className={cn("h-4 w-4", session.is_favorite && "fill-cyan")}
-          aria-hidden
-        />
-        {label}
-      </button>
-      {canDeleteSessionRow(session.logged_count) ? (
-        <DeleteSessionControl
-          sessionId={session.id}
-          action={submitDeleteSessionRow}
-          confirmPrompt="Delete?"
-        />
-      ) : null}
-    </OverflowMenu>
+    <button
+      type="button"
+      onClick={() => {
+        onToggle();
+        sheet?.actions.close();
+      }}
+      disabled={pending}
+      aria-pressed={isFavorite}
+      className={cn(actionSheetItemClass(), isFavorite && "text-cyan")}
+    >
+      <Star className={cn("h-4 w-4 shrink-0", isFavorite && "fill-cyan")} aria-hidden />
+      <ActionSheetItemText label={favoriteActionLabel(isFavorite)} />
+    </button>
   );
 }

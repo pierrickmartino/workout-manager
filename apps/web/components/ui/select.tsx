@@ -1,7 +1,8 @@
 import * as React from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown } from "@/components/pulse/icons";
 
 import { cn } from "@/lib/utils";
+import { useFieldControlProps } from "@/components/pulse/field-control";
 
 // Native <select> kept for zero-dependency form behavior, styled to match the
 // pulse input treatment with a mono value and a custom chevron.
@@ -10,19 +11,30 @@ import { cn } from "@/lib/utils";
 // the control's own furniture, not text: at 200% text a `pr-10` gutter is 80px, which on a
 // 320px screen leaves a field no room at all to show the value it holds. Pinning them keeps
 // 100% text pixel-identical and keeps the value legible once the text doubles.
+//
+// Autofill is off by default (ADR-0093): a Load kind or a distance unit is not
+// something a browser has on file, and a call site that names a real token wins.
+//
+// Inside a `Field` this claims the field's id, hint and error (ADR-0107). That the control is
+// wrapped here in a positioning div is exactly the shape the old positional contract broke
+// on: the wiring landed on the div, which is not labelable and not a control.
 export function Select({
   className,
   children,
+  autoComplete = "off",
   ...props
 }: React.SelectHTMLAttributes<HTMLSelectElement>): React.JSX.Element {
+  const [field, rest] = useFieldControlProps(props);
   return (
     <div className="relative">
       <select
+        autoComplete={autoComplete}
         className={cn(
           "flex h-11 w-full appearance-none rounded-sm border border-border-lite bg-surface px-4 pr-[40px] font-mono text-sm text-text-primary focus-visible:border-cyan focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan disabled:cursor-not-allowed disabled:opacity-50",
           className,
         )}
-        {...props}
+        {...field}
+        {...rest}
       >
         {children}
       </select>

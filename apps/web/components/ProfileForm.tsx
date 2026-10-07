@@ -92,7 +92,13 @@ export function ProfileForm({
       ) : null}
 
       <Field label="Display name">
-        <Input name="display_name" defaultValue={profile?.display_name ?? ""} />
+        {/* The one field here a browser genuinely has on file; every other control
+            keeps the primitive's `autoComplete="off"` (ADR-0093). */}
+        <Input
+          name="display_name"
+          autoComplete="name"
+          defaultValue={profile?.display_name ?? ""}
+        />
       </Field>
 
       <Field label="Gender">
@@ -153,6 +159,7 @@ export function ProfileForm({
       <Field label="Default equipment">
         <Input
           name="default_equipment"
+          spellCheck={false}
           placeholder="dumbbells, pull-up bar"
           defaultValue={(profile?.default_equipment ?? []).join(", ")}
         />
@@ -161,13 +168,16 @@ export function ProfileForm({
       <Field
         label="Default rest timer (seconds)"
         error={state.fieldErrors?.default_rest_seconds}
-        hint="Leave blank to use each Exercise's prescribed rest."
+        hint="Leave blank to use each Exercise’s prescribed rest."
       >
+        {/* No placeholder: the `hint` above says this sentence already, it is in the
+            control's `aria-describedby` so a screen reader reads it, and it survives the
+            first keystroke. A placeholder restating it was a second copy to keep in step
+            — and the copy that drifted (ADR-0101). */}
         <Input
           name="default_rest_seconds"
           type="number"
           min={1}
-          placeholder="Leave blank to use each exercise's prescribed rest"
           defaultValue={profile?.default_rest_seconds ?? ""}
         />
       </Field>
@@ -204,7 +214,7 @@ export function ProfileForm({
         <Textarea
           name="preferences"
           rows={2}
-          placeholder="no running, no jumping in the apartment"
+          placeholder="no running, no jumping in the apartment…"
           defaultValue={(profile?.preferences ?? []).join(", ")}
         />
       </Field>

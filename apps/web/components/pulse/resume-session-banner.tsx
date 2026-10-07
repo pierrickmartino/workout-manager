@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
-import { Play } from "lucide-react";
+import { Play } from "@/components/pulse/icons";
 
 import { readLiveSessionSlot } from "@/lib/live-session-storage";
 import { ownsLiveSlot } from "@/lib/live-session";

@@ -3,7 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
-import { useEffect, useReducer, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useState,
+  useTransition,
+} from "react";
 import {
   AlertTriangle,
   ArrowDown,
@@ -14,7 +21,7 @@ import {
   Play,
   SkipForward,
   Timer,
-} from "lucide-react";
+} from "@/components/pulse/icons";
 
 import {
   recordLiveSession,
@@ -56,17 +63,17 @@ import {
 } from "@/lib/live-session-storage";
 import {
   durationSeconds,
-  elapsedSeconds,
   formatElapsed,
   resolveRestSeconds,
   restTargetEnd,
-  restRemainingSeconds,
   adjustRestTargetEnd,
   REST_ADJUST_STEP_SECONDS,
 } from "@/lib/live-timer";
 import type { LoadKind } from "@/lib/load";
 import type { WeightUnit } from "@/lib/weight-unit";
 import type { WorkoutSession } from "@/lib/sessions-types";
+import { ElapsedClock } from "@/components/pulse/elapsed-clock";
+import { RestCountdown } from "@/components/pulse/rest-countdown";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { SegmentedBar } from "@/components/pulse/segmented-bar";
@@ -137,13 +144,11 @@ export function LiveSessionScreen({
   const [summary, setSummary] = useState<LiveSessionState | null>(null);
   const [blockedExisting, setBlockedExisting] =
     useState<LiveSessionState | null>(null);
-  // A wall-clock "now" that ticks each second. The elapsed timer is always derived
-  // from `state.startedAt` vs this value (never a decrementing counter), so a
-  // backgrounded or locked tab shows the correct time on return (ADR-0014).
-  const [now, setNow] = useState(() => Date.now());
   // The rest countdown between sets (issue #89 — F2·S4). A stored target-end
-  // timestamp — null when no rest is running — compared to the ticking `now`, so
-  // like the elapsed timer it survives a phone lock. Purely client-side: rest is
+  // timestamp — null when no rest is running. The countdown against it ticks inside
+  // <RestCountdown>, which like <ElapsedClock> derives its face from wall-clock rather
+  // than a decrementing counter, so a phone lock cannot corrupt it (ADR-0014). Neither
+  // tick reaches this screen: see lib/use-second-tick. Purely client-side — rest is
   // never written to the record.
   const [restEndAt, setRestEndAt] = useState<number | null>(null);
   // Completed units the user has manually re-expanded to review. A completed unit
@@ -221,11 +226,6 @@ export function LiveSessionScreen({
   useEffect(() => {
     if (phase === "live") writeLiveSessionSlot(state);
   }, [state, phase]);
-
-  useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Keep the screen on while the performance is live (issue #386 — ADR-0055). The
   // hook holds a best-effort Screen Wake Lock only in the `live` phase and only when
@@ -320,17 +320,12 @@ export function LiveSessionScreen({
     });
   }
 
-  const restRemaining = restRemainingSeconds(restEndAt, now);
-  const isResting = restEndAt !== null;
-
   // When the running rest elapses, resume into the next set by clearing it — the
   // current-set pointer already moved on set completion, so the next set is simply
-  // revealed once the countdown card disappears.
-  useEffect(() => {
-    if (restEndAt !== null && restRemainingSeconds(restEndAt, now) === 0) {
-      setRestEndAt(null);
-    }
-  }, [restEndAt, now]);
+  // revealed once the countdown card disappears. The countdown itself decides when
+  // that moment is (it is the thing counting), so this fires once per rest rather
+  // than being re-tested every second.
+  const endRest = useCallback(() => setRestEndAt(null), []);
 
   const percent = progressPercent(state);
   const unit = currentUnit(state);
@@ -341,7 +336,10 @@ export function LiveSessionScreen({
   // dual meaning of "Next up" (on-deck while resting, look-ahead otherwise).
   const onDeck = onDeckExercise(state);
   const following = nextExercise(state);
-  const units = groupUnits(state);
+  // Memoized on the performance alone, so the set table's props keep their identities
+  // across a re-render the record did not cause (skipping a rest, expanding a unit, a
+  // finish going in flight) and the memoized list below can skip its whole subtree.
+  const units = useMemo(() => groupUnits(state), [state]);
   // The DOM id of the current on-deck set row — the jump target. Null once every set
   // is attempted (the pointer has run off the end), when there is nothing to jump to.
   const currentDomId =
@@ -349,7 +347,6 @@ export function LiveSessionScreen({
       ? liveSetDomId(state.sets[state.currentIndex])
       : null;
   const completedCount = state.sets.filter((s) => s.status === "completed").length;
-  const elapsed = formatElapsed(elapsedSeconds(state.startedAt, now));
   // What a finish right now would leave out (ADR-0089) — null when nothing is pending.
   // The copy lives in lib/live-session-finish so it is unit-tested, not asserted by eye.
   const advisory = finishAdvisory(state);
@@ -365,64 +362,73 @@ export function LiveSessionScreen({
 
   // Re-expand a collapsed completed unit to review its logged sets (which stay
   // read-only). Expansion lasts the rest of the performance — there is no re-collapse.
-  function expandUnit(unitIndex: number) {
+  // Memoized, like the three handlers below, because all four are props of the
+  // memoized set table: a fresh arrow on any of them would defeat it every render.
+  const expandUnit = useCallback((unitIndex: number) => {
     setExpandedUnits((prev) => {
       const next = new Set(prev);
       next.add(unitIndex);
       return next;
     });
-  }
+  }, []);
 
-  function handleCompleteSet(
-    index: number,
-    reps: number,
-    loadKind: LoadKind,
-    loadValue: string,
-    rpe: number | null,
-  ) {
-    const completedAt = Date.now();
-    const set = state.sets[index];
-    dispatch({
-      type: "COMPLETE_SET",
-      index,
-      reps,
-      loadKind,
-      loadValue,
-      rpe,
-      now: completedAt,
-    });
-    // Auto-start a rest countdown, but only while sets remain, this set actually rests
-    // after it, and it is the set the pointer sits on. A Superset rests only at the round
-    // boundary (ADR-0023), so a set in the middle of a round (`restsAfter` false) flows
-    // straight to its co-member; the engine also carries the rest to use (round-rest vs
-    // the module's own), with the user's default taking precedence. The pointer condition
-    // is what keeps a *re*-completion quiet (ADR-0089): correcting a set finished ten
-    // minutes ago is a record edit, not the end of physical work, so it starts no rest —
-    // and leaves a running one alone.
-    const morePending = state.sets.some(
-      (s, i) => i !== index && s.status === "pending",
-    );
-    if (morePending && set.restsAfter && index === state.currentIndex) {
-      // A round boundary carries the Superset's own round-rest, which wins over the
-      // global default (ADR-0023 — "the Superset owns its round-rest"); a solo set
-      // still lets the user's global default take precedence.
-      const rest = resolveRestSeconds(
-        set.restSeconds,
-        defaultRestSeconds,
-        set.supersetGroup !== null,
+  const handleCompleteSet = useCallback(
+    (
+      index: number,
+      reps: number,
+      loadKind: LoadKind,
+      loadValue: string,
+      rpe: number | null,
+    ) => {
+      const completedAt = Date.now();
+      const set = state.sets[index];
+      dispatch({
+        type: "COMPLETE_SET",
+        index,
+        reps,
+        loadKind,
+        loadValue,
+        rpe,
+        now: completedAt,
+      });
+      // Auto-start a rest countdown, but only while sets remain, this set actually rests
+      // after it, and it is the set the pointer sits on. A Superset rests only at the round
+      // boundary (ADR-0023), so a set in the middle of a round (`restsAfter` false) flows
+      // straight to its co-member; the engine also carries the rest to use (round-rest vs
+      // the module's own), with the user's default taking precedence. The pointer condition
+      // is what keeps a *re*-completion quiet (ADR-0089): correcting a set finished ten
+      // minutes ago is a record edit, not the end of physical work, so it starts no rest —
+      // and leaves a running one alone.
+      const morePending = state.sets.some(
+        (s, i) => i !== index && s.status === "pending",
       );
-      setRestEndAt(restTargetEnd(completedAt, rest));
-    }
-  }
+      if (morePending && set.restsAfter && index === state.currentIndex) {
+        // A round boundary carries the Superset's own round-rest, which wins over the
+        // global default (ADR-0023 — "the Superset owns its round-rest"); a solo set
+        // still lets the user's global default take precedence.
+        const rest = resolveRestSeconds(
+          set.restSeconds,
+          defaultRestSeconds,
+          set.supersetGroup !== null,
+        );
+        setRestEndAt(restTargetEnd(completedAt, rest));
+      }
+    },
+    [state, defaultRestSeconds],
+  );
 
   // Reopen a completed set (ADR-0089): it returns to un-attempted with its entered
   // reps/load/effort retained, so the user corrects and completes it again. Nothing has
   // reached the server yet, so this is pure client state — the timestamp is passed
   // because a reopen is a real interaction and resets the idle clock (ADR-0014). Any
   // running rest is left alone: it is tracking the user's physical rest, not the record.
-  function handleReopenSet(index: number) {
+  const handleReopenSet = useCallback((index: number) => {
     dispatch({ type: "REOPEN_SET", index, now: Date.now() });
-  }
+  }, []);
+
+  // Leave the current set un-attempted and move the pointer on (ADR-0013 — finishing
+  // with any skipped set records the performance Incomplete).
+  const handleSkipSet = useCallback(() => dispatch({ type: "ADVANCE" }), []);
 
   // The `−15 / +15` controls shift the running rest's target-end; a shift never
   // banks time before now (see adjustRestTargetEnd).
@@ -541,7 +547,7 @@ export function LiveSessionScreen({
           running it swaps the elapsed timer for the rest countdown and its controls
           (the moment the user is most likely looking away from the list). */}
       <div className="sticky top-14 z-20 -mx-6 flex flex-col gap-2.5 border-b border-border bg-base/95 px-6 py-3 backdrop-blur">
-        {isResting ? (
+        {restEndAt !== null ? (
           <div className="flex items-center justify-between gap-3">
             <span className="label-mono flex items-center gap-1.5 text-[11px] text-text-muted">
               <Timer className="h-3.5 w-3.5" aria-hidden />
@@ -562,7 +568,7 @@ export function LiveSessionScreen({
                 className="min-w-[3.5rem] text-center font-mono text-[20px] font-bold leading-none text-cyan"
                 aria-label="Rest remaining"
               >
-                {formatElapsed(restRemaining)}
+                <RestCountdown endAt={restEndAt} onElapsed={endRest} />
               </span>
               <Button
                 type="button"
@@ -578,7 +584,7 @@ export function LiveSessionScreen({
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => setRestEndAt(null)}
+                onClick={endRest}
                 aria-label="Skip rest"
               >
                 <SkipForward className="h-3.5 w-3.5" />
@@ -596,7 +602,7 @@ export function LiveSessionScreen({
               aria-label="Elapsed time"
             >
               <Clock className="h-3.5 w-3.5 text-text-muted" aria-hidden />
-              {elapsed}
+              <ElapsedClock startedAt={state.startedAt} />
             </span>
           </div>
         )}
@@ -641,7 +647,7 @@ export function LiveSessionScreen({
           expandedUnits={expandedUnits}
           onExpandUnit={expandUnit}
           onCompleteSet={handleCompleteSet}
-          onSkipSet={() => dispatch({ type: "ADVANCE" })}
+          onSkipSet={handleSkipSet}
           onReopenSet={handleReopenSet}
           isFinishing={pending}
           weightUnit={weightUnit}
@@ -708,7 +714,7 @@ function BlockedPrompt({
           <AlertTriangle className="h-5 w-5 text-magenta" aria-hidden />
         </span>
         <div className="flex flex-col gap-1.5">
-          <h2 className="font-display text-lg font-semibold text-text-primary">
+          <h2 className="text-balance font-display text-lg font-semibold text-text-primary">
             Another session is in progress
           </h2>
           <p className="font-mono text-[13px] leading-relaxed text-text-muted">
@@ -784,7 +790,7 @@ function IdleEndedSummary({
 
       <Card className="flex flex-col gap-4 p-5">
         <div className="flex flex-col gap-1.5">
-          <h2 className="font-display text-lg font-semibold text-text-primary">
+          <h2 className="text-balance font-display text-lg font-semibold text-text-primary">
             Session ended after inactivity
           </h2>
           <p className="font-mono text-[13px] leading-relaxed text-text-muted">

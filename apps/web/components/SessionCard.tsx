@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Dumbbell, Play } from "lucide-react";
+import { Dumbbell, Play } from "@/components/pulse/icons";
 
 import type { SessionCardModel } from "@/lib/session-card";
 import { loggedCountBadge } from "@/lib/session-delete";
@@ -14,27 +14,34 @@ interface SessionCardProps {
   // Favorited => the soft cyan Glow Edge (CONTEXT: Favorite). The My Sessions list sets it; Train
   // leaves it false. Purely presentational — the glow, not an icon, now carries favorite state.
   isFavorite?: boolean;
-  // The footer actions slot — the My Sessions ⋯ overflow menu (Favorite + conditional Delete).
-  // Absent on Train, whose card has no per-row actions.
+  // The actions slot at the end of the fact row — the My Sessions ⋯ action sheet trigger (Favorite +
+  // conditional Delete, ADR-0113). Absent on Train, whose card has no per-row actions.
   actions?: React.ReactNode;
+  // Where the card's title sits in the page outline (ADR-0094). 2 for a list that heads itself
+  // with nothing but the page's <h1> (My Sessions); 3 inside a group that carries its own
+  // heading (Train's "PICK UP AGAIN" panel).
+  level?: 2 | 3;
 }
 
 // The shared Session card (CONTEXT: Recent Sessions, My Sessions): the one presentational format
 // the Train page's "Recent Sessions" panel and the My Sessions library both render, fed by the
 // `session-card` view-model so the two can never drift. Server-safe (no hooks / no I/O), so Train
 // renders it straight from a Server Component; the library wraps it in a Client row for the
-// press-and-hold Favorite gesture and passes its menu through `actions`. Source-specific lines
+// press-and-hold Favorite gesture and passes its action sheet through `actions`. Source-specific lines
 // (performed date, exercise preview, author, Logged Count) render only when the model carries them.
 export function SessionCard({
   model,
   isFavorite = false,
   actions,
+  level = 2,
 }: SessionCardProps): React.JSX.Element {
+  const Title = level === 3 ? "h3" : "h2";
   const loggedBadge =
     model.loggedCount === null ? null : loggedCountBadge(model.loggedCount);
   // The fact row (exercise count + Logged Count) is a library-only footer — Train carries no
   // Logged Count, so it shows just its header and exercise preview, exactly as before.
-  const showFactRow = model.loggedCount !== null;
+  // A card with actions shows it too, since that is where their trigger sits.
+  const showFactRow = model.loggedCount !== null || actions !== undefined;
 
   // The sigil/title/badge block. On the library it links to the plan's detail page; on Train it is
   // plain text (its lone navigation is Start). Kept as one node so both branches render identically.
@@ -49,9 +56,13 @@ export function SessionCard({
         size={44}
       />
       <div className="flex min-w-0 flex-col gap-2">
-        <h3 className="truncate font-display text-base font-semibold text-text-primary">
+        {/* A heading, not a styled <span> (ADR-0094). An <h2> by default: My Sessions heads its
+            list with nothing but the page's <h1>, so an <h3> there skipped a level — and
+            `HistoryBrowser` already titles the same list-item role at this rank. A group that
+            carries its own heading passes `level={3}`. */}
+        <Title className="truncate font-display text-base font-semibold text-text-primary">
           {model.displayName}
-        </h3>
+        </Title>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={model.badgeVariant} className="capitalize">
             {model.trainingType}
@@ -123,22 +134,25 @@ export function SessionCard({
           </span>
           {/* The Logged Count signal (CONTEXT: Logged Count): "Trained N×" when performed, so an
               already-trained plan is spotted at a glance. Delete is withheld then and lives in the
-              menu below only for a never-performed plan. */}
-          {loggedBadge ? (
-            <Badge
-              variant="muted"
-              className="uppercase"
-              title="Logged performances of this session"
-            >
-              {loggedBadge}
-            </Badge>
-          ) : null}
+              action sheet only for a never-performed plan. */}
+          <div className="flex items-center gap-2">
+            {loggedBadge ? (
+              <Badge
+                variant="muted"
+                className="uppercase"
+                title="Logged performances of this session"
+              >
+                {loggedBadge}
+              </Badge>
+            ) : null}
+            {/* The ⋯ trigger ends the fact row rather than sitting beside Start: the title
+                truncates, and every pixel beside Start is a character of the authored name. A
+                closed card spends no line on its rare actions, and the sheet is a modal, so
+                nothing here grows when it opens. */}
+            {actions}
+          </div>
         </div>
       ) : null}
-
-      {/* The actions slot — the ⋯ overflow menu on My Sessions (Favorite + conditional Delete). Its
-          own full-width block so the native <details> panel stacks its inline confirms cleanly. */}
-      {actions ? <div className="w-full">{actions}</div> : null}
     </Card>
   );
 }

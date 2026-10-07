@@ -8,7 +8,7 @@ import type { WorkoutSession } from "./sessions-types";
 // The one-line reason shown when Delete is disabled on the Session detail because the Session
 // has logged training. Mirrors the server's 409 detail so the UI and the backstop agree.
 export const DELETE_DISABLED_HINT =
-  "A session with logged training can't be deleted.";
+  "A session with logged training can’t be deleted.";
 
 // The Session detail's Delete state. `show` gates whether the control renders at all: Delete is
 // standalone-only (hidden on a Protocol member, like Rename/Favorite/Share) and needs the

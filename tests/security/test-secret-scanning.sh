@@ -99,4 +99,42 @@ if git -C "$source_repo" push --quiet origin main >/dev/null 2>&1; then
   exit 1
 fi
 
+# A force-push rewrites the ref, so the push event's `.before` names a commit the branch no
+# longer reaches — and `actions/checkout` fetches only reachable history, so the object is
+# simply absent from the runner's clone. The scan must still run: these two cases pin that it
+# neither crashes on the invalid range nor silently stops detecting. An absent OID is modelled
+# with a well-formed SHA that was never created, which is exactly what the runner sees.
+absent_oid=dead0000000000000000000000000000deadbeef
+printf '{"before":"%s","repository":{"default_branch":"main"}}\n' \
+  "$absent_oid" >"$test_root/force-push-event.json"
+
+git -C "$source_repo" reset --quiet --hard "$baseline_oid"
+printf 'clean after a force push\n' >"$source_repo/clean-forced.txt"
+git -C "$source_repo" add clean-forced.txt
+git -C "$source_repo" commit --quiet -m clean-after-force-push
+forced_clean_oid=$(git -C "$source_repo" rev-parse HEAD)
+
+if ! (cd "$source_repo" && GITHUB_EVENT_NAME=push \
+  GITHUB_EVENT_PATH="$test_root/force-push-event.json" GITHUB_SHA="$forced_clean_oid" \
+  "$repo_root/.github/scripts/scan-pushed-secrets.sh" >/dev/null 2>&1); then
+  echo "expected a force-push with an unreachable before-OID to scan, not fail the job" >&2
+  exit 1
+fi
+
+# The half that matters: falling back must *widen* the range to everything the branch
+# introduces, never narrow it to nothing. A fallback that scanned no commits would pass the
+# case above while quietly disabling the control on every force-push.
+git -C "$source_repo" reset --quiet --hard "$baseline_oid"
+printf '{"%s":"%s"}\n' "$token_field" "$token_value" >"$source_repo/representative.json"
+git -C "$source_repo" add representative.json
+git -C "$source_repo" commit --quiet -m force-pushed-secret
+forced_secret_oid=$(git -C "$source_repo" rev-parse HEAD)
+
+if (cd "$source_repo" && GITHUB_EVENT_NAME=push \
+  GITHUB_EVENT_PATH="$test_root/force-push-event.json" GITHUB_SHA="$forced_secret_oid" \
+  "$repo_root/.github/scripts/scan-pushed-secrets.sh" >/dev/null 2>&1); then
+  echo "expected a force-pushed secret to be detected despite the unreachable before-OID" >&2
+  exit 1
+fi
+
 echo "secret-scanning push checks passed"

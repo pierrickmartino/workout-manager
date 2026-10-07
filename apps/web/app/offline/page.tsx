@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { WifiOff } from "lucide-react";
+import { WifiOff } from "@/components/pulse/icons";
 
 import { Overline } from "@/components/pulse/overline";
 import { buttonVariants } from "@/components/ui/button";
@@ -18,7 +18,7 @@ export default function OfflinePage(): React.JSX.Element {
       </div>
       <div className="flex flex-col items-center gap-2">
         <Overline>PULSE // OFFLINE</Overline>
-        <h1 className="font-display text-2xl font-bold tracking-tight text-text-primary">
+        <h1 className="text-balance font-display text-2xl font-bold tracking-tight text-text-primary">
           You&rsquo;re offline
         </h1>
         <p className="max-w-xs text-sm text-text-secondary">

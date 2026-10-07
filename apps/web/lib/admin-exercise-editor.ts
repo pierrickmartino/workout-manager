@@ -106,6 +106,43 @@ export function toEditorFields(exercise: EditableExercise): ExerciseEditorFields
   };
 }
 
+// The fields the editor shows: the server's current values for every field the admin has
+// not touched, overlaid with the ones they have.
+//
+// Why the server wins by default: the editor page revalidates its own route whenever a
+// sibling control writes (set the Provenance, retire, upload an image), so the Server
+// Component can hand a mounted editor newer values at any time. Seeding the form state once
+// at mount would freeze it against that — the admin would read stale text and edit from it.
+// Their own typing still wins over the refresh, because nothing should ever discard it.
+export function overlayEditorEdits(
+  server: ExerciseEditorFields,
+  edits: Partial<ExerciseEditorFields>,
+): ExerciseEditorFields {
+  return { ...server, ...edits };
+}
+
+// Record one field edit. A value equal to the server's is not an edit at all — the admin
+// typed something and then undid it — so the entry is dropped rather than held, and that
+// field goes back to following the server.
+//
+// This is the difference between "the fields the admin changed" and "the fields the admin
+// touched", and only the first is right: holding every keystroke would pin a field on the
+// value they backed out of, which is the same staleness `overlayEditorEdits` exists to fix,
+// reintroduced one keystroke at a time. Compares the raw strings, not the parsed form, so a
+// whitespace-only list edit still shows what they typed even though it patches to nothing.
+export function applyEditorEdit<K extends keyof ExerciseEditorFields>(
+  server: ExerciseEditorFields,
+  edits: Partial<ExerciseEditorFields>,
+  key: K,
+  value: ExerciseEditorFields[K],
+): Partial<ExerciseEditorFields> {
+  if (value === server[key]) {
+    const { [key]: _dropped, ...rest } = edits;
+    return rest;
+  }
+  return { ...edits, [key]: value };
+}
+
 // A trimmed description, with a blank collapsing to `null` — an empty description is "no
 // description", never the empty string.
 function descriptionToPayload(value: string): string | null {

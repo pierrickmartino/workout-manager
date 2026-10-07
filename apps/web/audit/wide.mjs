@@ -48,6 +48,29 @@ const ALL_JOURNEYS = [
   // rather than just the wide frame — and the only one whose `columnOverNarrow` gate is
   // expected to be inapplicable rather than merely satisfied.
   "home",
+  // The themed confirmation (ADR-0098), which no other journey mounts because a dialog exists
+  // only while it is open. Its `max-w-sm` box must not stretch with the wide frame.
+  "confirm",
+  // The action sheet (ADR-0113), a modal for the same reason. It is capped at the shell's 26rem,
+  // so at 1440px it must stay a centred bottom sheet rather than a 72rem strip.
+  "sheet",
+  // The Exercise detail lens and the admin catalog (ADR-0095/0096/0097). Neither was ever in a
+  // journey, so neither had been rendered at any width by this harness. Both stay unconverted —
+  // no `data-shell="wide"` — so they also widen the evidence that the frame leaves an
+  // unconverted page at 26rem.
+  "exercise", "admin",
+  // The ad-hoc log (ADR-0106). It was a renderable case that no journey swept, so its form was
+  // unverified at every width while three sibling log forms were gated — and it is one of the
+  // four that now compose the shared set-entry family, so it is the one whose field rows
+  // changed shape (two half-width grid cells became wrapping rows that ask for their width).
+  "adhoc",
+  // Both launchpad compositions (ADR-0109), which no journey rendered in either harness. It stays
+  // unconverted, so its card must hold 26rem inside the wide frame.
+  "launchpad",
+  // The Profile view's Fitness Level section (ADR-0112). The Profile view page is in no journey
+  // at all — `profile` is the edit form — so this is the first thing on it either harness has
+  // rendered. It stays unconverted, so its card must hold 26rem inside the wide frame.
+  "levels",
 ];
 // A comma-separated subset, for iterating on one screen without paying for the full sweep.
 // The gated run is the unfiltered one.

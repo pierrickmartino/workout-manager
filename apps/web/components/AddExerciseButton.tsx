@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus } from "lucide-react";
+import { Plus } from "@/components/pulse/icons";
 
 import { resolveAuthoredExercise } from "@/app/sessions/log/actions";
 import { submitInsertPrescription } from "@/app/sessions/[id]/actions";
@@ -164,7 +164,7 @@ export function AddExerciseButton({ sessionId, unit }: AddExerciseButtonProps) {
       ) : (
         <>
           <div className="flex items-center justify-between gap-2">
-            <h3 className="font-display text-base font-bold text-text-primary">
+            <h3 className="text-balance font-display text-base font-bold text-text-primary">
               {exerciseName}
             </h3>
             <Button

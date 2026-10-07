@@ -61,14 +61,14 @@ export type FinishOutcome =
 // Shown when the request never reached the server (offline / dropped connection). The
 // work is safe on the device and a retry is available, so the copy reassures.
 export const FINISH_UNREACHABLE_MESSAGE =
-  "We couldn't reach the server. Your session is saved on this device — retry to finish saving it.";
+  "We couldn’t reach the server. Your session is saved on this device — retry to finish saving it.";
 
 // Shown when the finish could not be persisted to the on-device outbox at all (issue
 // #413 — IndexedDB unavailable, e.g. a locked-down private-mode browser). Unlike the
 // unreachable case, the work is NOT yet safe on the device, so the live slot is kept and
 // the copy asks the user to retry rather than implying a save that did not happen.
 export const FINISH_SAVE_FAILED_MESSAGE =
-  "We couldn't save your session on this device. Retry to save it.";
+  "We couldn’t save your session on this device. Retry to save it.";
 
 // Decide what to do with the slot from a finish attempt. Pure: the screen adapts its
 // awaited result / thrown error into a `FinishAttempt`, then applies this verdict.
@@ -107,7 +107,7 @@ export function finishAdvisory(state: LiveSessionState): string | null {
   if (pending === 0) return null;
   if (pending === state.sets.length) return null;
   const sets = pending === 1 ? "1 set" : `${pending} sets`;
-  return `${sets} won't be recorded — this session will be logged as Incomplete.`;
+  return `${sets} won’t be recorded — this session will be logged as Incomplete.`;
 }
 
 // Effect shell: the browser's UUID source, injected into `resolveFinishKey` at the

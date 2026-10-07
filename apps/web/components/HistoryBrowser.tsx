@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Copy, Repeat } from "lucide-react";
+import { Copy, Repeat } from "@/components/pulse/icons";
 
 import type { LoggedSession } from "@/lib/logs-types";
 import type { WeightUnit } from "@/lib/weight-unit";
@@ -22,6 +22,7 @@ import {
   UNCOMPLETE_TAIL_FIRST_REASON,
 } from "@/lib/log-correction-reasons";
 import { cn } from "@/lib/utils";
+import { replaceFilterQuery } from "@/lib/filter-url";
 import { PageHeader } from "@/components/pulse/page-header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -63,11 +64,9 @@ export function HistoryBrowser({
 
   function apply(next: HistoryFilters): void {
     setFilters(next);
-    const query = historyFiltersToQuery(next).toString();
-    const url = query.length > 0 ? `?${query}` : window.location.pathname;
     // Update the shareable URL without a navigation, so the Server Component and its
     // one-shot history fetch are never re-run by a filter change (Q4/Q8).
-    window.history.replaceState(null, "", url);
+    replaceFilterQuery(historyFiltersToQuery(next));
   }
 
   function setExercise(value: string): void {
@@ -125,7 +124,7 @@ export function HistoryBrowser({
             id="history-exercise"
             type="search"
             list="history-exercise-options"
-            placeholder="Any exercise"
+            placeholder="Any exercise…"
             value={filters.exercise ?? ""}
             onChange={(event) => setExercise(event.target.value)}
           />
@@ -256,7 +255,7 @@ function LoggedSessionCard({
           never collide or interleave on a narrow phone. */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
-          <h2 className="font-display text-lg font-semibold capitalize text-text-primary">
+          <h2 className="text-balance font-display text-lg font-semibold capitalize text-text-primary">
             {entry.training_type} session
           </h2>
           <span className="label-mono whitespace-nowrap text-[10px] text-text-muted">

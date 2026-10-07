@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search } from "@/components/pulse/icons";
 
 import { searchExerciseLibrary } from "@/app/protocols/[id]/edit/actions";
 import type { ExerciseSearchResult } from "@/lib/exercises-types";
@@ -103,6 +103,7 @@ export function ExerciseLibrary({ onPick, onCreate }: ExerciseLibraryProps) {
           />
           <Input
             value={query}
+            spellCheck={false}
             placeholder="Search an exercise…"
             aria-label="Search the Exercise Library"
             className="pl-9"

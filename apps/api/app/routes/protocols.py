@@ -30,6 +30,8 @@ from app.envelope import error_envelope, success_envelope
 from app.generation.orchestrator import GenerationOrchestrator
 from app.generation.protocol_generator import ProtocolGenerationRequest
 from app.generation.protocol_service import cache_request_for
+from app.protocols.balance_preview import build_balance_preview
+from app.protocols.calibration import CalibrationStatus, calibrate_protocol
 from app.protocols.deploy import DeployStatus, deploy_protocol_tail
 from app.protocols.deploy_validation import (
     MAX_SESSIONS_PER_WEEK,
@@ -481,6 +483,62 @@ def deploy_protocol(
     if result.status is DeployStatus.REJECTED:
         return _deploy_error_response(result.errors)
     return success_envelope(serialize_protocol_progress(result.view))
+
+
+class CalibrateProtocolBody(BaseModel):
+    """The whole Calibrate request: the offset the user wants to stand at (ADR-0111).
+
+    An **absolute target**, not a delta, so the act is idempotent — a double-tapped
+    "harder" lands on the offset the user can see rather than two notches past it, and a
+    retried request is harmless. The ±3 bounds are enforced in the domain
+    (``clamp_calibration``) rather than by `Field(ge=…, le=…)`, so an out-of-range value is
+    *clamped to the rail* and reported there instead of 422-ing a request whose intent is
+    perfectly clear.
+    """
+
+    calibration: int
+
+
+@router.post("/protocols/{protocol_id}/calibrate")
+def calibrate(
+    protocol_id: int,
+    payload: CalibrateProtocolBody,
+    clerk_user_id: str = Depends(get_current_user),
+    protocols: ProtocolRepository = Depends(get_protocol_repository),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+    profiles: ProfileRepository = Depends(get_profile_repository),
+) -> object:
+    """Re-pitch the owner's Protocol to the requested Calibration (ADR-0111).
+
+    Ownership is verified (``404`` otherwise) and the frozen performed prefix is enforced
+    server-side (ADR-0020) in both the pipeline and the repository. The whole
+    plan → validate → materialise flow lives behind ``calibrate_protocol``; the route only
+    maps its outcome to a response, and returns the **progressed** Protocol so the client
+    sees the calibrated plan with the Progression overlay already on top.
+
+    Two disclosures ride alongside the payload rather than changing it: ``at_rail`` (the
+    clamp refused part of the request — the one moment a Calibration is not silent) and
+    ``sensitive_caveat`` (ADR-0058's caveat-not-refusal for a user with a Sensitive
+    Constraint, in either direction).
+    """
+
+    result = calibrate_protocol(
+        clerk_user_id,
+        protocol_id,
+        payload.calibration,
+        protocols=protocols,
+        logged=logged,
+        profiles=profiles,
+    )
+    if result.status is CalibrationStatus.NOT_FOUND:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Protocol not found")
+    if result.status is CalibrationStatus.REJECTED:
+        return _deploy_error_response(result.errors)
+
+    data = serialize_protocol_progress(result.protocol)
+    data["calibration_at_rail"] = result.at_rail
+    data["calibration_sensitive_caveat"] = result.sensitive_caveat
+    return success_envelope(data)
 
 
 class SimulatePrescriptionBody(BaseModel):

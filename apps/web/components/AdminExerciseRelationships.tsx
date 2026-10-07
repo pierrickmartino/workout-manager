@@ -80,7 +80,7 @@ export function AdminExerciseRelationships({
       {error ? <Alert announce tone="error">{error}</Alert> : null}
 
       <RelationshipGroup
-        title="This movement's variations & alternatives"
+        title="This movement’s variations & alternatives"
         empty="No outgoing links yet."
         rows={grouped.outgoing}
         exerciseId={exerciseId}
@@ -232,8 +232,8 @@ function AddRelationship({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <Field label="Find a movement" htmlFor="relationship-search" className="flex-1">
           <Input
-            id="relationship-search"
             value={query}
+            spellCheck={false}
             placeholder="Search the catalog…"
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
@@ -265,7 +265,6 @@ function AddRelationship({
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <Field label="Movement" htmlFor="relationship-target" className="flex-1">
             <Select
-              id="relationship-target"
               value={selectedId ?? ""}
               onChange={(event) => setSelectedId(Number(event.target.value))}
             >
@@ -278,7 +277,6 @@ function AddRelationship({
           </Field>
           <Field label="Kind" htmlFor="relationship-kind">
             <Select
-              id="relationship-kind"
               value={kind}
               onChange={(event) => setKind(event.target.value as RelationshipKind)}
               className="sm:w-44"

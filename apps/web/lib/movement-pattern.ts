@@ -52,7 +52,7 @@ export const PATTERN_BLURB: Record<MovementPattern, string> = {
   carry: "Hold a load and stay braced — often while moving.",
   locomotion: "Cover ground or drive a machine — running, rowing, cycling.",
   core: "Resist or create motion through the trunk.",
-  general: "A mix of movements that don't fall into one pattern.",
+  general: "A mix of movements that don’t fall into one pattern.",
 };
 
 const KNOWN_PATTERNS = new Set<string>(PATTERN_ORDER);

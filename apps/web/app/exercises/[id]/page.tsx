@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -6,6 +7,7 @@ import { fetchExerciseProgress } from "@/lib/progress";
 import { fetchExerciseRecords } from "@/lib/exercise-records";
 import { fetchHome } from "@/lib/home";
 import { resolveAppearance } from "@/lib/appearance";
+import { bestEffortData, settleBestEffort } from "@/lib/best-effort-read";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { toExerciseTab } from "@/lib/exercise-detail-view";
 import { backTarget } from "@/lib/back-target";
@@ -13,6 +15,7 @@ import type { ProtocolProgress } from "@/lib/protocols-types";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
 import { Alert } from "@/components/pulse/alert";
+import { Skeleton } from "@/components/pulse/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ExerciseTabs } from "@/components/exercise/exercise-tabs";
@@ -46,34 +49,38 @@ export default async function ExercisePage({
   // path — and falls back to the Dashboard when absent or untrusted (see back-target).
   const back = backTarget(from);
 
-  const envelope = await fetchExercise(exerciseId);
+  // Four independent reads, settled together rather than in sequence. None takes an input from
+  // another, so awaiting them one at a time cost four serial round trips for one page
+  // (perf audit A1). Only `fetchExercise` may reject: the other three are best-effort, and
+  // `settleBestEffort` is what stops a flaky one rejecting the whole settle and taking down a
+  // page written to render without it — see `lib/best-effort-read.ts`. `resolveAppearance`
+  // needs no catch: it get-or-defaults and is documented never to throw.
+  //
+  //   - The stat header reads the record side (Personal Record + Total Sets) and sits above the
+  //     tabs on every lens, so it is fetched here rather than per-tab. A failed read simply
+  //     omits the header — the catalog SPECS content still renders — rather than breaking the
+  //     page or fabricating figures.
+  //   - ADD TO PROTOCOL targets the user's Current Protocol (ADR-0021), so the Home read
+  //     supplies it. A failed read simply leaves the control a disabled seam rather than
+  //     breaking the page or fabricating a target.
+  //   - The reader's Weight Unit steers every weight surface on this screen — the stat header's
+  //     Personal Record, the SPECS Top-Set Trend, the RECORDS milestones, and each HISTORY Load
+  //     (#417). One cached read, shared with the layout.
+  const [envelope, recordsResult, homeResult, { weight_unit: unit }] =
+    await Promise.all([
+      fetchExercise(exerciseId),
+      settleBestEffort(fetchExerciseRecords(exerciseId)),
+      settleBestEffort(fetchHome()),
+      resolveAppearance(),
+    ]);
+
   if (!envelope.success || !envelope.data) {
     notFound();
   }
 
   const exercise = envelope.data;
-
-  // The stat header reads the record side (Personal Record + Total Sets) and sits
-  // above the tabs on every lens, so it is fetched here rather than per-tab. A failed
-  // read simply omits the header — the catalog SPECS content still renders — rather
-  // than breaking the page or fabricating figures.
-  const recordsEnvelope = await fetchExerciseRecords(exerciseId);
-  const records =
-    recordsEnvelope.success && recordsEnvelope.data ? recordsEnvelope.data : null;
-
-  // ADD TO PROTOCOL targets the user's Current Protocol (ADR-0021), so the Home read
-  // supplies it here. A failed read simply leaves the control a disabled seam rather
-  // than breaking the page or fabricating a target.
-  const homeEnvelope = await fetchHome();
-  const currentProtocol =
-    homeEnvelope.success && homeEnvelope.data
-      ? homeEnvelope.data.current_protocol
-      : null;
-
-  // The reader's Weight Unit steers every weight surface on this screen — the stat header's
-  // Personal Record, the SPECS Top-Set Trend, the RECORDS milestones, and each HISTORY Load
-  // (#417). One cached read, shared with the layout.
-  const { weight_unit: unit } = await resolveAppearance();
+  const records = bestEffortData(recordsResult);
+  const currentProtocol = bestEffortData(homeResult)?.current_protocol ?? null;
 
   return (
     <section className="flex flex-col gap-7">
@@ -105,7 +112,21 @@ export default async function ExercisePage({
           from={from}
         />
       ) : null}
-      {tab === "history" ? <HistoryTab exerciseId={exerciseId} unit={unit} /> : null}
+      {/* HISTORY's read is nested one level down, so before this boundary nothing painted until
+          it too had returned — five serial round trips on this tab (perf audit A1). The boundary
+          buys exactly one thing, and it is worth being precise about which: the read still
+          starts only after the settle above (this element is created by that render), so it is
+          still two round trips — but the header, stat header, tabs and ADD TO PROTOCOL now flush
+          after the first instead of waiting for the second.
+          The audit's other option was to hoist this read into the settle when `tab ===
+          "history"`; it prefers the boundary because hoisting would put the read on the critical
+          path. Keeping it off the *other two tabs* entirely is the `tab === "history"` ternary's
+          doing, not the boundary's — that was already true and still is. */}
+      {tab === "history" ? (
+        <Suspense fallback={<HistoryTabFallback />}>
+          <HistoryTab exerciseId={exerciseId} unit={unit} />
+        </Suspense>
+      ) : null}
       {tab === "records" ? (
         <RecordsPanel
           milestones={records?.pr_milestones ?? []}
@@ -144,6 +165,18 @@ async function HistoryTab({
     );
   }
   return <HistoryPanel progress={envelope.data} unit={unit} />;
+}
+
+// The streamed stand-in for HISTORY: three Logged-Session cards at the rendered height, so the
+// swap costs no layout shift (ADR-0028 — skeletons over spinners, matched to the final size).
+function HistoryTabFallback(): React.JSX.Element {
+  return (
+    <div className="flex flex-col gap-4">
+      <Skeleton className="h-32 w-full rounded-lg" />
+      <Skeleton className="h-32 w-full rounded-lg" />
+      <Skeleton className="h-32 w-full rounded-lg" />
+    </div>
+  );
 }
 
 // ADD TO PROTOCOL, now wired to the Protocol Builder (F4 Slice 7, ADR-0021). When the

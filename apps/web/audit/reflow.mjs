@@ -42,7 +42,31 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // `home` joins them with ADR-0088's wide Home: the page is converted to the wide content
 // column, so the narrow sweep is what proves the conversion moved nothing at 320px — the
 // desktop-only blocks are `hidden` below `lg:` and must cost a phone no width at all.
-const NOVEL_JOURNEYS = ["correction", "creation-logged", "home"];
+// `exercise` and `admin` join them with the three MEDIUM audit findings (ADR-0095/0096/0097):
+// the Exercise detail page and the admin catalog were never in any journey, so the illustration
+// box, the reader's-clock instant and the deferred catalog rows were all unverified in a
+// browser however green their guards were.
+// `confirm` joins them with ADR-0098: the themed dialog replaced `window.confirm` at three
+// destructive actions, and a dialog renders only while it is open, so no existing journey ever
+// mounted one. Its message is the app's longest confirmation copy, in a `max-w-sm` box.
+// `adhoc` joins them with ADR-0106: it was a renderable case no journey swept, so the ad-hoc
+// log's form was unverified at every width while its three sibling log forms were gated — and
+// it is the one of the four whose field rows changed shape when they moved onto the shared
+// set-entry family, a lone amount field having sat in a two-column grid that gave it half a row
+// and left the other half empty.
+// `launchpad` joins them with ADR-0109: no journey rendered a launchpad at all, in either
+// composition, so a stack of full-width buttons with authored sentences for labels had never been
+// measured. See `LaunchpadSurface` in `main.tsx` for what the case holds.
+// `levels` joins them with ADR-0112: the Profile *view* page is swept by nothing — the `profile`
+// journey mounts the edit form — so its new Fitness Level section would otherwise be a surface
+// no journey renders, which is unverified however green its guards are (ADR-0088).
+// `sheet` joins them with ADR-0113: the action sheet that replaced the ⋯ More disclosure is a
+// modal, so — like `confirm` — it exists only while open and no journey would otherwise mount it.
+// Its title is an authored name, the one string in it that can be 120 unbroken characters.
+const NOVEL_JOURNEYS = [
+  "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc", "launchpad",
+  "levels", "sheet",
+];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and
 // `creation-logged` were listed here because each held a `rem`-sized grid track in a form field

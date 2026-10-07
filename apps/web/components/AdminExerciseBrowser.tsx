@@ -1,18 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, Search } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { ChevronRight, Search } from "@/components/pulse/icons";
 
 import {
   EMPTY_ADMIN_FILTERS,
+  adminFiltersToQuery,
   hasActiveAdminFilters,
-  selectAdminExerciseRows,
+  parseAdminFilters,
+  projectAdminExerciseRows,
+  sortAdminExercises,
   type AdminExerciseFilters,
   type AdminExerciseRow,
   type AdminExerciseRowView,
 } from "@/lib/admin-exercises-view";
 import { Badge } from "@/components/ui/badge";
+import { replaceFilterQuery } from "@/lib/filter-url";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -49,20 +54,55 @@ const PROVENANCE_BADGE: Record<string, "cyan" | "violet" | "muted"> = {
 // included) and both retired and active rows — and names the internal Completeness tier and
 // the retired tombstone, both absent from the user-facing catalog. A thin Client Component:
 // it holds only the filter state and delegates all filter/sort/projection to the pure
-// `selectAdminExerciseRows` in `lib/`, so the logic is unit-tested without a browser. Each
-// row links toward the (later) editor. The backend is the real gate (`require_admin`).
+// `sortAdminExercises` and `projectAdminExerciseRows` in `lib/`, so the logic is unit-tested
+// without a browser. Each row links toward the editor. The backend is the real gate
+// (`require_admin`).
+//
+// It holds the whole Catalog — one generous page, up to 500 rows — so the list is kept off the
+// keystroke path in three ways (ADR-0097): the sort is hoisted out of the filter pass, the
+// filter pass itself runs against `useDeferredValue` so a keystroke paints before the list
+// does, and each row defers its own layout and paint until it is near the viewport.
+//
+// The filters are also the view's address (#7): seeded from the URL on mount and mirrored back
+// into it as they change, so "all AI-provenance movements with incomplete metadata" is a link
+// an admin can paste to a colleague, and a refresh or a Back from an editor lands on the same
+// narrowed list rather than on 500 rows.
 export function AdminExerciseBrowser({
   rows,
 }: {
   rows: AdminExerciseRow[];
 }): React.JSX.Element {
-  const [filters, setFilters] = useState<AdminExerciseFilters>(EMPTY_ADMIN_FILTERS);
-
-  const views = useMemo(
-    () => selectAdminExerciseRows(rows, filters),
-    [rows, filters],
+  // Seed once from the URL, then own the state locally — the filtering is client-side over the
+  // already-fetched catalog, so re-reading the hook on every change would be answering a
+  // question this component is the authority on (the History/My Sessions pattern).
+  const initialParams = useSearchParams();
+  const [filters, setFilters] = useState<AdminExerciseFilters>(() =>
+    parseAdminFilters(new URLSearchParams(initialParams.toString())),
   );
-  const filtered = hasActiveAdminFilters(filters);
+  // The field follows the keystroke; the list follows the field. React renders the typed
+  // character first and the re-filtered catalog in a second, interruptible pass, so a fast
+  // typist is never waiting on 500 rows between characters.
+  const deferredFilters = useDeferredValue(filters);
+
+  // Mirror the live filters — what the admin has typed, which is what they would share — into
+  // the address bar. `replaceState`, not a router navigation: a push would re-run the Server
+  // Component and re-fetch the whole catalog on every keystroke, which is the cost ADR-0097
+  // exists to remove. The URL is not a rendered surface, so writing the live value rather than
+  // the deferred one cannot desynchronize anything on screen.
+  useEffect(() => {
+    replaceFilterQuery(adminFiltersToQuery(filters));
+  }, [filters]);
+
+  // The order never depends on the filters, so the sort — 500 `localeCompare`s — happens once
+  // per catalog rather than once per keystroke.
+  const sorted = useMemo(() => sortAdminExercises(rows), [rows]);
+  const views = useMemo(
+    () => projectAdminExerciseRows(sorted, deferredFilters),
+    [sorted, deferredFilters],
+  );
+  // Read off the deferred filters, not the live ones, so the summary row always describes the
+  // list underneath it rather than the one being computed.
+  const filtered = hasActiveAdminFilters(deferredFilters);
 
   function update<K extends keyof AdminExerciseFilters>(
     key: K,
@@ -199,7 +239,7 @@ function AdminExerciseRowLink({
   return (
     <Link
       href={view.href}
-      className="group flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-elevated/50"
+      className="group list-row-defer flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-elevated/50"
     >
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <span className="truncate font-sans text-[15px] font-medium text-text-primary">
