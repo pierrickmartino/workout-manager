@@ -565,6 +565,24 @@ Verify additional critical tables and schema versions before dropping the test d
 
 A failed migration is a stop condition. Rolling back images does not undo a schema migration; assess compatibility and restore the pre-update database only with a deliberate plan for any subsequent writes. Avoid automatic database major-version upgrades or volume deletion. Pin infrastructure image digests after rehearsal for controlled upgrades, and update them through a tested maintenance process.
 
+### Moving an existing install to Redis 8
+
+`/opt/workout-config/compose.production.yml` is your copy, so a release that changes this
+guide's YAML (ADR-0117 moved `redis` from 7 to 8) never reaches it on its own. Do this once,
+inside step 3's maintenance window, after the worker has drained the queue:
+
+1. In `/opt/workout-config/compose.production.yml`, change the `redis` service's image from
+   `redis:7-alpine` to `redis:8-alpine`. Leave its `command` and `redisdata` volume as they are.
+2. Pull and recreate only Redis: `workout-compose pull redis && workout-compose up -d redis`.
+3. Verify it: `workout-compose exec redis redis-server --version` reports `v=8.`, and
+   `workout-compose exec redis redis-cli ping` answers `PONG`. The existing 7.x AOF/RDB loads
+   in place, so cached generations and any queued jobs survive.
+4. Continue with step 4 of the release.
+
+**Rollback is not an image swap.** Redis 7 refuses to start on data Redis 8 has written ("Can't
+handle RDB format version 15"). To go back, drain the queue first, then start `redis:7-alpine`
+on an empty volume. The Generation Cache rebuilds itself, and only queued jobs would be lost.
+
 ### Operating checks
 
 ```bash

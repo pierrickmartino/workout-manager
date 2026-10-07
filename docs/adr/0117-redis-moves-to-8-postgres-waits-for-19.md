@@ -45,6 +45,10 @@ Going through 18 would mean two migrations for no gain.
 
 - Only `docker-compose.yml`'s app `redis` service and the VPS / Railway guides change. On
   Railway the managed Redis plugin picks its own version, so check it there.
+- An existing VPS install keeps its own Compose file, so it moves to 8 only through the
+  guide's "Moving an existing install to Redis 8" steps. The move is one-way for the data:
+  Redis 7 can't read Redis 8's RDB format (version 15), so a rollback starts Redis 7 on an
+  empty volume after draining the queue.
 - When 19.1 ships, open the migration ticket: the dump with a 19 client, the new volume
   layout, `alembic upgrade head` against a restored copy, and the restore drill.
 - If the owner prefers 18 now, the same ticket applies with 18 in place of 19.
