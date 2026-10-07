@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 
 // ADR-0095: an image reserves its box before its bytes arrive, and says whether it is worth
 // fetching yet. Both of the app's raw <img> elements did neither — `max-h-* w-full

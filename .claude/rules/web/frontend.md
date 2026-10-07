@@ -100,6 +100,8 @@ is **declared**, not that it renders right: the `audit/` journeys (`reflow.mjs` 
 
 ## Components and structure
 
+- Guard or harness that walks or transpiles TypeScript → `import ts from "@typescript/typescript6"`;
+  `typescript` 7 has no JS API and is only the compiler (`npm run typecheck`, ADR-0116).
 - Section divider → `SectionHeader`, a heading (`level={3}` inside another section). Anything that
   opens a group is a heading; don't skip levels (`section-heading.test.ts`, ADR-0094).
 - Irreversible action → `pulse/confirm-dialog.tsx`, never `alert`/`confirm`/`prompt`. Copy is a
