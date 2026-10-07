@@ -79,7 +79,7 @@ npm ci
 npm test
 ```
 
-For a separate web development server, copy `apps/web/.env.local.example` to `apps/web/.env.local`, fill in Clerk's keys, and set `API_URL` to the running API (usually `http://localhost:8000`). Then run `npm run dev`. To verify a production build, run `npm run build` with the Clerk environment variables configured. The web build uses Node.js 22 in Docker and CI. The API uses Python 3.11 in Docker.
+For a separate web development server, copy `apps/web/.env.local.example` to `apps/web/.env.local`, fill in Clerk's keys, and set `API_URL` to the running API (usually `http://localhost:8000`). Then run `npm run dev`. To verify a production build, run `npm run build` with the Clerk environment variables configured. The web build uses Node.js 22 in Docker and CI. The API uses Python 3.14 in Docker and CI.
 
 ## Repository map
 
