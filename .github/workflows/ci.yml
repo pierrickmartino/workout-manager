@@ -61,6 +61,32 @@ jobs:
       - name: Run tests
         run: npm test
 
+  typecheck:
+    name: Web (tsc --noEmit)
+    # Blocking. `node --test` strips types without checking them and `next build`
+    # only runs in the advisory Lighthouse job, so without this a type error
+    # reaches main unseen. It is also the gate for each TypeScript major.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # `next typegen` writes the route types tsconfig includes from .next/types,
+      # so typed routes and PageProps are checked without a full build.
+      - name: Type-check
+        run: npm run typecheck
+
   lighthouse:
     name: Lighthouse (advisory)
     runs-on: ubuntu-latest

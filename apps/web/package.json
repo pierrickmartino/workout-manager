@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "node --test --experimental-test-module-mocks",
     "audit:serve": "vite --config audit/vite.config.ts",
     "audit:ui": "node audit/run.mjs",
