@@ -18,7 +18,8 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine
+    # Redis 8 (ADR-0117). An existing Redis 7 AOF/RDB volume loads in place.
+    image: redis:8-alpine
     ports:
       # Override REDIS_PORT if 6379 is already taken on the host.
       - "${REDIS_PORT:-6379}:6379"
