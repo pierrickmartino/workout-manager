@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 
 // ADR-0103: a field whose value is not a word says so. `spellCheck` appeared nowhere in
 // the app, so a browser underlined every tempo code (`3-1-1`), every duration (`1:30`)

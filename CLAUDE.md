@@ -20,7 +20,7 @@ keeping those two separate. See `CONTEXT.md`.
 
 Monorepo with two deployables under `apps/`:
 
-- **`apps/api`** — FastAPI backend (Python 3.11, SQLModel/Postgres, Alembic,
+- **`apps/api`** — FastAPI backend (Python 3.14, SQLModel/Postgres, Alembic,
   Redis/RQ for async generation). Domain-driven layout:
   - `app/domain/` — pure domain logic (no I/O): one-rep-max, progression,
     readiness, streak, achievements, volume, load, completion… Unit-test heaven.

@@ -16,8 +16,14 @@ concurrency:
 
 jobs:
   api:
-    name: API (pytest + terminology guard)
+    name: API (pytest + terminology guard, Python ${{ matrix.python }})
     runs-on: ubuntu-latest
+    # 3.14 is what the image runs; 3.11 is the requires-python floor the README's
+    # local setup uses. Testing both keeps the floor honest.
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.14"]
     defaults:
       run:
         working-directory: apps/api
@@ -26,7 +32,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python }}
           cache: pip
 
       - name: Install dependencies
@@ -51,7 +57,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
 
@@ -60,6 +66,32 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+  typecheck:
+    name: Web (tsc --noEmit)
+    # Blocking. `node --test` strips types without checking them and `next build`
+    # only runs in the advisory Lighthouse job, so without this a type error
+    # reaches main unseen. It is also the gate for each TypeScript major.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # `next typegen` writes the route types tsconfig includes from .next/types,
+      # so typed routes and PageProps are checked without a full build.
+      - name: Type-check
+        run: npm run typecheck
 
   lighthouse:
     name: Lighthouse (advisory)
@@ -96,7 +128,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
 

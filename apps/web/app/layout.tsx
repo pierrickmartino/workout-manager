@@ -9,12 +9,7 @@ import {
   Geist,
   Geist_Mono,
 } from "next/font/google";
-import {
-  ClerkProvider,
-  SignInButton,
-  SignedIn,
-  SignedOut,
-} from "@clerk/nextjs";
+import { ClerkProvider, Show, SignInButton } from "@clerk/nextjs";
 
 import { TabBar } from "@/components/pulse/tab-bar";
 import { Sidebar } from "@/components/pulse/sidebar";
@@ -173,8 +168,8 @@ export default async function RootLayout({
       >
         {/* `lg:flex` makes the desktop sidebar a flex *sibling* of the content column rather
             than a fixed overlay every other element has to offset itself around (ADR-0088).
-            Clerk's <SignedIn> renders nothing when signed out, so on the sign-in screen the
-            row simply has one item and the content fills the width — no conditional padding
+            Clerk's <Show when="signed-in"> renders nothing when signed out, so on the sign-in
+            screen the row simply has one item and the content fills the width — no conditional padding
             anywhere. Below `lg:` this is a plain block body, exactly as before. */}
         <body className="min-h-screen bg-base text-text-primary antialiased lg:flex">
           {/* Skip-to-content link: the first focusable element, hidden until focused so
@@ -189,9 +184,9 @@ export default async function RootLayout({
           {/* Desktop primary navigation (ADR-0088). Same registry as the TabBar, and only
               ever one of the two is in the accessibility tree — this is `hidden lg:flex`,
               the TabBar is `lg:hidden`, and `display: none` removes the other outright. */}
-          <SignedIn>
+          <Show when="signed-in">
             <Sidebar isAdmin={isAdmin} />
-          </SignedIn>
+          </Show>
 
           {/* The content column beside the sidebar. `min-w-0` is load-bearing: a flex child's
               automatic minimum is its content, so without it a wide table or an unbroken name
@@ -209,7 +204,7 @@ export default async function RootLayout({
                   PULSE<span className="text-cyan"> //</span>
                 </span>
                 <nav aria-label={NAV_LABELS.account} className="flex items-center gap-3">
-                  <SignedOut>
+                  <Show when="signed-out">
                     {/* Clerk's SignInButton clones its child and re-validates
                         with React.Children.only; the trigger button must contain
                         a single text child (no nested elements/icons). */}
@@ -224,8 +219,8 @@ export default async function RootLayout({
                         Sign in
                       </button>
                     </SignInButton>
-                  </SignedOut>
-                  <SignedIn>
+                  </Show>
+                  <Show when="signed-in">
                     {/* Account actions live on Profile so every sign-out passes through the
                         account-scoped local-state teardown (ADR-0059/0080). Clerk's default
                         UserButton sign-out bypasses that teardown, so it is not mounted here. */}
@@ -235,7 +230,7 @@ export default async function RootLayout({
                     >
                       Account
                     </Link>
-                  </SignedIn>
+                  </Show>
                 </nav>
               </div>
             </header>
@@ -272,7 +267,7 @@ export default async function RootLayout({
 
           {/* Bottom navigation is only meaningful once authenticated. Hidden at `lg:`, where
               the sidebar is the primary navigation instead. */}
-          <SignedIn>
+          <Show when="signed-in">
             <TabBar />
             {/* Drains the finish outbox on reconnect / foreground / restart (ADR-0060,
                 issue #413). Signed-in only: the queue is account-scoped. */}
@@ -281,7 +276,7 @@ export default async function RootLayout({
                 a non-blocking toast that distinguishes offline / saved-locally / syncing /
                 synced / failed, with a manual retry on failure. */}
             <SyncStatusBanner />
-          </SignedIn>
+          </Show>
 
           {/* Registers the minimal installability service worker (ADR-0028). */}
           <ServiceWorkerRegistrar />

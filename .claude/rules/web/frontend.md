@@ -65,6 +65,8 @@ is **declared**, not that it renders right: the `audit/` journeys (`reflow.mjs` 
 - New chart or series → render `ChartValues` from the same rows as the plot, with formatting
   (`dateText`, `valueText`) in the `lib/` view-model; the `<caption>` says what an absent row
   means (`chart-values-policy.ts`, `audit/charts.mjs`, ADR-0084).
+- Recharts plot root → `accessibilityLayer={false}`; Recharts 3's default makes the SVG an unnamed
+  tab stop (`chart-values-policy.ts`, ADR-0084).
 
 ## Forms
 
@@ -98,6 +100,10 @@ is **declared**, not that it renders right: the `audit/` journeys (`reflow.mjs` 
 
 ## Components and structure
 
+- Guard or harness that walks or transpiles TypeScript → `import ts from "@typescript/typescript6"`;
+  `typescript` 7 has no JS API and is only the compiler (`npm run typecheck`, ADR-0116).
+- Signed-in / signed-out branch → Clerk's `<Show when="signed-in">`; Core 3 removed `SignedIn`,
+  `SignedOut` and `Protect`, which still import but throw on render (`clerk-import-policy.ts`).
 - Section divider → `SectionHeader`, a heading (`level={3}` inside another section). Anything that
   opens a group is a heading; don't skip levels (`section-heading.test.ts`, ADR-0094).
 - Irreversible action → `pulse/confirm-dialog.tsx`, never `alert`/`confirm`/`prompt`. Copy is a

@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 
 // ADR-0101: a display title decides its own wrap. Left to the browser, a two-line
 // heading breaks wherever the line box runs out — which on a 320px screen regularly

@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 
 // ADR-0082: movement does not survive the reduced-motion preference. Tailwind
 // declares motion at the call site, so the rule is a source property and this
