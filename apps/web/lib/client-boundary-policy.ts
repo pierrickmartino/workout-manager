@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, normalize, resolve } from "node:path";
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 
 // A Server Component may *render* a client component and *pass* a client export along as a prop,
 // because that is what a client reference is for. It may never *call* one: on the server, an

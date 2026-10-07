@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 
 // ADR-0093: autofill and the on-screen keypad are declared by the design system's form
 // primitives, so a call site gets them by using `<Input>` / `<Select>` / `<Textarea>`.

@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 import { parseClassToken, type ClassToken } from "./motion-policy.ts";
 
 // ADR-0085: a narrow screen reaches every control without scrolling sideways.

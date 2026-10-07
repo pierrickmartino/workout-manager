@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 
 // ADR-0096: an instant is written out in the *reader's* clock, which is only knowable in the
 // reader's browser. A Server Component that calls `toLocaleString()` resolves against the

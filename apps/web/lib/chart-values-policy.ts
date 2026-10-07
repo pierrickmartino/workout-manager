@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 
 // ADR-0084: a plotted datum is not available until it is available as text. A Recharts plot
 // hands its values to the eye and the pointer only — the SVG carries no per-point text and a
