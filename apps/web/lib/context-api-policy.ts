@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 
 // #6: `components/NavigationGuardProvider.tsx` was the app's oldest context, and the one left
 // on React 18 — `useContext(Ctx)` to read it, `<Ctx.Provider value={…}>` to provide it. React

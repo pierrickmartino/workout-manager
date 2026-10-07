@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 
 // ADR-0107: a `Field` publishes its id, its descriptions and its invalid state on a context,
 // and the control inside **claims** them — by being one of the design-system primitives, or

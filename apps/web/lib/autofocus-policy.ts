@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 
 // ADR-0103: nothing takes focus on arrival. `autoFocus` is defensible on a desktop screen
 // whose single reason to exist is one field; this is a mobile-first PWA, and the one place

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 import React from "react";
 import { JSDOM } from "jsdom";
 
