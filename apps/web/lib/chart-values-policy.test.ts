@@ -27,7 +27,7 @@ test("flags a plot that renders none of its values as text", () => {
   const source = `
     import { Line, LineChart, ResponsiveContainer, Tooltip } from "recharts";
     export function Chart({ rows }: { rows: Row[] }) {
-      return <ResponsiveContainer><LineChart data={rows}><Line dataKey="v" /></LineChart></ResponsiveContainer>;
+      return <ResponsiveContainer><LineChart data={rows} accessibilityLayer={false}><Line dataKey="v" /></LineChart></ResponsiveContainer>;
     }`;
 
   // Act
@@ -44,7 +44,7 @@ test("accepts a plot paired with its values table", () => {
     import { Line, LineChart } from "recharts";
     import { ChartValues } from "@/components/pulse/chart-values";
     export function Chart({ rows }: { rows: Row[] }) {
-      return <div><LineChart data={rows}><Line dataKey="v" /></LineChart>
+      return <div><LineChart data={rows} accessibilityLayer={false}><Line dataKey="v" /></LineChart>
         <ChartValues caption="c" labelHeading="D" valueHeading="V" rows={rows} /></div>;
     }`;
 
@@ -89,7 +89,7 @@ test("reads the imported symbol through an alias", () => {
   // Arrange — renaming the import does not change what it draws
   const source = `
     import { BarChart as Plot } from "recharts";
-    export function Chart({ rows }: { rows: Row[] }) { return <Plot data={rows} />; }`;
+    export function Chart({ rows }: { rows: Row[] }) { return <Plot data={rows} accessibilityLayer={false} />; }`;
 
   // Act
   const violations = findChartValuesViolations(source, "components/pulse/x-chart.tsx");
@@ -104,7 +104,7 @@ test("is not satisfied by a comment or a string that merely names the values tab
     import { BarChart } from "recharts";
     // TODO: add ChartValues here
     const note = "<ChartValues />";
-    export function Chart({ rows }: { rows: Row[] }) { return <BarChart data={rows} />; }`;
+    export function Chart({ rows }: { rows: Row[] }) { return <BarChart data={rows} accessibilityLayer={false} />; }`;
 
   // Act
   const violations = findChartValuesViolations(source, "components/pulse/x-chart.tsx");
@@ -112,6 +112,76 @@ test("is not satisfied by a comment or a string that merely names the values tab
   // Assert
   assert.equal(violations.length, 1);
   assert.equal(violations[0].failure.kind, "missing-values");
+});
+
+test("flags a plot root that leaves Recharts' accessibility layer on", () => {
+  // Arrange — Recharts 3 turns it on by default: the SVG becomes an unnamed
+  // role="application" tab stop, the focusable-SVG model ADR-0084 rejected
+  const source = `
+    import { Line, LineChart } from "recharts";
+    import { ChartValues } from "@/components/pulse/chart-values";
+    export function Chart({ rows }: { rows: Row[] }) {
+      return <div><LineChart data={rows}><Line dataKey="v" /></LineChart>
+        <ChartValues caption="c" labelHeading="D" valueHeading="V" rows={rows} /></div>;
+    }`;
+
+  // Act
+  const violations = findChartValuesViolations(source, "components/pulse/x-chart.tsx");
+
+  // Assert
+  assert.equal(violations.length, 1);
+  assert.deepEqual(violations[0].failure, { kind: "focusable-plot", plot: "LineChart" });
+  assert.equal(violations[0].line, 5);
+});
+
+test("flags an accessibility layer switched on explicitly, through an alias", () => {
+  // Arrange — only the literal `false` turns it off; a bare attribute or `true` is on
+  const source = `
+    import { BarChart as Plot } from "recharts";
+    import { ChartValues } from "@/components/pulse/chart-values";
+    export function A({ rows }: { rows: Row[] }) {
+      return <div><Plot data={rows} accessibilityLayer /><Plot data={rows} accessibilityLayer={true} />
+        <ChartValues caption="c" labelHeading="D" valueHeading="V" rows={rows} /></div>;
+    }`;
+
+  // Act
+  const violations = findChartValuesViolations(source, "components/pulse/x-chart.tsx");
+
+  // Assert
+  assert.deepEqual(violations.map((violation) => violation.failure),
+    [{ kind: "focusable-plot", plot: "BarChart" }, { kind: "focusable-plot", plot: "BarChart" }]);
+});
+
+test("an exemption from the values table does not excuse a focusable plot", () => {
+  // Arrange — the exempt file is the aria-hidden miniature, where a tab stop does the most harm
+  const exempt = CHART_VALUES_EXEMPTIONS[0].file;
+  const source = `
+    import { BarChart } from "recharts";
+    export function Mini({ rows }: { rows: Row[] }) { return <BarChart data={rows} />; }`;
+
+  // Act
+  const violations = findChartValuesViolations(source, exempt);
+
+  // Assert
+  assert.deepEqual(violations.map((violation) => violation.failure),
+    [{ kind: "focusable-plot", plot: "BarChart" }]);
+});
+
+test("names the switch to turn off in its focusable-plot message", () => {
+  // Arrange
+  const source = `import { BarChart } from "recharts";
+    import { ChartValues } from "@/components/pulse/chart-values";
+    export function Chart({ rows }: { rows: Row[] }) {
+      return <div><BarChart data={rows} /><ChartValues caption="c" labelHeading="D" valueHeading="V" rows={rows} /></div>;
+    }`;
+
+  // Act
+  const message = formatChartValuesViolations(
+    findChartValuesViolations(source, "components/pulse/x-chart.tsx"));
+
+  // Assert
+  assert.match(message, /accessibilityLayer=\{false\}/);
+  assert.match(message, /ADR-0084/);
 });
 
 test("does not ask the values primitive to render itself", () => {

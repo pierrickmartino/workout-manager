@@ -15,7 +15,7 @@ public networking**.
 | Compose service | Railway resource | Public? | Notes |
 |---|---|---|---|
 | `db` (postgres:16) | **Postgres** plugin (managed) | no | Managed, backed up; drop the bundled `db` service. |
-| `redis` (redis:7) | **Redis** plugin (managed) | no | Backs both the generation cache and the RQ queue. |
+| `redis` (redis:8) | **Redis** plugin (managed) | no | Backs both the generation cache and the RQ queue. |
 | `api` (FastAPI) | **Service** from `apps/api` | **no** | Called only server-side by `web` — keep it private. |
 | `worker` (RQ) | **Service** from `apps/api` | no | Same image/dir as `api`, different start command. |
 | `web` (Next.js) | **Service** from `apps/web` | **yes** | The only service with a public domain. |
