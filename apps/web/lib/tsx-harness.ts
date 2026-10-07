@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { mock } from "node:test";
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 import { JSDOM } from "jsdom";
 
 // The offline harness for the handful of tests that must render real TSX: no browser, no

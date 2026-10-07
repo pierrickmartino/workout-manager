@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 
 // #8: three irreversible actions — deleting a Logged Session, the admin hard delete, and the
 // Protocol supersede one-way door — asked for confirmation with `window.confirm`.

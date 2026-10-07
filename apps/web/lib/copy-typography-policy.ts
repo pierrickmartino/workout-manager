@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "@typescript/typescript6";
 
 // ADR-0101: an apostrophe in an authored string is the typographic one (’), not the
 // typewriter quote (') that doubles as a string delimiter. The app already writes
