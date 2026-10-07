@@ -118,7 +118,7 @@ drop a dependency (#628).
 
 ### Found during the majors work
 
-- ⬜ **Every authenticated API request fetches the JWKS first**, even without a token (`get_jwks` is a FastAPI dependency). If Clerk's JWKS is unreachable, every call returns 500 instead of 401/503.
+- ⬜ **A JWKS fetch failure surfaces as a 500.** `get_jwks` is a FastAPI dependency, so it runs before the token is checked, even when there is no token. It serves a cached JWKS for 600s, but on a cold or expired cache an unreachable Clerk makes authenticated calls return 500 instead of 401/503, until a fetch succeeds.
 - ⬜ **A Trusted Types policy for the service-worker registration** (`components/ServiceWorkerRegistrar.tsx`), needed before ADR-0036 enforcement.
 - ⬜ **Make the CI checks required** with branch protection or a ruleset on `main`.
 
