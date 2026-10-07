@@ -17,6 +17,11 @@ import ts from "typescript";
 //
 // It fails closed on an unrecognised `recharts` import: the next chart type someone reaches
 // for is exactly the case a fixed list of known plots would wave through.
+//
+// It also holds every plot root to `accessibilityLayer={false}`. Recharts 3 turns the layer on
+// by default, which makes the SVG an unnamed `role="application"` tab stop with arrow-key
+// traversal — the focusable-SVG model ADR-0084 rejected in favour of the values table. Only
+// the literal `false` discharges it; a missing, bare or `{true}` attribute leaves it on.
 
 // Recharts' plot roots — importing one of these means this component draws a plot, and the
 // rule applies. The list is the trigger, not the authority: an unknown import fails closed.
@@ -35,7 +40,7 @@ const PLOT_PARTS: ReadonlySet<string> = new Set([
   "ReferenceArea", "ReferenceDot", "ReferenceLine", "ResponsiveContainer", "Scatter",
   "Sector", "Text", "Tooltip", "XAxis", "YAxis", "ZAxis",
   // Type-only exports carry no runtime behaviour.
-  "TooltipProps", "LegendProps", "DotProps",
+  "TooltipProps", "TooltipContentProps", "LegendProps", "DotProps",
 ]);
 
 // The component that discharges the rule. A plot-bearing file must render it.
@@ -70,7 +75,9 @@ export type ChartValuesFailure =
   // The file draws a plot and renders no values table.
   | { readonly kind: "missing-values"; readonly plot: string }
   // The file imports something from recharts that this module cannot classify.
-  | { readonly kind: "unknown-import"; readonly imported: string };
+  | { readonly kind: "unknown-import"; readonly imported: string }
+  // A plot root renders without `accessibilityLayer={false}`, so its SVG is a tab stop.
+  | { readonly kind: "focusable-plot"; readonly plot: string };
 
 export interface ChartValuesViolation {
   readonly file: string;
@@ -80,6 +87,8 @@ export interface ChartValuesViolation {
 
 interface RechartsImport {
   readonly name: string;
+  // The name the file uses in JSX: the alias where `as` renamed it.
+  readonly local: string;
   readonly line: number;
 }
 
@@ -98,6 +107,7 @@ function rechartsImports(tree: ts.SourceFile): readonly RechartsImport[] {
         // `import { LineChart as Plot }` — the rule is about the imported symbol, so read
         // `propertyName` where an alias renamed it.
         name: (element.propertyName ?? element.name).text,
+        local: element.name.text,
         line: tree.getLineAndCharacterOfPosition(element.getStart(tree)).line + 1,
       });
     }
@@ -117,6 +127,37 @@ function rendersValues(tree: ts.SourceFile): boolean {
     if (tag !== null && ts.isIdentifier(tag) && tag.text === VALUES_ELEMENT) {
       found = true;
       return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(tree, visit);
+  return found;
+}
+
+// Whether a JSX element spells `accessibilityLayer={false}`.
+function turnsAccessibilityLayerOff(element: ts.JsxOpeningLikeElement): boolean {
+  return element.attributes.properties.some((attribute) =>
+    ts.isJsxAttribute(attribute)
+    && ts.isIdentifier(attribute.name)
+    && attribute.name.text === "accessibilityLayer"
+    && attribute.initializer !== undefined
+    && ts.isJsxExpression(attribute.initializer)
+    && attribute.initializer.expression?.kind === ts.SyntaxKind.FalseKeyword);
+}
+
+// Every rendered plot root that leaves Recharts' accessibility layer on.
+function focusablePlots(
+  tree: ts.SourceFile,
+  plots: readonly RechartsImport[],
+): readonly { readonly plot: string; readonly line: number }[] {
+  const byLocal = new Map(plots.map((plot) => [plot.local, plot.name]));
+  const found: { plot: string; line: number }[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const plot = ts.isIdentifier(node.tagName) ? byLocal.get(node.tagName.text) : undefined;
+      if (plot !== undefined && !turnsAccessibilityLayerOff(node)) {
+        found.push({ plot, line: tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1 });
+      }
     }
     ts.forEachChild(node, visit);
   };
@@ -151,6 +192,9 @@ export function findChartValuesViolations(
       violations.push({ file, line, failure: { kind: "missing-values", plot: name } });
     }
   }
+  for (const { plot, line } of focusablePlots(tree, plots)) {
+    violations.push({ file, line, failure: { kind: "focusable-plot", plot } });
+  }
 
   return violations.filter(
     (violation) => !CHART_VALUES_EXEMPTIONS.some((exemption) => exemption.file === violation.file),
@@ -164,6 +208,11 @@ export function formatChartValuesViolations(
     if (failure.kind === "unknown-import") {
       return `${file}:${line} — recharts' ${failure.imported} is neither a known plot nor a ` +
         "known plot part; classify it in chart-values-policy.ts (PLOT_ROOTS or PLOT_PARTS)";
+    }
+    if (failure.kind === "focusable-plot") {
+      return `${file}:${line} — <${failure.plot}> leaves Recharts' accessibility layer on, so its ` +
+        "SVG is an unnamed tab stop; set accessibilityLayer={false} and let the values table " +
+        "carry the data (ADR-0084)";
     }
     return `${file}:${line} — ${failure.plot} plots values this component never renders as ` +
       `text; pair it with <${VALUES_ELEMENT}> over the same rows (ADR-0084)`;

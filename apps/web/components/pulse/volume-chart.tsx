@@ -7,7 +7,7 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-  type TooltipProps,
+  type TooltipContentProps,
 } from "recharts";
 
 import { useChartTheme } from "@/lib/use-chart-theme";
@@ -32,7 +32,13 @@ export function VolumeChart({ rows }: { rows: VolumeChartRow[] }) {
     <div>
       <div className="h-56 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
+          {/* No accessibility layer: Recharts 3 would make the SVG an unnamed tab stop, and
+              the values table below is how a keyboard reader gets the data (ADR-0084). */}
+          <LineChart
+            data={rows}
+            margin={{ top: 8, right: 8, bottom: 0, left: -12 }}
+            accessibilityLayer={false}
+          >
             <XAxis
               dataKey="label"
               tick={{ fill: muted, fontSize: 11 }}
@@ -54,7 +60,7 @@ export function VolumeChart({ rows }: { rows: VolumeChartRow[] }) {
               width={48}
               tickFormatter={(value: number) => `${Math.round(value)}`}
             />
-            <Tooltip cursor={{ stroke: border }} content={<VolumeTooltip />} />
+            <Tooltip cursor={{ stroke: border }} content={VolumeTooltip} />
             <Line
               type="monotone"
               dataKey="volume"
@@ -85,7 +91,7 @@ export function VolumeChart({ rows }: { rows: VolumeChartRow[] }) {
 // Recharts' default white box. Both strings come from the row, so the pointer and the
 // values table state the same thing at the same precision — including the year, which a
 // tooltip needs as much as the table does (the axis tick alone cannot place a point).
-function VolumeTooltip({ active, payload }: TooltipProps<number, string>) {
+function VolumeTooltip({ active, payload }: TooltipContentProps) {
   if (!active || !payload || payload.length === 0) {
     return null;
   }
