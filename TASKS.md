@@ -211,7 +211,7 @@ Source: [gript-competitive-audit](docs/research/audit/gript-competitive-audit-20
 
 Source: [view-transitions-audit](docs/research/audit/vercel/view-transitions-audit.md). Nothing implemented yet; there's no `ViewTransition` in the code.
 
-- ⬜ 0. Turn on `experimental.viewTransition` and add the type shim.
+- ✅ 0. Turn on `experimental.viewTransition` and add the type shim. Already covered by the dependency bumps: Next 16.3.8 removed the flag (VTs are on by default, so adding it now only triggers an unrecognized-key warning), and `react`/`@types/react` 19.3.0 export and type `ViewTransition` and `addTransitionType`. No shim is needed. See the audit's §1 addendum.
 - ⬜ 1. Reduced-motion CSS, its ADR, and a guard that fails closed.
 - ⬜ 2. Isolate persistent shell elements (`viewTransitionName`).
 - ⬜ 3. Workout Signature sigil morph across the three surfaces (fix the `/train` collision).
