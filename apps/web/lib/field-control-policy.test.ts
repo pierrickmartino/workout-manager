@@ -7,6 +7,7 @@ import {
   findFieldControlViolations,
   formatFieldControlViolations,
   FIELD_CONTROL_EXEMPTIONS,
+  SHARED_CONTROLS,
 } from "./field-control-policy.ts";
 
 const webRoot = resolve(import.meta.dirname, "..");
@@ -110,6 +111,25 @@ test("a control component from another file claims nothing this guard can see", 
   // Act / Assert
   assert.deepEqual(findFieldControlViolations(source, "a.tsx").map(({ problem }) => problem),
     ["unclaimed"]);
+});
+
+test("a registered shared control from another file is a claimant", () => {
+  // Arrange — `LoadValueInput` renders exactly one `Input`, which the next test holds.
+  const source = `import { LoadValueInput } from "@/components/pulse/load-value-input";
+    export const A = () => <FieldLabel label="Load"><LoadValueInput kind="absolute" unit="kg" /></FieldLabel>;`;
+
+  // Act / Assert
+  assert.deepEqual(findFieldControlViolations(source, "a.tsx"), []);
+});
+
+test("every registered shared control renders exactly one primitive", () => {
+  // A shared control is a claimant only because the one primitive inside it claims the field.
+  // Two would claim one id twice, none would leave the label pointing at nothing.
+  for (const [component, file] of Object.entries(SHARED_CONTROLS)) {
+    const source = readFileSync(resolve(webRoot, file), "utf8");
+    const primitives = source.match(/<(Input|Select|Textarea)\b/g) ?? [];
+    assert.equal(primitives.length, 1, `${component} (${file}) renders ${primitives.length} primitives`);
+  }
 });
 
 test("reports a field no control claims, because its label then points at nothing", () => {

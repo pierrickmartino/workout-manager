@@ -102,7 +102,8 @@ Sources: [polish-ui-ux-review](docs/design/polish-ui-ux-review.md), [polish-ui-u
 **P1: correctness**
 - ✅ UX-01 Volume axis ordering (resolved before the review).
 - ✅ UX-02 / #1 Mobile containment at 320px and 200% text (#570, #572, ADR-0085/0087).
-- ⬜ #2 **Kind-aware Load placeholder.** `PrescriptionFieldStack.tsx:339` still always shows `60 kg`.
+- ✅ #2 **Kind-aware Load placeholder.** The Prescription editor and the Hand-Authored performed-set rows render `LoadValueInput`: unit suffix and placeholder follow the picked kind, guarded by `lib/load-value-policy.ts` (ADR-0114 amendment).
+  - ⬜ Move `SetEntry.Load` (the stacked log forms) onto `LoadValueInput`, dropping its caller-chosen placeholder (`70`, `0`, `15`); it is the guard's one exemption.
 - ❔ #3 **Push-up prescribed as absolute kg:** generation-parse finding; not checked.
 
 **P2: clarity and IA**

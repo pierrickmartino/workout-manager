@@ -40,8 +40,6 @@ import {
   isDraftUuid,
   isPositiveInteger,
 } from "@/lib/form-draft-validation";
-import { loadValueInputMode } from "@/lib/load";
-import { weightUnitLabel } from "@/lib/weight-format";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { type DistanceUnit, type QuantityKind } from "@/lib/quantity";
 import type { PickedExercise } from "@/lib/protocol-builder";
@@ -54,6 +52,7 @@ import { SessionCompositionStrip } from "@/components/builder/session-compositio
 import { PrescriptionFieldStack } from "@/components/prescription/PrescriptionFieldStack";
 import { Field, FieldGroup, FieldLabel } from "@/components/pulse/field";
 import { FieldRow, FIELD_WIDTH } from "@/components/pulse/field-row";
+import { LoadValueInput } from "@/components/pulse/load-value-input";
 import { Alert } from "@/components/pulse/alert";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { Card } from "@/components/ui/card";
@@ -1037,11 +1036,10 @@ function ExerciseCard({
               </FieldLabel>
             )}
             <FieldLabel className={FIELD_WIDTH} label="Load">
-              <Input
-                spellCheck={false}
+              <LoadValueInput
+                kind={set.loadKind}
+                unit={unit}
                 value={set.loadValue}
-                inputMode={loadValueInputMode(set.loadKind)}
-                placeholder={`60 ${weightUnitLabel(unit)}`}
                 onChange={(event) =>
                   onChangeSet(set.key, { loadValue: event.target.value })
                 }

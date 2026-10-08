@@ -3,7 +3,7 @@
 import * as React from "react";
 import { ChevronDown, StickyNote } from "@/components/pulse/icons";
 
-import { loadKindOptions, loadValueInputMode } from "@/lib/load";
+import { loadKindOptions } from "@/lib/load";
 import {
   prescriptionSummaryChips,
   restSecondsFromInput,
@@ -24,9 +24,9 @@ import {
   type QuantityKind,
 } from "@/lib/quantity";
 import { cn } from "@/lib/utils";
-import { weightUnitLabel } from "@/lib/weight-format";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { FieldLabel } from "@/components/pulse/field";
+import { LoadValueInput } from "@/components/pulse/load-value-input";
 import { FieldRow, FIELD_WIDTH } from "@/components/pulse/field-row";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -332,11 +332,10 @@ export function PrescriptionFieldStack({
           </Select>
         </FieldLabel>
         <FieldLabel className={FIELD_WIDTH} label="Load">
-          <Input
-            spellCheck={false}
+          <LoadValueInput
+            kind={loadKind}
+            unit={weightUnit}
             value={loadValue}
-            inputMode={loadValueInputMode(loadKind)}
-            placeholder={`60 ${weightUnitLabel(weightUnit)}`}
             onChange={(event) => onChangeLoadValue(event.target.value)}
             aria-label={`Load for ${name}`}
           />
