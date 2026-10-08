@@ -29,6 +29,7 @@ import { RecentRecords } from "@/components/pulse/recent-records";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 
 // The dashboard renders the full Fitness Profile that round-tripped through
 // Postgres on the FastAPI backend. New users (incomplete profile) are sent to
@@ -208,6 +209,7 @@ export default async function DashboardPage() {
                 ADR-0071 removed from Home, not extra information. */}
             {latestPr ? (
               <Link
+                {...NAV_FORWARD}
                 href={appendFrom(`/exercises/${latestPr.exerciseId}`, "/dashboard")}
                 className={cn(
                   "flex items-center gap-3 rounded-md border border-border bg-surface px-4 py-3 transition-colors hover:border-cyan/40",

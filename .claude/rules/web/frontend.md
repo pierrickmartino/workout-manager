@@ -22,6 +22,30 @@ is **declared**, not that it renders right: the `audit/` journeys (`reflow.mjs` 
   the worst surface in every Skin and Mode; `disabled:` is exempt (`faded-text-policy.ts`, ADR-0083).
 - Animation or transform transition → `motion-reduce:animate-none` / `motion-reduce:transition-none`
   in the same class string; colour and opacity transitions are exempt (`motion-policy.ts`, ADR-0082).
+- Animation in a stylesheet → on a `::view-transition-*` pseudo-element (the reduced-motion off
+  switch in `globals.css` reaches it) or inside `@media (prefers-reduced-motion: no-preference)`;
+  never `!important`, never a `<ViewTransition>` `onEnter`/`onExit`/`onUpdate`/`onShare`
+  (`view-transition-motion-policy.ts`, ADR-0118).
+- Element that stays on screen across a navigation → a `PERSISTENT_ELEMENTS` entry, pinned with
+  `style={persistentTransitionStyle(key)}`, never a hand-written `viewTransitionName`; its group
+  is frozen in `globals.css`, and a blurred one drops its old snapshot
+  (`persistent-transition-policy.ts`, ADR-0119).
+- `<ViewTransition>` → literal `default="none"`, `share` on a named one, every class styled in
+  `globals.css`; the root stays live. A Session's sigil morphs via `WorkoutSigil morphSessionId`,
+  claimed by one surface per page; a morph target renders above any loading boundary
+  (`view-transition-boundary-policy.ts`, ADR-0120).
+- Link deeper into the hierarchy → spread `{...NAV_FORWARD}` (`NavRow`: `direction={NAV_FORWARD}`);
+  back is `BackLink`. Tab-to-tab, query swaps and related items stay untagged. Never write
+  `transitionTypes` by hand; pages add no page-level `<ViewTransition>` (`RouteTransition` is the
+  one) (`nav-direction-policy.ts`, ADR-0121). A same-path pager keys its own boundary on the page
+  (`TimelinePageTransition`, ADR-0122).
+- `loading.tsx` → return `SkeletonPage` (header outside, data region dissolves); an in-page
+  skeleton wraps in `SkeletonReveal`; never a `PageHeader` inside a reveal
+  (`skeleton-reveal-policy.ts`, ADR-0123).
+- Element that appears on its own (toast, banner) → its `<ViewTransition>` enters/exits only in a
+  Transition: set it in `startTransition`, or mount on `useDeferredValue`; never make a pinned
+  element a boundary's top node — pin a wrapper that stays mounted (`persistent-transition-policy.ts`,
+  ADR-0124).
 - New Skin or retuned `--color-base` → update `SKIN_BASE_COLORS` in `lib/theme-color.ts` in the
   same change (`theme-color.test.ts`, ADR-0102).
 

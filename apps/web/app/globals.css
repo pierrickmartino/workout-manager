@@ -903,6 +903,173 @@
   }
 }
 
+/* The view-transition off switch (ADR-0118). A view transition moves things even with
+   no CSS of ours: the browser's default cross-fades the root and morphs any named
+   element from its old box to its new one. Under the reduced-motion preference every
+   transition pseudo-element loses its animation, so a navigation swaps instantly —
+   turned off, not sped up (ADR-0082). It covers the default and every transition class
+   a later rule adds, which is why it is required before any `<ViewTransition>` exists.
+
+   `!important` so a more specific `::view-transition-old(.slide)` cannot outrank it,
+   and in `@layer base` because an important declaration in an earlier layer beats one
+   in a later layer or in none. `view-transition-motion-policy.ts` fails if any of the
+   four selectors goes missing, and rejects an important transition animation elsewhere. */
+@layer base {
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*),
+    ::view-transition-image-pair(*),
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+      animation: none !important;
+    }
+  }
+}
+
+/* Persistent shell elements (ADR-0119). Each carries its own `view-transition-name`
+   (`lib/persistent-transition.ts`), which lifts it out of the page's `root` snapshot; the
+   rules below then freeze its group so it stays put while the page transitions beneath it.
+   Chrome stacks at 100 and the sync toast at 200, so the toast never slides behind the tab
+   bar it floats over.
+
+   The header, tab bar and toast use `backdrop-blur`. A snapshot bakes the blur in, and the
+   baked blur no longer matches what moves behind it, so those three drop their old snapshot
+   and show only the live new one.
+
+   Unlayered on purpose: an unlayered rule beats any layered one, so a later broad
+   `::view-transition-*(*)` recipe in a layer cannot un-pin the chrome.
+   `persistent-transition-policy.ts` fails if any declaration here goes missing. */
+::view-transition-group(shell-header),
+::view-transition-group(shell-tab-bar),
+::view-transition-group(shell-sidebar) {
+  animation: none;
+  z-index: 100;
+}
+
+::view-transition-group(shell-sync-toast) {
+  animation: none;
+  z-index: 200;
+}
+
+::view-transition-old(shell-header),
+::view-transition-old(shell-tab-bar),
+::view-transition-old(shell-sync-toast) {
+  display: none;
+}
+
+::view-transition-new(shell-header),
+::view-transition-new(shell-tab-bar),
+::view-transition-new(shell-sync-toast) {
+  animation: none;
+}
+
+/* A live root (ADR-0120). Whenever a named element moves — a sigil morphing between pages —
+   the browser also cross-fades everything unnamed, i.e. the whole page, by default. Hiding the
+   old root and not animating the new one makes the page swap instantly, as it did before view
+   transitions, and stay live (hover, focus, taps) while only the named element moves above it.
+   Page-level motion is opted into by name, never inherited from the root.
+   `view-transition-boundary-policy.ts` fails if either declaration goes missing. */
+::view-transition-old(root) {
+  display: none;
+}
+
+::view-transition-new(root) {
+  animation: none;
+}
+
+/* The Workout Signature morph (ADR-0120): a Session's sigil travels from the card or hero the
+   reader tapped to the same mark on the Session's detail page. The browser interpolates the
+   group's size and position; this only sets the pace — a shared-element move reads at 300–500ms,
+   slower than a page change, so the eye can follow it. */
+::view-transition-group(.sigil-morph) {
+  animation-duration: 400ms;
+}
+
+/* Directional page transitions (ADR-0121). A link tagged `nav-forward` goes deeper into the
+   hierarchy — or, on the Strength pager, to the next page of an ordered sequence (ADR-0122) —
+   so the old content leaves to the left and the new arrives from the right; `nav-back` mirrors
+   it. The old page fades out quickly (150ms) and the new one fades in after
+   it (210ms, delayed 150ms), while both travel 60px over 400ms, which is enough to read as
+   direction without sweeping the screen. Untagged navigations resolve to `none` and don't move.
+   ADR-0118's off switch removes all of it under the reduced-motion preference. */
+@keyframes vt-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes vt-slide {
+  from {
+    translate: var(--slide-offset);
+  }
+}
+
+::view-transition-old(.nav-forward) {
+  --slide-offset: -60px;
+  animation:
+    150ms ease-in both vt-fade reverse,
+    400ms ease-in-out both vt-slide reverse;
+}
+
+::view-transition-new(.nav-forward) {
+  --slide-offset: 60px;
+  animation:
+    210ms ease-out 150ms both vt-fade,
+    400ms ease-in-out both vt-slide;
+}
+
+::view-transition-old(.nav-back) {
+  --slide-offset: 60px;
+  animation:
+    150ms ease-in both vt-fade reverse,
+    400ms ease-in-out both vt-slide reverse;
+}
+
+::view-transition-new(.nav-back) {
+  --slide-offset: -60px;
+  animation:
+    210ms ease-out 150ms both vt-fade,
+    400ms ease-in-out both vt-slide;
+}
+
+/* The skeleton reveal (ADR-0123). When a route's data resolves, the skeleton's snapshot fades
+   off over the real content, which is already live underneath. Opacity only: nothing moves, so
+   the reveal reads as the placeholder dissolving into what it stood for. ADR-0118's off switch
+   removes it under the reduced-motion preference along with every other transition. */
+::view-transition-old(.skeleton-out) {
+  animation: 250ms ease-out both vt-fade reverse;
+}
+
+/* Conditional mounts (ADR-0124). The sync toast and Home's resume banner appear and leave on
+   their own, outside any navigation: each rises 8px into place while fading in, and sinks back
+   while fading out. Short — a toast is news, not a scene change. The toast's group stacks with
+   the persistent overlay tier (ADR-0119) so it never animates under the tab bar it floats over;
+   the banner sits in the page and keeps its place in it. ADR-0118's off switch removes all of
+   it under the reduced-motion preference. */
+@keyframes vt-rise {
+  from {
+    translate: 0 8px;
+  }
+}
+
+::view-transition-group(.toast-in),
+::view-transition-group(.toast-out) {
+  z-index: 200;
+}
+
+::view-transition-new(.toast-in),
+::view-transition-new(.banner-in) {
+  animation:
+    200ms ease-out both vt-fade,
+    200ms ease-out both vt-rise;
+}
+
+::view-transition-old(.toast-out),
+::view-transition-old(.banner-out) {
+  animation:
+    150ms ease-in both vt-fade reverse,
+    150ms ease-in both vt-rise reverse;
+}
+
 /* Indeterminate progress sweep for the generation loader. */
 @keyframes pulse-sweep {
   0% {

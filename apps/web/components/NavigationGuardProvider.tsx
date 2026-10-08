@@ -11,9 +11,11 @@ import {
 import { useRouter } from "next/navigation";
 
 import {
+  guardedNavigateOptions,
   resolveGuardedNavigation,
   type NavigationClickInfo,
 } from "@/lib/navigation-guard";
+import { NAV_DIRECTION_ATTRIBUTE } from "@/lib/nav-direction";
 import { ConfirmDialog } from "@/components/pulse/confirm-dialog";
 
 // The generic copy for every guarded form (Q7 — one message, not per-form).
@@ -22,6 +24,11 @@ const DIALOG_MESSAGE =
   "You have unsaved changes on this page. Leave and discard them?";
 const CONFIRM_LABEL = "Discard";
 const CANCEL_LABEL = "Keep editing";
+
+interface PendingNavigation {
+  href: string;
+  options: ReturnType<typeof guardedNavigateOptions>;
+}
 
 // The one behaviour the provider exposes to descendant forms: declare whether the
 // current form has unsaved work. Registering `false` (or unmounting) stands the guard
@@ -72,9 +79,10 @@ export function NavigationGuardProvider({
   // The live dirty flag, held in a ref so the once-installed native listeners read the
   // current value without being re-bound on every dirty-state change.
   const dirtyRef = useRef(false);
-  // The pending destination captured from an intercepted click; non-null renders the
-  // dialog. Held in state because it drives the render.
-  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  // The pending navigation captured from an intercepted click — its destination and the
+  // router options that keep its direction (ADR-0121); non-null renders the dialog. Held in
+  // state because it drives the render.
+  const [pending, setPending] = useState<PendingNavigation | null>(null);
 
   const setDirty = useCallback((isDirty: boolean) => {
     dirtyRef.current = isDirty;
@@ -105,6 +113,7 @@ export function NavigationGuardProvider({
                 target: anchorEl.getAttribute("target"),
                 download: anchorEl.hasAttribute("download"),
                 origin: new URL(anchorEl.href).origin,
+                direction: anchorEl.getAttribute(NAV_DIRECTION_ATTRIBUTE),
               }
             : null,
         currentOrigin: window.location.origin,
@@ -118,7 +127,7 @@ export function NavigationGuardProvider({
       // to the dialog.
       event.preventDefault();
       event.stopPropagation();
-      setPendingHref(destination);
+      setPending({ href: destination, options: guardedNavigateOptions(info) });
     };
 
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -138,20 +147,22 @@ export function NavigationGuardProvider({
   }, []);
 
   const confirmDiscard = useCallback(() => {
-    const destination = pendingHref;
-    setPendingHref(null);
+    const navigation = pending;
+    setPending(null);
     // The user chose to discard; stand the guard down so the programmatic push (not a
     // click) is not itself intercepted.
     dirtyRef.current = false;
-    if (destination !== null) router.push(destination);
-  }, [pendingHref, router]);
+    // The intercepted link's direction rides along, so a guarded Back slides back exactly
+    // as it would have from a clean form.
+    if (navigation !== null) router.push(navigation.href, navigation.options);
+  }, [pending, router]);
 
-  const cancelDiscard = useCallback(() => setPendingHref(null), []);
+  const cancelDiscard = useCallback(() => setPending(null), []);
 
   return (
     <NavigationGuardContext value={{ setDirty }}>
       {children}
-      {pendingHref !== null ? (
+      {pending !== null ? (
         <ConfirmDialog
           title={DIALOG_TITLE}
           message={DIALOG_MESSAGE}

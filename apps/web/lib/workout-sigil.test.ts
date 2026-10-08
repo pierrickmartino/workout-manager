@@ -7,6 +7,7 @@ import {
   MAX_SIGIL_NODES,
   MIN_SIGIL_NODES,
   SIGIL_VIEWBOX,
+  sigilTransitionName,
 } from "./workout-sigil.ts";
 
 // `workout-sigil` is the pure engine behind the Workout Signature mark (CONTEXT: Workout
@@ -72,4 +73,14 @@ test("all geometry stays within the sigil viewbox", () => {
 test("rotation is a degree value in [0, 360)", () => {
   const { rotation } = computeSigilGeometry(4012, 5);
   assert.ok(rotation >= 0 && rotation < 360);
+});
+
+test("names a Session's sigil morph by its id, so every surface claims the same pair", () => {
+  // Arrange & Act
+  const fromList = sigilTransitionName(42);
+  const fromDetail = sigilTransitionName(42);
+  // Assert: one name per Session, distinct between Sessions (ADR-0120).
+  assert.equal(fromList, "session-sigil-42");
+  assert.equal(fromDetail, fromList);
+  assert.notEqual(sigilTransitionName(43), fromList);
 });

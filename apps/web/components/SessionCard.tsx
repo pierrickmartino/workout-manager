@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { WorkoutSigil } from "@/components/pulse/workout-sigil";
 import { buttonVariants } from "@/components/ui/button";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 
 interface SessionCardProps {
   model: SessionCardModel;
@@ -21,6 +22,10 @@ interface SessionCardProps {
   // with nothing but the page's <h1> (My Sessions); 3 inside a group that carries its own
   // heading (Train's "PICK UP AGAIN" panel).
   level?: 2 | 3;
+  // Whether this card's sigil claims the cross-page morph to the Session's detail (ADR-0120).
+  // Only a surface that links to the detail and renders each Session once may claim it, so
+  // the library row opts in and Train's Recent panel, which has no detail link, does not.
+  claimsSigilMorph?: boolean;
 }
 
 // The shared Session card (CONTEXT: Recent Sessions, My Sessions): the one presentational format
@@ -34,6 +39,7 @@ export function SessionCard({
   isFavorite = false,
   actions,
   level = 2,
+  claimsSigilMorph = false,
 }: SessionCardProps): React.JSX.Element {
   const Title = level === 3 ? "h3" : "h2";
   const loggedBadge =
@@ -54,6 +60,7 @@ export function SessionCard({
         exerciseCount={model.exerciseCount}
         trainingType={model.trainingType}
         size={44}
+        morphSessionId={claimsSigilMorph ? model.id : undefined}
       />
       <div className="flex min-w-0 flex-col gap-2">
         {/* A heading, not a styled <span> (ADR-0094). An <h2> by default: My Sessions heads its
@@ -96,6 +103,7 @@ export function SessionCard({
       <div className="flex items-start justify-between gap-3">
         {model.detailHref ? (
           <Link
+            {...NAV_FORWARD}
             href={model.detailHref}
             className="flex min-w-0 flex-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan/60"
           >
@@ -108,6 +116,7 @@ export function SessionCard({
             LiveSessionScreen, ADR-0012). Deliberately `secondary`: a Start that repeats once per
             row is never the list's primary emphasis. The label names the row for screen readers. */}
         <Link
+          {...NAV_FORWARD}
           href={model.startHref}
           aria-label={model.startLabel}
           className={buttonVariants({ variant: "secondary", className: "shrink-0" })}

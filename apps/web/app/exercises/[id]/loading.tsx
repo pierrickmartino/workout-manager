@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/pulse/page-header";
 import { Skeleton } from "@/components/pulse/skeleton";
+import { SkeletonPage } from "@/components/pulse/skeleton-reveal";
 
 // Layout-matched loading state for Exercise Detail (ADR-0028). Parallelizing the page's four
 // reads collapsed them to one round trip (perf audit A1) but did not make them free, so the
@@ -16,9 +17,7 @@ import { Skeleton } from "@/components/pulse/skeleton";
 // into this one's HISTORY tab.
 export default function ExerciseDetailLoading(): React.JSX.Element {
   return (
-    <section className="flex flex-col gap-7">
-      <PageHeader overline="PULSE // EXERCISE" title="Exercise" />
-
+    <SkeletonPage gap={7} header={<PageHeader overline="PULSE // EXERCISE" title="Exercise" />}>
       {/* Stat header — Personal Record + Total Sets */}
       <Skeleton className="h-20 w-full rounded-lg" />
 
@@ -30,6 +29,6 @@ export default function ExerciseDetailLoading(): React.JSX.Element {
 
       {/* ADD TO PROTOCOL */}
       <Skeleton className="h-10 w-full rounded-md" />
-    </section>
+    </SkeletonPage>
   );
 }

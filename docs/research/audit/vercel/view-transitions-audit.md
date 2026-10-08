@@ -48,6 +48,23 @@ doesn't spell out, and it is the one hard blocker:
   surface, and it means **no page in this app needs a client wrapper just to tag a
   navigation** — the links are already Server Components and stay that way.
 
+> **Addendum (2026-10-08): both P1s above are now moot. Re-verified against an installed
+> `node_modules`.** The dependency bumps since this audit cleared them:
+>
+> - `next` 16.3.8 no longer has `experimental.viewTransition`. It is gone from
+>   `config-shared.d.ts` and the config schema, and the bundled guide
+>   (`next/dist/docs/01-app/02-guides/view-transitions.md`) says "View transitions work in
+>   the App Router with no configuration." Adding the key now only triggers Next's
+>   unrecognized-`experimental`-key warning, so **don't add it**. `transitionTypes` is
+>   forwarded to `addTransitionType` unconditionally
+>   (`next/dist/client/components/app-router-instance.js`, `dispatchNavigateAction`).
+> - `react` 19.3.0 stable exports `ViewTransition` and `addTransitionType` at runtime, and
+>   `@types/react` 19.3.0 types them (`index.d.ts`, `ViewTransition` / `addTransitionType`).
+>   A probe importing both, with `<ViewTransition default="none" enter={{…}}>` and
+>   `<Link transitionTypes={…}>`, passes `tsc --noEmit` with no local declaration.
+>
+> Step 0 of §10 therefore needs no code change.
+
 ---
 
 ## 2. What this app is architecturally good at, and what it isn't

@@ -39,6 +39,7 @@ import { toDistanceBars, formatDistanceDelta } from "@/lib/distance-view";
 import { resolveAppearance } from "@/lib/appearance";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { cn } from "@/lib/utils";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 
 // The Analytics screen (F3 Slice 1–4): honest, range-scoped counts drawn straight
 // from the record side — sessions, active days, total sets, new PRs — plus the
@@ -128,6 +129,7 @@ export default async function AnalyticsPage({
             sessions, active days, and total sets will appear here.
           </p>
           <Link
+            {...NAV_FORWARD}
             href={appendFrom("/sessions/new", "/analytics")}
             className="label-mono text-[11px] text-cyan hover:underline"
           >
@@ -166,6 +168,7 @@ export default async function AnalyticsPage({
               icon={Dumbbell}
               label="Strength Analytics"
               href={appendFrom("/analytics/strength", backOrigin)}
+              direction={NAV_FORWARD}
               accent="cyan"
             />
           ) : null}
@@ -179,6 +182,7 @@ export default async function AnalyticsPage({
             icon={LineChart}
             label="Metric history"
             href={appendFrom("/metrics", backOrigin)}
+            direction={NAV_FORWARD}
             accent="violet"
           />
         </Card>

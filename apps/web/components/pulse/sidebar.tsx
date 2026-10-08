@@ -11,6 +11,7 @@ import {
   type SidebarEntryLabel,
 } from "@/lib/sidebar-nav";
 import { NAV_LABELS } from "@/lib/shell-a11y";
+import { persistentTransitionStyle } from "@/lib/persistent-transition";
 
 // The desktop half of the app's primary navigation (ADR-0088). Which entries exist and which
 // one lights lives in `@/lib/sidebar-nav`, over the same route-ownership registry the TabBar
@@ -46,6 +47,8 @@ export function Sidebar({ isAdmin }: SidebarProps): React.JSX.Element {
       // The wide sweep (`audit/wide.mjs`) asserts this is the navigation actually rendering
       // at 1440px, so it needs a handle that does not depend on reading class strings.
       data-shell-nav="sidebar"
+      // Stays put while the page transitions beside it (ADR-0119).
+      style={persistentTransitionStyle("sidebar")}
       className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-1 border-r border-border bg-surface px-3 py-6 lg:flex"
     >
       {/* No wordmark here: the header carries the one brand mark at every width, because this

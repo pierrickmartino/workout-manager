@@ -1,3 +1,5 @@
+import { parseNavDirection } from "./nav-direction.ts";
+
 // Pure decision logic for the dirty-form navigation guard (finding #4). The guard
 // intercepts in-app navigations away from a form with unsaved changes and asks the
 // user to confirm before discarding them. This module holds the one non-trivial,
@@ -30,6 +32,8 @@ export interface NavigationClickInfo {
     download: boolean;
     // The anchor's origin, compared against the current origin to reject external links.
     origin: string;
+    // The anchor's `data-nav-direction`, or null when it carries none (ADR-0121).
+    direction: string | null;
   } | null;
   // The document's current origin and full URL, used to reject cross-origin links and
   // same-page (hash-only) navigations.
@@ -71,4 +75,12 @@ export function resolveGuardedNavigation(
   if (samePage) return null;
 
   return `${destination.pathname}${destination.search}${destination.hash}`;
+}
+
+// The router options to confirm an intercepted navigation with: the direction the clicked
+// link declared, so Discard animates exactly as the same click on a clean form would
+// (view-transitions audit §7). Undefined for an untagged link — it swaps instantly either way.
+export function guardedNavigateOptions(info: NavigationClickInfo): { transitionTypes: string[] } | undefined {
+  const direction = parseNavDirection(info.anchor?.direction ?? null);
+  return direction === null ? undefined : { transitionTypes: [direction] };
 }

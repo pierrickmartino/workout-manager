@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, ClipboardCheck, Play } from "@/components/pulse/icons";
@@ -46,12 +46,15 @@ import { sessionDeleteView, DELETE_DISABLED_HINT } from "@/lib/session-delete";
 import { submitDeleteSession } from "@/app/sessions/[id]/actions";
 import { appendFrom } from "@/lib/back-target";
 import { PageHeader } from "@/components/pulse/page-header";
+import { Skeleton } from "@/components/pulse/skeleton";
+import { SkeletonReveal } from "@/components/pulse/skeleton-reveal";
 import { WorkoutSigil } from "@/components/pulse/workout-sigil";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { DataList } from "@/components/pulse/data-list";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 
 // Displays a generated standalone Session and its Exercise Prescriptions. The
 // session is user-owned: the backend returns 404 (→ notFound) for anyone else.
@@ -115,18 +118,6 @@ export default async function SessionPage({
     session.is_protocol_member ?? false,
   );
 
-  // Read the harder-Variation offer per prescription (#202). The endpoint returns
-  // `null` for anything not at a pure-bodyweight rep ceiling, so most resolve to no
-  // offer; a failed read simply shows none. Fetched in parallel to keep the page fast.
-  const offers = await Promise.all(
-    session.prescriptions.map(async (prescription) => {
-      const offer = await fetchHarderVariation(session.id, prescription.position);
-      return toHarderVariationOffer(
-        offer.success && offer.data ? offer.data.suggested_variation : null,
-      );
-    }),
-  );
-
   return (
     <section className="flex flex-col gap-7">
       <PageHeader
@@ -141,6 +132,7 @@ export default async function SessionPage({
               exerciseCount={session.prescriptions.length}
               trainingType={session.training_type}
               size={48}
+              morphSessionId={session.id}
             />
             <span className="min-w-0">{nameView.displayName}</span>
           </span>
@@ -210,6 +202,7 @@ export default async function SessionPage({
           )}
           {/* Generate another standalone Session — a periodic action, not a per-session verb. */}
           <Link
+            {...NAV_FORWARD}
             href={appendFrom("/sessions/new", `/sessions/${session.id}`)}
             className={actionSheetItemClass()}
           >
@@ -242,25 +235,18 @@ export default async function SessionPage({
         <SectionHeader meta={`${session.prescriptions.length} EXERCISES`}>
           PROTOCOL
         </SectionHeader>
-        <ol className="flex list-none flex-col gap-3 p-0">
-          {session.prescriptions.map((prescription, index) => (
-            <li key={prescription.position}>
-              <PrescriptionCard
-                prescription={prescription}
-                superset={supersetSlots[index]}
-                sessionId={session.id}
-                unit={unit}
-                index={index + 1}
-                harderVariation={offers[index]}
-                schemeModel={schemeControlModel(prescription)}
-                showScheme={!(session.is_protocol_member ?? false)}
-                showRemove={removeAffordanceList[index].showRemove}
-                canRemove={removeAffordanceList[index].canRemove}
-                dissolvesSuperset={removeAffordanceList[index].dissolvesSuperset}
-              />
-            </li>
-          ))}
-        </ol>
+        {/* The cards wait on the per-movement offer reads; everything above and below them needs
+            only the Session read, so the header — and its sigil — commits with the navigation and
+            can morph from the surface the reader tapped (ADR-0120). One placeholder per movement
+            keeps the page from jumping when the cards arrive. */}
+        <Suspense fallback={<PrescriptionListSkeleton count={session.prescriptions.length} />}>
+          <PrescriptionList
+            session={session}
+            unit={unit}
+            supersetSlots={supersetSlots}
+            removeAffordanceList={removeAffordanceList}
+          />
+        </Suspense>
         {/* Insert (ADR-0051, issue #360): hand-author one new movement onto the end of a
             standalone Session. Withheld on a Protocol-member Session — adding inside a Protocol
             stays the Builder's tail-gated Deploy path (standalone-only, ADR-0051), mirroring how
@@ -274,6 +260,7 @@ export default async function SessionPage({
           into the header "⋯ More" disclosure so this block stays focused (ADR-0071). */}
       <div className="flex flex-col gap-2.5">
         <Link
+          {...NAV_FORWARD}
           href={`/sessions/${session.id}/live`}
           className={buttonVariants({ className: "w-full" })}
         >
@@ -281,6 +268,7 @@ export default async function SessionPage({
           Start session
         </Link>
         <Link
+          {...NAV_FORWARD}
           href={`/sessions/${session.id}/log`}
           className={buttonVariants({
             variant: "secondary",
@@ -292,6 +280,68 @@ export default async function SessionPage({
         </Link>
       </div>
     </section>
+  );
+}
+
+// The Exercise Prescription cards, streamed behind the page's header. Reads the harder-Variation
+// offer per prescription (#202): the endpoint returns `null` for anything not at a
+// pure-bodyweight rep ceiling, so most resolve to no offer; a failed read simply shows none.
+// Fetched in parallel — a twelve-movement Session is a twelve-way fan-out, the slowest read on
+// any read-only screen, which is why it no longer holds the header back.
+async function PrescriptionList({
+  session,
+  unit,
+  supersetSlots,
+  removeAffordanceList,
+}: {
+  session: WorkoutSession;
+  unit: WeightUnit;
+  supersetSlots: readonly (SupersetSlot | undefined)[];
+  removeAffordanceList: ReturnType<typeof removeAffordances>;
+}) {
+  const offers = await Promise.all(
+    session.prescriptions.map(async (prescription) => {
+      const offer = await fetchHarderVariation(session.id, prescription.position);
+      return toHarderVariationOffer(
+        offer.success && offer.data ? offer.data.suggested_variation : null,
+      );
+    }),
+  );
+
+  return (
+    <ol className="flex list-none flex-col gap-3 p-0">
+      {session.prescriptions.map((prescription, index) => (
+        <li key={prescription.position}>
+          <PrescriptionCard
+            prescription={prescription}
+            superset={supersetSlots[index]}
+            sessionId={session.id}
+            unit={unit}
+            index={index + 1}
+            harderVariation={offers[index]}
+            schemeModel={schemeControlModel(prescription)}
+            showScheme={!(session.is_protocol_member ?? false)}
+            showRemove={removeAffordanceList[index].showRemove}
+            canRemove={removeAffordanceList[index].canRemove}
+            dissolvesSuperset={removeAffordanceList[index].dissolvesSuperset}
+          />
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+// Stands in for the cards while the offers load: same list, same gap, one block per movement.
+// It dissolves over the cards when they arrive (ADR-0123).
+function PrescriptionListSkeleton({ count }: { count: number }) {
+  return (
+    <SkeletonReveal>
+      <div className="flex flex-col gap-3">
+        {Array.from({ length: count }, (_, index) => (
+          <Skeleton key={index} className="h-28 w-full rounded-lg" />
+        ))}
+      </div>
+    </SkeletonReveal>
   );
 }
 
@@ -335,6 +385,7 @@ function PrescriptionCard({
         <div className="flex flex-1 flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-2">
             <Link
+              {...NAV_FORWARD}
               href={appendFrom(
                 `/exercises/${prescription.exercise_id}`,
                 `/sessions/${sessionId}`,

@@ -10,6 +10,7 @@ import { BackLink } from "@/components/pulse/back-link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LoggedSetTable } from "@/components/LoggedSetTable";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 
 interface LogDetailPageProps {
   params: Promise<{ id: string }>;
@@ -63,6 +64,7 @@ export default async function LogDetailPage({ params }: LogDetailPageProps) {
             </span>
           ) : null}
           <Link
+            {...NAV_FORWARD}
             href={detail.editHref}
             className="label-mono ml-auto inline-flex items-center gap-1.5 text-[11px] text-cyan hover:underline"
           >
@@ -71,6 +73,7 @@ export default async function LogDetailPage({ params }: LogDetailPageProps) {
           </Link>
           {detail.sourceSessionHref !== null ? (
             <Link
+              {...NAV_FORWARD}
               href={detail.sourceSessionHref}
               className="label-mono text-[11px] text-cyan hover:underline"
             >
@@ -101,6 +104,7 @@ export default async function LogDetailPage({ params }: LogDetailPageProps) {
               live session or log it after the fact. No copy is made.
             </p>
             <Link
+              {...NAV_FORWARD}
               href={detail.repeatHref}
               className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-cyan/40 bg-cyan-dim px-4 py-2.5 font-mono text-[13px] text-cyan hover:border-cyan"
             >
@@ -116,6 +120,7 @@ export default async function LogDetailPage({ params }: LogDetailPageProps) {
               won&apos;t change your original record.
             </p>
             <Link
+              {...NAV_FORWARD}
               href={detail.captureHref}
               className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-cyan/40 bg-cyan-dim px-4 py-2.5 font-mono text-[13px] text-cyan hover:border-cyan"
             >

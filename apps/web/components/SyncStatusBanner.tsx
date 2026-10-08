@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useRef, useState, ViewTransition } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -13,6 +13,7 @@ import { useSyncStatus } from "@/lib/use-sync-status";
 import { hasQueuedWork, type SyncState } from "@/lib/sync-state";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { persistentTransitionStyle } from "@/lib/persistent-transition";
 
 // The honest connectivity + sync surface (issue #414 — ADR-0060). Mounted once under the
 // signed-in shell alongside the OutboxSyncRegistrar, it renders the five distinct states the
@@ -56,25 +57,39 @@ export function SyncStatusBanner(): React.JSX.Element | null {
   }, [state]);
 
   // Quiet: all clear and no recent confirmation to show.
-  if (state === "synced" && !showSynced) return null;
+  const visible = state !== "synced" || showSynced;
+  // The toast mounts and unmounts on a deferred copy of that decision (ADR-0124). A deferred
+  // re-render is a Transition, so the toast's enter and exit animate; its inputs (connectivity,
+  // the outbox read, the confirmation timer) are plain state updates that could not be. The lag
+  // is one render, and on first mount the deferred value is the real one, so a toast that is
+  // already true at load simply appears.
+  const shown = useDeferredValue(visible);
 
   return (
     <div
       // `bottom-20` clears the fixed TabBar. At `lg:` the TabBar is gone (ADR-0088), so the
       // clearance goes with it and the toast sits at the bottom edge like any other.
       className="pointer-events-none fixed inset-x-0 bottom-20 z-40 flex justify-center px-6 lg:bottom-6"
-      // A status region: announced politely, never stealing focus.
+      // Floats above the page and the chrome while a navigation transitions (ADR-0119).
+      style={persistentTransitionStyle("syncToast")}
+      // A status region: announced politely, never stealing focus. Always mounted, empty while
+      // quiet, so the region exists before its message does — the pinned name above stays on a
+      // node that outlives the toast, and the body animates inside it (ADR-0124).
       role="status"
       aria-live="polite"
     >
-      <BannerBody
-        state={state}
-        pendingCount={summary.pending + summary.syncing}
-        failedCount={summary.failed}
-        offlineQueued={hasQueuedWork(summary)}
-        lastSyncedAt={lastSyncedAt}
-        onRetry={retry}
-      />
+      {shown ? (
+        <ViewTransition enter="toast-in" exit="toast-out" default="none">
+          <BannerBody
+            state={state}
+            pendingCount={summary.pending + summary.syncing}
+            failedCount={summary.failed}
+            offlineQueued={hasQueuedWork(summary)}
+            lastSyncedAt={lastSyncedAt}
+            onRetry={retry}
+          />
+        </ViewTransition>
+      ) : null}
     </div>
   );
 }

@@ -19,6 +19,8 @@ import { StrengthTrajectories } from "@/components/analytics/strength-trajectori
 import { MuscleBalance } from "@/components/analytics/muscle-balance";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { NAV_BACK, NAV_FORWARD, type NavDirectionProps } from "@/lib/nav-direction";
+import { TimelinePageTransition } from "@/components/analytics/timeline-page-transition";
 
 // The default PR-timeline page size — kept in step with the endpoint's default so the
 // first page matches whether or not a ?offset= is supplied.
@@ -135,29 +137,31 @@ function PersonalRecordTimeline({
   return (
     <div className="flex flex-col gap-4">
       <SectionHeader>PERSONAL RECORDS</SectionHeader>
-      <Card className="divide-y divide-border overflow-hidden py-0">
-        {view.rows.map((row, index) => (
-          <div
-            key={`${row.exercise}-${row.date}-${index}`}
-            className="flex items-center gap-3.5 px-4 py-3.5"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm bg-cyan-dim text-cyan">
-              <Trophy className="h-[18px] w-[18px]" aria-hidden />
-            </span>
-            <div className="flex flex-1 flex-col gap-0.5">
-              <span className="font-sans text-[15px] font-medium text-text-primary">
-                {row.exercise}
+      <TimelinePageTransition offset={offset}>
+        <Card className="divide-y divide-border overflow-hidden py-0">
+          {view.rows.map((row, index) => (
+            <div
+              key={`${row.exercise}-${row.date}-${index}`}
+              className="flex items-center gap-3.5 px-4 py-3.5"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm bg-cyan-dim text-cyan">
+                <Trophy className="h-[18px] w-[18px]" aria-hidden />
               </span>
-              <span className="label-mono text-[11px] text-text-muted">
-                {row.gain} · {row.date}
+              <div className="flex flex-1 flex-col gap-0.5">
+                <span className="font-sans text-[15px] font-medium text-text-primary">
+                  {row.exercise}
+                </span>
+                <span className="label-mono text-[11px] text-text-muted">
+                  {row.gain} · {row.date}
+                </span>
+              </div>
+              <span className="font-display text-lg font-semibold text-text-primary tabular-nums">
+                {row.estimate}
               </span>
             </div>
-            <span className="font-display text-lg font-semibold text-text-primary tabular-nums">
-              {row.estimate}
-            </span>
-          </div>
-        ))}
-      </Card>
+          ))}
+        </Card>
+      </TimelinePageTransition>
       <TimelinePager view={view} offset={offset} from={from} />
     </div>
   );
@@ -189,12 +193,14 @@ function TimelinePager({
       <PagerLink
         href={appendFrom(`/analytics/strength?offset=${previousOffset}`, from)}
         enabled={view.hasPreviousPage}
+        direction={NAV_BACK}
       >
         ← Newer
       </PagerLink>
       <PagerLink
         href={appendFrom(`/analytics/strength?offset=${nextOffset}`, from)}
         enabled={view.hasNextPage}
+        direction={NAV_FORWARD}
       >
         Older →
       </PagerLink>
@@ -205,10 +211,13 @@ function TimelinePager({
 function PagerLink({
   href,
   enabled,
+  direction,
   children,
 }: {
   href: string;
   enabled: boolean;
+  // Which way the next page of records arrives (ADR-0122).
+  direction: NavDirectionProps;
   children: React.ReactNode;
 }) {
   const className = cn(
@@ -219,7 +228,7 @@ function PagerLink({
   );
 
   return enabled ? (
-    <Link href={href} className={className}>
+    <Link href={href} {...direction} className={className}>
       {children}
     </Link>
   ) : (

@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/pulse/page-header";
 import { Skeleton } from "@/components/pulse/skeleton";
+import { SkeletonPage } from "@/components/pulse/skeleton-reveal";
 
 // Layout-matched loading state for the admin catalog browser (ADR-0028), another of "the admin
 // pages" the perf audit names (A4's related backfill). This one is the longest admin wait: the
@@ -10,9 +11,7 @@ import { Skeleton } from "@/components/pulse/skeleton";
 // filter bar over a long row list, not the admin home's two cards.
 export default function AdminExercisesLoading(): React.JSX.Element {
   return (
-    <section className="flex flex-col gap-6">
-      <PageHeader overline="PULSE // ADMIN" title="Exercise catalog" />
-
+    <SkeletonPage gap={6} header={<PageHeader overline="PULSE // ADMIN" title="Exercise catalog" />}>
       {/* The descriptive paragraph above the browser */}
       <Skeleton className="h-14 w-full" />
 
@@ -28,6 +27,6 @@ export default function AdminExercisesLoading(): React.JSX.Element {
         <Skeleton className="h-12 w-full rounded-sm" />
         <Skeleton className="h-12 w-full rounded-sm" />
       </div>
-    </section>
+    </SkeletonPage>
   );
 }

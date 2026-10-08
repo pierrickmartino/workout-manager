@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ChevronRight, type LucideIcon } from "@/components/pulse/icons";
 
 import { cn } from "@/lib/utils";
+import type { NavDirectionProps } from "@/lib/nav-direction";
 
 interface NavRowProps {
   icon: LucideIcon;
@@ -13,6 +14,10 @@ interface NavRowProps {
   // Accent for the icon tile; defaults to the neutral elevated look.
   accent?: "cyan" | "violet" | "magenta" | "blue" | "neutral";
   valueClassName?: string;
+  // The direction this row navigates (ADR-0121): `NAV_FORWARD` for a drill-down into the
+  // section it sits in. Left unset for a row that crosses to another tab, which is lateral and
+  // swaps instantly.
+  direction?: NavDirectionProps;
 }
 
 const ICON_TILE: Record<NonNullable<NavRowProps["accent"]>, string> = {
@@ -33,10 +38,12 @@ export function NavRow({
   value,
   accent = "neutral",
   valueClassName,
+  direction,
 }: NavRowProps): React.JSX.Element {
   return (
     <Link
       href={href}
+      {...direction}
       className="group flex items-center gap-3.5 px-4 py-3.5 transition-colors hover:bg-elevated/50"
     >
       <span
