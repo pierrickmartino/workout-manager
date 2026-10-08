@@ -37,7 +37,8 @@ is **declared**, not that it renders right: the `audit/` journeys (`reflow.mjs` 
 - Link deeper into the hierarchy → spread `{...NAV_FORWARD}` (`NavRow`: `direction={NAV_FORWARD}`);
   back is `BackLink`. Tab-to-tab, query swaps and related items stay untagged. Never write
   `transitionTypes` by hand; pages add no page-level `<ViewTransition>` (`RouteTransition` is the
-  one) (`nav-direction-policy.ts`, ADR-0121).
+  one) (`nav-direction-policy.ts`, ADR-0121). A same-path pager keys its own boundary on the page
+  (`TimelinePageTransition`, ADR-0122).
 - New Skin or retuned `--color-base` → update `SKIN_BASE_COLORS` in `lib/theme-color.ts` in the
   same change (`theme-color.test.ts`, ADR-0102).
 
