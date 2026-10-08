@@ -24,6 +24,7 @@ import { FitnessLevelStandings } from "@/components/pulse/fitness-level-standing
 import { Bento, BentoTile } from "@/components/pulse/bento";
 import { Alert } from "@/components/pulse/alert";
 import { Card } from "@/components/ui/card";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 
 // How many badges the compact Profile summary shows before the "see all" affordance
 // reaches the full catalog — keeping the summary short (ADR-0019).
@@ -128,6 +129,7 @@ export default async function ProfilePage() {
           meta={
             cards.length > SUMMARY_COUNT ? (
               <Link
+                {...NAV_FORWARD}
                 href="/profile/achievements"
                 className="transition-colors hover:text-cyan"
               >
@@ -179,6 +181,7 @@ export default async function ProfilePage() {
             icon={User}
             label="Edit fitness profile"
             href="/profile/edit"
+            direction={NAV_FORWARD}
             accent="cyan"
           />
           {/* Admin-only: the dedicated /admin home for power features — publishing the
@@ -189,6 +192,7 @@ export default async function ProfilePage() {
               icon={ShieldCheck}
               label="Admin"
               href="/admin"
+              direction={NAV_FORWARD}
               accent="violet"
             />
           ) : null}

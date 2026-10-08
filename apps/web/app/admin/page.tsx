@@ -10,6 +10,7 @@ import { SectionHeader } from "@/components/pulse/section-header";
 import { NavRow } from "@/components/pulse/nav-row";
 import { BackLink } from "@/components/pulse/back-link";
 import { Card } from "@/components/ui/card";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 
 // The admin home (docs/redesign-ia.md, ADR-0071): a dedicated surface for the account's power
 // features, reached by an admin-only nav row on Profile rather than a fifth tab. It publishes
@@ -45,6 +46,7 @@ export default async function AdminPage() {
             icon={Dumbbell}
             label="Exercise catalog"
             href="/admin/exercises"
+            direction={NAV_FORWARD}
             value="BROWSE"
             accent="cyan"
           />

@@ -53,6 +53,7 @@ import { DataList } from "@/components/pulse/data-list";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 
 // Displays a generated standalone Session and its Exercise Prescriptions. The
 // session is user-owned: the backend returns 404 (→ notFound) for anyone else.
@@ -200,6 +201,7 @@ export default async function SessionPage({
           )}
           {/* Generate another standalone Session — a periodic action, not a per-session verb. */}
           <Link
+            {...NAV_FORWARD}
             href={appendFrom("/sessions/new", `/sessions/${session.id}`)}
             className={actionSheetItemClass()}
           >
@@ -257,6 +259,7 @@ export default async function SessionPage({
           into the header "⋯ More" disclosure so this block stays focused (ADR-0071). */}
       <div className="flex flex-col gap-2.5">
         <Link
+          {...NAV_FORWARD}
           href={`/sessions/${session.id}/live`}
           className={buttonVariants({ className: "w-full" })}
         >
@@ -264,6 +267,7 @@ export default async function SessionPage({
           Start session
         </Link>
         <Link
+          {...NAV_FORWARD}
           href={`/sessions/${session.id}/log`}
           className={buttonVariants({
             variant: "secondary",
@@ -377,6 +381,7 @@ function PrescriptionCard({
         <div className="flex flex-1 flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-2">
             <Link
+              {...NAV_FORWARD}
               href={appendFrom(
                 `/exercises/${prescription.exercise_id}`,
                 `/sessions/${sessionId}`,

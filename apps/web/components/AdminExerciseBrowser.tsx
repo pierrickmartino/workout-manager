@@ -21,6 +21,7 @@ import { replaceFilterQuery } from "@/lib/filter-url";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 
 // The closed Provenance and Completeness vocabularies as the facet dropdowns offer them
 // (CONTEXT: Provenance; ADR-0041). Kept here as UI options; the pure view-model owns the
@@ -239,6 +240,7 @@ function AdminExerciseRowLink({
   return (
     <Link
       href={view.href}
+      {...NAV_FORWARD}
       className="group list-row-defer flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-elevated/50"
     >
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">

@@ -34,6 +34,10 @@ is **declared**, not that it renders right: the `audit/` journeys (`reflow.mjs` 
   `globals.css`; the root stays live. A Session's sigil morphs via `WorkoutSigil morphSessionId`,
   claimed by one surface per page; a morph target renders above any loading boundary
   (`view-transition-boundary-policy.ts`, ADR-0120).
+- Link deeper into the hierarchy → spread `{...NAV_FORWARD}` (`NavRow`: `direction={NAV_FORWARD}`);
+  back is `BackLink`. Tab-to-tab, query swaps and related items stay untagged. Never write
+  `transitionTypes` by hand; pages add no page-level `<ViewTransition>` (`RouteTransition` is the
+  one) (`nav-direction-policy.ts`, ADR-0121).
 - New Skin or retuned `--color-base` → update `SKIN_BASE_COLORS` in `lib/theme-color.ts` in the
   same change (`theme-color.test.ts`, ADR-0102).
 

@@ -18,6 +18,7 @@ import { BackLink } from "@/components/pulse/back-link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 
 // Displays a user-owned multi-week Protocol: its self-paced next Session and the
 // full week-by-week schedule. Upcoming Sessions show the recommended load already
@@ -66,6 +67,7 @@ export default async function ProtocolPage({
           <div className="flex items-center gap-3">
             <Badge variant="cyan">{protocol.weeks}W</Badge>
             <Link
+              {...NAV_FORWARD}
               href={`/protocols/${protocol.id}/edit`}
               className="label-mono text-[10px] text-text-muted transition-colors hover:text-cyan"
             >
@@ -164,12 +166,13 @@ function NextUp({
       <SessionCard session={next} index={next.day} isNext protocolId={protocolId} />
       <div className="flex flex-col gap-2.5">
         {startHref ? (
-          <Link href={startHref} className={buttonVariants({ className: "w-full" })}>
+          <Link {...NAV_FORWARD} href={startHref} className={buttonVariants({ className: "w-full" })}>
             <Play className="h-4 w-4" />
             Start session
           </Link>
         ) : null}
         <Link
+          {...NAV_FORWARD}
           href={detailHref}
           className={buttonVariants({
             variant: "secondary",
@@ -226,6 +229,7 @@ function SessionCard({
         <div className="flex flex-1 flex-col gap-0.5">
           {headerHref ? (
             <Link
+              {...NAV_FORWARD}
               href={headerHref}
               className="font-display text-[15px] font-semibold text-text-primary transition-colors hover:text-cyan"
             >
@@ -267,6 +271,7 @@ function PrescriptionRow({
   return (
     <div className="flex items-center justify-between gap-3">
       <Link
+        {...NAV_FORWARD}
         href={appendFrom(
           `/exercises/${prescription.exercise_id}`,
           `/protocols/${protocolId}`,

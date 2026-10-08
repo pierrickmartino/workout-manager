@@ -14,6 +14,7 @@ import { ClerkProvider, Show, SignInButton } from "@clerk/nextjs";
 import { TabBar } from "@/components/pulse/tab-bar";
 import { Sidebar } from "@/components/pulse/sidebar";
 import { NavigationGuardProvider } from "@/components/NavigationGuardProvider";
+import { RouteTransition } from "@/components/RouteTransition";
 import { OutboxSyncRegistrar } from "@/components/OutboxSyncRegistrar";
 import { SyncStatusBanner } from "@/components/SyncStatusBanner";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
@@ -264,8 +265,11 @@ export default async function RootLayout({
                 {/* Guards the authoring/correction forms against discarding unsaved work on
                     navigation (finding #4). Descendant forms opt in via useNavigationGuard;
                     the click interceptor it installs is document-wide, so it also catches the
-                    TabBar and header links rendered outside this subtree. */}
-                <NavigationGuardProvider>{children}</NavigationGuardProvider>
+                    TabBar and header links rendered outside this subtree. Inside it, the page
+                    slides forward or back on a tagged navigation (ADR-0121). */}
+                <NavigationGuardProvider>
+                  <RouteTransition>{children}</RouteTransition>
+                </NavigationGuardProvider>
               </div>
             </main>
           </div>

@@ -7,6 +7,7 @@ import { StatRow } from "@/components/pulse/stat-row";
 import { WorkoutSigil } from "@/components/pulse/workout-sigil";
 import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 
 interface SessionHeroProps {
   protocol: ProtocolProgress;
@@ -78,6 +79,7 @@ export function SessionHero({ protocol }: SessionHeroProps): React.JSX.Element {
       {next ? (
         <div className="flex flex-col gap-2.5">
           <Link
+            {...NAV_FORWARD}
             href={`/sessions/${next.session_id}/live`}
             className={buttonVariants({ className: "w-full" })}
           >
@@ -85,6 +87,7 @@ export function SessionHero({ protocol }: SessionHeroProps): React.JSX.Element {
             Start session
           </Link>
           <Link
+            {...NAV_FORWARD}
             href={`/sessions/${next.session_id}`}
             className={buttonVariants({
               variant: "secondary",

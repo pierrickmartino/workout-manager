@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { WorkoutSigil } from "@/components/pulse/workout-sigil";
 import { buttonVariants } from "@/components/ui/button";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 
 interface SessionCardProps {
   model: SessionCardModel;
@@ -102,6 +103,7 @@ export function SessionCard({
       <div className="flex items-start justify-between gap-3">
         {model.detailHref ? (
           <Link
+            {...NAV_FORWARD}
             href={model.detailHref}
             className="flex min-w-0 flex-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan/60"
           >
@@ -114,6 +116,7 @@ export function SessionCard({
             LiveSessionScreen, ADR-0012). Deliberately `secondary`: a Start that repeats once per
             row is never the list's primary emphasis. The label names the row for screen readers. */}
         <Link
+          {...NAV_FORWARD}
           href={model.startHref}
           aria-label={model.startLabel}
           className={buttonVariants({ variant: "secondary", className: "shrink-0" })}

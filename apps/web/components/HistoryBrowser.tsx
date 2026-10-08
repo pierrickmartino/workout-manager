@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { DeleteLogControl } from "@/components/DeleteLogControl";
 import { OutcomeToggle } from "@/components/OutcomeToggle";
 import { LoggedSetTable } from "@/components/LoggedSetTable";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 
 // The interactive History screen: search by exercise + filter by Training Type over the
 // record (ADR-0031). Filtering is entirely client-side over the already-fetched feed (Q4) —
@@ -92,6 +93,7 @@ export function HistoryBrowser({
         action={
           <div className="flex flex-wrap items-center gap-3">
             <Link
+              {...NAV_FORWARD}
               href="/logs/new"
               className="label-mono text-[11px] text-cyan hover:underline"
             >
@@ -273,21 +275,21 @@ function LoggedSessionCard({
               uncompleteReason={uncompleteReason}
             />
           ) : null}
-          <Link href={`/history/${entry.id}`} className={pillClass}>
+          <Link {...NAV_FORWARD} href={`/history/${entry.id}`} className={pillClass}>
             Open
           </Link>
           {reuse.canRepeat && reuse.repeatHref !== null ? (
-            <Link href={reuse.repeatHref} className={reusePillClass}>
+            <Link {...NAV_FORWARD} href={reuse.repeatHref} className={reusePillClass}>
               <Repeat className="h-3 w-3" />
               Repeat
             </Link>
           ) : (
-            <Link href={reuse.captureHref} className={reusePillClass}>
+            <Link {...NAV_FORWARD} href={reuse.captureHref} className={reusePillClass}>
               <Copy className="h-3 w-3" />
               Capture
             </Link>
           )}
-          <Link href={`/history/${entry.id}/edit`} className={pillClass}>
+          <Link {...NAV_FORWARD} href={`/history/${entry.id}/edit`} className={pillClass}>
             Edit
           </Link>
           <DeleteLogControl
