@@ -156,6 +156,20 @@ the time. This also means the reach of a Calibration shrinks as the user trains 
 in my Protocol" is really "each Session in my un-performed tail", and that is the invariant, not
 a limitation to engineer around.
 
+### Uncertain results
+
+A post that throws (network gone, a proxy 5xx, a reply lost after the commit) is **uncertain**,
+not failed: the client cannot tell a failure before the commit from a lost acknowledgement after
+it. The control therefore never asserts either. It re-reads the stored offset once
+(`readCurrentCalibration`) and compares it with the target it posted. If they match, the post
+saved and the control stays silent like any success, then quietly re-posts the same target to
+recover the Sensitive Constraint caveat, which only the calibrate response carries. If they
+differ, the post did not save and the control says so, with a retry. If the read fails too, it
+says it **could not confirm**, as a status rather than an alarm, with a retry. A retry re-posts
+the **retained absolute target**, never one recomputed from a possibly stale readout, so it
+cannot double-step; a new tap replaces that target, and a result from an older attempt is
+dropped. The pure outcome table is `reconcileCalibration` in `lib/calibration-control.ts`.
+
 ## What this does not claim
 
 - **It is not a difficulty score.** There is no stored or displayed absolute figure, and the

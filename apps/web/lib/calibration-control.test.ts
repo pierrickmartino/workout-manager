@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 
 import {
   CALIBRATION_EFFECT,
+  CALIBRATION_NOT_SAVED,
+  CALIBRATION_UNCONFIRMED,
   SENSITIVE_CAVEAT,
+  calibrationNotice,
+  reconcileCalibration,
   calibrationControlView,
   calibrationReadout,
   calibrationSummary,
@@ -217,7 +221,41 @@ test("every string the control shows is typeset with a real apostrophe", () => {
     calibrationControlView(makeProtocol({ calibration: 3 })).railNote ?? "",
     calibrationSummary(0),
     CALIBRATION_EFFECT,
+    CALIBRATION_NOT_SAVED,
+    CALIBRATION_UNCONFIRMED,
   ].join(" ");
 
   assert.ok(!/[a-z]'[a-z]/i.test(copy), "a straight apostrophe is present");
+});
+
+// --- an uncertain result: the canonical read settles what the lost reply could not -------
+
+test("a re-read that shows the target means the re-pitch saved and only the reply was lost", () => {
+  assert.equal(reconcileCalibration(2, 2), "saved");
+});
+
+test("a re-read that shows another offset means the re-pitch did not save", () => {
+  assert.equal(reconcileCalibration(2, 1), "not-saved");
+});
+
+test("a re-read that fails too leaves the result unconfirmed", () => {
+  assert.equal(reconcileCalibration(2, null), "unconfirmed");
+});
+
+test("a saved re-pitch is silent, as a normal one is", () => {
+  assert.equal(calibrationNotice("saved"), null);
+});
+
+test("a re-pitch known not to have saved says so as an error", () => {
+  assert.deepEqual(calibrationNotice("not-saved"), {
+    tone: "error",
+    message: CALIBRATION_NOT_SAVED,
+  });
+});
+
+test("an unconfirmed re-pitch is a status, not an alarm, and says the screen may be stale", () => {
+  const notice = calibrationNotice("unconfirmed");
+
+  assert.deepEqual(notice, { tone: "info", message: CALIBRATION_UNCONFIRMED });
+  assert.match(CALIBRATION_UNCONFIRMED, /couldn’t confirm/);
 });

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { calibrateProtocol } from "@/lib/protocols";
+import { calibrateProtocol, fetchProtocol } from "@/lib/protocols";
 
 // The thin server action behind the Calibration control (ADR-0111). It posts the offset the
 // user wants to stand at and revalidates Home, which reads the Protocol server-side — so the
@@ -52,4 +52,29 @@ export async function calibrateCurrentProtocol(
     atRail: result.data.calibration_at_rail ?? false,
     sensitiveCaveat: result.data.calibration_sensitive_caveat ?? false,
   };
+}
+
+export interface CalibrationReadResult {
+  // The offset the server has stored, or `null` when the read did not answer.
+  calibration: number | null;
+}
+
+// The canonical re-read behind an uncertain calibrate (ADR-0111, "Uncertain results"): when
+// the post threw, the control cannot tell a failure before the commit from a lost reply after
+// it, so it asks the server what is stored. This never throws for the backend leg — a failed
+// read is itself an answer ("unconfirmed") — and the control still catches the browser leg.
+export async function readCurrentCalibration(
+  protocolId: number,
+): Promise<CalibrationReadResult> {
+  try {
+    const result = await fetchProtocol(protocolId);
+    if (!result.success || !result.data) {
+      return { calibration: null };
+    }
+    // If the lost post did commit, Home is still showing the old pitch; re-read it.
+    revalidatePath("/dashboard");
+    return { calibration: result.data.calibration };
+  } catch {
+    return { calibration: null };
+  }
 }

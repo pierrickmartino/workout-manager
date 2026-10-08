@@ -128,6 +128,57 @@ export function calibrationControlView(
   };
 }
 
+// --- an uncertain result ------------------------------------------------------------------
+//
+// A thrown post is not an answer: the request may have failed before the server committed, or
+// committed and lost its reply. The control re-reads the stored offset and compares it with the
+// target it posted (ADR-0111, "Uncertain results").
+
+// What a canonical re-read says about a post whose reply never arrived.
+export type CalibrationReconciliation = "saved" | "not-saved" | "unconfirmed";
+
+// What the control says after a post it could not see land.
+export interface CalibrationNotice {
+  // `error` when the re-pitch is known not to have saved; `info` — a polite status, not an
+  // alarm — when nothing is known to have failed.
+  tone: "error" | "info";
+  message: string;
+}
+
+export const CALIBRATION_NOT_SAVED =
+  "Your change didn’t save. Your remaining sessions are as shown.";
+
+export const CALIBRATION_UNCONFIRMED =
+  "We couldn’t confirm your change — check your connection. Your sessions may not match " +
+  "what’s shown.";
+
+// Compare the target a lost post asked for with the offset a re-read found stored, or `null`
+// when the re-read failed too.
+export function reconcileCalibration(
+  target: number,
+  stored: number | null,
+): CalibrationReconciliation {
+  if (stored === null) {
+    return "unconfirmed";
+  }
+  return stored === target ? "saved" : "not-saved";
+}
+
+// The notice for a reconciliation. A re-pitch that saved is silent, as a normal one is: the
+// re-pitched plan on screen is its own evidence.
+export function calibrationNotice(
+  outcome: CalibrationReconciliation,
+): CalibrationNotice | null {
+  switch (outcome) {
+    case "saved":
+      return null;
+    case "not-saved":
+      return { tone: "error", message: CALIBRATION_NOT_SAVED };
+    case "unconfirmed":
+      return { tone: "info", message: CALIBRATION_UNCONFIRMED };
+  }
+}
+
 function step(target: number | null): CalibrationStep {
   return { target, enabled: target !== null };
 }
