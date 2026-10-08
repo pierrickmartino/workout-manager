@@ -1,6 +1,9 @@
+import { ViewTransition } from "react";
+
 import { cn } from "@/lib/utils";
 import {
   computeSigilGeometry,
+  sigilTransitionName,
   SIGIL_VIEWBOX,
 } from "@/lib/workout-sigil";
 import {
@@ -25,6 +28,10 @@ interface WorkoutSigilProps {
   // Rendered medallion size in px (square). Defaults to a list-row size.
   size?: number;
   className?: string;
+  // The Session whose mark this is, when this surface claims the cross-page morph (ADR-0120).
+  // Left unset where the same Session could render twice on one page, or where the seed is not
+  // a Session id (the Home hero's Protocol fallback): two claims of one name break the morph.
+  morphSessionId?: number;
 }
 
 export function WorkoutSigil({
@@ -33,6 +40,7 @@ export function WorkoutSigil({
   trainingType,
   size = 46,
   className,
+  morphSessionId,
 }: WorkoutSigilProps): React.JSX.Element {
   const accentVar = trainingTypeAccentVar(trainingType);
   const accent = `var(${accentVar})`;
@@ -44,7 +52,7 @@ export function WorkoutSigil({
   const polygonPoints = polygon.map((point) => `${point.x},${point.y}`).join(" ");
   const nodePath = nodes.map((node) => `${node.x},${node.y}`).join(" ");
 
-  return (
+  const medallion = (
     <span
       className={cn(
         "flex shrink-0 items-center justify-center rounded-md border",
@@ -92,5 +100,14 @@ export function WorkoutSigil({
         </g>
       </svg>
     </span>
+  );
+
+  if (morphSessionId === undefined) return medallion;
+  // Off by default, so a revalidation or a list filter never animates the mark; it moves only
+  // when the same Session's sigil unmounts on one page and mounts on the next.
+  return (
+    <ViewTransition name={sigilTransitionName(morphSessionId)} share="sigil-morph" default="none">
+      {medallion}
+    </ViewTransition>
   );
 }

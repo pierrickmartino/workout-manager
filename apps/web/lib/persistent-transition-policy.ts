@@ -21,7 +21,7 @@ export interface PersistentTransitionUse {
   readonly key: PersistentElementKey | null;
 }
 
-type Requirements = Readonly<Record<string, Readonly<Record<string, string>>>>;
+export type Requirements = Readonly<Record<string, Readonly<Record<string, string>>>>;
 
 function requirementsFor(element: PersistentElement): Requirements {
   const group = { animation: "none", "z-index": String(TIER_Z_INDEX[element.tier]) };
@@ -57,13 +57,18 @@ function declaredBySelector(css: string): ReadonlyMap<string, ReadonlyMap<string
   return declared;
 }
 
-export function isolationGaps(css: string, elements: readonly PersistentElement[]): readonly string[] {
+// Each `selector needs property: value` the stylesheet does not declare unconditionally.
+// Shared with `view-transition-boundary-policy.ts`, which holds the live root to the same test.
+export function missingDeclarations(css: string, requirements: Requirements): readonly string[] {
   const declared = declaredBySelector(css);
-  return elements.flatMap((element) =>
-    Object.entries(requirementsFor(element)).flatMap(([selector, properties]) =>
-      Object.entries(properties)
-        .filter(([property, value]) => declared.get(selector)?.get(property) !== value)
-        .map(([property, value]) => `${selector} needs ${property}: ${value}`)));
+  return Object.entries(requirements).flatMap(([selector, properties]) =>
+    Object.entries(properties)
+      .filter(([property, value]) => declared.get(selector)?.get(property) !== value)
+      .map(([property, value]) => `${selector} needs ${property}: ${value}`));
+}
+
+export function isolationGaps(css: string, elements: readonly PersistentElement[]): readonly string[] {
+  return elements.flatMap((element) => missingDeclarations(css, requirementsFor(element)));
 }
 
 function isRegistryKey(value: string): value is PersistentElementKey {

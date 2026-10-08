@@ -962,6 +962,28 @@
   animation: none;
 }
 
+/* A live root (ADR-0120). Whenever a named element moves — a sigil morphing between pages —
+   the browser also cross-fades everything unnamed, i.e. the whole page, by default. Hiding the
+   old root and not animating the new one makes the page swap instantly, as it did before view
+   transitions, and stay live (hover, focus, taps) while only the named element moves above it.
+   Page-level motion is opted into by name, never inherited from the root.
+   `view-transition-boundary-policy.ts` fails if either declaration goes missing. */
+::view-transition-old(root) {
+  display: none;
+}
+
+::view-transition-new(root) {
+  animation: none;
+}
+
+/* The Workout Signature morph (ADR-0120): a Session's sigil travels from the card or hero the
+   reader tapped to the same mark on the Session's detail page. The browser interpolates the
+   group's size and position; this only sets the pace — a shared-element move reads at 300–500ms,
+   slower than a page change, so the eye can follow it. */
+::view-transition-group(.sigil-morph) {
+  animation-duration: 400ms;
+}
+
 /* Indeterminate progress sweep for the generation loader. */
 @keyframes pulse-sweep {
   0% {

@@ -46,6 +46,9 @@ export function SessionHero({ protocol }: SessionHeroProps): React.JSX.Element {
           exerciseCount={stats.modules}
           trainingType={protocol.training_type}
           size={60}
+          // Claims the morph only for a real Next Session: the Protocol-id fallback is not a
+          // Session id and could collide with one (ADR-0120).
+          morphSessionId={next?.session_id}
         />
         <div className="flex min-w-0 flex-col gap-1.5">
           {/* `break-words` because this is an authored name, and ADR-0085's first clause is

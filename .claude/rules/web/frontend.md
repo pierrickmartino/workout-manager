@@ -30,6 +30,10 @@ is **declared**, not that it renders right: the `audit/` journeys (`reflow.mjs` 
   `style={persistentTransitionStyle(key)}`, never a hand-written `viewTransitionName`; its group
   is frozen in `globals.css`, and a blurred one drops its old snapshot
   (`persistent-transition-policy.ts`, ADR-0119).
+- `<ViewTransition>` → literal `default="none"`, `share` on a named one, every class styled in
+  `globals.css`; the root stays live. A Session's sigil morphs via `WorkoutSigil morphSessionId`,
+  claimed by one surface per page; a morph target renders above any loading boundary
+  (`view-transition-boundary-policy.ts`, ADR-0120).
 - New Skin or retuned `--color-base` → update `SKIN_BASE_COLORS` in `lib/theme-color.ts` in the
   same change (`theme-color.test.ts`, ADR-0102).
 

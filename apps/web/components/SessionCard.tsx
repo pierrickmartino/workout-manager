@@ -21,6 +21,10 @@ interface SessionCardProps {
   // with nothing but the page's <h1> (My Sessions); 3 inside a group that carries its own
   // heading (Train's "PICK UP AGAIN" panel).
   level?: 2 | 3;
+  // Whether this card's sigil claims the cross-page morph to the Session's detail (ADR-0120).
+  // Only a surface that links to the detail and renders each Session once may claim it, so
+  // the library row opts in and Train's Recent panel, which has no detail link, does not.
+  claimsSigilMorph?: boolean;
 }
 
 // The shared Session card (CONTEXT: Recent Sessions, My Sessions): the one presentational format
@@ -34,6 +38,7 @@ export function SessionCard({
   isFavorite = false,
   actions,
   level = 2,
+  claimsSigilMorph = false,
 }: SessionCardProps): React.JSX.Element {
   const Title = level === 3 ? "h3" : "h2";
   const loggedBadge =
@@ -54,6 +59,7 @@ export function SessionCard({
         exerciseCount={model.exerciseCount}
         trainingType={model.trainingType}
         size={44}
+        morphSessionId={claimsSigilMorph ? model.id : undefined}
       />
       <div className="flex min-w-0 flex-col gap-2">
         {/* A heading, not a styled <span> (ADR-0094). An <h2> by default: My Sessions heads its

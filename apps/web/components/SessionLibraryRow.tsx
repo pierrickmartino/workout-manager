@@ -63,6 +63,7 @@ export function SessionLibraryRow({
       <SessionCard
         model={sessionSummaryCardModel(session)}
         isFavorite={session.is_favorite}
+        claimsSigilMorph
         actions={
           <SessionRowMenu
             session={session}

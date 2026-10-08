@@ -100,3 +100,10 @@ export function computeSigilGeometry(
 
   return { rotation, polygon, nodes, center };
 }
+
+// The shared-element name a Session's sigil morphs under (ADR-0120). One name per Session, so
+// the mark on My Sessions or the Home hero and the mark on that Session's detail page pair up
+// across the navigation. Only one surface on a page may claim it at a time.
+export function sigilTransitionName(sessionId: number): string {
+  return `session-sigil-${sessionId}`;
+}
