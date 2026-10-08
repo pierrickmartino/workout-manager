@@ -15,12 +15,13 @@ import {
   type SetEntrySubject,
   type SetEntryValues,
 } from "@/lib/set-entry";
-import { loadKindOptions, loadValueHint, loadValueInputMode } from "@/lib/load";
+import { loadKindOptions, loadValueInputMode } from "@/lib/load";
 import { DISTANCE_UNIT_OPTIONS } from "@/lib/quantity";
 import type { QuantityKind } from "@/lib/quantity";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { FieldRow, FIELD_CELL, WIDE_FIELD_CELL } from "@/components/pulse/field-row";
 import { Input } from "@/components/ui/input";
+import { LoadValueInput } from "@/components/pulse/load-value-input";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
@@ -445,25 +446,14 @@ export function SetEntryRepsCell() {
 export function SetEntryLoadValueCell() {
   const { control } = useSetEntryField<HTMLInputElement>("load_value");
   const { state } = useSetEntry();
-  const hint = loadValueHint(state.values.load_kind, state.unit);
   return (
-    <div className="relative min-w-0">
-      <Input
-        spellCheck={false}
-        className={cn(CELL_CONTROL, hint.suffix ? "pr-6" : null)}
-        placeholder={hint.placeholder}
-        inputMode={loadValueInputMode(state.values.load_kind)}
-        {...control}
-      />
-      {hint.suffix ? (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 font-mono text-[9px] text-text-muted"
-        >
-          {hint.suffix}
-        </span>
-      ) : null}
-    </div>
+    <LoadValueInput
+      kind={state.values.load_kind}
+      unit={state.unit}
+      density="cell"
+      className={CELL_CONTROL}
+      {...control}
+    />
   );
 }
 

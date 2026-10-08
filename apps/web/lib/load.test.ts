@@ -5,6 +5,7 @@ import {
   formatBodyWeight,
   formatLoad,
   loadKindOptions,
+  loadValueHint,
   loadValueInputMode,
   loadToFields,
   loadValueToKg,
@@ -228,4 +229,23 @@ test("loadValueInputMode leaves the keyboard alone where the value is not one nu
   // `low-high` range and a descriptive Load would be untypable behind one.
   assert.equal(loadValueInputMode("range"), undefined);
   assert.equal(loadValueInputMode("qualitative"), undefined);
+});
+
+test("loadValueHint names each kind's unit and what an empty value means", () => {
+  // Arrange & Act & Assert — an empty absolute or %1RM value is no load ("—"), an empty
+  // bodyweight value is no *added* load ("0" under "+kg"), and the two typed kinds show
+  // the shape they take.
+  assert.deepEqual(loadValueHint("absolute", "kg"), { suffix: "kg", placeholder: "—" });
+  assert.deepEqual(loadValueHint("bodyweight", "kg"), { suffix: "+kg", placeholder: "0" });
+  assert.deepEqual(loadValueHint("percent_1rm", "kg"), { suffix: "%", placeholder: "—" });
+  assert.deepEqual(loadValueHint("range", "kg"), { suffix: "kg", placeholder: "60-70" });
+  assert.deepEqual(loadValueHint("qualitative", "kg"), { suffix: "", placeholder: "light" });
+});
+
+test("loadValueHint follows the reader's Weight Unit on the weight-bearing kinds only", () => {
+  // Arrange & Act & Assert
+  assert.equal(loadValueHint("absolute", "lb").suffix, "lb");
+  assert.equal(loadValueHint("bodyweight", "lb").suffix, "+lb");
+  assert.equal(loadValueHint("range", "lb").suffix, "lb");
+  assert.equal(loadValueHint("percent_1rm", "lb").suffix, "%");
 });

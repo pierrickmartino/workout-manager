@@ -94,3 +94,28 @@ anything.
   and no other member's, a completed row's ✓ reopening it, and Skip on the current set alone;
   `lib/set-entry-fields.test.ts` holds the new cells to the captioned fields' names and keypads
   in both providers.
+
+## Amendment: the unit hint is every Load value field's
+
+The cell's unit hint stayed in the cell. The Prescription editor (`PrescriptionFieldStack`) and
+the Hand-Authored form's performed-set rows kept a hand-written Load value field whose
+placeholder was `60 kg` whatever the kind: a "kg" on a percentage, a number on a descriptive
+Load, and a unit the decimal keypad cannot type (UX review #2).
+
+So the field is now one component, `components/pulse/load-value-input.tsx` (`LoadValueInput`),
+and `loadValueHint` is its only source: the suffix stays in the field while a value is typed,
+and the placeholder says what an empty value means for the picked kind — `—` is no load, `0`
+under `+kg` is bodyweight with nothing added — rather than suggesting a value nobody prescribed.
+`density` sizes the suffix for a 44px captioned field or a 36px table cell. The suffix is
+`aria-hidden`; the kind picker's label names the unit.
+
+- `lib/load-value-policy.ts` reports any Load value field written outside `LoadValueInput`, read
+  from the keypad call every such field makes (`inputMode={loadValueInputMode(…)}`). Its one
+  exemption is `SetEntry.Load` on the stacked log forms, whose caller-chosen placeholder is
+  tracked as its own TASKS.md item.
+- `field-control-policy.ts` gains `SHARED_CONTROLS`: a control from another module that renders
+  exactly one primitive is a claimant, and the test holds that count.
+- The `creation` and `creation-logged` audit seeds give their rows different Load kinds, so the
+  suffixes are swept at 320px and 200% text. At 200% a field's 158px cell has no room for both
+  the range placeholder `60-70` and its suffix: the placeholder is cut to `60`. The document
+  does not overflow and a typed value scrolls in the field as before.

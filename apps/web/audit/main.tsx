@@ -250,6 +250,13 @@ function FitnessLevelSurface() {
   ])} />;
 }
 
+// The Load kinds the two Hand-Authored journeys seed, one per row. The Load value field's unit
+// suffix and placeholder follow the kind (ADR-0114), and the widest suffix ("+kg") and widest
+// placeholder ("60-70") belong to different kinds. `creation` takes all three; `creation-logged`
+// takes the first two on its reps rows (its third is the distance row). All-bodyweight rows
+// rendered only one shape of a field that has to fit a `FIELD_WIDTH` cell at 320px.
+const CREATION_LOAD_KINDS = ["absolute", "bodyweight", "range"] as const;
+
 function Content() {
   switch (journey) {
     case "charts": return <ChartAccessibilityFixture />;
@@ -260,7 +267,7 @@ function Content() {
     case "sessions": return <SessionsLibrary sessions={count === 0 ? [] : sessions} />;
     case "history": return <HistoryBrowser records={history(count)} unit="kg" />;
     case "catalog": return <ExerciseCatalogTaxonomy initialFilters={{ query: "", muscleGroups: [], equipment: [], difficulty: [] }} initialTaxonomy={count === 0 ? { groups: [], total: 0 } : count > 50 ? { total: count, groups: [{ pattern: "squat", count, exercises: Array.from({ length: count }, (_, i) => ({ ...exercises[i % 50], id: i + 1 })) }] } : taxonomy} equipmentOptions={["barbell", "dumbbell"]} myEquipment={["barbell"]} usage={[]} referenceIso="2026-09-26" unit="kg" />;
-    case "creation": return <HandAuthoredSessionForm draftId="audit-only" today="2026-09-26" unit="kg" mode="planOnly" seed={{ trainingType: "strength", exercises: exercises.slice(0, 3).map(exercise => ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "repetitions", unit: "km", sets: "3", reps: "12", loadKind: "bodyweight", loadValue: "" })) }} />;
+    case "creation": return <HandAuthoredSessionForm draftId="audit-only" today="2026-09-26" unit="kg" mode="planOnly" seed={{ trainingType: "strength", exercises: exercises.slice(0, 3).map((exercise, index) => ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "repetitions", unit: "km", sets: "3", reps: "12", loadKind: CREATION_LOAD_KINDS[index], loadValue: "" })) }} />;
     // The same Hand-Authored form in its default `authorAndLog` flow. The matrix only ever
     // mounted `planOnly` (Capture), which hides the "SETS PERFORMED" half — so the performed-set
     // grid was never rendered in any recorded capture. This case measures it.
@@ -271,7 +278,7 @@ function Content() {
     // was renderable and rendered by no journey, and a fieldset is precisely the box ADR-0085
     // floors at its content's minimum width. The reps rows stay beside it, so one capture holds
     // both shapes.
-    case "creation-logged": return <HandAuthoredSessionForm draftId="audit-only-logged" today="2026-09-26" unit="kg" seed={{ trainingType: "strength", exercises: exercises.slice(0, 3).map((exercise, index) => index === 2 ? ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "distance" as const, unit: "km" as const, sets: "3", reps: "5", loadKind: "bodyweight" as const, loadValue: "" }) : ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "repetitions" as const, unit: "km" as const, sets: "3", reps: "12", loadKind: "bodyweight" as const, loadValue: "" })) }} />;
+    case "creation-logged": return <HandAuthoredSessionForm draftId="audit-only-logged" today="2026-09-26" unit="kg" seed={{ trainingType: "strength", exercises: exercises.slice(0, 3).map((exercise, index) => index === 2 ? ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "distance" as const, unit: "km" as const, sets: "3", reps: "5", loadKind: "bodyweight" as const, loadValue: "" }) : ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "repetitions" as const, unit: "km" as const, sets: "3", reps: "12", loadKind: CREATION_LOAD_KINDS[index], loadValue: "" })) }} />;
     case "logging": return <LogSessionForm sessionId={1} prescriptions={prescriptions} today="2026-09-26" unit="kg" />;
     case "live": return <LiveSessionScreen session={liveWorkout} today="2026-09-26" defaultRestSeconds={60} keepScreenAwake={false} unit="kg" />;
     case "analytics": return <Analytics />;

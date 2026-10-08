@@ -65,6 +65,14 @@ function isFieldTag(tag: string): tag is FieldElement {
 // through them), so using one *is* the claim. Anything else says so out loud.
 const PRIMITIVE_CONTROLS = new Set<string>(["Input", "Select", "Textarea"]);
 
+// Design-system controls that live in a module of their own and render exactly one primitive, so
+// rendering one is the claim too. The guard reads one file and cannot see inside them, so each is
+// named here with its module, and `field-control-policy.test.ts` holds that the module renders
+// exactly one primitive — an entry is a checked claim, not a pass.
+export const SHARED_CONTROLS: Readonly<Record<string, string>> = {
+  LoadValueInput: "components/pulse/load-value-input.tsx",
+};
+
 // The two shapes the claim is published in: the wiring itself, and the props-splitting pair the
 // primitives use. A control that is not a primitive could reasonably reach for either, so both
 // are traced — otherwise the second would read as no claim at all and flag working code.
@@ -185,7 +193,8 @@ function isClaimingControl(
   claimers: Claimers,
   tree: ts.SourceFile,
 ): boolean {
-  if (PRIMITIVE_CONTROLS.has(tag) || claimers.components.has(tag)) return true;
+  if (PRIMITIVE_CONTROLS.has(tag) || Object.hasOwn(SHARED_CONTROLS, tag)) return true;
+  if (claimers.components.has(tag)) return true;
   const attributes = attributesOf(node);
   if (attributes === null) return false;
   return attributes.properties.some((attribute) =>
