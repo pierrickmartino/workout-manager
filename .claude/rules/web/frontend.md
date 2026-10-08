@@ -22,6 +22,10 @@ is **declared**, not that it renders right: the `audit/` journeys (`reflow.mjs` 
   the worst surface in every Skin and Mode; `disabled:` is exempt (`faded-text-policy.ts`, ADR-0083).
 - Animation or transform transition → `motion-reduce:animate-none` / `motion-reduce:transition-none`
   in the same class string; colour and opacity transitions are exempt (`motion-policy.ts`, ADR-0082).
+- Animation in a stylesheet → on a `::view-transition-*` pseudo-element (the reduced-motion off
+  switch in `globals.css` reaches it) or inside `@media (prefers-reduced-motion: no-preference)`;
+  never `!important`, never a `<ViewTransition>` `onEnter`/`onExit`/`onUpdate`/`onShare`
+  (`view-transition-motion-policy.ts`, ADR-0118).
 - New Skin or retuned `--color-base` → update `SKIN_BASE_COLORS` in `lib/theme-color.ts` in the
   same change (`theme-color.test.ts`, ADR-0102).
 

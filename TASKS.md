@@ -212,7 +212,7 @@ Source: [gript-competitive-audit](docs/research/audit/gript-competitive-audit-20
 Source: [view-transitions-audit](docs/research/audit/vercel/view-transitions-audit.md). Nothing implemented yet; there's no `ViewTransition` in the code.
 
 - ✅ 0. Turn on `experimental.viewTransition` and add the type shim. Already covered by the dependency bumps: Next 16.3.8 removed the flag (VTs are on by default, so adding it now only triggers an unrecognized-key warning), and `react`/`@types/react` 19.3.0 export and type `ViewTransition` and `addTransitionType`. No shim is needed. See the audit's §1 addendum.
-- ⬜ 1. Reduced-motion CSS, its ADR, and a guard that fails closed.
+- ✅ 1. Reduced-motion CSS, its ADR, and a guard that fails closed. The off switch is in `app/globals.css` (`@layer base`, `animation: none !important` on all four `::view-transition-*` pseudo-elements). The rule is ADR-0118, and the guard is `lib/view-transition-motion-policy.ts`, which also covers stylesheet movement and `<ViewTransition>` callbacks. Checked once in Chromium, but no journey covers it yet (audit §11).
 - ⬜ 2. Isolate persistent shell elements (`viewTransitionName`).
 - ⬜ 3. Workout Signature sigil morph across the three surfaces (fix the `/train` collision).
 - ⬜ 4. Directional page transitions (`nav-forward` / `nav-back`); fix `NavigationGuardProvider.tsx:146`.

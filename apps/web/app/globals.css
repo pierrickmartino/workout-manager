@@ -903,6 +903,28 @@
   }
 }
 
+/* The view-transition off switch (ADR-0118). A view transition moves things even with
+   no CSS of ours: the browser's default cross-fades the root and morphs any named
+   element from its old box to its new one. Under the reduced-motion preference every
+   transition pseudo-element loses its animation, so a navigation swaps instantly —
+   turned off, not sped up (ADR-0082). It covers the default and every transition class
+   a later rule adds, which is why it is required before any `<ViewTransition>` exists.
+
+   `!important` so a more specific `::view-transition-old(.slide)` cannot outrank it,
+   and in `@layer base` because an important declaration in an earlier layer beats one
+   in a later layer or in none. `view-transition-motion-policy.ts` fails if any of the
+   four selectors goes missing, and rejects an important transition animation elsewhere. */
+@layer base {
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*),
+    ::view-transition-image-pair(*),
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+      animation: none !important;
+    }
+  }
+}
+
 /* Indeterminate progress sweep for the generation loader. */
 @keyframes pulse-sweep {
   0% {
