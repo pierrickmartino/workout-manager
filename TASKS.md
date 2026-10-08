@@ -46,7 +46,7 @@ Sources: [research 2026-10-05](docs/research/2026-10-05.md) → *Next actions*,
 
 Source: [audit 2026-10-05](docs/research/audit/2026-10-05.md).
 
-- ⬜ **Handle uncertain Calibration results** (rank 3; the audit's suggested "small change" for this week). `calibration-control.tsx` has no `catch`. Add: catch transport errors, show "could not confirm" with a retry, re-read the canonical Calibration, and test both fault paths.
+- ✅ **Handle uncertain Calibration results** (rank 3; the audit's suggested "small change" for this week). A thrown post now re-reads the stored offset: saved → silent, not saved → error with retry, unreadable → "couldn’t confirm" status with retry; the retry re-posts the retained absolute target. Both fault paths are tested in `lib/calibration-control-uncertain.test.ts` (ADR-0111, "Uncertain results").
 - ❔ **Run the installed-PWA Live and Finish recovery matrix** (rank 4) on iOS Safari and Android Chrome: offline logging, reload or update during a Live Session, lost finish acknowledgement, account switch, and a "Safari tab idle 8 days" row.
 - 🟡 **Make AI spend and failures visible to the operator** (rank 5, tracked in [#270](https://github.com/pierrickmartino/workout-manager/issues/270), the only open issue). The recorder, Langfuse compose, lineage and erasure sub-issues (#271–#276) are closed. Still to do: reconcile against production and verify retention and erasure in operation.
   - ⬜ Update #270's acceptance criteria: pin the Langfuse server to `3.x` (compose still uses floating `:3`), note that SDK v2 loses support after v4, and restrict OTel spans to LLM calls.

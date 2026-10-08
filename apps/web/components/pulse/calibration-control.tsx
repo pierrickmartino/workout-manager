@@ -1,17 +1,38 @@
 "use client";
 
-import { useId, useState, useTransition } from "react";
+import { useId, useRef, useState, useTransition } from "react";
 import { Loader2, Minus, Plus, RotateCcw } from "@/components/pulse/icons";
 
-import { calibrateCurrentProtocol } from "@/app/dashboard/calibration-actions";
+import {
+  calibrateCurrentProtocol,
+  readCurrentCalibration,
+} from "@/app/dashboard/calibration-actions";
 import {
   CALIBRATION_EFFECT,
   SENSITIVE_CAVEAT,
   calibrationControlView,
+  calibrationNotice,
+  reconcileCalibration,
+  type CalibrationNotice,
+  type CalibrationReconciliation,
 } from "@/lib/calibration-control";
 import type { ProtocolProgress } from "@/lib/protocols-types";
 import { Alert } from "@/components/pulse/alert";
 import { cn } from "@/lib/utils";
+
+// What the control is saying about the last post: a server refusal, or an uncertain result
+// reconciled against the stored offset. `retryTarget` is the absolute offset a retry re-posts
+// — retained, never recomputed from a readout that may be stale — or `null` for no retry.
+interface ControlNotice extends CalibrationNotice {
+  retryTarget: number | null;
+}
+
+// A reconciled post: the outcome, and the caveat when the quiet re-post recovered it (`null`
+// when unknown, so a stale caveat is left as it was rather than cleared).
+interface Reconciled {
+  outcome: CalibrationReconciliation;
+  sensitiveCaveat: boolean | null;
+}
 
 interface CalibrationControlProps {
   // The Current Protocol, read server-side. Its `calibration` and the clamp's bounds come
@@ -34,15 +55,22 @@ interface CalibrationControlProps {
 //
 // A user with a Sensitive Constraint re-pitches in **both** directions and sees a caveat, not
 // a refusal (ADR-0058's precedent) — the server decides that and reports it back.
+//
+// A post that throws is **uncertain**, not failed: it may have died before the server committed
+// or lost its reply after. The control re-reads the stored offset to tell which, and offers a
+// retry of the same absolute target when it did not save or cannot tell (ADR-0111, "Uncertain
+// results"). The stepper stays live meanwhile: any later tap is itself absolute.
 export function CalibrationControl({
   protocol,
 }: CalibrationControlProps): React.JSX.Element {
   const labelId = useId();
-  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<ControlNotice | null>(null);
   const [caveat, setCaveat] = useState<boolean>(false);
   // Which target is in flight, so the spinner sits on the end that was tapped.
   const [posting, setPosting] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
+  // The latest attempt; a result from an older one is dropped rather than painted over it.
+  const attemptRef = useRef(0);
 
   const view = calibrationControlView(protocol);
   const spinsFor = (target: number | null): boolean =>
@@ -52,16 +80,56 @@ export function CalibrationControl({
     if (target === null) {
       return;
     }
-    setError(null);
+    const attempt = ++attemptRef.current;
+    const isCurrent = (): boolean => attempt === attemptRef.current;
+    setNotice(null);
     setPosting(target);
     startTransition(async () => {
-      const result = await calibrateCurrentProtocol(protocol.id, target);
-      if (result.error) {
-        setError(result.error);
-        return;
+      try {
+        const result = await calibrateCurrentProtocol(protocol.id, target);
+        if (!isCurrent()) {
+          return;
+        }
+        if (result.error) {
+          setNotice({ tone: "error", message: result.error, retryTarget: null });
+          return;
+        }
+        setCaveat(result.sensitiveCaveat);
+      } catch {
+        const { outcome, sensitiveCaveat } = await reconcile(target);
+        if (!isCurrent()) {
+          return;
+        }
+        if (sensitiveCaveat !== null) {
+          setCaveat(sensitiveCaveat);
+        }
+        const reconciled = calibrationNotice(outcome);
+        setNotice(reconciled ? { ...reconciled, retryTarget: target } : null);
       }
-      setCaveat(result.sensitiveCaveat);
     });
+  }
+
+  // Settle a post whose reply never came by reading what the server stored. When it did save,
+  // the same absolute target is quietly re-posted for the one thing a read cannot carry — the
+  // Sensitive Constraint caveat — and if that fails too, the read has already proven the save.
+  async function reconcile(target: number): Promise<Reconciled> {
+    let stored: number | null = null;
+    try {
+      stored = (await readCurrentCalibration(protocol.id)).calibration;
+    } catch {
+      stored = null;
+    }
+    const outcome = reconcileCalibration(target, stored);
+    if (outcome !== "saved") {
+      return { outcome, sensitiveCaveat: null };
+    }
+    try {
+      const again = await calibrateCurrentProtocol(protocol.id, target);
+      return { outcome, sensitiveCaveat: again.error ? null : again.sensitiveCaveat };
+    } catch {
+      // Saved per the read; only the caveat is unknown, and the next re-pitch reports it.
+      return { outcome, sensitiveCaveat: null };
+    }
   }
 
   return (
@@ -146,9 +214,19 @@ export function CalibrationControl({
         </Alert>
       ) : null}
 
-      {error ? (
-        <Alert tone="error" announce>
-          {error}
+      {notice ? (
+        <Alert tone={notice.tone} announce>
+          <p>{notice.message}</p>
+          {notice.retryTarget !== null ? (
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => calibrate(notice.retryTarget)}
+              className="mt-2 font-medium underline underline-offset-4 disabled:opacity-50"
+            >
+              Try again
+            </button>
+          ) : null}
         </Alert>
       ) : null}
     </div>
