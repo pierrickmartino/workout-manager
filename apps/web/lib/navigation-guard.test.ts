@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  guardedNavigateOptions,
   resolveGuardedNavigation,
   type NavigationClickInfo,
 } from "./navigation-guard.ts";
@@ -23,6 +24,7 @@ function click(overrides: Partial<NavigationClickInfo> = {}): NavigationClickInf
       target: null,
       download: false,
       origin: ORIGIN,
+      direction: null,
     },
     currentOrigin: ORIGIN,
     currentUrl: `${ORIGIN}/sessions/log`,
@@ -48,6 +50,7 @@ test("preserves the destination's query and hash", () => {
       target: null,
       download: false,
       origin: ORIGIN,
+      direction: null,
     },
   });
 
@@ -80,6 +83,7 @@ test("ignores a link that targets a new browsing context", () => {
       target: "_blank",
       download: false,
       origin: ORIGIN,
+      direction: null,
     },
   });
 
@@ -93,6 +97,7 @@ test("allows an explicit _self target through the guard", () => {
       target: "_self",
       download: false,
       origin: ORIGIN,
+      direction: null,
     },
   });
 
@@ -106,6 +111,7 @@ test("ignores a download link", () => {
       target: null,
       download: true,
       origin: ORIGIN,
+      direction: null,
     },
   });
 
@@ -119,6 +125,7 @@ test("ignores a link to a different origin", () => {
       target: null,
       download: false,
       origin: "https://other.example.com",
+      direction: null,
     },
   });
 
@@ -132,6 +139,7 @@ test("ignores a same-page hash link (no route change)", () => {
       target: null,
       download: false,
       origin: ORIGIN,
+      direction: null,
     },
     currentUrl: `${ORIGIN}/sessions/log`,
   });
@@ -146,6 +154,7 @@ test("ignores a click that navigates to the exact current URL", () => {
       target: null,
       download: false,
       origin: ORIGIN,
+      direction: null,
     },
     currentUrl: `${ORIGIN}/sessions/log`,
   });
@@ -160,9 +169,29 @@ test("intercepts when only the query differs from the current URL", () => {
       target: null,
       download: false,
       origin: ORIGIN,
+      direction: null,
     },
     currentUrl: `${ORIGIN}/sessions/log`,
   });
 
   assert.equal(resolveGuardedNavigation(info), "/sessions/log?tab=plan");
+});
+
+test("carries the intercepted link's direction through to the confirmed navigation", () => {
+  // Arrange: a back link on a dirty form, then a link with no direction.
+  const back = click({ anchor: { ...click().anchor!, direction: "nav-back" } });
+  const plain = click();
+  // Act
+  const backOptions = guardedNavigateOptions(back);
+  const plainOptions = guardedNavigateOptions(plain);
+  // Assert: Discard animates exactly as the same click on a clean form would.
+  assert.deepEqual(backOptions, { transitionTypes: ["nav-back"] });
+  assert.equal(plainOptions, undefined);
+});
+
+test("drops a direction attribute the registry does not know", () => {
+  // Arrange
+  const info = click({ anchor: { ...click().anchor!, direction: "sideways" } });
+  // Act & Assert
+  assert.equal(guardedNavigateOptions(info), undefined);
 });
