@@ -213,7 +213,7 @@ Source: [view-transitions-audit](docs/research/audit/vercel/view-transitions-aud
 
 - ✅ 0. Turn on `experimental.viewTransition` and add the type shim. Already covered by the dependency bumps: Next 16.3.8 removed the flag (VTs are on by default, so adding it now only triggers an unrecognized-key warning), and `react`/`@types/react` 19.3.0 export and type `ViewTransition` and `addTransitionType`. No shim is needed. See the audit's §1 addendum.
 - ✅ 1. Reduced-motion CSS, its ADR, and a guard that fails closed. The off switch is in `app/globals.css` (`@layer base`, `animation: none !important` on all four `::view-transition-*` pseudo-elements). The rule is ADR-0118, and the guard is `lib/view-transition-motion-policy.ts`, which also covers stylesheet movement and `<ViewTransition>` callbacks. Checked once in Chromium, but no journey covers it yet (audit §11).
-- ⬜ 2. Isolate persistent shell elements (`viewTransitionName`).
+- ✅ 2. Isolate persistent shell elements (`viewTransitionName`). The header, tab bar, sidebar and sync toast are pinned through `lib/persistent-transition.ts` and frozen in `globals.css` (chrome at z-index 100, toast at 200). The three blurred elements drop their old snapshot. The rule is ADR-0119, and `persistent-transition-policy.ts` guards the CSS and the call sites. Checked once in Chromium, not in the running app. The toast's own enter/exit is still step 7.
 - ⬜ 3. Workout Signature sigil morph across the three surfaces (fix the `/train` collision).
 - ⬜ 4. Directional page transitions (`nav-forward` / `nav-back`); fix `NavigationGuardProvider.tsx:146`.
 - ⬜ 5. Strength pager as a sequential slide.

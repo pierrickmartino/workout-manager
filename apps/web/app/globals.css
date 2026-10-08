@@ -925,6 +925,43 @@
   }
 }
 
+/* Persistent shell elements (ADR-0119). Each carries its own `view-transition-name`
+   (`lib/persistent-transition.ts`), which lifts it out of the page's `root` snapshot; the
+   rules below then freeze its group so it stays put while the page transitions beneath it.
+   Chrome stacks at 100 and the sync toast at 200, so the toast never slides behind the tab
+   bar it floats over.
+
+   The header, tab bar and toast use `backdrop-blur`. A snapshot bakes the blur in, and the
+   baked blur no longer matches what moves behind it, so those three drop their old snapshot
+   and show only the live new one.
+
+   Unlayered on purpose: an unlayered rule beats any layered one, so a later broad
+   `::view-transition-*(*)` recipe in a layer cannot un-pin the chrome.
+   `persistent-transition-policy.ts` fails if any declaration here goes missing. */
+::view-transition-group(shell-header),
+::view-transition-group(shell-tab-bar),
+::view-transition-group(shell-sidebar) {
+  animation: none;
+  z-index: 100;
+}
+
+::view-transition-group(shell-sync-toast) {
+  animation: none;
+  z-index: 200;
+}
+
+::view-transition-old(shell-header),
+::view-transition-old(shell-tab-bar),
+::view-transition-old(shell-sync-toast) {
+  display: none;
+}
+
+::view-transition-new(shell-header),
+::view-transition-new(shell-tab-bar),
+::view-transition-new(shell-sync-toast) {
+  animation: none;
+}
+
 /* Indeterminate progress sweep for the generation loader. */
 @keyframes pulse-sweep {
   0% {

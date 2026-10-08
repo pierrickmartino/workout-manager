@@ -29,6 +29,7 @@ import { resolveIsAdmin } from "@/lib/admin";
 import { resolveUserMode } from "@/lib/appearance";
 import { resolveTheme } from "@/lib/theme";
 import { themeColorFor } from "@/lib/theme-color";
+import { persistentTransitionStyle } from "@/lib/persistent-transition";
 
 import "./globals.css";
 
@@ -197,8 +198,12 @@ export default async function RootLayout({
                 (statusBarStyle: black-translucent); env() is 0 on non-notched devices. The
                 wordmark lives here at *every* width and the sidebar carries none: hiding it at
                 `lg:` left a signed-out desktop visitor — for whom the sidebar is not rendered
-                at all — with an unbranded shell (#575 review). One wordmark, no conditional. */}
-            <header className="sticky top-0 z-30 border-b border-border bg-base/90 pt-[env(safe-area-inset-top)] backdrop-blur">
+                at all — with an unbranded shell (#575 review). One wordmark, no conditional.
+                Pinned out of the page's view-transition snapshot so it never slides (ADR-0119). */}
+            <header
+              style={persistentTransitionStyle("header")}
+              className="sticky top-0 z-30 border-b border-border bg-base/90 pt-[env(safe-area-inset-top)] backdrop-blur"
+            >
               <div className="mx-auto flex h-14 max-w-shell items-center justify-between px-6 lg:max-w-shell-wide">
                 <span className="label-mono text-[13px] font-bold tracking-[0.2em] text-text-primary">
                   PULSE<span className="text-cyan"> //</span>

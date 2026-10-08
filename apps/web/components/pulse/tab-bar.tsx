@@ -7,6 +7,7 @@ import { LayoutGrid, Zap, BarChart3, User, type LucideIcon } from "@/components/
 import { cn } from "@/lib/utils";
 import { TABS, isActive, type TabLabel } from "@/lib/tab-nav";
 import { NAV_LABELS } from "@/lib/shell-a11y";
+import { persistentTransitionStyle } from "@/lib/persistent-transition";
 
 // Route ownership (which tab lights for which path) lives in `@/lib/tab-nav` so it can be
 // tested without a browser; this component owns only presentation. Icons are attached here
@@ -26,6 +27,8 @@ export function TabBar(): React.JSX.Element {
   return (
     <nav
       aria-label={NAV_LABELS.primary}
+      // Stays put while the page transitions underneath it (ADR-0119).
+      style={persistentTransitionStyle("tabBar")}
       // `lg:hidden` hands primary navigation to the sidebar at the shell's wide width
       // (ADR-0088). `display: none` removes this from the accessibility tree outright, so the
       // two never present as duplicate landmarks despite sharing a label.

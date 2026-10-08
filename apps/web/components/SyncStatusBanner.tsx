@@ -13,6 +13,7 @@ import { useSyncStatus } from "@/lib/use-sync-status";
 import { hasQueuedWork, type SyncState } from "@/lib/sync-state";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { persistentTransitionStyle } from "@/lib/persistent-transition";
 
 // The honest connectivity + sync surface (issue #414 — ADR-0060). Mounted once under the
 // signed-in shell alongside the OutboxSyncRegistrar, it renders the five distinct states the
@@ -63,6 +64,8 @@ export function SyncStatusBanner(): React.JSX.Element | null {
       // `bottom-20` clears the fixed TabBar. At `lg:` the TabBar is gone (ADR-0088), so the
       // clearance goes with it and the toast sits at the bottom edge like any other.
       className="pointer-events-none fixed inset-x-0 bottom-20 z-40 flex justify-center px-6 lg:bottom-6"
+      // Floats above the page and the chrome while a navigation transitions (ADR-0119).
+      style={persistentTransitionStyle("syncToast")}
       // A status region: announced politely, never stealing focus.
       role="status"
       aria-live="polite"

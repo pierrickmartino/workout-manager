@@ -26,6 +26,10 @@ is **declared**, not that it renders right: the `audit/` journeys (`reflow.mjs` 
   switch in `globals.css` reaches it) or inside `@media (prefers-reduced-motion: no-preference)`;
   never `!important`, never a `<ViewTransition>` `onEnter`/`onExit`/`onUpdate`/`onShare`
   (`view-transition-motion-policy.ts`, ADR-0118).
+- Element that stays on screen across a navigation → a `PERSISTENT_ELEMENTS` entry, pinned with
+  `style={persistentTransitionStyle(key)}`, never a hand-written `viewTransitionName`; its group
+  is frozen in `globals.css`, and a blurred one drops its old snapshot
+  (`persistent-transition-policy.ts`, ADR-0119).
 - New Skin or retuned `--color-base` → update `SKIN_BASE_COLORS` in `lib/theme-color.ts` in the
   same change (`theme-color.test.ts`, ADR-0102).
 
