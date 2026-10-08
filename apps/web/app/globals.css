@@ -1039,6 +1039,37 @@
   animation: 250ms ease-out both vt-fade reverse;
 }
 
+/* Conditional mounts (ADR-0124). The sync toast and Home's resume banner appear and leave on
+   their own, outside any navigation: each rises 8px into place while fading in, and sinks back
+   while fading out. Short — a toast is news, not a scene change. The toast's group stacks with
+   the persistent overlay tier (ADR-0119) so it never animates under the tab bar it floats over;
+   the banner sits in the page and keeps its place in it. ADR-0118's off switch removes all of
+   it under the reduced-motion preference. */
+@keyframes vt-rise {
+  from {
+    translate: 0 8px;
+  }
+}
+
+::view-transition-group(.toast-in),
+::view-transition-group(.toast-out) {
+  z-index: 200;
+}
+
+::view-transition-new(.toast-in),
+::view-transition-new(.banner-in) {
+  animation:
+    200ms ease-out both vt-fade,
+    200ms ease-out both vt-rise;
+}
+
+::view-transition-old(.toast-out),
+::view-transition-old(.banner-out) {
+  animation:
+    150ms ease-in both vt-fade reverse,
+    150ms ease-in both vt-rise reverse;
+}
+
 /* Indeterminate progress sweep for the generation loader. */
 @keyframes pulse-sweep {
   0% {

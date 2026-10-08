@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState, ViewTransition } from "react";
 import { Play } from "@/components/pulse/icons";
 
 import { readLiveSessionSlot } from "@/lib/live-session-storage";
 import { ownsLiveSlot } from "@/lib/live-session";
 import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 
 // The unfinished session offered on Home, once its owner is known.
 interface ResumableSlot {
@@ -47,11 +48,12 @@ export function ResumeSessionBanner(): React.JSX.Element | null {
   useEffect(() => {
     if (!isLoaded) return;
     const stored = readLiveSessionSlot();
-    if (stored && stored.status !== "finished" && ownsLiveSlot(stored, userId ?? null)) {
-      setSlot({ sessionId: stored.sessionId, startedAt: stored.startedAt });
-    } else {
-      setSlot(null);
-    }
+    const resumable = stored && stored.status !== "finished" && ownsLiveSlot(stored, userId ?? null)
+      ? { sessionId: stored.sessionId, startedAt: stored.startedAt }
+      : null;
+    // In a Transition, so the banner's arrival after hydration — and its departure on an
+    // account change — animate instead of popping (ADR-0124).
+    startTransition(() => setSlot(resumable));
   }, [isLoaded, userId]);
 
   if (slot === null) return null;
@@ -59,25 +61,28 @@ export function ResumeSessionBanner(): React.JSX.Element | null {
   const startedLabel = formatStartedAt(slot.startedAt);
 
   return (
-    <Card className="flex flex-col gap-3 border-cyan p-4">
-      <span className="label-mono text-[11px] text-cyan">
-        LIVE // SESSION IN PROGRESS
-      </span>
-      <p className="font-mono text-[13px] leading-relaxed text-text-secondary">
-        You have an unfinished session. Pick up exactly where you left off.
-      </p>
-      {startedLabel ? (
-        <p className="font-mono text-[12px] text-text-muted">
-          Started {startedLabel}
+    <ViewTransition enter="banner-in" exit="banner-out" default="none">
+      <Card className="flex flex-col gap-3 border-cyan p-4">
+        <span className="label-mono text-[11px] text-cyan">
+          LIVE // SESSION IN PROGRESS
+        </span>
+        <p className="font-mono text-[13px] leading-relaxed text-text-secondary">
+          You have an unfinished session. Pick up exactly where you left off.
         </p>
-      ) : null}
-      <Link
-        href={`/sessions/${slot.sessionId}/live`}
-        className={buttonVariants({ className: "w-full" })}
-      >
-        <Play className="h-4 w-4" />
-        Resume session
-      </Link>
-    </Card>
+        {startedLabel ? (
+          <p className="font-mono text-[12px] text-text-muted">
+            Started {startedLabel}
+          </p>
+        ) : null}
+        <Link
+          href={`/sessions/${slot.sessionId}/live`}
+          {...NAV_FORWARD}
+          className={buttonVariants({ className: "w-full" })}
+        >
+          <Play className="h-4 w-4" />
+          Resume session
+        </Link>
+      </Card>
+    </ViewTransition>
   );
 }

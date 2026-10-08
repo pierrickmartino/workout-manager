@@ -104,3 +104,39 @@ export function findPersistentTransitionUses(source: string, file: string): read
   visit(tree);
   return uses;
 }
+
+// A pinned element must not be a `<ViewTransition>`'s own top DOM node (ADR-0124). React names
+// that node itself whenever the boundary animates, overriding the registry's name, so the
+// element would lose its isolation exactly while it moves. Pin an always-mounted wrapper
+// instead and animate what is inside it, as the sync toast does.
+export function findPinnedUnderBoundary(source: string, file: string): readonly PersistentTransitionUse[] {
+  const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const found: PersistentTransitionUse[] = [];
+  const isBoundary = (node: ts.Node): boolean =>
+    ts.isJsxElement(node) && node.openingElement.tagName.getText(tree) === "ViewTransition";
+  const pinnedKey = (attributes: ts.JsxAttributes): PersistentElementKey | null | undefined => {
+    for (const attribute of attributes.properties) {
+      if (!ts.isJsxAttribute(attribute) || attribute.name.getText(tree) !== "style") continue;
+      const expression = attribute.initializer && ts.isJsxExpression(attribute.initializer) ? attribute.initializer.expression : undefined;
+      if (expression && ts.isCallExpression(expression) && expression.expression.getText(tree) === "persistentTransitionStyle") {
+        return persistentStyleKey(expression);
+      }
+    }
+    return undefined;
+  };
+  // `nearest` is the closest enclosing JSX element; a host element whose nearest JSX ancestor
+  // is a boundary is that boundary's top DOM node.
+  const visit = (node: ts.Node, nearest: ts.Node | null): void => {
+    const element = ts.isJsxElement(node) ? node.openingElement : ts.isJsxSelfClosingElement(node) ? node : null;
+    if (element !== null && nearest !== null && isBoundary(nearest)) {
+      const key = pinnedKey(element.attributes);
+      if (key !== undefined) {
+        found.push({ file, line: tree.getLineAndCharacterOfPosition(element.getStart(tree)).line + 1, key });
+      }
+    }
+    const next = ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node) ? node : nearest;
+    ts.forEachChild(node, (child) => visit(child, next));
+  };
+  visit(tree, null);
+  return found;
+}

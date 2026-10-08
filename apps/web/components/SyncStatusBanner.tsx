@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useRef, useState, ViewTransition } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -57,7 +57,13 @@ export function SyncStatusBanner(): React.JSX.Element | null {
   }, [state]);
 
   // Quiet: all clear and no recent confirmation to show.
-  if (state === "synced" && !showSynced) return null;
+  const visible = state !== "synced" || showSynced;
+  // The toast mounts and unmounts on a deferred copy of that decision (ADR-0124). A deferred
+  // re-render is a Transition, so the toast's enter and exit animate; its inputs (connectivity,
+  // the outbox read, the confirmation timer) are plain state updates that could not be. The lag
+  // is one render, and on first mount the deferred value is the real one, so a toast that is
+  // already true at load simply appears.
+  const shown = useDeferredValue(visible);
 
   return (
     <div
@@ -66,18 +72,24 @@ export function SyncStatusBanner(): React.JSX.Element | null {
       className="pointer-events-none fixed inset-x-0 bottom-20 z-40 flex justify-center px-6 lg:bottom-6"
       // Floats above the page and the chrome while a navigation transitions (ADR-0119).
       style={persistentTransitionStyle("syncToast")}
-      // A status region: announced politely, never stealing focus.
+      // A status region: announced politely, never stealing focus. Always mounted, empty while
+      // quiet, so the region exists before its message does — the pinned name above stays on a
+      // node that outlives the toast, and the body animates inside it (ADR-0124).
       role="status"
       aria-live="polite"
     >
-      <BannerBody
-        state={state}
-        pendingCount={summary.pending + summary.syncing}
-        failedCount={summary.failed}
-        offlineQueued={hasQueuedWork(summary)}
-        lastSyncedAt={lastSyncedAt}
-        onRetry={retry}
-      />
+      {shown ? (
+        <ViewTransition enter="toast-in" exit="toast-out" default="none">
+          <BannerBody
+            state={state}
+            pendingCount={summary.pending + summary.syncing}
+            failedCount={summary.failed}
+            offlineQueued={hasQueuedWork(summary)}
+            lastSyncedAt={lastSyncedAt}
+            onRetry={retry}
+          />
+        </ViewTransition>
+      ) : null}
     </div>
   );
 }

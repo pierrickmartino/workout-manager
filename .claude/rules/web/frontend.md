@@ -42,6 +42,10 @@ is **declared**, not that it renders right: the `audit/` journeys (`reflow.mjs` 
 - `loading.tsx` → return `SkeletonPage` (header outside, data region dissolves); an in-page
   skeleton wraps in `SkeletonReveal`; never a `PageHeader` inside a reveal
   (`skeleton-reveal-policy.ts`, ADR-0123).
+- Element that appears on its own (toast, banner) → its `<ViewTransition>` enters/exits only in a
+  Transition: set it in `startTransition`, or mount on `useDeferredValue`; never make a pinned
+  element a boundary's top node — pin a wrapper that stays mounted (`persistent-transition-policy.ts`,
+  ADR-0124).
 - New Skin or retuned `--color-base` → update `SKIN_BASE_COLORS` in `lib/theme-color.ts` in the
   same change (`theme-color.test.ts`, ADR-0102).
 

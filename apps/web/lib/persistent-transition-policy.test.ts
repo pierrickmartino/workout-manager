@@ -7,7 +7,7 @@ import {
   persistentTransitionStyle,
   type PersistentElement,
 } from "./persistent-transition.ts";
-import { findPersistentTransitionUses, isolationGaps } from "./persistent-transition-policy.ts";
+import { findPersistentTransitionUses, findPinnedUnderBoundary, isolationGaps } from "./persistent-transition-policy.ts";
 import { findStylesheetMotion } from "./view-transition-motion-policy.ts";
 
 const webRoot = resolve(import.meta.dirname, "..");
@@ -163,4 +163,28 @@ test("every persistent element has a distinct name", () => {
   const names = Object.values(PERSISTENT_ELEMENTS).map(({ name }) => name);
   // Assert
   assert.equal(new Set(names).size, names.length);
+});
+
+test("reports a pinned element that is a boundary's own root, whose name React would override", () => {
+  // Arrange: React names a boundary's top DOM node itself while it animates (ADR-0124).
+  const source = `export const A = ({ show }) => (
+  <div style={persistentTransitionStyle("syncToast")}>
+    {show ? (
+      <ViewTransition enter="toast-in" default="none">
+        <p style={persistentTransitionStyle("header")} />
+      </ViewTransition>
+    ) : null}
+  </div>
+);`;
+  // Act
+  const found = findPinnedUnderBoundary(source, "a.tsx");
+  // Assert: the outer pin wraps the boundary, which is fine; the inner one is its root.
+  assert.deepEqual(found, [{ file: "a.tsx", line: 5, key: "header" }]);
+});
+
+test("no persistent element is the root of a ViewTransition", () => {
+  // Arrange & Act
+  const found = componentSources().flatMap((file) => findPinnedUnderBoundary(read(file), file));
+  // Assert
+  assert.deepEqual(found, []);
 });
