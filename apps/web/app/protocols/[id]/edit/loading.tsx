@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/pulse/page-header";
 import { Skeleton } from "@/components/pulse/skeleton";
+import { SkeletonPage } from "@/components/pulse/skeleton-reveal";
 
 // Layout-matched loading state for the Protocol Builder (ADR-0028). It overrides the
 // `/protocols/[id]` boundary rather than inheriting it: the builder's overline is BUILDER, its
@@ -7,9 +8,7 @@ import { Skeleton } from "@/components/pulse/skeleton";
 // would name the wrong screen while the user waited on it.
 export default function ProtocolBuilderLoading(): React.JSX.Element {
   return (
-    <section className="flex flex-col gap-7">
-      <PageHeader overline="PULSE // BUILDER" title="Protocol builder" />
-
+    <SkeletonPage gap={7} header={<PageHeader overline="PULSE // BUILDER" title="Protocol builder" />}>
       {/* Config card */}
       <Skeleton className="h-32 w-full rounded-lg" />
 
@@ -22,6 +21,6 @@ export default function ProtocolBuilderLoading(): React.JSX.Element {
 
       {/* DEPLOY PROTOCOL */}
       <Skeleton className="h-10 w-full rounded-md" />
-    </section>
+    </SkeletonPage>
   );
 }

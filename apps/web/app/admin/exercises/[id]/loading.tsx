@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/pulse/page-header";
 import { Skeleton } from "@/components/pulse/skeleton";
+import { SkeletonPage } from "@/components/pulse/skeleton-reveal";
 
 // Layout-matched loading state for the admin Exercise editor (ADR-0028). Its three reads now
 // settle together behind the admin gate (perf audit A2), but the gate plus that settle is still
@@ -9,9 +10,7 @@ import { Skeleton } from "@/components/pulse/skeleton";
 // editor cards are skeletonized, at the heights they render.
 export default function AdminExerciseEditorLoading(): React.JSX.Element {
   return (
-    <section className="flex flex-col gap-8">
-      <PageHeader overline="PULSE // ADMIN" title="Edit exercise" />
-
+    <SkeletonPage gap={8} header={<PageHeader overline="PULSE // ADMIN" title="Edit exercise" />}>
       {/* The descriptive paragraph above the editor */}
       <Skeleton className="h-10 w-full" />
 
@@ -27,6 +26,6 @@ export default function AdminExerciseEditorLoading(): React.JSX.Element {
         <Skeleton className="h-12 w-full rounded-sm" />
         <Skeleton className="h-12 w-full rounded-sm" />
       </div>
-    </section>
+    </SkeletonPage>
   );
 }

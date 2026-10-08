@@ -1,13 +1,12 @@
 import { PageHeader } from "@/components/pulse/page-header";
 import { Skeleton } from "@/components/pulse/skeleton";
+import { SkeletonPage } from "@/components/pulse/skeleton-reveal";
 
 // Layout-matched loading state for Profile (ADR-0028): the lifetime Bento of
 // stat tiles followed by the achievements preview grid.
 export default function ProfileLoading(): React.JSX.Element {
   return (
-    <section className="flex flex-col gap-6">
-      <PageHeader overline="PULSE // OPERATOR" title="Profile" />
-
+    <SkeletonPage gap={6} header={<PageHeader overline="PULSE // OPERATOR" title="Profile" />}>
       {/* Lifetime stats Bento */}
       <div className="flex flex-col gap-4">
         <Skeleton className="h-3 w-24" />
@@ -26,6 +25,6 @@ export default function ProfileLoading(): React.JSX.Element {
           <Skeleton className="h-24 w-full" />
         </div>
       </div>
-    </section>
+    </SkeletonPage>
   );
 }

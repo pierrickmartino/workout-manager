@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/pulse/page-header";
 import { Skeleton } from "@/components/pulse/skeleton";
+import { SkeletonPage } from "@/components/pulse/skeleton-reveal";
 
 // Layout-matched loading state for the dashboard (ADR-0028). The PageHeader is
 // static, so it paints immediately; only the data region below is skeletonized,
@@ -7,9 +8,7 @@ import { Skeleton } from "@/components/pulse/skeleton";
 // CLS-free.
 export default function DashboardLoading(): React.JSX.Element {
   return (
-    <section className="flex flex-col gap-7">
-      <PageHeader overline="PULSE // DASHBOARD" title="Dashboard" />
-
+    <SkeletonPage gap={7} header={<PageHeader overline="PULSE // DASHBOARD" title="Dashboard" />}>
       {/* Session hero */}
       <Skeleton className="h-40 w-full rounded-xl" />
 
@@ -22,6 +21,6 @@ export default function DashboardLoading(): React.JSX.Element {
 
       {/* Week cycle strip */}
       <Skeleton className="h-24 w-full rounded-lg" />
-    </section>
+    </SkeletonPage>
   );
 }

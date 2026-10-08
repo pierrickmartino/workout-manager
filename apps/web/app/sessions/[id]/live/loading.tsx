@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/pulse/page-header";
 import { Skeleton } from "@/components/pulse/skeleton";
+import { SkeletonPage } from "@/components/pulse/skeleton-reveal";
 
 // Layout-matched loading state for the Live Session screen (ADR-0028). This is the wait the
 // perf audit cared most about (A3): the user has just tapped Start and is standing in a gym on
@@ -12,9 +13,7 @@ import { Skeleton } from "@/components/pulse/skeleton";
 // height on the swap, which is the CLS trade ADR-0028 warns a mismatched placeholder makes.
 export default function LiveSessionLoading(): React.JSX.Element {
   return (
-    <section className="flex flex-col gap-6">
-      <PageHeader overline="PULSE // LIVE" title="Live session" />
-
+    <SkeletonPage gap={6} header={<PageHeader overline="PULSE // LIVE" title="Live session" />}>
       {/* The always-on bar. Only what fixes the set list's starting offset is reproduced — the
           full-bleed inset, the border and the vertical padding. The real bar's `sticky top-14
           z-20 bg-base/95 backdrop-blur` is deliberately *not* copied: those govern how it
@@ -30,6 +29,6 @@ export default function LiveSessionLoading(): React.JSX.Element {
       <Skeleton className="h-56 w-full rounded-lg" />
       <Skeleton className="h-16 w-full rounded-lg" />
       <Skeleton className="h-16 w-full rounded-lg" />
-    </section>
+    </SkeletonPage>
   );
 }

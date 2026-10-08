@@ -47,6 +47,7 @@ import { submitDeleteSession } from "@/app/sessions/[id]/actions";
 import { appendFrom } from "@/lib/back-target";
 import { PageHeader } from "@/components/pulse/page-header";
 import { Skeleton } from "@/components/pulse/skeleton";
+import { SkeletonReveal } from "@/components/pulse/skeleton-reveal";
 import { WorkoutSigil } from "@/components/pulse/workout-sigil";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { DataList } from "@/components/pulse/data-list";
@@ -331,13 +332,16 @@ async function PrescriptionList({
 }
 
 // Stands in for the cards while the offers load: same list, same gap, one block per movement.
+// It dissolves over the cards when they arrive (ADR-0123).
 function PrescriptionListSkeleton({ count }: { count: number }) {
   return (
-    <div className="flex flex-col gap-3">
-      {Array.from({ length: count }, (_, index) => (
-        <Skeleton key={index} className="h-28 w-full rounded-lg" />
-      ))}
-    </div>
+    <SkeletonReveal>
+      <div className="flex flex-col gap-3">
+        {Array.from({ length: count }, (_, index) => (
+          <Skeleton key={index} className="h-28 w-full rounded-lg" />
+        ))}
+      </div>
+    </SkeletonReveal>
   );
 }
 

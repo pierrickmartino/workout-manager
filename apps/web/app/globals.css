@@ -1031,6 +1031,14 @@
     400ms ease-in-out both vt-slide;
 }
 
+/* The skeleton reveal (ADR-0123). When a route's data resolves, the skeleton's snapshot fades
+   off over the real content, which is already live underneath. Opacity only: nothing moves, so
+   the reveal reads as the placeholder dissolving into what it stood for. ADR-0118's off switch
+   removes it under the reduced-motion preference along with every other transition. */
+::view-transition-old(.skeleton-out) {
+  animation: 250ms ease-out both vt-fade reverse;
+}
+
 /* Indeterminate progress sweep for the generation loader. */
 @keyframes pulse-sweep {
   0% {

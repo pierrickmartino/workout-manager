@@ -39,6 +39,9 @@ is **declared**, not that it renders right: the `audit/` journeys (`reflow.mjs` 
   `transitionTypes` by hand; pages add no page-level `<ViewTransition>` (`RouteTransition` is the
   one) (`nav-direction-policy.ts`, ADR-0121). A same-path pager keys its own boundary on the page
   (`TimelinePageTransition`, ADR-0122).
+- `loading.tsx` → return `SkeletonPage` (header outside, data region dissolves); an in-page
+  skeleton wraps in `SkeletonReveal`; never a `PageHeader` inside a reveal
+  (`skeleton-reveal-policy.ts`, ADR-0123).
 - New Skin or retuned `--color-base` → update `SKIN_BASE_COLORS` in `lib/theme-color.ts` in the
   same change (`theme-color.test.ts`, ADR-0102).
 

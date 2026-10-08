@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/pulse/page-header";
 import { Skeleton } from "@/components/pulse/skeleton";
+import { SkeletonPage } from "@/components/pulse/skeleton-reveal";
 
 // Layout-matched loading state for Log Session. It used to inherit Session Detail's boundary,
 // until Session Detail dropped its route-level skeleton so its header could commit with the
@@ -10,8 +11,7 @@ import { Skeleton } from "@/components/pulse/skeleton";
 // content.
 export default function LogSessionLoading(): React.JSX.Element {
   return (
-    <section className="flex flex-col gap-6">
-      <PageHeader overline="PULSE // LOG" title="Log session" />
+    <SkeletonPage gap={6} header={<PageHeader overline="PULSE // LOG" title="Log session" />}>
       <Skeleton className="h-4 w-56" />
 
       {/* One set-entry card per prescription. */}
@@ -23,6 +23,6 @@ export default function LogSessionLoading(): React.JSX.Element {
 
       {/* Submit */}
       <Skeleton className="h-10 w-full rounded-md" />
-    </section>
+    </SkeletonPage>
   );
 }
