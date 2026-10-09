@@ -6,6 +6,7 @@ import {
   liveSessionReducer,
   resolveLiveEntry,
   ownsLiveSlot,
+  resumableLiveSlot,
   IDLE_TIMEOUT_MS,
 } from "./live-session.ts";
 import type { LiveSessionState } from "./live-session.ts";
@@ -212,6 +213,18 @@ test("ownsLiveSlot is true only for the signed-in owner's slot", () => {
   assert.equal(ownsLiveSlot({ ...stored, accountId: null }, ACCOUNT), false);
   assert.equal(ownsLiveSlot(null, ACCOUNT), false);
   assert.equal(ownsLiveSlot(stored, null), false);
+});
+
+test("resumableLiveSlot returns only an unfinished slot the signed-in account owns", () => {
+  const stored = inProgress();
+
+  // The owner's unfinished slot is the one Home offers and the Protocols index blocks on
+  assert.equal(resumableLiveSlot(stored, ACCOUNT), stored);
+  // A finished slot, another account's slot, an empty slot and an anonymous read are not
+  assert.equal(resumableLiveSlot({ ...stored, status: "finished" }, ACCOUNT), null);
+  assert.equal(resumableLiveSlot(stored, OTHER_ACCOUNT), null);
+  assert.equal(resumableLiveSlot(null, ACCOUNT), null);
+  assert.equal(resumableLiveSlot(stored, null), null);
 });
 
 test("HYDRATE restores a persisted state wholesale, replacing the current one", () => {

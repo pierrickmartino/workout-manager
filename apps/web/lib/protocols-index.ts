@@ -11,11 +11,12 @@
 // already is Current, and a Finished Protocol has no Next Session to drive Home. While the
 // persisted Live Session slot holds an unfinished performance the signed-in account owns, Switch
 // is blocked on every row with a reason, so Home never shows one plan mid-workout on another.
-// That guard is client-only because the server cannot see the slot (ADR-0012, ADR-0059).
+// That guard is client-only because the server cannot see the slot (ADR-0012, ADR-0059), so
+// until the slot has been read Switch is pending rather than available.
 
 import { formatLongDate } from "./date-format.ts";
 import { parseApiInstant } from "./instant.ts";
-import { ownsLiveSlot, type LiveSessionState } from "./live-session.ts";
+import { resumableLiveSlot, type LiveSessionState } from "./live-session.ts";
 
 export type ProtocolStatus = "current" | "set_aside" | "finished";
 
@@ -36,10 +37,11 @@ export interface ProtocolIndexEntry {
   made_current_at: string;
 }
 
-// What a row offers for Switch: the action itself, or the action blocked with a reason the
-// user can read and a way back to the Live Session that blocks it.
+// What a row offers for Switch: the action itself; pending while the Live Session slot is unread;
+// or blocked with a reason the user can read and a way back to the Live Session that blocks it.
 export type SwitchAction =
   | { kind: "available"; protocolId: number }
+  | { kind: "pending" }
   | { kind: "blocked"; reason: string; resumeHref: string };
 
 export interface ProtocolIndexRowView {
@@ -55,16 +57,15 @@ export interface ProtocolIndexRowView {
   switchAction: SwitchAction | null;
 }
 
-// The persisted Live Session slot and the signed-in account, read on the client. Absent on the
-// server render, where no slot is visible: nothing is blocked until the slot has been read.
+// The persisted Live Session slot and the signed-in account, read on the client. Null until it
+// has been read (the server render, or before auth resolves): no slot is visible there, so a
+// Live Session can't be ruled out and Switch stays pending.
 export interface LiveSessionContext {
   liveSlot: LiveSessionState | null;
   accountId: string | null;
 }
 
-const NO_LIVE_SESSION: LiveSessionContext = { liveSlot: null, accountId: null };
-
-export const SWITCH_BLOCKED_REASON =
+const SWITCH_BLOCKED_REASON =
   "Finish or resume your live session before you switch protocols.";
 
 export interface ProtocolIndexGroup {
@@ -113,27 +114,31 @@ function progressText(performed: number, total: number): string {
   return `${performed} of ${total} ${total === 1 ? "session" : "sessions"}`;
 }
 
-// The Live Session that blocks Switch: an unfinished slot owned by the signed-in account, the
-// same slot Home offers to resume. A slot another account left behind blocks nothing.
-function blockingLiveSessionId({ liveSlot, accountId }: LiveSessionContext): number | null {
-  if (liveSlot === null || liveSlot.status === "finished") return null;
-  return ownsLiveSlot(liveSlot, accountId) ? liveSlot.sessionId : null;
+// Where the Live Session stands for Switch: unread, none in progress, or the id of the one in
+// progress. It is the same slot Home offers to resume, so a slot another account left behind,
+// or a finished one, blocks nothing.
+type LiveSessionStanding = "unread" | "none" | number;
+
+function liveSessionStanding(live: LiveSessionContext | null): LiveSessionStanding {
+  if (live === null) return "unread";
+  return resumableLiveSlot(live.liveSlot, live.accountId)?.sessionId ?? "none";
 }
 
 function switchActionFor(
   entry: ProtocolIndexEntry,
-  liveSessionId: number | null,
+  live: LiveSessionStanding,
 ): SwitchAction | null {
   if (entry.status !== "set_aside") return null;
-  if (liveSessionId === null) return { kind: "available", protocolId: entry.id };
+  if (live === "unread") return { kind: "pending" };
+  if (live === "none") return { kind: "available", protocolId: entry.id };
   return {
     kind: "blocked",
     reason: SWITCH_BLOCKED_REASON,
-    resumeHref: `/sessions/${liveSessionId}/live`,
+    resumeHref: `/sessions/${live}/live`,
   };
 }
 
-function toRow(entry: ProtocolIndexEntry, liveSessionId: number | null): ProtocolIndexRowView {
+function toRow(entry: ProtocolIndexEntry, live: LiveSessionStanding): ProtocolIndexRowView {
   // Named exactly when the server's label rule would use the name: non-blank once trimmed.
   const isNamed = (entry.name ?? "").trim() !== "";
   return {
@@ -148,7 +153,7 @@ function toRow(entry: ProtocolIndexEntry, liveSessionId: number | null): Protoco
         ? null
         : `Last performed ${formatLongDate(entry.last_performed_on)}`,
     href: `/protocols/${entry.id}`,
-    switchAction: switchActionFor(entry, liveSessionId),
+    switchAction: switchActionFor(entry, live),
   };
 }
 
@@ -156,15 +161,16 @@ function toRow(entry: ProtocolIndexEntry, liveSessionId: number | null): Protoco
 // are dropped, so a heading never opens an empty list.
 export function protocolsIndex(
   entries: readonly ProtocolIndexEntry[],
-  live: LiveSessionContext = NO_LIVE_SESSION,
+  live: LiveSessionContext | null = null,
 ): ProtocolsIndexView {
-  const liveSessionId = blockingLiveSessionId(live);
+  const standing = liveSessionStanding(live);
   const groups = GROUP_ORDER.map((status) => {
     const members = entries.filter((entry) => entry.status === status);
     const ordered = [...members].sort(
       status === "finished" ? byLastPerformed : byMadeCurrent,
     );
-    return { status, heading: GROUP_HEADINGS[status], rows: ordered.map((entry) => toRow(entry, liveSessionId)) };
+    const rows = ordered.map((entry) => toRow(entry, standing));
+    return { status, heading: GROUP_HEADINGS[status], rows };
   }).filter((group) => group.rows.length > 0);
   return { isEmpty: groups.length === 0, groups };
 }

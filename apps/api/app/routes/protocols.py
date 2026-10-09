@@ -255,7 +255,7 @@ def switch(
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Protocol not found")
     if result.status is SwitchStatus.FINISHED:
         raise HTTPException(
-            status_code=HTTP_CONFLICT, detail="A Finished Protocol can't be switched to"
+            status_code=HTTP_CONFLICT, detail="A Finished Protocol can’t be switched to"
         )
     return success_envelope(serialize_protocol_progress(result.protocol))
 

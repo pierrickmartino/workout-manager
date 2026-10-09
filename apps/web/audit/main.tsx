@@ -276,7 +276,7 @@ function Content() {
     case "correction": return <CorrectLogForm logId={1} fields={correctionFieldsFromRecord(history(1)[0], "kg")} today="2026-09-26" unit="kg" />;
     case "profile": return <ProfileForm profile={profile} submitLabel="Save profile" />;
     case "sessions": return <SessionsLibrary sessions={count === 0 ? [] : sessions} />;
-    case "protocols": return <ProtocolsIndex index={protocolsIndex(count === 0 ? [] : protocolIndexEntries)} />;
+    case "protocols": return <ProtocolsIndex index={protocolsIndex(count === 0 ? [] : protocolIndexEntries, { liveSlot: null, accountId: "audit-synthetic-account" })} />;
     // The same index with a Live Session in progress (#638): every set-aside row's Switch is
     // blocked and carries its reason and a Resume link, the widest shape a row action takes.
     case "protocols-live": return <ProtocolsIndex index={protocolsIndex(protocolIndexEntries, auditLiveSession)} />;

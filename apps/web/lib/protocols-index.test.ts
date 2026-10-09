@@ -167,9 +167,11 @@ const MIXED = [
   entry({ id: 3, status: "finished", last_performed_on: "2026-04-01" }),
 ];
 
+const NO_LIVE_SESSION = { liveSlot: null, accountId: ACCOUNT };
+
 test("only a set-aside row offers Switch; Current and Finished rows offer none", () => {
   // Act
-  const rows = rowsByStatus(protocolsIndex(MIXED));
+  const rows = rowsByStatus(protocolsIndex(MIXED, NO_LIVE_SESSION));
   // Assert
   assert.deepEqual(rows.set_aside[0].switchAction, { kind: "available", protocolId: 2 });
   assert.equal(rows.current[0].switchAction, null);
@@ -205,6 +207,14 @@ test("a Live Session block never adds Switch to the Current or Finished rows", (
   // Assert
   assert.equal(rows.current[0].switchAction, null);
   assert.equal(rows.finished[0].switchAction, null);
+});
+
+test("until the Live Session slot has been read, Switch is pending, never available", () => {
+  // Act — no slot reading yet (the server render, or before auth resolves)
+  const rows = rowsByStatus(protocolsIndex(MIXED));
+  // Assert
+  assert.deepEqual(rows.set_aside[0].switchAction, { kind: "pending" });
+  assert.equal(rows.current[0].switchAction, null);
 });
 
 test("a slot another account owns does not block Switch", () => {

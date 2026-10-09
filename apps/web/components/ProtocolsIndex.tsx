@@ -11,8 +11,9 @@ import { SwitchProtocolControl } from "@/components/SwitchProtocolControl";
 
 // The Protocols index (issue #637): every Protocol the user owns, grouped Current / Set aside /
 // Finished, each row opening the Protocol's detail page. A set-aside row also carries Switch
-// (#638), offered or blocked as the view-model decides. A thin renderer over the `protocols-index` view-model, which owns grouping,
-// order and copy; kept server-safe and prop-driven so the audit harness can mount it directly.
+// (#638), offered, pending or blocked as the view-model decides. A thin renderer over the
+// `protocols-index` view-model, which owns grouping, order, copy and row actions; kept
+// prop-driven so the audit harness can mount it directly.
 export function ProtocolsIndex({
   index,
 }: {

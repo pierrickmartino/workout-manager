@@ -19,12 +19,14 @@ interface SwitchProtocolControlProps {
 
 // The Switch control on a set-aside row (issue #638). No confirmation: Switch is reversible,
 // and the server action lands the user on Home showing the new Current Protocol. The
-// view-model decides whether it is offered or blocked; this only renders that verdict.
+// view-model decides whether it is offered, pending or blocked; this only renders that verdict.
 //
 // Blocked (a Live Session is in progress) is an `aria-disabled` button rather than a
 // `disabled` one, so it stays focusable and a screen reader announces it as unavailable with
-// the reason attached through `aria-describedby`; the reason is also visible, beside a way
-// back to the Live Session that blocks it.
+// the reason attached through `aria-describedby`. The reason is also visible, with a way back
+// to the Live Session beside it rather than inside the description. Pending (the slot is not
+// read yet) is a plain disabled button for the moment before hydration, so Switch can never be
+// pressed before a Live Session has been ruled out.
 export function SwitchProtocolControl({
   action,
   protocolTitle,
@@ -36,6 +38,14 @@ export function SwitchProtocolControl({
   );
   const label = `Switch to ${protocolTitle}`;
   const buttonClass = buttonVariants({ variant: "secondary", size: "sm" });
+
+  if (action.kind === "pending") {
+    return (
+      <button type="button" disabled aria-label={label} className={buttonClass}>
+        Switch
+      </button>
+    );
+  }
 
   if (action.kind === "blocked") {
     return (
@@ -50,11 +60,15 @@ export function SwitchProtocolControl({
           Switch
         </button>
         <p id={reasonId} className="font-mono text-[12px] leading-relaxed text-text-secondary">
-          {action.reason}{" "}
-          <Link {...NAV_FORWARD} href={action.resumeHref} className="text-cyan hover:underline">
-            Resume session
-          </Link>
+          {action.reason}
         </p>
+        <Link
+          {...NAV_FORWARD}
+          href={action.resumeHref}
+          className="font-mono text-[12px] text-cyan hover:underline"
+        >
+          Resume session
+        </Link>
       </div>
     );
   }

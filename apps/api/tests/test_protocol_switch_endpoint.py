@@ -10,6 +10,10 @@ from __future__ import annotations
 from datetime import date
 
 from app.repositories.logged_session_repository import LoggedSetDraft
+from app.repositories.profile_repository import (
+    InMemoryProfileRepository,
+    ProfileUpdate,
+)
 from tests.quantities import reps_quantity
 from tests.test_home_endpoint import _abs, build_harness
 
@@ -212,3 +216,19 @@ def test_switch_leaves_xp_streak_personal_records_and_history_unchanged():
     assert before[0]["xp"] > 0
     assert before[1] is not None
     assert len(before[2]) == 1
+
+
+def test_switch_behaves_the_same_for_a_user_with_a_sensitive_constraint():
+    # Arrange — Switch touches no generation or cache, so the safety bypass is irrelevant
+    profiles = InMemoryProfileRepository()
+    profiles.update("user_injured", ProfileUpdate(sensitive_constraints=["injury"]))
+    h = build_harness(profiles=profiles)
+    older = h.adopt_protocol("user_injured")
+    h.adopt_protocol("user_injured")
+
+    # Act
+    response = _switch(h, "user_injured", older.id)
+
+    # Assert
+    assert response.status_code == 200
+    assert _home_protocol_id(h, "user_injured") == older.id
