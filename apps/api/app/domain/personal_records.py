@@ -124,6 +124,11 @@ class PersonalRecord:
     as *the set that achieved it* — ``reps`` and any ``added_kg`` — rather than a kilogram
     headline. ``is_bodyweight`` tells absolute records (which keep their kg figure) apart
     from bodyweight ones. For an absolute record ``added_kg`` is ``None``.
+
+    ``load`` and ``body_weight_kg`` are the set's stored typed Load and Performed Body
+    Weight, carried through so a surface that shows *the lift* (the First Record Stamp,
+    #653) reads them off the record rather than re-finding the set. ``body_weight_kg`` is
+    ``None`` for an absolute record, whose estimate never read it.
     """
 
     exercise_id: int
@@ -134,6 +139,8 @@ class PersonalRecord:
     reps: int = 0
     is_bodyweight: bool = False
     added_kg: float | None = None
+    load: dict | None = None
+    body_weight_kg: float | None = None
 
 
 def estimated_1rm_for_set(
@@ -220,6 +227,8 @@ def detect_personal_records(
                 reps=reps if reps is not None else 0,
                 is_bodyweight=is_bodyweight,
                 added_kg=parsed.added_kg if is_bodyweight else None,
+                load=record.load,
+                body_weight_kg=record.body_weight_kg if is_bodyweight else None,
             )
         )
         best_by_exercise[record.exercise_id] = estimate

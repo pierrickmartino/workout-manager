@@ -36,6 +36,7 @@ from typing import Protocol
 from app.domain.muscle_groups import MuscleGroup, covered_groups
 from app.domain.personal_records import (
     LoggedSet,
+    PersonalRecord,
     detect_personal_records,
     logged_set_records,
 )
@@ -75,8 +76,10 @@ class Achievement:
     ``unlocked`` is whether the predicate holds over the *whole current* history;
     ``current``/``target`` are the live progress a locked badge shows; ``unlocked_on`` is
     the earliest date at which the predicate first held and ``unlocked_by_session_id`` the
-    Logged Session whose inclusion crossed it (both ``None`` while locked). Because every
-    field is derived read-time, a deleted log recomputes and can re-lock the badge.
+    Logged Session whose inclusion crossed it (both ``None`` while locked). ``record`` is
+    the lift behind First Record — the first Personal Record, as the shared detector
+    reports it — and ``None`` while locked and for every other Achievement (#653). Because
+    every field is derived read-time, a deleted log recomputes and can re-lock the badge.
     """
 
     id: str
@@ -87,6 +90,7 @@ class Achievement:
     target: int
     unlocked_on: date | None
     unlocked_by_session_id: int | None
+    record: PersonalRecord | None = None
 
 
 def _session_count(history: Sequence[_LoggedSession]) -> int:
@@ -128,6 +132,23 @@ def _has_personal_record(history: Sequence[_LoggedSession]) -> int:
     return 1 if detect_personal_records(logged_set_records(history)) else 0
 
 
+def _heaviest_first_record(
+    through_crossing: Sequence[_LoggedSession],
+) -> PersonalRecord | None:
+    """The lift that earned First Record: the crossing session's heaviest record set.
+
+    ``through_crossing`` is the replay up to and including the crossing session. No
+    earlier session in it set a record, so every record the shared detector finds there
+    belongs to the crossing session (ADR-0029: the detector decides which sets qualify).
+    "Heaviest" is the highest Estimated 1RM, the one yardstick every record compares on
+    (ADR-0017), so a ramp of unmarked working sets shows its top set, not its opener. A
+    tie keeps the set logged first.
+    """
+
+    records = detect_personal_records(logged_set_records(through_crossing))
+    return max(records, key=lambda record: record.estimated_1rm, default=None)
+
+
 @dataclass(frozen=True)
 class _Definition:
     """A catalog entry: identity, human-facing copy, target, and its progress metric.
@@ -136,6 +157,9 @@ class _Definition:
     (it aggregates the whole set) and **monotonic non-decreasing over a chronological
     prefix** — both hold for every metric here, which is what makes ``unlocked_on``
     recoverable by replay.
+
+    ``lift`` names the Personal Record behind an unlocked entry, read over the replay up
+    to and including its crossing session; only First Record has one (#653).
     """
 
     id: str
@@ -143,6 +167,7 @@ class _Definition:
     criteria: str
     target: int
     metric: Callable[[Sequence[_LoggedSession]], int]
+    lift: Callable[[Sequence[_LoggedSession]], PersonalRecord | None] | None = None
 
 
 # The seed catalog — curated data, fixed, in a stable display order. Type-neutral
@@ -178,26 +203,27 @@ CATALOG: tuple[_Definition, ...] = (
         "Set your first Personal Record",
         1,
         _has_personal_record,
+        lift=_heaviest_first_record,
     ),
 )
 
 
-def _crossing_session(
+def _replay_through_crossing(
     definition: _Definition, chronological: Sequence[_LoggedSession]
-) -> _LoggedSession | None:
-    """The first session whose inclusion makes the prefix satisfy ``definition``'s target.
+) -> Sequence[_LoggedSession]:
+    """The replay up to and including the session whose inclusion first makes the prefix
+    satisfy ``definition``'s target; empty when the whole history falls short.
 
     Sessions are replayed oldest-first; the metric is monotonic over the growing prefix,
-    so the first crossing is the honest source of the unlock and its date the honest
-    unlock date. ``None`` when the whole history falls short, i.e. while locked.
+    so its last session — the first crossing — is the honest source of the unlock and its
+    date the honest unlock date.
     """
 
-    prefix: list[_LoggedSession] = []
-    for session in chronological:
-        prefix.append(session)
+    for end in range(1, len(chronological) + 1):
+        prefix = chronological[:end]
         if definition.metric(prefix) >= definition.target:
-            return session
-    return None
+            return prefix
+    return ()
 
 
 def _evaluate(
@@ -207,7 +233,10 @@ def _evaluate(
 ) -> Achievement:
     current = definition.metric(history)
     unlocked = current >= definition.target
-    crossing = _crossing_session(definition, chronological) if unlocked else None
+    replay = _replay_through_crossing(definition, chronological) if unlocked else ()
+    crossing = replay[-1] if replay else None
+    lift = definition.lift
+    record = lift(replay) if replay and lift is not None else None
     return Achievement(
         id=definition.id,
         name=definition.name,
@@ -217,6 +246,7 @@ def _evaluate(
         target=definition.target,
         unlocked_on=crossing.performed_on if crossing is not None else None,
         unlocked_by_session_id=crossing.id if crossing is not None else None,
+        record=record,
     )
 
 

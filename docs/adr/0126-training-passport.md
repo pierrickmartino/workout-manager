@@ -48,7 +48,12 @@ concepts. The API keeps calling them Achievements, the profile progress endpoint
 - **The First Record Stamp shows its lift.** `first-pr` carries a nullable `record`, shaped like
   the Personal Record serialisation. It is derived through the shared Personal Record
   definition, never by re-deriving which sets qualify. A bodyweight lift reads as "bodyweight +
-  added load × reps" and never as a bare kg figure (ADR-0026).
+  added load × reps" and never as a bare kg figure (ADR-0026). The `record` adds the
+  Exercise's id, the set's typed `load` and its Performed Body Weight (`body_weight_kg`, null
+  for an absolute lift) to that shape. The lift is the crossing session's heaviest record
+  set by Estimated 1RM (ADR-0017), so a ramp of unmarked working sets shows its top set, not
+  its opener. Only an absolute lift shows an Estimated 1RM; a bodyweight lift shows the body
+  weight it was done at instead.
 - **Stamp art is generated, not authored.** One parametric SVG generator, a sibling of the
   workout sigil, draws every Stamp from (family, tier, state): the family is a silhouette,
   the tier is a ring or segment count, and the state is earned ink or a muted outline. It is
@@ -81,5 +86,5 @@ concepts. The API keeps calling them Achievements, the profile progress endpoint
   the empty Passport (#651); the Stamp page with its source session (#652); the First Record
   lift (#653); and the generated art (#654).
 - The Passport and its disclosure, in both states, the empty Passport and the Stamp page,
-  earned and locked, are journeys in the reflow audit (`passport`, `passport-open`,
-  `passport-empty`, `stamp`, `stamp-locked`), at 320px and 200% text.
+  earned, locked and with the First Record lift, are journeys in the reflow audit (`passport`, `passport-open`,
+  `passport-empty`, `stamp`, `stamp-locked`, `stamp-record`), at 320px and 200% text.

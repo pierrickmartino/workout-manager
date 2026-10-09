@@ -76,11 +76,13 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // Passport is an empty state with a link Home, a shape neither of the others renders.
 // `stamp` and `stamp-locked` join them with #652: every Stamp opens its own page, whose title
 // is the Stamp's name, and a locked Achievement's page shows criteria and progress instead of
-// the explanation and source link, so each is a journey of its own.
+// the explanation and source link, so each is a journey of its own. `stamp-record` joins them
+// with #653: the First Record page also lists the lift that set it, a bodyweight one here, whose
+// "bodyweight + added load × reps" set is the longest value the list holds.
 const NOVEL_JOURNEYS = [
   "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc", "launchpad",
   "levels", "sheet", "protocols", "protocols-live", "set-aside", "passport", "passport-open",
-  "passport-empty", "stamp", "stamp-locked",
+  "passport-empty", "stamp", "stamp-locked", "stamp-record",
 ];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and

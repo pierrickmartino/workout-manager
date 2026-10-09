@@ -18,6 +18,7 @@ from tests.quantities import reps_quantity
 
 from datetime import date, timedelta
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.auth.dependencies import get_jwks
@@ -471,6 +472,133 @@ def test_deleting_the_crossing_session_with_no_successor_locks_the_stamp_again()
     # Assert
     assert five["unlocked"] is False
     assert five["unlocked_by_session_id"] is None
+
+
+# --- the lift behind the First Record Stamp (#653) ---
+
+
+def test_first_record_carries_the_absolute_lift_that_set_it():
+    # Arrange — a 100 kg × 5 squat, the first Personal Record
+    client, ctx, sessions, logged, _ = build_client()
+    record = _perform(
+        sessions,
+        logged,
+        "user_r",
+        date(2026, 6, 2),
+        1,
+        load=ParsedLoad(kind=LoadKind.ABSOLUTE, text="100 kg", kg=100.0).to_dict(),
+    )
+
+    # Act
+    by_id = _achievements_by_id(client, ctx, "user_r")
+
+    # Assert — the lift, shaped like a Personal Record plus the typed Load it was lifted at;
+    # 100 kg × 5 estimates 116.7 kg by Epley
+    first_pr = by_id["first-pr"]
+    assert first_pr["unlocked_by_session_id"] == record.id
+    assert first_pr["record"] == {
+        "exercise_id": SQUAT,
+        "exercise": "Back Squat",
+        "estimated_1rm": pytest.approx(116.67, abs=0.01),
+        "gain": 0.0,
+        "date": "2026-06-02",
+        "reps": 5,
+        "is_bodyweight": False,
+        "added_kg": None,
+        "load": {"kind": "absolute", "text": "100 kg", "kg": 100.0},
+        "body_weight_kg": None,
+    }
+
+
+def test_first_record_carries_a_bodyweight_lift_with_its_added_load_and_body_weight():
+    # Arrange — a weighted pull-up, bodyweight + 20 kg × 5 at 80 kg Performed Body Weight
+    client, ctx, sessions, logged, _ = build_client()
+    pull_up = _COVERAGE_IDS[1]
+    session_view = sessions.create(
+        "user_b",
+        SessionDraft(training_type="strength", duration_minutes=45, prescriptions=[]),
+    )
+    logged.create(
+        "user_b",
+        LoggedSessionDraft(
+            session_id=session_view.id,
+            training_type="strength",
+            performed_on=date(2026, 6, 2),
+            logged_sets=[
+                LoggedSetDraft(
+                    exercise_id=pull_up,
+                    quantity=reps_quantity(5),
+                    load=ParsedLoad(
+                        kind=LoadKind.BODYWEIGHT, text="bodyweight + 20 kg", added_kg=20.0
+                    ).to_dict(),
+                    body_weight_kg=80.0,
+                )
+            ],
+        ),
+    )
+
+    # Act
+    record = _achievements_by_id(client, ctx, "user_b")["first-pr"]["record"]
+
+    # Assert — the set that achieved it, never a bare kilogram headline (ADR-0026)
+    assert record["exercise_id"] == pull_up
+    assert record["exercise"] == "Pull-Up"
+    assert record["reps"] == 5
+    assert record["is_bodyweight"] is True
+    assert record["added_kg"] == 20.0
+    assert record["body_weight_kg"] == 80.0
+    assert record["load"] == {
+        "kind": "bodyweight",
+        "text": "bodyweight + 20 kg",
+        "added_kg": 20.0,
+    }
+
+
+def test_only_an_unlocked_first_record_carries_a_record():
+    # Arrange — sessions with no load: First Session earned, First Record locked
+    client, ctx, sessions, logged, _ = build_client()
+    _perform(sessions, logged, "user_l", date(2026, 6, 2), 1)
+
+    # Act
+    by_id = _achievements_by_id(client, ctx, "user_l")
+
+    # Assert — a locked First Record carries null; no other Achievement carries the key
+    assert by_id["first-pr"]["unlocked"] is False
+    assert by_id["first-pr"]["record"] is None
+    assert all("record" not in a for key, a in by_id.items() if key != "first-pr")
+
+
+def test_deleting_the_record_session_moves_the_record_to_the_next_one_or_clears_it():
+    # Arrange — two record-setting sessions; the earlier one is deleted
+    client, ctx, sessions, logged, _ = build_client()
+
+    def lift(day, kg):
+        return _perform(
+            sessions,
+            logged,
+            "user_z",
+            day,
+            1,
+            load=ParsedLoad(kind=LoadKind.ABSOLUTE, text=f"{kg} kg", kg=kg).to_dict(),
+        )
+
+    first = lift(date(2026, 6, 2), 100.0)
+    second = lift(date(2026, 6, 9), 110.0)
+    assert logged.delete(first.id, "user_z") is True
+
+    # Act
+    moved = _achievements_by_id(client, ctx, "user_z")["first-pr"]
+
+    # Assert — the later session now sets the first record
+    assert moved["unlocked_by_session_id"] == second.id
+    assert moved["record"]["date"] == "2026-06-09"
+    assert moved["record"]["load"]["kg"] == 110.0
+
+    # ...and deleting that one too clears it
+    assert logged.delete(second.id, "user_z") is True
+    cleared = _achievements_by_id(client, ctx, "user_z")["first-pr"]
+    assert cleared["unlocked"] is False
+    assert cleared["record"] is None
 
 
 def test_requires_authentication():

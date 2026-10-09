@@ -23,7 +23,9 @@ from fastapi import APIRouter, Depends
 
 from app.auth.dependencies import get_current_user
 from app.domain.achievements import Achievement
+from app.domain.personal_records import PersonalRecord
 from app.envelope import success_envelope
+from app.logbook.records import personal_record_payload
 from app.logbook.profile_progress import (
     FitnessLevelStanding,
     ProfileProgress,
@@ -39,8 +41,28 @@ from app.repositories.profile_repository import ProfileRepository
 router = APIRouter(prefix="/api", tags=["profile"])
 
 
-def _serialize_achievement(achievement: Achievement) -> dict:
+# The one Achievement whose Stamp page shows the lift that earned it (#653).
+_FIRST_RECORD = "first-pr"
+
+
+def _serialize_record(record: PersonalRecord | None) -> dict | None:
+    """The First Record lift: the shared Personal Record payload, plus the Exercise's
+    identity and the set's typed Load and Performed Body Weight, so the Stamp page can
+    show the lift itself — bodyweight with any added load, never a bare kg figure
+    (ADR-0026). Null while First Record is locked."""
+
+    if record is None:
+        return None
     return {
+        **personal_record_payload(record),
+        "exercise_id": record.exercise_id,
+        "load": record.load,
+        "body_weight_kg": record.body_weight_kg,
+    }
+
+
+def _serialize_achievement(achievement: Achievement) -> dict:
+    serialized = {
         "id": achievement.id,
         "name": achievement.name,
         "criteria": achievement.criteria,
@@ -58,6 +80,9 @@ def _serialize_achievement(achievement: Achievement) -> dict:
         # deletion to the next crossing session and never names a missing record.
         "unlocked_by_session_id": achievement.unlocked_by_session_id,
     }
+    if achievement.id != _FIRST_RECORD:
+        return serialized
+    return {**serialized, "record": _serialize_record(achievement.record)}
 
 
 def _serialize_fitness_level(standing: FitnessLevelStanding) -> dict:

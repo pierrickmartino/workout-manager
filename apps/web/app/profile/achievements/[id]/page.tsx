@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { resolveAppearance } from "@/lib/appearance";
 import { fetchProfileProgress } from "@/lib/profile-progress";
 import { stampBackLink, toStampDetail } from "@/lib/passport-view";
 import { PageHeader } from "@/components/pulse/page-header";
@@ -17,12 +18,14 @@ interface StampPageProps {
 // Achievement — there is no endpoint of its own — so its source link is the crossing Logged
 // Session as of this read, and never a deleted one (ADR-0018). An id the catalog does not hold
 // is not found. Its back link returns to the Profile when it was opened from the Profile
-// summary, and to the Passport otherwise.
+// summary, and to the Passport otherwise. First Record also shows its lift (#653), in the
+// reader's Weight Unit.
 export default async function StampPage({ params, searchParams }: StampPageProps) {
-  const [{ id }, { from }, envelope] = await Promise.all([
+  const [{ id }, { from }, envelope, appearance] = await Promise.all([
     params,
     searchParams,
     fetchProfileProgress(),
+    resolveAppearance(),
   ]);
   const back = stampBackLink(from);
 
@@ -38,7 +41,7 @@ export default async function StampPage({ params, searchParams }: StampPageProps
     );
   }
 
-  const detail = toStampDetail(envelope.data.achievements, id);
+  const detail = toStampDetail(envelope.data.achievements, id, appearance.weight_unit);
   if (detail === null) notFound();
 
   return (

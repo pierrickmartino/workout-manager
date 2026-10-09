@@ -2,7 +2,8 @@ import * as React from "react";
 import Link from "next/link";
 import { Lock, Trophy } from "@/components/pulse/icons";
 
-import type { StampDetail } from "@/lib/passport-view";
+import type { StampDetail, StampLift } from "@/lib/passport-view";
+import { DataList } from "@/components/pulse/data-list";
 import { SegmentedBar } from "@/components/pulse/segmented-bar";
 import { Card } from "@/components/ui/card";
 
@@ -10,9 +11,22 @@ import { Card } from "@/components/ui/card";
 // when and, in plain words, what earned it, and links the Logged Session whose logging crossed
 // the target. A locked Achievement opens too: it shows its criteria and live progress, and
 // links nowhere, since no session has earned it. The icon is decorative; the text carries the
-// meaning. No animation.
+// meaning. No animation. First Record also shows the lift that set it (#653).
 interface StampDetailBodyProps {
   detail: StampDetail;
+}
+
+// The lift's rows, pre-formatted by the view-model. A bodyweight lift has no Estimated 1RM row
+// (ADR-0026), and only it can carry a Performed Body Weight.
+function liftRows(lift: StampLift): { label: string; value: string }[] {
+  return [
+    { label: "EXERCISE", value: lift.exercise },
+    { label: "SET", value: lift.set },
+    ...(lift.estimatedOneRepMax !== null
+      ? [{ label: "EST. 1RM", value: lift.estimatedOneRepMax }]
+      : []),
+    ...(lift.bodyWeight !== null ? [{ label: "BODY WEIGHT", value: lift.bodyWeight }] : []),
+  ];
 }
 
 export function StampDetailBody({ detail }: StampDetailBodyProps): React.JSX.Element {
@@ -29,6 +43,7 @@ export function StampDetailBody({ detail }: StampDetailBodyProps): React.JSX.Ele
           <p className="break-words font-sans text-sm text-text-primary">{detail.explanation}</p>
         </div>
       </div>
+      {detail.lift !== null ? <DataList rows={liftRows(detail.lift)} /> : null}
       {/* The source record sits in History, a related place rather than a level deeper, so
           the link carries no navigation direction (ADR-0121). */}
       {detail.sourceHref !== null ? (
