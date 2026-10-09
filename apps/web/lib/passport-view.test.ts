@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { stampBackLink, toPassport, toStampDetail } from "./passport-view.ts";
-import type { Achievement } from "./profile-progress-types.ts";
+import type { Achievement, AchievementRecord } from "./profile-progress-types.ts";
 
 // `toPassport` turns the API's evaluated Achievements (curated catalog order) into the
 // Training Passport: the earned Stamps oldest first, one next milestone, and the rest of the
@@ -247,7 +247,7 @@ test("reads no Stamp page for an id the catalog does not hold", () => {
   const achievements = [earned("sessions-1", "2026-01-02")];
 
   // Act
-  const detail = toStampDetail(achievements, "sessions-9000");
+  const detail = toStampDetail(achievements, "sessions-9000", "kg");
 
   // Assert — the page renders not-found
   assert.equal(detail, null);
@@ -258,7 +258,7 @@ test("dates an earned Stamp's page with the year and links its crossing Logged S
   const achievements = [{ ...earned("sessions-5", "2025-11-14", 42), target: 5 }];
 
   // Act
-  const detail = toStampDetail(achievements, "sessions-5");
+  const detail = toStampDetail(achievements, "sessions-5", "kg");
 
   // Assert — the source link opens that record's detail page in History
   assert.equal(detail?.status, "earned");
@@ -299,7 +299,7 @@ const EXPLANATIONS: readonly [Achievement, string][] = [
 for (const [achievement, explanation] of EXPLANATIONS) {
   test(`explains what earned the ${achievement.id} Stamp in plain words`, () => {
     // Act
-    const detail = toStampDetail([achievement], achievement.id);
+    const detail = toStampDetail([achievement], achievement.id, "kg");
 
     // Assert
     assert.equal(detail?.status === "earned" && detail.explanation, explanation);
@@ -318,6 +318,7 @@ test("reads an ordinal past the teens with its own suffix", () => {
     const detail = toStampDetail(
       [{ ...earned(`sessions-${target}`, "2026-01-02"), target }],
       `sessions-${target}`,
+      "kg",
     );
 
     // Assert
@@ -333,7 +334,7 @@ test("explains an Achievement of an unknown family by its criteria", () => {
   const achievement = earned("mystery", "2026-01-02");
 
   // Act
-  const detail = toStampDetail([achievement], "mystery");
+  const detail = toStampDetail([achievement], "mystery", "kg");
 
   // Assert — still a plain sentence, never a blank
   assert.equal(
@@ -347,7 +348,7 @@ test("offers no source link for an earned Stamp the API sent without its session
   const achievements = [earned("sessions-1", "2026-01-02", null)];
 
   // Act
-  const detail = toStampDetail(achievements, "sessions-1");
+  const detail = toStampDetail(achievements, "sessions-1", "kg");
 
   // Assert — no link rather than a link to a missing record
   assert.equal(detail?.status === "earned" && detail.sourceHref, null);
@@ -358,7 +359,7 @@ test("opens a locked Achievement's page with its criteria and progress, and no s
   const achievements = [locked("streak-4", 2, 4)];
 
   // Act
-  const detail = toStampDetail(achievements, "streak-4");
+  const detail = toStampDetail(achievements, "streak-4", "kg");
 
   // Assert — the milestone's criteria and best-run progress; a locked page links nowhere
   assert.deepEqual(detail, {
@@ -369,6 +370,123 @@ test("opens a locked Achievement's page with its criteria and progress, and no s
     progress: "Best run 2/4 consecutive weeks",
     fill: 0.5,
   });
+});
+
+// --- the lift behind the First Record Stamp (#653) ---
+
+const SQUAT_RECORD: AchievementRecord = {
+  exercise_id: 1,
+  exercise: "Back Squat",
+  estimated_1rm: 116.6667,
+  gain: 0,
+  date: "2026-01-02",
+  reps: 5,
+  is_bodyweight: false,
+  added_kg: null,
+  load: { kind: "absolute", text: "100 kg", kg: 100 },
+  body_weight_kg: null,
+};
+
+const WEIGHTED_PULL_UP_RECORD: AchievementRecord = {
+  exercise_id: 3,
+  exercise: "Pull-Up",
+  estimated_1rm: 116.6667,
+  gain: 0,
+  date: "2026-01-02",
+  reps: 5,
+  is_bodyweight: true,
+  added_kg: 20,
+  load: { kind: "bodyweight", text: "bodyweight + 20 kg", added_kg: 20 },
+  body_weight_kg: 80,
+};
+
+function firstRecord(record: AchievementRecord | null): Achievement {
+  return { ...earned("first-pr", "2026-01-02"), record };
+}
+
+function liftOf(achievement: Achievement, unit: "kg" | "lb") {
+  const detail = toStampDetail([achievement], achievement.id, unit);
+  assert.equal(detail?.status, "earned");
+  return detail?.status === "earned" ? detail.lift : undefined;
+}
+
+test("shows an absolute First Record as its Load × reps with the Estimated 1RM", () => {
+  // Act
+  const lift = liftOf(firstRecord(SQUAT_RECORD), "kg");
+
+  // Assert — 100 kg × 5 estimates 116.67 kg, headlined whole like every Personal Record
+  assert.deepEqual(lift, {
+    exercise: "Back Squat",
+    set: "100 kg × 5",
+    estimatedOneRepMax: "117 kg",
+    bodyWeight: null,
+  });
+});
+
+test("projects an absolute First Record into the reader’s Weight Unit", () => {
+  // Act
+  const lift = liftOf(firstRecord(SQUAT_RECORD), "lb");
+
+  // Assert — 100 kg is 220.46 lb; 116.67 kg is 257 lb whole
+  assert.equal(lift?.set, "220.46 lb × 5");
+  assert.equal(lift?.estimatedOneRepMax, "257 lb");
+});
+
+test("shows a bodyweight First Record as bodyweight + added load × reps, never a bare kg figure", () => {
+  // Act
+  const lift = liftOf(firstRecord(WEIGHTED_PULL_UP_RECORD), "kg");
+
+  // Assert — no Estimated 1RM headline (ADR-0026); the Performed Body Weight stands apart
+  assert.deepEqual(lift, {
+    exercise: "Pull-Up",
+    set: "bodyweight + 20 kg × 5",
+    estimatedOneRepMax: null,
+    bodyWeight: "80 kg",
+  });
+});
+
+test("projects a bodyweight First Record’s added load and body weight into the reader’s unit", () => {
+  // Act
+  const lift = liftOf(firstRecord(WEIGHTED_PULL_UP_RECORD), "lb");
+
+  // Assert — 20 kg is 44.09 lb, 80 kg is 176.37 lb
+  assert.equal(lift?.set, "bodyweight + 44.09 lb × 5");
+  assert.equal(lift?.bodyWeight, "176.37 lb");
+});
+
+test("shows a pure bodyweight First Record as bodyweight × reps", () => {
+  // Arrange — no added load, no Performed Body Weight on file
+  const record: AchievementRecord = {
+    ...WEIGHTED_PULL_UP_RECORD,
+    reps: 12,
+    added_kg: null,
+    load: { kind: "bodyweight", text: "bodyweight" },
+    body_weight_kg: null,
+  };
+
+  // Act
+  const lift = liftOf(firstRecord(record), "kg");
+
+  // Assert
+  assert.deepEqual(lift, {
+    exercise: "Pull-Up",
+    set: "bodyweight × 12",
+    estimatedOneRepMax: null,
+    bodyWeight: null,
+  });
+});
+
+test("shows no lift on a Stamp that carries no record", () => {
+  // Arrange — First Record without its record, and an Achievement of another family
+  const cases = [firstRecord(null), earned("first-pr", "2026-01-02"), earned("sessions-1", "2026-01-02")];
+
+  for (const achievement of cases) {
+    // Act
+    const lift = liftOf(achievement, "kg");
+
+    // Assert — nothing rather than an empty or invented lift
+    assert.equal(lift, null);
+  }
 });
 
 // --- where a Stamp page's back link returns to ---

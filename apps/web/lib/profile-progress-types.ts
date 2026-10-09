@@ -2,6 +2,9 @@
 // safe to import from both Server and Client Components. The server-only data access
 // (Clerk auth + fetch) lives in `lib/profile-progress.ts`.
 
+import type { Load } from "./load";
+import type { RecordAchievement } from "./record-achievement";
+
 // Where the account's XP sits on the Operator Level curve (F5 Slice 2). `level` is the
 // account-wide tier; `xp_into_level / xp_span_of_level` is the progress-bar fill toward
 // the next level, and `xp_to_next` is the XP still owed to reach it.
@@ -12,13 +15,27 @@ export interface OperatorLevel {
   xp_to_next: number;
 }
 
+// The lift behind the First Record Achievement (#653): the shared Personal Record shape
+// (`exercise` … `added_kg`, ADR-0026), plus the Exercise's id and the set's typed `load` and
+// Performed Body Weight (`body_weight_kg`, kg). `body_weight_kg` is null for an absolute record
+// and for a bodyweight one logged without a body weight on file.
+export interface AchievementRecord extends RecordAchievement {
+  exercise_id: number;
+  exercise: string;
+  gain: number;
+  date: string;
+  load: Load | null;
+  body_weight_kg: number | null;
+}
+
 // One evaluated Achievement (F5 Slice 3): a curated, type-neutral milestone projected
 // read-time over the user's Logged history. `unlocked` is whether its predicate holds over
 // the whole current record; `current`/`target` are the live progress a locked badge shows
 // ("Log 25 Sessions — 18/25"); `unlocked_on` is the ISO date it was first earned and
 // `unlocked_by_session_id` the Logged Session whose logging crossed the target (#652), both
-// null while locked. Because it is a pure projection of current logs, a badge re-locks if the
-// logs behind it are deleted.
+// null while locked. Only First Record carries `record`: its lift, or null while locked; every
+// other Achievement omits the key. Because it is a pure projection of current logs, a badge
+// re-locks if the logs behind it are deleted.
 export interface Achievement {
   id: string;
   name: string;
@@ -28,6 +45,7 @@ export interface Achievement {
   target: number;
   unlocked_on: string | null;
   unlocked_by_session_id: number | null;
+  record?: AchievementRecord | null;
 }
 
 // One Training Type's Fitness Level read both ways (ADR-0112). `declared` is the stored

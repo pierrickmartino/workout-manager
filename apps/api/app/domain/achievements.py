@@ -36,6 +36,7 @@ from typing import Protocol
 from app.domain.muscle_groups import MuscleGroup, covered_groups
 from app.domain.personal_records import (
     LoggedSet,
+    PersonalRecord,
     detect_personal_records,
     logged_set_records,
 )
@@ -75,8 +76,10 @@ class Achievement:
     ``unlocked`` is whether the predicate holds over the *whole current* history;
     ``current``/``target`` are the live progress a locked badge shows; ``unlocked_on`` is
     the earliest date at which the predicate first held and ``unlocked_by_session_id`` the
-    Logged Session whose inclusion crossed it (both ``None`` while locked). Because every
-    field is derived read-time, a deleted log recomputes and can re-lock the badge.
+    Logged Session whose inclusion crossed it (both ``None`` while locked). ``record`` is
+    the lift behind First Record — the first Personal Record, as the shared detector
+    reports it — and ``None`` while locked and for every other Achievement (#653). Because
+    every field is derived read-time, a deleted log recomputes and can re-lock the badge.
     """
 
     id: str
@@ -87,6 +90,7 @@ class Achievement:
     target: int
     unlocked_on: date | None
     unlocked_by_session_id: int | None
+    record: PersonalRecord | None = None
 
 
 def _session_count(history: Sequence[_LoggedSession]) -> int:
@@ -128,6 +132,21 @@ def _has_personal_record(history: Sequence[_LoggedSession]) -> int:
     return 1 if detect_personal_records(logged_set_records(history)) else 0
 
 
+def _first_personal_record(
+    chronological: Sequence[_LoggedSession],
+) -> PersonalRecord | None:
+    """The first Personal Record the history holds — the lift that earned First Record.
+
+    Read off the shared detector rather than re-deciding which sets qualify (ADR-0029).
+    Detection is causal (oldest first), so the earliest record over the whole history is
+    the one the crossing session set; the history arrives in replay order, so a same-date
+    tie resolves exactly as the crossing session does.
+    """
+
+    records = detect_personal_records(logged_set_records(chronological))
+    return records[0] if records else None
+
+
 @dataclass(frozen=True)
 class _Definition:
     """A catalog entry: identity, human-facing copy, target, and its progress metric.
@@ -136,6 +155,9 @@ class _Definition:
     (it aggregates the whole set) and **monotonic non-decreasing over a chronological
     prefix** — both hold for every metric here, which is what makes ``unlocked_on``
     recoverable by replay.
+
+    ``lift`` names the Personal Record behind an unlocked entry, read over the
+    chronological history; only First Record has one (#653).
     """
 
     id: str
@@ -143,6 +165,7 @@ class _Definition:
     criteria: str
     target: int
     metric: Callable[[Sequence[_LoggedSession]], int]
+    lift: Callable[[Sequence[_LoggedSession]], PersonalRecord | None] | None = None
 
 
 # The seed catalog — curated data, fixed, in a stable display order. Type-neutral
@@ -178,6 +201,7 @@ CATALOG: tuple[_Definition, ...] = (
         "Set your first Personal Record",
         1,
         _has_personal_record,
+        lift=_first_personal_record,
     ),
 )
 
@@ -208,6 +232,8 @@ def _evaluate(
     current = definition.metric(history)
     unlocked = current >= definition.target
     crossing = _crossing_session(definition, chronological) if unlocked else None
+    lift = definition.lift
+    record = lift(chronological) if unlocked and lift is not None else None
     return Achievement(
         id=definition.id,
         name=definition.name,
@@ -217,6 +243,7 @@ def _evaluate(
         target=definition.target,
         unlocked_on=crossing.performed_on if crossing is not None else None,
         unlocked_by_session_id=crossing.id if crossing is not None else None,
+        record=record,
     )
 
 

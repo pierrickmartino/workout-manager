@@ -1,5 +1,8 @@
-import type { Achievement } from "./profile-progress-types";
+import type { Achievement, AchievementRecord } from "./profile-progress-types";
+import type { WeightUnit } from "./weight-unit";
 import { formatLongDate } from "./date-format.ts";
+import { formatBodyWeight, formatLoad } from "./load.ts";
+import { formatRecordAchievement } from "./record-achievement.ts";
 
 // One earned Achievement, presented as a Stamp in the Training Passport.
 export interface Stamp {
@@ -157,6 +160,20 @@ export function toPassport(
   };
 }
 
+// The lift that set the First Record (#653), formatted in the reader's Weight Unit.
+export interface StampLift {
+  exercise: string;
+  // The set: its typed Load × reps — "100 kg × 5", "bodyweight + 20 kg × 5".
+  set: string;
+  // The Estimated 1RM headline for an absolute lift ("117 kg"); null for a bodyweight one,
+  // whose estimate only orders records within its Exercise and is never a kg headline
+  // (ADR-0026).
+  estimatedOneRepMax: string | null;
+  // The Performed Body Weight a bodyweight lift was done at, or null when none was on file
+  // and for an absolute lift.
+  bodyWeight: string | null;
+}
+
 // An earned Achievement's page: what earned it in plain words, and a link to the Logged Session
 // whose logging crossed its target (#652).
 export interface EarnedStampDetail {
@@ -169,6 +186,9 @@ export interface EarnedStampDetail {
   // The crossing Logged Session's detail page in History, or null if the API named none — no
   // link rather than one to a missing record.
   sourceHref: string | null;
+  // The lift behind First Record (#653); null for every other Achievement, and for a First
+  // Record the API sent without one.
+  lift: StampLift | null;
 }
 
 // A locked Achievement's page: its criteria and live progress, and no source to link.
@@ -213,11 +233,27 @@ function explanation(achievement: Achievement): string {
   return `This session met the criteria: ${achievement.criteria}.`;
 }
 
+// The lift through the shared display rules: the set's Load by the typed-Load rules, and the
+// Estimated 1RM by the Personal Record headline rule, which an absolute record alone carries.
+function toStampLift(record: AchievementRecord, unit: WeightUnit): StampLift {
+  return {
+    exercise: record.exercise,
+    set: `${formatLoad(record.load, unit)} × ${record.reps}`,
+    estimatedOneRepMax: record.is_bodyweight ? null : formatRecordAchievement(record, unit),
+    bodyWeight:
+      record.is_bodyweight && record.body_weight_kg != null
+        ? formatBodyWeight(record.body_weight_kg, unit)
+        : null,
+  };
+}
+
 // The Stamp page for one Achievement, read from the same profile progress the Passport is: no
 // endpoint of its own. Null when the catalog holds no such id, so the page renders not-found.
+// `unit` is the reader's Weight Unit, which the First Record lift is shown in.
 export function toStampDetail(
   achievements: readonly Achievement[],
   id: string,
+  unit: WeightUnit,
 ): StampDetail | null {
   const achievement = achievements.find((candidate) => candidate.id === id);
   if (achievement === undefined) {
@@ -237,5 +273,6 @@ export function toStampDetail(
       achievement.unlocked_by_session_id === null
         ? null
         : `/history/${achievement.unlocked_by_session_id}`,
+    lift: achievement.record != null ? toStampLift(achievement.record, unit) : null,
   };
 }

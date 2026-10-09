@@ -276,7 +276,10 @@ const passportAchievements: Achievement[] = [
   { id: "streak-4", name: "4-Week Streak", criteria: "Train 4 weeks in a row", unlocked: false, current: 3, target: 4, unlocked_on: null, unlocked_by_session_id: null },
   { id: "streak-12", name: "12-Week Streak", criteria: "Train 12 weeks in a row", unlocked: false, current: 3, target: 12, unlocked_on: null, unlocked_by_session_id: null },
   { id: "muscle-all", name: "Full Coverage", criteria: "Train all six Muscle Groups", unlocked: false, current: 4, target: 6, unlocked_on: null, unlocked_by_session_id: null },
-  { id: "first-pr", name: "First Record", criteria: "Set your first Personal Record", unlocked: true, current: 1, target: 1, unlocked_on: "2025-11-14", unlocked_by_session_id: 7 },
+  { id: "first-pr", name: "First Record", criteria: "Set your first Personal Record", unlocked: true, current: 1, target: 1, unlocked_on: "2025-11-14", unlocked_by_session_id: 7, record: {
+    exercise_id: 3, exercise: "Single-Arm Assisted Archer Pull-Up", estimated_1rm: 116.67, gain: 0, date: "2025-11-14", reps: 12,
+    is_bodyweight: true, added_kg: 22.5, load: { kind: "bodyweight", text: "bodyweight + 22.5 kg", added_kg: 22.5 }, body_weight_kg: 82.5,
+  } },
 ];
 const passport = toPassport(passportAchievements);
 
@@ -290,9 +293,10 @@ const emptyPassport = toPassport([
 // One Stamp's page (#652) over the same catalog, header included, since the Stamp's title is
 // the page's display heading. `stamp` is earned: the date, its plain-words explanation and the
 // source link. `stamp-locked` opens the 4-Week Streak, whose criteria and best-run progress (the
-// longest progress label) replace the explanation and the link.
+// longest progress label) replace the explanation and the link. `stamp-record` opens First
+// Record, which also lists its lift (#653): a weighted bodyweight one with a long Exercise name.
 function StampSurface({ id }: { id: string }): React.JSX.Element {
-  const detail = toStampDetail(passportAchievements, id);
+  const detail = toStampDetail(passportAchievements, id, "kg");
   if (detail === null) throw new Error(`Unknown audit Stamp: ${id}`);
   return (
     <section className="flex flex-col gap-6">
@@ -370,6 +374,7 @@ function Content() {
     case "passport-empty": return <TrainingPassport passport={emptyPassport} />;
     case "stamp": return <StampSurface id="sessions-25" />;
     case "stamp-locked": return <StampSurface id="streak-4" />;
+    case "stamp-record": return <StampSurface id="first-pr" />;
     case "contrast": return <ContrastSamples />;
     default: throw new Error(`Unknown audit journey: ${journey}`);
   }
