@@ -301,3 +301,90 @@ test("generating with nothing to supersede asks nothing", async () => {
     restore();
   }
 });
+
+test("deleting an un-started protocol asks in the themed dialog, and only a confirm deletes", async () => {
+  // Arrange — the server marked it deletable and no Live Session holds it (issue #639).
+  const { restore } = mountDom({ url: "http://localhost/protocols" });
+  try {
+    forbidNativeConfirm();
+    const deleted: number[] = [];
+    const { unmount } = await mount(
+      "components/DeleteProtocolControl.tsx",
+      {
+        "@/app/protocols/actions": {
+          deleteProtocolAction: async (_state: unknown, form: FormData) => {
+            deleted.push(Number(form.get("protocol_id")));
+            return { error: null };
+          },
+        },
+      },
+      { action: { kind: "available", protocolId: 5 }, protocolTitle: "Summer block" },
+    );
+
+    // Act — open
+    await React.act(async () => buttonLabelled("Delete").click());
+
+    // Assert — the question names the Protocol, and nothing has happened yet.
+    assert.ok(dialog(), "no themed dialog opened");
+    assert.match(dialog()!.textContent ?? "", /Summer block/);
+    assert.deepEqual(deleted, []);
+
+    // Act — cancel
+    await React.act(async () => dialogButton("Cancel").click());
+
+    // Assert
+    assert.equal(dialog(), null);
+    assert.deepEqual(deleted, []);
+
+    // Act — confirm
+    await React.act(async () => buttonLabelled("Delete").click());
+    await React.act(async () => dialogButton("Delete").click());
+
+    // Assert
+    assert.deepEqual(deleted, [5]);
+    assert.equal(dialog(), null);
+
+    await React.act(async () => unmount());
+  } finally {
+    restore();
+  }
+});
+
+test("a protocol delete blocked by its live session announces why and offers no dialog", async () => {
+  // Arrange — the Live Session in progress is one of this Protocol's Sessions.
+  const { restore } = mountDom({ url: "http://localhost/protocols" });
+  try {
+    forbidNativeConfirm();
+    const reason = "Your live session is from this protocol. Finish or resume it before you delete it.";
+    const { unmount } = await mount(
+      "components/DeleteProtocolControl.tsx",
+      {
+        "@/app/protocols/actions": { deleteProtocolAction: async () => ({ error: null }) },
+        "next/link": {
+          __esModule: true,
+          default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) =>
+            React.createElement("a", { href, ...rest }, children),
+        },
+      },
+      {
+        action: { kind: "blocked", reason, resumeHref: "/sessions/21/live" },
+        protocolTitle: "Summer block",
+      },
+    );
+
+    // Act
+    const button = buttonLabelled("Delete");
+    await React.act(async () => button.click());
+
+    // Assert — still focusable, announced unavailable, with the reason attached, and inert.
+    assert.equal(dialog(), null);
+    assert.equal(button.disabled, false);
+    assert.equal(button.getAttribute("aria-disabled"), "true");
+    const described = document.getElementById(button.getAttribute("aria-describedby")!);
+    assert.equal(described?.textContent, reason);
+
+    await React.act(async () => unmount());
+  } finally {
+    restore();
+  }
+});

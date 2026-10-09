@@ -1,15 +1,14 @@
 "use client";
 
-import Link from "next/link";
-import { useActionState, useId } from "react";
+import { useActionState } from "react";
 
 import {
   switchProtocolAction,
   type SwitchProtocolState,
 } from "@/app/protocols/actions";
 import type { SwitchAction } from "@/lib/protocols-index";
-import { NAV_FORWARD } from "@/lib/nav-direction";
 import { buttonVariants } from "@/components/ui/button";
+import { BlockedRowAction } from "@/components/BlockedRowAction";
 
 interface SwitchProtocolControlProps {
   action: SwitchAction;
@@ -21,17 +20,14 @@ interface SwitchProtocolControlProps {
 // and the server action lands the user on Home showing the new Current Protocol. The
 // view-model decides whether it is offered, pending or blocked; this only renders that verdict.
 //
-// Blocked (a Live Session is in progress) is an `aria-disabled` button rather than a
-// `disabled` one, so it stays focusable and a screen reader announces it as unavailable with
-// the reason attached through `aria-describedby`. The reason is also visible, with a way back
-// to the Live Session beside it rather than inside the description. Pending (the slot is not
+// Blocked (a Live Session is in progress) renders `BlockedRowAction`: focusable, announced as
+// unavailable with its reason, and a way back to the Live Session. Pending (the slot is not
 // read yet) is a plain disabled button for the moment before hydration, so Switch can never be
 // pressed before a Live Session has been ruled out.
 export function SwitchProtocolControl({
   action,
   protocolTitle,
 }: SwitchProtocolControlProps): React.JSX.Element {
-  const reasonId = useId();
   const [state, formAction, pending] = useActionState<SwitchProtocolState, FormData>(
     switchProtocolAction,
     { error: null },
@@ -49,27 +45,13 @@ export function SwitchProtocolControl({
 
   if (action.kind === "blocked") {
     return (
-      <div className="flex flex-col items-start gap-2">
-        <button
-          type="button"
-          aria-disabled="true"
-          aria-label={label}
-          aria-describedby={reasonId}
-          className={`${buttonClass} cursor-not-allowed text-text-muted hover:bg-surface`}
-        >
-          Switch
-        </button>
-        <p id={reasonId} className="font-mono text-[12px] leading-relaxed text-text-secondary">
-          {action.reason}
-        </p>
-        <Link
-          {...NAV_FORWARD}
-          href={action.resumeHref}
-          className="font-mono text-[12px] text-cyan hover:underline"
-        >
-          Resume session
-        </Link>
-      </div>
+      <BlockedRowAction
+        label={label}
+        blocked={action}
+        className={buttonClass}
+      >
+        Switch
+      </BlockedRowAction>
     );
   }
 

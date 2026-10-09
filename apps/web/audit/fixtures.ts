@@ -28,11 +28,13 @@ export const sessions: SessionSummary[] = names.map((name, i) => ({
   is_favorite: i === 0, exercise_count: 100, logged_count: 1000,
 }));
 // The Protocols index (#637): one row per group, the first two carrying the authored-name
-// variants (a named row also shows its derived label beneath), the third unnamed.
+// variants (a named row also shows its derived label beneath), the third unnamed. The un-started
+// set-aside row is deletable (#639) and owns Session 1, the Session the `protocols-live` journey's
+// Live Session holds, so that journey renders both of its actions blocked.
 export const protocolIndexEntries: ProtocolIndexEntry[] = [
-  { status: "current", performed_count: 3, session_count: 12, last_performed_on: "2026-09-20" },
-  { status: "set_aside", performed_count: 0, session_count: 8, last_performed_on: null },
-  { status: "finished", performed_count: 16, session_count: 16, last_performed_on: "2025-12-04" },
+  { status: "current", performed_count: 3, session_count: 12, last_performed_on: "2026-09-20", deletable: false, session_ids: [101, 102] },
+  { status: "set_aside", performed_count: 0, session_count: 8, last_performed_on: null, deletable: true, session_ids: [1, 2] },
+  { status: "finished", performed_count: 16, session_count: 16, last_performed_on: "2025-12-04", deletable: false, session_ids: [301] },
 ].map((row, i) => ({
   ...row,
   id: i + 1,

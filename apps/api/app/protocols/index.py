@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from enum import StrEnum
 
+from app.domain.protocol_deletion import is_started, logged_session_ids
 from app.protocols.progress import by_made_current, last_performed_on_by_session
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
@@ -43,12 +44,18 @@ class ProtocolIndexRow:
     performed_count: int
     session_count: int
     last_performed_on: date | None
+    # Un-started: no Logged Session of *any* Completion Outcome references a member
+    # Session, so Delete may be offered (#639, ADR-0125). Computed here, never by the client.
+    deletable: bool
     # Ordering only (ADR-0001): the index sorts set-aside rows by it, never shows it.
     made_current_at: datetime
 
 
 def _row(
-    protocol: ProtocolView, status: ProtocolStatus, performed_on: dict[int, date]
+    protocol: ProtocolView,
+    status: ProtocolStatus,
+    performed_on: dict[int, date],
+    logged_ids: frozenset[int],
 ) -> ProtocolIndexRow:
     dates = [
         performed_on[session.session_id]
@@ -61,6 +68,9 @@ def _row(
         performed_count=len(dates),
         session_count=len(protocol.sessions),
         last_performed_on=max(dates, default=None),
+        deletable=not is_started(
+            (session.session_id for session in protocol.sessions), logged_ids
+        ),
         made_current_at=protocol.made_current_at,
     )
 
@@ -79,6 +89,7 @@ def protocol_index_from(
     """
 
     performed_on = last_performed_on_by_session(logged_sessions)
+    logged_ids = logged_session_ids(entry.session_id for entry in logged_sessions)
     rows: list[ProtocolIndexRow] = []
     has_current = False
     for protocol in by_made_current(protocols):
@@ -89,7 +100,7 @@ def protocol_index_from(
             has_current = True
         else:
             status = ProtocolStatus.SET_ASIDE
-        rows.append(_row(protocol, status, performed_on))
+        rows.append(_row(protocol, status, performed_on, logged_ids))
     return rows
 
 

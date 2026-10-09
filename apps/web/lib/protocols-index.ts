@@ -13,6 +13,11 @@
 // is blocked on every row with a reason, so Home never shows one plan mid-workout on another.
 // That guard is client-only because the server cannot see the slot (ADR-0012, ADR-0059), so
 // until the slot has been read Switch is pending rather than available.
+//
+// Delete (issue #639) is offered exactly when the server marks the row `deletable` (no Logged
+// Session of any Completion Outcome) — the client never works that out itself. The same slot
+// blocks it, but only on the row whose Protocol owns the Live Session's Session, so the workout
+// in progress never loses its plan halfway through.
 
 import { formatLongDate } from "./date-format.ts";
 import { parseApiInstant } from "./instant.ts";
@@ -33,16 +38,25 @@ export interface ProtocolIndexEntry {
   session_count: number;
   // ISO `yyyy-mm-dd` of the latest performed Session, or null when none is performed.
   last_performed_on: string | null;
+  // Server-computed: un-started, so Delete may be offered (issue #639).
+  deletable: boolean;
+  // The member Session ids, so a Live Session can be traced to the row that owns it.
+  session_ids: number[];
   // ISO instant the user last made this Protocol Current — ordering only.
   made_current_at: string;
 }
 
-// What a row offers for Switch: the action itself; pending while the Live Session slot is unread;
-// or blocked with a reason the user can read and a way back to the Live Session that blocks it.
-export type SwitchAction =
+// What a row offers for one action (Switch or Delete): the action itself; pending while the Live
+// Session slot is unread; or blocked with a reason the user can read and a way back to the Live
+// Session that blocks it.
+export type RowAction =
   | { kind: "available"; protocolId: number }
   | { kind: "pending" }
   | { kind: "blocked"; reason: string; resumeHref: string };
+
+export type SwitchAction = RowAction;
+export type DeleteAction = RowAction;
+export type BlockedRowActionView = Extract<RowAction, { kind: "blocked" }>;
 
 export interface ProtocolIndexRowView {
   id: number;
@@ -55,6 +69,8 @@ export interface ProtocolIndexRowView {
   href: string;
   // Null on a row that never offers Switch (Current, Finished).
   switchAction: SwitchAction | null;
+  // Null on a row the server did not mark deletable (started, which includes Finished).
+  deleteAction: DeleteAction | null;
 }
 
 // The persisted Live Session slot and the signed-in account, read on the client. Null until it
@@ -67,6 +83,9 @@ export interface LiveSessionContext {
 
 const SWITCH_BLOCKED_REASON =
   "Finish or resume your live session before you switch protocols.";
+
+const DELETE_BLOCKED_REASON =
+  "Your live session is from this protocol. Finish or resume it before you delete it.";
 
 export interface ProtocolIndexGroup {
   status: ProtocolStatus;
@@ -114,7 +133,7 @@ function progressText(performed: number, total: number): string {
   return `${performed} of ${total} ${total === 1 ? "session" : "sessions"}`;
 }
 
-// Where the Live Session stands for Switch: unread, none in progress, or the id of the one in
+// Where the Live Session stands for Switch and Delete: unread, none in progress, or the id of the one in
 // progress. It is the same slot Home offers to resume, so a slot another account left behind,
 // or a finished one, blocks nothing.
 type LiveSessionStanding = "unread" | "none" | number;
@@ -124,18 +143,41 @@ function liveSessionStanding(live: LiveSessionContext | null): LiveSessionStandi
   return resumableLiveSlot(live.liveSlot, live.accountId)?.sessionId ?? "none";
 }
 
+// One row action under the Live Session guard: pending while the slot is unread, available when
+// no Live Session is in progress or `isBlockedBy` lets it pass, else blocked with `reason` and a
+// way back to the Live Session.
+function guardedAction(
+  protocolId: number,
+  live: LiveSessionStanding,
+  isBlockedBy: (liveSessionId: number) => boolean,
+  reason: string,
+): RowAction {
+  if (live === "unread") return { kind: "pending" };
+  if (live === "none" || !isBlockedBy(live)) return { kind: "available", protocolId };
+  return { kind: "blocked", reason, resumeHref: `/sessions/${live}/live` };
+}
+
+// Switch: set-aside rows only, blocked by any Live Session.
 function switchActionFor(
   entry: ProtocolIndexEntry,
   live: LiveSessionStanding,
 ): SwitchAction | null {
   if (entry.status !== "set_aside") return null;
-  if (live === "unread") return { kind: "pending" };
-  if (live === "none") return { kind: "available", protocolId: entry.id };
-  return {
-    kind: "blocked",
-    reason: SWITCH_BLOCKED_REASON,
-    resumeHref: `/sessions/${live}/live`,
-  };
+  return guardedAction(entry.id, live, () => true, SWITCH_BLOCKED_REASON);
+}
+
+// Delete: deletable rows only, blocked by a Live Session from one of this Protocol's Sessions.
+function deleteActionFor(
+  entry: ProtocolIndexEntry,
+  live: LiveSessionStanding,
+): DeleteAction | null {
+  if (!entry.deletable) return null;
+  return guardedAction(
+    entry.id,
+    live,
+    (liveSessionId) => entry.session_ids.includes(liveSessionId),
+    DELETE_BLOCKED_REASON,
+  );
 }
 
 function toRow(entry: ProtocolIndexEntry, live: LiveSessionStanding): ProtocolIndexRowView {
@@ -154,6 +196,7 @@ function toRow(entry: ProtocolIndexEntry, live: LiveSessionStanding): ProtocolIn
         : `Last performed ${formatLongDate(entry.last_performed_on)}`,
     href: `/protocols/${entry.id}`,
     switchAction: switchActionFor(entry, live),
+    deleteAction: deleteActionFor(entry, live),
   };
 }
 

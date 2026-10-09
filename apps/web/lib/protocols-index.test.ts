@@ -23,6 +23,8 @@ function entry(overrides: Partial<ProtocolIndexEntry>): ProtocolIndexEntry {
     performed_count: 0,
     session_count: 6,
     last_performed_on: null,
+    deletable: false,
+    session_ids: [],
     made_current_at: "2026-05-01T09:00:00+00:00",
     ...overrides,
   };
@@ -235,4 +237,80 @@ test("a finished slot does not block Switch", () => {
   }).groups;
   // Assert
   assert.equal(group.rows[0].switchAction?.kind, "available");
+});
+
+// Delete (issue #639): only a row the server marks `deletable` offers it, and a Live Session
+// from that Protocol blocks it on that row alone.
+
+const UNSTARTED = [
+  entry({ id: 1, status: "current", deletable: true, session_ids: [10, 11] }),
+  entry({ id: 2, status: "set_aside", deletable: true, session_ids: [20, 21] }),
+  entry({ id: 3, status: "set_aside", deletable: false, session_ids: [30, 31] }),
+];
+
+function rowsById(index: ReturnType<typeof protocolsIndex>) {
+  return Object.fromEntries(
+    index.groups.flatMap((group) => group.rows).map((row) => [row.id, row]),
+  );
+}
+
+test("Delete is offered only on rows the server marks deletable, Current included", () => {
+  // Act
+  const rows = rowsById(protocolsIndex(UNSTARTED, NO_LIVE_SESSION));
+  // Assert
+  assert.deepEqual(rows[1].deleteAction, { kind: "available", protocolId: 1 });
+  assert.deepEqual(rows[2].deleteAction, { kind: "available", protocolId: 2 });
+  assert.equal(rows[3].deleteAction, null);
+});
+
+test("a Live Session from a Protocol blocks Delete on that row only, with a readable reason", () => {
+  // Act — the slot holds Session 21, a member of Protocol 2
+  const rows = rowsById(
+    protocolsIndex(UNSTARTED, { liveSlot: liveSlot({ sessionId: 21 }), accountId: ACCOUNT }),
+  );
+  // Assert
+  assert.deepEqual(rows[2].deleteAction, {
+    kind: "blocked",
+    reason: "Your live session is from this protocol. Finish or resume it before you delete it.",
+    resumeHref: "/sessions/21/live",
+  });
+  assert.deepEqual(rows[1].deleteAction, { kind: "available", protocolId: 1 });
+  assert.equal(rows[3].deleteAction, null);
+});
+
+test("a Live Session from a standalone Session blocks no Delete", () => {
+  // Act — Session 99 belongs to none of the listed Protocols
+  const rows = rowsById(
+    protocolsIndex(UNSTARTED, { liveSlot: liveSlot({ sessionId: 99 }), accountId: ACCOUNT }),
+  );
+  // Assert
+  assert.equal(rows[1].deleteAction?.kind, "available");
+  assert.equal(rows[2].deleteAction?.kind, "available");
+});
+
+test("a slot another account owns, or a finished one, blocks no Delete", () => {
+  // Act
+  const foreign = rowsById(
+    protocolsIndex(UNSTARTED, {
+      liveSlot: liveSlot({ sessionId: 21, accountId: "user_2" }),
+      accountId: ACCOUNT,
+    }),
+  );
+  const finished = rowsById(
+    protocolsIndex(UNSTARTED, {
+      liveSlot: liveSlot({ sessionId: 21, status: "finished" }),
+      accountId: ACCOUNT,
+    }),
+  );
+  // Assert
+  assert.equal(foreign[2].deleteAction?.kind, "available");
+  assert.equal(finished[2].deleteAction?.kind, "available");
+});
+
+test("until the Live Session slot has been read, Delete is pending, never available", () => {
+  // Act
+  const rows = rowsById(protocolsIndex(UNSTARTED));
+  // Assert
+  assert.deepEqual(rows[1].deleteAction, { kind: "pending" });
+  assert.equal(rows[3].deleteAction, null);
 });

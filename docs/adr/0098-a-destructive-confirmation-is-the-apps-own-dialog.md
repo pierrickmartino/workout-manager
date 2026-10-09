@@ -11,6 +11,12 @@ components/GenerateProtocolForm.tsx:43   the Protocol supersede one-way door (AD
 [`ConfirmDialog`](../../apps/web/components/pulse/confirm-dialog.tsx) already existed
 and `NavigationGuardProvider` already used it. These three bypassed it.
 
+Later destructive actions were born on the dialog rather than moved onto it:
+
+```text
+components/DeleteProtocolControl.tsx     delete an un-started Protocol (ADR-0125, #639)
+```
+
 ## Why this is not a styling complaint
 
 A browser dialog is chrome, and the cost is not that it looks wrong in six Skins —
@@ -57,6 +63,13 @@ the submitted values are read at submit time and held in `awaitingSupersede` whi
 the question is on screen; re-reading the form on confirm would depend on it still
 being mounted. The confirm button is destructive-styled on purpose: accepting sets
 aside a Protocol the user is partway through.
+
+**The Protocol delete** (#639) takes the logged-session delete's shape: a `<form action>`
+whose submit only `preventDefault`s, confirmed with `requestSubmit()`, so the hidden
+`protocol_id` is the one place the Protocol is named. Its title names the Protocol, which
+is an authored name and can be 120 unbroken characters, so the dialog's title and message
+now carry `break-words`. That is the `confirm` journey's title, and it overflowed only
+*inside* the dialog's own scroll box, where a document-width sweep can't see it.
 
 ## The guard
 

@@ -15,6 +15,7 @@ from datetime import datetime
 from typing import Any
 from typing import Protocol as Interface
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 # Sentinel distinguishing "leave the Protocol name unchanged" (the default) from an
@@ -35,6 +36,13 @@ from app.repositories.prescription_mapping import (
     row_from_draft,
     view_from_row,
 )
+
+
+class ProtocolStarted(Exception):
+    """A Logged Session references a member Session, so the Protocol can't be deleted.
+
+    Raised by :meth:`ProtocolRepository.delete` when the database refuses the cascade: a log
+    committed after the Delete service's guard read still pins its Session (ADR-0125)."""
 
 
 @dataclass(frozen=True)
@@ -176,6 +184,19 @@ class ProtocolRepository(Interface):
         The one write Switch makes: a plan-side choice that touches no Session,
         Prescription or Logged Session. Owner-scoped: returns the updated Protocol, or
         ``None`` if it is missing or owned by another user."""
+        ...
+
+    def delete(self, protocol_id: int, clerk_user_id: str) -> bool:
+        """Permanently delete the owner's Protocol (Delete, #639, ADR-0125).
+
+        Removes the Protocol row (its Calibration is a column on it) together with its
+        member Sessions and their Exercise Prescriptions, children-first so a
+        foreign-key-enforcing database accepts the parent deletes, and issues the single
+        terminal commit. Returns ``True`` when a Protocol was deleted, ``False`` when it is
+        missing or owned by another user. Raises :class:`ProtocolStarted`, having rolled the
+        whole cascade back, when a Logged Session still references a member Session (a log
+        that landed after the service's guard). The un-started guard and the Generation Feedback
+        cleanup live in the Delete service — this seam owns only the Protocol aggregate."""
         ...
 
     def deploy_tail(
@@ -354,6 +375,39 @@ class SqlProtocolRepository:
         self._session.commit()
         self._session.refresh(protocol)
         return self._view(protocol)
+
+    def delete(self, protocol_id: int, clerk_user_id: str) -> bool:
+        # The **terminal** step of the Protocol-Delete cascade: any Generation Feedback the
+        # Delete service flushed earlier rides this one commit (all repositories in a request
+        # share one session), so the delete lands whole or rolls back whole.
+        protocol = self._session.get(Protocol, protocol_id)
+        if protocol is None or protocol.clerk_user_id != clerk_user_id:
+            return False
+
+        workouts = self._session.exec(
+            select(WorkoutSession).where(WorkoutSession.protocol_id == protocol_id)
+        ).all()
+        prescriptions = self._session.exec(
+            select(ExercisePrescription).where(
+                ExercisePrescription.session_id.in_([w.id for w in workouts])
+            )
+        ).all()
+        try:
+            for prescription in prescriptions:
+                self._session.delete(prescription)
+            self._session.flush()
+            for workout in workouts:
+                self._session.delete(workout)
+            self._session.flush()
+            self._session.delete(protocol)
+            self._session.commit()
+        except IntegrityError as exc:
+            # A Logged Session committed after the service's guard read still references a
+            # member Session, so the foreign key refuses the cascade: roll it back whole and
+            # report the Protocol as started rather than surfacing a database error.
+            self._session.rollback()
+            raise ProtocolStarted from exc
+        return True
 
     def deploy_tail(
         self,
@@ -580,6 +634,16 @@ class InMemoryProtocolRepository:
         protocol.made_current_at = _utcnow()
         return self._view(protocol)
 
+    def delete(self, protocol_id: int, clerk_user_id: str) -> bool:
+        protocol = self._protocols.get(protocol_id)
+        if protocol is None or protocol.clerk_user_id != clerk_user_id:
+            return False
+
+        for workout in self._sessions.pop(protocol_id, []):
+            self._prescriptions.pop(workout.id, None)
+        del self._protocols[protocol_id]
+        return True
+
     def deploy_tail(
         self,
         protocol_id: int,
@@ -709,6 +773,7 @@ __all__ = [
     "ProtocolRepository",
     "ProtocolSessionDraft",
     "ProtocolSessionView",
+    "ProtocolStarted",
     "ProtocolView",
     "SqlProtocolRepository",
 ]

@@ -180,14 +180,15 @@ function AdminAudit() {
   </div>;
 }
 
-// The themed confirmation that replaced `window.confirm` at the three destructive actions
-// (ADR-0098). It is `fixed inset-0` and renders only while mounted, so no other journey ever
-// shows one — and an unrendered surface is an unmeasured one, whatever the static guards say
-// (ADR-0088). The copy is the longest of the three in each slot: the supersede's warning names
-// a Protocol, and the admin delete's two-line consequence is the longest message.
+// The themed confirmation that replaced `window.confirm` at the destructive actions (ADR-0098).
+// It is `fixed inset-0` and renders only while mounted, so no other journey ever shows one — and
+// an unrendered surface is an unmeasured one, whatever the static guards say (ADR-0088). The copy
+// is the longest of them in each slot: the Protocol Delete's title (#639) names the Protocol, here
+// the unbroken authored name; the supersede's warning names a Protocol, and the admin delete's
+// two-line consequence is the longest message.
 function ConfirmSurface() {
   return <ConfirmDialog
-    title="Permanently delete this exercise?"
+    title={`Delete \u201C${"W".repeat(120)}\u201D?`}
     message={'This cannot be undone. The movement is removed from the shared catalog outright, not retired. You\u2019re partway through \u201CPosterior Chain Rebuild \u2014 Weeks 1\u20134\u201D.'}
     confirmLabel="Delete permanently"
     cancelLabel="Keep current"
