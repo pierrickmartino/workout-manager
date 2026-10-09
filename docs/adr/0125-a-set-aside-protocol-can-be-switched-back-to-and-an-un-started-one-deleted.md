@@ -5,7 +5,7 @@
 ADR-0037 let a user move on from a Protocol by generating a new one, which supersedes the old
 one and sets it aside for good. It turned down a delete button and put off an index. In use,
 that one-way door is the problem. Users can't see the Protocols they own, can't go back to one
-they paused, and can't get rid of one they adopted by mistake. Generating has to warn whenever
+they set aside, and can't get rid of one they adopted by mistake. Generating has to warn whenever
 the Current Protocol has performed Sessions, so trying a new plan feels like abandoning the old
 one.
 

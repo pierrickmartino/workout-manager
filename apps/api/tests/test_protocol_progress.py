@@ -28,7 +28,10 @@ from app.repositories.logged_session_repository import (
     InMemoryLoggedSessionRepository,
     LoggedSessionDraft,
 )
-from app.repositories.protocol_repository import InMemoryProtocolRepository
+from app.repositories.protocol_repository import (
+    InMemoryProtocolRepository,
+    ProtocolView,
+)
 from app.repositories.session_repository import InMemorySessionRepository
 
 
@@ -326,19 +329,27 @@ def test_current_protocol_skips_a_fully_performed_protocol_for_an_older_one():
 class _MadeCurrentAt:
     """A ``ProtocolRepository`` whose reads carry the given ``made_current_at`` per id.
 
-    Wraps a real repository and keeps its list order (``created_at`` desc), so a test can
-    make the made-Current order disagree with the adoption order — the case Switch will
-    create (ADR-0125) — without a writer for it existing yet."""
+    Wraps a real repository and keeps its list order (``created_at`` desc, or reversed
+    with ``oldest_first``), so a test can make the made-Current order disagree with the
+    list order — the case Switch will create (ADR-0125) — without a writer for it yet."""
 
-    def __init__(self, inner, made_current_at):
+    def __init__(
+        self,
+        inner: InMemoryProtocolRepository,
+        made_current_at: dict[int, datetime],
+        *,
+        oldest_first: bool = False,
+    ) -> None:
         self._inner = inner
         self._made_current_at = made_current_at
+        self._oldest_first = oldest_first
 
-    def list_for_user(self, clerk_user_id):
-        return [
+    def list_for_user(self, clerk_user_id: str) -> list[ProtocolView]:
+        views = [
             replace(p, made_current_at=self._made_current_at.get(p.id, p.made_current_at))
             for p in self._inner.list_for_user(clerk_user_id)
         ]
+        return list(reversed(views)) if self._oldest_first else views
 
 
 def test_current_protocol_follows_the_latest_made_current_not_the_latest_adopted():
@@ -370,15 +381,14 @@ def test_current_protocol_breaks_a_made_current_tie_by_the_higher_id():
     second = adopt(_three_week_protocol(), "user_tie", PARAMS,
                    exercises=exercises, protocols=protocols)
     same = datetime(2026, 3, 1, tzinfo=UTC)
-    tied = _MadeCurrentAt(protocols, {first.id: same, second.id: same})
-    reversed_order = type("_Reversed", (), {
-        "list_for_user": lambda self, user: list(reversed(tied.list_for_user(user)))
-    })()
+    tied = _MadeCurrentAt(
+        protocols, {first.id: same, second.id: same}, oldest_first=True
+    )
 
     # Act
     current = current_protocol(
         "user_tie",
-        protocols=reversed_order,
+        protocols=tied,
         logged_sessions=logged.list_for_user("user_tie"),
     )
 

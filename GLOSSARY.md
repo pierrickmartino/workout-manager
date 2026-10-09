@@ -13,7 +13,7 @@ A user-owned training plan: a fully enumerated set of Sessions spanning a user-c
 _Avoid_: Plan, routine, cycle, Program
 
 **Current Protocol**:
-The one Protocol a user is actively working through — the unfinished Protocol (one that still has an un-performed Session) the user most recently made Current, by Adopting it or by **Switching** to it. It is the Protocol the Home screen surfaces the Next Session and the remaining queue from. A user may own several Protocols but has at most one Current Protocol at a time; when none exists, Home falls back to prompting a new generation. Generating a new Protocol therefore **supersedes** the prior Current Protocol: adopting makes the new one Current and the old one is **set aside**. When the Current Protocol becomes a Finished Protocol, the next most-recently-Current unfinished Protocol takes its place. A Protocol is deleted only when un-started — no Logged Session of any Completion Outcome references any of its Sessions (ADR-0125).
+The one Protocol a user is actively working through, which Home surfaces the Next Session from: the unfinished Protocol the user most recently made Current, by Adopting it or by **Switching** to it. Generating a new Protocol therefore **supersedes** the prior one, which is **set aside**; when none is unfinished, Home prompts a new generation. A Protocol is deleted only when un-started — no Logged Session of any Completion Outcome references any of its Sessions (ADR-0125).
 _Avoid_: Active plan, selected protocol, today's protocol, Protocol library (Library already names the Catalog pick widget and the Session Library), discard/abandon/archive (a superseded Protocol is set aside, not removed)
 
 **Set aside**:
@@ -21,7 +21,7 @@ The state of a Protocol the user owns that is unfinished but not Current — sup
 _Avoid_: Paused, inactive, archived, abandoned
 
 **Switch**:
-Making a set-aside Protocol Current again. A plan-side choice only: it writes nothing to any Session or Logged Session, and the previously Current Protocol is set aside with nothing lost. A Finished Protocol cannot be switched to — it has no Next Session.
+Making a set-aside Protocol Current again, setting the previous Current Protocol aside. A plan-side choice only: it writes nothing to any Session or Logged Session.
 _Avoid_: Resume (that is the Live Session), activate, select
 
 **Finished Protocol**:
