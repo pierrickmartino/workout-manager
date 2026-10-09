@@ -6,7 +6,7 @@ import type { WeightUnit } from "./weight-unit";
 // fixed Skin catalog with preview/publish state (CONTEXT "Skin" / "Active Skin");
 // an ordinary user never sees it. Keeping this decision logic pure and server-free
 // means it is unit-testable without a browser and the picker/publisher components
-// stay thin (prior art: apps/web/lib/achievements-view.ts).
+// stay thin (prior art: apps/web/lib/passport-view.ts).
 
 // ── Mode slice (everyone) ────────────────────────────────────────────────────
 

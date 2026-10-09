@@ -18,7 +18,7 @@ import { KNOWN_WEIGHT_UNITS, type WeightUnit } from "./weight-unit.ts";
 // Light/Dark/System options for everyone and — for an admin only — the Skin catalog
 // with preview/publish state. It is pure (no I/O), so it is unit-tested over its
 // inputs/outputs without rendering React (prior art:
-// apps/web/lib/achievements-view.test.ts).
+// apps/web/lib/passport-view.test.ts).
 
 // ── Mode slice: everyone ────────────────────────────────────────────────────
 
