@@ -5,14 +5,15 @@
 // `navigator.onLine`, no IndexedDB, and no Clerk. The connectivity read and the outbox read
 // are thin effect shells around this (lib/use-connectivity, lib/use-sync-status).
 //
-// The cardinal honesty rule (CONTEXT / issue #414): these five states are never collapsed
+// The cardinal honesty rule (CONTEXT / issue #414): these states are never collapsed
 // into one generic "error", and "synced" is claimed ONLY when the server has actually
 // acknowledged the write — a queued-but-undelivered finish reads as "saved on this device",
 // never a false "synced".
 
 import type { OutboxEntry } from "./finish-outbox.ts";
 
-// The five distinct states the UI surfaces, most-actionable first in the derivation below:
+// The distinct states the UI surfaces, most-actionable first in the derivation below:
+//   - orphaned       a finish can never be saved — its Session no longer exists (#636)
 //   - offline        no connection; queued work is safe on-device and will sync on reconnect
 //   - saved-locally  online, a finish is durably queued but not yet delivered ("sync pending")
 //   - syncing        online, a delivery attempt is in flight
@@ -23,7 +24,8 @@ export type SyncState =
   | "saved-locally"
   | "syncing"
   | "synced"
-  | "failed";
+  | "failed"
+  | "orphaned";
 
 // A count of the account's queued finishes by lifecycle status — the only thing the
 // derivation needs from the outbox, so the pure rule never depends on entry shape.
@@ -31,6 +33,7 @@ export interface OutboxSummary {
   pending: number;
   syncing: number;
   failed: number;
+  orphaned: number;
 }
 
 // An empty summary — no queued finishes.
@@ -38,6 +41,7 @@ export const EMPTY_OUTBOX_SUMMARY: OutboxSummary = {
   pending: 0,
   syncing: 0,
   failed: 0,
+  orphaned: 0,
 };
 
 // Count the account's queued finishes by status. The caller has already scoped the
@@ -53,8 +57,8 @@ export function summarizeOutbox(
   );
 }
 
-// True when any finish is still queued (in any lifecycle status) — i.e. there is
-// undelivered work on the device.
+// True when any finish is still queued for delivery — i.e. there is undelivered work on
+// the device that will sync. An orphaned finish is not: it never will (#636).
 export function hasQueuedWork(summary: OutboxSummary): boolean {
   return summary.pending + summary.syncing + summary.failed > 0;
 }
@@ -62,7 +66,11 @@ export function hasQueuedWork(summary: OutboxSummary): boolean {
 // Decide the single honest state to present, from connectivity and the outbox summary.
 // Pure — no DOM, no I/O.
 //
-// Offline wins outright: while there is no connection, the honest headline is "offline",
+// An orphaned finish wins outright (#636): no reconnect or retry can land it, so it is the
+// one state that waits on the user rather than the network, and it shows until they
+// dismiss it — never hidden behind "offline" or a transient "syncing".
+//
+// Otherwise offline wins: while there is no connection, the honest headline is "offline",
 // whatever the queue holds (a finish stranded `failed` by a drain that ran while offline
 // is really just "can't reach the server", i.e. offline — never a scary "failed"). The
 // offline surface still names how many finishes are saved on-device, so "saved locally"
@@ -75,6 +83,7 @@ export function deriveSyncState(
   online: boolean,
   summary: OutboxSummary,
 ): SyncState {
+  if (summary.orphaned > 0) return "orphaned";
   if (!online) return "offline";
   if (summary.syncing > 0) return "syncing";
   if (summary.failed > 0) return "failed";

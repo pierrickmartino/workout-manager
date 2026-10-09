@@ -81,6 +81,23 @@ export async function apiSend<T>(
   method: "POST" | "PUT" | "PATCH" | "DELETE",
   body?: unknown,
 ): Promise<Envelope<T>> {
+  return (await apiSendWithStatus<T>(path, method, body)).envelope;
+}
+
+// A write's raw envelope together with the HTTP status it came back with.
+export interface SentEnvelope<T> {
+  status: number;
+  envelope: Envelope<T>;
+}
+
+// `apiSend`, keeping the HTTP status. For the rare caller that must tell one rejection
+// from another — the finish outbox stops retrying a `404` (the Session is gone, #636)
+// but keeps retrying every other failure. Every other caller uses `apiSend`.
+export async function apiSendWithStatus<T>(
+  path: string,
+  method: "POST" | "PUT" | "PATCH" | "DELETE",
+  body?: unknown,
+): Promise<SentEnvelope<T>> {
   const headers = await authHeaders();
   const init: RequestInit =
     body === undefined
@@ -97,9 +114,9 @@ export async function apiSend<T>(
   // response still carries the JSON envelope (see the API's exception handlers), so only the
   // bodyless 204 needs this branch.
   if (response.status === HTTP_NO_CONTENT) {
-    return { success: true, data: null, error: null };
+    return { status: response.status, envelope: { success: true, data: null, error: null } };
   }
-  return (await response.json()) as Envelope<T>;
+  return { status: response.status, envelope: (await response.json()) as Envelope<T> };
 }
 
 // Upload a file to a backend endpoint as `multipart/form-data` — the one non-JSON write in the

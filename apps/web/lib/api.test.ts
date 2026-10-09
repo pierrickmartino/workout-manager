@@ -15,7 +15,7 @@ mock.module("@clerk/nextjs/server", {
 });
 
 // Import after the mocks are registered so the seam binds to the stubs.
-const { apiGet, apiSend, MissingAuthError } = await import("./api.ts");
+const { apiGet, apiSend, apiSendWithStatus, MissingAuthError } = await import("./api.ts");
 
 // Capture the arguments each `fetch` call receives and hand back a canned envelope.
 let lastFetch: { url: string; init: RequestInit | undefined };
@@ -101,6 +101,23 @@ test("apiSend returns the parsed envelope unchanged", async () => {
 
   // Assert — writes surface the raw envelope too; unwrap stays at the caller
   assert.deepEqual(result, envelope);
+});
+
+test("apiSendWithStatus surfaces the HTTP status beside the raw envelope", async () => {
+  // Arrange — a 404 error envelope, the shape a write against a vanished Session returns
+  const envelope = { success: false, data: null, error: "Session not found" };
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    lastFetch = { url, init };
+    return { status: 404, json: async () => envelope } as Response;
+  }) as typeof fetch;
+
+  // Act
+  const result = await apiSendWithStatus("/api/sessions/9/logs", "POST", { a: 1 });
+
+  // Assert — the caller can tell "not found" from any other rejection, envelope untouched
+  assert.equal(result.status, 404);
+  assert.deepEqual(result.envelope, envelope);
+  assert.equal(lastFetch.url, "http://localhost:8000/api/sessions/9/logs");
 });
 
 test("apiGet throws MissingAuthError on a null token instead of sending Bearer null", async () => {

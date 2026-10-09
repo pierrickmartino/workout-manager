@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   RefreshCw,
   Save,
+  Unlink,
   WifiOff,
 } from "@/components/pulse/icons";
 
@@ -17,14 +18,15 @@ import { persistentTransitionStyle } from "@/lib/persistent-transition";
 
 // The honest connectivity + sync surface (issue #414 — ADR-0060). Mounted once under the
 // signed-in shell alongside the OutboxSyncRegistrar, it renders the five distinct states the
-// pure `deriveSyncState` seam decides — offline / saved-locally / syncing / synced / failed —
-// and never collapses them into one generic error. Non-blocking: a slim banner pinned above
+// pure `deriveSyncState` seam decides — offline / saved-locally / syncing / synced / failed /
+// orphaned — and never collapses them into one generic error. Non-blocking: a slim banner pinned above
 // the bottom tab bar, never a modal, so it never interrupts training.
 //
 // "Synced" is the quiet default: with nothing queued it shows nothing, except a brief
 // confirmation right after a finish actually lands (a real server ack), carrying the
 // last-synced time. Offline, saved-locally, syncing and failed are always shown while they
-// hold, because each is something the user should be able to see and (for failed) act on.
+// hold, because each is something the user should be able to see and (for failed and
+// orphaned) act on.
 
 // How long the "Synced" confirmation lingers after a finish lands before the banner goes
 // quiet again — long enough to read, short enough not to nag.
@@ -37,7 +39,7 @@ function isActiveState(state: SyncState): boolean {
 }
 
 export function SyncStatusBanner(): React.JSX.Element | null {
-  const { state, summary, lastSyncedAt, retry } = useSyncStatus();
+  const { state, summary, lastSyncedAt, retry, dismiss } = useSyncStatus();
 
   // Show "Synced" only as a brief confirmation after a real acknowledgement — i.e. when the
   // state transitions INTO synced from an active state. On a fresh load with nothing queued
@@ -84,9 +86,11 @@ export function SyncStatusBanner(): React.JSX.Element | null {
             state={state}
             pendingCount={summary.pending + summary.syncing}
             failedCount={summary.failed}
+            orphanedCount={summary.orphaned}
             offlineQueued={hasQueuedWork(summary)}
             lastSyncedAt={lastSyncedAt}
             onRetry={retry}
+            onDismiss={dismiss}
           />
         </ViewTransition>
       ) : null}
@@ -98,20 +102,24 @@ interface BannerBodyProps {
   state: SyncState;
   pendingCount: number;
   failedCount: number;
+  orphanedCount: number;
   offlineQueued: boolean;
   lastSyncedAt: number | null;
   onRetry: () => void;
+  onDismiss: () => void;
 }
 
-// The per-state chrome. Each state gets its own icon, accent, and copy so the five never
-// read as one; only `failed` carries an action (the manual retry).
+// The per-state chrome. Each state gets its own icon, accent, and copy so they never
+// read as one; `failed` carries the manual retry, `orphaned` a dismiss (no retry can help).
 function BannerBody({
   state,
   pendingCount,
   failedCount,
+  orphanedCount,
   offlineQueued,
   lastSyncedAt,
   onRetry,
+  onDismiss,
 }: BannerBodyProps): React.JSX.Element {
   const { icon: Icon, accent, spin } = STATE_CHROME[state];
   return (
@@ -129,6 +137,7 @@ function BannerBody({
         {renderMessage(state, {
           pendingCount,
           failedCount,
+          orphanedCount,
           offlineQueued,
           lastSyncedAt,
         })}
@@ -145,6 +154,17 @@ function BannerBody({
           Retry
         </Button>
       ) : null}
+      {state === "orphaned" ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={onDismiss}
+          className="shrink-0"
+        >
+          Dismiss
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -152,6 +172,7 @@ function BannerBody({
 interface MessageInputs {
   pendingCount: number;
   failedCount: number;
+  orphanedCount: number;
   offlineQueued: boolean;
   lastSyncedAt: number | null;
 }
@@ -161,7 +182,7 @@ interface MessageInputs {
 // while a finish is only saved on-device).
 function renderMessage(
   state: SyncState,
-  { pendingCount, failedCount, offlineQueued, lastSyncedAt }: MessageInputs,
+  { pendingCount, failedCount, orphanedCount, offlineQueued, lastSyncedAt }: MessageInputs,
 ): React.JSX.Element {
   switch (state) {
     case "offline":
@@ -197,6 +218,19 @@ function renderMessage(
           <span className="font-semibold text-magenta">Sync failed</span>
           {failedCount > 1 ? ` for ${failedCount} sessions` : ""}. Your work is safe
           on this device.
+        </span>
+      );
+    case "orphaned":
+      // No retry can save it (#636), so the copy says why and that nothing more will
+      // happen, instead of the reassurance the retryable states give.
+      return (
+        <span className="text-text-secondary">
+          <span className="font-semibold text-magenta">
+            {orphanedCount > 1 ? `${orphanedCount} sessions` : "Session"} not saved.
+          </span>{" "}
+          {orphanedCount > 1
+            ? "Their plans no longer exist — deleted, maybe on another device — so these workouts can’t be saved."
+            : "Its plan no longer exists — deleted, maybe on another device — so this workout can’t be saved."}
         </span>
       );
   }
@@ -247,6 +281,10 @@ const STATE_CHROME: Record<SyncState, StateChrome> = {
   },
   failed: {
     icon: AlertTriangle,
+    accent: "border-magenta/40 bg-magenta-dim text-magenta",
+  },
+  orphaned: {
+    icon: Unlink,
     accent: "border-magenta/40 bg-magenta-dim text-magenta",
   },
 };

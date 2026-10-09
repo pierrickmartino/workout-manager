@@ -14,8 +14,12 @@ import type { LogSessionInput } from "./logs-types.ts";
 // Where one queued finish sits in its delivery lifecycle. There is no "synced" status:
 // a delivered finish is REMOVED from the queue (the outbox holds only undelivered
 // records), so the projection truth stays server-side (ADR-0061). `failed` is
-// retryable — a reconnect or manual retry re-attempts it.
-export type OutboxStatus = "pending" | "syncing" | "failed";
+// retryable — a reconnect or manual retry re-attempts it. `orphaned` is terminal: the
+// server answered `404`, so the Session this finish records against no longer exists
+// (its un-started Protocol was deleted, perhaps on another device — #636). Retrying can
+// never succeed, so it is never re-attempted; it stays queued only so the user sees why,
+// until they dismiss it — never retried forever, never discarded silently.
+export type OutboxStatus = "pending" | "syncing" | "failed" | "orphaned";
 
 // One finished Live Session awaiting delivery. The `key` is the client-minted
 // idempotency key (ADR-0060, issue #412): it is both this entry's identity in the
@@ -35,6 +39,38 @@ export interface OutboxEntry {
   // The last delivery error, surfaced by the sync-state UI (issue #414); null unless
   // a delivery attempt failed.
   error: string | null;
+}
+
+// Shown for an orphaned finish (#636). Says what happened and what it means for the
+// workout, rather than echoing the server's terse "Session not found".
+export const FINISH_ORPHANED_MESSAGE =
+  "This session’s plan no longer exists — it was deleted, maybe on another device — so this workout can’t be saved.";
+
+// A server-side rejection that names no cause of its own.
+const SYNC_FAILED_MESSAGE = "Could not sync your session.";
+
+const HTTP_NOT_FOUND = 404;
+
+// What one delivery attempt came to, as the drain acts on it: removed from the queue,
+// kept for a retry, or kept as terminal for the user to see and dismiss.
+export type DeliveryResult =
+  | { outcome: "delivered" }
+  | { outcome: "failed"; error: string }
+  | { outcome: "orphaned"; error: string };
+
+// Classify a server response to a queued finish. A `404` means the Session is missing or
+// not the caller's: no retry can change that, so it is terminal (#636). Every other
+// rejection stays retryable, exactly as before. (A response that never came back at all
+// is not classified here — the drain treats a thrown delivery as unreachable.)
+export function classifyDelivery(
+  status: number,
+  envelope: { success: boolean; data: unknown; error: string | null },
+): DeliveryResult {
+  if (envelope.success && envelope.data) return { outcome: "delivered" };
+  if (status === HTTP_NOT_FOUND) {
+    return { outcome: "orphaned", error: FINISH_ORPHANED_MESSAGE };
+  }
+  return { outcome: "failed", error: envelope.error ?? SYNC_FAILED_MESSAGE };
 }
 
 // Build a fresh, pending outbox entry for a just-finished Live Session. The idempotency
@@ -102,6 +138,27 @@ export function markFailed(
   return mapEntry(outbox, key, (e) => ({ ...e, status: "failed", error }));
 }
 
+// Record a terminal delivery — the Session is gone (#636). Unlike `markFailed`, nothing
+// re-attempts it: `drainableEntries` and `retryAll` both pass it by. A no-op for an
+// unknown key.
+export function markOrphaned(
+  outbox: readonly OutboxEntry[],
+  key: string,
+  error: string,
+): OutboxEntry[] {
+  return mapEntry(outbox, key, (e) => ({ ...e, status: "orphaned", error }));
+}
+
+// Remove the account's orphaned entries once the user has read why they could not be
+// saved — the only way an orphaned finish leaves the queue. Deliverable entries and
+// other accounts' entries are untouched.
+export function dismissOrphaned(
+  outbox: readonly OutboxEntry[],
+  accountId: string | null,
+): OutboxEntry[] {
+  return outbox.filter((e) => !(e.accountId === accountId && e.status === "orphaned"));
+}
+
 // Reset one entry to pending so the next drain re-attempts it (a manual retry, or
 // clearing a failed state before a re-drain). A no-op for an unknown key.
 export function retry(
@@ -113,31 +170,42 @@ export function retry(
 
 // Reset every one of the given account's non-pending entries to pending — the "retry
 // all" a reconnect or a manual retry runs before draining, so failed and stalled
-// in-flight entries are re-attempted together. Other accounts' entries are untouched.
+// in-flight entries are re-attempted together. Other accounts' entries, and orphaned ones
+// (terminal, #636), are untouched.
 export function retryAll(
   outbox: readonly OutboxEntry[],
   accountId: string | null,
 ): OutboxEntry[] {
   if (accountId === null) return outbox as OutboxEntry[];
   return outbox.map((e) =>
-    e.accountId === accountId && e.status !== "pending" ? toPending(e) : e,
+    e.accountId === accountId && isRetryable(e) && e.status !== "pending"
+      ? toPending(e)
+      : e,
   );
 }
 
 // The owner's entries only (reject-foreign on read, ADR-0059): a foreign account's
 // queued finish is never read here, and persisting this result back is the active
-// purge. Nothing belongs to a signed-out reader, so a null account reads empty. This is
-// also the drain's work list — every undelivered entry, whatever its status: a `failed`
-// one is retried, and a `syncing` one is reclaimed (a crash can strand an entry mid-
-// delivery). Re-delivering an entry another drain is already handling is a harmless
-// idempotent no-op server-side (ADR-0060), and delivery order does not matter — every
-// projection keys on each record's own `performed_on`, not sync-arrival order.
+// purge. Nothing belongs to a signed-out reader, so a null account reads empty.
 export function entriesForAccount(
   outbox: readonly OutboxEntry[],
   accountId: string | null,
 ): OutboxEntry[] {
   if (accountId === null) return [];
   return outbox.filter((e) => e.accountId === accountId);
+}
+
+// The drain's work list: the owner's entries that a delivery could still land, whatever
+// their status — a `failed` one is retried, and a `syncing` one is reclaimed (a crash can
+// strand an entry mid-delivery). An `orphaned` one is not: its Session is gone (#636).
+// Re-delivering an entry another drain is already handling is a harmless idempotent no-op
+// server-side (ADR-0060), and delivery order does not matter — every projection keys on
+// each record's own `performed_on`, not sync-arrival order.
+export function drainableEntries(
+  outbox: readonly OutboxEntry[],
+  accountId: string | null,
+): OutboxEntry[] {
+  return entriesForAccount(outbox, accountId).filter(isRetryable);
 }
 
 // Whether the queue holds any entry NOT owned by the given account — the signal the
@@ -159,6 +227,11 @@ function mapEntry(
 ): OutboxEntry[] {
   if (!hasEntry(outbox, key)) return outbox as OutboxEntry[];
   return outbox.map((e) => (e.key === key ? f(e) : e));
+}
+
+// Whether another delivery attempt could land this entry — false only for a terminal one.
+function isRetryable(entry: OutboxEntry): boolean {
+  return entry.status !== "orphaned";
 }
 
 function toPending(entry: OutboxEntry): OutboxEntry {
