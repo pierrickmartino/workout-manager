@@ -15,6 +15,7 @@ from app.domain.calibration import MAX_CALIBRATION, MIN_CALIBRATION
 from app.domain.protocol import protocol_label
 from app.domain.session_section import sectionize
 from app.protocols.balance_preview import BalancePreview
+from app.protocols.index import ProtocolIndexRow
 from app.protocols.progress import ProtocolProgressView
 from app.repositories.protocol_repository import ProtocolSessionView, ProtocolView
 
@@ -148,6 +149,29 @@ def serialize_protocol_progress(progress: ProtocolProgressView) -> dict:
     return data
 
 
+def serialize_protocol_index_row(row: ProtocolIndexRow) -> dict:
+    """One Protocols-index row (#637): the plan's label and its read-time standing.
+
+    ``made_current_at`` travels only so the client can order set-aside rows (ADR-0125);
+    it is never shown — the app is calendar-free (ADR-0001)."""
+
+    protocol = row.protocol
+    return {
+        "id": protocol.id,
+        "name": protocol.name,
+        "label": protocol_label(protocol.name, protocol.objective, protocol.training_type),
+        "objective": protocol.objective,
+        "training_type": protocol.training_type,
+        "status": row.status.value,
+        "performed_count": row.performed_count,
+        "session_count": row.session_count,
+        "last_performed_on": (
+            row.last_performed_on.isoformat() if row.last_performed_on else None
+        ),
+        "made_current_at": row.made_current_at.isoformat(),
+    }
+
+
 def serialize_balance_preview(preview: BalancePreview) -> dict:
     """The non-predictive SIMULATE payload the Builder renders (ADR-0021): per-week
     Session/Set counts, plan totals, and the curated Muscle-Group split as an ordered
@@ -177,5 +201,6 @@ __all__ = [
     "serialize_session",
     "serialize_protocol",
     "serialize_protocol_progress",
+    "serialize_protocol_index_row",
     "serialize_balance_preview",
 ]

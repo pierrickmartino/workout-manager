@@ -11,6 +11,8 @@
 // `GET /api/sessions` filter. The row's display title and date-format live here too, so the
 // component stays a thin renderer.
 
+import { formatLongDate } from "./date-format.ts";
+
 // The separator joining Training Type and creation date in the derived fallback label.
 // Mirrors the server's `_LABEL_SEPARATOR` so the two derived labels are byte-identical.
 const LABEL_SEPARATOR = " · ";
@@ -232,36 +234,10 @@ export function sessionFiltersToQuery(
   return params;
 }
 
-// The three-letter month abbreviations for the row date, indexed by 0-based month.
-const MONTH_ABBREVIATIONS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-
-// Format the plan's creation date (a `YYYY-MM-DD` calendar string) as e.g. "Sep 5, 2026".
-// Parsed by regex, never `new Date`, so it is timezone-agnostic — the server already sent the
-// calendar date and this only reshapes it. A string that isn't a plain date is returned as-is.
+// Format the plan's creation date (a `YYYY-MM-DD` calendar string) as e.g. "Sep 5, 2026" —
+// the shared calendar-date label (`date-format`), so every surface spells a date one way.
 export function formatSessionDate(createdAt: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(createdAt);
-  if (match === null) {
-    return createdAt;
-  }
-  const [, year, month, day] = match;
-  const abbreviation = MONTH_ABBREVIATIONS[Number(month) - 1];
-  if (abbreviation === undefined) {
-    return createdAt;
-  }
-  return `${abbreviation} ${Number(day)}, ${year}`;
+  return formatLongDate(createdAt);
 }
 
 // The row's display title (CONTEXT: My Sessions / Session Name): the user-given Session Name

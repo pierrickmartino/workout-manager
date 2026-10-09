@@ -5,6 +5,7 @@ import type { ExerciseDetail, ExercisePrescription, WorkoutSession } from "@/lib
 import type { AdminExerciseRow } from "@/lib/admin-exercises-view";
 import type { Profile } from "@/lib/profile-types";
 import type { ProtocolProgress } from "@/lib/protocols-types";
+import type { ProtocolIndexEntry } from "@/lib/protocols-index";
 import type { PersonalRecordEntry, VolumePoint } from "@/lib/analytics-types";
 
 const originalNames = ["Long workout name with spaces ".repeat(5).slice(0, 120), "W".repeat(120)];
@@ -25,6 +26,22 @@ export const sessions: SessionSummary[] = names.map((name, i) => ({
   id: i + 1, name, display_name: name, training_type: "strength", created_at: "2026-09-01",
   author: { display_name: nameFixture === "mixed" ? "Long author name ".repeat(6) : "Synthetic author" }, authored_by_me: false,
   is_favorite: i === 0, exercise_count: 100, logged_count: 1000,
+}));
+// The Protocols index (#637): one row per group, the first two carrying the authored-name
+// variants (a named row also shows its derived label beneath), the third unnamed.
+export const protocolIndexEntries: ProtocolIndexEntry[] = [
+  { status: "current", performed_count: 3, session_count: 12, last_performed_on: "2026-09-20" },
+  { status: "set_aside", performed_count: 0, session_count: 8, last_performed_on: null },
+  { status: "finished", performed_count: 16, session_count: 16, last_performed_on: "2025-12-04" },
+].map((row, i) => ({
+  ...row,
+  id: i + 1,
+  name: i < 2 ? names[i] : null,
+  label: i < 2 ? names[i] : "improve endurance · conditioning",
+  objective: "improve endurance",
+  training_type: "conditioning",
+  status: row.status as ProtocolIndexEntry["status"],
+  made_current_at: `2026-0${9 - i}-01T08:00:00+00:00`,
 }));
 export function history(count: number): LoggedSession[] {
   return Array.from({ length: count }, (_, i) => ({

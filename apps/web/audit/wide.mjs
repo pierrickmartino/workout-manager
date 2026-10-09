@@ -71,6 +71,9 @@ const ALL_JOURNEYS = [
   // at all — `profile` is the edit form — so this is the first thing on it either harness has
   // rendered. It stays unconverted, so its card must hold 26rem inside the wide frame.
   "levels",
+  // The Protocols index (#637): a new page, so no journey had rendered it. It stays unconverted,
+  // so its grouped list must hold 26rem inside the wide frame.
+  "protocols",
 ];
 // A comma-separated subset, for iterating on one screen without paying for the full sweep.
 // The gated run is the unfiltered one.

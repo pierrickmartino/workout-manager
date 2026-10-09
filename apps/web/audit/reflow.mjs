@@ -63,9 +63,11 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // `sheet` joins them with ADR-0113: the action sheet that replaced the ⋯ More disclosure is a
 // modal, so — like `confirm` — it exists only while open and no journey would otherwise mount it.
 // Its title is an authored name, the one string in it that can be 120 unbroken characters.
+// `protocols` joins them with the Protocols index (#637): a new page whose rows lead with an
+// authored Protocol name, so it is swept at 320px and 200% text before anyone relies on it.
 const NOVEL_JOURNEYS = [
   "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc", "launchpad",
-  "levels", "sheet",
+  "levels", "sheet", "protocols",
 ];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and

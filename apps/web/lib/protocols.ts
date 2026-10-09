@@ -1,6 +1,7 @@
 import { apiGet, apiSend, type Envelope } from "./api";
 
 import type { DeployPayload, SimulatePayload } from "./protocol-builder";
+import type { ProtocolIndexEntry } from "./protocols-index";
 import type {
   BalancePreview,
   GenerateProtocolInput,
@@ -21,6 +22,12 @@ export async function fetchProtocol(
   id: number,
 ): Promise<Envelope<ProtocolProgress>> {
   return apiGet(`/api/protocols/${id}`);
+}
+
+// The Protocols index (issue #637): one row per Protocol the user owns, with its status
+// (current / set aside / finished) and performed counts. Owner-scoped on the server.
+export async function fetchProtocolsIndex(): Promise<Envelope<ProtocolIndexEntry[]>> {
+  return apiGet("/api/protocols");
 }
 
 // Submit a Protocol generation. Generation runs off the request path: the backend

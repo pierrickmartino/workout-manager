@@ -55,7 +55,9 @@ import { ArrowRight } from "@/components/pulse/icons";
 import { BuildWorkoutLink, GenerateTrainingLaunchpad, LogPastWorkoutLink } from "@/components/pulse/generate-training-launchpad";
 import { FitnessLevelStandings } from "@/components/pulse/fitness-level-standings";
 import { toFitnessLevelRows } from "@/lib/fitness-level-standing";
-import { adminExerciseRows, auditEntry, exerciseDetail, exerciseNames, exercises, history, liveWorkout, personalRecords, prescriptions, profile, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
+import { ProtocolsIndex } from "@/components/ProtocolsIndex";
+import { protocolsIndex } from "@/lib/protocols-index";
+import { adminExerciseRows, auditEntry, exerciseDetail, exerciseNames, exercises, history, liveWorkout, personalRecords, prescriptions, profile, protocolIndexEntries, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
 
 const params = new URLSearchParams(location.search);
 if (params.get("fonts") === "fontsource") {
@@ -265,6 +267,7 @@ function Content() {
     case "correction": return <CorrectLogForm logId={1} fields={correctionFieldsFromRecord(history(1)[0], "kg")} today="2026-09-26" unit="kg" />;
     case "profile": return <ProfileForm profile={profile} submitLabel="Save profile" />;
     case "sessions": return <SessionsLibrary sessions={count === 0 ? [] : sessions} />;
+    case "protocols": return <ProtocolsIndex index={protocolsIndex(count === 0 ? [] : protocolIndexEntries)} />;
     case "history": return <HistoryBrowser records={history(count)} unit="kg" />;
     case "catalog": return <ExerciseCatalogTaxonomy initialFilters={{ query: "", muscleGroups: [], equipment: [], difficulty: [] }} initialTaxonomy={count === 0 ? { groups: [], total: 0 } : count > 50 ? { total: count, groups: [{ pattern: "squat", count, exercises: Array.from({ length: count }, (_, i) => ({ ...exercises[i % 50], id: i + 1 })) }] } : taxonomy} equipmentOptions={["barbell", "dumbbell"]} myEquipment={["barbell"]} usage={[]} referenceIso="2026-09-26" unit="kg" />;
     case "creation": return <HandAuthoredSessionForm draftId="audit-only" today="2026-09-26" unit="kg" mode="planOnly" seed={{ trainingType: "strength", exercises: exercises.slice(0, 3).map((exercise, index) => ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "repetitions", unit: "km", sets: "3", reps: "12", loadKind: CREATION_LOAD_KINDS[index], loadValue: "" })) }} />;

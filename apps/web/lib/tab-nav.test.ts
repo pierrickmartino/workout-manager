@@ -26,6 +26,14 @@ test("the admin area (/admin) is oriented under PROFILE", () => {
   assert.equal(tab?.label, "PROFILE");
 });
 
+test("the Protocols index (/protocols) is oriented under TRAIN", () => {
+  // Arrange — reached from the Train launchpad and from a Protocol's detail page (#637).
+  // Act
+  const tab = activeTab("/protocols");
+  // Assert
+  assert.equal(tab?.label, "TRAIN");
+});
+
 test("a deliberately tab-less route (/onboarding) lights no tab", () => {
   assert.equal(activeTab("/onboarding"), null);
 });
