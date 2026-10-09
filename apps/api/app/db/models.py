@@ -296,6 +296,11 @@ class Protocol(SQLModel, table=True):
     # ``scheme``), never a derived ledger (ADR-0018).
     calibration: int | None = Field(default=None)
     created_at: datetime = Field(default_factory=_utcnow)
+    # When the user last made this their Current Protocol (ADR-0125): set by Adopting it,
+    # and by Switching back to it. The Current Protocol is the unfinished Protocol with the
+    # latest value, ties broken by id. A stored user *choice* (like ``calibration``), never
+    # a derived ledger (ADR-0018); it only orders Protocols and is never shown as a date.
+    made_current_at: datetime = Field(default_factory=_utcnow)
 
 
 class WorkoutSession(SQLModel, table=True):

@@ -2,8 +2,9 @@
 
 A user tidying **My Sessions** wants to throw away a workout they generated or authored
 but never did — a mis-generated plan, a duplicate, an experiment. Until now the domain had
-**no deletion at all**: a Protocol is *set aside*, never removed (`CONTEXT.md`, §Current
-Protocol), and **Remove** withdraws a single Prescription, never a whole Session (ADR-0052).
+**no deletion at all**: a Protocol was *set aside*, never removed (since amended: an
+un-started Protocol may now be deleted, ADR-0125), and **Remove** withdraws a single
+Prescription, never a whole Session (ADR-0052).
 We add **Delete** (`CONTEXT.md`, §Session Library & Sharing): a user permanently removes one
 of their **own standalone Sessions** — but **only when no Logged Session references it**.
 
@@ -25,8 +26,9 @@ list read and the click turns the delete into a `409`, never a silent record los
 as Rename, Favorite, Share, Insert, and Remove (ADR-0051/0052/0057), a Protocol-member
 Session lives inside an ordered, partially-performed sequence governed by the tail-only
 Deploy invariant (ADR-0020/0021); lifting one Session out of a plan the user is working
-through is the Builder's concern, not a library delete. A Protocol is never deleted at all
-(`CONTEXT.md`, §Current Protocol), so Delete stays on the user's own standalone Sessions.
+through is the Builder's concern, not a library delete. A whole Protocol has its own delete,
+allowed only when the Protocol is un-started (ADR-0125, `GLOSSARY.md` §Current Protocol), so
+this Delete stays on the user's own standalone Sessions.
 
 **Delete is a hard delete of the plan and its plan-side dependents — no soft-delete, no
 archive.** Because a deletable Session carries no record, there is nothing to preserve for

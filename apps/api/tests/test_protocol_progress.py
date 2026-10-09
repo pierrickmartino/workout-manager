@@ -7,7 +7,8 @@ with in-memory repositories; logging reuses the existing record-side repository.
 
 from __future__ import annotations
 
-from datetime import date
+from dataclasses import replace
+from datetime import UTC, date, datetime
 
 from app.adoption.service import adopt
 from app.generation.protocol_generator import ProtocolGenerationRequest
@@ -320,6 +321,69 @@ def test_current_protocol_skips_a_fully_performed_protocol_for_an_older_one():
     # Assert — the finished Protocol is passed over for the older, in-progress one
     assert current.protocol.id == older.id
     assert current.next_session.week == 1
+
+
+class _MadeCurrentAt:
+    """A ``ProtocolRepository`` whose reads carry the given ``made_current_at`` per id.
+
+    Wraps a real repository and keeps its list order (``created_at`` desc), so a test can
+    make the made-Current order disagree with the adoption order — the case Switch will
+    create (ADR-0125) — without a writer for it existing yet."""
+
+    def __init__(self, inner, made_current_at):
+        self._inner = inner
+        self._made_current_at = made_current_at
+
+    def list_for_user(self, clerk_user_id):
+        return [
+            replace(p, made_current_at=self._made_current_at.get(p.id, p.made_current_at))
+            for p in self._inner.list_for_user(clerk_user_id)
+        ]
+
+
+def test_current_protocol_follows_the_latest_made_current_not_the_latest_adopted():
+    # Arrange — the older Protocol was made Current after the newer one was adopted
+    exercises, protocols, logged = _build()
+    older = adopt(_three_week_protocol(), "user_back", PARAMS,
+                  exercises=exercises, protocols=protocols)
+    newer = adopt(_three_week_protocol(), "user_back", PARAMS,
+                  exercises=exercises, protocols=protocols)
+    chosen = _MadeCurrentAt(protocols, {
+        older.id: datetime(2026, 3, 1, tzinfo=UTC),
+        newer.id: datetime(2026, 2, 1, tzinfo=UTC),
+    })
+
+    # Act
+    current = current_protocol(
+        "user_back", protocols=chosen, logged_sessions=logged.list_for_user("user_back")
+    )
+
+    # Assert — the user's choice wins over adoption order
+    assert current.protocol.id == older.id
+
+
+def test_current_protocol_breaks_a_made_current_tie_by_the_higher_id():
+    # Arrange — two Protocols made Current at the same instant, listed lower id first
+    exercises, protocols, logged = _build()
+    first = adopt(_three_week_protocol(), "user_tie", PARAMS,
+                  exercises=exercises, protocols=protocols)
+    second = adopt(_three_week_protocol(), "user_tie", PARAMS,
+                   exercises=exercises, protocols=protocols)
+    same = datetime(2026, 3, 1, tzinfo=UTC)
+    tied = _MadeCurrentAt(protocols, {first.id: same, second.id: same})
+    reversed_order = type("_Reversed", (), {
+        "list_for_user": lambda self, user: list(reversed(tied.list_for_user(user)))
+    })()
+
+    # Act
+    current = current_protocol(
+        "user_tie",
+        protocols=reversed_order,
+        logged_sessions=logged.list_for_user("user_tie"),
+    )
+
+    # Assert — the tie goes to the higher id, whatever order the repository lists them in
+    assert current.protocol.id == second.id
 
 
 def test_current_protocol_is_none_when_the_user_owns_no_protocol():

@@ -157,7 +157,7 @@ Source: [future-improvements](docs/design/future-improvements.md).
   - ⬜ A current-capabilities page.
   - ⬜ **Fix stale ADR statuses:** 0013, 0014, 0020, 0021, 0034, 0111 and 0112 still say "proposed" but are implemented.
 - §16 **Explore later:**
-  - ⬜ Protocol library and explicit switching (needs an ADR; changes ADR-0037).
+  - 🟡 Protocols index, Switch, and delete-if-un-started (amends ADR-0037; ADR-0125, #634). Done: Current Protocol selection follows `made_current_at` (#635). Still to do: the index, Switch and Delete.
   - ⬜ Cross-device resume.
   - ⬜ More capable offline training (see §3).
   - 🟡 Units, import and portability: kg/lb is done (#408); **import** is still to do.
