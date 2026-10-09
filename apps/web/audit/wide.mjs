@@ -72,8 +72,9 @@ const ALL_JOURNEYS = [
   // rendered. It stays unconverted, so its card must hold 26rem inside the wide frame.
   "levels",
   // The Protocols index (#637): a new page, so no journey had rendered it. It stays unconverted,
-  // so its grouped list must hold 26rem inside the wide frame.
-  "protocols",
+  // so its grouped list must hold 26rem inside the wide frame. `protocols-live` is the same page
+  // with Switch blocked by a Live Session (#638).
+  "protocols", "protocols-live",
 ];
 // A comma-separated subset, for iterating on one screen without paying for the full sweep.
 // The gated run is the unfiltered one.

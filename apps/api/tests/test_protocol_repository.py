@@ -135,6 +135,23 @@ def test_adopting_a_protocol_makes_it_current_now(repos):
     ]
 
 
+def test_make_current_restamps_made_current_at_for_the_owner_only(repos):
+    # Arrange
+    protocol_repo, exercises = repos
+    view = protocol_repo.create("user_switcher", _two_week_draft(exercises))
+
+    # Act
+    switched = protocol_repo.make_current(view.id, "user_switcher")
+    refused = protocol_repo.make_current(view.id, "user_intruder")
+
+    # Assert — Switch moves the made-Current choice forward (ADR-0125), and an unowned or
+    # missing Protocol is refused
+    assert switched.made_current_at > view.made_current_at
+    assert protocol_repo.get(view.id, "user_switcher").made_current_at == switched.made_current_at
+    assert refused is None
+    assert protocol_repo.make_current(9999, "user_switcher") is None
+
+
 def test_create_persists_the_trace_id_lineage(repos):
     # Arrange — a draft carrying the originating Generation Call's trace id (#274)
     protocol_repo, exercises = repos

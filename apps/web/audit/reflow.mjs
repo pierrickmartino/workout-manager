@@ -65,9 +65,11 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // Its title is an authored name, the one string in it that can be 120 unbroken characters.
 // `protocols` joins them with the Protocols index (#637): a new page whose rows lead with an
 // authored Protocol name, so it is swept at 320px and 200% text before anyone relies on it.
+// `protocols-live` is the same page with Switch blocked by a Live Session (#638): each set-aside
+// row then carries a sentence of reason and a Resume link under its button.
 const NOVEL_JOURNEYS = [
   "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc", "launchpad",
-  "levels", "sheet", "protocols",
+  "levels", "sheet", "protocols", "protocols-live",
 ];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and

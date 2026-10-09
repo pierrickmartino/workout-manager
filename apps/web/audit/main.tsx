@@ -56,7 +56,7 @@ import { BuildWorkoutLink, GenerateTrainingLaunchpad, LogPastWorkoutLink } from 
 import { FitnessLevelStandings } from "@/components/pulse/fitness-level-standings";
 import { toFitnessLevelRows } from "@/lib/fitness-level-standing";
 import { ProtocolsIndex } from "@/components/ProtocolsIndex";
-import { protocolsIndex } from "@/lib/protocols-index";
+import { protocolsIndex, type LiveSessionContext } from "@/lib/protocols-index";
 import { adminExerciseRows, auditEntry, exerciseDetail, exerciseNames, exercises, history, liveWorkout, personalRecords, prescriptions, profile, protocolIndexEntries, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
 
 const params = new URLSearchParams(location.search);
@@ -259,6 +259,15 @@ function FitnessLevelSurface() {
 // rendered only one shape of a field that has to fit a `FIELD_WIDTH` cell at 320px.
 const CREATION_LOAD_KINDS = ["absolute", "bodyweight", "range"] as const;
 
+// An unfinished Live Session the synthetic account owns, which blocks Switch on the index.
+const auditLiveSession: LiveSessionContext = {
+  accountId: "audit-synthetic-account",
+  liveSlot: {
+    sessionId: 1, accountId: "audit-synthetic-account", idempotencyKey: null, sets: [],
+    currentIndex: 0, status: "in_progress", startedAt: null, lastActivityAt: null,
+  },
+};
+
 function Content() {
   switch (journey) {
     case "charts": return <ChartAccessibilityFixture />;
@@ -268,6 +277,9 @@ function Content() {
     case "profile": return <ProfileForm profile={profile} submitLabel="Save profile" />;
     case "sessions": return <SessionsLibrary sessions={count === 0 ? [] : sessions} />;
     case "protocols": return <ProtocolsIndex index={protocolsIndex(count === 0 ? [] : protocolIndexEntries)} />;
+    // The same index with a Live Session in progress (#638): every set-aside row's Switch is
+    // blocked and carries its reason and a Resume link, the widest shape a row action takes.
+    case "protocols-live": return <ProtocolsIndex index={protocolsIndex(protocolIndexEntries, auditLiveSession)} />;
     case "history": return <HistoryBrowser records={history(count)} unit="kg" />;
     case "catalog": return <ExerciseCatalogTaxonomy initialFilters={{ query: "", muscleGroups: [], equipment: [], difficulty: [] }} initialTaxonomy={count === 0 ? { groups: [], total: 0 } : count > 50 ? { total: count, groups: [{ pattern: "squat", count, exercises: Array.from({ length: count }, (_, i) => ({ ...exercises[i % 50], id: i + 1 })) }] } : taxonomy} equipmentOptions={["barbell", "dumbbell"]} myEquipment={["barbell"]} usage={[]} referenceIso="2026-09-26" unit="kg" />;
     case "creation": return <HandAuthoredSessionForm draftId="audit-only" today="2026-09-26" unit="kg" mode="planOnly" seed={{ trainingType: "strength", exercises: exercises.slice(0, 3).map((exercise, index) => ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "repetitions", unit: "km", sets: "3", reps: "12", loadKind: CREATION_LOAD_KINDS[index], loadValue: "" })) }} />;

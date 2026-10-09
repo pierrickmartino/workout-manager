@@ -7,10 +7,11 @@ import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { BackLink } from "@/components/pulse/back-link";
 import { Card } from "@/components/ui/card";
+import { SwitchProtocolControl } from "@/components/SwitchProtocolControl";
 
 // The Protocols index (issue #637): every Protocol the user owns, grouped Current / Set aside /
-// Finished, each row opening the Protocol's detail page. Read-only — Switch and Delete arrive in
-// their own tickets. A thin renderer over the `protocols-index` view-model, which owns grouping,
+// Finished, each row opening the Protocol's detail page. A set-aside row also carries Switch
+// (#638), offered or blocked as the view-model decides. A thin renderer over the `protocols-index` view-model, which owns grouping,
 // order and copy; kept server-safe and prop-driven so the audit harness can mount it directly.
 export function ProtocolsIndex({
   index,
@@ -53,8 +54,9 @@ export function ProtocolsIndex({
   );
 }
 
-// One row: the whole card is the link into the Protocol's detail page. The title is an authored
-// name, so it wraps rather than truncates (ADR-0085).
+// One row: the card's body is the link into the Protocol's detail page, and its row action sits
+// below the link rather than inside it, so a control is never nested in an anchor. The title is
+// an authored name, so it wraps rather than truncates (ADR-0085).
 function ProtocolIndexCard({ row }: { row: ProtocolIndexRowView }): React.JSX.Element {
   return (
     <Card className="transition-colors hover:border-cyan">
@@ -82,6 +84,11 @@ function ProtocolIndexCard({ row }: { row: ProtocolIndexRowView }): React.JSX.El
           className="h-[18px] w-[18px] shrink-0 text-text-muted transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
         />
       </Link>
+      {row.switchAction ? (
+        <div className="border-t border-border px-4 py-3">
+          <SwitchProtocolControl action={row.switchAction} protocolTitle={row.title} />
+        </div>
+      ) : null}
     </Card>
   );
 }

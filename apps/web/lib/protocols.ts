@@ -30,6 +30,15 @@ export async function fetchProtocolsIndex(): Promise<Envelope<ProtocolIndexEntry
   return apiGet("/api/protocols");
 }
 
+// Switch to a set-aside Protocol (issue #638): it becomes the Current Protocol and the
+// response is its progressed view. A `404` (not owned / missing) or `409` (Finished) comes
+// back as a non-2xx envelope whose `error` says why; nothing is written.
+export async function switchToProtocol(
+  id: number,
+): Promise<Envelope<ProtocolProgress>> {
+  return apiSend(`/api/protocols/${id}/switch`, "POST");
+}
+
 // Submit a Protocol generation. Generation runs off the request path: the backend
 // returns a job handle to poll (cache miss/bypass) or, on a cache hit, the adopted
 // Protocol id inline — neither blocks on the long AI call.
