@@ -1,12 +1,17 @@
 # 0098 — A destructive confirmation is the app's own dialog
 
-Three irreversible actions asked for confirmation with `window.confirm`:
+Three actions asked for confirmation with `window.confirm`. Two were irreversible and are still
+confirmed:
 
 ```text
 components/DeleteLogControl.tsx:33       delete a Logged Session
 components/AdminExerciseDelete.tsx:33    the admin hard delete (ADR-0076)
-components/GenerateProtocolForm.tsx:43   the Protocol supersede one-way door (ADR-0037)
 ```
+
+The third was generating a Protocol over an in-progress one, the ADR-0037 supersede. ADR-0125
+made a set-aside Protocol switchable, so superseding stopped being a one-way door, and #640
+removed that confirmation. Generation now asks nothing and the adopted Protocol shows a short,
+non-blocking note naming the Protocol it set aside.
 
 [`ConfirmDialog`](../../apps/web/components/pulse/confirm-dialog.tsx) already existed
 and `NavigationGuardProvider` already used it. These three bypassed it.
@@ -26,7 +31,7 @@ dialogs" checkbox. Once ticked, every later `window.confirm` on that document
 returns without asking anything.
 
 So the guard becomes a standing answer, and which answer depends on the browser:
-the delete silently stops working, or the one-way door silently stops being a door.
+the delete silently stops working, or the guard silently stops guarding.
 Nothing on screen says which, and nothing in the code can tell. A guard whose
 reliability belongs to the user agent is not a guard.
 
@@ -58,11 +63,9 @@ thing the one-slot version had no room for: that this removes the movement from 
 shared catalog outright rather than retiring it. The guard itself is unchanged and
 the backend remains the real one (409 if unmet).
 
-**The supersede** is the one that needed state. The generate form is uncontrolled, so
-the submitted values are read at submit time and held in `awaitingSupersede` while
-the question is on screen; re-reading the form on confirm would depend on it still
-being mounted. The confirm button is destructive-styled on purpose: accepting sets
-aside a Protocol the user is partway through.
+**The supersede** needed state: the uncontrolled generate form's submitted values were
+held while the question was on screen. It was retired by #640 (ADR-0125), not moved: a
+supersede can now be undone by a Switch, so it is no longer a destructive confirmation.
 
 **The Protocol delete** (#639) takes the logged-session delete's shape: a `<form action>`
 whose submit only `preventDefault`s, confirmed with `requestSubmit()`, so the hidden
@@ -87,7 +90,7 @@ rule they are documenting. A method named `confirm` on something else
 What the guard cannot see is whether a confirmation was asked at all — a delete that
 simply stopped asking would sweep clean. That is held by
 [`destructive-confirm.test.ts`](../../apps/web/lib/destructive-confirm.test.ts),
-which mounts all three controls and holds the same three properties on each: opening
+which mounts each delete control and holds the same three properties on each: opening
 the dialog performs nothing, cancelling performs nothing, and only confirming acts.
 Those tests make `window.confirm` **throw** rather than returning `undefined`, so a
 forgotten call cannot read as a quiet cancel.

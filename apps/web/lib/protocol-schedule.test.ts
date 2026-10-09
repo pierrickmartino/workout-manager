@@ -44,7 +44,7 @@ test("the Next Session of a non-current (set-aside) protocol cannot be Started",
     isCurrentProtocol: false,
   });
 
-  // Assert — no Start (honors the supersede one-way door); detail still viewable
+  // Assert — no Start (a set-aside Protocol is Switched to first, ADR-0125); detail still viewable
   assert.equal(card.state, "next");
   assert.equal(card.state === "next" && card.startHref, null);
   assert.equal(card.state === "next" && card.detailHref, "/sessions/7");

@@ -1,11 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { Zap } from "@/components/pulse/icons";
 
 import { GenerationProgress } from "@/components/GenerationProgress";
 import { EquipmentField } from "@/components/EquipmentField";
-import { ConfirmDialog } from "@/components/pulse/confirm-dialog";
 import type { GenerateProtocolInput } from "@/lib/protocols-types";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
 import { useProtocolGeneration } from "@/lib/use-protocol-generation";
@@ -19,29 +17,25 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 interface GenerateProtocolFormProps {
-  // The one-way-door confirmation to show before generating, or `null` when
-  // superseding is silent (no in-progress Current Protocol to set aside, ADR-0037).
-  // Computed server-side from the Home read so the client stays dumb.
-  supersedeWarning?: string | null;
+  // The Current Protocol that generating will set aside, or `null` when there is none.
+  // Superseding is no longer a one-way door (ADR-0125), so nothing is asked first; the id
+  // only rides along so the adopted Protocol can note where the old one went. Read
+  // server-side from the Home read so the client stays dumb.
+  setAsideProtocolId?: number | null;
   // The user's saved Default Equipment, pre-filled into the equipment field so it is
   // visible and editable before generating (ADR-0038).
   defaultEquipment?: readonly string[];
 }
 
 export function GenerateProtocolForm({
-  supersedeWarning = null,
+  setAsideProtocolId = null,
   defaultEquipment = [],
 }: GenerateProtocolFormProps = {}) {
-  const { phase, error, start } = useProtocolGeneration();
+  const { phase, error, start } = useProtocolGeneration({ setAsideProtocolId });
   const busy = phase === "submitting" || phase === "generating";
   // AI generation is network-only: annotate and disable it while offline rather than let a
   // submit fail after the fact (issue #414).
   const online = useConnectivity();
-  // The submitted values, held while the one-way-door question is on screen. The form is
-  // uncontrolled, so what the user filled in has to be read at submit time and kept — the
-  // alternative, re-reading the form on confirm, would depend on it still being mounted.
-  const [pendingGeneration, setPendingGeneration] =
-    useState<GenerateProtocolInput | null>(null);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -54,15 +48,6 @@ export function GenerateProtocolForm({
       weeks: Number(form.get("weeks")),
       equipment: parseEquipment(String(form.get("equipment") ?? "")),
     };
-    // Guard the supersede at the moment of generation: generating adopts a new
-    // Protocol that becomes Current and sets the old one aside (ADR-0037). Warn only
-    // when there is settled progress to lose; silent otherwise. The question is asked in
-    // the app's own dialog rather than `window.confirm` (#8): a browser that has been told
-    // to suppress further dialogs would otherwise answer this one-way door for the user.
-    if (supersedeWarning !== null) {
-      setPendingGeneration(input);
-      return;
-    }
     await start(input);
   }
 
@@ -128,21 +113,6 @@ export function GenerateProtocolForm({
         <Zap className="h-4 w-4" />
         Generate protocol
       </Button>
-
-      {pendingGeneration !== null && supersedeWarning !== null ? (
-        <ConfirmDialog
-          title="Set aside your current protocol?"
-          message={supersedeWarning}
-          confirmLabel="Generate anyway"
-          cancelLabel="Keep current"
-          onCancel={() => setPendingGeneration(null)}
-          onConfirm={() => {
-            const input = pendingGeneration;
-            setPendingGeneration(null);
-            void start(input);
-          }}
-        />
-      ) : null}
     </form>
   );
 }

@@ -9,7 +9,7 @@
 //   - "next"      the one un-performed Session the user should run. Views the plan
 //                 detail; Starts into the Live route — but only when this is the
 //                 Current Protocol, so a set-aside (superseded) protocol never offers
-//                 Start (the supersede one-way door).
+//                 Start; it is Switched to first (ADR-0125).
 //   - "performed" a settled record. Links to the *record* (History), never the plan
 //                 detail — which would offer Start/Log on a finished Session and blur
 //                 plan vs. record.
@@ -36,7 +36,7 @@ export interface ProtocolCardContext {
   // `next_session`). The Next Session is un-performed by definition.
   isNext: boolean;
   // Whether the Protocol being viewed is the user's Current Protocol. Gates Start:
-  // a superseded protocol is view/history-only (ADR-0008, supersede one-way door).
+  // a superseded protocol is view/history-only until Switched to (ADR-0008, ADR-0125).
   isCurrentProtocol: boolean;
 }
 

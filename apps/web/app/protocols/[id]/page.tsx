@@ -19,6 +19,12 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { NAV_FORWARD } from "@/lib/nav-direction";
+import {
+  SET_ASIDE_PARAM,
+  parseSetAsideParam,
+  setAsideLabel,
+} from "@/lib/protocol-supersede";
+import { SetAsideNote } from "@/components/SetAsideNote";
 
 // Displays a user-owned multi-week Protocol: its self-paced next Session and the
 // full week-by-week schedule. Upcoming Sessions show the recommended load already
@@ -31,18 +37,30 @@ import { NAV_FORWARD } from "@/lib/nav-direction";
 // *record* (History), never the plan; future Sessions are informational (their plan is
 // already shown inline). "Current" is a cross-Protocol fact the Home read owns, so it is
 // read alongside the Protocol; a failed Home read simply hides Start (safe default).
+//
+// Generation lands here carrying the Protocol it set aside (`?set_aside=`, ADR-0125); that
+// one is read too, so a short note can name it and point to the Protocols screen. The read
+// is owner-scoped like any other, so an id that isn't the user's simply yields no note.
 export default async function ProtocolPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ [SET_ASIDE_PARAM]?: string | string[] }>;
 }) {
   const { id } = await params;
   const protocolId = Number(id);
   if (!Number.isInteger(protocolId)) notFound();
+  const setAsideId = parseSetAsideParam(
+    (await searchParams)[SET_ASIDE_PARAM],
+    protocolId,
+  );
 
-  const [envelope, home] = await Promise.all([
+  const [envelope, home, setAside] = await Promise.all([
     fetchProtocol(protocolId),
     fetchHome(),
+    // Optional: a transport failure costs the note, never the page (ADR-0088).
+    setAsideId === null ? null : fetchProtocol(setAsideId).catch(() => null),
   ]);
   if (!envelope.success || !envelope.data) {
     notFound();
@@ -53,10 +71,19 @@ export default async function ProtocolPage({
   const done = protocol.completed_count;
   const progress = total > 0 ? done / total : 0;
 
-  // Is this the Current Protocol? Only then may its Next Session be Started (ADR-0008,
-  // supersede one-way door). A failed/empty Home read resolves to `false`, hiding Start.
+  // Is this the Current Protocol? Only then may its Next Session be Started (ADR-0008); a
+  // set-aside one is Switched to first (ADR-0125). A failed/empty Home read resolves to
+  // `false`, hiding Start.
   const isCurrentProtocol =
     home.success && home.data?.current_protocol?.id === protocolId;
+  // The set-aside note — only once Home has said what is Current, so it never claims a
+  // Protocol is set aside after the user has Switched back to it.
+  const setAsideNoteLabel = home.success
+    ? setAsideLabel(
+        setAside?.success ? (setAside.data ?? null) : null,
+        home.data?.current_protocol?.id ?? null,
+      )
+    : null;
 
   return (
     <section className="flex flex-col gap-7">
@@ -76,6 +103,8 @@ export default async function ProtocolPage({
           </div>
         }
       />
+
+      {setAsideNoteLabel !== null ? <SetAsideNote label={setAsideNoteLabel} /> : null}
 
       {/* Protocol overview + completion. */}
       <Card className="flex flex-col gap-4 p-5">

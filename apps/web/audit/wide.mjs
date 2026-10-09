@@ -75,6 +75,9 @@ const ALL_JOURNEYS = [
   // so its grouped list must hold 26rem inside the wide frame. `protocols-live` is the same page
   // with Switch blocked by a Live Session (#638), and Delete on the row that owns it (#639).
   "protocols", "protocols-live",
+  // The set-aside note a generated Protocol lands with (ADR-0125), whose label is an authored
+  // name. It renders only on that landing, so no other journey shows it.
+  "set-aside",
 ];
 // A comma-separated subset, for iterating on one screen without paying for the full sweep.
 // The gated run is the unfiltered one.
