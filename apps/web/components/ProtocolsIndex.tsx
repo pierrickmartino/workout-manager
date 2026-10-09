@@ -13,9 +13,8 @@ import { DeleteProtocolControl } from "@/components/DeleteProtocolControl";
 // The Protocols index (issue #637): every Protocol the user owns, grouped Current / Set aside /
 // Finished, each row opening the Protocol's detail page. A set-aside row also carries Switch
 // (#638), and an un-started row Delete (#639), each offered, pending or blocked as the view-model
-// decides. A thin renderer over the
-// `protocols-index` view-model, which owns grouping, order, copy and row actions; kept
-// prop-driven so the audit harness can mount it directly.
+// decides. A thin renderer over the `protocols-index` view-model, which owns grouping, order, copy
+// and row actions; kept prop-driven so the audit harness can mount it directly.
 export function ProtocolsIndex({
   index,
 }: {
@@ -59,8 +58,8 @@ export function ProtocolsIndex({
 
 // One row: the card's body is the link into the Protocol's detail page, and its row actions sit
 // below the link rather than inside it, so a control is never nested in an anchor. Delete comes
-// last, after the reversible Switch. The title is
-// an authored name, so it wraps rather than truncates (ADR-0085).
+// last, after the reversible Switch. The title is an authored name, so it wraps rather than
+// truncates (ADR-0085).
 function ProtocolIndexCard({ row }: { row: ProtocolIndexRowView }): React.JSX.Element {
   return (
     <Card className="transition-colors hover:border-cyan">

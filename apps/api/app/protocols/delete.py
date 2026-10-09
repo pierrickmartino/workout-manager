@@ -6,10 +6,10 @@ an Incomplete log is still logged training, so either refuses the delete.
 
 The un-started guard is authoritative and runs here, inside the delete, rather than
 trusting the ``deletable`` the index served: a Session logged after the client drew the
-list turns the delete into a ``STARTED`` refusal, never a lost record. The guard and the
-cascade share the request's one database session, and on a foreign-key-enforcing database
-a Logged Session committed concurrently still pins its Session row, so the parent delete
-fails whole rather than orphaning the record.
+list turns the delete into a ``STARTED`` refusal, never a lost record. A Logged Session
+committed concurrently, after this guard's read, still pins its Session row through the
+foreign key, so the repository rolls the cascade back whole and raises ``ProtocolStarted``,
+which is the same ``STARTED`` refusal.
 
 Cascade order is children-first, mirroring Session Delete (ADR-0063): each member
 Session's Generation Feedback is flushed through its own repository, then the Protocol
@@ -20,12 +20,12 @@ from __future__ import annotations
 
 from enum import Enum
 
-from app.protocols.index import is_started, logged_session_ids
+from app.domain.protocol_deletion import is_started, logged_session_ids
 from app.repositories.generation_feedback_repository import (
     GenerationFeedbackRepository,
 )
 from app.repositories.logged_session_repository import LoggedSessionRepository
-from app.repositories.protocol_repository import ProtocolRepository
+from app.repositories.protocol_repository import ProtocolRepository, ProtocolStarted
 
 
 class DeleteStatus(str, Enum):
@@ -53,12 +53,18 @@ def delete_protocol(
     protocol = protocols.get(protocol_id, clerk_user_id)
     if protocol is None:
         return DeleteStatus.NOT_FOUND
-    if is_started(protocol, logged_session_ids(logged.list_for_user(clerk_user_id))):
+    history = logged.list_for_user(clerk_user_id)
+    logged_ids = logged_session_ids(entry.session_id for entry in history)
+    if is_started((session.session_id for session in protocol.sessions), logged_ids):
         return DeleteStatus.STARTED
 
     for session in protocol.sessions:
         feedback.delete_for_session(session.session_id)
-    if not protocols.delete(protocol_id, clerk_user_id):  # removed since the read
+    try:
+        deleted = protocols.delete(protocol_id, clerk_user_id)
+    except ProtocolStarted:  # a log committed after the guard read
+        return DeleteStatus.STARTED
+    if not deleted:  # removed since the read
         return DeleteStatus.NOT_FOUND
     return DeleteStatus.DELETED
 

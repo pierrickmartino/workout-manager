@@ -56,6 +56,7 @@ export type RowAction =
 
 export type SwitchAction = RowAction;
 export type DeleteAction = RowAction;
+export type BlockedRowActionView = Extract<RowAction, { kind: "blocked" }>;
 
 export interface ProtocolIndexRowView {
   id: number;
@@ -142,34 +143,41 @@ function liveSessionStanding(live: LiveSessionContext | null): LiveSessionStandi
   return resumableLiveSlot(live.liveSlot, live.accountId)?.sessionId ?? "none";
 }
 
+// One row action under the Live Session guard: pending while the slot is unread, available when
+// no Live Session is in progress or `isBlockedBy` lets it pass, else blocked with `reason` and a
+// way back to the Live Session.
+function guardedAction(
+  protocolId: number,
+  live: LiveSessionStanding,
+  isBlockedBy: (liveSessionId: number) => boolean,
+  reason: string,
+): RowAction {
+  if (live === "unread") return { kind: "pending" };
+  if (live === "none" || !isBlockedBy(live)) return { kind: "available", protocolId };
+  return { kind: "blocked", reason, resumeHref: `/sessions/${live}/live` };
+}
+
+// Switch: set-aside rows only, blocked by any Live Session.
 function switchActionFor(
   entry: ProtocolIndexEntry,
   live: LiveSessionStanding,
 ): SwitchAction | null {
   if (entry.status !== "set_aside") return null;
-  if (live === "unread") return { kind: "pending" };
-  if (live === "none") return { kind: "available", protocolId: entry.id };
-  return {
-    kind: "blocked",
-    reason: SWITCH_BLOCKED_REASON,
-    resumeHref: `/sessions/${live}/live`,
-  };
+  return guardedAction(entry.id, live, () => true, SWITCH_BLOCKED_REASON);
 }
 
+// Delete: deletable rows only, blocked by a Live Session from one of this Protocol's Sessions.
 function deleteActionFor(
   entry: ProtocolIndexEntry,
   live: LiveSessionStanding,
 ): DeleteAction | null {
   if (!entry.deletable) return null;
-  if (live === "unread") return { kind: "pending" };
-  if (live === "none" || !entry.session_ids.includes(live)) {
-    return { kind: "available", protocolId: entry.id };
-  }
-  return {
-    kind: "blocked",
-    reason: DELETE_BLOCKED_REASON,
-    resumeHref: `/sessions/${live}/live`,
-  };
+  return guardedAction(
+    entry.id,
+    live,
+    (liveSessionId) => entry.session_ids.includes(liveSessionId),
+    DELETE_BLOCKED_REASON,
+  );
 }
 
 function toRow(entry: ProtocolIndexEntry, live: LiveSessionStanding): ProtocolIndexRowView {

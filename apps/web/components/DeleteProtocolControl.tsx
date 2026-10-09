@@ -51,8 +51,7 @@ export function DeleteProtocolControl({
     return (
       <BlockedRowAction
         label={label}
-        reason={action.reason}
-        resumeHref={action.resumeHref}
+        blocked={action}
         className={buttonVariants({ variant: "secondary", size: "sm" })}
       >
         Delete

@@ -8,12 +8,13 @@ another user."""
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 from sqlmodel import Session, SQLModel
 from tests.conftest import make_fk_engine
 
+from app.db.models import LoggedSession
 from app.domain.exercise import Provenance
 from app.repositories.exercise_repository import (
     InMemoryExerciseRepository,
@@ -24,6 +25,7 @@ from app.repositories.protocol_repository import (
     InMemoryProtocolRepository,
     ProtocolDraft,
     ProtocolSessionDraft,
+    ProtocolStarted,
     ProtocolView,
     SqlProtocolRepository,
 )
@@ -168,6 +170,34 @@ def test_delete_removes_the_owners_protocol_and_leaves_every_other_one(repos):
     assert protocol_repo.get(doomed.id, "user_deleter") is None
     assert protocol_repo.list_for_user("user_deleter") == [kept]
     assert protocol_repo.delete(doomed.id, "user_deleter") is False
+
+
+def test_sql_delete_refuses_a_protocol_a_logged_session_landed_on_and_keeps_it_whole():
+    # Arrange — a Logged Session committed after the Delete service's guard read: the
+    # concurrent race only the database can see (ADR-0125)
+    engine = make_fk_engine()
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as session:
+        protocol_repo = SqlProtocolRepository(session)
+        view = protocol_repo.create("user_racer", _two_week_draft(SqlExerciseRepository(session)))
+        member = view.sessions[0].session_id
+        session.add(
+            LoggedSession(
+                clerk_user_id="user_racer",
+                session_id=member,
+                training_type="strength",
+                performed_on=date(2026, 3, 1),
+            )
+        )
+        session.commit()
+
+        # Act / Assert — the foreign key refuses the cascade as a started Protocol
+        with pytest.raises(ProtocolStarted):
+            protocol_repo.delete(view.id, "user_racer")
+
+        # Assert — rolled back whole: the plan and the record are both intact
+        assert protocol_repo.get(view.id, "user_racer") == view
+        assert session.get(LoggedSession, 1) is not None
 
 
 def test_create_persists_the_trace_id_lineage(repos):

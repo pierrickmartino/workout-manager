@@ -15,6 +15,7 @@ from datetime import datetime
 from typing import Any
 from typing import Protocol as Interface
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 # Sentinel distinguishing "leave the Protocol name unchanged" (the default) from an
@@ -35,6 +36,13 @@ from app.repositories.prescription_mapping import (
     row_from_draft,
     view_from_row,
 )
+
+
+class ProtocolStarted(Exception):
+    """A Logged Session references a member Session, so the Protocol can't be deleted.
+
+    Raised by :meth:`ProtocolRepository.delete` when the database refuses the cascade: a log
+    committed after the Delete service's guard read still pins its Session (ADR-0125)."""
 
 
 @dataclass(frozen=True)
@@ -185,7 +193,9 @@ class ProtocolRepository(Interface):
         member Sessions and their Exercise Prescriptions, children-first so a
         foreign-key-enforcing database accepts the parent deletes, and issues the single
         terminal commit. Returns ``True`` when a Protocol was deleted, ``False`` when it is
-        missing or owned by another user. The un-started guard and the Generation Feedback
+        missing or owned by another user. Raises :class:`ProtocolStarted`, having rolled the
+        whole cascade back, when a Logged Session still references a member Session (a log
+        that landed after the service's guard). The un-started guard and the Generation Feedback
         cleanup live in the Delete service — this seam owns only the Protocol aggregate."""
         ...
 
@@ -377,20 +387,26 @@ class SqlProtocolRepository:
         workouts = self._session.exec(
             select(WorkoutSession).where(WorkoutSession.protocol_id == protocol_id)
         ).all()
-        for workout in workouts:
-            prescriptions = self._session.exec(
-                select(ExercisePrescription).where(
-                    ExercisePrescription.session_id == workout.id
-                )
-            ).all()
+        prescriptions = self._session.exec(
+            select(ExercisePrescription).where(
+                ExercisePrescription.session_id.in_([w.id for w in workouts])
+            )
+        ).all()
+        try:
             for prescription in prescriptions:
                 self._session.delete(prescription)
-        self._session.flush()
-        for workout in workouts:
-            self._session.delete(workout)
-        self._session.flush()
-        self._session.delete(protocol)
-        self._session.commit()
+            self._session.flush()
+            for workout in workouts:
+                self._session.delete(workout)
+            self._session.flush()
+            self._session.delete(protocol)
+            self._session.commit()
+        except IntegrityError as exc:
+            # A Logged Session committed after the service's guard read still references a
+            # member Session, so the foreign key refuses the cascade: roll it back whole and
+            # report the Protocol as started rather than surfacing a database error.
+            self._session.rollback()
+            raise ProtocolStarted from exc
         return True
 
     def deploy_tail(
@@ -757,6 +773,7 @@ __all__ = [
     "ProtocolRepository",
     "ProtocolSessionDraft",
     "ProtocolSessionView",
+    "ProtocolStarted",
     "ProtocolView",
     "SqlProtocolRepository",
 ]

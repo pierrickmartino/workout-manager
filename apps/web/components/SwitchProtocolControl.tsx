@@ -47,8 +47,7 @@ export function SwitchProtocolControl({
     return (
       <BlockedRowAction
         label={label}
-        reason={action.reason}
-        resumeHref={action.resumeHref}
+        blocked={action}
         className={buttonClass}
       >
         Switch

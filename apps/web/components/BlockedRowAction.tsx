@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useId } from "react";
 
 import { NAV_FORWARD } from "@/lib/nav-direction";
+import type { BlockedRowActionView } from "@/lib/protocols-index";
 
 interface BlockedRowActionProps {
   // The visible verb ("Switch", "Delete") and the accessible name naming the row.
   children: string;
   label: string;
-  reason: string;
-  resumeHref: string;
+  // The view-model's blocked verdict: the reason and the way back to the Live Session.
+  blocked: BlockedRowActionView;
   className: string;
 }
 
@@ -21,8 +22,7 @@ interface BlockedRowActionProps {
 export function BlockedRowAction({
   children,
   label,
-  reason,
-  resumeHref,
+  blocked,
   className,
 }: BlockedRowActionProps): React.JSX.Element {
   const reasonId = useId();
@@ -38,11 +38,11 @@ export function BlockedRowAction({
         {children}
       </button>
       <p id={reasonId} className="font-mono text-[12px] leading-relaxed text-text-secondary">
-        {reason}
+        {blocked.reason}
       </p>
       <Link
         {...NAV_FORWARD}
-        href={resumeHref}
+        href={blocked.resumeHref}
         className="font-mono text-[12px] text-cyan hover:underline"
       >
         Resume session

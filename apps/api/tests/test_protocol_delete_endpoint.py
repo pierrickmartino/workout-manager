@@ -13,11 +13,15 @@ from datetime import date
 
 from app.domain.completion import CompletionOutcome
 from app.domain.feedback import Verdict
-from app.repositories.deps import get_generation_feedback_repository
+from app.repositories.deps import (
+    get_generation_feedback_repository,
+    get_protocol_repository,
+)
 from app.repositories.generation_feedback_repository import (
     InMemoryGenerationFeedbackRepository,
 )
 from app.repositories.logged_session_repository import LoggedSessionDraft
+from app.repositories.protocol_repository import ProtocolStarted
 from tests.test_home_endpoint import build_harness
 
 
@@ -186,6 +190,37 @@ def test_a_session_logged_after_the_index_read_turns_the_delete_into_a_409():
     assert h.feedback.latest(member, "user_race") is not None
     history = h.client.get("/api/logs", headers=h.auth("user_race")).json()["data"]
     assert len(history) == 1
+
+
+class _LogLandsMidDelete:
+    """A Protocol repository whose delete meets a Logged Session committed after the guard
+    read — what the FK-enforcing database reports as ``ProtocolStarted`` (the SQL refusal
+    itself is exercised in the repository suite)."""
+
+    def __init__(self, inner) -> None:
+        self._inner = inner
+
+    def get(self, protocol_id, clerk_user_id):
+        return self._inner.get(protocol_id, clerk_user_id)
+
+    def delete(self, protocol_id, clerk_user_id):
+        raise ProtocolStarted
+
+
+def test_a_session_logged_during_the_delete_is_a_409_not_a_server_error():
+    # Arrange
+    h = _harness()
+    protocol = h.adopt_protocol("user_mid")
+    h.client.app.dependency_overrides[get_protocol_repository] = lambda: _LogLandsMidDelete(
+        h.protocols
+    )
+
+    # Act
+    response = _delete(h, "user_mid", protocol.id)
+
+    # Assert
+    assert response.status_code == 409
+    assert response.json()["success"] is False
 
 
 def test_deleting_the_unstarted_current_protocol_falls_back_to_the_next_most_recently_current():
