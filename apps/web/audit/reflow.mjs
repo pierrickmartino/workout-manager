@@ -68,9 +68,11 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // `protocols-live` is the same page with Switch blocked by a Live Session (#638), and Delete too on
 // the row that owns it (#639): that row then carries two blocked buttons, each with a sentence of
 // reason and a Resume link.
+// `set-aside` joins them with ADR-0125: the note a generated Protocol lands with, naming the
+// Protocol it set aside, renders only on that landing, and its label is an authored name.
 const NOVEL_JOURNEYS = [
   "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc", "launchpad",
-  "levels", "sheet", "protocols", "protocols-live",
+  "levels", "sheet", "protocols", "protocols-live", "set-aside",
 ];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and

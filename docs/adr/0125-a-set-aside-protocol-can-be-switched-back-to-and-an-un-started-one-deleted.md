@@ -55,5 +55,9 @@ non-blocking note says where the old Protocol went.
   first" block on Switch and Delete lives in the web view-model. The server can't see it.
 - Delivered in slices (#634): the selection rule and this record first, with no visible change;
   then the index, Switch and removal of the generate confirmation; then Delete.
+- Generation lands on the adopted Protocol at `?set_aside=<id>` when a Current Protocol was
+  superseded (#640). The detail page re-reads that Protocol, owner-scoped, and shows the note
+  only while it is not Current, so a revisited address never names a Protocol the user has
+  since Switched back to (`lib/protocol-supersede.ts`).
 - **Out of scope:** running a Finished Protocol again, deleting a Protocol that has any Logged
   Session, and server-side awareness of the Live Session.

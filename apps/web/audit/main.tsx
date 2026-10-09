@@ -56,6 +56,7 @@ import { BuildWorkoutLink, GenerateTrainingLaunchpad, LogPastWorkoutLink } from 
 import { FitnessLevelStandings } from "@/components/pulse/fitness-level-standings";
 import { toFitnessLevelRows } from "@/lib/fitness-level-standing";
 import { ProtocolsIndex } from "@/components/ProtocolsIndex";
+import { SetAsideNote } from "@/components/SetAsideNote";
 import { protocolsIndex, type LiveSessionContext } from "@/lib/protocols-index";
 import { adminExerciseRows, auditEntry, exerciseDetail, exerciseNames, exercises, history, liveWorkout, personalRecords, prescriptions, profile, protocolIndexEntries, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
 
@@ -184,8 +185,9 @@ function AdminAudit() {
 // It is `fixed inset-0` and renders only while mounted, so no other journey ever shows one — and
 // an unrendered surface is an unmeasured one, whatever the static guards say (ADR-0088). The copy
 // is the longest of them in each slot: the Protocol Delete's title (#639) names the Protocol, here
-// the unbroken authored name; the supersede's warning names a Protocol, and the admin delete's
-// two-line consequence is the longest message.
+// the unbroken authored name, and the admin delete's two-line consequence is the longest message.
+// The message's tail names a Protocol as the retired supersede warning did (ADR-0125), kept as
+// the longest Protocol label a message has carried.
 function ConfirmSurface() {
   return <ConfirmDialog
     title={`Delete \u201C${"W".repeat(120)}\u201D?`}
@@ -311,6 +313,10 @@ function Content() {
     case "sheet": return <SheetSurface />;
     case "launchpad": return <LaunchpadSurface />;
     case "levels": return <FitnessLevelSurface />;
+    // The note a freshly adopted Protocol shows once generating it set the previous one aside
+    // (ADR-0125). It renders only on that landing, so no other journey shows it; the label is
+    // the worst an authored name can be, 120 unbroken characters.
+    case "set-aside": return <SetAsideNote note={{ label: "W".repeat(120), href: "/protocols" }} />;
     case "contrast": return <ContrastSamples />;
     default: throw new Error(`Unknown audit journey: ${journey}`);
   }

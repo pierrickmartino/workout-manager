@@ -5,11 +5,14 @@ import { useRouter } from "next/navigation";
 
 import { pollProtocolJob, startGeneration } from "@/app/protocols/actions";
 import type { GenerateProtocolInput } from "@/lib/protocols-types";
+import { adoptedProtocolHref } from "@/lib/protocol-supersede";
 
 // Drives the async Protocol generation flow on the client (Slice 7, ADR-0005):
 // submit, then poll the job to completion and navigate to the adopted Protocol. A
 // cache hit short-circuits straight to navigation; a miss/bypass shows progress
-// while the worker runs, so a long multi-week generation never blocks the UI.
+// while the worker runs, so a long multi-week generation never blocks the UI. When a
+// Current Protocol was set aside by the adoption, its id rides on the landing address so
+// the adopted Protocol can note where the old one went (ADR-0125).
 
 export type GenerationPhase = "idle" | "submitting" | "generating" | "error";
 
@@ -21,7 +24,14 @@ interface ProtocolGeneration {
   start: (input: GenerateProtocolInput) => Promise<void>;
 }
 
-export function useProtocolGeneration(): ProtocolGeneration {
+interface ProtocolGenerationOptions {
+  // The Current Protocol this generation sets aside, or `null` when there is none.
+  setAsideProtocolId?: number | null;
+}
+
+export function useProtocolGeneration({
+  setAsideProtocolId = null,
+}: ProtocolGenerationOptions = {}): ProtocolGeneration {
   const router = useRouter();
   const [phase, setPhase] = useState<GenerationPhase>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -29,9 +39,9 @@ export function useProtocolGeneration(): ProtocolGeneration {
 
   const goToProtocol = useCallback(
     (protocolId: number) => {
-      router.push(`/protocols/${protocolId}`);
+      router.push(adoptedProtocolHref(protocolId, setAsideProtocolId));
     },
-    [router],
+    [router, setAsideProtocolId],
   );
 
   const start = useCallback(

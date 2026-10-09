@@ -1,26 +1,55 @@
-// Pure view-model for the supersede guard (ADR-0037). NO I/O and NO server-only
-// imports, so it is safe to import from both Server and Client Components and is
-// unit-testable in isolation.
+// Pure view-model for the set-aside note (ADR-0125, amending ADR-0037). NO I/O and NO
+// server-only imports, so it is safe to import from both Server and Client Components and
+// is unit-testable in isolation.
 //
-// Generating a new Protocol supersedes the Current one (ADR-0030 selection rule):
-// the old Protocol is *set aside* — still owned, records intact, but no longer
-// surfaced (CONTEXT.md "Current Protocol"). That is a one-way door, so this decides
-// whether generation must warn first.
+// Generating a new Protocol supersedes the Current one (ADR-0030 selection rule): the old
+// Protocol is *set aside* — still owned, records intact, and since ADR-0125 one Switch away
+// from being Current again. Superseding is no longer a one-way door, so generation asks
+// nothing first; once the new Protocol is adopted, a short non-blocking note says where the
+// old one went. The adopted Protocol's address carries the set-aside id so the detail page
+// can say so; this module owns both ends of that hand-off.
 
 import type { ProtocolProgress } from "./protocols-types";
 
-// The confirmation message to show before superseding the Current Protocol, or
-// `null` when superseding is silent (nothing settled would be set aside).
-export function supersedeWarning(
-  currentProtocol: ProtocolProgress | null,
-): string | null {
-  // Silent when there is nothing to supersede (empty state) or nothing settled to
-  // lose: a Protocol with no advancing Session (ADR-0013) has made zero forward
-  // progress, so its Next Session is still the first and superseding costs nothing.
-  if (currentProtocol === null || currentProtocol.completed_count <= 0) {
-    return null;
-  }
-  // In progress: warn at the one-way door, naming the Protocol (its resolved display
-  // label, ADR-0021) that will be set aside.
-  return `You’re partway through "${currentProtocol.label}". Starting a new protocol will set it aside — you won’t be able to return to it.`;
+// The search parameter naming the Protocol a generation set aside.
+export const SET_ASIDE_PARAM = "set_aside";
+
+// Where generation lands: the adopted Protocol, carrying the one it set aside when there
+// was a Current Protocol to supersede.
+export function adoptedProtocolHref(
+  protocolId: number,
+  setAsideId: number | null,
+): string {
+  const base = `/protocols/${protocolId}`;
+  return setAsideId === null ? base : `${base}?${SET_ASIDE_PARAM}=${setAsideId}`;
+}
+
+// The Protocol id a detail page should look up for the note, or `null` when the address
+// names none worth reading: absent, repeated, not a positive integer, or the Protocol on
+// screen (a Protocol cannot have set itself aside).
+export function setAsideProtocolId(
+  raw: string | readonly string[] | undefined,
+  viewedProtocolId: number,
+): number | null {
+  if (typeof raw !== "string" || !/^[1-9]\d*$/.test(raw)) return null;
+  const id = Number(raw);
+  if (!Number.isSafeInteger(id) || id === viewedProtocolId) return null;
+  return id;
+}
+
+export interface SetAsideNote {
+  // The set-aside Protocol's resolved display label (ADR-0021).
+  readonly label: string;
+  // Where the user finds it again — the Protocols screen, where it can be Switched to.
+  readonly href: string;
+}
+
+// The note to show, or `null` when there is nothing true to say: the set-aside Protocol
+// could not be read (not owned, deleted since, failed read), or it is Current again.
+export function setAsideNote(
+  setAside: ProtocolProgress | null,
+  currentProtocolId: number | null,
+): SetAsideNote | null {
+  if (setAside === null || setAside.id === currentProtocolId) return null;
+  return { label: setAside.label, href: "/protocols" };
 }

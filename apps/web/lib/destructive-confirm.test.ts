@@ -198,50 +198,35 @@ test("the admin hard delete asks in the themed dialog, and only a confirm delete
   }
 });
 
-test("superseding the current protocol asks in the themed dialog before generating", async () => {
-  // Arrange — the one-way door (ADR-0037): generating sets the in-progress Protocol aside.
+test("generating while a protocol is current asks nothing and hands the hook what it sets aside", async () => {
+  // Arrange — Protocol 4 is Current with performed Sessions. Superseding it is no longer a
+  // one-way door (ADR-0125: it can be Switched back to), so generation must not grow a dialog.
   const { restore } = mountDom({ url: "http://localhost/protocols/new" });
   try {
     forbidNativeConfirm();
     const started: unknown[] = [];
+    const hookOptions: unknown[] = [];
     const { unmount } = await mount(
       "components/GenerateProtocolForm.tsx",
       {
         "@/lib/use-protocol-generation": {
-          useProtocolGeneration: () => ({
-            phase: "idle",
-            error: null,
-            start: async (input: unknown) => {
-              started.push(input);
-            },
-          }),
+          useProtocolGeneration: (options: unknown) => {
+            hookOptions.push(options);
+            return {
+              phase: "idle",
+              error: null,
+              start: async (input: unknown) => {
+                started.push(input);
+              },
+            };
+          },
         },
         "@/lib/use-connectivity": { useConnectivity: () => true },
       },
-      { supersedeWarning: "You're partway through “Week 3”.", defaultEquipment: [] },
+      { setAsideProtocolId: 4, defaultEquipment: [] },
     );
 
-    // Act — submitting opens the door's question rather than walking through it.
-    const form = document.querySelector("form")!;
-    await React.act(async () =>
-      form.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })),
-    );
-
-    // Assert
-    assert.ok(dialog(), "no themed dialog opened");
-    assert.match(dialog()!.textContent ?? "", /partway through/);
-    assert.deepEqual(started, []);
-
-    // Act — backing out
-    await React.act(async () => dialogButton("Keep current").click());
-
-    // Assert — nothing generated, and the form is still there to edit.
-    assert.equal(dialog(), null);
-    assert.deepEqual(started, []);
-    assert.ok(document.querySelector("form"));
-
-    // Act — going through with it, having first typed an objective of their own, so what
-    // arrives is the filled-in form and not the defaults it was mounted with.
+    // Act — fill in an objective of their own and submit.
     const objective = document.querySelector<HTMLInputElement>('input[name="objective"]')!;
     await React.act(async () => setFieldValue(objective, "build a bigger squat"));
     await React.act(async () =>
@@ -249,52 +234,13 @@ test("superseding the current protocol asks in the themed dialog before generati
         .querySelector("form")!
         .dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })),
     );
-    await React.act(async () => dialogButton("Generate anyway").click());
 
-    // Assert — the values held across the dialog are the submitted ones. Re-reading the form
-    // on confirm would be the same assertion; holding a stale or empty payload would not.
-    assert.equal(started.length, 1);
-    assert.equal((started[0] as { objective: string }).objective, "build a bigger squat");
-
-    await React.act(async () => unmount());
-  } finally {
-    restore();
-  }
-});
-
-test("generating with nothing to supersede asks nothing", async () => {
-  // Arrange — a silent supersede (no settled progress to lose) must not grow a dialog.
-  const { restore } = mountDom({ url: "http://localhost/protocols/new" });
-  try {
-    forbidNativeConfirm();
-    const started: unknown[] = [];
-    const { unmount } = await mount(
-      "components/GenerateProtocolForm.tsx",
-      {
-        "@/lib/use-protocol-generation": {
-          useProtocolGeneration: () => ({
-            phase: "idle",
-            error: null,
-            start: async (input: unknown) => {
-              started.push(input);
-            },
-          }),
-        },
-        "@/lib/use-connectivity": { useConnectivity: () => true },
-      },
-      { supersedeWarning: null, defaultEquipment: [] },
-    );
-
-    // Act
-    await React.act(async () =>
-      document
-        .querySelector("form")!
-        .dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })),
-    );
-
-    // Assert
+    // Assert — straight through to generation with the submitted values, and the hook knows
+    // which Protocol it sets aside so the adopted one can say where the old one went.
     assert.equal(dialog(), null);
     assert.equal(started.length, 1);
+    assert.equal((started[0] as { objective: string }).objective, "build a bigger squat");
+    assert.deepEqual(hookOptions.at(-1), { setAsideProtocolId: 4 });
 
     await React.act(async () => unmount());
   } finally {
