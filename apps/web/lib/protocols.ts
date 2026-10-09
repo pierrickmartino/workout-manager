@@ -39,6 +39,15 @@ export async function switchToProtocol(
   return apiSend(`/api/protocols/${id}/switch`, "POST");
 }
 
+// Permanently delete an un-started Protocol (issue #639): the Protocol and its plan-side
+// dependents go, with no soft-delete. A bodyless DELETE, so the seam sends no `Content-Type`
+// (ADR-0022). The backend re-checks the guard authoritatively: `409` when any Logged Session
+// references a member Session (a log may have landed since the index was drawn), `404` when
+// missing or not owned. On success the envelope carries the deleted id.
+export async function deleteProtocol(id: number): Promise<Envelope<{ id: number }>> {
+  return apiSend(`/api/protocols/${id}`, "DELETE");
+}
+
 // Submit a Protocol generation. Generation runs off the request path: the backend
 // returns a job handle to poll (cache miss/bypass) or, on a cache hit, the adopted
 // Protocol id inline — neither blocks on the long AI call.

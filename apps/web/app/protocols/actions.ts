@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
+  deleteProtocol,
   fetchProtocolJob,
   startProtocolGeneration,
   switchToProtocol,
@@ -63,4 +64,32 @@ export async function switchProtocolAction(
   revalidatePath("/dashboard");
   revalidatePath("/protocols");
   redirect("/dashboard");
+}
+
+export interface DeleteProtocolState {
+  error: string | null;
+}
+
+// Delete an un-started Protocol (issue #639), reached only through the app's own confirmation
+// (ADR-0098). The server is authoritative — it owns the `404` (not owned) and the `409` (a
+// Session was logged since the index was drawn) — so a refusal surfaces its message inline. On
+// success Home and the index are revalidated: deleting the Current Protocol makes Home fall back
+// to the next most-recently-Current unfinished one, or to the empty state.
+export async function deleteProtocolAction(
+  _prevState: DeleteProtocolState,
+  form: FormData,
+): Promise<DeleteProtocolState> {
+  const protocolId = Number(form.get("protocol_id"));
+  if (!Number.isInteger(protocolId)) {
+    return { error: "Could not tell which protocol to delete." };
+  }
+
+  const result = await deleteProtocol(protocolId);
+  if (!result.success) {
+    return { error: result.error ?? "Could not delete this protocol." };
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/protocols");
+  return { error: null };
 }

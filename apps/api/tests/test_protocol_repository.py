@@ -152,6 +152,24 @@ def test_make_current_restamps_made_current_at_for_the_owner_only(repos):
     assert protocol_repo.make_current(9999, "user_switcher") is None
 
 
+def test_delete_removes_the_owners_protocol_and_leaves_every_other_one(repos):
+    # Arrange — two Protocols, so the delete must reach only its own Sessions
+    protocol_repo, exercises = repos
+    doomed = protocol_repo.create("user_deleter", _two_week_draft(exercises))
+    kept = protocol_repo.create("user_deleter", _two_week_draft(exercises))
+
+    # Act — the FK-enforcing engine accepts it only if the children go first
+    refused = protocol_repo.delete(doomed.id, "user_intruder")
+    deleted = protocol_repo.delete(doomed.id, "user_deleter")
+
+    # Assert — a non-owner or a missing id is refused, and the survivor is untouched
+    assert refused is False
+    assert deleted is True
+    assert protocol_repo.get(doomed.id, "user_deleter") is None
+    assert protocol_repo.list_for_user("user_deleter") == [kept]
+    assert protocol_repo.delete(doomed.id, "user_deleter") is False
+
+
 def test_create_persists_the_trace_id_lineage(repos):
     # Arrange — a draft carrying the originating Generation Call's trace id (#274)
     protocol_repo, exercises = repos

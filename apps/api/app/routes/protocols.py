@@ -10,7 +10,8 @@ Session* (self-paced, no calendar), with each upcoming Prescription's recommende
 load progressed from the user's Logged Sets (ADR-0004); ``404`` for anyone else.
 ``GET /api/protocols`` is the Protocols index: one row per owned Protocol with its
 status (current / set aside / finished) and performed counts (#637). ``POST
-/api/protocols/{id}/switch`` makes a set-aside Protocol Current again (#638).
+/api/protocols/{id}/switch`` makes a set-aside Protocol Current again (#638), and
+``DELETE /api/protocols/{id}`` removes one nobody has trained (#639).
 All responses use the standard envelope."""
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ from app.generation.protocol_generator import ProtocolGenerationRequest
 from app.generation.protocol_service import cache_request_for
 from app.protocols.balance_preview import build_balance_preview
 from app.protocols.calibration import CalibrationStatus, calibrate_protocol
+from app.protocols.delete import DeleteStatus, delete_protocol
 from app.protocols.deploy import DeployStatus, deploy_protocol_tail
 from app.protocols.deploy_validation import (
     MAX_SESSIONS_PER_WEEK,
@@ -57,12 +59,16 @@ from app.protocols.serialization import (
 )
 from app.repositories.deps import (
     get_exercise_repository,
+    get_generation_feedback_repository,
     get_generation_orchestrator,
     get_logged_session_repository,
     get_profile_repository,
     get_protocol_repository,
 )
 from app.repositories.exercise_repository import ExerciseRepository
+from app.repositories.generation_feedback_repository import (
+    GenerationFeedbackRepository,
+)
 from app.repositories.logged_session_repository import LoggedSessionRepository
 from app.repositories.profile_repository import ProfileRepository
 from app.repositories.protocol_repository import ProtocolRepository
@@ -258,6 +264,41 @@ def switch(
             status_code=HTTP_CONFLICT, detail="A Finished Protocol can’t be switched to"
         )
     return success_envelope(serialize_protocol_progress(result.protocol))
+
+
+@router.delete("/protocols/{protocol_id}")
+def delete(
+    protocol_id: int,
+    clerk_user_id: str = Depends(get_current_user),
+    protocols: ProtocolRepository = Depends(get_protocol_repository),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+    feedback: GenerationFeedbackRepository = Depends(
+        get_generation_feedback_repository
+    ),
+) -> dict:
+    """Permanently delete the owner's un-started Protocol (#639, ADR-0125).
+
+    Removes the Protocol and its plan-side dependents — member Sessions, Exercise
+    Prescriptions, Calibration and Generation Feedback — with no soft-delete. ``404`` when
+    the Protocol is missing or not owned; ``409`` when any Logged Session of any Completion
+    Outcome references a member Session. The guard runs inside the delete, so a Session
+    logged after the client drew the index is a conflict, never a lost record."""
+
+    status = delete_protocol(
+        clerk_user_id,
+        protocol_id,
+        protocols=protocols,
+        logged=logged,
+        feedback=feedback,
+    )
+    if status is DeleteStatus.NOT_FOUND:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Protocol not found")
+    if status is DeleteStatus.STARTED:
+        raise HTTPException(
+            status_code=HTTP_CONFLICT,
+            detail="A Protocol with logged training can’t be deleted",
+        )
+    return success_envelope({"id": protocol_id})
 
 
 class DeployPrescriptionBody(BaseModel):

@@ -43,12 +43,35 @@ class ProtocolIndexRow:
     performed_count: int
     session_count: int
     last_performed_on: date | None
+    # Un-started: no Logged Session of *any* Completion Outcome references a member
+    # Session, so Delete may be offered (#639, ADR-0125). Computed here, never by the client.
+    deletable: bool
     # Ordering only (ADR-0001): the index sorts set-aside rows by it, never shows it.
     made_current_at: datetime
 
 
+def logged_session_ids(logged_sessions: list[LoggedSessionView]) -> set[int]:
+    """Every Session id any Logged Session references, whatever its Completion Outcome.
+
+    Unlike ``last_performed_on_by_session`` an Incomplete log counts here: it does not
+    perform a Session, but it is still logged training a Delete must never destroy."""
+
+    return {
+        entry.session_id for entry in logged_sessions if entry.session_id is not None
+    }
+
+
+def is_started(protocol: ProtocolView, logged_ids: set[int]) -> bool:
+    """Whether any member Session of ``protocol`` has a Logged Session (ADR-0125)."""
+
+    return any(session.session_id in logged_ids for session in protocol.sessions)
+
+
 def _row(
-    protocol: ProtocolView, status: ProtocolStatus, performed_on: dict[int, date]
+    protocol: ProtocolView,
+    status: ProtocolStatus,
+    performed_on: dict[int, date],
+    logged_ids: set[int],
 ) -> ProtocolIndexRow:
     dates = [
         performed_on[session.session_id]
@@ -61,6 +84,7 @@ def _row(
         performed_count=len(dates),
         session_count=len(protocol.sessions),
         last_performed_on=max(dates, default=None),
+        deletable=not is_started(protocol, logged_ids),
         made_current_at=protocol.made_current_at,
     )
 
@@ -79,6 +103,7 @@ def protocol_index_from(
     """
 
     performed_on = last_performed_on_by_session(logged_sessions)
+    logged_ids = logged_session_ids(logged_sessions)
     rows: list[ProtocolIndexRow] = []
     has_current = False
     for protocol in by_made_current(protocols):
@@ -89,7 +114,7 @@ def protocol_index_from(
             has_current = True
         else:
             status = ProtocolStatus.SET_ASIDE
-        rows.append(_row(protocol, status, performed_on))
+        rows.append(_row(protocol, status, performed_on, logged_ids))
     return rows
 
 
@@ -109,6 +134,8 @@ def protocol_index(
 __all__ = [
     "ProtocolIndexRow",
     "ProtocolStatus",
+    "is_started",
+    "logged_session_ids",
     "protocol_index",
     "protocol_index_from",
 ]

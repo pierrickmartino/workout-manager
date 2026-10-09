@@ -178,6 +178,17 @@ class ProtocolRepository(Interface):
         ``None`` if it is missing or owned by another user."""
         ...
 
+    def delete(self, protocol_id: int, clerk_user_id: str) -> bool:
+        """Permanently delete the owner's Protocol (Delete, #639, ADR-0125).
+
+        Removes the Protocol row (its Calibration is a column on it) together with its
+        member Sessions and their Exercise Prescriptions, children-first so a
+        foreign-key-enforcing database accepts the parent deletes, and issues the single
+        terminal commit. Returns ``True`` when a Protocol was deleted, ``False`` when it is
+        missing or owned by another user. The un-started guard and the Generation Feedback
+        cleanup live in the Delete service — this seam owns only the Protocol aggregate."""
+        ...
+
     def deploy_tail(
         self,
         protocol_id: int,
@@ -354,6 +365,33 @@ class SqlProtocolRepository:
         self._session.commit()
         self._session.refresh(protocol)
         return self._view(protocol)
+
+    def delete(self, protocol_id: int, clerk_user_id: str) -> bool:
+        # The **terminal** step of the Protocol-Delete cascade: any Generation Feedback the
+        # Delete service flushed earlier rides this one commit (all repositories in a request
+        # share one session), so the delete lands whole or rolls back whole.
+        protocol = self._session.get(Protocol, protocol_id)
+        if protocol is None or protocol.clerk_user_id != clerk_user_id:
+            return False
+
+        workouts = self._session.exec(
+            select(WorkoutSession).where(WorkoutSession.protocol_id == protocol_id)
+        ).all()
+        for workout in workouts:
+            prescriptions = self._session.exec(
+                select(ExercisePrescription).where(
+                    ExercisePrescription.session_id == workout.id
+                )
+            ).all()
+            for prescription in prescriptions:
+                self._session.delete(prescription)
+        self._session.flush()
+        for workout in workouts:
+            self._session.delete(workout)
+        self._session.flush()
+        self._session.delete(protocol)
+        self._session.commit()
+        return True
 
     def deploy_tail(
         self,
@@ -579,6 +617,16 @@ class InMemoryProtocolRepository:
             return None
         protocol.made_current_at = _utcnow()
         return self._view(protocol)
+
+    def delete(self, protocol_id: int, clerk_user_id: str) -> bool:
+        protocol = self._protocols.get(protocol_id)
+        if protocol is None or protocol.clerk_user_id != clerk_user_id:
+            return False
+
+        for workout in self._sessions.pop(protocol_id, []):
+            self._prescriptions.pop(workout.id, None)
+        del self._protocols[protocol_id]
+        return True
 
     def deploy_tail(
         self,

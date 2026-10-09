@@ -67,6 +67,8 @@ def test_index_lists_a_single_unstarted_protocol_as_current():
             "performed_count": 0,
             "session_count": 2,
             "last_performed_on": None,
+            "deletable": True,
+            "session_ids": [s.session_id for s in protocol.sessions],
             "made_current_at": protocol.made_current_at.isoformat(),
         }
     ]

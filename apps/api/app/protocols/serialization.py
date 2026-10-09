@@ -150,7 +150,8 @@ def serialize_protocol_progress(progress: ProtocolProgressView) -> dict:
 
 
 def serialize_protocol_index_row(row: ProtocolIndexRow) -> dict:
-    """One Protocols-index row (#637): the plan's label and its read-time standing.
+    """One Protocols-index row (#637): the plan's label and its read-time standing, and
+    whether it may be deleted (#639).
 
     ``made_current_at`` travels only so the client can order set-aside rows (ADR-0125);
     it is never shown — the app is calendar-free (ADR-0001)."""
@@ -168,6 +169,10 @@ def serialize_protocol_index_row(row: ProtocolIndexRow) -> dict:
         "last_performed_on": (
             row.last_performed_on.isoformat() if row.last_performed_on else None
         ),
+        "deletable": row.deletable,
+        # The member Session ids, in order, so the client can tell which row owns the Live
+        # Session it holds (the server can't see that slot, ADR-0012) and block its Delete.
+        "session_ids": [session.session_id for session in protocol.sessions],
         "made_current_at": row.made_current_at.isoformat(),
     }
 

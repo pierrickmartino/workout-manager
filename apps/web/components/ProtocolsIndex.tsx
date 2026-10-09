@@ -8,10 +8,12 @@ import { SectionHeader } from "@/components/pulse/section-header";
 import { BackLink } from "@/components/pulse/back-link";
 import { Card } from "@/components/ui/card";
 import { SwitchProtocolControl } from "@/components/SwitchProtocolControl";
+import { DeleteProtocolControl } from "@/components/DeleteProtocolControl";
 
 // The Protocols index (issue #637): every Protocol the user owns, grouped Current / Set aside /
 // Finished, each row opening the Protocol's detail page. A set-aside row also carries Switch
-// (#638), offered, pending or blocked as the view-model decides. A thin renderer over the
+// (#638), and an un-started row Delete (#639), each offered, pending or blocked as the view-model
+// decides. A thin renderer over the
 // `protocols-index` view-model, which owns grouping, order, copy and row actions; kept
 // prop-driven so the audit harness can mount it directly.
 export function ProtocolsIndex({
@@ -55,8 +57,9 @@ export function ProtocolsIndex({
   );
 }
 
-// One row: the card's body is the link into the Protocol's detail page, and its row action sits
-// below the link rather than inside it, so a control is never nested in an anchor. The title is
+// One row: the card's body is the link into the Protocol's detail page, and its row actions sit
+// below the link rather than inside it, so a control is never nested in an anchor. Delete comes
+// last, after the reversible Switch. The title is
 // an authored name, so it wraps rather than truncates (ADR-0085).
 function ProtocolIndexCard({ row }: { row: ProtocolIndexRowView }): React.JSX.Element {
   return (
@@ -85,9 +88,14 @@ function ProtocolIndexCard({ row }: { row: ProtocolIndexRowView }): React.JSX.El
           className="h-[18px] w-[18px] shrink-0 text-text-muted transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
         />
       </Link>
-      {row.switchAction ? (
-        <div className="border-t border-border px-4 py-3">
-          <SwitchProtocolControl action={row.switchAction} protocolTitle={row.title} />
+      {row.switchAction || row.deleteAction ? (
+        <div className="flex flex-wrap items-start gap-3 border-t border-border px-4 py-3">
+          {row.switchAction ? (
+            <SwitchProtocolControl action={row.switchAction} protocolTitle={row.title} />
+          ) : null}
+          {row.deleteAction ? (
+            <DeleteProtocolControl action={row.deleteAction} protocolTitle={row.title} />
+          ) : null}
         </div>
       ) : null}
     </Card>
