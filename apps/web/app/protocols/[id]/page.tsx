@@ -21,8 +21,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { NAV_FORWARD } from "@/lib/nav-direction";
 import {
   SET_ASIDE_PARAM,
-  setAsideNote,
-  setAsideProtocolId,
+  parseSetAsideParam,
+  setAsideLabel,
 } from "@/lib/protocol-supersede";
 import { SetAsideNote } from "@/components/SetAsideNote";
 
@@ -51,7 +51,7 @@ export default async function ProtocolPage({
   const { id } = await params;
   const protocolId = Number(id);
   if (!Number.isInteger(protocolId)) notFound();
-  const setAsideId = setAsideProtocolId(
+  const setAsideId = parseSetAsideParam(
     (await searchParams)[SET_ASIDE_PARAM],
     protocolId,
   );
@@ -72,13 +72,14 @@ export default async function ProtocolPage({
   const progress = total > 0 ? done / total : 0;
 
   // Is this the Current Protocol? Only then may its Next Session be Started (ADR-0008); a
-  // set-aside one is Switched to first (ADR-0125). A failed/empty Home read resolves to `false`, hiding Start.
+  // set-aside one is Switched to first (ADR-0125). A failed/empty Home read resolves to
+  // `false`, hiding Start.
   const isCurrentProtocol =
     home.success && home.data?.current_protocol?.id === protocolId;
   // The set-aside note — only once Home has said what is Current, so it never claims a
   // Protocol is set aside after the user has Switched back to it.
-  const note = home.success
-    ? setAsideNote(
+  const setAsideNoteLabel = home.success
+    ? setAsideLabel(
         setAside?.success ? (setAside.data ?? null) : null,
         home.data?.current_protocol?.id ?? null,
       )
@@ -103,7 +104,7 @@ export default async function ProtocolPage({
         }
       />
 
-      {note ? <SetAsideNote note={note} /> : null}
+      {setAsideNoteLabel !== null ? <SetAsideNote label={setAsideNoteLabel} /> : null}
 
       {/* Protocol overview + completion. */}
       <Card className="flex flex-col gap-4 p-5">

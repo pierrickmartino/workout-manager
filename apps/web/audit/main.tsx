@@ -316,7 +316,7 @@ function Content() {
     // The note a freshly adopted Protocol shows once generating it set the previous one aside
     // (ADR-0125). It renders only on that landing, so no other journey shows it; the label is
     // the worst an authored name can be, 120 unbroken characters.
-    case "set-aside": return <SetAsideNote note={{ label: "W".repeat(120), href: "/protocols" }} />;
+    case "set-aside": return <SetAsideNote label={"W".repeat(120)} />;
     case "contrast": return <ContrastSamples />;
     default: throw new Error(`Unknown audit journey: ${journey}`);
   }

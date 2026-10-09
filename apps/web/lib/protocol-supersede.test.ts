@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 
 import {
   adoptedProtocolHref,
-  setAsideNote,
-  setAsideProtocolId,
+  parseSetAsideParam,
+  setAsideLabel,
 } from "./protocol-supersede.ts";
 import type { ProtocolProgress } from "./protocols-types.ts";
 
@@ -26,6 +26,9 @@ function makeProtocol(
     sessions: [],
     next_session: null,
     completed_count: 0,
+    // The standing Calibration and the clamp's bounds (ADR-0111). Stated rather than
+    // defaulted: the server always sends all three, and a fixture that omitted them would
+    // let a control render against a shape the API never produces.
     calibration: 0,
     calibration_min: -3,
     calibration_max: 3,
@@ -51,45 +54,45 @@ test("generation lands on the adopted Protocol carrying the one it set aside", (
 
 test("the set-aside Protocol is read back from the address", () => {
   // Arrange / Act
-  const id = setAsideProtocolId("4", 12);
+  const id = parseSetAsideParam("4", 12);
   // Assert
   assert.equal(id, 4);
 });
 
 test("an absent, malformed, or self-referring set-aside address reads nothing", () => {
   // Arrange / Act / Assert: nothing to look up, so no extra read and no note.
-  assert.equal(setAsideProtocolId(undefined, 12), null);
-  assert.equal(setAsideProtocolId("", 12), null);
-  assert.equal(setAsideProtocolId("abc", 12), null);
-  assert.equal(setAsideProtocolId("4.5", 12), null);
-  assert.equal(setAsideProtocolId("-4", 12), null);
-  assert.equal(setAsideProtocolId(["4", "5"], 12), null);
+  assert.equal(parseSetAsideParam(undefined, 12), null);
+  assert.equal(parseSetAsideParam("", 12), null);
+  assert.equal(parseSetAsideParam("abc", 12), null);
+  assert.equal(parseSetAsideParam("4.5", 12), null);
+  assert.equal(parseSetAsideParam("-4", 12), null);
+  assert.equal(parseSetAsideParam(["4", "5"], 12), null);
   // A Protocol cannot have set itself aside.
-  assert.equal(setAsideProtocolId("12", 12), null);
+  assert.equal(parseSetAsideParam("12", 12), null);
 });
 
-test("the note names the set-aside Protocol and points at the Protocols screen", () => {
+test("the note names the set-aside Protocol by its label", () => {
   // Arrange: the previous Protocol was resolved; the adopted one (12) is now Current.
   const previous = makeProtocol({ id: 4, label: "Summer Strength" });
   // Act
-  const note = setAsideNote(previous, 12);
+  const label = setAsideLabel(previous, 12);
   // Assert
-  assert.deepEqual(note, { label: "Summer Strength", href: "/protocols" });
+  assert.equal(label, "Summer Strength");
 });
 
 test("no note when the set-aside Protocol could not be read", () => {
   // Arrange: not owned, deleted since, or the read failed.
   // Act
-  const note = setAsideNote(null, 12);
+  const label = setAsideLabel(null, 12);
   // Assert
-  assert.equal(note, null);
+  assert.equal(label, null);
 });
 
 test("no note once the Protocol it names is Current again", () => {
   // Arrange: the user Switched back to Protocol 4 and then revisited the address.
   const previous = makeProtocol({ id: 4, label: "Summer Strength" });
   // Act
-  const note = setAsideNote(previous, 4);
+  const label = setAsideLabel(previous, 4);
   // Assert: telling them it was set aside would now be false.
-  assert.equal(note, null);
+  assert.equal(label, null);
 });

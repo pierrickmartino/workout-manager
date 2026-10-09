@@ -27,7 +27,7 @@ export function adoptedProtocolHref(
 // The Protocol id a detail page should look up for the note, or `null` when the address
 // names none worth reading: absent, repeated, not a positive integer, or the Protocol on
 // screen (a Protocol cannot have set itself aside).
-export function setAsideProtocolId(
+export function parseSetAsideParam(
   raw: string | readonly string[] | undefined,
   viewedProtocolId: number,
 ): number | null {
@@ -37,19 +37,13 @@ export function setAsideProtocolId(
   return id;
 }
 
-export interface SetAsideNote {
-  // The set-aside Protocol's resolved display label (ADR-0021).
-  readonly label: string;
-  // Where the user finds it again — the Protocols screen, where it can be Switched to.
-  readonly href: string;
-}
-
-// The note to show, or `null` when there is nothing true to say: the set-aside Protocol
-// could not be read (not owned, deleted since, failed read), or it is Current again.
-export function setAsideNote(
+// The label the note names (the Protocol's resolved display label, ADR-0021), or `null` when
+// there is nothing true to say: the set-aside Protocol could not be read (not owned, deleted
+// since, failed read), or it is Current again.
+export function setAsideLabel(
   setAside: ProtocolProgress | null,
   currentProtocolId: number | null,
-): SetAsideNote | null {
+): string | null {
   if (setAside === null || setAside.id === currentProtocolId) return null;
-  return { label: setAside.label, href: "/protocols" };
+  return setAside.label;
 }

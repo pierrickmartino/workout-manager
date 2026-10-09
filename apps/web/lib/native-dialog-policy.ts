@@ -1,7 +1,8 @@
 import ts from "@typescript/typescript6";
 
 // #8: three irreversible actions — deleting a Logged Session, the admin hard delete, and the
-// Protocol supersede one-way door — asked for confirmation with `window.confirm`.
+// Protocol supersede one-way door — asked for confirmation with `window.confirm`. (The
+// supersede's confirmation was later retired outright, #640: ADR-0125 made it undoable.)
 //
 // That is not a styling complaint. A browser dialog is chrome: it ignores the Skin, it is
 // not the focus trap `lib/use-modal-focus.ts` provides, and after the first one a browser
