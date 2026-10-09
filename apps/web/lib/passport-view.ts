@@ -69,10 +69,32 @@ function progressLabel(achievement: Achievement): string {
     : fraction;
 }
 
+// Where a Stamp page was opened from: the Passport itself, or the Profile summary. A closed
+// vocabulary rather than a free path, since these are the only two places that list Stamps.
+export type StampOrigin = "passport" | "profile";
+
+const PROFILE_ORIGIN = "profile";
+
 // Every Achievement, earned or locked, opens its own page under the Achievements route, keyed
-// by its id (#652).
-function stampHref(id: string): string {
-  return `/profile/achievements/${encodeURIComponent(id)}`;
+// by its id (#652). One opened from the Profile carries that origin, so its back link can
+// return there; the Passport is the page's parent and needs none.
+function stampHref(id: string, origin: StampOrigin): string {
+  const page = `/profile/achievements/${encodeURIComponent(id)}`;
+  return origin === PROFILE_ORIGIN ? `${page}?from=${PROFILE_ORIGIN}` : page;
+}
+
+export interface StampBackLink {
+  href: string;
+  label: string;
+}
+
+// The Stamp page's back link, from its `?from=` query: the Profile when it was opened there,
+// otherwise the Passport, its parent. Anything else is ignored, so a crafted origin can only
+// ever fall back to the Passport.
+export function stampBackLink(from: string | undefined): StampBackLink {
+  return from === PROFILE_ORIGIN
+    ? { href: "/profile", label: "BACK TO PROFILE" }
+    : { href: "/profile/achievements", label: "BACK TO PASSPORT" };
 }
 
 // The earned date with the year, or null if the API sent none.
@@ -80,14 +102,14 @@ function earnedOn(achievement: Achievement): string | null {
   return achievement.unlocked_on === null ? null : formatLongDate(achievement.unlocked_on);
 }
 
-function toMilestone(achievement: Achievement): Milestone {
+function toMilestone(achievement: Achievement, origin: StampOrigin): Milestone {
   return {
     id: achievement.id,
     name: achievement.name,
     criteria: achievement.criteria,
     progress: progressLabel(achievement),
     fill: ratio(achievement),
-    href: stampHref(achievement.id),
+    href: stampHref(achievement.id, origin),
   };
 }
 
@@ -102,8 +124,12 @@ function closestToEarned(locked: readonly CatalogEntry[]): CatalogEntry | null {
 }
 
 // Build the Passport from the API's evaluated Achievements, which arrive in curated catalog
-// order. Pure and server-free, so it is safe from either a Server or Client Component.
-export function toPassport(achievements: readonly Achievement[]): Passport {
+// order. `origin` is the page listing them, which every Stamp link carries (see `stampHref`).
+// Pure and server-free, so it is safe from either a Server or Client Component.
+export function toPassport(
+  achievements: readonly Achievement[],
+  origin: StampOrigin = "passport",
+): Passport {
   const catalog = achievements.map((achievement, index) => ({ achievement, index }));
   const stamps = catalog
     .filter(({ achievement }) => achievement.unlocked)
@@ -116,17 +142,17 @@ export function toPassport(achievements: readonly Achievement[]): Passport {
       id: achievement.id,
       name: achievement.name,
       earnedOn: earnedOn(achievement),
-      href: stampHref(achievement.id),
+      href: stampHref(achievement.id, origin),
     }));
   const locked = catalog.filter(({ achievement }) => !achievement.unlocked);
   const next = closestToEarned(locked);
   const moreToEarn = locked
     .filter((entry) => entry !== next)
-    .map(({ achievement }) => toMilestone(achievement));
+    .map(({ achievement }) => toMilestone(achievement, origin));
   return {
     stamps,
     empty: stamps.length === 0,
-    next: next === null ? null : toMilestone(next.achievement),
+    next: next === null ? null : toMilestone(next.achievement, origin),
     moreToEarn,
   };
 }
@@ -198,7 +224,7 @@ export function toStampDetail(
     return null;
   }
   if (!achievement.unlocked) {
-    const { href: _ownPage, ...milestone } = toMilestone(achievement);
+    const { href: _ownPage, ...milestone } = toMilestone(achievement, "passport");
     return { status: "locked", ...milestone };
   }
   return {

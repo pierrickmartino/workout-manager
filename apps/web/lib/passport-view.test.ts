@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { toPassport, toStampDetail } from "./passport-view.ts";
+import { stampBackLink, toPassport, toStampDetail } from "./passport-view.ts";
 import type { Achievement } from "./profile-progress-types.ts";
 
 // `toPassport` turns the API's evaluated Achievements (curated catalog order) into the
@@ -369,4 +369,44 @@ test("opens a locked Achievement's page with its criteria and progress, and no s
     progress: "Best run 2/4 consecutive weeks",
     fill: 0.5,
   });
+});
+
+// --- where a Stamp page's back link returns to ---
+
+test("links the Profile summary's Stamps with the Profile as their origin", () => {
+  // Arrange
+  const achievements = [
+    earned("sessions-1", "2026-01-02"),
+    locked("sessions-5", 3, 5),
+    locked("streak-12", 1, 12),
+  ];
+
+  // Act
+  const passport = toPassport(achievements, "profile");
+
+  // Assert — the Stamp page then knows to send the user back to the Profile
+  assert.equal(passport.stamps[0].href, "/profile/achievements/sessions-1?from=profile");
+  assert.equal(passport.next?.href, "/profile/achievements/sessions-5?from=profile");
+  assert.equal(passport.moreToEarn[0].href, "/profile/achievements/streak-12?from=profile");
+});
+
+test("returns a Stamp page opened from the Profile to the Profile", () => {
+  // Act
+  const back = stampBackLink("profile");
+
+  // Assert
+  assert.deepEqual(back, { href: "/profile", label: "BACK TO PROFILE" });
+});
+
+test("returns a Stamp page to the Passport when it was opened there or from nowhere known", () => {
+  // Arrange — opened from the Passport (no origin), and a crafted or stale origin
+  const origins = [undefined, "", "passport", "https://evil.example", "/dashboard"];
+
+  for (const from of origins) {
+    // Act
+    const back = stampBackLink(from);
+
+    // Assert — the Passport is the Stamp page's parent, so it is the honest fallback
+    assert.deepEqual(back, { href: "/profile/achievements", label: "BACK TO PASSPORT" });
+  }
 });

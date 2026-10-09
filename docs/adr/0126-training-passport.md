@@ -41,8 +41,10 @@ concepts. The API keeps calling them Achievements, the profile progress endpoint
   The Stamp page is served from the same profile progress read, so no endpoint is added; an
   unknown id is not found, and a locked Achievement's page shows criteria and progress with no
   source link. The page is one level deeper than the Passport, so its links slide forward and
-  it has a back link (ADR-0121); the source record sits in History, a related place, so that
-  link carries no direction.
+  it has a back link (ADR-0121). The back link returns to where the Stamp was opened: a Stamp
+  on the Profile summary links with `?from=profile` and returns to the Profile; any other or
+  missing origin returns to the Passport, its parent. The source record sits in History, a
+  related place, so that link carries no direction.
 - **The First Record Stamp shows its lift.** `first-pr` carries a nullable `record`, shaped like
   the Personal Record serialisation. It is derived through the shared Personal Record
   definition, never by re-deriving which sets qualify. A bodyweight lift reads as "bodyweight +
