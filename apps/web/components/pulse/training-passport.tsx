@@ -1,4 +1,5 @@
 import * as React from "react";
+import Link from "next/link";
 import { ChevronRight, Lock, Trophy } from "@/components/pulse/icons";
 
 import type { Milestone, Passport, Stamp } from "@/lib/passport-view";
@@ -41,6 +42,22 @@ function PassportStamps({ stamps }: PassportStampsProps): React.JSX.Element {
         </li>
       ))}
     </ul>
+  );
+}
+
+// The Passport before anything is earned: one sentence saying how the collection starts and
+// a link Home, where the next workout is — never a page of locks (#651). Home is a tab, so
+// the link carries no navigation direction (ADR-0121).
+function EmptyPassport(): React.JSX.Element {
+  return (
+    <Card className="flex flex-col items-start gap-3 p-4">
+      <p className="font-sans text-sm text-text-secondary">
+        Your passport is empty. Your first logged session earns its first stamp.
+      </p>
+      <Link href="/dashboard" className="label-mono text-[11px] text-cyan hover:underline">
+        Go to Home →
+      </Link>
+    </Card>
   );
 }
 
@@ -133,20 +150,19 @@ interface PassportHighlightsProps {
 }
 
 // The earned Stamps, then the next milestone: the whole Profile summary, and the head of the
-// Passport page. Each part is omitted when the view-model has nothing for it, so a heading
-// never opens an empty section.
+// Passport page. With nothing earned, the Stamps section holds the empty state instead; the
+// next milestone is omitted once everything is earned, so a heading never opens an empty
+// section.
 export function PassportHighlights({
   passport,
   headingLevel,
 }: PassportHighlightsProps): React.JSX.Element {
   return (
     <>
-      {passport.stamps.length > 0 ? (
-        <div className="flex flex-col gap-4">
-          <SectionHeader level={headingLevel}>STAMPS</SectionHeader>
-          <PassportStamps stamps={passport.stamps} />
-        </div>
-      ) : null}
+      <div className="flex flex-col gap-4">
+        <SectionHeader level={headingLevel}>STAMPS</SectionHeader>
+        {passport.empty ? <EmptyPassport /> : <PassportStamps stamps={passport.stamps} />}
+      </div>
       {passport.next !== null ? (
         <div className="flex flex-col gap-4">
           <SectionHeader level={headingLevel}>NEXT MILESTONE</SectionHeader>

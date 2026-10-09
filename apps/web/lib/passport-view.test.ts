@@ -164,3 +164,50 @@ test("guards against a zero target instead of dividing by zero", () => {
   assert.equal(passport.next?.id, "b");
   assert.equal(passport.moreToEarn[0].fill, 0);
 });
+
+// The catalog as a brand-new user receives it: the First Session leads, and nothing is earned
+// (#651). Real ids and targets, so the empty state is read off the shape the API sends.
+const NEW_USER_CATALOG: readonly Achievement[] = [
+  locked("sessions-1", 0, 1),
+  locked("sessions-5", 0, 5),
+  locked("streak-4", 0, 4),
+  locked("muscle-all", 0, 6),
+  locked("first-pr", 0, 1),
+];
+
+test("reads as an empty Passport when nothing is earned", () => {
+  // Act
+  const passport = toPassport(NEW_USER_CATALOG);
+
+  // Assert — an empty collection, not a page of locks
+  assert.equal(passport.empty, true);
+  assert.deepEqual(passport.stamps, []);
+});
+
+test("offers the First Session at 0/1 as the next milestone of an empty Passport", () => {
+  // Act — every ratio is 0, so the catalog-order tie-break picks the First Session
+  const passport = toPassport(NEW_USER_CATALOG);
+
+  // Assert
+  assert.equal(passport.next?.id, "sessions-1");
+  assert.equal(passport.next?.progress, "0/1");
+  assert.equal(passport.next?.fill, 0);
+});
+
+test("earns the First Session Stamp, dated on the first Logged Session", () => {
+  // Arrange — one Logged Session on Jun 2, 2026
+  const achievements = [
+    { ...earned("sessions-1", "2026-06-02"), name: "First Session" },
+    locked("sessions-5", 1, 5),
+    locked("streak-4", 1, 4),
+  ];
+
+  // Act
+  const passport = toPassport(achievements);
+
+  // Assert — no longer empty, and the first Stamp carries its date with the year
+  assert.equal(passport.empty, false);
+  assert.deepEqual(passport.stamps, [
+    { id: "sessions-1", name: "First Session", earnedOn: "Jun 2, 2026" },
+  ]);
+});

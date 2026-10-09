@@ -257,13 +257,15 @@ function FitnessLevelSurface() {
   ])} />;
 }
 
-// The Training Passport (ADR-0126) over the real catalog: three Stamps earned across two years,
+// The Training Passport (ADR-0126) over the real catalog: four Stamps earned across two years,
 // the 4-Week Streak as the next milestone (its "best run" copy is the longest progress label),
 // and three Achievements under "More to earn". The disclosure renders its list only while open,
 // so `passport` measures it closed and `passport-open` open; a state no journey mounts is
 // unmeasured. The Profile summary is the same `PassportStamps` and `NextMilestone`, so it is
-// covered by the first two sections here.
+// covered by the first two sections here. `passport-empty` is a brand-new user's: the empty
+// state with its link Home, and the First Session as the next milestone at 0/1 (#651).
 const passport = toPassport([
+  { id: "sessions-1", name: "First Session", criteria: "Log your first Session", unlocked: true, current: 31, target: 1, unlocked_on: "2025-11-14" },
   { id: "sessions-5", name: "5 Sessions", criteria: "Log 5 Sessions", unlocked: true, current: 31, target: 5, unlocked_on: "2025-11-14" },
   { id: "sessions-25", name: "25 Sessions", criteria: "Log 25 Sessions", unlocked: true, current: 31, target: 25, unlocked_on: "2026-08-02" },
   { id: "sessions-100", name: "100 Sessions", criteria: "Log 100 Sessions", unlocked: false, current: 31, target: 100, unlocked_on: null },
@@ -271,6 +273,13 @@ const passport = toPassport([
   { id: "streak-12", name: "12-Week Streak", criteria: "Train 12 weeks in a row", unlocked: false, current: 3, target: 12, unlocked_on: null },
   { id: "muscle-all", name: "Full Coverage", criteria: "Train all six Muscle Groups", unlocked: false, current: 4, target: 6, unlocked_on: null },
   { id: "first-pr", name: "First Record", criteria: "Set your first Personal Record", unlocked: true, current: 1, target: 1, unlocked_on: "2025-11-14" },
+]);
+
+const emptyPassport = toPassport([
+  { id: "sessions-1", name: "First Session", criteria: "Log your first Session", unlocked: false, current: 0, target: 1, unlocked_on: null },
+  { id: "sessions-5", name: "5 Sessions", criteria: "Log 5 Sessions", unlocked: false, current: 0, target: 5, unlocked_on: null },
+  { id: "streak-4", name: "4-Week Streak", criteria: "Train 4 weeks in a row", unlocked: false, current: 0, target: 4, unlocked_on: null },
+  { id: "first-pr", name: "First Record", criteria: "Set your first Personal Record", unlocked: false, current: 0, target: 1, unlocked_on: null },
 ]);
 
 // The Load kinds the two Hand-Authored journeys seed, one per row. The Load value field's unit
@@ -337,6 +346,7 @@ function Content() {
     case "set-aside": return <SetAsideNote label={"W".repeat(120)} />;
     case "passport": return <TrainingPassport passport={passport} />;
     case "passport-open": return <TrainingPassport passport={passport} moreToEarnOpen />;
+    case "passport-empty": return <TrainingPassport passport={emptyPassport} />;
     case "contrast": return <ContrastSamples />;
     default: throw new Error(`Unknown audit journey: ${journey}`);
   }

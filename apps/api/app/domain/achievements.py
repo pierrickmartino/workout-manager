@@ -140,8 +140,13 @@ class _Definition:
 
 # The seed catalog — curated data, fixed, in a stable display order. Type-neutral
 # milestones (sessions, streaks, muscle coverage) come first and dominate; the single
-# strength-shaped one (first PR) sits last, never gating the wall (ADR-0018/0019).
+# strength-shaped one (first PR) sits last, never gating the wall (ADR-0018/0019). The
+# First Session leads, so the first Logged Session of any Completion Outcome earns the
+# first Stamp in the Training Passport (ADR-0126).
 CATALOG: tuple[_Definition, ...] = (
+    _Definition(
+        "sessions-1", "First Session", "Log your first Session", 1, _session_count
+    ),
     _Definition("sessions-5", "5 Sessions", "Log 5 Sessions", 5, _session_count),
     _Definition("sessions-25", "25 Sessions", "Log 25 Sessions", 25, _session_count),
     _Definition(
