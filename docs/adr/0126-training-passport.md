@@ -85,6 +85,11 @@ concepts. The API keeps calling them Achievements, the profile progress endpoint
   this record first (#650), with the existing icons and no API change; then First Session and
   the empty Passport (#651); the Stamp page with its source session (#652); the First Record
   lift (#653); and the generated art (#654).
+- Each catalog Achievement is given its (family, tier) by id in `lib/stamp-art.ts`, and no two
+  share one. An Achievement added to the catalog draws no art until it is given a design there:
+  its text still carries the meaning, and it never borrows another Stamp's mark. The art uses
+  only the existing teal (`cyan`) and `violet` accents, the `text-muted` outline and `surface`
+  knock-outs, so it adds no Skin token to classify.
 - The Passport and its disclosure, in both states, the empty Passport and the Stamp page,
   earned, locked and with the First Record lift, are journeys in the reflow audit (`passport`, `passport-open`,
   `passport-empty`, `stamp`, `stamp-locked`, `stamp-record`), at 320px and 200% text.

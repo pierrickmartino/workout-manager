@@ -1,17 +1,17 @@
 import * as React from "react";
 import Link from "next/link";
-import { Lock, Trophy } from "@/components/pulse/icons";
 
 import type { StampDetail, StampLift } from "@/lib/passport-view";
 import { DataList } from "@/components/pulse/data-list";
 import { SegmentedBar } from "@/components/pulse/segmented-bar";
+import { StampArt } from "@/components/pulse/stamp-art";
 import { Card } from "@/components/ui/card";
 
 // The body of one Stamp's page (#652), pre-mapped by `toStampDetail`. An earned Stamp says
 // when and, in plain words, what earned it, and links the Logged Session whose logging crossed
 // the target. A locked Achievement opens too: it shows its criteria and live progress, and
-// links nowhere, since no session has earned it. The icon is decorative; the text carries the
-// meaning. No animation. First Record also shows the lift that set it (#653).
+// links nowhere, since no session has earned it. The Stamp art is decorative — an outline until
+// earned — and the text carries the meaning. No animation. First Record also shows the lift that set it (#653).
 interface StampDetailBodyProps {
   detail: StampDetail;
 }
@@ -33,9 +33,7 @@ export function StampDetailBody({ detail }: StampDetailBodyProps): React.JSX.Ele
   return detail.status === "earned" ? (
     <Card className="flex flex-col gap-4 border-cyan/30 p-4">
       <div className="flex items-start gap-3">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-cyan-dim text-cyan">
-          <Trophy className="h-4 w-4" aria-hidden />
-        </span>
+        <StampArt achievementId={detail.id} state="earned" size={56} />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           {detail.earnedOn !== null ? (
             <span className="label-mono text-[11px] text-cyan">Earned {detail.earnedOn}</span>
@@ -58,9 +56,7 @@ export function StampDetailBody({ detail }: StampDetailBodyProps): React.JSX.Ele
   ) : (
     <Card className="flex flex-col gap-3 p-4">
       <div className="flex items-start gap-3">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-elevated text-text-muted">
-          <Lock className="h-4 w-4" aria-hidden />
-        </span>
+        <StampArt achievementId={detail.id} state="next" size={56} />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="label-mono text-[11px] text-text-secondary">Not earned yet</span>
           <span className="break-words font-sans text-sm text-text-primary">
