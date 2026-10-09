@@ -152,10 +152,13 @@ def test_index_never_lists_another_users_protocols():
 
 
 def test_index_is_empty_for_a_user_with_no_protocols():
+    # Arrange
     h = build_harness()
 
+    # Act
     response = _fetch_index(h, "user_none")
 
+    # Assert
     assert response.status_code == 200
     assert response.json()["data"] == []
 
@@ -182,9 +185,12 @@ def test_index_reads_the_logged_history_exactly_once():
 
 
 def test_index_requires_authentication():
+    # Arrange
     h = build_harness()
 
+    # Act
     response = h.client.get("/api/protocols")
 
+    # Assert
     assert response.status_code == 401
     assert response.json()["success"] is False

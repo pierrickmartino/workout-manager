@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ChevronRight } from "@/components/pulse/icons";
 
-import type { ProtocolIndexRow, ProtocolsIndex as ProtocolsIndexModel } from "@/lib/protocols-index";
+import type { ProtocolIndexRowView, ProtocolsIndexView } from "@/lib/protocols-index";
 import { NAV_FORWARD } from "@/lib/nav-direction";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -15,7 +15,7 @@ import { Card } from "@/components/ui/card";
 export function ProtocolsIndex({
   index,
 }: {
-  index: ProtocolsIndexModel;
+  index: ProtocolsIndexView;
 }): React.JSX.Element {
   return (
     <section className="flex flex-col gap-7">
@@ -55,7 +55,7 @@ export function ProtocolsIndex({
 
 // One row: the whole card is the link into the Protocol's detail page. The title is an authored
 // name, so it wraps rather than truncates (ADR-0085).
-function ProtocolIndexCard({ row }: { row: ProtocolIndexRow }): React.JSX.Element {
+function ProtocolIndexCard({ row }: { row: ProtocolIndexRowView }): React.JSX.Element {
   return (
     <Card className="transition-colors hover:border-cyan">
       <Link

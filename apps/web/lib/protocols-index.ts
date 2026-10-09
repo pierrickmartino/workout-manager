@@ -8,6 +8,7 @@
 // so it is never shown.
 
 import { formatLongDate } from "./date-format.ts";
+import { parseApiInstant } from "./instant.ts";
 
 export type ProtocolStatus = "current" | "set_aside" | "finished";
 
@@ -28,7 +29,7 @@ export interface ProtocolIndexEntry {
   made_current_at: string;
 }
 
-export interface ProtocolIndexRow {
+export interface ProtocolIndexRowView {
   id: number;
   title: string;
   // The derived "objective · training type" under a user-given name; null when the title
@@ -42,10 +43,10 @@ export interface ProtocolIndexRow {
 export interface ProtocolIndexGroup {
   status: ProtocolStatus;
   heading: string;
-  rows: ProtocolIndexRow[];
+  rows: ProtocolIndexRowView[];
 }
 
-export interface ProtocolsIndex {
+export interface ProtocolsIndexView {
   isEmpty: boolean;
   groups: ProtocolIndexGroup[];
 }
@@ -61,10 +62,13 @@ const GROUP_ORDER: readonly ProtocolStatus[] = ["current", "set_aside", "finishe
 // Matches the server's derived-label separator (`app/domain/protocol.py`).
 const LABEL_SEPARATOR = " · ";
 
-// Newest first by the instant it was made Current, compared as instants (offsets differ);
-// ties fall to the higher id, the server's tie-break.
+// Newest first by the instant it was made Current, compared as instants through the shared
+// API-instant parser (an offsetless value reads as UTC, ADR-0096); an unparseable one sorts
+// last. Ties fall to the higher id, the server's tie-break.
 function byMadeCurrent(a: ProtocolIndexEntry, b: ProtocolIndexEntry): number {
-  return Date.parse(b.made_current_at) - Date.parse(a.made_current_at) || b.id - a.id;
+  const left = parseApiInstant(a.made_current_at) ?? Number.NEGATIVE_INFINITY;
+  const right = parseApiInstant(b.made_current_at) ?? Number.NEGATIVE_INFINITY;
+  return right - left || b.id - a.id;
 }
 
 // Newest first by last performance. ISO calendar dates order as strings; a never-performed
@@ -82,7 +86,7 @@ function progressText(performed: number, total: number): string {
   return `${performed} of ${total} ${total === 1 ? "session" : "sessions"}`;
 }
 
-function toRow(entry: ProtocolIndexEntry): ProtocolIndexRow {
+function toRow(entry: ProtocolIndexEntry): ProtocolIndexRowView {
   // Named exactly when the server's label rule would use the name: non-blank once trimmed.
   const isNamed = (entry.name ?? "").trim() !== "";
   return {
@@ -102,7 +106,7 @@ function toRow(entry: ProtocolIndexEntry): ProtocolIndexRow {
 
 // Group, order and phrase the index rows. Groups with no rows are dropped, so a heading never
 // opens an empty list.
-export function protocolsIndex(entries: readonly ProtocolIndexEntry[]): ProtocolsIndex {
+export function protocolsIndex(entries: readonly ProtocolIndexEntry[]): ProtocolsIndexView {
   const groups = GROUP_ORDER.map((status) => {
     const members = entries.filter((entry) => entry.status === status);
     const ordered = [...members].sort(

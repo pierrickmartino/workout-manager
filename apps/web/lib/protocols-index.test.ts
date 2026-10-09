@@ -28,8 +28,23 @@ function entry(overrides: Partial<ProtocolIndexEntry>): ProtocolIndexEntry {
 }
 
 test("an empty index has no groups", () => {
-  assert.deepEqual(protocolsIndex([]).groups, []);
-  assert.equal(protocolsIndex([]).isEmpty, true);
+  // Act
+  const index = protocolsIndex([]);
+  // Assert
+  assert.deepEqual(index.groups, []);
+  assert.equal(index.isEmpty, true);
+});
+
+test("an offsetless made-Current instant reads as UTC, not local time", () => {
+  // Arrange — 08:30Z vs an offsetless 09:00 (UTC): the offsetless one is newer.
+  const entries = [
+    entry({ id: 1, made_current_at: "2026-05-01T08:30:00Z" }),
+    entry({ id: 2, made_current_at: "2026-05-01T09:00:00" }),
+  ];
+  // Act
+  const [group] = protocolsIndex(entries).groups;
+  // Assert
+  assert.deepEqual(group.rows.map((row) => row.id), [2, 1]);
 });
 
 test("groups come out Current, Set aside, Finished, and empty groups are dropped", () => {
