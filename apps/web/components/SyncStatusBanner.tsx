@@ -32,10 +32,12 @@ import { persistentTransitionStyle } from "@/lib/persistent-transition";
 // quiet again — long enough to read, short enough not to nag.
 const SYNCED_CONFIRMATION_MS = 5000;
 
-// The active states that always show while they hold. `synced` is deliberately excluded —
-// it is the quiet all-clear, surfaced only as a transient confirmation (below).
+// The states a move into `synced` confirms as delivered. `synced` is deliberately excluded —
+// it is the quiet all-clear, surfaced only as a transient confirmation (below). So is
+// `orphaned`: it leaves the queue by the user's Dismiss, not a server ack (#636), so going
+// quiet afterwards must not claim "Synced".
 function isActiveState(state: SyncState): boolean {
-  return state !== "synced";
+  return state !== "synced" && state !== "orphaned";
 }
 
 export function SyncStatusBanner(): React.JSX.Element | null {
