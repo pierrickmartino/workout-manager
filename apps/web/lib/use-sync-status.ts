@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { deliverQueuedFinish } from "@/app/actions/outbox";
 import { loadOutbox } from "./finish-outbox-store.ts";
 import { entriesForAccount } from "./finish-outbox.ts";
-import { drainOutbox } from "./finish-outbox-sync.ts";
+import { dismissOrphanedFinishes, drainOutbox } from "./finish-outbox-sync.ts";
 import { readLastSynced } from "./last-synced-store.ts";
 import { subscribeOutboxChange } from "./outbox-observer.ts";
 import { useConnectivity } from "./use-connectivity.ts";
@@ -18,7 +18,7 @@ import {
   type SyncState,
 } from "./sync-state.ts";
 
-// What the sync-state UI reads. `state` is the pure five-way decision; the rest is the
+// What the sync-state UI reads. `state` is the pure sync-state decision; the rest is the
 // supporting detail the presentation needs (the queue counts, when the last finish actually
 // landed, and a manual retry).
 export interface SyncStatus {
@@ -31,6 +31,9 @@ export interface SyncStatus {
   // Re-drive delivery of the account's queued finishes now (the manual retry the `failed`
   // state offers). A no-op while signed out.
   retry: () => void;
+  // Acknowledge the account's orphaned finishes (#636) and remove them — the action the
+  // `orphaned` state offers, since no retry can save them. A no-op while signed out.
+  dismiss: () => void;
 }
 
 // The effect shell behind the honest sync-state surface (issue #414). It mirrors how
@@ -79,11 +82,17 @@ export function useSyncStatus(): SyncStatus {
     void drainOutbox(accountId, deliverQueuedFinish);
   }, [accountId]);
 
+  const dismiss = useCallback(() => {
+    if (accountId === null) return;
+    void dismissOrphanedFinishes(accountId);
+  }, [accountId]);
+
   return {
     state: deriveSyncState(online, summary),
     online,
     summary,
     lastSyncedAt,
     retry,
+    dismiss,
   };
 }

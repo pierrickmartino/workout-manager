@@ -1,4 +1,4 @@
-import { apiGet, apiSend, type Envelope } from "./api";
+import { apiGet, apiSend, apiSendWithStatus, type Envelope, type SentEnvelope } from "./api";
 
 import type {
   LoggedSession,
@@ -21,6 +21,15 @@ export async function logSession(
   input: LogSessionInput,
 ): Promise<Envelope<LoggedSession>> {
   return apiSend(`/api/sessions/${sessionId}/logs`, "POST", input);
+}
+
+// `logSession` keeping the HTTP status — the finish outbox's delivery, which must tell a
+// `404` (the Session is gone: stop retrying, #636) from any other rejection (retry).
+export async function deliverSessionLog(
+  sessionId: number,
+  input: LogSessionInput,
+): Promise<SentEnvelope<LoggedSession>> {
+  return apiSendWithStatus(`/api/sessions/${sessionId}/logs`, "POST", input);
 }
 
 // Record a plan-less performance (ADR-0031) — an ad-hoc log with no Session behind

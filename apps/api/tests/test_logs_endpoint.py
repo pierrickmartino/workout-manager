@@ -567,6 +567,31 @@ def test_user_cannot_log_another_users_session():
     assert response.json()["success"] is False
 
 
+def test_finish_against_a_session_that_no_longer_exists_is_not_found():
+    # Arrange — a queued finish whose Session has since gone (e.g. its un-started
+    # Protocol was deleted on another device, #636): the id resolves to nothing
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_owner")
+    session = _generate_session(client, headers)
+    missing_session_id = session["id"] + 10_000
+
+    # Act — the outbox delivers the finish, idempotency key and all
+    response = client.post(
+        f"/api/sessions/{missing_session_id}/logs",
+        headers=headers,
+        json=_log_body(session, idempotency_key="orphaned-finish-key"),
+    )
+
+    # Assert — a 404 in the standard envelope, and nothing was recorded
+    assert response.status_code == 404
+    assert response.json() == {
+        "success": False,
+        "data": None,
+        "error": "Session not found",
+    }
+    assert client.get("/api/logs", headers=headers).json()["data"] == []
+
+
 def test_history_is_scoped_to_the_requesting_user():
     # Arrange — owner logs a performance
     client, ctx = build_client()

@@ -41,13 +41,14 @@ test("summarizeOutbox tallies entries by lifecycle status", () => {
     entry("b", "pending"),
     entry("c", "syncing"),
     entry("d", "failed"),
+    entry("e", "orphaned"),
   ];
 
   // Act
   const tally = summarizeOutbox(entries);
 
   // Assert
-  assert.deepEqual(tally, { pending: 2, syncing: 1, failed: 1 });
+  assert.deepEqual(tally, { pending: 2, syncing: 1, failed: 1, orphaned: 1 });
 });
 
 test("summarizeOutbox of an empty queue is the empty summary", () => {
@@ -59,6 +60,21 @@ test("hasQueuedWork is true when any entry is queued in any status", () => {
   assert.equal(hasQueuedWork(summary({ syncing: 1 })), true);
   assert.equal(hasQueuedWork(summary({ failed: 1 })), true);
   assert.equal(hasQueuedWork(EMPTY_OUTBOX_SUMMARY), false);
+});
+
+test("hasQueuedWork is false for an orphaned finish alone: it will never sync", () => {
+  assert.equal(hasQueuedWork(summary({ orphaned: 1 })), false);
+});
+
+test("deriveSyncState: an orphaned finish outranks every other state, offline included", () => {
+  // It waits on the user, not the network — no reconnect or retry will land it (#636) —
+  // so it shows until dismissed, never hidden behind "offline" or "syncing".
+  assert.equal(deriveSyncState(true, summary({ orphaned: 1 })), "orphaned");
+  assert.equal(deriveSyncState(false, summary({ orphaned: 1, pending: 1 })), "orphaned");
+  assert.equal(
+    deriveSyncState(true, summary({ orphaned: 1, syncing: 1, failed: 1 })),
+    "orphaned",
+  );
 });
 
 test("deriveSyncState: offline wins outright, whatever the queue holds", () => {

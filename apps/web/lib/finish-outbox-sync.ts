@@ -7,13 +7,16 @@
 // is an untested effect shell, like the store and the event listeners around it.
 
 import {
+  dismissOrphaned,
+  drainableEntries,
   enqueue,
-  entriesForAccount,
   hasEntry,
   hasForeignEntries,
   markFailed,
+  markOrphaned,
   markSynced,
   markSyncing,
+  type DeliveryResult,
   type OutboxEntry,
 } from "./finish-outbox.ts";
 import {
@@ -26,17 +29,14 @@ import { recordLastSynced } from "./last-synced-store.ts";
 import { FINISH_UNREACHABLE_MESSAGE } from "./live-session-finish.ts";
 import type { LogSessionInput } from "./logs-types.ts";
 
-// A delivery failure whose cause the server did name (a returned envelope error), when
-// the transport gives no message of its own.
-const SYNC_FAILED_MESSAGE = "Could not sync your session.";
-
-// Delivers one queued finish. Resolves ok/error for a server-acknowledged write or a
-// returned rejection; REJECTS (throws) when the server was unreachable, which the drain
-// translates into a retryable failure. Satisfied by the `deliverQueuedFinish` action.
+// Delivers one queued finish. Resolves the classified outcome of a server response —
+// delivered, a retryable rejection, or a terminal `404` (orphaned, #636); REJECTS (throws)
+// when the server was unreachable, which the drain translates into a retryable failure.
+// Satisfied by the `deliverQueuedFinish` action.
 export type DeliverFinish = (
   sessionId: number,
   payload: LogSessionInput,
-) => Promise<{ ok: boolean; error: string | null }>;
+) => Promise<DeliveryResult>;
 
 // Queue a finished Live Session durably. Runs the pure `enqueue` (which dedupes by key,
 // so a re-fired finish never double-queues) and persists the new entry, then reads back
@@ -71,8 +71,9 @@ export async function purgeForeignFinishes(
 }
 
 // Deliver the signed-in account's queued finishes. Purges foreign entries, then attempts
-// each of the account's undelivered entries: the pure reducer stamps `syncing` → then
-// `synced` (removed) on an acknowledged write, or `failed` on a rejection, and each
+// each of the account's deliverable entries: the pure reducer stamps `syncing` → then
+// `synced` (removed) on an acknowledged write, `failed` on a retryable rejection, or
+// `orphaned` on a `404` (never re-attempted, #636), and each
 // transition is persisted immediately so a crash mid-drain leaves a consistent, resumable
 // queue. Concurrent drains are safe — a duplicate delivery is an idempotent no-op
 // server-side (ADR-0060). A signed-out reader (`accountId` null) drains nothing.
@@ -84,21 +85,24 @@ export async function drainOutbox(
   await purgeForeignFinishes(accountId);
 
   let outbox = await loadOutbox();
-  for (const entry of entriesForAccount(outbox, accountId)) {
+  for (const entry of drainableEntries(outbox, accountId)) {
     outbox = markSyncing(outbox, entry.key);
     await saveOutboxEntry(requireEntry(outbox, entry.key));
     // Surface "syncing" to the sync-state UI (issue #414) the moment the attempt begins.
     notifyOutboxChange();
     try {
       const result = await deliver(entry.sessionId, entry.payload);
-      if (result.ok) {
+      if (result.outcome === "delivered") {
         outbox = markSynced(outbox, entry.key);
         await removeOutboxEntry(entry.key);
         // A real server acknowledgement — the ONLY place "Last synced …" is stamped
         // (issue #414), so the UI never claims a synced state for an undelivered finish.
         recordLastSynced(accountId, Date.now());
       } else {
-        outbox = markFailed(outbox, entry.key, result.error ?? SYNC_FAILED_MESSAGE);
+        outbox =
+          result.outcome === "orphaned"
+            ? markOrphaned(outbox, entry.key, result.error)
+            : markFailed(outbox, entry.key, result.error);
         await saveOutboxEntry(requireEntry(outbox, entry.key));
       }
     } catch {
@@ -110,6 +114,18 @@ export async function drainOutbox(
     // Reflect the resolved outcome — synced (removed), failed, or a reclaimed entry.
     notifyOutboxChange();
   }
+}
+
+// Remove the account's orphaned finishes once the user has read why they cannot be saved
+// (#636) — the only way one leaves the store; deliverable entries are kept.
+export async function dismissOrphanedFinishes(accountId: string | null): Promise<void> {
+  const stored = await loadOutbox();
+  const remaining = dismissOrphaned(stored, accountId);
+  const dismissed = stored.filter((e) => !remaining.includes(e));
+  for (const entry of dismissed) {
+    await removeOutboxEntry(entry.key);
+  }
+  notifyOutboxChange();
 }
 
 // The entry for `key`, which a preceding `markSyncing`/`markFailed` guarantees is

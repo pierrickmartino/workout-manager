@@ -12,6 +12,11 @@ import {
   entriesForAccount,
   hasEntry,
   hasForeignEntries,
+  classifyDelivery,
+  markOrphaned,
+  drainableEntries,
+  dismissOrphaned,
+  FINISH_ORPHANED_MESSAGE,
   type OutboxEntry,
 } from "./finish-outbox.ts";
 import type { LogSessionInput } from "./logs-types.ts";
@@ -238,7 +243,7 @@ test("entriesForAccount returns nothing when no account is signed in", () => {
   assert.deepEqual(entriesForAccount(outbox, null), []);
 });
 
-test("entriesForAccount is the drain work list: it includes failed and stranded-syncing entries", () => {
+test("drainableEntries is the drain work list: it includes failed and stranded-syncing entries", () => {
   // Arrange — the account has a pending, a failed (retryable), and a syncing entry
   // stranded by a crash mid-delivery; plus a foreign one that must never be drained.
   let outbox = enqueue([], entry("a1", "acct-a"));
@@ -250,7 +255,7 @@ test("entriesForAccount is the drain work list: it includes failed and stranded-
 
   // Act — the drain re-attempts every undelivered entry it owns (idempotent), so a
   // crash-stranded `syncing` entry is reclaimed rather than lost.
-  const work = entriesForAccount(outbox, "acct-a");
+  const work = drainableEntries(outbox, "acct-a");
 
   // Assert
   assert.deepEqual(
@@ -270,4 +275,96 @@ test("hasForeignEntries treats every entry as foreign when no account is signed 
   const outbox = enqueue([], entry("a1", "acct-a"));
   assert.equal(hasForeignEntries(outbox, null), true);
   assert.equal(hasForeignEntries([], null), false);
+});
+
+test("classifyDelivery reads an acknowledged write as delivered", () => {
+  const result = classifyDelivery(200, { success: true, data: { id: 3 }, error: null });
+  assert.deepEqual(result, { outcome: "delivered" });
+});
+
+test("classifyDelivery reads a 404 as orphaned: the Session's plan no longer exists (#636)", () => {
+  // Act — the Session was deleted (its un-started Protocol, on another device)
+  const result = classifyDelivery(404, {
+    success: false,
+    data: null,
+    error: "Session not found",
+  });
+
+  // Assert — terminal, with copy that says why rather than echoing the server
+  assert.deepEqual(result, { outcome: "orphaned", error: FINISH_ORPHANED_MESSAGE });
+});
+
+test("classifyDelivery keeps every other rejection retryable, carrying the server's error", () => {
+  const result = classifyDelivery(500, { success: false, data: null, error: "boom" });
+  assert.deepEqual(result, { outcome: "failed", error: "boom" });
+});
+
+test("classifyDelivery falls back to generic copy for a rejection with no error text", () => {
+  const result = classifyDelivery(422, { success: false, data: null, error: null });
+  assert.deepEqual(result, { outcome: "failed", error: "Could not sync your session." });
+});
+
+test("markOrphaned records the error and marks the entry terminal", () => {
+  // Arrange
+  const outbox = markSyncing(enqueue([], entry("k1", "acct-a")), "k1");
+
+  // Act
+  const next = markOrphaned(outbox, "k1", FINISH_ORPHANED_MESSAGE);
+
+  // Assert — kept (never discarded silently) so the user can see it
+  assert.equal(next[0].status, "orphaned");
+  assert.equal(next[0].error, FINISH_ORPHANED_MESSAGE);
+});
+
+test("drainableEntries excludes orphaned entries so a 404 is never retried", () => {
+  // Arrange — the account has a pending, a failed, and an orphaned entry
+  let outbox = enqueue([], entry("a1", "acct-a"));
+  outbox = enqueue(outbox, entry("a2", "acct-a"));
+  outbox = enqueue(outbox, entry("a3", "acct-a"));
+  outbox = enqueue(outbox, entry("b1", "acct-b"));
+  outbox = markFailed(outbox, "a2", "offline");
+  outbox = markOrphaned(outbox, "a3", FINISH_ORPHANED_MESSAGE);
+
+  // Act
+  const work = drainableEntries(outbox, "acct-a");
+
+  // Assert — failed is still retried; orphaned and foreign are not
+  assert.deepEqual(
+    work.map((e) => e.key),
+    ["a1", "a2"],
+  );
+});
+
+test("retryAll leaves an orphaned entry terminal", () => {
+  // Arrange
+  let outbox = enqueue([], entry("a1", "acct-a"));
+  outbox = enqueue(outbox, entry("a2", "acct-a"));
+  outbox = markFailed(outbox, "a1", "offline");
+  outbox = markOrphaned(outbox, "a2", FINISH_ORPHANED_MESSAGE);
+
+  // Act
+  const next = retryAll(outbox, "acct-a");
+
+  // Assert
+  assert.equal(next.find((e) => e.key === "a1")?.status, "pending");
+  assert.equal(next.find((e) => e.key === "a2")?.status, "orphaned");
+});
+
+test("dismissOrphaned removes only the account's orphaned entries once the user has seen them", () => {
+  // Arrange — an orphaned and a pending entry for A, an orphaned one for B
+  let outbox = enqueue([], entry("a1", "acct-a"));
+  outbox = enqueue(outbox, entry("a2", "acct-a"));
+  outbox = enqueue(outbox, entry("b1", "acct-b"));
+  outbox = markOrphaned(outbox, "a1", FINISH_ORPHANED_MESSAGE);
+  outbox = markOrphaned(outbox, "b1", FINISH_ORPHANED_MESSAGE);
+
+  // Act
+  const next = dismissOrphaned(outbox, "acct-a");
+
+  // Assert — a deliverable finish is never discarded; B's entry is not A's to dismiss
+  assert.deepEqual(
+    next.map((e) => e.key),
+    ["a2", "b1"],
+  );
+  assert.equal(outbox.length, 3); // input untouched
 });
