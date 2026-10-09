@@ -5,6 +5,7 @@ import {
   protocolsIndex,
   type ProtocolIndexEntry,
 } from "./protocols-index.ts";
+import type { LiveSessionState } from "./live-session.ts";
 
 // `protocols-index` is the Protocols index view-model (issue #637): it turns the
 // `GET /api/protocols` rows into the three groups the page renders — Current pinned, Set
@@ -136,4 +137,102 @@ test("each row opens the Protocol's detail page", () => {
   const [row] = protocolsIndex([entry({ id: 42 })]).groups[0].rows;
 
   assert.equal(row.href, "/protocols/42");
+});
+
+// Switch (issue #638): a set-aside row offers Switch; a Live Session in progress blocks it.
+
+const ACCOUNT = "user_1";
+
+function liveSlot(overrides: Partial<LiveSessionState> = {}): LiveSessionState {
+  return {
+    sessionId: 77,
+    accountId: ACCOUNT,
+    idempotencyKey: null,
+    sets: [],
+    currentIndex: 0,
+    status: "in_progress",
+    startedAt: null,
+    lastActivityAt: null,
+    ...overrides,
+  };
+}
+
+function rowsByStatus(index: ReturnType<typeof protocolsIndex>) {
+  return Object.fromEntries(index.groups.map((group) => [group.status, group.rows]));
+}
+
+const MIXED = [
+  entry({ id: 1, status: "current" }),
+  entry({ id: 2, status: "set_aside" }),
+  entry({ id: 3, status: "finished", last_performed_on: "2026-04-01" }),
+];
+
+const NO_LIVE_SESSION = { liveSlot: null, accountId: ACCOUNT };
+
+test("only a set-aside row offers Switch; Current and Finished rows offer none", () => {
+  // Act
+  const rows = rowsByStatus(protocolsIndex(MIXED, NO_LIVE_SESSION));
+  // Assert
+  assert.deepEqual(rows.set_aside[0].switchAction, { kind: "available", protocolId: 2 });
+  assert.equal(rows.current[0].switchAction, null);
+  assert.equal(rows.finished[0].switchAction, null);
+});
+
+test("a Live Session in progress blocks Switch on every set-aside row, with a readable reason", () => {
+  // Arrange
+  const entries = [
+    entry({ id: 2, made_current_at: "2026-05-02T00:00:00Z" }),
+    entry({ id: 4, made_current_at: "2026-05-01T00:00:00Z" }),
+  ];
+  // Act
+  const [group] = protocolsIndex(entries, {
+    liveSlot: liveSlot({ sessionId: 77 }),
+    accountId: ACCOUNT,
+  }).groups;
+  // Assert
+  for (const row of group.rows) {
+    assert.deepEqual(row.switchAction, {
+      kind: "blocked",
+      reason: "Finish or resume your live session before you switch protocols.",
+      resumeHref: "/sessions/77/live",
+    });
+  }
+});
+
+test("a Live Session block never adds Switch to the Current or Finished rows", () => {
+  // Act
+  const rows = rowsByStatus(
+    protocolsIndex(MIXED, { liveSlot: liveSlot(), accountId: ACCOUNT }),
+  );
+  // Assert
+  assert.equal(rows.current[0].switchAction, null);
+  assert.equal(rows.finished[0].switchAction, null);
+});
+
+test("until the Live Session slot has been read, Switch is pending, never available", () => {
+  // Act — no slot reading yet (the server render, or before auth resolves)
+  const rows = rowsByStatus(protocolsIndex(MIXED));
+  // Assert
+  assert.deepEqual(rows.set_aside[0].switchAction, { kind: "pending" });
+  assert.equal(rows.current[0].switchAction, null);
+});
+
+test("a slot another account owns does not block Switch", () => {
+  // Act
+  const [group] = protocolsIndex([entry({ id: 2 })], {
+    liveSlot: liveSlot({ accountId: "user_2" }),
+    accountId: ACCOUNT,
+  }).groups;
+  // Assert
+  assert.equal(group.rows[0].switchAction?.kind, "available");
+});
+
+test("a finished slot does not block Switch", () => {
+  // Act
+  const [group] = protocolsIndex([entry({ id: 2 })], {
+    liveSlot: liveSlot({ status: "finished" }),
+    accountId: ACCOUNT,
+  }).groups;
+  // Assert
+  assert.equal(group.rows[0].switchAction?.kind, "available");
 });

@@ -165,6 +165,17 @@ export function ownsLiveSlot(
   );
 }
 
+// The persisted slot as a Live Session in progress for the signed-in account: an unfinished
+// slot that account owns, or null. The one reading Home's Resume banner offers and the
+// Protocols index blocks Switch on (#638), so the two can never disagree.
+export function resumableLiveSlot(
+  stored: LiveSessionState | null,
+  currentAccountId: string | null,
+): LiveSessionState | null {
+  if (stored === null || stored.status === "finished") return null;
+  return ownsLiveSlot(stored, currentAccountId) ? stored : null;
+}
+
 // Decide what happens when the user arrives at a Session's live route, given the
 // single persisted slot (`stored`, or null when empty), the `requestedSessionId`,
 // the current wall-clock `now`, and the signed-in `currentAccountId` (null when no

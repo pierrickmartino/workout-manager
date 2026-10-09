@@ -9,7 +9,8 @@ surfaced as a ``502`` (an upstream AI failure), never silently persisted. ``GET
 Session* (self-paced, no calendar), with each upcoming Prescription's recommended
 load progressed from the user's Logged Sets (ADR-0004); ``404`` for anyone else.
 ``GET /api/protocols`` is the Protocols index: one row per owned Protocol with its
-status (current / set aside / finished) and performed counts (#637).
+status (current / set aside / finished) and performed counts (#637). ``POST
+/api/protocols/{id}/switch`` makes a set-aside Protocol Current again (#638).
 All responses use the standard envelope."""
 
 from __future__ import annotations
@@ -48,6 +49,7 @@ from app.protocols.deploy_validation import (
 from app.protocols.balance_preview import build_balance_preview
 from app.protocols.index import protocol_index
 from app.protocols.progress import progressed_protocol, protocol_progress
+from app.protocols.switch import SwitchStatus, switch_protocol
 from app.protocols.serialization import (
     serialize_balance_preview,
     serialize_protocol_index_row,
@@ -69,6 +71,7 @@ router = APIRouter(prefix="/api", tags=["protocols"])
 
 HTTP_NOT_FOUND = 404
 HTTP_ACCEPTED = 202
+HTTP_CONFLICT = 409
 HTTP_UNPROCESSABLE_ENTITY = 422
 
 # ``weeks`` / ``sessions_per_week`` bounds are shared with deploy validation so the
@@ -229,6 +232,32 @@ def read_protocol(
     if progress is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Protocol not found")
     return success_envelope(serialize_protocol_progress(progress))
+
+
+@router.post("/protocols/{protocol_id}/switch")
+def switch(
+    protocol_id: int,
+    clerk_user_id: str = Depends(get_current_user),
+    protocols: ProtocolRepository = Depends(get_protocol_repository),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+) -> dict:
+    """Make the owner's set-aside Protocol Current again (#638, ADR-0125).
+
+    Returns the new Current Protocol's progressed view. ``404`` when the Protocol is
+    missing or not owned, ``409`` when it is Finished (no Next Session to drive Home).
+    Switching to the Protocol that is already Current succeeds and changes nothing a user
+    can see. No Session or Logged Session is written."""
+
+    result = switch_protocol(
+        clerk_user_id, protocol_id, protocols=protocols, logged=logged
+    )
+    if result.status is SwitchStatus.NOT_FOUND:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Protocol not found")
+    if result.status is SwitchStatus.FINISHED:
+        raise HTTPException(
+            status_code=HTTP_CONFLICT, detail="A Finished Protocol can’t be switched to"
+        )
+    return success_envelope(serialize_protocol_progress(result.protocol))
 
 
 class DeployPrescriptionBody(BaseModel):

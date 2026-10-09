@@ -170,6 +170,14 @@ class ProtocolRepository(Interface):
         user owns none."""
         ...
 
+    def make_current(self, protocol_id: int, clerk_user_id: str) -> ProtocolView | None:
+        """Stamp the owner's Protocol's ``made_current_at`` with now (Switch, ADR-0125).
+
+        The one write Switch makes: a plan-side choice that touches no Session,
+        Prescription or Logged Session. Owner-scoped: returns the updated Protocol, or
+        ``None`` if it is missing or owned by another user."""
+        ...
+
     def deploy_tail(
         self,
         protocol_id: int,
@@ -336,6 +344,16 @@ class SqlProtocolRepository:
             .order_by(Protocol.created_at.desc(), Protocol.id.desc())
         ).all()
         return [self._view(protocol) for protocol in protocols]
+
+    def make_current(self, protocol_id: int, clerk_user_id: str) -> ProtocolView | None:
+        protocol = self._session.get(Protocol, protocol_id)
+        if protocol is None or protocol.clerk_user_id != clerk_user_id:
+            return None
+        protocol.made_current_at = _utcnow()
+        self._session.add(protocol)
+        self._session.commit()
+        self._session.refresh(protocol)
+        return self._view(protocol)
 
     def deploy_tail(
         self,
@@ -554,6 +572,13 @@ class InMemoryProtocolRepository:
         ]
         owned.sort(key=lambda p: (p.created_at, p.id), reverse=True)
         return [self._view(protocol) for protocol in owned]
+
+    def make_current(self, protocol_id: int, clerk_user_id: str) -> ProtocolView | None:
+        protocol = self._protocols.get(protocol_id)
+        if protocol is None or protocol.clerk_user_id != clerk_user_id:
+            return None
+        protocol.made_current_at = _utcnow()
+        return self._view(protocol)
 
     def deploy_tail(
         self,

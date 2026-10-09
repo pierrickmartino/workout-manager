@@ -6,7 +6,7 @@ import { startTransition, useEffect, useState, ViewTransition } from "react";
 import { Play } from "@/components/pulse/icons";
 
 import { readLiveSessionSlot } from "@/lib/live-session-storage";
-import { ownsLiveSlot } from "@/lib/live-session";
+import { resumableLiveSlot } from "@/lib/live-session";
 import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { NAV_FORWARD } from "@/lib/nav-direction";
@@ -47,8 +47,8 @@ export function ResumeSessionBanner(): React.JSX.Element | null {
 
   useEffect(() => {
     if (!isLoaded) return;
-    const stored = readLiveSessionSlot();
-    const resumable = stored && stored.status !== "finished" && ownsLiveSlot(stored, userId ?? null)
+    const stored = resumableLiveSlot(readLiveSessionSlot(), userId ?? null);
+    const resumable = stored
       ? { sessionId: stored.sessionId, startedAt: stored.startedAt }
       : null;
     // In a Transition, so the banner's arrival after hydration — and its departure on an
