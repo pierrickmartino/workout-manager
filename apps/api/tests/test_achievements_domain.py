@@ -255,6 +255,53 @@ def test_first_personal_record_unlocks_from_an_absolute_load_lift():
     assert first_pr.unlocked_on == date(2026, 6, 10)
 
 
+def test_first_record_carries_the_lift_set_in_its_crossing_session_on_a_same_date_tie():
+    # Arrange — two record-setting sessions on one date, arriving newest-id first; the
+    # lower id was logged first, so it crosses the target and its lift is the record
+    day = date(2026, 6, 10)
+    earlier = _Session(performed_on=day, logged_sets=[_Set(load=_absolute(80.0))], id=901)
+    later = _Session(performed_on=day, logged_sets=[_Set(load=_absolute(120.0))], id=902)
+
+    # Act
+    first_pr = _by_id(evaluate_achievements([later, earlier]))["first-pr"]
+
+    # Assert — the record and the crossing session agree
+    assert first_pr.unlocked_by_session_id == earlier.id
+    assert first_pr.record is not None
+    assert first_pr.record.load == _absolute(80.0)
+
+
+def test_first_record_skips_a_heavier_warm_up_set_for_the_working_set():
+    # Arrange — a warm-up set carries no Estimated 1RM however heavy (ADR-0065)
+    history = [
+        _Session(
+            performed_on=date(2026, 6, 10),
+            logged_sets=[
+                _Set(load=_absolute(140.0), set_type="warm_up"),
+                _Set(load=_absolute(100.0)),
+            ],
+        )
+    ]
+
+    # Act
+    record = _by_id(evaluate_achievements(history))["first-pr"].record
+
+    # Assert
+    assert record is not None
+    assert record.load == _absolute(100.0)
+
+
+def test_only_an_unlocked_first_record_carries_a_record():
+    # Arrange — sessions with no load earn session Stamps but no Personal Record
+    history = _sessions_on([date(2026, 6, 1) + timedelta(days=i) for i in range(5)])
+
+    # Act
+    achievements = evaluate_achievements(history)
+
+    # Assert — no Achievement, earned or locked, carries a record
+    assert all(achievement.record is None for achievement in achievements)
+
+
 def test_progress_can_exceed_a_met_target_without_capping():
     # Arrange — thirty sessions, well past the 25-session badge
     history = _sessions_on([date(2026, 1, 1) + timedelta(days=i) for i in range(30)])

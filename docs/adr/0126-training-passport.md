@@ -84,5 +84,5 @@ concepts. The API keeps calling them Achievements, the profile progress endpoint
   the empty Passport (#651); the Stamp page with its source session (#652); the First Record
   lift (#653); and the generated art (#654).
 - The Passport and its disclosure, in both states, the empty Passport and the Stamp page,
-  earned and locked, are journeys in the reflow audit (`passport`, `passport-open`,
-  `passport-empty`, `stamp`, `stamp-locked`), at 320px and 200% text.
+  earned, locked and with the First Record lift, are journeys in the reflow audit (`passport`, `passport-open`,
+  `passport-empty`, `stamp`, `stamp-locked`, `stamp-record`), at 320px and 200% text.

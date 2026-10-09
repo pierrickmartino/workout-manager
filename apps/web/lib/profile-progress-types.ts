@@ -2,8 +2,8 @@
 // safe to import from both Server and Client Components. The server-only data access
 // (Clerk auth + fetch) lives in `lib/profile-progress.ts`.
 
+import type { PersonalRecordEntry } from "./analytics-types";
 import type { Load } from "./load";
-import type { RecordAchievement } from "./record-achievement";
 
 // Where the account's XP sits on the Operator Level curve (F5 Slice 2). `level` is the
 // account-wide tier; `xp_into_level / xp_span_of_level` is the progress-bar fill toward
@@ -19,11 +19,8 @@ export interface OperatorLevel {
 // (`exercise` … `added_kg`, ADR-0026), plus the Exercise's id and the set's typed `load` and
 // Performed Body Weight (`body_weight_kg`, kg). `body_weight_kg` is null for an absolute record
 // and for a bodyweight one logged without a body weight on file.
-export interface AchievementRecord extends RecordAchievement {
+export interface AchievementRecord extends PersonalRecordEntry {
   exercise_id: number;
-  exercise: string;
-  gain: number;
-  date: string;
   load: Load | null;
   body_weight_kg: number | null;
 }
