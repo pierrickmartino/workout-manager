@@ -265,7 +265,7 @@ function FitnessLevelSurface() {
 // covered by the first two sections here. `passport-empty` is a brand-new user's: the empty
 // state with its link Home, and the First Session as the next milestone at 0/1 (#651).
 const passport = toPassport([
-  { id: "sessions-1", name: "First Session", criteria: "Log your first Session", unlocked: true, current: 31, target: 1, unlocked_on: "2025-11-14" },
+  { id: "sessions-1", name: "First Session", criteria: "Log your first Session", unlocked: true, current: 31, target: 1, unlocked_on: "2025-10-20" },
   { id: "sessions-5", name: "5 Sessions", criteria: "Log 5 Sessions", unlocked: true, current: 31, target: 5, unlocked_on: "2025-11-14" },
   { id: "sessions-25", name: "25 Sessions", criteria: "Log 25 Sessions", unlocked: true, current: 31, target: 25, unlocked_on: "2026-08-02" },
   { id: "sessions-100", name: "100 Sessions", criteria: "Log 100 Sessions", unlocked: false, current: 31, target: 100, unlocked_on: null },

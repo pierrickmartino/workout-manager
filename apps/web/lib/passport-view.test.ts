@@ -176,6 +176,8 @@ const NEW_USER_CATALOG: readonly Achievement[] = [
 ];
 
 test("reads as an empty Passport when nothing is earned", () => {
+  // Arrange — a brand-new user's catalog: every Achievement locked at 0 (above)
+
   // Act
   const passport = toPassport(NEW_USER_CATALOG);
 
@@ -185,6 +187,8 @@ test("reads as an empty Passport when nothing is earned", () => {
 });
 
 test("offers the First Session at 0/1 as the next milestone of an empty Passport", () => {
+  // Arrange — a brand-new user's catalog: every Achievement locked at 0 (above)
+
   // Act — every ratio is 0, so the catalog-order tie-break picks the First Session
   const passport = toPassport(NEW_USER_CATALOG);
 
