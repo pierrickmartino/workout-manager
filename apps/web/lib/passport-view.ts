@@ -233,12 +233,16 @@ function explanation(achievement: Achievement): string {
   return `This session met the criteria: ${achievement.criteria}.`;
 }
 
-// The lift through the shared display rules: the set's Load by the typed-Load rules, and the
-// Estimated 1RM by the Personal Record headline rule, which an absolute record alone carries.
+// The lift through the shared display rules. An absolute set reads as its typed Load × reps,
+// headlined by its Estimated 1RM. A bodyweight set reads through the Personal Record rule every
+// other record surface uses — "bodyweight + 20 kg × 5" — so a stored "BW" or a zero added load
+// never shows through, and it carries no kg headline (ADR-0026).
 function toStampLift(record: AchievementRecord, unit: WeightUnit): StampLift {
   return {
     exercise: record.exercise,
-    set: `${formatLoad(record.load, unit)} × ${record.reps}`,
+    set: record.is_bodyweight
+      ? formatRecordAchievement(record, unit)
+      : `${formatLoad(record.load, unit)} × ${record.reps}`,
     estimatedOneRepMax: record.is_bodyweight ? null : formatRecordAchievement(record, unit),
     bodyWeight:
       record.is_bodyweight && record.body_weight_kg != null

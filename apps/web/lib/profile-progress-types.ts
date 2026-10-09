@@ -17,8 +17,8 @@ export interface OperatorLevel {
 
 // The lift behind the First Record Achievement (#653): the shared Personal Record shape
 // (`exercise` … `added_kg`, ADR-0026), plus the Exercise's id and the set's typed `load` and
-// Performed Body Weight (`body_weight_kg`, kg). `body_weight_kg` is null for an absolute record
-// and for a bodyweight one logged without a body weight on file.
+// Performed Body Weight (`body_weight_kg`, kg). `body_weight_kg` is null for an absolute record;
+// a bodyweight one always has it, since a bodyweight set scores only against its body weight.
 export interface AchievementRecord extends PersonalRecordEntry {
   exercise_id: number;
   load: Load | null;

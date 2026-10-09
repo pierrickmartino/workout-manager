@@ -454,25 +454,25 @@ test("projects a bodyweight First Record’s added load and body weight into the
   assert.equal(lift?.bodyWeight, "176.37 lb");
 });
 
-test("shows a pure bodyweight First Record as bodyweight × reps", () => {
-  // Arrange — no added load, no Performed Body Weight on file
+test("shows a pure bodyweight First Record as bodyweight × reps, whatever its Load was typed as", () => {
+  // Arrange — no added load, the Load typed as "BW", at 75 kg Performed Body Weight
   const record: AchievementRecord = {
     ...WEIGHTED_PULL_UP_RECORD,
     reps: 12,
     added_kg: null,
-    load: { kind: "bodyweight", text: "bodyweight" },
-    body_weight_kg: null,
+    load: { kind: "bodyweight", text: "BW" },
+    body_weight_kg: 75,
   };
 
   // Act
   const lift = liftOf(firstRecord(record), "kg");
 
-  // Assert
+  // Assert — the same wording as every other Personal Record surface
   assert.deepEqual(lift, {
     exercise: "Pull-Up",
     set: "bodyweight × 12",
     estimatedOneRepMax: null,
-    bodyWeight: null,
+    bodyWeight: "75 kg",
   });
 });
 
