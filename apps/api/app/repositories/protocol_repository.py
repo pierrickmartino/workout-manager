@@ -11,6 +11,7 @@ another. SQLModel-backed and in-memory implementations honor the same contract."
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 from typing import Protocol as Interface
 
@@ -20,7 +21,13 @@ from sqlmodel import Session, select
 # explicit ``name=None`` that clears it back to the derived label (F4 Slice 5).
 _KEEP_NAME: Any = object()
 
-from app.db.models import Exercise, ExercisePrescription, Protocol, WorkoutSession
+from app.db.models import (
+    Exercise,
+    ExercisePrescription,
+    Protocol,
+    WorkoutSession,
+    _utcnow,
+)
 from app.repositories.exercise_repository import ExerciseRepository
 from app.repositories.prescription_mapping import (
     PrescriptionDraft,
@@ -132,6 +139,10 @@ class ProtocolView:
     # The standing Calibration offset (ADR-0111), or ``None`` for "as authored". Carried on
     # the read so a client can render the current offset and disable the control at the rail.
     calibration: int | None = None
+    # When the user last made this their Current Protocol (ADR-0125) — the key Current
+    # Protocol selection sorts on. Defaulted (tz-aware, matching ``models._utcnow``) so
+    # hand-built views in tests stay valid; every repository read populates it from the row.
+    made_current_at: datetime = field(default_factory=_utcnow)
 
 
 class ProtocolRepository(Interface):
@@ -252,10 +263,12 @@ class SqlProtocolRepository:
             duration_minutes=protocol.duration_minutes,
             name=protocol.name,
             calibration=protocol.calibration,
+            made_current_at=protocol.made_current_at,
             sessions=[self._session_view(w) for w in workouts],
         )
 
     def create(self, clerk_user_id: str, draft: ProtocolDraft) -> ProtocolView:
+        adopted_at = _utcnow()
         protocol = Protocol(
             clerk_user_id=clerk_user_id,
             training_type=draft.training_type,
@@ -265,6 +278,9 @@ class SqlProtocolRepository:
             duration_minutes=draft.duration_minutes,
             name=draft.name,
             trace_id=draft.trace_id,
+            # Adopting makes the Protocol Current (ADR-0125): both stamps share one instant.
+            created_at=adopted_at,
+            made_current_at=adopted_at,
         )
         self._session.add(protocol)
         self._session.commit()
@@ -462,10 +478,12 @@ class InMemoryProtocolRepository:
             duration_minutes=protocol.duration_minutes,
             name=protocol.name,
             calibration=protocol.calibration,
+            made_current_at=protocol.made_current_at,
             sessions=[self._session_view(w) for w in workouts],
         )
 
     def create(self, clerk_user_id: str, draft: ProtocolDraft) -> ProtocolView:
+        adopted_at = _utcnow()
         protocol = Protocol(
             id=self._next_protocol_id,
             clerk_user_id=clerk_user_id,
@@ -476,6 +494,9 @@ class InMemoryProtocolRepository:
             duration_minutes=draft.duration_minutes,
             name=draft.name,
             trace_id=draft.trace_id,
+            # Adopting makes the Protocol Current (ADR-0125): both stamps share one instant.
+            created_at=adopted_at,
+            made_current_at=adopted_at,
         )
         self._next_protocol_id += 1
         self._protocols[protocol.id] = protocol

@@ -13,8 +13,20 @@ A user-owned training plan: a fully enumerated set of Sessions spanning a user-c
 _Avoid_: Plan, routine, cycle, Program
 
 **Current Protocol**:
-The one Protocol a user is actively working through — the most recently adopted Protocol that still has an un-performed Session. It is the Protocol the Home screen surfaces the Next Session and the remaining queue from. A user may own several Protocols but has at most one Current Protocol at a time; when none exists, Home falls back to prompting a new generation. Generating a new Protocol therefore **supersedes** the prior Current Protocol: the new one is now the most-recently-adopted with an un-performed Session, so it becomes Current and the old one is **set aside** — still owned, its records intact, but no longer surfaced and not (in v1) switched back to. A Protocol is never deleted.
-_Avoid_: Active plan, selected protocol, today's protocol, delete/discard/abandon/archive (a superseded Protocol is set aside, never removed)
+The one Protocol a user is actively working through, which Home surfaces the Next Session from: the unfinished Protocol the user most recently made Current, by Adopting it or by **Switching** to it. Generating a new Protocol therefore **supersedes** the prior one, which is **set aside**; when none is unfinished, Home prompts a new generation. A Protocol is deleted only when un-started — no Logged Session of any Completion Outcome references any of its Sessions (ADR-0125).
+_Avoid_: Active plan, selected protocol, today's protocol, Protocol library (Library already names the Catalog pick widget and the Session Library), discard/abandon/archive (a superseded Protocol is set aside, not removed)
+
+**Set aside**:
+The state of a Protocol the user owns that is unfinished but not Current — superseded by a generation or by a Switch. Its Sessions and records are intact and it can be **Switched** to, picking up exactly where the user left off.
+_Avoid_: Paused, inactive, archived, abandoned
+
+**Switch**:
+Making a set-aside Protocol Current again, setting the previous Current Protocol aside. A plan-side choice only: it writes nothing to any Session or Logged Session.
+_Avoid_: Resume (that is the Live Session), activate, select
+
+**Finished Protocol**:
+A Protocol every Session of which has been performed — it has no Next Session, so it is never Current and never set aside.
+_Avoid_: Completed (that word belongs to the Completion Outcome), archived, done
 
 **Next Session**:
 The next un-performed Session in a self-paced Protocol's ordered sequence — what the user is prompted to do next. There is no calendar; "next" means next in position, never a dated "today". The thing a user initiates from Home is always a Session, never a whole Protocol.
@@ -259,7 +271,7 @@ A **read-time projection** on **Train** of the user's up to **five** most-recent
 _Avoid_: Recent workouts, history (that is the record side), last sessions (bare), recently played
 
 **Delete**:
-The act of a user **permanently removing one of their own standalone Sessions** — a hard delete of the *plan*, offered from **My Sessions** and on the Session itself (beside Rename / Favorite / Share). Allowed **only when the Session has no Logged Session** referencing it: a performed Session is settled record and is never deleted (plan/record separation), so the moment any performance exists — Completed *or* Incomplete — the plan is permanent. Standalone-only (a Protocol-member Session is never deleted here; a Protocol is never deleted at all — see Current Protocol) and owner-only. Removes the Session together with its plan-side dependents — Exercise Prescriptions, the Favorite marker, Generation Feedback, and Share Links — while every already-**Redeem**ed copy stays independent and untouched (ADR-0063). Its enabling condition is surfaced as the **Logged Count**: a Session shows a count iff it cannot be deleted. Distinct from **Remove** (withdraw one Exercise Prescription, not the Session) and from a superseded Protocol being **set aside** (records intact, never removed).
+The act of a user **permanently removing one of their own standalone Sessions** — a hard delete of the *plan*, offered from **My Sessions** and on the Session itself (beside Rename / Favorite / Share). Allowed **only when the Session has no Logged Session** referencing it: a performed Session is settled record and is never deleted (plan/record separation), so the moment any performance exists — Completed *or* Incomplete — the plan is permanent. Standalone-only (a Protocol-member Session is never deleted here; a whole Protocol is deleted only when un-started — see Current Protocol) and owner-only. Removes the Session together with its plan-side dependents — Exercise Prescriptions, the Favorite marker, Generation Feedback, and Share Links — while every already-**Redeem**ed copy stays independent and untouched (ADR-0063). Its enabling condition is surfaced as the **Logged Count**: a Session shows a count iff it cannot be deleted. Distinct from **Remove** (withdraw one Exercise Prescription, not the Session) and from a superseded Protocol being **set aside** (records intact, not removed).
 _Avoid_: Archive, Discard, Abandon (those imply a preserved/hidden state — a deletable Session has no record to preserve), Remove (that is the Prescription withdrawal), Trash
 
 **Logged Count**:

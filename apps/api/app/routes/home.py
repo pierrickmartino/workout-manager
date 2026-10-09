@@ -4,8 +4,8 @@
 current_protocol, gamification }``. ``readiness`` is the user's qualitative
 three-state signal computed from their constraints and most-recent performance
 (ADR-0008); it renders even when there is no Current Protocol. ``current_protocol``
-is the progressed view of the user's Current Protocol — the most-recently-adopted
-Protocol still holding an un-performed Session — or ``null`` in the empty state.
+is the progressed view of the user's Current Protocol — the most-recently-made-Current
+Protocol (ADR-0125) still holding an un-performed Session — or ``null`` in the empty state.
 Reusing the progressed view means the Next Session's upcoming loads already carry
 the ADR-0004 Progression adjustment (slice 2). ``gamification`` is the account's
 Level / XP / weekly Streak, projected read-time from the same Logged-Session

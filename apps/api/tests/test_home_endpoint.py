@@ -314,6 +314,39 @@ def test_home_current_protocol_is_null_once_the_protocol_is_complete():
     assert data["current_protocol"] is None
 
 
+def test_home_a_newly_generated_protocol_becomes_current():
+    # Arrange — the user is part-way through one Protocol, then generates another
+    h = build_harness()
+    first = h.adopt_protocol("user_supersede")
+    h.perform("user_supersede", first.sessions[0].session_id)
+    generated = h.adopt_protocol("user_supersede")
+
+    # Act
+    current = h.fetch_home("user_supersede").json()["data"]["current_protocol"]
+
+    # Assert — adopting made the new Protocol Current; the old one is set aside
+    assert current["id"] == generated.id
+    assert current["next_session"]["week"] == 1
+
+
+def test_home_falls_back_to_the_next_most_recently_current_once_current_finishes():
+    # Arrange — three Protocols adopted in turn; the newest (Current) is then finished
+    h = build_harness()
+    h.adopt_protocol("user_fallback")
+    middle = h.adopt_protocol("user_fallback")
+    h.perform("user_fallback", middle.sessions[0].session_id)
+    newest = h.adopt_protocol("user_fallback")
+    for session in newest.sessions:
+        h.perform("user_fallback", session.session_id)
+
+    # Act
+    current = h.fetch_home("user_fallback").json()["data"]["current_protocol"]
+
+    # Assert — Home picks up the next most-recently-Current one where it was left off
+    assert current["id"] == middle.id
+    assert current["next_session"]["week"] == 2
+
+
 def test_home_never_surfaces_another_users_protocol():
     # Arrange — only another user owns a Protocol
     h = build_harness()

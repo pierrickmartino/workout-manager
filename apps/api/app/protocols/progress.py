@@ -342,11 +342,15 @@ def current_protocol(
 ) -> ProtocolProgressView | None:
     """Return the user's Current Protocol as a progressed view, or ``None``.
 
-    The Current Protocol is the user's *most-recently-adopted* Protocol that still
-    holds an un-performed Session (ADR-0008): Home focuses on the plan the user is
-    actively working through, and never dead-ends on a finished one. Fully-performed
-    Protocols are passed over in favour of an older in-progress one. Returns ``None``
-    when the user owns no Protocol, or when every owned Protocol is complete.
+    The Current Protocol is the user's *most-recently-made-Current* Protocol — latest
+    ``made_current_at``, ties broken by the higher id (ADR-0125) — that still holds an
+    un-performed Session (ADR-0008): Home focuses on the plan the user is actively
+    working through, and never dead-ends on a finished one. Adopting stamps
+    ``made_current_at``, so a newly generated Protocol supersedes; fully-performed
+    Protocols are passed over in favour of the next most-recently-Current unfinished
+    one. Returns ``None`` when the user owns no Protocol, or when every owned Protocol
+    is complete. The order is applied here, explicitly, rather than borrowed from the
+    repository's list order (``created_at``), which its other callers rely on.
 
     Takes the **already-loaded** history and projects each candidate Protocol through
     the pure ``progressed_protocol_from`` — so selecting the Current Protocol reads the
@@ -357,7 +361,12 @@ def current_protocol(
     Sessions are not eligible — only adopted Protocols are considered.
     """
 
-    for protocol in protocols.list_for_user(clerk_user_id):
+    by_made_current = sorted(
+        protocols.list_for_user(clerk_user_id),
+        key=lambda protocol: (protocol.made_current_at, protocol.id),
+        reverse=True,
+    )
+    for protocol in by_made_current:
         progress = progressed_protocol_from(protocol, logged_sessions)
         if progress.next_session is not None:
             return progress

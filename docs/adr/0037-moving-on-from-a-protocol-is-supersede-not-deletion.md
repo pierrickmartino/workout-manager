@@ -1,5 +1,7 @@
 # 0037 — Moving on from a Protocol is supersede-by-generation, never deletion
 
+**Status:** accepted, amended by [ADR-0125](./0125-a-set-aside-protocol-can-be-switched-back-to-and-an-un-started-one-deleted.md): a set-aside Protocol can now be switched back to, there is a Protocols index, and an un-started Protocol may be deleted. The core point here, that deleting a *performed* Protocol is the trap, still stands.
+
 A user stuck on a Protocol they no longer want has no visible way to start a fresh
 one: `/protocols/new` is reachable only from the dashboard's *empty-state* CTA, so
 while a Current Protocol exists the TRAIN tab — which already `match`es `/protocols`

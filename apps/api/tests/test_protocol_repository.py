@@ -8,6 +8,7 @@ another user."""
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import UTC, datetime
 
 import pytest
 from sqlmodel import Session, SQLModel
@@ -113,6 +114,25 @@ def test_create_persists_a_user_owned_protocol(repos):
     assert view.training_type == "strength"
     assert view.objective == "gain muscle mass"
     assert view.weeks == 2
+
+
+def test_adopting_a_protocol_makes_it_current_now(repos):
+    # Arrange
+    protocol_repo, exercises = repos
+    before = datetime.now(UTC).replace(tzinfo=None)
+
+    # Act
+    view = protocol_repo.create("user_adopter", _two_week_draft(exercises))
+
+    # Assert — the made-Current choice is stamped at adoption (ADR-0125), and survives a
+    # read-back through either access path
+    after = datetime.now(UTC).replace(tzinfo=None)
+    stamped = view.made_current_at.replace(tzinfo=None)
+    assert before <= stamped <= after
+    assert protocol_repo.get(view.id, "user_adopter").made_current_at == view.made_current_at
+    assert [p.made_current_at for p in protocol_repo.list_for_user("user_adopter")] == [
+        view.made_current_at
+    ]
 
 
 def test_create_persists_the_trace_id_lineage(repos):
