@@ -23,6 +23,9 @@ export interface Milestone {
 export interface Passport {
   // Earned Achievements, oldest first; a same-day tie keeps catalog order.
   stamps: Stamp[];
+  // Nothing is earned yet: the Passport shows its empty state, which points Home, rather than
+  // a page of locks (#651).
+  empty: boolean;
   // The one locked Achievement closest to earned, or null once everything is earned.
   next: Milestone | null;
   // Every other locked Achievement, in catalog order, behind the "More to earn" disclosure.
@@ -106,6 +109,7 @@ export function toPassport(achievements: readonly Achievement[]): Passport {
     .map(({ achievement }) => toMilestone(achievement));
   return {
     stamps,
+    empty: stamps.length === 0,
     next: next === null ? null : toMilestone(next.achievement),
     moreToEarn,
   };

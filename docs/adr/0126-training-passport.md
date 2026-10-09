@@ -73,5 +73,5 @@ concepts. The API keeps calling them Achievements, the profile progress endpoint
   this record first (#650), with the existing icons and no API change; then First Session and
   the empty Passport (#651); the Stamp page with its source session (#652); the First Record
   lift (#653); and the generated art (#654).
-- The Passport and its disclosure, in both states, are journeys in the reflow audit
-  (`passport`, `passport-open`), at 320px and 200% text.
+- The Passport and its disclosure, in both states, and the empty Passport are journeys in the
+  reflow audit (`passport`, `passport-open`, `passport-empty`), at 320px and 200% text.

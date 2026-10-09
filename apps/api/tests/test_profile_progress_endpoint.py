@@ -102,7 +102,8 @@ def _perform(
     effort=None,
 ):
     """Record one performance, optionally carrying the two signals the Effective
-    Fitness Level reads: the declared Completion Outcome and the rated Effort."""
+    Fitness Level reads: the declared Completion Outcome and the rated Effort. Returns
+    the Logged Session, so a test can delete it again."""
 
     session_view = sessions.create(
         user,
@@ -110,7 +111,7 @@ def _perform(
             training_type=training_type, duration_minutes=45, prescriptions=[]
         ),
     )
-    logged.create(
+    return logged.create(
         user,
         LoggedSessionDraft(
             session_id=session_view.id,
@@ -179,8 +180,8 @@ def test_returns_streak_and_lifetime_counts_in_the_envelope():
         # No Declared level is on file, so there is no standing to read against one.
         "fitness_levels": [],
     }
-    # Two Logged Sessions is short of every threshold, so the wall is all locked.
-    assert achievements and all(a["unlocked"] is False for a in achievements)
+    # Two Logged Sessions earn the First Session and fall short of every other threshold.
+    assert [a["id"] for a in achievements if a["unlocked"]] == ["sessions-1"]
 
 
 def test_empty_user_sees_zero_states_not_an_error():
@@ -263,6 +264,86 @@ def test_serializes_an_unlocked_achievement_with_its_earned_date():
     assert by_id["sessions-25"]["unlocked"] is False
     assert by_id["sessions-25"]["current"] == 5
     assert by_id["sessions-25"]["unlocked_on"] is None
+
+
+# --- the First Session Stamp (ADR-0126, #651) ---
+
+
+def _first_session(client, ctx, user):
+    response = client.get("/api/profile/progress", headers=_auth(ctx, user))
+    assert response.status_code == 200
+    return response.json()["data"]["achievements"][0]
+
+
+def test_a_new_user_sees_first_session_first_in_the_catalog_locked_at_zero():
+    # Arrange — nothing logged yet
+    client, ctx, _, _, _ = build_client()
+
+    # Act
+    first = _first_session(client, ctx, "newcomer")
+
+    # Assert — the first entry in catalog order is the First Session, at 0/1
+    assert first == {
+        "id": "sessions-1",
+        "name": "First Session",
+        "criteria": "Log your first Session",
+        "unlocked": False,
+        "current": 0,
+        "target": 1,
+        "unlocked_on": None,
+    }
+
+
+def test_the_first_logged_session_earns_first_session_dated_on_that_session():
+    # Arrange — two Logged Sessions; the earlier one is the first
+    client, ctx, sessions, logged, _ = build_client()
+    _perform(sessions, logged, "user_f", date(2026, 6, 9), 1)
+    _perform(sessions, logged, "user_f", date(2026, 6, 2), 1)
+
+    # Act
+    first = _first_session(client, ctx, "user_f")
+
+    # Assert
+    assert first["id"] == "sessions-1"
+    assert first["unlocked"] is True
+    assert first["current"] == 2
+    assert first["unlocked_on"] == "2026-06-02"
+
+
+def test_a_partially_completed_session_still_earns_first_session():
+    # Arrange — the only Logged Session is Incomplete: the Passport counts work performed
+    client, ctx, sessions, logged, _ = build_client()
+    _perform(
+        sessions,
+        logged,
+        "user_p",
+        date(2026, 6, 2),
+        1,
+        outcome=CompletionOutcome.INCOMPLETE.value,
+    )
+
+    # Act
+    first = _first_session(client, ctx, "user_p")
+
+    # Assert
+    assert first["unlocked"] is True
+    assert first["unlocked_on"] == "2026-06-02"
+
+
+def test_deleting_the_only_logged_session_locks_first_session_again():
+    # Arrange — one Logged Session earned the Stamp, then it is deleted
+    client, ctx, sessions, logged, _ = build_client()
+    only = _perform(sessions, logged, "user_d", date(2026, 6, 2), 1)
+    assert _first_session(client, ctx, "user_d")["unlocked"] is True
+    assert logged.delete(only.id, "user_d") is True
+
+    # Act
+    first = _first_session(client, ctx, "user_d")
+
+    # Assert — a read-time projection with no ledger re-locks (ADR-0018)
+    assert first["unlocked"] is False
+    assert first["current"] == 0
+    assert first["unlocked_on"] is None
 
 
 def test_requires_authentication():
