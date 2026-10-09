@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
+from datetime import date
 
 from app.domain.completion import CompletionOutcome
 from app.domain.load import parse_load
@@ -102,6 +103,25 @@ def _advancing_log_ids(logged_sessions: list[LoggedSessionView]) -> dict[int, in
             continue
         log_ids.setdefault(entry.session_id, entry.id)
     return log_ids
+
+
+def last_performed_on_by_session(
+    logged_sessions: list[LoggedSessionView],
+) -> dict[int, date]:
+    """Map each performed Session id to the date of its latest *advancing* performance.
+
+    Its keys are exactly the performed Sessions (ADR-0013: an Incomplete log does not
+    perform a Session), so a caller that also needs the date reads both off one pass.
+    Plan-less records carry no Session and are skipped."""
+
+    dates: dict[int, date] = {}
+    for entry in logged_sessions:
+        if entry.session_id is None or not _advances(entry):
+            continue
+        previous = dates.get(entry.session_id)
+        if previous is None or entry.performed_on > previous:
+            dates[entry.session_id] = entry.performed_on
+    return dates
 
 
 def _progress_over(
@@ -334,6 +354,20 @@ def progressed_protocol(
     return progressed_protocol_from(protocol, logged.list_for_user(clerk_user_id))
 
 
+def by_made_current(protocols: list[ProtocolView]) -> list[ProtocolView]:
+    """``protocols`` most-recently-made-Current first, ties broken by the higher id.
+
+    The one order Current Protocol selection walks (ADR-0125): the first unfinished
+    Protocol in it is Current. Shared by Home and the Protocols index so the two can
+    never disagree about which Protocol is Current."""
+
+    return sorted(
+        protocols,
+        key=lambda protocol: (protocol.made_current_at, protocol.id),
+        reverse=True,
+    )
+
+
 def current_protocol(
     clerk_user_id: str,
     *,
@@ -361,12 +395,7 @@ def current_protocol(
     Sessions are not eligible — only adopted Protocols are considered.
     """
 
-    by_made_current = sorted(
-        protocols.list_for_user(clerk_user_id),
-        key=lambda protocol: (protocol.made_current_at, protocol.id),
-        reverse=True,
-    )
-    for protocol in by_made_current:
+    for protocol in by_made_current(protocols.list_for_user(clerk_user_id)):
         progress = progressed_protocol_from(protocol, logged_sessions)
         if progress.next_session is not None:
             return progress
@@ -380,6 +409,8 @@ __all__ = [
     "progressed_protocol",
     "progressed_protocol_from",
     "current_protocol",
+    "by_made_current",
+    "last_performed_on_by_session",
     "latest_sets_by_exercise",
     "exposure_counts_by_exercise",
     "progressed_prescription",

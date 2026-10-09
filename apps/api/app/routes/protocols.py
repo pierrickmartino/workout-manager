@@ -8,6 +8,8 @@ surfaced as a ``502`` (an upstream AI failure), never silently persisted. ``GET
 /api/protocols/{id}`` returns the owner's Protocol joined to its *next un-performed
 Session* (self-paced, no calendar), with each upcoming Prescription's recommended
 load progressed from the user's Logged Sets (ADR-0004); ``404`` for anyone else.
+``GET /api/protocols`` is the Protocols index: one row per owned Protocol with its
+status (current / set aside / finished) and performed counts (#637).
 All responses use the standard envelope."""
 
 from __future__ import annotations
@@ -44,9 +46,11 @@ from app.protocols.deploy_validation import (
     DraftSession,
 )
 from app.protocols.balance_preview import build_balance_preview
+from app.protocols.index import protocol_index
 from app.protocols.progress import progressed_protocol, protocol_progress
 from app.protocols.serialization import (
     serialize_balance_preview,
+    serialize_protocol_index_row,
     serialize_protocol_progress,
 )
 from app.repositories.deps import (
@@ -196,6 +200,20 @@ def read_job(
             error=state.error,
         )
     )
+
+
+@router.get("/protocols")
+def list_protocols(
+    clerk_user_id: str = Depends(get_current_user),
+    protocols: ProtocolRepository = Depends(get_protocol_repository),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+) -> dict:
+    """The caller's Protocols index (#637): one row per owned Protocol, with its
+    ``status`` (current / set aside / finished) and performed counts. Owner-scoped, and
+    the Logged history is read once for the whole index (ADR-0030)."""
+
+    rows = protocol_index(clerk_user_id, protocols=protocols, logged=logged)
+    return success_envelope([serialize_protocol_index_row(row) for row in rows])
 
 
 @router.get("/protocols/{protocol_id}")

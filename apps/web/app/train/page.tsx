@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { LibraryBig, ListChecks } from "@/components/pulse/icons";
+import { LayoutGrid, LibraryBig, ListChecks } from "@/components/pulse/icons";
 
 import {
   BuildWorkoutLink,
@@ -73,6 +73,14 @@ export default function TrainPage(): React.JSX.Element {
         >
           <ListChecks className="h-4 w-4" />
           My sessions
+        </Link>
+        {/* Every Protocol the user owns — Current, set aside and finished (issue #637). */}
+        <Link
+          href="/protocols"
+          className={buttonVariants({ variant: "secondary", className: "w-full" })}
+        >
+          <LayoutGrid className="h-4 w-4" />
+          My protocols
         </Link>
       </div>
 

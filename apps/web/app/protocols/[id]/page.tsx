@@ -118,6 +118,14 @@ export default async function ProtocolPage({
         </ol>
       </div>
 
+      {/* The way to the user's other Protocols from the one they are on (issue #637). */}
+      <Link
+        href="/protocols"
+        className="label-mono text-[11px] text-cyan hover:underline"
+      >
+        All protocols →
+      </Link>
+
       <BackLink href="/dashboard">Back to dashboard</BackLink>
     </section>
   );
