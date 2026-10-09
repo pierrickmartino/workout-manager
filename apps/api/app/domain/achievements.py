@@ -19,7 +19,9 @@ Each milestone carries an integer ``current`` progress toward an integer ``targe
 locked Achievement can show live progress ("Log 25 Sessions — 18/25"). Every catalog
 metric is monotonic non-decreasing over a chronological prefix of the history, which is
 what lets ``unlocked_on`` be recovered by replay and keeps it consistent with the
-full-history unlock check.
+full-history unlock check. The same replay names the Logged Session whose inclusion
+crossed the target (``unlocked_by_session_id``), so the date and the source session
+always agree, and deleting that session simply moves both to the next crossing (#652).
 
 Pure and dependency-free over the domain (streak, muscle groups, personal records): no
 ORM, no HTTP."""
@@ -57,8 +59,11 @@ class _LoggedSet(LoggedSet, Protocol):
 
 
 class _LoggedSession(Protocol):
-    """The Logged Session fields the catalog metrics read (satisfied by the view)."""
+    """The Logged Session fields the catalog metrics and the replay read (satisfied by
+    the view). ``id`` names the crossing session and breaks a same-date tie in the
+    replay: a lower id was logged first."""
 
+    id: int
     performed_on: date
     logged_sets: Sequence[_LoggedSet]
 
@@ -69,8 +74,9 @@ class Achievement:
 
     ``unlocked`` is whether the predicate holds over the *whole current* history;
     ``current``/``target`` are the live progress a locked badge shows; ``unlocked_on`` is
-    the earliest date at which the predicate first held (``None`` while locked). Because
-    every field is derived read-time, a deleted log recomputes and can re-lock the badge.
+    the earliest date at which the predicate first held and ``unlocked_by_session_id`` the
+    Logged Session whose inclusion crossed it (both ``None`` while locked). Because every
+    field is derived read-time, a deleted log recomputes and can re-lock the badge.
     """
 
     id: str
@@ -80,6 +86,7 @@ class Achievement:
     current: int
     target: int
     unlocked_on: date | None
+    unlocked_by_session_id: int | None
 
 
 def _session_count(history: Sequence[_LoggedSession]) -> int:
@@ -175,24 +182,22 @@ CATALOG: tuple[_Definition, ...] = (
 )
 
 
-def _unlocked_on(
+def _crossing_session(
     definition: _Definition, chronological: Sequence[_LoggedSession]
-) -> date:
-    """The earliest date at which the prefix first satisfies ``definition``'s target.
+) -> _LoggedSession | None:
+    """The first session whose inclusion makes the prefix satisfy ``definition``'s target.
 
     Sessions are replayed oldest-first; the metric is monotonic over the growing prefix,
-    so the first session whose inclusion crosses the target stamps the honest unlock
-    date. Only called once the full history is known to satisfy the target, so a crossing
-    always exists.
+    so the first crossing is the honest source of the unlock and its date the honest
+    unlock date. ``None`` when the whole history falls short, i.e. while locked.
     """
 
     prefix: list[_LoggedSession] = []
     for session in chronological:
         prefix.append(session)
         if definition.metric(prefix) >= definition.target:
-            return session.performed_on
-    # Unreachable: the caller has already confirmed the full history qualifies.
-    return chronological[-1].performed_on
+            return session
+    return None
 
 
 def _evaluate(
@@ -202,6 +207,7 @@ def _evaluate(
 ) -> Achievement:
     current = definition.metric(history)
     unlocked = current >= definition.target
+    crossing = _crossing_session(definition, chronological) if unlocked else None
     return Achievement(
         id=definition.id,
         name=definition.name,
@@ -209,7 +215,8 @@ def _evaluate(
         unlocked=unlocked,
         current=current,
         target=definition.target,
-        unlocked_on=_unlocked_on(definition, chronological) if unlocked else None,
+        unlocked_on=crossing.performed_on if crossing is not None else None,
+        unlocked_by_session_id=crossing.id if crossing is not None else None,
     )
 
 
@@ -217,13 +224,17 @@ def evaluate_achievements(history: Iterable[_LoggedSession]) -> list[Achievement
     """Evaluate the whole curated catalog against ``history``, in catalog order.
 
     Each milestone reports its live ``current`` progress over the full history and, when
-    unlocked, the earliest date it first held. A brand-new user gets every badge locked
-    at ``0`` progress with no unlock date and no error. Deleting logs simply recomputes,
-    so a badge can re-lock — the same honest non-monotonicity as the Operator Level.
+    unlocked, the earliest date it first held and the session that crossed it. A
+    brand-new user gets every badge locked at ``0`` progress with no unlock date and no
+    error. Deleting logs simply recomputes, so a badge can re-lock — the same honest
+    non-monotonicity as the Operator Level. Sessions on the same date replay in id order,
+    so the crossing session never depends on the order the history arrives in.
     """
 
     sessions = list(history)
-    chronological = sorted(sessions, key=lambda session: session.performed_on)
+    chronological = sorted(
+        sessions, key=lambda session: (session.performed_on, session.id)
+    )
     return [_evaluate(definition, sessions, chronological) for definition in CATALOG]
 
 

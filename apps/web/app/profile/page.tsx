@@ -73,7 +73,8 @@ export default async function ProfilePage() {
     achievements,
     fitness_levels,
   } = envelope.data;
-  const passport = toPassport(achievements);
+  // Stamps opened from here carry the Profile as their origin, so their back link returns here.
+  const passport = toPassport(achievements, "profile");
   // The Fitness Level standing (ADR-0112): one row per *declared* Training Type. It comes from
   // the progress read model, beside Operator Level, and never from the Profile endpoint —
   // whose `fitness_levels` field the edit form writes back, so a derived level placed there

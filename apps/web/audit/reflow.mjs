@@ -74,10 +74,13 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // achievement wall, and its "More to earn" list renders only while the disclosure is open, so
 // each state is a journey of its own. `passport-empty` joins them with #651: a brand-new user's
 // Passport is an empty state with a link Home, a shape neither of the others renders.
+// `stamp` and `stamp-locked` join them with #652: every Stamp opens its own page, whose title
+// is the Stamp's name, and a locked Achievement's page shows criteria and progress instead of
+// the explanation and source link, so each is a journey of its own.
 const NOVEL_JOURNEYS = [
   "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc", "launchpad",
   "levels", "sheet", "protocols", "protocols-live", "set-aside", "passport", "passport-open",
-  "passport-empty",
+  "passport-empty", "stamp", "stamp-locked",
 ];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and

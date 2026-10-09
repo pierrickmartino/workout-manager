@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { toPassport } from "./passport-view.ts";
+import { stampBackLink, toPassport, toStampDetail } from "./passport-view.ts";
 import type { Achievement } from "./profile-progress-types.ts";
 
 // `toPassport` turns the API's evaluated Achievements (curated catalog order) into the
@@ -9,7 +9,7 @@ import type { Achievement } from "./profile-progress-types.ts";
 // locked Achievements behind "More to earn". Ordering and the milestone choice are
 // presentation, so they live here and the API keeps catalog order.
 
-function earned(id: string, on: string): Achievement {
+function earned(id: string, on: string, bySessionId: number | null = 1): Achievement {
   return {
     id,
     name: `Name of ${id}`,
@@ -18,6 +18,7 @@ function earned(id: string, on: string): Achievement {
     current: 1,
     target: 1,
     unlocked_on: on,
+    unlocked_by_session_id: bySessionId,
   };
 }
 
@@ -30,6 +31,7 @@ function locked(id: string, current: number, target: number): Achievement {
     current,
     target,
     unlocked_on: null,
+    unlocked_by_session_id: null,
   };
 }
 
@@ -212,6 +214,199 @@ test("earns the First Session Stamp, dated on the first Logged Session", () => {
   // Assert — no longer empty, and the first Stamp carries its date with the year
   assert.equal(passport.empty, false);
   assert.deepEqual(passport.stamps, [
-    { id: "sessions-1", name: "First Session", earnedOn: "Jun 2, 2026" },
+    {
+      id: "sessions-1",
+      name: "First Session",
+      earnedOn: "Jun 2, 2026",
+      href: "/profile/achievements/sessions-1",
+    },
   ]);
+});
+
+// --- the Stamp page (#652) ---
+
+test("links every Stamp, the next milestone and each More to earn entry to its own page", () => {
+  // Arrange
+  const achievements = [
+    earned("sessions-1", "2026-01-02"),
+    locked("sessions-5", 3, 5),
+    locked("streak-12", 1, 12),
+  ];
+
+  // Act
+  const passport = toPassport(achievements);
+
+  // Assert — each page is keyed by the Achievement id under the Achievements route
+  assert.equal(passport.stamps[0].href, "/profile/achievements/sessions-1");
+  assert.equal(passport.next?.href, "/profile/achievements/sessions-5");
+  assert.equal(passport.moreToEarn[0].href, "/profile/achievements/streak-12");
+});
+
+test("reads no Stamp page for an id the catalog does not hold", () => {
+  // Arrange
+  const achievements = [earned("sessions-1", "2026-01-02")];
+
+  // Act
+  const detail = toStampDetail(achievements, "sessions-9000");
+
+  // Assert — the page renders not-found
+  assert.equal(detail, null);
+});
+
+test("dates an earned Stamp's page with the year and links its crossing Logged Session", () => {
+  // Arrange — Logged Session 42 crossed the target
+  const achievements = [{ ...earned("sessions-5", "2025-11-14", 42), target: 5 }];
+
+  // Act
+  const detail = toStampDetail(achievements, "sessions-5");
+
+  // Assert — the source link opens that record's detail page in History
+  assert.equal(detail?.status, "earned");
+  assert.equal(detail?.name, "Name of sessions-5");
+  assert.equal(detail?.status === "earned" && detail.earnedOn, "Nov 14, 2025");
+  assert.equal(detail?.status === "earned" && detail.sourceHref, "/history/42");
+});
+
+// The plain-words explanation of what earned a Stamp, one family at a time. Targets are the
+// catalog's own, so the copy is read off the shape the API sends.
+const EXPLANATIONS: readonly [Achievement, string][] = [
+  [
+    { ...earned("sessions-1", "2026-01-02"), target: 1 },
+    "This was your first logged session.",
+  ],
+  [
+    { ...earned("sessions-25", "2026-01-02"), target: 25 },
+    "This was your 25th logged session.",
+  ],
+  [
+    { ...earned("streak-4", "2026-01-02"), target: 4 },
+    "Your 4th consecutive week of training was completed with this session.",
+  ],
+  [
+    { ...earned("streak-12", "2026-01-02"), target: 12 },
+    "Your 12th consecutive week of training was completed with this session.",
+  ],
+  [
+    { ...earned("muscle-all", "2026-01-02"), target: 6 },
+    "With this session you had trained all six muscle groups.",
+  ],
+  [
+    earned("first-pr", "2026-01-02"),
+    "This session set your first personal record.",
+  ],
+];
+
+for (const [achievement, explanation] of EXPLANATIONS) {
+  test(`explains what earned the ${achievement.id} Stamp in plain words`, () => {
+    // Act
+    const detail = toStampDetail([achievement], achievement.id);
+
+    // Assert
+    assert.equal(detail?.status === "earned" && detail.explanation, explanation);
+  });
+}
+
+test("reads an ordinal past the teens with its own suffix", () => {
+  // Arrange — 21st, 22nd, 23rd but 11th, 12th, 13th
+  const cases: readonly [number, string][] = [
+    [2, "2nd"], [3, "3rd"], [11, "11th"], [12, "12th"], [13, "13th"],
+    [21, "21st"], [22, "22nd"], [23, "23rd"], [100, "100th"], [101, "101st"],
+  ];
+
+  for (const [target, ordinal] of cases) {
+    // Act
+    const detail = toStampDetail(
+      [{ ...earned(`sessions-${target}`, "2026-01-02"), target }],
+      `sessions-${target}`,
+    );
+
+    // Assert
+    assert.equal(
+      detail?.status === "earned" && detail.explanation,
+      `This was your ${ordinal} logged session.`,
+    );
+  }
+});
+
+test("explains an Achievement of an unknown family by its criteria", () => {
+  // Arrange — a catalog entry this view-model has no family copy for
+  const achievement = earned("mystery", "2026-01-02");
+
+  // Act
+  const detail = toStampDetail([achievement], "mystery");
+
+  // Assert — still a plain sentence, never a blank
+  assert.equal(
+    detail?.status === "earned" && detail.explanation,
+    "This session met the criteria: Criteria of mystery.",
+  );
+});
+
+test("offers no source link for an earned Stamp the API sent without its session", () => {
+  // Arrange — a malformed row: earned, but no crossing session
+  const achievements = [earned("sessions-1", "2026-01-02", null)];
+
+  // Act
+  const detail = toStampDetail(achievements, "sessions-1");
+
+  // Assert — no link rather than a link to a missing record
+  assert.equal(detail?.status === "earned" && detail.sourceHref, null);
+});
+
+test("opens a locked Achievement's page with its criteria and progress, and no source", () => {
+  // Arrange
+  const achievements = [locked("streak-4", 2, 4)];
+
+  // Act
+  const detail = toStampDetail(achievements, "streak-4");
+
+  // Assert — the milestone's criteria and best-run progress; a locked page links nowhere
+  assert.deepEqual(detail, {
+    status: "locked",
+    id: "streak-4",
+    name: "Name of streak-4",
+    criteria: "Criteria of streak-4",
+    progress: "Best run 2/4 consecutive weeks",
+    fill: 0.5,
+  });
+});
+
+// --- where a Stamp page's back link returns to ---
+
+test("links the Profile summary's Stamps with the Profile as their origin", () => {
+  // Arrange
+  const achievements = [
+    earned("sessions-1", "2026-01-02"),
+    locked("sessions-5", 3, 5),
+    locked("streak-12", 1, 12),
+  ];
+
+  // Act
+  const passport = toPassport(achievements, "profile");
+
+  // Assert — the Stamp page then knows to send the user back to the Profile
+  assert.equal(passport.stamps[0].href, "/profile/achievements/sessions-1?from=profile");
+  assert.equal(passport.next?.href, "/profile/achievements/sessions-5?from=profile");
+  assert.equal(passport.moreToEarn[0].href, "/profile/achievements/streak-12?from=profile");
+});
+
+test("returns a Stamp page opened from the Profile to the Profile", () => {
+  // Act
+  const back = stampBackLink("profile");
+
+  // Assert
+  assert.deepEqual(back, { href: "/profile", label: "BACK TO PROFILE" });
+});
+
+test("returns a Stamp page to the Passport when it was opened there or from nowhere known", () => {
+  // Arrange — opened from the Passport (no origin), and a crafted or stale origin
+  const origins = [undefined, "", "passport", "https://evil.example", "/dashboard"];
+
+  for (const from of origins) {
+    // Act
+    const back = stampBackLink(from);
+
+    // Assert — the Passport is the Stamp page's parent, so it is the honest fallback
+    assert.deepEqual(back, { href: "/profile/achievements", label: "BACK TO PASSPORT" });
+  }
 });

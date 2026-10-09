@@ -57,7 +57,11 @@ import { FitnessLevelStandings } from "@/components/pulse/fitness-level-standing
 import { toFitnessLevelRows } from "@/lib/fitness-level-standing";
 import { ProtocolsIndex } from "@/components/ProtocolsIndex";
 import { TrainingPassport } from "@/components/pulse/training-passport";
-import { toPassport } from "@/lib/passport-view";
+import { toPassport, toStampDetail } from "@/lib/passport-view";
+import { StampDetailBody } from "@/components/pulse/stamp-detail";
+import { PageHeader } from "@/components/pulse/page-header";
+import { BackLink } from "@/components/pulse/back-link";
+import type { Achievement } from "@/lib/profile-progress-types";
 import { SetAsideNote } from "@/components/SetAsideNote";
 import { protocolsIndex, type LiveSessionContext } from "@/lib/protocols-index";
 import { adminExerciseRows, auditEntry, exerciseDetail, exerciseNames, exercises, history, liveWorkout, personalRecords, prescriptions, profile, protocolIndexEntries, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
@@ -264,23 +268,40 @@ function FitnessLevelSurface() {
 // unmeasured. The Profile summary is the same `PassportStamps` and `NextMilestone`, so it is
 // covered by the first two sections here. `passport-empty` is a brand-new user's: the empty
 // state with its link Home, and the First Session as the next milestone at 0/1 (#651).
-const passport = toPassport([
-  { id: "sessions-1", name: "First Session", criteria: "Log your first Session", unlocked: true, current: 31, target: 1, unlocked_on: "2025-10-20" },
-  { id: "sessions-5", name: "5 Sessions", criteria: "Log 5 Sessions", unlocked: true, current: 31, target: 5, unlocked_on: "2025-11-14" },
-  { id: "sessions-25", name: "25 Sessions", criteria: "Log 25 Sessions", unlocked: true, current: 31, target: 25, unlocked_on: "2026-08-02" },
-  { id: "sessions-100", name: "100 Sessions", criteria: "Log 100 Sessions", unlocked: false, current: 31, target: 100, unlocked_on: null },
-  { id: "streak-4", name: "4-Week Streak", criteria: "Train 4 weeks in a row", unlocked: false, current: 3, target: 4, unlocked_on: null },
-  { id: "streak-12", name: "12-Week Streak", criteria: "Train 12 weeks in a row", unlocked: false, current: 3, target: 12, unlocked_on: null },
-  { id: "muscle-all", name: "Full Coverage", criteria: "Train all six Muscle Groups", unlocked: false, current: 4, target: 6, unlocked_on: null },
-  { id: "first-pr", name: "First Record", criteria: "Set your first Personal Record", unlocked: true, current: 1, target: 1, unlocked_on: "2025-11-14" },
-]);
+const passportAchievements: Achievement[] = [
+  { id: "sessions-1", name: "First Session", criteria: "Log your first Session", unlocked: true, current: 31, target: 1, unlocked_on: "2025-10-20", unlocked_by_session_id: 7 },
+  { id: "sessions-5", name: "5 Sessions", criteria: "Log 5 Sessions", unlocked: true, current: 31, target: 5, unlocked_on: "2025-11-14", unlocked_by_session_id: 7 },
+  { id: "sessions-25", name: "25 Sessions", criteria: "Log 25 Sessions", unlocked: true, current: 31, target: 25, unlocked_on: "2026-08-02", unlocked_by_session_id: 7 },
+  { id: "sessions-100", name: "100 Sessions", criteria: "Log 100 Sessions", unlocked: false, current: 31, target: 100, unlocked_on: null, unlocked_by_session_id: null },
+  { id: "streak-4", name: "4-Week Streak", criteria: "Train 4 weeks in a row", unlocked: false, current: 3, target: 4, unlocked_on: null, unlocked_by_session_id: null },
+  { id: "streak-12", name: "12-Week Streak", criteria: "Train 12 weeks in a row", unlocked: false, current: 3, target: 12, unlocked_on: null, unlocked_by_session_id: null },
+  { id: "muscle-all", name: "Full Coverage", criteria: "Train all six Muscle Groups", unlocked: false, current: 4, target: 6, unlocked_on: null, unlocked_by_session_id: null },
+  { id: "first-pr", name: "First Record", criteria: "Set your first Personal Record", unlocked: true, current: 1, target: 1, unlocked_on: "2025-11-14", unlocked_by_session_id: 7 },
+];
+const passport = toPassport(passportAchievements);
 
 const emptyPassport = toPassport([
-  { id: "sessions-1", name: "First Session", criteria: "Log your first Session", unlocked: false, current: 0, target: 1, unlocked_on: null },
-  { id: "sessions-5", name: "5 Sessions", criteria: "Log 5 Sessions", unlocked: false, current: 0, target: 5, unlocked_on: null },
-  { id: "streak-4", name: "4-Week Streak", criteria: "Train 4 weeks in a row", unlocked: false, current: 0, target: 4, unlocked_on: null },
-  { id: "first-pr", name: "First Record", criteria: "Set your first Personal Record", unlocked: false, current: 0, target: 1, unlocked_on: null },
+  { id: "sessions-1", name: "First Session", criteria: "Log your first Session", unlocked: false, current: 0, target: 1, unlocked_on: null, unlocked_by_session_id: null },
+  { id: "sessions-5", name: "5 Sessions", criteria: "Log 5 Sessions", unlocked: false, current: 0, target: 5, unlocked_on: null, unlocked_by_session_id: null },
+  { id: "streak-4", name: "4-Week Streak", criteria: "Train 4 weeks in a row", unlocked: false, current: 0, target: 4, unlocked_on: null, unlocked_by_session_id: null },
+  { id: "first-pr", name: "First Record", criteria: "Set your first Personal Record", unlocked: false, current: 0, target: 1, unlocked_on: null, unlocked_by_session_id: null },
 ]);
+
+// One Stamp's page (#652) over the same catalog, header included, since the Stamp's title is
+// the page's display heading. `stamp` is earned: the date, its plain-words explanation and the
+// source link. `stamp-locked` opens the 4-Week Streak, whose criteria and best-run progress (the
+// longest progress label) replace the explanation and the link.
+function StampSurface({ id }: { id: string }): React.JSX.Element {
+  const detail = toStampDetail(passportAchievements, id);
+  if (detail === null) throw new Error(`Unknown audit Stamp: ${id}`);
+  return (
+    <section className="flex flex-col gap-6">
+      <BackLink href="/profile/achievements">BACK TO PASSPORT</BackLink>
+      <PageHeader overline="PULSE // STAMP" title={detail.name} />
+      <StampDetailBody detail={detail} />
+    </section>
+  );
+}
 
 // The Load kinds the two Hand-Authored journeys seed, one per row. The Load value field's unit
 // suffix and placeholder follow the kind (ADR-0114), and the widest suffix ("+kg") and widest
@@ -347,6 +368,8 @@ function Content() {
     case "passport": return <TrainingPassport passport={passport} />;
     case "passport-open": return <TrainingPassport passport={passport} moreToEarnOpen />;
     case "passport-empty": return <TrainingPassport passport={emptyPassport} />;
+    case "stamp": return <StampSurface id="sessions-25" />;
+    case "stamp-locked": return <StampSurface id="streak-4" />;
     case "contrast": return <ContrastSamples />;
     default: throw new Error(`Unknown audit journey: ${journey}`);
   }

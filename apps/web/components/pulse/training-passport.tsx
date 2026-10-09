@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ChevronRight, Lock, Trophy } from "@/components/pulse/icons";
 
 import type { Milestone, Passport, Stamp } from "@/lib/passport-view";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { SegmentedBar } from "@/components/pulse/segmented-bar";
 import { Card } from "@/components/ui/card";
@@ -12,6 +13,12 @@ import { Card } from "@/components/ui/card";
 // and the "More to earn" remainder are all decided there — so these components only render,
 // and the Profile summary and the full Passport page share them. Every Achievement is a
 // read-time projection of the Logged record (ADR-0018). No animation: Stamps sit still.
+//
+// Every Stamp, the next milestone and each "More to earn" entry opens its own page, one level
+// deeper, so each link slides forward (ADR-0121, #652). A hover moves the border, never a fill.
+const ENTRY_LINK_CLASS =
+  "group block h-full rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-cyan " +
+  "focus-visible:ring-offset-2 focus-visible:ring-offset-base";
 
 // The earned Stamps, oldest first, so the collection reads as the story of the user's
 // training. Each one is announced by its title and earned date; the icon is decorative.
@@ -24,21 +31,23 @@ function PassportStamps({ stamps }: PassportStampsProps): React.JSX.Element {
     <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       {stamps.map((stamp) => (
         <li key={stamp.id}>
-          <Card className="flex h-full items-start gap-3 border-cyan/30 p-4">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-cyan-dim text-cyan">
-              <Trophy className="h-4 w-4" aria-hidden />
-            </span>
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="break-words font-sans text-[14px] font-semibold text-text-primary">
-                {stamp.name}
+          <Link {...NAV_FORWARD} href={stamp.href} className={ENTRY_LINK_CLASS}>
+            <Card className="flex h-full items-start gap-3 border-cyan/30 p-4 transition-colors group-hover:border-cyan">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-cyan-dim text-cyan">
+                <Trophy className="h-4 w-4" aria-hidden />
               </span>
-              {stamp.earnedOn !== null ? (
-                <span className="label-mono text-[10px] text-cyan">
-                  Earned {stamp.earnedOn}
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="break-words font-sans text-[14px] font-semibold text-text-primary">
+                  {stamp.name}
                 </span>
-              ) : null}
-            </div>
-          </Card>
+                {stamp.earnedOn !== null ? (
+                  <span className="label-mono text-[10px] text-cyan">
+                    Earned {stamp.earnedOn}
+                  </span>
+                ) : null}
+              </div>
+            </Card>
+          </Link>
         </li>
       ))}
     </ul>
@@ -69,27 +78,29 @@ interface NextMilestoneProps {
 
 function NextMilestone({ milestone }: NextMilestoneProps): React.JSX.Element {
   return (
-    <Card className="flex flex-col gap-3 p-4">
-      <div className="flex items-start gap-3">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-elevated text-text-muted">
-          <Lock className="h-4 w-4" aria-hidden />
-        </span>
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="break-words font-sans text-[14px] font-semibold text-text-primary">
-            {milestone.name}
+    <Link {...NAV_FORWARD} href={milestone.href} className={ENTRY_LINK_CLASS}>
+      <Card className="flex flex-col gap-3 p-4 transition-colors group-hover:border-cyan">
+        <div className="flex items-start gap-3">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-elevated text-text-muted">
+            <Lock className="h-4 w-4" aria-hidden />
           </span>
-          <span className="break-words font-sans text-[12px] text-text-secondary">
-            {milestone.criteria}
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="break-words font-sans text-[14px] font-semibold text-text-primary">
+              {milestone.name}
+            </span>
+            <span className="break-words font-sans text-[12px] text-text-secondary">
+              {milestone.criteria}
+            </span>
+          </div>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <SegmentedBar value={milestone.fill} accent="blue" />
+          <span className="label-mono text-[10px] text-text-secondary">
+            {milestone.progress}
           </span>
         </div>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <SegmentedBar value={milestone.fill} accent="blue" />
-        <span className="label-mono text-[10px] text-text-secondary">
-          {milestone.progress}
-        </span>
-      </div>
-    </Card>
+      </Card>
+    </Link>
   );
 }
 
@@ -125,16 +136,25 @@ function MoreToEarn({
       </summary>
       <ul className="mt-3 flex flex-col divide-y divide-border rounded-sm border border-border bg-surface">
         {milestones.map((milestone) => (
-          <li key={milestone.id} className="flex flex-col gap-0.5 px-4 py-3">
-            <span className="break-words font-sans text-[14px] font-semibold text-text-primary">
-              {milestone.name}
-            </span>
-            <span className="break-words font-sans text-[12px] text-text-secondary">
-              {milestone.criteria}
-            </span>
-            <span className="label-mono text-[10px] text-text-secondary">
-              {milestone.progress}
-            </span>
+          <li key={milestone.id}>
+            <Link
+              {...NAV_FORWARD}
+              href={milestone.href}
+              className={
+                "flex flex-col gap-0.5 px-4 py-3 outline-none focus-visible:ring-2 " +
+                "focus-visible:ring-inset focus-visible:ring-cyan"
+              }
+            >
+              <span className="break-words font-sans text-[14px] font-semibold text-text-primary">
+                {milestone.name}
+              </span>
+              <span className="break-words font-sans text-[12px] text-text-secondary">
+                {milestone.criteria}
+              </span>
+              <span className="label-mono text-[10px] text-text-secondary">
+                {milestone.progress}
+              </span>
+            </Link>
           </li>
         ))}
       </ul>

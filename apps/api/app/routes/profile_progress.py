@@ -53,6 +53,10 @@ def _serialize_achievement(achievement: Achievement) -> dict:
             if achievement.unlocked_on is not None
             else None
         ),
+        # The Logged Session whose logging crossed the target — the Stamp page's source
+        # link (#652) — or null while locked. Read-time like the date, so it follows a
+        # deletion to the next crossing session and never names a missing record.
+        "unlocked_by_session_id": achievement.unlocked_by_session_id,
     }
 
 
