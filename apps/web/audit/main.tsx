@@ -60,6 +60,7 @@ import { TrainingPassport } from "@/components/pulse/training-passport";
 import { toPassport, toStampDetail } from "@/lib/passport-view";
 import { StampDetailBody } from "@/components/pulse/stamp-detail";
 import { PageHeader } from "@/components/pulse/page-header";
+import { BackLink } from "@/components/pulse/back-link";
 import type { Achievement } from "@/lib/profile-progress-types";
 import { SetAsideNote } from "@/components/SetAsideNote";
 import { protocolsIndex, type LiveSessionContext } from "@/lib/protocols-index";
@@ -295,6 +296,7 @@ function StampSurface({ id }: { id: string }): React.JSX.Element {
   if (detail === null) throw new Error(`Unknown audit Stamp: ${id}`);
   return (
     <section className="flex flex-col gap-6">
+      <BackLink href="/profile/achievements">BACK TO PASSPORT</BackLink>
       <PageHeader overline="PULSE // STAMP" title={detail.name} />
       <StampDetailBody detail={detail} />
     </section>

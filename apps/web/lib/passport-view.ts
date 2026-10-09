@@ -71,8 +71,13 @@ function progressLabel(achievement: Achievement): string {
 
 // Every Achievement, earned or locked, opens its own page under the Achievements route, keyed
 // by its id (#652).
-export function stampHref(id: string): string {
+function stampHref(id: string): string {
   return `/profile/achievements/${encodeURIComponent(id)}`;
+}
+
+// The earned date with the year, or null if the API sent none.
+function earnedOn(achievement: Achievement): string | null {
+  return achievement.unlocked_on === null ? null : formatLongDate(achievement.unlocked_on);
 }
 
 function toMilestone(achievement: Achievement): Milestone {
@@ -110,8 +115,7 @@ export function toPassport(achievements: readonly Achievement[]): Passport {
     .map(({ achievement }) => ({
       id: achievement.id,
       name: achievement.name,
-      earnedOn:
-        achievement.unlocked_on === null ? null : formatLongDate(achievement.unlocked_on),
+      earnedOn: earnedOn(achievement),
       href: stampHref(achievement.id),
     }));
   const locked = catalog.filter(({ achievement }) => !achievement.unlocked);
@@ -163,7 +167,9 @@ function ordinal(n: number): string {
 
 // What the crossing session did, per Achievement family. The family is the id's prefix, as in
 // the progress copy; the count is the target, since the crossing session is the one that
-// reached it. Streaks count consecutive weeks, never a run that could be broken (ADR-0019).
+// reached it. That holds because the API replays sessions oldest first: each one adds one to
+// the session count, and can only extend the latest run of weeks by one, so the crossing
+// session lands exactly on the target rather than past it. Streaks count consecutive weeks, never a run that could be broken (ADR-0019).
 function explanation(achievement: Achievement): string {
   const { id, target } = achievement;
   if (id.startsWith("sessions-")) {
@@ -192,21 +198,14 @@ export function toStampDetail(
     return null;
   }
   if (!achievement.unlocked) {
-    return {
-      status: "locked",
-      id: achievement.id,
-      name: achievement.name,
-      criteria: achievement.criteria,
-      progress: progressLabel(achievement),
-      fill: ratio(achievement),
-    };
+    const { href: _ownPage, ...milestone } = toMilestone(achievement);
+    return { status: "locked", ...milestone };
   }
   return {
     status: "earned",
     id: achievement.id,
     name: achievement.name,
-    earnedOn:
-      achievement.unlocked_on === null ? null : formatLongDate(achievement.unlocked_on),
+    earnedOn: earnedOn(achievement),
     explanation: explanation(achievement),
     sourceHref:
       achievement.unlocked_by_session_id === null

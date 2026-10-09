@@ -24,8 +24,8 @@ from app.auth.dependencies import get_jwks
 from app.config import Settings, get_settings
 from app.domain.completion import CompletionOutcome
 from app.domain.exercise import Provenance
-from app.domain.load import LoadKind, ParsedLoad
 from app.domain.fitness_profile import DEFAULT_STRONG_SESSIONS_PER_LEVEL
+from app.domain.load import LoadKind, ParsedLoad
 from app.domain.progression import LOW_EFFORT_MAX
 from app.main import create_app
 from app.repositories.deps import (
@@ -58,6 +58,8 @@ _COVERAGE = (
     ("Biceps Curl", "biceps"),
     ("Plank", "abs"),
 )
+# The catalog ids they are created with, after Back Squat's.
+_COVERAGE_IDS = tuple(range(SQUAT + 1, SQUAT + 1 + len(_COVERAGE)))
 _WEEK = timedelta(days=7)
 
 
@@ -398,7 +400,7 @@ def test_every_earned_family_names_its_crossing_session_and_locked_ones_none():
         "user_x",
         start + 2 * _WEEK,
         1,
-        exercise_ids=(SQUAT, 2, 3, 4, 5, 6),
+        exercise_ids=(SQUAT, *_COVERAGE_IDS),
     )
     _perform(sessions, logged, "user_x", start + 3 * _WEEK - timedelta(days=1), 1)
     fourth_week = _perform(sessions, logged, "user_x", start + 3 * _WEEK, 1)
@@ -418,17 +420,33 @@ def test_every_earned_family_names_its_crossing_session_and_locked_ones_none():
         assert by_id[locked]["unlocked_by_session_id"] is None
 
 
+def test_an_incomplete_session_can_be_the_crossing_session():
+    # Arrange — the fifth Logged Session is Incomplete: the Passport counts work performed
+    client, ctx, sessions, logged, _ = build_client()
+    days = [date(2026, 6, 1) + timedelta(days=i) for i in range(5)]
+    for day in days[:4]:
+        _perform(sessions, logged, "user_i", day, 1)
+    fifth = _perform(
+        sessions,
+        logged,
+        "user_i",
+        days[4],
+        1,
+        outcome=CompletionOutcome.INCOMPLETE.value,
+    )
+
+    # Act
+    five = _achievements_by_id(client, ctx, "user_i")["sessions-5"]
+
+    # Assert
+    assert five["unlocked_by_session_id"] == fifth.id
+
+
 def test_deleting_the_crossing_session_moves_the_source_to_the_next_crossing():
     # Arrange — six Logged Sessions; the fifth crossed the 5-session target
     client, ctx, sessions, logged, _ = build_client()
     days = [date(2026, 6, 1) + timedelta(days=i) for i in range(6)]
     performed = [_perform(sessions, logged, "user_m", day, 1) for day in days]
-    assert (
-        _achievements_by_id(client, ctx, "user_m")["sessions-5"][
-            "unlocked_by_session_id"
-        ]
-        == performed[4].id
-    )
     assert logged.delete(performed[4].id, "user_m") is True
 
     # Act
