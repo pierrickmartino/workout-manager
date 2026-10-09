@@ -271,6 +271,53 @@ def test_first_record_carries_the_lift_set_in_its_crossing_session_on_a_same_dat
     assert first_pr.record.load == _absolute(80.0)
 
 
+def test_first_record_carries_the_heaviest_set_of_its_crossing_session():
+    # Arrange — a session ramping 60 → 100 → 80 kg with no set marked a warm-up, and a
+    # heavier lift in a later session
+    history = [
+        _Session(
+            performed_on=date(2026, 6, 10),
+            logged_sets=[
+                _Set(load=_absolute(60.0)),
+                _Set(load=_absolute(100.0)),
+                _Set(load=_absolute(80.0)),
+            ],
+        ),
+        _Session(
+            performed_on=date(2026, 6, 17),
+            logged_sets=[_Set(load=_absolute(140.0))],
+        ),
+    ]
+
+    # Act
+    record = _by_id(evaluate_achievements(history))["first-pr"].record
+
+    # Assert — the crossing session's heaviest set, never a later session's
+    assert record is not None
+    assert record.load == _absolute(100.0)
+    assert record.performed_on == date(2026, 6, 10)
+
+
+def test_first_record_compares_exercises_in_its_crossing_session_by_estimated_1rm():
+    # Arrange — a light squat logged before a heavier deadlift in the same session
+    history = [
+        _Session(
+            performed_on=date(2026, 6, 10),
+            logged_sets=[
+                _Set(load=_absolute(60.0)),
+                _Set(exercise_id=2, exercise_name="Deadlift", load=_absolute(120.0)),
+            ],
+        )
+    ]
+
+    # Act
+    record = _by_id(evaluate_achievements(history))["first-pr"].record
+
+    # Assert
+    assert record is not None
+    assert record.exercise_name == "Deadlift"
+
+
 def test_first_record_skips_a_heavier_warm_up_set_for_the_working_set():
     # Arrange — a warm-up set carries no Estimated 1RM however heavy (ADR-0065)
     history = [

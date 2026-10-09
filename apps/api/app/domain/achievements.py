@@ -132,19 +132,21 @@ def _has_personal_record(history: Sequence[_LoggedSession]) -> int:
     return 1 if detect_personal_records(logged_set_records(history)) else 0
 
 
-def _first_personal_record(
-    chronological: Sequence[_LoggedSession],
+def _heaviest_first_record(
+    through_crossing: Sequence[_LoggedSession],
 ) -> PersonalRecord | None:
-    """The first Personal Record the history holds — the lift that earned First Record.
+    """The lift that earned First Record: the crossing session's heaviest record set.
 
-    Read off the shared detector rather than re-deciding which sets qualify (ADR-0029).
-    Detection is causal (oldest first), so the earliest record over the whole history is
-    the one the crossing session set; the history arrives in replay order, so a same-date
-    tie resolves exactly as the crossing session does.
+    ``through_crossing`` is the replay up to and including the crossing session. No
+    earlier session in it set a record, so every record the shared detector finds there
+    belongs to the crossing session (ADR-0029: the detector decides which sets qualify).
+    "Heaviest" is the highest Estimated 1RM, the one yardstick every record compares on
+    (ADR-0017), so a ramp of unmarked working sets shows its top set, not its opener. A
+    tie keeps the set logged first.
     """
 
-    records = detect_personal_records(logged_set_records(chronological))
-    return records[0] if records else None
+    records = detect_personal_records(logged_set_records(through_crossing))
+    return max(records, key=lambda record: record.estimated_1rm, default=None)
 
 
 @dataclass(frozen=True)
@@ -156,8 +158,8 @@ class _Definition:
     prefix** — both hold for every metric here, which is what makes ``unlocked_on``
     recoverable by replay.
 
-    ``lift`` names the Personal Record behind an unlocked entry, read over the
-    chronological history; only First Record has one (#653).
+    ``lift`` names the Personal Record behind an unlocked entry, read over the replay up
+    to and including its crossing session; only First Record has one (#653).
     """
 
     id: str
@@ -201,27 +203,27 @@ CATALOG: tuple[_Definition, ...] = (
         "Set your first Personal Record",
         1,
         _has_personal_record,
-        lift=_first_personal_record,
+        lift=_heaviest_first_record,
     ),
 )
 
 
-def _crossing_session(
+def _replay_through_crossing(
     definition: _Definition, chronological: Sequence[_LoggedSession]
-) -> _LoggedSession | None:
-    """The first session whose inclusion makes the prefix satisfy ``definition``'s target.
+) -> Sequence[_LoggedSession]:
+    """The replay up to and including the session whose inclusion first makes the prefix
+    satisfy ``definition``'s target; empty when the whole history falls short.
 
     Sessions are replayed oldest-first; the metric is monotonic over the growing prefix,
-    so the first crossing is the honest source of the unlock and its date the honest
-    unlock date. ``None`` when the whole history falls short, i.e. while locked.
+    so its last session — the first crossing — is the honest source of the unlock and its
+    date the honest unlock date.
     """
 
-    prefix: list[_LoggedSession] = []
-    for session in chronological:
-        prefix.append(session)
+    for end in range(1, len(chronological) + 1):
+        prefix = chronological[:end]
         if definition.metric(prefix) >= definition.target:
-            return session
-    return None
+            return prefix
+    return ()
 
 
 def _evaluate(
@@ -231,9 +233,10 @@ def _evaluate(
 ) -> Achievement:
     current = definition.metric(history)
     unlocked = current >= definition.target
-    crossing = _crossing_session(definition, chronological) if unlocked else None
+    replay = _replay_through_crossing(definition, chronological) if unlocked else ()
+    crossing = replay[-1] if replay else None
     lift = definition.lift
-    record = lift(chronological) if unlocked and lift is not None else None
+    record = lift(replay) if replay and lift is not None else None
     return Achievement(
         id=definition.id,
         name=definition.name,
