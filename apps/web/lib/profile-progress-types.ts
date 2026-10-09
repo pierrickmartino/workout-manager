@@ -15,8 +15,9 @@ export interface OperatorLevel {
 // One evaluated Achievement (F5 Slice 3): a curated, type-neutral milestone projected
 // read-time over the user's Logged history. `unlocked` is whether its predicate holds over
 // the whole current record; `current`/`target` are the live progress a locked badge shows
-// ("Log 25 Sessions — 18/25"); `unlocked_on` is the ISO date it was first earned, or null
-// while locked. Because it is a pure projection of current logs, a badge re-locks if the
+// ("Log 25 Sessions — 18/25"); `unlocked_on` is the ISO date it was first earned and
+// `unlocked_by_session_id` the Logged Session whose logging crossed the target (#652), both
+// null while locked. Because it is a pure projection of current logs, a badge re-locks if the
 // logs behind it are deleted.
 export interface Achievement {
   id: string;
@@ -26,6 +27,7 @@ export interface Achievement {
   current: number;
   target: number;
   unlocked_on: string | null;
+  unlocked_by_session_id: number | null;
 }
 
 // One Training Type's Fitness Level read both ways (ADR-0112). `declared` is the stored

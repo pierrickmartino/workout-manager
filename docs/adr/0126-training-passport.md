@@ -36,8 +36,13 @@ concepts. The API keeps calling them Achievements, the profile progress endpoint
   Stamp in plain words and links to the Logged Session that crossed the threshold. To support
   that, each evaluated Achievement carries `unlocked_by_session_id`: the crossing session the
   existing oldest-first replay already finds when it works out `unlocked_on`. Both come from
-  the same replay, so they always agree. The Stamp page is served from the same profile
-  progress read, so no endpoint is added.
+  the same replay, so they always agree. Sessions performed on the same date replay in id
+  order, so the crossing session never depends on the order the repository returns them in.
+  The Stamp page is served from the same profile progress read, so no endpoint is added; an
+  unknown id is not found, and a locked Achievement's page shows criteria and progress with no
+  source link. The page is one level deeper than the Passport, so its links slide forward and
+  it has a back link (ADR-0121); the source record sits in History, a related place, so that
+  link carries no direction.
 - **The First Record Stamp shows its lift.** `first-pr` carries a nullable `record`, shaped like
   the Personal Record serialisation. It is derived through the shared Personal Record
   definition, never by re-deriving which sets qualify. A bodyweight lift reads as "bodyweight +
@@ -73,5 +78,6 @@ concepts. The API keeps calling them Achievements, the profile progress endpoint
   this record first (#650), with the existing icons and no API change; then First Session and
   the empty Passport (#651); the Stamp page with its source session (#652); the First Record
   lift (#653); and the generated art (#654).
-- The Passport and its disclosure, in both states, and the empty Passport are journeys in the
-  reflow audit (`passport`, `passport-open`, `passport-empty`), at 320px and 200% text.
+- The Passport and its disclosure, in both states, the empty Passport and the Stamp page,
+  earned and locked, are journeys in the reflow audit (`passport`, `passport-open`,
+  `passport-empty`, `stamp`, `stamp-locked`), at 320px and 200% text.

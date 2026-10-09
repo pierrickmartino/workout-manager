@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from itertools import count
 
 from app.domain.achievements import CATALOG, Achievement, evaluate_achievements
 from app.domain.load import LoadKind, ParsedLoad
@@ -46,12 +47,19 @@ class _Set:
         return reps_quantity(self.reps)
 
 
+_IDS = count(1)
+
+
 @dataclass
 class _Session:
-    """Minimal stand-in for a Logged Session: its date and its ordered Logged Sets."""
+    """Minimal stand-in for a Logged Session: its id, date and ordered Logged Sets.
+
+    The id defaults to the next in a running sequence, so sessions built later get larger
+    ids — the order a database assigns them in."""
 
     performed_on: date
     logged_sets: list[_Set] = field(default_factory=list)
+    id: int = field(default_factory=lambda: next(_IDS))
 
 
 def _absolute(kg: float) -> dict:
@@ -257,3 +265,93 @@ def test_progress_can_exceed_a_met_target_without_capping():
     # Assert — current is the honest raw count, not clamped to the target
     assert twenty_five.unlocked is True
     assert twenty_five.current == 30
+
+
+# --- the crossing Logged Session (#652) ---
+
+
+def test_a_streak_milestone_names_the_session_that_completed_the_run():
+    # Arrange — one session a week for five weeks: the fourth completes the 4-week run
+    start = date(2026, 3, 2)  # a Monday
+    history = _sessions_on([start + i * _WEEK for i in range(5)])
+
+    # Act
+    streak = _by_id(evaluate_achievements(history))["streak-4"]
+
+    # Assert
+    assert streak.unlocked_by_session_id == history[3].id
+
+
+def test_full_coverage_names_the_session_that_trained_the_last_group():
+    # Arrange — five groups over two sessions, then the sixth (core) in a third
+    history = [
+        _Session(
+            performed_on=date(2026, 5, 1),
+            logged_sets=[
+                _Set(targeted_muscles=["quadriceps"]),
+                _Set(targeted_muscles=["chest"]),
+                _Set(targeted_muscles=["lats"]),
+            ],
+        ),
+        _Session(
+            performed_on=date(2026, 5, 4),
+            logged_sets=[
+                _Set(targeted_muscles=["deltoids"]),
+                _Set(targeted_muscles=["biceps"]),
+            ],
+        ),
+        _Session(
+            performed_on=date(2026, 5, 8),
+            logged_sets=[_Set(targeted_muscles=["abs"])],
+        ),
+        _Session(
+            performed_on=date(2026, 5, 9),
+            logged_sets=[_Set(targeted_muscles=["abs"])],
+        ),
+    ]
+
+    # Act
+    coverage = _by_id(evaluate_achievements(history))["muscle-all"]
+
+    # Assert — the third session crossed six; the fourth adds nothing new
+    assert coverage.unlocked_on == date(2026, 5, 8)
+    assert coverage.unlocked_by_session_id == history[2].id
+
+
+def test_a_same_date_tie_credits_the_session_logged_first():
+    # Arrange — two sessions on one day, fed newest-first as the repository returns them
+    day = date(2026, 6, 2)
+    earlier, later = _Session(performed_on=day), _Session(performed_on=day)
+
+    # Act
+    first = _by_id(evaluate_achievements([later, earlier]))["sessions-1"]
+
+    # Assert — the lower id was logged first, whatever order the history arrives in
+    assert first.unlocked_by_session_id == earlier.id
+
+
+def test_a_locked_achievement_names_no_session():
+    # Arrange — four sessions, short of five
+    history = _sessions_on([date(2026, 6, 1) + timedelta(days=i) for i in range(4)])
+
+    # Act
+    five = _by_id(evaluate_achievements(history))["sessions-5"]
+
+    # Assert
+    assert five.unlocked_by_session_id is None
+
+
+def test_deleting_the_crossing_session_moves_the_source_to_the_next_one():
+    # Arrange — six sessions; the fifth crossed the 5-session target
+    dates = [date(2026, 6, 1) + timedelta(days=i) for i in range(6)]
+    history = _sessions_on(dates)
+    crossing = history[4]
+
+    # Act — the crossing session is deleted
+    five = _by_id(
+        evaluate_achievements([s for s in history if s is not crossing])
+    )["sessions-5"]
+
+    # Assert — the sixth session now crosses, and the date follows it
+    assert five.unlocked_by_session_id == history[5].id
+    assert five.unlocked_on == dates[5]

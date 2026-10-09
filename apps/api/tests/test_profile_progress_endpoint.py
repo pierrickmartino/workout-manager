@@ -24,6 +24,7 @@ from app.auth.dependencies import get_jwks
 from app.config import Settings, get_settings
 from app.domain.completion import CompletionOutcome
 from app.domain.exercise import Provenance
+from app.domain.load import LoadKind, ParsedLoad
 from app.domain.fitness_profile import DEFAULT_STRONG_SESSIONS_PER_LEVEL
 from app.domain.progression import LOW_EFFORT_MAX
 from app.main import create_app
@@ -48,6 +49,15 @@ from app.repositories.session_repository import (
 from tests.conftest import ISSUER, make_signing_context
 
 SQUAT = 1
+# One more catalog Exercise per remaining real Muscle Group, so a history can reach Full
+# Coverage over HTTP: with Back Squat's quadriceps they make all six.
+_COVERAGE = (
+    ("Bench Press", "chest"),
+    ("Pull-Up", "lats"),
+    ("Overhead Press", "deltoids"),
+    ("Biceps Curl", "biceps"),
+    ("Plank", "abs"),
+)
 _WEEK = timedelta(days=7)
 
 
@@ -66,6 +76,10 @@ def build_client(ctx=None):
         provenance=Provenance.CURATED,
         targeted_muscles=["quadriceps", "glutes"],
     )
+    for name, muscle in _COVERAGE:
+        exercises.find_or_create(
+            name, provenance=Provenance.CURATED, targeted_muscles=[muscle]
+        )
     sessions = InMemorySessionRepository(exercises)
     logged = InMemoryLoggedSessionRepository(sessions, exercises)
     # The Fitness Level standing's second input: the stored Declared levels (ADR-0112).
@@ -100,6 +114,8 @@ def _perform(
     training_type="strength",
     outcome=None,
     effort=None,
+    exercise_ids=(SQUAT,),
+    load=None,
 ):
     """Record one performance, optionally carrying the two signals the Effective
     Fitness Level reads: the declared Completion Outcome and the rated Effort. Returns
@@ -121,10 +137,12 @@ def _perform(
             completion_outcome=outcome,
             logged_sets=[
                 LoggedSetDraft(
-                    exercise_id=SQUAT,
+                    exercise_id=exercise_id,
                     quantity=reps_quantity(5),
+                    load=load,
                     perceived_difficulty=effort,
                 )
+                for exercise_id in exercise_ids
                 for _ in range(set_count)
             ],
         ),
@@ -240,8 +258,8 @@ def test_serializes_an_unlocked_achievement_with_its_earned_date():
     # Arrange — five Logged Sessions unlock the 5-session badge; the fifth is dated
     client, ctx, sessions, logged, _ = build_client()
     first_five = [date(2026, 6, 1) + timedelta(days=i) for i in range(5)]
-    for day in first_five:
-        _perform(sessions, logged, "user_e", day, 1)
+    performed = [_perform(sessions, logged, "user_e", day, 1) for day in first_five]
+    fifth = performed[4]
 
     # Act
     response = client.get("/api/profile/progress", headers=_auth(ctx, "user_e"))
@@ -259,6 +277,7 @@ def test_serializes_an_unlocked_achievement_with_its_earned_date():
         "current": 5,
         "target": 5,
         "unlocked_on": first_five[4].isoformat(),
+        "unlocked_by_session_id": fifth.id,
     }
     # A still-locked badge carries live progress and no date.
     assert by_id["sessions-25"]["unlocked"] is False
@@ -291,6 +310,7 @@ def test_a_new_user_sees_first_session_first_in_the_catalog_locked_at_zero():
         "current": 0,
         "target": 1,
         "unlocked_on": None,
+        "unlocked_by_session_id": None,
     }
 
 
@@ -298,7 +318,7 @@ def test_the_first_logged_session_earns_first_session_dated_on_that_session():
     # Arrange — two Logged Sessions; the earlier one is the first
     client, ctx, sessions, logged, _ = build_client()
     _perform(sessions, logged, "user_f", date(2026, 6, 9), 1)
-    _perform(sessions, logged, "user_f", date(2026, 6, 2), 1)
+    earliest = _perform(sessions, logged, "user_f", date(2026, 6, 2), 1)
 
     # Act
     first = _first_session(client, ctx, "user_f")
@@ -308,6 +328,7 @@ def test_the_first_logged_session_earns_first_session_dated_on_that_session():
     assert first["unlocked"] is True
     assert first["current"] == 2
     assert first["unlocked_on"] == "2026-06-02"
+    assert first["unlocked_by_session_id"] == earliest.id
 
 
 def test_a_partially_completed_session_still_earns_first_session():
@@ -344,6 +365,94 @@ def test_deleting_the_only_logged_session_locks_first_session_again():
     assert first["unlocked"] is False
     assert first["current"] == 0
     assert first["unlocked_on"] is None
+    assert first["unlocked_by_session_id"] is None
+
+
+# --- the crossing Logged Session behind each Stamp (#652) ---
+
+
+def _achievements_by_id(client, ctx, user):
+    response = client.get("/api/profile/progress", headers=_auth(ctx, user))
+    assert response.status_code == 200
+    return {a["id"]: a for a in response.json()["data"]["achievements"]}
+
+
+def test_every_earned_family_names_its_crossing_session_and_locked_ones_none():
+    # Arrange — four consecutive weeks: the first week lifts an absolute load (a record),
+    # the third trains every Muscle Group, the fourth completes the 4-week run and is the
+    # fifth Logged Session overall
+    client, ctx, sessions, logged, _ = build_client()
+    start = date(2026, 3, 2)  # a Monday
+    record = _perform(
+        sessions,
+        logged,
+        "user_x",
+        start,
+        1,
+        load=ParsedLoad(kind=LoadKind.ABSOLUTE, text="100 kg", kg=100.0).to_dict(),
+    )
+    _perform(sessions, logged, "user_x", start + _WEEK, 1)
+    coverage = _perform(
+        sessions,
+        logged,
+        "user_x",
+        start + 2 * _WEEK,
+        1,
+        exercise_ids=(SQUAT, 2, 3, 4, 5, 6),
+    )
+    _perform(sessions, logged, "user_x", start + 3 * _WEEK - timedelta(days=1), 1)
+    fourth_week = _perform(sessions, logged, "user_x", start + 3 * _WEEK, 1)
+
+    # Act
+    by_id = _achievements_by_id(client, ctx, "user_x")
+
+    # Assert — each family names the session that crossed its target
+    assert by_id["sessions-1"]["unlocked_by_session_id"] == record.id
+    assert by_id["sessions-5"]["unlocked_by_session_id"] == fourth_week.id
+    assert by_id["streak-4"]["unlocked_by_session_id"] == fourth_week.id
+    assert by_id["muscle-all"]["unlocked_by_session_id"] == coverage.id
+    assert by_id["first-pr"]["unlocked_by_session_id"] == record.id
+    # ...and every locked one names none
+    for locked in ("sessions-25", "sessions-100", "streak-12"):
+        assert by_id[locked]["unlocked"] is False
+        assert by_id[locked]["unlocked_by_session_id"] is None
+
+
+def test_deleting_the_crossing_session_moves_the_source_to_the_next_crossing():
+    # Arrange — six Logged Sessions; the fifth crossed the 5-session target
+    client, ctx, sessions, logged, _ = build_client()
+    days = [date(2026, 6, 1) + timedelta(days=i) for i in range(6)]
+    performed = [_perform(sessions, logged, "user_m", day, 1) for day in days]
+    assert (
+        _achievements_by_id(client, ctx, "user_m")["sessions-5"][
+            "unlocked_by_session_id"
+        ]
+        == performed[4].id
+    )
+    assert logged.delete(performed[4].id, "user_m") is True
+
+    # Act
+    five = _achievements_by_id(client, ctx, "user_m")["sessions-5"]
+
+    # Assert — the sixth session now crosses; the link never names the deleted record
+    assert five["unlocked"] is True
+    assert five["unlocked_by_session_id"] == performed[5].id
+    assert five["unlocked_on"] == days[5].isoformat()
+
+
+def test_deleting_the_crossing_session_with_no_successor_locks_the_stamp_again():
+    # Arrange — exactly five Logged Sessions; the last one crossed the target
+    client, ctx, sessions, logged, _ = build_client()
+    days = [date(2026, 6, 1) + timedelta(days=i) for i in range(5)]
+    performed = [_perform(sessions, logged, "user_n", day, 1) for day in days]
+    assert logged.delete(performed[4].id, "user_n") is True
+
+    # Act
+    five = _achievements_by_id(client, ctx, "user_n")["sessions-5"]
+
+    # Assert
+    assert five["unlocked"] is False
+    assert five["unlocked_by_session_id"] is None
 
 
 def test_requires_authentication():

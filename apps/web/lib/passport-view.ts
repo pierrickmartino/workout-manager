@@ -7,6 +7,8 @@ export interface Stamp {
   name: string;
   // The date it was earned, with the year ("Jul 4, 2026"), or null if the API sent none.
   earnedOn: string | null;
+  // The Stamp's own page (#652).
+  href: string;
 }
 
 // One locked Achievement, with its live progress toward the target and a clamped 0–1 `fill`
@@ -17,6 +19,8 @@ export interface Milestone {
   criteria: string;
   progress: string;
   fill: number;
+  // The Achievement's own page, which a locked one opens too (#652).
+  href: string;
 }
 
 // The Training Passport: the Achievements presented as a collection (ADR-0126).
@@ -65,6 +69,12 @@ function progressLabel(achievement: Achievement): string {
     : fraction;
 }
 
+// Every Achievement, earned or locked, opens its own page under the Achievements route, keyed
+// by its id (#652).
+export function stampHref(id: string): string {
+  return `/profile/achievements/${encodeURIComponent(id)}`;
+}
+
 function toMilestone(achievement: Achievement): Milestone {
   return {
     id: achievement.id,
@@ -72,6 +82,7 @@ function toMilestone(achievement: Achievement): Milestone {
     criteria: achievement.criteria,
     progress: progressLabel(achievement),
     fill: ratio(achievement),
+    href: stampHref(achievement.id),
   };
 }
 
@@ -101,6 +112,7 @@ export function toPassport(achievements: readonly Achievement[]): Passport {
       name: achievement.name,
       earnedOn:
         achievement.unlocked_on === null ? null : formatLongDate(achievement.unlocked_on),
+      href: stampHref(achievement.id),
     }));
   const locked = catalog.filter(({ achievement }) => !achievement.unlocked);
   const next = closestToEarned(locked);
@@ -112,5 +124,93 @@ export function toPassport(achievements: readonly Achievement[]): Passport {
     empty: stamps.length === 0,
     next: next === null ? null : toMilestone(next.achievement),
     moreToEarn,
+  };
+}
+
+// An earned Achievement's page: what earned it in plain words, and a link to the Logged Session
+// whose logging crossed its target (#652).
+export interface EarnedStampDetail {
+  status: "earned";
+  id: string;
+  name: string;
+  // The earned date with the year, or null if the API sent none.
+  earnedOn: string | null;
+  explanation: string;
+  // The crossing Logged Session's detail page in History, or null if the API named none — no
+  // link rather than one to a missing record.
+  sourceHref: string | null;
+}
+
+// A locked Achievement's page: its criteria and live progress, and no source to link.
+export interface LockedStampDetail extends Omit<Milestone, "href"> {
+  status: "locked";
+}
+
+export type StampDetail = EarnedStampDetail | LockedStampDetail;
+
+// "1st", "2nd", "3rd", "4th"… with the teens all "th"; the first of anything reads as a word.
+function ordinal(n: number): string {
+  if (n === 1) {
+    return "first";
+  }
+  const lastTwo = n % 100;
+  if (lastTwo >= 11 && lastTwo <= 13) {
+    return `${n}th`;
+  }
+  const suffix = ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th";
+  return `${n}${suffix}`;
+}
+
+// What the crossing session did, per Achievement family. The family is the id's prefix, as in
+// the progress copy; the count is the target, since the crossing session is the one that
+// reached it. Streaks count consecutive weeks, never a run that could be broken (ADR-0019).
+function explanation(achievement: Achievement): string {
+  const { id, target } = achievement;
+  if (id.startsWith("sessions-")) {
+    return `This was your ${ordinal(target)} logged session.`;
+  }
+  if (id.startsWith(STREAK_PREFIX)) {
+    return `Your ${ordinal(target)} consecutive week of training was completed with this session.`;
+  }
+  if (id === "muscle-all") {
+    return "With this session you had trained all six muscle groups.";
+  }
+  if (id === "first-pr") {
+    return "This session set your first personal record.";
+  }
+  return `This session met the criteria: ${achievement.criteria}.`;
+}
+
+// The Stamp page for one Achievement, read from the same profile progress the Passport is: no
+// endpoint of its own. Null when the catalog holds no such id, so the page renders not-found.
+export function toStampDetail(
+  achievements: readonly Achievement[],
+  id: string,
+): StampDetail | null {
+  const achievement = achievements.find((candidate) => candidate.id === id);
+  if (achievement === undefined) {
+    return null;
+  }
+  if (!achievement.unlocked) {
+    return {
+      status: "locked",
+      id: achievement.id,
+      name: achievement.name,
+      criteria: achievement.criteria,
+      progress: progressLabel(achievement),
+      fill: ratio(achievement),
+    };
+  }
+  return {
+    status: "earned",
+    id: achievement.id,
+    name: achievement.name,
+    earnedOn:
+      achievement.unlocked_on === null ? null : formatLongDate(achievement.unlocked_on),
+    explanation: explanation(achievement),
+    sourceHref:
+      achievement.unlocked_by_session_id === null
+        ? null
+        : `/history/${achievement.unlocked_by_session_id}`,
   };
 }
