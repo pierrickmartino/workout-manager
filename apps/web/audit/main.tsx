@@ -56,6 +56,8 @@ import { BuildWorkoutLink, GenerateTrainingLaunchpad, LogPastWorkoutLink } from 
 import { FitnessLevelStandings } from "@/components/pulse/fitness-level-standings";
 import { toFitnessLevelRows } from "@/lib/fitness-level-standing";
 import { ProtocolsIndex } from "@/components/ProtocolsIndex";
+import { TrainingPassport } from "@/components/pulse/training-passport";
+import { toPassport } from "@/lib/passport-view";
 import { SetAsideNote } from "@/components/SetAsideNote";
 import { protocolsIndex, type LiveSessionContext } from "@/lib/protocols-index";
 import { adminExerciseRows, auditEntry, exerciseDetail, exerciseNames, exercises, history, liveWorkout, personalRecords, prescriptions, profile, protocolIndexEntries, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
@@ -255,6 +257,22 @@ function FitnessLevelSurface() {
   ])} />;
 }
 
+// The Training Passport (ADR-0126) over the real catalog: three Stamps earned across two years,
+// the 4-Week Streak as the next milestone (its "best run" copy is the longest progress label),
+// and three Achievements under "More to earn". The disclosure renders its list only while open,
+// so `passport` measures it closed and `passport-open` open; a state no journey mounts is
+// unmeasured. The Profile summary is the same `PassportStamps` and `NextMilestone`, so it is
+// covered by the first two sections here.
+const passport = toPassport([
+  { id: "sessions-5", name: "5 Sessions", criteria: "Log 5 Sessions", unlocked: true, current: 31, target: 5, unlocked_on: "2025-11-14" },
+  { id: "sessions-25", name: "25 Sessions", criteria: "Log 25 Sessions", unlocked: true, current: 31, target: 25, unlocked_on: "2026-08-02" },
+  { id: "sessions-100", name: "100 Sessions", criteria: "Log 100 Sessions", unlocked: false, current: 31, target: 100, unlocked_on: null },
+  { id: "streak-4", name: "4-Week Streak", criteria: "Train 4 weeks in a row", unlocked: false, current: 3, target: 4, unlocked_on: null },
+  { id: "streak-12", name: "12-Week Streak", criteria: "Train 12 weeks in a row", unlocked: false, current: 3, target: 12, unlocked_on: null },
+  { id: "muscle-all", name: "Full Coverage", criteria: "Train all six Muscle Groups", unlocked: false, current: 4, target: 6, unlocked_on: null },
+  { id: "first-pr", name: "First Record", criteria: "Set your first Personal Record", unlocked: true, current: 1, target: 1, unlocked_on: "2025-11-14" },
+]);
+
 // The Load kinds the two Hand-Authored journeys seed, one per row. The Load value field's unit
 // suffix and placeholder follow the kind (ADR-0114), and the widest suffix ("+kg") and widest
 // placeholder ("60-70") belong to different kinds. `creation` takes all three; `creation-logged`
@@ -317,6 +335,8 @@ function Content() {
     // (ADR-0125). It renders only on that landing, so no other journey shows it; the label is
     // the worst an authored name can be, 120 unbroken characters.
     case "set-aside": return <SetAsideNote label={"W".repeat(120)} />;
+    case "passport": return <TrainingPassport passport={passport} />;
+    case "passport-open": return <TrainingPassport passport={passport} moreToEarnOpen />;
     case "contrast": return <ContrastSamples />;
     default: throw new Error(`Unknown audit journey: ${journey}`);
   }

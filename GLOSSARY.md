@@ -390,6 +390,7 @@ _Avoid_: Activity heatmap (activity is vague), Contribution graph, daily streak 
 
 **Achievement**:
 A named, curated training milestone a user unlocks when their logged history satisfies its predicate — e.g. a session-count threshold, a Streak length, covering all six Muscle Groups, or a first Personal Record. A milestone that names another term reads **that term's own definition**, never a private variant: the first-Personal-Record milestone qualifies a set exactly as a Personal Record does, so a **bodyweight** set carrying a Performed Body Weight unlocks it on the same basis it sets a record on Home, Analytics, and Exercise Detail. Evaluated **read-time** over the record like a Personal Record: "unlocked" iff the predicate currently holds, with an honest unlock date recovered as the earliest point in the replayed history where it first held — there is no achievement table and no unlock write hook. The catalog is **curated and fixed** (like the Muscle Group buckets), not AI-generated, and deliberately **type-neutral** so a yoga or mobility user is never faced with an all-locked strength wall. A locked Achievement shows its criteria and live progress. Because it is a pure predicate over current logs, an Achievement can **re-lock** if the logs behind it are deleted — the same non-monotonicity as Operator Level.
+Presented as a **Stamp** in the **Training Passport**; not a separate concept (ADR-0126).
 _Avoid_: Badge (as a separate concept — it is the visual of an Achievement), trophy, unlock record, reward
 
 ## Feedback

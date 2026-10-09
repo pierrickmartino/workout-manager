@@ -7,7 +7,7 @@ import { fetchTrainingHeatmap } from "@/lib/heatmap";
 import { toHeatmapGrid } from "@/lib/heatmap-view";
 import { resolveAppearance } from "@/lib/appearance";
 import { resolveIsAdmin } from "@/lib/admin";
-import { toAchievementCards } from "@/lib/achievements-view";
+import { toPassport } from "@/lib/passport-view";
 import { toFitnessLevelRows } from "@/lib/fitness-level-standing";
 import { AppearanceModePicker } from "@/components/AppearanceModePicker";
 import { AppearanceKeepAwakeToggle } from "@/components/AppearanceKeepAwakeToggle";
@@ -17,7 +17,7 @@ import { SectionHeader } from "@/components/pulse/section-header";
 import { NavRow } from "@/components/pulse/nav-row";
 import { SignOutRow } from "@/components/pulse/sign-out-row";
 import { LevelBadge } from "@/components/pulse/level-badge";
-import { AchievementWall } from "@/components/pulse/achievement-wall";
+import { PassportHighlights } from "@/components/pulse/training-passport";
 import { TrainingHeatmap } from "@/components/pulse/training-heatmap";
 import { FitnessProfileSummary } from "@/components/pulse/fitness-profile-summary";
 import { FitnessLevelStandings } from "@/components/pulse/fitness-level-standings";
@@ -26,19 +26,15 @@ import { Alert } from "@/components/pulse/alert";
 import { Card } from "@/components/ui/card";
 import { NAV_FORWARD } from "@/lib/nav-direction";
 
-// How many badges the compact Profile summary shows before the "see all" affordance
-// reaches the full catalog — keeping the summary short (ADR-0019).
-const SUMMARY_COUNT = 4;
-
 // The Profile view screen (F5 Slices 1–2): the net-new landing page for the Profile tab,
 // which until now had only the edit form. It reflects the user's real training back to
 // them, honestly — the Operator Level with an XP progress bar, the weekly Streak, and the
 // lifetime Total Sessions / Total Sets, all derived read-time from Logged Sessions
 // (ADR-0018) — plus the two account affordances that belong here: a link to the Fitness
 // Profile edit form and an explicit log-out. A brand-new user with no history sees
-// sensible zero states (Level 1, 0 XP, no streak), not an error. Later F5 slices layer
-// Achievements onto this same spine — a compact wall with a "see all" affordance to the
-// full catalog.
+// sensible zero states (Level 1, 0 XP, no streak), not an error. The Training Passport
+// summary (ADR-0126) shows the earned Stamps and the next milestone, and links to the full
+// Passport, where the rest of the locked Achievements wait behind "More to earn".
 export default async function ProfilePage() {
   // Resolve everything the page needs in parallel. `resolveActiveSkin` /
   // `resolveIsAdmin` share this request's cache with the root layout, so the extra
@@ -77,7 +73,7 @@ export default async function ProfilePage() {
     achievements,
     fitness_levels,
   } = envelope.data;
-  const cards = toAchievementCards(achievements);
+  const passport = toPassport(achievements);
   // The Fitness Level standing (ADR-0112): one row per *declared* Training Type. It comes from
   // the progress read model, beside Operator Level, and never from the Profile endpoint —
   // whose `fitness_levels` field the edit form writes back, so a derived level placed there
@@ -89,7 +85,6 @@ export default async function ProfilePage() {
     heatmapEnvelope.success && heatmapEnvelope.data
       ? toHeatmapGrid(heatmapEnvelope.data)
       : null;
-  const unlockedCount = cards.filter((card) => card.unlocked).length;
 
   return (
     <section className="flex flex-col gap-6">
@@ -127,20 +122,18 @@ export default async function ProfilePage() {
       <div className="flex flex-col gap-4">
         <SectionHeader
           meta={
-            cards.length > SUMMARY_COUNT ? (
-              <Link
-                {...NAV_FORWARD}
-                href="/profile/achievements"
-                className="transition-colors hover:text-cyan"
-              >
-                SEE ALL →
-              </Link>
-            ) : undefined
+            <Link
+              {...NAV_FORWARD}
+              href="/profile/achievements"
+              className="transition-colors hover:text-cyan"
+            >
+              OPEN PASSPORT →
+            </Link>
           }
         >
-          ACHIEVEMENTS · {unlockedCount}/{cards.length}
+          TRAINING PASSPORT · {passport.stamps.length}/{achievements.length}
         </SectionHeader>
-        <AchievementWall cards={cards.slice(0, SUMMARY_COUNT)} />
+        <PassportHighlights passport={passport} headingLevel={3} />
       </div>
 
       <div className="flex flex-col gap-4">

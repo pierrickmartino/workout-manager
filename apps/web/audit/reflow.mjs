@@ -70,9 +70,12 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // reason and a Resume link.
 // `set-aside` joins them with ADR-0125: the note a generated Protocol lands with, naming the
 // Protocol it set aside, renders only on that landing, and its label is an authored name.
+// `passport` and `passport-open` join them with ADR-0126: the Training Passport replaced the
+// achievement wall, and its "More to earn" list renders only while the disclosure is open, so
+// each state is a journey of its own.
 const NOVEL_JOURNEYS = [
   "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc", "launchpad",
-  "levels", "sheet", "protocols", "protocols-live", "set-aside",
+  "levels", "sheet", "protocols", "protocols-live", "set-aside", "passport", "passport-open",
 ];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and
