@@ -120,9 +120,10 @@ export async function drainOutbox(
 // (#636) — the only way one leaves the store; deliverable entries are kept.
 export async function dismissOrphanedFinishes(accountId: string | null): Promise<void> {
   const stored = await loadOutbox();
-  const kept = new Set(dismissOrphaned(stored, accountId).map((e) => e.key));
-  for (const entry of stored) {
-    if (!kept.has(entry.key)) await removeOutboxEntry(entry.key);
+  const remaining = dismissOrphaned(stored, accountId);
+  const dismissed = stored.filter((e) => !remaining.includes(e));
+  for (const entry of dismissed) {
+    await removeOutboxEntry(entry.key);
   }
   notifyOutboxChange();
 }

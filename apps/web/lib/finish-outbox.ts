@@ -9,6 +9,7 @@
 // Every function returns a NEW array and never mutates its input (coding-style:
 // immutability), so a caller can persist the result without aliasing the prior queue.
 
+import type { Envelope } from "./api.ts";
 import type { LogSessionInput } from "./logs-types.ts";
 
 // Where one queued finish sits in its delivery lifecycle. There is no "synced" status:
@@ -42,9 +43,9 @@ export interface OutboxEntry {
 }
 
 // Shown for an orphaned finish (#636). Says what happened and what it means for the
-// workout, rather than echoing the server's terse "Session not found".
+// finish, rather than echoing the server's terse "Session not found".
 export const FINISH_ORPHANED_MESSAGE =
-  "This session’s plan no longer exists — it was deleted, maybe on another device — so this workout can’t be saved.";
+  "This session no longer exists — it was deleted, maybe on another device — so this finish can’t be saved.";
 
 // A server-side rejection that names no cause of its own.
 const SYNC_FAILED_MESSAGE = "Could not sync your session.";
@@ -64,7 +65,7 @@ export type DeliveryResult =
 // is not classified here — the drain treats a thrown delivery as unreachable.)
 export function classifyDelivery(
   status: number,
-  envelope: { success: boolean; data: unknown; error: string | null },
+  envelope: Envelope<unknown>,
 ): DeliveryResult {
   if (envelope.success && envelope.data) return { outcome: "delivered" };
   if (status === HTTP_NOT_FOUND) {

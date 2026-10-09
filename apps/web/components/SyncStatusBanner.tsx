@@ -10,6 +10,7 @@ import {
   WifiOff,
 } from "@/components/pulse/icons";
 
+import { FINISH_ORPHANED_MESSAGE } from "@/lib/finish-outbox";
 import { useSyncStatus } from "@/lib/use-sync-status";
 import { hasQueuedWork, type SyncState } from "@/lib/sync-state";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { persistentTransitionStyle } from "@/lib/persistent-transition";
 
 // The honest connectivity + sync surface (issue #414 — ADR-0060). Mounted once under the
-// signed-in shell alongside the OutboxSyncRegistrar, it renders the five distinct states the
+// signed-in shell alongside the OutboxSyncRegistrar, it renders the six distinct states the
 // pure `deriveSyncState` seam decides — offline / saved-locally / syncing / synced / failed /
 // orphaned — and never collapses them into one generic error. Non-blocking: a slim banner pinned above
 // the bottom tab bar, never a modal, so it never interrupts training.
@@ -231,8 +232,8 @@ function renderMessage(
             {orphanedCount > 1 ? `${orphanedCount} sessions` : "Session"} not saved.
           </span>{" "}
           {orphanedCount > 1
-            ? "Their plans no longer exist — deleted, maybe on another device — so these workouts can’t be saved."
-            : "Its plan no longer exists — deleted, maybe on another device — so this workout can’t be saved."}
+            ? "These sessions no longer exist — they were deleted, maybe on another device — so these finishes can’t be saved."
+            : FINISH_ORPHANED_MESSAGE}
         </span>
       );
   }
