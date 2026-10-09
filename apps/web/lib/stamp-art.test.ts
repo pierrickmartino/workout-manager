@@ -1,7 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { computeStampGeometry, stampDesign } from "./stamp-art.ts";
+import {
+  computeStampGeometry,
+  stampDesign,
+  STAMP_VIEWBOX,
+  type StampGeometry,
+  type StampState,
+} from "./stamp-art.ts";
 
 // `stamp-art` is the pure engine behind every Stamp's illustration (#654), a sibling of the
 // workout sigil. It is asserted on its structure — silhouette kind, ring and segment count,
@@ -19,6 +25,14 @@ const CATALOG_IDS = [
   "first-pr",
 ] as const;
 
+const STATES: readonly StampState[] = ["earned", "next"];
+
+function geometryOf(id: string, state: StampState): StampGeometry {
+  const design = stampDesign(id);
+  assert.ok(design !== null, `${id} has no Stamp design`);
+  return computeStampGeometry(design, state);
+}
+
 test("every catalog Achievement maps to a distinct family and tier", () => {
   // Arrange & Act
   const designs = CATALOG_IDS.map((id) => stampDesign(id));
@@ -31,100 +45,72 @@ test("every catalog Achievement maps to a distinct family and tier", () => {
   assert.equal(new Set(keys).size, CATALOG_IDS.length);
 });
 
-test("each Achievement family is drawn with its own silhouette", () => {
-  // Arrange & Act
-  const silhouetteOf = (id: string): string => {
-    const design = stampDesign(id);
-    assert.ok(design !== null);
-    return computeStampGeometry(design, "earned").silhouette.kind;
+test("each Stamp's silhouette, rings and segments, in both states", () => {
+  // Arrange: per Achievement, the family's silhouette and the tier's marks — inner rings for
+  // 1 / 5 / 25 / 100 Sessions, one segment per week for the 4- and 12-week streaks.
+  const expected: Record<(typeof CATALOG_IDS)[number], [string, number, number]> = {
+    "sessions-1": ["circle", 1, 0],
+    "sessions-5": ["circle", 2, 0],
+    "sessions-25": ["circle", 3, 0],
+    "sessions-100": ["circle", 4, 0],
+    "streak-4": ["hexagon", 1, 4],
+    "streak-12": ["hexagon", 1, 12],
+    "muscle-all": ["square", 1, 0],
+    "first-pr": ["notched-circle", 1, 0],
   };
 
-  // Assert
-  assert.equal(silhouetteOf("sessions-25"), "circle");
-  assert.equal(silhouetteOf("streak-4"), "hexagon");
-  assert.equal(silhouetteOf("muscle-all"), "square");
-  assert.equal(silhouetteOf("first-pr"), "notched-circle");
+  for (const id of CATALOG_IDS) {
+    for (const state of STATES) {
+      // Act
+      const { silhouette, rings, segments } = geometryOf(id, state);
+
+      // Assert: the state changes the treatment, never the structure.
+      assert.deepEqual(
+        [silhouette.kind, rings.length, segments.length],
+        expected[id],
+        `${id} (${state})`,
+      );
+    }
+  }
 });
 
-test("a higher session tier adds an inner ring: 1, 5, 25 and 100 Sessions", () => {
-  // Arrange & Act
-  const rings = ["sessions-1", "sessions-5", "sessions-25", "sessions-100"].map((id) => {
-    const design = stampDesign(id);
-    assert.ok(design !== null);
-    return computeStampGeometry(design, "earned").rings.length;
-  });
-
-  // Assert
-  assert.deepEqual(rings, [1, 2, 3, 4]);
-});
-
-test("a week-streak Stamp carries one segment per week: 4 and 12", () => {
-  // Arrange & Act
-  const segments = ["streak-4", "streak-12"].map((id) => {
-    const design = stampDesign(id);
-    assert.ok(design !== null);
-    return computeStampGeometry(design, "earned").segments.length;
-  });
-
-  // Assert
-  assert.deepEqual(segments, [4, 12]);
-});
-
-test("an earned Stamp is filled ink and the next milestone a muted outline", () => {
-  // Arrange
-  const design = { family: "sessions", tier: 2 } as const;
-
-  // Act
-  const earned = computeStampGeometry(design, "earned");
-  const next = computeStampGeometry(design, "next");
-
-  // Assert: the state changes the treatment, never the structure.
-  assert.equal(earned.filled, true);
-  assert.equal(next.filled, false);
-  assert.equal(next.accent, "muted");
-  assert.deepEqual(next.silhouette, earned.silhouette);
-  assert.deepEqual(next.rings, earned.rings);
+test("an earned Stamp is filled ink and the next milestone an outline", () => {
+  for (const id of CATALOG_IDS) {
+    // Act & Assert
+    assert.equal(geometryOf(id, "earned").filled, true, id);
+    assert.equal(geometryOf(id, "next").filled, false, id);
+  }
 });
 
 test("only the record Stamp carries the violet milestone accent; the rest are teal", () => {
-  // Arrange & Act
-  const accentOf = (id: string): string => {
-    const design = stampDesign(id);
-    assert.ok(design !== null);
-    return computeStampGeometry(design, "earned").accent;
-  };
-
-  // Assert
-  assert.equal(accentOf("first-pr"), "violet");
+  // Act & Assert
+  assert.equal(geometryOf("first-pr", "earned").accent, "violet");
   for (const id of CATALOG_IDS.filter((candidate) => candidate !== "first-pr")) {
-    assert.equal(accentOf(id), "cyan", `${id} should use the teal ink`);
+    assert.equal(geometryOf(id, "earned").accent, "cyan", `${id} should use the teal ink`);
   }
 });
 
 test("an id outside the catalog has no Stamp design, so nothing is drawn", () => {
+  // Act & Assert
   assert.equal(stampDesign("sessions-7"), null);
   assert.equal(stampDesign("unknown"), null);
 });
 
 test("all geometry stays within the Stamp viewbox", () => {
   for (const id of CATALOG_IDS) {
-    // Arrange
-    const design = stampDesign(id);
-    assert.ok(design !== null);
-
     // Act
-    const { silhouette, rings, segments } = computeStampGeometry(design, "earned");
+    const { silhouette, rings, segments } = geometryOf(id, "earned");
 
     // Assert
     const points = [
       ...silhouette.points,
       ...segments.flatMap((segment) => [segment.from, segment.to]),
     ];
-    for (const point of points) {
-      assert.ok(point.x >= 0 && point.x <= 100 && point.y >= 0 && point.y <= 100, `${id}`);
+    for (const { x, y } of points) {
+      assert.ok(x >= 0 && x <= STAMP_VIEWBOX && y >= 0 && y <= STAMP_VIEWBOX, id);
     }
     for (const radius of [silhouette.radius, ...rings]) {
-      assert.ok(radius > 0 && radius <= 50, `${id} radius ${radius}`);
+      assert.ok(radius > 0 && radius <= STAMP_VIEWBOX / 2, `${id} radius ${radius}`);
     }
   }
 });

@@ -20,15 +20,20 @@ export type StampFamily = "sessions" | "streak" | "coverage" | "record";
 // Achievement's page).
 export type StampState = "earned" | "next";
 
-// Earned Stamps wear the Training Atlas teal ink; the violet milestone accent is reserved for
-// the record Stamp. Every outline is muted. Each is an existing Skin token, already measured
-// against every surface in every Skin and Mode (ADR-0081).
-export type StampAccent = "cyan" | "violet" | "muted";
+// The ink an earned Stamp is filled with: the Training Atlas teal, or the violet milestone
+// accent, reserved for the record Stamp. An outline is always muted, whatever its family. Each
+// is an existing Skin token, already measured against every surface in every Skin and Mode
+// (ADR-0081).
+export type StampAccent = "cyan" | "violet";
 
 export interface StampDesign {
-  family: StampFamily;
+  readonly family: StampFamily;
   // 1-based within the family; a higher tier draws more elaborately.
-  tier: number;
+  readonly tier: number;
+  // How the tier is drawn, spelled out per Stamp so a new tier is never clamped onto an old
+  // one's mark: inner rings (sessions: 1 / 5 / 25 / 100) and radial segments (one per week).
+  readonly rings: number;
+  readonly segments: number;
 }
 
 export interface StampPoint {
@@ -39,41 +44,41 @@ export interface StampPoint {
 export type SilhouetteKind = "circle" | "hexagon" | "square" | "notched-circle";
 
 export interface StampSilhouette {
-  kind: SilhouetteKind;
+  readonly kind: SilhouetteKind;
   // The outer radius: the circle's own, or the polygon's circumradius.
-  radius: number;
+  readonly radius: number;
   // The outline's vertices; empty for a plain circle.
-  points: StampPoint[];
+  readonly points: readonly StampPoint[];
 }
 
 // A radial tick: one per week on a streak Stamp.
 export interface StampSegment {
-  from: StampPoint;
-  to: StampPoint;
+  readonly from: StampPoint;
+  readonly to: StampPoint;
 }
 
 export interface StampGeometry {
-  silhouette: StampSilhouette;
+  readonly silhouette: StampSilhouette;
   // Concentric inner ring radii, outermost first.
-  rings: number[];
-  segments: StampSegment[];
-  accent: StampAccent;
-  // Filled ink (earned) or an outline (next).
-  filled: boolean;
+  readonly rings: readonly number[];
+  readonly segments: readonly StampSegment[];
+  readonly accent: StampAccent;
+  // Filled ink (earned) or a muted outline (next).
+  readonly filled: boolean;
 }
 
 // The curated catalog (`apps/api/app/domain/achievements.py`), each Achievement a distinct
 // (family, tier). An id outside it has no design, so a newly added Achievement renders its text
 // without art until it is given one here — never a borrowed, misleading Stamp.
 const STAMP_DESIGNS: Readonly<Record<string, StampDesign>> = {
-  "sessions-1": { family: "sessions", tier: 1 },
-  "sessions-5": { family: "sessions", tier: 2 },
-  "sessions-25": { family: "sessions", tier: 3 },
-  "sessions-100": { family: "sessions", tier: 4 },
-  "streak-4": { family: "streak", tier: 1 },
-  "streak-12": { family: "streak", tier: 2 },
-  "muscle-all": { family: "coverage", tier: 1 },
-  "first-pr": { family: "record", tier: 1 },
+  "sessions-1": { family: "sessions", tier: 1, rings: 1, segments: 0 },
+  "sessions-5": { family: "sessions", tier: 2, rings: 2, segments: 0 },
+  "sessions-25": { family: "sessions", tier: 3, rings: 3, segments: 0 },
+  "sessions-100": { family: "sessions", tier: 4, rings: 4, segments: 0 },
+  "streak-4": { family: "streak", tier: 1, rings: 1, segments: 4 },
+  "streak-12": { family: "streak", tier: 2, rings: 1, segments: 12 },
+  "muscle-all": { family: "coverage", tier: 1, rings: 1, segments: 0 },
+  "first-pr": { family: "record", tier: 1, rings: 1, segments: 0 },
 };
 
 export function stampDesign(achievementId: string): StampDesign | null {
@@ -87,18 +92,16 @@ const SILHOUETTES: Readonly<Record<StampFamily, SilhouetteKind>> = {
   record: "notched-circle",
 };
 
-// The weeks each streak tier counts, so the Stamp carries one segment per week.
-const STREAK_WEEKS: readonly number[] = [4, 12];
-
 const CENTER: StampPoint = { x: 50, y: 50 };
 const OUTER_RADIUS = 44;
 // The notch-starred circle alternates between the outer radius and this inner one.
-const NOTCH_RADIUS = 39;
-const NOTCH_COUNT = 16;
+// Deep enough to read as a seal rather than a plain circle at the 40px list size.
+const NOTCH_RADIUS = 35;
+const NOTCH_COUNT = 12;
 // Session rings step inward from just inside the silhouette.
 const FIRST_RING_RADIUS = 34;
 const RING_STEP = 7;
-// Every family but sessions shows its tier another way, so it carries a single ring.
+// Every other family carries its single ring nearer the centre, clear of any segments.
 const SINGLE_RING_RADIUS = 22;
 const SEGMENT_INNER_RADIUS = 27;
 const SEGMENT_OUTER_RADIUS = 35;
@@ -133,29 +136,18 @@ function silhouette(kind: SilhouetteKind): StampSilhouette {
   }
 }
 
-function rings({ family, tier }: StampDesign): number[] {
+function rings({ family, rings: count }: StampDesign): number[] {
   if (family !== "sessions") {
-    return [SINGLE_RING_RADIUS];
+    return count > 0 ? [SINGLE_RING_RADIUS] : [];
   }
-  return Array.from({ length: Math.max(1, tier) }, (_, i) => FIRST_RING_RADIUS - i * RING_STEP);
+  return Array.from({ length: count }, (_, i) => FIRST_RING_RADIUS - i * RING_STEP);
 }
 
-function segments({ family, tier }: StampDesign): StampSegment[] {
-  if (family !== "streak") {
-    return [];
-  }
-  const weeks = STREAK_WEEKS[tier - 1] ?? STREAK_WEEKS[STREAK_WEEKS.length - 1];
-  return Array.from({ length: weeks }, (_, i) => ({
-    from: polar(SEGMENT_INNER_RADIUS, i / weeks),
-    to: polar(SEGMENT_OUTER_RADIUS, i / weeks),
+function segments({ segments: count }: StampDesign): StampSegment[] {
+  return Array.from({ length: count }, (_, i) => ({
+    from: polar(SEGMENT_INNER_RADIUS, i / count),
+    to: polar(SEGMENT_OUTER_RADIUS, i / count),
   }));
-}
-
-function accent(family: StampFamily, state: StampState): StampAccent {
-  if (state === "next") {
-    return "muted";
-  }
-  return family === "record" ? "violet" : "cyan";
 }
 
 export function computeStampGeometry(design: StampDesign, state: StampState): StampGeometry {
@@ -163,7 +155,7 @@ export function computeStampGeometry(design: StampDesign, state: StampState): St
     silhouette: silhouette(SILHOUETTES[design.family]),
     rings: rings(design),
     segments: segments(design),
-    accent: accent(design.family, state),
+    accent: design.family === "record" ? "violet" : "cyan",
     filled: state === "earned",
   };
 }

@@ -25,18 +25,17 @@ interface StampArtProps {
   className?: string;
 }
 
-const FILL_CLASS: Readonly<Record<StampAccent, string>> = {
+// Stroke widths in viewbox units: about 1px at the 40px list size.
+const OUTLINE_WIDTH = 2.5;
+const SEGMENT_WIDTH = 3;
+
+const INK_CLASS: Readonly<Record<StampAccent, string>> = {
   cyan: "fill-cyan stroke-cyan",
   violet: "fill-violet stroke-violet",
-  muted: "fill-none stroke-text-muted",
 };
-
-// What the rings and segments are drawn in: knocked out of the ink, or the outline's own grey.
-const LINE_CLASS: Readonly<Record<StampAccent, string>> = {
-  cyan: "fill-none stroke-surface",
-  violet: "fill-none stroke-surface",
-  muted: "fill-none stroke-text-muted",
-};
+const OUTLINE_CLASS = "fill-none stroke-text-muted";
+// Rings and segments on filled ink are knocked out of it in the surface colour.
+const KNOCKOUT_CLASS = "fill-none stroke-surface";
 
 function pointList(points: readonly StampPoint[]): string {
   return points.map((point) => `${point.x},${point.y}`).join(" ");
@@ -52,8 +51,10 @@ export function StampArt({
   if (design === null) {
     return null;
   }
-  const { silhouette, rings, segments, accent } = computeStampGeometry(design, state);
+  const { silhouette, rings, segments, accent, filled } = computeStampGeometry(design, state);
   const center = STAMP_VIEWBOX / 2;
+  const shapeClass = filled ? INK_CLASS[accent] : OUTLINE_CLASS;
+  const lineClass = filled ? KNOCKOUT_CLASS : OUTLINE_CLASS;
 
   return (
     <svg
@@ -64,20 +65,20 @@ export function StampArt({
       focusable="false"
       className={cn("shrink-0", className)}
     >
-      {silhouette.points.length === 0 ? (
+      {silhouette.kind === "circle" ? (
         <circle
           cx={center}
           cy={center}
           r={silhouette.radius}
-          strokeWidth={2.5}
-          className={FILL_CLASS[accent]}
+          strokeWidth={OUTLINE_WIDTH}
+          className={shapeClass}
         />
       ) : (
         <polygon
           points={pointList(silhouette.points)}
-          strokeWidth={2.5}
+          strokeWidth={OUTLINE_WIDTH}
           strokeLinejoin="round"
-          className={FILL_CLASS[accent]}
+          className={shapeClass}
         />
       )}
       {rings.map((radius) => (
@@ -86,8 +87,8 @@ export function StampArt({
           cx={center}
           cy={center}
           r={radius}
-          strokeWidth={2.5}
-          className={LINE_CLASS[accent]}
+          strokeWidth={OUTLINE_WIDTH}
+          className={lineClass}
         />
       ))}
       {segments.map((segment, index) => (
@@ -97,9 +98,9 @@ export function StampArt({
           y1={segment.from.y}
           x2={segment.to.x}
           y2={segment.to.y}
-          strokeWidth={3}
+          strokeWidth={SEGMENT_WIDTH}
           strokeLinecap="round"
-          className={LINE_CLASS[accent]}
+          className={lineClass}
         />
       ))}
     </svg>

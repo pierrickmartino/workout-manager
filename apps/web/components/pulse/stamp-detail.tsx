@@ -10,8 +10,9 @@ import { Card } from "@/components/ui/card";
 // The body of one Stamp's page (#652), pre-mapped by `toStampDetail`. An earned Stamp says
 // when and, in plain words, what earned it, and links the Logged Session whose logging crossed
 // the target. A locked Achievement opens too: it shows its criteria and live progress, and
-// links nowhere, since no session has earned it. The Stamp art is decorative — an outline until
-// earned — and the text carries the meaning. No animation. First Record also shows the lift that set it (#653).
+// links nowhere, since no session has earned it. The Stamp art is decorative, an outline until
+// earned, and the text carries the meaning. No animation. First Record also shows the lift
+// that set it (#653).
 interface StampDetailBodyProps {
   detail: StampDetail;
 }
