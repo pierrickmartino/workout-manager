@@ -122,7 +122,7 @@ test("puts every other locked Achievement under More to earn, in catalog order",
     passport.moreToEarn.map((milestone) => milestone.id),
     ["a", "d", "e"],
   );
-  assert.equal(passport.moreToEarnCount, 3);
+  assert.equal(passport.moreToEarn.length, 3);
 });
 
 test("states each locked Achievement's criteria and its current/target progress", () => {
@@ -138,16 +138,6 @@ test("states each locked Achievement's criteria and its current/target progress"
   const [more] = passport.moreToEarn;
   assert.equal(more.criteria, "Criteria of sessions-100");
   assert.equal(more.progress, "18/100");
-});
-
-test("reads as empty when nothing is earned yet, and not otherwise", () => {
-  // Arrange
-  const fresh = [locked("a", 0, 5), locked("b", 0, 4)];
-  const started = [earned("a", "2026-01-02"), locked("b", 0, 4)];
-
-  // Act / Assert
-  assert.equal(toPassport(fresh).empty, true);
-  assert.equal(toPassport(started).empty, false);
 });
 
 test("words streak progress as the best run of consecutive weeks", () => {

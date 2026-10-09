@@ -5,7 +5,6 @@ import { formatLongDate } from "./date-format.ts";
 export interface Stamp {
   id: string;
   name: string;
-  criteria: string;
   // The date it was earned, with the year ("Jul 4, 2026"), or null if the API sent none.
   earnedOn: string | null;
 }
@@ -28,9 +27,6 @@ export interface Passport {
   next: Milestone | null;
   // Every other locked Achievement, in catalog order, behind the "More to earn" disclosure.
   moreToEarn: Milestone[];
-  moreToEarnCount: number;
-  // Nothing earned yet: the Passport shows its empty state rather than a list of locks.
-  empty: boolean;
 }
 
 interface CatalogEntry {
@@ -38,10 +34,12 @@ interface CatalogEntry {
   index: number;
 }
 
-// The ISO date an earned Achievement sorts by. An earned Achievement always carries one; a
-// missing date sorts last rather than throwing, so a malformed row never blanks the Passport.
+// An earned Achievement always carries its date; one that arrives without sorts after every
+// real date rather than throwing, so a malformed row never blanks the Passport.
+const UNDATED_SORTS_LAST = "9999-12-31";
+
 function earnedSortKey(achievement: Achievement): string {
-  return achievement.unlocked_on ?? "9999-12-31";
+  return achievement.unlocked_on ?? UNDATED_SORTS_LAST;
 }
 
 // How far a locked Achievement is toward its target, from 0 to 1. Guards the divide (a curated
@@ -98,7 +96,6 @@ export function toPassport(achievements: readonly Achievement[]): Passport {
     .map(({ achievement }) => ({
       id: achievement.id,
       name: achievement.name,
-      criteria: achievement.criteria,
       earnedOn:
         achievement.unlocked_on === null ? null : formatLongDate(achievement.unlocked_on),
     }));
@@ -111,7 +108,5 @@ export function toPassport(achievements: readonly Achievement[]): Passport {
     stamps,
     next: next === null ? null : toMilestone(next.achievement),
     moreToEarn,
-    moreToEarnCount: moreToEarn.length,
-    empty: stamps.length === 0,
   };
 }

@@ -17,7 +17,7 @@ import { SectionHeader } from "@/components/pulse/section-header";
 import { NavRow } from "@/components/pulse/nav-row";
 import { SignOutRow } from "@/components/pulse/sign-out-row";
 import { LevelBadge } from "@/components/pulse/level-badge";
-import { NextMilestone, PassportStamps } from "@/components/pulse/training-passport";
+import { PassportHighlights } from "@/components/pulse/training-passport";
 import { TrainingHeatmap } from "@/components/pulse/training-heatmap";
 import { FitnessProfileSummary } from "@/components/pulse/fitness-profile-summary";
 import { FitnessLevelStandings } from "@/components/pulse/fitness-level-standings";
@@ -133,12 +133,7 @@ export default async function ProfilePage() {
         >
           TRAINING PASSPORT · {passport.stamps.length}/{achievements.length}
         </SectionHeader>
-        {passport.stamps.length > 0 ? (
-          <PassportStamps stamps={passport.stamps} />
-        ) : null}
-        {passport.next !== null ? (
-          <NextMilestone milestone={passport.next} />
-        ) : null}
+        <PassportHighlights passport={passport} headingLevel={3} />
       </div>
 
       <div className="flex flex-col gap-4">

@@ -14,11 +14,11 @@ import { Card } from "@/components/ui/card";
 
 // The earned Stamps, oldest first, so the collection reads as the story of the user's
 // training. Each one is announced by its title and earned date; the icon is decorative.
-export function PassportStamps({
-  stamps,
-}: {
+interface PassportStampsProps {
   stamps: readonly Stamp[];
-}): React.JSX.Element {
+}
+
+function PassportStamps({ stamps }: PassportStampsProps): React.JSX.Element {
   return (
     <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       {stamps.map((stamp) => (
@@ -46,11 +46,11 @@ export function PassportStamps({
 
 // The single locked Achievement closest to earned: what is within reach next, with its
 // criteria and live progress.
-export function NextMilestone({
-  milestone,
-}: {
+interface NextMilestoneProps {
   milestone: Milestone;
-}): React.JSX.Element {
+}
+
+function NextMilestone({ milestone }: NextMilestoneProps): React.JSX.Element {
   return (
     <Card className="flex flex-col gap-3 p-4">
       <div className="flex items-start gap-3">
@@ -85,7 +85,7 @@ interface MoreToEarnProps {
 
 // Every other locked Achievement, behind a native disclosure so the Passport leads with what
 // the user has done rather than a wall of locks. `<details>` is keyboard-operable as is.
-export function MoreToEarn({
+function MoreToEarn({
   milestones,
   defaultOpen = false,
 }: MoreToEarnProps): React.JSX.Element {
@@ -125,33 +125,53 @@ export function MoreToEarn({
   );
 }
 
+interface PassportHighlightsProps {
+  passport: Passport;
+  // Where the two section headings sit in the page outline: 2 on the Passport page, 3 inside
+  // the Profile's own TRAINING PASSPORT section (ADR-0094).
+  headingLevel: 2 | 3;
+}
+
+// The earned Stamps, then the next milestone: the whole Profile summary, and the head of the
+// Passport page. Each part is omitted when the view-model has nothing for it, so a heading
+// never opens an empty section.
+export function PassportHighlights({
+  passport,
+  headingLevel,
+}: PassportHighlightsProps): React.JSX.Element {
+  return (
+    <>
+      {passport.stamps.length > 0 ? (
+        <div className="flex flex-col gap-4">
+          <SectionHeader level={headingLevel}>STAMPS</SectionHeader>
+          <PassportStamps stamps={passport.stamps} />
+        </div>
+      ) : null}
+      {passport.next !== null ? (
+        <div className="flex flex-col gap-4">
+          <SectionHeader level={headingLevel}>NEXT MILESTONE</SectionHeader>
+          <NextMilestone milestone={passport.next} />
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 interface TrainingPassportProps {
   passport: Passport;
   // Passed to the "More to earn" disclosure; see `MoreToEarn`.
   moreToEarnOpen?: boolean;
 }
 
-// The full Passport page body: the earned Stamps, the next milestone, then the disclosure.
-// Each part is omitted when the view-model has nothing for it, so a section is never empty.
+// The full Passport page body: the highlights, then the "More to earn" disclosure.
 export function TrainingPassport({
   passport,
   moreToEarnOpen = false,
 }: TrainingPassportProps): React.JSX.Element {
   return (
     <div className="flex flex-col gap-6">
-      {passport.stamps.length > 0 ? (
-        <div className="flex flex-col gap-4">
-          <SectionHeader>STAMPS</SectionHeader>
-          <PassportStamps stamps={passport.stamps} />
-        </div>
-      ) : null}
-      {passport.next !== null ? (
-        <div className="flex flex-col gap-4">
-          <SectionHeader>NEXT MILESTONE</SectionHeader>
-          <NextMilestone milestone={passport.next} />
-        </div>
-      ) : null}
-      {passport.moreToEarnCount > 0 ? (
+      <PassportHighlights passport={passport} headingLevel={2} />
+      {passport.moreToEarn.length > 0 ? (
         <MoreToEarn milestones={passport.moreToEarn} defaultOpen={moreToEarnOpen} />
       ) : null}
     </div>
