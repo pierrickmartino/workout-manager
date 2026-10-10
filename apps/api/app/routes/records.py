@@ -4,9 +4,10 @@
 highest Estimated 1RM, or ``null`` when the Exercise has no absolute-Load history),
 Total Sets (a count of their Logged Sets), the Top-Set Trend series (the best Estimated
 1RM per qualifying session, oldest-first), and the PR milestones (every set that struck a
-new Estimated-1RM best, newest-first — the RECORDS lens) for a single Exercise, plus its Progress Story
-(ADR-0127), under the standard envelope. It is read-only over the *record* side — no plan is read or mutated,
-no AI runs — and reuses the shipped Estimated-1RM / Personal-Record engine (ADR-0010).
+new Estimated-1RM best, newest-first — the RECORDS lens) for a single Exercise, plus its
+Progress Story (ADR-0127), under the standard envelope. It is read-only over the *record*
+side — no plan is read or mutated, no AI runs — and reuses the shipped Estimated-1RM /
+Personal-Record engine (ADR-0010).
 Reads are scoped to the owning user (F6 Slices 2–4)."""
 
 from __future__ import annotations

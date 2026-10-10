@@ -135,3 +135,15 @@ test("writes its copy with the typographic apostrophe", () => {
   // Act / Assert
   assert.deepEqual(findStraightApostrophes(source, "lib/progress-story-view.ts"), []);
 });
+
+test("never words a non-absolute story as a kilogram figure", () => {
+  // Act — a bodyweight story, whose held value is an added load, not a bar weight
+  const view = toProgressStoryView(story({ load_kind: "bodyweight" }), "kg");
+
+  // Assert — withheld rather than misstated, until bodyweight has its own wording
+  assert.equal(
+    view.headline,
+    "No comparable sessions yet. Repeat a load or a rep count from last time to see what changed.",
+  );
+  assert.deepEqual(view.rows, []);
+});

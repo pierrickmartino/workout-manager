@@ -331,7 +331,7 @@ The single best Estimated 1RM set within one Logged Session for a given Exercise
 _Avoid_: Best set (bare), heaviest set, top weight
 
 **Progress Story**:
-A plain, exact comparison of an Exercise's latest Logged Session with the one before it: one quantity held equal, the other measured, using only Logged Sets (e.g. "2 more reps at 60 kg than last time"). It is a comparison of two performances, distinct from a Personal Record, which is a single all-time best on the Estimated-1RM yardstick; a Progress Story never uses an Estimated 1RM and never compares across Load kinds. When nothing is exactly comparable it says so rather than inventing a comparison. Computed at read time, never stored (ADR-0127).
+A plain, exact comparison of an Exercise's latest Logged Session with the most recent earlier one it can be exactly compared with: one quantity held equal, the other measured, using only Logged Sets (e.g. "2 more reps at 60 kg than last time"). It is a comparison of two performances, distinct from a Personal Record, which is a single all-time best on the Estimated-1RM yardstick; a Progress Story never uses an Estimated 1RM and never compares across Load kinds. When nothing is exactly comparable it says so rather than inventing a comparison. Computed at read time, never stored (ADR-0127).
 _Avoid_: Progress (bare), trend, improvement score
 
 **Muscle Group**:

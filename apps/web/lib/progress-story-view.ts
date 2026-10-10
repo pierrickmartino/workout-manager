@@ -58,8 +58,11 @@ export function toProgressStoryView(
   unit: WeightUnit,
 ): ProgressStoryView {
   const { latest, previous, held, delta } = story;
+  // Only an absolute Load reads as a kilogram figure; a story in any other Load kind is not
+  // worded until its own display rule exists, rather than shown as a bare kg number.
   if (
     story.kind === "insufficient" ||
+    story.load_kind !== "absolute" ||
     latest === null ||
     previous === null ||
     held === null ||
@@ -85,7 +88,7 @@ function headline(
   }
   const change = kind === "improved" ? "more" : "fewer";
   const count = Math.abs(delta);
-  return `${count} ${change} ${count === 1 ? "rep" : "reps"} at ${load} than last time.`;
+  return `${count} ${change} ${repNoun(count)} at ${load} than last time.`;
 }
 
 function row(label: string, side: ProgressStorySide, load: string): ProgressStoryRow {
@@ -98,5 +101,9 @@ function row(label: string, side: ProgressStorySide, load: string): ProgressStor
 }
 
 function reps(count: number): string {
-  return `${count} ${count === 1 ? "rep" : "reps"}`;
+  return `${count} ${repNoun(count)}`;
+}
+
+function repNoun(count: number): string {
+  return count === 1 ? "rep" : "reps";
 }
