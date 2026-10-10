@@ -128,6 +128,96 @@ test("shows both compared sessions, previous first, each linking to its Logged S
   ]);
 });
 
+// A load-at-reps story: 5 reps held, 60 kg last time, 62.5 kg now.
+function loadAtReps(overrides: Partial<ProgressStory> = {}): ProgressStory {
+  return story({
+    axis: "load_at_reps",
+    held: 5,
+    delta: 2.5,
+    latest: { logged_session_id: 12, performed_on: "2026-03-08", value: 62.5 },
+    previous: { logged_session_id: 7, performed_on: "2026-03-01", value: 60 },
+    ...overrides,
+  });
+}
+
+test("states a heavier load at a shared rep count as a signed gain", () => {
+  // Act
+  const view = toProgressStoryView(loadAtReps(), "kg");
+
+  // Assert
+  assert.equal(view.headline, "+2.5 kg for 5 reps.");
+});
+
+test("states a lighter load at a shared rep count with a minus sign, plainly", () => {
+  // Act
+  const view = toProgressStoryView(
+    loadAtReps({
+      kind: "declined",
+      delta: -2.5,
+      latest: { logged_session_id: 12, performed_on: "2026-03-08", value: 57.5 },
+    }),
+    "kg",
+  );
+
+  // Assert — a typographic minus, not a hyphen
+  assert.equal(view.headline, "−2.5 kg for 5 reps.");
+});
+
+test("says rep, not reps, for a single shared rep", () => {
+  // Act
+  const view = toProgressStoryView(loadAtReps({ held: 1 }), "kg");
+
+  // Assert
+  assert.equal(view.headline, "+2.5 kg for 1 rep.");
+  assert.equal(view.rows[0].performance, "1 rep at 60 kg");
+});
+
+test("projects a load-at-reps change into the reader’s Weight Unit", () => {
+  // Arrange — 60 lb then 65 lb, stored as exact kilograms
+  const sixty = 60 * 0.45359237;
+  const sixtyFive = 65 * 0.45359237;
+
+  // Act
+  const view = toProgressStoryView(
+    loadAtReps({
+      delta: sixtyFive - sixty,
+      latest: { logged_session_id: 12, performed_on: "2026-03-08", value: sixtyFive },
+      previous: { logged_session_id: 7, performed_on: "2026-03-01", value: sixty },
+    }),
+    "lb",
+  );
+
+  // Assert
+  assert.equal(view.headline, "+5 lb for 5 reps.");
+  assert.equal(view.rows[1].performance, "5 reps at 65 lb");
+});
+
+test("shows each side’s own load when the rep count is held", () => {
+  // Act
+  const view = toProgressStoryView(loadAtReps(), "kg");
+
+  // Assert
+  assert.deepEqual(view.rows, [
+    { label: "Last time", performance: "5 reps at 60 kg", date: "Mar 1, 2026", href: "/history/7" },
+    { label: "Latest", performance: "5 reps at 62.5 kg", date: "Mar 8, 2026", href: "/history/12" },
+  ]);
+});
+
+test("acknowledges an unchanged load at a shared rep count with its numbers", () => {
+  // Act
+  const view = toProgressStoryView(
+    loadAtReps({
+      kind: "unchanged",
+      delta: 0,
+      latest: { logged_session_id: 12, performed_on: "2026-03-08", value: 60 },
+    }),
+    "kg",
+  );
+
+  // Assert
+  assert.equal(view.headline, "Same as last time: 5 reps at 60 kg.");
+});
+
 test("writes its copy with the typographic apostrophe", () => {
   // Arrange
   const source = readFileSync(resolve(import.meta.dirname, "progress-story-view.ts"), "utf8");
