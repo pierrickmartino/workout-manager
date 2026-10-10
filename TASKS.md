@@ -178,7 +178,6 @@ Sources: [pulse-creative-directions](docs/design/pulse-creative-directions.md), 
 - ❔ Signature **rest-timer instrument**.
 - 🟡 Exercise "field guide": catalog taxonomy and drawer are done; the visual field-guide treatment isn't.
 - ⬜ Progress stories.
-- ⬜ The personal **Training Passport**: Achievements as a collection of Stamps (#648).
 
 **Microinteractions: suggested order** (none found in the code; implementation not confirmed)
 - ⬜ 1. Tactile set-completion check, plus a calm handoff to the next exercise.

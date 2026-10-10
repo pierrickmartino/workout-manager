@@ -1,11 +1,12 @@
 import * as React from "react";
 import Link from "next/link";
-import { ChevronRight, Lock, Trophy } from "@/components/pulse/icons";
+import { ChevronRight } from "@/components/pulse/icons";
 
 import type { Milestone, Passport, Stamp } from "@/lib/passport-view";
 import { NAV_FORWARD } from "@/lib/nav-direction";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { SegmentedBar } from "@/components/pulse/segmented-bar";
+import { StampArt } from "@/components/pulse/stamp-art";
 import { Card } from "@/components/ui/card";
 
 // The Training Passport (ADR-0126): the user's Achievements presented as a collection of
@@ -21,7 +22,7 @@ const ENTRY_LINK_CLASS =
   "focus-visible:ring-offset-2 focus-visible:ring-offset-base";
 
 // The earned Stamps, oldest first, so the collection reads as the story of the user's
-// training. Each one is announced by its title and earned date; the icon is decorative.
+// training. Each one is announced by its title and earned date; the art is decorative.
 interface PassportStampsProps {
   stamps: readonly Stamp[];
 }
@@ -33,9 +34,7 @@ function PassportStamps({ stamps }: PassportStampsProps): React.JSX.Element {
         <li key={stamp.id}>
           <Link {...NAV_FORWARD} href={stamp.href} className={ENTRY_LINK_CLASS}>
             <Card className="flex h-full items-start gap-3 border-cyan/30 p-4 transition-colors group-hover:border-cyan">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-cyan-dim text-cyan">
-                <Trophy className="h-4 w-4" aria-hidden />
-              </span>
+              <StampArt achievementId={stamp.id} state="earned" />
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="break-words font-sans text-[14px] font-semibold text-text-primary">
                   {stamp.name}
@@ -81,9 +80,7 @@ function NextMilestone({ milestone }: NextMilestoneProps): React.JSX.Element {
     <Link {...NAV_FORWARD} href={milestone.href} className={ENTRY_LINK_CLASS}>
       <Card className="flex flex-col gap-3 p-4 transition-colors group-hover:border-cyan">
         <div className="flex items-start gap-3">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-elevated text-text-muted">
-            <Lock className="h-4 w-4" aria-hidden />
-          </span>
+          <StampArt achievementId={milestone.id} state="next" />
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="break-words font-sans text-[14px] font-semibold text-text-primary">
               {milestone.name}
