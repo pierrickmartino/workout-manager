@@ -348,6 +348,35 @@ def test_records_endpoint_carries_the_progress_story():
     }
 
 
+def test_records_endpoint_story_pairs_with_a_non_adjacent_earlier_session():
+    # Arrange — 5 reps at 60 kg, then a non-comparable 2 at 80 kg, then 5 reps at 65 kg
+    client, ctx, sessions, logged = build_client()
+    _perform(sessions, logged, "user_scan", SQUAT, date(2026, 1, 1), 5, _absolute(60.0))
+    _perform(sessions, logged, "user_scan", SQUAT, date(2026, 1, 8), 2, _absolute(80.0))
+    _perform(sessions, logged, "user_scan", SQUAT, date(2026, 1, 15), 5, _absolute(65.0))
+    oldest, middle, newest = sorted(
+        logged.list_for_user("user_scan"), key=lambda session: session.performed_on
+    )
+
+    # Act
+    story = _story(client, ctx, "user_scan", SQUAT)
+
+    # Assert — the shared-rep rule pairs the latest with the oldest, skipping the middle
+    assert story["kind"] == "improved"
+    assert story["axis"] == "load_at_reps"
+    assert story["held"] == 5
+    assert story["delta"] == 5.0
+    linked = (story["latest"]["logged_session_id"], story["previous"]["logged_session_id"])
+    assert linked == (newest.id, oldest.id)
+    assert middle.id not in linked
+    # Both links resolve to the caller's own Logged Sessions (the owner-scoped detail read)
+    for logged_session_id in linked:
+        response = client.get(
+            f"/api/logs/{logged_session_id}", headers=_auth(ctx, "user_scan")
+        )
+        assert response.status_code == 200
+
+
 def test_records_endpoint_story_is_insufficient_for_a_single_session():
     # Arrange
     client, ctx, sessions, logged = build_client()

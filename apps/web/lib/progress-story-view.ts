@@ -1,8 +1,8 @@
 // The Progress Story view-model (ADR-0127): the API's structured comparison of an
-// Exercise's latest Logged Session with the one before it, turned into the headline and
-// the two compared sessions. The API never sends a sentence — the copy, the Weight Unit
-// projection and the links to each Logged Session all live here, so every surface that
-// shows a story words it identically. Pure and server-free (no I/O, no server-only
+// Exercise's latest Logged Session with the most recent earlier comparable one, turned
+// into the headline and the two compared sessions. The API never sends a sentence — the
+// copy, the Weight Unit projection and the links to each Logged Session all live here, so
+// every surface that shows a story words it identically. Pure and server-free (no I/O, no server-only
 // imports), so it is safe from both Server and Client Components.
 //
 // No wording judges the change: a decline is stated as plainly as an improvement.
@@ -15,8 +15,9 @@ import { formatWeight } from "./weight-format.ts";
 export type ProgressStoryKind = "improved" | "unchanged" | "declined" | "insufficient";
 
 // Which quantity is held equal and which is measured. `reps_at_load` holds the load
-// (`held`, in kg) and measures reps.
-export type ProgressStoryAxis = "reps_at_load";
+// (`held`, in kg) and measures reps; `load_at_reps` holds the rep count (`held`) and
+// measures the load, in kg.
+export type ProgressStoryAxis = "reps_at_load" | "load_at_reps";
 
 // One compared Logged Session and the value it measured on the story's axis.
 export interface ProgressStorySide {
@@ -70,14 +71,27 @@ export function toProgressStoryView(
   ) {
     return { headline: INSUFFICIENT_HEADLINE, rows: [] };
   }
+  if (story.axis === "load_at_reps") {
+    return {
+      headline: loadAtRepsHeadline(story.kind, delta, held, latest.value, unit),
+      rows: [
+        row("Last time", previous, `${reps(held)} at ${formatWeight(previous.value, unit)}`),
+        row("Latest", latest, `${reps(held)} at ${formatWeight(latest.value, unit)}`),
+      ],
+    };
+  }
   const load = formatWeight(held, unit);
   return {
-    headline: headline(story.kind, delta, latest.value, load),
-    rows: [row("Last time", previous, load), row("Latest", latest, load)],
+    headline: repsAtLoadHeadline(story.kind, delta, latest.value, load),
+    rows: [
+      row("Last time", previous, `${reps(previous.value)} at ${load}`),
+      row("Latest", latest, `${reps(latest.value)} at ${load}`),
+    ],
   };
 }
 
-function headline(
+// "2 more reps at 60 kg than last time." — the load is held, the reps measured.
+function repsAtLoadHeadline(
   kind: ProgressStoryKind,
   delta: number,
   latestReps: number,
@@ -91,10 +105,28 @@ function headline(
   return `${count} ${change} ${repNoun(count)} at ${load} than last time.`;
 }
 
-function row(label: string, side: ProgressStorySide, load: string): ProgressStoryRow {
+// "+2.5 kg for 5 reps." — the rep count is held, the load measured. A decline takes the
+// typographic minus, stated as plainly as a gain.
+function loadAtRepsHeadline(
+  kind: ProgressStoryKind,
+  delta: number,
+  heldReps: number,
+  latestKg: number,
+  unit: WeightUnit,
+): string {
+  // The API never sends this (equal loads are a shared load, so the shared-load rule wins),
+  // but a structurally valid story is still worded honestly rather than as "+0 kg".
+  if (kind === "unchanged") {
+    return `Same as last time: ${reps(heldReps)} at ${formatWeight(latestKg, unit)}.`;
+  }
+  const sign = kind === "improved" ? "+" : "−";
+  return `${sign}${formatWeight(Math.abs(delta), unit)} for ${reps(heldReps)}.`;
+}
+
+function row(label: string, side: ProgressStorySide, performance: string): ProgressStoryRow {
   return {
     label,
-    performance: `${reps(side.value)} at ${load}`,
+    performance,
     date: formatLongDate(side.performed_on),
     href: `/history/${side.logged_session_id}`,
   };

@@ -32,7 +32,12 @@ each linking to its record, so the claim can always be checked.
   3. Otherwise `insufficient`.
 
   Heaviest, because it is the user's most meaningful work; the shared load comes first because
-  more reps at the same weight is the most direct statement of progress.
+  more reps at the same weight is the most direct statement of progress. A consequence: the
+  shared-rep rule never reports "the same". Equal heaviest loads at a shared rep count are
+  themselves a shared load, so rule 1 claims the pair first; rule 2 only ever states a gain or a
+  loss ("+2.5 kg for 5 reps.", "−2.5 kg for 5 reps."). The rule applies to a pair, and the scan
+  stops at the first earlier session either rule matches: a nearer reps-only match beats an
+  older shared-load one.
 - **Loads match at logged precision.** Kilograms are stored exactly (a pound entry keeps the
   conversion's residue, #417), so loads are compared rounded to the gram: two entries of one
   logged load match, and two loads a user could tell apart (60 and 60.25 kg) never do.
@@ -64,8 +69,9 @@ history (`insufficient` when no pair qualifies). The Strength analytics response
 shape from the same domain function.
 
 The first slice (#655) ships the shared-load rule for absolute Loads, pairing the latest session
-with the immediately previous one, on the Exercise page. The shared-rep rule, the backwards scan,
-bodyweight with its footnote, and the Strength analytics cards follow in #649's later slices.
+with the immediately previous one, on the Exercise page. The second (#656) adds the shared-rep
+rule and the backwards scan. Bodyweight with its footnote, and the Strength analytics cards,
+follow in #649's later slices.
 
 ## Considered options
 

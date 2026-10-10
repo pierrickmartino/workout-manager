@@ -1,10 +1,11 @@
-"""Progress Story (#655) — the latest Logged Session of an Exercise against the one before.
+"""Progress Story (#655, #656) — the latest Logged Session of an Exercise against the most
+recent earlier comparable one.
 
-``progress_story`` compares the user's latest Logged Session of an Exercise with the
-immediately previous one, and returns a structured result — never a sentence. This first
-slice compares absolute Loads only, on the **heaviest shared load** rule: the heaviest load
-present in both sessions' non-warm-up sets, and the best reps each session did at it.
-Anything it cannot compare exactly is ``insufficient``; Estimated 1RM is never used.
+``progress_story`` returns a structured result — never a sentence. It compares absolute
+Loads in non-warm-up sets: first at the **heaviest shared load** (best reps at it), else at
+the **heaviest shared rep count** (heaviest load for it), scanning earlier sessions
+backwards until one matches. Anything it cannot compare exactly is ``insufficient``;
+Estimated 1RM is never used.
 
 Pure and dependency-free — exercised here with hand-built session stubs."""
 
@@ -199,10 +200,10 @@ def test_no_history_is_insufficient():
     assert story.kind is StoryKind.INSUFFICIENT
 
 
-def test_no_shared_load_is_insufficient():
-    # Arrange — every load changed
+def test_no_shared_load_and_no_shared_rep_count_is_insufficient():
+    # Arrange — every load and every rep count changed
     history = [
-        _session(2, 8, _squat(62.5, 8)),
+        _session(2, 8, _squat(62.5, 7)),
         _session(1, 1, _squat(60.0, 8)),
     ]
 
@@ -213,8 +214,138 @@ def test_no_shared_load_is_insufficient():
     assert story.kind is StoryKind.INSUFFICIENT
 
 
-def test_only_the_immediately_previous_session_is_compared():
-    # Arrange — the latest matches the oldest session, not the one right before it
+def test_a_heavier_load_at_a_shared_rep_count_is_an_improvement():
+    # Arrange — every load changed, but both sessions did 5 reps: 60 kg then 62.5 kg
+    history = [
+        _session(2, 8, _squat(62.5, 5)),
+        _session(1, 1, _squat(60.0, 5)),
+    ]
+
+    # Act
+    story = progress_story(history, SQUAT)
+
+    # Assert — the rep count is held, the load is measured, in kg
+    assert story.kind is StoryKind.IMPROVED
+    assert story.axis is StoryAxis.LOAD_AT_REPS
+    assert story.load_kind is LoadKind.ABSOLUTE
+    assert story.held == 5
+    assert (story.latest.value, story.previous.value) == (62.5, 60.0)
+    assert story.delta == 2.5
+    assert (story.latest.logged_session_id, story.previous.logged_session_id) == (2, 1)
+
+
+def test_a_lighter_load_at_a_shared_rep_count_is_a_decline():
+    # Arrange
+    history = [
+        _session(2, 8, _squat(57.5, 5)),
+        _session(1, 1, _squat(60.0, 5)),
+    ]
+
+    # Act
+    story = progress_story(history, SQUAT)
+
+    # Assert — the delta is signed
+    assert story.kind is StoryKind.DECLINED
+    assert story.axis is StoryAxis.LOAD_AT_REPS
+    assert story.delta == -2.5
+
+
+def test_an_equal_load_at_a_shared_rep_count_reads_as_the_same_on_the_shared_load():
+    # Arrange — 5 reps at 60 kg both times: an equal load at the shared rep count is
+    # itself a shared load, so the shared-load rule always claims it
+    history = [
+        _session(2, 8, _squat(60.0, 5)),
+        _session(1, 1, _squat(60.0, 5)),
+    ]
+
+    # Act
+    story = progress_story(history, SQUAT)
+
+    # Assert — "Same as last time", held on the load
+    assert story.kind is StoryKind.UNCHANGED
+    assert story.axis is StoryAxis.REPS_AT_LOAD
+    assert story.held == 60.0
+
+
+def test_the_heaviest_shared_rep_count_is_chosen_among_several():
+    # Arrange — both sessions did 5 and 8 reps; 3 reps only in the latest, 10 only before
+    history = [
+        _session(2, 8, _squat(52.5, 8), _squat(62.5, 5), _squat(70.0, 3)),
+        _session(1, 1, _squat(50.0, 8), _squat(60.0, 5), _squat(45.0, 10)),
+    ]
+
+    # Act
+    story = progress_story(history, SQUAT)
+
+    # Assert — 8 reps is the highest count present in both; the heaviest load at it wins
+    assert story.axis is StoryAxis.LOAD_AT_REPS
+    assert story.held == 8
+    assert (story.latest.value, story.previous.value) == (52.5, 50.0)
+
+
+def test_the_heaviest_load_at_the_shared_rep_count_is_compared():
+    # Arrange — several sets of 5 in each session
+    history = [
+        _session(2, 8, _squat(55.0, 5), _squat(65.0, 5)),
+        _session(1, 1, _squat(62.5, 5), _squat(57.5, 5)),
+    ]
+
+    # Act
+    story = progress_story(history, SQUAT)
+
+    # Assert
+    assert (story.latest.value, story.previous.value, story.delta) == (65.0, 62.5, 2.5)
+
+
+def test_a_zero_rep_set_is_not_a_lift_to_compare():
+    # Arrange — two failed attempts (0 reps) at different loads: nothing was lifted
+    history = [
+        _session(2, 8, _squat(102.5, 0)),
+        _session(1, 1, _squat(100.0, 0)),
+    ]
+
+    # Act
+    story = progress_story(history, SQUAT)
+
+    # Assert — never "+2.5 kg for 0 reps"
+    assert story.kind is StoryKind.INSUFFICIENT
+
+
+def test_a_shared_load_wins_over_a_shared_rep_count():
+    # Arrange — the pair shares 60 kg (8 then 10 reps) and also 5 reps (70 then 72.5 kg)
+    history = [
+        _session(2, 8, _squat(60.0, 10), _squat(72.5, 5)),
+        _session(1, 1, _squat(60.0, 8), _squat(70.0, 5)),
+    ]
+
+    # Act
+    story = progress_story(history, SQUAT)
+
+    # Assert
+    assert story.axis is StoryAxis.REPS_AT_LOAD
+    assert story.held == 60.0
+    assert story.delta == 2
+
+
+def test_the_scan_pairs_with_an_earlier_session_matching_on_reps_only():
+    # Arrange — the middle session shares nothing; the oldest shares 5 reps, not a load
+    history = [
+        _session(3, 15, _squat(65.0, 5)),
+        _session(2, 8, _squat(80.0, 2)),
+        _session(1, 1, _squat(60.0, 5)),
+    ]
+
+    # Act
+    story = progress_story(history, SQUAT)
+
+    # Assert
+    assert story.axis is StoryAxis.LOAD_AT_REPS
+    assert story.previous.logged_session_id == 1
+    assert story.delta == 5.0
+
+
+def test_the_scan_skips_a_non_comparable_intermediate_session():
+    # Arrange — the session right before the latest shares neither a load nor a rep count
     history = [
         _session(3, 15, _squat(60.0, 10)),
         _session(2, 8, _squat(70.0, 5)),
@@ -224,7 +355,58 @@ def test_only_the_immediately_previous_session_is_compared():
     # Act
     story = progress_story(history, SQUAT)
 
-    # Assert — this slice pairs the latest with the immediately previous one only
+    # Assert — the latest pairs with the most recent earlier comparable session
+    assert story.kind is StoryKind.IMPROVED
+    assert story.axis is StoryAxis.REPS_AT_LOAD
+    assert (story.latest.logged_session_id, story.previous.logged_session_id) == (3, 1)
+    assert story.delta == 2
+
+
+def test_a_nearer_rep_count_match_beats_an_older_shared_load():
+    # Arrange — the middle session shares only 5 reps; the oldest shares 60 kg
+    history = [
+        _session(3, 15, _squat(60.0, 5)),
+        _session(2, 8, _squat(57.5, 5)),
+        _session(1, 1, _squat(60.0, 3)),
+    ]
+
+    # Act
+    story = progress_story(history, SQUAT)
+
+    # Assert — "last time" is the nearest comparable session, whichever rule matched
+    assert story.axis is StoryAxis.LOAD_AT_REPS
+    assert story.previous.logged_session_id == 2
+    assert story.delta == 2.5
+
+
+def test_the_scan_stops_at_the_most_recent_comparable_session():
+    # Arrange — both earlier sessions share 60 kg with the latest
+    history = [
+        _session(3, 15, _squat(60.0, 10)),
+        _session(2, 8, _squat(60.0, 9)),
+        _session(1, 1, _squat(60.0, 6)),
+    ]
+
+    # Act
+    story = progress_story(history, SQUAT)
+
+    # Assert — the nearer one wins, never the oldest
+    assert story.previous.logged_session_id == 2
+    assert story.delta == 1
+
+
+def test_no_earlier_comparable_session_is_insufficient():
+    # Arrange — three sessions, none sharing a load or a rep count with the latest
+    history = [
+        _session(3, 15, _squat(60.0, 10)),
+        _session(2, 8, _squat(70.0, 5)),
+        _session(1, 1, _squat(65.0, 6)),
+    ]
+
+    # Act
+    story = progress_story(history, SQUAT)
+
+    # Assert
     assert story.kind is StoryKind.INSUFFICIENT
 
 
