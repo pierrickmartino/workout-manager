@@ -52,7 +52,7 @@ Sources: [research 2026-10-05](docs/research/2026-10-05.md), [market report 08-2
 - ⬜ **Notifications and badges**, only when the user asks for them (P2).
 - 🟡 **iOS storage-eviction resilience** for a paused Live Session. The outbox exists; the `persist()` call and a long-pause warning are missing.
 - ⬜ **Offline cold-start decision:** write an ADR choosing between caching the training path, accepting the gap and saying so, or a native client (Gript audit P0-2, audit 09-24 question).
-- ⬜ **Native shell vs PWA-only:** answer it in an ADR (Gript audit §7, research 10-05 Q2).
+- ⬜ **Native shell vs PWA-only:** answer it in an ADR (Gript audit §7, research 10-05 Q2). If the ADR picks React Native / Expo, start from the rule shortlist in the [React Native skills audit](docs/research/audit/vercel/react-native-skills-2026-10-10.md). There is no native code today, so that audit added no tasks.
 
 ## 4. Dependency majors
 
@@ -185,14 +185,45 @@ Sources: [pulse-creative-directions](docs/design/pulse-creative-directions.md), 
 
 ## 11. Validation and accessibility follow-ups
 
-Sources: `docs/development/*`, [audit 09-28](docs/research/audit/2026-09-28.md), [view-transitions-audit](docs/research/audit/vercel/view-transitions-audit.md) §11.
+Sources: `docs/development/*`, [audit 09-28](docs/research/audit/2026-09-28.md), [view-transitions audit 10-10](docs/research/audit/vercel/view-transitions-2026-10-10.md) VT-4 (it replaces the deleted pre-implementation audit).
 
 - ⬜ **CH-F3 Atlas heat-magnitude gap:** the heat uses emphasis-weighted volume but the text shows set counts. Needs owner sign-off on the wording first.
 - ❔ **Manual accessibility journeys** (AUTH, CAT, PROF, LOG, SAVE in [accessibility-journeys](docs/development/accessibility-journeys.md)) with a real screen reader.
 - ❔ **WebKit / real iPhone runs** for reflow, resilience and charts (Chromium only so far).
 - ⬜ **View Transitions in the running app:** all eight steps (ADR-0118 to ADR-0124) were checked with real components in Chromium, but none through the Next router in the running app, and no CI journey drives a navigation yet.
 
-## 12. Deployment: Hostinger VPS migration
+## 12. Vercel React best-practices audit (10 Oct)
+
+Source: [react-best-practices-2026-10-10](docs/research/audit/vercel/react-best-practices-2026-10-10.md). Each fix is measured against the build output before and after.
+
+- ⬜ V-1 **History list:** add `.list-row-defer` to each history card (XS), then map records to a slim view-model on the server (S). Windowing `GET /api/logs` with "show more" needs an ADR, because filtering is client-side today.
+- ⬜ V-2 **Stop preloading every Skin's fonts:** 9 files (235 KB) are preloaded on every route. Set `preload: false` on the Aurora and Vercel families, or preload only the active Skin's fonts. Fix the layout comment and add a note to ADR-0050.
+- ⬜ V-3 **Shrink the atlas client data** (36.4 KB gz on `/analytics`): round `reference-data.ts` coordinates to 1 decimal place, and send only the resolved figure's paths (split by gender, or render the base silhouette on the server).
+- ⬜ V-4 **Protocol edit page:** fetch the Protocol, Profile and appearance in one `Promise.all`, then call `notFound()`.
+- ⬜ V-5 **Batch harder-variation offers:** one `GET /api/sessions/{id}/harder-variations` instead of one request per prescription.
+- ⬜ V-6 **Strength analytics:** read appearance in the same `Promise.all` as the main fetch.
+- ⬜ V-7 **`ProtocolBuilder`:** derive the shown preview during render instead of clearing it in an effect.
+- ⬜ V-8 **`ExerciseLibrary`:** move the query-change state resets into `onChange`.
+- ⬜ V-9 **`useWideViewport` / `useChartTheme`:** move to `useSyncExternalStore` with one shared subscription (low priority).
+
+## 13. Vercel composition patterns audit (10 Oct)
+
+Source: [composition-patterns-2026-10-10](docs/research/audit/vercel/composition-patterns-2026-10-10.md).
+
+- ⬜ C-1 **Split `HandAuthoredSessionForm`** (1,103 lines, over the 800 max) into two explicit forms, `LogHandAuthoredSessionForm` and `PlanHandAuthoredSessionForm`, built on a shared exercise-list editor. Drop the `mode` and `showPerformedSets` props.
+- ⬜ C-2 **Redesign `PrescriptionFieldStack`'s 30-prop interface:** replace the handlers that control visibility by being present, and the per-surface flags, with a compound component or an explicit field set per surface. Write an ADR first (ADR-0067/0069).
+- ⬜ C-3 **Remove the dead `advancedNonDefault` prop** from `PrescriptionFieldStack` (no caller passes it).
+- ⬜ C-4 **Split `ReferenceAtlasFigure`** into a static figure (empty state, could be a Server Component) and an interactive one. This pairs with V-3.
+
+## 14. Vercel view transitions audit (10 Oct)
+
+Source: [view-transitions-2026-10-10](docs/research/audit/vercel/view-transitions-2026-10-10.md). Running-app verification is already tracked in §11 and isn't repeated here.
+
+- ⬜ VT-1 **Wrap the exercise HISTORY-tab skeleton in `SkeletonReveal`** (the one skeleton that pops), and extend `lib/skeleton-reveal-policy.ts` to in-page fallbacks if it doesn't already cover them.
+- ⬜ VT-2 **Spread `NAV_FORWARD` on the ~9 untyped hierarchical links** (training route, trajectory tiles, record teasers, achievement source, catalog → exercise, Train hub, launchpad, page actions). Record the link classification in ADR-0121.
+- ⬜ VT-3 **Type the two directional programmatic navigations:** generation → adopted Protocol (`nav-forward`) and admin delete → catalog (`nav-back`), using a helper rather than a literal.
+
+## 15. Deployment: Hostinger VPS migration
 
 Source: [hostinger-vps](docs/deployment/hostinger-vps.md) → *Completion checklist*. All unchecked in the doc; owner tasks.
 
