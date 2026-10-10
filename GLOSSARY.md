@@ -330,6 +330,10 @@ _Avoid_: Best, max weight, record (bare), personal best (for the raw heaviest lo
 The single best Estimated 1RM set within one Logged Session for a given Exercise — that session's strength high-water mark. It is the per-session scalar the Exercise Detail top-set trend plots over the last several sessions, so the trend reads as Personal-Record trajectory on one yardstick. Distinct from the Personal Record, which is the best Top Set across *all* sessions; undefined for a session with no absolute-Load or Performed-Body-Weight set in the trustworthy rep range.
 _Avoid_: Best set (bare), heaviest set, top weight
 
+**Progress Story**:
+A plain, exact comparison of an Exercise's latest Logged Session with the one before it: one quantity held equal, the other measured, using only Logged Sets (e.g. "2 more reps at 60 kg than last time"). It is a comparison of two performances, distinct from a Personal Record, which is a single all-time best on the Estimated-1RM yardstick; a Progress Story never uses an Estimated 1RM and never compares across Load kinds. When nothing is exactly comparable it says so rather than inventing a comparison. Computed at read time, never stored (ADR-0127).
+_Avoid_: Progress (bare), trend, improvement score
+
 **Muscle Group**:
 A coarse, curated bucket — Legs, Chest, Back, Shoulders, Arms, or Core — that a catalog Exercise's free-form targeted muscles roll up into, used to show how a user's training is distributed across the body on the Analytics screen. The mapping is curated, not AI-derived; a targeted muscle with no known mapping falls into an explicit **Unclassified** bucket rather than being silently dropped. Coarser than an Exercise's own targeted-muscle list, and distinct from the training-type dimension. The coarse **roll-up tier** above the finer **Muscle** vocabulary — every Muscle nests under exactly one Muscle Group.
 _Avoid_: Body part, region, coarse muscle (as the label — that is a **Muscle Group**, not a **Muscle**)

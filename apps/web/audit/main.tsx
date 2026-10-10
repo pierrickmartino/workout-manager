@@ -40,6 +40,8 @@ import { Alert } from "@/components/pulse/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SpecsPanel } from "@/components/exercise/specs-panel";
+import { ProgressStoryCard } from "@/components/pulse/progress-story";
+import { toProgressStoryView } from "@/lib/progress-story-view";
 import { AdminExerciseBrowser } from "@/components/AdminExerciseBrowser";
 import { LocalInstant } from "@/components/pulse/local-instant";
 import { ConfirmDialog } from "@/components/pulse/confirm-dialog";
@@ -64,7 +66,7 @@ import { BackLink } from "@/components/pulse/back-link";
 import type { Achievement } from "@/lib/profile-progress-types";
 import { SetAsideNote } from "@/components/SetAsideNote";
 import { protocolsIndex, type LiveSessionContext } from "@/lib/protocols-index";
-import { adminExerciseRows, auditEntry, exerciseDetail, exerciseNames, exercises, history, liveWorkout, personalRecords, prescriptions, profile, protocolIndexEntries, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
+import { adminExerciseRows, auditEntry, exerciseDetail, exerciseNames, exercises, history, liveWorkout, personalRecords, prescriptions, profile, progressStory, protocolIndexEntries, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
 
 const params = new URLSearchParams(location.search);
 if (params.get("fonts") === "fontsource") {
@@ -356,7 +358,14 @@ function Content() {
     // The Exercise detail page's SPECS lens, which carries the framed illustration (ADR-0095).
     // Its box is reserved by the layout rather than by the image, so this measures the box the
     // page actually holds open while the bytes never arrive.
-    case "exercise": return <SpecsPanel exercise={exerciseDetail} topSetSeries={[]} unit="kg" />;
+    // The Progress Story leads that page (ADR-0127): a headline and two linked sessions side by
+    // side, the pair being the one thing on it that halves 320px.
+    case "exercise": return (
+      <div className="flex flex-col gap-7">
+        <ProgressStoryCard story={toProgressStoryView(progressStory, "kg")} />
+        <SpecsPanel exercise={exerciseDetail} topSetSeries={[]} unit="kg" />
+      </div>
+    );
     // The admin catalog browser (ADR-0097) and, beneath it, one audit-trail row in the shape
     // the admin editor renders it — the reader's-clock instant (ADR-0096) is the longest text
     // in that row. Neither admin screen was in any journey before.

@@ -10,6 +10,7 @@ import { resolveAppearance } from "@/lib/appearance";
 import { bestEffortData, settleBestEffort } from "@/lib/best-effort-read";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { toExerciseTab } from "@/lib/exercise-detail-view";
+import { toProgressStoryView } from "@/lib/progress-story-view";
 import { backTarget } from "@/lib/back-target";
 import type { ProtocolProgress } from "@/lib/protocols-types";
 import { PageHeader } from "@/components/pulse/page-header";
@@ -23,6 +24,7 @@ import { StatHeader } from "@/components/exercise/stat-header";
 import { SpecsPanel } from "@/components/exercise/specs-panel";
 import { HistoryPanel } from "@/components/exercise/history-panel";
 import { RecordsPanel } from "@/components/exercise/records-panel";
+import { ProgressStoryCard } from "@/components/pulse/progress-story";
 
 // The Exercise Detail page (F6 Slice 1): Pulse's tabbed layout over honest reads
 // (ADR-0017). A single header carries the name and AI-GEN / CURATED provenance,
@@ -100,6 +102,11 @@ export default async function ExercisePage({
         }
       />
 
+      {/* The Progress Story leads (ADR-0127): "how am I doing?" is answered first, from the
+          same records read as the stat header beside it. */}
+      {records ? (
+        <ProgressStoryCard story={toProgressStoryView(records.story, unit)} />
+      ) : null}
       {records ? <StatHeader records={records} unit={unit} /> : null}
 
       <ExerciseTabs exerciseId={exerciseId} active={tab} from={from} />

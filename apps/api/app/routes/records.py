@@ -4,8 +4,8 @@
 highest Estimated 1RM, or ``null`` when the Exercise has no absolute-Load history),
 Total Sets (a count of their Logged Sets), the Top-Set Trend series (the best Estimated
 1RM per qualifying session, oldest-first), and the PR milestones (every set that struck a
-new Estimated-1RM best, newest-first — the RECORDS lens) for a single Exercise, under the
-standard envelope. It is read-only over the *record* side — no plan is read or mutated,
+new Estimated-1RM best, newest-first — the RECORDS lens) for a single Exercise, plus its Progress Story
+(ADR-0127), under the standard envelope. It is read-only over the *record* side — no plan is read or mutated,
 no AI runs — and reuses the shipped Estimated-1RM / Personal-Record engine (ADR-0010).
 Reads are scoped to the owning user (F6 Slices 2–4)."""
 
@@ -14,6 +14,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from app.auth.dependencies import get_current_user
+from app.domain.progress_story import progress_story_payload
 from app.envelope import success_envelope
 from app.logbook.exercise_records import ExerciseRecordsView, exercise_records
 from app.logbook.records import personal_record_payload
@@ -37,6 +38,7 @@ def _serialize(view: ExerciseRecordsView) -> dict:
         "pr_milestones": [
             personal_record_payload(milestone) for milestone in view.pr_milestones
         ],
+        "story": progress_story_payload(view.story),
     }
 
 

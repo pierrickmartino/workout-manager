@@ -310,3 +310,86 @@ def test_records_endpoint_requires_authentication():
 
     # Assert
     assert response.status_code == 401
+
+
+def _story(client, ctx, user, exercise_id):
+    response = client.get(
+        f"/api/exercises/{exercise_id}/records", headers=_auth(ctx, user)
+    )
+    assert response.status_code == 200
+    return response.json()["data"]["story"]
+
+
+def test_records_endpoint_carries_the_progress_story():
+    # Arrange — 8 then 10 squats at 60 kg
+    client, ctx, sessions, logged = build_client()
+    _perform(sessions, logged, "user_story", SQUAT, date(2026, 1, 1), 8, _absolute(60.0))
+    _perform(sessions, logged, "user_story", SQUAT, date(2026, 1, 8), 10, _absolute(60.0))
+    previous, latest = sorted(
+        logged.list_for_user("user_story"), key=lambda session: session.performed_on
+    )
+
+    # Act
+    story = _story(client, ctx, "user_story", SQUAT)
+
+    # Assert — the structured result, linking the caller's own two Logged Sessions
+    assert story == {
+        "kind": "improved",
+        "axis": "reps_at_load",
+        "load_kind": "absolute",
+        "held": 60.0,
+        "delta": 2,
+        "latest": {"logged_session_id": latest.id, "performed_on": "2026-01-08", "value": 10},
+        "previous": {
+            "logged_session_id": previous.id,
+            "performed_on": "2026-01-01",
+            "value": 8,
+        },
+    }
+
+
+def test_records_endpoint_story_is_insufficient_for_a_single_session():
+    # Arrange
+    client, ctx, sessions, logged = build_client()
+    _perform(sessions, logged, "user_once", SQUAT, date(2026, 1, 1), 8, _absolute(60.0))
+
+    # Act
+    story = _story(client, ctx, "user_once", SQUAT)
+
+    # Assert — present, honestly insufficient
+    assert story["kind"] == "insufficient"
+    assert story["latest"] is None
+
+
+def test_deleting_the_latest_logged_session_changes_the_story():
+    # Arrange — 6, 8, then 10 reps at 60 kg
+    client, ctx, sessions, logged = build_client()
+    for day, reps in ((1, 6), (8, 8), (15, 10)):
+        _perform(sessions, logged, "user_del", SQUAT, date(2026, 1, day), reps, _absolute(60.0))
+    newest = logged.list_for_user("user_del")[0]
+    assert _story(client, ctx, "user_del", SQUAT)["latest"]["value"] == 10
+
+    # Act
+    logged.delete(newest.id, "user_del")
+    story = _story(client, ctx, "user_del", SQUAT)
+
+    # Assert — the story falls back to the remaining pair, never linking the deleted one
+    assert story["latest"]["value"] == 8
+    assert story["previous"]["value"] == 6
+    assert newest.id not in (
+        story["latest"]["logged_session_id"],
+        story["previous"]["logged_session_id"],
+    )
+
+
+def test_another_users_sessions_are_never_paired():
+    # Arrange — I logged once; another user logged the same load since
+    client, ctx, sessions, logged = build_client()
+    _perform(sessions, logged, "user_mine", SQUAT, date(2026, 1, 1), 8, _absolute(60.0))
+    _perform(sessions, logged, "user_other", SQUAT, date(2026, 1, 8), 10, _absolute(60.0))
+
+    # Act
+    story = _story(client, ctx, "user_mine", SQUAT)
+
+    # Assert — one session of mine is no pair
+    assert story["kind"] == "insufficient"

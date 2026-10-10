@@ -41,6 +41,7 @@ from app.domain.personal_records import (
     detect_personal_records,
     logged_set_records,
 )
+from app.domain.progress_story import INSUFFICIENT, ProgressStory, progress_story
 from app.logbook.top_sets import TOP_SET_SERIES_LIMIT, TopSetPoint, top_set_series
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
@@ -75,6 +76,10 @@ class ExerciseRecordsView:
     # weight so their calisthenics work can start setting Personal Records. False once the
     # Exercise holds any Personal Record, or when no would-be-eligible mass-less set exists.
     body_weight_nudge: bool = False
+    # The Progress Story (ADR-0127): the latest Logged Session of the Exercise compared
+    # with the one before it, as a structured result. Always present — ``insufficient``
+    # when no exact comparison exists, including for an Exercise never logged.
+    story: ProgressStory = INSUFFICIENT
 
 
 def exercise_records(
@@ -126,6 +131,7 @@ def exercise_records(
         # already computed for the PR tile — no second pass over the history.
         pr_milestones=list(reversed(records)),
         body_weight_nudge=_needs_body_weight_nudge(history, exercise_id, records),
+        story=progress_story(history, exercise_id),
     )
 
 

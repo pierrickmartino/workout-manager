@@ -4,6 +4,7 @@
 // `lib/exercise-records.ts`.
 
 import type { PersonalRecordEntry } from "./analytics-types";
+import type { ProgressStory } from "./progress-story-view.ts";
 import { formatRecordAchievement } from "./record-achievement.ts";
 import type { WeightUnit } from "./weight-unit";
 import { formatWholeWeight } from "./weight-format.ts";
@@ -26,6 +27,10 @@ export interface ExerciseRecords {
   // Weight was on file (ADR-0026) — the signal to prompt the user to record their weight
   // so their calisthenics work can set records. `false` once any record exists.
   body_weight_nudge: boolean;
+  // The Progress Story (ADR-0127): the latest Logged Session of this Exercise against the
+  // one before it, structured; `toProgressStoryView` words it. Always present — kind
+  // `insufficient` when no exact comparison exists.
+  story: ProgressStory;
 }
 
 // One qualifying session's Top Set (ADR-0017): the ISO `date` it was performed on and

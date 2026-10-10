@@ -3,6 +3,7 @@ import type { SessionSummary } from "@/lib/session-library";
 import type { ExerciseSearchResult } from "@/lib/exercises-types";
 import type { ExerciseDetail, ExercisePrescription, WorkoutSession } from "@/lib/sessions-types";
 import type { AdminExerciseRow } from "@/lib/admin-exercises-view";
+import type { ProgressStory } from "@/lib/progress-story-view";
 import type { Profile } from "@/lib/profile-types";
 import type { ProtocolProgress } from "@/lib/protocols-types";
 import type { ProtocolIndexEntry } from "@/lib/protocols-index";
@@ -206,3 +207,11 @@ export const adminExerciseRows: AdminExerciseRow[] = Array.from({ length: 60 }, 
 // than imported — what is under measurement is the instant's own text, which is the longest
 // thing in that row and the part this change made longer.
 export const auditEntry = { actor: "operator@example.com", createdAt: "2026-09-30T14:03:22.123456" };
+
+// The Progress Story at its widest (ADR-0127): a fractional load and two-digit counts, so the
+// headline and each side-by-side row hold the longest figures a reps-at-load story can.
+export const progressStory: ProgressStory = {
+  kind: "declined", axis: "reps_at_load", load_kind: "absolute", held: 102.5, delta: -12,
+  latest: { logged_session_id: 1000, performed_on: "2026-09-26", value: 10 },
+  previous: { logged_session_id: 999, performed_on: "2026-09-19", value: 22 },
+};
