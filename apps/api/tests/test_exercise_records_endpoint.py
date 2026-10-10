@@ -345,6 +345,42 @@ def test_records_endpoint_carries_the_progress_story():
             "performed_on": "2026-01-01",
             "value": 8,
         },
+        "body_weight": None,
+    }
+
+
+def test_records_endpoint_story_compares_bodyweight_on_the_added_load():
+    # Arrange — weighted push-ups at +10 kg: 4 reps at 80 kg body weight, then 6 at 78 kg
+    client, ctx, sessions, logged = build_client()
+    _perform_bw(
+        sessions, logged, "user_bw_story", PUSHUP, date(2026, 1, 1), 4,
+        added_kg=10.0, mass=80.0,
+    )
+    _perform_bw(
+        sessions, logged, "user_bw_story", PUSHUP, date(2026, 1, 8), 6,
+        added_kg=10.0, mass=78.0,
+    )
+    previous, latest = sorted(
+        logged.list_for_user("user_bw_story"), key=lambda session: session.performed_on
+    )
+
+    # Act
+    story = _story(client, ctx, "user_bw_story", PUSHUP)
+
+    # Assert — held on the added 10 kg, with both Performed Body Weights for the footnote
+    assert story == {
+        "kind": "improved",
+        "axis": "reps_at_load",
+        "load_kind": "bodyweight",
+        "held": 10.0,
+        "delta": 2,
+        "latest": {"logged_session_id": latest.id, "performed_on": "2026-01-08", "value": 6},
+        "previous": {
+            "logged_session_id": previous.id,
+            "performed_on": "2026-01-01",
+            "value": 4,
+        },
+        "body_weight": {"previous_kg": 80.0, "latest_kg": 78.0},
     }
 
 

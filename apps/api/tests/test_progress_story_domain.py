@@ -1,8 +1,8 @@
-"""Progress Story (#655, #656) — the latest Logged Session of an Exercise against the most
+"""Progress Story (#655, #656, #657) — the latest Logged Session of an Exercise against the most
 recent earlier comparable one.
 
 ``progress_story`` returns a structured result — never a sentence. It compares absolute
-Loads in non-warm-up sets: first at the **heaviest shared load** (best reps at it), else at
+Loads, and bodyweight Loads on their added load, in non-warm-up sets: first at the **heaviest shared load** (best reps at it), else at
 the **heaviest shared rep count** (heaviest load for it), scanning earlier sessions
 backwards until one matches. Anything it cannot compare exactly is ``insufficient``;
 Estimated 1RM is never used.
@@ -18,6 +18,7 @@ import pytest
 
 from app.domain.load import LoadKind, ParsedLoad
 from app.domain.progress_story import (
+    BodyWeightChange,
     StoryAxis,
     StoryKind,
     progress_story,
@@ -520,6 +521,7 @@ def test_the_payload_carries_the_structured_result():
         "delta": 2,
         "latest": {"logged_session_id": 2, "performed_on": "2026-03-08", "value": 10},
         "previous": {"logged_session_id": 1, "performed_on": "2026-03-01", "value": 8},
+        "body_weight": None,
     }
 
 
@@ -536,4 +538,183 @@ def test_the_insufficient_payload_claims_nothing():
         "delta": None,
         "latest": None,
         "previous": None,
+        "body_weight": None,
     }
+
+
+PULL_UP = 3
+
+
+def _bodyweight(added_kg: float | None = None) -> dict:
+    text = "bodyweight" if added_kg is None else f"bodyweight + {added_kg:g} kg"
+    return ParsedLoad(kind=LoadKind.BODYWEIGHT, text=text, added_kg=added_kg).to_dict()
+
+
+def _pull_up(
+    reps: int, *, added_kg: float | None = None, body_weight_kg: float | None = None
+) -> _Set:
+    return _Set(PULL_UP, _reps(reps), _bodyweight(added_kg), body_weight_kg=body_weight_kg)
+
+
+def test_plain_bodyweight_sets_compare_reps_at_zero_added_load():
+    # Arrange — 5 pull-ups last time, 8 now, no added load
+    history = [
+        _session(2, 8, _pull_up(8)),
+        _session(1, 1, _pull_up(5)),
+    ]
+
+    # Act
+    story = progress_story(history, PULL_UP)
+
+    # Assert — the held "load" is the added load: zero
+    assert story.kind is StoryKind.IMPROVED
+    assert story.axis is StoryAxis.REPS_AT_LOAD
+    assert story.load_kind is LoadKind.BODYWEIGHT
+    assert story.held == 0.0
+    assert (story.latest.value, story.previous.value, story.delta) == (8, 5, 3)
+
+
+def test_bodyweight_with_added_load_compares_reps_at_the_shared_added_load():
+    # Arrange — weighted pull-ups at +10 kg: 4 reps last time, 6 now
+    history = [
+        _session(2, 8, _pull_up(6, added_kg=10.0)),
+        _session(1, 1, _pull_up(4, added_kg=10.0)),
+    ]
+
+    # Act
+    story = progress_story(history, PULL_UP)
+
+    # Assert — held on the added 10 kg, never on body weight + added
+    assert story.kind is StoryKind.IMPROVED
+    assert story.load_kind is LoadKind.BODYWEIGHT
+    assert story.held == 10.0
+    assert story.delta == 2
+
+
+def test_bodyweight_with_added_load_compares_the_added_load_at_a_shared_rep_count():
+    # Arrange — 5 reps at +10 kg, then 5 reps at +12.5 kg
+    history = [
+        _session(2, 8, _pull_up(5, added_kg=12.5)),
+        _session(1, 1, _pull_up(5, added_kg=10.0)),
+    ]
+
+    # Act
+    story = progress_story(history, PULL_UP)
+
+    # Assert
+    assert story.axis is StoryAxis.LOAD_AT_REPS
+    assert story.load_kind is LoadKind.BODYWEIGHT
+    assert story.held == 5
+    assert (story.latest.value, story.previous.value, story.delta) == (12.5, 10.0, 2.5)
+
+
+def test_bodyweight_and_absolute_sets_are_never_compared():
+    # Arrange — the same "10 kg for 5 reps", once as a bar weight, once as an added load
+    history = [
+        _session(2, 8, _Set(PULL_UP, _reps(5), _absolute(10.0))),
+        _session(1, 1, _pull_up(5, added_kg=10.0)),
+    ]
+
+    # Act
+    story = progress_story(history, PULL_UP)
+
+    # Assert
+    assert story.kind is StoryKind.INSUFFICIENT
+
+
+def test_a_mixed_pair_compares_within_the_load_kind_both_sessions_share():
+    # Arrange — the latest holds an absolute set and a bodyweight set; the previous only a
+    # bodyweight set, with reps equal to the absolute set's
+    history = [
+        _session(2, 8, _Set(PULL_UP, _reps(5), _absolute(20.0)), _pull_up(7)),
+        _session(1, 1, _pull_up(5)),
+    ]
+
+    # Act
+    story = progress_story(history, PULL_UP)
+
+    # Assert — bodyweight against bodyweight only
+    assert story.load_kind is LoadKind.BODYWEIGHT
+    assert story.axis is StoryAxis.REPS_AT_LOAD
+    assert story.held == 0.0
+    assert story.delta == 2
+
+
+def test_a_changed_performed_body_weight_is_carried_for_the_footnote():
+    # Arrange — same added load, body weight 80 kg last time, 78 kg now
+    history = [
+        _session(2, 8, _pull_up(6, added_kg=10.0, body_weight_kg=78.0)),
+        _session(1, 1, _pull_up(4, added_kg=10.0, body_weight_kg=80.0)),
+    ]
+
+    # Act
+    story = progress_story(history, PULL_UP)
+
+    # Assert — both values, and the comparison itself is untouched
+    assert story.body_weight == BodyWeightChange(previous_kg=80.0, latest_kg=78.0)
+    assert story.delta == 2
+
+
+@pytest.mark.parametrize(
+    ("previous_kg", "latest_kg"),
+    [(80.0, 80.0), (None, 78.0), (80.0, None), (None, None), (80.0, 80.0 + 1e-9)],
+    ids=["equal", "previous_unrecorded", "latest_unrecorded", "neither_recorded", "residue"],
+)
+def test_no_footnote_unless_both_body_weights_are_recorded_and_differ(previous_kg, latest_kg):
+    # Arrange
+    history = [
+        _session(2, 8, _pull_up(8, body_weight_kg=latest_kg)),
+        _session(1, 1, _pull_up(5, body_weight_kg=previous_kg)),
+    ]
+
+    # Act
+    story = progress_story(history, PULL_UP)
+
+    # Assert
+    assert story.kind is StoryKind.IMPROVED
+    assert story.body_weight is None
+
+
+def test_an_absolute_story_never_carries_a_body_weight():
+    # Arrange — body weights recorded on bar-weight sets mean nothing to the comparison
+    history = [
+        _session(2, 8, _Set(SQUAT, _reps(10), _absolute(60.0), body_weight_kg=78.0)),
+        _session(1, 1, _Set(SQUAT, _reps(8), _absolute(60.0), body_weight_kg=80.0)),
+    ]
+
+    # Act
+    story = progress_story(history, SQUAT)
+
+    # Assert
+    assert story.body_weight is None
+
+
+def test_the_footnote_reads_the_body_weight_of_the_compared_sets():
+    # Arrange — a shared-rep-count story, whose compared sets are the heaviest at 5 reps
+    history = [
+        _session(2, 8, _pull_up(5, added_kg=12.5, body_weight_kg=78.0)),
+        _session(1, 1, _pull_up(5, added_kg=10.0, body_weight_kg=80.0)),
+    ]
+
+    # Act
+    story = progress_story(history, PULL_UP)
+
+    # Assert
+    assert story.axis is StoryAxis.LOAD_AT_REPS
+    assert story.body_weight == BodyWeightChange(previous_kg=80.0, latest_kg=78.0)
+
+
+def test_the_payload_carries_the_body_weight_change():
+    # Arrange
+    history = [
+        _session(2, 8, _pull_up(6, added_kg=10.0, body_weight_kg=78.0)),
+        _session(1, 1, _pull_up(4, added_kg=10.0, body_weight_kg=80.0)),
+    ]
+
+    # Act
+    payload = progress_story_payload(progress_story(history, PULL_UP))
+
+    # Assert
+    assert payload["load_kind"] == "bodyweight"
+    assert payload["held"] == 10.0
+    assert payload["body_weight"] == {"previous_kg": 80.0, "latest_kg": 78.0}

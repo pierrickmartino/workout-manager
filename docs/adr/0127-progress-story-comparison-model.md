@@ -47,11 +47,17 @@ each linking to its record, so the claim can always be checked.
   reps. Percent-of-1RM, qualitative and range Loads, and timed or distance sets, are ineligible:
   each would need a guess (an estimate, a word, a midpoint) to compare. The two sides are compared
   only within one Load kind, never across absolute and bodyweight (the Load term in the glossary).
+  When a pair holds both kinds, each rule is tried in absolute, then bodyweight, before the next
+  rule: a shared load in either kind still beats a shared rep count.
 - **Bodyweight compares on the added load** (ADR-0026). "Same load" for a weighted pull-up means
   the same added weight the user prescribed; a plain bodyweight set's load is zero added. The
   Performed Body Weight is not part of the comparison, because it changes for reasons that aren't
-  training. When both sides recorded one and they differ, the result carries both, and the story
-  shows them as a footnote ("body weight 80 → 78 kg") so the comparison stays transparent.
+  training. When both sides recorded one and they differ, the result carries both (`body_weight`:
+  `previous_kg`, `latest_kg`, read off the two compared sets), and the story shows them as a
+  footnote ("Body weight 80 → 78 kg.") so the comparison stays transparent. They differ at the
+  same gram precision loads match at. The copy never shows a bare kg total: "3 more reps at
+  bodyweight", "2 more reps at bodyweight + 10 kg", and a shared-rep change names itself as the
+  added load ("+2.5 kg added for 5 reps.").
 - **The domain returns a structure, never a sentence.** `app/domain/progress_story.py` returns the
   kind (`improved`, `unchanged`, `declined`, `insufficient`), the axis, the held value, both
   measured values and the signed delta, the Load kind, and both Logged Session ids and dates.
@@ -70,8 +76,8 @@ shape from the same domain function.
 
 The first slice (#655) ships the shared-load rule for absolute Loads, pairing the latest session
 with the immediately previous one, on the Exercise page. The second (#656) adds the shared-rep
-rule and the backwards scan. Bodyweight with its footnote, and the Strength analytics cards,
-follow in #649's later slices.
+rule and the backwards scan. The third (#657) adds bodyweight with its footnote. The Strength
+analytics cards follow in #649's last slice.
 
 ## Considered options
 
