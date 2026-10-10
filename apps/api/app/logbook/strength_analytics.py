@@ -17,7 +17,7 @@ over the Logged-Session repository; no ORM, no HTTP."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import date
 
 from app.domain.muscle_groups import (
@@ -30,13 +30,22 @@ from app.domain.personal_records import (
     detect_personal_records,
     logged_set_records,
 )
-from app.domain.progress_story import progress_story
+from app.domain.progress_story import ProgressStory, progress_story
 from app.logbook.top_sets import ExerciseTrajectory, rank_qualifying_exercises
 from app.repositories.logged_session_repository import LoggedSessionRepository
 
 # The balance-over-time series spans :data:`MUSCLE_BALANCE_WEEKS`, imported from the
 # muscle-groups domain so the chart provably shares its recent window with the coming
 # Muscle Group Coverage read (issue #187) rather than keeping its own private eight.
+
+
+@dataclass(frozen=True)
+class StrengthTrajectory:
+    """One small-multiple: an Exercise's ranked Top-Set trajectory and its Progress Story
+    (ADR-0127), the same comparison the Exercise page shows."""
+
+    trajectory: ExerciseTrajectory
+    story: ProgressStory
 
 
 @dataclass(frozen=True)
@@ -66,7 +75,7 @@ class StrengthAnalyticsOverview:
     pr_timeline: tuple[PersonalRecord, ...]
     total_records: int
     has_qualifying_strength: bool
-    trajectories: tuple[ExerciseTrajectory, ...]
+    trajectories: tuple[StrengthTrajectory, ...]
     # The Muscle-Group balance-over-time series (ADR-0024 / issue #178): one set-count
     # composition per week over the last :data:`MUSCLE_BALANCE_WEEKS`, oldest-first. It
     # reads *all* logged sets (not just qualifying strength), is descriptive only, and
@@ -106,8 +115,8 @@ def strength_analytics_overview(
         has_qualifying_strength=bool(timeline),
         # The small-multiples are the whole ranked set, independent of the timeline page.
         trajectories=tuple(
-            replace(
-                trajectory, story=progress_story(history, trajectory.exercise_id)
+            StrengthTrajectory(
+                trajectory, progress_story(history, trajectory.exercise_id)
             )
             for trajectory in rank_qualifying_exercises(history)
         ),
@@ -122,5 +131,6 @@ def strength_analytics_overview(
 __all__ = [
     "MUSCLE_BALANCE_WEEKS",
     "StrengthAnalyticsOverview",
+    "StrengthTrajectory",
     "strength_analytics_overview",
 ]

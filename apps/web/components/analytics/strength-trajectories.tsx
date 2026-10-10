@@ -63,7 +63,7 @@ function TrajectoryTile({ tile }: { tile: StrengthTrajectoryTile }) {
 
 function TrajectoryCard({ tile }: { tile: StrengthTrajectoryTile }) {
   return (
-    <Card className="flex h-full flex-col gap-3 p-4 transition-colors group-hover:border-cyan/40">
+    <Card className="flex flex-col gap-3 p-4 transition-colors group-hover:border-cyan/40">
       <div className="flex items-center justify-between gap-2">
         {/* An authored name wraps, never widens the tile (ADR-0085). */}
         <span className="min-w-0 break-words font-sans text-[15px] font-medium text-text-primary">

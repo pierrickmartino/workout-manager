@@ -27,8 +27,10 @@ from app.domain.progress_story import progress_story_payload
 from app.envelope import success_envelope
 from app.logbook.analytics import AnalyticsOverview, AnalyticsRange, analytics_overview
 from app.logbook.records import personal_record_payload
-from app.logbook.strength_analytics import strength_analytics_overview
-from app.logbook.top_sets import ExerciseTrajectory
+from app.logbook.strength_analytics import (
+    StrengthTrajectory,
+    strength_analytics_overview,
+)
 from app.repositories.deps import (
     get_logged_session_repository,
     get_profile_repository,
@@ -164,7 +166,8 @@ def _serialize_week(week: WeeklyComposition) -> dict:
     }
 
 
-def _serialize_trajectory(trajectory: ExerciseTrajectory) -> dict:
+def _serialize_trajectory(ranked: StrengthTrajectory) -> dict:
+    trajectory = ranked.trajectory
     return {
         "exercise_id": trajectory.exercise_id,
         "exercise": trajectory.exercise_name,
@@ -175,7 +178,7 @@ def _serialize_trajectory(trajectory: ExerciseTrajectory) -> dict:
             }
             for point in trajectory.series
         ],
-        "story": progress_story_payload(trajectory.story),
+        "story": progress_story_payload(ranked.story),
     }
 
 

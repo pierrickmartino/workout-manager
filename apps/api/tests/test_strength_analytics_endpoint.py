@@ -67,8 +67,8 @@ def _auth(ctx, sub):
     return {"Authorization": f"Bearer {ctx.mint(sub=sub)}"}
 
 
-def _perform_pr(sessions, logged, user, performed_on, kg):
-    """Log a single absolute-load Squat single that can set a Personal Record."""
+def _log_squat(sessions, logged, user, performed_on, reps, kg):
+    """Log one Squat set of ``reps`` at an absolute ``kg``."""
 
     session_view = sessions.create(
         user,
@@ -80,9 +80,18 @@ def _perform_pr(sessions, logged, user, performed_on, kg):
         LoggedSessionDraft(
             session_id=session_view.id,
             performed_on=performed_on,
-            logged_sets=[LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(1), load=load)],
+            logged_sets=[
+                LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(reps), load=load)
+            ],
         ),
     )
+
+
+
+def _perform_pr(sessions, logged, user, performed_on, kg):
+    """Log a single absolute-load Squat single that can set a Personal Record."""
+
+    _log_squat(sessions, logged, user, performed_on, 1, kg)
 
 
 def test_strength_returns_the_newest_first_pr_timeline_and_open_gate():
@@ -335,26 +344,6 @@ def test_strength_requires_authentication():
     assert response.status_code == 401
 
 
-def _log_squat(sessions, logged, user, performed_on, reps, kg):
-    """Log one Squat set of ``reps`` at an absolute ``kg``."""
-
-    session_view = sessions.create(
-        user,
-        SessionDraft(training_type="strength", duration_minutes=45, prescriptions=[]),
-    )
-    load = ParsedLoad(kind=LoadKind.ABSOLUTE, text=f"{kg:g} kg", kg=kg).to_dict()
-    logged.create(
-        user,
-        LoggedSessionDraft(
-            session_id=session_view.id,
-            performed_on=performed_on,
-            logged_sets=[
-                LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(reps), load=load)
-            ],
-        ),
-    )
-
-
 def _trajectory_stories(client, ctx, user):
     response = client.get("/api/analytics/strength", headers=_auth(ctx, user))
     assert response.status_code == 200
@@ -424,7 +413,9 @@ def test_deleting_the_latest_logged_session_changes_the_trajectory_story():
     client, ctx, sessions, logged = build_client()
     for day, reps in ((1, 6), (8, 8), (15, 10)):
         _log_squat(sessions, logged, "user_del", date(2026, 1, day), reps, 60.0)
-    newest = logged.list_for_user("user_del")[0]
+    newest = max(
+        logged.list_for_user("user_del"), key=lambda session: session.performed_on
+    )
     assert _trajectory_stories(client, ctx, "user_del")[SQUAT]["latest"]["value"] == 10
 
     # Act
