@@ -192,7 +192,21 @@ Sources: `docs/development/*`, [audit 09-28](docs/research/audit/2026-09-28.md),
 - ❔ **WebKit / real iPhone runs** for reflow, resilience and charts (Chromium only so far).
 - ⬜ **View Transitions in the running app:** all eight steps (ADR-0118 to ADR-0124) were checked with real components in Chromium, but none through the Next router in the running app, and no CI journey drives a navigation yet.
 
-## 12. Deployment: Hostinger VPS migration
+## 12. Vercel React best-practices audit (10 Oct)
+
+Source: [react-best-practices-2026-10-10](docs/research/audit/vercel/react-best-practices-2026-10-10.md). Each fix is measured against the build output before and after.
+
+- ⬜ V-1 **History list:** add `.list-row-defer` to each history card (XS), then map records to a slim view-model on the server (S). Windowing `GET /api/logs` with "show more" needs an ADR, because filtering is client-side today.
+- ⬜ V-2 **Stop preloading every Skin's fonts:** 9 files (235 KB) are preloaded on every route. Set `preload: false` on the Aurora and Vercel families, or preload only the active Skin's fonts. Fix the layout comment and add a note to ADR-0050.
+- ⬜ V-3 **Shrink the atlas client data** (36.4 KB gz on `/analytics`): round `reference-data.ts` coordinates to 1 decimal place, and send only the resolved figure's paths (split by gender, or render the base silhouette on the server).
+- ⬜ V-4 **Protocol edit page:** fetch the Protocol, Profile and appearance in one `Promise.all`, then call `notFound()`.
+- ⬜ V-5 **Batch harder-variation offers:** one `GET /api/sessions/{id}/harder-variations` instead of one request per prescription.
+- ⬜ V-6 **Strength analytics:** read appearance in the same `Promise.all` as the main fetch.
+- ⬜ V-7 **`ProtocolBuilder`:** derive the shown preview during render instead of clearing it in an effect.
+- ⬜ V-8 **`ExerciseLibrary`:** move the query-change state resets into `onChange`.
+- ⬜ V-9 **`useWideViewport` / `useChartTheme`:** move to `useSyncExternalStore` with one shared subscription (low priority).
+
+## 13. Deployment: Hostinger VPS migration
 
 Source: [hostinger-vps](docs/deployment/hostinger-vps.md) → *Completion checklist*. All unchecked in the doc; owner tasks.
 
