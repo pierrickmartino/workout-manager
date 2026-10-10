@@ -6,6 +6,7 @@ import {
   toggleOutcomeAction,
   type ToggleOutcomeState,
 } from "@/app/history/actions";
+import type { HistoryCard } from "@/lib/history-window";
 import type { CompletionOutcome } from "@/lib/logs-types";
 
 interface OutcomeToggleProps {
@@ -19,6 +20,9 @@ interface OutcomeToggleProps {
   // un-complete direction — marking Completed only fills the set and is never gated.
   uncompleteDisabled: boolean;
   uncompleteReason: string | null;
+  // Receives the corrected record, so a card held only on the client shows the new outcome
+  // (the server's revalidation refreshes only its own first window, ADR-0128).
+  onCorrected?: (card: HistoryCard) => void;
 }
 
 // A thin control to correct a plan-backed Logged Session's Completion Outcome from the
@@ -31,9 +35,14 @@ export function OutcomeToggle({
   outcome,
   uncompleteDisabled,
   uncompleteReason,
+  onCorrected,
 }: OutcomeToggleProps) {
   const [state, action, pending] = useActionState<ToggleOutcomeState, FormData>(
-    toggleOutcomeAction,
+    async (previous, form) => {
+      const next = await toggleOutcomeAction(previous, form);
+      if (next.card !== undefined) onCorrected?.(next.card);
+      return next;
+    },
     { error: null },
   );
 

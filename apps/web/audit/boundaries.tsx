@@ -1,4 +1,5 @@
-import { taxonomy, exercises } from "./fixtures";
+import { taxonomy, exercises, history } from "./fixtures";
+import { toHistoryCard } from "@/lib/history-window";
 import * as auditOutbox from "@/lib/finish-outbox-store";
 import * as auditSync from "@/lib/finish-outbox-sync";
 
@@ -46,6 +47,11 @@ export function actionResult(name: string, args: unknown[]) {
   }
   if (name === "fetchCatalogTaxonomyForFilters") return { taxonomy, error: null };
   if (name === "searchExerciseLibrary") return { exercises, error: null };
+  // History's windowed cards (ADR-0128): the synthetic records for the requested ids.
+  if (name === "fetchHistoryCards") {
+    const ids = args[0] as number[];
+    return { cards: history(Math.max(...ids)).filter(record => ids.includes(record.id)).map(toHistoryCard), error: null };
+  }
   if (name === "fetchCatalogEntryDetail") {
     const exercise = exercises.find(item => item.id === args[0]) ?? exercises[0];
     return { exercise: { ...exercise, description: "Synthetic coaching text.", instructions: ["Keep movements controlled and comfortable."], alternatives: [] }, records: null, error: null };

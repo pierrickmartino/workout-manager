@@ -1107,6 +1107,14 @@
     contain-intrinsic-size: auto 74px;
   }
 
+  /* The same deferral for a History card (ADR-0128). A card is much taller than a catalog
+     row: a header, an action row and a stacked set table. 360px is an estimate for a card
+     with a few sets; as above, `auto` replaces it with the measured size once rendered. */
+  .history-row-defer {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 360px;
+  }
+
   /* The Reference Atlas figure's keyboard focus indicator (ADR-0104). A selectable muscle
      group is an SVG `<g>`, and the figure's own feedback for it is a fill tint — which is
      a colour shift on an already-tinted shape, indistinguishable from the heat overlay a

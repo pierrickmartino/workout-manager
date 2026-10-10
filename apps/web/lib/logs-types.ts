@@ -66,6 +66,22 @@ export interface LoggedSession {
   uncompletable?: boolean;
 }
 
+// One row of the History index (`GET /api/logs/index`, ADR-0128): every Logged Session, in
+// history order, carrying only what the History filters read plus the correction verdicts.
+// The screen filters, counts and builds the exercise picker over this, so all of them see the
+// whole record while full records arrive in windows. `exercise_names` are the movements the
+// record's Logged Sets performed, distinct. The verdicts live here, not on the windowed
+// records, because a tail-first correction can change an older record's verdict, and the index
+// is re-read on every revalidation.
+export interface HistoryIndexRow {
+  id: number;
+  performed_on: string;
+  training_type: string;
+  exercise_names: string[];
+  deletable: boolean;
+  uncompletable: boolean;
+}
+
 // A set the user submits to record. The amount is captured as a typed Quantity
 // (ADR-0032): `quantity_kind` is the picked kind (the log form sends `repetitions`)
 // and `quantity_value` its value field. The load is captured the same way — the picked

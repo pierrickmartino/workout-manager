@@ -1,13 +1,14 @@
 // View-model for the History screen's search + filter. This module has NO server-only
 // imports, so both the Server Component page and the Client Component controls can use it.
 //
-// It works purely over the already-fetched History feed (client-side filtering, Q4). An
-// exercise search matches the *record* — each Logged Session's Logged Sets — never the plan
-// (Q1), so a substituted-in or off-plan movement is found. A training-type filter reads each
-// Logged Session's own denormalized `training_type` (ADR-0031, Q3). The two facets intersect
+// It works purely over the History index (client-side filtering, Q4; ADR-0128): one row per
+// Logged Session, so a filter always sees the whole record even though full records arrive in
+// windows. An exercise search matches the *record* — the movements its Logged Sets performed —
+// never the plan (Q1), so a substituted-in or off-plan movement is found. A training-type
+// filter reads each Logged Session's own denormalized `training_type` (ADR-0031, Q3). The two facets intersect
 // (AND); multiple training types OR within their own facet (Q7).
 
-import type { LoggedSession } from "./logs-types";
+import type { HistoryIndexRow } from "./logs-types";
 import { TRAINING_TYPES } from "./sessions-types.ts";
 
 // The URL param names the filter state lives under (Q8): a single `exercise`, and a repeated
@@ -28,28 +29,33 @@ export interface HistoryFilters {
 // The distinct exercises the user has actually logged, alphabetical — the options for the
 // exercise picker (Q5). Only movements present in the record are offered, since searching for
 // one you never performed can only ever yield an empty result.
-export function deriveExerciseOptions(records: LoggedSession[]): string[] {
+export function deriveExerciseOptions(
+  records: readonly Pick<HistoryIndexRow, "exercise_names">[],
+): string[] {
   const names = new Set<string>();
   for (const record of records) {
-    for (const set of record.logged_sets) {
-      names.add(set.exercise_name);
+    for (const name of record.exercise_names) {
+      names.add(name);
     }
   }
   return Array.from(names).sort((a, b) => a.localeCompare(b));
 }
 
+// The fields a filter reads off a History index row.
+type Filterable = Pick<HistoryIndexRow, "training_type" | "exercise_names">;
+
 // Whether a record performed the named exercise — i.e. any of its Logged Sets references it.
 // Exact-name match is sound because the Catalog holds one definition per normalized name.
-function performedExercise(record: LoggedSession, exercise: string): boolean {
-  return record.logged_sets.some((set) => set.exercise_name === exercise);
+function performedExercise(record: Filterable, exercise: string): boolean {
+  return record.exercise_names.includes(exercise);
 }
 
 // Apply the agreed filter, returning a new array (immutability) in the input order. An unset
 // facet imposes no constraint; a set exercise AND a non-empty training-type set both apply.
-export function filterHistory(
-  records: LoggedSession[],
+export function filterHistory<T extends Filterable>(
+  records: readonly T[],
   filters: HistoryFilters,
-): LoggedSession[] {
+): T[] {
   const { exercise, trainingTypes } = filters;
   return records.filter((record) => {
     if (exercise !== null && !performedExercise(record, exercise)) {

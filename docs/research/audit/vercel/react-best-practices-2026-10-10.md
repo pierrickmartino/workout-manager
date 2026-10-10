@@ -85,6 +85,11 @@ met:
 
 ### V-1: History sends and renders the whole record (High, grows over time)
 
+**Status:** fixed by [ADR-0128](../../../adr/0128-history-is-a-full-index-over-windowed-records.md)
+(fix 3 together with fixes 1 and 2). For a seeded 300 × 15-set history, the History props go
+from 1,303 KB to 183 KB raw (20.1 KB to 4.7 KB gz) and first-load cards from 300 to 30
+(`node apps/web/audit/history-payload.mjs`; serialized props, not a live RSC capture).
+
 **Where:**
 - `app/history/page.tsx` → `fetchHistory()` → `GET /api/logs`
   (`apps/api/app/routes/logs.py:488`) has no limit and returns every Logged Session

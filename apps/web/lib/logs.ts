@@ -1,6 +1,8 @@
 import { apiGet, apiSend, apiSendWithStatus, type Envelope, type SentEnvelope } from "./api";
 
+import { historyWindowIdsQuery } from "./history-window";
 import type {
+  HistoryIndexRow,
   LoggedSession,
   LogAdhocInput,
   LogCorrectionInput,
@@ -45,6 +47,27 @@ export async function logAdhocSession(
 
 export async function fetchHistory(): Promise<Envelope<LoggedSession[]>> {
   return apiGet("/api/logs");
+}
+
+// The History index (ADR-0128): one slim row per Logged Session, newest first, with the
+// filterable fields and the correction verdicts. The History screen filters over it.
+export async function fetchHistoryIndex(): Promise<Envelope<HistoryIndexRow[]>> {
+  return apiGet("/api/logs/index");
+}
+
+// The newest `limit` Logged Sessions in full (at most one window, ADR-0128). No verdicts.
+export async function fetchRecentHistory(
+  limit: number,
+): Promise<Envelope<LoggedSession[]>> {
+  return apiGet(`/api/logs?limit=${limit}`);
+}
+
+// One batch of the owner's Logged Sessions by id (at most one window, ADR-0128), newest
+// first. An id that is missing or someone else's is simply absent. No verdicts.
+export async function fetchHistoryByIds(
+  ids: readonly number[],
+): Promise<Envelope<LoggedSession[]>> {
+  return apiGet(`/api/logs?${historyWindowIdsQuery(ids)}`);
 }
 
 // Read one of the user's Logged Sessions in full — the record detail (the record side's
