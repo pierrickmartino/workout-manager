@@ -7,9 +7,9 @@ not a prerequisite for contributing: an agent or a first-day engineer can put up
 correct PR, and review (human or automated) catches the rest.
 
 **How to use it:** walk the checklist against the diff. Each item says what to
-**reject** and cites the decision that fixes it. Severity follows
-[`.claude/rules/common/code-review.md`](./.claude/rules/common/code-review.md):
-🔴 CRITICAL blocks merge; 🟠 HIGH should block; 🟡 MEDIUM is advisory.
+**reject** and cites the decision that fixes it. Severity: 🔴 CRITICAL (a
+security hole or data loss) blocks merge; 🟠 HIGH (a bug or a broken invariant)
+should block; 🟡 MEDIUM is advisory.
 
 ---
 
@@ -203,17 +203,14 @@ The plan model has **no calendar and no "today"** (ADR-0001).
 
 ## 9. Baseline quality & security
 
-Inherit the standing checklists — don't re-list them here, apply them:
-
-- Quality: [`.claude/rules/common/code-review.md`](./.claude/rules/common/code-review.md)
-  and [`coding-style.md`](./.claude/rules/common/coding-style.md) (immutability;
-  functions < 50 lines; files < 800 lines; nesting ≤ 4; explicit error handling;
-  no debug prints).
-- Security: [`.claude/rules/common/security.md`](./.claude/rules/common/security.md)
-  (no hardcoded secrets; validate boundaries; authz on every endpoint). Auth,
-  user-data, and generation changes warrant the **security-reviewer** agent.
-- Tests: [`.claude/rules/common/testing.md`](./.claude/rules/common/testing.md)
-  — new behavior ships with tests; keep coverage at the 80% bar; CI must be green.
+- Quality: [`coding-style.md`](./.claude/rules/common/coding-style.md)
+  (immutability; functions < 50 lines; files < 800 lines; nesting ≤ 4; explicit
+  error handling; no debug prints).
+- Security: no hardcoded secrets (env vars only); validate input at the system
+  boundary; authorize every endpoint against the signed-in user. Auth, user-data,
+  and generation changes warrant the **security-reviewer** agent.
+- Tests: new behaviour ships with a test written first, Arrange-Act-Assert with a
+  name that states the behaviour; keep coverage at the 80% bar; CI must be green.
 
 ---
 
