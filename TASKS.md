@@ -206,7 +206,16 @@ Source: [react-best-practices-2026-10-10](docs/research/audit/vercel/react-best-
 - ⬜ V-8 **`ExerciseLibrary`:** move the query-change state resets into `onChange`.
 - ⬜ V-9 **`useWideViewport` / `useChartTheme`:** move to `useSyncExternalStore` with one shared subscription (low priority).
 
-## 13. Deployment: Hostinger VPS migration
+## 13. Vercel composition patterns audit (10 Oct)
+
+Source: [composition-patterns-2026-10-10](docs/research/audit/vercel/composition-patterns-2026-10-10.md).
+
+- ⬜ C-1 **Split `HandAuthoredSessionForm`** (1,103 lines, over the 800 max) into two explicit forms, `LogHandAuthoredSessionForm` and `PlanHandAuthoredSessionForm`, built on a shared exercise-list editor. Drop the `mode` and `showPerformedSets` props.
+- ⬜ C-2 **Redesign `PrescriptionFieldStack`'s 30-prop interface:** replace the handlers that control visibility by being present, and the per-surface flags, with a compound component or an explicit field set per surface. Write an ADR first (ADR-0067/0069).
+- ⬜ C-3 **Remove the dead `advancedNonDefault` prop** from `PrescriptionFieldStack` (no caller passes it).
+- ⬜ C-4 **Split `ReferenceAtlasFigure`** into a static figure (empty state, could be a Server Component) and an interactive one. This pairs with V-3.
+
+## 14. Deployment: Hostinger VPS migration
 
 Source: [hostinger-vps](docs/deployment/hostinger-vps.md) → *Completion checklist*. All unchecked in the doc; owner tasks.
 
