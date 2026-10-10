@@ -134,7 +134,7 @@ The plan model has **no calendar and no "today"** (ADR-0001).
   raw `<img>` with no `width`/`height` ratio hint and no `loading`. A `max-h-*` is not a
   height.
 - 🟠 An **instant** is written in the reader's clock (ADR-0096, enforced by
-  `server-locale-policy.ts`): reject `toLocaleString()` on a `Date` in a Server Component,
+  `server-locale-policy.ts` and `api-instant-policy.ts`): reject `toLocaleString()` on a `Date` in a Server Component,
   and reject parsing an API timestamp with a bare `new Date(...)` — the offsetless strings
   the API emits parse as *local* time, so the moment is wrong before it is formatted. Use
   `lib/instant.ts` + `components/pulse/local-instant.tsx`; calendar dates stay with

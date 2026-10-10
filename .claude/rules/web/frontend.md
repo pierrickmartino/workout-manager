@@ -142,8 +142,9 @@ is **declared**, not that it renders right: the `audit/` journeys (`reflow.mjs` 
   in `globals.css`); another widget role extends that rule; a custom gesture spells `touch-none`
   (`tap-target-policy.ts`, ADR-0099).
 - Instant (a moment on the clock) → `pulse/local-instant.tsx`, parsed with `lib/instant.ts`
-  (offsetless reads as UTC); never `toLocale*` in a Server Component. Calendar dates →
-  `lib/date-format.ts` (`server-locale-policy.ts`, ADR-0096).
+  (offsetless reads as UTC), never `Date.parse` or `new Date(row.…_at)`; never `toLocale*` in a
+  Server Component. Calendar dates → `lib/date-format.ts` (`server-locale-policy.ts`,
+  `api-instant-policy.ts`, ADR-0096).
 - Focusable surface that isn't a DOM control → draw the focus indicator, don't tint (the atlas's
   `.atlas-region-ring`) (`atlas-focus-ring.test.ts`, ADR-0104).
 - Optional card or link one caller offers → a `children` slot, never a `show*` flag; a flag for a
