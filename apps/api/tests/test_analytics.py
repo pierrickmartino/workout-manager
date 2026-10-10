@@ -11,15 +11,13 @@ owning user. Exercised with the in-memory Logged-Session repository."""
 
 from __future__ import annotations
 
-from tests.quantities import reps_quantity
-
 from datetime import date, timedelta
 
 from app.domain.exercise import Provenance
 from app.domain.load import LoadKind, ParsedLoad
+from app.domain.muscle_groups import GROUP_ORDER, MuscleGroup
 from app.domain.quantity import Quantity, QuantityKind
 from app.domain.week import week_start
-from app.domain.muscle_groups import GROUP_ORDER, MuscleGroup
 from app.logbook.analytics import AnalyticsRange, analytics_overview
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.logged_session_repository import (
@@ -35,6 +33,7 @@ from app.repositories.session_repository import (
     InMemorySessionRepository,
     SessionDraft,
 )
+from tests.quantities import reps_quantity
 
 SQUAT = 1
 PRESS = 2

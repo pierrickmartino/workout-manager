@@ -8,8 +8,6 @@ read-only over the record side and scoped to the owning user."""
 
 from __future__ import annotations
 
-from tests.quantities import reps_quantity
-
 from datetime import date
 
 from fastapi.testclient import TestClient
@@ -30,6 +28,7 @@ from app.repositories.session_repository import (
     SessionDraft,
 )
 from tests.conftest import ISSUER, make_signing_context
+from tests.quantities import reps_quantity
 
 SQUAT = 1
 

@@ -11,8 +11,6 @@ offline and deterministically."""
 
 from __future__ import annotations
 
-from tests.quantities import reps_quantity
-
 from datetime import date
 
 import pytest
@@ -48,6 +46,7 @@ from app.substitution.service import (
     harder_variation_suggestion,
     substitute_exercise,
 )
+from tests.quantities import reps_quantity
 
 
 class FakeSubstituteGenerator:

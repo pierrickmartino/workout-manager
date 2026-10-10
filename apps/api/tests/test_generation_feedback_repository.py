@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import pytest
 from sqlmodel import Session, SQLModel
-from tests.conftest import make_fk_engine
 
 from app.db.models import WorkoutSession
 from app.domain.feedback import Verdict
@@ -18,6 +17,7 @@ from app.repositories.generation_feedback_repository import (
     InMemoryGenerationFeedbackRepository,
     SqlGenerationFeedbackRepository,
 )
+from tests.conftest import make_fk_engine
 
 # The Session ids these tests record feedback against. Under FK enforcement the parent
 # ``workout_session`` rows must exist, so the SQL fixture seeds them (the in-memory fake

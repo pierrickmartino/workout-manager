@@ -10,13 +10,13 @@ from __future__ import annotations
 
 import pytest
 from sqlmodel import Session, SQLModel
-from tests.conftest import make_fk_engine
 
 from app.domain.skin import DEFAULT_ACTIVE_SKIN
 from app.repositories.active_skin_repository import (
     InMemoryActiveSkinRepository,
     SqlActiveSkinRepository,
 )
+from tests.conftest import make_fk_engine
 
 
 @pytest.fixture(params=["in_memory", "sql"])

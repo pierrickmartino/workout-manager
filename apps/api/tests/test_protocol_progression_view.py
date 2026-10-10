@@ -9,8 +9,6 @@ Exercised with in-memory repositories."""
 
 from __future__ import annotations
 
-from tests.quantities import reps_quantity
-
 from datetime import date
 
 from app.adoption.service import adopt
@@ -30,7 +28,7 @@ from app.repositories.logged_session_repository import (
 )
 from app.repositories.protocol_repository import InMemoryProtocolRepository
 from app.repositories.session_repository import InMemorySessionRepository
-
+from tests.quantities import reps_quantity
 
 PARAMS = ProtocolGenerationRequest(
     training_type="strength",

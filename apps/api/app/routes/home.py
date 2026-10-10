@@ -19,8 +19,8 @@ from datetime import date
 from fastapi import APIRouter, Depends
 
 from app.auth.dependencies import get_current_user
-from app.domain.readiness import assess_readiness
 from app.domain.personal_records import PersonalRecord
+from app.domain.readiness import assess_readiness
 from app.envelope import success_envelope
 from app.logbook.gamification import GamificationSummary, project_gamification
 from app.logbook.records import latest_personal_record, personal_record_payload

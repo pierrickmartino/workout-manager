@@ -27,7 +27,6 @@ from app.repositories.logged_session_repository import (
 from app.repositories.protocol_repository import InMemoryProtocolRepository
 from app.repositories.session_repository import InMemorySessionRepository
 
-
 PARAMS = ProtocolGenerationRequest(
     training_type="strength",
     objective="gain muscle mass",

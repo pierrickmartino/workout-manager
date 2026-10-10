@@ -33,8 +33,6 @@ from dataclasses import dataclass
 
 from app.domain.load import LoadKind, ParsedLoad
 from app.domain.one_rep_max import MAX_TRUSTWORTHY_REPS, MIN_TRUSTWORTHY_REPS
-from app.domain.quantity import repetitions_of
-from app.domain.set_type import is_warm_up
 from app.domain.personal_records import (
     LoggedSetRecord,
     PersonalRecord,
@@ -42,6 +40,8 @@ from app.domain.personal_records import (
     logged_set_records,
 )
 from app.domain.progress_story import INSUFFICIENT, ProgressStory, progress_story
+from app.domain.quantity import repetitions_of
+from app.domain.set_type import is_warm_up
 from app.logbook.top_sets import TOP_SET_SERIES_LIMIT, TopSetPoint, top_set_series
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,

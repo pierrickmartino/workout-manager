@@ -14,8 +14,6 @@ than left as a comment."""
 
 from __future__ import annotations
 
-from tests.quantities import reps_quantity
-
 from datetime import date, timedelta
 
 import pytest
@@ -48,6 +46,7 @@ from app.repositories.session_repository import (
     SessionDraft,
 )
 from tests.conftest import ISSUER, make_signing_context
+from tests.quantities import reps_quantity
 
 SQUAT = 1
 # One more catalog Exercise per remaining real Muscle Group, so a history can reach Full

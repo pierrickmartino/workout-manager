@@ -38,6 +38,11 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[dev]"
 
+      # Mechanical lint (syntax, unused/undefined names, import order); the rule
+      # set lives in pyproject.toml.
+      - name: Lint
+        run: ruff check .
+
       # The suite is fully offline (SQLite, injected JWKS, fake LLM) — no live
       # Postgres/Redis/Clerk needed. The terminology guard runs as a test here.
       - name: Run tests with coverage

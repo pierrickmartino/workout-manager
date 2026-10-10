@@ -13,9 +13,7 @@ the domain — no ORM, no HTTP — and exercised directly on flattened ``VolumeS
 
 from __future__ import annotations
 
-from datetime import date
-
-from datetime import timedelta
+from datetime import date, timedelta
 
 from app.domain.load import LoadKind, ParsedLoad
 from app.domain.quantity import Quantity, QuantityKind

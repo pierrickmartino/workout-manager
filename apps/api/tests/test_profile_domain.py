@@ -30,7 +30,6 @@ from app.domain.fitness_profile import (
 )
 from app.domain.progression import LOW_EFFORT_MAX
 
-
 # --- resolve_equipment: request Available Equipment over Profile Default ---
 
 

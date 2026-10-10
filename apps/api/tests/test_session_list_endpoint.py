@@ -11,8 +11,8 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from app.auth.dependencies import get_jwks
-from app.domain.exercise import Provenance
 from app.config import Settings, get_settings
+from app.domain.exercise import Provenance
 from app.main import create_app
 from app.repositories.deps import (
     get_logged_session_repository,

@@ -14,12 +14,12 @@ from datetime import date
 import pytest
 
 from app.domain.load import LoadKind, ParsedLoad
-from app.domain.quantity import Quantity, QuantityKind
 from app.domain.personal_records import (
     LoggedSetRecord,
     detect_personal_records,
     estimated_1rm_for_set,
 )
+from app.domain.quantity import Quantity, QuantityKind
 
 SQUAT = 1
 PRESS = 2

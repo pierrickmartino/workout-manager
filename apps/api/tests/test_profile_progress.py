@@ -15,14 +15,12 @@ Those cases are the last block below."""
 
 from __future__ import annotations
 
-from tests.quantities import reps_quantity
-
 from datetime import date, timedelta
 
 from app.domain.completion import CompletionOutcome
 from app.domain.effort import HIGH_EFFORT_MIN
 from app.domain.exercise import Provenance
-from app.domain.experience import PER_SET_XP, SESSION_XP, operator_level, total_xp
+from app.domain.experience import PER_SET_XP, SESSION_XP, operator_level
 from app.domain.fitness_profile import DEFAULT_STRONG_SESSIONS_PER_LEVEL
 from app.domain.progression import LOW_EFFORT_MAX
 from app.logbook.profile_progress import FitnessLevelStanding, profile_progress
@@ -36,6 +34,7 @@ from app.repositories.session_repository import (
     InMemorySessionRepository,
     SessionDraft,
 )
+from tests.quantities import reps_quantity
 
 SQUAT = 1
 # A Wednesday; its ISO week runs Mon 2026-07-06 .. Sun 2026-07-12.

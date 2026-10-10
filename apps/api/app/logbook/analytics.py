@@ -29,6 +29,12 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from enum import Enum
 
+from app.domain.distance import (
+    DistanceSet,
+    DistanceWeek,
+    distance_series,
+    has_distance,
+)
 from app.domain.muscle_groups import (
     MUSCLE_BALANCE_WEEKS,
     RecentCoverage,
@@ -40,12 +46,6 @@ from app.domain.personal_records import (
     PersonalRecord,
     detect_personal_records,
     logged_set_records,
-)
-from app.domain.distance import (
-    DistanceSet,
-    DistanceWeek,
-    distance_series,
-    has_distance,
 )
 from app.domain.volume import VolumePoint, VolumeSet, volume_series
 from app.repositories.logged_session_repository import (

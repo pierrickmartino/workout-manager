@@ -12,13 +12,13 @@ from dataclasses import replace
 
 import pytest
 from sqlmodel import Session, SQLModel
-from tests.conftest import make_fk_engine
 
 from app.domain.appearance import InterfacePreference, Mode, WeightUnit
 from app.repositories.appearance_preference_repository import (
     InMemoryAppearancePreferenceRepository,
     SqlAppearancePreferenceRepository,
 )
+from tests.conftest import make_fk_engine
 
 
 @pytest.fixture(params=["in_memory", "sql"])

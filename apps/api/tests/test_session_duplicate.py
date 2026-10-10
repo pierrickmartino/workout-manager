@@ -16,7 +16,6 @@ from datetime import date
 
 import pytest
 from sqlmodel import Session, SQLModel
-from tests.conftest import make_fk_engine
 
 from app.db.models import ExercisePrescription, Protocol, WorkoutSession
 from app.domain.exercise import Provenance
@@ -35,6 +34,7 @@ from app.repositories.session_repository import (
     SessionDraft,
     SqlSessionRepository,
 )
+from tests.conftest import make_fk_engine
 
 
 @pytest.fixture(params=["in_memory", "sql"])

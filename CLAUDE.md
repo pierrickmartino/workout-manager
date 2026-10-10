@@ -51,6 +51,7 @@ No live Postgres/Redis/Clerk needed to run tests.
 cd apps/api
 pip install -e ".[dev]"           # or: uv venv && uv pip install -e ".[dev]"
 pytest --cov --cov-report=term-missing
+ruff check --fix .                # lint: unused names, import order (CI blocks on it)
 
 # Frontend
 cd apps/web

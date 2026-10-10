@@ -7,8 +7,6 @@ their history back. Ownership and validation are enforced at the boundary."""
 
 from __future__ import annotations
 
-from tests.quantities import reps_quantity
-
 from fastapi.testclient import TestClient
 
 from app.auth.dependencies import get_jwks
@@ -33,6 +31,7 @@ from app.repositories.profile_repository import InMemoryProfileRepository
 from app.repositories.protocol_repository import InMemoryProtocolRepository
 from app.repositories.session_repository import InMemorySessionRepository
 from tests.conftest import ISSUER, NullEnrichmentQueue, make_signing_context
+from tests.quantities import reps_quantity
 
 
 class FakeGenerator:

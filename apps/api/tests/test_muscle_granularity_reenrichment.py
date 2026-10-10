@@ -23,13 +23,14 @@ offline and deterministically:
 
 from __future__ import annotations
 
+import sqlmodel
+
 import app.config
 import app.db.session
 import app.generation.llm
 import app.repositories.exercise_repository as exercise_repository_module
-import sqlmodel
-from app.domain.muscle_groups import MuscleGroup, classify
 from app.domain.exercise import Provenance
+from app.domain.muscle_groups import MuscleGroup, classify
 from app.generation import muscle_granularity_reenrichment
 from app.generation.muscle_granularity_generator import MuscleGranularityRequest
 from app.generation.muscle_granularity_reenrichment import (

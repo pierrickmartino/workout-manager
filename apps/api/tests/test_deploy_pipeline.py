@@ -42,6 +42,8 @@ from app.repositories.protocol_repository import (
 )
 from app.repositories.session_repository import (
     InMemorySessionRepository,
+)
+from app.repositories.session_repository import (
     PrescriptionDraft as PersistPrescription,
 )
 

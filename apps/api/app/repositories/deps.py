@@ -13,14 +13,13 @@ from sqlmodel import Session
 from app.active_skin.cache import ActiveSkinCache
 from app.config import Settings, get_settings
 from app.db.session import get_session
-from app.generation.cache import GenerationCache, RedisCacheStore
 from app.generation.backfill_queue import BackfillQueue, RqBackfillQueue
+from app.generation.cache import GenerationCache, RedisCacheStore
 from app.generation.enrichment_queue import EnrichmentQueue, RqEnrichmentQueue
+from app.generation.generator import LlmSessionGenerator, SessionGenerator
 from app.generation.job_queue import JobQueue, RqJobQueue
 from app.generation.llm import build_llm_client
 from app.generation.orchestrator import GenerationOrchestrator
-from app.generation.worker import QUEUE_NAME
-from app.generation.generator import LlmSessionGenerator, SessionGenerator
 from app.generation.protocol_generator import (
     LlmProtocolGenerator,
     ProtocolGenerator,
@@ -33,9 +32,14 @@ from app.generation.substitute_generator import (
     LlmSubstituteGenerator,
     SubstituteGenerator,
 )
-from app.repositories.exercise_relationship_repository import (
-    ExerciseRelationshipRepository,
-    SqlExerciseRelationshipRepository,
+from app.generation.worker import QUEUE_NAME
+from app.repositories.active_skin_repository import (
+    ActiveSkinRepository,
+    SqlActiveSkinRepository,
+)
+from app.repositories.appearance_preference_repository import (
+    AppearancePreferenceRepository,
+    SqlAppearancePreferenceRepository,
 )
 from app.repositories.exercise_audit_repository import (
     ExerciseAuditRepository,
@@ -46,6 +50,10 @@ from app.repositories.exercise_image_repository import (
     ExerciseImageRepository,
     SqlExerciseImageRepository,
 )
+from app.repositories.exercise_relationship_repository import (
+    ExerciseRelationshipRepository,
+    SqlExerciseRelationshipRepository,
+)
 from app.repositories.exercise_repository import (
     ExerciseRepository,
     SqlExerciseRepository,
@@ -53,10 +61,6 @@ from app.repositories.exercise_repository import (
 from app.repositories.generation_feedback_repository import (
     GenerationFeedbackRepository,
     SqlGenerationFeedbackRepository,
-)
-from app.repositories.protocol_repository import (
-    ProtocolRepository,
-    SqlProtocolRepository,
 )
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
@@ -66,17 +70,13 @@ from app.repositories.metric_entry_repository import (
     MetricEntryRepository,
     SqlMetricEntryRepository,
 )
-from app.repositories.active_skin_repository import (
-    ActiveSkinRepository,
-    SqlActiveSkinRepository,
-)
-from app.repositories.appearance_preference_repository import (
-    AppearancePreferenceRepository,
-    SqlAppearancePreferenceRepository,
-)
 from app.repositories.profile_repository import (
     ProfileRepository,
     SqlProfileRepository,
+)
+from app.repositories.protocol_repository import (
+    ProtocolRepository,
+    SqlProtocolRepository,
 )
 from app.repositories.session_repository import (
     SessionRepository,

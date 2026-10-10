@@ -36,7 +36,10 @@ from app.repositories.protocol_repository import (
     ProtocolDraft,
     ProtocolSessionDraft,
 )
-from app.repositories.session_repository import InMemorySessionRepository, PrescriptionDraft
+from app.repositories.session_repository import (
+    InMemorySessionRepository,
+    PrescriptionDraft,
+)
 from tests.quantities import reps_quantity
 
 OWNER = "user_builder"

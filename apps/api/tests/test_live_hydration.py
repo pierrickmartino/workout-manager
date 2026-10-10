@@ -9,8 +9,6 @@ repositories; no AI, no HTTP."""
 
 from __future__ import annotations
 
-from tests.quantities import reps_quantity
-
 from datetime import date
 
 from app.domain.exercise import Provenance
@@ -27,6 +25,7 @@ from app.repositories.session_repository import (
     PrescriptionDraft,
     SessionDraft,
 )
+from tests.quantities import reps_quantity
 
 
 def _build():

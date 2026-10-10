@@ -10,8 +10,6 @@ with the in-memory Logged-Session repository."""
 
 from __future__ import annotations
 
-from tests.quantities import reps_quantity
-
 from datetime import date, timedelta
 
 from app.domain.exercise import Provenance
@@ -31,6 +29,7 @@ from app.repositories.session_repository import (
     InMemorySessionRepository,
     SessionDraft,
 )
+from tests.quantities import reps_quantity
 
 SQUAT = 1
 PRESS = 2

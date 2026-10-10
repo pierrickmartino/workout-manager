@@ -11,13 +11,13 @@ from __future__ import annotations
 
 import pytest
 from sqlmodel import Session, SQLModel, select
-from tests.conftest import make_fk_engine
 
 from app.db.models import WorkoutSession
 from app.repositories.share_link_repository import (
     InMemoryShareLinkRepository,
     SqlShareLinkRepository,
 )
+from tests.conftest import make_fk_engine
 
 
 @pytest.fixture(params=["in_memory", "sql"])

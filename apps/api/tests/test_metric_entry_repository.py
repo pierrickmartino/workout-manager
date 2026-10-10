@@ -12,13 +12,13 @@ from datetime import date
 
 import pytest
 from sqlmodel import Session, SQLModel
-from tests.conftest import make_fk_engine
 
 from app.repositories.metric_entry_repository import (
     InMemoryMetricEntryRepository,
     MetricEntryDraft,
     SqlMetricEntryRepository,
 )
+from tests.conftest import make_fk_engine
 
 
 @pytest.fixture(params=["in_memory", "sql"])

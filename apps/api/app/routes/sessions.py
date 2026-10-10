@@ -56,7 +56,7 @@ from app.generation.service import generate_session
 from app.generation.substitute_generator import SubstituteGenerator
 from app.live.hydration import hydrate_session
 from app.live.serialization import serialize_hydrated_session
-from app.session_serialization import serialize_session
+from app.protocols.deploy_validation import DeployError
 from app.repositories.deps import (
     get_exercise_relationship_repository,
     get_exercise_repository,
@@ -69,7 +69,6 @@ from app.repositories.deps import (
     get_share_link_repository,
     get_substitute_generator,
 )
-from app.repositories.logged_session_repository import LoggedSessionRepository
 from app.repositories.exercise_relationship_repository import (
     ExerciseRelationshipRepository,
 )
@@ -78,30 +77,15 @@ from app.repositories.generation_feedback_repository import (
     GenerationFeedbackRepository,
     GenerationFeedbackView,
 )
+from app.repositories.logged_session_repository import LoggedSessionRepository
 from app.repositories.profile_repository import ProfileRepository
 from app.repositories.session_repository import (
     PrescriptionDraft,
     SessionRepository,
     SessionSummaryView,
-    SessionView,
 )
 from app.repositories.share_link_repository import ShareLinkRepository
-from app.sessions.service import (
-    SessionHasLoggedSessions,
-    SessionNotStandalone,
-    delete_session,
-)
-from app.sessions.service import SessionNotFound as SessionServiceNotFound
-from app.protocols.deploy_validation import DeployError
 from app.routes.logs import LogSetBody, serialize_logged_session
-from app.substitution.service import (
-    HarderVariationSuggestion,
-    PrescriptionNotFound,
-    SubstituteNotAvailable,
-    harder_variation_suggestion,
-    substitute_exercise,
-)
-from app.substitution.service import SessionNotFound as SubstituteSessionNotFound
 from app.scheme_selection.service import (
     IncompatibleScheme,
     SchemeNotOnProtocolMember,
@@ -112,6 +96,21 @@ from app.scheme_selection.service import (
     PrescriptionNotFound as SchemePrescriptionNotFound,
 )
 from app.scheme_selection.service import SessionNotFound as SchemeSessionNotFound
+from app.session_serialization import serialize_session
+from app.sessions.service import (
+    SessionHasLoggedSessions,
+    SessionNotStandalone,
+    delete_session,
+)
+from app.sessions.service import SessionNotFound as SessionServiceNotFound
+from app.substitution.service import (
+    HarderVariationSuggestion,
+    PrescriptionNotFound,
+    SubstituteNotAvailable,
+    harder_variation_suggestion,
+    substitute_exercise,
+)
+from app.substitution.service import SessionNotFound as SubstituteSessionNotFound
 
 router = APIRouter(prefix="/api", tags=["sessions"])
 

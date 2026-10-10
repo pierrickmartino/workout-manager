@@ -10,8 +10,6 @@ overrides so the flow runs offline and deterministically."""
 
 from __future__ import annotations
 
-from tests.quantities import reps_quantity
-
 from datetime import date
 
 from fastapi.testclient import TestClient
@@ -21,8 +19,8 @@ from app.config import Settings, get_settings
 from app.domain.exercise import Provenance
 from app.domain.load import parse_load
 from app.domain.substitution import RelationKind
-from app.generation.substitute_generator import SubstituteRequest
 from app.generation.schema import GeneratedSubstitute
+from app.generation.substitute_generator import SubstituteRequest
 from app.main import create_app
 from app.repositories.deps import (
     get_exercise_relationship_repository,
@@ -48,6 +46,7 @@ from app.repositories.session_repository import (
     SessionDraft,
 )
 from tests.conftest import ISSUER, make_signing_context
+from tests.quantities import reps_quantity
 
 
 class FakeSubstituteGenerator:

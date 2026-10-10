@@ -48,15 +48,14 @@ from app.protocols.deploy_validation import (
     DraftPrescription,
     DraftSession,
 )
-from app.protocols.balance_preview import build_balance_preview
 from app.protocols.index import protocol_index
 from app.protocols.progress import progressed_protocol, protocol_progress
-from app.protocols.switch import SwitchStatus, switch_protocol
 from app.protocols.serialization import (
     serialize_balance_preview,
     serialize_protocol_index_row,
     serialize_protocol_progress,
 )
+from app.protocols.switch import SwitchStatus, switch_protocol
 from app.repositories.deps import (
     get_exercise_repository,
     get_generation_feedback_repository,

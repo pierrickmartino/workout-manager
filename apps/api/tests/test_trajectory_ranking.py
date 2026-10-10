@@ -7,8 +7,6 @@ Pure over the repository view — no ORM, no HTTP."""
 
 from __future__ import annotations
 
-from tests.quantities import reps_quantity
-
 from datetime import date
 
 from app.domain.load import LoadKind, ParsedLoad
@@ -22,6 +20,7 @@ from app.repositories.logged_session_repository import (
     LoggedSessionView,
     LoggedSetView,
 )
+from tests.quantities import reps_quantity
 
 SQUAT = 1
 PRESS = 2

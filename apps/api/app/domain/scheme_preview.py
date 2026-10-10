@@ -29,13 +29,13 @@ from app.domain.load import LoadKind, ParsedLoad
 # within the progression domain; reused here (not re-implemented) so the rep grammar has one
 # home — renaming one is a deliberate, co-located change to both.
 from app.domain.progression import (
+    _AMRAP_FLOOR_RE,
     DECREASE_KG,
     INCREASE_KG,
     LOW_EFFORT_MAX,
     RESET_FRACTION,
     SESSION_COUNT_N,
     ProgressionScheme,
-    _AMRAP_FLOOR_RE,
     _greyskull_floor,
     _is_pure_bodyweight,
     _parse_rep_target,

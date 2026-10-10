@@ -10,13 +10,13 @@ from __future__ import annotations
 
 import pytest
 from sqlmodel import Session, SQLModel
-from tests.conftest import make_fk_engine
 
 from app.db.models import WorkoutSession
 from app.repositories.favorite_repository import (
     InMemoryFavoriteRepository,
     SqlFavoriteRepository,
 )
+from tests.conftest import make_fk_engine
 
 
 @pytest.fixture(params=["in_memory", "sql"])
