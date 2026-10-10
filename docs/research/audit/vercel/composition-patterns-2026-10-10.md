@@ -73,7 +73,7 @@ remaining issues are in the large feature components:
   becomes another `planOnly ?` branch, and the prop combinations that make no sense
   (`seed` with `authorAndLog`) are allowed by the type system.
 - The file is past the repo's 800-line maximum (CLAUDE.md, *Conventions*).
-- Plan-only vs log-a-performance is the domain's plan-vs-record split (CONTEXT.md), so
+- Plan-only vs log-a-performance is the domain's plan-vs-record split (GLOSSARY.md), so
   each variant should state which side it writes.
 
 **Fix:**
@@ -122,7 +122,7 @@ tests stay green, and each new file is under 800 lines.
     `<PrescriptionFields.More>` holding `<PrescriptionFields.TargetEffort/>`,
     `<PrescriptionFields.Note/>` and `{advanced}`.
   - Showing or hiding a control becomes whether the child is present.
-  - The catch: the summary chips (ADR-0067, CONTEXT "Prescription Summary") are built
+  - The catch: the summary chips (ADR-0067, GLOSSARY "Prescription Summary") are built
     from the fields present, so the root has to know which children are mounted.
     Either declare them in a typed `fields` list on the root, or keep the chips
     computed from the value plus a declared field set.

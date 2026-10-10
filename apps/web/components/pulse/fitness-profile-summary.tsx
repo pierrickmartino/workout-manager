@@ -63,7 +63,7 @@ export function FitnessProfileSummary({
             // "Declared", not bare "Fitness levels": this is the stored baseline the user
             // states about themselves, and the same screen now also renders the Effective
             // reading the app plans with (ADR-0112). One name for two readings is the
-            // confusion CONTEXT's qualified pair exists to remove.
+            // confusion GLOSSARY's qualified pair exists to remove.
             label: "Declared fitness levels",
             value: formatLevels(profile.fitness_levels),
           },

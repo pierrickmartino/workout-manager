@@ -9,7 +9,7 @@ import {
   supersetSummaryChips,
 } from "./prescription-summary.ts";
 
-// `prescription-summary` is the Prescription Summary read-time projection (CONTEXT: Prescription
+// `prescription-summary` is the Prescription Summary read-time projection (GLOSSARY: Prescription
 // Summary; ADR-0067, #465) — the pure view-model behind a collapsed Exercise Prescription card.
 // It renders compact chips for only the *advanced* values that differ from their default, and it
 // decides whether a freshly-rendered card opens expanded (so nothing meaningful is hidden on

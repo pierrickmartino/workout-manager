@@ -17,7 +17,7 @@ import { buttonVariants } from "@/components/ui/button";
 // into the standalone-workout form, so protocol generation had no home in the global nav once a
 // Current Protocol existed (ADR-0037). This launchpad restores the protocol entry point
 // everywhere, not just the Home empty state; the Recent Sessions panel by My Sessions lets a
-// user re-run a recent standalone Session in one tap (CONTEXT: Recent Sessions).
+// user re-run a recent standalone Session in one tap (GLOSSARY: Recent Sessions).
 //
 // The page is deliberately **synchronous**: every read it needs belongs to one panel, and it
 // used to await that panel's whole chain before returning any JSX, so a fully static header,
@@ -47,7 +47,7 @@ export default function TrainPage(): React.JSX.Element {
       </GenerateTrainingLaunchpad>
 
       {/* Pick up where you left off: the user's up-to-five most-recently-performed standalone
-          Sessions, each a one-tap Start into a Live Session (CONTEXT: Recent Sessions). Sits just
+          Sessions, each a one-tap Start into a Live Session (GLOSSARY: Recent Sessions). Sits just
           above My Sessions — both are about reusing existing Sessions, distinct from the "start
           new" launchpad — and renders nothing when there is nothing to resume.
 
@@ -60,7 +60,7 @@ export default function TrainPage(): React.JSX.Element {
         <RecentSessionsPanel />
       </Suspense>
 
-      {/* The user's own saved standalone Sessions — reopen one to run again (CONTEXT: My
+      {/* The user's own saved standalone Sessions — reopen one to run again (GLOSSARY: My
           Sessions, issue #397). Distinct from generation (starting something new) and from
           Browse the Catalog (movement discovery). */}
       <div className="flex flex-col gap-2">

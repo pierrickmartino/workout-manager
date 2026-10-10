@@ -1,6 +1,6 @@
 """Standalone-Session display-label rule (Session Library & Sharing, issue #394).
 
-A standalone Session carries a user-given **Session Name** (CONTEXT: Session Name).
+A standalone Session carries a user-given **Session Name** (GLOSSARY: Session Name).
 It is nullable and never backfilled, so every read path resolves a display label
 through :func:`session_label`: the name when the user set one, otherwise a derived
 ``training_type · date`` label so an unnamed Session is never blank — the same

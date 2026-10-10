@@ -75,7 +75,7 @@ const AT_HARDEST =
 
 // The offset in words. Written as a *relative* phrase in every case, because the number is an
 // offset from what the plan already says and reading it as a level would be the one thing
-// CONTEXT's _Avoid_ list forbids. A user-facing "step" is ADR-0111's notch.
+// GLOSSARY's _Avoid_ list forbids. A user-facing "step" is ADR-0111's notch.
 export function calibrationSummary(value: number): string {
   if (value === 0) {
     return "As written";

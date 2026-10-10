@@ -1,4 +1,4 @@
-"""The Deploy pipeline (CONTEXT §Deploy, ADR-0020/0021).
+"""The Deploy pipeline (GLOSSARY §Deploy, ADR-0020/0021).
 
 Deploy is the atomic commit of a Builder edit — the whole staged reshaping of a
 Protocol's **un-performed tail** validated and written in one call, or rejected

@@ -1,5 +1,5 @@
 // The theming seam. A rendered Theme is always the composition of the app-wide
-// **Active Skin** and one user's **Mode** (CONTEXT "Theme") — never a single
+// **Active Skin** and one user's **Mode** (GLOSSARY "Theme") — never a single
 // stored choice. This module owns the one pure mapping from that pair to the
 // `data-skin` / `data-mode` attributes the root layout stamps on <html>, which
 // `globals.css` keys its token variants off. Keeping it here means the Mode
@@ -9,7 +9,7 @@
 // Pure and server-free, so it is safe to call from a Server Component and to
 // unit-test without a browser (prior art: apps/web/lib/*.test.ts).
 
-// A named palette family from the fixed, curated catalog (CONTEXT "Skin"). This
+// A named palette family from the fixed, curated catalog (GLOSSARY "Skin"). This
 // union is the frontend half of the single canonical Skin id list — it mirrors the
 // backend catalog in app/domain/skin.py, and the two must not drift on which Skins
 // exist. `aurora` is the minimal second seed Skin (ADR-0048 / #331); `vercel` is a
@@ -38,7 +38,7 @@ export function isSkin(value: string): value is Skin {
   return (KNOWN_SKINS as readonly string[]).includes(value);
 }
 
-// A user's chosen surface polarity (CONTEXT "Mode"). `system` is not a stored
+// A user's chosen surface polarity (GLOSSARY "Mode"). `system` is not a stored
 // polarity — it defers to the device's own preference via prefers-color-scheme.
 export type Mode = "light" | "dark" | "system";
 

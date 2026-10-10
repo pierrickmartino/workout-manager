@@ -14,10 +14,10 @@ retry, silently duplicates a record. We fix this by settling *what a finish is* 
 
 - **A finish creates a real Logged Session at the moment the user finishes**, identified
   by a **client-minted key** (a UUID). "Finishes" in the **Live Session** →
-  **Logged Session** transition (ADR-0012, CONTEXT.md) means the tap, not the server
+  **Logged Session** transition (ADR-0012, GLOSSARY.md) means the tap, not the server
   acknowledgement: the record is real the instant it is authored; only its *delivery* is
   in flight. Sync is therefore a **transport** concern, kept out of the domain and out of
-  `CONTEXT.md` — there is no "pending" Logged-Session state and no stored `status` (which
+  `GLOSSARY.md` — there is no "pending" Logged-Session state and no stored `status` (which
   the read-time-projection rule, ADR-0018, forbids anyway).
 - **Finished records queue in an IndexedDB outbox**, not the `localStorage` live slot.
   Each entry carries its finish payload, its idempotency key, and its owner's account id

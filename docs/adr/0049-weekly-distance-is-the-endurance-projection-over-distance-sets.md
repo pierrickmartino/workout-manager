@@ -50,7 +50,7 @@ and the daily Volume line). Old `?range=7d` links fall back to the new default
 ## Considered options
 
 - **Fold distance into the Volume chart** — rejected: Volume is kg tonnage by
-  definition (CONTEXT 'Volume' / 'Quantity'), and a kilometre is not a kilogram.
+  definition (GLOSSARY 'Volume' / 'Quantity'), and a kilometre is not a kilogram.
   Mixing axes on one line destroys both.
 - **Key the feed off a "running" training-type label** — rejected: training type
   is free text, and a label match is fragile where the typed `distance` Quantity is

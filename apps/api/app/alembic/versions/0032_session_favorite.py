@@ -2,7 +2,7 @@
 
 Adds the ``session_favorite`` table — a per-user relationship keyed by
 ``(clerk_user_id, session_id)`` holding a user's **Favorite** marker on one of their own
-standalone Sessions (CONTEXT: Favorite). A stored *preference*, the same species as a
+standalone Sessions (GLOSSARY: Favorite). A stored *preference*, the same species as a
 Pinned Target or an Interface Preference — the no-stored-ledger rule (ADR-0018) governs
 *derived* facts, never user choices.
 

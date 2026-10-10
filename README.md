@@ -2,7 +2,7 @@
 
 Workout Manager is a mobile-friendly, AI-assisted training app for planning sessions, recording what you actually did, and following your progress. You can generate a multi-week **Protocol** or a standalone **Session**, build a reusable Session by hand, or log training without a plan.
 
-A Protocol and a Session describe what you intend to do. A **Logged Session** records what you performed. Keeping plans and records separate lets you reuse a Session and compare performances over time. See [CONTEXT.md](./CONTEXT.md) for the full domain glossary.
+A Protocol and a Session describe what you intend to do. A **Logged Session** records what you performed. Keeping plans and records separate lets you reuse a Session and compare performances over time. See [GLOSSARY.md](./GLOSSARY.md) for the full domain glossary.
 
 ## What the app does
 
@@ -86,7 +86,7 @@ For a separate web development server, copy `apps/web/.env.local.example` to `ap
 - `apps/web/`: pages, UI components, PWA assets and frontend view models.
 - `apps/api/app/routes/`: HTTP endpoints; `domain/`: training rules and calculations; `repositories/`: persistence; `generation/`: AI providers, cache and jobs.
 - `apps/api/app/alembic/`: database migrations.
-- `docs/adr/`: architectural decisions; [CONTEXT.md](./CONTEXT.md): product terminology; [CLAUDE.md](./CLAUDE.md): developer map.
+- `docs/adr/`: architectural decisions; [GLOSSARY.md](./GLOSSARY.md): product terminology; [CLAUDE.md](./CLAUDE.md): developer map.
 - `docs/deployment/`: [Railway](./docs/deployment/railway.md), [Hostinger VPS](./docs/deployment/hostinger-vps.md) and [Langfuse](./docs/deployment/langfuse.md) guides.
 
 The project is licensed under [MIT](./LICENSE).

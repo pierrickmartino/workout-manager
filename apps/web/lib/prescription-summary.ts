@@ -1,4 +1,4 @@
-// The Prescription Summary projection (CONTEXT: Prescription Summary; ADR-0067, #465) — the pure
+// The Prescription Summary projection (GLOSSARY: Prescription Summary; ADR-0067, #465) — the pure
 // view-model behind a collapsed Exercise Prescription card. Given a Prescription's *advanced*
 // fields it renders compact chips for only the values that differ from their default, so a plain
 // working set summarizes to nothing at all, and it decides whether a freshly-rendered card opens
@@ -13,7 +13,7 @@
 // order they render.
 //
 // The **Progression Scheme** is deliberately not part of the summary — its Scheme Preview sentence
-// stands on its own line whether the card is collapsed or open (CONTEXT: Prescription Summary), so
+// stands on its own line whether the card is collapsed or open (GLOSSARY: Prescription Summary), so
 // a non-default scheme is never hidden and never drives the auto-expand decision. Auto-expand is
 // exactly "is there any chip", which keeps the collapsed summary and the open-on-first-view rule
 // in lock-step: a card shows chips iff it would have auto-expanded.
@@ -28,7 +28,7 @@ import { toTempoView } from "./tempo-view.ts";
 
 // The distinguishing mark a chip can render instead of text. Most chips read as a compact label
 // (`Controlled`, `90s rest`); the Exercise Note reads as an **icon only** — its presence matters
-// but its text would compete with the exercise name (CONTEXT: Prescription Summary), so the chip
+// but its text would compete with the exercise name (GLOSSARY: Prescription Summary), so the chip
 // names an icon and carries no preview of the cue. Extend the union as more icon chips appear.
 export type PrescriptionSummaryChipIcon = "note";
 
@@ -144,7 +144,7 @@ function targetEffortChip(
 
 // The Exercise Note chip, or null when the movement carries no cue — an **icon**, never a text
 // preview (#468, user story 19): a present note shows a small note icon so the cue's presence is
-// visible without a second block of text competing with the exercise name (CONTEXT: Prescription
+// visible without a second block of text competing with the exercise name (GLOSSARY: Prescription
 // Summary). Presence is decided by `noteText` — the exact same "is there a note" rule the note
 // views share — so the chip appears precisely when the note renders elsewhere, and a stored
 // (escaped) note reads as present just as a freshly-typed one does. The `label` is a terse
@@ -210,7 +210,7 @@ export interface SupersetSummaryFields {
 
 // The round-rest chip, or null when no round-rest is set. Deliberately distinct from a solo
 // movement's `90s rest` chip: the group's boundary rest reads `round rest 90s` so a reader never
-// mistakes it for a member's per-set rest (CONTEXT: Prescription Summary). Any present, finite
+// mistakes it for a member's per-set rest (GLOSSARY: Prescription Summary). Any present, finite
 // value is shown, including a deliberate `0` (no rest between rounds).
 function roundRestChip(
   roundRestSeconds: number | null | undefined,

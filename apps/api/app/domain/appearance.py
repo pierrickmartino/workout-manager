@@ -10,10 +10,10 @@ Session, and the **Weight Unit** a Load is entered and displayed in. This module
 owns the domain facts of that preference: the closed sets a user may choose and
 the shipped defaults for every member.
 
-``Mode`` is the user's chosen surface polarity (CONTEXT "Mode"); ``system``
+``Mode`` is the user's chosen surface polarity (GLOSSARY "Mode"); ``system``
 means *follow the device*, resolved client-side via ``prefers-color-scheme``
 rather than stored as a concrete polarity. **Keep Screen Awake** is the
-behavioural facet (CONTEXT "Keep Screen Awake"). **Weight Unit** (CONTEXT
+behavioural facet (GLOSSARY "Keep Screen Awake"). **Weight Unit** (GLOSSARY
 "Weight Unit") steers only how a Load's kilogram value is entered and displayed —
 storage stays canonical kilograms — so it too never reaches generation or the
 cache key. Absence of a stored preference defaults to Dark + Keep-Screen-Awake on
@@ -51,7 +51,7 @@ DEFAULT_KEEP_SCREEN_AWAKE: bool = True
 
 
 class WeightUnit(str, Enum):
-    """The closed set of Weight Units a user may choose (CONTEXT "Weight Unit").
+    """The closed set of Weight Units a user may choose (GLOSSARY "Weight Unit").
 
     A constrained vocabulary stored as its raw value (like ``Mode``): the toggle
     only ever offers kilograms or pounds, and an unknown unit is a boundary
@@ -64,7 +64,7 @@ class WeightUnit(str, Enum):
 
 
 # The shipped default when a user has no Weight Unit preference yet: kilograms,
-# the app's canonical storage unit, so existing behaviour is unchanged (CONTEXT
+# the app's canonical storage unit, so existing behaviour is unchanged (GLOSSARY
 # "Weight Unit"). The web ``DEFAULT_WEIGHT_UNIT`` mirrors this exact choice.
 DEFAULT_WEIGHT_UNIT: WeightUnit = WeightUnit.KG
 

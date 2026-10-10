@@ -12,7 +12,7 @@ Progression is a **read-time projection** — it recomputes an Exercise Prescrip
 recommended Load or bodyweight rep target from the user's Logged Sets on every read and
 **stores nothing** (ADR-0004). A calisthenics user who beats the top of a prescribed rep
 range wants the plan to reflect what they achieved *now* and to *keep* that target, rather
-than let the conservative `+1` overlay drive it. We add **Pin** (`CONTEXT.md`, §Plan vs.
+than let the conservative `+1` overlay drive it. We add **Pin** (`GLOSSARY.md`, §Plan vs.
 Record): from the log flow a confirm dialog commits a user-set **Pinned Target** (a rep
 range) onto the next un-performed occurrence of that Prescription, and **suspends automatic
 Progression** for it until un-pinned. The surprising part worth recording is that this

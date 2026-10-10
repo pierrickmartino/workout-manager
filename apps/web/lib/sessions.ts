@@ -53,7 +53,7 @@ export async function fetchSession(
 // pagination UI — out of scope for v1's personal library.
 const LIBRARY_PAGE_LIMIT = 100;
 
-// List the user's own standalone Sessions for the My Sessions library (CONTEXT: My Sessions,
+// List the user's own standalone Sessions for the My Sessions library (GLOSSARY: My Sessions,
 // issue #397). The backend is owner-scoped and standalone-only — a Protocol-member Session and
 // every other user's Session are excluded — and returns the thin per-row projection
 // (name/fallback, Training Type, Author, favorite state). The page fetches the whole first
@@ -115,7 +115,7 @@ export async function duplicateSession(
   return apiSend(`/api/sessions/${id}/duplicate`, "POST");
 }
 
-// Permanently delete the user's own standalone Session (Delete, CONTEXT: Delete, ADR-0063): a
+// Permanently delete the user's own standalone Session (Delete, GLOSSARY: Delete, ADR-0063): a
 // hard delete of the plan and its plan-side dependents — Prescriptions, the Favorite marker,
 // Generation Feedback, and Share Links. Offered only on a Session with no logged training. A
 // bodyless DELETE, so the seam sends no `Content-Type` (ADR-0022). The backend re-checks the
@@ -142,7 +142,7 @@ export async function renameSession(
   return apiSend(`/api/sessions/${id}/name`, "PUT", { name });
 }
 
-// Mark the user's own standalone Session as a Favorite (CONTEXT: Favorite, issue #396): a
+// Mark the user's own standalone Session as a Favorite (GLOSSARY: Favorite, issue #396): a
 // stored, per-user, per-copy marker, private to the user and never carried across Duplicate.
 // Bodyless POST, so the seam sends no `Content-Type` (ADR-0022). The backend returns 404 for a
 // non-owner and 409 for a Protocol-member Session (Favorite is standalone-only); on success the

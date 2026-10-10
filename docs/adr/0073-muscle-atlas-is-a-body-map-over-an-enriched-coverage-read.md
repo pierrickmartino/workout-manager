@@ -73,5 +73,5 @@ everywhere" payoff the atlas direction was chosen for.
 - Accessibility is preserved end to end: every region and list row is a real control with a
   composed `aria-label` naming group, state, window, and volume, so nothing rides on color;
   the drawer is a labeled dialog, dismissible by scrim or Escape, inert when closed.
-- Introduces **one new surface term, Muscle Atlas** (see `CONTEXT.md`), a presentation of
+- Introduces **one new surface term, Muscle Atlas** (see `GLOSSARY.md`), a presentation of
   Muscle Group Coverage — not a new domain concept.

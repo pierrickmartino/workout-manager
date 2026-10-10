@@ -1,7 +1,7 @@
 """attribute a Session's human Author, backfilled to the owner (issue #395)
 
 Gives ``workout_session`` a nullable ``author_clerk_user_id`` column holding a reference
-to the **human who first created** the plan (CONTEXT: Author) — a distinct axis from both
+to the **human who first created** the plan (GLOSSARY: Author) — a distinct axis from both
 the Owner (``clerk_user_id``) and Session Provenance (``ai_generated`` / ``user_authored``).
 
 Unlike ``name`` (0030), the Author **is** backfilled: every pre-existing row is attributed

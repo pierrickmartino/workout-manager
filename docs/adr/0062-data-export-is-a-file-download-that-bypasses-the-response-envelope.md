@@ -2,7 +2,7 @@
 
 **Status:** accepted
 
-**Export** (CONTEXT.md) lets a user take a portable copy of their own data — owned
+**Export** (GLOSSARY.md) lets a user take a portable copy of their own data — owned
 **Protocols** and standalone **Sessions**, **Logged Sessions** and **Logged Sets**, body
 metrics, and the referenced **Catalog** Exercises — off the platform. Every other endpoint
 returns the `{success, data, error}` **response envelope** (`app/envelope.py`), a seam
@@ -19,7 +19,7 @@ place that seam does not fit, so we make Export a **deliberate, documented devia
   self-contained via the referenced Catalog Exercises), but **no import path is built** in
   this slice.
 - **Values are canonical kilograms**, regardless of the user's **Weight Unit** — portability
-  favours one unambiguous unit over a display preference (CONTEXT.md, Export / Weight Unit).
+  favours one unambiguous unit over a display preference (GLOSSARY.md, Export / Weight Unit).
 - **Scope is strictly user-owned.** Export never includes the shared **Generated** cache or
   any other user's data; it is whole-account portability for the user themselves, distinct
   from **Share** (ADR-0057), which hands one plan to another user.

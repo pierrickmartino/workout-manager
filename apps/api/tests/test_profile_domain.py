@@ -63,7 +63,7 @@ def test_stated_request_equipment_replaces_the_default():
     # Act
     available = resolve_equipment(["barbell", "rack"], default_equipment)
 
-    # Assert — replace, never merge (CONTEXT: Available Equipment replaces Default)
+    # Assert — replace, never merge (GLOSSARY: Available Equipment replaces Default)
     assert available == ["barbell", "rack"]
 
 

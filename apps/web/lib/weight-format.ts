@@ -1,5 +1,5 @@
 // The Weight Unit conversion + formatting seam (issue #417). Storage stays canonical
-// kilograms; a reader's chosen Weight Unit (CONTEXT "Weight Unit") is a **read-time
+// kilograms; a reader's chosen Weight Unit (GLOSSARY "Weight Unit") is a **read-time
 // projection computed per reader** — so a Redeemed / Shared Session shows the
 // recipient's unit, not the author's. Weight *inputs* run the inverse: a figure typed
 // in the reader's unit converts to **exact kilograms** on the way in, with rounding

@@ -2,7 +2,7 @@
 
 Gives ``protocol`` a nullable ``calibration`` integer column holding the user's standing
 **Calibration** — the *relative offset* from the Protocol's authored values that re-pitches
-its un-performed tail (CONTEXT: Calibration). Clamped −3…+3 by
+its un-performed tail (GLOSSARY: Calibration). Clamped −3…+3 by
 ``app.domain.calibration.clamp_calibration`` at the write boundary; the column itself stays a
 plain integer so a future change to the clamp needs no migration.
 

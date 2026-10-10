@@ -1,6 +1,6 @@
 # Chart keyboard, screen-reader and value-access validation
 
-Source: [UI/UX audit follow-up 5](../ui-ux-audit.md#follow-up-validation).
+Source: UI/UX audit follow-up 5 (`docs/ui-ux-audit.md`, since removed; see `21be1c1^`).
 Scope confirmed through the grilling workflow; no separate issue supplied.
 Base commit: `bcb18a1584d7fc3790056a8184368807f35c1917`. Session: Codex.
 Validation tooling and findings only; no production component behavior changed.

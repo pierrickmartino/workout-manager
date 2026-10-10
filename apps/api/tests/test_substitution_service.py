@@ -1,7 +1,7 @@
 """The Substitution flow: resolve lookup-first, swap the Exercise on the user's
 own Session copy, fall back to AI only when no catalog link fits.
 
-A Substitution is unlimited and distinct from Regeneration (CONTEXT.md): it swaps
+A Substitution is unlimited and distinct from Regeneration (GLOSSARY.md): it swaps
 one Exercise Prescription's Exercise — keeping its sets/reps — and never consumes
 the once-per-Session regeneration guard. Resolution is filtered by the user's
 equipment and constraints; when none of the typed catalog relationships fit, an

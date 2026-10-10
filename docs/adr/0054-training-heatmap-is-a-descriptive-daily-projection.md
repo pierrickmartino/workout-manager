@@ -6,7 +6,7 @@ read-time projection** of the Logged Session record (ADR-0018): no new table, no
 write hook, no migration — the same shape as the Streak, XP, and Personal Records
 engines. That part is uncontroversial. This ADR records the part that is: adopting a
 **per-day** grid at all, when ADR-0001 made the domain deliberately calendar-free
-("no today") and CONTEXT.md lists **"daily streak"** and **"don't-break-the-chain"**
+("no today") and GLOSSARY.md lists **"daily streak"** and **"don't-break-the-chain"**
 under _Avoid_.
 
 **We adopted the daily grid but fenced off every daily-chain mechanic.** The domain's

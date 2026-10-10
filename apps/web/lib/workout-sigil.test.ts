@@ -10,7 +10,7 @@ import {
   sigilTransitionName,
 } from "./workout-sigil.ts";
 
-// `workout-sigil` is the pure engine behind the Workout Signature mark (CONTEXT: Workout
+// `workout-sigil` is the pure engine behind the Workout Signature mark (GLOSSARY: Workout
 // Signature). Its whole job is a DETERMINISTIC mapping from a Session id + Exercise count to a
 // geometric sigil that is identical across every surface and distinct between Sessions.
 

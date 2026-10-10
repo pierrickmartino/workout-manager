@@ -1,4 +1,4 @@
-"""Share / Redeem HTTP endpoints (ADR-0057, CONTEXT: Share, Share Link, Redeem).
+"""Share / Redeem HTTP endpoints (ADR-0057, GLOSSARY: Share, Share Link, Redeem).
 
 The first feature in the domain that crosses the user-ownership boundary — and it does so
 **by copy over a revocable link**, never by reference. Two audiences:

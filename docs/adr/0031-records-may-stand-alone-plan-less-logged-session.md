@@ -9,7 +9,7 @@ may exist with no Session behind it**.
 
 **A mandatory `session_id` was accidental coupling, not the invariant.** The
 domain's cardinal rule is that a plan (what the AI prescribes) and a record (what
-the user did) are *never the same thing* (`CONTEXT.md`, ADR-0001). A required
+the user did) are *never the same thing* (`GLOSSARY.md`, ADR-0001). A required
 plan-pointer on every record quietly asserts the opposite — that a record cannot
 exist without a plan. Making `session_id` nullable is therefore the *honest*
 reading of the plan/record split, not a violation of it: a record of performed

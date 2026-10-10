@@ -45,21 +45,21 @@ export interface SessionSummary {
   display_name: string;
   created_at: string;
   author: { display_name?: string | null };
-  // Whether the Author resolves to the viewing owner (CONTEXT: Author). The card surfaces the "by
+  // Whether the Author resolves to the viewing owner (GLOSSARY: Author). The card surfaces the "by
   // <name>" byline only when this is false — it is provenance (a plan adopted from someone else),
   // not self-repetition on every row. Computed server-side (owner == author); always present on a
   // list row.
   authored_by_me: boolean;
   is_favorite: boolean;
   exercise_count: number;
-  // Logged Count (CONTEXT: Logged Count, ADR-0063): how many Logged Sessions the owner has
+  // Logged Count (GLOSSARY: Logged Count, ADR-0063): how many Logged Sessions the owner has
   // recorded against this Session. The row badges it when > 0 (so already-trained Sessions are
   // spotted at a glance) and offers Delete only when it is 0 (a performed Session is never
   // deleted). Always present on a list row — the server computes it for every row.
   logged_count: number;
 }
 
-// The single-select chip filter (CONTEXT: My Sessions): `all` (no narrowing), `favorites`
+// The single-select chip filter (GLOSSARY: My Sessions): `all` (no narrowing), `favorites`
 // (the owner's Favorites), or one `type` (a Training Type). Folds the former standalone
 // favorites toggle into one row alongside the per-type chips.
 export type SessionChipFilter =
@@ -240,7 +240,7 @@ export function formatSessionDate(createdAt: string): string {
   return formatLongDate(createdAt);
 }
 
-// The row's display title (CONTEXT: My Sessions / Session Name): the user-given Session Name
+// The row's display title (GLOSSARY: My Sessions / Session Name): the user-given Session Name
 // when set, else the formatted creation date. Unlike the server's `display_name` fallback
 // (`training_type · date`), an unnamed row's title drops the Training Type — it is already
 // carried by the row's type badge, so repeating it would double-print (Q5).

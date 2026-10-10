@@ -1,7 +1,7 @@
 """The lookup-first resolution rule at the heart of Substitution.
 
 ``resolve_substitute`` chooses a catalog substitute for a prescribed Exercise the
-user cannot perform, filtered by the user's equipment and constraints (CONTEXT.md).
+user cannot perform, filtered by the user's equipment and constraints (GLOSSARY.md).
 It is the deterministic, no-AI core: it returns a compatible catalog match when one
 exists and otherwise signals that AI generation is required. These tests pin that
 behavior over hand-built candidates so the rule is exercised in isolation."""

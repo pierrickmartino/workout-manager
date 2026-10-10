@@ -15,7 +15,7 @@ ordering and rest) and **ADR-0006** (the generation schema and `parse_*` boundar
 **A Superset is a round-major overlay, not a badge.** It is an ordered group of two or
 more contiguous Prescriptions within one Session, performed in **rounds** — one set of
 each member in turn — resting only at the **round boundary**, never between members (see
-`CONTEXT.md`). One umbrella term covers two members and many; there is deliberately no
+`GLOSSARY.md`). One umbrella term covers two members and many; there is deliberately no
 separate "circuit"/"giant set", because the round-major behaviour is identical regardless
 of member count, so a second term would split on member count alone. It changes *order and
 rest*, never what a set is — reps, Load, and per-Exercise muscle attribution are untouched.

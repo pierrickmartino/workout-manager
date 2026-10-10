@@ -1,4 +1,4 @@
-// View-model for the shared Session card (CONTEXT: Recent Sessions, My Sessions). Pure and
+// View-model for the shared Session card (GLOSSARY: Recent Sessions, My Sessions). Pure and
 // browser-safe (no server-only imports), like `recent-sessions` and `session-library`, so it is
 // unit-testable without a browser and both the Train panel and the My Sessions list feed it.
 //
@@ -74,7 +74,7 @@ export function sessionSummaryCardModel(
   summary: SessionSummary,
 ): SessionCardModel {
   const title = sessionRowTitle(summary);
-  // The Author byline (CONTEXT: Author) is provenance, not self-repetition: shown only when the
+  // The Author byline (GLOSSARY: Author) is provenance, not self-repetition: shown only when the
   // plan was authored by someone else (an adopted/shared copy). A self-authored row drops it
   // (`null` → the card renders no byline). Otherwise the never-blank credit — the same fallback
   // the row used before (a null/blank raw name → the generic label), so a shown byline is never "".
@@ -97,7 +97,7 @@ export function sessionSummaryCardModel(
   };
 }
 
-// Whether a library row offers Delete in its ⋯ menu (CONTEXT: Delete, ADR-0063): only a plan that
+// Whether a library row offers Delete in its ⋯ menu (GLOSSARY: Delete, ADR-0063): only a plan that
 // has never been performed (Logged Count 0). A performed Session is settled record and is never
 // deleted from the row; the server 409 is the backstop on a race. Mirrors the mutually-exclusive
 // rule the old inline control used (the "Trained N×" badge shows instead when the count is > 0).
@@ -105,7 +105,7 @@ export function canDeleteSessionRow(loggedCount: number): boolean {
   return loggedCount <= 0;
 }
 
-// The ⋯ menu's Favorite action label (CONTEXT: Favorite): mark when currently unfavorited, unmark
+// The ⋯ menu's Favorite action label (GLOSSARY: Favorite): mark when currently unfavorited, unmark
 // when currently favorited. Owned here so the menu item and the long-press shortcut read the same.
 export function favoriteActionLabel(isFavorite: boolean): string {
   return isFavorite ? "Unfavorite session" : "Favorite session";

@@ -25,7 +25,7 @@ bought is unchanged. Only the fold's reading rule is decided here.
 
 ## Two levels, two names
 
-`CONTEXT.md` carried one **Fitness Level** entry for two concepts the code already treated
+`GLOSSARY.md` carried one **Fitness Level** entry for two concepts the code already treated
 differently. It splits into a qualified pair, shaped exactly like the **Default Equipment** /
 **Available Equipment** pair that sits just above it in the same section — a saved base versus
 what one use actually runs with:
@@ -136,7 +136,7 @@ defects later:
 The guard's `BANNED_TERMS` registry is for *hard regressions* — a user-facing domain term the
 codebase was deliberately moved away from, or one whose shape encodes a rejected design. **No
 domain term is retired here.** **Fitness Level** survives as the umbrella concept and only gains
-two qualified readings, and the fold's rename is a private identifier that no `CONTEXT.md`
+two qualified readings, and the fold's rename is a private identifier that no `GLOSSARY.md`
 `_Avoid_` line names. Padding the registry with private identifiers dulls exactly the
 user-facing signal it protects, so the registry is left alone; a future user-facing phrase such
 as "fitness score" would earn an entry, and this does not.
@@ -164,7 +164,7 @@ as "fitness score" would earn an entry, and this does not.
 
 ## Consequences
 
-- **`CONTEXT.md` gains two entries and keeps the third.** Every existing cross-reference to the
+- **`GLOSSARY.md` gains two entries and keeps the third.** Every existing cross-reference to the
   bare term is qualified: **Training Type** names the dimension the Declared level is held per,
   **Calibration** reads the **Effective** band, the **Fitness Profile** stores the **Declared**
   level and explicitly does not carry the Effective one, and **Operator Level**'s distinction is

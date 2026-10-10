@@ -1,4 +1,4 @@
-"""Unit tests for the Note domain value (ADR-0065, CONTEXT: Exercise Note / Set Note).
+"""Unit tests for the Note domain value (ADR-0065, GLOSSARY: Exercise Note / Set Note).
 
 A note is optional, user-authored free text — an **Exercise Note** on the plan and a
 **Set Note** on the record. This module pins the one write-boundary sanitizer,

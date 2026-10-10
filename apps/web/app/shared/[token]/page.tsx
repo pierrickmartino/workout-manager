@@ -52,7 +52,7 @@ export default async function SharedSessionPage({
         }
       />
 
-      {/* Author credit (CONTEXT: Author): the human who first created this plan — preserved on the
+      {/* Author credit (GLOSSARY: Author): the human who first created this plan — preserved on the
           copy when redeemed, so even a shared plan keeps crediting its original creator. */}
       <p className="-mt-4 font-sans text-[13px] text-text-secondary">
         {preview.authorByline}

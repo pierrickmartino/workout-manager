@@ -1,7 +1,7 @@
 # 0043 — Duplicating a Session preserves its Provenance and lineage, and lands standalone
 
 A user wants to reuse a workout they already own without re-authoring it — "give me
-this Session again so I can tweak and log it." We add **Duplicate** (`CONTEXT.md`,
+this Session again so I can tweak and log it." We add **Duplicate** (`GLOSSARY.md`,
 §Generation & Reuse): a hand-triggered deep-copy of a user-owned Session into a **new
 standalone Session**. The one surprising, hard-to-reverse choice is that the copy keeps
 the source's **Session Provenance** (`ai_generated` | `user_authored`) and its

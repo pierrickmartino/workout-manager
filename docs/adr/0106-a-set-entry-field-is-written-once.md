@@ -31,7 +31,7 @@ The copies were not identical, and nothing in the type system had any way to say
 - **One distance field was not a numeric field.** `CorrectLogForm`'s pre-filled distance input
   declared no `type` and no `step`, so a 5 km run was typed on an alphabetic keyboard in that one
   form while the other three derived a decimal pad from `type="number" step="any"`.
-- **The same picker was captioned two different ways**, and one of them was the word CONTEXT
+- **The same picker was captioned two different ways**, and one of them was the word GLOSSARY
   'Quantity' lists under _Avoid_. The terminology guard bans that word as a quoted display label
   (issue #345) but had never seen it: in all four forms the caption was a JSX **text node**, not a
   string literal, so the regex could not reach it. Merging the copies moved the caption into a
@@ -167,7 +167,7 @@ below is a normalization onto what the majority already did:
   the distance field that was not numeric now is. A `range` or descriptive Load still keeps the
   full keyboard in every form — a numeric pad offers neither a hyphen nor letters.
 - The Quantity-kind picker is captioned "Quantity" everywhere, and announced "Quantity kind".
-  Three of the four forms used the word CONTEXT puts under _Avoid_; the minority was the one
+  Three of the four forms used the word GLOSSARY puts under _Avoid_; the minority was the one
   following the law, so the majority moved. This is also the one change here that a guard
   demanded rather than merely permitted — see above.
 - A duration entered *as* the amount is announced "Duration" everywhere. It is still captioned
@@ -182,7 +182,7 @@ below is a normalization onto what the majority already did:
 Two things were deliberately **not** normalized, because each would change what a user can do
 rather than how one field is written.
 
-The Effort picker still offers 1-10 integers, which is narrower than the domain: CONTEXT 'Effort'
+The Effort picker still offers 1-10 integers, which is narrower than the domain: GLOSSARY 'Effort'
 defines the RPE scale as 0-10 with half-steps. All four copies offered exactly 1-10, so this is
 pre-existing — but it is now one list instead of four, which turns closing the gap from a
 four-file hunt into a one-line edit. The gap is named at the constant so it cannot be mistaken for

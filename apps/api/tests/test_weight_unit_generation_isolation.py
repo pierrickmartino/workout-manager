@@ -1,6 +1,6 @@
 """Proof that the **Weight Unit** facet never crosses into generation (#416).
 
-Weight Unit is an **Interface Preference** (CONTEXT "Weight Unit", ADR-0047/0055):
+Weight Unit is an **Interface Preference** (GLOSSARY "Weight Unit", ADR-0047/0055):
 like Mode and Keep Screen Awake it steers only how a Load is *entered and displayed*
 and must never enter generation input or the generation **cache key** — two users on
 different units must share one cached Protocol. These tests are the executable

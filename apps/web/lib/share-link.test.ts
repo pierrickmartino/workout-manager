@@ -9,7 +9,7 @@ import {
 
 // `toShareLinkResult` turns the backend's create-link envelope into the sharer's result — the
 // token and the shareable recipient URL to copy, or an honest error. Pure and server-free, so the
-// URL shape (CONTEXT: Share Link — it is a link, not a code) and the error copy are unit-tested
+// URL shape (GLOSSARY: Share Link — it is a link, not a code) and the error copy are unit-tested
 // here and the action/component stay thin.
 
 test("builds the recipient URL from the token and origin", () => {

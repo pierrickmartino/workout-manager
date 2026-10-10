@@ -7,7 +7,7 @@ status: accepted
 The operator needs visibility into AI usage — prompts, tokens, cost, latency, outcome, and
 eventually feedback — across every generation. This is **operational observability of the
 system, not part of the product domain**: it exists to serve the operator, never the end
-user, so it earns no term in `CONTEXT.md` and is deliberately a **stored write-time event
+user, so it earns no term in `GLOSSARY.md` and is deliberately a **stored write-time event
 log** — the very shape the domain forbids for XP/Streak/PRs. That is not a contradiction:
 the "read-time projection, never a stored ledger" invariant (ADR-0018/0019) governs
 *user-facing projections of the record*; it says nothing about operator telemetry, which

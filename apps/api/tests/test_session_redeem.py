@@ -207,7 +207,7 @@ def test_scheme_survives_a_re_redeemed_chain(repos):
 
 
 def test_redeem_starts_un_favorited_for_the_new_owner(repos):
-    # Favorite is per-owner and per-copy: a redeemed copy has no marker (CONTEXT: Favorite).
+    # Favorite is per-owner and per-copy: a redeemed copy has no marker (GLOSSARY: Favorite).
     session_repo, exercises = repos
     source = session_repo.create("sharer", _draft(exercises))
     session_repo.set_favorite(source.id, "sharer", True)
@@ -249,7 +249,7 @@ def test_redeem_carries_no_logged_sessions(repos):
 
 
 def test_each_redeem_is_a_fresh_distinct_copy(repos):
-    # Redeeming twice yields distinct copies (CONTEXT: Share Link — each Redeem one fresh copy).
+    # Redeeming twice yields distinct copies (GLOSSARY: Share Link — each Redeem one fresh copy).
     session_repo, exercises = repos
     source = session_repo.create("sharer", _draft(exercises))
 

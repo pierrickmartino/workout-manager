@@ -10,7 +10,7 @@
 import { decodeHtmlEntities } from "./html-entities.ts";
 import { provenanceLabel } from "./admin-exercises-view.ts";
 
-// The closed Provenance vocabulary in trust order (CONTEXT: Provenance) — the options the
+// The closed Provenance vocabulary in trust order (GLOSSARY: Provenance) — the options the
 // deliberate Provenance control offers. The backend re-validates against the same set (422 on
 // anything else), so this is only the client-side option list.
 export const PROVENANCE_VALUES = [

@@ -190,7 +190,7 @@ def test_rename_leaves_logged_sessions_untouched():
 
 def test_rename_is_rejected_on_a_protocol_member():
     # Arrange — a Protocol-member Session owned by the caller, seeded directly (the API
-    # only ever builds standalone Sessions). Session Name is standalone-only (CONTEXT),
+    # only ever builds standalone Sessions). Session Name is standalone-only (GLOSSARY),
     # so rename must refuse a Protocol member at the boundary.
     client, ctx = build_client()
     headers = _auth(ctx, "proto_owner")

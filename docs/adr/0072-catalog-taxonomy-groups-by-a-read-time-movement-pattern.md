@@ -43,7 +43,7 @@ also gains a `movement_pattern` field so a row and its section agree on the fami
 
 ## Consequences
 
-- Introduces **one new domain term, Movement Pattern** (see `CONTEXT.md`), and **no
+- Introduces **one new domain term, Movement Pattern** (see `GLOSSARY.md`), and **no
   data-model change**: no column, no migration, no write hook.
 - The classifier is name-keyword-first with a conservative muscle-mix fallback and a General
   bucket; its order is load-bearing (Locomotion before Pull so a rowing *machine* is not a

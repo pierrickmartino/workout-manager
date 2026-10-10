@@ -2,7 +2,7 @@
 
 A user reusing a past workout wants to add a movement to it — and, on the record side,
 to log a movement they did but that was never prescribed. We add two affordances:
-**Insert** (`CONTEXT.md`, §Plan vs. Record) hand-authors a new Exercise Prescription into
+**Insert** (`GLOSSARY.md`, §Plan vs. Record) hand-authors a new Exercise Prescription into
 the user's own **standalone Session** (the *plan*); and **Log Correction** grows the
 ability to **add** a Logged Set to a record (the *record*), including an off-plan movement.
 This ADR records the plan-side decision, which is the surprising one: it overturns the
@@ -57,7 +57,7 @@ claim no longer does.
 
 ## Consequences
 
-- **The record side gains "add a set" via Log Correction** (`CONTEXT.md`, §Plan vs. Record):
+- **The record side gains "add a set" via Log Correction** (`GLOSSARY.md`, §Plan vs. Record):
   an added Logged Set may record any catalog movement, including one never prescribed. Such
   an off-plan set **never changes the Completion Outcome** (it is not prescribed work, so a
   Completed Session stays Completed, ADR-0013) and **never trips the contiguity gate**
@@ -70,5 +70,5 @@ claim no longer does.
   no cache-bypass question (ADR-0003).
 - **Reuse friction, addressed separately (not an ADR):** the History row gains a direct
   **Repeat** (plan-backed) / **Capture** (plan-less) control, cutting the `OPEN → Repeat`
-  hop; the plan landing is kept so the Start-vs-Log fork survives. `CONTEXT.md` now defines
+  hop; the plan landing is kept so the Start-vs-Log fork survives. `GLOSSARY.md` now defines
   the previously-undocumented **Repeat** term.

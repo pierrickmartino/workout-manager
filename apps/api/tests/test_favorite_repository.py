@@ -1,7 +1,7 @@
 """Behavior of the Favorite repository through its public interface, over both the
 in-memory fake and the real SQLModel implementation.
 
-A Favorite is a **stored, per-user, per-copy** marker keyed by (user, session) (CONTEXT:
+A Favorite is a **stored, per-user, per-copy** marker keyed by (user, session) (GLOSSARY:
 Favorite, issue #396): presence of a row means favorited, its absence means not. The marker
 is private to the user — one user's mark never leaks into another's read — and both mark and
 unmark are idempotent."""

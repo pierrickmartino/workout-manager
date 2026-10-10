@@ -18,7 +18,7 @@ neutral surfaces. The report uses the same threshold and finds zero failures.
 quantization; their dim fills keep alpha 0x1f. Five additional Light Skins now
 explicitly override inherited amber/green. Vercel Dark's label becomes black.
 The [derivation evidence](accent-retuning.json) records originals, retuned values,
-actual surfaces, target lightness and minimum ratio. ADR-0081 and CONTEXT.md
+actual surfaces, target lightness and minimum ratio. ADR-0081 and GLOSSARY.md
 record the widened invariant; CLAUDE.md documents the registry obligation.
 
 The original issue count of 29 describes an incomplete audit; the existing #559

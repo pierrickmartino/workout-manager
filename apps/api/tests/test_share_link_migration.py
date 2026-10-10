@@ -1,7 +1,7 @@
 """Migration test for the ``share_link`` table (issue #398).
 
 Exercises 0033 end to end against a real SQLite database: upgrade creates the Share Link
-table (CONTEXT: Share Link) with a unique ``token``, so a preview/redeem lookup is exact;
+table (GLOSSARY: Share Link) with a unique ``token``, so a preview/redeem lookup is exact;
 downgrading one step drops it, so the migration is reversible. There is no backfill —
 sharing is a new capability, so a Session simply has no link until one is created.
 """

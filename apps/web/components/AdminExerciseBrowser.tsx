@@ -24,7 +24,7 @@ import { Select } from "@/components/ui/select";
 import { NAV_FORWARD } from "@/lib/nav-direction";
 
 // The closed Provenance and Completeness vocabularies as the facet dropdowns offer them
-// (CONTEXT: Provenance; ADR-0041). Kept here as UI options; the pure view-model owns the
+// (GLOSSARY: Provenance; ADR-0041). Kept here as UI options; the pure view-model owns the
 // labels a row renders.
 const PROVENANCE_OPTIONS = [
   { value: "curated", label: "Curated" },

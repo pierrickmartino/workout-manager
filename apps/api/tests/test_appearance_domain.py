@@ -20,7 +20,7 @@ from app.domain.appearance import (
 
 def test_default_preference_is_dark_awake_and_kilograms():
     # Assert — the shipped defaults preserve today's look and expected gym behaviour,
-    # and Weight Unit defaults to kilograms (CONTEXT "Weight Unit")
+    # and Weight Unit defaults to kilograms (GLOSSARY "Weight Unit")
     assert DEFAULT_MODE == Mode.DARK
     assert DEFAULT_KEEP_SCREEN_AWAKE is True
     assert DEFAULT_WEIGHT_UNIT == WeightUnit.KG

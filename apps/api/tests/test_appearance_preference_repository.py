@@ -37,7 +37,7 @@ def test_get_defaults_to_dark_awake_and_kg_when_no_record_exists(repo):
     preference = repo.get_preference("user_default")
 
     # Assert — the shipped defaults: Dark look (ADR-0047) + Keep Screen Awake on
-    # + kilograms (CONTEXT "Weight Unit")
+    # + kilograms (GLOSSARY "Weight Unit")
     assert preference == InterfacePreference(
         mode=Mode.DARK, keep_screen_awake=True, weight_unit=WeightUnit.KG
     )

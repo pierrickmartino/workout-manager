@@ -4,7 +4,7 @@ A user wants to hand one of their saved workouts to another user — "share this
 training session with a friend." This is the **first feature in the domain that
 crosses the user-ownership boundary**, every prior copy having stayed within one
 account (Adopt, Duplicate, Capture). We add **Share / Share Link / Redeem**
-(`CONTEXT.md`, §Session Library & Sharing): a user **Shares** a standalone Session
+(`GLOSSARY.md`, §Session Library & Sharing): a user **Shares** a standalone Session
 by publishing a **revocable, reusable Share Link**, and the recipient **Redeems**
 that link into an **independent deep-copy** they own outright. The sharer's Session
 and the recipient's copy are thereafter fully independent. This ADR records why
@@ -74,5 +74,5 @@ invariant this decision exists to protect. No auto-expiry in v1.
   for a recipient with a Sensitive Constraint is a deliberate carve-out from ADR-0003,
   recorded separately in **ADR-0058**.
 - **The library surface is new.** Redeemed and self-authored standalone Sessions are
-  reached, searched, and favourited in **My Sessions** (`CONTEXT.md`), a read
+  reached, searched, and favourited in **My Sessions** (`GLOSSARY.md`), a read
   destination off Train that did not exist before this work.

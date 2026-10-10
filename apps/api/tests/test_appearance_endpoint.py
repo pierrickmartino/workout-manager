@@ -230,7 +230,7 @@ def test_get_defaults_weight_unit_to_kg_when_no_record_exists():
     # Act
     data = client.get("/api/appearance", headers=headers).json()["data"]
 
-    # Assert — the shipped default is kilograms (CONTEXT "Weight Unit")
+    # Assert — the shipped default is kilograms (GLOSSARY "Weight Unit")
     assert data["weight_unit"] == "kg"
 
 

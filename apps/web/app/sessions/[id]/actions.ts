@@ -77,7 +77,7 @@ export async function submitDeleteSession(
   redirect("/sessions");
 }
 
-// Mark or unmark the user's own standalone Session as a Favorite (CONTEXT: Favorite, issue
+// Mark or unmark the user's own standalone Session as a Favorite (GLOSSARY: Favorite, issue
 // #396). A thin transport-and-revalidate shell: the hidden `favorite` field carries the desired
 // next state ("true" to mark, anything else to unmark), so the toggle sends the opposite of the
 // current state. On success the Session page is revalidated so the toggle reflects the new marker

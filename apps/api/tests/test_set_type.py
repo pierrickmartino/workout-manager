@@ -1,4 +1,4 @@
-"""Unit tests for the Set Type domain value (ADR-0065, CONTEXT: Set Type).
+"""Unit tests for the Set Type domain value (ADR-0065, GLOSSARY: Set Type).
 
 Set Type is a curated, closed enum — warm-up / working / drop / failure / AMRAP —
 with an unset→working resolution and no default-inventing parse for the write boundary.

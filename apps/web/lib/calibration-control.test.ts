@@ -95,7 +95,7 @@ test("the effect line says what moves and that the record does not", () => {
 });
 
 test("the readout never names a level or a score", () => {
-  // CONTEXT 'Calibration' puts "difficulty level" and "calibration score" under _Avoid_;
+  // GLOSSARY 'Calibration' puts "difficulty level" and "calibration score" under _Avoid_;
   // the offset is relative to what the plan already says, so the copy must stay relative.
   for (const value of [-3, -1, 0, 1, 3]) {
     const { headline, direction } = calibrationReadout(value);

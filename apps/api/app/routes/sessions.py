@@ -578,7 +578,7 @@ def _serialize_summary(
         # Whether the Author resolves to the viewing owner (the list is scoped to the caller, so
         # ``clerk_user_id`` is the owner). The card shows the "by <name>" byline only when this is
         # false — an adopted/shared copy keeps its original Author (provenance), a self-authored
-        # row drops the redundant "by <you>" (CONTEXT: Author). The raw Author id stays off-wire.
+        # row drops the redundant "by <you>" (GLOSSARY: Author). The raw Author id stays off-wire.
         "authored_by_me": summary.author_clerk_user_id is not None
         and summary.author_clerk_user_id == clerk_user_id,
         # The owner's Favorite marker, driving the favorites-only filter's rendering.
@@ -602,7 +602,7 @@ def list_sessions(
 ) -> dict:
     """List the caller's own **standalone** Sessions for My Sessions (issue #397).
 
-    The read behind the My Sessions library (CONTEXT: My Sessions): scoped to the
+    The read behind the My Sessions library (GLOSSARY: My Sessions): scoped to the
     authenticated user and to standalone Sessions only — a Protocol-member Session and
     every other user's Session are excluded. ``query`` searches Session Name, the derived
     ``training_type · date`` fallback label, and Training Type case-insensitively (a blank
@@ -772,7 +772,7 @@ def rename_session(
 def _set_favorite(
     session_id: int, clerk_user_id: str, favorite: bool, sessions: SessionRepository
 ) -> dict:
-    """Mark or unmark the owner's standalone Session as a Favorite (CONTEXT: Favorite, #396).
+    """Mark or unmark the owner's standalone Session as a Favorite (GLOSSARY: Favorite, #396).
 
     The shared body of the mark (POST) and unmark (DELETE) endpoints. Scoped to the
     authenticated owner: a missing or non-owned Session ``404``s, so a non-owner can never
@@ -802,7 +802,7 @@ def favorite_session(
     clerk_user_id: str = Depends(get_current_user),
     sessions: SessionRepository = Depends(get_session_repository),
 ) -> dict:
-    """Mark the owner's standalone Session as a Favorite (CONTEXT: Favorite, issue #396).
+    """Mark the owner's standalone Session as a Favorite (GLOSSARY: Favorite, issue #396).
 
     The submit target of the standalone Session's Favorite toggle. Writes a stored, per-user,
     per-copy marker — private to the user, and never carried across Duplicate/Redeem (a copy

@@ -75,7 +75,7 @@ def test_create_persists_a_user_owned_standalone_session(repos):
 
 
 def test_created_session_attributes_its_author_to_the_creator(repos):
-    # A self-authored/generated Session credits the user who created it (CONTEXT: Author,
+    # A self-authored/generated Session credits the user who created it (GLOSSARY: Author,
     # #395): the Author reference is stamped with the creating user at creation, distinct
     # from Provenance and equal to the owner until a later Redeem transfers ownership.
     session_repo, exercises = repos

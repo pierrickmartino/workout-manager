@@ -1,4 +1,4 @@
-// The Workout Signature engine (CONTEXT: Workout Signature). A pure, browser-safe,
+// The Workout Signature engine (GLOSSARY: Workout Signature). A pure, browser-safe,
 // deterministic mapping from a Session's stable identity to a geometric "sigil" — a base
 // polygon plus a constellation of nodes — so every Session renders one recognizable mark that
 // is identical on every surface it appears on (Home hero, My Sessions, Train, Session detail).

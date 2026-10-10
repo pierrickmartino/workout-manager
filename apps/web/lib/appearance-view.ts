@@ -2,8 +2,8 @@ import type { Mode, Skin } from "./theme";
 import type { WeightUnit } from "./weight-unit";
 
 // The pure, per-role view-model for the Profile Appearance section. *Everyone* gets
-// the same three Mode options (CONTEXT "Mode"). An **admin** additionally gets the
-// fixed Skin catalog with preview/publish state (CONTEXT "Skin" / "Active Skin");
+// the same three Mode options (GLOSSARY "Mode"). An **admin** additionally gets the
+// fixed Skin catalog with preview/publish state (GLOSSARY "Skin" / "Active Skin");
 // an ordinary user never sees it. Keeping this decision logic pure and server-free
 // means it is unit-testable without a browser and the picker/publisher components
 // stay thin (prior art: apps/web/lib/passport-view.ts).
@@ -40,10 +40,10 @@ export function buildModeOptions(currentMode: Mode): AppearanceModeOption[] {
 // ── Keep Screen Awake slice (everyone) ───────────────────────────────────────
 
 // The user's Keep Screen Awake control: whether the preference is `enabled`, plus
-// the human `label` and a short `caption`. CONTEXT "Keep Screen Awake" — the user's
+// the human `label` and a short `caption`. GLOSSARY "Keep Screen Awake" — the user's
 // Interface Preference for holding the device screen on while a Live Session is
 // underway. The copy names the *preference*, never the browser wake-lock API that
-// backs it (a term CONTEXT tells us to avoid for the user-facing choice).
+// backs it (a term GLOSSARY tells us to avoid for the user-facing choice).
 export interface AppearanceKeepAwakeControl {
   enabled: boolean;
   label: string;
@@ -78,7 +78,7 @@ export interface WeightUnitOption {
 }
 
 // The user's Weight Unit control: the human `label` and `caption` plus the two
-// unit `options`. CONTEXT "Weight Unit" — the user's Interface Preference for the
+// unit `options`. GLOSSARY "Weight Unit" — the user's Interface Preference for the
 // unit a Load and Performed Body Weight are entered and displayed in. It steers
 // display only; storage stays canonical kilograms, so the choice never reaches
 // generation or the cache key.

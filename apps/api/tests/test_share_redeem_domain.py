@@ -1,4 +1,4 @@
-"""The Redeem copy rule as a pure domain fact (ADR-0057, CONTEXT: Redeem).
+"""The Redeem copy rule as a pure domain fact (ADR-0057, GLOSSARY: Redeem).
 
 Redeem is the cross-user cousin of Duplicate (ADR-0043): it deep-copies a shared
 standalone Session into a new one owned by the *redeemer*. This exercises the pure
@@ -34,7 +34,7 @@ def test_new_owner_is_the_redeemer():
     # Act — the redeemer is a different user than the source's owner/author
     copy = redeem_copy(_source(), "redeemer_user")
 
-    # Assert — ownership transfers to whoever redeemed the link (CONTEXT: Owner transfers on Redeem)
+    # Assert — ownership transfers to whoever redeemed the link (GLOSSARY: Owner transfers on Redeem)
     assert copy.clerk_user_id == "redeemer_user"
 
 

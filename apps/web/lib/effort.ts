@@ -7,7 +7,7 @@
 // This module has NO server-only imports, so it is safe in both Server and Client Components
 // and is unit-testable without a browser. It is the one place RPE turns into RIR and back.
 
-// A user's Effort scale (CONTEXT "Effort"). The frontend mirror of the backend's closed
+// A user's Effort scale (GLOSSARY "Effort"). The frontend mirror of the backend's closed
 // `EffortScale` enum in app/domain/effort.py; the two must not drift on which scales exist.
 export type EffortScale = "rpe" | "rir";
 

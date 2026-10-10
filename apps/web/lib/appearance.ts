@@ -5,7 +5,7 @@ import { apiGet, apiSend, type Envelope } from "./api";
 import { DEFAULT_MODE, type Mode } from "./theme";
 import { DEFAULT_WEIGHT_UNIT, type WeightUnit } from "./weight-unit";
 
-// Keep Screen Awake ships **on** (ADR-0055 / CONTEXT "Keep Screen Awake"): the
+// Keep Screen Awake ships **on** (ADR-0055 / GLOSSARY "Keep Screen Awake"): the
 // backend get-or-defaults to `true`, and this mirrors it for the offline/signed-out
 // fallback below so both ends agree on the shipped default.
 export const DEFAULT_KEEP_SCREEN_AWAKE = true;
@@ -20,7 +20,7 @@ export const DEFAULT_KEEP_SCREEN_AWAKE = true;
 
 // The wire shape of GET/PUT /api/appearance's `data`: the stored Mode, whether to
 // Keep Screen Awake during a Live Session (defaults on, ADR-0055), and the Weight
-// Unit a Load is entered and displayed in (defaults kg, CONTEXT "Weight Unit").
+// Unit a Load is entered and displayed in (defaults kg, GLOSSARY "Weight Unit").
 export interface Appearance {
   mode: Mode;
   keep_screen_awake: boolean;

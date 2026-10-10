@@ -3,7 +3,7 @@ of palette families (ADR-0048) and the pure invariant validator.
 
 A Skin is a named palette family drawn from a *fixed, curated catalog*; each one
 must define **both** a light and a dark variant, and each variant must cover the
-full required token set, so a Skin composes with any Mode (CONTEXT "Skin"). This
+full required token set, so a Skin composes with any Mode (GLOSSARY "Skin"). This
 is the same catalog ``PUT /api/active-skin`` validates a published id against, so
 an unknown id can never become the Active Skin. Pure, no I/O. Prior art:
 tests/test_profile_domain.py."""

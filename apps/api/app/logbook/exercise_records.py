@@ -9,7 +9,7 @@ RECORDS tabs (ADR-0017):
   trustworthy 1–12-rep window exists. For a bodyweight / qualitative / %-1RM / range
   Exercise this stays ``None`` so the tile is *hidden, never zeroed* — a ``0 kg`` would
   be a fabrication. It is the highest Estimated 1RM, never the heaviest bar touched:
-  CONTEXT.md reserves "Personal Record" for the estimate, not a raw-load "personal best".
+  GLOSSARY.md reserves "Personal Record" for the estimate, not a raw-load "personal best".
 - ``total_sets`` — the count of the user's Logged Sets of the Exercise, across every
   session and regardless of Load kind. It always exists, so it always renders.
 

@@ -12,7 +12,7 @@ lands on the static log form (ADR-0045), whose reps input is numeric — "7 KM"
 cannot be entered, so it shows only as a grey placeholder; the Load block is forced
 to a nonsense `bodyweight / 70`; and the only escape is to abandon the plan and
 re-enter the run through the plan-less hand-authored path (ADR-0031/0040). The
-axis the domain calls **Quantity** (`CONTEXT.md`: "how much a set *prescribes or
+axis the domain calls **Quantity** (`GLOSSARY.md`: "how much a set *prescribes or
 records*") was typed on only one of the two sides that definition names.
 
 **Decision.**
@@ -61,7 +61,7 @@ quantity migration. The bridge is built at the write boundary, not sniffed on re
   Quantity. `progression.py` over a `distance`/`duration` prescription is **out of
   scope** here — it steps reps/load and is left unchanged for cardio.
 - Terminology: the Hand-Authored builder's **"Amount"** label is corrected to
-  **"Quantity"** (`CONTEXT.md` lists "amount" under the term's _Avoid_), and the
+  **"Quantity"** (`GLOSSARY.md` lists "amount" under the term's _Avoid_), and the
   terminology guard gains a tripwire once the label is fixed.
 - The set-count-metric distortion ADR-0032 left standing (`6 × 800 m` over-weighting
   Legs and over-earning XP versus one 10 km set) is untouched by this ADR.

@@ -74,7 +74,7 @@ export interface LoggedSetRow {
 export interface LoggedSetOptions {
   // The path has an explicit performed mark (the plan-backed log's Done toggle, a completed
   // Live Session set), so a blank rep count on a marked row is 0 reps — a set ground out to
-  // failure is still attempted (CONTEXT 'Completion Outcome'). Elsewhere a blank row is one
+  // failure is still attempted (GLOSSARY 'Completion Outcome'). Elsewhere a blank row is one
   // the user did not perform.
   performedMark?: boolean;
   // The Load kind a blank picker means. `absolute` unless the path says otherwise.

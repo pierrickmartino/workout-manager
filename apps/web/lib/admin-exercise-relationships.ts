@@ -9,7 +9,7 @@
 // is owned by the other Exercise but shown here so a curator sees the full local graph. No
 // reciprocal link is ever created — the backend adds exactly the one row.
 
-// The closed relationship vocabulary (CONTEXT: Variation / Alternative). The backend
+// The closed relationship vocabulary (GLOSSARY: Variation / Alternative). The backend
 // re-validates against the same set (422 on anything else), so this is only the client option
 // list.
 export const RELATIONSHIP_KINDS = ["variation", "alternative"] as const;

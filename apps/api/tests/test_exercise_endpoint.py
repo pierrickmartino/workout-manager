@@ -2,7 +2,7 @@
 
 A user opens an Exercise to read its description, execution instructions, targeted
 muscles, difficulty, required equipment, Variations, Alternatives, and precautions
-(CONTEXT.md, Slice 11). The catalog is global and shared, but the endpoint still
+(GLOSSARY.md, Slice 11). The catalog is global and shared, but the endpoint still
 requires authentication like the rest of the API. Repositories are injected via
 dependency overrides so the test runs offline."""
 

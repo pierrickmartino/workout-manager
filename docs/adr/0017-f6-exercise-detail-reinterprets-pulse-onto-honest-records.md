@@ -12,7 +12,7 @@ reinterpretations and deviations**.
 
 Concretely:
 
-- **One strength figure, not two.** CONTEXT.md defines a **Personal Record** as the
+- **One strength figure, not two.** GLOSSARY.md defines a **Personal Record** as the
   *highest Estimated 1RM* — explicitly "not merely the heaviest bar ever touched." Pulse's
   two tiles (`PERSONAL BEST` = a load, `EST. 1RM` = an estimate) would either be redundant
   or force the raw-load tile to wear the label the glossary reserves for the PR. So the

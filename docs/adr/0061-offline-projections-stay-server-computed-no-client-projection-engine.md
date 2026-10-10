@@ -46,5 +46,5 @@ record is simply **not yet reflected** in them.
   local. Choosing server-only now avoids building and maintaining that engine before the
   need is proven.
 - **No new domain vocabulary.** Because sync stays a transport concern (ADR-0060), this
-  decision adds nothing to `CONTEXT.md`; it is about *where* existing projections run, not a
+  decision adds nothing to `GLOSSARY.md`; it is about *where* existing projections run, not a
   new concept.

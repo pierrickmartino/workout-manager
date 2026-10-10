@@ -63,5 +63,5 @@ re-inventing a junk name cannot undo a curator's decision.
   `retired` filter threaded through the discovery repository methods above.
 - **Audited.** Retire, un-retire, and hard delete are recorded in the exercise-admin audit
   trail alongside Provenance changes (ADR-0075).
-- **A new domain term, `Retire` / `Retired`,** enters `CONTEXT.md` — distinct from **Delete**
+- **A new domain term, `Retire` / `Retired`,** enters `GLOSSARY.md` — distinct from **Delete**
   (a standalone Session) and **Remove** (an Exercise Prescription), both already taken.

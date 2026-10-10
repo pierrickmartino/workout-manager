@@ -28,7 +28,7 @@ Screen Awake**. This ADR extends ADR-0047; it does not supersede it.
   gain.
 - **Generalise the language only, keep physical names (chosen).** Add a
   `keep_screen_awake` boolean to the existing Appearance Preference store/endpoint and
-  generalise the *concept* (CONTEXT.md → *Interface Preference*). The `appearance_*`
+  generalise the *concept* (GLOSSARY.md → *Interface Preference*). The `appearance_*`
   physical names stay as an incidental legacy detail — the same discipline ADR-0018/0054
   apply, where the concept lives in docs and storage naming is incidental.
 

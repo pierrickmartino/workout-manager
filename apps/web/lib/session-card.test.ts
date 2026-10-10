@@ -12,7 +12,7 @@ import type { SessionSummary } from "./session-library.ts";
 
 // `session-card` normalizes a Train "Recent Sessions" row and a My Sessions library row into the
 // one `SessionCardModel` the shared card renders, so both surfaces reuse a single card format
-// (CONTEXT: Recent Sessions, My Sessions). Pure and server-free, so the mapping and the menu-gating
+// (GLOSSARY: Recent Sessions, My Sessions). Pure and server-free, so the mapping and the menu-gating
 // rules are unit-tested here.
 
 function makeRecentRow(overrides: Partial<RecentSessionRow> = {}): RecentSessionRow {

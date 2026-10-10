@@ -19,7 +19,7 @@ unbounded, **closed-form** curve with no stored table. Level ``L`` begins at
 ``LEVEL_CURVE_K × (L - 1)²`` XP, so each level costs progressively more than the last;
 the ``xp_into_level / xp_span_of_level`` ratio is the progress-bar fill. Distinct from the
 per-training-type **Fitness Level** (ability); Operator Level is one number for the whole
-account and measures *investment* (see ``CONTEXT.md`` / ADR-0018).
+account and measures *investment* (see ``GLOSSARY.md`` / ADR-0018).
 
 The constants are module-level, tunable defaults — the mechanics are honest, the exact
 numbers are expected to be tuned. Pure and dependency-free: no ORM, no HTTP."""

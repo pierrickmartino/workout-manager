@@ -320,7 +320,7 @@ class SqlProtocolRepository:
                 clerk_user_id=clerk_user_id,
                 training_type=draft.training_type,
                 duration_minutes=draft.duration_minutes,
-                # Author stamped with the adopting/deploying user (CONTEXT: Author, #395):
+                # Author stamped with the adopting/deploying user (GLOSSARY: Author, #395):
                 # a Protocol-member Session attributes to whoever created it here.
                 author_clerk_user_id=clerk_user_id,
                 protocol_id=protocol.id,
@@ -455,7 +455,7 @@ class SqlProtocolRepository:
                 clerk_user_id=clerk_user_id,
                 training_type=protocol.training_type,
                 duration_minutes=protocol.duration_minutes,
-                # Author stamped with the adopting/deploying user (CONTEXT: Author, #395):
+                # Author stamped with the adopting/deploying user (GLOSSARY: Author, #395):
                 # a Protocol-member Session attributes to whoever created it here.
                 author_clerk_user_id=clerk_user_id,
                 protocol_id=protocol.id,
@@ -580,7 +580,7 @@ class InMemoryProtocolRepository:
                 clerk_user_id=clerk_user_id,
                 training_type=draft.training_type,
                 duration_minutes=draft.duration_minutes,
-                # Author stamped with the adopting/deploying user (CONTEXT: Author, #395):
+                # Author stamped with the adopting/deploying user (GLOSSARY: Author, #395):
                 # a Protocol-member Session attributes to whoever created it here.
                 author_clerk_user_id=clerk_user_id,
                 protocol_id=protocol.id,
@@ -679,7 +679,7 @@ class InMemoryProtocolRepository:
                 clerk_user_id=clerk_user_id,
                 training_type=protocol.training_type,
                 duration_minutes=protocol.duration_minutes,
-                # Author stamped with the adopting/deploying user (CONTEXT: Author, #395):
+                # Author stamped with the adopting/deploying user (GLOSSARY: Author, #395):
                 # a Protocol-member Session attributes to whoever created it here.
                 author_clerk_user_id=clerk_user_id,
                 protocol_id=protocol.id,

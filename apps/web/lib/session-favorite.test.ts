@@ -6,7 +6,7 @@ import type { WorkoutSession } from "./sessions-types.ts";
 
 // `sessionFavoriteView` turns a Session into the Session view's Favorite state: whether it is
 // currently favorited and whether the toggle should render at all. Pure and server-free, so the
-// standalone-only show/hide rule (CONTEXT: Favorite, #396) is unit-tested here and the page stays
+// standalone-only show/hide rule (GLOSSARY: Favorite, #396) is unit-tested here and the page stays
 // thin.
 
 function makeSession(overrides: Partial<WorkoutSession>): WorkoutSession {

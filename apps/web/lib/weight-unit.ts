@@ -1,5 +1,5 @@
 // The Weight Unit seam. A user's **Weight Unit** is an Interface Preference
-// (CONTEXT "Weight Unit") — **kg** or **lb** — steering only how a Load and a
+// (GLOSSARY "Weight Unit") — **kg** or **lb** — steering only how a Load and a
 // Performed Body Weight are entered and displayed, never what is stored (storage
 // stays canonical kilograms) or generated. This module owns the frontend's closed
 // vocabulary for that facet: the type, the canonical catalog, the shipped default,
@@ -10,7 +10,7 @@
 // import from a Server Component and to unit-test without a browser (prior art:
 // apps/web/lib/theme.ts's Skin slice).
 
-// A user's chosen Weight Unit (CONTEXT "Weight Unit"). This union is the frontend
+// A user's chosen Weight Unit (GLOSSARY "Weight Unit"). This union is the frontend
 // mirror of the backend's closed `WeightUnit` enum in app/domain/appearance.py; the
 // two must not drift on which units exist.
 export type WeightUnit = "kg" | "lb";
@@ -21,6 +21,6 @@ export type WeightUnit = "kg" | "lb";
 export const KNOWN_WEIGHT_UNITS = ["kg", "lb"] as const;
 
 // The shipped default when a user has no Weight Unit preference yet: kilograms, the
-// app's canonical storage unit, so existing behaviour is unchanged (CONTEXT "Weight
+// app's canonical storage unit, so existing behaviour is unchanged (GLOSSARY "Weight
 // Unit"). Mirrors the backend `DEFAULT_WEIGHT_UNIT`.
 export const DEFAULT_WEIGHT_UNIT: WeightUnit = "kg";

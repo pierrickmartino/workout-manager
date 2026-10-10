@@ -1,6 +1,6 @@
 # Motion, network, navigation and installed-app validation
 
-Date: 2026-09-26. Source: [UI/UX audit, follow-up 4](../ui-ux-audit.md).
+Date: 2026-09-26. Source: UI/UX audit, follow-up 4 (`docs/ui-ux-audit.md`, since removed; see `21be1c1^`).
 Base commit: `2a1bb9e0c37855292716d8ca1e2472563ffc81bc`.
 Session: Codex, inherited session model; no separate issue supplied.
 Agreed scope: report and regression tooling only; no production fixes. Cover all

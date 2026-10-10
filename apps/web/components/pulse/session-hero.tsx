@@ -38,7 +38,7 @@ export function SessionHero({ protocol }: SessionHeroProps): React.JSX.Element {
       </div>
 
       <div className="flex items-center gap-4">
-        {/* The Workout Signature mark (CONTEXT: Workout Signature): the Next Session's
+        {/* The Workout Signature mark (GLOSSARY: Workout Signature): the Next Session's
             recognizable sigil, keyed on its Session id so it matches the same Session's mark on
             My Sessions and its detail page. Falls back to the Protocol id when a Protocol has no
             Next Session (the heading is non-Session then too). */}

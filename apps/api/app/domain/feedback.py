@@ -2,7 +2,7 @@
 
 A Generation Feedback is the user's binary verdict on a generated/adopted Session
 — positive or negative — with an optional free-text reason; a negative verdict is
-the trigger for Regeneration (CONTEXT.md). It is deliberately distinct from
+the trigger for Regeneration (GLOSSARY.md). It is deliberately distinct from
 Performance Feedback (perceived effort on a Logged Session/Set): never collapse
 the two. ``Verdict`` fixes the allowed values; ``parse_verdict`` validates
 untrusted client input at the boundary."""

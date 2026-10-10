@@ -1,6 +1,6 @@
 """share a standalone Session by a revocable, reusable Share Link (issue #398)
 
-Adds the ``share_link`` table — the token a **Share** produces (CONTEXT: Share Link,
+Adds the ``share_link`` table — the token a **Share** produces (GLOSSARY: Share Link,
 ADR-0057). Each row is an **unguessable** ``token`` referencing the sharer's standalone
 ``session_id``, held with the sharer (``clerk_user_id``) so revocation stays owner-scoped,
 and a nullable ``revoked_at`` stamp (``NULL`` = active). Anyone holding the token may

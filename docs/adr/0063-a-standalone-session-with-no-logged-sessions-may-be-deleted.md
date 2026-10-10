@@ -5,7 +5,7 @@ but never did — a mis-generated plan, a duplicate, an experiment. Until now th
 **no deletion at all**: a Protocol was *set aside*, never removed (since amended: an
 un-started Protocol may now be deleted, ADR-0125), and **Remove** withdraws a single
 Prescription, never a whole Session (ADR-0052).
-We add **Delete** (`CONTEXT.md`, §Session Library & Sharing): a user permanently removes one
+We add **Delete** (`GLOSSARY.md`, §Session Library & Sharing): a user permanently removes one
 of their **own standalone Sessions** — but **only when no Logged Session references it**.
 
 This ADR records the decisions that are surprising or hard to reverse. The counter that
@@ -53,7 +53,7 @@ count iff it is undeletable.
   (ADR-0034), a record-side act the user takes deliberately.
 - **Soft-delete / archive instead of hard delete** — rejected: a record-free plan has nothing
   worth preserving, and a hidden-but-present state would burden every library read with a
-  filter. Reserved-word note: `CONTEXT.md` lists *archive/discard/abandon* on the Protocol
+  filter. Reserved-word note: `GLOSSARY.md` lists *archive/discard/abandon* on the Protocol
   *Avoid* list; Delete is a different act on a different concept (a removable standalone plan),
   and the word chosen is the plain, honest **Delete**.
 - **Let Delete reach Protocol-member Sessions** — rejected for the same reason as Insert and

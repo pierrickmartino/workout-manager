@@ -1,6 +1,6 @@
 # Keyboard and screen-reader journey validation
 
-Date: 2026-09-26. Source: [UI/UX audit follow-up 2](../ui-ux-audit.md#follow-up-validation).
+Date: 2026-09-26. Source: UI/UX audit follow-up 2 (`docs/ui-ux-audit.md`, since removed; see `21be1c1^`).
 Scope agreed with the user through the grilling workflow. No separate GitHub issue supplied.
 Base commit: `671aa51ecc1d374983e21bba1592a3f20e5be85b`. Session: Codex; documentation and guided validation only.
 

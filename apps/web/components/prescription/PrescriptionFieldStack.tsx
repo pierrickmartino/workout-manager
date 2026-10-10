@@ -165,7 +165,7 @@ export interface PrescriptionFieldStackProps {
   advanced?: React.ReactNode;
   // The always-visible line under the disclosure — the **Scheme Preview** sentence (#452). It
   // stands in for the Progression Scheme whether More is open or closed and is never a summary
-  // chip (CONTEXT: Prescription Summary). Omitted by surfaces that render no scheme.
+  // chip (GLOSSARY: Prescription Summary). Omitted by surfaces that render no scheme.
   preview?: React.ReactNode;
   // Whether the surface's opaque `advanced` slot currently holds a non-default value that should
   // force the card open, so nothing meaningful is hidden on first view (#465). The component can't
@@ -485,7 +485,7 @@ export function PrescriptionFieldStack({
         </div>
 
         {/* The Scheme Preview line stands on its own, visible whether More is open or closed
-            (CONTEXT: Prescription Summary; #465). */}
+            (GLOSSARY: Prescription Summary; #465). */}
         {preview}
       </div>
     </>

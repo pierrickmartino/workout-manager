@@ -28,7 +28,7 @@ import { Card } from "@/components/ui/card";
 // all-neutral rail with its sentence says exactly that.
 //
 // Sits beside the Operator Level badge on purpose — the account-wide investment number and the
-// per-type ability readings are the one pair a reader is most likely to confuse (CONTEXT:
+// per-type ability readings are the one pair a reader is most likely to confuse (GLOSSARY:
 // Operator Level), so they are legible next to each other rather than on separate screens.
 interface FitnessLevelStandingsProps {
   // One row per declared Training Type, already ordered, zoned and worded by

@@ -175,7 +175,7 @@ class Exercise(SQLModel, table=True):
 
 
 class ExerciseRelationship(SQLModel, table=True):
-    """A typed link between two catalog Exercises (CONTEXT.md, Slice 11).
+    """A typed link between two catalog Exercises (GLOSSARY.md, Slice 11).
 
     ``kind`` is ``variation`` (the *same* movement scaled in difficulty) or
     ``alternative`` (a *different* movement with a similar training effect). The
@@ -306,7 +306,7 @@ class Protocol(SQLModel, table=True):
 class WorkoutSession(SQLModel, table=True):
     """A single prescribed workout owned by one user.
 
-    One unified concept (CONTEXT.md): a Session either stands alone (no
+    One unified concept (GLOSSARY.md): a Session either stands alone (no
     ``protocol_id``, no Week/Day position) or belongs to a Protocol, in which case
     it carries its ``protocol_id``, descriptive ``week``/``day`` labels, and a
     zero-based ``position`` fixing its place in the self-paced sequence. It
@@ -320,7 +320,7 @@ class WorkoutSession(SQLModel, table=True):
     duration_minutes: int
     created_at: datetime = Field(default_factory=_utcnow)
 
-    # Session Provenance (CONTEXT.md, ADR-0040): how this plan came to exist —
+    # Session Provenance (GLOSSARY.md, ADR-0040): how this plan came to exist —
     # ``ai_generated`` (the generation pipeline: standalone generation or a Protocol
     # Session adopted from a Generated Protocol) or ``user_authored`` (a Hand-Authored
     # Session, built by hand with no AI call). Every existing creation path is AI, so the
@@ -339,7 +339,7 @@ class WorkoutSession(SQLModel, table=True):
     position: int | None = Field(default=None)
     title: str | None = Field(default=None)
 
-    # The user-given Session Name on a standalone Session (CONTEXT: Session Name, issue
+    # The user-given Session Name on a standalone Session (GLOSSARY: Session Name, issue
     # #394) — the act the user calls "rename". Nullable and never backfilled: a generated
     # or adopted Session is born unnamed and read paths fall back to a derived
     # ``training_type · date`` label (``app.domain.session_naming.session_label``), the same
@@ -348,7 +348,7 @@ class WorkoutSession(SQLModel, table=True):
     # Session — and is carried verbatim across Duplicate and Redeem.
     name: str | None = Field(default=None)
 
-    # Author (CONTEXT: Author, issue #395): a reference to the **human who first created**
+    # Author (GLOSSARY: Author, issue #395): a reference to the **human who first created**
     # this plan, held as the creator's ``clerk_user_id``. A distinct axis from both the
     # **Owner** (``clerk_user_id`` above, which will transfer on Redeem) and **Session
     # Provenance** (``ai_generated`` / ``user_authored`` — *how* the plan was made, not
@@ -458,7 +458,7 @@ class ExercisePrescription(SQLModel, table=True):
 
 
 class SessionFavorite(SQLModel, table=True):
-    """A user's Favorite marker on one standalone Session (CONTEXT: Favorite, issue #396).
+    """A user's Favorite marker on one standalone Session (GLOSSARY: Favorite, issue #396).
 
     A **stored, per-user, per-copy** preference — the same species as an Interface
     Preference, deliberately stored rather than derived: the no-stored-ledger rule
@@ -485,7 +485,7 @@ class SessionFavorite(SQLModel, table=True):
 class ShareLink(SQLModel, table=True):
     """A revocable, reusable Share Link to one of a user's standalone Sessions (ADR-0057).
 
-    The token a **Share** produces (CONTEXT: Share Link): an **unguessable** ``token``
+    The token a **Share** produces (GLOSSARY: Share Link): an **unguessable** ``token``
     referencing the sharer's standalone ``session_id``, held alongside the sharer
     (``clerk_user_id``) so revocation stays owner-scoped. Anyone holding the token may
     **Redeem** it — each Redeem yielding one fresh, independent deep-copy — until the

@@ -5,7 +5,7 @@
 // `navigator.onLine`, no IndexedDB, and no Clerk. The connectivity read and the outbox read
 // are thin effect shells around this (lib/use-connectivity, lib/use-sync-status).
 //
-// The cardinal honesty rule (CONTEXT / issue #414): these states are never collapsed
+// The cardinal honesty rule (GLOSSARY / issue #414): these states are never collapsed
 // into one generic "error", and "synced" is claimed ONLY when the server has actually
 // acknowledged the write — a queued-but-undelivered finish reads as "saved on this device",
 // never a false "synced".

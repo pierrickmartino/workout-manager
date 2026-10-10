@@ -50,7 +50,7 @@ def build_client(profiles=None):
     exercises = InMemoryExerciseRepository()
     profiles = profiles or InMemoryProfileRepository()
     # Wire the shared profile store into the session repo so the read resolves the Author's
-    # display name (CONTEXT: Author, #395).
+    # display name (GLOSSARY: Author, #395).
     sessions = InMemorySessionRepository(exercises, profiles)
     app = create_app()
     app.dependency_overrides[get_jwks] = lambda: ctx.jwks
@@ -151,7 +151,7 @@ def test_duplicate_carries_the_prescribed_quantity_kind_forward():
 
 def test_duplicate_preserves_the_author_on_the_read():
     # Arrange — the owner (with a display name) creates a Session and duplicates it. Author
-    # is immutable origin (CONTEXT: Author, ADR-0043), so the copy's read still credits the
+    # is immutable origin (GLOSSARY: Author, ADR-0043), so the copy's read still credits the
     # creator rather than reading authorless.
     profiles = InMemoryProfileRepository()
     profiles.update("user_dup", ProfileUpdate(display_name="Jordan Lee"))

@@ -40,7 +40,7 @@ from app.repositories.logged_session_repository import (
 
 @dataclass(frozen=True)
 class FitnessLevelStanding:
-    """One Training Type's Fitness Level read both ways (CONTEXT: Fitness Level).
+    """One Training Type's Fitness Level read both ways (GLOSSARY: Fitness Level).
 
     ``declared`` is the stored **Declared Fitness Level** the user states about
     themselves; ``effective`` is the **Effective Fitness Level** the generation cache key

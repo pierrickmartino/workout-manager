@@ -35,7 +35,7 @@ interface DeleteSessionControlProps {
   disabledHint?: string | null;
 }
 
-// The Session Delete control (CONTEXT: Delete, ADR-0063), the last row of the action sheet on both
+// The Session Delete control (GLOSSARY: Delete, ADR-0063), the last row of the action sheet on both
 // the Session detail and each My Sessions row (ADR-0113). A hard delete is irreversible, so the
 // click is guarded by a two-step confirm that opens in place of the row, the same idiom as
 // RemoveExerciseButton. On the detail a performed Session shows this disabled, with the reason as

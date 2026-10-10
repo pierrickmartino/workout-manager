@@ -11,7 +11,7 @@ import {
   trainingTypeAccentVar,
 } from "@/lib/training-type-accent";
 
-// The Workout Signature mark (CONTEXT: Workout Signature): a Session's recognizable, generated
+// The Workout Signature mark (GLOSSARY: Workout Signature): a Session's recognizable, generated
 // geometric sigil — a faint base polygon plus a constellation of nodes — framed in a small
 // medallion. Deterministic in the Session id, so the same Session shows the same mark on every
 // surface (Home hero, My Sessions, Train, Session detail) and two Sessions read as two marks.

@@ -80,7 +80,7 @@ def _log(
         LoggedSessionDraft(
             session_id=session_view.id,
             # Restated on the record, as the log service does for a plan-backed write:
-            # every Logged Session declares its own Training Type (CONTEXT: Training
+            # every Logged Session declares its own Training Type (GLOSSARY: Training
             # Type), and the Effective level reads it off the record, never off the plan.
             training_type=training_type,
             performed_on=performed_on,

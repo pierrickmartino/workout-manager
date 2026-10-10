@@ -54,7 +54,7 @@ admin-published Active Skin app-wide, users choose only their Mode) stands uncha
   falls back to the PULSE-dark values, so SSR and the client's first frame agree; the true
   Skin × Mode resolves on mount. Chart tick text already inherits `--font-sans`, so typography
   in charts follows the Skin for free.
-- **Terminology.** CONTEXT.md's "Skin" (and "Theme") definitions move from "palette / set of
+- **Terminology.** GLOSSARY.md's "Skin" (and "Theme") definitions move from "palette / set of
   colours" to "coordinated visual identity — colour, typography, and shape". No term is
   retired, so the terminology guard is unchanged.
 - **Bundle cost.** All catalog typefaces are bundled up front rather than lazily by Active

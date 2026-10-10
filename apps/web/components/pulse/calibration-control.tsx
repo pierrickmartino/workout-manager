@@ -40,7 +40,7 @@ interface CalibrationControlProps {
   protocol: ProtocolProgress;
 }
 
-// The Home control for a Protocol's **Calibration** (CONTEXT "Calibration", ADR-0111): a
+// The Home control for a Protocol's **Calibration** (GLOSSARY "Calibration", ADR-0111): a
 // stepper whose two ends — easier, harder — re-pitch the whole un-performed tail relative to
 // what the plan already says, with the standing offset read out between them, so the result of
 // a tap lands where the eye already is. The offset posted is *absolute*, so a double-tap is

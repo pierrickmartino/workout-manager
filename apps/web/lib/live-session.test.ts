@@ -513,7 +513,7 @@ test("nextExercise previews the exercise of the upcoming module", () => {
   assert.equal(nextExercise(state), null);
 });
 
-// Reopen a Set (CONTEXT 'Reopen', ADR-0089): before the finish, the whole performance
+// Reopen a Set (GLOSSARY 'Reopen', ADR-0089): before the finish, the whole performance
 // is a draft, so a completed set can be returned to un-attempted and re-completed with
 // corrected values. The pointer rule that makes this safe is forward-only — it never
 // travels backwards, so neither a reopen nor a skip can drag the header back to a part

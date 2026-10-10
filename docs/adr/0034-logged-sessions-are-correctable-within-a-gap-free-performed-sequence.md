@@ -6,7 +6,7 @@ Until now the record side was append-only: `log_session` could `create` a Logged
 Session but nothing could edit or delete one, even though four read-model modules
 (`gamification.py`, `strength_analytics.py`, `records.py`, `profile_progress.py`) and
 ADR-0018 already promise that "a corrected, back-dated, or deleted log simply
-recomputes it." F introduces **Log Correction** (CONTEXT.md) — the first act that
+recomputes it." F introduces **Log Correction** (GLOSSARY.md) — the first act that
 mutates the *record* rather than the plan — via `PUT /api/logs/{id}` and
 `DELETE /api/logs/{id}`, both funnelling through one service that reuses the
 catalog-validity guard and the plan-backed/plan-less boundary rule (read off the

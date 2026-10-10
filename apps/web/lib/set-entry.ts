@@ -40,7 +40,7 @@ export type SetEntryValues = Readonly<Record<SetEntryField, string>>;
 // The visible micro-label over each field, and the noun its accessible name is built from.
 // One caption per field in one place: the four copies had drifted here too, captioning the
 // Quantity picker one way in one form and another way elsewhere. The amount axis is called
-// **Quantity** to a user (CONTEXT 'Quantity' lists the alternative under _Avoid_, and the
+// **Quantity** to a user (GLOSSARY 'Quantity' lists the alternative under _Avoid_, and the
 // terminology guard bans it as a quoted label): the one form that said so was right, and the
 // three that did not are the ones that moved.
 export const SET_ENTRY_LABELS: Readonly<Record<SetEntryField, string>> = {
@@ -146,7 +146,7 @@ export const SET_ENTRY_KIND_OPTIONS: ReadonlyArray<{
 // The values the Effort picker offers, on its RPE scale. Declared once: three of the four forms
 // had their own copy of this array.
 //
-// It is 1-10 integers, which is **narrower than the domain**: CONTEXT 'Effort' defines the RPE
+// It is 1-10 integers, which is **narrower than the domain**: GLOSSARY 'Effort' defines the RPE
 // scale as 0-10 with half-steps allowed. That gap is pre-existing — all four copies offered
 // exactly this — and widening a picker is a change to what users can record, not a refactor, so
 // it is left as it was. What changes is that it is now one list instead of four, so closing the

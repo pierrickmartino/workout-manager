@@ -1,6 +1,6 @@
 import type { WorkoutSession } from "./sessions-types";
 
-// View-models for the Delete affordance (CONTEXT: Delete, ADR-0063). Pure and server-free
+// View-models for the Delete affordance (GLOSSARY: Delete, ADR-0063). Pure and server-free
 // (types are erased), so the "when may this Session be deleted" rule is unit-tested here and
 // the Session page and the My Sessions row stay thin. A Session is deletable only when it has
 // no Logged Session — the read-time **Logged Count** — and is standalone.
@@ -35,7 +35,7 @@ export function sessionDeleteView(session: WorkoutSession): SessionDeleteView {
 
 // The My Sessions row badge label for a Session's Logged Count, or `null` when the Session has
 // never been performed (so an unperformed row reads clean and its Delete affordance shows). The
-// label counts *performances* (CONTEXT: Logged Count) — "Trained N×" — never Logged Sets, so a
+// label counts *performances* (GLOSSARY: Logged Count) — "Trained N×" — never Logged Sets, so a
 // single workout of many sets still reads as one training.
 export function loggedCountBadge(loggedCount: number): string | null {
   if (loggedCount <= 0) {

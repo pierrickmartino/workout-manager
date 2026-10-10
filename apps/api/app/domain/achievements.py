@@ -122,7 +122,7 @@ def _has_personal_record(history: Sequence[_LoggedSession]) -> int:
     """``1`` once any Exercise has an Estimated-1RM Personal Record, else ``0``.
 
     Qualifies a set through the **shared flattening**, so this milestone reads the same
-    definition of a Personal Record every other surface does (CONTEXT 'Achievement',
+    definition of a Personal Record every other surface does (GLOSSARY 'Achievement',
     ADR-0029): an absolute-load lift, or a **bodyweight** set carrying its Performed Body
     Weight (ADR-0026), in the trustworthy rep window. A percent-of-1RM or qualitative
     history still stays at ``0`` — that is the Load kinds talking, not a private rule —

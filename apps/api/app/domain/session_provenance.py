@@ -1,4 +1,4 @@
-"""Session Provenance — how a Session's plan came to exist (CONTEXT.md, ADR-0040).
+"""Session Provenance — how a Session's plan came to exist (GLOSSARY.md, ADR-0040).
 
 A Session is either ``ai_generated`` (produced by the generation pipeline) or
 ``user_authored`` (built by hand with no AI — a Hand-Authored Session). The axis is

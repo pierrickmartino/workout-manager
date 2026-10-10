@@ -2,7 +2,7 @@
 
 A user who logged a workout ad-hoc — a plan-less Logged Session, recorded with no plan
 behind it (ADR-0031) — wants to keep doing it: "make this into a reusable workout." We add
-**Capture** (`CONTEXT.md`, §Generation & Reuse): a hand-triggered promotion of one of the
+**Capture** (`GLOSSARY.md`, §Generation & Reuse): a hand-triggered promotion of one of the
 user's own **plan-less records** into a new **standalone Session**. Capture is the first
 act that crosses the plan/record line in the *record → plan* direction, so this ADR records
 why it is a distinct act from Duplicate, why its result is always `user_authored`, why a

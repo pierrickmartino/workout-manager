@@ -1,7 +1,7 @@
 """add a user-given Session Name to the standalone Session (issue #394)
 
 Gives ``workout_session`` a nullable ``name`` column holding the user-given **Session
-Name** (CONTEXT: Session Name). Nullable by design and **not** backfilled: an existing
+Name** (GLOSSARY: Session Name). Nullable by design and **not** backfilled: an existing
 Session that was never named keeps NULL, and read paths fall back to a derived
 ``training_type · date`` label (``app.domain.session_naming.session_label``) — the same
 no-backfill pattern as the Protocol's ``name`` (0016). Distinct from ``title`` (a

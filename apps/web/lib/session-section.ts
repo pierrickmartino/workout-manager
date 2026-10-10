@@ -1,5 +1,5 @@
 // Session Section — the read-time composition bucket of an Exercise Prescription
-// (CONTEXT: Session Section; ADR-0074). Where a movement sits in a Session's arc —
+// (GLOSSARY: Session Section; ADR-0074). Where a movement sits in a Session's arc —
 // warm-up / main work / accessory / cooldown — that the Builder's composition strip
 // groups a Session by.
 //

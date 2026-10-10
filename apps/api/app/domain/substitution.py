@@ -2,7 +2,7 @@
 
 A Substitution swaps one Exercise Prescription's Exercise for a Variation (same
 movement, scaled) or Alternative (same effect) within the user's own Session copy
-(CONTEXT.md). Resolution is **lookup-first**: ``resolve_substitute`` filters the
+(GLOSSARY.md). Resolution is **lookup-first**: ``resolve_substitute`` filters the
 typed catalog relationships by the user's equipment and constraints and returns a
 compatible match when one exists, falling back to AI generation only when none
 fits. This module is the deterministic, no-AI core of that flow."""
@@ -14,7 +14,7 @@ from enum import Enum
 
 
 class RelationKind(str, Enum):
-    """The typed relationship between two catalog Exercises (CONTEXT.md).
+    """The typed relationship between two catalog Exercises (GLOSSARY.md).
 
     A Variation is the *same* movement pattern scaled in difficulty; an
     Alternative achieves a *similar* training effect with a different movement."""
