@@ -75,6 +75,8 @@ is **declared**, not that it renders right: the `audit/` journeys (`reflow.mjs` 
 - Desktop-only client JS → dynamic import plus a `useWideViewport` mount gate; `hidden lg:block`
   hides markup, not JavaScript. An optional read gets `.catch()`, since `apiGet` rejects on a
   transport failure (ADR-0088).
+- `next/font` family → `preload: false` unless the default Skin's `--font-*` tokens use it
+  (`font-preload-policy.ts`, `audit/font-preload.mjs`, ADR-0050 amendment).
 - Icons → from `@/components/pulse/icons`, never `lucide-react`; keep that file pure re-exports
   (`icon-import-policy.ts`, ADR-0092).
 - Per-second tick → in the leaf that renders the figure (`useSecondTick`, `ElapsedClock`,

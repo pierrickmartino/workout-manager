@@ -1,0 +1,44 @@
+{
+  "tool": "Lighthouse 12.8.2, mobile, simulated throttling, Chrome 141, 5 runs per side",
+  "build": "next build (production), placeholder pk_live_ Clerk keys, signed-out /",
+  "before": {
+    "fontFiles": 9,
+    "fontTransferBytes": 237796,
+    "fcpMedianMs": 1448,
+    "fcpRangeMs": [
+      1430,
+      1467
+    ],
+    "lcpMedianMs": 3643,
+    "lcpRangeMs": [
+      3629,
+      4080
+    ],
+    "scoreMedian": 0.89
+  },
+  "after": {
+    "fontFiles": 2,
+    "fontTransferBytes": 63400,
+    "fcpMedianMs": 1441,
+    "fcpRangeMs": [
+      1435,
+      1453
+    ],
+    "lcpMedianMs": 2567,
+    "lcpRangeMs": [
+      2565,
+      2574
+    ],
+    "scoreMedian": 0.97
+  },
+  "nextFontManifest": {
+    "before": {
+      "files": 9,
+      "bytes": 235096
+    },
+    "after": {
+      "files": 2,
+      "bytes": 62800
+    }
+  }
+}

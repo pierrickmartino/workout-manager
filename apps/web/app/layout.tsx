@@ -40,6 +40,13 @@ import "./globals.css";
 // Aurora → Bricolage Grotesque / Inter / IBM Plex Mono, Vercel → Geist / Geist Mono.
 // Bundling all of them up front is what lets an admin publish a Skin and have its
 // fonts apply on the next visit with no runtime fetch — the fixed-catalog trade-off.
+//
+// Only the default Skin's families keep next/font's `preload: true`; every other family
+// says `preload: false` (ADR-0050, amended). A preload is an unconditional high-priority
+// download — `unicode-range` cannot veto it — so preloading every Skin cost every visitor
+// all nine files. A non-default Skin's faces now load when its tokens first use them, over
+// next/font's size-adjusted fallback. `lib/font-preload-policy.ts` keeps this in step with
+// `DEFAULT_SKIN`.
 
 // PULSE — Space Grotesk for display/body, JetBrains Mono for labels & data
 // (the two typefaces specified by pulse.pen; the shipped default identity).
@@ -60,12 +67,14 @@ const bricolageGrotesque = Bricolage_Grotesque({
   subsets: ["latin"],
   variable: "--font-bricolage",
   display: "swap",
+  preload: false,
 });
 
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
   display: "swap",
+  preload: false,
 });
 
 // IBM Plex Mono is not a variable font, so next/font requires explicit weights.
@@ -74,6 +83,7 @@ const ibmPlexMono = IBM_Plex_Mono({
   weight: ["400", "500", "600"],
   variable: "--font-ibm-plex-mono",
   display: "swap",
+  preload: false,
 });
 
 // Vercel — the Geist identity (Geist Sans across display + body, Geist Mono data).
@@ -81,17 +91,19 @@ const geist = Geist({
   subsets: ["latin"],
   variable: "--font-geist",
   display: "swap",
+  preload: false,
 });
 
 const geistMono = Geist_Mono({
   subsets: ["latin"],
   variable: "--font-geist-mono",
   display: "swap",
+  preload: false,
 });
 
 // Every Skin's font variables are attached to <html> so whichever Skin is active
-// resolves its `--font-*` handles. Unused handles cost only their font payload,
-// which next/font lazy-loads per glyph coverage.
+// resolves its `--font-*` handles. A handle no rendered token uses costs a few
+// bytes of @font-face CSS and no download, because its family is not preloaded.
 const fontVariables = [
   spaceGrotesk.variable,
   jetbrainsMono.variable,
