@@ -117,18 +117,18 @@ def progress_story(history: Iterable[StorySession], exercise_id: int) -> Progres
     sessions are scanned backwards until one matches by either rule.
     """
 
-    performances = sorted(
+    sessions = sorted(
         (
-            _performance_of(session, sets)
+            _eligible_sets_of(session, sets)
             for session in history
             if (sets := _working_sets(session, exercise_id))
         ),
-        key=lambda performance: (performance.performed_on, performance.logged_session_id),
+        key=lambda eligible: (eligible.performed_on, eligible.logged_session_id),
         reverse=True,
     )
-    if not performances:
+    if not sessions:
         return INSUFFICIENT
-    latest, earlier = performances[0], performances[1:]
+    latest, earlier = sessions[0], sessions[1:]
     for previous in earlier:
         story = _at_shared_load(latest, previous) or _at_shared_reps(latest, previous)
         if story is not None:
@@ -169,7 +169,7 @@ def _working_sets(session: StorySession, exercise_id: int) -> list[StorySet]:
 
 
 @dataclass(frozen=True)
-class _Performance:
+class _EligibleSets:
     """One session's eligible sets of the Exercise, as ``(kilograms, reps)`` pairs."""
 
     logged_session_id: int
@@ -180,7 +180,7 @@ class _Performance:
         return StorySide(self.logged_session_id, self.performed_on, value)
 
 
-def _performance_of(session: StorySession, sets: Iterable[StorySet]) -> _Performance:
+def _eligible_sets_of(session: StorySession, sets: Iterable[StorySet]) -> _EligibleSets:
     """Keep the eligible sets: an absolute Load lifted for a count of reps."""
 
     eligible = []
@@ -191,10 +191,10 @@ def _performance_of(session: StorySession, sets: Iterable[StorySet]) -> _Perform
         load = ParsedLoad.from_dict(logged_set.load)
         if load.kind is LoadKind.ABSOLUTE and load.kg is not None:
             eligible.append((load.kg, reps))
-    return _Performance(session.id, session.performed_on, tuple(eligible))
+    return _EligibleSets(session.id, session.performed_on, tuple(eligible))
 
 
-def _at_shared_load(latest: _Performance, previous: _Performance) -> ProgressStory | None:
+def _at_shared_load(latest: _EligibleSets, previous: _EligibleSets) -> ProgressStory | None:
     """Rule 1: hold the heaviest shared load, measure the best reps at it."""
 
     latest_reps = _best_reps_by_load(latest)
@@ -217,7 +217,7 @@ def _at_shared_load(latest: _Performance, previous: _Performance) -> ProgressSto
     )
 
 
-def _at_shared_reps(latest: _Performance, previous: _Performance) -> ProgressStory | None:
+def _at_shared_reps(latest: _EligibleSets, previous: _EligibleSets) -> ProgressStory | None:
     """Rule 2: hold the heaviest shared rep count, measure the heaviest load at it.
 
     Reached only when no load is shared, so the two heaviest loads always differ at
@@ -242,7 +242,7 @@ def _at_shared_reps(latest: _Performance, previous: _Performance) -> ProgressSto
     )
 
 
-def _best_reps_by_load(performance: _Performance) -> dict[float, tuple[float, int]]:
+def _best_reps_by_load(eligible: _EligibleSets) -> dict[float, tuple[float, int]]:
     """The best reps per load, keyed by the load at logged precision.
 
     Each value keeps the logged kilograms beside the best reps, so the story reports the
@@ -250,7 +250,7 @@ def _best_reps_by_load(performance: _Performance) -> dict[float, tuple[float, in
     """
 
     best: dict[float, tuple[float, int]] = {}
-    for kg, reps in performance.sets:
+    for kg, reps in eligible.sets:
         key = _load_key(kg)
         current = best.get(key)
         if current is None or reps > current[1]:
@@ -258,11 +258,11 @@ def _best_reps_by_load(performance: _Performance) -> dict[float, tuple[float, in
     return best
 
 
-def _heaviest_load_by_reps(performance: _Performance) -> dict[int, float]:
+def _heaviest_load_by_reps(eligible: _EligibleSets) -> dict[int, float]:
     """The heaviest logged kilograms per rep count."""
 
     heaviest: dict[int, float] = {}
-    for kg, reps in performance.sets:
+    for kg, reps in eligible.sets:
         if reps not in heaviest or kg > heaviest[reps]:
             heaviest[reps] = kg
     return heaviest

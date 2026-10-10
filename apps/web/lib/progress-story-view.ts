@@ -1,9 +1,8 @@
 // The Progress Story view-model (ADR-0127): the API's structured comparison of an
 // Exercise's latest Logged Session with the most recent earlier comparable one, turned
-// into the headline and
-// the two compared sessions. The API never sends a sentence — the copy, the Weight Unit
-// projection and the links to each Logged Session all live here, so every surface that
-// shows a story words it identically. Pure and server-free (no I/O, no server-only
+// into the headline and the two compared sessions. The API never sends a sentence — the
+// copy, the Weight Unit projection and the links to each Logged Session all live here, so
+// every surface that shows a story words it identically. Pure and server-free (no I/O, no server-only
 // imports), so it is safe from both Server and Client Components.
 //
 // No wording judges the change: a decline is stated as plainly as an improvement.
@@ -115,6 +114,8 @@ function loadAtRepsHeadline(
   latestKg: number,
   unit: WeightUnit,
 ): string {
+  // The API never sends this (equal loads are a shared load, so the shared-load rule wins),
+  // but a structurally valid story is still worded honestly rather than as "+0 kg".
   if (kind === "unchanged") {
     return `Same as last time: ${reps(heldReps)} at ${formatWeight(latestKg, unit)}.`;
   }
