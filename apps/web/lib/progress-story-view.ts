@@ -9,10 +9,10 @@
 // bodyweight story is worded on its added load ("bodyweight + 10 kg"), never as a bare kg
 // total (ADR-0026).
 
-import type { LoadKind } from "./load.ts";
+import { formatLoad, type LoadKind } from "./load.ts";
 import { formatLongDate } from "./date-format.ts";
 import type { WeightUnit } from "./weight-unit";
-import { formatWeight, formatWeightNumber } from "./weight-format.ts";
+import { formatWeight, formatWeightNumber, weightUnitLabel } from "./weight-format.ts";
 
 export type ProgressStoryKind = "improved" | "unchanged" | "declined" | "insufficient";
 
@@ -20,6 +20,13 @@ export type ProgressStoryKind = "improved" | "unchanged" | "declined" | "insuffi
 // (`held`, in kg) and measures reps; `load_at_reps` holds the rep count (`held`) and
 // measures the load, in kg.
 export type ProgressStoryAxis = "reps_at_load" | "load_at_reps";
+
+// The Load kinds a story is worded in; any other kind is withheld, never shown as kg.
+type StoryLoadKind = "absolute" | "bodyweight";
+
+function isStoryLoadKind(kind: LoadKind | null): kind is StoryLoadKind {
+  return kind === "absolute" || kind === "bodyweight";
+}
 
 // One compared Logged Session and the value it measured on the story's axis.
 export interface ProgressStorySide {
@@ -77,7 +84,7 @@ export function toProgressStoryView(
   const loadKind = story.load_kind;
   if (
     story.kind === "insufficient" ||
-    (loadKind !== "absolute" && loadKind !== "bodyweight") ||
+    !isStoryLoadKind(loadKind) ||
     latest === null ||
     previous === null ||
     held === null ||
@@ -107,21 +114,27 @@ export function toProgressStoryView(
   };
 }
 
-// The load as the user prescribed it: a bar weight, or bodyweight plus its added load —
-// plain "bodyweight" when nothing was added.
-function loadText(kind: "absolute" | "bodyweight", kg: number, unit: WeightUnit): string {
-  if (kind === "absolute") return formatWeight(kg, unit);
-  return kg === 0 ? "bodyweight" : `bodyweight + ${formatWeight(kg, unit)}`;
+// The load as the user prescribed it, through the typed-Load display rule: a bar weight, or
+// bodyweight plus its added load — plain "bodyweight" when nothing was added.
+function loadText(kind: StoryLoadKind, kg: number, unit: WeightUnit): string {
+  if (kind === "absolute") return formatLoad({ kind, text: "", kg }, unit);
+  return formatLoad(
+    { kind, text: "bodyweight", added_kg: kg === 0 ? undefined : kg },
+    unit,
+  );
 }
 
-// "Body weight 80 → 78 kg." — previous to latest, one unit label for the pair.
+// "Body weight 80 → 78 kg." — previous to latest, one unit label for the pair. Dropped when
+// the two read the same at display precision, so it never states "80 → 80 kg".
 function bodyWeightFootnote(
   bodyWeight: ProgressStoryBodyWeight | null,
   unit: WeightUnit,
 ): string | null {
   if (bodyWeight === null) return null;
   const previous = formatWeightNumber(bodyWeight.previous_kg, unit);
-  return `Body weight ${previous} → ${formatWeight(bodyWeight.latest_kg, unit)}.`;
+  const latest = formatWeightNumber(bodyWeight.latest_kg, unit);
+  if (previous === latest) return null;
+  return `Body weight ${previous} → ${latest} ${weightUnitLabel(unit)}.`;
 }
 
 // "2 more reps at 60 kg than last time." — the load is held, the reps measured.
@@ -144,7 +157,7 @@ function repsAtLoadHeadline(
 // ("+2.5 kg added for 5 reps."), so it never reads as a bare kg total.
 function loadAtRepsHeadline(
   kind: ProgressStoryKind,
-  loadKind: "absolute" | "bodyweight",
+  loadKind: StoryLoadKind,
   delta: number,
   heldReps: number,
   latestKg: number,

@@ -204,7 +204,7 @@ class _Lift:
 
     kg: float
     reps: int
-    body_weight_kg: float | None = None
+    body_weight_kg: float | None
 
 
 @dataclass(frozen=True)
@@ -215,7 +215,7 @@ class _EligibleSets:
     performed_on: date
     lifts: tuple[tuple[LoadKind, _Lift], ...]
 
-    def of(self, kind: LoadKind) -> list[_Lift]:
+    def lifts_of(self, kind: LoadKind) -> list[_Lift]:
         return [lift for lift_kind, lift in self.lifts if lift_kind is kind]
 
     def side(self, value: float) -> StorySide:
@@ -265,8 +265,8 @@ def _at_shared_load(
 ) -> ProgressStory | None:
     """Rule 1: hold the heaviest shared load, measure the best reps at it."""
 
-    latest_best = _best_reps_by_load(latest.of(kind))
-    previous_best = _best_reps_by_load(previous.of(kind))
+    latest_best = _best_reps_by_load(latest.lifts_of(kind))
+    previous_best = _best_reps_by_load(previous.lifts_of(kind))
     shared = latest_best.keys() & previous_best.keys()
     if not shared:
         return None
@@ -295,15 +295,15 @@ def _at_shared_reps(
     same".
     """
 
-    latest_heaviest = _heaviest_load_by_reps(latest.of(kind))
-    previous_heaviest = _heaviest_load_by_reps(previous.of(kind))
+    latest_heaviest = _heaviest_load_by_reps(latest.lifts_of(kind))
+    previous_heaviest = _heaviest_load_by_reps(previous.lifts_of(kind))
     shared = latest_heaviest.keys() & previous_heaviest.keys()
     if not shared:
         return None
     reps = max(shared)
     latest_lift, previous_lift = latest_heaviest[reps], previous_heaviest[reps]
     return ProgressStory(
-        kind=_kind_of(_load_key(latest_lift.kg) - _load_key(previous_lift.kg)),
+        kind=_kind_of(_kg_key(latest_lift.kg) - _kg_key(previous_lift.kg)),
         axis=StoryAxis.LOAD_AT_REPS,
         load_kind=kind,
         held=reps,
@@ -324,7 +324,7 @@ def _body_weight_change(
         return None
     if latest.body_weight_kg is None or previous.body_weight_kg is None:
         return None
-    if _load_key(latest.body_weight_kg) == _load_key(previous.body_weight_kg):
+    if _kg_key(latest.body_weight_kg) == _kg_key(previous.body_weight_kg):
         return None
     return BodyWeightChange(previous.body_weight_kg, latest.body_weight_kg)
 
@@ -338,7 +338,7 @@ def _best_reps_by_load(lifts: Iterable[_Lift]) -> dict[float, _Lift]:
 
     best: dict[float, _Lift] = {}
     for lift in lifts:
-        key = _load_key(lift.kg)
+        key = _kg_key(lift.kg)
         current = best.get(key)
         if current is None or lift.reps > current.reps:
             best[key] = lift
@@ -356,7 +356,7 @@ def _heaviest_load_by_reps(lifts: Iterable[_Lift]) -> dict[int, _Lift]:
     return heaviest
 
 
-def _load_key(kg: float) -> float:
+def _kg_key(kg: float) -> float:
     return round(kg, LOAD_PRECISION_DECIMALS)
 
 

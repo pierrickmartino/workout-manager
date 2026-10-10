@@ -370,3 +370,14 @@ test("has no footnote when the API sends no body weight change", () => {
   assert.equal(absolute.footnote, null);
   assert.equal(plain.footnote, null);
 });
+
+test("drops the footnote when the two body weights read the same once displayed", () => {
+  // Act — 80 and 80.004 kg differ in storage but both display as 80 kg
+  const view = toProgressStoryView(
+    bodyweight({ body_weight: { previous_kg: 80, latest_kg: 80.004 } }),
+    "kg",
+  );
+
+  // Assert — never "Body weight 80 → 80 kg."
+  assert.equal(view.footnote, null);
+});
