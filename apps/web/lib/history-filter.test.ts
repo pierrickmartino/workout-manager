@@ -8,7 +8,7 @@ import {
   historyFiltersToQuery,
   parseHistoryFilters,
 } from "./history-filter.ts";
-import type { LoggedSession, LoggedSet } from "./logs-types.ts";
+import type { HistoryIndexRow } from "./logs-types.ts";
 
 // `history-filter` is the view-model behind the History screen's search/filter (the record
 // side, ADR-0031). It operates purely on the already-fetched feed: an exercise search matches
@@ -17,36 +17,21 @@ import type { LoggedSession, LoggedSet } from "./logs-types.ts";
 // multiple training types OR within their facet (Q7). All logic lives here so the History
 // component stays thin and this stays trivially unit-testable.
 
-function loggedSet(exerciseName: string, position: number): LoggedSet {
-  return {
-    position,
-    quantity: null,
-    load: null,
-    perceived_difficulty: null,
-    exercise_id: position,
-    exercise_name: exerciseName,
-    body_weight_kg: null,
-  };
-}
-
+// The History filters run over the index (ADR-0128): one slim row per record carrying the
+// movements its Logged Sets performed, so filtering always sees the whole record even though
+// full records arrive in windows.
 function record(
-  overrides: Partial<LoggedSession> & { exercises?: string[] },
-): LoggedSession {
+  overrides: Partial<HistoryIndexRow> & { exercises?: string[] },
+): HistoryIndexRow {
   const { exercises, ...rest } = overrides;
-  const logged_sets =
-    exercises !== undefined
-      ? exercises.map((name, i) => loggedSet(name, i + 1))
-      : (rest.logged_sets ?? []);
   return {
     id: 1,
-    clerk_user_id: "u1",
-    session_id: null,
     training_type: "strength",
     performed_on: "2026-06-20",
-    completion_outcome: null,
-    duration_seconds: null,
+    deletable: true,
+    uncompletable: true,
     ...rest,
-    logged_sets,
+    exercise_names: exercises ?? rest.exercise_names ?? [],
   };
 }
 
@@ -91,13 +76,10 @@ test("filterHistory keeps only sessions whose Logged Sets include the picked exe
 });
 
 test("filterHistory matches the performed record, not the plan — a substituted-in movement is found", () => {
-  // Arrange: a plan-backed record (session_id set) whose Logged Sets show Leg Press —
-  // e.g. the user substituted or logged it off-plan. Searching the record finds it (Q1).
-  const planBacked = record({
-    id: 5,
-    session_id: 42,
-    exercises: ["Leg Press"],
-  });
+  // Arrange: a plan-backed record whose Logged Sets show Leg Press — e.g. the user
+  // substituted or logged it off-plan. The index lists what was performed, so searching
+  // the record finds it (Q1).
+  const planBacked = record({ id: 5, exercises: ["Leg Press"] });
 
   // Act
   const result = filterHistory([planBacked], {

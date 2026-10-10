@@ -1,4 +1,4 @@
-import type { LoggedSession } from "@/lib/logs-types";
+import type { HistoryIndexRow, LoggedSession } from "@/lib/logs-types";
 import type { SessionSummary } from "@/lib/session-library";
 import type { ExerciseSearchResult } from "@/lib/exercises-types";
 import type { ExerciseDetail, ExercisePrescription, WorkoutSession } from "@/lib/sessions-types";
@@ -53,6 +53,14 @@ export function history(count: number): LoggedSession[] {
     logged_sets: [{ position: 1, exercise_id: i % 2 + 1, exercise_name: exerciseNames[i % 2],
       quantity: { kind: "repetitions", count: 12, text: "12" }, load: null,
       perceived_difficulty: 8, body_weight_kg: null }],
+  }));
+}
+// The History index for the same records (ADR-0128): what `GET /api/logs/index` returns.
+export function historyIndex(count: number): HistoryIndexRow[] {
+  return history(count).map((record) => ({
+    id: record.id, performed_on: record.performed_on, training_type: record.training_type,
+    exercise_names: [...new Set(record.logged_sets.map((set) => set.exercise_name))],
+    deletable: true, uncompletable: true,
   }));
 }
 export const prescriptions: ExercisePrescription[] = exercises.slice(0, 3).map((exercise, i) => ({

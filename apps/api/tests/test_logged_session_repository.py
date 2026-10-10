@@ -610,3 +610,80 @@ def test_logged_set_view_emphasis_falls_back_to_all_primary_without_a_split(repo
     assert emphasis_of(logged_set) == MuscleEmphasis(
         primary=("quadriceps", "glutes"), secondary=()
     )
+
+
+# --- Windowed history reads (ADR-0128) ------------------------------------------------
+
+
+def _log_on(logged, sessions, exercises, owner, performed_on):
+    """Log one single-set performance for ``owner`` on ``performed_on``; return its view."""
+    session_view, squat, _ = _session_with_two_exercises(sessions, exercises)
+    return logged.create(
+        owner,
+        LoggedSessionDraft(
+            session_id=session_view.id,
+            performed_on=performed_on,
+            logged_sets=[LoggedSetDraft(exercise_id=squat.id, quantity=reps_quantity(5))],
+        ),
+    )
+
+
+def test_recent_history_returns_only_the_newest_records_newest_first(repos):
+    # Arrange — three performances on shuffled dates
+    logged, sessions, exercises = repos
+    for day in (1, 15, 10):
+        _log_on(logged, sessions, exercises, "user_owner", date(2026, 6, day))
+
+    # Act
+    recent = logged.list_recent_for_user("user_owner", 2)
+
+    # Assert — the same order as the full history, cut to the limit
+    assert [entry.performed_on for entry in recent] == [
+        date(2026, 6, 15),
+        date(2026, 6, 10),
+    ]
+
+
+def test_recent_history_is_scoped_to_the_user(repos):
+    # Arrange
+    logged, sessions, exercises = repos
+    _log_on(logged, sessions, exercises, "user_owner", date(2026, 6, 1))
+
+    # Act / Assert
+    assert logged.list_recent_for_user("user_other", 5) == []
+
+
+def test_history_by_ids_returns_the_owners_records_newest_first(repos):
+    # Arrange — three records; ask for two of them, out of order
+    logged, sessions, exercises = repos
+    oldest = _log_on(logged, sessions, exercises, "user_owner", date(2026, 6, 1))
+    _log_on(logged, sessions, exercises, "user_owner", date(2026, 6, 5))
+    newest = _log_on(logged, sessions, exercises, "user_owner", date(2026, 6, 9))
+
+    # Act
+    picked = logged.list_by_ids("user_owner", [oldest.id, newest.id])
+
+    # Assert
+    assert [entry.id for entry in picked] == [newest.id, oldest.id]
+
+
+def test_history_by_ids_drops_unknown_and_foreign_ids(repos):
+    # Arrange — one record each for two users
+    logged, sessions, exercises = repos
+    mine = _log_on(logged, sessions, exercises, "user_owner", date(2026, 6, 1))
+    theirs = _log_on(logged, sessions, exercises, "user_other", date(2026, 6, 2))
+
+    # Act
+    picked = logged.list_by_ids("user_owner", [mine.id, theirs.id, 987654])
+
+    # Assert — another user's record never leaks, and a missing id is simply absent
+    assert [entry.id for entry in picked] == [mine.id]
+
+
+def test_history_by_ids_with_no_ids_is_empty(repos):
+    # Arrange
+    logged, sessions, exercises = repos
+    _log_on(logged, sessions, exercises, "user_owner", date(2026, 6, 1))
+
+    # Act / Assert
+    assert logged.list_by_ids("user_owner", []) == []

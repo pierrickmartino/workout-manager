@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Copy, Repeat } from "@/components/pulse/icons";
 
-import type { LoggedSession } from "@/lib/logs-types";
+import type { HistoryIndexRow } from "@/lib/logs-types";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { TRAINING_TYPES } from "@/lib/sessions-types";
 import {
@@ -16,6 +16,14 @@ import {
   parseHistoryFilters,
   type HistoryFilters,
 } from "@/lib/history-filter";
+import {
+  INITIAL_HISTORY_WINDOW_STATE,
+  historyWindowReducer,
+  planHistoryWindow,
+  resolveHistoryCards,
+  type HistoryCard,
+} from "@/lib/history-window";
+import { fetchHistoryCards } from "@/app/history/history-cards-action";
 import { sessionReuse } from "@/lib/session-reuse";
 import {
   DELETE_TAIL_FIRST_REASON,
@@ -33,17 +41,25 @@ import { LoggedSetTable } from "@/components/LoggedSetTable";
 import { NAV_FORWARD } from "@/lib/nav-direction";
 
 // The interactive History screen: search by exercise + filter by Training Type over the
-// record (ADR-0031). Filtering is entirely client-side over the already-fetched feed (Q4) —
-// the filter state lives in React and is mirrored into the URL with `history.replaceState`
-// (Q8) rather than a router navigation, so a keystroke never re-runs the Server Component or
-// re-fetches history. The URL round-trips through `history-filter`, so a shared or refreshed
-// link restores the same view. All matching lives in the `history-filter` view-model; this
-// component only wires controls to it.
+// record (ADR-0031). Filtering is entirely client-side over the History index (Q4) — the
+// filter state lives in React and is mirrored into the URL with `history.replaceState` (Q8)
+// rather than a router navigation, so a keystroke never re-runs the Server Component or
+// re-reads the history. The URL round-trips through `history-filter`, so a shared or refreshed
+// link restores the same view.
+//
+// Full records arrive in windows (ADR-0128): the server renders the first window, and the
+// window view-model decides which visible matches still need fetching — after "Show more", or
+// after a filter change reveals matches the client does not hold yet. All matching and window
+// logic lives in `history-filter` / `history-window`; this component only wires them up.
 export function HistoryBrowser({
-  records,
+  index,
+  firstWindow,
   unit,
 }: {
-  records: LoggedSession[];
+  // Every Logged Session, newest first, with its filterable fields and correction verdicts.
+  index: HistoryIndexRow[];
+  // The full records of the first window, rendered by the server.
+  firstWindow: HistoryCard[];
   // The reader's Weight Unit, forwarded to each record's set table (#417).
   unit: WeightUnit;
 }): React.JSX.Element {
@@ -52,21 +68,44 @@ export function HistoryBrowser({
   const [filters, setFilters] = useState<HistoryFilters>(() =>
     parseHistoryFilters(new URLSearchParams(initialParams.toString())),
   );
+  const [windowState, dispatch] = useReducer(
+    historyWindowReducer,
+    INITIAL_HISTORY_WINDOW_STATE,
+  );
 
-  const exerciseOptions = useMemo(
-    () => deriveExerciseOptions(records),
-    [records],
+  const exerciseOptions = useMemo(() => deriveExerciseOptions(index), [index]);
+  const filtered = useMemo(() => filterHistory(index, filters), [index, filters]);
+  const cards = useMemo(
+    () => resolveHistoryCards(windowState.fetched, firstWindow),
+    [windowState.fetched, firstWindow],
   );
-  const filtered = useMemo(
-    () => filterHistory(records, filters),
-    [records, filters],
-  );
+  const view = planHistoryWindow(filtered, cards, windowState);
   const active = hasActiveFilters(filters);
+
+  // Fetch the visible matches the client does not hold yet. Keyed on the ids themselves, so
+  // marking them in flight (which empties `toRequest`) does not re-run the read. A response
+  // is merged whenever it lands; nothing is cancelled (see `historyWindowReducer`).
+  const requestKey = view.toRequest.join(",");
+  useEffect(() => {
+    if (requestKey === "") return;
+    const ids = requestKey.split(",").map(Number);
+    dispatch({ type: "requested", ids });
+    fetchHistoryCards(ids)
+      .then((result) =>
+        dispatch(
+          result.cards === null
+            ? { type: "failed", ids }
+            : { type: "succeeded", ids, cards: result.cards },
+        ),
+      )
+      .catch(() => dispatch({ type: "failed", ids }));
+  }, [requestKey]);
 
   function apply(next: HistoryFilters): void {
     setFilters(next);
-    // Update the shareable URL without a navigation, so the Server Component and its
-    // one-shot history fetch are never re-run by a filter change (Q4/Q8).
+    dispatch({ type: "filters-changed" });
+    // Update the shareable URL without a navigation, so the Server Component and its index
+    // read are never re-run by a filter change (Q4/Q8).
     replaceFilterQuery(historyFiltersToQuery(next));
   }
 
@@ -103,8 +142,8 @@ export function HistoryBrowser({
                 total (Q9) — so a narrowed list never looks like a shrunken history. */}
             <Badge variant="muted">
               {active
-                ? `${filtered.length} of ${records.length}`
-                : records.length}{" "}
+                ? `${filtered.length} of ${index.length}`
+                : index.length}{" "}
               LOGGED
             </Badge>
           </div>
@@ -192,18 +231,19 @@ export function HistoryBrowser({
         </Card>
       ) : (
         <ol className="flex list-none flex-col gap-4 p-0">
-          {filtered.map((entry) => {
+          {view.entries.map(({ card, deletable, uncompletable }) => {
             // The server (the one contiguity gate, ADR-0034) decides whether each record
-            // may be deleted / un-completed and rides the verdict on the record, so the
-            // control is disabled before the user clicks into a `409` (user story 27). An
-            // absent flag (older payloads) leaves the control enabled — the server stays
-            // authoritative and still rejects.
-            const deleteDisabled = entry.deletable === false;
-            const uncompleteDisabled = entry.uncompletable === false;
+            // may be deleted / un-completed; the verdict rides on the index row, which is
+            // re-read on every revalidation, so the control is disabled before the user
+            // clicks into a `409` (user story 27). The server stays authoritative.
+            const deleteDisabled = !deletable;
+            const uncompleteDisabled = !uncompletable;
             return (
-              <li key={entry.id}>
+              // Off-screen cards skip layout and paint but stay in the DOM and the
+              // accessibility tree (ADR-0097).
+              <li key={card.id} className="history-row-defer">
                 <LoggedSessionCard
-                  entry={entry}
+                  entry={card}
                   unit={unit}
                   deleteDisabled={deleteDisabled}
                   deleteReason={deleteDisabled ? DELETE_TAIL_FIRST_REASON : null}
@@ -211,14 +251,78 @@ export function HistoryBrowser({
                   uncompleteReason={
                     uncompleteDisabled ? UNCOMPLETE_TAIL_FIRST_REASON : null
                   }
+                  onCorrected={(corrected) =>
+                    dispatch({ type: "corrected", card: corrected })
+                  }
                 />
               </li>
             );
           })}
+          <HistoryWindowStatus
+            pendingCount={view.pendingCount}
+            failedCount={view.failedCount}
+            hiddenCount={view.hiddenCount}
+            onRetry={() => dispatch({ type: "retry" })}
+            onShowMore={() => dispatch({ type: "show-more" })}
+          />
         </ol>
       )}
     </section>
   );
+}
+
+// The row after the last card: what is still loading, a failed window with its retry, or the
+// "Show more" control. Renders nothing when every match is on screen.
+function HistoryWindowStatus({
+  pendingCount,
+  failedCount,
+  hiddenCount,
+  onRetry,
+  onShowMore,
+}: {
+  pendingCount: number;
+  failedCount: number;
+  hiddenCount: number;
+  onRetry: () => void;
+  onShowMore: () => void;
+}): React.JSX.Element | null {
+  if (failedCount > 0) {
+    return (
+      <li className="flex flex-wrap items-center gap-3">
+        <span role="alert" className="font-sans text-sm text-magenta">
+          Could not load {failedCount} {failedCount === 1 ? "session" : "sessions"}.
+        </span>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="label-mono text-[11px] text-cyan hover:underline"
+        >
+          Try again
+        </button>
+      </li>
+    );
+  }
+  if (pendingCount > 0) {
+    return (
+      <li role="status" className="label-mono text-[11px] text-text-muted">
+        Loading {pendingCount} more…
+      </li>
+    );
+  }
+  if (hiddenCount > 0) {
+    return (
+      <li>
+        <button
+          type="button"
+          onClick={onShowMore}
+          className="label-mono rounded-md border border-border bg-elevated px-3 py-1.5 text-[10px] text-text-primary transition-colors hover:border-cyan hover:text-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan/60 motion-reduce:transition-none"
+        >
+          Show more ({hiddenCount} older)
+        </button>
+      </li>
+    );
+  }
+  return null;
 }
 
 function LoggedSessionCard({
@@ -228,13 +332,15 @@ function LoggedSessionCard({
   deleteReason,
   uncompleteDisabled,
   uncompleteReason,
+  onCorrected,
 }: {
-  entry: LoggedSession;
+  entry: HistoryCard;
   unit: WeightUnit;
   deleteDisabled: boolean;
   deleteReason: string | null;
   uncompleteDisabled: boolean;
   uncompleteReason: string | null;
+  onCorrected: (card: HistoryCard) => void;
 }): React.JSX.Element {
   // Shared pill styling for the Open / Edit link actions, so the whole cluster reads as
   // one row of tappable pills alongside the outcome toggle and delete controls.
@@ -273,6 +379,7 @@ function LoggedSessionCard({
               outcome={entry.completion_outcome}
               uncompleteDisabled={uncompleteDisabled}
               uncompleteReason={uncompleteReason}
+              onCorrected={onCorrected}
             />
           ) : null}
           <Link {...NAV_FORWARD} href={`/history/${entry.id}`} className={pillClass}>

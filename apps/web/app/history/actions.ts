@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { toHistoryCard, type HistoryCard } from "@/lib/history-window";
 import { buildOutcomeCorrection } from "@/lib/log-correction";
 import { correctSession, deleteSession, fetchHistory } from "@/lib/logs";
 import type { CompletionOutcome } from "@/lib/logs-types";
@@ -35,6 +36,10 @@ export async function deleteLogAction(
 
 export interface ToggleOutcomeState {
   error: string | null;
+  // The corrected record as a History card, so a card the client fetched beyond the
+  // server's first window shows the new outcome too (ADR-0128); the revalidation below only
+  // refreshes the server-rendered window.
+  card?: HistoryCard;
 }
 
 // Correct a plan-backed Logged Session's Completion Outcome from the History screen
@@ -78,5 +83,5 @@ export async function toggleOutcomeAction(
   }
 
   revalidatePath("/history");
-  return { error: null };
+  return { error: null, card: toHistoryCard(result.data) };
 }
