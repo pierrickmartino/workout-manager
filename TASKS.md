@@ -185,7 +185,7 @@ Sources: [pulse-creative-directions](docs/design/pulse-creative-directions.md), 
 
 ## 11. Validation and accessibility follow-ups
 
-Sources: `docs/development/*`, [audit 09-28](docs/research/audit/2026-09-28.md), [view-transitions-audit](docs/research/audit/vercel/view-transitions-audit.md) §11.
+Sources: `docs/development/*`, [audit 09-28](docs/research/audit/2026-09-28.md), [view-transitions audit 10-10](docs/research/audit/vercel/view-transitions-2026-10-10.md) VT-4 (it replaces the deleted pre-implementation audit).
 
 - ⬜ **CH-F3 Atlas heat-magnitude gap:** the heat uses emphasis-weighted volume but the text shows set counts. Needs owner sign-off on the wording first.
 - ❔ **Manual accessibility journeys** (AUTH, CAT, PROF, LOG, SAVE in [accessibility-journeys](docs/development/accessibility-journeys.md)) with a real screen reader.
@@ -215,7 +215,15 @@ Source: [composition-patterns-2026-10-10](docs/research/audit/vercel/composition
 - ⬜ C-3 **Remove the dead `advancedNonDefault` prop** from `PrescriptionFieldStack` (no caller passes it).
 - ⬜ C-4 **Split `ReferenceAtlasFigure`** into a static figure (empty state, could be a Server Component) and an interactive one. This pairs with V-3.
 
-## 14. Deployment: Hostinger VPS migration
+## 14. Vercel view transitions audit (10 Oct)
+
+Source: [view-transitions-2026-10-10](docs/research/audit/vercel/view-transitions-2026-10-10.md). Running-app verification is already tracked in §11 and isn't repeated here.
+
+- ⬜ VT-1 **Wrap the exercise HISTORY-tab skeleton in `SkeletonReveal`** (the one skeleton that pops), and extend `lib/skeleton-reveal-policy.ts` to in-page fallbacks if it doesn't already cover them.
+- ⬜ VT-2 **Spread `NAV_FORWARD` on the ~9 untyped hierarchical links** (training route, trajectory tiles, record teasers, achievement source, catalog → exercise, Train hub, launchpad, page actions). Record the link classification in ADR-0121.
+- ⬜ VT-3 **Type the two directional programmatic navigations:** generation → adopted Protocol (`nav-forward`) and admin delete → catalog (`nav-back`), using a helper rather than a literal.
+
+## 15. Deployment: Hostinger VPS migration
 
 Source: [hostinger-vps](docs/deployment/hostinger-vps.md) → *Completion checklist*. All unchecked in the doc; owner tasks.
 
