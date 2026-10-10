@@ -17,8 +17,6 @@ from __future__ import annotations
 
 from datetime import date
 
-from tests.quantities import reps_quantity
-
 from app.domain.exercise import Provenance
 from app.domain.load import LoadKind, ParsedLoad
 from app.logbook.analytics import AnalyticsRange, analytics_overview
@@ -34,6 +32,7 @@ from app.repositories.session_repository import (
     InMemorySessionRepository,
     SessionDraft,
 )
+from tests.quantities import reps_quantity
 
 SQUAT = 1
 TODAY = date(2026, 7, 5)

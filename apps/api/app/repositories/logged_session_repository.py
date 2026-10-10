@@ -195,7 +195,7 @@ class LoggedSessionRepository(Protocol):
         ...
 
     def count_for_session(self, clerk_user_id: str, session_id: int) -> int:
-        """The **Logged Count** for one Session (ADR-0063, CONTEXT: Logged Count).
+        """The **Logged Count** for one Session (ADR-0063, GLOSSARY: Logged Count).
 
         How many Logged Sessions the owner has recorded against ``session_id`` — counted
         across **every Completion Outcome** (an Incomplete performance is still logged

@@ -120,7 +120,7 @@ test("names the preference Keep Screen Awake, not the browser wake-lock API", ()
   // Arrange / Act
   const control = buildKeepScreenAwakeControl(true);
 
-  // Assert — the label is the user's preference, per CONTEXT "Keep Screen Awake"
+  // Assert — the label is the user's preference, per GLOSSARY "Keep Screen Awake"
   assert.equal(control.label, "Keep Screen Awake");
 });
 
@@ -177,11 +177,11 @@ test("carries a human label and caption for the Weight Unit control", () => {
   }
 });
 
-test("names the preference Weight Unit, per CONTEXT", () => {
+test("names the preference Weight Unit, per GLOSSARY", () => {
   // Arrange / Act
   const control = buildWeightUnitControl("kg");
 
-  // Assert — the label is the user's preference (CONTEXT "Weight Unit")
+  // Assert — the label is the user's preference (GLOSSARY "Weight Unit")
   assert.equal(control.label, "Weight Unit");
 });
 

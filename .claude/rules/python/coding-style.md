@@ -33,10 +33,5 @@ class Point(NamedTuple):
 
 ## Formatting
 
-- **black** for code formatting
-- **isort** for import sorting
-- **ruff** for linting
-
-## Reference
-
-See skill: `python-patterns` for comprehensive Python idioms and patterns.
+- **ruff** lints syntax, unused names and import order: `ruff check --fix .` in
+  `apps/api` (rules in `pyproject.toml`; CI runs it)

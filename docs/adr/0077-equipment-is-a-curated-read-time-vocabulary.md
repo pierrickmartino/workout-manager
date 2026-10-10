@@ -47,7 +47,7 @@ untouched, so no cache key or generation input shifts.
 
 ## Consequences
 
-- Introduces **one new domain term, Equipment** (see `CONTEXT.md`), and **no data-model change**:
+- Introduces **one new domain term, Equipment** (see `GLOSSARY.md`), and **no data-model change**:
   no column, no migration, no write hook.
 - The canonical set and its alias map are **curated data** — auditable and unit-tested — with a
   keyword-first resolver and an **Unmapped** fallback. Its rules are the load-bearing part and live

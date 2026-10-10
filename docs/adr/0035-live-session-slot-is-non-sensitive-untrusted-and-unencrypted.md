@@ -12,7 +12,7 @@ is the wrong object to harden against it.
 - **The slot carries only non-sensitive workout performance** — the Session's
   prescriptions and the user's own set entries (reps, load, RPE, timestamps). It
   **never** persists PII, credentials, or **Sensitive-Constraint** content (injury,
-  rehab, postpartum, medical — `CONTEXT.md`; the class ADR-0003 keeps out of shared
+  rehab, postpartum, medical — `GLOSSARY.md`; the class ADR-0003 keeps out of shared
   caches). This is the invariant the other two rules and ADR-0012's client-side
   model rest on.
 - **The slot is untrusted input on hydration.** The resume path

@@ -241,7 +241,7 @@ def test_type_annotations_naming_the_record_are_not_flagged(tmp_path: Path) -> N
 
 def test_flags_the_amount_label_for_the_quantity_picker(tmp_path: Path) -> None:
     # Arrange — the amount picker's user-facing label must read "Quantity", not "Amount"
-    # (CONTEXT 'Quantity' lists 'amount' under _Avoid_; ADR-0032/0050, issue #345). The
+    # (GLOSSARY 'Quantity' lists 'amount' under _Avoid_; ADR-0032/0050, issue #345). The
     # tripwire is scoped to the quoted display-label form so it catches the regression.
     _write(
         tmp_path,

@@ -4,7 +4,7 @@ The **My Sessions** library lets a user search their own standalone Sessions
 case-insensitively over three things: the user-given **Session Name**, the derived
 **fallback label** (``training_type · date`` — so an unnamed Session, and any
 Session's creation date, is still findable), and the **Training Type**
-(CONTEXT: My Sessions). :func:`matches_session_search` is that predicate.
+(GLOSSARY: My Sessions). :func:`matches_session_search` is that predicate.
 
 Pure — no I/O, no ORM — and it reuses :func:`app.domain.session_naming.session_label`
 so the fallback label it searches is *the same* label the read surfaces, never a

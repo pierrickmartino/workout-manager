@@ -48,6 +48,6 @@ the manifest.
 
 Adding an Exercise Prescription field means adding it to `PrescriptionDraft` (and
 its ORM column) and deciding its authorship partition; the guard test fails if a
-projection or the partition forgets it. `CONTEXT.md` is unchanged — the "field
+projection or the partition forgets it. `GLOSSARY.md` is unchanged — the "field
 spine / manifest" is implementation, not domain vocabulary, and the Exercise
 Prescription term's meaning is unaffected.

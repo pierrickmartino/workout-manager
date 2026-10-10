@@ -3,9 +3,9 @@
 A web-research sweep (July 2026) of where fitness / workout apps are heading,
 classified into candidate features and improvements for **workout-manager**.
 Each item is a title plus a short description. Where the market pulls against a
-load-bearing invariant (`CLAUDE.md`, `CONTEXT.md`, `docs/adr/`), the item says so
+load-bearing invariant (`CLAUDE.md`, `GLOSSARY.md`, `docs/adr/`), the item says so
 explicitly — the point is a *conscious* position, not a silent adoption. Nothing
-here changes source, ADRs, or `CONTEXT.md`; it is forward-looking fuel for the
+here changes source, ADRs, or `GLOSSARY.md`; it is forward-looking fuel for the
 issue tracker.
 
 Sources are listed at the end.
@@ -72,7 +72,7 @@ biggest cited reason users abandon trackers — not medical form judgment.
 ### Rest-Timer & Superset Round Cues — Shipped
 A low-cost, high-value polish item: an explicit rest timer that respects the
 Superset model — rest falls only at the **round boundary**, never between members
-(CONTEXT 'Superset'). Most trackers get supersets wrong; ours already models them
+(GLOSSARY 'Superset'). Most trackers get supersets wrong; ours already models them
 correctly, so a timer that cues "round 2 of 3, next: goblet squat" is a
 differentiator that falls straight out of existing structure. Ephemeral,
 client-side, and part of the Live Session only. Pairs naturally with the
@@ -109,7 +109,7 @@ the foreground.
 The loudest 2026 trend is "recovery-first" training: apps read HRV / sleep / RHR
 daily and rewrite *today's* session, showing an "87% recovered" score. Our stance
 is the opposite by design — self-paced, calendar-free, no "today", and Readiness
-is a **3-state signal, not a percentage** (ADR-0001, CONTEXT 'Readiness'). This is
+is a **3-state signal, not a percentage** (ADR-0001, GLOSSARY 'Readiness'). This is
 a genuine strategic fork, not a missing feature. Documented here so it stays a
 *conscious* position: if we ever ingest wearable data, it must feed the qualitative
 Readiness signal (Ready / Caution / Extra Caution), never a recovery score, and
@@ -149,7 +149,7 @@ single teaching empty state — never a wall of zeros — for the partial or
 non-strength case (ADR-0017 / ADR-0018/0019). Named **"Strength Analytics"**, not
 "Strength Intelligence Dashboard": "Intelligence" would falsely imply an AI judging
 the user's strength when every figure is a deterministic projection, so the honest
-name won (a UI/naming call — `CONTEXT.md` unchanged). Domain logic lives in pure
+name won (a UI/naming call — `GLOSSARY.md` unchanged). Domain logic lives in pure
 `logbook/strength_analytics`, `logbook/top_sets`, and `domain/muscle_groups`
 functions with co-located view-models and tests.
 

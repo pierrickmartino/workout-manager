@@ -1,7 +1,7 @@
 // Shared tempo view helpers. This module has NO server-only imports, so it is
 // safe to import from both Server and Client Components.
 
-// The coarse, curated three-state tempo signal (CONTEXT: Tempo) — a signal, not a
+// The coarse, curated three-state tempo signal (GLOSSARY: Tempo) — a signal, not a
 // score, derived deterministically from the parsed phases.
 export type TempoLabel = "Explosive" | "Controlled" | "Slow";
 
@@ -19,7 +19,7 @@ export type TempoView =
 
 // Turn a stored tempo string into its display model. An empty value renders no row
 // at all; a non-empty value that is not 3- or 4-token notation is shown verbatim
-// rather than given a fabricated interpretation (CONTEXT: Tempo).
+// rather than given a fabricated interpretation (GLOSSARY: Tempo).
 export function toTempoView(tempo: string | null | undefined): TempoView {
   const raw = (tempo ?? "").trim();
   if (raw.length === 0) return { kind: "none" };

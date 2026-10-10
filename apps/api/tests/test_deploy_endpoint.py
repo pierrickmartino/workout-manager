@@ -11,8 +11,6 @@ route tests use.
 
 from __future__ import annotations
 
-from tests.quantities import reps_quantity
-
 from datetime import date
 
 from app.domain.load import parse_load
@@ -24,10 +22,11 @@ from app.repositories.profile_repository import (
     InMemoryProfileRepository,
     ProfileUpdate,
 )
+from tests.quantities import reps_quantity
 from tests.test_protocol_endpoint import (
     FakeProtocolGenerator,
-    build_harness,
     _kg_protocol,
+    build_harness,
 )
 
 

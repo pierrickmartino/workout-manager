@@ -22,8 +22,8 @@ from __future__ import annotations
 
 from app.domain.exercise import Provenance
 from app.generation.muscle_emphasis_generator import MuscleEmphasisRequest
-from app.generation.schema import GeneratedMuscleEmphasis
 from app.generation.muscle_emphasis_reenrichment import reenrich_muscle_emphasis
+from app.generation.schema import GeneratedMuscleEmphasis
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 
 

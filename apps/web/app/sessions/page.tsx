@@ -9,7 +9,7 @@ import { Alert } from "@/components/pulse/alert";
 import { Card } from "@/components/ui/card";
 import { SessionsLibrary } from "@/components/SessionsLibrary";
 
-// My Sessions — the user's personal library of their own standalone Sessions (CONTEXT: My
+// My Sessions — the user's personal library of their own standalone Sessions (GLOSSARY: My
 // Sessions, issue #397), reached from Train. The Server Component fetches the whole library
 // once; the interactive search + favorites filter run entirely client-side over it in
 // `SessionsLibrary` (like History, ADR-0031). It lists *plans*, never records, and only the

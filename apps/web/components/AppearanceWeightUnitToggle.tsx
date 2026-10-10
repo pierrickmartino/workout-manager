@@ -13,7 +13,7 @@ interface AppearanceWeightUnitToggleProps {
   weightUnit: WeightUnit;
 }
 
-// The Profile control for the user's Weight Unit Interface Preference (CONTEXT
+// The Profile control for the user's Weight Unit Interface Preference (GLOSSARY
 // "Weight Unit" / ADR-0055): a compact segmented kg / lb toggle — beside the Keep
 // Screen Awake control — for the unit a Load is entered and displayed in. The copy
 // and which unit is active come from the pure `buildWeightUnitControl` mapper, so

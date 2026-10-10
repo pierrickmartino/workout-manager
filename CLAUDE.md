@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 Operational map for working in this repo productively with no additional context.
-Read this first, then [`CONTEXT.md`](./CONTEXT.md) for the domain **language** and
+Read this first, then [`GLOSSARY.md`](./GLOSSARY.md) for the domain **language** and
 [`docs/adr/`](./docs/adr) for the **why** behind every invariant. When you change
 behaviour, [`REVIEW.md`](./REVIEW.md) is the checklist your change must survive.
 
@@ -14,7 +14,7 @@ behaviour, [`REVIEW.md`](./REVIEW.md) is the checklist your change must survive.
 An AI-assisted app for creating, following, and tracking fitness workouts. The
 domain's cardinal rule: a **plan** (what the AI prescribes) and a **record** (what
 the user actually did) are never the same thing. Most of the design falls out of
-keeping those two separate. See `CONTEXT.md`.
+keeping those two separate. See `GLOSSARY.md`.
 
 ## Layout
 
@@ -51,6 +51,7 @@ No live Postgres/Redis/Clerk needed to run tests.
 cd apps/api
 pip install -e ".[dev]"           # or: uv venv && uv pip install -e ".[dev]"
 pytest --cov --cov-report=term-missing
+ruff check --fix .                # lint: unused names, import order (CI blocks on it)
 
 # Frontend
 cd apps/web
@@ -94,7 +95,7 @@ These are enforced by review (`REVIEW.md`) and, where mechanizable, by tests.
   recovery %, no daily streak (ADR-0001). Readiness is a 3-state signal, not a
   score.
 - **`Load` is a typed value** (absolute / bodyweight / %1RM / qualitative /
-  range), never a bare kg number (CONTEXT 'Load').
+  range), never a bare kg number (GLOSSARY 'Load').
 - **Completion Outcome gates advancement**: only a *Completed* Logged Session
   advances a Protocol to its Next Session (ADR-0013).
 - **Live Session is ephemeral / client-side** until finished (ADR-0012).
@@ -102,7 +103,7 @@ These are enforced by review (`REVIEW.md`) and, where mechanizable, by tests.
 
 ## Terminology discipline
 
-`CONTEXT.md` is the law for naming; each term lists the words to **_Avoid_**. A
+`GLOSSARY.md` is the law for naming; each term lists the words to **_Avoid_**. A
 subset of hard regressions is enforced by `app/quality/terminology_guard.py`
 (runs as a pytest test). When you retire or rename a **domain** term, add it to
 the guard's `BANNED_TERMS` registry (one line). Renaming a private identifier, or
@@ -129,7 +130,7 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
 ## Where to make a change
 
 - New/changed domain rule → `app/domain/` (+ unit test) → surface via a
-  service/route → update `CONTEXT.md` if it introduces or shifts a term → write
+  service/route → update `GLOSSARY.md` if it introduces or shifts a term → write
   an ADR if it's an architectural decision.
 - New endpoint → `app/routes/`, return via the envelope, back it with a
   repository, add an endpoint test.

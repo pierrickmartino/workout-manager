@@ -1,6 +1,6 @@
 import type { WorkoutSession } from "./sessions-types";
 
-// The Session view's Favorite state (CONTEXT: Favorite, issue #396). `isFavorite` is the
+// The Session view's Favorite state (GLOSSARY: Favorite, issue #396). `isFavorite` is the
 // current marker — the toggle renders "Favorited" vs. "Favorite" from it. `show` gates whether
 // the toggle appears at all: Favorite is a standalone-only concept, so the server withholds the
 // marker (`null`) on a Protocol member and omits it entirely on read paths that don't carry it

@@ -11,7 +11,7 @@ input and dropped both buttons). A user who tapped Complete on the wrong row, or
 through **Log Correction** (ADR-0034), which is a server-side write against settled
 record. The everyday mid-workout mistake had the heaviest possible remedy.
 
-We introduce **Reopen** (CONTEXT.md): a completed set returns to un-attempted, keeping the
+We introduce **Reopen** (GLOSSARY.md): a completed set returns to un-attempted, keeping the
 reps, Load and Effort already entered, so the user corrects them and completes it again.
 It is available on any completed set at any point before the finish, because until the
 finish nothing has left the device — the whole Live Session is a draft (ADR-0012). It is

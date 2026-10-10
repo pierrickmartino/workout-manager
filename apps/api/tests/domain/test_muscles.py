@@ -19,6 +19,7 @@ from app.domain.muscle_groups import (
     covered_groups,
 )
 from app.domain.muscles import (
+    _FREEFORM_TO_MUSCLE,
     MUSCLE_ORDER,
     MUSCLE_TO_GROUP,
     MUSCLES_IN_GROUP,
@@ -33,7 +34,6 @@ from app.domain.muscles import (
     real_groups_of,
     recent_muscle_coverage,
 )
-from app.domain.muscles import _FREEFORM_TO_MUSCLE
 
 # The free-form keys the muscle map claims — read off the module's own alias table so the
 # consistency test below covers exactly what is mapped (and grows automatically with it).

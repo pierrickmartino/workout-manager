@@ -1,4 +1,4 @@
-"""The Calibrate pipeline (CONTEXT §Calibration, ADR-0111).
+"""The Calibrate pipeline (GLOSSARY §Calibration, ADR-0111).
 
 Calibrate stores a user's **Calibration** — a relative offset from the Protocol's authored
 values — and materialises it onto the Protocol's **un-performed tail**. It is the sibling of

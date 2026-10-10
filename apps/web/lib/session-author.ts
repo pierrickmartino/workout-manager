@@ -17,7 +17,7 @@ export function resolveAuthorCredit(author: SessionAuthor | undefined): {
   return { displayName: isNamed ? trimmed : GENERIC_AUTHOR_LABEL, isNamed };
 }
 
-// The Session view's Author line (CONTEXT: Author, issue #395). `byline` is what the header
+// The Session view's Author line (GLOSSARY: Author, issue #395). `byline` is what the header
 // renders — "by <name>", visually distinct from Session Provenance (how the plan was made).
 // `displayName` is the resolved name alone; `isNamed` is false when the credit fell back to the
 // generic label, so the UI can style it as a placeholder rather than a real name.

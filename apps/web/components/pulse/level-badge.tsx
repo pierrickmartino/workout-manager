@@ -15,7 +15,7 @@ interface LevelBadgeProps {
 // current level ("LVL 12 · 760 XP → LEVEL 13"). The fill is the honest
 // `xp_into_level / xp_span_of_level` ratio from the read model; a brand-new user with
 // 0 XP renders as Level 1 with an empty bar. Distinct from the per-type Fitness Level —
-// this is one account-wide number that measures investment, not ability (CONTEXT.md).
+// this is one account-wide number that measures investment, not ability (GLOSSARY.md).
 export function LevelBadge({ xp, level }: LevelBadgeProps): React.JSX.Element {
   // Guard the divide: the curve always spans a positive width, but never trust it to.
   const fill =

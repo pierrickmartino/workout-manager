@@ -36,7 +36,7 @@ Several third-party roundups conflate these. Any claim sourced to "GRIPT PTY LTD
 
 ### 1.3 Our side of the comparison
 
-Our side is grounded in the repository, not in aspiration: 112 ADRs under `docs/adr/`, the domain glossary in `CONTEXT.md`, ~33,200 lines of Python across `apps/api/app`, 233 backend test files, 35 Next.js routes, and ~353 modules in `apps/web/lib`. Where I say we do not have something, I checked for it (§4.3 names the greps).
+Our side is grounded in the repository, not in aspiration: 112 ADRs under `docs/adr/`, the domain glossary in `GLOSSARY.md`, ~33,200 lines of Python across `apps/api/app`, 233 backend test files, 35 Next.js routes, and ~353 modules in `apps/web/lib`. Where I say we do not have something, I checked for it (§4.3 names the greps).
 
 ### 1.4 One note on prior work
 
@@ -351,4 +351,4 @@ Third-party context on the competitive set:
 [Strong](https://www.strong.app/) ·
 [Gravitus Pro](https://gravitus.com/pro/)
 
-Internal: `CLAUDE.md`, `CONTEXT.md`, `README.md`, `REVIEW.md`, `docs/adr/` (112 ADRs), `apps/api/app/`, `apps/web/`, `docs/research/`.
+Internal: `CLAUDE.md`, `GLOSSARY.md`, `README.md`, `REVIEW.md`, `docs/adr/` (112 ADRs), `apps/api/app/`, `apps/web/`, `docs/research/`.

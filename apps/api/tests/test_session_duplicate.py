@@ -16,7 +16,6 @@ from datetime import date
 
 import pytest
 from sqlmodel import Session, SQLModel
-from tests.conftest import make_fk_engine
 
 from app.db.models import ExercisePrescription, Protocol, WorkoutSession
 from app.domain.exercise import Provenance
@@ -35,6 +34,7 @@ from app.repositories.session_repository import (
     SessionDraft,
     SqlSessionRepository,
 )
+from tests.conftest import make_fk_engine
 
 
 @pytest.fixture(params=["in_memory", "sql"])
@@ -252,7 +252,7 @@ def test_duplicate_carries_the_trace_id_lineage_forward(repos):
 def test_duplicate_preserves_the_source_author(repos):
     # Arrange — a source Session whose Author is a *different* human than the duplicating
     # user (as a redeemed/re-shared copy would be). Author is immutable origin, so Duplicate
-    # must carry it forward, never re-attribute it to whoever ran the copy (CONTEXT: Author,
+    # must carry it forward, never re-attribute it to whoever ran the copy (GLOSSARY: Author,
     # ADR-0043). Seeded via ``create`` then re-stamped, since ``create`` attributes to owner.
     session_repo, exercises = repos
     source = session_repo.create("user_dup", _draft_with_two_prescriptions(exercises))

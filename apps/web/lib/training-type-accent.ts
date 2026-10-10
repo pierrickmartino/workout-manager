@@ -1,4 +1,4 @@
-// The Training Type → accent-colour map for the Workout Signature sigil (CONTEXT: Workout
+// The Training Type → accent-colour map for the Workout Signature sigil (GLOSSARY: Workout
 // Signature, Training Type). Pure and server-free, so it is unit-tested without a browser.
 //
 // The sibling `training-type-badge.ts` maps a Training Type to a Badge *variant* for the text

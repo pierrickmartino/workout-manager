@@ -8,7 +8,7 @@ supersedes this report's layout input attribution, font-payload limitation and
 completed-card/rendered-Accent measurements. Original captures and numbers below
 are preserved; zoom and large-data checks are not superseded by that run.
 
-Date: 2026-09-26. Source: [UI/UX audit, follow-up 3](../ui-ux-audit.md).
+Date: 2026-09-26. Source: UI/UX audit, follow-up 3 (`docs/ui-ux-audit.md`, since removed; see `21be1c1^`).
 Scope confirmed through the grilling interview. Base commit:
 `8edd5ca4ed62b6a732191778ba0917fc96573485`. Session: Codex; no separate issue supplied.
 

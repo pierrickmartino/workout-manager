@@ -1,4 +1,4 @@
-"""Migration test for the Session Provenance column (CONTEXT.md, ADR-0040).
+"""Migration test for the Session Provenance column (GLOSSARY.md, ADR-0040).
 
 Exercises 0023 end to end against a real SQLite database: seed a WorkoutSession at the
 prior revision (before the column existed), upgrade over 0023, and assert the row gains a

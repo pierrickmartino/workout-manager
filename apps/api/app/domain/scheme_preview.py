@@ -4,7 +4,7 @@
 Progression Scheme together with its current reps and typed Load, it returns one
 plain-language sentence describing what the scheme will do *next* — the same species as
 Tempo's phase expansion and three-state label. Nothing is stored and no record is touched;
-it only *describes* the stepping rule the read-time overlay would apply (CONTEXT: Scheme
+it only *describes* the stepping rule the read-time overlay would apply (GLOSSARY: Scheme
 Preview).
 
 The sentence reads **honestly for each Load kind**. A weight-axis scheme talks about adding
@@ -29,20 +29,20 @@ from app.domain.load import LoadKind, ParsedLoad
 # within the progression domain; reused here (not re-implemented) so the rep grammar has one
 # home — renaming one is a deliberate, co-located change to both.
 from app.domain.progression import (
+    _AMRAP_FLOOR_RE,
     DECREASE_KG,
     INCREASE_KG,
     LOW_EFFORT_MAX,
     RESET_FRACTION,
     SESSION_COUNT_N,
     ProgressionScheme,
-    _AMRAP_FLOOR_RE,
     _greyskull_floor,
     _is_pure_bodyweight,
     _parse_rep_target,
 )
 
 # Read-time typography: an en dash for a rep range ("8–12"), an em dash for the trailing
-# aside. Chosen to match the example sentence in CONTEXT (Scheme Preview) rather than a
+# aside. Chosen to match the example sentence in GLOSSARY (Scheme Preview) rather than a
 # hyphen, which the reps are *stored* with.
 _EN_DASH = "–"
 _EM_DASH = "—"

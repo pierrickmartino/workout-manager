@@ -25,12 +25,12 @@ from app.auth.dependencies import get_current_user
 from app.domain.achievements import Achievement
 from app.domain.personal_records import PersonalRecord
 from app.envelope import success_envelope
-from app.logbook.records import personal_record_payload
 from app.logbook.profile_progress import (
     FitnessLevelStanding,
     ProfileProgress,
     profile_progress,
 )
+from app.logbook.records import personal_record_payload
 from app.repositories.deps import (
     get_logged_session_repository,
     get_profile_repository,

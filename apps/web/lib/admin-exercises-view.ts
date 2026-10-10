@@ -52,7 +52,7 @@ export interface AdminExerciseRowView {
   statusLabel: string;
 }
 
-// Provenance is a closed set (CONTEXT: Provenance); the ops labels read as the rest of the
+// Provenance is a closed set (GLOSSARY: Provenance); the ops labels read as the rest of the
 // UI surfaces them. An unknown token falls back to itself so a future value still renders.
 const PROVENANCE_LABELS: Record<string, string> = {
   curated: "Curated",

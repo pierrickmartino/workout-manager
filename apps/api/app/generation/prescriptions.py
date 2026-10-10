@@ -12,7 +12,7 @@ carried onto a ``PrescriptionDraft``.
 Pure orchestration over the Exercise catalog: it resolves and maps, it never
 persists and never mutates its input. Every field the schema carries is carried
 through; a caller that must not carry Superset grouping flattens its generated
-prescriptions upstream (Regeneration is flat in v1 — CONTEXT.md §Regeneration,
+prescriptions upstream (Regeneration is flat in v1 — GLOSSARY.md §Regeneration,
 ADR-0023), so this module never special-cases a path.
 """
 

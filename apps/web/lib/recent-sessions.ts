@@ -1,10 +1,10 @@
-// View-model for the Train page's "Recent Sessions" panel (CONTEXT: Recent Sessions).
+// View-model for the Train page's "Recent Sessions" panel (GLOSSARY: Recent Sessions).
 // Pure and browser-safe (no server-only imports), like `session-reuse` and `history-filter`,
 // so it is unit-testable without a browser and the Server Component can call it directly.
 //
 // It surfaces the user's up-to-five most-recently-*performed* standalone Session **plans**,
 // each as a one-tap Start into a Live Session — the proactive, Train-side cousin of Repeat
-// (CONTEXT: Repeat). The cardinal plan/record split drives it: recency and ordering come from
+// (GLOSSARY: Repeat). The cardinal plan/record split drives it: recency and ordering come from
 // the *record* (Logged Sessions), but every row is a *plan* (a standalone Session), so
 // plan-less records are skipped (no plan to Start — they offer Capture on History) and
 // Protocol-member performances are excluded (standalone-only, like My Sessions).

@@ -188,7 +188,7 @@ def test_weight_unit_column_backfills_existing_rows_to_kg(sqlite_url):
     finally:
         engine.dispose()
 
-    # Act — add the Weight Unit facet (CONTEXT "Weight Unit")
+    # Act — add the Weight Unit facet (GLOSSARY "Weight Unit")
     command.upgrade(config, AFTER_WEIGHT_UNIT)
 
     # Assert — the column arrives and the returning user's row is backfilled to the

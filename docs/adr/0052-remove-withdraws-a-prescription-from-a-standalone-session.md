@@ -1,7 +1,7 @@
 # 0052 — Remove withdraws a hand-authored prescription from a standalone Session
 
 A user reshaping a reusable workout wants to take a movement *out* of it, not only add
-one. We add **Remove** (`CONTEXT.md`, §Plan vs. Record): it withdraws a single Exercise
+one. We add **Remove** (`GLOSSARY.md`, §Plan vs. Record): it withdraws a single Exercise
 Prescription from the user's own **standalone Session** (the *plan*), in place, with **no
 AI call** — the symmetric partner of **Insert** (ADR-0051). This ADR records the three
 decisions that are surprising or hard to reverse; the rest is Insert's shape run in
@@ -21,7 +21,7 @@ The create and Insert paths reject an *empty* Session through `validate_deploy`'
 `empty_session` rule, so an empty standalone Session can never be authored. Allowing Remove
 to drop the final prescription would persist a Session that could never have been created,
 and the domain has no standalone-Session deletion to fall back on (a Protocol is never
-deleted either — `CONTEXT.md`, §Current Protocol). So Remove refuses the last-remaining
+deleted either — `GLOSSARY.md`, §Current Protocol). So Remove refuses the last-remaining
 prescription (`would_empty_session`) rather than silently reinterpreting "remove the last
 one" as "delete the Session."
 

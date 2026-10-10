@@ -6,7 +6,7 @@ concrete ``LlmSessionRegenerator`` runs through the provider-agnostic
 The output is the set of **replacement** Exercise Prescriptions for the
 prescriptions the user chose to drop — conditioned on the kept Prescriptions and
 the negative Generation Feedback reason so progression stays coherent
-(CONTEXT.md). Output crosses the shared ``generate_structured`` boundary against
+(GLOSSARY.md). Output crosses the shared ``generate_structured`` boundary against
 the ``GeneratedSession`` schema, so a malformed regeneration raises
 ``GenerationError`` and never reaches the user's copy."""
 
@@ -128,7 +128,7 @@ class LlmSessionRegenerator:
             context=GenerationCallContext(generator_kind=self._kind, capture=capture),
         )
         # Regeneration produces flat replacement Prescriptions in v1 — it is not
-        # Superset-aware (CONTEXT.md §Regeneration, ADR-0023). The prompt never asks
+        # Superset-aware (GLOSSARY.md §Regeneration, ADR-0023). The prompt never asks
         # for grouping, this path does not validate it, and the regenerate splice
         # appends replacements without re-namespacing group tags, so any Superset the
         # model volunteers is stripped here rather than persisted invalid or colliding

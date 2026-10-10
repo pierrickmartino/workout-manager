@@ -37,7 +37,7 @@ test("names the Variation in honest copy free of banned phrasing", () => {
   if (offer.kind !== "offer") return;
   const copy = `${offer.headline} ${offer.body} ${offer.acceptLabel}`;
   assert.match(copy, /Pull-Up/);
-  // Honest copy: none of the deliberately-avoided load/PR phrasing (CONTEXT)
+  // Honest copy: none of the deliberately-avoided load/PR phrasing (GLOSSARY)
   assert.doesNotMatch(copy.toLowerCase(), /personal best|max weight|rep[- ]max/);
 });
 

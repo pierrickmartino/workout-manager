@@ -78,7 +78,7 @@ backend's `terminology_guard`.
 - **The dead `Gauge` component is removed.** The finding's most extreme evidence,
   `text-[7px]` in `gauge.tsx`, was in a component nothing imports or renders. It is
   deleted rather than fixed or frozen.
-- **Terminology.** `CONTEXT.md` gains **Text Ramp** (the ordered primary/secondary/
+- **Terminology.** `GLOSSARY.md` gains **Text Ramp** (the ordered primary/secondary/
   muted rung set) and **Contrast Floor** (this invariant), and the **Skin** entry
   gains the well-formedness clause that every rung clears the Floor in both variants.
   No term is retired, so the terminology guard is unchanged.

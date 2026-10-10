@@ -1,4 +1,4 @@
-"""Read-time Logged Count projection over the record (ADR-0063, CONTEXT: Logged Count).
+"""Read-time Logged Count projection over the record (ADR-0063, GLOSSARY: Logged Count).
 
 The My Sessions counter and the Delete guard read the same fact: how many Logged Sessions
 (performances) a user has recorded against a given Session — counted across every Completion

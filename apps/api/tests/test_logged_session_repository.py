@@ -9,10 +9,6 @@ training type — consumers never touch the ORM."""
 
 from __future__ import annotations
 
-from tests.conftest import make_fk_engine
-from tests.quantities import reps_quantity
-from app.domain.quantity import repetitions_of
-
 from datetime import date
 
 import pytest
@@ -22,6 +18,7 @@ from sqlmodel import Session, SQLModel
 from app.db.models import LoggedSet
 from app.domain.exercise import Provenance
 from app.domain.muscle_groups import MuscleEmphasis, emphasis_of
+from app.domain.quantity import repetitions_of
 from app.repositories.exercise_repository import (
     InMemoryExerciseRepository,
     SqlExerciseRepository,
@@ -38,6 +35,8 @@ from app.repositories.session_repository import (
     SessionDraft,
     SqlSessionRepository,
 )
+from tests.conftest import make_fk_engine
+from tests.quantities import reps_quantity
 
 
 @pytest.fixture(params=["in_memory", "sql"])

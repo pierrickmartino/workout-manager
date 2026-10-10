@@ -1,4 +1,4 @@
-"""The Redeem copy rule (ADR-0057, CONTEXT.md § Session Library & Sharing → Redeem).
+"""The Redeem copy rule (ADR-0057, GLOSSARY.md § Session Library & Sharing → Redeem).
 
 **Redeem** is the cross-user cousin of **Duplicate** (ADR-0043): it deep-copies a
 shared standalone Session into a new one owned by the **redeemer**. This module is the

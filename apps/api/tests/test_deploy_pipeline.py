@@ -1,7 +1,7 @@
 """Behavior of the Deploy pipeline module (``app.protocols.deploy``).
 
 Deploy is the atomic commit of a Builder edit to a Protocol's un-performed tail
-(CONTEXT §Deploy, ADR-0020/0021). This module deepens the two-tier convention the
+(GLOSSARY §Deploy, ADR-0020/0021). This module deepens the two-tier convention the
 rest of the read model uses (``protocols/progress.py``): a **pure** planning tier
 (``plan_deploy``) that validates and folds the desired tail over an already-loaded
 ``ProtocolProgressView`` with no I/O, and a thin **service** tier
@@ -42,6 +42,8 @@ from app.repositories.protocol_repository import (
 )
 from app.repositories.session_repository import (
     InMemorySessionRepository,
+)
+from app.repositories.session_repository import (
     PrescriptionDraft as PersistPrescription,
 )
 

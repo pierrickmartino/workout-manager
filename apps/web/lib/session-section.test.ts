@@ -9,7 +9,7 @@ import {
   sectionize,
 } from "./session-section.ts";
 
-// `session-section` is the Session Section read-time projection (CONTEXT: Session Section;
+// `session-section` is the Session Section read-time projection (GLOSSARY: Session Section;
 // ADR-0074) — the frontend twin of `app/domain/session_section.py`, buckets each Exercise
 // Prescription in a Session into warm-up / main work / accessory / cooldown from signals on
 // the plan (the warm-up Set Type, name keywords, position). The Builder re-derives sections

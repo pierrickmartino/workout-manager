@@ -56,7 +56,7 @@ export interface StatTile {
 // record (ADR-0026) shows the set that achieved it — "bodyweight × 12" — from the newest
 // milestone, never a fabricated kg figure. An Exercise with no record omits the tile,
 // never shown as `0 kg` (ADR-0017). The tile is always labelled PERSONAL RECORD — never
-// "personal best" for the raw heaviest load, which CONTEXT.md forbids. Pure and
+// "personal best" for the raw heaviest load, which GLOSSARY.md forbids. Pure and
 // server-free.
 export function toStatTiles(records: ExerciseRecords, unit: WeightUnit): StatTile[] {
   const tiles: StatTile[] = [];

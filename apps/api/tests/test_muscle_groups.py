@@ -26,8 +26,8 @@ from app.domain.muscle_groups import (
     classify,
     covered_groups,
     distribution,
-    recent_coverage,
     emphasis_of,
+    recent_coverage,
     weekly_distribution,
 )
 

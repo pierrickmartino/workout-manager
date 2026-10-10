@@ -10,7 +10,7 @@ import type { WorkoutSession } from "./sessions-types.ts";
 
 // `sessionDeleteView` turns a Session into the detail page's Delete state (show / canDelete /
 // loggedCount) and `loggedCountBadge` the My Sessions row label. Pure and server-free, so the
-// deletable-only-when-unperformed rule (CONTEXT: Delete, ADR-0063) is unit-tested here.
+// deletable-only-when-unperformed rule (GLOSSARY: Delete, ADR-0063) is unit-tested here.
 
 function makeSession(overrides: Partial<WorkoutSession>): WorkoutSession {
   return {

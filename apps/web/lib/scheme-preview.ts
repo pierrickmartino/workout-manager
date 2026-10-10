@@ -1,4 +1,4 @@
-// The Scheme Preview projection (CONTEXT: Scheme Preview; ADR-0064/0065, #452) — the web twin
+// The Scheme Preview projection (GLOSSARY: Scheme Preview; ADR-0064/0065, #452) — the web twin
 // of the backend `app/domain/scheme_preview.py`. Given a Prescription's chosen Progression
 // Scheme together with its current reps and typed Load, it renders one plain-language sentence
 // describing what the scheme will do next — the same species as Tempo's phase expansion.

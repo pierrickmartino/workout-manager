@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import pytest
 from sqlmodel import Session, SQLModel
-from tests.conftest import make_fk_engine
 
 from app.domain.exercise import Provenance
 from app.domain.substitution import RelationKind
@@ -24,6 +23,7 @@ from app.repositories.exercise_repository import (
     InMemoryExerciseRepository,
     SqlExerciseRepository,
 )
+from tests.conftest import make_fk_engine
 
 
 @pytest.fixture(params=["in_memory", "sql"])

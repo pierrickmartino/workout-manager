@@ -101,7 +101,7 @@ plan-value in its place.
 **Migration.** Each Prescription carrying a Pinned Target becomes `reps = <pinned
 value>` + `scheme = Static`, preserving the user's intent exactly (their target holds,
 nothing auto-steps it); the Pin columns are then dropped. `Pin` / `Pinned Target` leave
-`CONTEXT.md`, and the terminology guard gains them as retired terms **in the same change
+`GLOSSARY.md`, and the terminology guard gains them as retired terms **in the same change
 that removes the Pin identifiers** (`PinOffer`, `pin_offer`, `pinned_reps`), so the
 guard's absent-from-tree self-test stays green.
 

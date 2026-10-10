@@ -50,7 +50,7 @@ class ProfileRepository(Protocol):
         """Return the user's Profile display name, or ``None`` if unset or no profile.
 
         A read-only lookup (never creates a profile) used to resolve a Session's **Author**
-        display for the read (CONTEXT: Author, #395). Returns the raw stored value; the web
+        display for the read (GLOSSARY: Author, #395). Returns the raw stored value; the web
         ``sessionAuthorView`` mapper applies the never-blank generic fallback at render time,
         so the fallback rule lives in one place."""
         ...

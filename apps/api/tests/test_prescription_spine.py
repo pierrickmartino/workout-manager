@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import pytest
 from sqlmodel import Session, SQLModel
-from tests.conftest import make_fk_engine
 
 from app.db.models import ExercisePrescription
 from app.domain.exercise import Provenance
@@ -49,6 +48,7 @@ from app.repositories.session_repository import (
     SqlSessionRepository,
 )
 from app.session_serialization import serialize_prescription
+from tests.conftest import make_fk_engine
 
 USER = "user_spine"
 OTHER = "user_other"

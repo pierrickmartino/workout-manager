@@ -7,16 +7,16 @@ not a prerequisite for contributing: an agent or a first-day engineer can put up
 correct PR, and review (human or automated) catches the rest.
 
 **How to use it:** walk the checklist against the diff. Each item says what to
-**reject** and cites the decision that fixes it. Severity follows
-[`.claude/rules/common/code-review.md`](./.claude/rules/common/code-review.md):
-🔴 CRITICAL blocks merge; 🟠 HIGH should block; 🟡 MEDIUM is advisory.
+**reject** and cites the decision that fixes it. Severity: 🔴 CRITICAL (a
+security hole or data loss) blocks merge; 🟠 HIGH (a bug or a broken invariant)
+should block; 🟡 MEDIUM is advisory.
 
 ---
 
 ## 1. Plan vs. Record integrity — the cardinal rule
 
 The whole domain rests on keeping the **plan** (what the AI prescribes) separate
-from the **record** (what the user did). See `CONTEXT.md` §"Plan vs. Record".
+from the **record** (what the user did). See `GLOSSARY.md` §"Plan vs. Record".
 
 - 🔴 **Reject** any change that writes performance data onto a plan object, or
   derives a plan value from a bare record without going through the defined
@@ -26,7 +26,7 @@ from the **record** (what the user did). See `CONTEXT.md` §"Plan vs. Record".
 - 🟠 **Reject** collapsing the two feedback concepts. **Generation Feedback**
   ("was the plan good?") and **Performance Feedback** (perceived effort on a
   Session I did) are distinct and must never merge into one "Feedback"
-  (CONTEXT §Feedback).
+  (GLOSSARY §Feedback).
 
 ## 2. Read-time projections, never stored ledgers
 
@@ -84,7 +84,7 @@ The plan model has **no calendar and no "today"** (ADR-0001).
 
 - 🟠 **Reject** treating **`Load`** as a bare kg number. It is a typed value
   (absolute / bodyweight / %1RM / qualitative / range); only some kinds resolve
-  to a numeric weight (CONTEXT §Load).
+  to a numeric weight (GLOSSARY §Load).
 - 🟠 **Estimated 1RM** and **Personal Record** may be derived **only** from
   absolute-Load sets with integer reps in a trustworthy rep range — never from a
   plan, never from bodyweight/%/qualitative loads.
@@ -97,7 +97,7 @@ The plan model has **no calendar and no "today"** (ADR-0001).
 
 ## 7. Terminology
 
-- 🟠 `CONTEXT.md` fixes every term and its **_Avoid_** list. **Reject**
+- 🟠 `GLOSSARY.md` fixes every term and its **_Avoid_** list. **Reject**
   reintroducing a retired term. The hard regressions (Program, daily streak,
   personal best, max weight, readiness/recovery score) are enforced automatically
   by `apps/api/app/quality/terminology_guard.py` — if that test fails, the PR
@@ -134,7 +134,7 @@ The plan model has **no calendar and no "today"** (ADR-0001).
   raw `<img>` with no `width`/`height` ratio hint and no `loading`. A `max-h-*` is not a
   height.
 - 🟠 An **instant** is written in the reader's clock (ADR-0096, enforced by
-  `server-locale-policy.ts`): reject `toLocaleString()` on a `Date` in a Server Component,
+  `server-locale-policy.ts` and `api-instant-policy.ts`): reject `toLocaleString()` on a `Date` in a Server Component,
   and reject parsing an API timestamp with a bare `new Date(...)` — the offsetless strings
   the API emits parse as *local* time, so the moment is wrong before it is formatted. Use
   `lib/instant.ts` + `components/pulse/local-instant.tsx`; calendar dates stay with
@@ -203,19 +203,16 @@ The plan model has **no calendar and no "today"** (ADR-0001).
 
 ## 9. Baseline quality & security
 
-Inherit the standing checklists — don't re-list them here, apply them:
-
-- Quality: [`.claude/rules/common/code-review.md`](./.claude/rules/common/code-review.md)
-  and [`coding-style.md`](./.claude/rules/common/coding-style.md) (immutability;
-  functions < 50 lines; files < 800 lines; nesting ≤ 4; explicit error handling;
-  no debug prints).
-- Security: [`.claude/rules/common/security.md`](./.claude/rules/common/security.md)
-  (no hardcoded secrets; validate boundaries; authz on every endpoint). Auth,
-  user-data, and generation changes warrant the **security-reviewer** agent.
-- Tests: [`.claude/rules/common/testing.md`](./.claude/rules/common/testing.md)
-  — new behavior ships with tests; keep coverage at the 80% bar; CI must be green.
+- Quality: [`coding-style.md`](./.claude/rules/common/coding-style.md)
+  (immutability; functions < 50 lines; files < 800 lines; nesting ≤ 4; explicit
+  error handling; no debug prints).
+- Security: no hardcoded secrets (env vars only); validate input at the system
+  boundary; authorize every endpoint against the signed-in user. Auth, user-data,
+  and generation changes warrant the **security-reviewer** agent.
+- Tests: new behaviour ships with a test written first, Arrange-Act-Assert with a
+  name that states the behaviour; keep coverage at the 80% bar; CI must be green.
 
 ---
 
 **Approve** when no 🔴/🟠 remain. **Block** on any 🔴. A rejection that cites an
-item here should link the ADR/CONTEXT reference so the fix is unambiguous.
+item here should link the ADR/GLOSSARY reference so the fix is unambiguous.

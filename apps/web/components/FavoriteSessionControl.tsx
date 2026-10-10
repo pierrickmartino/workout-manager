@@ -17,7 +17,7 @@ interface FavoriteSessionControlProps {
   isFavorite: boolean;
 }
 
-// The standalone Session's Favorite toggle (CONTEXT: Favorite, issue #396). Rendered only on
+// The standalone Session's Favorite toggle (GLOSSARY: Favorite, issue #396). Rendered only on
 // standalone Sessions — the caller withholds it on a Protocol member (Favorite is standalone-only,
 // like the Session Name), mirroring how Rename/Duplicate are withheld there. Marking is a stored,
 // per-user, per-copy preference; the toggle submits the opposite of the current state through the

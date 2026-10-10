@@ -6,7 +6,7 @@ AI-written in one place (`substitute_generator.py`) and rendered as one
 `whitespace-pre-line` paragraph. "Render step-by-step" is therefore not wiring — it
 is *deriving* discrete steps from prose. We decided to make the steps **first-class
 in the catalog**: `instructions` becomes an ordered `list[str]` (Execution Steps in
-CONTEXT.md), the enrichment schema (`GeneratedSubstitute`) and prompt emit an ordered
+GLOSSARY.md), the enrichment schema (`GeneratedSubstitute`) and prompt emit an ordered
 array, and a migration converts the shared catalog. This touches the *shared global
 catalog* (ADR-0002) and is hard to reverse (schema + migration + prompt + repository
 signatures + serializer + web type), so it is recorded here.

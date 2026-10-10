@@ -6,7 +6,7 @@ file is the disposition of it: what we decided, what the review got right, what 
 about our domain, what turned out to be already fixed, and the prioritized work that remains.
 
 Produced by a `/grill-with-docs` session (grilling + domain-modeling). The domain glossary
-([`CONTEXT.md`](../../CONTEXT.md)) and ADRs won every conflict; the review was mined for the real
+([`GLOSSARY.md`](../../GLOSSARY.md)) and ADRs won every conflict; the review was mined for the real
 usability problem under each conflict.
 
 ## Posture (how to read the review)
@@ -30,13 +30,13 @@ usability problem under each conflict.
 ## Decision ledger
 
 ### Framing
-- **Deliverable:** decisions (CONTEXT/ADR) + this backlog. No code this session.
+- **Deliverable:** decisions (GLOSSARY/ADR) + this backlog. No code this session.
 - **Scope:** all 12 screens walked.
 
 ### Cross-cutting conventions
 | # | Decision |
 | --- | --- |
-| Q4 | **Vocabulary.** Domain terms *are* the UI terms (Protocol / Session / Logged Session). The defect is leaked synonyms ("training", "workout") and flat hierarchy — purge and structure, never rename. Captured in `CONTEXT.md` intro. |
+| Q4 | **Vocabulary.** Domain terms *are* the UI terms (Protocol / Session / Logged Session). The defect is leaked synonyms ("training", "workout") and flat hierarchy — purge and structure, never rename. Captured in `GLOSSARY.md` intro. |
 | Q5 | **One record-row.** A single shared `record-row` view-model in `apps/web/lib/`, consumed by My Sessions, Analytics, and Strength: name-first (full width), result via the typed `Load`/`Quantity` formatters, date/comparison trailing. |
 | Q6 | **Action hierarchy.** Primary action (Start / Save / Edit) at the **top** of every task page; sticky-bottom only as a per-screen, tested enhancement (bottom nav + software keyboard make it conditional). |
 | Q7 | **Chart honesty.** Every chart states unit + aggregation + window; zero baseline for magnitude bars, line/dot with an explicit range for focused strength. |
@@ -47,7 +47,7 @@ usability problem under each conflict.
 | --- | --- | --- |
 | Q9 | 02 | **Creation IA.** Noun + clarifier: "Generate a Protocol · multiple weeks", "Generate a Session · one workout", "Build a Session · by hand", "Log a past workout". Returning users see Current Protocol / Recent Sessions before the create block. |
 | Q10 | 04 | **Non-absolute Load at log time.** Show the prescribed target (`% 1RM` / "Moderate") **and** a resolved "≈ N kg (est.)" *only* when an Estimated 1RM exists — never implying a known working weight. User still logs the actual absolute Load. |
-| Q11+Q14 | 06, 11 | **Equipment vocabulary.** New curated-closed **Equipment** term + alias map, applied as a **read-time projection** with an honest **Unmapped/Other** bucket. Drives the catalog facet and the profile multi-select. → **ADR-0077**, new `CONTEXT.md` term. |
+| Q11+Q14 | 06, 11 | **Equipment vocabulary.** New curated-closed **Equipment** term + alias map, applied as a **read-time projection** with an honest **Unmapped/Other** bucket. Drives the catalog facet and the profile multi-select. → **ADR-0077**, new `GLOSSARY.md` term. |
 | Q12 | 09 | **Profile weight vs reading.** On a new weight reading, **offer** to update profile weight — never auto-sync (auto-sync would silently mutate a generation input from a history entry). Store canonical kg per reading. |
 | Q13 | 11 | **Fitness Level.** Keep the self-rated **seed** (confirmed self-seeded, `ProfileForm.tsx:111`); replace bare 1–10 inputs with anchored labels / experience categories that map to the stored 1–10 per training type. |
 
@@ -110,9 +110,9 @@ collide with legitimate usage ("Training Type", "Workout Signature", prose).
 existing `"Amount"` entry uses — `re.compile(r"[\"']…[\"']")`), e.g. a UI label string of
 "Completed workout" / "Completed session" for a Logged Session, or a bare "training" used as a create
 label for a Session/Protocol. Never a bare-word regex. Guidance string points at this file and
-`CONTEXT.md` (Q4).
+`GLOSSARY.md` (Q4).
 
 ## Artifacts produced this session
-- `CONTEXT.md` — new **Equipment** term; intro note that glossary terms are the user-facing labels.
+- `GLOSSARY.md` — new **Equipment** term; intro note that glossary terms are the user-facing labels.
 - `docs/adr/0077-equipment-is-a-curated-read-time-vocabulary.md`.
 - This decisions & backlog document.

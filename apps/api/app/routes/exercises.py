@@ -22,6 +22,7 @@ from app.auth.dependencies import (
     require_admin,
 )
 from app.db.models import Exercise
+from app.domain.equipment import canonical_equipment
 from app.domain.exercise import (
     CatalogCompleteness,
     Provenance,
@@ -30,7 +31,6 @@ from app.domain.exercise import (
     completeness_breakdown,
     normalize_name,
 )
-from app.domain.equipment import canonical_equipment
 from app.domain.exercise_admin import AdminBrowseFilters
 from app.domain.exercise_browse import (
     catalog_equipment,

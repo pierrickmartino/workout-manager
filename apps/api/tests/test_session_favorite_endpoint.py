@@ -1,5 +1,5 @@
 """The Favorite endpoints end to end: real JWKS verification, the repositories, and the
-response envelope wired through FastAPI (CONTEXT: Favorite, issue #396).
+response envelope wired through FastAPI (GLOSSARY: Favorite, issue #396).
 
 ``POST /api/sessions/{id}/favorite`` marks the owner's standalone Session as a Favorite and
 ``DELETE`` unmarks it. The marker is a stored, per-user, per-copy preference surfaced on the

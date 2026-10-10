@@ -49,7 +49,7 @@ Concretely:
 
 - **Explicitly the strength lens, and gated so non-strength users hit no wall.** Estimated
   1RM — the yardstick under both the trajectory and the PR timeline — exists *only* for
-  absolute-Load sets in the trustworthy 1–12-rep window (ADR-0010, CONTEXT 'Estimated
+  absolute-Load sets in the trustworthy 1–12-rep window (ADR-0010, GLOSSARY 'Estimated
   1RM'); it is undefined for bodyweight, %-1RM, qualitative, and range Loads. A yoga /
   mobility / bodyweight user would otherwise land on two empty sections that read as broken.
   Following ADR-0017 ("hide, never fabricate a `0 kg`") *and* the type-neutral posture
@@ -67,7 +67,7 @@ Concretely:
   read-time projection with zero LLM involvement (the honest-projection stance of
   ADR-0018/0019), so the word fabricates a capability the screen doesn't have. "Dashboard"
   breaks the plain-noun screen naming (Home, Analytics, Exercise Detail, Profile). The
-  screen name is a UI/naming call, not a new domain term, so `CONTEXT.md` is unchanged.
+  screen name is a UI/naming call, not a new domain term, so `GLOSSARY.md` is unchanged.
 
 ## Consequences
 

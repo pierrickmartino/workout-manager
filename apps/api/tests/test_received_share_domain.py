@@ -1,4 +1,4 @@
-"""The Received-Share safety caveat as a pure domain fact (ADR-0058, CONTEXT: Redeem).
+"""The Received-Share safety caveat as a pure domain fact (ADR-0058, GLOSSARY: Redeem).
 
 A Redeem is *shared generation*, which ADR-0003 would hard-block for a Sensitive-Constraint
 user. ADR-0058 is the deliberate carve-out: the Redeem is **never blocked**, but a redeemer

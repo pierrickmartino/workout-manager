@@ -1,4 +1,4 @@
-"""add Session Provenance to workout_session (CONTEXT.md, ADR-0040)
+"""add Session Provenance to workout_session (GLOSSARY.md, ADR-0040)
 
 Adds a non-null ``provenance`` column to ``workout_session`` recording how the plan came
 to exist: ``ai_generated`` (the generation pipeline) or ``user_authored`` (a

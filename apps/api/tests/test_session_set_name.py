@@ -1,13 +1,12 @@
 """Session rename at the repository seam (issue #394): ``set_name`` sets, edits, and
 clears a standalone Session's user-given **Session Name**, and Duplicate carries it
-verbatim (CONTEXT: Session Name). Exercised over both the in-memory fake and the real
+verbatim (GLOSSARY: Session Name). Exercised over both the in-memory fake and the real
 SQLModel implementation so the two honor the same contract."""
 
 from __future__ import annotations
 
 import pytest
 from sqlmodel import Session, SQLModel
-from tests.conftest import make_fk_engine
 
 from app.domain.exercise import Provenance
 from app.repositories.exercise_repository import (
@@ -20,6 +19,7 @@ from app.repositories.session_repository import (
     SessionDraft,
     SqlSessionRepository,
 )
+from tests.conftest import make_fk_engine
 
 
 @pytest.fixture(params=["in_memory", "sql"])
@@ -120,6 +120,6 @@ def test_duplicate_carries_the_session_name_verbatim(repos):
     # Act
     copy = session_repo.duplicate(source.id, "user_a")
 
-    # Assert — the Session Name rides the copy (CONTEXT: carried verbatim across Duplicate)
+    # Assert — the Session Name rides the copy (GLOSSARY: carried verbatim across Duplicate)
     assert copy is not None
     assert copy.name == "Leg Day A"

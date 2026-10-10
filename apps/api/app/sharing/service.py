@@ -1,4 +1,4 @@
-"""Share / preview / Redeem orchestration (ADR-0057, CONTEXT: Share, Share Link, Redeem).
+"""Share / preview / Redeem orchestration (ADR-0057, GLOSSARY: Share, Share Link, Redeem).
 
 The thin layer that composes the two repositories the Share feature spans — the
 ``ShareLinkRepository`` (the token store) and the ``SessionRepository`` (owner-scoped

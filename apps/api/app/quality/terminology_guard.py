@@ -1,6 +1,6 @@
 """Terminology guard: regression tripwires for forbidden domain terms.
 
-``CONTEXT.md`` fixes the domain's language and lists, for every concept, the
+``GLOSSARY.md`` fixes the domain's language and lists, for every concept, the
 words to _Avoid_. Most of those are casual synonyms that only matter in prose;
 a handful are *hard regressions* — a term the codebase was deliberately moved
 away from (or one whose very shape encodes a rejected design), whose reappearance
@@ -61,7 +61,7 @@ class BannedTerm:
     ``pattern`` must match only *identifier* forms so ordinary English prose in
     comments (e.g. "the training program ran") never trips the guard.
     ``guidance`` is shown to the developer and names the term to use instead and
-    the CONTEXT.md / ADR reference that fixes it.
+    the GLOSSARY.md / ADR reference that fixes it.
     """
 
     name: str
@@ -76,7 +76,7 @@ class BannedTerm:
 
 # The registry. Every entry is a *hard* regression — a term the codebase moved
 # away from or whose shape encodes a rejected design — verified absent from the
-# current tree. Casual prose synonyms from CONTEXT.md's _Avoid_ lists are
+# current tree. Casual prose synonyms from GLOSSARY.md's _Avoid_ lists are
 # deliberately NOT here: they collide with legitimate identifiers ("weight",
 # "status", "level", "feedback") and belong in review, not a tripwire.
 BANNED_TERMS: tuple[BannedTerm, ...] = (
@@ -95,7 +95,7 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
         name="daily streak",
         pattern=re.compile(r"daily_streak|dailyStreak|/daily-streak\b"),
         guidance=(
-            "Streak is deliberately *weekly*, not daily (ADR-0001, CONTEXT 'Streak'): "
+            "Streak is deliberately *weekly*, not daily (ADR-0001, GLOSSARY 'Streak'): "
             "the plan model is self-paced and calendar-free, so there is no 'today' "
             "to miss. Use the weekly consecutive-week Streak."
         ),
@@ -104,7 +104,7 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
         name="activity heatmap",
         pattern=re.compile(r"activity_heatmap|activityHeatmap|/activity-heatmap\b"),
         guidance=(
-            "The Profile daily-activity mosaic is the 'Training Heatmap' (CONTEXT "
+            "The Profile daily-activity mosaic is the 'Training Heatmap' (GLOSSARY "
             "'Training Heatmap', ADR-0054): 'activity' is vague, and the projection is "
             "strictly descriptive — it derives no daily streak / don't-break-the-chain "
             "mechanic (the weekly Streak stays the sole consecutiveness metric). Use "
@@ -115,7 +115,7 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
         name="personal best",
         pattern=re.compile(r"personal_best|personalBest"),
         guidance=(
-            "Use 'Personal Record' — the best Estimated 1RM ever logged (CONTEXT "
+            "Use 'Personal Record' — the best Estimated 1RM ever logged (GLOSSARY "
             "'Personal Record'). 'personal best' is the deliberately-avoided raw "
             "heaviest-load concept it must never be confused with."
         ),
@@ -124,9 +124,9 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
         name="max weight",
         pattern=re.compile(r"max_weight|maxWeight"),
         guidance=(
-            "Load is a typed value, never a bare kg (CONTEXT 'Load'). Per-Exercise "
+            "Load is a typed value, never a bare kg (GLOSSARY 'Load'). Per-Exercise "
             "strength is the Personal Record (Estimated 1RM), not a 'max weight' tile "
-            "(CONTEXT 'Personal Record')."
+            "(GLOSSARY 'Personal Record')."
         ),
     ),
     BannedTerm(
@@ -137,7 +137,7 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
         ),
         guidance=(
             "Readiness is a qualitative three-state signal (Ready / Caution / Extra "
-            "Caution), NOT a computed score or recovery percentage (ADR-0001, CONTEXT "
+            "Caution), NOT a computed score or recovery percentage (ADR-0001, GLOSSARY "
             "'Readiness'): the calendar-free model gives no honest basis for a "
             "recovery %."
         ),
@@ -154,7 +154,7 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
         ),
         guidance=(
             "A Calibration is a *relative offset* from a Protocol's authored values, "
-            "never a level or a score (CONTEXT 'Calibration', ADR-0111) — the same "
+            "never a level or a score (GLOSSARY 'Calibration', ADR-0111) — the same "
             "reasoning that keeps Readiness a three-state signal rather than a recovery "
             "percentage. 'difficulty' is also already spoken for three times (a catalog "
             "Exercise's own difficulty, the legacy perceived_difficulty, and Effort's "
@@ -167,7 +167,7 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
         pattern=re.compile(r"mileage|Mileage"),
         guidance=(
             "The weekly-distance projection is 'Distance', reported in kilometres "
-            "(CONTEXT 'Distance', ADR-0049). The app is metric-canonical; 'mileage' "
+            "(GLOSSARY 'Distance', ADR-0049). The app is metric-canonical; 'mileage' "
             "smuggles in an imperial unit. Use Distance / kilometres."
         ),
     ),
@@ -176,7 +176,7 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
         pattern=re.compile(r"stored_pace|storedPace|pace_column"),
         guidance=(
             "Pace is a read-time projection over a distance Quantity's metres and "
-            "companion duration, never stored (ADR-0032, CONTEXT 'Quantity'). A "
+            "companion duration, never stored (ADR-0032, GLOSSARY 'Quantity'). A "
             "stored-pace field reinvents the derived value that ADR eliminated."
         ),
     ),
@@ -188,7 +188,7 @@ BANNED_TERMS: tuple[BannedTerm, ...] = (
         # ``performedAmount``) and prose that name the amount axis stay legal.
         pattern=re.compile(r"[\"']Amount[\"']"),
         guidance=(
-            "The amount picker's user-facing label is 'Quantity', not 'Amount' (CONTEXT "
+            "The amount picker's user-facing label is 'Quantity', not 'Amount' (GLOSSARY "
             "'Quantity' lists 'amount' under _Avoid_; ADR-0032/0050). Rename the display "
             "label to 'Quantity'. Internal identifiers naming the amount axis are fine — "
             "only the quoted label string is banned."
@@ -310,7 +310,7 @@ def format_findings(findings: list[Finding]) -> str:
     """Render findings into a message naming each offending file, match, and fix."""
     lines = [
         "Forbidden terminology found — these identifiers regress the domain "
-        "language fixed in CONTEXT.md. Fix each before merging:",
+        "language fixed in GLOSSARY.md. Fix each before merging:",
     ]
     for f in findings:
         guidance = f" — {f.guidance}" if f.guidance else ""

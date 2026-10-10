@@ -111,24 +111,24 @@ export interface WorkoutSession {
   // Name when set, else `training_type · date`. The `sessionName` view-model reads it as the
   // fallback so an unnamed Session is never rendered blank.
   display_name?: string;
-  // Author (CONTEXT: Author, issue #395): who first created this plan, surfaced as "by <name>"
+  // Author (GLOSSARY: Author, issue #395): who first created this plan, surfaced as "by <name>"
   // on the Session view — a distinct axis from Session Provenance (how it was made). The plain
   // Session read always carries it; the live hydration read omits it, so it is optional here
   // (mirror of `provenance`). The `sessionAuthorView` mapper applies the generic fallback.
   author?: SessionAuthor;
-  // Whether the Author resolves to the viewing owner (CONTEXT: Author, ADR-0040). The byline is
+  // Whether the Author resolves to the viewing owner (GLOSSARY: Author, ADR-0040). The byline is
   // provenance, not self-repetition — so it is surfaced only when this is false (an adopted or
   // shared plan keeps its original Author). Computed server-side (owner == author), since the raw
   // Author id stays off the wire. Optional/absent on read paths that omit the Author (live
   // hydration); a missing flag is treated as "not self", so provenance is never hidden by default.
   authored_by_me?: boolean;
-  // Favorite (CONTEXT: Favorite, issue #396): the owner's stored, per-user, per-copy marker,
+  // Favorite (GLOSSARY: Favorite, issue #396): the owner's stored, per-user, per-copy marker,
   // surfaced on the standalone Session read as a toggle. `true`/`false` on a standalone Session;
   // `null` when withheld on a Protocol member (Favorite is standalone-only), and absent on read
   // paths that omit it (live hydration). The `sessionFavoriteView` mapper owns the "show the
   // toggle only when the marker is a boolean" decision so the page stays thin.
   is_favorite?: boolean | null;
-  // Logged Count (CONTEXT: Logged Count, ADR-0063): how many Logged Sessions the owner has
+  // Logged Count (GLOSSARY: Logged Count, ADR-0063): how many Logged Sessions the owner has
   // recorded against this Session — a read-time projection over the record. Carried on the plain
   // detail read so the Delete control can decide whether to offer deletion (count 0) or show it
   // disabled with a hint (count > 0); absent on read paths that omit it (live hydration, the
@@ -153,7 +153,7 @@ export interface RedeemCaveat {
   message: string | null;
 }
 
-// A Session's Author (CONTEXT: Author, issue #395): who first created the plan. `display_name` is
+// A Session's Author (GLOSSARY: Author, issue #395): who first created the plan. `display_name` is
 // that creator's *raw* Profile name — `null`/absent when they never set one — which the
 // `sessionAuthorView` mapper resolves to a never-blank byline (the generic fallback then). The
 // underlying Author reference (the creator's user id) stays server-side and off the wire.

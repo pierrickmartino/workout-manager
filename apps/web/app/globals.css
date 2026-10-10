@@ -9,7 +9,7 @@
 /*
   PULSE design system — a "tactical command-center" fitness theme.
 
-  A rendered Theme is always Active Skin × Mode (CONTEXT "Theme"), so colour
+  A rendered Theme is always Active Skin × Mode (GLOSSARY "Theme"), so colour
   tokens resolve from a `[data-skin][data-mode]` selector layer rather than a
   single hardcoded block (ADR-0047/0048). The root layout stamps those two
   attributes on <html> via `resolveTheme` (lib/theme.ts); components keep
@@ -1141,13 +1141,13 @@
     scrollbar-color: var(--color-border-lite) transparent;
   }
 
-  /* Glow Edge (CONTEXT: Favorite): the soft, static glow that marks a favorited
+  /* Glow Edge (GLOSSARY: Favorite): the soft, static glow that marks a favorited
      Session card in My Sessions. Two layers built on the skin's cyan accent so it
      re-tints per skin — a crisp ~1px ring for the literal "glowing border" plus a
      soft blurred halo. It rides on box-shadow (not border-color), so it stays
      orthogonal to the row's `hover:border-cyan/40` and hover can never dim it. The
      shadow follows the card's border-radius, so the ring stays rounded. Not named
-     "star": CONTEXT lists Star among the words to avoid for Favorite. */
+     "star": GLOSSARY lists Star among the words to avoid for Favorite. */
   .glow-favorite {
     box-shadow:
       0 0 0 1px color-mix(in srgb, var(--color-cyan) 55%, transparent),

@@ -1,5 +1,5 @@
 // The Live Session engine (issue #86 — F2·S1). A pure reducer over an in-flight
-// performance of a Session (see "Live Session" in CONTEXT.md): a record being
+// performance of a Session (see "Live Session" in GLOSSARY.md): a record being
 // built, holding the sets done so far and which set is current. It has NO
 // server-only imports, so both the Server route and the Client screen can use it.
 
@@ -107,7 +107,7 @@ export type LiveEvent =
       now?: number;
     }
   | { type: "ADVANCE" }
-  // Reopen a Set (CONTEXT 'Reopen', ADR-0089): return a completed set to un-attempted
+  // Reopen a Set (GLOSSARY 'Reopen', ADR-0089): return a completed set to un-attempted
   // so the user can correct what they entered and complete it again. Client-only and
   // pre-finish — nothing has left the device yet, so the whole performance is still a
   // draft. Like a completion it carries the activity instant; unlike one it never moves

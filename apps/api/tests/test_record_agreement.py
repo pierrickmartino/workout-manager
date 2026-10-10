@@ -16,8 +16,6 @@ flows down both paths — offline, no ORM."""
 
 from __future__ import annotations
 
-from tests.quantities import reps_quantity
-
 from datetime import date
 
 from app.domain.achievements import Achievement, evaluate_achievements
@@ -34,6 +32,7 @@ from app.repositories.session_repository import (
     InMemorySessionRepository,
     SessionDraft,
 )
+from tests.quantities import reps_quantity
 
 PULL_UP = 1
 TODAY = date(2026, 7, 19)

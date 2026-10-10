@@ -13,7 +13,7 @@ Rebuilding the form to per-set fidelity — one editable row per prescribed set,
 **Done** toggle (Model B) — gives it the per-set signal it previously lacked, so it now
 **derives** the Completion Outcome instead of hardcoding it: a set is *attempted* when its Done
 toggle is checked (even at 0 reps — a set ground out to failure is still attempted, per
-CONTEXT 'Completion Outcome'), and the Session is **Incomplete** when any prescribed set was
+GLOSSARY 'Completion Outcome'), and the Session is **Incomplete** when any prescribed set was
 left un-attempted, else **Completed**. The derived verdict is shown live before submit ("Will
 log as: Incomplete — 2 prescribed sets skipped"), never a silent change.
 

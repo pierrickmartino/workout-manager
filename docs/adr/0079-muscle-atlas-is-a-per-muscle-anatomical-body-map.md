@@ -94,6 +94,6 @@ not a new stored one.
 - The section **degrades gracefully**: a genuinely empty window shows a neutral figure and a
   teaching empty state; an unclassified-only window reads as all-not-trained muscles plus the
   neutral off-map footnote (ADR-0025/0073), never "nothing logged".
-- **No new domain term.** The **Muscle Atlas** surface term (CONTEXT.md) is refined to describe
+- **No new domain term.** The **Muscle Atlas** surface term (GLOSSARY.md) is refined to describe
   the anatomical per-muscle map; `Muscle` and `Muscle Group` are unchanged, so the terminology
   guard needs no new entry.

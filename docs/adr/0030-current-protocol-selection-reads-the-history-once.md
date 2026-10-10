@@ -69,7 +69,7 @@ known follow-ups, not silently bundled.
   convention fully for one parameter of churn.
 - **A `LoggedHistory` value object** wrapping the list and memoizing the repeated walks
   (latest-sets-by-exercise, advancing-session ids) — rejected here under YAGNI. It is a new
-  domain noun needing a CONTEXT.md entry and overlaps the "many set-walks" concern of a
+  domain noun needing a GLOSSARY.md entry and overlaps the "many set-walks" concern of a
   separate candidate; the established convention threads the raw `list[LoggedSessionView]`
   (as `project_gamification` and `evaluate_achievements` already do), and this change stays
   consistent with it.

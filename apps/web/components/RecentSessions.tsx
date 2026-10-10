@@ -2,7 +2,7 @@ import type { RecentSessionRow } from "@/lib/recent-sessions";
 import { recentSessionCardModel } from "@/lib/session-card";
 import { SessionCard } from "@/components/SessionCard";
 
-// The Train page's "Recent Sessions" panel (CONTEXT: Recent Sessions): the user's up-to-five
+// The Train page's "Recent Sessions" panel (GLOSSARY: Recent Sessions): the user's up-to-five
 // most-recently-performed standalone Session plans, each with a one-tap Start into a Live
 // Session — the proactive, Train-side cousin of Repeat. Presentational only; the selection,
 // dedupe, and exercise-preview logic all live in the `recent-sessions` view-model. Each row renders

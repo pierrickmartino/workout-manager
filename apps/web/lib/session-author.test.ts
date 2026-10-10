@@ -6,7 +6,7 @@ import type { WorkoutSession } from "./sessions-types.ts";
 
 // `sessionAuthorView` turns a Session into the Session view's Author line: the "by <name>"
 // byline, the resolved name, and whether it is a real name or the generic fallback. Pure and
-// server-free, so the author-display fallback (CONTEXT: Author, #395) is unit-tested here and
+// server-free, so the author-display fallback (GLOSSARY: Author, #395) is unit-tested here and
 // the page stays thin.
 
 function makeSession(overrides: Partial<WorkoutSession>): WorkoutSession {

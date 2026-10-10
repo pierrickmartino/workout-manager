@@ -2,7 +2,7 @@
 (colour + typography + shape) — first added in ADR-0048, widened by ADR-0050.
 
 A **Skin** is a named *visual identity* — the coordinated colour, typography, and
-shape the whole app draws with (CONTEXT "Skin"; ADR-0050). Skins come from a
+shape the whole app draws with (GLOSSARY "Skin"; ADR-0050). Skins come from a
 *fixed, curated catalog* (never user- or AI-authored). A Skin's tokens fall into
 two groups:
 

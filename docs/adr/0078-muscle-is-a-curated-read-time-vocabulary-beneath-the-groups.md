@@ -62,7 +62,7 @@ the six-group atlas still renders exactly as today.
 
 ## Consequences
 
-- Introduces **one new domain term, `Muscle`** (see `CONTEXT.md`), the finer tier beneath
+- Introduces **one new domain term, `Muscle`** (see `GLOSSARY.md`), the finer tier beneath
   Muscle Group. `terminology_guard` needs **no** new entry: nothing is retired or renamed —
   `Muscle` is additive, and the six-group roll-up's identifiers are untouched.
 - **No data-model change.** `LoggedSetView` carries the emphasis split as a denormalized

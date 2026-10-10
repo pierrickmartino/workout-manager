@@ -83,18 +83,18 @@ export default async function SessionPage({
   // rename control is withheld on a Protocol member below (Session Name is standalone-only).
   const nameView = sessionNameView(session);
 
-  // The Author byline (CONTEXT: Author, issue #395): "by <name>", crediting the human who first
+  // The Author byline (GLOSSARY: Author, issue #395): "by <name>", crediting the human who first
   // created this plan. Rendered under the title as quiet secondary text — deliberately distinct
   // from the per-movement AI-GENERATED Provenance badges (who made it vs. how it was made).
   const authorView = sessionAuthorView(session);
 
-  // The Favorite toggle state (CONTEXT: Favorite, issue #396): whether this standalone Session is
+  // The Favorite toggle state (GLOSSARY: Favorite, issue #396): whether this standalone Session is
   // favorited, and whether to show the toggle at all. Withheld on a Protocol member (the server
   // sends `null`), where `show` is false — Favorite is a standalone-only concept, like the Session
   // Name — so the control is hidden alongside Rename below.
   const favoriteView = sessionFavoriteView(session);
 
-  // The Delete control state (CONTEXT: Delete, ADR-0063): whether to show Delete at all
+  // The Delete control state (GLOSSARY: Delete, ADR-0063): whether to show Delete at all
   // (standalone-only, and only when the detail read carried the Logged Count) and whether the
   // Session may be deleted now (only with no logged training). Shown disabled with a hint when
   // the Session has been performed — the server 409 is the backstop.
@@ -124,7 +124,7 @@ export default async function SessionPage({
         overline="PULSE // SESSION"
         title={
           <span className="flex items-center gap-3">
-            {/* The Workout Signature mark (CONTEXT: Workout Signature): the Session's recognizable
+            {/* The Workout Signature mark (GLOSSARY: Workout Signature): the Session's recognizable
                 sigil, keyed on its id so it matches the mark shown for this Session on Home, My
                 Sessions, and Train. Fill hue by Training Type, beside the type badge on the right. */}
             <WorkoutSigil
@@ -212,7 +212,7 @@ export default async function SessionPage({
               description="Ask for a new standalone session"
             />
           </Link>
-          {/* Delete (CONTEXT: Delete, ADR-0063): permanently remove this standalone Session, offered
+          {/* Delete (GLOSSARY: Delete, ADR-0063): permanently remove this standalone Session, offered
               only when it has no logged training. Shown disabled, with the reason as its
               description, when the Session has been performed (deleteView.canDelete false); hidden
               entirely on a Protocol member or a read that omits the Logged Count (deleteView.show
@@ -530,7 +530,7 @@ function PrescriptionCard({
 }
 
 // The Tempo row(s) for the prescription's DataList — a read-time projection of the
-// stored free-form tempo string (CONTEXT: Tempo). A parsed tempo shows its coarse
+// stored free-form tempo string (GLOSSARY: Tempo). A parsed tempo shows its coarse
 // three-state label over the plain-language phase expansion, keeping the cryptic raw
 // code on hover (`title`) and a naturally-spoken `aria-label` for screen readers; an
 // unparseable value is shown verbatim; an absent tempo renders no row at all.

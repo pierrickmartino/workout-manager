@@ -6,7 +6,7 @@ import type { ShareLink } from "./sessions-types";
 export const SHARE_FALLBACK_ERROR = "Could not create a share link.";
 
 // The recipient path a Share Link token resolves to (ADR-0057). The token is not itself a URL
-// (CONTEXT: Share Link — "it is a link, not a share code"); the sharer copies this URL, and the
+// (GLOSSARY: Share Link — "it is a link, not a share code"); the sharer copies this URL, and the
 // recipient opens it to preview and Redeem. Encoded so a url-safe token is still path-safe.
 export function shareUrl(token: string, origin: string): string {
   return `${origin}/shared/${encodeURIComponent(token)}`;

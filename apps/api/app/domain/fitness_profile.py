@@ -78,7 +78,7 @@ def is_sensitive(profile: HasSensitiveConstraints) -> bool:
 def resolve_equipment(
     request_equipment: list[str] | None, default_equipment: list[str]
 ) -> list[str]:
-    """Resolve the Available Equipment for one generation (CONTEXT: Available Equipment).
+    """Resolve the Available Equipment for one generation (GLOSSARY: Available Equipment).
 
     A request that states no equipment (``None``) inherits the user's saved
     Default Equipment. A request that *states* equipment is honored literally —

@@ -15,9 +15,12 @@ from app.config import Settings, get_settings
 from app.domain.exercise import Provenance
 from app.domain.substitution import RelationKind
 from app.generation.generator import GenerationError, GenerationRequest
-from app.generation.schema import GeneratedExercisePrescription, GeneratedSession
+from app.generation.schema import (
+    GeneratedExercisePrescription,
+    GeneratedSession,
+    GeneratedSubstitute,
+)
 from app.generation.substitute_generator import SubstituteRequest
-from app.generation.schema import GeneratedSubstitute
 from app.main import create_app
 from app.repositories.deps import (
     get_exercise_relationship_repository,

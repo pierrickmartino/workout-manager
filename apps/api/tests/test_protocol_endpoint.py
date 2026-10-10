@@ -11,14 +11,14 @@ in-memory queue's ``work()`` stands in for the out-of-process RQ worker.
 
 from __future__ import annotations
 
-from tests.quantities import reps_quantity
-
 from datetime import date
 
 from fastapi.testclient import TestClient
 
 from app.auth.dependencies import get_jwks
 from app.config import Settings, get_settings
+from app.domain.load import parse_load
+from app.generation.cache import GenerationCache, InMemoryCacheStore
 from app.generation.generator import GenerationError
 from app.generation.job_queue import InMemoryJobQueue
 from app.generation.orchestrator import GenerationOrchestrator
@@ -29,8 +29,6 @@ from app.generation.schema import (
     GeneratedProtocol,
     GeneratedProtocolSession,
 )
-from app.domain.load import parse_load
-from app.generation.cache import GenerationCache, InMemoryCacheStore
 from app.main import create_app
 from app.repositories.deps import (
     get_exercise_repository,
@@ -52,6 +50,7 @@ from app.repositories.profile_repository import (
 from app.repositories.protocol_repository import InMemoryProtocolRepository
 from app.repositories.session_repository import InMemorySessionRepository
 from tests.conftest import ISSUER, make_signing_context
+from tests.quantities import reps_quantity
 
 
 class FakeProtocolGenerator:

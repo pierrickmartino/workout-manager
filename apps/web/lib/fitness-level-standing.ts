@@ -17,7 +17,7 @@ import type { FitnessLevelStanding } from "./profile-progress-types.ts";
 // control can use it. The zone mapping, the copy and the ordering live here; the component
 // stays a thin renderer of one array.
 
-// The top of the 1–10 Fitness Level scale (CONTEXT: Fitness Level), and so the number of
+// The top of the 1–10 Fitness Level scale (GLOSSARY: Fitness Level), and so the number of
 // notches every rail is drawn with — equal-length rails are what let two rows be compared.
 export const MAX_LEVEL = 10;
 

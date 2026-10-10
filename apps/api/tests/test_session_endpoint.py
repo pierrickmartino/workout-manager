@@ -72,7 +72,7 @@ def build_client(generator=None, ctx=None, profiles=None, sessions=None, exercis
     exercises = exercises or InMemoryExerciseRepository()
     profiles = profiles or InMemoryProfileRepository()
     # Wire the shared profile store into the session repo so the read resolves the Author's
-    # display name (CONTEXT: Author, #395); without it the serializer's generic fallback stands in.
+    # display name (GLOSSARY: Author, #395); without it the serializer's generic fallback stands in.
     sessions = sessions or InMemorySessionRepository(exercises, profiles)
     logged = InMemoryLoggedSessionRepository(sessions, exercises)
     generator = generator or FakeGenerator(result=_default_generation())
@@ -193,7 +193,7 @@ def test_detail_read_marks_a_self_created_session_authored_by_me():
     ).json()["data"]
 
     # Assert — the Author resolves to the viewer, so the byline is self-repetition: the client
-    # suppresses "by <you>" (CONTEXT: Author). The raw Author id stays server-side.
+    # suppresses "by <you>" (GLOSSARY: Author). The raw Author id stays server-side.
     assert fetched["authored_by_me"] is True
 
 

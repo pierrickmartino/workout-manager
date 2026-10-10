@@ -21,7 +21,7 @@ interface HarderVariationOfferProps {
 // its rep ceiling (#202), to advance to the next harder Variation. Accepting posts
 // the suggested Exercise as `target_exercise_id` through the existing user-initiated
 // Substitution flow; declining is a client-only dismissal that makes no write call,
-// keeping Substitution user-driven (CONTEXT). All copy comes from the view-model so
+// keeping Substitution user-driven (GLOSSARY). All copy comes from the view-model so
 // this component stays thin.
 export function HarderVariationOffer({
   sessionId,

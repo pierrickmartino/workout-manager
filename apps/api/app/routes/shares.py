@@ -1,4 +1,4 @@
-"""Share / Redeem HTTP endpoints (ADR-0057, CONTEXT: Share, Share Link, Redeem).
+"""Share / Redeem HTTP endpoints (ADR-0057, GLOSSARY: Share, Share Link, Redeem).
 
 The first feature in the domain that crosses the user-ownership boundary — and it does so
 **by copy over a revocable link**, never by reference. Two audiences:
@@ -22,7 +22,6 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.auth.dependencies import get_current_user
 from app.envelope import success_envelope
-from app.session_serialization import serialize_session
 from app.repositories.deps import (
     get_profile_repository,
     get_session_repository,
@@ -34,6 +33,7 @@ from app.repositories.share_link_repository import (
     ShareLinkRepository,
     ShareLinkView,
 )
+from app.session_serialization import serialize_session
 from app.sharing.service import (
     RedeemOutcome,
     ShareLinkInvalid,

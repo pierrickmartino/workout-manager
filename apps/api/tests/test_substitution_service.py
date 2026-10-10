@@ -1,7 +1,7 @@
 """The Substitution flow: resolve lookup-first, swap the Exercise on the user's
 own Session copy, fall back to AI only when no catalog link fits.
 
-A Substitution is unlimited and distinct from Regeneration (CONTEXT.md): it swaps
+A Substitution is unlimited and distinct from Regeneration (GLOSSARY.md): it swaps
 one Exercise Prescription's Exercise — keeping its sets/reps — and never consumes
 the once-per-Session regeneration guard. Resolution is filtered by the user's
 equipment and constraints; when none of the typed catalog relationships fit, an
@@ -10,8 +10,6 @@ Exercised with in-memory repositories and a fake generator so the flow runs
 offline and deterministically."""
 
 from __future__ import annotations
-
-from tests.quantities import reps_quantity
 
 from datetime import date
 
@@ -48,6 +46,7 @@ from app.substitution.service import (
     harder_variation_suggestion,
     substitute_exercise,
 )
+from tests.quantities import reps_quantity
 
 
 class FakeSubstituteGenerator:

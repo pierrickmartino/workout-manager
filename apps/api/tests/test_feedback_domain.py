@@ -1,7 +1,7 @@
 """Generation Feedback domain rules: the verdict vocabulary.
 
 A Generation Feedback is a binary verdict on a generated/adopted Session — "did
-the AI give me a good plan?" (CONTEXT.md). ``Verdict`` fixes the two allowed
+the AI give me a good plan?" (GLOSSARY.md). ``Verdict`` fixes the two allowed
 values and ``parse_verdict`` is the boundary that turns untrusted client input
 into one of them, rejecting anything else."""
 

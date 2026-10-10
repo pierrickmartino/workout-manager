@@ -9,7 +9,7 @@ RECORDS tabs (ADR-0017):
   trustworthy 1–12-rep window exists. For a bodyweight / qualitative / %-1RM / range
   Exercise this stays ``None`` so the tile is *hidden, never zeroed* — a ``0 kg`` would
   be a fabrication. It is the highest Estimated 1RM, never the heaviest bar touched:
-  CONTEXT.md reserves "Personal Record" for the estimate, not a raw-load "personal best".
+  GLOSSARY.md reserves "Personal Record" for the estimate, not a raw-load "personal best".
 - ``total_sets`` — the count of the user's Logged Sets of the Exercise, across every
   session and regardless of Load kind. It always exists, so it always renders.
 
@@ -33,8 +33,6 @@ from dataclasses import dataclass
 
 from app.domain.load import LoadKind, ParsedLoad
 from app.domain.one_rep_max import MAX_TRUSTWORTHY_REPS, MIN_TRUSTWORTHY_REPS
-from app.domain.quantity import repetitions_of
-from app.domain.set_type import is_warm_up
 from app.domain.personal_records import (
     LoggedSetRecord,
     PersonalRecord,
@@ -42,6 +40,8 @@ from app.domain.personal_records import (
     logged_set_records,
 )
 from app.domain.progress_story import INSUFFICIENT, ProgressStory, progress_story
+from app.domain.quantity import repetitions_of
+from app.domain.set_type import is_warm_up
 from app.logbook.top_sets import TOP_SET_SERIES_LIMIT, TopSetPoint, top_set_series
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,

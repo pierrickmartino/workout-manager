@@ -90,7 +90,7 @@ class SessionView:
     # ``ai_generated`` — every path that builds a Session today is AI. See
     # ``app.domain.session_provenance.SessionProvenance``.
     provenance: str = "ai_generated"
-    # Author (CONTEXT: Author, #395): a reference (the creator's ``clerk_user_id``) to the
+    # Author (GLOSSARY: Author, #395): a reference (the creator's ``clerk_user_id``) to the
     # human who first created this plan — distinct from the Owner and from Provenance, and
     # immutable origin (preserved through Duplicate). ``author_display_name`` is that
     # creator's raw Profile display name joined at read time, ``None`` when they have no
@@ -105,7 +105,7 @@ class SessionView:
     # no value there (Q2); Duplicate stays on standalone Sessions and the endpoint is
     # unchanged. A read-time fact off the linkage, never a stored flag.
     is_protocol_member: bool = False
-    # The viewing owner's Favorite marker on this Session (CONTEXT: Favorite, issue #396) —
+    # The viewing owner's Favorite marker on this Session (GLOSSARY: Favorite, issue #396) —
     # a **stored, per-user, per-copy** preference resolved through the ``FavoriteRepository``
     # seam for the owner of this read (every ``_view`` is built for the owner). ``False`` for
     # an un-favorited Session, and for the many reads whose repository carries no favorite
@@ -125,9 +125,9 @@ class SessionSummaryView:
     the never-blank display label through ``session_label`` exactly as the detail read
     does; ``training_type`` and ``author_display_name`` feed the row's Training Type and
     Author, and ``is_favorite`` is the owner's Favorite marker (the favorites-only
-    filter, CONTEXT: My Sessions / Favorite). ``prescription_count`` is the number of
+    filter, GLOSSARY: My Sessions / Favorite). ``prescription_count`` is the number of
     Exercise Prescriptions in the plan — the row's *plan-side* "N exercises" fact, counted
-    without joining the prescriptions themselves (CONTEXT: Exercise Prescription)."""
+    without joining the prescriptions themselves (GLOSSARY: Exercise Prescription)."""
 
     id: int
     training_type: str
@@ -136,7 +136,7 @@ class SessionSummaryView:
     # The Author reference (the creator's ``clerk_user_id``), preserved through Duplicate/Redeem
     # like the detail read's. Kept server-side (never serialized): the route compares it to the
     # viewing owner to derive the row's ``authored_by_me`` — the byline is provenance, not a
-    # "by <you>" on every self-authored row (CONTEXT: Author). ``None`` for a legacy/pre-#395 row.
+    # "by <you>" on every self-authored row (GLOSSARY: Author). ``None`` for a legacy/pre-#395 row.
     author_clerk_user_id: str | None
     author_display_name: str | None
     is_favorite: bool
@@ -307,7 +307,7 @@ class SessionRepository(Protocol):
     def set_favorite(
         self, session_id: int, clerk_user_id: str, favorite: bool
     ) -> SessionView | None:
-        """Mark or unmark the owner's standalone Session as a Favorite (CONTEXT: Favorite,
+        """Mark or unmark the owner's standalone Session as a Favorite (GLOSSARY: Favorite,
         issue #396).
 
         Writes the user's **stored, per-user, per-copy** Favorite marker on their own Session —
@@ -479,7 +479,7 @@ def _removed_drafts(
 def _author_display_name(
     profiles: ProfileRepository | None, author_clerk_user_id: str | None
 ) -> str | None:
-    """The Author's raw Profile display name for the read, or ``None`` (CONTEXT: Author, #395).
+    """The Author's raw Profile display name for the read, or ``None`` (GLOSSARY: Author, #395).
 
     ``None`` when the Session has no Author reference (a defensive pre-backfill case), no
     profile source is wired (an Author-agnostic in-memory test), or the author has no display
@@ -496,9 +496,9 @@ class SqlSessionRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
         # Author display resolves through the same ProfileRepository seam the in-memory repo
-        # uses (CONTEXT: Author, #395), built over this DB session so the read stays one query.
+        # uses (GLOSSARY: Author, #395), built over this DB session so the read stays one query.
         self._profiles = SqlProfileRepository(session)
-        # The Favorite marker resolves through the FavoriteRepository seam (CONTEXT: Favorite,
+        # The Favorite marker resolves through the FavoriteRepository seam (GLOSSARY: Favorite,
         # #396), built over this same DB session — the owner's ``is_favorite`` for the read and
         # the write target of ``set_favorite``.
         self._favorites: FavoriteRepository = SqlFavoriteRepository(session)
@@ -528,7 +528,7 @@ class SqlSessionRepository:
             author_display_name=_author_display_name(
                 self._profiles, workout.author_clerk_user_id
             ),
-            # The owner's Favorite marker (CONTEXT: Favorite, #396). Every ``_view`` is built
+            # The owner's Favorite marker (GLOSSARY: Favorite, #396). Every ``_view`` is built
             # for the owner, so the viewer is ``workout.clerk_user_id``.
             is_favorite=self._favorites.is_favorite(
                 workout.clerk_user_id, workout.id
@@ -550,7 +550,7 @@ class SqlSessionRepository:
             duration_minutes=draft.duration_minutes,
             provenance=draft.provenance,
             trace_id=draft.trace_id,
-            # Author is stamped with the creating user at creation (CONTEXT: Author, #395):
+            # Author is stamped with the creating user at creation (GLOSSARY: Author, #395):
             # a self-authored/generated Session attributes to whoever created it.
             author_clerk_user_id=clerk_user_id,
         )
@@ -698,7 +698,7 @@ class SqlSessionRepository:
 
         # A standalone copy: Provenance, lineage, name and Author carried verbatim; Protocol
         # linkage and the regeneration guard deliberately not copied (ADR-0043). Author is
-        # preserved from the source, NOT re-attributed to the duplicating user (CONTEXT:
+        # preserved from the source, NOT re-attributed to the duplicating user (GLOSSARY:
         # Author immutable origin, #395) — the same non-re-attribution as Provenance/lineage.
         copy = WorkoutSession(
             clerk_user_id=clerk_user_id,
@@ -949,11 +949,11 @@ class InMemorySessionRepository:
     ) -> None:
         self._exercises = exercises
         # Optional Profile source used only to resolve the Author's display name for the
-        # read (CONTEXT: Author, #395). Left ``None`` in the many tests that don't exercise
+        # read (GLOSSARY: Author, #395). Left ``None`` in the many tests that don't exercise
         # Author, where the display resolves to ``None`` and the serializer's generic
         # fallback stands in; production and the endpoint tests wire the shared profile repo.
         self._profiles = profiles
-        # The Favorite store (CONTEXT: Favorite, #396). Defaults to a private in-memory one so
+        # The Favorite store (GLOSSARY: Favorite, #396). Defaults to a private in-memory one so
         # ``set_favorite`` and the ``is_favorite`` read always work; endpoint tests can pass a
         # shared instance to assert per-user isolation across two callers.
         self._favorites: FavoriteRepository = favorites or InMemoryFavoriteRepository()
@@ -982,7 +982,7 @@ class InMemorySessionRepository:
             author_display_name=_author_display_name(
                 self._profiles, workout.author_clerk_user_id
             ),
-            # The owner's Favorite marker (CONTEXT: Favorite, #396) — the viewer is the owner.
+            # The owner's Favorite marker (GLOSSARY: Favorite, #396) — the viewer is the owner.
             is_favorite=self._favorites.is_favorite(
                 workout.clerk_user_id, workout.id
             ),
@@ -1010,7 +1010,7 @@ class InMemorySessionRepository:
             duration_minutes=draft.duration_minutes,
             provenance=draft.provenance,
             trace_id=draft.trace_id,
-            # Author stamped with the creating user at creation (CONTEXT: Author, #395).
+            # Author stamped with the creating user at creation (GLOSSARY: Author, #395).
             author_clerk_user_id=clerk_user_id,
         )
         self._next_id += 1
@@ -1106,7 +1106,7 @@ class InMemorySessionRepository:
         )
         # A standalone copy: Provenance, lineage, name and Author carried verbatim; Protocol
         # linkage and the regeneration guard deliberately not copied (ADR-0043). Author is
-        # preserved from the source, NOT re-attributed to the duplicating user (CONTEXT:
+        # preserved from the source, NOT re-attributed to the duplicating user (GLOSSARY:
         # Author immutable origin, #395).
         copy = WorkoutSession(
             id=self._next_id,

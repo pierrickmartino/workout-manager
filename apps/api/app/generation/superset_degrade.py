@@ -104,7 +104,7 @@ def flatten_session_supersets(session: GeneratedSession) -> GeneratedSession:
     Distinct from :func:`degrade_session_to_flat`, which keeps valid groups and only
     ungroups the offending ones: this forces the whole Session flat. Regeneration
     uses it because Regeneration produces flat replacement Prescriptions in v1 — it
-    is not Superset-aware (CONTEXT.md §Regeneration, ADR-0023). That path neither
+    is not Superset-aware (GLOSSARY.md §Regeneration, ADR-0023). That path neither
     validates grouping nor tells the model the kept prescriptions' group tags, and
     the regenerate splice appends replacements without re-namespacing, so any group
     the model volunteers could persist invalid or collide with a kept group; forcing

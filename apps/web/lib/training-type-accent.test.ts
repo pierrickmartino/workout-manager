@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { accentTint, trainingTypeAccentVar } from "./training-type-accent.ts";
 
 // `training-type-accent` maps a Training Type to the Skin-aware accent token the Workout
-// Signature sigil fills with (CONTEXT: Workout Signature, Training Type). Pure and curated —
+// Signature sigil fills with (GLOSSARY: Workout Signature, Training Type). Pure and curated —
 // the same species as `training-type-badge`, tested the same way.
 
 test("maps each curated Training Type to its accent token", () => {

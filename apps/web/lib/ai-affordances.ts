@@ -6,7 +6,7 @@
 // AI-affordance control consults, kept in `lib/` so the rule is unit-tested without a
 // browser (the twin of the backend's provenance check in `app/routes/sessions.py`).
 
-// Session Provenance is a closed set (CONTEXT: Session Provenance): how a Session's plan
+// Session Provenance is a closed set (GLOSSARY: Session Provenance): how a Session's plan
 // came to exist. Parallel to an Exercise's Provenance, but a distinct axis on a distinct
 // concept — the plan, not the movement.
 export const SESSION_PROVENANCE = {

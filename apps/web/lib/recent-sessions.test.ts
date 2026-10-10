@@ -14,7 +14,7 @@ import type { LoggedSession } from "./logs-types.ts";
 import type { SessionSummary } from "./session-library.ts";
 
 // `recent-sessions` is the pure view-model behind the Train page's "Recent Sessions" panel
-// (CONTEXT: Recent Sessions). It surfaces the user's up-to-five most-recently-*performed*
+// (GLOSSARY: Recent Sessions). It surfaces the user's up-to-five most-recently-*performed*
 // standalone Session **plans**, deduped, each as a one-tap Start into a Live Session — the
 // proactive, Train-side cousin of Repeat. The cardinal plan/record split drives it: recency
 // comes from the record (Logged Sessions), but every row is a plan (a standalone Session), so

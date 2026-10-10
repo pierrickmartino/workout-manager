@@ -14,7 +14,7 @@ interface AppearanceKeepAwakeToggleProps {
 }
 
 // The Profile control for the user's Keep Screen Awake Interface Preference
-// (CONTEXT "Keep Screen Awake" / ADR-0055): a set-once switch — beside the Mode
+// (GLOSSARY "Keep Screen Awake" / ADR-0055): a set-once switch — beside the Mode
 // picker — for whether the device screen is held on during a Live Session. The copy
 // and on/off state come from the pure `buildKeepScreenAwakeControl` mapper, so this
 // component stays thin. The switch is optimistic — it moves the instant you tap so

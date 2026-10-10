@@ -21,7 +21,6 @@ from app.generation.schema import (
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.protocol_repository import InMemoryProtocolRepository
 
-
 PARAMS = ProtocolGenerationRequest(
     training_type="strength",
     objective="gain muscle mass",

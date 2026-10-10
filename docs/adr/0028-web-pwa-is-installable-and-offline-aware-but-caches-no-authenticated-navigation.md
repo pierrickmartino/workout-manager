@@ -51,7 +51,7 @@ form: exactly two states, online and the branded offline fallback.
 - **A UI data-freshness timestamp is permitted under the calendar-free invariant (ADR-0001).**
   A "synced N minutes ago" label describes a *record's currency*, not a dated schedule or a
   "today" to miss, so it does not conflict with the self-paced/calendar-free model. This is a
-  UI concern, so it is recorded here rather than in `CONTEXT.md` (which is a domain glossary).
+  UI concern, so it is recorded here rather than in `GLOSSARY.md` (which is a domain glossary).
 - **"Repeat-load LCP < 1s once the shell is cached" and field INP are not yet observable.**
   Repeat-load LCP needs the shell-caching SW, which is deferred; field INP needs real-user
   monitoring (a `web-vitals` beacon), which is a separate ticket. Lighthouse runs as a

@@ -5,7 +5,7 @@ import { schemePreview, schemePreviewForInput } from "./scheme-preview.ts";
 import type { Load } from "./load.ts";
 
 // `scheme-preview` renders a Progression Scheme's stepping rule as one plain-language sentence
-// (CONTEXT: Scheme Preview; ADR-0064, #452), the web twin of the backend `scheme_preview`. These
+// (GLOSSARY: Scheme Preview; ADR-0064, #452), the web twin of the backend `scheme_preview`. These
 // tests pin the rendered sentence for representative schemes and, above all, the **Load-kind
 // honesty** rule: a weight axis speaks of kilograms, a pure-bodyweight movement of reps (never
 // "add kg"), and a Load with no clean value to step says so. The full-string assertions are the

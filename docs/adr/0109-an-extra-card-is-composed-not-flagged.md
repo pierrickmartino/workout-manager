@@ -49,13 +49,13 @@ call, because it is deliberately the one link in the stack that differs.
   hrefs — the TRAIN launchpad renders four links and Home's empty state two, exactly as the flags
   produced. `/dashboard` did not change at all: passing no children is what passing neither flag
   was.
-- **The names carry a standing CONTEXT divergence, and do not create it.** CONTEXT lists
+- **The names carry a standing GLOSSARY divergence, and do not create it.** GLOSSARY lists
   *Workout* under _Avoid_ for both 'Session' and 'Hand-Authored Session', and binds the avoid-lists
   in code as well as on screen — so `BuildWorkoutLink` and `LogPastWorkoutLink` are named after
   copy that is itself the divergence. The copy is what the launchpad has always rendered ("Build a
   workout", "Log a past workout"), it is user-visible text rather than a refactor's business, and
   the terminology guard cannot see it for exactly the reason ADR-0106 recorded: a JSX text node is
-  not the quoted label its regex matches. Naming the component something CONTEXT prefers while the
+  not the quoted label its regex matches. Naming the component something GLOSSARY prefers while the
   button it renders says "workout" would hide that, so the names mirror the labels and the
   divergence is stated once, here, where whoever retires the copy will find it.
 - **The three `show*` booleans left in the app are not this finding.** `showValues`

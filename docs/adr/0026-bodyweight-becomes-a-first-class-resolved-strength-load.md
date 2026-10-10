@@ -41,7 +41,7 @@ carrying added load it steps that added load with the existing increment logic; 
 pure bodyweight — no weight to add — it steps the target reps, and at the top of the
 range **suggests** advancing to a harder Variation rather than growing reps without
 bound. It never auto-swaps the movement: that stays a user-initiated Substitution
-(CONTEXT), which also keeps a Sensitive-Constraint user (ADR-0003) from being silently
+(GLOSSARY), which also keeps a Sensitive-Constraint user (ADR-0003) from being silently
 pushed onto a harder exercise.
 
 ## Considered options

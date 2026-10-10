@@ -37,7 +37,7 @@ standard `rpe ≈ 10 − rir`.
   `perceived_difficulty` int while keeping that column readable.
 
 These are never collapsed, the same discipline that keeps Generation Feedback and
-Performance Feedback separate (CONTEXT: Feedback).
+Performance Feedback separate (GLOSSARY: Feedback).
 
 ## Logged RIR must normalize into the existing gate
 
@@ -73,7 +73,7 @@ reader depends on it. Every existing row reads its int as RPE; no backfill.
 
 ## Terminology reconciliation
 
-`CONTEXT.md` lists "RPE (loosely)" under **Performance Feedback**'s `_Avoid_` — RPE is
+`GLOSSARY.md` lists "RPE (loosely)" under **Performance Feedback**'s `_Avoid_` — RPE is
 now a legitimate *Effort scale*, so that line is narrowed: RPE/RIR name the Effort
 scales; the whole Performance-Feedback concept is still not called "RPE". No new
 terminology-guard `BANNED_TERMS` entry is required — nothing is renamed away, only

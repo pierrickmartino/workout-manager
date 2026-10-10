@@ -15,13 +15,13 @@ import pytest
 from app.domain.exercise import Provenance
 from app.domain.feedback import Verdict
 from app.generation.generator import GenerationError
-from app.generation.regenerator import RegenerationRequest
 from app.generation.regeneration_service import (
     RegenerationNotAllowed,
     RegenerationRequiresNegativeFeedback,
     SessionNotFound,
     regenerate_session,
 )
+from app.generation.regenerator import RegenerationRequest
 from app.generation.schema import GeneratedExercisePrescription, GeneratedSession
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.generation_feedback_repository import (

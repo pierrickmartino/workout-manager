@@ -1,7 +1,7 @@
 """Behavior of the Favorite repository through its public interface, over both the
 in-memory fake and the real SQLModel implementation.
 
-A Favorite is a **stored, per-user, per-copy** marker keyed by (user, session) (CONTEXT:
+A Favorite is a **stored, per-user, per-copy** marker keyed by (user, session) (GLOSSARY:
 Favorite, issue #396): presence of a row means favorited, its absence means not. The marker
 is private to the user — one user's mark never leaks into another's read — and both mark and
 unmark are idempotent."""
@@ -10,13 +10,13 @@ from __future__ import annotations
 
 import pytest
 from sqlmodel import Session, SQLModel
-from tests.conftest import make_fk_engine
 
 from app.db.models import WorkoutSession
 from app.repositories.favorite_repository import (
     InMemoryFavoriteRepository,
     SqlFavoriteRepository,
 )
+from tests.conftest import make_fk_engine
 
 
 @pytest.fixture(params=["in_memory", "sql"])

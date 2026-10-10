@@ -5,7 +5,7 @@ the ORM directly (the project's repository-pattern rule). Two implementations ar
 a SQLModel-backed one for production and an in-memory fake for tests and local wiring.
 
 A Favorite is a **stored, per-user, per-copy** preference keyed by ``(clerk_user_id,
-session_id)`` (CONTEXT: Favorite, issue #396) — the same species as a Pinned Target, which
+session_id)`` (GLOSSARY: Favorite, issue #396) — the same species as a Pinned Target, which
 the domain deliberately stores; it is *not* a read-time projection (ADR-0018 governs derived
 facts, not user choices). Kept a distinct seam from ``SessionRepository`` so the marker
 never widens the Session's own write surface, and so a redeemed/duplicated copy — a new

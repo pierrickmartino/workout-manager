@@ -24,7 +24,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 
-// The interactive My Sessions library (CONTEXT: My Sessions, issue #397): search over the
+// The interactive My Sessions library (GLOSSARY: My Sessions, issue #397): search over the
 // user's own standalone Sessions plus a single-select chip row (All / Favorites / one Training
 // Type). Filtering is entirely client-side over the already-fetched library (like History) —
 // the filter state lives in React and every keystroke or chip re-filters in-browser, never
@@ -107,7 +107,7 @@ export function SessionsLibrary({
           />
         </div>
 
-        {/* The single-select chip row (CONTEXT: My Sessions): All / Favorites / one Training
+        {/* The single-select chip row (GLOSSARY: My Sessions): All / Favorites / one Training
             Type. It replaces the former standalone favorites toggle and combines (AND) with
             the search. Tapping the active chip returns to All. */}
         <div

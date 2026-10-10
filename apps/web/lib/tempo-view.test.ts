@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { toTempoView } from "./tempo-view.ts";
 
-// `toTempoView` is the read-time projection (CONTEXT: Tempo) that turns a stored
+// `toTempoView` is the read-time projection (GLOSSARY: Tempo) that turns a stored
 // free-form tempo string into the display model the Session detail row renders:
 // a coarse three-state label, a plain-language phase expansion, and the raw code
 // preserved for hover/screen-reader — with an honest raw-text fallback for

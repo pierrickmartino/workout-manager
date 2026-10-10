@@ -16,7 +16,7 @@ import { RecentSessions } from "@/components/RecentSessions";
 //
 // `RecentSessions` stays purely presentational; this component is only the read.
 
-// Load the panel rows (CONTEXT: Recent Sessions). Recency and dedupe come from the record
+// Load the panel rows (GLOSSARY: Recent Sessions). Recency and dedupe come from the record
 // (History), standalone-ness and names from the library (My Sessions), and the exercise preview
 // from each plan's detail read — so we deep-link Start straight into the plan the button runs,
 // never the last record.

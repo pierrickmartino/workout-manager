@@ -17,9 +17,7 @@ from datetime import date
 
 import pytest
 from sqlmodel import Session, SQLModel
-from tests.conftest import make_fk_engine
 
-from app.db.models import WorkoutSession
 from app.domain.exercise import Provenance
 from app.repositories.exercise_repository import (
     InMemoryExerciseRepository,
@@ -36,6 +34,7 @@ from app.repositories.session_repository import (
     SessionDraft,
     SqlSessionRepository,
 )
+from tests.conftest import make_fk_engine
 
 
 @pytest.fixture(params=["in_memory", "sql"])
@@ -207,7 +206,7 @@ def test_scheme_survives_a_re_redeemed_chain(repos):
 
 
 def test_redeem_starts_un_favorited_for_the_new_owner(repos):
-    # Favorite is per-owner and per-copy: a redeemed copy has no marker (CONTEXT: Favorite).
+    # Favorite is per-owner and per-copy: a redeemed copy has no marker (GLOSSARY: Favorite).
     session_repo, exercises = repos
     source = session_repo.create("sharer", _draft(exercises))
     session_repo.set_favorite(source.id, "sharer", True)
@@ -242,14 +241,14 @@ def test_redeem_carries_no_logged_sessions(repos):
         ),
     )
 
-    copy = session_repo.redeem(source.id, "recipient")
+    session_repo.redeem(source.id, "recipient")
 
     # No Logged Session for the recipient at all (the sharer's log is not copied or transferred).
     assert logs.list_for_user("recipient") == []
 
 
 def test_each_redeem_is_a_fresh_distinct_copy(repos):
-    # Redeeming twice yields distinct copies (CONTEXT: Share Link — each Redeem one fresh copy).
+    # Redeeming twice yields distinct copies (GLOSSARY: Share Link — each Redeem one fresh copy).
     session_repo, exercises = repos
     source = session_repo.create("sharer", _draft(exercises))
 

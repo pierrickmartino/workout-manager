@@ -2,7 +2,7 @@
 
 Regeneration replaces the *non-kept* Exercise Prescriptions of one Session,
 conditioned on the kept Prescriptions and the negative-feedback reason so
-progression stays coherent (CONTEXT.md). The AI's output is the set of
+progression stays coherent (GLOSSARY.md). The AI's output is the set of
 replacement prescriptions, schema-constrained to ``GeneratedSession`` and
 validated at the boundary — a malformed regeneration raises ``GenerationError``,
 never reaching the user's copy. These tests pin the wiring and that the kept

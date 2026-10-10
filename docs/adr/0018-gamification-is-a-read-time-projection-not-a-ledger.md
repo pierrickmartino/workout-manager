@@ -31,7 +31,7 @@ Logged Session (ADR-0013) still earns XP for the sets attempted.
 **Operator Level is a pure, non-monotonic function of XP.** An escalating
 closed-form curve (`level = ⌊√(xp / k)⌋`-shaped, unbounded, no stored table) maps
 XP to the account-wide **Operator Level** — distinct in every dimension from the
-per-type **Fitness Level** (see CONTEXT.md). The curve is an admittedly arbitrary
+per-type **Fitness Level** (see GLOSSARY.md). The curve is an admittedly arbitrary
 *motivational re-scaling*, and that is acceptable where a readiness percentage was
 not (ADR-0008): the curve claims nothing about the world beyond "you have
 accumulated this much XP," so it makes no false factual claim. Because Level is a

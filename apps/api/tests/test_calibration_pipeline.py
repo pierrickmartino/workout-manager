@@ -1,7 +1,7 @@
 """Behavior of the Calibrate pipeline module (``app.protocols.calibration``).
 
 Calibrate stores a **Calibration** — a relative offset from a Protocol's authored values —
-and materialises it onto the Protocol's **un-performed tail** (CONTEXT §Calibration,
+and materialises it onto the Protocol's **un-performed tail** (GLOSSARY §Calibration,
 ADR-0111). It follows the two-tier convention of ``protocols/deploy.py`` and
 ``protocols/progress.py``: a **pure** planning tier (``plan_calibration``) that folds the
 resolver over an already-loaded ``ProtocolProgressView`` with no I/O, and a thin **service**

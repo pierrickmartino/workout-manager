@@ -1,7 +1,7 @@
 """Migration test for the ``session_favorite`` table (issue #396).
 
 Exercises 0032 end to end against a real SQLite database: upgrade creates the per-user
-Favorite table (CONTEXT: Favorite) and its unique ``(clerk_user_id, session_id)`` constraint,
+Favorite table (GLOSSARY: Favorite) and its unique ``(clerk_user_id, session_id)`` constraint,
 so a user favorites one Session once; downgrading one step drops it, so the migration is
 reversible. There is no backfill — a Favorite is born absent."""
 

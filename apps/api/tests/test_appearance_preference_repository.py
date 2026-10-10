@@ -12,13 +12,13 @@ from dataclasses import replace
 
 import pytest
 from sqlmodel import Session, SQLModel
-from tests.conftest import make_fk_engine
 
 from app.domain.appearance import InterfacePreference, Mode, WeightUnit
 from app.repositories.appearance_preference_repository import (
     InMemoryAppearancePreferenceRepository,
     SqlAppearancePreferenceRepository,
 )
+from tests.conftest import make_fk_engine
 
 
 @pytest.fixture(params=["in_memory", "sql"])
@@ -37,7 +37,7 @@ def test_get_defaults_to_dark_awake_and_kg_when_no_record_exists(repo):
     preference = repo.get_preference("user_default")
 
     # Assert — the shipped defaults: Dark look (ADR-0047) + Keep Screen Awake on
-    # + kilograms (CONTEXT "Weight Unit")
+    # + kilograms (GLOSSARY "Weight Unit")
     assert preference == InterfacePreference(
         mode=Mode.DARK, keep_screen_awake=True, weight_unit=WeightUnit.KG
     )

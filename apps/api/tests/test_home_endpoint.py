@@ -10,17 +10,15 @@ authentication, the envelope, and that the computed state reaches the payload.""
 
 from __future__ import annotations
 
-from tests.quantities import reps_quantity
-
 from datetime import date
 
 from fastapi.testclient import TestClient
 
 from app.adoption.service import adopt
 from app.auth.dependencies import get_jwks
+from app.config import Settings, get_settings
 from app.domain.exercise import Provenance
 from app.domain.load import LoadKind, ParsedLoad
-from app.config import Settings, get_settings
 from app.generation.protocol_generator import ProtocolGenerationRequest
 from app.generation.schema import (
     GeneratedExercisePrescription,
@@ -46,6 +44,7 @@ from app.repositories.profile_repository import (
 from app.repositories.protocol_repository import InMemoryProtocolRepository
 from app.repositories.session_repository import InMemorySessionRepository
 from tests.conftest import ISSUER, make_signing_context
+from tests.quantities import reps_quantity
 
 
 def _abs(kg: float) -> dict:

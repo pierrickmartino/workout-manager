@@ -1,4 +1,4 @@
-"""Repository layer for the Share Link (ADR-0057, CONTEXT: Share Link).
+"""Repository layer for the Share Link (ADR-0057, GLOSSARY: Share Link).
 
 Routes and the sharing service depend on the ``ShareLinkRepository`` interface, never on
 the ORM directly (the project's repository-pattern rule). Two implementations are

@@ -24,7 +24,7 @@ export interface ToggleFavoriteState {
   error: string | null;
 }
 
-// Toggle a Session's Favorite marker from a My Sessions row (CONTEXT: Favorite, #396). The
+// Toggle a Session's Favorite marker from a My Sessions row (GLOSSARY: Favorite, #396). The
 // star button submits the *target* state in `favorite` ("true" to mark, else unmark) alongside
 // the `session_id`; this action calls the matching endpoint and, on success, revalidates
 // `/sessions` so the library re-renders with the new marker (the client-side search/chip filter

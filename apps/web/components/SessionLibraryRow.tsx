@@ -29,7 +29,7 @@ import {
 import { useLongPress } from "@/components/use-long-press";
 
 // One My Sessions library row: the shared `SessionCard` plus the interactions the library adds on
-// top of Train's read-only card (CONTEXT: My Sessions, Favorite, Delete). Favoriting has no star on
+// top of Train's read-only card (GLOSSARY: My Sessions, Favorite, Delete). Favoriting has no star on
 // the card face any more (Q6) — the Glow Edge carries the state — so the write lives in two places
 // that share one action: the ⋯ action sheet (the accessible, cross-platform home) and a
 // press-and-hold shortcut on the card. Both dispatch the same `submitToggleFavorite`; a 404/409
@@ -82,7 +82,7 @@ export function SessionLibraryRow({
 }
 
 // The row's ⋯ action sheet (ADR-0113): Favorite/Unfavorite always, Delete only for a
-// never-performed plan (CONTEXT: Delete, ADR-0063). Its trigger sits beside Start, so a closed row
+// never-performed plan (GLOSSARY: Delete, ADR-0063). Its trigger sits beside Start, so a closed row
 // spends no line on it; the sheet is titled with the plan's name, and the trigger names it too,
 // since every row on the screen carries one.
 function SessionRowMenu({

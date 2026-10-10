@@ -1,5 +1,5 @@
 """The Favorite marker surfaced through the SessionRepository, over both the in-memory fake
-and the real SQLModel implementation (CONTEXT: Favorite, issue #396).
+and the real SQLModel implementation (GLOSSARY: Favorite, issue #396).
 
 ``set_favorite`` marks/unmarks the owner's own standalone Session and surfaces the state on
 the read (``SessionView.is_favorite``). The marker is per-user (a non-owner can't touch it)
@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import pytest
 from sqlmodel import Session, SQLModel
-from tests.conftest import make_fk_engine
 
 from app.domain.exercise import Provenance
 from app.repositories.exercise_repository import (
@@ -23,6 +22,7 @@ from app.repositories.session_repository import (
     SessionDraft,
     SqlSessionRepository,
 )
+from tests.conftest import make_fk_engine
 
 
 @pytest.fixture(params=["in_memory", "sql"])
@@ -111,7 +111,7 @@ def test_favorite_is_not_carried_by_duplicate(repos):
     copy = sessions.duplicate(source.id, "user_a")
 
     # Assert — the copy is a new Session with no marker: it starts un-favorited, while the
-    # source keeps its own mark (per-copy, CONTEXT: Favorite)
+    # source keeps its own mark (per-copy, GLOSSARY: Favorite)
     assert copy.id != source.id
     assert copy.is_favorite is False
     assert sessions.get(source.id, "user_a").is_favorite is True

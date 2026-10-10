@@ -12,7 +12,6 @@ from datetime import UTC, date, datetime
 
 import pytest
 from sqlmodel import Session, SQLModel
-from tests.conftest import make_fk_engine
 
 from app.db.models import LoggedSession
 from app.domain.exercise import Provenance
@@ -30,6 +29,7 @@ from app.repositories.protocol_repository import (
     SqlProtocolRepository,
 )
 from app.repositories.session_repository import PrescriptionDraft
+from tests.conftest import make_fk_engine
 
 
 def _tail_specs(view: ProtocolView, *, performed: set[int] = frozenset()) -> list:

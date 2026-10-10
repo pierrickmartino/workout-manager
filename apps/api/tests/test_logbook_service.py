@@ -7,14 +7,12 @@ over in-memory repositories; no AI and no database."""
 
 from __future__ import annotations
 
-from tests.quantities import reps_quantity
-from app.domain.quantity import repetitions_of
-
 from datetime import date
 
 import pytest
 
 from app.domain.exercise import Provenance
+from app.domain.quantity import repetitions_of
 from app.logbook.service import (
     LogKindError,
     LogSessionRequest,
@@ -36,6 +34,7 @@ from app.repositories.session_repository import (
     PrescriptionDraft,
     SessionDraft,
 )
+from tests.quantities import reps_quantity
 
 
 def _wire():

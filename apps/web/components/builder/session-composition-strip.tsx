@@ -25,7 +25,7 @@ import {
 import { type SupersetSlot } from "@/lib/supersets";
 import { cn } from "@/lib/utils";
 
-// The Session composition strip (CONTEXT: Session Section; ADR-0074) — the "visible workout
+// The Session composition strip (GLOSSARY: Session Section; ADR-0074) — the "visible workout
 // composition" above the editable exercises (creative-directions idea 5). It groups the
 // Session into its read-time Sections (warm-up / main work / accessory / cooldown), one
 // labeled tile per Exercise, brackets Superset members with their shared round instruction,

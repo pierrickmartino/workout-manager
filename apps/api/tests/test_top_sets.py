@@ -10,8 +10,6 @@ Record tile, so "the Top Set" means one thing everywhere. Pure over the reposito
 
 from __future__ import annotations
 
-from tests.quantities import reps_quantity
-
 from datetime import date
 
 from app.domain.load import LoadKind, ParsedLoad
@@ -25,6 +23,7 @@ from app.repositories.logged_session_repository import (
     LoggedSessionView,
     LoggedSetView,
 )
+from tests.quantities import reps_quantity
 
 SQUAT = 1
 PRESS = 2

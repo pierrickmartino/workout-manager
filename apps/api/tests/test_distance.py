@@ -13,14 +13,14 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from app.domain.quantity import Quantity, QuantityKind
-from app.domain.week import week_start
 from app.domain.distance import (
     DistanceSet,
     DistanceWeek,
     distance_series,
     has_distance,
 )
+from app.domain.quantity import Quantity, QuantityKind
+from app.domain.week import week_start
 
 TODAY = date(2026, 7, 5)  # a Sunday; its Monday week-start is 2026-06-29
 THIS_MON = date(2026, 6, 29)

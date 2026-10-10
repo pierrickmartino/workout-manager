@@ -82,7 +82,7 @@ editable tail, and it never re-renders settled record as mutable (ADR-0020).
 - Adds one plan operation, **`MOVE_SESSION`** (tail-only), which the **Deploy**
   serializer and validator must carry alongside the existing tail reshapes; the
   performed prefix still passes through byte-for-byte and Sessions re-enumerate
-  into contiguous positions after it (ADR-0020/0021). `CONTEXT.md`'s **Deploy**
+  into contiguous positions after it (ADR-0020/0021). `GLOSSARY.md`'s **Deploy**
   entry is extended to name reordered Sessions among those reshapes; no new
   glossary term is introduced.
 - The always-visible spine treatment applies to **all plan-editing surfaces**

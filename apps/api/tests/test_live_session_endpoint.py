@@ -8,8 +8,6 @@ are injected via dependency overrides so the test runs offline."""
 
 from __future__ import annotations
 
-from tests.quantities import reps_quantity
-
 from datetime import date
 
 from fastapi.testclient import TestClient
@@ -35,6 +33,7 @@ from app.repositories.session_repository import (
     SessionDraft,
 )
 from tests.conftest import ISSUER, make_signing_context
+from tests.quantities import reps_quantity
 
 
 def _seed_session(sessions, exercises, *, owner="user_owner"):

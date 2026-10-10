@@ -63,7 +63,7 @@ muscle **Unclassified** rather than forcing a guess.
   discovery/authoring axis only — never a generation input, cache key, Progression signal,
   or advancement gate — so a mis-section can never move a number or change a plan the AI
   conditions on.
-- **A new domain term, "Session Section," enters `CONTEXT.md`,** disambiguated from the
+- **A new domain term, "Session Section," enters `GLOSSARY.md`,** disambiguated from the
   audience **Role** axis (ADR-0071) whose name it deliberately does not reuse.
 
 ## Follow-up (revisited, projection reaffirmed)

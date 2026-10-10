@@ -10,10 +10,10 @@ right up until Start. Both reads now render through one shared serializer."""
 
 from __future__ import annotations
 
-from app.live.serialization import serialize_hydrated_session
 from app.live.hydration import HydratedSessionView, PreviousSetView
-from app.session_serialization import serialize_prescription
+from app.live.serialization import serialize_hydrated_session
 from app.repositories.session_repository import PrescriptionView, SessionView
+from app.session_serialization import serialize_prescription
 
 
 def _prescription(**overrides) -> PrescriptionView:

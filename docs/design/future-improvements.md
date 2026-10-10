@@ -14,11 +14,11 @@ This is a product and engineering recommendation document, not a record of appro
 
 ## Evidence and scope
 
-This document draws on the local application source, [domain glossary](../../CONTEXT.md), architecture decisions, [feature-gap history](../pulse-feature-gap.md), and the 12 screenshots previously reviewed. It complements:
+This document draws on the local application source, [domain glossary](../../GLOSSARY.md), architecture decisions, feature-gap history (`docs/pulse-feature-gap.md`, since removed), and the 12 screenshots previously reviewed. It complements:
 
 - [UI/UX review](polish-ui-ux-review.md): screen-specific findings and acceptance checks.
 - [Creative directions](pulse-creative-directions.md): signature experiences and researched component resources.
-- [Skin ideas](pulse-skin-ideas.md): additional visual identities and theme infrastructure.
+- Skin ideas (`docs/design/pulse-skin-ideas.md`, since removed; see `0f5eb26^`): additional visual identities and theme infrastructure.
 
 The source and screenshots represent different states. For example, the screenshots show light mode and named skins, while this checkout's stylesheet implements one dark appearance. Do not treat screenshot features as verified source capabilities or assume every historical gap remains open.
 

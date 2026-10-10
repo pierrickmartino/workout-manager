@@ -12,7 +12,7 @@ non-AI plan origin) and that authoring one and logging its first performance is 
 atomic action.
 
 **Rest and Supersets belong to the plan, so the user is authoring a plan.** The domain's
-cardinal rule is that a plan and a record are never the same thing (`CONTEXT.md`,
+cardinal rule is that a plan and a record are never the same thing (`GLOSSARY.md`,
 ADR-0001). A Logged Set carries the *performed* Quantity, Load, and perceived difficulty
 and deliberately has no rest field (a record's only time concept is Session Duration,
 ADR-0014). Wanting to "log a workout *with* rest and Supersets" is therefore wanting to

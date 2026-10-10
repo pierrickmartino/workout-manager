@@ -2,7 +2,7 @@
 
 Grows the Interface Preference store (ADR-0055) with the **Weight Unit** facet: a
 ``weight_unit`` string on ``appearance_preference``. It defaults **kg** — the app's
-canonical storage unit — so existing behaviour is unchanged (CONTEXT "Weight Unit").
+canonical storage unit — so existing behaviour is unchanged (GLOSSARY "Weight Unit").
 
 The ``server_default`` of ``'kg'`` backfills every existing row, so a returning user
 who already picked a Mode / Keep-Screen-Awake keeps those and gains kilograms, never

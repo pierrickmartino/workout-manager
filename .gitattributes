@@ -1,0 +1,4 @@
+# A lockfile is generated, never merged by hand or by git. `merge=binary` makes a
+# concurrent change conflict instead of letting git splice two lockfiles into one
+# that `npm ci` rejects (#628): regenerate it with `npm install` and commit that.
+apps/web/package-lock.json merge=binary

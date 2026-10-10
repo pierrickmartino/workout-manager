@@ -10,7 +10,6 @@ from datetime import date
 
 import pytest
 from sqlmodel import Session, SQLModel, select
-from tests.conftest import make_fk_engine
 
 from app.db.models import (
     Exercise,
@@ -27,6 +26,7 @@ from app.repositories.exercise_repository import (
     NameCollision,
     SqlExerciseRepository,
 )
+from tests.conftest import make_fk_engine
 
 
 def test_resolve_or_create_reports_a_fresh_create(repo):

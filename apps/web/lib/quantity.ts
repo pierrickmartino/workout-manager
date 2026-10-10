@@ -142,7 +142,7 @@ export function parseDurationSeconds(raw: string): number | null {
 // The per-set request fields for a duration Quantity — timed, non-locomotion work (a
 // hold, a distance-unknown treadmill session). The picked kind and the entered time
 // ride through verbatim; the backend canonicalises to seconds. No unit or companion
-// time: a duration carries no distance, so pace is not derivable (CONTEXT 'Quantity').
+// time: a duration carries no distance, so pace is not derivable (GLOSSARY 'Quantity').
 export function durationInput(value: string): {
   quantity_kind: QuantityKind;
   quantity_value: string;

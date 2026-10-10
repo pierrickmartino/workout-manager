@@ -11,7 +11,7 @@ Session, build a hand-made Session, log a past workout, re-run a recent Session)
 reachable within a fixed click budget (start-next ≤ 1 tap, the rest ≤ 2), and rare or
 destructive actions move exactly one tap behind progressive disclosure. The full plan,
 per-page feature inventory, and click budget live in
-[`docs/redesign-ia.md`](../redesign-ia.md).
+`docs/redesign-ia.md` (since removed; see git history at `c91ec6f^`).
 
 ## Considered options
 

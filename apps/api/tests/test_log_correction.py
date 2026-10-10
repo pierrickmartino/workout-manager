@@ -15,7 +15,6 @@ from datetime import date
 
 import pytest
 
-from tests.quantities import reps_quantity
 from app.domain.exercise import Provenance
 from app.domain.quantity import repetitions_of
 from app.logbook.correction import (
@@ -37,20 +36,21 @@ from app.repositories.logged_session_repository import (
     LoggedSessionDraft,
     LoggedSetDraft,
 )
+from app.repositories.profile_repository import (
+    InMemoryProfileRepository,
+    ProfileUpdate,
+)
 from app.repositories.protocol_repository import (
     InMemoryProtocolRepository,
     ProtocolDraft,
     ProtocolSessionDraft,
-)
-from app.repositories.profile_repository import (
-    InMemoryProfileRepository,
-    ProfileUpdate,
 )
 from app.repositories.session_repository import (
     InMemorySessionRepository,
     PrescriptionDraft,
     SessionDraft,
 )
+from tests.quantities import reps_quantity
 
 
 def _wire():

@@ -3,7 +3,7 @@
 Exercises 0031 end to end against a real SQLite database: seed a WorkoutSession at the
 prior revision (before the column existed), upgrade over 0031, and assert the row gains
 an ``author_clerk_user_id`` **backfilled to its owner** — so no pre-existing Session reads
-as authorless (CONTEXT: Author). Downgrading one step drops the column again, so the
+as authorless (GLOSSARY: Author). Downgrading one step drops the column again, so the
 migration is reversible.
 """
 

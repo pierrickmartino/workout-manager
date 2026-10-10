@@ -93,7 +93,7 @@ correct, since that is the surface they exist to test.
   with a back-dated `unlocked_on`. `_has_personal_record` is monotonic over a chronological
   prefix, so the replay recovers an honest date. This is ADR-0018's intended
   non-monotonicity running forward instead of backward — no migration, no backfill.
-- `CONTEXT.md` §Achievement now states the general rule the specific bug broke: a milestone
+- `GLOSSARY.md` §Achievement now states the general rule the specific bug broke: a milestone
   that names another term reads **that term's own definition**, never a private variant.
 - Adding a field to `LoggedSetRecord` is now a one-site edit that every projection picks up,
   instead of a two-site edit where missing one is silent.

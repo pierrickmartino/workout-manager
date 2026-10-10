@@ -1,5 +1,5 @@
 """The Share Link repository over both the in-memory fake and the real SQLModel repo
-(ADR-0057, CONTEXT: Share Link).
+(ADR-0057, GLOSSARY: Share Link).
 
 A Share Link is revocable and reusable: ``create`` mints an unguessable token (returning
 the existing active link rather than a duplicate), ``revoke`` stamps it so future Redeems
@@ -11,13 +11,13 @@ from __future__ import annotations
 
 import pytest
 from sqlmodel import Session, SQLModel, select
-from tests.conftest import make_fk_engine
 
 from app.db.models import WorkoutSession
 from app.repositories.share_link_repository import (
     InMemoryShareLinkRepository,
     SqlShareLinkRepository,
 )
+from tests.conftest import make_fk_engine
 
 
 @pytest.fixture(params=["in_memory", "sql"])

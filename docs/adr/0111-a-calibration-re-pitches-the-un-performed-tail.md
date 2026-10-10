@@ -19,7 +19,7 @@ too easy or too hard, the app's three existing adaptation mechanisms all decline
   this ADR was written against.)*
 - **Regeneration** replaces a Session's *content* on negative Generation Feedback, once. It is
   the wrong instrument for "the numbers are wrong but the movements are right", and generating
-  a fresh Protocol instead **supersedes** the Current Protocol (CONTEXT 'Current Protocol') —
+  a fresh Protocol instead **supersedes** the Current Protocol (GLOSSARY 'Current Protocol') —
   a total loss of position for "week 3 feels heavy".
 
 So we add a fourth, and the point of this ADR is to record how it stays inside the domain's
@@ -173,7 +173,7 @@ dropped. The pure outcome table is `reconcileCalibration` in `lib/calibration-co
 ## What this does not claim
 
 - **It is not a difficulty score.** There is no stored or displayed absolute figure, and the
-  term is banned in `CONTEXT.md`'s `_Avoid_` list alongside "intensity" for the same reason
+  term is banned in `GLOSSARY.md`'s `_Avoid_` list alongside "intensity" for the same reason
   **Readiness** is three states rather than a recovery percentage (ADR-0001).
 - **It does not touch the record.** It is a plan edit: XP, Streak, Personal Records,
   Achievements, Volume and the Training Heatmap are read-time projections of Logged Sets and
