@@ -18,6 +18,15 @@ const ABSOLUTE: ExerciseRecords = {
   top_set_series: [],
   pr_milestones: [],
   body_weight_nudge: false,
+  story: {
+    kind: "insufficient",
+    axis: null,
+    load_kind: null,
+    held: null,
+    delta: null,
+    latest: null,
+    previous: null,
+  },
 };
 
 test("renders PERSONAL RECORD and TOTAL SETS for an absolute-load exercise", () => {
@@ -52,6 +61,7 @@ test("hides the PERSONAL RECORD tile for a non-absolute exercise with no record"
     top_set_series: [],
     pr_milestones: [],
     body_weight_nudge: false,
+    story: ABSOLUTE.story,
   };
 
   // Act
@@ -82,6 +92,7 @@ test("shows the PERSONAL RECORD tile for a qualifying bodyweight exercise, as th
       },
     ],
     body_weight_nudge: false,
+    story: ABSOLUTE.story,
   };
 
   // Act
