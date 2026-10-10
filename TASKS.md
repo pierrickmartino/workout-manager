@@ -1,7 +1,7 @@
 # TASKS
 
 All the open actions and tasks planned across `docs/` and the GitHub tracker, each
-with its current status. Reviewed on **2026-10-07** against `main` at `70a85c2`.
+with its current status. Reviewed on **2026-10-10** against `main` at `4b0be41`.
 
 Status was checked against the code, the GitHub issues and PRs, and later audits
 that verified earlier items. Done items have been removed; see the git history of
@@ -145,7 +145,6 @@ Source: [next-feature](docs/research/next-feature.md).
 - ⬜ **On-device rep counting** (exploratory).
 - ⬜ **Apple Health / Health Connect write-out** (a PWA can't reach HealthKit; ties to the native question).
 - 🚫 **Recovery signals / readiness %:** deliberately not adopted (ADR-0001). Carried as open question Q1 in 10-05: hold the line, or add a bounded lane feeding only the 3-state signal?
-- 🟡 **Weekly consistency and streak surfacing:** Streak, heatmap, achievement wall and Home fan-out are done (#165–#167, #377). "Progress toward next unlock" isn't checked.
 - 🚫/⬜ **Social comparison and challenges:** treated as a large separate effort; Gript audit says not to build a feed.
 - ⬜ **Shareable milestone cards** (PR, Streak, Level image).
 - 🟡 **iOS storage resilience:** see §3.
@@ -177,7 +176,6 @@ Sources: [pulse-creative-directions](docs/design/pulse-creative-directions.md), 
 - ⬜ Collectible **completion card** at the end of a workout.
 - ❔ Signature **rest-timer instrument**.
 - 🟡 Exercise "field guide": catalog taxonomy and drawer are done; the visual field-guide treatment isn't.
-- ⬜ Progress stories.
 
 **Microinteractions: suggested order** (none found in the code; implementation not confirmed)
 - ⬜ 1. Tactile set-completion check, plus a calm handoff to the next exercise.
