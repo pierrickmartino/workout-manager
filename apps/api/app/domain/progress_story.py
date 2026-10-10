@@ -181,12 +181,15 @@ class _EligibleSets:
 
 
 def _eligible_sets_of(session: StorySession, sets: Iterable[StorySet]) -> _EligibleSets:
-    """Keep the eligible sets: an absolute Load lifted for a count of reps."""
+    """Keep the eligible sets: an absolute Load lifted for at least one rep.
+
+    A zero-rep set (a failed attempt) lifted nothing, so it is no load "for N reps".
+    """
 
     eligible = []
     for logged_set in sets:
         reps = repetitions_of(logged_set.quantity)
-        if reps is None or logged_set.load is None:
+        if reps is None or reps < 1 or logged_set.load is None:
             continue
         load = ParsedLoad.from_dict(logged_set.load)
         if load.kind is LoadKind.ABSOLUTE and load.kg is not None:

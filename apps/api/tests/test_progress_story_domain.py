@@ -297,6 +297,20 @@ def test_the_heaviest_load_at_the_shared_rep_count_is_compared():
     assert (story.latest.value, story.previous.value, story.delta) == (65.0, 62.5, 2.5)
 
 
+def test_a_zero_rep_set_is_not_a_lift_to_compare():
+    # Arrange — two failed attempts (0 reps) at different loads: nothing was lifted
+    history = [
+        _session(2, 8, _squat(102.5, 0)),
+        _session(1, 1, _squat(100.0, 0)),
+    ]
+
+    # Act
+    story = progress_story(history, SQUAT)
+
+    # Assert — never "+2.5 kg for 0 reps"
+    assert story.kind is StoryKind.INSUFFICIENT
+
+
 def test_a_shared_load_wins_over_a_shared_rep_count():
     # Arrange — the pair shares 60 kg (8 then 10 reps) and also 5 reps (70 then 72.5 kg)
     history = [
