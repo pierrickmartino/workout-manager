@@ -52,7 +52,7 @@ Sources: [research 2026-10-05](docs/research/2026-10-05.md), [market report 08-2
 - ⬜ **Notifications and badges**, only when the user asks for them (P2).
 - 🟡 **iOS storage-eviction resilience** for a paused Live Session. The outbox exists; the `persist()` call and a long-pause warning are missing.
 - ⬜ **Offline cold-start decision:** write an ADR choosing between caching the training path, accepting the gap and saying so, or a native client (Gript audit P0-2, audit 09-24 question).
-- ⬜ **Native shell vs PWA-only:** answer it in an ADR (Gript audit §7, research 10-05 Q2).
+- ⬜ **Native shell vs PWA-only:** answer it in an ADR (Gript audit §7, research 10-05 Q2). If the ADR picks React Native / Expo, start from the rule shortlist in the [React Native skills audit](docs/research/audit/vercel/react-native-skills-2026-10-10.md). There is no native code today, so that audit added no tasks.
 
 ## 4. Dependency majors
 
