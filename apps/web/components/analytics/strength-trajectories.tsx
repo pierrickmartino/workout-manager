@@ -3,6 +3,7 @@ import { ChevronRight } from "@/components/pulse/icons";
 
 import type { StrengthTrajectoryTile } from "@/lib/strength-trajectories-view";
 import { SectionHeader } from "@/components/pulse/section-header";
+import { ProgressStoryCard } from "@/components/pulse/progress-story";
 import { TopSetTrendChartLazy } from "@/components/exercise/top-set-trend-chart-lazy";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -40,37 +41,50 @@ export function StrengthTrajectories({ tiles }: StrengthTrajectoriesProps) {
 }
 
 // One small-multiple: a single focusable link to the Exercise's full chart, labelled for
-// screen readers (the bar chart itself is decorative and hidden from them). The visible
-// focus ring keeps keyboard navigation legible against the dark surface.
+// screen readers (the bar chart itself is decorative and hidden from them), then the
+// Exercise's Progress Story (ADR-0127) through the shared card the Exercise page renders.
+// The story sits beside the link, not inside it: it links to its two Logged Sessions, and
+// a link may not nest in another. The visible focus ring keeps keyboard navigation legible
+// against the dark surface.
 function TrajectoryTile({ tile }: { tile: StrengthTrajectoryTile }) {
   return (
-    <Link
-      href={tile.href}
-      aria-label={tile.ariaLabel}
-      className="group rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-base"
-    >
-      <Card className="flex h-full flex-col gap-3 p-4 transition-colors group-hover:border-cyan/40">
-        <div className="flex items-center justify-between gap-2">
-          <span className="font-sans text-[15px] font-medium text-text-primary">
-            {tile.exercise}
-          </span>
-          <ChevronRight
-            className="h-4 w-4 shrink-0 text-text-muted transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
-            aria-hidden
-          />
-        </div>
-        <div className="flex items-center justify-between gap-2">
-          <span className="font-display text-lg font-semibold text-text-primary tabular-nums">
-            {tile.estimate}
-          </span>
-          {tile.trend.delta ? (
-            <Badge variant="cyan">{tile.trend.delta}</Badge>
-          ) : null}
-        </div>
-        <div aria-hidden>
-          <TopSetTrendChartLazy rows={tile.trend.rows} heightClass="h-28" showValues={false} />
-        </div>
-      </Card>
-    </Link>
+    <div className="flex min-w-0 flex-col gap-2">
+      <Link
+        href={tile.href}
+        aria-label={tile.ariaLabel}
+        className="group block rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-base"
+      >
+        <TrajectoryCard tile={tile} />
+      </Link>
+      <ProgressStoryCard story={tile.story} />
+    </div>
+  );
+}
+
+function TrajectoryCard({ tile }: { tile: StrengthTrajectoryTile }) {
+  return (
+    <Card className="flex flex-col gap-3 p-4 transition-colors group-hover:border-cyan/40">
+      <div className="flex items-center justify-between gap-2">
+        {/* An authored name wraps, never widens the tile (ADR-0085). */}
+        <span className="min-w-0 break-words font-sans text-[15px] font-medium text-text-primary">
+          {tile.exercise}
+        </span>
+        <ChevronRight
+          className="h-4 w-4 shrink-0 text-text-muted transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
+          aria-hidden
+        />
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-display text-lg font-semibold text-text-primary tabular-nums">
+          {tile.estimate}
+        </span>
+        {tile.trend.delta ? (
+          <Badge variant="cyan">{tile.trend.delta}</Badge>
+        ) : null}
+      </div>
+      <div aria-hidden>
+        <TopSetTrendChartLazy rows={tile.trend.rows} heightClass="h-28" showValues={false} />
+      </div>
+    </Card>
   );
 }

@@ -12,6 +12,7 @@ import { toVolumeRows } from "@/lib/volume-view";
 import { toDistanceBars } from "@/lib/distance-view";
 import type { Figure } from "@/lib/atlas/atlas-geometry";
 import type { MuscleRegionAtlasView } from "@/lib/muscle-region-atlas-view";
+import { progressStory } from "./fixtures";
 
 // Fixtures pass data through production mappers; no accessible fallback is added here.
 const params = new URLSearchParams(location.search);
@@ -26,7 +27,7 @@ const volume = toVolumeRows(dates.map((date, i) => ({ date, volume_kg: 1234.6 + 
 const distance = toDistanceBars(Array.from({ length: length === 0 ? 0 : variant === "large" ? Math.ceil(range / 7) : length }, (_, i) => ({ week: iso(i * 7), km: variant === "sparse" && i === 1 ? 0 : 1.125 + i * 0.375 })));
 // Top-set production is capped at eight qualifying sessions; large means its maximum.
 const series = dates.slice(0, 8).map((date, i) => ({ date, estimated_1rm: 80.6 + i * 2.25 }));
-const tiles = toStrengthTrajectories(series.length ? [{ exercise_id: 1, exercise: "Synthetic Squat", series }] : [], unit);
+const tiles = toStrengthTrajectories(series.length ? [{ exercise_id: 1, exercise: "Synthetic Squat", series, story: progressStory }] : [], unit);
 const shares = length ? [{ group: "Legs", pct: 66.6 }, { group: "Core", pct: 33.4 }] : [];
 const balance = toMuscleBalance(distance.map((row, i) => ({ week: row.week, groups: variant === "sparse" && i === 1 ? [] : shares })));
 const regions = ["Quadriceps", "Hamstrings", "Rectus Abdominis"].map((muscle, i) => {

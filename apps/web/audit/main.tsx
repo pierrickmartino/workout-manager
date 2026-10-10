@@ -32,6 +32,8 @@ import { homeReview } from "@/lib/home-review";
 import { quickActions } from "@/lib/quick-actions";
 import { Card } from "@/components/ui/card";
 import { AtlasDrawer } from "@/components/analytics/atlas-drawer";
+import { StrengthTrajectories } from "@/components/analytics/strength-trajectories";
+import { toStrengthTrajectories } from "@/lib/strength-trajectories-view";
 import { VolumeChart } from "@/components/pulse/volume-chart";
 import { DistanceChart } from "@/components/pulse/distance-chart";
 import { toVolumeRows } from "@/lib/volume-view";
@@ -83,6 +85,10 @@ function Analytics() {
   const [open, setOpen] = useState(false);
   return <><VolumeChart rows={toVolumeRows(Array.from({ length: 20 }, (_, i) => ({ date: `2026-09-${String(i + 1).padStart(2, "0")}`, volume_kg: (i + 1) * 100 })), "kg")} />
     <DistanceChart rows={toDistanceBars(Array.from({ length: 12 }, (_, i) => ({ week: `2026-07-${String(i + 1).padStart(2, "0")}`, km: i + 1 })))} />
+    {/* Strength Analytics' exercise cards, each with its Progress Story at its widest (ADR-0127). */}
+    <StrengthTrajectories tiles={toStrengthTrajectories(exerciseNames.map((exercise, i) => ({ exercise_id: i + 1, exercise,
+      series: Array.from({ length: 8 }, (_, j) => ({ date: `2026-09-${String(j + 1).padStart(2, "0")}`, estimated_1rm: 100.5 + j * 2.5 })),
+      story: progressStory })), "kg")} />
     <Button onClick={() => setOpen(true)}>Open muscle details</Button>
     <AtlasDrawer onClose={() => setOpen(false)} weeksLabel="last 8 weeks" region={open ? {
       muscle: "Quadriceps", group: "Legs", covered: true, stateLabel: "Trained", sets: 1000,

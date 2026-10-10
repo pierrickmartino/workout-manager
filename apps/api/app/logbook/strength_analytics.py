@@ -30,12 +30,22 @@ from app.domain.personal_records import (
     detect_personal_records,
     logged_set_records,
 )
+from app.domain.progress_story import ProgressStory, progress_story
 from app.logbook.top_sets import ExerciseTrajectory, rank_qualifying_exercises
 from app.repositories.logged_session_repository import LoggedSessionRepository
 
 # The balance-over-time series spans :data:`MUSCLE_BALANCE_WEEKS`, imported from the
 # muscle-groups domain so the chart provably shares its recent window with the coming
 # Muscle Group Coverage read (issue #187) rather than keeping its own private eight.
+
+
+@dataclass(frozen=True)
+class StrengthTrajectory:
+    """One small-multiple: an Exercise's ranked Top-Set trajectory and its Progress Story
+    (ADR-0127), the same comparison the Exercise page shows."""
+
+    trajectory: ExerciseTrajectory
+    story: ProgressStory
 
 
 @dataclass(frozen=True)
@@ -51,7 +61,8 @@ class StrengthAnalyticsOverview:
     user's top few *qualifying* Exercises by recent training frequency, each with its
     oldest-first Top-Set series. Unlike the PR timeline it is **not** paginated — it is the
     whole small-multiples set, the same on every page — because it is a fixed handful the
-    screen renders in one grid above the timeline.
+    screen renders in one grid above the timeline. Each carries its Exercise's Progress
+    Story (ADR-0127), built by the one ``progress_story`` the Exercise page reads.
 
     ``has_qualifying_strength`` gates the screen: true iff the user holds at least one
     Personal Record. A user with no comparable strength history reads ``False`` here and is
@@ -64,7 +75,7 @@ class StrengthAnalyticsOverview:
     pr_timeline: tuple[PersonalRecord, ...]
     total_records: int
     has_qualifying_strength: bool
-    trajectories: tuple[ExerciseTrajectory, ...]
+    trajectories: tuple[StrengthTrajectory, ...]
     # The Muscle-Group balance-over-time series (ADR-0024 / issue #178): one set-count
     # composition per week over the last :data:`MUSCLE_BALANCE_WEEKS`, oldest-first. It
     # reads *all* logged sets (not just qualifying strength), is descriptive only, and
@@ -103,7 +114,12 @@ def strength_analytics_overview(
         total_records=len(timeline),
         has_qualifying_strength=bool(timeline),
         # The small-multiples are the whole ranked set, independent of the timeline page.
-        trajectories=tuple(rank_qualifying_exercises(history)),
+        trajectories=tuple(
+            StrengthTrajectory(
+                trajectory, progress_story(history, trajectory.exercise_id)
+            )
+            for trajectory in rank_qualifying_exercises(history)
+        ),
         weekly_muscle_balance=tuple(
             weekly_distribution(
                 history, reference=reference, weeks=MUSCLE_BALANCE_WEEKS
@@ -115,5 +131,6 @@ def strength_analytics_overview(
 __all__ = [
     "MUSCLE_BALANCE_WEEKS",
     "StrengthAnalyticsOverview",
+    "StrengthTrajectory",
     "strength_analytics_overview",
 ]

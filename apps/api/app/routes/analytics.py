@@ -23,11 +23,14 @@ from fastapi import APIRouter, Depends, Query
 from app.auth.dependencies import get_current_user
 from app.domain.muscle_groups import MUSCLE_BALANCE_WEEKS, WeeklyComposition
 from app.domain.personal_records import PersonalRecord
+from app.domain.progress_story import progress_story_payload
 from app.envelope import success_envelope
 from app.logbook.analytics import AnalyticsOverview, AnalyticsRange, analytics_overview
 from app.logbook.records import personal_record_payload
-from app.logbook.strength_analytics import strength_analytics_overview
-from app.logbook.top_sets import ExerciseTrajectory
+from app.logbook.strength_analytics import (
+    StrengthTrajectory,
+    strength_analytics_overview,
+)
 from app.repositories.deps import (
     get_logged_session_repository,
     get_profile_repository,
@@ -163,7 +166,8 @@ def _serialize_week(week: WeeklyComposition) -> dict:
     }
 
 
-def _serialize_trajectory(trajectory: ExerciseTrajectory) -> dict:
+def _serialize_trajectory(ranked: StrengthTrajectory) -> dict:
+    trajectory = ranked.trajectory
     return {
         "exercise_id": trajectory.exercise_id,
         "exercise": trajectory.exercise_name,
@@ -174,6 +178,7 @@ def _serialize_trajectory(trajectory: ExerciseTrajectory) -> dict:
             }
             for point in trajectory.series
         ],
+        "story": progress_story_payload(ranked.story),
     }
 
 
@@ -191,7 +196,8 @@ def read_strength_analytics(
     ``has_qualifying_strength`` gate.
 
     The timeline paginates via ``limit``/``offset``; the trajectories are the whole ranked
-    small-multiples set, unpaginated, the same on every page. Reads are scoped to the owning
+    small-multiples set, unpaginated, the same on every page, each carrying its Exercise's
+    ``story`` in the exercise records shape (ADR-0127). Reads are scoped to the owning
     user. An out-of-range ``limit``/``offset`` is rejected by validation and surfaced in the
     same error envelope; a user with no qualifying strength history reads a closed gate, an
     empty timeline, and no trajectories, never an error."""

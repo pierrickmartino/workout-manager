@@ -264,7 +264,7 @@ def test_trajectories_rank_the_users_qualifying_lifts_regardless_of_the_page():
 
     # Assert — the more-frequently-trained squat leads, each with its oldest-first series
     assert [
-        (t.exercise_id, [p.estimated_1rm for p in t.series])
+        (t.trajectory.exercise_id, [p.estimated_1rm for p in t.trajectory.series])
         for t in overview.trajectories
     ] == [
         (SQUAT, [100.0, 110.0]),

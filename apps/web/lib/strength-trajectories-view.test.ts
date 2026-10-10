@@ -3,11 +3,35 @@ import assert from "node:assert/strict";
 
 import { toStrengthTrajectories } from "./strength-trajectories-view.ts";
 import type { ExerciseTrajectory } from "./strength-analytics-types.ts";
+import { INSUFFICIENT_HEADLINE, type ProgressStory } from "./progress-story-view.ts";
 
 // `toStrengthTrajectories` shapes the ranked strength small-multiples (issue #177): one
 // tile per qualifying Exercise, each carrying a link to its canonical Exercise Detail
 // chart and the same Top-Set trend rows/delta the full chart uses (via `toTopSetTrend`).
 // Pure and server-free.
+
+const NO_STORY: ProgressStory = {
+  kind: "insufficient",
+  axis: null,
+  load_kind: null,
+  held: null,
+  delta: null,
+  latest: null,
+  previous: null,
+  body_weight: null,
+};
+
+// 8 then 10 reps at 60 kg — the same comparison the Exercise page would show.
+const SQUAT_STORY: ProgressStory = {
+  kind: "improved",
+  axis: "reps_at_load",
+  load_kind: "absolute",
+  held: 60,
+  delta: 2,
+  latest: { logged_session_id: 42, performed_on: "2026-07-04", value: 10 },
+  previous: { logged_session_id: 41, performed_on: "2026-06-01", value: 8 },
+  body_weight: null,
+};
 
 const SQUAT: ExerciseTrajectory = {
   exercise_id: 7,
@@ -16,6 +40,7 @@ const SQUAT: ExerciseTrajectory = {
     { date: "2026-06-01", estimated_1rm: 100 },
     { date: "2026-07-04", estimated_1rm: 110 },
   ],
+  story: SQUAT_STORY,
 };
 
 test("maps each trajectory to a tile linking to its Exercise Detail chart", () => {
@@ -36,6 +61,7 @@ test("surfaces the latest top set as a whole-kilogram headline estimate", () => 
     exercise_id: 9,
     exercise: "Bench Press",
     series: [{ date: "2026-07-01", estimated_1rm: 104.166 }],
+    story: NO_STORY,
   };
 
   // Act
@@ -62,6 +88,7 @@ test("omits the trend clause from the label when there is only one session", () 
     exercise_id: 3,
     exercise: "Overhead Press",
     series: [{ date: "2026-07-01", estimated_1rm: 60 }],
+    story: NO_STORY,
   };
 
   // Act
@@ -95,6 +122,7 @@ test("preserves the server's ranked order across multiple trajectories", () => {
     exercise_id: 3,
     exercise: "Overhead Press",
     series: [{ date: "2026-07-01", estimated_1rm: 60 }],
+    story: NO_STORY,
   };
 
   // Act
@@ -113,6 +141,7 @@ test("a single-session trajectory has rows but no delta pill", () => {
     exercise_id: 3,
     exercise: "Overhead Press",
     series: [{ date: "2026-07-01", estimated_1rm: 60 }],
+    story: NO_STORY,
   };
 
   // Act
@@ -134,4 +163,44 @@ test("projects the trajectory tile's headline estimate into the reader's pounds"
 
   // Assert — the headline estimate carries the lb unit, not kg.
   assert.ok(tile.estimate.endsWith(" lb"));
+});
+
+test("each tile tells its Exercise's progress story, linking both Logged Sessions", () => {
+  // Act
+  const [tile] = toStrengthTrajectories([SQUAT], "kg");
+
+  // Assert — worded exactly as on the Exercise page, each side linking to its record
+  assert.equal(tile.story.headline, "2 more reps at 60 kg than last time.");
+  assert.deepEqual(
+    tile.story.rows.map((row) => [row.label, row.performance, row.href]),
+    [
+      ["Last time", "8 reps at 60 kg", "/history/41"],
+      ["Latest", "10 reps at 60 kg", "/history/42"],
+    ],
+  );
+});
+
+test("words a tile's progress story in the reader's pounds", () => {
+  // Act
+  const [tile] = toStrengthTrajectories([SQUAT], "lb");
+
+  // Assert — the held load is projected, never shown in kg
+  assert.ok(tile.story.headline.endsWith(" lb than last time."));
+});
+
+test("a tile with no comparable sessions carries the honest insufficient story", () => {
+  // Arrange
+  const press: ExerciseTrajectory = {
+    exercise_id: 3,
+    exercise: "Overhead Press",
+    series: [{ date: "2026-07-01", estimated_1rm: 60 }],
+    story: NO_STORY,
+  };
+
+  // Act
+  const [tile] = toStrengthTrajectories([press], "kg");
+
+  // Assert
+  assert.equal(tile.story.headline, INSUFFICIENT_HEADLINE);
+  assert.deepEqual(tile.story.rows, []);
 });
