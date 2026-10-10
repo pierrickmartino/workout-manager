@@ -60,4 +60,57 @@ admin-published Active Skin app-wide, users choose only their Mode) stands uncha
 - **Bundle cost.** All catalog typefaces are bundled up front rather than lazily by Active
   Skin. `next/font` still loads only the glyph coverage each face needs, and the fixed catalog
   bounds the count, so the cost is a handful of self-hosted font payloads — an accepted
-  trade-off for the "applies on next visit, no runtime fetch" property.
+  trade-off for the "applies on next visit, no runtime fetch" property. (Preloading broke
+  the per-glyph claim; see the amendment below.)
+
+## Amendment (audit V-2): only the default Skin's fonts are preloaded
+
+The **Bundle cost** consequence above was right about download size and wrong about
+download *timing*. `next/font` preloads every family by default, and a
+`<link rel="preload">` (here also a `Link` response header) is an unconditional,
+high-priority download: `unicode-range` can only skip a face that has **no** preload. So
+every visitor downloaded all nine files, 235,096 bytes, before first paint, whichever Skin
+was live. The React best-practices audit measured this
+(`docs/research/audit/vercel/react-best-practices-2026-10-10.md`, V-2).
+
+**Decision.** A family keeps `next/font`'s default `preload: true` only if the
+**default Skin**'s `--font-*` tokens name it. Every other family says `preload: false`.
+Today that preloads Space Grotesk and JetBrains Mono, which PULSE uses, and so do Alpine,
+Clay and Track. Aurora's and Vercel's families load when their tokens first use them,
+with `display: swap` over `next/font`'s size-adjusted fallback face. On those two Skins
+the cost is a font swap on a cold visit, with little layout shift. The fixed-catalog
+property still holds: no runtime fetch from a third party, and every face is self-hosted.
+
+**Considered: preload only the live Skin's files.** The layout already resolves the Active
+Skin per request, so it could emit `preload()` hints for exactly that Skin. But `next/font`
+does not expose its hashed file URLs, so the layout would have to read them from Next's
+build manifest, an internal file. That coupling is not worth it while PULSE is the
+production Skin. **Revisit it if** an admin publishes Aurora or Vercel as a lasting
+choice (kept, not previewed), or if a font-swap or CLS problem is measured on one of them.
+Changing `DEFAULT_SKIN` itself needs no revisit: the guard below makes the preload set
+follow it.
+
+**Guards.**
+- `lib/font-preload-policy.ts` (runs under `npm test`) reads the `next/font` calls in
+  `app/layout.tsx` and the default Skin's tokens in `globals.css`. It fails if a
+  non-default family is preloaded, if a default family is not, or if an option is not a
+  literal. It proves what the layout **declares**.
+- `audit/font-preload.mjs` loads `/` from a production `next start`, collects the font
+  preload hints from the `Link` header and the DOM, maps each file back to its handle
+  through the served CSS, and applies the same rule. It proves what the app **emits**.
+  Evidence: `docs/development/font-preload-evidence/`.
+
+**Measured.** Production build with placeholder `pk_live_` keys, signed-out `/`, Lighthouse
+12.8.2 mobile with simulated throttling, five runs each:
+
+| | Before | After |
+| --- | --- | --- |
+| Font files preloaded (`next-font-manifest.json`, all 38 entries) | 9, 235,096 B | 2, 62,800 B |
+| Font requests (transfer) | 9, 237,796 B | 2, 63,400 B |
+| FCP, median (range) | 1,448 ms (1,430–1,467) | 1,441 ms (1,435–1,453) |
+| LCP, median (range) | 3,643 ms (3,629–4,080) | 2,567 ms (2,565–2,574) |
+| Performance score, median | 0.89 | 0.97 |
+
+The root layout carries the preloads, so the signed-out shell stands in for every route.
+These are lab numbers from one machine with Clerk's script unreachable in both runs, so
+read them as a relative change, not as production timings.

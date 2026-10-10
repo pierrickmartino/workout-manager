@@ -129,6 +129,13 @@ sessions, before and after.
 
 ### V-2: Every Skin's fonts are preloaded on every route (Medium-high, measured)
 
+**Status:** fixed by the [ADR-0050 amendment](../../../adr/0050-a-skin-is-a-full-visual-identity.md#amendment-audit-v-2-only-the-default-skins-fonts-are-preloaded)
+(first fix: `preload: false` on the Aurora and Vercel families; preloading only the
+active Skin is deferred, with its trigger recorded there). `next-font-manifest.json` goes
+from 9 files (235,096 bytes) to the 2 PULSE files (62,800 bytes) in all 38 entries. On the
+signed-out `/`, median Lighthouse mobile LCP goes from 3,643 ms to 2,567 ms over five runs
+each, and FCP does not change (lab numbers, `docs/development/font-preload-evidence/`).
+
 **Where:**
 - `app/layout.tsx:44-104` sets up seven `next/font/google` families: PULSE (Space
   Grotesk, JetBrains Mono), Aurora (Bricolage Grotesque, Inter, IBM Plex Mono ×3
