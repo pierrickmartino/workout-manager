@@ -290,9 +290,13 @@ def test_strength_serializes_ranked_trajectories_in_the_envelope():
     response = client.get("/api/analytics/strength", headers=_auth(ctx, "user_traj"))
 
     # Assert — the small-multiples ride in the envelope, most-frequent first, each with
-    # its oldest-first Top-Set series of {date, estimated_1rm}
+    # its oldest-first Top-Set series of {date, estimated_1rm} (the story is covered below)
     assert response.status_code == 200
-    assert response.json()["data"]["trajectories"] == [
+    trajectories = [
+        {key: value for key, value in trajectory.items() if key != "story"}
+        for trajectory in response.json()["data"]["trajectories"]
+    ]
+    assert trajectories == [
         {
             "exercise_id": SQUAT,
             "exercise": "Back Squat",
@@ -329,3 +333,108 @@ def test_strength_requires_authentication():
 
     # Assert
     assert response.status_code == 401
+
+
+def _log_squat(sessions, logged, user, performed_on, reps, kg):
+    """Log one Squat set of ``reps`` at an absolute ``kg``."""
+
+    session_view = sessions.create(
+        user,
+        SessionDraft(training_type="strength", duration_minutes=45, prescriptions=[]),
+    )
+    load = ParsedLoad(kind=LoadKind.ABSOLUTE, text=f"{kg:g} kg", kg=kg).to_dict()
+    logged.create(
+        user,
+        LoggedSessionDraft(
+            session_id=session_view.id,
+            performed_on=performed_on,
+            logged_sets=[
+                LoggedSetDraft(exercise_id=SQUAT, quantity=reps_quantity(reps), load=load)
+            ],
+        ),
+    )
+
+
+def _trajectory_stories(client, ctx, user):
+    response = client.get("/api/analytics/strength", headers=_auth(ctx, user))
+    assert response.status_code == 200
+    return {
+        trajectory["exercise_id"]: trajectory["story"]
+        for trajectory in response.json()["data"]["trajectories"]
+    }
+
+
+def test_strength_trajectories_carry_the_progress_story():
+    # Arrange — 8 then 10 squats at 60 kg
+    client, ctx, sessions, logged = build_client()
+    _log_squat(sessions, logged, "user_story", date(2026, 1, 1), 8, 60.0)
+    _log_squat(sessions, logged, "user_story", date(2026, 1, 8), 10, 60.0)
+    previous, latest = sorted(
+        logged.list_for_user("user_story"), key=lambda session: session.performed_on
+    )
+
+    # Act
+    stories = _trajectory_stories(client, ctx, "user_story")
+
+    # Assert — the same structured shape the exercise records endpoint carries
+    assert stories[SQUAT] == {
+        "kind": "improved",
+        "axis": "reps_at_load",
+        "load_kind": "absolute",
+        "held": 60.0,
+        "delta": 2,
+        "latest": {"logged_session_id": latest.id, "performed_on": "2026-01-08", "value": 10},
+        "previous": {
+            "logged_session_id": previous.id,
+            "performed_on": "2026-01-01",
+            "value": 8,
+        },
+        "body_weight": None,
+    }
+
+
+def test_strength_trajectory_story_is_insufficient_for_a_single_session():
+    # Arrange
+    client, ctx, sessions, logged = build_client()
+    _log_squat(sessions, logged, "user_once", date(2026, 1, 1), 8, 60.0)
+
+    # Act
+    stories = _trajectory_stories(client, ctx, "user_once")
+
+    # Assert — present on the card, honestly insufficient
+    assert stories[SQUAT]["kind"] == "insufficient"
+    assert stories[SQUAT]["latest"] is None
+
+
+def test_strength_trajectory_story_never_pairs_another_users_sessions():
+    # Arrange — I logged once; another user logged the same load since
+    client, ctx, sessions, logged = build_client()
+    _log_squat(sessions, logged, "user_mine", date(2026, 1, 1), 8, 60.0)
+    _log_squat(sessions, logged, "user_other", date(2026, 1, 8), 10, 60.0)
+
+    # Act
+    stories = _trajectory_stories(client, ctx, "user_mine")
+
+    # Assert — one session of mine is no pair
+    assert stories[SQUAT]["kind"] == "insufficient"
+
+
+def test_deleting_the_latest_logged_session_changes_the_trajectory_story():
+    # Arrange — 6, 8, then 10 reps at 60 kg
+    client, ctx, sessions, logged = build_client()
+    for day, reps in ((1, 6), (8, 8), (15, 10)):
+        _log_squat(sessions, logged, "user_del", date(2026, 1, day), reps, 60.0)
+    newest = logged.list_for_user("user_del")[0]
+    assert _trajectory_stories(client, ctx, "user_del")[SQUAT]["latest"]["value"] == 10
+
+    # Act
+    logged.delete(newest.id, "user_del")
+    story = _trajectory_stories(client, ctx, "user_del")[SQUAT]
+
+    # Assert — the story falls back to the remaining pair, never linking the deleted one
+    assert story["latest"]["value"] == 8
+    assert story["previous"]["value"] == 6
+    assert newest.id not in (
+        story["latest"]["logged_session_id"],
+        story["previous"]["logged_session_id"],
+    )

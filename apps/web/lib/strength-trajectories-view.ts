@@ -1,4 +1,5 @@
 import { toTopSetTrend, type TopSetTrend } from "./top-set-trend-view.ts";
+import { toProgressStoryView, type ProgressStoryView } from "./progress-story-view.ts";
 import type { ExerciseTrajectory } from "./strength-analytics-types.ts";
 import { appendFrom } from "./back-target.ts";
 import type { WeightUnit } from "./weight-unit";
@@ -19,6 +20,9 @@ export interface StrengthTrajectoryTile {
   // the lift, its latest Top Set, and (when more than one session) the trend delta.
   ariaLabel: string;
   trend: TopSetTrend;
+  // The Exercise's Progress Story (ADR-0127), worded by the same view-model the Exercise
+  // page uses, so the card and the page say the same thing.
+  story: ProgressStoryView;
 }
 
 // Shape the API's ranked trajectories into small-multiple tiles, preserving the server's
@@ -48,6 +52,7 @@ export function toStrengthTrajectories(
       estimate,
       ariaLabel: buildLabel(trajectory.exercise, estimate, trend.delta),
       trend,
+      story: toProgressStoryView(trajectory.story, unit),
     };
   });
 }

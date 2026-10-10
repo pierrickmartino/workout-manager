@@ -17,7 +17,7 @@ over the Logged-Session repository; no ORM, no HTTP."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 
 from app.domain.muscle_groups import (
@@ -30,6 +30,7 @@ from app.domain.personal_records import (
     detect_personal_records,
     logged_set_records,
 )
+from app.domain.progress_story import progress_story
 from app.logbook.top_sets import ExerciseTrajectory, rank_qualifying_exercises
 from app.repositories.logged_session_repository import LoggedSessionRepository
 
@@ -51,7 +52,8 @@ class StrengthAnalyticsOverview:
     user's top few *qualifying* Exercises by recent training frequency, each with its
     oldest-first Top-Set series. Unlike the PR timeline it is **not** paginated — it is the
     whole small-multiples set, the same on every page — because it is a fixed handful the
-    screen renders in one grid above the timeline.
+    screen renders in one grid above the timeline. Each carries its Exercise's Progress
+    Story (ADR-0127), built by the one ``progress_story`` the Exercise page reads.
 
     ``has_qualifying_strength`` gates the screen: true iff the user holds at least one
     Personal Record. A user with no comparable strength history reads ``False`` here and is
@@ -103,7 +105,12 @@ def strength_analytics_overview(
         total_records=len(timeline),
         has_qualifying_strength=bool(timeline),
         # The small-multiples are the whole ranked set, independent of the timeline page.
-        trajectories=tuple(rank_qualifying_exercises(history)),
+        trajectories=tuple(
+            replace(
+                trajectory, story=progress_story(history, trajectory.exercise_id)
+            )
+            for trajectory in rank_qualifying_exercises(history)
+        ),
         weekly_muscle_balance=tuple(
             weekly_distribution(
                 history, reference=reference, weeks=MUSCLE_BALANCE_WEEKS

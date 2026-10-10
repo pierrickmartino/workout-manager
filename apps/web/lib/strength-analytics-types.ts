@@ -4,15 +4,18 @@
 
 import type { MuscleShare, PersonalRecordEntry } from "./analytics-types";
 import type { TopSetPoint } from "./exercise-stats-view";
+import type { ProgressStory } from "./progress-story-view";
 
 // One ranked strength trajectory (issue #177): a qualifying Exercise and its oldest-first
 // Top-Set series, as ranked by the API. `series` carries the same `{date, estimated_1rm}`
 // points the Exercise Detail chart uses, so the screen's small-multiple is a faithful
-// teaser of the canonical chart the tile links to.
+// teaser of the canonical chart the tile links to. `story` is the Exercise's Progress
+// Story (ADR-0127) in the same shape the exercise records endpoint sends.
 export interface ExerciseTrajectory {
   exercise_id: number;
   exercise: string;
   series: TopSetPoint[];
+  story: ProgressStory;
 }
 
 // One week of the Muscle-Group balance-over-time series (issue #178 / ADR-0024): the

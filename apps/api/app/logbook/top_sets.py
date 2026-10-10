@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from app.domain.personal_records import estimated_1rm_for_set
+from app.domain.progress_story import INSUFFICIENT, ProgressStory
 from app.repositories.logged_session_repository import LoggedSessionView
 
 # The Top-Set trend charts only the most recent qualifying sessions so it reads as a
@@ -57,11 +58,16 @@ class ExerciseTrajectory:
     yields for the Exercise's canonical chart on Exercise Detail, so the small-multiple is
     a faithful teaser rather than a subtly-different second chart (ADR-0024). Trajectories
     are only built for *qualifying* Exercises, so ``series`` is always non-empty.
+
+    ``story`` is the Exercise's Progress Story (ADR-0127) — the same comparison the
+    Exercise page shows. Ranking leaves it ``insufficient``; the Strength Analytics read
+    model fills it in over the same history.
     """
 
     exercise_id: int
     exercise_name: str
     series: list[TopSetPoint]
+    story: ProgressStory = INSUFFICIENT
 
 
 def _session_top_sets(session: LoggedSessionView) -> dict[int, float]:
