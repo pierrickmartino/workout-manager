@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.auth.dependencies import get_current_user
@@ -24,6 +24,7 @@ from app.domain.set_type import SetType, parse_set_type
 from app.envelope import success_envelope
 from app.logbook.correction import (
     ContiguityError,
+    CorrectionVerdicts,
     CorrectSessionRequest,
     LogNotFoundError,
     correct_session,
@@ -59,6 +60,10 @@ router = APIRouter(prefix="/api", tags=["logs"])
 HTTP_NOT_FOUND = 404
 HTTP_CONFLICT = 409
 HTTP_UNPROCESSABLE_ENTITY = 422
+
+# The most records one windowed History read returns, by ``limit`` or by ``ids``
+# (ADR-0128). The web History screen asks for exactly one window of this size.
+HISTORY_WINDOW_MAX = 30
 
 MIN_RPE = 1
 MAX_RPE = 10
@@ -485,22 +490,58 @@ def delete_log(
     return success_envelope({"id": log_id})
 
 
+def _history_index_row(view: LoggedSessionView, verdict: CorrectionVerdicts) -> dict:
+    """One History index row (ADR-0128): the fields the History filters read, plus the
+    record's correction verdicts. ``exercise_names`` are distinct, in first-logged order."""
+    return {
+        "id": view.id,
+        "performed_on": view.performed_on.isoformat(),
+        "training_type": view.training_type,
+        "exercise_names": list(dict.fromkeys(s.exercise_name for s in view.logged_sets)),
+        "deletable": verdict.deletable,
+        "uncompletable": verdict.uncompletable,
+    }
+
+
 @router.get("/logs")
 def read_history(
+    limit: int | None = Query(default=None, ge=1, le=HISTORY_WINDOW_MAX),
+    ids: list[int] | None = Query(default=None),
     clerk_user_id: str = Depends(get_current_user),
     logged: LoggedSessionRepository = Depends(get_logged_session_repository),
     protocols: ProtocolRepository = Depends(get_protocol_repository),
 ) -> dict:
-    """Return the caller's Logged history, most recent first, each record annotated with
-    whether it may be deleted / un-completed without breaking the gap-free performed
-    sequence (ADR-0034).
+    """Return the caller's Logged history, most recent first.
 
-    The ``deletable`` / ``uncompletable`` flags ride only on this list read: the server
-    owns the one contiguity gate, so the History screen can disable a control the server
-    would reject with a ``409`` instead of surprising the user with a bare rejection (user
-    story 27). A faithful client-side mirror is impossible — it would need every Protocol's
-    Session ordering, while Home surfaces only the current one — so the verdicts are
-    computed here over the same history."""
+    Without parameters it returns the whole history, each record annotated with whether
+    it may be deleted / un-completed without breaking the gap-free performed sequence
+    (ADR-0034). The server owns the one contiguity gate, so the History screen can
+    disable a control the server would reject with a ``409`` instead of surprising the
+    user with a bare rejection (user story 27). A faithful client-side mirror is
+    impossible — it would need every Protocol's Session ordering, while Home surfaces
+    only the current one — so the verdicts are computed here over the same history.
+
+    With ``limit`` (the newest records) or ``ids`` (an explicit batch, owner-scoped,
+    unknown ids dropped), it returns one bounded window of full records (ADR-0128). A
+    window carries no verdicts: those travel on ``GET /api/logs/index``, which always
+    covers the whole history, so they stay correct for every card on screen."""
+
+    if limit is not None and ids is not None:
+        raise HTTPException(
+            status_code=HTTP_UNPROCESSABLE_ENTITY,
+            detail="Pass either limit or ids, not both",
+        )
+    if ids is not None:
+        if len(ids) > HISTORY_WINDOW_MAX:
+            raise HTTPException(
+                status_code=HTTP_UNPROCESSABLE_ENTITY,
+                detail=f"At most {HISTORY_WINDOW_MAX} ids per read",
+            )
+        window = logged.list_by_ids(clerk_user_id, ids)
+        return success_envelope([serialize_logged_session(view) for view in window])
+    if limit is not None:
+        window = logged.list_recent_for_user(clerk_user_id, limit)
+        return success_envelope([serialize_logged_session(view) for view in window])
 
     history = logged.list_for_user(clerk_user_id)
     verdicts = history_correction_verdicts(
@@ -514,6 +555,32 @@ def read_history(
         record["uncompletable"] = verdict.uncompletable
         records.append(record)
     return success_envelope(records)
+
+
+# Registered before ``/logs/{log_id}``: that route would otherwise claim ``index`` and
+# reject it as a non-integer id.
+@router.get("/logs/index")
+def read_history_index(
+    clerk_user_id: str = Depends(get_current_user),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+    protocols: ProtocolRepository = Depends(get_protocol_repository),
+) -> dict:
+    """Return the History index (ADR-0128): one slim row per Logged Session, newest
+    first, with the filterable fields and the ADR-0034 correction verdicts.
+
+    The History screen filters over this, so a filter, its count and the exercise picker
+    always see the whole record, while full records arrive in windows. The verdicts ride
+    here rather than on the windows because a tail-first correction can change an older
+    record's verdict; the index is re-read on every revalidation, so they never go stale.
+    Reading it still loads the whole history server-side (a known limit, ADR-0128)."""
+
+    history = logged.list_for_user(clerk_user_id)
+    verdicts = history_correction_verdicts(
+        history, clerk_user_id, protocols=protocols
+    )
+    return success_envelope(
+        [_history_index_row(view, verdicts[view.id]) for view in history]
+    )
 
 
 @router.get("/logs/{log_id}")

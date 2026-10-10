@@ -194,6 +194,23 @@ class LoggedSessionRepository(Protocol):
         """Return the user's Logged Sessions, most recently performed first."""
         ...
 
+    def list_recent_for_user(
+        self, clerk_user_id: str, limit: int
+    ) -> list[LoggedSessionView]:
+        """The newest ``limit`` Logged Sessions, in ``list_for_user`` order — a bounded
+        read for windowed History (ADR-0128)."""
+        ...
+
+    def list_by_ids(
+        self, clerk_user_id: str, ids: list[int]
+    ) -> list[LoggedSessionView]:
+        """The owner's Logged Sessions among ``ids``, in ``list_for_user`` order (ADR-0128).
+
+        Owner-scoped: an id that is missing or belongs to another user is simply absent,
+        never an error, so a record deleted between the index read and this read drops
+        out quietly."""
+        ...
+
     def count_for_session(self, clerk_user_id: str, session_id: int) -> int:
         """The **Logged Count** for one Session (ADR-0063, GLOSSARY: Logged Count).
 
@@ -404,6 +421,32 @@ class SqlLoggedSessionRepository:
         ).all()
         return [self._view(logged) for logged in rows]
 
+    def list_recent_for_user(
+        self, clerk_user_id: str, limit: int
+    ) -> list[LoggedSessionView]:
+        rows = self._session.exec(
+            select(LoggedSession)
+            .where(LoggedSession.clerk_user_id == clerk_user_id)
+            .order_by(LoggedSession.performed_on.desc(), LoggedSession.id.desc())
+            .limit(limit)
+        ).all()
+        return [self._view(logged) for logged in rows]
+
+    def list_by_ids(
+        self, clerk_user_id: str, ids: list[int]
+    ) -> list[LoggedSessionView]:
+        if not ids:
+            return []
+        rows = self._session.exec(
+            select(LoggedSession)
+            .where(
+                LoggedSession.clerk_user_id == clerk_user_id,
+                LoggedSession.id.in_(ids),
+            )
+            .order_by(LoggedSession.performed_on.desc(), LoggedSession.id.desc())
+        ).all()
+        return [self._view(logged) for logged in rows]
+
     def count_for_session(self, clerk_user_id: str, session_id: int) -> int:
         rows = self._session.exec(
             select(LoggedSession.id).where(
@@ -572,6 +615,17 @@ class InMemoryLoggedSessionRepository:
         ]
         owned.sort(key=lambda logged: (logged.performed_on, logged.id), reverse=True)
         return [self._view(logged) for logged in owned]
+
+    def list_recent_for_user(
+        self, clerk_user_id: str, limit: int
+    ) -> list[LoggedSessionView]:
+        return self.list_for_user(clerk_user_id)[:limit]
+
+    def list_by_ids(
+        self, clerk_user_id: str, ids: list[int]
+    ) -> list[LoggedSessionView]:
+        wanted = set(ids)
+        return [view for view in self.list_for_user(clerk_user_id) if view.id in wanted]
 
     def count_for_session(self, clerk_user_id: str, session_id: int) -> int:
         return sum(
