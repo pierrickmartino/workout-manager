@@ -26,6 +26,7 @@ const ABSOLUTE: ExerciseRecords = {
     delta: null,
     latest: null,
     previous: null,
+    body_weight: null,
   },
 };
 

@@ -208,10 +208,12 @@ export const adminExerciseRows: AdminExerciseRow[] = Array.from({ length: 60 }, 
 // thing in that row and the part this change made longer.
 export const auditEntry = { actor: "operator@example.com", createdAt: "2026-09-30T14:03:22.123456" };
 
-// The Progress Story at its widest (ADR-0127): a fractional load and two-digit counts, so the
-// headline and each side-by-side row hold the longest figures a reps-at-load story can.
+// The Progress Story at its widest (ADR-0127): bodyweight plus a fractional added load and
+// two-digit counts, so the headline and each side-by-side row hold the longest figures a
+// reps-at-load story can, under a Performed Body Weight footnote.
 export const progressStory: ProgressStory = {
-  kind: "declined", axis: "reps_at_load", load_kind: "absolute", held: 102.5, delta: -12,
+  kind: "declined", axis: "reps_at_load", load_kind: "bodyweight", held: 102.5, delta: -12,
   latest: { logged_session_id: 1000, performed_on: "2026-09-26", value: 10 },
   previous: { logged_session_id: 999, performed_on: "2026-09-19", value: 22 },
+  body_weight: { previous_kg: 102.5, latest_kg: 98.5 },
 };

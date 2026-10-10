@@ -11,7 +11,7 @@ interface ProgressStoryCardProps {
 
 // The Progress Story (ADR-0127): one plain sentence on what changed since last time, then
 // the two compared Logged Sessions side by side, each linking to its record so the claim
-// can be checked. Plain text throughout, and one colour for every outcome — nothing
+// can be checked, and a bodyweight story's Performed Body Weight change as a footnote. Plain text throughout, and one colour for every outcome — nothing
 // encodes better or worse, so a decline reads as calmly as an improvement.
 export function ProgressStoryCard({ story }: ProgressStoryCardProps): React.JSX.Element {
   return (
@@ -38,6 +38,9 @@ export function ProgressStoryCard({ story }: ProgressStoryCardProps): React.JSX.
             </li>
           ))}
         </ul>
+      ) : null}
+      {story.footnote !== null ? (
+        <p className="font-sans text-xs text-text-muted">{story.footnote}</p>
       ) : null}
     </Card>
   );

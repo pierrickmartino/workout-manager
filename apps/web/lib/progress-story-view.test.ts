@@ -19,6 +19,7 @@ function story(overrides: Partial<ProgressStory> = {}): ProgressStory {
     delta: 2,
     latest: { logged_session_id: 12, performed_on: "2026-03-08", value: 10 },
     previous: { logged_session_id: 7, performed_on: "2026-03-01", value: 8 },
+    body_weight: null,
     ...overrides,
   };
 }
@@ -85,6 +86,7 @@ test("explains how to earn a story when there is nothing comparable", () => {
       delta: null,
       latest: null,
       previous: null,
+      body_weight: null,
     },
     "kg",
   );
@@ -226,14 +228,145 @@ test("writes its copy with the typographic apostrophe", () => {
   assert.deepEqual(findStraightApostrophes(source, "lib/progress-story-view.ts"), []);
 });
 
-test("never words a non-absolute story as a kilogram figure", () => {
-  // Act — a bodyweight story, whose held value is an added load, not a bar weight
-  const view = toProgressStoryView(story({ load_kind: "bodyweight" }), "kg");
+test("never words a story in a Load kind it has no display rule for", () => {
+  // Act — a %1RM story, whose held value is no bar weight
+  const view = toProgressStoryView(story({ load_kind: "percent_1rm" }), "kg");
 
-  // Assert — withheld rather than misstated, until bodyweight has its own wording
+  // Assert — withheld rather than misstated as a kilogram figure
   assert.equal(
     view.headline,
     "No comparable sessions yet. Repeat a load or a rep count from last time to see what changed.",
   );
   assert.deepEqual(view.rows, []);
+  assert.equal(view.footnote, null);
+});
+
+// A bodyweight story: the held or measured load is the *added* load (ADR-0026).
+function bodyweight(overrides: Partial<ProgressStory> = {}): ProgressStory {
+  return story({ load_kind: "bodyweight", held: 0, delta: 3, ...overrides });
+}
+
+test("words plain bodyweight as bodyweight, never as zero kilograms", () => {
+  // Act
+  const view = toProgressStoryView(
+    bodyweight({
+      latest: { logged_session_id: 12, performed_on: "2026-03-08", value: 8 },
+      previous: { logged_session_id: 7, performed_on: "2026-03-01", value: 5 },
+    }),
+    "kg",
+  );
+
+  // Assert
+  assert.equal(view.headline, "3 more reps at bodyweight than last time.");
+  assert.equal(view.rows[0].performance, "5 reps at bodyweight");
+  assert.equal(view.rows[1].performance, "8 reps at bodyweight");
+});
+
+test("words bodyweight with added load as bodyweight plus the added load", () => {
+  // Act
+  const view = toProgressStoryView(bodyweight({ held: 10, delta: 2 }), "kg");
+
+  // Assert — never a bare kg total
+  assert.equal(view.headline, "2 more reps at bodyweight + 10 kg than last time.");
+  assert.equal(view.rows[1].performance, "10 reps at bodyweight + 10 kg");
+});
+
+test("acknowledges the same bodyweight performance with its numbers", () => {
+  // Act
+  const view = toProgressStoryView(
+    bodyweight({
+      kind: "unchanged",
+      delta: 0,
+      latest: { logged_session_id: 12, performed_on: "2026-03-08", value: 8 },
+    }),
+    "kg",
+  );
+
+  // Assert
+  assert.equal(view.headline, "Same as last time: 8 reps at bodyweight.");
+});
+
+test("states a change in added load at a shared rep count as added weight", () => {
+  // Act — 5 reps at +10 kg, then at +12.5 kg
+  const view = toProgressStoryView(
+    bodyweight({
+      axis: "load_at_reps",
+      held: 5,
+      delta: 2.5,
+      latest: { logged_session_id: 12, performed_on: "2026-03-08", value: 12.5 },
+      previous: { logged_session_id: 7, performed_on: "2026-03-01", value: 10 },
+    }),
+    "kg",
+  );
+
+  // Assert — the delta names itself as added, so it never reads as a bare kg total
+  assert.equal(view.headline, "+2.5 kg added for 5 reps.");
+  assert.deepEqual(
+    view.rows.map((row) => row.performance),
+    ["5 reps at bodyweight + 10 kg", "5 reps at bodyweight + 12.5 kg"],
+  );
+});
+
+test("words a shared rep count up from plain bodyweight", () => {
+  // Act — 5 reps at bodyweight, then at +5 kg
+  const view = toProgressStoryView(
+    bodyweight({
+      axis: "load_at_reps",
+      held: 5,
+      delta: 5,
+      latest: { logged_session_id: 12, performed_on: "2026-03-08", value: 5 },
+      previous: { logged_session_id: 7, performed_on: "2026-03-01", value: 0 },
+    }),
+    "kg",
+  );
+
+  // Assert
+  assert.equal(view.headline, "+5 kg added for 5 reps.");
+  assert.equal(view.rows[0].performance, "5 reps at bodyweight");
+});
+
+test("projects the added load into the reader’s Weight Unit", () => {
+  // Arrange — +20 lb, stored as exact kilograms
+  const twentyPounds = 20 * 0.45359237;
+
+  // Act
+  const view = toProgressStoryView(bodyweight({ held: twentyPounds, delta: 2 }), "lb");
+
+  // Assert
+  assert.equal(view.headline, "2 more reps at bodyweight + 20 lb than last time.");
+});
+
+test("footnotes a changed Performed Body Weight, previous to latest", () => {
+  // Act
+  const view = toProgressStoryView(
+    bodyweight({ held: 10, body_weight: { previous_kg: 80, latest_kg: 78 } }),
+    "kg",
+  );
+
+  // Assert
+  assert.equal(view.footnote, "Body weight 80 → 78 kg.");
+});
+
+test("footnotes the body weight in the reader’s Weight Unit", () => {
+  // Arrange — 176 lb then 172 lb, stored as exact kilograms
+  const pounds = 0.45359237;
+
+  // Act
+  const view = toProgressStoryView(
+    bodyweight({ body_weight: { previous_kg: 176 * pounds, latest_kg: 172 * pounds } }),
+    "lb",
+  );
+
+  // Assert
+  assert.equal(view.footnote, "Body weight 176 → 172 lb.");
+});
+
+test("has no footnote when the API sends no body weight change", () => {
+  // Act
+  const absolute = toProgressStoryView(story(), "kg");
+  const plain = toProgressStoryView(bodyweight({ body_weight: null }), "kg");
+
+  // Assert
+  assert.equal(absolute.footnote, null);
+  assert.equal(plain.footnote, null);
 });
