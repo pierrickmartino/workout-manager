@@ -66,6 +66,60 @@ test("reports a page header inside a reveal, where it fades over its own live co
   assert.deepEqual(violations, [{ file: "components/a.tsx", line: 4, rule: "header-in-reveal" }]);
 });
 
+test("accepts an in-page fallback that is empty or dissolves through a reveal", () => {
+  // Arrange: inline, through a component in the same file, and nothing at all.
+  const source = `export function Page() {
+  return (
+    <>
+      <Suspense fallback={null}><A /></Suspense>
+      <Suspense fallback={<SkeletonReveal><Skeleton /></SkeletonReveal>}><B /></Suspense>
+      <Suspense fallback={<ListSkeleton count={3} />}><C /></Suspense>
+    </>
+  );
+}
+function ListSkeleton({ count }: { count: number }) {
+  return (
+    <SkeletonReveal>
+      <Skeleton />
+    </SkeletonReveal>
+  );
+}`;
+  // Act & Assert
+  assert.deepEqual(findSkeletonRevealViolations(source, "app/a/page.tsx"), []);
+});
+
+test("reports an in-page fallback skeleton that pops instead of dissolving", () => {
+  // Arrange
+  const source = `export function Page() {
+  return (
+    <Suspense fallback={<TabFallback />}>
+      <Tab />
+    </Suspense>
+  );
+}
+function TabFallback() {
+  return (
+    <div>
+      <Skeleton />
+    </div>
+  );
+}`;
+  // Act
+  const violations = findSkeletonRevealViolations(source, "app/a/page.tsx");
+  // Assert
+  assert.deepEqual(violations, [{ file: "app/a/page.tsx", line: 3, rule: "inline-skeleton-root" }]);
+});
+
+test("reports a fallback it cannot see into, rather than trusting it", () => {
+  // Arrange: an imported component is declared elsewhere, so the sweep fails closed.
+  const source = `import { Elsewhere } from "./elsewhere";
+export const A = () => <Suspense fallback={<Elsewhere />}><B /></Suspense>;`;
+  // Act
+  const violations = findSkeletonRevealViolations(source, "components/a.tsx");
+  // Assert
+  assert.deepEqual(violations, [{ file: "components/a.tsx", line: 2, rule: "inline-skeleton-root" }]);
+});
+
 test("does not hold an ordinary component to the route-skeleton rule", () => {
   // Arrange
   const source = `export default function Page() { return <section />; }`;

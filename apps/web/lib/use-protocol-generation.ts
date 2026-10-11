@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { pollProtocolJob, startGeneration } from "@/app/protocols/actions";
 import type { GenerateProtocolInput } from "@/lib/protocols-types";
 import { adoptedProtocolHref } from "@/lib/protocol-supersede";
+import { navigateOptions } from "@/lib/nav-direction";
 
 // Drives the async Protocol generation flow on the client (Slice 7, ADR-0005):
 // submit, then poll the job to completion and navigate to the adopted Protocol. A
@@ -39,7 +40,8 @@ export function useProtocolGeneration({
 
   const goToProtocol = useCallback(
     (protocolId: number) => {
-      router.push(adoptedProtocolHref(protocolId, setAsideProtocolId));
+      // The adopted Protocol is a level deeper than the generator that made it (ADR-0121).
+      router.push(adoptedProtocolHref(protocolId, setAsideProtocolId), navigateOptions("nav-forward"));
     },
     [router, setAsideProtocolId],
   );

@@ -11,6 +11,7 @@ import { Overline } from "@/components/pulse/overline";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 
 interface TrainingRouteCardProps {
   protocol: ProtocolProgress;
@@ -133,6 +134,7 @@ function StopRow({
 
       <Link
         href={`/sessions/${stop.sessionId}`}
+        {...NAV_FORWARD}
         aria-current={stop.state === "next" ? "step" : undefined}
         className="group/stop -mt-1 mb-3 flex min-w-0 flex-1 items-center gap-2"
       >

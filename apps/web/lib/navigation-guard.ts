@@ -1,4 +1,4 @@
-import { parseNavDirection } from "./nav-direction.ts";
+import { navigateOptions, parseNavDirection, type NavigateOptions } from "./nav-direction.ts";
 
 // Pure decision logic for the dirty-form navigation guard (finding #4). The guard
 // intercepts in-app navigations away from a form with unsaved changes and asks the
@@ -80,7 +80,7 @@ export function resolveGuardedNavigation(
 // The router options to confirm an intercepted navigation with: the direction the clicked
 // link declared, so Discard animates exactly as the same click on a clean form would
 // (view-transitions audit §7). Undefined for an untagged link — it swaps instantly either way.
-export function guardedNavigateOptions(info: NavigationClickInfo): { transitionTypes: string[] } | undefined {
+export function guardedNavigateOptions(info: NavigationClickInfo): NavigateOptions | undefined {
   const direction = parseNavDirection(info.anchor?.direction ?? null);
-  return direction === null ? undefined : { transitionTypes: [direction] };
+  return direction === null ? undefined : navigateOptions(direction);
 }

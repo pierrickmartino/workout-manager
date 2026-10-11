@@ -27,6 +27,7 @@ import type { WeightUnit } from "@/lib/weight-unit";
 import type { ExerciseSearchResult } from "@/lib/exercises-types";
 import { MovementGlyph } from "./movement-glyph";
 import { EquipmentSymbol } from "./equipment-symbol";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 
 interface CatalogDetailProps {
   exercise: ExerciseSearchResult;
@@ -209,6 +210,7 @@ function Alternatives({ items }: { items: { id: number; name: string }[] }) {
           <Link
             key={item.id}
             href={appendFrom(`/exercises/${item.id}`, from)}
+            {...NAV_FORWARD}
             className={
               "group flex items-center justify-between gap-3 px-3.5 py-3 transition-colors hover:bg-elevated/60 " +
               (index > 0 ? "border-t border-border" : "")

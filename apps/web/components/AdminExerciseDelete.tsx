@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { deleteExerciseAction } from "@/app/admin/exercises/actions";
 import { deleteControlView } from "@/lib/admin-exercise-delete";
+import { navigateOptions } from "@/lib/nav-direction";
 import type { ExerciseDetail } from "@/lib/sessions-types";
 import { Alert } from "@/components/pulse/alert";
 import { ConfirmDialog } from "@/components/pulse/confirm-dialog";
@@ -43,8 +44,8 @@ export function AdminExerciseDelete({
           return;
         }
         // The Exercise no longer exists; leaving the admin on its editor would 404. Send them
-        // back to the catalog, which the action has already revalidated.
-        router.push("/admin/exercises");
+        // back up to the catalog, which the action has already revalidated (ADR-0121).
+        router.push("/admin/exercises", navigateOptions("nav-back"));
       } catch {
         setError("Could not delete the exercise. Try again.");
       }

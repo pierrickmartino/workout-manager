@@ -157,6 +157,7 @@ export default async function AnalyticsPage({
                 }
               : null
           }
+          teaserDirection={NAV_FORWARD}
         />
       ) : null}
 

@@ -36,11 +36,11 @@ is **declared**, not that it renders right: the `audit/` journeys (`reflow.mjs` 
   (`view-transition-boundary-policy.ts`, ADR-0120).
 - Link deeper into the hierarchy → spread `{...NAV_FORWARD}` (`NavRow`: `direction={NAV_FORWARD}`);
   back is `BackLink`. Tab-to-tab, query swaps and related items stay untagged. Never write
-  `transitionTypes` by hand; pages add no page-level `<ViewTransition>` (`RouteTransition` is the
-  one) (`nav-direction-policy.ts`, ADR-0121). A same-path pager keys its own boundary on the page
+  `transitionTypes` by hand (a `router.push` passes `navigateOptions(direction)`); pages add no
+  page-level `<ViewTransition>` (`RouteTransition` is the one) (`nav-direction-policy.ts`, ADR-0121). A same-path pager keys its own boundary on the page
   (`TimelinePageTransition`, ADR-0122).
-- `loading.tsx` → return `SkeletonPage` (header outside, data region dissolves); an in-page
-  skeleton wraps in `SkeletonReveal`; never a `PageHeader` inside a reveal
+- `loading.tsx` → return `SkeletonPage` (header outside, data region dissolves); a `<Suspense>`
+  fallback is `null` or rooted in `SkeletonReveal`, in the same file; never a `PageHeader` inside a reveal
   (`skeleton-reveal-policy.ts`, ADR-0123).
 - Element that appears on its own (toast, banner) → its `<ViewTransition>` enters/exits only in a
   Transition: set it in `startTransition`, or mount on `useDeferredValue`; never make a pinned

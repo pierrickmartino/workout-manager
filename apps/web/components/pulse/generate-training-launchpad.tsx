@@ -4,6 +4,7 @@ import { ArrowRight, PencilLine, PencilRuler, Zap } from "@/components/pulse/ico
 import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { appendFrom } from "@/lib/back-target";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 
 interface GenerateTrainingLaunchpadProps {
   // The mono eyebrow above the heading — differs by context ("no active protocol"
@@ -50,12 +51,13 @@ export function GenerateTrainingLaunchpad({
       <div className="flex flex-col gap-2.5">
         <Link
           href="/protocols/new"
+          {...NAV_FORWARD}
           className={buttonVariants({ className: "w-full" })}
         >
           <Zap className="h-4 w-4" />
           Generate a protocol
         </Link>
-        <Link href={appendFrom("/sessions/new", from)} className={LAUNCH_LINK}>
+        <Link href={appendFrom("/sessions/new", from)} {...NAV_FORWARD} className={LAUNCH_LINK}>
           Generate a workout
           <ArrowRight className="h-4 w-4" />
         </Link>
@@ -70,7 +72,7 @@ export function GenerateTrainingLaunchpad({
 // a prop on them, so the caller that offers it says so by rendering it.
 export function BuildWorkoutLink(): React.JSX.Element {
   return (
-    <Link href="/sessions/build" className={LAUNCH_LINK}>
+    <Link href="/sessions/build" {...NAV_FORWARD} className={LAUNCH_LINK}>
       <PencilRuler className="h-4 w-4" />
       Build a workout
     </Link>
@@ -81,7 +83,7 @@ export function BuildWorkoutLink(): React.JSX.Element {
 // performed (ADR-0040).
 export function LogPastWorkoutLink(): React.JSX.Element {
   return (
-    <Link href="/sessions/log" className={LAUNCH_LINK}>
+    <Link href="/sessions/log" {...NAV_FORWARD} className={LAUNCH_LINK}>
       <PencilLine className="h-4 w-4" />
       Log a past workout
     </Link>

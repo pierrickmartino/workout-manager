@@ -26,6 +26,16 @@ export const NAV_FORWARD = navDirectionProps("nav-forward");
 // Back out of it. `BackLink` is the one place this is spread.
 export const NAV_BACK = navDirectionProps("nav-back");
 
+// The router options for a programmatic navigation that steps through the hierarchy — the
+// `router.push` after an action, where there is no `<Link>` to spread a direction onto.
+export interface NavigateOptions {
+  readonly transitionTypes: string[];
+}
+
+export function navigateOptions(direction: NavDirection): NavigateOptions {
+  return { transitionTypes: [direction] };
+}
+
 export function parseNavDirection(value: string | null): NavDirection | null {
   return value !== null && Object.hasOwn(DIRECTIONS, value) ? (value as NavDirection) : null;
 }

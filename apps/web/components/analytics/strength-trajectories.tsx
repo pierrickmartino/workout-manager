@@ -7,6 +7,7 @@ import { ProgressStoryCard } from "@/components/pulse/progress-story";
 import { TopSetTrendChartLazy } from "@/components/exercise/top-set-trend-chart-lazy";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 
 interface StrengthTrajectoriesProps {
   // Already projected into the reader's Weight Unit by `toStrengthTrajectories` (#417):
@@ -51,6 +52,7 @@ function TrajectoryTile({ tile }: { tile: StrengthTrajectoryTile }) {
     <div className="flex min-w-0 flex-col gap-2">
       <Link
         href={tile.href}
+        {...NAV_FORWARD}
         aria-label={tile.ariaLabel}
         className="group block rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-base"
       >
