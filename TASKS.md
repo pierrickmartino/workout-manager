@@ -201,10 +201,6 @@ Source: [react-best-practices-2026-10-10](docs/research/audit/vercel/react-best-
 - ⬜ V-3 **Shrink the atlas client data** (36.4 KB gz on `/analytics`): round `reference-data.ts` coordinates to 1 decimal place, and send only the resolved figure's paths (split by gender, or render the base silhouette on the server).
 - ⬜ V-4 **Protocol edit page:** fetch the Protocol, Profile and appearance in one `Promise.all`, then call `notFound()`.
 - ⬜ V-5 **Batch harder-variation offers:** one `GET /api/sessions/{id}/harder-variations` instead of one request per prescription.
-- ⬜ V-6 **Strength analytics:** read appearance in the same `Promise.all` as the main fetch.
-- ⬜ V-7 **`ProtocolBuilder`:** derive the shown preview during render instead of clearing it in an effect.
-- ⬜ V-8 **`ExerciseLibrary`:** move the query-change state resets into `onChange`.
-- ⬜ V-9 **`useWideViewport` / `useChartTheme`:** move to `useSyncExternalStore` with one shared subscription (low priority).
 
 ## 13. Vercel composition patterns audit (10 Oct)
 
