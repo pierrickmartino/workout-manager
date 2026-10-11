@@ -252,6 +252,10 @@ stops reading appearance.
 
 ### V-7: `ProtocolBuilder` resets the preview in an effect (Low)
 
+**Status:** fixed. The SIMULATE result is stored with the draft it was computed from, and
+the panel shows only while that draft is still current. The effect is gone. A result for a
+draft edited while the request was in flight is no longer shown either.
+
 **Where:** `components/ProtocolBuilder.tsx:109` runs
 `useEffect(() => { setPreview(null) }, [draft])`. Every draft edit renders once with the
 stale preview, then commits a second render to clear it.
