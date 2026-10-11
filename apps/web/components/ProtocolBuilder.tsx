@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useReducer, useState, useTransition } from "react";
+import { useReducer, useState, useTransition } from "react";
 import Link from "next/link";
 import { Lock, Plus, Trash2 } from "@/components/pulse/icons";
 
@@ -52,6 +52,13 @@ interface ProtocolBuilderProps {
   unit: WeightUnit;
 }
 
+// A SIMULATE result and the draft it describes (compared by reference: the reducer
+// returns a new draft on every edit).
+interface SimulatedPreview {
+  draft: BuilderDraft;
+  preview: BalancePreview;
+}
+
 // Shape bounds mirror the server's deploy validation (weeks 1–52, frequency 1–14).
 // The inputs constrain to these; deploy re-checks server-side (ADR-0020).
 const MIN_WEEKS = 1;
@@ -98,17 +105,15 @@ export function ProtocolBuilder({
   const [error, setError] = useState<string | null>(null);
   const [deployed, setDeployed] = useState(false);
   const [pending, startTransition] = useTransition();
-  // SIMULATE's read-only balance preview of the current draft (ADR-0021). Held apart
-  // from the deploy flow: it stays open and recomputes each run, and any structural
-  // edit clears it so a stale preview never lingers over a changed plan.
-  const [preview, setPreview] = useState<BalancePreview | null>(null);
+  // SIMULATE's read-only balance preview (ADR-0021), kept with the draft it was computed
+  // from. Held apart from the deploy flow: it stays open and recomputes each run.
+  const [simulation, setSimulation] = useState<SimulatedPreview | null>(null);
   const [simulating, startSimulate] = useTransition();
 
-  // Any draft edit invalidates a shown preview — drop it so the panel never lingers
-  // over a plan it no longer describes; the user re-runs SIMULATE to see the new split.
-  useEffect(() => {
-    setPreview(null);
-  }, [draft]);
+  // Any draft edit invalidates the preview, so it shows only while the draft is the
+  // one it describes; the user re-runs SIMULATE to see the new split. Derived during
+  // render, so an edit never paints one frame of the stale panel.
+  const preview = simulation?.draft === draft ? simulation.preview : null;
 
   const matrix = builderMatrix(draft);
   const selectedSession =
@@ -133,16 +138,19 @@ export function ProtocolBuilder({
 
   function onSimulate() {
     setError(null);
+    // Pin the draft being simulated: an edit made while the request is in flight
+    // leaves the result describing a plan that no longer exists, so it never shows.
+    const simulated = draft;
     startSimulate(async () => {
       const result = await runSimulation(
-        draft.protocolId,
-        toSimulatePayload(draft),
+        simulated.protocolId,
+        toSimulatePayload(simulated),
       );
       if (result.error || !result.preview) {
         setError(result.error ?? "Could not simulate the protocol.");
         return;
       }
-      setPreview(result.preview);
+      setSimulation({ draft: simulated, preview: result.preview });
     });
   }
 

@@ -241,6 +241,8 @@ load and time until the cards appear.
 
 ### V-6: Strength analytics sequential appearance read (Low)
 
+**Status:** fixed. The strength analytics and appearance reads start in one `Promise.all`.
+
 **Where:** in `app/analytics/strength/page.tsx:50,65`, `resolveAppearance()` is awaited
 after `fetchStrengthAnalytics`. It is `React.cache`d and the layout usually has it in
 flight already, so the real delay is small.
@@ -249,6 +251,10 @@ flight already, so the real delay is small.
 stops reading appearance.
 
 ### V-7: `ProtocolBuilder` resets the preview in an effect (Low)
+
+**Status:** fixed. The SIMULATE result is stored with the draft it was computed from, and
+the panel shows only while that draft is still current. The effect is gone. A result for a
+draft edited while the request was in flight is no longer shown either.
 
 **Where:** `components/ProtocolBuilder.tsx:109` runs
 `useEffect(() => { setPreview(null) }, [draft])`. Every draft edit renders once with the
@@ -262,6 +268,9 @@ stale preview, then commits a second render to clear it.
 
 ### V-8: `ExerciseLibrary` resets state in an effect (Low)
 
+**Status:** fixed. `changeQuery` does the resets with the keystroke (and after a create).
+The effect keeps only the debounced search.
+
 **Where:** `components/ExerciseLibrary.tsx:49` clears `createError`, `results`, `error`
 and `searched` inside the `[query]` effect.
 
@@ -272,6 +281,11 @@ and `searched` inside the `[query]` effect.
   commit.
 
 ### V-9: Viewport and chart-theme hooks correct themselves after mount (Low)
+
+**Status:** fixed. Both hooks use `useSyncExternalStore` over `createSharedStore`
+(`lib/shared-store.ts`, unit-tested), which watches the source once for every reader.
+Server rendering and hydration still read the fallback. A chart mounted after hydration
+(a client navigation or a lazy chunk) reads the real value on its first render.
 
 **Where:**
 - `lib/use-wide-viewport.ts` and `lib/use-chart-theme.ts` start from a fallback

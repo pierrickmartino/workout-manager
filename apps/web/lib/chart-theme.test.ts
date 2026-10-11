@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   CHART_THEME_FALLBACK,
   readChartTheme,
+  sameChartTheme,
   type ChartTheme,
   type CSSVariableSource,
 } from "./chart-theme.ts";
@@ -90,4 +91,16 @@ test("treats a blank variable value as absent and falls back", () => {
 
   // Assert — a blank value never reaches Recharts as a colour
   assert.equal(theme.cyan, CHART_THEME_FALLBACK.cyan);
+});
+
+test("sameChartTheme compares themes by colour, not by reference", () => {
+  // Arrange — two separately read themes with the same colours, and one that differs
+  const a = readChartTheme(fakeSource({ "--color-cyan": "#00ffff" }));
+  const b = readChartTheme(fakeSource({ "--color-cyan": "#00ffff" }));
+  const c = readChartTheme(fakeSource({ "--color-cyan": "#ff00ff" }));
+
+  // Act / Assert — equal colours match, so the hook keeps its cached theme
+  assert.notEqual(a, b);
+  assert.equal(sameChartTheme(a, b), true);
+  assert.equal(sameChartTheme(a, c), false);
 });
