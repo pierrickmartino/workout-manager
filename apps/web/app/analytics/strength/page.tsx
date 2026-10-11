@@ -47,7 +47,12 @@ export default async function StrengthAnalyticsPage({
   // resolved to its labelled target. A shared/deep link with no origin falls back to the
   // Dashboard rather than stranding the user on the global tabs alone.
   const back = backTarget(from);
-  const envelope = await fetchStrengthAnalytics(TIMELINE_LIMIT, offset);
+  // The reads are independent, so they start together; an error page doesn't use the
+  // appearance, and that read is cached and usually already in flight from the layout.
+  const [envelope, { weight_unit: unit }] = await Promise.all([
+    fetchStrengthAnalytics(TIMELINE_LIMIT, offset),
+    resolveAppearance(),
+  ]);
 
   if (!envelope.success || !envelope.data) {
     return (
@@ -62,7 +67,6 @@ export default async function StrengthAnalyticsPage({
     );
   }
 
-  const { weight_unit: unit } = await resolveAppearance();
   const total = envelope.meta?.total ?? envelope.data.records.length;
   const view = toStrengthTimelineView(
     envelope.data,

@@ -241,6 +241,8 @@ load and time until the cards appear.
 
 ### V-6: Strength analytics sequential appearance read (Low)
 
+**Status:** fixed. The strength analytics and appearance reads start in one `Promise.all`.
+
 **Where:** in `app/analytics/strength/page.tsx:50,65`, `resolveAppearance()` is awaited
 after `fetchStrengthAnalytics`. It is `React.cache`d and the layout usually has it in
 flight already, so the real delay is small.
