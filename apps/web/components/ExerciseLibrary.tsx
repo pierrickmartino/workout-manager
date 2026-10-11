@@ -46,16 +46,23 @@ export function ExerciseLibrary({ onPick, onCreate }: ExerciseLibraryProps) {
   // the results of a newer one.
   const latestQuery = useRef("");
 
-  useEffect(() => {
-    const trimmed = query.trim();
-    latestQuery.current = trimmed;
+  // A new query drops the last create error, and an empty one clears the search too.
+  // Reset here, with the keystroke, so React batches it instead of rendering again
+  // after commit; the effect below keeps only the debounced search.
+  const changeQuery = (next: string) => {
+    setQuery(next);
     setCreateError(null);
-    if (trimmed === "") {
+    if (next.trim() === "") {
       setResults([]);
       setError(null);
       setSearched(false);
-      return;
     }
+  };
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    latestQuery.current = trimmed;
+    if (trimmed === "") return;
     const handle = setTimeout(() => {
       startTransition(async () => {
         const outcome = await searchExerciseLibrary(trimmed);
@@ -85,8 +92,7 @@ export function ExerciseLibrary({ onPick, onCreate }: ExerciseLibraryProps) {
         return;
       }
       // Minted and added to the workout — clear the search so the picker resets.
-      setCreateError(null);
-      setQuery("");
+      changeQuery("");
     });
   };
 
@@ -107,7 +113,7 @@ export function ExerciseLibrary({ onPick, onCreate }: ExerciseLibraryProps) {
             placeholder="Search an exercise…"
             aria-label="Search the Exercise Library"
             className="pl-9"
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => changeQuery(e.target.value)}
           />
         </div>
       </label>

@@ -268,6 +268,9 @@ stale preview, then commits a second render to clear it.
 
 ### V-8: `ExerciseLibrary` resets state in an effect (Low)
 
+**Status:** fixed. `changeQuery` does the resets with the keystroke (and after a create).
+The effect keeps only the debounced search.
+
 **Where:** `components/ExerciseLibrary.tsx:49` clears `createError`, `results`, `error`
 and `searched` inside the `[query]` effect.
 
