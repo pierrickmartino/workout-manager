@@ -282,6 +282,11 @@ and `searched` inside the `[query]` effect.
 
 ### V-9: Viewport and chart-theme hooks correct themselves after mount (Low)
 
+**Status:** fixed. Both hooks use `useSyncExternalStore` over `createSharedStore`
+(`lib/shared-store.ts`, unit-tested), which watches the source once for every reader.
+Server rendering and hydration still read the fallback. A chart mounted after hydration
+(a client navigation or a lazy chunk) reads the real value on its first render.
+
 **Where:**
 - `lib/use-wide-viewport.ts` and `lib/use-chart-theme.ts` start from a fallback
   (`false` / `CHART_THEME_FALLBACK`) and set the real value in an effect.

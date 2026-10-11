@@ -29,6 +29,7 @@ const CHART_TOKENS: Record<keyof ChartTheme, string> = {
   muted: "--color-text-muted",
   border: "--color-border",
 };
+const CHART_THEME_KEYS = Object.keys(CHART_TOKENS) as (keyof ChartTheme)[];
 
 // The SSR / first-paint fallback: the PULSE **dark** token values, byte-for-byte
 // the look charts had before this change. Used when there is no DOM to read (server
@@ -52,9 +53,14 @@ export interface CSSVariableSource {
 // PULSE-dark value when a variable is absent or blank. Pure: same source, same
 // result, no I/O — this is the TDD seam the DOM hook wraps.
 export function readChartTheme(source: CSSVariableSource): ChartTheme {
-  const keys = Object.keys(CHART_TOKENS) as (keyof ChartTheme)[];
-  return keys.reduce((theme, key) => {
+  return CHART_THEME_KEYS.reduce((theme, key) => {
     const value = source.getPropertyValue(CHART_TOKENS[key]).trim();
     return { ...theme, [key]: value || CHART_THEME_FALLBACK[key] };
   }, CHART_THEME_FALLBACK);
+}
+
+// Whether two themes hold the same colours. The hook keeps its cached theme when a
+// re-read matches, so a re-read that changed nothing re-renders no chart.
+export function sameChartTheme(a: ChartTheme, b: ChartTheme): boolean {
+  return CHART_THEME_KEYS.every((key) => a[key] === b[key]);
 }
