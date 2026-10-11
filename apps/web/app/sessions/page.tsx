@@ -8,6 +8,7 @@ import { BackLink } from "@/components/pulse/back-link";
 import { Alert } from "@/components/pulse/alert";
 import { Card } from "@/components/ui/card";
 import { SessionsLibrary } from "@/components/SessionsLibrary";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 
 // My Sessions — the user's personal library of their own standalone Sessions (GLOSSARY: My
 // Sessions, issue #397), reached from Train. The Server Component fetches the whole library
@@ -44,6 +45,7 @@ export default async function SessionsLibraryPage(): Promise<React.JSX.Element> 
           </p>
           <Link
             href={appendFrom("/sessions/new", "/sessions")}
+            {...NAV_FORWARD}
             className="label-mono text-[11px] text-cyan hover:underline"
           >
             Generate a workout →

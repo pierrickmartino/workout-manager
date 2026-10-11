@@ -23,6 +23,7 @@ import { Alert } from "@/components/pulse/alert";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { HistoryBrowser } from "@/components/HistoryBrowser";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 
 // Lists the user's Logged Sessions — the record side of the plan/record split — newest first.
 // Reads use the server-only transport seam (ADR-0022). The screen holds the whole History
@@ -70,6 +71,7 @@ export default async function HistoryPage({
             <div className="flex items-center gap-3">
               <Link
                 href="/logs/new"
+                {...NAV_FORWARD}
                 className="label-mono text-[11px] text-cyan hover:underline"
               >
                 + Log a movement
@@ -84,12 +86,14 @@ export default async function HistoryPage({
           </p>
           <Link
             href={appendFrom("/sessions/new", "/history")}
+            {...NAV_FORWARD}
             className="label-mono text-[11px] text-cyan hover:underline"
           >
             Generate a workout →
           </Link>
           <Link
             href="/logs/new"
+            {...NAV_FORWARD}
             className="label-mono text-[11px] text-cyan hover:underline"
           >
             Or log something you did →

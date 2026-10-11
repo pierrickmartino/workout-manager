@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
 import { RecentSessionsPanel } from "@/components/recent-sessions-panel";
 import { buttonVariants } from "@/components/ui/button";
+import { NAV_FORWARD } from "@/lib/nav-direction";
 
 // The TRAIN tab's landing page: start something new — a full multi-week Protocol or a
 // standalone workout — or pick up an existing Session. Previously the TRAIN tab jumped straight
@@ -69,6 +70,7 @@ export default function TrainPage(): React.JSX.Element {
         </h2>
         <Link
           href="/sessions"
+          {...NAV_FORWARD}
           className={buttonVariants({ variant: "secondary", className: "w-full" })}
         >
           <ListChecks className="h-4 w-4" />
@@ -77,6 +79,7 @@ export default function TrainPage(): React.JSX.Element {
         {/* Every Protocol the user owns — Current, set aside and finished (issue #637). */}
         <Link
           href="/protocols"
+          {...NAV_FORWARD}
           className={buttonVariants({ variant: "secondary", className: "w-full" })}
         >
           <LayoutGrid className="h-4 w-4" />
@@ -92,6 +95,7 @@ export default function TrainPage(): React.JSX.Element {
         </h2>
         <Link
           href="/exercises"
+          {...NAV_FORWARD}
           className={buttonVariants({ variant: "secondary", className: "w-full" })}
         >
           <LibraryBig className="h-4 w-4" />

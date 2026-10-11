@@ -6,6 +6,7 @@ import {
   NAV_BACK,
   NAV_DIRECTION_ATTRIBUTE,
   NAV_FORWARD,
+  navigateOptions,
   parseNavDirection,
 } from "./nav-direction.ts";
 import { findHandWrittenTransitionTypes } from "./nav-direction-policy.ts";
@@ -25,6 +26,12 @@ test("a forward link carries its type for the router and the DOM alike", () => {
   assert.equal(NAV_FORWARD[NAV_DIRECTION_ATTRIBUTE], "nav-forward");
   assert.deepEqual(NAV_BACK.transitionTypes, ["nav-back"]);
   assert.equal(NAV_BACK[NAV_DIRECTION_ATTRIBUTE], "nav-back");
+});
+
+test("a programmatic navigation carries the same type a link would", () => {
+  // Arrange & Act & Assert: a push after an action slides exactly like the spread link.
+  assert.deepEqual(navigateOptions("nav-forward"), { transitionTypes: NAV_FORWARD.transitionTypes });
+  assert.deepEqual(navigateOptions("nav-back"), { transitionTypes: NAV_BACK.transitionTypes });
 });
 
 test("reads a direction back from an anchor attribute, and nothing else", () => {

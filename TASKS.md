@@ -211,9 +211,7 @@ Source: [composition-patterns-2026-10-10](docs/research/audit/vercel/composition
 
 Source: [view-transitions-2026-10-10](docs/research/audit/vercel/view-transitions-2026-10-10.md). Running-app verification is already tracked in §11 and isn't repeated here.
 
-- ⬜ VT-1 **Wrap the exercise HISTORY-tab skeleton in `SkeletonReveal`** (the one skeleton that pops), and extend `lib/skeleton-reveal-policy.ts` to in-page fallbacks if it doesn't already cover them.
-- ⬜ VT-2 **Spread `NAV_FORWARD` on the ~9 untyped hierarchical links** (training route, trajectory tiles, record teasers, achievement source, catalog → exercise, Train hub, launchpad, page actions). Record the link classification in ADR-0121.
-- ⬜ VT-3 **Type the two directional programmatic navigations:** generation → adopted Protocol (`nav-forward`) and admin delete → catalog (`nav-back`), using a helper rather than a literal.
+VT-1 to VT-3 are fixed (ADR-0121 and ADR-0123 amendments).
 
 ## 15. Deployment: Hostinger VPS migration
 

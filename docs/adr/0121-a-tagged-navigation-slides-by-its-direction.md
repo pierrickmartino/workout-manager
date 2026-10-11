@@ -98,6 +98,46 @@ Not covered here:
 - **The Strength pager.** Its `Older →` / `← Newer` is an ordered sequence, not a hierarchy.
   It is step 5.
 
+## Amendment: the rest of the navigation map (view-transitions audit, 10 Oct 2026)
+
+The post-implementation audit
+([view-transitions-2026-10-10](../research/audit/vercel/view-transitions-2026-10-10.md),
+VT-2 and VT-3) found hierarchical steps the first pass left untagged. Each is a direction
+judgement, so the classification lives here rather than in a guard that forces a type on every
+link.
+
+**Now forward:**
+
+- Protocol route stop → its Session (`pulse/training-route.tsx`).
+- Strength trajectory tile → its exercise (`analytics/strength-trajectories.tsx`).
+- Analytics' "See all records" teaser → Strength (`pulse/recent-records.tsx`). The direction
+  is the caller's, through `teaserDirection`, like `NavRow`'s: Home renders the same teaser,
+  where it crosses to another tab and stays untagged.
+- Catalog drawer's Alternatives → `/exercises/[id]`. The drawer sits over the catalog list, so
+  opening a movement is list → detail. This narrows "the catalog drawer" above: opening and
+  closing the drawer is still not a navigation.
+- Train hub → My Sessions, My Protocols, the catalog.
+- The generation launchpad → `/protocols/new`, `/sessions/new`, `/sessions/build`,
+  `/sessions/log`, on Train and on Home alike.
+- History's and My Sessions' page actions → `/logs/new`, `/sessions/new`.
+
+**Programmatic, after an action:** a `router.push` has no `<Link>` to spread onto, so it passes
+`navigateOptions(direction)` from `lib/nav-direction.ts`. `guardedNavigateOptions` builds its
+options through the same helper.
+
+- Generation → the adopted Protocol: `nav-forward` (`lib/use-protocol-generation.ts`).
+- Admin delete → the catalog: `nav-back` (`AdminExerciseDelete`).
+- Live Session Finish → `/history`, and the save-then-`replace` of the log and authoring forms,
+  stay instant. A replace is not a step in the hierarchy, and Finish lands on another tab.
+
+**Left untagged, against the audit's suggestion:**
+
+- An Achievement's "Open the logged session" (`pulse/stamp-detail.tsx`). The record sits in
+  History, a related place rather than a level deeper; the component already says so.
+- The exercise page's related-movement list (`exercise/specs-panel.tsx`). Exercise to
+  exercise is lateral: these are the "related exercises" above.
+- My Sessions' empty-state "start something new in Train" link, which goes up a level, not down.
+
 ## Rejected alternatives
 
 **A `DirectionalTransition` in each page component**, the skill's default. It is about 28

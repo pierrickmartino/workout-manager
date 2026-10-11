@@ -48,6 +48,10 @@ shape. The guard would otherwise need an exemption list that says nothing true.
 
 - Every `app/**/loading.tsx` returns a `SkeletonPage` at its root. A skeleton returning
   anything else would simply never reveal, and nothing else would notice.
+- Every in-page `<Suspense fallback={…}>` is `null` or a skeleton whose root is a
+  `SkeletonReveal`, written inline or as a component in the same file. A fallback the sweep
+  can't read (an imported component) is reported, so the rule fails closed. Added after the
+  exercise HISTORY tab's skeleton was found popping (view-transitions audit VT-1, 10 Oct 2026).
 - No `PageHeader` sits inside a `SkeletonReveal`, anywhere in `components/` or `app/`.
 
 `view-transition-boundary-policy.ts` (ADR-0120) holds the boundary to `default="none"` and

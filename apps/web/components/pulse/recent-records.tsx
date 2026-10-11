@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Trophy } from "@/components/pulse/icons";
 
 import type { RecordRow, RecentRecordsTeaser } from "@/lib/records-view";
+import type { NavDirectionProps } from "@/lib/nav-direction";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { Card } from "@/components/ui/card";
 
@@ -18,19 +19,24 @@ import { Card } from "@/components/ui/card";
 // Lives in `pulse/` rather than inside a page because both Analytics and the wide Home
 // render it (ADR-0088): Home's desktop column shows the record side that a 26rem column has
 // no room for, and two copies of this markup would drift.
+//
+// The teaser's direction is the caller's (ADR-0121): from Analytics it drills into Strength,
+// a level deeper, so it slides forward; from Home it crosses to another tab and stays unset.
 export function RecentRecords({
   rows,
   teaser,
+  teaserDirection,
 }: {
   rows: RecordRow[];
   teaser: RecentRecordsTeaser | null;
+  teaserDirection?: NavDirectionProps;
 }): React.JSX.Element {
   return (
     <div className="flex flex-col gap-4">
       <SectionHeader
         meta={
           teaser ? (
-            <Link href={teaser.href} className="text-cyan hover:underline">
+            <Link href={teaser.href} {...teaserDirection} className="text-cyan hover:underline">
               {teaser.label}
             </Link>
           ) : null

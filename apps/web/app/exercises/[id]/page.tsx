@@ -17,6 +17,7 @@ import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
 import { Alert } from "@/components/pulse/alert";
 import { Skeleton } from "@/components/pulse/skeleton";
+import { SkeletonReveal } from "@/components/pulse/skeleton-reveal";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ExerciseTabs } from "@/components/exercise/exercise-tabs";
@@ -176,13 +177,16 @@ async function HistoryTab({
 
 // The streamed stand-in for HISTORY: three Logged-Session cards at the rendered height, so the
 // swap costs no layout shift (ADR-0028 — skeletons over spinners, matched to the final size).
+// It dissolves over the history when it arrives (ADR-0123).
 function HistoryTabFallback(): React.JSX.Element {
   return (
-    <div className="flex flex-col gap-4">
-      <Skeleton className="h-32 w-full rounded-lg" />
-      <Skeleton className="h-32 w-full rounded-lg" />
-      <Skeleton className="h-32 w-full rounded-lg" />
-    </div>
+    <SkeletonReveal>
+      <div className="flex flex-col gap-4">
+        <Skeleton className="h-32 w-full rounded-lg" />
+        <Skeleton className="h-32 w-full rounded-lg" />
+        <Skeleton className="h-32 w-full rounded-lg" />
+      </div>
+    </SkeletonReveal>
   );
 }
 
