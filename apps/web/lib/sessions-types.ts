@@ -5,7 +5,7 @@
 import type { Effort } from "./effort";
 import type { Load } from "./load";
 import type { Quantity } from "./quantity";
-import type { SuggestedVariation } from "./harder-variation-view";
+import type { PositionedSuggestion } from "./harder-variation-view";
 
 // Training types a Session can be generated for. Mirrors the Fitness Level
 // dimensions used elsewhere in the app.
@@ -182,12 +182,12 @@ export interface SharePreview {
   author: SessionAuthor;
 }
 
-// The harder-Variation offer read for one Prescription (#202): the catalog
-// Exercise to advance to at the pure-bodyweight rep ceiling, or `null` when there
-// is none on file and the prescription holds. The client feeds `suggested_variation`
-// to `toHarderVariationOffer` (lib/harder-variation-view) to build the display model.
-export interface HarderVariationResponse {
-  suggested_variation: SuggestedVariation | null;
+// The harder-Variation offers for a whole Session in one read (#202, audit V-5): one
+// entry per Prescription position, each the catalog Exercise to advance to at the
+// pure-bodyweight rep ceiling, or `null` when the prescription holds. The page feeds
+// `offers` to `harderVariationOffersFor` (lib/harder-variation-view).
+export interface HarderVariationsResponse {
+  offers: PositionedSuggestion[];
 }
 
 // A short reference to a related catalog Exercise (a Variation or Alternative),

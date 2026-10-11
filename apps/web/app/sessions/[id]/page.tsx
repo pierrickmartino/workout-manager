@@ -27,13 +27,13 @@ import { prescriptionSetTypeBadge } from "@/lib/set-type-view";
 import { targetEffortLabel } from "@/lib/target-effort-view";
 import { exerciseNoteText } from "@/lib/note-view";
 import {
-  fetchHarderVariation,
+  fetchHarderVariations,
   fetchSession,
   type ExercisePrescription,
   type WorkoutSession,
 } from "@/lib/sessions";
 import {
-  toHarderVariationOffer,
+  harderVariationOffersFor,
   type HarderVariationOffer as HarderVariationOfferView,
 } from "@/lib/harder-variation-view";
 import { toTempoView, type TempoView } from "@/lib/tempo-view";
@@ -235,7 +235,7 @@ export default async function SessionPage({
         <SectionHeader meta={`${session.prescriptions.length} EXERCISES`}>
           PROTOCOL
         </SectionHeader>
-        {/* The cards wait on the per-movement offer reads; everything above and below them needs
+        {/* The cards wait on the harder-Variation offer read; everything above and below them needs
             only the Session read, so the header — and its sigil — commits with the navigation and
             can morph from the surface the reader tapped (ADR-0120). One placeholder per movement
             keeps the page from jumping when the cards arrive. */}
@@ -283,11 +283,11 @@ export default async function SessionPage({
   );
 }
 
-// The Exercise Prescription cards, streamed behind the page's header. Reads the harder-Variation
-// offer per prescription (#202): the endpoint returns `null` for anything not at a
-// pure-bodyweight rep ceiling, so most resolve to no offer; a failed read simply shows none.
-// Fetched in parallel — a twelve-movement Session is a twelve-way fan-out, the slowest read on
-// any read-only screen, which is why it no longer holds the header back.
+// The Exercise Prescription cards, streamed behind the page's header. Reads every
+// prescription's harder-Variation offer (#202) in one request (audit V-5): the backend returns
+// `null` for anything not at a pure-bodyweight rep ceiling, so most resolve to no offer, and a
+// failed read — envelope or transport — simply shows none. It is still the slowest read on the
+// page, which is why it does not hold the header back.
 async function PrescriptionList({
   session,
   unit,
@@ -299,13 +299,10 @@ async function PrescriptionList({
   supersetSlots: readonly (SupersetSlot | undefined)[];
   removeAffordanceList: ReturnType<typeof removeAffordances>;
 }) {
-  const offers = await Promise.all(
-    session.prescriptions.map(async (prescription) => {
-      const offer = await fetchHarderVariation(session.id, prescription.position);
-      return toHarderVariationOffer(
-        offer.success && offer.data ? offer.data.suggested_variation : null,
-      );
-    }),
+  const envelope = await fetchHarderVariations(session.id).catch(() => null);
+  const offers = harderVariationOffersFor(
+    session.prescriptions.map((prescription) => prescription.position),
+    envelope?.success && envelope.data ? envelope.data.offers : null,
   );
 
   return (
