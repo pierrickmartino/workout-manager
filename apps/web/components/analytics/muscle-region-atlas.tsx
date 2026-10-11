@@ -15,6 +15,7 @@ import { SectionHeader } from "@/components/pulse/section-header";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { ReferenceAtlasFigure } from "./reference-atlas-figure";
+import { StaticAtlasFigure } from "./static-atlas-figure";
 import { AtlasDrawer } from "./atlas-drawer";
 
 const VIEWS: { view: View; label: string }[] = [
@@ -68,14 +69,11 @@ export function MuscleRegionAtlas({ view, figure }: MuscleRegionAtlasProps) {
         <Card className="flex flex-col items-center gap-4 p-6">
           <div className="flex justify-center gap-2">
             {VIEWS.map(({ view: bodyView }) => (
-              <ReferenceAtlasFigure
+              <StaticAtlasFigure
                 key={bodyView}
                 figure={figure}
                 half={bodyView}
                 regionsByMuscle={regionsByMuscle}
-                selectedMuscle={null}
-                onSelectMuscle={() => {}}
-                interactive={false}
               />
             ))}
           </div>

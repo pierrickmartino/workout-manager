@@ -23,14 +23,17 @@ function renderFigure(interactive: boolean): Document {
   const { ReferenceAtlasFigure } = importComponent(
     "components/analytics/reference-atlas-figure.tsx",
   );
-  const markup = renderToStaticMarkup(React.createElement(ReferenceAtlasFigure, {
-    figure: "male",
-    half: "front",
-    regionsByMuscle: new Map(),
-    selectedMuscle: null,
-    onSelectMuscle: () => {},
-    interactive,
-  }));
+  const { StaticAtlasFigure } = importComponent(
+    "components/analytics/static-atlas-figure.tsx",
+  );
+  const props = { figure: "male", half: "front", regionsByMuscle: new Map() };
+  const markup = renderToStaticMarkup(interactive
+    ? React.createElement(ReferenceAtlasFigure, {
+      ...props,
+      selectedMuscle: null,
+      onSelectMuscle: () => {},
+    })
+    : React.createElement(StaticAtlasFigure, props));
   return new JSDOM(`<!doctype html><body>${markup}</body>`).window.document;
 }
 
@@ -84,7 +87,7 @@ test("the ring is the element the stylesheet's focus rule can reach", () => {
   assert.equal(ring.getAttribute("style"), null);
 });
 
-test("a read-only figure draws no ring, because nothing in it takes focus", () => {
+test("the static figure draws no ring, because nothing in it takes focus", () => {
   // Arrange & Act
   const document = renderFigure(false);
 
@@ -92,6 +95,9 @@ test("a read-only figure draws no ring, because nothing in it takes focus", () =
   assert.equal(document.querySelectorAll("path.atlas-region-ring").length, 0);
   assert.equal(document.querySelectorAll("g.atlas-region").length, 0);
   assert.equal(document.querySelectorAll("[tabindex]").length, 0);
+  assert.equal(document.querySelectorAll("[role=button]").length, 0);
+  // Still named: the empty-state body reads as anatomy to a screen reader too.
+  assert.ok(document.querySelectorAll("g[aria-label]").length > 5);
 });
 
 test("the ring is inert at rest and a 2px accent stroke on keyboard focus", () => {

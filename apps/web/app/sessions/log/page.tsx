@@ -1,4 +1,4 @@
-import { HandAuthoredSessionForm } from "@/components/HandAuthoredSessionForm";
+import { LogHandAuthoredSessionForm } from "@/components/LogHandAuthoredSessionForm";
 import { fetchProfile } from "@/lib/profile";
 import { resolveAppearance } from "@/lib/appearance";
 import { PageHeader } from "@/components/pulse/page-header";
@@ -30,7 +30,7 @@ export default async function LogWorkoutPage() {
         how it went. We&apos;ll save it as a reusable workout and log this performance.
       </p>
 
-      <HandAuthoredSessionForm
+      <LogHandAuthoredSessionForm
         draftId="hand-authored:log"
         today={today}
         hasSensitiveConstraint={hasSensitiveConstraint}

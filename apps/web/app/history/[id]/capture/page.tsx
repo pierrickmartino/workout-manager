@@ -4,7 +4,7 @@ import { fetchLog } from "@/lib/logs";
 import { fetchProfile } from "@/lib/profile";
 import { captureSeedFromRecord } from "@/lib/capture-seed";
 import { resolveAppearance } from "@/lib/appearance";
-import { HandAuthoredSessionForm } from "@/components/HandAuthoredSessionForm";
+import { PlanHandAuthoredSessionForm } from "@/components/PlanHandAuthoredSessionForm";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
 
@@ -14,8 +14,8 @@ interface CaptureLogPageProps {
 
 // Capture a plan-less record into a reusable plan (ADR-0044). Loads the record server-side
 // (owner-scoped: a record that is not the caller's 404s), folds it into the Hand-Authored
-// builder's seed, and renders the builder in plan-only mode — pre-filled with what the user
-// did, with the performed-sets half hidden, so they set rest/tempo/supersets and save a new
+// builder's seed, and renders the plan-only builder — pre-filled with what the user did,
+// with no performed-sets half, so they set rest/tempo/supersets and save a new
 // standalone plan. A plan-backed record has a plan already, so Capture does not apply: it is
 // sent to its detail page, where Duplicate (ADR-0043) is the reuse action instead.
 export default async function CaptureLogPage({ params }: CaptureLogPageProps) {
@@ -29,8 +29,6 @@ export default async function CaptureLogPage({ params }: CaptureLogPageProps) {
   const record = envelope.data;
   // Only a plan-less record is Captured; a plan-backed one reuses its plan via Duplicate.
   if (record.session_id !== null) redirect(`/history/${logId}`);
-
-  const today = new Date().toISOString().slice(0, 10);
 
   // The Sensitive-Constraint gate (ADR-0023): a constrained user builds with Supersets
   // paused. An absent profile defaults to allowing them; the plan-only endpoint stays the
@@ -52,11 +50,9 @@ export default async function CaptureLogPage({ params }: CaptureLogPageProps) {
         won&apos;t change your original record.
       </p>
 
-      <HandAuthoredSessionForm
+      <PlanHandAuthoredSessionForm
         draftId={`hand-authored:capture:${logId}`}
-        today={today}
         hasSensitiveConstraint={hasSensitiveConstraint}
-        mode="planOnly"
         seed={seed}
         unit={appearance.weight_unit}
       />

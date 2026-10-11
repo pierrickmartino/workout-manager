@@ -8,7 +8,9 @@ import { SessionsLibrary } from "@/components/SessionsLibrary";
 import { HistoryBrowser } from "@/components/HistoryBrowser";
 import { HISTORY_WINDOW, toHistoryCard } from "@/lib/history-window";
 import { ExerciseCatalogTaxonomy } from "@/components/ExerciseCatalogTaxonomy";
-import { HandAuthoredSessionForm } from "@/components/HandAuthoredSessionForm";
+import { PlanHandAuthoredSessionForm } from "@/components/PlanHandAuthoredSessionForm";
+import { AccountScopedLogForm } from "@/components/LogHandAuthoredSessionForm";
+import { makePerformedSet, seededPlanRow } from "@/lib/hand-authored-draft";
 import { LogSessionForm } from "@/components/LogSessionForm";
 import { LiveSessionScreen } from "@/components/LiveSessionScreen";
 import { AdhocLogForm } from "@/components/AdhocLogForm";
@@ -347,10 +349,11 @@ function Content() {
     // The server renders the first window; a count beyond it exercises "Show more" (ADR-0128).
     case "history": return <HistoryBrowser index={historyIndex(count)} firstWindow={history(count).slice(0, HISTORY_WINDOW).map(toHistoryCard)} unit="kg" />;
     case "catalog": return <ExerciseCatalogTaxonomy initialFilters={{ query: "", muscleGroups: [], equipment: [], difficulty: [] }} initialTaxonomy={count === 0 ? { groups: [], total: 0 } : count > 50 ? { total: count, groups: [{ pattern: "squat", count, exercises: Array.from({ length: count }, (_, i) => ({ ...exercises[i % 50], id: i + 1 })) }] } : taxonomy} equipmentOptions={["barbell", "dumbbell"]} myEquipment={["barbell"]} usage={[]} referenceIso="2026-09-26" unit="kg" />;
-    case "creation": return <HandAuthoredSessionForm draftId="audit-only" today="2026-09-26" unit="kg" mode="planOnly" seed={{ trainingType: "strength", exercises: exercises.slice(0, 3).map((exercise, index) => ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "repetitions", unit: "km", sets: "3", reps: "12", loadKind: CREATION_LOAD_KINDS[index], loadValue: "" })) }} />;
-    // The same Hand-Authored form in its default `authorAndLog` flow. The matrix only ever
-    // mounted `planOnly` (Capture), which hides the "SETS PERFORMED" half — so the performed-set
-    // grid was never rendered in any recorded capture. This case measures it.
+    case "creation": return <PlanHandAuthoredSessionForm draftId="audit-only" unit="kg" seed={{ trainingType: "strength", exercises: exercises.slice(0, 3).map((exercise, index) => ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "repetitions", unit: "km", sets: "3", reps: "12", loadKind: CREATION_LOAD_KINDS[index], loadValue: "" })) }} />;
+    // The Log form (`/sessions/log`). The matrix only ever mounted the plan-only form
+    // (Capture), which has no "SETS PERFORMED" half, so the performed-set grid was never
+    // rendered in any recorded capture. This case measures it. The product form starts blank, so
+    // the harness mounts its account-scoped body with rows already added.
     //
     // The third row is a **distance**, which is what renders the performed-set `<fieldset>`
     // (ADR-0108's `FieldGroup`, holding ADR-0032's distance-and-time pair). Every row here was
@@ -358,7 +361,7 @@ function Content() {
     // was renderable and rendered by no journey, and a fieldset is precisely the box ADR-0085
     // floors at its content's minimum width. The reps rows stay beside it, so one capture holds
     // both shapes.
-    case "creation-logged": return <HandAuthoredSessionForm draftId="audit-only-logged" today="2026-09-26" unit="kg" seed={{ trainingType: "strength", exercises: exercises.slice(0, 3).map((exercise, index) => index === 2 ? ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "distance" as const, unit: "km" as const, sets: "3", reps: "5", loadKind: "bodyweight" as const, loadValue: "" }) : ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "repetitions" as const, unit: "km" as const, sets: "3", reps: "12", loadKind: CREATION_LOAD_KINDS[index], loadValue: "" })) }} />;
+    case "creation-logged": return <AccountScopedLogForm draftId="audit-only-logged" today="2026-09-26" unit="kg" initialRows={() => exercises.slice(0, 3).map((exercise, index) => ({ ...seededPlanRow(index === 2 ? { exerciseId: exercise.id, exerciseName: exercise.name, kind: "distance", unit: "km", sets: "3", reps: "5", loadKind: "bodyweight", loadValue: "" } : { exerciseId: exercise.id, exerciseName: exercise.name, kind: "repetitions", unit: "km", sets: "3", reps: "12", loadKind: CREATION_LOAD_KINDS[index], loadValue: "" }), performedSets: [makePerformedSet()] }))} />;
     case "logging": return <LogSessionForm sessionId={1} prescriptions={prescriptions} today="2026-09-26" unit="kg" />;
     case "live": return <LiveSessionScreen session={liveWorkout} today="2026-09-26" defaultRestSeconds={60} keepScreenAwake={false} unit="kg" />;
     case "analytics": return <Analytics />;

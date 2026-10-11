@@ -1,16 +1,16 @@
 "use client";
 
-import { type LoadKind } from "@/lib/load";
-import { toIntOrZero } from "@/lib/numeric-input";
 import {
   DEFAULT_SCHEME,
   compatibleSchemesForInput,
   currentScheme,
 } from "@/lib/scheme-view";
 import { schemePreviewForInput } from "@/lib/scheme-preview";
-import { planSetType } from "@/lib/set-type-view";
-import { targetEffortFromInput } from "@/lib/target-effort-view";
-import { DEFAULT_EFFORT_SCALE } from "@/lib/effort";
+import {
+  builderControlValues,
+  builderPrescriptionEvent,
+  prescriptionControlSet,
+} from "@/lib/prescription-controls";
 import { PrescriptionFieldStack } from "@/components/prescription/PrescriptionFieldStack";
 import { Select } from "@/components/ui/select";
 import { SupersetBadge } from "@/components/builder/prescription-row-parts";
@@ -51,117 +51,14 @@ export function PrescriptionEditor({ position }: { position: number }) {
           Builder's own advanced field) rides in the `advanced` slot. */}
       <PrescriptionFieldStack
         exerciseName={name}
-        // The composition strip above shows this exercise's warm-up under the WARM-UP band, so
-        // don't repeat a warm-up chip on the row (ADR-0074).
-        suppressWarmUpSummaryChip
         weightUnit={unit}
-        kind={prescription.quantityKind}
-        unit={prescription.quantityUnit}
-        sets={String(prescription.sets)}
-        target={prescription.reps}
-        restSeconds={
-          prescription.restSeconds === null ? "" : String(prescription.restSeconds)
-        }
-        tempo={prescription.tempo ?? ""}
-        setType={prescription.setType ?? ""}
-        // Target Effort (ADR-0066, #467): the draft holds the typed value, so project it back to
-        // the editor's scale pick + display value; an unset target defaults the scale and leaves
-        // the value blank. The onChange parses the pair back to the typed value (or null).
-        targetEffortScale={prescription.targetEffort?.scale ?? DEFAULT_EFFORT_SCALE}
-        targetEffortValue={
-          prescription.targetEffort ? String(prescription.targetEffort.value) : ""
-        }
-        // Exercise Note (ADR-0065, #468): the draft holds the decoded cue (see
-        // `initBuilderDraft`), so it renders directly; a null note is an empty field.
-        note={prescription.note ?? ""}
-        loadKind={prescription.loadKind}
-        loadValue={prescription.loadValue}
-        showRest={!grouped}
-        // Picking a Quantity kind fixes what the target means; unlike the ad-hoc surfaces the
-        // Builder does not re-default the Load, so a generated Load the user is editing is
-        // never silently discarded.
-        onChangeKind={(quantityKind) =>
-          dispatch({
-            type: "SET_QUANTITY",
-            position,
-            quantityKind,
-            quantityUnit: prescription.quantityUnit,
-          })
-        }
-        onChangeUnit={(quantityUnit) =>
-          dispatch({
-            type: "SET_QUANTITY",
-            position,
-            quantityKind: prescription.quantityKind,
-            quantityUnit,
-          })
-        }
-        onChangeSets={(value) =>
-          dispatch({
-            type: "EDIT_PRESCRIPTION",
-            position,
-            field: "sets",
-            value: toIntOrZero(value),
-          })
-        }
-        onChangeTarget={(value) =>
-          dispatch({ type: "EDIT_PRESCRIPTION", position, field: "reps", value })
-        }
-        onChangeRest={(value) =>
-          dispatch({
-            type: "EDIT_PRESCRIPTION",
-            position,
-            field: "restSeconds",
-            value: value === "" ? null : toIntOrZero(value),
-          })
-        }
-        onChangeTempo={(value) =>
-          dispatch({
-            type: "EDIT_PRESCRIPTION",
-            position,
-            field: "tempo",
-            value: value === "" ? null : value,
-          })
-        }
-        // The working default is stored as unset (null) so a plain set carries no annotation;
-        // any non-working member is stored as-is and rides through DEPLOY (#463/#466).
-        onChangeSetType={(value) =>
-          dispatch({ type: "SET_SET_TYPE", position, setType: planSetType(value) })
-        }
-        // A blank value clears the target (null); any value rides onto the picked scale and
-        // through DEPLOY untouched (#463). Descriptive only — it feeds no progression (ADR-0066).
-        onChangeTargetEffort={(scale, value) =>
-          dispatch({
-            type: "SET_TARGET_EFFORT",
-            position,
-            targetEffort: targetEffortFromInput(scale, value),
-          })
-        }
-        // A blank value clears the note (null); any text rides through DEPLOY, where the write
-        // boundary length-caps + HTML-escapes it (ADR-0065, #468). Descriptive only.
-        onChangeNote={(value) =>
-          dispatch({
-            type: "SET_NOTE",
-            position,
-            note: value.trim() === "" ? null : value,
-          })
-        }
-        onChangeLoadKind={(value) =>
-          dispatch({
-            type: "EDIT_LOAD",
-            position,
-            loadKind: value as LoadKind,
-            loadValue: prescription.loadValue,
-          })
-        }
-        onChangeLoadValue={(value) =>
-          dispatch({
-            type: "EDIT_LOAD",
-            position,
-            loadKind: prescription.loadKind,
-            loadValue: value,
-          })
-        }
+        // The Builder authors every control; the composition strip above shows this exercise's
+        // warm-up under the WARM-UP band, so its preset drops the row's warm-up chip (ADR-0074).
+        controls={prescriptionControlSet("builder", { grouped })}
+        value={builderControlValues(prescription)}
+        // Unlike the ad-hoc surfaces, a Quantity pick leaves the Load alone, so a generated Load
+        // the user is editing is never silently discarded (`builderPrescriptionEvent`).
+        onChange={(edit) => dispatch(builderPrescriptionEvent(position, prescription, edit))}
         advanced={
           /* Progression Scheme (ADR-0064, #432): how this movement's un-performed tail steps.
              The selector lives inside **More** (#465). Only schemes compatible with the current

@@ -10,6 +10,7 @@ import {
   type InsertPrescriptionFields,
 } from "@/lib/insert-prescription";
 import { defaultLoadKindForAmount } from "@/lib/hand-authored-session";
+import { authoredRowPatch, prescriptionControlSet } from "@/lib/prescription-controls";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { type DistanceUnit, type QuantityKind } from "@/lib/quantity";
 import type { PickedExercise } from "@/lib/protocol-builder";
@@ -45,6 +46,8 @@ interface EditorState {
 
 const DEFAULT_AMOUNT_KIND: QuantityKind = "repetitions";
 const DEFAULT_DISTANCE_UNIT: DistanceUnit = "km";
+// Insert appends one solo movement, so its row is never a grouped Superset member.
+const INSERT_CONTROLS = prescriptionControlSet("insert", { grouped: false });
 
 function freshEditor(): EditorState {
   return {
@@ -180,33 +183,26 @@ export function AddExerciseButton({ sessionId, unit }: AddExerciseButtonProps) {
           {/* The authored plan — the one shared, presentation-only field stack every
               authoring surface now renders (ADR-0067, #464): Quantity, sets, target, rest,
               tempo, and a typed Load. Insert appends one solo movement, so it carries no
-              surface-specific advanced fields. */}
+              surface-specific advanced fields, and its preset leaves out the Target Effort and
+              the Note its request cannot carry (ADR-0129). */}
           <PrescriptionFieldStack
             exerciseName={exerciseName ?? ""}
             weightUnit={unit}
-            kind={editor.kind}
-            unit={editor.unit}
-            sets={editor.sets}
-            target={editor.reps}
-            restSeconds={editor.restSeconds}
-            tempo={editor.tempo}
-            setType={editor.setType}
-            loadKind={editor.loadKind}
-            loadValue={editor.loadValue}
-            showRest
-            onChangeKind={(kind) =>
-              // Picking a kind re-defaults the plan's Load kind for it (bodyweight for a hold
-              // or a run, absolute for reps) — still overridable below.
-              patch({ kind, loadKind: defaultLoadKindForAmount(kind) })
-            }
-            onChangeUnit={(unit) => patch({ unit })}
-            onChangeSets={(value) => patch({ sets: value })}
-            onChangeTarget={(value) => patch({ reps: value })}
-            onChangeRest={(value) => patch({ restSeconds: value })}
-            onChangeTempo={(value) => patch({ tempo: value })}
-            onChangeSetType={(value) => patch({ setType: value })}
-            onChangeLoadKind={(value) => patch({ loadKind: value })}
-            onChangeLoadValue={(value) => patch({ loadValue: value })}
+            controls={INSERT_CONTROLS}
+            value={{
+              kind: editor.kind,
+              unit: editor.unit,
+              sets: editor.sets,
+              target: editor.reps,
+              restSeconds: editor.restSeconds,
+              tempo: editor.tempo,
+              setType: editor.setType,
+              loadKind: editor.loadKind,
+              loadValue: editor.loadValue,
+            }}
+            // Picking a kind re-defaults the plan's Load kind for it (bodyweight for a hold or a
+            // run, absolute for reps) — still overridable below.
+            onChange={(edit) => patch(authoredRowPatch(edit))}
           />
         </>
       )}
