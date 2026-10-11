@@ -23,6 +23,11 @@ import {
   type DistanceUnit,
   type QuantityKind,
 } from "@/lib/quantity";
+import {
+  type PrescriptionControlEdit,
+  type PrescriptionControlSet,
+  type PrescriptionControlValues,
+} from "@/lib/prescription-controls";
 import { cn } from "@/lib/utils";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { FieldLabel } from "@/components/pulse/field";
@@ -40,7 +45,9 @@ import { Select } from "@/components/ui/select";
 // the ad-hoc surfaces already had.
 //
 // It owns **only the field stack** and holds **no domain state of its own** (ADR-0067): every plan
-// value is a display string it renders and every edit is a callback the surface owns. The one bit
+// value is a display string it renders and every edit is one `onChange` the surface owns. Which
+// controls it renders is the surface's declared preset (`lib/prescription-controls`, ADR-0129),
+// never inferred from which handlers were passed. The one bit
 // of state it does keep is the **ephemeral** open/closed state of the progressive-disclosure
 // **More** area (#465) — per-card, per-render, deliberately *not* an Interface Preference
 // (ADR-0047/0055): it steers nothing about the plan and is not worth syncing across devices, so it
@@ -102,117 +109,46 @@ export interface PrescriptionFieldStackProps {
   exerciseName: string;
   // The reader's Weight Unit (#417): the Load picker names it and the value is authored in it.
   weightUnit: WeightUnit;
-  // Frequent path — the typed Quantity, Sets, and the free-text target.
-  kind: QuantityKind;
-  // The distance unit; only rendered (and meaningful) when the kind is `distance`.
-  unit: DistanceUnit;
-  sets: string;
-  target: string;
-  // Advanced fields, collapsed behind **More** (#465).
-  restSeconds: string;
-  tempo: string;
-  // The Set Type (ADR-0065, #466): the stored value ("" for unset), shown behind **More** as a
-  // curated selector that leads with Warm-up and defaults to Working. An unset or working value
-  // is the quiet default — it renders no summary chip and never forces the card open. Shared by
-  // all three authoring surfaces, so it lives here rather than in any one surface's slot.
-  setType: string;
-  // The Target Effort (ADR-0066, #467): the prescribed Effort authored behind **More** as a
-  // scale pick (RPE / RIR) plus a free-text value — a blank value is no target. Held as the
-  // picked `scale` and the display `value`, matching how the component keeps every field a
-  // display string it renders and reports (ADR-0067). Optional: a surface that authors no
-  // Target Effort (Insert) omits `onChangeTargetEffort`, and the control is not rendered.
-  targetEffortScale?: EffortScale;
-  targetEffortValue?: string;
-  // The Exercise Note (ADR-0065, #468): the plan-side coaching cue authored behind **More** as
-  // free text — a blank value is no note. Held as the display string the component renders and
-  // reports (ADR-0067). Optional: a surface that authors no Note (Insert) omits `onChangeNote`,
-  // and the control is not rendered. A present note earns a note **icon** in the summary (never a
-  // text preview) and opens the card.
-  note?: string;
-  // The typed Load (ADR-0010): the picked kind and its value field — on the frequent path.
-  loadKind: string;
-  loadValue: string;
-  // Whether to render the per-movement Rest field. False for a grouped Superset member, whose
-  // rest is the group's round-rest and lives on the container instead (ADR-0023). A grouped
-  // member therefore also carries no rest chip in its summary.
-  showRest: boolean;
-  // The surface owns the effect of picking a kind: the ad-hoc surfaces re-default the Load kind
-  // for the new Quantity (bodyweight for a hold, absolute for reps), the Builder leaves its
-  // stored Load untouched. The component just reports the pick.
-  onChangeKind: (kind: QuantityKind) => void;
-  onChangeUnit: (unit: DistanceUnit) => void;
-  onChangeSets: (value: string) => void;
-  onChangeTarget: (value: string) => void;
-  onChangeRest: (value: string) => void;
-  onChangeTempo: (value: string) => void;
-  // Report the picked Set Type — a raw catalog member string. The surface stores it (mapping
-  // the working default back to unset via `planSetType`), so the component reports the pick and
-  // holds no domain state.
-  onChangeSetType: (value: string) => void;
-  // Report the picked Target Effort as its `(scale, value)` pair — the surface parses that into
-  // the typed value it stores (Builder) or holds the two strings as-is (Hand-Authored). Omitted
-  // by a surface that authors no Target Effort, which also suppresses the control's render.
-  onChangeTargetEffort?: (scale: EffortScale, value: string) => void;
-  // Report the edited Exercise Note as its raw text. The surface stores it (a blank value is no
-  // note, stored `null`) and the backend length-caps + HTML-escapes it at the write boundary
-  // (ADR-0065). Omitted by a surface that authors no Note, which also suppresses the control.
-  onChangeNote?: (value: string) => void;
-  onChangeLoadKind: (value: string) => void;
-  onChangeLoadValue: (value: string) => void;
+  // Which controls this row renders and how its summary reads, from the surface's declared
+  // preset (`prescriptionControlSet`, ADR-0129). A control outside the set is not rendered and
+  // earns no summary chip, so a surface opts out by its preset, never by omitting a handler.
+  controls: PrescriptionControlSet;
+  // Every plan value as the display string the surface holds (ADR-0067).
+  value: PrescriptionControlValues;
+  // One edit, reported as the field and its new value. The surface owns what it means: the
+  // ad-hoc surfaces patch their row, re-defaulting the Load kind on a kind pick; the Builder
+  // dispatches an event and leaves its stored Load untouched.
+  onChange: (edit: PrescriptionControlEdit) => void;
   // Surface-specific advanced fields rendered inside the **More** area, below the shared advanced
-  // controls (the Builder's Progression Scheme selector). Omitted by Insert and the Hand-Authored
-  // form, whose advanced fields are now all first-class props of this stack.
+  // controls (the Builder's Progression Scheme selector).
   advanced?: React.ReactNode;
   // The always-visible line under the disclosure — the **Scheme Preview** sentence (#452). It
   // stands in for the Progression Scheme whether More is open or closed and is never a summary
   // chip (GLOSSARY: Prescription Summary). Omitted by surfaces that render no scheme.
   preview?: React.ReactNode;
-  // Whether the surface's opaque `advanced` slot currently holds a non-default value that should
-  // force the card open, so nothing meaningful is hidden on first view (#465). The component can't
-  // read into that slot, so the surface reports it. Now that Set Type, Target Effort, and the
-  // Exercise Note are first-class fields with their own summary chips, no surface's `advanced`
-  // slot holds a hidden value — the Builder's scheme selector isn't one (the always-visible Scheme
-  // Preview line stands in for it) — so this defaults false and the slot's chip-driven fields open
-  // the card on their own.
-  advancedNonDefault?: boolean;
-  // Drop the warm-up Set-Type summary chip only (ADR-0074): set by a surface that already
-  // shows the Session Section, so a warm-up exercise under the WARM-UP band doesn't also read
-  // "warm-up" on its row. The Set-Type picker and every other chip are untouched; defaults
-  // false so non-builder surfaces keep the chip.
-  suppressWarmUpSummaryChip?: boolean;
 }
 
 export function PrescriptionFieldStack({
   exerciseName,
   weightUnit,
-  kind,
-  unit,
-  sets,
-  target,
-  restSeconds,
-  tempo,
-  setType,
-  targetEffortScale = DEFAULT_EFFORT_SCALE,
-  targetEffortValue = "",
-  note = "",
-  loadKind,
-  loadValue,
-  showRest,
-  onChangeKind,
-  onChangeUnit,
-  onChangeSets,
-  onChangeTarget,
-  onChangeRest,
-  onChangeTempo,
-  onChangeSetType,
-  onChangeTargetEffort,
-  onChangeNote,
-  onChangeLoadKind,
-  onChangeLoadValue,
+  controls: { controls, suppressWarmUpSummaryChip },
+  value: {
+    kind,
+    unit,
+    sets,
+    target,
+    restSeconds,
+    tempo,
+    setType,
+    targetEffortScale = DEFAULT_EFFORT_SCALE,
+    targetEffortValue = "",
+    note = "",
+    loadKind,
+    loadValue,
+  },
+  onChange,
   advanced,
   preview,
-  advancedNonDefault = false,
-  suppressWarmUpSummaryChip = false,
 }: PrescriptionFieldStackProps): React.JSX.Element {
   const name = exerciseName;
   const isDistance = kind === "distance";
@@ -229,117 +165,126 @@ export function PrescriptionFieldStack({
 
   // The typed Target Effort the summary reasons about, parsed from the picked scale + value — the
   // one seam the editor's strings become the typed value (scale-faithful, no conversion). Null
-  // (no target) when the surface authors none or the value is blank, so it earns no chip.
-  const targetEffort = onChangeTargetEffort
+  // (no target) when the row has no Target Effort control or the value is blank, so it earns no
+  // chip.
+  const targetEffort = controls.has("targetEffort")
     ? targetEffortFromInput(effortScale, targetEffortValue)
     : null;
 
-  // The Exercise Note the summary reasons about — only when the surface authors one (Insert does
-  // not), so a note-less surface never manufactures a note chip. A present cue earns the note
-  // icon chip (and, via the seed below, opens the card).
-  const summaryNote = onChangeNote ? note : null;
-
-  // The advanced values the Prescription Summary reasons about. A grouped member's rest belongs to
-  // the group (ADR-0023), so it is excluded here — a member's summary never carries a rest chip.
-  // A non-working Set Type, a set Target Effort, or a present Exercise Note earns its own chip
-  // (and, via the seed below, opens the card).
+  // The advanced values the Prescription Summary reasons about, each only when its control is on
+  // this row: a note-less surface never manufactures a note chip, and a grouped member's rest
+  // belongs to the group (ADR-0023), so its summary never carries a rest chip. A non-working Set
+  // Type, a set Target Effort, or a present Exercise Note earns its own chip (and, via the seed
+  // below, opens the card).
   const summaryChips = prescriptionSummaryChips(
     {
-      tempo,
-      restSeconds: showRest ? restSecondsFromInput(restSeconds) : null,
-      setType,
+      tempo: controls.has("tempo") ? tempo : "",
+      restSeconds: controls.has("rest") ? restSecondsFromInput(restSeconds) : null,
+      setType: controls.has("setType") ? setType : "",
       targetEffort,
-      note: summaryNote,
+      note: controls.has("note") ? note : null,
     },
     { suppressWarmUpSetType: suppressWarmUpSummaryChip },
   );
 
   // Open/closed is ephemeral React state (#465): seeded once so a card with any non-default
   // advanced value opens expanded and a plain set opens collapsed, then freely toggled. It never
-  // persists — a fresh render (reload, remount) re-seeds. The seed mirrors `shouldAutoExpand`
-  // (a chip means a non-default summarized value — Target Effort and the Exercise Note now among
-  // them, #467/#468) and keeps the surface's advanced-slot signal as a backstop for any future
-  // hidden value.
-  const [open, setOpen] = React.useState<boolean>(
-    () => summaryChips.length > 0 || advancedNonDefault,
-  );
+  // persists — a fresh render (reload, remount) re-seeds. The seed mirrors `shouldAutoExpand`: a
+  // chip means a non-default summarized value.
+  const [open, setOpen] = React.useState<boolean>(() => summaryChips.length > 0);
   const contentId = React.useId();
 
   return (
     <>
       <FieldRow>
-        <FieldLabel className={FIELD_WIDTH} label="Quantity">
-          <Select
-            value={kind}
-            onChange={(event) => onChangeKind(event.target.value as QuantityKind)}
-            aria-label={`Quantity kind for ${name}`}
-          >
-            {AMOUNT_KIND_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </FieldLabel>
-        {/* A distance movement reads in one unit, chosen once here and applied to every set
-            (ADR-0032). Hidden for the other kinds, which carry no unit. */}
-        {isDistance ? (
-          <FieldLabel className={FIELD_WIDTH} label="Unit">
-            <Select
-              value={unit}
-              onChange={(event) => onChangeUnit(event.target.value as DistanceUnit)}
-              aria-label={`Distance unit for ${name}`}
-            >
-              {DISTANCE_UNIT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
+        {controls.has("quantity") ? (
+          <>
+            <FieldLabel className={FIELD_WIDTH} label="Quantity">
+              <Select
+                value={kind}
+                onChange={(event) =>
+                  onChange({ field: "kind", value: event.target.value as QuantityKind })
+                }
+                aria-label={`Quantity kind for ${name}`}
+              >
+                {AMOUNT_KIND_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </FieldLabel>
+            {/* A distance movement reads in one unit, chosen once here and applied to every set
+                (ADR-0032). Hidden for the other kinds, which carry no unit. */}
+            {isDistance ? (
+              <FieldLabel className={FIELD_WIDTH} label="Unit">
+                <Select
+                  value={unit}
+                  onChange={(event) =>
+                    onChange({ field: "unit", value: event.target.value as DistanceUnit })
+                  }
+                  aria-label={`Distance unit for ${name}`}
+                >
+                  {DISTANCE_UNIT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              </FieldLabel>
+            ) : null}
+          </>
+        ) : null}
+        {controls.has("sets") ? (
+          <FieldLabel className={FIELD_WIDTH} label="Sets">
+            <Input
+              type="number"
+              min={1}
+              value={sets}
+              onChange={(event) => onChange({ field: "sets", value: event.target.value })}
+              aria-label={`Sets for ${name}`}
+            />
           </FieldLabel>
         ) : null}
-        <FieldLabel className={FIELD_WIDTH} label="Sets">
-          <Input
-            type="number"
-            min={1}
-            value={sets}
-            onChange={(event) => onChangeSets(event.target.value)}
-            aria-label={`Sets for ${name}`}
-          />
-        </FieldLabel>
-        <FieldLabel className={FIELD_WIDTH} label={targetLabel}>
-          <Input
-            spellCheck={false}
-            value={target}
-            placeholder={targetPlaceholderFor(kind)}
-            onChange={(event) => onChangeTarget(event.target.value)}
-            aria-label={`${targetLabel} for ${name}`}
-          />
-        </FieldLabel>
+        {controls.has("target") ? (
+          <FieldLabel className={FIELD_WIDTH} label={targetLabel}>
+            <Input
+              spellCheck={false}
+              value={target}
+              placeholder={targetPlaceholderFor(kind)}
+              onChange={(event) => onChange({ field: "target", value: event.target.value })}
+              aria-label={`${targetLabel} for ${name}`}
+            />
+          </FieldLabel>
+        ) : null}
         {/* Load is a typed value (ADR-0010): pick the kind, then give the value that kind
             carries — the same picker the log form uses. On the frequent path (ADR-0067). */}
-        <FieldLabel className={FIELD_WIDTH} label="Load kind">
-          <Select
-            value={loadKind}
-            onChange={(event) => onChangeLoadKind(event.target.value)}
-            aria-label={`Load kind for ${name}`}
-          >
-            {loadKindOptions(weightUnit).map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </FieldLabel>
-        <FieldLabel className={FIELD_WIDTH} label="Load">
-          <LoadValueInput
-            kind={loadKind}
-            unit={weightUnit}
-            value={loadValue}
-            onChange={(event) => onChangeLoadValue(event.target.value)}
-            aria-label={`Load for ${name}`}
-          />
-        </FieldLabel>
+        {controls.has("load") ? (
+          <>
+            <FieldLabel className={FIELD_WIDTH} label="Load kind">
+              <Select
+                value={loadKind}
+                onChange={(event) => onChange({ field: "loadKind", value: event.target.value })}
+                aria-label={`Load kind for ${name}`}
+              >
+                {loadKindOptions(weightUnit).map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </FieldLabel>
+            <FieldLabel className={FIELD_WIDTH} label="Load">
+              <LoadValueInput
+                kind={loadKind}
+                unit={weightUnit}
+                value={loadValue}
+                onChange={(event) => onChange({ field: "loadValue", value: event.target.value })}
+                aria-label={`Load for ${name}`}
+              />
+            </FieldLabel>
+          </>
+        ) : null}
       </FieldRow>
 
       <div className="flex flex-col gap-2.5">
@@ -388,52 +333,59 @@ export function PrescriptionFieldStack({
         >
           <FieldRow>
             {/* A grouped member rests once per round at the group level, so its own rest is
-                dormant while grouped — hidden here and restored on ungroup (ADR-0023). */}
-            {showRest ? (
+                dormant while grouped — out of its control set and restored on ungroup
+                (ADR-0023). */}
+            {controls.has("rest") ? (
               <FieldLabel className={FIELD_WIDTH} label="Rest (sec)">
                 <Input
                   type="number"
                   min={0}
                   value={restSeconds}
                   placeholder="90"
-                  onChange={(event) => onChangeRest(event.target.value)}
+                  onChange={(event) =>
+                    onChange({ field: "restSeconds", value: event.target.value })
+                  }
                   aria-label={`Rest seconds for ${name}`}
                 />
               </FieldLabel>
             ) : null}
-            <FieldLabel className={FIELD_WIDTH} label="Tempo">
-              <Input
-                spellCheck={false}
-                value={tempo}
-                placeholder="3-1-1"
-                onChange={(event) => onChangeTempo(event.target.value)}
-                aria-label={`Tempo for ${name}`}
-              />
-            </FieldLabel>
+            {controls.has("tempo") ? (
+              <FieldLabel className={FIELD_WIDTH} label="Tempo">
+                <Input
+                  spellCheck={false}
+                  value={tempo}
+                  placeholder="3-1-1"
+                  onChange={(event) => onChange({ field: "tempo", value: event.target.value })}
+                  aria-label={`Tempo for ${name}`}
+                />
+              </FieldLabel>
+            ) : null}
             {/* Set Type (ADR-0065, #466): a curated annotation on the movement line —
                 Warm-up / Working / Drop set / To failure / AMRAP. It is descriptive only
                 (it feeds no progression); leaving it Working keeps the set a plain working
                 set and shows no summary chip. The value resolves for display so an unset
                 (or legacy) value reads as Working rather than a blank option. */}
-            <FieldLabel className={FIELD_WIDTH} label="Set type">
-              <Select
-                value={resolveSetType(setType)}
-                onChange={(event) => onChangeSetType(event.target.value)}
-                aria-label={`Set type for ${name}`}
-              >
-                {SET_TYPE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
-            </FieldLabel>
+            {controls.has("setType") ? (
+              <FieldLabel className={FIELD_WIDTH} label="Set type">
+                <Select
+                  value={resolveSetType(setType)}
+                  onChange={(event) => onChange({ field: "setType", value: event.target.value })}
+                  aria-label={`Set type for ${name}`}
+                >
+                  {SET_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              </FieldLabel>
+            ) : null}
             {/* Target Effort (ADR-0066, #467): the prescribed Effort in either scale — pick a
                 scale (RPE / RIR), then give a value; a blank value authors no target. Descriptive
                 only (it feeds no progression, ADR-0066); a set target shows a scale-faithful
                 summary chip and opens the card. The value's band is validated at the write
-                boundary. Rendered only for a surface that authors Target Effort. */}
-            {onChangeTargetEffort ? (
+                boundary. */}
+            {controls.has("targetEffort") ? (
               <>
                 <FieldLabel className={FIELD_WIDTH} label="Target effort scale">
                   <Select
@@ -441,7 +393,7 @@ export function PrescriptionFieldStack({
                     onChange={(event) => {
                       const scale = event.target.value as EffortScale;
                       setEffortScale(scale);
-                      onChangeTargetEffort(scale, targetEffortValue);
+                      onChange({ field: "targetEffort", scale, value: targetEffortValue });
                     }}
                     aria-label={`Target effort scale for ${name}`}
                   >
@@ -458,7 +410,11 @@ export function PrescriptionFieldStack({
                     value={targetEffortValue}
                     placeholder={effortScale === "rir" ? "e.g. 2" : "e.g. 8"}
                     onChange={(event) =>
-                      onChangeTargetEffort(effortScale, event.target.value)
+                      onChange({
+                        field: "targetEffort",
+                        scale: effortScale,
+                        value: event.target.value,
+                      })
                     }
                     aria-label={`Target effort for ${name}`}
                   />
@@ -470,13 +426,13 @@ export function PrescriptionFieldStack({
               "pause on the chest". A blank value authors no note; the backend length-caps and
               HTML-escapes it at the write boundary. Full-width below the two-column grid so a
               sentence-long cue has room. When present it shows a note icon in the collapsed
-              summary and opens the card. Rendered only for a surface that authors a Note. */}
-          {onChangeNote ? (
+              summary and opens the card. */}
+          {controls.has("note") ? (
             <FieldLabel label="Note">
               <Input
                 value={note}
                 placeholder="Optional cue (e.g. pause on the chest)"
-                onChange={(event) => onChangeNote(event.target.value)}
+                onChange={(event) => onChange({ field: "note", value: event.target.value })}
                 aria-label={`Note for ${name}`}
               />
             </FieldLabel>

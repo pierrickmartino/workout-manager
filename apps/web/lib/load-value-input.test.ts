@@ -6,6 +6,7 @@ import { JSDOM } from "jsdom";
 
 import { loadTsx } from "./tsx-harness.ts";
 import { loadKindOptions, loadValueHint, loadValueInputMode } from "./load.ts";
+import { prescriptionControlSet } from "./prescription-controls.ts";
 import type { WeightUnit } from "./weight-unit.ts";
 
 // The Load value field says what it is in and what an empty value means, whichever kind is
@@ -75,29 +76,22 @@ function renderPrescriptionLoad(loadKind: string): Document {
   const { PrescriptionFieldStack } = loadTsx(
     "components/prescription/PrescriptionFieldStack.tsx",
   );
-  const noop = (): void => {};
   return documentOf(renderToStaticMarkup(React.createElement(PrescriptionFieldStack, {
     exerciseName: "Back Squat",
     weightUnit: "kg",
-    kind: "repetitions",
-    unit: "km",
-    sets: "3",
-    target: "8-12",
-    restSeconds: "",
-    tempo: "",
-    setType: "",
-    loadKind,
-    loadValue: "",
-    showRest: true,
-    onChangeKind: noop,
-    onChangeUnit: noop,
-    onChangeSets: noop,
-    onChangeTarget: noop,
-    onChangeRest: noop,
-    onChangeTempo: noop,
-    onChangeSetType: noop,
-    onChangeLoadKind: noop,
-    onChangeLoadValue: noop,
+    controls: prescriptionControlSet("insert", { grouped: false }),
+    value: {
+      kind: "repetitions",
+      unit: "km",
+      sets: "3",
+      target: "8-12",
+      restSeconds: "",
+      tempo: "",
+      setType: "",
+      loadKind,
+      loadValue: "",
+    },
+    onChange: (): void => {},
   })));
 }
 

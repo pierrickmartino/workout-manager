@@ -114,6 +114,9 @@ is **declared**, not that it renders right: the `audit/` journeys (`reflow.mjs` 
 - Performed-set row → `LogSetInput` → `buildLoggedSets` / `readPostedSetRows` in `lib/logged-set.ts`,
   never a per-path builder; a path keeps only which posted rows count. Blank skips, garbage errors;
   options are `performedMark` and `defaultLoadKind` only (`logged-set.test.ts`, ADR-0115).
+- Prescription control on an authoring surface → its preset in `PRESCRIPTION_SURFACES`, rendered via
+  `prescriptionControlSet`, edits through one `onChange`; never inferred from which handlers were passed
+  (`prescription-controls.test.ts`, ADR-0129).
 - Live Session per-set field → a cell in the row in `live-session-sets.tsx` from a `SetEntry.*Cell`;
   what doesn't vary per set goes in the card header; the row is a wrapping flex row, not a grid
   (`live-set-table-card.test.ts`, ADR-0114).
