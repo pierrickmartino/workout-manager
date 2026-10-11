@@ -22,7 +22,15 @@ export default async function ProtocolBuilderPage({
   const protocolId = Number(id);
   if (!Number.isInteger(protocolId)) notFound();
 
-  const envelope = await fetchProtocol(protocolId);
+  // The reads are independent, so they start together; a 404 costs one wasted
+  // Profile read, which is rare and cheap.
+  const [envelope, profileEnvelope, appearance, { queue, queueName }] =
+    await Promise.all([
+      fetchProtocol(protocolId),
+      fetchProfile(),
+      resolveAppearance(),
+      searchParams,
+    ]);
   if (!envelope.success || !envelope.data) {
     notFound();
   }
@@ -31,13 +39,7 @@ export default async function ProtocolBuilderPage({
   // opens the builder with Supersets auto-unlinked and a banner. The derived
   // `is_sensitive` flag comes from the Profile; a failed read defaults to allowing
   // Supersets (DEPLOY remains the server-side backstop).
-  const [profileEnvelope, appearance] = await Promise.all([
-    fetchProfile(),
-    resolveAppearance(),
-  ]);
   const hasSensitiveConstraint = profileEnvelope.data?.is_sensitive ?? false;
-
-  const { queue, queueName } = await searchParams;
   const queuedExercise = toQueuedExercise(queue, queueName);
 
   return (
