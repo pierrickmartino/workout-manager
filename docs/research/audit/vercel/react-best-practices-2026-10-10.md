@@ -197,6 +197,9 @@ and after (CLAUDE.md: "a green guard is not a measurement").
 
 ### V-4: Protocol edit page waterfall (Low-medium)
 
+**Status:** fixed. The Protocol, Profile, appearance and `searchParams` reads now start
+in one `Promise.all`, and `notFound()` runs after it.
+
 **Where:**
 - In `app/protocols/[id]/edit/page.tsx:25-38`, `fetchProtocol` is awaited first.
 - Only then does `Promise.all([fetchProfile(), resolveAppearance()])` start.
