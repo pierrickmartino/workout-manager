@@ -180,3 +180,93 @@ def test_no_offer_when_the_catalog_has_no_harder_variation():
     # Assert — the offer holds at the ceiling: nothing to advance to
     assert offer.status_code == 200
     assert offer.json()["data"]["suggested_variation"] is None
+
+
+# --- The batch read (audit V-5): every Prescription's offer in one request -------
+
+
+def test_batch_harder_variations_requires_authentication():
+    client, *_ = _build()
+    response = client.get("/api/sessions/1/harder-variations")
+    assert response.status_code == 401
+
+
+def test_batch_returns_one_offer_per_position_in_session_order():
+    # Arrange — a pull-up at its ceiling (with a harder Variation) followed by a
+    # squat that has never been performed, so only the first earns an offer
+    client, ctx, exercises, relationships, sessions, logged = _build()
+    user = "user_c"
+    created, pullup = _seed_bodyweight_ceiling(exercises, sessions, logged, user)
+    archer = exercises.find_or_create(
+        "Archer Pull-Up", provenance=Provenance.CURATED, difficulty=7
+    )
+    relationships.add(pullup.id, archer.id, RelationKind.VARIATION)
+    squat = exercises.find_or_create("Air Squat", provenance=Provenance.CURATED)
+    sessions.append_prescription(
+        created.id,
+        user,
+        PrescriptionDraft(
+            exercise_id=squat.id,
+            sets=3,
+            reps="15",
+            recommended_load=parse_load("bodyweight").to_dict(),
+        ),
+    )
+
+    # Act
+    response = client.get(
+        f"/api/sessions/{created.id}/harder-variations", headers=_auth(ctx, user)
+    )
+
+    # Assert — the batch matches what each per-position read would say
+    assert response.status_code == 200
+    assert response.json()["data"]["offers"] == [
+        {
+            "position": 0,
+            "suggested_variation": {"exercise_id": archer.id, "name": "Archer Pull-Up"},
+        },
+        {"position": 1, "suggested_variation": None},
+    ]
+
+
+def test_batch_returns_404_for_another_users_session():
+    # Arrange
+    client, ctx, exercises, _, sessions, logged = _build()
+    created, _ = _seed_bodyweight_ceiling(exercises, sessions, logged, "owner")
+
+    # Act
+    response = client.get(
+        f"/api/sessions/{created.id}/harder-variations",
+        headers=_auth(ctx, "intruder"),
+    )
+
+    # Assert
+    assert response.status_code == 404
+
+
+def test_batch_reads_the_logged_history_once_for_the_whole_session():
+    # Arrange — a three-movement Session, counting Logged Session reads
+    client, ctx, exercises, _, sessions, logged = _build()
+    user = "user_d"
+    created, pullup = _seed_bodyweight_ceiling(exercises, sessions, logged, user)
+    for _ in range(2):
+        sessions.append_prescription(
+            created.id,
+            user,
+            PrescriptionDraft(exercise_id=pullup.id, sets=3, reps="5"),
+        )
+    reads = []
+    original = logged.list_for_user
+    logged.list_for_user = lambda *args, **kwargs: (
+        reads.append(args) or original(*args, **kwargs)
+    )
+
+    # Act
+    response = client.get(
+        f"/api/sessions/{created.id}/harder-variations", headers=_auth(ctx, user)
+    )
+
+    # Assert — three offers from a single history read, not one read per movement
+    assert response.status_code == 200
+    assert len(response.json()["data"]["offers"]) == 3
+    assert len(reads) == 1

@@ -48,8 +48,8 @@ met:
   - `resolveAppearance`, `resolveIsAdmin` and `resolveActiveSkin` are wrapped in
     `React.cache`, so the layout and the page share each round-trip
     (`server-cache-react`).
-  - The slow harder-variation fan-out streams behind `<Suspense>`, so it no longer
-    holds back the header (`async-suspense-boundaries`).
+  - The harder-variation read streams behind `<Suspense>`, so it no longer holds
+    back the header (`async-suspense-boundaries`).
 - **Bundle:**
   - `recharts` can only be imported through `next/dynamic`, enforced by
     `lib/recharts-import-policy.ts`.
@@ -214,6 +214,12 @@ in one `Promise.all`, and `notFound()` runs after it.
 - The cost is one wasted Profile read on a 404, which is rare and cheap.
 
 ### V-5: Harder-variation N-way fan-out (Medium, server cost)
+
+**Status:** fixed. `GET /api/sessions/{id}/harder-variations` returns every Prescription's
+offer by position, and `PrescriptionList` calls it once through `fetchHarderVariations`. The
+batch also reads the Session, the user's Logged Sessions and the Profile once per Session
+instead of once per Prescription (`test_batch_reads_the_logged_history_once_for_the_whole_session`).
+The per-position endpoint is kept, though the web app no longer calls it.
 
 **Where:**
 - `app/sessions/[id]/page.tsx:302` calls `fetchHarderVariation` once per prescription

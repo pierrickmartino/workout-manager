@@ -10,7 +10,7 @@ import type { SessionSummary } from "./session-library";
 import type {
   ExerciseDetail,
   GenerateSessionInput,
-  HarderVariationResponse,
+  HarderVariationsResponse,
   ShareLink,
   SharePreview,
   WorkoutSession,
@@ -240,18 +240,15 @@ export async function substitutePrescription(
   return apiSend(path, "POST", { target_exercise_id: targetExerciseId });
 }
 
-// Read the harder-Variation offer for one Prescription (#202): the next harder
-// Variation to advance to when a pure-bodyweight prescription has hit its rep
-// ceiling and is still hitting it easily, or `{ suggested_variation: null }` when
-// there is none. Read-only; accepting is a `substitutePrescription` POST with the
-// returned `exercise_id` as `target_exercise_id`.
-export async function fetchHarderVariation(
+// Read every Prescription's harder-Variation offer in one request (#202, audit V-5):
+// for each position, the next harder Variation to advance to when a pure-bodyweight
+// prescription has hit its rep ceiling and is still hitting it easily, or `null`.
+// Read-only; accepting is a `substitutePrescription` POST with the returned
+// `exercise_id` as `target_exercise_id`.
+export async function fetchHarderVariations(
   sessionId: number,
-  position: number,
-): Promise<Envelope<HarderVariationResponse>> {
-  return apiGet(
-    `/api/sessions/${sessionId}/prescriptions/${position}/harder-variation`,
-  );
+): Promise<Envelope<HarderVariationsResponse>> {
+  return apiGet(`/api/sessions/${sessionId}/harder-variations`);
 }
 
 // Select a Progression Scheme on the prescription at `position` in the user's own standalone

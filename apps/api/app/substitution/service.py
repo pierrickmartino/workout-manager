@@ -12,7 +12,9 @@ unlimited, and never touches the once-per-Session regeneration guard."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from functools import cache
 
 from app.db.models import Profile
 from app.domain.exercise import Provenance
@@ -215,19 +217,70 @@ def _auto_resolve(
     return resolution.candidate.exercise_id
 
 
-def _latest_sets_for(
-    logged: LoggedSessionRepository, clerk_user_id: str, exercise_id: int
-) -> list[LoggedSetView]:
-    """The user's Logged Sets for ``exercise_id`` from its most recent performance.
+def _latest_sets_by_exercise(
+    logged: LoggedSessionRepository, clerk_user_id: str, exercise_ids: set[int]
+) -> dict[int, list[LoggedSetView]]:
+    """Each Exercise's Logged Sets from its most recent performance, read in one pass.
 
     ``list_for_user`` arrives newest-first, so the first Logged Session that touched
-    the Exercise carries the sets that drive its next Progression step."""
+    an Exercise carries the sets that drive its next Progression step. An Exercise
+    never performed is absent from the result."""
 
+    latest: dict[int, list[LoggedSetView]] = {}
     for session in logged.list_for_user(clerk_user_id):
-        sets = [s for s in session.logged_sets if s.exercise_id == exercise_id]
-        if sets:
-            return sets
-    return []
+        for exercise_id in exercise_ids - latest.keys():
+            sets = [s for s in session.logged_sets if s.exercise_id == exercise_id]
+            if sets:
+                latest = {**latest, exercise_id: sets}
+        if latest.keys() >= exercise_ids:
+            break
+    return latest
+
+
+def _suggestion_for(
+    prescription: PrescriptionView,
+    latest_sets: list[LoggedSetView],
+    context: Callable[[], SubstitutionContext],
+    *,
+    relationships: ExerciseRelationshipRepository,
+    exercises: ExerciseRepository,
+) -> HarderVariationSuggestion | None:
+    """The harder-Variation offer for one Prescription, given its latest Logged Sets.
+
+    ``context`` is called only when the Progression step reaches the ceiling, so a
+    Session with no offer never reads the Profile."""
+
+    load = prescription.recommended_load
+    step = next_prescription(
+        _RepLoad(
+            reps=prescription.reps,
+            recommended_load=load["text"] if load else None,
+        ),
+        latest_sets,
+    )
+    if not step.suggest_harder_variation:
+        return None
+
+    current = exercises.get(prescription.exercise_id)
+    candidates = [
+        _candidate(related)
+        for related in relationships.substitutes_for(prescription.exercise_id)
+    ]
+    harder = next_harder_variation(
+        current.difficulty if current is not None else None,
+        compatible_candidates(candidates, context()),
+    )
+    if harder is None:
+        return None
+    return HarderVariationSuggestion(exercise_id=harder.exercise_id, name=harder.name)
+
+
+def _lazy_context(
+    profiles: ProfileRepository, clerk_user_id: str, goal: str | None
+) -> Callable[[], SubstitutionContext]:
+    """The user's SubstitutionContext, read from the Profile at most once."""
+
+    return cache(lambda: _context(profiles.get_or_create(clerk_user_id), goal))
 
 
 def harder_variation_suggestion(
@@ -262,31 +315,68 @@ def harder_variation_suggestion(
     if prescription is None:
         raise PrescriptionNotFound(position)
 
-    load = prescription.recommended_load
-    step = next_prescription(
-        _RepLoad(
-            reps=prescription.reps,
-            recommended_load=load["text"] if load else None,
-        ),
-        _latest_sets_for(logged, clerk_user_id, prescription.exercise_id),
+    latest = _latest_sets_by_exercise(
+        logged, clerk_user_id, {prescription.exercise_id}
     )
-    if not step.suggest_harder_variation:
-        return None
+    return _suggestion_for(
+        prescription,
+        latest.get(prescription.exercise_id, []),
+        _lazy_context(profiles, clerk_user_id, view.training_type),
+        relationships=relationships,
+        exercises=exercises,
+    )
 
-    current = exercises.get(prescription.exercise_id)
-    candidates = [
-        _candidate(related)
-        for related in relationships.substitutes_for(prescription.exercise_id)
-    ]
-    profile = profiles.get_or_create(clerk_user_id)
-    context = _context(profile, view.training_type)
-    harder = next_harder_variation(
-        current.difficulty if current is not None else None,
-        compatible_candidates(candidates, context),
+
+@dataclass(frozen=True)
+class PositionedSuggestion:
+    """One Prescription's harder-Variation offer, keyed by its position."""
+
+    position: int
+    suggestion: HarderVariationSuggestion | None
+
+
+def harder_variation_suggestions(
+    session_id: int,
+    clerk_user_id: str,
+    *,
+    relationships: ExerciseRelationshipRepository,
+    exercises: ExerciseRepository,
+    sessions: SessionRepository,
+    logged: LoggedSessionRepository,
+    profiles: ProfileRepository,
+) -> tuple[PositionedSuggestion, ...]:
+    """Every Prescription's harder-Variation offer, in Session order (audit V-5).
+
+    The batch form of ``harder_variation_suggestion``, with the same rule per
+    Prescription: the Session, the user's Logged Sessions and the Profile are each
+    read once for the whole Session instead of once per Prescription.
+
+    Raises ``SessionNotFound`` if the user does not own the Session.
+    """
+
+    view = sessions.get(session_id, clerk_user_id)
+    if view is None:
+        raise SessionNotFound(session_id)
+
+    latest = _latest_sets_by_exercise(
+        logged,
+        clerk_user_id,
+        {prescription.exercise_id for prescription in view.prescriptions},
     )
-    if harder is None:
-        return None
-    return HarderVariationSuggestion(exercise_id=harder.exercise_id, name=harder.name)
+    context = _lazy_context(profiles, clerk_user_id, view.training_type)
+    return tuple(
+        PositionedSuggestion(
+            position=prescription.position,
+            suggestion=_suggestion_for(
+                prescription,
+                latest.get(prescription.exercise_id, []),
+                context,
+                relationships=relationships,
+                exercises=exercises,
+            ),
+        )
+        for prescription in view.prescriptions
+    )
 
 
 def _generate_substitute(
@@ -330,6 +420,8 @@ __all__ = [
     "PrescriptionNotFound",
     "SubstituteNotAvailable",
     "HarderVariationSuggestion",
+    "PositionedSuggestion",
     "substitute_exercise",
     "harder_variation_suggestion",
+    "harder_variation_suggestions",
 ]

@@ -49,3 +49,24 @@ export function toHarderVariationOffer(
     dismissLabel: "Not yet",
   };
 }
+
+// One Prescription's entry in the batch offer read (audit V-5).
+export interface PositionedSuggestion {
+  position: number;
+  suggested_variation: SuggestedVariation | null;
+}
+
+// Line the batch read up with the Session's prescriptions: one display model per
+// position, in the order given. A position the read left out — or a failed read,
+// passed as `null` — shows no offer, so a missing offer never hides a card.
+export function harderVariationOffersFor(
+  positions: readonly number[],
+  offers: readonly PositionedSuggestion[] | null,
+): HarderVariationOffer[] {
+  const byPosition = new Map(
+    (offers ?? []).map((offer) => [offer.position, offer.suggested_variation]),
+  );
+  return positions.map((position) =>
+    toHarderVariationOffer(byPosition.get(position)),
+  );
+}

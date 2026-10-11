@@ -1,7 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { toHarderVariationOffer } from "./harder-variation-view.ts";
+import {
+  harderVariationOffersFor,
+  toHarderVariationOffer,
+} from "./harder-variation-view.ts";
 
 // `toHarderVariationOffer` turns the backend's `suggested_variation` (or its
 // absence) into the display model the offer card renders. Pure and server-free:
@@ -58,4 +61,59 @@ test("trims surrounding whitespace from the Variation name", () => {
   if (offer.kind !== "offer") return;
   assert.equal(offer.name, "Pull-Up");
   assert.match(offer.acceptLabel, /Advance to Pull-Up$/);
+});
+
+// `harderVariationOffersFor` lines the batch read (one request per Session, audit V-5)
+// up with the prescriptions the page renders.
+
+test("maps the batch read to one offer per prescription, by position", () => {
+  // Arrange — the second of three movements is at its ceiling
+  const offers = [
+    { position: 0, suggested_variation: null },
+    { position: 1, suggested_variation: { exercise_id: 7, name: "Archer Pull-Up" } },
+    { position: 2, suggested_variation: null },
+  ];
+
+  // Act
+  const views = harderVariationOffersFor([0, 1, 2], offers);
+
+  // Assert
+  assert.deepEqual(
+    views.map((view) => view.kind),
+    ["none", "offer", "none"],
+  );
+  assert.equal(views[1].kind === "offer" && views[1].exerciseId, 7);
+});
+
+test("matches offers by position, not by array order", () => {
+  // Arrange — the read lists positions out of order
+  const offers = [
+    { position: 1, suggested_variation: null },
+    { position: 0, suggested_variation: { exercise_id: 3, name: "Pistol Squat" } },
+  ];
+
+  // Act
+  const views = harderVariationOffersFor([0, 1], offers);
+
+  // Assert
+  assert.equal(views[0].kind, "offer");
+  assert.equal(views[1].kind, "none");
+});
+
+test("shows no offer anywhere when the batch read failed", () => {
+  // Act
+  const views = harderVariationOffersFor([0, 1], null);
+
+  // Assert — every card still renders, just without an offer
+  assert.deepEqual(views, [{ kind: "none" }, { kind: "none" }]);
+});
+
+test("shows no offer for a position the batch read left out", () => {
+  // Act
+  const views = harderVariationOffersFor([0, 1], [
+    { position: 0, suggested_variation: null },
+  ]);
+
+  // Assert
+  assert.equal(views[1].kind, "none");
 });

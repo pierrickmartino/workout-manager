@@ -108,6 +108,7 @@ from app.substitution.service import (
     PrescriptionNotFound,
     SubstituteNotAvailable,
     harder_variation_suggestion,
+    harder_variation_suggestions,
     substitute_exercise,
 )
 from app.substitution.service import SessionNotFound as SubstituteSessionNotFound
@@ -1066,6 +1067,46 @@ def read_harder_variation(
             status_code=HTTP_NOT_FOUND, detail="Prescription not found"
         ) from exc
     return success_envelope(_serialize_suggestion(suggestion))
+
+
+@router.get("/sessions/{session_id}/harder-variations")
+def read_harder_variations(
+    session_id: int,
+    clerk_user_id: str = Depends(get_current_user),
+    relationships: ExerciseRelationshipRepository = Depends(
+        get_exercise_relationship_repository
+    ),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    sessions: SessionRepository = Depends(get_session_repository),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+    profiles: ProfileRepository = Depends(get_profile_repository),
+) -> dict:
+    """Every Prescription's harder-Variation offer in one read (audit V-5): one entry
+    per position, in Session order, each shaped like the per-position read. Replaces
+    the Session detail's one-request-per-Prescription fan-out."""
+
+    try:
+        offers = harder_variation_suggestions(
+            session_id,
+            clerk_user_id,
+            relationships=relationships,
+            exercises=exercises,
+            sessions=sessions,
+            logged=logged,
+            profiles=profiles,
+        )
+    except SubstituteSessionNotFound as exc:
+        raise HTTPException(
+            status_code=HTTP_NOT_FOUND, detail="Session not found"
+        ) from exc
+    return success_envelope(
+        {
+            "offers": [
+                {"position": offer.position, **_serialize_suggestion(offer.suggestion)}
+                for offer in offers
+            ]
+        }
+    )
 
 
 class SchemeBody(BaseModel):
