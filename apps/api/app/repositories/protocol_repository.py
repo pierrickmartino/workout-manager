@@ -31,6 +31,11 @@ from app.db.models import (
     WorkoutSession,
     _utcnow,
 )
+from app.domain.curated_lineage import (
+    CuratedLineage,
+    lineage_columns,
+    lineage_of,
+)
 from app.domain.session_provenance import SessionProvenance
 from app.repositories.exercise_repository import ExerciseRepository
 from app.repositories.prescription_mapping import (
@@ -122,6 +127,9 @@ class ProtocolDraft:
     # ``ai_generated`` for an adopted Generated Protocol, ``curated`` for an adopted Curated
     # Protocol. The default keeps every existing generation caller unchanged.
     provenance: str = SessionProvenance.AI_GENERATED.value
+    # Curated lineage (ADR-0130, #688): the Curated Protocol this copy is adopted from,
+    # stamped on the Protocol and every member Session. ``None`` for a Generated adopt.
+    curated_lineage: CuratedLineage | None = None
     # Persist the Protocol set aside rather than Current: ``made_current_at`` stays unset, so
     # Current Protocol selection passes it over until a Switch (ADR-0125) stamps it. Set for a
     # Curated Protocol adopted by a user with a Sensitive Constraint (ADR-0130, ADR-0058).
@@ -163,6 +171,9 @@ class ProtocolView:
     # hand-built views in tests stay valid; every repository read populates it from the row.
     # ``None`` for a Protocol adopted set aside and never made Current since (ADR-0130).
     made_current_at: datetime | None = field(default_factory=_utcnow)
+    # Curated lineage (ADR-0130, #688): the Curated Protocol this copy was adopted from, or
+    # ``None`` for one adopted from a Generated Protocol. Immutable after adoption.
+    curated_lineage: CuratedLineage | None = None
 
 
 class ProtocolRepository(Interface):
@@ -305,6 +316,7 @@ class SqlProtocolRepository:
             name=protocol.name,
             calibration=protocol.calibration,
             made_current_at=protocol.made_current_at,
+            curated_lineage=lineage_of(protocol),
             sessions=[self._session_view(w) for w in workouts],
         )
 
@@ -319,6 +331,7 @@ class SqlProtocolRepository:
             duration_minutes=draft.duration_minutes,
             name=draft.name,
             trace_id=draft.trace_id,
+            **lineage_columns(draft.curated_lineage),
             # Adopting makes the Protocol Current (ADR-0125): both stamps share one instant.
             # A set-aside adopt (ADR-0130) leaves it never made Current; ``null()``, because
             # a plain ``None`` would fire the column's default and stamp it after all.
@@ -347,6 +360,7 @@ class SqlProtocolRepository:
                 # Regeneration re-stamps the individual Session later.
                 trace_id=draft.trace_id,
                 provenance=draft.provenance,
+                **lineage_columns(draft.curated_lineage),
             )
             self._session.add(workout)
             self._session.commit()
@@ -481,6 +495,9 @@ class SqlProtocolRepository:
                 position=spec.position,
                 title=spec.title,
                 provenance=provenance,
+                # The Protocol's curated lineage reaches every Session it holds: editing the
+                # plan doesn't change where it came from (ADR-0130).
+                **lineage_columns(lineage_of(protocol)),
             )
             self._session.add(workout)
             self._session.flush()  # assign the new Session id without committing
@@ -568,6 +585,7 @@ class InMemoryProtocolRepository:
             name=protocol.name,
             calibration=protocol.calibration,
             made_current_at=protocol.made_current_at,
+            curated_lineage=lineage_of(protocol),
             sessions=[self._session_view(w) for w in workouts],
         )
 
@@ -583,6 +601,7 @@ class InMemoryProtocolRepository:
             duration_minutes=draft.duration_minutes,
             name=draft.name,
             trace_id=draft.trace_id,
+            **lineage_columns(draft.curated_lineage),
             # Adopting makes the Protocol Current (ADR-0125): both stamps share one instant.
             # A set-aside adopt (ADR-0130) leaves it never made Current.
             created_at=adopted_at,
@@ -611,6 +630,7 @@ class InMemoryProtocolRepository:
                 # Regeneration re-stamps the individual Session later.
                 trace_id=draft.trace_id,
                 provenance=draft.provenance,
+                **lineage_columns(draft.curated_lineage),
             )
             self._next_session_id += 1
             self._sessions[protocol.id].append(workout)
@@ -709,6 +729,9 @@ class InMemoryProtocolRepository:
                 position=spec.position,
                 title=spec.title,
                 provenance=provenance,
+                # The Protocol's curated lineage reaches every Session it holds: editing the
+                # plan doesn't change where it came from (ADR-0130).
+                **lineage_columns(lineage_of(protocol)),
             )
             self._next_session_id += 1
             kept.append(workout)

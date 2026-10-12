@@ -2,6 +2,7 @@
 // so it is safe to import from both Server and Client Components. The
 // server-only data access (Clerk auth + fetch) lives in `lib/sessions.ts`.
 
+import type { CuratedLineage } from "./curated-lineage";
 import type { Effort } from "./effort";
 import type { Load } from "./load";
 import type { Quantity } from "./quantity";
@@ -122,6 +123,10 @@ export interface WorkoutSession {
   // Author id stays off the wire. Optional/absent on read paths that omit the Author (live
   // hydration); a missing flag is treated as "not self", so provenance is never hidden by default.
   authored_by_me?: boolean;
+  // Curated lineage (ADR-0130, issue #688): the Curated Protocol this plan was adopted from,
+  // carried through Duplicate and Redeem — the "Based on <name>" label. Null when there is none;
+  // absent on read paths that omit it (live hydration).
+  curated_lineage?: CuratedLineage | null;
   // Favorite (GLOSSARY: Favorite, issue #396): the owner's stored, per-user, per-copy marker,
   // surfaced on the standalone Session read as a toggle. `true`/`false` on a standalone Session;
   // `null` when withheld on a Protocol member (Favorite is standalone-only), and absent on read

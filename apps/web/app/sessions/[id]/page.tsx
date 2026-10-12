@@ -41,6 +41,7 @@ import { supersetLayout, type SupersetSlot } from "@/lib/supersets";
 import { removeAffordances } from "@/lib/remove-prescription";
 import { sessionNameView } from "@/lib/session-name";
 import { sessionAuthorView } from "@/lib/session-author";
+import { BasedOnNote } from "@/components/BasedOnNote";
 import { sessionFavoriteView } from "@/lib/session-favorite";
 import { sessionDeleteView, DELETE_DISABLED_HINT } from "@/lib/session-delete";
 import { submitDeleteSession } from "@/app/sessions/[id]/actions";
@@ -162,6 +163,10 @@ export default async function SessionPage({
           {authorView.byline}
         </p>
       ) : null}
+
+      {/* Curated lineage (ADR-0130, #688): "Based on <name>" for a plan adopted from a Curated
+          Protocol, kept through Duplicate and Redeem; nothing otherwise. */}
+      <BasedOnNote lineage={session.curated_lineage} />
 
       {/* Header controls. Favorite — a frequent, cheap toggle — stays visible; the rare and
           destructive actions (Rename, Share, Duplicate, Generate another, Delete) sit one tap

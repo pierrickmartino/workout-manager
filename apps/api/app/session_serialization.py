@@ -15,6 +15,7 @@ other field a Prescription carries lives here.
 
 from __future__ import annotations
 
+from app.domain.curated_lineage import lineage_dict
 from app.domain.session_naming import session_label
 from app.domain.session_section import sectionize
 from app.repositories.session_repository import PrescriptionView, SessionView
@@ -113,6 +114,9 @@ def serialize_session(view: SessionView, *, logged_count: int | None = None) -> 
         "duration_minutes": view.duration_minutes,
         "has_been_regenerated": view.has_been_regenerated,
         "provenance": view.provenance,
+        # Curated lineage (ADR-0130, #688): {identifier, version, name} of the Curated Protocol
+        # this plan was adopted from, carried through Duplicate and Redeem — or null.
+        "curated_lineage": lineage_dict(view.curated_lineage),
         "name": view.name,
         "display_name": session_label(
             view.name, view.training_type, view.created_at

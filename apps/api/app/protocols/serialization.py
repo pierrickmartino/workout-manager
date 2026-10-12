@@ -12,6 +12,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 
 from app.domain.calibration import MAX_CALIBRATION, MIN_CALIBRATION
+from app.domain.curated_lineage import lineage_dict
 from app.domain.protocol import protocol_label
 from app.domain.session_section import sectionize
 from app.protocols.balance_preview import BalancePreview
@@ -117,6 +118,9 @@ def serialize_protocol(
         "calibration": view.calibration or 0,
         "calibration_min": MIN_CALIBRATION,
         "calibration_max": MAX_CALIBRATION,
+        # Curated lineage (ADR-0130, #688): the Curated Protocol this copy was adopted from
+        # ({identifier, version, name}) — the web's "Based on <name>" — or null.
+        "curated_lineage": lineage_dict(view.curated_lineage),
         "sessions": [
             serialize_session(
                 s,

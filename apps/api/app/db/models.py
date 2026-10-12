@@ -287,6 +287,14 @@ class Protocol(SQLModel, table=True):
     # here at adoption so operator feedback can trace back to the exact call. Nullable —
     # absent when no monitoring backend was configured. Never mutated after creation.
     trace_id: str | None = Field(default=None)
+    # Curated lineage (ADR-0130, #688): the identifier, version and as-adopted name of the
+    # Curated Protocol this copy was Adopted from, written together at adoption and never
+    # mutated after — a content fix to the Curated Protocol never re-syncs an existing copy.
+    # All null for a Protocol adopted from a Generated Protocol. See
+    # ``app.domain.curated_lineage``.
+    curated_identifier: str | None = Field(default=None)
+    curated_version: int | None = Field(default=None)
+    curated_name: str | None = Field(default=None)
     # The standing Calibration (ADR-0111): the user's *relative offset* from this
     # Protocol's authored values, re-pitching its un-performed tail. Nullable and never
     # backfilled — ``None`` reads as 0, "as authored". It stores the user's *intent*, not
@@ -377,6 +385,15 @@ class WorkoutSession(SQLModel, table=True):
     # rather than the superseded call. Nullable (absent with no backend); written only at
     # creation and on Regeneration, never otherwise mutated.
     trace_id: str | None = Field(default=None)
+
+    # Curated lineage (ADR-0130, #688): the Curated Protocol (identifier, version, as-adopted
+    # name) this plan was Adopted from — stamped from the Protocol at adoption (and on every
+    # Session a Deploy writes into it) and carried verbatim across Duplicate and Redeem, like
+    # Provenance and ``trace_id``. Never otherwise mutated. All null for any plan not adopted
+    # from a Curated Protocol. See ``app.domain.curated_lineage``.
+    curated_identifier: str | None = Field(default=None)
+    curated_version: int | None = Field(default=None)
+    curated_name: str | None = Field(default=None)
 
 
 class ExercisePrescription(SQLModel, table=True):

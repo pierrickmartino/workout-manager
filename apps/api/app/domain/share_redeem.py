@@ -12,8 +12,8 @@ The two deltas from Duplicate are encoded here:
   Redeem; and
 * the **Author** is *preserved* as the original creator (immutable origin), never
   re-attributed to the redeemer — the same non-re-attribution as Session Provenance and
-  the ``trace_id`` lineage, which also carry forward unchanged, along with the Session
-  Name (verbatim).
+  the ``trace_id`` lineage and the curated lineage (ADR-0130), which also carry forward
+  unchanged, along with the Session Name (verbatim).
 
 What the copy drops is *not* represented here at all, because it is dropped by
 construction rather than by rule: a redeemed copy is always a **standalone** plan with
@@ -24,6 +24,8 @@ an **empty logbook** (no Protocol position, no Logged Sessions) and starts
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from app.domain.curated_lineage import CuratedLineage
 
 
 @dataclass(frozen=True)
@@ -42,6 +44,7 @@ class SharedSessionSource:
     name: str | None
     author_clerk_user_id: str | None
     trace_id: str | None = None
+    curated_lineage: CuratedLineage | None = None
 
 
 @dataclass(frozen=True)
@@ -55,6 +58,7 @@ class RedeemedSessionCopy:
     name: str | None
     author_clerk_user_id: str | None
     trace_id: str | None
+    curated_lineage: CuratedLineage | None
 
 
 def redeem_copy(
@@ -63,7 +67,8 @@ def redeem_copy(
     """Compute the redeemed copy's Session attributes from ``source`` (ADR-0057).
 
     New **Owner** is ``redeemer_clerk_user_id``; the **Author**, **Session Name**,
-    **Session Provenance**, and ``trace_id`` **lineage** are carried forward unchanged.
+    **Session Provenance**, ``trace_id`` **lineage** and **curated lineage** are carried
+    forward unchanged.
     Pure — returns a fresh immutable value and never touches the source.
     """
 
@@ -75,6 +80,7 @@ def redeem_copy(
         name=source.name,
         author_clerk_user_id=source.author_clerk_user_id,
         trace_id=source.trace_id,
+        curated_lineage=source.curated_lineage,
     )
 
 

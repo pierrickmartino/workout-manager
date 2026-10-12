@@ -3,6 +3,7 @@
 // (Clerk auth + fetch) lives in `lib/protocols.ts`.
 
 import type { MuscleShare } from "./analytics-types";
+import type { CuratedLineage } from "./curated-lineage";
 import type { ExercisePrescription } from "./sessions-types";
 
 // One Session inside a Protocol, fixed to a descriptive Week/Day position (no
@@ -73,6 +74,10 @@ export interface ProtocolProgress {
   // without hard-coding ±3. The server owns the clamp (ADR-0111); this is a UX affordance.
   calibration_min: number;
   calibration_max: number;
+  // Curated lineage (ADR-0130, issue #688): the Curated Protocol this copy was adopted from —
+  // the "Based on <name>" label — or null for one adopted from a Generated Protocol. Optional
+  // so hand-built fixtures that predate it stay valid.
+  curated_lineage?: CuratedLineage | null;
   // Present only on a Calibrate response, never on a plain Protocol read. `at_rail` is the
   // one moment a Calibration is not silent; `sensitive_caveat` is ADR-0058's
   // caveat-not-refusal for a user with a Sensitive Constraint, in either direction.

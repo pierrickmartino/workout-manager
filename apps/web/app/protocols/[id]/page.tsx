@@ -25,6 +25,7 @@ import {
   setAsideLabel,
 } from "@/lib/protocol-supersede";
 import { SetAsideNote } from "@/components/SetAsideNote";
+import { BasedOnNote } from "@/components/BasedOnNote";
 
 // Displays a user-owned multi-week Protocol: its self-paced next Session and the
 // full week-by-week schedule. Upcoming Sessions show the recommended load already
@@ -103,6 +104,10 @@ export default async function ProtocolPage({
           </div>
         }
       />
+
+      {/* Curated lineage (ADR-0130, #688): "Based on <name>" for a plan adopted from a Curated
+          Protocol, kept through Duplicate and Redeem; nothing otherwise. */}
+      <BasedOnNote lineage={protocol.curated_lineage} />
 
       {setAsideNoteLabel !== null ? <SetAsideNote label={setAsideNoteLabel} /> : null}
 
