@@ -1,7 +1,7 @@
 """Turn a Curated Protocol plus the user's choices into a fully enumerated plan (ADR-0130).
 
-Pure — no I/O, no catalog. ``validate_choices`` is the boundary check every adopt (and later
-preview) runs: a length inside the Curated Protocol's bounds and one positive starting weight
+Pure — no I/O, no catalog. ``validate_choices`` is the boundary check every adopt and preview
+runs: a length inside the Curated Protocol's bounds and one positive starting weight
 for each main lift, nothing more and nothing less. ``enumerate_plan`` repeats the weekly
 pattern to fill the chosen length, so the Protocol is fully enumerated and self-paced
 (ADR-0001), and writes each main lift's starting weight as an **absolute** Load. It never writes a ``percent_1rm``

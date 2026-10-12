@@ -2,9 +2,12 @@
 
 ``GET /api/curated-protocols`` lists the released Curated Protocols. ``POST
 /api/curated-protocols/{identifier}/adopt`` validates the user's length and starting weights,
-recomputes the whole plan server-side, and persists it as the user's Current Protocol. An
-unreleased Curated Protocol is a ``404``, exactly like an unknown one. Rejected choices are a
-``422`` naming every problem, and persist nothing. Every response uses the standard envelope."""
+recomputes the whole plan server-side, and persists it as the user's Current Protocol. ``POST
+/api/curated-protocols/{identifier}/preview`` (issue #685) takes the same choices through the
+same validation and the same ``enumerate_plan``, and returns the plan without persisting
+anything, so what was previewed is what adopt writes. An unreleased Curated Protocol is a
+``404``, exactly like an unknown one. Rejected choices are a ``422`` naming every problem, and
+persist nothing. Every response uses the standard envelope."""
 
 from __future__ import annotations
 
@@ -17,7 +20,13 @@ from pydantic import BaseModel
 from app.adoption.curated import CuratedExerciseMissing, adopt_curated
 from app.auth.dependencies import get_current_user
 from app.curated.model import CuratedProtocol
-from app.curated.plan import AdoptionChoices, ChoiceError, validate_choices
+from app.curated.plan import (
+    AdoptionChoices,
+    ChoiceError,
+    PlannedSession,
+    enumerate_plan,
+    validate_choices,
+)
 from app.curated.registry import CuratedRegistry, get_curated_registry
 from app.envelope import error_envelope, success_envelope
 from app.repositories.deps import get_exercise_repository, get_protocol_repository
@@ -35,8 +44,8 @@ HTTP_INTERNAL_SERVER_ERROR = 500
 
 
 class AdoptCuratedProtocolRequest(BaseModel):
-    """The user's choices. The bounds belong to the Curated Protocol, so they are checked once it
-    is known (``validate_choices``), not here."""
+    """The user's choices, for adopt and preview alike. The bounds belong to the Curated
+    Protocol, so they are checked once it is known (``validate_choices``), not here."""
 
     weeks: int
     starting_weights_kg: dict[str, float]
@@ -85,16 +94,13 @@ def _choice_error_response(errors: list[ChoiceError]) -> JSONResponse:
     return JSONResponse(status_code=HTTP_UNPROCESSABLE_ENTITY, content=body)
 
 
-@router.post("/curated-protocols/{identifier}/adopt", status_code=HTTP_CREATED)
-def adopt_curated_protocol(
+def _checked_choices(
     identifier: str,
     payload: AdoptCuratedProtocolRequest,
-    clerk_user_id: str = Depends(get_current_user),
-    registry: CuratedRegistry = Depends(get_curated_registry),
-    exercises: ExerciseRepository = Depends(get_exercise_repository),
-    protocols: ProtocolRepository = Depends(get_protocol_repository),
-) -> object:
-    """Adopt a released Curated Protocol as the user's own, Current Protocol."""
+    registry: CuratedRegistry,
+) -> tuple[CuratedProtocol, AdoptionChoices] | JSONResponse:
+    """The released Curated Protocol and the user's validated choices, or the ``422`` naming
+    every problem. Adopt and preview both pass through here, so they reject alike."""
 
     curated = registry.find_released(identifier)
     if curated is None:
@@ -108,6 +114,73 @@ def adopt_curated_protocol(
     errors = validate_choices(curated, choices)
     if errors:
         return _choice_error_response(errors)
+    return curated, choices
+
+
+def _serialize_planned_session(session: PlannedSession) -> dict:
+    return {
+        "week": session.week,
+        "day": session.day,
+        "title": session.title,
+        "prescriptions": [
+            {
+                "exercise_name": p.exercise,
+                "sets": p.sets,
+                "reps": p.reps,
+                "rest_seconds": p.rest_seconds,
+                "recommended_load": p.recommended_load,
+                "prescribed_quantity": p.prescribed_quantity,
+                "scheme": p.scheme,
+            }
+            for p in session.prescriptions
+        ],
+    }
+
+
+@router.post("/curated-protocols/{identifier}/preview")
+def preview_curated_protocol(
+    identifier: str,
+    payload: AdoptCuratedProtocolRequest,
+    _clerk_user_id: str = Depends(get_current_user),
+    registry: CuratedRegistry = Depends(get_curated_registry),
+) -> object:
+    """The fully enumerated plan adopting with these choices would write. Persists nothing,
+    reads no repository and never calls the LLM: it is the pure ``enumerate_plan`` adopt
+    persists, so the Loads shown are the Loads adopted."""
+
+    checked = _checked_choices(identifier, payload, registry)
+    if isinstance(checked, JSONResponse):
+        return checked
+    curated, choices = checked
+    return success_envelope(
+        {
+            "identifier": curated.identifier,
+            "version": curated.version,
+            "weeks": choices.weeks,
+            "sessions_per_week": curated.sessions_per_week,
+            "sessions": [
+                _serialize_planned_session(session)
+                for session in enumerate_plan(curated, choices)
+            ],
+        }
+    )
+
+
+@router.post("/curated-protocols/{identifier}/adopt", status_code=HTTP_CREATED)
+def adopt_curated_protocol(
+    identifier: str,
+    payload: AdoptCuratedProtocolRequest,
+    clerk_user_id: str = Depends(get_current_user),
+    registry: CuratedRegistry = Depends(get_curated_registry),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    protocols: ProtocolRepository = Depends(get_protocol_repository),
+) -> object:
+    """Adopt a released Curated Protocol as the user's own, Current Protocol."""
+
+    checked = _checked_choices(identifier, payload, registry)
+    if isinstance(checked, JSONResponse):
+        return checked
+    curated, choices = checked
 
     try:
         protocol = adopt_curated(

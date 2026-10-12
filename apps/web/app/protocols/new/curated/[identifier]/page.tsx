@@ -3,7 +3,13 @@ import { notFound } from "next/navigation";
 import { CuratedAdoptForm } from "@/components/CuratedAdoptForm";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
-import { fetchCuratedProtocols } from "@/lib/curated-protocols";
+import { fetchCuratedProtocols, previewCuratedProtocol } from "@/lib/curated-protocols";
+import {
+  curatedPlanView,
+  defaultFormSnapshot,
+  defaultPreviewRequest,
+  type CuratedPreview,
+} from "@/lib/curated-plan-preview";
 import {
   adoptFormDefaults,
   curatedProtocolRow,
@@ -12,7 +18,8 @@ import {
 } from "@/lib/curated-protocol-view";
 
 // Adopt one Curated Protocol (issue #684): its description, then the length and starting
-// weights. An unknown or unreleased Curated Protocol is a 404 here, as it is on the API.
+// weights, with the plan the defaults would write already previewed (issue #685). An unknown
+// or unreleased Curated Protocol is a 404 here, as it is on the API.
 export default async function AdoptCuratedProtocolPage({
   params,
 }: {
@@ -23,6 +30,16 @@ export default async function AdoptCuratedProtocolPage({
   const curated = findCuratedProtocol(result, identifier);
   if (!curated) notFound();
   const row = curatedProtocolRow(curated);
+  const defaults = adoptFormDefaults(curated);
+  // A failed preview read leaves the form to preview on demand.
+  const previewed = await previewCuratedProtocol(
+    curated.identifier,
+    defaultPreviewRequest(defaults),
+  ).catch(() => null);
+  const initialPreview: CuratedPreview | null =
+    previewed?.success && previewed.data
+      ? { snapshot: defaultFormSnapshot(defaults), plan: curatedPlanView(previewed.data) }
+      : null;
 
   return (
     <section className="flex flex-col gap-6">
@@ -34,7 +51,11 @@ export default async function AdoptCuratedProtocolPage({
         </p>
         <p className="font-mono text-[12px] text-text-muted">Equipment: {row.equipment}</p>
       </div>
-      <CuratedAdoptForm identifier={curated.identifier} defaults={adoptFormDefaults(curated)} />
+      <CuratedAdoptForm
+        identifier={curated.identifier}
+        defaults={defaults}
+        initialPreview={initialPreview}
+      />
       <BackLink href={CURATED_PICKER_HREF}>Back to Curated Protocols</BackLink>
     </section>
   );

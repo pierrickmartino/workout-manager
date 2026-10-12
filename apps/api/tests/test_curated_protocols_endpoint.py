@@ -1,7 +1,9 @@
 """Behavior of the Curated Protocol endpoints (issue #684, ADR-0130).
 
-``GET /api/curated-protocols`` lists the released Curated Protocols, and ``POST
-/api/curated-protocols/{identifier}/adopt`` turns one into the user's own Protocol. Driven end
+``GET /api/curated-protocols`` lists the released Curated Protocols, ``POST
+/api/curated-protocols/{identifier}/preview`` shows the plan the user's choices would write
+(issue #685), and ``POST /api/curated-protocols/{identifier}/adopt`` turns one into the user's
+own Protocol. Driven end
 to end over HTTP against a throwaway SQLite database (so the adopted plan is read back through
 the real Protocol, Session, Home and index endpoints), with an injected registry that releases
 the real beginner content (it ships unreleased) and the curated Catalog seeded as the migration
@@ -14,7 +16,7 @@ from datetime import date
 
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, func, select
 
 from app.auth.dependencies import get_jwks
 from app.config import Settings, get_settings
@@ -22,6 +24,7 @@ from app.curated.beginner_linear import BEGINNER_LINEAR
 from app.curated.model import CoachSignOff
 from app.curated.registry import CuratedRegistry, get_curated_registry
 from app.curated.seed import seed_curated_exercises
+from app.db.models import ExercisePrescription, Protocol, WorkoutSession
 from app.db.session import get_session
 from app.main import create_app
 from app.repositories.deps import (
@@ -70,6 +73,14 @@ class _Harness:
             headers=self.auth(sub),
         )
 
+    def preview(self, identifier: str = RELEASED.identifier, sub: str = USER, **body):
+        payload = {"weeks": 4, "starting_weights_kg": STARTING_WEIGHTS, **body}
+        return self.client.post(
+            f"/api/curated-protocols/{identifier}/preview",
+            json=payload,
+            headers=self.auth(sub),
+        )
+
     def adopted(self, response, sub: str = USER) -> dict:
         protocol_id = response.json()["data"]["protocol_id"]
         return self.get(f"/api/protocols/{protocol_id}", sub).json()["data"]
@@ -77,6 +88,18 @@ class _Harness:
     def catalog_names(self) -> list[str]:
         with Session(self.engine) as session:
             return sorted(e.name for e in SqlExerciseRepository(session).list_all())
+
+    def row_counts(self) -> dict[str, int]:
+        """Rows in every table an adopt writes. Read straight off the database, because
+        "nothing was persisted" has no other witness."""
+
+        with Session(self.engine) as session:
+            return {
+                table.__name__: session.exec(
+                    select(func.count()).select_from(table)
+                ).one()
+                for table in (Protocol, WorkoutSession, ExercisePrescription)
+            }
 
 
 def build_harness(*curated_protocols) -> _Harness:
@@ -464,3 +487,174 @@ def test_a_builder_deploy_keeps_the_rewritten_tail_curated():
         for s in deployed["sessions"]
     }
     assert provenances == {"curated"}
+
+
+# --- Preview ----------------------------------------------------------------------------
+
+PLAN_FIELDS = (
+    "exercise_name",
+    "sets",
+    "reps",
+    "rest_seconds",
+    "recommended_load",
+    "prescribed_quantity",
+    "scheme",
+)
+
+
+def _plan_of(sessions) -> list:
+    return [
+        (
+            s["week"],
+            s["day"],
+            s["title"],
+            [{field: p[field] for field in PLAN_FIELDS} for p in s["prescriptions"]],
+        )
+        for s in sessions
+    ]
+
+
+def test_preview_returns_the_enumerated_plan_in_the_envelope():
+    # Arrange
+    h = build_harness()
+
+    # Act
+    response = h.preview(weeks=5)
+
+    # Assert
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    plan = body["data"]
+    assert plan["identifier"] == "beginner-linear-progression"
+    assert plan["version"] == 1
+    assert plan["weeks"] == 5
+    assert plan["sessions_per_week"] == 3
+    assert len(plan["sessions"]) == 15
+    assert [(s["week"], s["day"]) for s in plan["sessions"][:4]] == [
+        (1, 1),
+        (1, 2),
+        (1, 3),
+        (2, 1),
+    ]
+    squat = next(
+        p
+        for p in plan["sessions"][0]["prescriptions"]
+        if p["exercise_name"] == "Barbell Back Squat"
+    )
+    assert squat["recommended_load"] == {"kind": "absolute", "text": "60 kg", "kg": 60}
+    assert squat["scheme"] == "greyskull"
+
+
+def test_preview_equals_what_adopt_then_persists():
+    # Arrange
+    h = build_harness()
+    weights = {"squat": 62.5, "bench": 42.5, "press": 27.5, "deadlift": 90}
+
+    # Act
+    previewed = h.preview(weeks=6, starting_weights_kg=weights).json()["data"]
+    adopted = h.adopted(h.adopt(weeks=6, starting_weights_kg=weights))
+
+    # Assert
+    assert _plan_of(previewed["sessions"]) == _plan_of(adopted["sessions"])
+
+
+def test_preview_persists_nothing_and_leaves_the_current_protocol_current():
+    # Arrange
+    h = build_harness()
+    current = h.adopt().json()["data"]["protocol_id"]
+    counts = h.row_counts()
+
+    # Act
+    response = h.preview(weeks=12)
+
+    # Assert
+    assert response.status_code == 200
+    assert h.row_counts() == counts
+    assert h.get("/api/home").json()["data"]["current_protocol"]["id"] == current
+    assert [row["id"] for row in h.get("/api/protocols").json()["data"]] == [current]
+
+
+def test_preview_creates_no_catalog_exercise():
+    # Arrange
+    h = build_harness()
+    before = h.catalog_names()
+
+    # Act
+    response = h.preview()
+
+    # Assert
+    assert response.status_code == 200
+    assert h.catalog_names() == before
+
+
+def _rejection(response) -> tuple:
+    body = response.json()
+    return response.status_code, body["success"], body["error"], body["errors"]
+
+
+def test_preview_rejects_invalid_choices_with_the_same_errors_as_adopt():
+    # Arrange
+    h = build_harness()
+    invalid = [
+        {"weeks": 3},
+        {"weeks": 13},
+        {"starting_weights_kg": {"squat": 60, "bench": 40, "press": 30}},
+        {"starting_weights_kg": {**STARTING_WEIGHTS, "squat": 0}},
+        {"starting_weights_kg": {**STARTING_WEIGHTS, "bench": -20}},
+        {"starting_weights_kg": {**STARTING_WEIGHTS, "curl": 10}},
+    ]
+
+    for body in invalid:
+        # Act
+        previewed = h.preview(**body)
+        adopted = h.adopt(**body)
+
+        # Assert
+        assert previewed.status_code == 422, body
+        assert _rejection(previewed) == _rejection(adopted)
+    assert h.row_counts() == {
+        "Protocol": 0,
+        "WorkoutSession": 0,
+        "ExercisePrescription": 0,
+    }
+
+
+def test_preview_rejects_a_malformed_body_in_the_envelope():
+    # Arrange
+    h = build_harness()
+
+    # Act
+    response = h.preview(starting_weights_kg={**STARTING_WEIGHTS, "squat": "heavy"})
+
+    # Assert
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+
+
+def test_an_unreleased_curated_protocol_cannot_be_previewed():
+    # Arrange
+    h = build_harness()
+
+    # Act
+    unreleased = h.preview(identifier=UNRELEASED.identifier)
+    unknown = h.preview(identifier="no-such-curated-protocol")
+
+    # Assert
+    assert unreleased.status_code == 404
+    assert unreleased.json()["success"] is False
+    assert unknown.status_code == 404
+
+
+def test_preview_requires_authentication():
+    # Arrange
+    h = build_harness()
+
+    # Act
+    response = h.client.post(
+        f"/api/curated-protocols/{RELEASED.identifier}/preview",
+        json={"weeks": 4, "starting_weights_kg": STARTING_WEIGHTS},
+    )
+
+    # Assert
+    assert response.status_code == 401

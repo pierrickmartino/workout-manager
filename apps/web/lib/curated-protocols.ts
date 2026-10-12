@@ -1,5 +1,6 @@
 import { apiGet, apiSend, type Envelope } from "./api";
 
+import type { CuratedPreviewResponse } from "./curated-plan-preview";
 import type {
   AdoptCuratedProtocolRequest,
   CuratedProtocolSummary,
@@ -12,6 +13,19 @@ import type {
 // The released Curated Protocols, in authored order.
 export async function fetchCuratedProtocols(): Promise<Envelope<CuratedProtocolSummary[]>> {
   return apiGet("/api/curated-protocols");
+}
+
+// The fully enumerated plan adopting with these choices would write (issue #685). It takes the
+// adopt body, is refused exactly as adopt is (`404`, `422`), and persists nothing.
+export async function previewCuratedProtocol(
+  identifier: string,
+  request: AdoptCuratedProtocolRequest,
+): Promise<Envelope<CuratedPreviewResponse>> {
+  return apiSend(
+    `/api/curated-protocols/${encodeURIComponent(identifier)}/preview`,
+    "POST",
+    request,
+  );
 }
 
 // Adopt one as the user's own, Current Protocol. The server recomputes the whole plan from the
