@@ -53,9 +53,7 @@ export default async function AdoptCuratedProtocolPage({
         </p>
         <p className="font-mono text-[12px] text-text-muted">Equipment: {row.equipment}</p>
         {row.equipmentFlag !== null ? (
-          <p className="font-mono text-[12px] text-amber">
-            {row.equipmentFlag} — you can Substitute exercises after adopting.
-          </p>
+          <p className="font-mono text-[12px] text-amber">{row.equipmentFlag}</p>
         ) : null}
       </div>
       <CuratedAdoptForm

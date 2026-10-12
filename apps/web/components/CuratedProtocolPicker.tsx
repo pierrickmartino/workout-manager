@@ -11,8 +11,8 @@ interface CuratedProtocolPickerProps {
 
 // The Curated Protocol picker (issue #684): one card per released Curated Protocol, opening its adopt
 // form. A thin renderer over `curatedProtocolRow`; names and descriptions are authored text,
-// so they wrap rather than truncate (ADR-0085). A program needing kit the user lacks is flagged,
-// never hidden, and stays adoptable (issue #689, ADR-0130).
+// so they wrap rather than truncate (ADR-0085). A Curated Protocol needing equipment the user
+// lacks is flagged, never hidden, and stays adoptable (issue #689, ADR-0130).
 export function CuratedProtocolPicker({
   rows,
 }: CuratedProtocolPickerProps): React.JSX.Element {

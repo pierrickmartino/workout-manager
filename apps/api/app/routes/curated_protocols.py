@@ -34,6 +34,7 @@ from app.curated.plan import (
 )
 from app.curated.prefill import StartingWeightPrefill, starting_weight_prefills
 from app.curated.registry import CuratedRegistry, get_curated_registry
+from app.db.models import Profile
 from app.domain.equipment import missing_equipment
 from app.domain.fitness_profile import is_sensitive, resolve_equipment
 from app.envelope import error_envelope, success_envelope
@@ -111,20 +112,19 @@ def _serialize_curated(
     }
 
 
-def _untailored_for(clerk_user_id: str, profiles: ProfileRepository) -> bool:
+def _untailored_for(profile: Profile) -> bool:
     """Whether a Curated Protocol is untailored *for this user*: they hold a Sensitive
     Constraint, so the list shows the caveat and adopt sets the copy aside (ADR-0058). One
     rule, read the same way by both, so the caveat shown is the posture applied."""
 
-    return is_sensitive(profiles.get_or_create(clerk_user_id))
+    return is_sensitive(profile)
 
 
-def _available_equipment(clerk_user_id: str, profiles: ProfileRepository) -> list[str]:
+def _available_equipment(profile: Profile) -> list[str]:
     """The equipment a generation stating none would run with: the user's Default Equipment,
     read through the one fall-back rule generation uses (ADR-0038), so the picker's flag and
     a generation never disagree about what the user has."""
 
-    profile = profiles.get_or_create(clerk_user_id)
     return resolve_equipment(None, profile.default_equipment)
 
 
@@ -143,8 +143,9 @@ def list_curated_protocols(
     if not released:
         return success_envelope([])
     history = logged.list_for_user(clerk_user_id)
-    caveat = _untailored_for(clerk_user_id, profiles)
-    available = _available_equipment(clerk_user_id, profiles)
+    profile = profiles.get_or_create(clerk_user_id)
+    caveat = _untailored_for(profile)
+    available = _available_equipment(profile)
     return success_envelope(
         [
             _serialize_curated(
@@ -255,7 +256,7 @@ def adopt_curated_protocol(
     if isinstance(checked, JSONResponse):
         return checked
     curated, choices = checked
-    set_aside = _untailored_for(clerk_user_id, profiles)
+    set_aside = _untailored_for(profiles.get_or_create(clerk_user_id))
 
     try:
         protocol = adopt_curated(
