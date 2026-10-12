@@ -16,7 +16,7 @@ Most of the skill's rules are about native APIs (FlashList, Reanimated, native
 navigators, `expo-image`, `Pressable`, native modals and menus, safe-area ScrollViews,
 font config plugins, native dependencies in a monorepo). They have nothing to apply to,
 so **this audit produces no code tasks.** The web app's own performance audit is
-[react-best-practices-2026-10-10](react-best-practices-2026-10-10.md).
+react-best-practices-2026-10-10 (since removed).
 
 ## The rules that also apply to web React
 

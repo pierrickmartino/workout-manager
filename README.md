@@ -87,6 +87,6 @@ For a separate web development server, copy `apps/web/.env.local.example` to `ap
 - `apps/api/app/routes/`: HTTP endpoints; `domain/`: training rules and calculations; `repositories/`: persistence; `generation/`: AI providers, cache and jobs.
 - `apps/api/app/alembic/`: database migrations.
 - `docs/adr/`: architectural decisions; [GLOSSARY.md](./GLOSSARY.md): product terminology; [CLAUDE.md](./CLAUDE.md): developer map.
-- `docs/deployment/`: [Railway](./docs/deployment/railway.md), [Hostinger VPS](./docs/deployment/hostinger-vps.md) and [Langfuse](./docs/deployment/langfuse.md) guides.
+- `docs/deployment/`: [Railway](./docs/deployment/railway.md), [Langfuse](./docs/deployment/langfuse.md) and [enrichment backfill](./docs/deployment/enrichment-backfill.md) guides.
 
 The project is licensed under [MIT](./LICENSE).

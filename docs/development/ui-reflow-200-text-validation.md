@@ -4,8 +4,7 @@ Date: 2026-09-29. Issue:
 [#572](https://github.com/pierrickmartino/workout-manager/issues/572), split out
 of [#570](https://github.com/pierrickmartino/workout-manager/issues/570) /
 [#571](https://github.com/pierrickmartino/workout-manager/issues/571), where it
-was measured, named and deliberately left open — see
-[that record](ui-reflow-validation.md).
+was measured, named and deliberately left open.
 Application base: `65fbc1dc435b967ed5754def8a209ee18a8331b6`.
 Governed by [ADR-0087](../adr/0087-a-field-row-stacks-when-its-fields-no-longer-fit.md).
 
