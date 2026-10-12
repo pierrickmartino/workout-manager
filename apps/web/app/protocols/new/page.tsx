@@ -1,6 +1,9 @@
 import { GenerateProtocolForm } from "@/components/GenerateProtocolForm";
+import { NewProtocolChoices } from "@/components/NewProtocolChoices";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
+import { fetchCuratedProtocols } from "@/lib/curated-protocols";
+import { newProtocolChoices } from "@/lib/curated-protocol-view";
 import { fetchHome } from "@/lib/home";
 import { fetchProfile } from "@/lib/profile";
 
@@ -12,8 +15,16 @@ import { fetchProfile } from "@/lib/profile";
 // longer a one-way door (ADR-0125: it can be Switched back to), so nothing is asked; this
 // reads Home only to hand the form the Current Protocol's id, so the adopted Protocol can
 // note where the old one went. A failed Home read simply omits the note.
+//
+// "Choose a Curated Protocol" sits beside generation as a peer (ADR-0130), offered once at least
+// one is released; a failed list read simply leaves generation on its own.
 export default async function NewProtocolPage() {
-  const [home, profile] = await Promise.all([fetchHome(), fetchProfile()]);
+  const [home, profile, curated] = await Promise.all([
+    fetchHome(),
+    fetchProfile(),
+    fetchCuratedProtocols().catch(() => null),
+  ]);
+  const hasCuratedProtocols = Boolean(curated?.success && curated.data?.length);
   const setAsideProtocolId = home.success
     ? (home.data?.current_protocol?.id ?? null)
     : null;
@@ -26,6 +37,9 @@ export default async function NewProtocolPage() {
   return (
     <section className="flex flex-col gap-6">
       <PageHeader overline="PULSE // BUILDER" title="Generate a protocol" />
+      <NewProtocolChoices
+        choices={newProtocolChoices("generate", { hasCuratedProtocols })}
+      />
       <p className="font-mono text-[13px] leading-relaxed text-text-muted">
         Choose your training type, objective, and schedule. We&apos;ll build a
         full multi-week plan with week-to-week progression.

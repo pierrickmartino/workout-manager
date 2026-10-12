@@ -10,6 +10,7 @@ another. SQLModel-backed and in-memory implementations honor the same contract."
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -29,6 +30,7 @@ from app.db.models import (
     WorkoutSession,
     _utcnow,
 )
+from app.domain.session_provenance import SessionProvenance
 from app.repositories.exercise_repository import ExerciseRepository
 from app.repositories.prescription_mapping import (
     PrescriptionDraft,
@@ -115,6 +117,10 @@ class ProtocolDraft:
     # trace id, deep-copied from the Generated artifact onto the Protocol and seeded onto
     # each of its Sessions at creation. ``None`` when no monitoring backend was configured.
     trace_id: str | None = None
+    # Session Provenance stamped on every member Session (ADR-0040, ADR-0130):
+    # ``ai_generated`` for an adopted Generated Protocol, ``curated`` for an adopted Curated
+    # Protocol. The default keeps every existing generation caller unchanged.
+    provenance: str = SessionProvenance.AI_GENERATED.value
 
 
 @dataclass(frozen=True)
@@ -332,6 +338,7 @@ class SqlProtocolRepository:
                 # Seed each Session's lineage with the originating Protocol call (#274);
                 # Regeneration re-stamps the individual Session later.
                 trace_id=draft.trace_id,
+                provenance=draft.provenance,
             )
             self._session.add(workout)
             self._session.commit()
@@ -436,6 +443,7 @@ class SqlProtocolRepository:
         workouts = self._session.exec(
             select(WorkoutSession).where(WorkoutSession.protocol_id == protocol_id)
         ).all()
+        provenance = _tail_provenance(workouts)
         for workout in workouts:
             if workout.id in performed_session_ids:
                 continue
@@ -464,6 +472,7 @@ class SqlProtocolRepository:
                 day=spec.day,
                 position=spec.position,
                 title=spec.title,
+                provenance=provenance,
             )
             self._session.add(workout)
             self._session.flush()  # assign the new Session id without committing
@@ -592,6 +601,7 @@ class InMemoryProtocolRepository:
                 # Seed each Session's lineage with the originating Protocol call (#274);
                 # Regeneration re-stamps the individual Session later.
                 trace_id=draft.trace_id,
+                provenance=draft.provenance,
             )
             self._next_session_id += 1
             self._sessions[protocol.id].append(workout)
@@ -666,6 +676,7 @@ class InMemoryProtocolRepository:
 
         # Drop every un-performed Session (and its Prescriptions); the frozen performed
         # prefix is kept exactly as it was.
+        provenance = _tail_provenance(self._sessions.get(protocol_id, []))
         kept: list[WorkoutSession] = []
         for workout in self._sessions.get(protocol_id, []):
             if workout.id in performed_session_ids:
@@ -688,6 +699,7 @@ class InMemoryProtocolRepository:
                 day=spec.day,
                 position=spec.position,
                 title=spec.title,
+                provenance=provenance,
             )
             self._next_session_id += 1
             kept.append(workout)
@@ -727,6 +739,19 @@ class InMemoryProtocolRepository:
                     _apply_pitch(row, pitch)
 
         return self._view(protocol)
+
+
+def _tail_provenance(workouts: Sequence[WorkoutSession]) -> str:
+    """The Session Provenance a Deployed tail inherits (ADR-0130).
+
+    Every Session of a Protocol shares the provenance it was adopted with, and editing the
+    plan in the Builder doesn't change who wrote it: a Curated Protocol's rewritten tail stays
+    ``curated``, so Deploy can't re-open the AI-only affordances on it."""
+
+    return next(
+        (w.provenance for w in workouts if w.provenance is not None),
+        SessionProvenance.AI_GENERATED.value,
+    )
 
 
 def _pitches_by_session(

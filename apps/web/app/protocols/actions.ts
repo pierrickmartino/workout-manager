@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { adoptCuratedProtocol, fetchCuratedProtocols } from "@/lib/curated-protocols";
+import { findCuratedProtocol, readAdoptForm } from "@/lib/curated-protocol-view";
+import { fetchHome } from "@/lib/home";
+import { adoptedProtocolHref } from "@/lib/protocol-supersede";
 import {
   deleteProtocol,
   fetchProtocolJob,
@@ -92,4 +96,46 @@ export async function deleteProtocolAction(
   revalidatePath("/dashboard");
   revalidatePath("/protocols");
   return { error: null };
+}
+
+export interface AdoptCuratedProtocolState {
+  error: string | null;
+}
+
+// Adopt a Curated Protocol (issue #684). The Curated Protocol is re-read server-side rather than trusted
+// from the form, and the form is checked against it before anything is sent; the API is still
+// authoritative and recomputes the plan itself. On success the new Protocol is Current, so Home
+// and the index are revalidated and the user lands on it, with the same note a generated
+// adoption carries saying where the previous Current Protocol went (ADR-0125).
+export async function adoptCuratedProtocolAction(
+  _prevState: AdoptCuratedProtocolState,
+  form: FormData,
+): Promise<AdoptCuratedProtocolState> {
+  const identifier = String(form.get("identifier") ?? "");
+  const list = await fetchCuratedProtocols();
+  const curated = findCuratedProtocol(list, identifier);
+  if (!curated) {
+    return { error: list.error ?? "This Curated Protocol isn’t available." };
+  }
+
+  const parsed = readAdoptForm(curated, form);
+  if (!parsed.ok) {
+    return { error: parsed.error };
+  }
+
+  // Read before adopting: afterwards Home already reports the new Protocol as Current. A failed
+  // read simply omits the note.
+  const home = await fetchHome().catch(() => null);
+  const setAsideProtocolId = home?.success
+    ? (home.data?.current_protocol?.id ?? null)
+    : null;
+
+  const result = await adoptCuratedProtocol(identifier, parsed.request);
+  if (!result.success || !result.data) {
+    return { error: result.error ?? "Could not adopt this Curated Protocol." };
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/protocols");
+  redirect(adoptedProtocolHref(result.data.protocol_id, setAsideProtocolId));
 }

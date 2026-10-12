@@ -78,11 +78,13 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // is the Stamp's name, and a locked Achievement's page shows criteria and progress instead of
 // the explanation and source link, so each is a journey of its own. `stamp-record` joins them
 // with #653: the First Record page also lists the lift that set it, a bodyweight one here, whose
-// "bodyweight + added load × reps" set is the longest value the list holds.
+// "bodyweight + added load × reps" set is the longest value the list holds. `curated` and
+// `curated-adopt` join them with #684: the new-Protocol peer choice over the Curated Protocol
+// picker, and the adopt form's length and four starting-weight fields.
 const NOVEL_JOURNEYS = [
   "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc", "launchpad",
   "levels", "sheet", "protocols", "protocols-live", "set-aside", "passport", "passport-open",
-  "passport-empty", "stamp", "stamp-locked", "stamp-record",
+  "passport-empty", "stamp", "stamp-locked", "stamp-record", "curated", "curated-adopt",
 ];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and
