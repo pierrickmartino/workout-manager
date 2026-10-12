@@ -53,9 +53,10 @@ class SessionDraft:
     training_type: str
     duration_minutes: int
     prescriptions: list[PrescriptionDraft] = field(default_factory=list)
-    # Session Provenance (ADR-0040): how this plan came to exist — ``ai_generated``
-    # (the generation pipeline) or ``user_authored`` (a Hand-Authored Session, built by
-    # hand with no AI). Defaults to ``ai_generated`` so every existing generation path is
+    # Session Provenance (ADR-0040, ADR-0130): how this plan came to exist —
+    # ``ai_generated`` (the generation pipeline), ``user_authored`` (a Hand-Authored
+    # Session, built by hand with no AI), or ``curated`` (adopted from a Curated
+    # Protocol). Defaults to ``ai_generated`` so every existing generation path is
     # unchanged; the Hand-Authored create path stamps ``user_authored``. See
     # ``app.domain.session_provenance.SessionProvenance``.
     provenance: str = "ai_generated"
@@ -86,7 +87,8 @@ class SessionView:
     created_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
-    # Session Provenance (ADR-0040): ``ai_generated`` | ``user_authored``. Defaults to
+    # Session Provenance (ADR-0040, ADR-0130): ``ai_generated`` | ``user_authored`` |
+    # ``curated``. Defaults to
     # ``ai_generated`` — every path that builds a Session today is AI. See
     # ``app.domain.session_provenance.SessionProvenance``.
     provenance: str = "ai_generated"

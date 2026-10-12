@@ -29,6 +29,18 @@ test("hides both AI-only affordances on a hand-authored session", () => {
   });
 });
 
+test("hides both AI-only affordances on a curated session", () => {
+  // Arrange / Act — the wire value the Session read carries for a Curated adoption.
+  const visibility = aiAffordanceVisibility("curated");
+
+  // Assert — a plan adopted from a Curated Protocol was written by a person, not the AI
+  // (ADR-0130), so neither plan-quality affordance is offered, matching the backend's 409.
+  assert.deepEqual(visibility, {
+    showGenerationFeedback: false,
+    showRegeneration: false,
+  });
+});
+
 test("hides both affordances when provenance is absent (e.g. the live read)", () => {
   // Arrange / Act — the live hydration read omits session-level provenance.
   const visibility = aiAffordanceVisibility(undefined);

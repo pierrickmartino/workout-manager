@@ -37,7 +37,7 @@ from app.domain.note import parse_note
 from app.domain.progression import ProgressionScheme, parse_scheme
 from app.domain.quantity import QuantityKind, prescribed_quantity_from_input
 from app.domain.session_naming import session_label
-from app.domain.session_provenance import SessionProvenance
+from app.domain.session_provenance import is_ai_generated
 from app.domain.set_type import SetType, parse_set_type
 from app.envelope import error_envelope, success_envelope
 from app.generation.generator import (
@@ -887,12 +887,13 @@ def record_feedback(
     if session_view is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Session not found")
 
-    # Generation Feedback is an AI-only affordance (ADR-0040): "the AI gave me a bad plan"
-    # is nonsensical on a plan the user wrote by hand, so a user_authored Session rejects it.
-    if session_view.provenance == SessionProvenance.USER_AUTHORED.value:
+    # Generation Feedback is an AI-only affordance (ADR-0040, ADR-0130): "the AI gave me a
+    # bad plan" is nonsensical on a plan no AI wrote. Fails closed — only an ai_generated
+    # Session takes it; user_authored, curated, or any future value is rejected.
+    if not is_ai_generated(session_view.provenance):
         raise HTTPException(
             status_code=HTTP_CONFLICT,
-            detail="Generation feedback isn't available for a hand-authored session.",
+            detail="Generation feedback is only available for an AI-generated session.",
         )
 
     view = feedback.record(
@@ -923,17 +924,15 @@ def regenerate(
     exercises: ExerciseRepository = Depends(get_exercise_repository),
     sessions: SessionRepository = Depends(get_session_repository),
 ) -> dict:
-    # Regeneration is an AI-only affordance (ADR-0040): a hand-authored plan was never
-    # generated, so the AI can't redo it. Reject a user_authored Session before the
-    # regeneration service runs; a missing/unowned Session still 404s from the service.
+    # Regeneration is an AI-only affordance (ADR-0040, ADR-0130): a plan the AI never
+    # generated can't be redone by it. Fails closed — reject anything but an ai_generated
+    # Session before the regeneration service runs; a missing/unowned Session still 404s
+    # from the service.
     session_view = sessions.get(session_id, clerk_user_id)
-    if (
-        session_view is not None
-        and session_view.provenance == SessionProvenance.USER_AUTHORED.value
-    ):
+    if session_view is not None and not is_ai_generated(session_view.provenance):
         raise HTTPException(
             status_code=HTTP_CONFLICT,
-            detail="A hand-authored session can't be regenerated.",
+            detail="Only an AI-generated session can be regenerated.",
         )
     try:
         view = regenerate_session(
