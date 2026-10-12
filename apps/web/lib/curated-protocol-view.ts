@@ -241,8 +241,8 @@ export function curatedCaveat(curated: CuratedProtocolSummary): CuratedCaveat | 
     title: "Not tailored to your constraints",
     body:
       "This plan was written for a general audience, not around your injury, rehabilitation, " +
-      "postpartum or medical constraint. Adopting it sets it aside: your current protocol " +
-      "stays current until you choose Switch.",
+      "postpartum or medical constraint. Adopting it sets it aside rather than making it your " +
+      "Current Protocol; Switch to it when you’re ready to start.",
   };
 }
 

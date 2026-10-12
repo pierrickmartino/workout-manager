@@ -66,10 +66,12 @@ import { ProtocolsIndex } from "@/components/ProtocolsIndex";
 import { NewProtocolChoices } from "@/components/NewProtocolChoices";
 import { CuratedProtocolPicker } from "@/components/CuratedProtocolPicker";
 import { CuratedAdoptForm } from "@/components/CuratedAdoptForm";
+import { AdoptedSetAsideNote } from "@/components/AdoptedSetAsideNote";
 import {
   adoptFormDefaults,
   curatedCaveat,
   curatedProtocolRow,
+  curatedSetAsideNotice,
   newProtocolChoices,
   type CuratedProtocolSummary,
 } from "@/lib/curated-protocol-view";
@@ -429,7 +431,11 @@ function Content() {
     // The new-Protocol peer choice over the Curated Protocol picker (#684).
     case "curated": return <><NewProtocolChoices choices={newProtocolChoices("curated", { hasCuratedProtocols: true })} /><CuratedProtocolPicker rows={count === 0 ? [] : [curatedProtocolRow(auditCuratedProtocol)]} /></>;
     case "curated-adopt": return <CuratedAdoptForm identifier={auditCuratedProtocol.identifier} defaults={adoptFormDefaults(auditCuratedProtocol)} initialPreview={auditCuratedPreview} caveat={curatedCaveat(auditCuratedProtocol)} />;
-    case "protocols": return <ProtocolsIndex index={protocolsIndex(count === 0 ? [] : protocolIndexEntries, { liveSlot: null, accountId: "audit-synthetic-account" })} />;
+    // With the note a Curated Protocol adopted set aside lands on (#687), naming the set-aside row.
+    case "protocols": {
+      const notice = count === 0 ? null : curatedSetAsideNotice("2", protocolIndexEntries);
+      return <ProtocolsIndex index={protocolsIndex(count === 0 ? [] : protocolIndexEntries, { liveSlot: null, accountId: "audit-synthetic-account" })}>{notice !== null ? <AdoptedSetAsideNote notice={notice} /> : null}</ProtocolsIndex>;
+    }
     // The same index with a Live Session in progress (#638): every set-aside row's Switch is
     // blocked and carries its reason and a Resume link, the widest shape a row action takes.
     case "protocols-live": return <ProtocolsIndex index={protocolsIndex(protocolIndexEntries, auditLiveSession)} />;

@@ -100,6 +100,14 @@ def _serialize_curated(
     }
 
 
+def _untailored_for(clerk_user_id: str, profiles: ProfileRepository) -> bool:
+    """Whether a Curated Protocol is untailored *for this user*: they hold a Sensitive
+    Constraint, so the list shows the caveat and adopt sets the copy aside (ADR-0058). One
+    rule, read the same way by both, so the caveat shown is the posture applied."""
+
+    return is_sensitive(profiles.get_or_create(clerk_user_id))
+
+
 @router.get("/curated-protocols")
 def list_curated_protocols(
     clerk_user_id: str = Depends(get_current_user),
@@ -115,7 +123,7 @@ def list_curated_protocols(
     if not released:
         return success_envelope([])
     history = logged.list_for_user(clerk_user_id)
-    caveat = is_sensitive(profiles.get_or_create(clerk_user_id))
+    caveat = _untailored_for(clerk_user_id, profiles)
     return success_envelope(
         [_serialize_curated(p, history, caveat=caveat) for p in released]
     )
@@ -221,7 +229,7 @@ def adopt_curated_protocol(
     if isinstance(checked, JSONResponse):
         return checked
     curated, choices = checked
-    set_aside = is_sensitive(profiles.get_or_create(clerk_user_id))
+    set_aside = _untailored_for(clerk_user_id, profiles)
 
     try:
         protocol = adopt_curated(

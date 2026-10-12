@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
 import { Alert } from "@/components/pulse/alert";
 import { ProtocolsIndexScreen } from "@/components/ProtocolsIndexScreen";
+import { AdoptedSetAsideNote } from "@/components/AdoptedSetAsideNote";
 import { ADOPTED_PARAM, curatedSetAsideNotice } from "@/lib/curated-protocol-view";
 
 // The Protocols index (issue #637), reached from the Train launchpad and from a Protocol's
@@ -35,11 +36,7 @@ export default async function ProtocolsIndexPage({
   const notice = curatedSetAsideNotice(params[ADOPTED_PARAM], envelope.data);
   return (
     <ProtocolsIndexScreen entries={envelope.data}>
-      {notice !== null ? (
-        <Alert tone="info">
-          <span className="wrap-anywhere">{notice}</span>
-        </Alert>
-      ) : null}
+      {notice !== null ? <AdoptedSetAsideNote notice={notice} /> : null}
     </ProtocolsIndexScreen>
   );
 }
