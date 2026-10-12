@@ -29,7 +29,8 @@ export interface AiAffordanceVisibility {
 // Decide affordance visibility from a Session's provenance. A plan is AI-authored exactly
 // when its provenance is `ai_generated`; anything else — a `user_authored` or `curated`
 // plan, an absent value (the live read omits it), or an unrecognized value — withholds both
-// affordances, the safe posture for a control that only makes sense on a plan the AI actually wrote.
+// affordances, the safe posture for a control that only makes sense on a plan the AI
+// actually wrote.
 export function aiAffordanceVisibility(
   provenance: string | undefined,
 ): AiAffordanceVisibility {

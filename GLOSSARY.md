@@ -45,7 +45,7 @@ A Session a user builds by hand with **no AI call** — choosing its Exercise Pr
 _Avoid_: Custom workout, manual workout, Workout, my routine
 
 **Session Provenance**:
-How a Session's plan came to exist: `ai_generated` (produced by the generation pipeline), `user_authored` (built by hand, no AI — a Hand-Authored Session), or `curated` (adopted from a human-authored, reviewed **Curated Protocol**). Carried on every Session so plan-quality affordances that assume the AI wrote it — Generation Feedback and Regeneration — are offered only on an `ai_generated` plan, never on a `user_authored` or `curated` one. Parallel to an Exercise's Provenance and named the same way, but a distinct axis on a distinct concept (the plan, not the movement).
+How a Session's plan came to exist: `ai_generated` (produced by the generation pipeline), `user_authored` (built by hand, no AI — a Hand-Authored Session), or `curated` (adopted from a human-authored, reviewed **Curated Protocol**, ADR-0130). Carried on every Session so plan-quality affordances that assume the AI wrote it — Generation Feedback and Regeneration — are offered only on an `ai_generated` plan, never on a `user_authored` or `curated` one. Parallel to an Exercise's Provenance and named the same way, but a distinct axis on a distinct concept (the plan, not the movement).
 _Avoid_: Origin, source, generated flag
 
 **Catalog**:

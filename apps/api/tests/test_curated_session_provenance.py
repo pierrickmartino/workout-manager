@@ -9,6 +9,8 @@ slips past the gate is visible."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from fastapi.testclient import TestClient
 
 from app.auth.dependencies import get_jwks
@@ -55,7 +57,43 @@ class CountingRegenerator:
         )
 
 
-def _harness():
+@dataclass(frozen=True)
+class Harness:
+    """The wired app plus the in-memory collaborators a test arranges or inspects."""
+
+    client: TestClient
+    headers: dict[str, str]
+    sessions: InMemorySessionRepository
+    exercises: InMemoryExerciseRepository
+    feedback: InMemoryGenerationFeedbackRepository
+    regenerator: CountingRegenerator
+
+    def seed_session(self, provenance: SessionProvenance) -> int:
+        """Create a Session straight through the repository — no endpoint can mint a
+        ``curated`` one yet."""
+        squat = self.exercises.find_or_create(
+            "Back Squat", provenance=Provenance.CURATED
+        )
+        view = self.sessions.create(
+            USER,
+            SessionDraft(
+                training_type="strength",
+                duration_minutes=45,
+                prescriptions=[
+                    PrescriptionDraft(exercise_id=squat.id, sets=5, reps="5")
+                ],
+                provenance=provenance.value,
+            ),
+        )
+        return view.id
+
+    def record_negative_feedback(self, session_id: int) -> None:
+        self.feedback.record(
+            USER, session_id=session_id, verdict=Verdict.NEGATIVE, reason="too hard"
+        )
+
+
+def _harness() -> Harness:
     ctx = make_signing_context()
     exercises = InMemoryExerciseRepository()
     sessions = InMemorySessionRepository(exercises)
@@ -71,31 +109,23 @@ def _harness():
     )
     app.dependency_overrides[get_session_regenerator] = lambda: regenerator
     app.dependency_overrides[get_generation_feedback_repository] = lambda: feedback
-    headers = {"Authorization": f"Bearer {ctx.mint(sub=USER)}"}
-    return TestClient(app), headers, exercises, sessions, feedback, regenerator
-
-
-def _seed_session(exercises, sessions, provenance: SessionProvenance) -> int:
-    squat = exercises.find_or_create("Back Squat", provenance=Provenance.CURATED)
-    view = sessions.create(
-        USER,
-        SessionDraft(
-            training_type="strength",
-            duration_minutes=45,
-            prescriptions=[PrescriptionDraft(exercise_id=squat.id, sets=5, reps="5")],
-            provenance=provenance.value,
-        ),
+    return Harness(
+        client=TestClient(app),
+        headers={"Authorization": f"Bearer {ctx.mint(sub=USER)}"},
+        sessions=sessions,
+        exercises=exercises,
+        feedback=feedback,
+        regenerator=regenerator,
     )
-    return view.id
 
 
 def test_a_curated_session_round_trips_its_provenance_on_the_read_path():
     # Arrange
-    client, headers, exercises, sessions, _, _ = _harness()
-    session_id = _seed_session(exercises, sessions, SessionProvenance.CURATED)
+    h = _harness()
+    session_id = h.seed_session(SessionProvenance.CURATED)
 
     # Act
-    response = client.get(f"/api/sessions/{session_id}", headers=headers)
+    response = h.client.get(f"/api/sessions/{session_id}", headers=h.headers)
 
     # Assert
     assert response.status_code == 200
@@ -104,75 +134,71 @@ def test_a_curated_session_round_trips_its_provenance_on_the_read_path():
 
 def test_generation_feedback_is_rejected_on_a_curated_session_and_nothing_is_recorded():
     # Arrange
-    client, headers, exercises, sessions, feedback, _ = _harness()
-    session_id = _seed_session(exercises, sessions, SessionProvenance.CURATED)
+    h = _harness()
+    session_id = h.seed_session(SessionProvenance.CURATED)
 
     # Act — "did the AI give me a good plan?" on a plan no AI wrote.
-    response = client.post(
+    response = h.client.post(
         f"/api/sessions/{session_id}/feedback",
-        headers=headers,
+        headers=h.headers,
         json={"verdict": "negative", "reason": "too hard"},
     )
 
     # Assert — rejected with a message that doesn't call the plan hand-authored.
     assert response.status_code == 409
     assert "hand-authored" not in response.json()["error"].lower()
-    assert feedback.latest(session_id, USER) is None
+    assert h.feedback.latest(session_id, USER) is None
 
 
 def test_regeneration_is_rejected_on_a_curated_session_before_the_llm_runs():
     # Arrange — negative feedback is already on file, so provenance is the only blocker.
-    client, headers, exercises, sessions, feedback, regenerator = _harness()
-    session_id = _seed_session(exercises, sessions, SessionProvenance.CURATED)
-    feedback.record(
-        USER, session_id=session_id, verdict=Verdict.NEGATIVE, reason="too hard"
-    )
+    h = _harness()
+    session_id = h.seed_session(SessionProvenance.CURATED)
+    h.record_negative_feedback(session_id)
 
     # Act
-    response = client.post(
+    response = h.client.post(
         f"/api/sessions/{session_id}/regenerate",
-        headers=headers,
+        headers=h.headers,
         json={"keep": []},
     )
 
     # Assert
     assert response.status_code == 409
     assert "hand-authored" not in response.json()["error"].lower()
-    assert regenerator.calls == 0
+    assert h.regenerator.calls == 0
 
 
 def test_generation_feedback_is_still_recorded_on_an_ai_generated_session():
     # Arrange
-    client, headers, exercises, sessions, feedback, _ = _harness()
-    session_id = _seed_session(exercises, sessions, SessionProvenance.AI_GENERATED)
+    h = _harness()
+    session_id = h.seed_session(SessionProvenance.AI_GENERATED)
 
     # Act
-    response = client.post(
+    response = h.client.post(
         f"/api/sessions/{session_id}/feedback",
-        headers=headers,
+        headers=h.headers,
         json={"verdict": "negative", "reason": "too hard"},
     )
 
     # Assert
     assert response.status_code == 200
-    assert feedback.latest(session_id, USER) is not None
+    assert h.feedback.latest(session_id, USER) is not None
 
 
 def test_regeneration_still_runs_on_an_ai_generated_session():
     # Arrange
-    client, headers, exercises, sessions, feedback, regenerator = _harness()
-    session_id = _seed_session(exercises, sessions, SessionProvenance.AI_GENERATED)
-    feedback.record(
-        USER, session_id=session_id, verdict=Verdict.NEGATIVE, reason="too hard"
-    )
+    h = _harness()
+    session_id = h.seed_session(SessionProvenance.AI_GENERATED)
+    h.record_negative_feedback(session_id)
 
     # Act
-    response = client.post(
+    response = h.client.post(
         f"/api/sessions/{session_id}/regenerate",
-        headers=headers,
+        headers=h.headers,
         json={"keep": []},
     )
 
     # Assert
     assert response.status_code == 200
-    assert regenerator.calls == 1
+    assert h.regenerator.calls == 1
