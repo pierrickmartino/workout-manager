@@ -137,6 +137,24 @@ def test_adopting_a_protocol_makes_it_current_now(repos):
     ]
 
 
+def test_adopting_set_aside_leaves_it_never_made_current_until_a_switch(repos):
+    # Arrange
+    protocol_repo, exercises = repos
+    draft = replace(_two_week_draft(exercises), set_aside=True)
+
+    # Act
+    view = protocol_repo.create("user_cautious", draft)
+    listed = protocol_repo.list_for_user("user_cautious")
+    switched = protocol_repo.make_current(view.id, "user_cautious")
+
+    # Assert — a set-aside adopt carries no made-Current stamp through either read path
+    # (ADR-0130), and Switch is what gives it one (ADR-0125)
+    assert view.made_current_at is None
+    assert [p.made_current_at for p in listed] == [None]
+    assert switched.made_current_at is not None
+    assert protocol_repo.get(view.id, "user_cautious").made_current_at is not None
+
+
 def test_make_current_restamps_made_current_at_for_the_owner_only(repos):
     # Arrange
     protocol_repo, exercises = repos

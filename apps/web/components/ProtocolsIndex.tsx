@@ -14,15 +14,20 @@ import { DeleteProtocolControl } from "@/components/DeleteProtocolControl";
 // Finished, each row opening the Protocol's detail page. A set-aside row also carries Switch
 // (#638), and an un-started row Delete (#639), each offered, pending or blocked as the view-model
 // decides. A thin renderer over the `protocols-index` view-model, which owns grouping, order, copy
-// and row actions; kept prop-driven so the audit harness can mount it directly.
+// and row actions; kept prop-driven so the audit harness can mount it directly. `children` is a
+// note the page offers under the header, such as a Curated Protocol just adopted set aside (#687).
 export function ProtocolsIndex({
   index,
+  children,
 }: {
   index: ProtocolsIndexView;
+  children?: React.ReactNode;
 }): React.JSX.Element {
   return (
     <section className="flex flex-col gap-7">
       <PageHeader overline="PULSE // TRAIN" title="Protocols" />
+
+      {children}
 
       {index.isEmpty ? (
         <Card className="flex flex-col items-start gap-3 p-6">

@@ -17,9 +17,14 @@ import { ProtocolsIndex } from "@/components/ProtocolsIndex";
 // then Switch is pending, so it can't be pressed before a Live Session has been ruled out.
 interface ProtocolsIndexScreenProps {
   entries: readonly ProtocolIndexEntry[];
+  // A note rendered under the header, passed through to `ProtocolsIndex`.
+  children?: React.ReactNode;
 }
 
-export function ProtocolsIndexScreen({ entries }: ProtocolsIndexScreenProps): React.JSX.Element {
+export function ProtocolsIndexScreen({
+  entries,
+  children,
+}: ProtocolsIndexScreenProps): React.JSX.Element {
   const { userId, isLoaded } = useAuth();
   // Null until the slot has been read, which the view-model renders as a pending Switch.
   const [live, setLive] = useState<LiveSessionContext | null>(null);
@@ -29,5 +34,5 @@ export function ProtocolsIndexScreen({ entries }: ProtocolsIndexScreenProps): Re
     setLive({ liveSlot: readLiveSessionSlot(), accountId: userId ?? null });
   }, [isLoaded, userId]);
 
-  return <ProtocolsIndex index={protocolsIndex(entries, live)} />;
+  return <ProtocolsIndex index={protocolsIndex(entries, live)}>{children}</ProtocolsIndex>;
 }

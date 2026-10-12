@@ -173,7 +173,9 @@ def serialize_protocol_index_row(row: ProtocolIndexRow) -> dict:
         # The member Session ids, in order, so the client can tell which row owns the Live
         # Session it holds (the server can't see that slot, ADR-0012) and block its Delete.
         "session_ids": [session.session_id for session in protocol.sessions],
-        "made_current_at": row.made_current_at.isoformat(),
+        "made_current_at": (
+            row.made_current_at.isoformat() if row.made_current_at else None
+        ),
     }
 
 

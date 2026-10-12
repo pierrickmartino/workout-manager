@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from datetime import date
+from datetime import UTC, date, datetime
 
 from app.domain.completion import CompletionOutcome
 from app.domain.load import parse_load
@@ -354,16 +354,34 @@ def progressed_protocol(
     return progressed_protocol_from(protocol, logged.list_for_user(clerk_user_id))
 
 
+# Stands in for a never-made-Current Protocol's missing stamp, only so it sorts; the leading
+# flag in the key already places every such Protocol after every made-Current one.
+_NEVER_MADE_CURRENT = datetime.min.replace(tzinfo=UTC)
+
+
+def is_selectable(protocol: ProtocolView) -> bool:
+    """Whether ``protocol`` may be selected as Current: it has been made Current at least
+    once. A Curated Protocol a Sensitive-Constraint user adopted set aside has not, so it
+    stays set aside until they Switch to it (ADR-0130, ADR-0058)."""
+
+    return protocol.made_current_at is not None
+
+
 def by_made_current(protocols: list[ProtocolView]) -> list[ProtocolView]:
-    """``protocols`` most-recently-made-Current first, ties broken by the higher id.
+    """``protocols`` most-recently-made-Current first, ties broken by the higher id, and
+    never-made-Current Protocols last.
 
     The one order Current Protocol selection walks (ADR-0125): the first unfinished
-    Protocol in it is Current. Shared by Home and the Protocols index so the two can
-    never disagree about which Protocol is Current."""
+    selectable Protocol in it is Current. Shared by Home and the Protocols index so the two
+    can never disagree about which Protocol is Current."""
 
     return sorted(
         protocols,
-        key=lambda protocol: (protocol.made_current_at, protocol.id),
+        key=lambda protocol: (
+            is_selectable(protocol),
+            protocol.made_current_at or _NEVER_MADE_CURRENT,
+            protocol.id,
+        ),
         reverse=True,
     )
 
@@ -396,6 +414,8 @@ def current_protocol(
     """
 
     for protocol in by_made_current(protocols.list_for_user(clerk_user_id)):
+        if not is_selectable(protocol):
+            break  # every Protocol from here on was adopted set aside, never made Current
         progress = progressed_protocol_from(protocol, logged_sessions)
         if progress.next_session is not None:
             return progress
@@ -410,6 +430,7 @@ __all__ = [
     "progressed_protocol_from",
     "current_protocol",
     "by_made_current",
+    "is_selectable",
     "last_performed_on_by_session",
     "latest_sets_by_exercise",
     "exposure_counts_by_exercise",

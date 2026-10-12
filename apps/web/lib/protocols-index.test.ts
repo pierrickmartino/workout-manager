@@ -50,6 +50,19 @@ test("an offsetless made-Current instant reads as UTC, not local time", () => {
   assert.deepEqual(group.rows.map((row) => row.id), [2, 1]);
 });
 
+test("a set-aside row never made Current sorts after every made-Current one", () => {
+  // Arrange — a Curated Protocol adopted set aside carries no made-Current instant (#687)
+  const entries = [
+    entry({ id: 9, made_current_at: null }),
+    entry({ id: 1, made_current_at: "2026-05-01T08:30:00Z" }),
+  ];
+  // Act
+  const [group] = protocolsIndex(entries).groups;
+  // Assert
+  assert.deepEqual(group.rows.map((row) => row.id), [1, 9]);
+  assert.deepEqual(group.rows[1].switchAction, { kind: "pending" });
+});
+
 test("groups come out Current, Set aside, Finished, and empty groups are dropped", () => {
   const index = protocolsIndex([
     entry({ id: 1, status: "finished", last_performed_on: "2026-04-01" }),

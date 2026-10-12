@@ -7,6 +7,13 @@
 // re-validates everything and recomputes the plan itself.
 //
 // The surface is never labelled "Library", which already names the Catalog pick widget.
+//
+// A Curated Protocol is shared content tailored to no one, so a user with a Sensitive
+// Constraint adopts it under the Redeem posture (issue #687, ADR-0130, ADR-0058): they see a
+// caveat first, and the copy arrives set aside, offering Switch, rather than Current.
+
+import { adoptedProtocolHref } from "./protocol-supersede.ts";
+import type { ProtocolIndexEntry } from "./protocols-index.ts";
 
 // Where a main lift's prefilled starting weight came from (issue #686): a working-weight share
 // of the user's Estimated 1RM ("records"), or the Curated Protocol's conservative default.
@@ -37,6 +44,16 @@ export interface CuratedProtocolSummary {
   max_weeks: number;
   required_equipment: string[];
   main_lifts: CuratedMainLift[];
+  // Whether this user holds a Sensitive Constraint, so the caveat applies and adopting sets the
+  // copy aside (issue #687). Decided by the server, which owns the profile.
+  sensitive_constraint_caveat: boolean;
+}
+
+// The data of a successful `POST /api/curated-protocols/{identifier}/adopt`.
+export interface AdoptCuratedProtocolResponse {
+  protocol_id: number;
+  // True when the copy was persisted set aside, never Current (a Sensitive Constraint).
+  set_aside: boolean;
 }
 
 // The body of `POST /api/curated-protocols/{identifier}/adopt`.
@@ -208,4 +225,56 @@ export function findCuratedProtocol(
   return list.success
     ? list.data?.find((candidate) => candidate.identifier === identifier)
     : undefined;
+}
+
+export interface CuratedCaveat {
+  title: string;
+  body: string;
+}
+
+// The caveat shown before adopting, or `null` when it doesn't apply to this user (ADR-0058). It
+// never claims the plan was checked against their constraint: it says the opposite, and what
+// adopting will do.
+export function curatedCaveat(curated: CuratedProtocolSummary): CuratedCaveat | null {
+  if (!curated.sensitive_constraint_caveat) return null;
+  return {
+    title: "Not tailored to your constraints",
+    body:
+      "This plan was written for a general audience, not around your injury, rehabilitation, " +
+      "postpartum or medical constraint. Adopting it sets it aside rather than making it your " +
+      "Current Protocol; Switch to it when you’re ready to start.",
+  };
+}
+
+// The search parameter naming the Curated Protocol a Sensitive-Constraint user just adopted set
+// aside, on the Protocols index where its Switch lives.
+export const ADOPTED_PARAM = "adopted";
+
+const PROTOCOLS_INDEX_HREF = "/protocols";
+
+// Where an adopt lands. A set-aside copy goes to the Protocols index, which offers its Switch
+// (and blocks it during a Live Session); a Current one goes to the Protocol itself, carrying the
+// Protocol it superseded for the set-aside note (ADR-0125).
+export function curatedAdoptedHref(
+  adopted: AdoptCuratedProtocolResponse,
+  supersededId: number | null,
+): string {
+  if (adopted.set_aside) {
+    return `${PROTOCOLS_INDEX_HREF}?${ADOPTED_PARAM}=${adopted.protocol_id}`;
+  }
+  return adoptedProtocolHref(adopted.protocol_id, supersededId);
+}
+
+// The Protocols index note for a set-aside adopt, or `null` when there is nothing true to say:
+// no or a malformed id, a Protocol the index doesn't hold, or one no longer set aside (the user
+// has Switched to it since, or finished it).
+export function curatedSetAsideNotice(
+  raw: string | readonly string[] | undefined,
+  entries: readonly ProtocolIndexEntry[],
+): string | null {
+  if (typeof raw !== "string" || !/^[1-9]\d*$/.test(raw)) return null;
+  const id = Number(raw);
+  const entry = entries.find((candidate) => candidate.id === id);
+  if (entry === undefined || entry.status !== "set_aside") return null;
+  return `“${entry.label}” is set aside — Switch to start it.`;
 }

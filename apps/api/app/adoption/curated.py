@@ -56,6 +56,7 @@ def adopt_curated(
     choices: AdoptionChoices,
     clerk_user_id: str,
     *,
+    set_aside: bool,
     exercises: ExerciseRepository,
     protocols: ProtocolRepository,
 ) -> ProtocolView:
@@ -63,7 +64,10 @@ def adopt_curated(
     ``clerk_user_id``. Callers validate ``choices`` first (``plan.validate_choices``).
 
     Adopting makes the new Protocol Current, setting the previous one aside, exactly as
-    adopting a Generated Protocol does (ADR-0125)."""
+    adopting a Generated Protocol does (ADR-0125) — unless ``set_aside``: the caller sets it
+    for a user with a Sensitive Constraint, whose copy of this untailored plan arrives set
+    aside and the previous Current Protocol stays Current until they Switch (ADR-0130,
+    ADR-0058)."""
 
     ids = _resolve_ids(curated, exercises)
     sessions = [
@@ -86,6 +90,7 @@ def adopt_curated(
         sessions=sessions,
         name=curated.name,
         provenance=SessionProvenance.CURATED.value,
+        set_aside=set_aside,
     )
     return protocols.create(clerk_user_id, draft)
 
