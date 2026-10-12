@@ -361,11 +361,32 @@ const auditCuratedProtocol: CuratedProtocolSummary = {
   min_weeks: 4,
   max_weeks: 12,
   required_equipment: ["barbell", "rack", "bench", "dumbbell"],
+  // The squat is prefilled from records (#686), so the longest weight hint is on screen.
   main_lifts: [
-    { key: "squat", exercise_name: "Barbell Back Squat", default_starting_weight_kg: 20 },
-    { key: "bench", exercise_name: "Barbell Bench Press", default_starting_weight_kg: 20 },
-    { key: "press", exercise_name: "Barbell Overhead Press", default_starting_weight_kg: 20 },
-    { key: "deadlift", exercise_name: "Barbell Deadlift", default_starting_weight_kg: 40 },
+    {
+      key: "squat",
+      exercise_name: "Barbell Back Squat",
+      default_starting_weight_kg: 20,
+      starting_weight_prefill: { kg: 82.5, source: "records" },
+    },
+    {
+      key: "bench",
+      exercise_name: "Barbell Bench Press",
+      default_starting_weight_kg: 20,
+      starting_weight_prefill: { kg: 20, source: "default" },
+    },
+    {
+      key: "press",
+      exercise_name: "Barbell Overhead Press",
+      default_starting_weight_kg: 20,
+      starting_weight_prefill: { kg: 20, source: "default" },
+    },
+    {
+      key: "deadlift",
+      exercise_name: "Barbell Deadlift",
+      default_starting_weight_kg: 40,
+      starting_weight_prefill: { kg: 40, source: "default" },
+    },
   ],
 };
 

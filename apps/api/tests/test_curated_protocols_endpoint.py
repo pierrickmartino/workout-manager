@@ -26,6 +26,7 @@ from app.curated.registry import CuratedRegistry, get_curated_registry
 from app.curated.seed import seed_curated_exercises
 from app.db.models import ExercisePrescription, Protocol, WorkoutSession
 from app.db.session import get_session
+from app.domain.load import LoadKind, ParsedLoad
 from app.main import create_app
 from app.repositories.deps import (
     get_generation_orchestrator,
@@ -33,7 +34,13 @@ from app.repositories.deps import (
     get_session_generator,
 )
 from app.repositories.exercise_repository import SqlExerciseRepository
+from app.repositories.logged_session_repository import (
+    LoggedSessionDraft,
+    LoggedSetDraft,
+    SqlLoggedSessionRepository,
+)
 from tests.conftest import ISSUER, SigningContext, make_signing_context
+from tests.quantities import reps_quantity
 
 USER = "user_curated"
 SIGN_OFF = CoachSignOff(
@@ -44,6 +51,11 @@ UNRELEASED = replace(
     BEGINNER_LINEAR, identifier="unreleased-curated-protocol", name="Unreleased Curated Protocol"
 )
 STARTING_WEIGHTS = {"squat": 60, "bench": 40, "press": 30, "deadlift": 80}
+BODYWEIGHT = ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict()
+
+
+def _absolute(kg: float) -> dict:
+    return ParsedLoad(kind=LoadKind.ABSOLUTE, text=f"{kg:g} kg", kg=kg).to_dict()
 
 
 def _no_llm():
@@ -84,6 +96,29 @@ class _Harness:
     def adopted(self, response, sub: str = USER) -> dict:
         protocol_id = response.json()["data"]["protocol_id"]
         return self.get(f"/api/protocols/{protocol_id}", sub).json()["data"]
+
+    def log_sets(self, sub: str, *sets: tuple[str, dict, int]) -> None:
+        """Record one plan-less Logged Session of ``(exercise name, load, reps)`` sets."""
+
+        with Session(self.engine) as session:
+            exercises = SqlExerciseRepository(session)
+            SqlLoggedSessionRepository(session).create(
+                sub,
+                LoggedSessionDraft(
+                    session_id=None,
+                    performed_on=date(2026, 9, 1),
+                    training_type="strength",
+                    logged_sets=[
+                        LoggedSetDraft(
+                            exercise_id=exercises.find_by_name(name).id,
+                            quantity=reps_quantity(reps),
+                            load=load,
+                            body_weight_kg=80,
+                        )
+                        for name, load, reps in sets
+                    ],
+                ),
+            )
 
     def catalog_names(self) -> list[str]:
         with Session(self.engine) as session:
@@ -175,23 +210,53 @@ def test_a_list_row_describes_the_curated_protocol_and_its_main_lifts():
                 "key": "squat",
                 "exercise_name": "Barbell Back Squat",
                 "default_starting_weight_kg": 20,
+                "starting_weight_prefill": {"kg": 20, "source": "default"},
             },
             {
                 "key": "bench",
                 "exercise_name": "Barbell Bench Press",
                 "default_starting_weight_kg": 20,
+                "starting_weight_prefill": {"kg": 20, "source": "default"},
             },
             {
                 "key": "press",
                 "exercise_name": "Barbell Overhead Press",
                 "default_starting_weight_kg": 20,
+                "starting_weight_prefill": {"kg": 20, "source": "default"},
             },
             {
                 "key": "deadlift",
                 "exercise_name": "Barbell Deadlift",
                 "default_starting_weight_kg": 40,
+                "starting_weight_prefill": {"kg": 40, "source": "default"},
             },
         ],
+    }
+
+
+def test_a_users_estimated_1rm_prefills_their_starting_weight_from_records():
+    # Arrange — 100 kg × 5 squat (Est. 1RM 116.7 → 70% → 80 kg) and a bodyweight-only
+    # bench, which must not count; another user's history must not leak in
+    h = build_harness(RELEASED)
+    h.log_sets(
+        USER,
+        ("Barbell Back Squat", _absolute(100), 5),
+        ("Barbell Bench Press", BODYWEIGHT, 5),
+    )
+    h.log_sets("user_other", ("Barbell Overhead Press", _absolute(60), 1))
+
+    # Act
+    lifts = {
+        lift["key"]: lift["starting_weight_prefill"]
+        for lift in h.list().json()["data"][0]["main_lifts"]
+    }
+
+    # Assert
+    assert lifts == {
+        "squat": {"kg": 80, "source": "records"},
+        "bench": {"kg": 20, "source": "default"},
+        "press": {"kg": 20, "source": "default"},
+        "deadlift": {"kg": 40, "source": "default"},
     }
 
 

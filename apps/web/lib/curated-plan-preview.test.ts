@@ -101,8 +101,22 @@ const DEFAULTS: AdoptFormDefaults = {
   weeks: 4,
   weekOptions: [4, 5, 6],
   lifts: [
-    { key: "squat", name: "weight_squat", label: "Barbell Back Squat", defaultKg: 20 },
-    { key: "deadlift", name: "weight_deadlift", label: "Barbell Deadlift", defaultKg: 40 },
+    {
+      key: "squat",
+      name: "weight_squat",
+      label: "Barbell Back Squat",
+      defaultKg: 20,
+      source: "default",
+      hint: "Starting weight in kg",
+    },
+    {
+      key: "deadlift",
+      name: "weight_deadlift",
+      label: "Barbell Deadlift",
+      defaultKg: 40,
+      source: "default",
+      hint: "Starting weight in kg",
+    },
   ],
 };
 

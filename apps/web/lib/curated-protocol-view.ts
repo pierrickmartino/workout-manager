@@ -8,10 +8,21 @@
 //
 // The surface is never labelled "Library", which already names the Catalog pick widget.
 
+// Where a main lift's prefilled starting weight came from (issue #686): a working-weight share
+// of the user's Estimated 1RM ("records"), or the Curated Protocol's conservative default.
+export type PrefillSource = "records" | "default";
+
+export interface StartingWeightPrefill {
+  kg: number;
+  source: PrefillSource;
+}
+
 export interface CuratedMainLift {
   key: string;
   exercise_name: string;
   default_starting_weight_kg: number;
+  // The starting weight offered to this user, computed at read time from their records.
+  starting_weight_prefill: StartingWeightPrefill;
 }
 
 // One row of `GET /api/curated-protocols`.
@@ -102,7 +113,10 @@ export interface AdoptLiftField {
   // The form field name the weight posts under.
   name: string;
   label: string;
+  // The value the field starts at: the user's prefill, editable like any typed weight.
   defaultKg: number;
+  source: PrefillSource;
+  hint: string;
 }
 
 export interface AdoptFormDefaults {
@@ -113,6 +127,14 @@ export interface AdoptFormDefaults {
 
 function liftFieldName(key: string): string {
   return `weight_${key}`;
+}
+
+const WEIGHT_HINT = "Starting weight in kg";
+
+function weightHint(source: PrefillSource): string {
+  return source === "records"
+    ? `${WEIGHT_HINT} · prefilled from your records, edit it freely`
+    : WEIGHT_HINT;
 }
 
 export function adoptFormDefaults(curated: CuratedProtocolSummary): AdoptFormDefaults {
@@ -127,7 +149,9 @@ export function adoptFormDefaults(curated: CuratedProtocolSummary): AdoptFormDef
       key: lift.key,
       name: liftFieldName(lift.key),
       label: lift.exercise_name,
-      defaultKg: lift.default_starting_weight_kg,
+      defaultKg: lift.starting_weight_prefill.kg,
+      source: lift.starting_weight_prefill.source,
+      hint: weightHint(lift.starting_weight_prefill.source),
     })),
   };
 }
