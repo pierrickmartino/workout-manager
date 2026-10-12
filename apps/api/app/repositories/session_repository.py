@@ -23,6 +23,11 @@ from app.db.models import (
     SessionFavorite,
     WorkoutSession,
 )
+from app.domain.curated_lineage import (
+    CuratedLineage,
+    lineage_columns,
+    lineage_from_columns,
+)
 from app.domain.session_library import matches_session_search
 from app.domain.share_redeem import SharedSessionSource, redeem_copy
 from app.domain.superset import MIN_SUPERSET_MEMBERS
@@ -115,6 +120,9 @@ class SessionView:
     # Defaulted so pre-existing SessionView constructions (e.g. Live-serialization tests) stay
     # valid; the route withholds it on a Protocol member (Favorite is standalone-only).
     is_favorite: bool = False
+    # Curated lineage (ADR-0130, #688): the Curated Protocol this plan was adopted from, carried
+    # unchanged through Duplicate and Redeem; ``None`` for a plan not adopted from one.
+    curated_lineage: CuratedLineage | None = None
 
 
 @dataclass(frozen=True)
@@ -478,6 +486,12 @@ def _removed_drafts(
     return drafts
 
 
+def _session_lineage(workout: WorkoutSession) -> CuratedLineage | None:
+    return lineage_from_columns(
+        workout.curated_identifier, workout.curated_version, workout.curated_name
+    )
+
+
 def _author_display_name(
     profiles: ProfileRepository | None, author_clerk_user_id: str | None
 ) -> str | None:
@@ -535,6 +549,7 @@ class SqlSessionRepository:
             is_favorite=self._favorites.is_favorite(
                 workout.clerk_user_id, workout.id
             ),
+            curated_lineage=_session_lineage(workout),
         )
 
     def _add_prescriptions(
@@ -711,6 +726,7 @@ class SqlSessionRepository:
             title=source.title,
             name=source.name,
             author_clerk_user_id=source.author_clerk_user_id,
+            **lineage_columns(_session_lineage(source)),
         )
         self._session.add(copy)
         self._session.commit()
@@ -754,6 +770,7 @@ class SqlSessionRepository:
                 name=source.name,
                 author_clerk_user_id=source.author_clerk_user_id,
                 trace_id=source.trace_id,
+                curated_lineage=_session_lineage(source),
             ),
             redeemer_clerk_user_id,
         )
@@ -765,6 +782,7 @@ class SqlSessionRepository:
             trace_id=attrs.trace_id,
             name=attrs.name,
             author_clerk_user_id=attrs.author_clerk_user_id,
+            **lineage_columns(attrs.curated_lineage),
         )
         self._session.add(copy)
         self._session.commit()
@@ -988,6 +1006,7 @@ class InMemorySessionRepository:
             is_favorite=self._favorites.is_favorite(
                 workout.clerk_user_id, workout.id
             ),
+            curated_lineage=_session_lineage(workout),
         )
 
     def _materialize(
@@ -1120,6 +1139,7 @@ class InMemorySessionRepository:
             title=source.title,
             name=source.name,
             author_clerk_user_id=source.author_clerk_user_id,
+            **lineage_columns(_session_lineage(source)),
         )
         self._next_id += 1
         self._sessions[copy.id] = copy
@@ -1157,6 +1177,7 @@ class InMemorySessionRepository:
                 name=source.name,
                 author_clerk_user_id=source.author_clerk_user_id,
                 trace_id=source.trace_id,
+                curated_lineage=_session_lineage(source),
             ),
             redeemer_clerk_user_id,
         )
@@ -1169,6 +1190,7 @@ class InMemorySessionRepository:
             trace_id=attrs.trace_id,
             name=attrs.name,
             author_clerk_user_id=attrs.author_clerk_user_id,
+            **lineage_columns(attrs.curated_lineage),
         )
         self._next_id += 1
         self._sessions[copy.id] = copy

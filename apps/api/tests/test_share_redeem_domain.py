@@ -10,6 +10,7 @@ Name, Session Provenance and the ``trace_id`` lineage carry forward unchanged.
 
 from __future__ import annotations
 
+from app.domain.curated_lineage import CuratedLineage
 from app.domain.share_redeem import (
     RedeemedSessionCopy,
     SharedSessionSource,
@@ -87,3 +88,15 @@ def test_training_parameters_carry_forward():
 def test_result_is_an_immutable_value():
     copy = redeem_copy(_source(), "redeemer_user")
     assert isinstance(copy, RedeemedSessionCopy)
+
+
+def test_curated_lineage_is_carried_forward_unchanged():
+    # The Curated Protocol a plan was adopted from is immutable origin (ADR-0130, #688).
+    lineage = CuratedLineage(identifier="beginner-linear-progression", version=1, name="Beginner")
+    copy = redeem_copy(_source(provenance="curated", curated_lineage=lineage), "redeemer_user")
+    assert copy.curated_lineage == lineage
+
+
+def test_a_source_without_curated_lineage_redeems_without_one():
+    copy = redeem_copy(_source(), "redeemer_user")
+    assert copy.curated_lineage is None

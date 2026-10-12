@@ -9,6 +9,9 @@ Two things differ on purpose:
   guarantees; a missing one raises rather than minting an ``ai_generated`` Stub.
 - Every Session is stamped ``curated`` Session Provenance, so the AI-only affordances
   (Generation Feedback, Regeneration) are never offered on it.
+- The Protocol and every Session record the **curated lineage**: which Curated Protocol and
+  version they came from (issue #688). Written here once and never re-synced, so a later
+  version of the Curated Protocol never alters this copy.
 
 No LLM is involved, and nothing here touches the generation cache."""
 
@@ -16,6 +19,7 @@ from __future__ import annotations
 
 from app.curated.model import CuratedProtocol
 from app.curated.plan import AdoptionChoices, enumerate_plan
+from app.domain.curated_lineage import CuratedLineage
 from app.domain.session_provenance import SessionProvenance
 from app.repositories.exercise_repository import ExerciseRepository
 from app.repositories.protocol_repository import (
@@ -90,6 +94,9 @@ def adopt_curated(
         sessions=sessions,
         name=curated.name,
         provenance=SessionProvenance.CURATED.value,
+        curated_lineage=CuratedLineage(
+            identifier=curated.identifier, version=curated.version, name=curated.name
+        ),
         set_aside=set_aside,
     )
     return protocols.create(clerk_user_id, draft)
