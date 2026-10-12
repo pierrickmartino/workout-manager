@@ -1,6 +1,6 @@
 import { apiGet, apiSend, type Envelope } from "./api";
 
-import type { CuratedPlanPreview } from "./curated-plan-preview";
+import type { CuratedPreviewResponse } from "./curated-plan-preview";
 import type {
   AdoptCuratedProtocolRequest,
   CuratedProtocolSummary,
@@ -20,7 +20,7 @@ export async function fetchCuratedProtocols(): Promise<Envelope<CuratedProtocolS
 export async function previewCuratedProtocol(
   identifier: string,
   request: AdoptCuratedProtocolRequest,
-): Promise<Envelope<CuratedPlanPreview>> {
+): Promise<Envelope<CuratedPreviewResponse>> {
   return apiSend(
     `/api/curated-protocols/${encodeURIComponent(identifier)}/preview`,
     "POST",

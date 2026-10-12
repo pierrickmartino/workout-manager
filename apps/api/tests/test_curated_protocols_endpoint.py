@@ -89,7 +89,6 @@ class _Harness:
         with Session(self.engine) as session:
             return sorted(e.name for e in SqlExerciseRepository(session).list_all())
 
-
     def row_counts(self) -> dict[str, int]:
         """Rows in every table an adopt writes. Read straight off the database, because
         "nothing was persisted" has no other witness."""

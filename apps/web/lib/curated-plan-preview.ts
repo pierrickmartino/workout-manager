@@ -21,8 +21,9 @@ export interface CuratedPlanPrescription {
   reps: string;
   rest_seconds: number | null;
   recommended_load: Load | null;
-  prescribed_quantity: Quantity | null;
-  scheme: string | null;
+  prescribed_quantity: Quantity;
+  // Every Curated Prescription names its scheme explicitly (ADR-0130).
+  scheme: string;
 }
 
 export interface CuratedPlanSession {
@@ -33,7 +34,7 @@ export interface CuratedPlanSession {
 }
 
 // The body of a successful preview.
-export interface CuratedPlanPreview {
+export interface CuratedPreviewResponse {
   identifier: string;
   version: number;
   weeks: number;
@@ -87,7 +88,7 @@ function sessionView(session: CuratedPlanSession): CuratedPlanSessionView {
 }
 
 // The preview grouped by week, in Week/Day order, as the adopt form shows it.
-export function curatedPlanView(preview: CuratedPlanPreview): CuratedPlanView {
+export function curatedPlanView(preview: CuratedPreviewResponse): CuratedPlanView {
   const weeks = Array.from({ length: preview.weeks }, (_, index) => index + 1).map((week) => ({
     week,
     heading: `Week ${week}`,

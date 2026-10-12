@@ -7,7 +7,7 @@ import {
   defaultFormSnapshot,
   defaultPreviewRequest,
   previewControls,
-  type CuratedPlanPreview,
+  type CuratedPreviewResponse,
   type CuratedPreview,
 } from "./curated-plan-preview.ts";
 import type { AdoptFormDefaults } from "./curated-protocol-view.ts";
@@ -33,7 +33,7 @@ const CHIN_UP = {
 };
 
 // Two weeks of a two-Session pattern: the smallest plan with more than one of each grouping.
-const PREVIEW: CuratedPlanPreview = {
+const PREVIEW: CuratedPreviewResponse = {
   identifier: "beginner-linear-progression",
   version: 1,
   weeks: 2,
