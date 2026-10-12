@@ -68,6 +68,7 @@ import { CuratedProtocolPicker } from "@/components/CuratedProtocolPicker";
 import { CuratedAdoptForm } from "@/components/CuratedAdoptForm";
 import {
   adoptFormDefaults,
+  curatedCaveat,
   curatedProtocolRow,
   newProtocolChoices,
   type CuratedProtocolSummary,
@@ -349,7 +350,8 @@ const auditLiveSession: LiveSessionContext = {
 };
 
 // A Curated Protocol with the longest shapes the picker and adopt form render: a long authored
-// name and description, four main lifts, and a 4–12 week range (#684).
+// name and description, four main lifts, a 4–12 week range (#684), and the Sensitive Constraint
+// caveat above the form (#687).
 const auditCuratedProtocol: CuratedProtocolSummary = {
   identifier: "beginner-linear-progression",
   version: 1,
@@ -388,6 +390,7 @@ const auditCuratedProtocol: CuratedProtocolSummary = {
       starting_weight_prefill: { kg: 40, source: "default" },
     },
   ],
+  sensitive_constraint_caveat: true,
 };
 
 // The previewed plan under the adopt form (#685): the widest line pairs the longest main-lift
@@ -425,7 +428,7 @@ function Content() {
     case "sessions": return <SessionsLibrary sessions={count === 0 ? [] : sessions} />;
     // The new-Protocol peer choice over the Curated Protocol picker (#684).
     case "curated": return <><NewProtocolChoices choices={newProtocolChoices("curated", { hasCuratedProtocols: true })} /><CuratedProtocolPicker rows={count === 0 ? [] : [curatedProtocolRow(auditCuratedProtocol)]} /></>;
-    case "curated-adopt": return <CuratedAdoptForm identifier={auditCuratedProtocol.identifier} defaults={adoptFormDefaults(auditCuratedProtocol)} initialPreview={auditCuratedPreview} />;
+    case "curated-adopt": return <CuratedAdoptForm identifier={auditCuratedProtocol.identifier} defaults={adoptFormDefaults(auditCuratedProtocol)} initialPreview={auditCuratedPreview} caveat={curatedCaveat(auditCuratedProtocol)} />;
     case "protocols": return <ProtocolsIndex index={protocolsIndex(count === 0 ? [] : protocolIndexEntries, { liveSlot: null, accountId: "audit-synthetic-account" })} />;
     // The same index with a Live Session in progress (#638): every set-aside row's Switch is
     // blocked and carries its reason and a Resume link, the widest shape a row action takes.

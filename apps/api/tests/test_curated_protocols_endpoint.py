@@ -231,6 +231,7 @@ def test_a_list_row_describes_the_curated_protocol_and_its_main_lifts():
                 "starting_weight_prefill": {"kg": 40, "source": "default"},
             },
         ],
+        "sensitive_constraint_caveat": False,
     }
 
 

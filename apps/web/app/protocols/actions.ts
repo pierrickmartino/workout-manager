@@ -10,6 +10,7 @@ import {
 } from "@/lib/curated-protocols";
 import {
   adoptFormDefaults,
+  curatedAdoptedHref,
   findCuratedProtocol,
   readAdoptForm,
 } from "@/lib/curated-protocol-view";
@@ -19,7 +20,6 @@ import {
   type CuratedPreview,
 } from "@/lib/curated-plan-preview";
 import { fetchHome } from "@/lib/home";
-import { adoptedProtocolHref } from "@/lib/protocol-supersede";
 import {
   deleteProtocol,
   fetchProtocolJob,
@@ -117,9 +117,10 @@ export interface AdoptCuratedProtocolState {
 
 // Adopt a Curated Protocol (issue #684). The Curated Protocol is re-read server-side rather than trusted
 // from the form, and the form is checked against it before anything is sent; the API is still
-// authoritative and recomputes the plan itself. On success the new Protocol is Current, so Home
-// and the index are revalidated and the user lands on it, with the same note a generated
-// adoption carries saying where the previous Current Protocol went (ADR-0125).
+// authoritative and recomputes the plan itself. On success Home and the index are revalidated.
+// A Current copy lands on the Protocol, with the same note a generated adoption carries saying
+// where the previous Current Protocol went (ADR-0125); a copy set aside for a Sensitive
+// Constraint lands on the Protocols index, where its Switch is (issue #687, ADR-0058).
 export async function adoptCuratedProtocolAction(
   _prevState: AdoptCuratedProtocolState,
   form: FormData,
@@ -150,7 +151,7 @@ export async function adoptCuratedProtocolAction(
 
   revalidatePath("/dashboard");
   revalidatePath("/protocols");
-  redirect(adoptedProtocolHref(result.data.protocol_id, setAsideProtocolId));
+  redirect(curatedAdoptedHref(result.data, setAsideProtocolId));
 }
 
 export interface PreviewCuratedProtocolState {

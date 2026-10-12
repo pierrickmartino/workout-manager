@@ -19,7 +19,11 @@ from datetime import date, datetime
 from enum import StrEnum
 
 from app.domain.protocol_deletion import is_started, logged_session_ids
-from app.protocols.progress import by_made_current, last_performed_on_by_session
+from app.protocols.progress import (
+    by_made_current,
+    is_selectable,
+    last_performed_on_by_session,
+)
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
     LoggedSessionView,
@@ -48,7 +52,8 @@ class ProtocolIndexRow:
     # Session, so Delete may be offered (#639, ADR-0125). Computed here, never by the client.
     deletable: bool
     # Ordering only (ADR-0001): the index sorts set-aside rows by it, never shows it.
-    made_current_at: datetime
+    # ``None`` for a Protocol adopted set aside and never made Current since (ADR-0130).
+    made_current_at: datetime | None
 
 
 def _row(
@@ -84,8 +89,9 @@ def protocol_index_from(
 ) -> list[ProtocolIndexRow]:
     """Project each Protocol to its index row over an already-loaded history.
 
-    Rows come back in made-Current order. The first unfinished Protocol in that order is
-    Current (ADR-0125); every later unfinished one is set aside. Pure: no I/O.
+    Rows come back in made-Current order. The first unfinished Protocol in that order that
+    has ever been made Current is Current (ADR-0125); every other unfinished one is set
+    aside. Pure: no I/O.
     """
 
     performed_on = last_performed_on_by_session(logged_sessions)
@@ -95,7 +101,7 @@ def protocol_index_from(
     for protocol in by_made_current(protocols):
         if _is_finished(protocol, performed_on):
             status = ProtocolStatus.FINISHED
-        elif not has_current:
+        elif not has_current and is_selectable(protocol):
             status = ProtocolStatus.CURRENT
             has_current = True
         else:

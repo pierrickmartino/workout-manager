@@ -300,7 +300,10 @@ class Protocol(SQLModel, table=True):
     # and by Switching back to it. The Current Protocol is the unfinished Protocol with the
     # latest value, ties broken by id. A stored user *choice* (like ``calibration``), never
     # a derived ledger (ADR-0018); it only orders Protocols and is never shown as a date.
-    made_current_at: datetime = Field(default_factory=_utcnow)
+    # ``None`` when the Protocol was adopted set aside and never made Current since: a
+    # Curated Protocol a Sensitive-Constraint user adopted (ADR-0130). It is never selected
+    # as Current until a Switch stamps it.
+    made_current_at: datetime | None = Field(default_factory=_utcnow)
 
 
 class WorkoutSession(SQLModel, table=True):

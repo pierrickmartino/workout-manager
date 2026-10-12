@@ -17,7 +17,7 @@ The one Protocol a user is actively working through, which Home surfaces the Nex
 _Avoid_: Active plan, selected protocol, today's protocol, Protocol library (Library already names the Catalog pick widget and the Session Library), discard/abandon/archive (a superseded Protocol is set aside, not removed)
 
 **Set aside**:
-The state of a Protocol the user owns that is unfinished but not Current — superseded by a generation or by a Switch. Its Sessions and records are intact and it can be **Switched** to, picking up exactly where the user left off.
+The state of a Protocol the user owns that is unfinished but not Current — superseded by a generation or by a Switch, or adopted set aside: a Curated Protocol adopted by a user with a Sensitive Constraint arrives set aside and is never made Current until they Switch to it (ADR-0130). Its Sessions and records are intact and it can be **Switched** to, picking up exactly where the user left off.
 _Avoid_: Paused, inactive, archived, abandoned
 
 **Switch**:

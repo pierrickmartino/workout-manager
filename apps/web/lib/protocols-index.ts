@@ -42,8 +42,9 @@ export interface ProtocolIndexEntry {
   deletable: boolean;
   // The member Session ids, so a Live Session can be traced to the row that owns it.
   session_ids: number[];
-  // ISO instant the user last made this Protocol Current — ordering only.
-  made_current_at: string;
+  // ISO instant the user last made this Protocol Current — ordering only. Null when it was
+  // adopted set aside and never made Current since (a Sensitive Constraint, issue #687).
+  made_current_at: string | null;
 }
 
 // What a row offers for one action (Switch or Delete): the action itself; pending while the Live
@@ -111,10 +112,15 @@ const LABEL_SEPARATOR = " · ";
 
 // Newest first by the instant it was made Current, compared as instants through the shared
 // API-instant parser (an offsetless value reads as UTC, ADR-0096); an unparseable one sorts
-// last. Ties fall to the higher id, the server's tie-break.
+// last, as does one never made Current. Ties fall to the higher id, the server's tie-break.
+function madeCurrentInstant(entry: ProtocolIndexEntry): number {
+  if (entry.made_current_at === null) return Number.NEGATIVE_INFINITY;
+  return parseApiInstant(entry.made_current_at) ?? Number.NEGATIVE_INFINITY;
+}
+
 function byMadeCurrent(a: ProtocolIndexEntry, b: ProtocolIndexEntry): number {
-  const left = parseApiInstant(a.made_current_at) ?? Number.NEGATIVE_INFINITY;
-  const right = parseApiInstant(b.made_current_at) ?? Number.NEGATIVE_INFINITY;
+  const left = madeCurrentInstant(a);
+  const right = madeCurrentInstant(b);
   return right - left || b.id - a.id;
 }
 

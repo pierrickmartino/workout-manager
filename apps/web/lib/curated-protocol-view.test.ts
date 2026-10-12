@@ -3,12 +3,16 @@ import assert from "node:assert/strict";
 
 import {
   adoptFormDefaults,
+  curatedAdoptedHref,
+  curatedCaveat,
   curatedProtocolRow,
+  curatedSetAsideNotice,
   findCuratedProtocol,
   newProtocolChoices,
   readAdoptForm,
   type CuratedProtocolSummary,
 } from "./curated-protocol-view.ts";
+import type { ProtocolIndexEntry } from "./protocols-index.ts";
 
 const BEGINNER: CuratedProtocolSummary = {
   identifier: "beginner-linear-progression",
@@ -34,7 +38,10 @@ const BEGINNER: CuratedProtocolSummary = {
       starting_weight_prefill: { kg: 40, source: "default" },
     },
   ],
+  sensitive_constraint_caveat: false,
 };
+
+const FOR_SENSITIVE: CuratedProtocolSummary = { ...BEGINNER, sensitive_constraint_caveat: true };
 
 function formOf(entries: Record<string, string>): FormData {
   const form = new FormData();
@@ -222,4 +229,87 @@ test("a Curated Protocol is found by identifier only in a successful list read",
   assert.equal(findCuratedProtocol(ok, "beginner-linear-progression"), BEGINNER);
   assert.equal(findCuratedProtocol(ok, "unreleased-curated-protocol"), undefined);
   assert.equal(findCuratedProtocol(failed, "beginner-linear-progression"), undefined);
+});
+
+// --- Sensitive Constraint caveat and set-aside adopt (issue #687, ADR-0058) ---------------
+
+function indexEntry(overrides: Partial<ProtocolIndexEntry>): ProtocolIndexEntry {
+  return {
+    id: 7,
+    name: "Beginner linear progression",
+    label: "Beginner linear progression",
+    objective: "build strength",
+    training_type: "strength",
+    status: "set_aside",
+    performed_count: 0,
+    session_count: 12,
+    last_performed_on: null,
+    deletable: true,
+    session_ids: [],
+    made_current_at: null,
+    ...overrides,
+  };
+}
+
+test("a user with a Sensitive Constraint sees the caveat before adopting", () => {
+  // Act
+  const caveat = curatedCaveat(FOR_SENSITIVE);
+
+  // Assert
+  assert.deepEqual(caveat, {
+    title: "Not tailored to your constraints",
+    body:
+      "This plan was written for a general audience, not around your injury, rehabilitation, " +
+      "postpartum or medical constraint. Adopting it sets it aside: your current protocol " +
+      "stays current until you choose Switch.",
+  });
+});
+
+test("a user without a Sensitive Constraint sees no caveat", () => {
+  // Act / Assert
+  assert.equal(curatedCaveat(BEGINNER), null);
+});
+
+test("a set-aside adopt lands on Protocols naming the adopted Protocol", () => {
+  // Act
+  const href = curatedAdoptedHref({ protocol_id: 7, set_aside: true }, 3);
+
+  // Assert
+  assert.equal(href, "/protocols?adopted=7");
+});
+
+test("an adopt that became Current lands on it with the superseded-Protocol note", () => {
+  // Act / Assert
+  assert.equal(curatedAdoptedHref({ protocol_id: 7, set_aside: false }, 3), "/protocols/7?set_aside=3");
+  assert.equal(curatedAdoptedHref({ protocol_id: 7, set_aside: false }, null), "/protocols/7");
+});
+
+test("Protocols says the adopted Protocol is set aside and to Switch to start it", () => {
+  // Arrange
+  const entries = [indexEntry({ id: 3, status: "current" }), indexEntry({ id: 7 })];
+
+  // Act
+  const notice = curatedSetAsideNotice("7", entries);
+
+  // Assert
+  assert.equal(notice, "“Beginner linear progression” is set aside — Switch to start it.");
+});
+
+test("the set-aside notice is dropped once the adopted Protocol is no longer set aside", () => {
+  // Arrange
+  const switched = [indexEntry({ id: 7, status: "current" })];
+
+  // Act / Assert
+  assert.equal(curatedSetAsideNotice("7", switched), null);
+});
+
+test("the set-aside notice names nothing for a missing, unknown or malformed id", () => {
+  // Arrange
+  const entries = [indexEntry({ id: 7 })];
+
+  // Act / Assert
+  assert.equal(curatedSetAsideNotice(undefined, entries), null);
+  assert.equal(curatedSetAsideNotice("8", entries), null);
+  assert.equal(curatedSetAsideNotice("7abc", entries), null);
+  assert.equal(curatedSetAsideNotice(["7", "7"], entries), null);
 });

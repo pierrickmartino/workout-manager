@@ -12,13 +12,15 @@ import {
 } from "@/lib/curated-plan-preview";
 import {
   adoptFormDefaults,
+  curatedCaveat,
   curatedProtocolRow,
   CURATED_PICKER_HREF,
   findCuratedProtocol,
 } from "@/lib/curated-protocol-view";
 
 // Adopt one Curated Protocol (issue #684): its description, then the length and starting
-// weights, with the plan the prefilled inputs would write already previewed (issues #685, #686).
+// weights, with the plan the prefilled inputs would write already previewed (issues #685, #686),
+// under the caveat for a user with a Sensitive Constraint (issue #687).
 // An unknown or unreleased Curated Protocol is a 404 here, as it is on the API.
 export default async function AdoptCuratedProtocolPage({
   params,
@@ -55,6 +57,7 @@ export default async function AdoptCuratedProtocolPage({
         identifier={curated.identifier}
         defaults={defaults}
         initialPreview={initialPreview}
+        caveat={curatedCaveat(curated)}
       />
       <BackLink href={CURATED_PICKER_HREF}>Back to Curated Protocols</BackLink>
     </section>

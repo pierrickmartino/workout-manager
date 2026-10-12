@@ -8,7 +8,7 @@ import {
   type AdoptCuratedProtocolState,
   type PreviewCuratedProtocolState,
 } from "@/app/protocols/actions";
-import type { AdoptFormDefaults } from "@/lib/curated-protocol-view";
+import type { AdoptFormDefaults, CuratedCaveat } from "@/lib/curated-protocol-view";
 import {
   adoptFormSnapshot,
   defaultFormSnapshot,
@@ -27,6 +27,9 @@ interface CuratedAdoptFormProps {
   defaults: AdoptFormDefaults;
   // The plan for the untouched defaults, previewed by the page; null when that read failed.
   initialPreview: CuratedPreview | null;
+  // The Sensitive Constraint caveat (issue #687), shown before anything can be adopted; null
+  // when it doesn't apply to this user.
+  caveat: CuratedCaveat | null;
 }
 
 const ADOPT_NOTICE_ID = "curated-adopt-notice";
@@ -44,6 +47,7 @@ export function CuratedAdoptForm({
   identifier,
   defaults,
   initialPreview,
+  caveat,
 }: CuratedAdoptFormProps): React.JSX.Element {
   const [previewState, preview, previewing] = useActionState<
     PreviewCuratedProtocolState,
@@ -77,6 +81,14 @@ export function CuratedAdoptForm({
 
   return (
     <div className="flex flex-col gap-8">
+      {caveat ? (
+        <Alert tone="info">
+          <span className="flex flex-col gap-1">
+            <strong className="font-semibold text-text-primary">{caveat.title}</strong>
+            <span>{caveat.body}</span>
+          </span>
+        </Alert>
+      ) : null}
       <form onSubmit={onPreview} onChange={onChange} className="flex flex-col gap-5">
         {previewState.error ? (
           <Alert announce tone="error">{previewState.error}</Alert>

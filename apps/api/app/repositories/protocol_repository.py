@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import Any
 from typing import Protocol as Interface
 
+from sqlalchemy import null
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -121,6 +122,10 @@ class ProtocolDraft:
     # ``ai_generated`` for an adopted Generated Protocol, ``curated`` for an adopted Curated
     # Protocol. The default keeps every existing generation caller unchanged.
     provenance: str = SessionProvenance.AI_GENERATED.value
+    # Persist the Protocol set aside rather than Current: ``made_current_at`` stays unset, so
+    # Current Protocol selection passes it over until a Switch (ADR-0125) stamps it. Set for a
+    # Curated Protocol adopted by a user with a Sensitive Constraint (ADR-0130, ADR-0058).
+    set_aside: bool = False
 
 
 @dataclass(frozen=True)
@@ -156,7 +161,8 @@ class ProtocolView:
     # When the user last made this their Current Protocol (ADR-0125) — the key Current
     # Protocol selection sorts on. Defaulted (tz-aware, matching ``models._utcnow``) so
     # hand-built views in tests stay valid; every repository read populates it from the row.
-    made_current_at: datetime = field(default_factory=_utcnow)
+    # ``None`` for a Protocol adopted set aside and never made Current since (ADR-0130).
+    made_current_at: datetime | None = field(default_factory=_utcnow)
 
 
 class ProtocolRepository(Interface):
@@ -314,8 +320,10 @@ class SqlProtocolRepository:
             name=draft.name,
             trace_id=draft.trace_id,
             # Adopting makes the Protocol Current (ADR-0125): both stamps share one instant.
+            # A set-aside adopt (ADR-0130) leaves it never made Current; ``null()``, because
+            # a plain ``None`` would fire the column's default and stamp it after all.
             created_at=adopted_at,
-            made_current_at=adopted_at,
+            made_current_at=null() if draft.set_aside else adopted_at,
         )
         self._session.add(protocol)
         self._session.commit()
@@ -576,8 +584,9 @@ class InMemoryProtocolRepository:
             name=draft.name,
             trace_id=draft.trace_id,
             # Adopting makes the Protocol Current (ADR-0125): both stamps share one instant.
+            # A set-aside adopt (ADR-0130) leaves it never made Current.
             created_at=adopted_at,
-            made_current_at=adopted_at,
+            made_current_at=None if draft.set_aside else adopted_at,
         )
         self._next_protocol_id += 1
         self._protocols[protocol.id] = protocol

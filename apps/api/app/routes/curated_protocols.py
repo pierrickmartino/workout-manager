@@ -2,9 +2,11 @@
 
 ``GET /api/curated-protocols`` lists the released Curated Protocols, each main lift carrying the
 starting weight prefilled for the requesting user (issue #686): a fraction of their Estimated
-1RM, or the conservative default, computed at read time from their Logged Sessions. ``POST
+1RM, or the conservative default, computed at read time from their Logged Sessions, and whether
+the Sensitive Constraint caveat applies to them (issue #687). ``POST
 /api/curated-protocols/{identifier}/adopt`` validates the user's length and starting weights,
-recomputes the whole plan server-side, and persists it as the user's Current Protocol. ``POST
+recomputes the whole plan server-side, and persists it as the user's Current Protocol, or set
+aside for a user with a Sensitive Constraint (ADR-0130, ADR-0058). ``POST
 /api/curated-protocols/{identifier}/preview`` (issue #685) takes the same choices through the
 same validation and the same ``enumerate_plan``, and returns the plan without persisting
 anything, so what was previewed is what adopt writes. An unreleased Curated Protocol is a
@@ -31,10 +33,12 @@ from app.curated.plan import (
 )
 from app.curated.prefill import StartingWeightPrefill, starting_weight_prefills
 from app.curated.registry import CuratedRegistry, get_curated_registry
+from app.domain.fitness_profile import is_sensitive
 from app.envelope import error_envelope, success_envelope
 from app.repositories.deps import (
     get_exercise_repository,
     get_logged_session_repository,
+    get_profile_repository,
     get_protocol_repository,
 )
 from app.repositories.exercise_repository import ExerciseRepository
@@ -42,6 +46,7 @@ from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
     LoggedSessionView,
 )
+from app.repositories.profile_repository import ProfileRepository
 from app.repositories.protocol_repository import ProtocolRepository
 
 logger = logging.getLogger(__name__)
@@ -67,7 +72,7 @@ def _serialize_prefill(prefill: StartingWeightPrefill) -> dict:
 
 
 def _serialize_curated(
-    curated: CuratedProtocol, history: list[LoggedSessionView]
+    curated: CuratedProtocol, history: list[LoggedSessionView], *, caveat: bool
 ) -> dict:
     prefills = starting_weight_prefills(curated, history)
     return {
@@ -89,6 +94,9 @@ def _serialize_curated(
             }
             for lift in curated.main_lifts
         ],
+        # Whether the "not tailored to your constraints" caveat applies to this user (ADR-0058):
+        # true exactly when they hold a Sensitive Constraint, so adopting will set it aside.
+        "sensitive_constraint_caveat": caveat,
     }
 
 
@@ -97,13 +105,20 @@ def list_curated_protocols(
     clerk_user_id: str = Depends(get_current_user),
     registry: CuratedRegistry = Depends(get_curated_registry),
     logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+    profiles: ProfileRepository = Depends(get_profile_repository),
 ) -> dict:
     """The released Curated Protocols, in authored order, with each main lift's starting
-    weight prefilled from the user's own records."""
+    weight prefilled from the user's own records, and whether the Sensitive Constraint
+    caveat applies to this user."""
 
     released = registry.released()
-    history = logged.list_for_user(clerk_user_id) if released else []
-    return success_envelope([_serialize_curated(p, history) for p in released])
+    if not released:
+        return success_envelope([])
+    history = logged.list_for_user(clerk_user_id)
+    caveat = is_sensitive(profiles.get_or_create(clerk_user_id))
+    return success_envelope(
+        [_serialize_curated(p, history, caveat=caveat) for p in released]
+    )
 
 
 def _choice_error_response(errors: list[ChoiceError]) -> JSONResponse:
@@ -197,19 +212,23 @@ def adopt_curated_protocol(
     registry: CuratedRegistry = Depends(get_curated_registry),
     exercises: ExerciseRepository = Depends(get_exercise_repository),
     protocols: ProtocolRepository = Depends(get_protocol_repository),
+    profiles: ProfileRepository = Depends(get_profile_repository),
 ) -> object:
-    """Adopt a released Curated Protocol as the user's own, Current Protocol."""
+    """Adopt a released Curated Protocol as the user's own Protocol: Current, or set aside
+    for a user with a Sensitive Constraint (ADR-0130, ADR-0058), which the response says."""
 
     checked = _checked_choices(identifier, payload, registry)
     if isinstance(checked, JSONResponse):
         return checked
     curated, choices = checked
+    set_aside = is_sensitive(profiles.get_or_create(clerk_user_id))
 
     try:
         protocol = adopt_curated(
             curated,
             choices,
             clerk_user_id,
+            set_aside=set_aside,
             exercises=exercises,
             protocols=protocols,
         )
@@ -221,4 +240,4 @@ def adopt_curated_protocol(
             status_code=HTTP_INTERNAL_SERVER_ERROR,
             content=error_envelope("This Curated Protocol can’t be adopted right now."),
         )
-    return success_envelope({"protocol_id": protocol.id})
+    return success_envelope({"protocol_id": protocol.id, "set_aside": set_aside})
