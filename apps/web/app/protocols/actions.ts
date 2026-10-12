@@ -3,8 +3,21 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { adoptCuratedProtocol, fetchCuratedProtocols } from "@/lib/curated-protocols";
-import { findCuratedProtocol, readAdoptForm } from "@/lib/curated-protocol-view";
+import {
+  adoptCuratedProtocol,
+  fetchCuratedProtocols,
+  previewCuratedProtocol,
+} from "@/lib/curated-protocols";
+import {
+  adoptFormDefaults,
+  findCuratedProtocol,
+  readAdoptForm,
+} from "@/lib/curated-protocol-view";
+import {
+  adoptFormSnapshot,
+  curatedPlanView,
+  type CuratedPreview,
+} from "@/lib/curated-plan-preview";
 import { fetchHome } from "@/lib/home";
 import { adoptedProtocolHref } from "@/lib/protocol-supersede";
 import {
@@ -138,4 +151,44 @@ export async function adoptCuratedProtocolAction(
   revalidatePath("/dashboard");
   revalidatePath("/protocols");
   redirect(adoptedProtocolHref(result.data.protocol_id, setAsideProtocolId));
+}
+
+export interface PreviewCuratedProtocolState {
+  preview: CuratedPreview | null;
+  error: string | null;
+}
+
+// Preview a Curated Protocol for the posted length and starting weights (issue #685). Checked
+// like adopt, then computed by the API's adopt code, which persists nothing. A refusal keeps
+// the last preview on screen, which the form then shows as stale, and says why inline.
+export async function previewCuratedProtocolAction(
+  prevState: PreviewCuratedProtocolState,
+  form: FormData,
+): Promise<PreviewCuratedProtocolState> {
+  const identifier = String(form.get("identifier") ?? "");
+  const list = await fetchCuratedProtocols();
+  const curated = findCuratedProtocol(list, identifier);
+  if (!curated) {
+    return { preview: prevState.preview, error: list.error ?? "This Curated Protocol isn’t available." };
+  }
+
+  const parsed = readAdoptForm(curated, form);
+  if (!parsed.ok) {
+    return { preview: prevState.preview, error: parsed.error };
+  }
+
+  const result = await previewCuratedProtocol(identifier, parsed.request);
+  if (!result.success || !result.data) {
+    return {
+      preview: prevState.preview,
+      error: result.error ?? "Could not preview this Curated Protocol.",
+    };
+  }
+  return {
+    preview: {
+      snapshot: adoptFormSnapshot(adoptFormDefaults(curated), form),
+      plan: curatedPlanView(result.data),
+    },
+    error: null,
+  };
 }

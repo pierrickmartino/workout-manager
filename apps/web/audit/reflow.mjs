@@ -80,7 +80,8 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // with #653: the First Record page also lists the lift that set it, a bodyweight one here, whose
 // "bodyweight + added load × reps" set is the longest value the list holds. `curated` and
 // `curated-adopt` join them with #684: the new-Protocol peer choice over the Curated Protocol
-// picker, and the adopt form's length and four starting-weight fields.
+// picker, and the adopt form's length and four starting-weight fields; #685 adds the previewed
+// plan under that form.
 const NOVEL_JOURNEYS = [
   "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc", "launchpad",
   "levels", "sheet", "protocols", "protocols-live", "set-aside", "passport", "passport-open",

@@ -72,6 +72,11 @@ import {
   newProtocolChoices,
   type CuratedProtocolSummary,
 } from "@/lib/curated-protocol-view";
+import {
+  curatedPlanView,
+  defaultFormSnapshot,
+  type CuratedPlanPrescription,
+} from "@/lib/curated-plan-preview";
 import { TrainingPassport } from "@/components/pulse/training-passport";
 import { toPassport, toStampDetail } from "@/lib/passport-view";
 import { StampDetailBody } from "@/components/pulse/stamp-detail";
@@ -364,6 +369,31 @@ const auditCuratedProtocol: CuratedProtocolSummary = {
   ],
 };
 
+// The previewed plan under the adopt form (#685): the widest line pairs the longest main-lift
+// name with an absolute Load and the longest scheme label, beside a qualitative accessory.
+const auditPlanLines: CuratedPlanPrescription[] = [
+  {
+    exercise_name: "Barbell Overhead Press", sets: 3, reps: "5", rest_seconds: 180,
+    recommended_load: { kind: "absolute", text: "102.5 kg", kg: 102.5 },
+    prescribed_quantity: { kind: "repetitions", text: "5", count: 5 }, scheme: "greyskull",
+  },
+  {
+    exercise_name: "Dumbbell Romanian Deadlift", sets: 3, reps: "10", rest_seconds: 90,
+    recommended_load: { kind: "qualitative", text: "moderate" },
+    prescribed_quantity: { kind: "repetitions", text: "10", count: 10 }, scheme: "double_progression",
+  },
+];
+const auditCuratedPreview = {
+  snapshot: defaultFormSnapshot(adoptFormDefaults(auditCuratedProtocol)),
+  plan: curatedPlanView({
+    identifier: auditCuratedProtocol.identifier, version: 1, weeks: 2, sessions_per_week: 2,
+    sessions: [1, 2].flatMap((week) => [
+      { week, day: 1, title: "Workout A", prescriptions: auditPlanLines },
+      { week, day: 2, title: "Workout B", prescriptions: auditPlanLines },
+    ]),
+  }),
+};
+
 function Content() {
   switch (journey) {
     case "charts": return <ChartAccessibilityFixture />;
@@ -374,7 +404,7 @@ function Content() {
     case "sessions": return <SessionsLibrary sessions={count === 0 ? [] : sessions} />;
     // The new-Protocol peer choice over the Curated Protocol picker (#684).
     case "curated": return <><NewProtocolChoices choices={newProtocolChoices("curated", { hasCuratedProtocols: true })} /><CuratedProtocolPicker rows={count === 0 ? [] : [curatedProtocolRow(auditCuratedProtocol)]} /></>;
-    case "curated-adopt": return <CuratedAdoptForm identifier={auditCuratedProtocol.identifier} defaults={adoptFormDefaults(auditCuratedProtocol)} />;
+    case "curated-adopt": return <CuratedAdoptForm identifier={auditCuratedProtocol.identifier} defaults={adoptFormDefaults(auditCuratedProtocol)} initialPreview={auditCuratedPreview} />;
     case "protocols": return <ProtocolsIndex index={protocolsIndex(count === 0 ? [] : protocolIndexEntries, { liveSlot: null, accountId: "audit-synthetic-account" })} />;
     // The same index with a Live Session in progress (#638): every set-aside row's Switch is
     // blocked and carries its reason and a Resume link, the widest shape a row action takes.
