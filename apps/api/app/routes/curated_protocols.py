@@ -3,7 +3,8 @@
 ``GET /api/curated-protocols`` lists the released Curated Protocols, each main lift carrying the
 starting weight prefilled for the requesting user (issue #686): a fraction of their Estimated
 1RM, or the conservative default, computed at read time from their Logged Sessions, and whether
-the Sensitive Constraint caveat applies to them (issue #687). ``POST
+the Sensitive Constraint caveat applies to them (issue #687), and which of its required equipment
+they lack (issue #689): a flag, never a filter and never an auto-substitution. ``POST
 /api/curated-protocols/{identifier}/adopt`` validates the user's length and starting weights,
 recomputes the whole plan server-side, and persists it as the user's Current Protocol, or set
 aside for a user with a Sensitive Constraint (ADR-0130, ADR-0058). ``POST
@@ -33,7 +34,8 @@ from app.curated.plan import (
 )
 from app.curated.prefill import StartingWeightPrefill, starting_weight_prefills
 from app.curated.registry import CuratedRegistry, get_curated_registry
-from app.domain.fitness_profile import is_sensitive
+from app.domain.equipment import missing_equipment
+from app.domain.fitness_profile import is_sensitive, resolve_equipment
 from app.envelope import error_envelope, success_envelope
 from app.repositories.deps import (
     get_exercise_repository,
@@ -72,7 +74,11 @@ def _serialize_prefill(prefill: StartingWeightPrefill) -> dict:
 
 
 def _serialize_curated(
-    curated: CuratedProtocol, history: list[LoggedSessionView], *, caveat: bool
+    curated: CuratedProtocol,
+    history: list[LoggedSessionView],
+    *,
+    caveat: bool,
+    available_equipment: list[str],
 ) -> dict:
     prefills = starting_weight_prefills(curated, history)
     return {
@@ -97,6 +103,11 @@ def _serialize_curated(
         # Whether the "not tailored to your constraints" caveat applies to this user (ADR-0058):
         # true exactly when they hold a Sensitive Constraint, so adopting will set it aside.
         "sensitive_constraint_caveat": caveat,
+        # The required equipment this user lacks: flagged, never hidden, and never swapped
+        # out at adopt time; the user can Substitute afterwards (ADR-0130, ADR-0064).
+        "missing_equipment": list(
+            missing_equipment(curated.required_equipment, available_equipment)
+        ),
     }
 
 
@@ -108,6 +119,15 @@ def _untailored_for(clerk_user_id: str, profiles: ProfileRepository) -> bool:
     return is_sensitive(profiles.get_or_create(clerk_user_id))
 
 
+def _available_equipment(clerk_user_id: str, profiles: ProfileRepository) -> list[str]:
+    """The equipment a generation stating none would run with: the user's Default Equipment,
+    read through the one fall-back rule generation uses (ADR-0038), so the picker's flag and
+    a generation never disagree about what the user has."""
+
+    profile = profiles.get_or_create(clerk_user_id)
+    return resolve_equipment(None, profile.default_equipment)
+
+
 @router.get("/curated-protocols")
 def list_curated_protocols(
     clerk_user_id: str = Depends(get_current_user),
@@ -116,16 +136,22 @@ def list_curated_protocols(
     profiles: ProfileRepository = Depends(get_profile_repository),
 ) -> dict:
     """The released Curated Protocols, in authored order, with each main lift's starting
-    weight prefilled from the user's own records, and whether the Sensitive Constraint
-    caveat applies to this user."""
+    weight prefilled from the user's own records, whether the Sensitive Constraint caveat
+    applies to this user, and the required equipment they lack."""
 
     released = registry.released()
     if not released:
         return success_envelope([])
     history = logged.list_for_user(clerk_user_id)
     caveat = _untailored_for(clerk_user_id, profiles)
+    available = _available_equipment(clerk_user_id, profiles)
     return success_envelope(
-        [_serialize_curated(p, history, caveat=caveat) for p in released]
+        [
+            _serialize_curated(
+                p, history, caveat=caveat, available_equipment=available
+            )
+            for p in released
+        ]
     )
 
 

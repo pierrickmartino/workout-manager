@@ -47,6 +47,9 @@ export interface CuratedProtocolSummary {
   // Whether this user holds a Sensitive Constraint, so the caveat applies and adopting sets the
   // copy aside (issue #687). Decided by the server, which owns the profile.
   sensitive_constraint_caveat: boolean;
+  // The required equipment this user lacks, read from their Default Equipment as generation
+  // reads it (issue #689, ADR-0038). Empty when they have it all.
+  missing_equipment: string[];
 }
 
 // The data of a successful `POST /api/curated-protocols/{identifier}/adopt`.
@@ -101,6 +104,9 @@ export interface CuratedProtocolRow {
   schedule: string;
   mainLifts: string;
   equipment: string;
+  // "Needs: …" when the user lacks required equipment, else `null`. Only a flag: the row is
+  // never hidden and stays adoptable; nothing is auto-substituted (ADR-0130, ADR-0064).
+  equipmentFlag: string | null;
   href: string;
 }
 
@@ -112,6 +118,10 @@ export function curatedProtocolHref(identifier: string): string {
   return `${CURATED_PICKER_HREF}/${encodeURIComponent(identifier)}`;
 }
 
+function equipmentFlag(missing: readonly string[]): string | null {
+  return missing.length === 0 ? null : `Needs: ${missing.join(", ")}`;
+}
+
 export function curatedProtocolRow(curated: CuratedProtocolSummary): CuratedProtocolRow {
   const sessions = `${curated.sessions_per_week} session${curated.sessions_per_week === 1 ? "" : "s"} a week`;
   return {
@@ -121,6 +131,7 @@ export function curatedProtocolRow(curated: CuratedProtocolSummary): CuratedProt
     schedule: `${sessions} · ${weeksText(curated.min_weeks, curated.max_weeks)}`,
     mainLifts: curated.main_lifts.map((lift) => lift.exercise_name).join(", "),
     equipment: curated.required_equipment.join(", "),
+    equipmentFlag: equipmentFlag(curated.missing_equipment),
     href: curatedProtocolHref(curated.identifier),
   };
 }

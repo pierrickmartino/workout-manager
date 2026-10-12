@@ -354,7 +354,7 @@ const auditLiveSession: LiveSessionContext = {
 
 // A Curated Protocol with the longest shapes the picker and adopt form render: a long authored
 // name and description, four main lifts, a 4–12 week range (#684), and the Sensitive Constraint
-// caveat above the form (#687).
+// caveat above the form (#687), and every required item flagged as missing (#689).
 const auditCuratedProtocol: CuratedProtocolSummary = {
   identifier: "beginner-linear-progression",
   version: 1,
@@ -366,6 +366,7 @@ const auditCuratedProtocol: CuratedProtocolSummary = {
   min_weeks: 4,
   max_weeks: 12,
   required_equipment: ["barbell", "rack", "bench", "dumbbell"],
+  missing_equipment: ["barbell", "rack", "bench", "dumbbell"],
   // The squat is prefilled from records (#686), so the longest weight hint is on screen.
   main_lifts: [
     {

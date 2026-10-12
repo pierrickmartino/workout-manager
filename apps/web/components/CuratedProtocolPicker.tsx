@@ -11,7 +11,8 @@ interface CuratedProtocolPickerProps {
 
 // The Curated Protocol picker (issue #684): one card per released Curated Protocol, opening its adopt
 // form. A thin renderer over `curatedProtocolRow`; names and descriptions are authored text,
-// so they wrap rather than truncate (ADR-0085).
+// so they wrap rather than truncate (ADR-0085). A program needing kit the user lacks is flagged,
+// never hidden, and stays adoptable (issue #689, ADR-0130).
 export function CuratedProtocolPicker({
   rows,
 }: CuratedProtocolPickerProps): React.JSX.Element {
@@ -46,6 +47,11 @@ export function CuratedProtocolPicker({
                 <span className="font-mono text-[12px] break-words text-text-muted">
                   Equipment: {row.equipment}
                 </span>
+                {row.equipmentFlag !== null ? (
+                  <span className="font-mono text-[12px] break-words text-amber">
+                    {row.equipmentFlag}
+                  </span>
+                ) : null}
               </span>
               <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-text-muted" />
             </Link>

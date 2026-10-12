@@ -52,6 +52,11 @@ export default async function AdoptCuratedProtocolPage({
           {curated.description}
         </p>
         <p className="font-mono text-[12px] text-text-muted">Equipment: {row.equipment}</p>
+        {row.equipmentFlag !== null ? (
+          <p className="font-mono text-[12px] text-amber">
+            {row.equipmentFlag} — you can Substitute exercises after adopting.
+          </p>
+        ) : null}
       </div>
       <CuratedAdoptForm
         identifier={curated.identifier}

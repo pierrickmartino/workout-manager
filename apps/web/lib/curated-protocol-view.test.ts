@@ -39,6 +39,7 @@ const BEGINNER: CuratedProtocolSummary = {
     },
   ],
   sensitive_constraint_caveat: false,
+  missing_equipment: [],
 };
 
 const FOR_SENSITIVE: CuratedProtocolSummary = { ...BEGINNER, sensitive_constraint_caveat: true };
@@ -108,8 +109,18 @@ test("a list row summarises the Curated Protocol for the picker", () => {
     schedule: "3 sessions a week · 4–12 weeks",
     mainLifts: "Barbell Back Squat, Barbell Deadlift",
     equipment: "barbell, rack",
+    equipmentFlag: null,
     href: "/protocols/new/curated/beginner-linear-progression",
   });
+});
+
+test("a row flags the required equipment the user lacks, and still links to adopting it", () => {
+  // Act
+  const row = curatedProtocolRow({ ...BEGINNER, missing_equipment: ["barbell", "rack"] });
+
+  // Assert
+  assert.equal(row.equipmentFlag, "Needs: barbell, rack");
+  assert.equal(row.href, "/protocols/new/curated/beginner-linear-progression");
 });
 
 test("a one-session, fixed-length Curated Protocol reads in the singular without a range", () => {
