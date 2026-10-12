@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { adoptCuratedProtocol, fetchCuratedProtocols } from "@/lib/curated-protocols";
+import { readAdoptForm } from "@/lib/curated-protocol-view";
 import {
   deleteProtocol,
   fetchProtocolJob,
@@ -92,4 +94,40 @@ export async function deleteProtocolAction(
   revalidatePath("/dashboard");
   revalidatePath("/protocols");
   return { error: null };
+}
+
+export interface AdoptCuratedProtocolState {
+  error: string | null;
+}
+
+// Adopt a Curated Protocol (issue #684). The program is re-read server-side rather than trusted
+// from the form, and the form is checked against it before anything is sent; the API is still
+// authoritative and recomputes the plan itself. On success the new Protocol is Current, so Home
+// and the index are revalidated and the user lands on it.
+export async function adoptCuratedProtocolAction(
+  _prevState: AdoptCuratedProtocolState,
+  form: FormData,
+): Promise<AdoptCuratedProtocolState> {
+  const identifier = String(form.get("identifier") ?? "");
+  const programs = await fetchCuratedProtocols();
+  const program = programs.success
+    ? programs.data?.find((candidate) => candidate.identifier === identifier)
+    : undefined;
+  if (!program) {
+    return { error: programs.error ?? "This Curated Protocol isn’t available." };
+  }
+
+  const parsed = readAdoptForm(program, form);
+  if (!parsed.ok) {
+    return { error: parsed.error };
+  }
+
+  const result = await adoptCuratedProtocol(identifier, parsed.request);
+  if (!result.success || !result.data) {
+    return { error: result.error ?? "Could not adopt this Curated Protocol." };
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/protocols");
+  redirect(`/protocols/${result.data.protocol_id}`);
 }

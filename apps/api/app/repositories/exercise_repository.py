@@ -166,6 +166,14 @@ class ExerciseRepository(Protocol):
         not need to know whether the row was freshly minted."""
         ...
 
+    def find_by_name(self, name: str) -> Exercise | None:
+        """Return the catalog Exercise for ``name``'s normalized form, or ``None``.
+
+        Resolve-only: unlike ``find_or_create`` it never mints a row. Curated Protocol
+        adoption resolves through it, so a missing seed fails loudly rather than leaving an
+        unvalidated Stub in the shared catalog (ADR-0130)."""
+        ...
+
     def get(self, exercise_id: int) -> Exercise | None:
         """Return the catalog Exercise with ``exercise_id``, or ``None``."""
         ...
@@ -709,6 +717,9 @@ class SqlExerciseRepository:
             image=image,
         ).exercise
 
+    def find_by_name(self, name: str) -> Exercise | None:
+        return self._lookup(normalize_name(name))
+
     def _lookup(self, normalized_name: str) -> Exercise | None:
         return self._session.exec(
             select(Exercise).where(Exercise.normalized_name == normalized_name)
@@ -1028,6 +1039,9 @@ class InMemoryExerciseRepository:
             precautions=precautions,
             image=image,
         ).exercise
+
+    def find_by_name(self, name: str) -> Exercise | None:
+        return self._by_key.get(normalize_name(name))
 
     def get(self, exercise_id: int) -> Exercise | None:
         return self._by_id.get(exercise_id)
