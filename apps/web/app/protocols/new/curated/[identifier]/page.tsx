@@ -18,8 +18,8 @@ import {
 } from "@/lib/curated-protocol-view";
 
 // Adopt one Curated Protocol (issue #684): its description, then the length and starting
-// weights, with the plan the defaults would write already previewed (issue #685). An unknown
-// or unreleased Curated Protocol is a 404 here, as it is on the API.
+// weights, with the plan the prefilled inputs would write already previewed (issues #685, #686).
+// An unknown or unreleased Curated Protocol is a 404 here, as it is on the API.
 export default async function AdoptCuratedProtocolPage({
   params,
 }: {

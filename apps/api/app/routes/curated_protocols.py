@@ -1,6 +1,8 @@
 """Curated Protocol routes (issue #684, ADR-0130).
 
-``GET /api/curated-protocols`` lists the released Curated Protocols. ``POST
+``GET /api/curated-protocols`` lists the released Curated Protocols, each main lift carrying the
+starting weight prefilled for the requesting user (issue #686): a fraction of their Estimated
+1RM, or the conservative default, computed at read time from their Logged Sessions. ``POST
 /api/curated-protocols/{identifier}/adopt`` validates the user's length and starting weights,
 recomputes the whole plan server-side, and persists it as the user's Current Protocol. ``POST
 /api/curated-protocols/{identifier}/preview`` (issue #685) takes the same choices through the
@@ -27,10 +29,19 @@ from app.curated.plan import (
     enumerate_plan,
     validate_choices,
 )
+from app.curated.prefill import StartingWeightPrefill, starting_weight_prefills
 from app.curated.registry import CuratedRegistry, get_curated_registry
 from app.envelope import error_envelope, success_envelope
-from app.repositories.deps import get_exercise_repository, get_protocol_repository
+from app.repositories.deps import (
+    get_exercise_repository,
+    get_logged_session_repository,
+    get_protocol_repository,
+)
 from app.repositories.exercise_repository import ExerciseRepository
+from app.repositories.logged_session_repository import (
+    LoggedSessionRepository,
+    LoggedSessionView,
+)
 from app.repositories.protocol_repository import ProtocolRepository
 
 logger = logging.getLogger(__name__)
@@ -51,7 +62,14 @@ class AdoptCuratedProtocolRequest(BaseModel):
     starting_weights_kg: dict[str, float]
 
 
-def _serialize_curated(curated: CuratedProtocol) -> dict:
+def _serialize_prefill(prefill: StartingWeightPrefill) -> dict:
+    return {"kg": prefill.kg, "source": prefill.source}
+
+
+def _serialize_curated(
+    curated: CuratedProtocol, history: list[LoggedSessionView]
+) -> dict:
+    prefills = starting_weight_prefills(curated, history)
     return {
         "identifier": curated.identifier,
         "version": curated.version,
@@ -67,6 +85,7 @@ def _serialize_curated(curated: CuratedProtocol) -> dict:
                 "key": lift.key,
                 "exercise_name": lift.exercise,
                 "default_starting_weight_kg": lift.default_start_kg,
+                "starting_weight_prefill": _serialize_prefill(prefills[lift.key]),
             }
             for lift in curated.main_lifts
         ],
@@ -75,12 +94,16 @@ def _serialize_curated(curated: CuratedProtocol) -> dict:
 
 @router.get("/curated-protocols")
 def list_curated_protocols(
-    _clerk_user_id: str = Depends(get_current_user),
+    clerk_user_id: str = Depends(get_current_user),
     registry: CuratedRegistry = Depends(get_curated_registry),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
 ) -> dict:
-    """The released Curated Protocols, in authored order."""
+    """The released Curated Protocols, in authored order, with each main lift's starting
+    weight prefilled from the user's own records."""
 
-    return success_envelope([_serialize_curated(p) for p in registry.released()])
+    released = registry.released()
+    history = logged.list_for_user(clerk_user_id) if released else []
+    return success_envelope([_serialize_curated(p, history) for p in released])
 
 
 def _choice_error_response(errors: list[ChoiceError]) -> JSONResponse:

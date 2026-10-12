@@ -32,10 +32,11 @@ interface CuratedAdoptFormProps {
 const ADOPT_NOTICE_ID = "curated-adopt-notice";
 
 // The adopt form for one Curated Protocol (issues #684, #685): a length within the Curated
-// Protocol's range and a starting weight per main lift, prefilled with conservative defaults,
-// and the fully enumerated plan those inputs would write. Editing an input makes the shown
-// plan stale and holds Adopt back until the user previews again, so what is adopted is what
-// was seen. The API recomputes the plan on adopt; a refusal shows inline and nothing is saved.
+// Protocol's range and a starting weight per main lift, prefilled from the user's Estimated 1RM
+// where they have one and with conservative defaults otherwise (issue #686), and the fully
+// enumerated plan those inputs would write. Editing an input makes the shown plan stale and
+// holds Adopt back until the user previews again, so what is adopted is what was seen. The API
+// recomputes the plan on adopt; a refusal shows inline and nothing is saved.
 //
 // Both actions are dispatched by hand rather than as the form's `action`: React resets a form
 // once its action completes, which would wipe the inputs the user just previewed.
@@ -94,7 +95,7 @@ export function CuratedAdoptForm({
         </Field>
 
         {defaults.lifts.map((lift) => (
-          <Field key={lift.key} label={lift.label} hint="Starting weight in kg">
+          <Field key={lift.key} label={lift.label} hint={lift.hint}>
             <Input
               name={lift.name}
               type="number"
@@ -102,7 +103,7 @@ export function CuratedAdoptForm({
               min={0}
               required
               spellCheck={false}
-              defaultValue={lift.defaultKg}
+              defaultValue={lift.initialKg}
             />
           </Field>
         ))}

@@ -21,8 +21,18 @@ const BEGINNER: CuratedProtocolSummary = {
   max_weeks: 12,
   required_equipment: ["barbell", "rack"],
   main_lifts: [
-    { key: "squat", exercise_name: "Barbell Back Squat", default_starting_weight_kg: 20 },
-    { key: "deadlift", exercise_name: "Barbell Deadlift", default_starting_weight_kg: 40 },
+    {
+      key: "squat",
+      exercise_name: "Barbell Back Squat",
+      default_starting_weight_kg: 20,
+      starting_weight_prefill: { kg: 20, source: "default" },
+    },
+    {
+      key: "deadlift",
+      exercise_name: "Barbell Deadlift",
+      default_starting_weight_kg: 40,
+      starting_weight_prefill: { kg: 40, source: "default" },
+    },
   ],
 };
 
@@ -117,9 +127,51 @@ test("the adopt form starts at the shortest length with the default starting wei
     weeks: 4,
     weekOptions: [4, 5, 6, 7, 8, 9, 10, 11, 12],
     lifts: [
-      { key: "squat", name: "weight_squat", label: "Barbell Back Squat", defaultKg: 20 },
-      { key: "deadlift", name: "weight_deadlift", label: "Barbell Deadlift", defaultKg: 40 },
+      {
+        key: "squat",
+        name: "weight_squat",
+        label: "Barbell Back Squat",
+        initialKg: 20,
+        source: "default",
+        hint: "Starting weight in kg",
+      },
+      {
+        key: "deadlift",
+        name: "weight_deadlift",
+        label: "Barbell Deadlift",
+        initialKg: 40,
+        source: "default",
+        hint: "Starting weight in kg",
+      },
     ],
+  });
+});
+
+test("a lift prefilled from the user’s records starts there and says so", () => {
+  // Arrange
+  const withRecords: CuratedProtocolSummary = {
+    ...BEGINNER,
+    main_lifts: [
+      {
+        key: "squat",
+        exercise_name: "Barbell Back Squat",
+        default_starting_weight_kg: 20,
+        starting_weight_prefill: { kg: 82.5, source: "records" },
+      },
+    ],
+  };
+
+  // Act
+  const [squat] = adoptFormDefaults(withRecords).lifts;
+
+  // Assert
+  assert.deepEqual(squat, {
+    key: "squat",
+    name: "weight_squat",
+    label: "Barbell Back Squat",
+    initialKg: 82.5,
+    source: "records",
+    hint: "Starting weight in kg · prefilled from your records, edit it freely",
   });
 });
 
