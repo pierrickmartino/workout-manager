@@ -103,7 +103,7 @@ export function CuratedAdoptForm({
               min={0}
               required
               spellCheck={false}
-              defaultValue={lift.defaultKg}
+              defaultValue={lift.initialKg}
             />
           </Field>
         ))}

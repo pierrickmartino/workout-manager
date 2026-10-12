@@ -127,16 +127,16 @@ export function adoptFormSnapshot(
 export function defaultFormSnapshot(defaults: AdoptFormDefaults): AdoptFormSnapshot {
   return {
     weeks: defaults.weeks,
-    ...Object.fromEntries(defaults.lifts.map((lift) => [lift.name, lift.defaultKg])),
+    ...Object.fromEntries(defaults.lifts.map((lift) => [lift.name, lift.initialKg])),
   };
 }
 
-// The preview request for the untouched form: the shortest length and the default weights.
+// The preview request for the untouched form: the shortest length and the prefilled weights.
 export function defaultPreviewRequest(defaults: AdoptFormDefaults): AdoptCuratedProtocolRequest {
   return {
     weeks: defaults.weeks,
     starting_weights_kg: Object.fromEntries(
-      defaults.lifts.map((lift) => [lift.key, lift.defaultKg]),
+      defaults.lifts.map((lift) => [lift.key, lift.initialKg]),
     ),
   };
 }

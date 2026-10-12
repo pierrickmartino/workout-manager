@@ -23,7 +23,7 @@ from typing import Literal
 from app.curated.model import CuratedProtocol
 from app.curated.plan import MAX_STARTING_WEIGHT_KG
 from app.domain.exercise import normalize_name
-from app.domain.load import LoadKind
+from app.domain.load import LoadKind, ParsedLoad
 from app.domain.personal_records import (
     LoggedSession,
     estimated_1rm_for_set,
@@ -33,8 +33,7 @@ from app.domain.personal_records import (
 # The share of an Estimated 1RM offered as a first working weight: inside the usual 70–75%
 # band, at its conservative end, so the first sessions of a linear progression leave room.
 WORKING_WEIGHT_FRACTION = 0.7
-# The smallest step a barbell can be loaded by (a pair of 1.25 kg plates); also the step the
-# Curated main lifts progress by.
+# The smallest step a barbell can be loaded by: a pair of 1.25 kg plates.
 LOADABLE_INCREMENT_KG = 2.5
 # Absorbs float error so an exact multiple (0.7 × 125 = 87.5) never floors one step short.
 _ROUNDING_TOLERANCE = 1e-9
@@ -53,7 +52,7 @@ class StartingWeightPrefill:
 def _best_absolute_1rm_by_name(history: Iterable[LoggedSession]) -> dict[str, float]:
     best: dict[str, float] = {}
     for record in logged_set_records(history):
-        if record.load is None or record.load.get("kind") != LoadKind.ABSOLUTE.value:
+        if record.load is None or ParsedLoad.from_dict(record.load).kind is not LoadKind.ABSOLUTE:
             continue
         estimate = estimated_1rm_for_set(
             record.load, record.quantity, set_type=record.set_type

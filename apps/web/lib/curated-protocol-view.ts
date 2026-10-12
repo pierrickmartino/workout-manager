@@ -114,7 +114,7 @@ export interface AdoptLiftField {
   name: string;
   label: string;
   // The value the field starts at: the user's prefill, editable like any typed weight.
-  defaultKg: number;
+  initialKg: number;
   source: PrefillSource;
   hint: string;
 }
@@ -149,7 +149,7 @@ export function adoptFormDefaults(curated: CuratedProtocolSummary): AdoptFormDef
       key: lift.key,
       name: liftFieldName(lift.key),
       label: lift.exercise_name,
-      defaultKg: lift.starting_weight_prefill.kg,
+      initialKg: lift.starting_weight_prefill.kg,
       source: lift.starting_weight_prefill.source,
       hint: weightHint(lift.starting_weight_prefill.source),
     })),
