@@ -13,6 +13,8 @@ from dataclasses import replace
 
 from app.adoption.service import adopt
 from app.curated.registry import CuratedRegistry, get_curated_registry
+from app.domain.curated_lineage import CuratedLineage
+from app.export.serializer import export_document
 from app.generation.protocol_generator import ProtocolGenerationRequest
 from app.generation.schema import (
     GeneratedExercisePrescription,
@@ -22,7 +24,11 @@ from app.generation.schema import (
 from app.protocols.serialization import serialize_protocol
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.protocol_repository import InMemoryProtocolRepository
-from app.repositories.session_repository import InMemorySessionRepository, SessionDraft
+from app.repositories.session_repository import (
+    InMemorySessionRepository,
+    SessionDraft,
+    SessionView,
+)
 from app.session_serialization import serialize_session
 from tests.test_curated_protocols_endpoint import RELEASED, build_harness
 
@@ -226,3 +232,34 @@ def test_a_builder_deploy_keeps_the_lineage_on_the_rewritten_tail():
     ]
     assert deployed["curated_lineage"] == LINEAGE_V1
     assert lineages == [LINEAGE_V1] * len(deployed["sessions"])
+
+
+def test_data_export_carries_the_lineage_of_a_curated_copy():
+    # Arrange — a Session carrying lineage, as Duplicate leaves it.
+    lineage = CuratedLineage(
+        identifier="beginner-linear-progression",
+        version=1,
+        name="Beginner linear progression",
+    )
+    session = SessionView(
+        id=1,
+        clerk_user_id="user_export",
+        training_type="strength",
+        duration_minutes=45,
+        prescriptions=[],
+        provenance="curated",
+        curated_lineage=lineage,
+    )
+
+    # Act
+    doc = export_document(
+        user_id="user_export",
+        protocols=[],
+        sessions=[session],
+        logged_sessions=[],
+        metrics=[],
+        exercises=[],
+    )
+
+    # Assert
+    assert doc["sessions"][0]["curated_lineage"] == LINEAGE_V1

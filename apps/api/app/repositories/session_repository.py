@@ -26,7 +26,7 @@ from app.db.models import (
 from app.domain.curated_lineage import (
     CuratedLineage,
     lineage_columns,
-    lineage_from_columns,
+    lineage_of,
 )
 from app.domain.session_library import matches_session_search
 from app.domain.share_redeem import SharedSessionSource, redeem_copy
@@ -486,12 +486,6 @@ def _removed_drafts(
     return drafts
 
 
-def _session_lineage(workout: WorkoutSession) -> CuratedLineage | None:
-    return lineage_from_columns(
-        workout.curated_identifier, workout.curated_version, workout.curated_name
-    )
-
-
 def _author_display_name(
     profiles: ProfileRepository | None, author_clerk_user_id: str | None
 ) -> str | None:
@@ -549,7 +543,7 @@ class SqlSessionRepository:
             is_favorite=self._favorites.is_favorite(
                 workout.clerk_user_id, workout.id
             ),
-            curated_lineage=_session_lineage(workout),
+            curated_lineage=lineage_of(workout),
         )
 
     def _add_prescriptions(
@@ -726,7 +720,7 @@ class SqlSessionRepository:
             title=source.title,
             name=source.name,
             author_clerk_user_id=source.author_clerk_user_id,
-            **lineage_columns(_session_lineage(source)),
+            **lineage_columns(lineage_of(source)),
         )
         self._session.add(copy)
         self._session.commit()
@@ -770,7 +764,7 @@ class SqlSessionRepository:
                 name=source.name,
                 author_clerk_user_id=source.author_clerk_user_id,
                 trace_id=source.trace_id,
-                curated_lineage=_session_lineage(source),
+                curated_lineage=lineage_of(source),
             ),
             redeemer_clerk_user_id,
         )
@@ -1006,7 +1000,7 @@ class InMemorySessionRepository:
             is_favorite=self._favorites.is_favorite(
                 workout.clerk_user_id, workout.id
             ),
-            curated_lineage=_session_lineage(workout),
+            curated_lineage=lineage_of(workout),
         )
 
     def _materialize(
@@ -1139,7 +1133,7 @@ class InMemorySessionRepository:
             title=source.title,
             name=source.name,
             author_clerk_user_id=source.author_clerk_user_id,
-            **lineage_columns(_session_lineage(source)),
+            **lineage_columns(lineage_of(source)),
         )
         self._next_id += 1
         self._sessions[copy.id] = copy
@@ -1177,7 +1171,7 @@ class InMemorySessionRepository:
                 name=source.name,
                 author_clerk_user_id=source.author_clerk_user_id,
                 trace_id=source.trace_id,
-                curated_lineage=_session_lineage(source),
+                curated_lineage=lineage_of(source),
             ),
             redeemer_clerk_user_id,
         )

@@ -78,6 +78,9 @@ const ALL_JOURNEYS = [
   // The set-aside note a generated Protocol lands with (ADR-0125), whose label is an authored
   // name. It renders only on that landing, so no other journey shows it.
   "set-aside",
+  // The "Based on <name>" line under an adopted Curated Protocol's title (#688), whose name is
+  // authored content.
+  "based-on",
 ];
 // A comma-separated subset, for iterating on one screen without paying for the full sweep.
 // The gated run is the unfiltered one.

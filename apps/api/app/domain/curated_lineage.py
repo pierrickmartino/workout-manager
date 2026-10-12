@@ -14,6 +14,7 @@ Pure: no I/O, no ORM."""
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Protocol
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,22 @@ def lineage_from_columns(
     return CuratedLineage(identifier=identifier, version=version, name=name)
 
 
+class LineageColumns(Protocol):
+    """Any row carrying the three lineage columns — a Protocol or a Session."""
+
+    curated_identifier: str | None
+    curated_version: int | None
+    curated_name: str | None
+
+
+def lineage_of(row: LineageColumns) -> CuratedLineage | None:
+    """The lineage a Protocol or Session row stores, or ``None``."""
+
+    return lineage_from_columns(
+        row.curated_identifier, row.curated_version, row.curated_name
+    )
+
+
 def lineage_columns(lineage: CuratedLineage | None) -> dict[str, str | int | None]:
     """The three column values that store ``lineage`` on a row — all ``None`` for none.
     The inverse of :func:`lineage_from_columns`, so every write stamps them together."""
@@ -58,4 +75,11 @@ def lineage_dict(lineage: CuratedLineage | None) -> dict | None:
     return None if lineage is None else lineage.to_dict()
 
 
-__all__ = ["CuratedLineage", "lineage_from_columns", "lineage_columns", "lineage_dict"]
+__all__ = [
+    "CuratedLineage",
+    "LineageColumns",
+    "lineage_from_columns",
+    "lineage_of",
+    "lineage_columns",
+    "lineage_dict",
+]

@@ -41,7 +41,7 @@ import { supersetLayout, type SupersetSlot } from "@/lib/supersets";
 import { removeAffordances } from "@/lib/remove-prescription";
 import { sessionNameView } from "@/lib/session-name";
 import { sessionAuthorView } from "@/lib/session-author";
-import { basedOnLabel } from "@/lib/curated-lineage";
+import { BasedOnNote } from "@/components/BasedOnNote";
 import { sessionFavoriteView } from "@/lib/session-favorite";
 import { sessionDeleteView, DELETE_DISABLED_HINT } from "@/lib/session-delete";
 import { submitDeleteSession } from "@/app/sessions/[id]/actions";
@@ -88,10 +88,6 @@ export default async function SessionPage({
   // created this plan. Rendered under the title as quiet secondary text — deliberately distinct
   // from the per-movement AI-GENERATED Provenance badges (who made it vs. how it was made).
   const authorView = sessionAuthorView(session);
-
-  // Curated lineage (ADR-0130, issue #688): "Based on <name>" when this plan was adopted from a
-  // Curated Protocol — kept through Duplicate and Redeem — else nothing.
-  const basedOn = basedOnLabel(session.curated_lineage);
 
   // The Favorite toggle state (GLOSSARY: Favorite, issue #396): whether this standalone Session is
   // favorited, and whether to show the toggle at all. Withheld on a Protocol member (the server
@@ -168,9 +164,9 @@ export default async function SessionPage({
         </p>
       ) : null}
 
-      {basedOn !== null ? (
-        <p className="-mt-4 font-sans text-[13px] text-text-secondary">{basedOn}</p>
-      ) : null}
+      {/* Curated lineage (ADR-0130, #688): "Based on <name>" for a plan adopted from a Curated
+          Protocol, kept through Duplicate and Redeem; nothing otherwise. */}
+      <BasedOnNote lineage={session.curated_lineage} />
 
       {/* Header controls. Favorite — a frequent, cheap toggle — stays visible; the rare and
           destructive actions (Rename, Share, Duplicate, Generate another, Delete) sit one tap

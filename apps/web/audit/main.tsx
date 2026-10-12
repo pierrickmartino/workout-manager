@@ -87,6 +87,7 @@ import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
 import type { Achievement } from "@/lib/profile-progress-types";
 import { SetAsideNote } from "@/components/SetAsideNote";
+import { BasedOnNote } from "@/components/BasedOnNote";
 import { protocolsIndex, type LiveSessionContext } from "@/lib/protocols-index";
 import { adminExerciseRows, auditEntry, exerciseDetail, exerciseNames, exercises, history, historyIndex, liveWorkout, personalRecords, prescriptions, profile, progressStory, protocolIndexEntries, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
 
@@ -482,6 +483,9 @@ function Content() {
     // (ADR-0125). It renders only on that landing, so no other journey shows it; the label is
     // the worst an authored name can be, 120 unbroken characters.
     case "set-aside": return <SetAsideNote label={"W".repeat(120)} />;
+    // The "Based on" line a Protocol or Session adopted from a Curated Protocol shows (#688). Its
+    // name is authored content, so the worst case is 120 unbroken characters.
+    case "based-on": return <BasedOnNote lineage={{ identifier: "audit", version: 1, name: "W".repeat(120) }} />;
     case "passport": return <TrainingPassport passport={passport} />;
     case "passport-open": return <TrainingPassport passport={passport} moreToEarnOpen />;
     case "passport-empty": return <TrainingPassport passport={emptyPassport} />;

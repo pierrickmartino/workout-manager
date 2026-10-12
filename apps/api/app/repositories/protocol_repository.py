@@ -34,7 +34,7 @@ from app.db.models import (
 from app.domain.curated_lineage import (
     CuratedLineage,
     lineage_columns,
-    lineage_from_columns,
+    lineage_of,
 )
 from app.domain.session_provenance import SessionProvenance
 from app.repositories.exercise_repository import ExerciseRepository
@@ -316,7 +316,7 @@ class SqlProtocolRepository:
             name=protocol.name,
             calibration=protocol.calibration,
             made_current_at=protocol.made_current_at,
-            curated_lineage=_protocol_lineage(protocol),
+            curated_lineage=lineage_of(protocol),
             sessions=[self._session_view(w) for w in workouts],
         )
 
@@ -497,7 +497,7 @@ class SqlProtocolRepository:
                 provenance=provenance,
                 # The Protocol's curated lineage reaches every Session it holds: editing the
                 # plan doesn't change where it came from (ADR-0130).
-                **lineage_columns(_protocol_lineage(protocol)),
+                **lineage_columns(lineage_of(protocol)),
             )
             self._session.add(workout)
             self._session.flush()  # assign the new Session id without committing
@@ -585,7 +585,7 @@ class InMemoryProtocolRepository:
             name=protocol.name,
             calibration=protocol.calibration,
             made_current_at=protocol.made_current_at,
-            curated_lineage=_protocol_lineage(protocol),
+            curated_lineage=lineage_of(protocol),
             sessions=[self._session_view(w) for w in workouts],
         )
 
@@ -731,7 +731,7 @@ class InMemoryProtocolRepository:
                 provenance=provenance,
                 # The Protocol's curated lineage reaches every Session it holds: editing the
                 # plan doesn't change where it came from (ADR-0130).
-                **lineage_columns(_protocol_lineage(protocol)),
+                **lineage_columns(lineage_of(protocol)),
             )
             self._next_session_id += 1
             kept.append(workout)
@@ -771,12 +771,6 @@ class InMemoryProtocolRepository:
                     _apply_pitch(row, pitch)
 
         return self._view(protocol)
-
-
-def _protocol_lineage(protocol: Protocol) -> CuratedLineage | None:
-    return lineage_from_columns(
-        protocol.curated_identifier, protocol.curated_version, protocol.curated_name
-    )
 
 
 def _tail_provenance(workouts: Sequence[WorkoutSession]) -> str:

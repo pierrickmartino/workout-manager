@@ -19,6 +19,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from app.db.models import Exercise
+from app.domain.curated_lineage import lineage_dict
 from app.repositories.logged_session_repository import (
     LoggedSessionView,
     LoggedSetView,
@@ -112,6 +113,8 @@ def _protocol(view: ProtocolView) -> dict:
         # Calibration is materialised, so the export is faithful either way, and this is
         # the user's *intent* alongside it.
         "calibration": view.calibration or 0,
+        # Curated lineage (ADR-0130, #688): the Curated Protocol this copy was adopted from.
+        "curated_lineage": lineage_dict(view.curated_lineage),
         "sessions": [_protocol_session(s) for s in view.sessions],
     }
 
@@ -123,6 +126,7 @@ def _session(view: SessionView) -> dict:
         "training_type": view.training_type,
         "duration_minutes": view.duration_minutes,
         "provenance": view.provenance,
+        "curated_lineage": lineage_dict(view.curated_lineage),
         "author_clerk_user_id": view.author_clerk_user_id,
         "created_at": view.created_at.isoformat(),
         "prescriptions": [_prescription(p) for p in view.prescriptions],

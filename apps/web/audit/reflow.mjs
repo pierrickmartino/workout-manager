@@ -81,11 +81,13 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // "bodyweight + added load × reps" set is the longest value the list holds. `curated` and
 // `curated-adopt` join them with #684: the new-Protocol peer choice over the Curated Protocol
 // picker, and the adopt form's length and four starting-weight fields; #685 adds the previewed
-// plan under that form.
+// plan under that form. `based-on` joins them with #688: the "Based on <name>" line under an
+// adopted Curated Protocol's title, whose name is authored content.
 const NOVEL_JOURNEYS = [
   "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc", "launchpad",
   "levels", "sheet", "protocols", "protocols-live", "set-aside", "passport", "passport-open",
   "passport-empty", "stamp", "stamp-locked", "stamp-record", "curated", "curated-adopt",
+  "based-on",
 ];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and
