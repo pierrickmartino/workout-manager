@@ -326,9 +326,9 @@ class WorkoutSession(SQLModel, table=True):
     # Session, built by hand with no AI call). Every existing creation path is AI, so the
     # default is ``ai_generated`` and the 0023 migration backfills pre-existing rows;
     # ``user_authored`` arrives with the Hand-Authored Session feature that builds on this
-    # column. Load-bearing, not cosmetic: Generation Feedback and Regeneration are hidden
-    # for ``user_authored`` plans (offering "the AI gave me a bad plan" on a hand-written
-    # plan is nonsensical). See ``app.domain.session_provenance.SessionProvenance``.
+    # column, and ``curated`` with Curated Protocols (ADR-0130). Load-bearing, not cosmetic:
+    # Generation Feedback and Regeneration are offered only on ``ai_generated`` plans
+    # (offering "the AI gave me a bad plan" on a plan no AI wrote is nonsensical). See ``app.domain.session_provenance.SessionProvenance``.
     provenance: str = Field(default="ai_generated")
 
     # Protocol linkage — all null for a standalone Session (Slices 3-4 path).

@@ -6,6 +6,7 @@ import type { Effort } from "./effort";
 import type { Load } from "./load";
 import type { Quantity } from "./quantity";
 import type { PositionedSuggestion } from "./harder-variation-view";
+import type { SessionProvenance } from "./ai-affordances";
 
 // Training types a Session can be generated for. Mirrors the Fitness Level
 // dimensions used elsewhere in the app.
@@ -92,11 +93,11 @@ export interface WorkoutSession {
   training_type: string;
   duration_minutes: number;
   has_been_regenerated: boolean;
-  // Session Provenance (ADR-0040): how the plan came to exist — `ai_generated` or
-  // `user_authored`. Gates the AI-only affordances (Generation Feedback, Regeneration)
+  // Session Provenance (ADR-0040, ADR-0130): how the plan came to exist — `ai_generated`,
+  // `user_authored`, or `curated`. Gates the AI-only affordances (Generation Feedback, Regeneration)
   // via `aiAffordanceVisibility`. Optional here because the plain Session read always
   // carries it while the live hydration read omits it (mirror of `previous_performance`).
-  provenance?: string;
+  provenance?: SessionProvenance;
   // Whether this Session belongs to a Protocol (ADR-0043 consequence, Q2). The Session
   // view withholds the Duplicate control on a Protocol member — lifting one workout out of
   // a plan the user is working through has no value there; Duplicate stays on standalone
