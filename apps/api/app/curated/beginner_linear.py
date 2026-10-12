@@ -12,8 +12,8 @@ from __future__ import annotations
 from app.curated.model import (
     CuratedProtocol,
     MainLift,
-    PrescriptionTemplate,
-    SessionTemplate,
+    PatternPrescription,
+    PatternSession,
 )
 from app.domain.progression import ProgressionScheme
 
@@ -28,8 +28,8 @@ PRESS = MainLift("press", "Barbell Overhead Press", default_start_kg=20)
 DEADLIFT = MainLift("deadlift", "Barbell Deadlift", default_start_kg=40)
 
 
-def _main(lift: MainLift, sets: int) -> PrescriptionTemplate:
-    return PrescriptionTemplate(
+def _main(lift: MainLift, sets: int) -> PatternPrescription:
+    return PatternPrescription(
         exercise=lift.exercise,
         sets=sets,
         reps=_MAIN_REPS,
@@ -39,8 +39,8 @@ def _main(lift: MainLift, sets: int) -> PrescriptionTemplate:
     )
 
 
-def _accessory(exercise: str, sets: int, reps: str, load: str) -> PrescriptionTemplate:
-    return PrescriptionTemplate(
+def _accessory(exercise: str, sets: int, reps: str, load: str) -> PatternPrescription:
+    return PatternPrescription(
         exercise=exercise,
         sets=sets,
         reps=reps,
@@ -58,10 +58,11 @@ BEGINNER_LINEAR = CuratedProtocol(
         "Three full-body barbell sessions a week built on the squat, bench press, overhead "
         "press and deadlift. Every set is at least five reps, and the last set is as many "
         "good reps as you can. Each main lift goes up 2.5 kg after a session in which every "
-        "set reaches five, and drops back 10% after a session where one doesn’t. It suits someone new to barbell training who wants to add "
-        "weight quickly. It does not alternate A/B weeks, programme conditioning, or plan "
-        "for the point where you stop adding weight every session: when that happens, "
-        "Calibrate the plan or move to an intermediate Protocol."
+        "set reaches five, and drops back 10% after a session where one doesn’t. It suits "
+        "someone new to barbell training who wants to add weight quickly. It does not "
+        "alternate A/B weeks, include conditioning, or plan for the point where you stop "
+        "adding weight every session: when that happens, Calibrate the plan or move to an "
+        "intermediate Protocol."
     ),
     training_type="strength",
     objective="build strength",
@@ -71,7 +72,7 @@ BEGINNER_LINEAR = CuratedProtocol(
     required_equipment=("barbell", "rack", "bench", "dumbbell"),
     main_lifts=(SQUAT, BENCH, PRESS, DEADLIFT),
     weekly_pattern=(
-        SessionTemplate(
+        PatternSession(
             "Squat and bench",
             (
                 _main(SQUAT, 3),
@@ -79,7 +80,7 @@ BEGINNER_LINEAR = CuratedProtocol(
                 _accessory("Dumbbell Row", 3, "8-12", "moderate"),
             ),
         ),
-        SessionTemplate(
+        PatternSession(
             "Deadlift and press",
             (
                 _main(DEADLIFT, 1),
@@ -87,7 +88,7 @@ BEGINNER_LINEAR = CuratedProtocol(
                 _accessory("Dumbbell Curl", 2, "10-15", "light"),
             ),
         ),
-        SessionTemplate(
+        PatternSession(
             "Squat and bench",
             (
                 _main(SQUAT, 3),

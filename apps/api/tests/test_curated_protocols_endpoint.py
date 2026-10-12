@@ -38,7 +38,7 @@ SIGN_OFF = CoachSignOff(
 )
 RELEASED = replace(BEGINNER_LINEAR, released=True, coach_sign_off=SIGN_OFF)
 UNRELEASED = replace(
-    BEGINNER_LINEAR, identifier="unreleased-program", name="Unreleased program"
+    BEGINNER_LINEAR, identifier="unreleased-curated-protocol", name="Unreleased Curated Protocol"
 )
 STARTING_WEIGHTS = {"squat": 60, "bench": 40, "press": 30, "deadlift": 80}
 
@@ -79,7 +79,7 @@ class _Harness:
             return sorted(e.name for e in SqlExerciseRepository(session).list_all())
 
 
-def build_harness(*programs) -> _Harness:
+def build_harness(*curated_protocols) -> _Harness:
     ctx = make_signing_context()
     engine = create_engine(
         "sqlite://",
@@ -89,7 +89,7 @@ def build_harness(*programs) -> _Harness:
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         seed_curated_exercises(SqlExerciseRepository(session))
-    registry = CuratedRegistry(programs or (RELEASED, UNRELEASED))
+    registry = CuratedRegistry(curated_protocols or (RELEASED, UNRELEASED))
 
     def _session():
         with Session(engine) as session:
@@ -129,7 +129,7 @@ def test_list_returns_only_released_curated_protocols_in_the_envelope():
     ]
 
 
-def test_a_list_row_describes_the_program_and_its_main_lifts():
+def test_a_list_row_describes_the_curated_protocol_and_its_main_lifts():
     # Arrange
     h = build_harness(RELEASED)
 
@@ -318,7 +318,7 @@ def _assert_rejected_and_nothing_persisted(h, response, code):
     assert h.get("/api/protocols").json()["data"] == []
 
 
-def test_adopt_rejects_a_length_outside_the_programs_bounds():
+def test_adopt_rejects_a_length_outside_the_curated_protocols_bounds():
     # Arrange
     h = build_harness()
 
@@ -357,7 +357,7 @@ def test_adopt_rejects_a_non_positive_starting_weight():
     _assert_rejected_and_nothing_persisted(h, negative, "invalid_starting_weight")
 
 
-def test_adopt_rejects_a_weight_for_a_lift_the_program_does_not_have():
+def test_adopt_rejects_a_weight_for_a_lift_the_curated_protocol_does_not_have():
     # Arrange
     h = build_harness()
 
@@ -399,7 +399,7 @@ def test_an_unknown_curated_protocol_is_404():
     h = build_harness()
 
     # Act
-    response = h.adopt(identifier="no-such-program")
+    response = h.adopt(identifier="no-such-curated-protocol")
 
     # Assert
     assert response.status_code == 404

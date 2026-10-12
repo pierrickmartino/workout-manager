@@ -1,7 +1,7 @@
 """The Curated Protocol data format (ADR-0130).
 
 A **Curated Protocol** is a human-authored, coach-reviewed plan shipped as versioned data in the
-repo, never a runtime-editable row. These frozen dataclasses *are* the format: a program file
+repo, never a runtime-editable row. These frozen dataclasses *are* the format: a content file
 (``beginner_linear.py``) builds one ``CuratedProtocol`` value, the content-integrity check
 (``integrity.py``) gates it, and adoption (``adoption/curated.py``) enumerates it into a
 user-owned Protocol.
@@ -37,7 +37,7 @@ class MainLift:
 
 
 @dataclass(frozen=True)
-class PrescriptionTemplate:
+class PatternPrescription:
     """One Prescription in the weekly pattern.
 
     Exactly one of ``main_lift`` (a ``MainLift.key``) and ``load`` is set: a main lift takes
@@ -54,16 +54,16 @@ class PrescriptionTemplate:
 
 
 @dataclass(frozen=True)
-class SessionTemplate:
+class PatternSession:
     """One Session of the repeating weekly pattern."""
 
     title: str
-    prescriptions: tuple[PrescriptionTemplate, ...]
+    prescriptions: tuple[PatternPrescription, ...]
 
 
 @dataclass(frozen=True)
 class CoachSignOff:
-    """The recorded review by a qualified coach a released program needs (ADR-0130)."""
+    """The recorded review by a qualified coach a released Curated Protocol needs (ADR-0130)."""
 
     reviewer: str
     credential: str
@@ -74,9 +74,9 @@ class CoachSignOff:
 class CuratedProtocol:
     """One Curated Protocol: identity, honest description, shape, and its weekly pattern.
 
-    Only a ``released`` program is listed or adoptable; content ships unreleased until a
-    coach has signed it off. ``weekly_pattern`` holds one ``SessionTemplate`` per Session of
-    a week, so its length is the program's sessions per week."""
+    Only a ``released`` Curated Protocol is listed or adoptable; content ships unreleased until a
+    coach has signed it off. ``weekly_pattern`` holds one ``PatternSession`` per Session of
+    a week, so its length is the Curated Protocol's sessions per week."""
 
     identifier: str
     version: int
@@ -89,7 +89,7 @@ class CuratedProtocol:
     max_weeks: int
     required_equipment: tuple[str, ...]
     main_lifts: tuple[MainLift, ...]
-    weekly_pattern: tuple[SessionTemplate, ...]
+    weekly_pattern: tuple[PatternSession, ...]
     coach_sign_off: CoachSignOff | None = None
     released: bool = False
 
@@ -100,8 +100,8 @@ class CuratedProtocol:
 
 __all__ = [
     "MainLift",
-    "PrescriptionTemplate",
-    "SessionTemplate",
+    "PatternPrescription",
+    "PatternSession",
     "CoachSignOff",
     "CuratedProtocol",
 ]

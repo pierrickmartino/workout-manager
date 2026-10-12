@@ -3,14 +3,16 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { NewProtocolChoice } from "@/lib/curated-protocol-view";
 
+interface NewProtocolChoicesProps {
+  choices: NewProtocolChoice[];
+}
+
 // The peer choice at the new-Protocol entry point (ADR-0130): "Generate for me" beside
 // "Choose a Curated Protocol". The two are siblings, not a drill-down, so the links carry no
 // navigation direction. Renders nothing when there is only one way to get a Protocol.
 export function NewProtocolChoices({
   choices,
-}: {
-  choices: NewProtocolChoice[];
-}): React.JSX.Element | null {
+}: NewProtocolChoicesProps): React.JSX.Element | null {
   if (choices.length < 2) return null;
   return (
     <nav aria-label="How to make your protocol" className="flex flex-wrap gap-2">

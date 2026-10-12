@@ -1,10 +1,10 @@
 """Turn a Curated Protocol plus the user's choices into a fully enumerated plan (ADR-0130).
 
 Pure — no I/O, no catalog. ``validate_choices`` is the boundary check every adopt (and later
-preview) runs: a length inside the program's bounds and one positive starting weight for each
-main lift, nothing more and nothing less. ``enumerate_plan`` repeats the weekly pattern to fill
-the chosen length, so the Protocol is fully enumerated and self-paced (ADR-0001), and writes
-each main lift's starting weight as an **absolute** Load. It never writes a ``percent_1rm``
+preview) runs: a length inside the Curated Protocol's bounds and one positive starting weight
+for each main lift, nothing more and nothing less. ``enumerate_plan`` repeats the weekly
+pattern to fill the chosen length, so the Protocol is fully enumerated and self-paced
+(ADR-0001), and writes each main lift's starting weight as an **absolute** Load. It never writes a ``percent_1rm``
 Load. Exercises stay names here; adoption resolves them against the Catalog.
 """
 
@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from app.curated.model import CuratedProtocol, PrescriptionTemplate
+from app.curated.model import CuratedProtocol, PatternPrescription
 from app.domain.load import load_from_input, parse_load
 from app.domain.quantity import quantity_from_text
 from app.repositories.prescription_mapping import PrescriptionDraft
@@ -78,24 +78,24 @@ class PlannedSession:
 
 
 def validate_choices(
-    program: CuratedProtocol, choices: AdoptionChoices
+    curated: CuratedProtocol, choices: AdoptionChoices
 ) -> list[ChoiceError]:
-    """Every reason ``choices`` cannot be adopted for ``program``, or ``[]``."""
+    """Every reason ``choices`` cannot be adopted for ``curated``, or ``[]``."""
 
     errors: list[ChoiceError] = []
-    if not program.min_weeks <= choices.weeks <= program.max_weeks:
+    if not curated.min_weeks <= choices.weeks <= curated.max_weeks:
         errors.append(
             ChoiceError(
                 code="weeks_out_of_range",
                 message=(
-                    f"Choose a length between {program.min_weeks} and "
-                    f"{program.max_weeks} weeks."
+                    f"Choose a length between {curated.min_weeks} and "
+                    f"{curated.max_weeks} weeks."
                 ),
             )
         )
 
-    keys = {lift.key for lift in program.main_lifts}
-    for lift in program.main_lifts:
+    keys = {lift.key for lift in curated.main_lifts}
+    for lift in curated.main_lifts:
         weight = choices.starting_weights_kg.get(lift.key)
         if weight is None:
             errors.append(
@@ -128,35 +128,35 @@ def validate_choices(
 
 
 def planned_prescription(
-    template: PrescriptionTemplate, starting_weights_kg: Mapping[str, float]
+    prescription: PatternPrescription, starting_weights_kg: Mapping[str, float]
 ) -> PlannedPrescription:
-    """Enumerate one template: a main lift takes its starting weight as an absolute Load;
+    """Enumerate one prescription: a main lift takes its starting weight as an absolute Load;
     anything else keeps its authored Load."""
 
-    if template.main_lift is not None:
-        weight = starting_weights_kg[template.main_lift]
+    if prescription.main_lift is not None:
+        weight = starting_weights_kg[prescription.main_lift]
         load = load_from_input("absolute", f"{weight:g}")
-    elif template.load is not None:
-        load = parse_load(template.load)
+    elif prescription.load is not None:
+        load = parse_load(prescription.load)
     else:
         load = None
     return PlannedPrescription(
-        exercise=template.exercise,
-        sets=template.sets,
-        reps=template.reps,
-        rest_seconds=template.rest_seconds,
+        exercise=prescription.exercise,
+        sets=prescription.sets,
+        reps=prescription.reps,
+        rest_seconds=prescription.rest_seconds,
         recommended_load=None if load is None else load.to_dict(),
-        prescribed_quantity=quantity_from_text(template.reps).to_dict(),
-        scheme=template.scheme.value,
+        prescribed_quantity=quantity_from_text(prescription.reps).to_dict(),
+        scheme=prescription.scheme.value,
     )
 
 
 def enumerate_plan(
-    program: CuratedProtocol, choices: AdoptionChoices
+    curated: CuratedProtocol, choices: AdoptionChoices
 ) -> tuple[PlannedSession, ...]:
     """The weekly pattern repeated ``choices.weeks`` times, Week/Day numbered from 1.
 
-    Callers validate first; a missing starting weight here is a programming error."""
+    Callers validate first; a missing starting weight here is a caller bug."""
 
     return tuple(
         PlannedSession(
@@ -169,7 +169,7 @@ def enumerate_plan(
             ),
         )
         for week in range(1, choices.weeks + 1)
-        for day, session in enumerate(program.weekly_pattern, start=1)
+        for day, session in enumerate(curated.weekly_pattern, start=1)
     )
 
 

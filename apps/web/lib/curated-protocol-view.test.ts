@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   adoptFormDefaults,
   curatedProtocolRow,
+  findCuratedProtocol,
   newProtocolChoices,
   readAdoptForm,
   type CuratedProtocolSummary,
@@ -78,7 +79,7 @@ test("no choice is ever labelled Library", () => {
   assert.ok(labels.every((label) => !/library/i.test(label)));
 });
 
-test("a list row summarises the program for the picker", () => {
+test("a list row summarises the Curated Protocol for the picker", () => {
   // Act
   const row = curatedProtocolRow(BEGINNER);
 
@@ -94,7 +95,7 @@ test("a list row summarises the program for the picker", () => {
   });
 });
 
-test("a one-session, fixed-length program reads in the singular without a range", () => {
+test("a one-session, fixed-length Curated Protocol reads in the singular without a range", () => {
   // Act
   const row = curatedProtocolRow({
     ...BEGINNER,
@@ -152,10 +153,21 @@ test("a blank or non-positive starting weight is refused before anything is sent
   });
 });
 
-test("a length outside the program’s range is refused", () => {
+test("a length outside the Curated Protocol’s range is refused", () => {
   // Act
   const result = readAdoptForm(BEGINNER, formOf({ weeks: "13", weight_squat: "60", weight_deadlift: "80" }));
 
   // Assert
   assert.deepEqual(result, { ok: false, error: "Choose a length between 4 and 12 weeks." });
+});
+
+test("a Curated Protocol is found by identifier only in a successful list read", () => {
+  // Arrange
+  const ok = { success: true, data: [BEGINNER] };
+  const failed = { success: false, data: null };
+
+  // Act / Assert
+  assert.equal(findCuratedProtocol(ok, "beginner-linear-progression"), BEGINNER);
+  assert.equal(findCuratedProtocol(ok, "unreleased-curated-protocol"), undefined);
+  assert.equal(findCuratedProtocol(failed, "beginner-linear-progression"), undefined);
 });

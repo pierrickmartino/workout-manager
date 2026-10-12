@@ -1,12 +1,12 @@
 """The seeded ``curated`` Catalog Exercises every Curated Protocol names (ADR-0130).
 
 Adopting a Curated Protocol only *resolves* Exercises and never creates a Catalog row, so every
-Exercise a program names must already exist. This tuple is the seed manifest: migration
-``0046_seed_curated_protocol_exercises`` inserts each entry as a ``curated`` Exercise, and the
-content-integrity check fails the build if a program names anything outside it.
+Exercise a Curated Protocol names must already exist. This tuple is the seed manifest: migration
+``0046_seed_curated_exercises`` inserts each entry as a ``curated`` Exercise, and the
+content-integrity check fails the build if a Curated Protocol names anything outside it.
 
 Adding an Exercise here is not enough on an existing database, where 0046 has already run: a
-later program that names a new movement ships its own migration seeding the delta.
+later Curated Protocol that names a new movement ships its own migration seeding the delta.
 
 Muscle strings come from the Muscle Group vocabulary (``domain/muscle_groups.py``) and equipment
 strings from the canonical Equipment tokens (``domain/equipment.py``), so a seeded movement rolls

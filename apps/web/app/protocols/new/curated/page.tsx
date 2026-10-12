@@ -13,20 +13,20 @@ import {
 // beside "Generate for me". Picking one opens its adopt form.
 export default async function CuratedProtocolsPage() {
   const result = await fetchCuratedProtocols();
-  const programs = result.success ? (result.data ?? []) : [];
+  const curatedProtocols = result.success ? (result.data ?? []) : [];
 
   return (
     <section className="flex flex-col gap-6">
       <PageHeader overline="PULSE // BUILDER" title="Choose a Curated Protocol" />
       <NewProtocolChoices
-        choices={newProtocolChoices("curated", { hasCuratedProtocols: true })}
+        choices={newProtocolChoices("curated", { hasCuratedProtocols: curatedProtocols.length > 0 })}
       />
       <p className="font-mono text-[13px] leading-relaxed text-text-muted">
         Plans written by a person and reviewed by a coach. Adopt one and it becomes your own
         protocol to log, edit and adjust.
       </p>
       {result.success ? (
-        <CuratedProtocolPicker rows={programs.map(curatedProtocolRow)} />
+        <CuratedProtocolPicker rows={curatedProtocols.map(curatedProtocolRow)} />
       ) : (
         <Alert tone="error">{result.error ?? "Could not load Curated Protocols."}</Alert>
       )}

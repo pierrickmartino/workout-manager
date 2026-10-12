@@ -5,14 +5,16 @@ import type { CuratedProtocolRow } from "@/lib/curated-protocol-view";
 import { NAV_FORWARD } from "@/lib/nav-direction";
 import { Card } from "@/components/ui/card";
 
-// The Curated Protocol picker (issue #684): one card per released program, opening its adopt
+interface CuratedProtocolPickerProps {
+  rows: CuratedProtocolRow[];
+}
+
+// The Curated Protocol picker (issue #684): one card per released Curated Protocol, opening its adopt
 // form. A thin renderer over `curatedProtocolRow`; names and descriptions are authored text,
 // so they wrap rather than truncate (ADR-0085).
 export function CuratedProtocolPicker({
   rows,
-}: {
-  rows: CuratedProtocolRow[];
-}): React.JSX.Element {
+}: CuratedProtocolPickerProps): React.JSX.Element {
   if (rows.length === 0) {
     return (
       <Card className="p-6">

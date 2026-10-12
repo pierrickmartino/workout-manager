@@ -84,16 +84,16 @@ export function curatedProtocolHref(identifier: string): string {
   return `${CURATED_PICKER_HREF}/${encodeURIComponent(identifier)}`;
 }
 
-export function curatedProtocolRow(program: CuratedProtocolSummary): CuratedProtocolRow {
-  const sessions = `${program.sessions_per_week} session${program.sessions_per_week === 1 ? "" : "s"} a week`;
+export function curatedProtocolRow(curated: CuratedProtocolSummary): CuratedProtocolRow {
+  const sessions = `${curated.sessions_per_week} session${curated.sessions_per_week === 1 ? "" : "s"} a week`;
   return {
-    identifier: program.identifier,
-    name: program.name,
-    description: program.description,
-    schedule: `${sessions} · ${weeksText(program.min_weeks, program.max_weeks)}`,
-    mainLifts: program.main_lifts.map((lift) => lift.exercise_name).join(", "),
-    equipment: program.required_equipment.join(", "),
-    href: curatedProtocolHref(program.identifier),
+    identifier: curated.identifier,
+    name: curated.name,
+    description: curated.description,
+    schedule: `${sessions} · ${weeksText(curated.min_weeks, curated.max_weeks)}`,
+    mainLifts: curated.main_lifts.map((lift) => lift.exercise_name).join(", "),
+    equipment: curated.required_equipment.join(", "),
+    href: curatedProtocolHref(curated.identifier),
   };
 }
 
@@ -115,15 +115,15 @@ function liftFieldName(key: string): string {
   return `weight_${key}`;
 }
 
-export function adoptFormDefaults(program: CuratedProtocolSummary): AdoptFormDefaults {
+export function adoptFormDefaults(curated: CuratedProtocolSummary): AdoptFormDefaults {
   const weekOptions = Array.from(
-    { length: program.max_weeks - program.min_weeks + 1 },
-    (_, index) => program.min_weeks + index,
+    { length: curated.max_weeks - curated.min_weeks + 1 },
+    (_, index) => curated.min_weeks + index,
   );
   return {
-    weeks: program.min_weeks,
+    weeks: curated.min_weeks,
     weekOptions,
-    lifts: program.main_lifts.map((lift) => ({
+    lifts: curated.main_lifts.map((lift) => ({
       key: lift.key,
       name: liftFieldName(lift.key),
       label: lift.exercise_name,
@@ -145,27 +145,43 @@ function positiveNumber(raw: FormDataEntryValue | null): number | null {
 
 // Read the posted adopt form into the request body, or the first reason it can't be sent.
 export function readAdoptForm(
-  program: CuratedProtocolSummary,
+  curated: CuratedProtocolSummary,
   form: FormData,
 ): AdoptFormResult {
   const weeks = Number(form.get("weeks"));
-  if (!Number.isInteger(weeks) || weeks < program.min_weeks || weeks > program.max_weeks) {
+  if (!Number.isInteger(weeks) || weeks < curated.min_weeks || weeks > curated.max_weeks) {
     return {
       ok: false,
-      error: `Choose a length between ${program.min_weeks} and ${program.max_weeks} weeks.`,
+      error: `Choose a length between ${curated.min_weeks} and ${curated.max_weeks} weeks.`,
     };
   }
 
-  const startingWeights: Record<string, number> = {};
-  for (const lift of program.main_lifts) {
-    const kg = positiveNumber(form.get(liftFieldName(lift.key)));
-    if (kg === null) {
-      return {
-        ok: false,
-        error: `Enter a starting weight above 0 kg for ${lift.exercise_name}.`,
-      };
-    }
-    startingWeights[lift.key] = kg;
+  const weights = curated.main_lifts.map(
+    (lift) => [lift, positiveNumber(form.get(liftFieldName(lift.key)))] as const,
+  );
+  const missing = weights.find(([, kg]) => kg === null);
+  if (missing) {
+    return {
+      ok: false,
+      error: `Enter a starting weight above 0 kg for ${missing[0].exercise_name}.`,
+    };
   }
-  return { ok: true, request: { weeks, starting_weights_kg: startingWeights } };
+  return {
+    ok: true,
+    request: {
+      weeks,
+      starting_weights_kg: Object.fromEntries(weights.map(([lift, kg]) => [lift.key, kg as number])),
+    },
+  };
+}
+
+// The released Curated Protocol named by `identifier` in a list read, or `undefined` when the
+// read failed or names none (an unreleased one is indistinguishable from an unknown one).
+export function findCuratedProtocol(
+  list: { success: boolean; data: CuratedProtocolSummary[] | null },
+  identifier: string,
+): CuratedProtocolSummary | undefined {
+  return list.success
+    ? list.data?.find((candidate) => candidate.identifier === identifier)
+    : undefined;
 }

@@ -63,6 +63,15 @@ import { BuildWorkoutLink, GenerateTrainingLaunchpad, LogPastWorkoutLink } from 
 import { FitnessLevelStandings } from "@/components/pulse/fitness-level-standings";
 import { toFitnessLevelRows } from "@/lib/fitness-level-standing";
 import { ProtocolsIndex } from "@/components/ProtocolsIndex";
+import { NewProtocolChoices } from "@/components/NewProtocolChoices";
+import { CuratedProtocolPicker } from "@/components/CuratedProtocolPicker";
+import { CuratedAdoptForm } from "@/components/CuratedAdoptForm";
+import {
+  adoptFormDefaults,
+  curatedProtocolRow,
+  newProtocolChoices,
+  type CuratedProtocolSummary,
+} from "@/lib/curated-protocol-view";
 import { TrainingPassport } from "@/components/pulse/training-passport";
 import { toPassport, toStampDetail } from "@/lib/passport-view";
 import { StampDetailBody } from "@/components/pulse/stamp-detail";
@@ -334,6 +343,27 @@ const auditLiveSession: LiveSessionContext = {
   },
 };
 
+// A Curated Protocol with the longest shapes the picker and adopt form render: a long authored
+// name and description, four main lifts, and a 4–12 week range (#684).
+const auditCuratedProtocol: CuratedProtocolSummary = {
+  identifier: "beginner-linear-progression",
+  version: 1,
+  name: "Beginner linear progression for barbell newcomers",
+  description:
+    "Three full-body barbell sessions a week built on the squat, bench press, overhead press and deadlift. Each main lift goes up 2.5 kg after a session in which every set reaches five, and drops back 10% after a session where one doesn’t.",
+  training_type: "strength",
+  sessions_per_week: 3,
+  min_weeks: 4,
+  max_weeks: 12,
+  required_equipment: ["barbell", "rack", "bench", "dumbbell"],
+  main_lifts: [
+    { key: "squat", exercise_name: "Barbell Back Squat", default_starting_weight_kg: 20 },
+    { key: "bench", exercise_name: "Barbell Bench Press", default_starting_weight_kg: 20 },
+    { key: "press", exercise_name: "Barbell Overhead Press", default_starting_weight_kg: 20 },
+    { key: "deadlift", exercise_name: "Barbell Deadlift", default_starting_weight_kg: 40 },
+  ],
+};
+
 function Content() {
   switch (journey) {
     case "charts": return <ChartAccessibilityFixture />;
@@ -342,6 +372,9 @@ function Content() {
     case "correction": return <CorrectLogForm logId={1} fields={correctionFieldsFromRecord(history(1)[0], "kg")} today="2026-09-26" unit="kg" />;
     case "profile": return <ProfileForm profile={profile} submitLabel="Save profile" />;
     case "sessions": return <SessionsLibrary sessions={count === 0 ? [] : sessions} />;
+    // The new-Protocol peer choice over the Curated Protocol picker (#684).
+    case "curated": return <><NewProtocolChoices choices={newProtocolChoices("curated", { hasCuratedProtocols: true })} /><CuratedProtocolPicker rows={count === 0 ? [] : [curatedProtocolRow(auditCuratedProtocol)]} /></>;
+    case "curated-adopt": return <CuratedAdoptForm identifier={auditCuratedProtocol.identifier} defaults={adoptFormDefaults(auditCuratedProtocol)} />;
     case "protocols": return <ProtocolsIndex index={protocolsIndex(count === 0 ? [] : protocolIndexEntries, { liveSlot: null, accountId: "audit-synthetic-account" })} />;
     // The same index with a Live Session in progress (#638): every set-aside row's Switch is
     // blocked and carries its reason and a Resume link, the widest shape a row action takes.

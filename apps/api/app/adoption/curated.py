@@ -35,12 +35,12 @@ class CuratedExerciseMissing(Exception):
 
 
 def _resolve_ids(
-    program: CuratedProtocol, exercises: ExerciseRepository
+    curated: CuratedProtocol, exercises: ExerciseRepository
 ) -> dict[str, int]:
     names = {
-        template.exercise
-        for session in program.weekly_pattern
-        for template in session.prescriptions
+        prescription.exercise
+        for session in curated.weekly_pattern
+        for prescription in session.prescriptions
     }
     ids: dict[str, int] = {}
     for name in sorted(names):
@@ -52,20 +52,20 @@ def _resolve_ids(
 
 
 def adopt_curated(
-    program: CuratedProtocol,
+    curated: CuratedProtocol,
     choices: AdoptionChoices,
     clerk_user_id: str,
     *,
     exercises: ExerciseRepository,
     protocols: ProtocolRepository,
 ) -> ProtocolView:
-    """Persist ``program`` enumerated to ``choices`` as a Protocol owned by
+    """Persist ``curated`` enumerated to ``choices`` as a Protocol owned by
     ``clerk_user_id``. Callers validate ``choices`` first (``plan.validate_choices``).
 
     Adopting makes the new Protocol Current, setting the previous one aside, exactly as
     adopting a Generated Protocol does (ADR-0125)."""
 
-    ids = _resolve_ids(program, exercises)
+    ids = _resolve_ids(curated, exercises)
     sessions = [
         ProtocolSessionDraft(
             week=planned.week,
@@ -75,16 +75,16 @@ def adopt_curated(
                 p.to_draft(ids[p.exercise]) for p in planned.prescriptions
             ],
         )
-        for planned in enumerate_plan(program, choices)
+        for planned in enumerate_plan(curated, choices)
     ]
     draft = ProtocolDraft(
-        training_type=program.training_type,
-        objective=program.objective,
-        sessions_per_week=program.sessions_per_week,
+        training_type=curated.training_type,
+        objective=curated.objective,
+        sessions_per_week=curated.sessions_per_week,
         weeks=choices.weeks,
-        duration_minutes=program.duration_minutes,
+        duration_minutes=curated.duration_minutes,
         sessions=sessions,
-        name=program.name,
+        name=curated.name,
         provenance=SessionProvenance.CURATED.value,
     )
     return protocols.create(clerk_user_id, draft)

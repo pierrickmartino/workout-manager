@@ -2,7 +2,7 @@
 
 Adopting a Curated Protocol only *resolves* Exercises and never creates a Catalog row, so every
 movement a Curated Protocol names is seeded here as a ``curated`` Exercise from the manifest in
-``app.curated.exercises``. The content-integrity test fails the build if a program names
+``app.curated.exercises``. The content-integrity test fails the build if a Curated Protocol names
 anything outside that manifest.
 
 Idempotent like 0019: only names not already in the catalog (by normalized name, ADR-0002) are

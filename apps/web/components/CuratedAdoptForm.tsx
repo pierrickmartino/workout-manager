@@ -18,9 +18,9 @@ interface CuratedAdoptFormProps {
   defaults: AdoptFormDefaults;
 }
 
-// The adopt form for one Curated Protocol (issue #684): a length within the program's range
+// The adopt form for one Curated Protocol (issue #684): a length within the Curated Protocol's range
 // and a starting weight per main lift, prefilled with conservative defaults. The server action
-// checks the form against the program and the API recomputes the whole plan; a refusal shows
+// checks the form against the Curated Protocol and the API recomputes the whole plan; a refusal shows
 // inline and nothing is saved.
 export function CuratedAdoptForm({
   identifier,

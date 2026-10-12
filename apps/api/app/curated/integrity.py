@@ -1,7 +1,7 @@
 """The content-integrity gate every Curated Protocol must pass (ADR-0130).
 
-Curated content is versioned data, so a broken program is caught in the build rather than by a
-user. ``integrity_errors`` checks one program and returns every problem:
+Curated content is versioned data, so a broken Curated Protocol is caught in the build, not by a
+user. ``integrity_errors`` checks one Curated Protocol and returns every problem:
 
 - every Exercise it names is in the curated seed manifest, so adopting only ever resolves;
 - every Prescription passes the prescription spine: it is enumerated exactly as adoption does
@@ -13,7 +13,7 @@ user. ``integrity_errors`` checks one program and returns every problem:
 - the length bounds are valid (1 ≤ min ≤ max, within the Protocol shape bounds);
 - main lifts are declared, and each is trained somewhere in the weekly pattern;
 - the name carries no third-party brand mark;
-- a released program has a recorded coach sign-off.
+- a released Curated Protocol has a recorded coach sign-off.
 
 Pure: no I/O. Exercises are checked against the manifest the migration seeds, not a database.
 """
@@ -21,10 +21,10 @@ Pure: no I/O. Exercises are checked against the manifest the migration seeds, no
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 from app.curated.exercises import CURATED_EXERCISES
-from app.curated.model import CuratedProtocol, PrescriptionTemplate
+from app.curated.model import CuratedProtocol, PatternPrescription
 from app.curated.plan import PlannedPrescription, planned_prescription
 from app.domain.load import LoadKind, parse_load
 from app.protocols.deploy_validation import (
@@ -36,9 +36,9 @@ from app.protocols.deploy_validation import (
     validate_deploy,
 )
 
-# Third-party program names (someone's mark) a Curated Protocol must not borrow. Lowercase;
+# Third-party training-plan names (someone's mark) a Curated Protocol must not borrow. Lowercase;
 # matched as whole words. The Greyskull *scheme* keeps its descriptive internal name, but a
-# program title never says it.
+# Curated Protocol's name never says it.
 BRAND_MARKS: tuple[str, ...] = (
     "starting strength",
     "stronglifts",
@@ -71,47 +71,47 @@ def _seeded_names() -> frozenset[str]:
     return frozenset(item.name for item in CURATED_EXERCISES)
 
 
-def _templates(program: CuratedProtocol) -> list[tuple[int, PrescriptionTemplate]]:
+def _pattern_prescriptions(curated: CuratedProtocol) -> list[tuple[int, PatternPrescription]]:
     return [
-        (day, template)
-        for day, session in enumerate(program.weekly_pattern, start=1)
-        for template in session.prescriptions
+        (day, prescription)
+        for day, session in enumerate(curated.weekly_pattern, start=1)
+        for prescription in session.prescriptions
     ]
 
 
-def _brand_errors(program: CuratedProtocol) -> list[IntegrityError]:
-    name = program.name.lower()
+def _brand_errors(curated: CuratedProtocol) -> list[IntegrityError]:
+    name = curated.name.lower()
     return [
-        IntegrityError("brand_mark", f"The name '{program.name}' uses the mark '{mark}'.")
+        IntegrityError("brand_mark", f"The name '{curated.name}' uses the mark '{mark}'.")
         for mark in BRAND_MARKS
         if re.search(rf"(?<![\w/]){re.escape(mark)}(?![\w/])", name)
     ]
 
 
-def _shape_errors(program: CuratedProtocol) -> list[IntegrityError]:
+def _shape_errors(curated: CuratedProtocol) -> list[IntegrityError]:
     errors: list[IntegrityError] = []
-    if not MIN_WEEKS <= program.min_weeks <= program.max_weeks <= MAX_WEEKS:
+    if not MIN_WEEKS <= curated.min_weeks <= curated.max_weeks <= MAX_WEEKS:
         errors.append(
             IntegrityError(
                 "invalid_length_bounds",
-                f"Length bounds {program.min_weeks}–{program.max_weeks} must satisfy "
+                f"Length bounds {curated.min_weeks}–{curated.max_weeks} must satisfy "
                 f"{MIN_WEEKS} ≤ min ≤ max ≤ {MAX_WEEKS}.",
             )
         )
-    if not program.main_lifts:
+    if not curated.main_lifts:
         errors.append(IntegrityError("no_main_lifts", "No main lifts are declared."))
-    if program.released and program.coach_sign_off is None:
+    if curated.released and curated.coach_sign_off is None:
         errors.append(
             IntegrityError(
-                "missing_sign_off", "A released program needs a recorded coach sign-off."
+                "missing_sign_off", "A released Curated Protocol needs a recorded coach sign-off."
             )
         )
     return errors
 
 
-def _main_lift_errors(program: CuratedProtocol) -> list[IntegrityError]:
-    lifts = {lift.key: lift for lift in program.main_lifts}
-    trained = {t.main_lift for _, t in _templates(program)}
+def _main_lift_errors(curated: CuratedProtocol) -> list[IntegrityError]:
+    lifts = {lift.key: lift for lift in curated.main_lifts}
+    trained = {t.main_lift for _, t in _pattern_prescriptions(curated)}
     errors = [
         IntegrityError(
             "main_lift_unused", f"Main lift '{key}' is never trained in the pattern."
@@ -119,69 +119,69 @@ def _main_lift_errors(program: CuratedProtocol) -> list[IntegrityError]:
         for key in lifts
         if key not in trained
     ]
-    for day, template in _templates(program):
-        if template.main_lift is None:
+    for day, prescription in _pattern_prescriptions(curated):
+        if prescription.main_lift is None:
             continue
-        lift = lifts.get(template.main_lift)
+        lift = lifts.get(prescription.main_lift)
         if lift is None:
             errors.append(
                 IntegrityError(
                     "unknown_main_lift",
-                    f"Day {day}: '{template.main_lift}' is not a declared main lift.",
+                    f"Day {day}: '{prescription.main_lift}' is not a declared main lift.",
                 )
             )
-        elif lift.exercise != template.exercise:
+        elif lift.exercise != prescription.exercise:
             errors.append(
                 IntegrityError(
                     "main_lift_exercise_mismatch",
                     f"Day {day}: main lift '{lift.key}' is {lift.exercise}, "
-                    f"not {template.exercise}.",
+                    f"not {prescription.exercise}.",
                 )
             )
     return errors
 
 
-def _prescription_errors(program: CuratedProtocol) -> list[IntegrityError]:
+def _prescription_errors(curated: CuratedProtocol) -> list[IntegrityError]:
     seeded = _seeded_names()
     errors: list[IntegrityError] = []
-    for day, template in _templates(program):
-        if template.exercise not in seeded:
+    for day, prescription in _pattern_prescriptions(curated):
+        if prescription.exercise not in seeded:
             errors.append(
                 IntegrityError(
                     "unknown_exercise",
-                    f"Day {day}: '{template.exercise}' is not a seeded curated Exercise.",
+                    f"Day {day}: '{prescription.exercise}' is not a seeded curated Exercise.",
                 )
             )
-        if (template.main_lift is None) == (template.load is None):
+        if (prescription.main_lift is None) == (prescription.load is None):
             errors.append(
                 IntegrityError(
                     "ambiguous_load",
-                    f"Day {day}: {template.exercise} needs exactly one of a main lift "
+                    f"Day {day}: {prescription.exercise} needs exactly one of a main lift "
                     "or an authored Load.",
                 )
             )
         if (
-            template.load is not None
-            and parse_load(template.load).kind is LoadKind.PERCENT_1RM
+            prescription.load is not None
+            and parse_load(prescription.load).kind is LoadKind.PERCENT_1RM
         ):
             errors.append(
                 IntegrityError(
                     "percent_load",
-                    f"Day {day}: {template.exercise} has a percentage Load.",
+                    f"Day {day}: {prescription.exercise} has a percentage Load.",
                 )
             )
     return errors
 
 
-def _spine_errors(program: CuratedProtocol) -> list[IntegrityError]:
+def _spine_errors(curated: CuratedProtocol) -> list[IntegrityError]:
     """Enumerate each Session as adoption would (main lifts at their default starting weight)
     and run it through the Deploy gate, the shared prescription-spine check. One Session per
     gate run, so every error is located to its day."""
 
-    declared = {lift.key for lift in program.main_lifts}
-    weights = {lift.key: lift.default_start_kg for lift in program.main_lifts}
+    declared = {lift.key for lift in curated.main_lifts}
+    weights = {lift.key: lift.default_start_kg for lift in curated.main_lifts}
     errors: list[IntegrityError] = []
-    for day, session in enumerate(program.weekly_pattern, start=1):
+    for day, session in enumerate(curated.weekly_pattern, start=1):
         draft = DeployDraft(
             weeks=MIN_WEEKS,
             sessions_per_week=1,
@@ -214,26 +214,18 @@ def _spine_errors(program: CuratedProtocol) -> list[IntegrityError]:
 
 def _draft(planned: PlannedPrescription) -> DraftPrescription:
     # The catalog id is irrelevant here: Exercise names are checked against the seed manifest.
-    return DraftPrescription(
-        exercise_id=0,
-        sets=planned.sets,
-        reps=planned.reps,
-        rest_seconds=planned.rest_seconds,
-        recommended_load=planned.recommended_load,
-        prescribed_quantity=planned.prescribed_quantity,
-        scheme=planned.scheme,
-    )
+    return DraftPrescription(**asdict(planned.to_draft(exercise_id=0)))
 
 
-def integrity_errors(program: CuratedProtocol) -> list[IntegrityError]:
-    """Every integrity problem with ``program``, or ``[]`` when it may ship."""
+def integrity_errors(curated: CuratedProtocol) -> list[IntegrityError]:
+    """Every integrity problem with ``curated``, or ``[]`` when it may ship."""
 
     return [
-        *_shape_errors(program),
-        *_brand_errors(program),
-        *_main_lift_errors(program),
-        *_prescription_errors(program),
-        *_spine_errors(program),
+        *_shape_errors(curated),
+        *_brand_errors(curated),
+        *_main_lift_errors(curated),
+        *_prescription_errors(curated),
+        *_spine_errors(curated),
     ]
 
 

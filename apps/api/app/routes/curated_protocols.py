@@ -3,8 +3,8 @@
 ``GET /api/curated-protocols`` lists the released Curated Protocols. ``POST
 /api/curated-protocols/{identifier}/adopt`` validates the user's length and starting weights,
 recomputes the whole plan server-side, and persists it as the user's Current Protocol. An
-unreleased program is a ``404``, exactly like an unknown one. Rejected choices are a ``422``
-naming every problem, and persist nothing. Every response uses the standard envelope."""
+unreleased Curated Protocol is a ``404``, exactly like an unknown one. Rejected choices are a
+``422`` naming every problem, and persist nothing. Every response uses the standard envelope."""
 
 from __future__ import annotations
 
@@ -35,31 +35,31 @@ HTTP_INTERNAL_SERVER_ERROR = 500
 
 
 class AdoptCuratedProtocolRequest(BaseModel):
-    """The user's choices. Bounds are the program's, so they are checked after the program
+    """The user's choices. The bounds belong to the Curated Protocol, so they are checked once it
     is known (``validate_choices``), not here."""
 
     weeks: int
     starting_weights_kg: dict[str, float]
 
 
-def _serialize_program(program: CuratedProtocol) -> dict:
+def _serialize_curated(curated: CuratedProtocol) -> dict:
     return {
-        "identifier": program.identifier,
-        "version": program.version,
-        "name": program.name,
-        "description": program.description,
-        "training_type": program.training_type,
-        "sessions_per_week": program.sessions_per_week,
-        "min_weeks": program.min_weeks,
-        "max_weeks": program.max_weeks,
-        "required_equipment": list(program.required_equipment),
+        "identifier": curated.identifier,
+        "version": curated.version,
+        "name": curated.name,
+        "description": curated.description,
+        "training_type": curated.training_type,
+        "sessions_per_week": curated.sessions_per_week,
+        "min_weeks": curated.min_weeks,
+        "max_weeks": curated.max_weeks,
+        "required_equipment": list(curated.required_equipment),
         "main_lifts": [
             {
                 "key": lift.key,
                 "exercise_name": lift.exercise,
                 "default_starting_weight_kg": lift.default_start_kg,
             }
-            for lift in program.main_lifts
+            for lift in curated.main_lifts
         ],
     }
 
@@ -71,15 +71,17 @@ def list_curated_protocols(
 ) -> dict:
     """The released Curated Protocols, in authored order."""
 
-    return success_envelope([_serialize_program(p) for p in registry.released()])
+    return success_envelope([_serialize_curated(p) for p in registry.released()])
 
 
 def _choice_error_response(errors: list[ChoiceError]) -> JSONResponse:
-    body = error_envelope(errors[0].message)
-    body["errors"] = [
-        {"code": e.code, "message": e.message, "main_lift": e.main_lift}
-        for e in errors
-    ]
+    body = {
+        **error_envelope(errors[0].message),
+        "errors": [
+            {"code": e.code, "message": e.message, "main_lift": e.main_lift}
+            for e in errors
+        ],
+    }
     return JSONResponse(status_code=HTTP_UNPROCESSABLE_ENTITY, content=body)
 
 
@@ -94,8 +96,8 @@ def adopt_curated_protocol(
 ) -> object:
     """Adopt a released Curated Protocol as the user's own, Current Protocol."""
 
-    program = registry.find_released(identifier)
-    if program is None:
+    curated = registry.find_released(identifier)
+    if curated is None:
         raise HTTPException(
             status_code=HTTP_NOT_FOUND, detail="Curated Protocol not found."
         )
@@ -103,13 +105,13 @@ def adopt_curated_protocol(
     choices = AdoptionChoices(
         weeks=payload.weeks, starting_weights_kg=payload.starting_weights_kg
     )
-    errors = validate_choices(program, choices)
+    errors = validate_choices(curated, choices)
     if errors:
         return _choice_error_response(errors)
 
     try:
         protocol = adopt_curated(
-            program,
+            curated,
             choices,
             clerk_user_id,
             exercises=exercises,

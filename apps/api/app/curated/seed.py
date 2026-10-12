@@ -1,6 +1,6 @@
 """Seed the curated Catalog Exercises through a repository (ADR-0130).
 
-The migration (``0046_seed_curated_protocol_exercises``) inserts the same manifest with raw
+The migration (``0046_seed_curated_exercises``) inserts the same manifest with raw
 SQL, as migrations must not depend on application repositories. This helper is the offline
 twin the in-memory test harnesses use, so a test catalog holds exactly what a migrated
 database holds. Idempotent by normalized-name dedup (ADR-0002)."""
