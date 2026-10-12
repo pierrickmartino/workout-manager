@@ -1,7 +1,8 @@
 # TASKS
 
 All the open actions and tasks planned across `docs/` and the GitHub tracker, each
-with its current status. Reviewed on **2026-10-10** against `main` at `4b0be41`.
+with its current status. Reviewed on **2026-10-10** against `main` at `4b0be41`; sources pruned on **2026-10-12**
+(outdated docs and the Hostinger VPS guide deleted, sections for finished audits removed).
 
 Status was checked against the code, the GitHub issues and PRs, and later audits
 that verified earlier items. Done items have been removed; see the git history of
@@ -24,7 +25,7 @@ Sources: [research 2026-10-05](docs/research/2026-10-05.md) → *Next actions*,
 [audit 2026-10-05](docs/research/audit/2026-10-05.md) → rank 1–2,
 [incident 2026-09-25](docs/security/incidents/2026-09-25-codex-tool-state.md).
 
-- ❔ **Re-pull `postgres:16-alpine` (≥16.15) and move the VPS to `redis:8-alpine` on the next deploy.**
+- ❔ **Re-pull `postgres:16-alpine` (≥16.15) and move to `redis:8-alpine` on the next deploy.**
 - ⬜ **Decide on dependency automation:** Renovate or Dependabot with exact-pin PRs, a weekly `npm audit` / `pip-audit` job, and maybe `uv lock` for the API (open since 08-14, Q2). There is no `.github/dependabot.yml`.
 - 🟡 **Close the 09-25 credential incident.** Repository containment is done: `.codex` was removed, Gitleaks added, and a pre-push hook installed. Four owner items are still open:
   - ❔ Confirm the exposed refresh credential was revoked at the provider.
@@ -43,7 +44,7 @@ Source: [audit 2026-10-05](docs/research/audit/2026-10-05.md).
 
 ## 3. PWA and platform
 
-Sources: [research 2026-10-05](docs/research/2026-10-05.md), [market report 08-28](docs/research/workout-manager-market-ux-pwa-report_20260828.md), [refresh 09-01](docs/research/workout-manager-market-ux-pwa-report_20260901.md), [next-feature](docs/research/next-feature.md) §6.
+Sources: [research 2026-10-05](docs/research/2026-10-05.md), [next-feature](docs/research/next-feature.md) §6.
 
 - ⬜ **Call `navigator.storage.persist()`** when the finish outbox first holds a pending entry, and show `persisted()` in the sync-status view-model (P-1). Not found in the code.
 - ⬜ **Enrich the manifest** with `id`, `scope`, `shortcuts` and `screenshots` (P-7).
@@ -66,7 +67,7 @@ Sources: [research 2026-10-05](docs/research/2026-10-05.md), [market report 08-2
 
 ## 5. Builder (visual workout builder)
 
-Sources: research reports 07-19 → 10-05, [market report 08-28](docs/research/workout-manager-market-ux-pwa-report_20260828.md), [refresh 09-01](docs/research/workout-manager-market-ux-pwa-report_20260901.md).
+Source: [research 2026-10-05](docs/research/2026-10-05.md) → *Next actions* (builder).
 
 - ⬜ **Next builder slice:** drop-onto-row grouping, plus checkbox-select-then-group as the WCAG 2.5.7 alternative.
 - ⬜ **Triset/circuit (N-member) grouping.**
@@ -185,7 +186,7 @@ Sources: [pulse-creative-directions](docs/design/pulse-creative-directions.md), 
 
 ## 11. Validation and accessibility follow-ups
 
-Sources: `docs/development/*`, [audit 09-28](docs/research/audit/2026-09-28.md), [view-transitions audit 10-10](docs/research/audit/vercel/view-transitions-2026-10-10.md) VT-4 (it replaces the deleted pre-implementation audit).
+Sources: `docs/development/*` ([chart-accessibility-validation](docs/development/chart-accessibility-validation.md) for CH-F3), ADR-0118 to ADR-0124 for View Transitions.
 
 - ⬜ **CH-F3 Atlas heat-magnitude gap:** the heat uses emphasis-weighted volume but the text shows set counts. Needs owner sign-off on the wording first.
 - ❔ **Manual accessibility journeys** (AUTH, CAT, PROF, LOG, SAVE in [accessibility-journeys](docs/development/accessibility-journeys.md)) with a real screen reader.
@@ -194,36 +195,6 @@ Sources: `docs/development/*`, [audit 09-28](docs/research/audit/2026-09-28.md),
 
 ## 12. Vercel React best-practices audit (10 Oct)
 
-Source: [react-best-practices-2026-10-10](docs/research/audit/vercel/react-best-practices-2026-10-10.md). Each fix is measured against the build output before and after.
+Source: the react-best-practices audit of 10 Oct (since removed). Each fix is measured against the build output before and after.
 
 - ⬜ V-3 **Shrink the atlas client data** (36.4 KB gz on `/analytics`): round `reference-data.ts` coordinates to 1 decimal place, and send only the resolved figure's paths (split by gender, or render the base silhouette on the server).
-
-## 13. Vercel composition patterns audit (10 Oct)
-
-Source: [composition-patterns-2026-10-10](docs/research/audit/vercel/composition-patterns-2026-10-10.md).
-
-- ⬜ C-1 **Split `HandAuthoredSessionForm`** (1,103 lines, over the 800 max) into two explicit forms, `LogHandAuthoredSessionForm` and `PlanHandAuthoredSessionForm`, built on a shared exercise-list editor. Drop the `mode` and `showPerformedSets` props.
-- ⬜ C-2 **Redesign `PrescriptionFieldStack`'s 30-prop interface:** replace the handlers that control visibility by being present, and the per-surface flags, with a compound component or an explicit field set per surface. Write an ADR first (ADR-0067/0069).
-- ⬜ C-3 **Remove the dead `advancedNonDefault` prop** from `PrescriptionFieldStack` (no caller passes it).
-- ⬜ C-4 **Split `ReferenceAtlasFigure`** into a static figure (empty state, could be a Server Component) and an interactive one. This pairs with V-3.
-
-## 14. Vercel view transitions audit (10 Oct)
-
-Source: [view-transitions-2026-10-10](docs/research/audit/vercel/view-transitions-2026-10-10.md). Running-app verification is already tracked in §11 and isn't repeated here.
-
-VT-1 to VT-3 are fixed (ADR-0121 and ADR-0123 amendments).
-
-## 15. Deployment: Hostinger VPS migration
-
-Source: [hostinger-vps](docs/deployment/hostinger-vps.md) → *Completion checklist*. All unchecked in the doc; owner tasks.
-
-- ❔ Same production Clerk identities and application data verified.
-- ❔ Final database dump taken after all Railway writes stopped.
-- ❔ Queue drained; failed or deferred work accounted for.
-- ❔ DNS and HTTPS work on desktop, mobile and an installed PWA.
-- ❔ Existing history, a new saved workout and an uncached generation tested.
-- ❔ Only the SSH and Caddy ports reachable from outside.
-- ❔ Backup schedule, encrypted off-server storage, alerts and a restore drill verified.
-- ❔ Reboot recovery tested; release, configuration and rollback images kept.
-- ❔ Langfuse migrated, or its temporary status documented.
-- ❔ Railway retired only after the observation period and rollback decision.

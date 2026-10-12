@@ -101,7 +101,7 @@ Not covered here:
 ## Amendment: the rest of the navigation map (view-transitions audit, 10 Oct 2026)
 
 The post-implementation audit
-([view-transitions-2026-10-10](../research/audit/vercel/view-transitions-2026-10-10.md),
+(view-transitions-2026-10-10, since removed,
 VT-2 and VT-3) found hierarchical steps the first pass left untagged. Each is a direction
 judgement, so the classification lives here rather than in a guard that forces a type on every
 link.

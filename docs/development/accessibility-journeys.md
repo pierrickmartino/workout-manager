@@ -70,7 +70,7 @@ must distinguish reproduction from source-inferred risks. Fixes are a subsequent
 
 ## Handoff and supporting evidence
 
-Existing source/DOM evidence: [form accessibility handoff](form-accessibility-handoff.md)
+Existing source/DOM evidence: `lib/form-accessibility.test.ts`, `lib/profile-validation.test.ts`
 and the audit's priority 1 implementation follow-up. No automated tests were run in this
 documentation session. Existing tests are supporting evidence, not runtime results.
 
