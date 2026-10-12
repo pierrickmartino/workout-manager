@@ -9,7 +9,7 @@ The terms defined here are the words the product speaks: each term's canonical n
 The single most important distinction in the domain: a **plan** is what the AI prescribes; a **record** is what the user actually performed. They are separate concepts, and the same plan can be performed many times.
 
 **Protocol**:
-A user-owned training plan: a fully enumerated set of Sessions spanning a user-chosen number of weeks, each Session occupying a specific position; the same logical workout may differ from week to week to express progression and deloads. It originates as the user's own copy of an AI generation (see Adopt) and may then be **edited directly by the user** — reshaping the number of weeks and the per-week session count, adding or removing Sessions, and authoring Exercise Prescriptions by hand — so a Protocol's content is not necessarily wholly AI-generated. Editing only ever reaches the *un-performed* remainder: a Session the user has already performed is settled record and is never rewritten or reordered. May carry a user-given name. Mutating a Protocol never affects other users or the cache.
+A user-owned training plan: a fully enumerated set of Sessions spanning a user-chosen number of weeks, each Session occupying a specific position; the same logical workout may differ from week to week to express progression and deloads. It originates as the user's own copy of an AI generation or of a Curated Protocol (see Adopt) and may then be **edited directly by the user** — reshaping the number of weeks and the per-week session count, adding or removing Sessions, and authoring Exercise Prescriptions by hand — so a Protocol's content is not necessarily wholly AI-generated. Editing only ever reaches the *un-performed* remainder: a Session the user has already performed is settled record and is never rewritten or reordered. May carry a user-given name. Mutating a Protocol never affects other users or the cache.
 _Avoid_: Plan, routine, cycle, Program
 
 **Current Protocol**:
@@ -45,7 +45,7 @@ A Session a user builds by hand with **no AI call** — choosing its Exercise Pr
 _Avoid_: Custom workout, manual workout, Workout, my routine
 
 **Session Provenance**:
-How a Session's plan came to exist: `ai_generated` (produced by the generation pipeline) or `user_authored` (built by hand, no AI — a Hand-Authored Session). Carried on every Session so plan-quality affordances that assume the AI wrote it — Generation Feedback and Regeneration — are never offered on a `user_authored` plan. Parallel to an Exercise's Provenance and named the same way, but a distinct axis on a distinct concept (the plan, not the movement).
+How a Session's plan came to exist: `ai_generated` (produced by the generation pipeline), `user_authored` (built by hand, no AI — a Hand-Authored Session), or `curated` (adopted from a human-authored, reviewed **Curated Protocol**). Carried on every Session so plan-quality affordances that assume the AI wrote it — Generation Feedback and Regeneration — are offered only on an `ai_generated` plan, never on a `user_authored` or `curated` one. Parallel to an Exercise's Provenance and named the same way, but a distinct axis on a distinct concept (the plan, not the movement).
 _Avoid_: Origin, source, generated flag
 
 **Catalog**:
@@ -240,9 +240,13 @@ _Avoid_: Constraint (bare), restriction
 The immutable AI output produced for a given set of normalized parameters, stored in the cache and shareable across users. Never mutated. The source content from which a user's own Protocol or Session is made.
 _Avoid_: Template, cached protocol (loosely), Generated Program
 
+**Curated Protocol**:
+An immutable Protocol written by a person and reviewed by a qualified coach, offered to every user beside AI generation as a known-good plan to Adopt. Drawn from a small, closed set that ships with the product (never AI- or user-authored), named for what it does rather than after any branded program, and built only from existing Progression Schemes. A Protocol adopted from one carries `curated` **Session Provenance** and remembers which Curated Protocol, and which version of it, it came from (ADR-0130).
+_Avoid_: Program, Template, Preset, Routine, Library (that is the Catalog pick widget), Generated Protocol (that is AI output)
+
 **Adopt**:
-The act of taking a Generated Protocol or Generated Session and deep-copying it into a user-owned Protocol or Session that the user logs against, gives feedback on, swaps exercises in, and regenerates. Mutations only ever touch the user's copy.
-_Avoid_: Assign, instantiate, clone
+The act of taking a Generated Protocol, a Generated Session, or a **Curated Protocol** and deep-copying it into a user-owned Protocol or Session that the user logs against, swaps exercises in, and edits. Mutations only ever touch the user's copy. A copy adopted from a Generated artifact also takes Generation Feedback and Regeneration; one adopted from a Curated Protocol does not. A user with a Sensitive Constraint who adopts a Curated Protocol receives it **set aside** with a caveat, never made Current.
+_Avoid_: Assign, instantiate, clone, Import
 
 **Duplicate**:
 The act of a user deep-copying a **Session they already own** into a new **standalone** Session — a reusable *plan*, never a record. Copies the source's Exercise Prescriptions, Supersets, and per-set sets/reps/rest/tempo/Load faithfully, and carries the source's **Session Provenance and `trace_id` lineage forward unchanged** (an `ai_generated` Session stays `ai_generated`, so Generation Feedback and Regeneration remain available on the copy; a `user_authored` one stays `user_authored`). The copy carries **no Logged Sessions** (plan/record separation) and **no Protocol position** — a Protocol-member Session's Week/Day/position are dropped so the copy stands alone. The source is untouched; mutating either copy never affects the other. Unlimited. Distinct from **Adopt** (which copies an *immutable Generated* artifact, not a user's own Session), **Deploy** (which commits a Builder tail-edit into a Protocol), and **Substitution** (which swaps one Exercise).
@@ -257,7 +261,7 @@ The act of running one of a user's own **plan-backed** Logged Sessions again by 
 _Avoid_: Redo, re-run (bare), Duplicate (that forks a copy), Clone, Adopt
 
 **Sensitive Constraint**:
-A profile condition that demands extra caution — injury, rehabilitation, postpartum, or a flagged medical limitation. A user with any Sensitive Constraint is never served a shared/cached Generated Protocol; the system always generates fresh so postnatal/rehab caution can be applied.
+A profile condition that demands extra caution — injury, rehabilitation, postpartum, or a flagged medical limitation. A user with any Sensitive Constraint is never served a shared/cached Generated Protocol; the system always generates fresh so postnatal/rehab caution can be applied. Shared content that is never generated — a redeemed Session or an adopted **Curated Protocol** — is allowed with a caveat that it is not tailored to their constraints, and is never made Current automatically.
 _Avoid_: Restriction, limitation (generic)
 
 ## Session Library & Sharing
@@ -402,7 +406,7 @@ _Avoid_: Badge (as a separate concept — it is the visual of an Achievement), t
 Two distinct concepts. Never collapse them into one "Feedback".
 
 **Generation Feedback**:
-A positive/negative verdict on a generated/adopted Protocol or Session — "did the AI give me a good plan?" — with an optional free-text reason. Captured at the level being judged (Protocol or Session) and is the trigger for regeneration.
+A positive/negative verdict on an `ai_generated` Protocol or Session — "did the AI give me a good plan?" — with an optional free-text reason. Captured at the level being judged (Protocol or Session) and is the trigger for regeneration.
 _Avoid_: Feedback (bare), rating
 
 **Performance Feedback**:

@@ -116,6 +116,8 @@ PPL) as adoptable Protocols beside AI generation.
 *Evidence:* Boostcamp's main draw is choosing from established training methodologies.
 **Grill:** licensing and naming of branded programs; are they curated Generated content
 (adopt-by-copy) or a new provenance?
+**Decided (ADR-0130):** a new `curated` provenance with adopt-by-copy semantics; our own
+descriptive names, no third-party brands.
 
 ---
 
