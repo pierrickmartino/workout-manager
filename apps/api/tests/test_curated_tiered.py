@@ -8,12 +8,11 @@ set/rep scheme with the AMRAP last sets, its Progression Scheme and its Load kin
 
 from __future__ import annotations
 
-import re
 from dataclasses import replace
 
 import pytest
 
-from app.curated.integrity import BRAND_MARKS
+from app.curated.integrity import integrity_errors
 from app.curated.registry import CURATED_PROTOCOLS, get_curated_registry
 from app.curated.tiered import TIERED
 from tests.test_curated_protocols_endpoint import SIGN_OFF, _Harness, build_harness
@@ -111,9 +110,10 @@ def test_every_session_has_one_lift_from_each_tier_in_tier_order():
 
     # Assert
     for session in protocol["sessions"]:
-        names = [p["exercise_name"] for p in session["prescriptions"]]
-        assert len(names) == 3
-        assert (names[0] in T1, names[1] in T2, names[2] in T3) == (True, True, True)
+        tier1, tier2, tier3 = (p["exercise_name"] for p in session["prescriptions"])
+        assert tier1 in T1
+        assert tier2 in T2
+        assert tier3 in T3
 
 
 def test_t1_is_five_sets_of_three_with_an_amrap_last_set_on_greyskull_linear():
@@ -169,7 +169,7 @@ def test_no_tier_shares_an_exercise_with_another():
 
 def test_the_description_says_a_miss_resets_the_weight():
     # Assert
-    assert "resets" in TIERED.description
+    assert "the weight resets down 10%" in TIERED.description
 
 
 @pytest.mark.parametrize("scheme", ["6×2", "6x2", "10×1", "10x1", "6 sets of two", "ten singles"])
@@ -178,7 +178,6 @@ def test_the_description_claims_no_set_or_rep_change_after_a_miss(scheme):
     assert scheme not in TIERED.description.lower()
 
 
-@pytest.mark.parametrize("mark", BRAND_MARKS)
-def test_the_description_carries_no_brand_mark(mark):
-    # Assert
-    assert not re.search(rf"(?<![\w/]){re.escape(mark)}(?![\w/])", TIERED.description.lower())
+def test_it_passes_the_integrity_gate_including_brand_marks_in_its_description():
+    # Act / Assert
+    assert integrity_errors(RELEASED) == []

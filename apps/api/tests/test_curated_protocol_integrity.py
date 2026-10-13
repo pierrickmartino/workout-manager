@@ -264,6 +264,14 @@ def test_a_name_carrying_a_third_party_brand_mark_fails(name):
     assert "brand_mark" in _codes(curated)
 
 
+def test_a_description_carrying_a_third_party_brand_mark_fails():
+    # Arrange
+    curated = replace(BEGINNER_LINEAR, description="Linear gains, much like GZCLP.")
+
+    # Act / Assert
+    assert "brand_mark" in _codes(curated)
+
+
 def test_curated_protocol_identifiers_are_unique():
     identifiers = [curated.identifier for curated in CURATED_PROTOCOLS]
     assert len(identifiers) == len(set(identifiers))

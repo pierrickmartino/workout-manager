@@ -31,6 +31,7 @@ AT_SEED = "0046_seed_curated_exercises"
 BEFORE_PPL_SEED = "0048_curated_lineage"
 AT_PPL_SEED = "0049_seed_push_pull_legs_exercises"
 AT_TIERED_SEED = "0050_seed_tiered_exercises"
+BEFORE_TIERED_BATCHES = (*CURATED_EXERCISES_0046, *CURATED_EXERCISES_0049)
 
 
 @pytest.fixture()
@@ -149,7 +150,7 @@ def test_the_push_pull_legs_seed_adds_its_batch_as_curated_exercises(sqlite_url)
     rows = _curated_rows(sqlite_url)
     assert before == {normalize_name(item.name) for item in CURATED_EXERCISES_0046}
     assert set(rows) == {
-        normalize_name(item.name) for item in (*CURATED_EXERCISES_0046, *CURATED_EXERCISES_0049)
+        normalize_name(item.name) for item in BEFORE_TIERED_BATCHES
     }
     for item in CURATED_EXERCISES_0049:
         row = rows[normalize_name(item.name)]
@@ -202,5 +203,5 @@ def test_the_tiered_downgrade_removes_only_its_batch(sqlite_url):
 
     # Assert
     assert set(_curated_rows(sqlite_url)) == {
-        normalize_name(item.name) for item in (*CURATED_EXERCISES_0046, *CURATED_EXERCISES_0049)
+        normalize_name(item.name) for item in BEFORE_TIERED_BATCHES
     }

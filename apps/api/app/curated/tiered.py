@@ -49,29 +49,20 @@ FRONT_SQUAT = MainLift("front_squat", "Barbell Front Squat", default_start_kg=20
 INCLINE_BENCH = MainLift("incline_bench", "Barbell Incline Bench Press", default_start_kg=20)
 
 
-def _t1(lift: MainLift) -> PatternPrescription:
+def _main(
+    lift: MainLift, sets: int, reps: str, scheme: ProgressionScheme, rest_seconds: int
+) -> PatternPrescription:
     return PatternPrescription(
         exercise=lift.exercise,
-        sets=_T1_SETS,
-        reps=_T1_REPS,
-        scheme=ProgressionScheme.GREYSKULL,
+        sets=sets,
+        reps=reps,
+        scheme=scheme,
         main_lift=lift.key,
-        rest_seconds=_T1_REST_SECONDS,
+        rest_seconds=rest_seconds,
     )
 
 
-def _t2(lift: MainLift) -> PatternPrescription:
-    return PatternPrescription(
-        exercise=lift.exercise,
-        sets=_T2_SETS,
-        reps=_T2_REPS,
-        scheme=ProgressionScheme.DOUBLE_PROGRESSION,
-        main_lift=lift.key,
-        rest_seconds=_T2_REST_SECONDS,
-    )
-
-
-def _t3(exercise: str) -> PatternPrescription:
+def _accessory(exercise: str) -> PatternPrescription:
     return PatternPrescription(
         exercise=exercise,
         sets=_T3_SETS,
@@ -82,8 +73,21 @@ def _t3(exercise: str) -> PatternPrescription:
     )
 
 
-def _session(title: str, t1: MainLift, t2: MainLift, t3: str) -> PatternSession:
-    return PatternSession(title, (_t1(t1), _t2(t2), _t3(t3)))
+def _session(title: str, tier1: MainLift, tier2: MainLift, tier3: str) -> PatternSession:
+    return PatternSession(
+        title,
+        (
+            _main(tier1, _T1_SETS, _T1_REPS, ProgressionScheme.GREYSKULL, _T1_REST_SECONDS),
+            _main(
+                tier2,
+                _T2_SETS,
+                _T2_REPS,
+                ProgressionScheme.DOUBLE_PROGRESSION,
+                _T2_REST_SECONDS,
+            ),
+            _accessory(tier3),
+        ),
+    )
 
 
 TIERED = CuratedProtocol(
@@ -91,7 +95,7 @@ TIERED = CuratedProtocol(
     version=1,
     name="Tiered linear progression",
     description=(
-        "Four barbell sessions a week, done in order, each in three tiers. Tier 1 is a heavy "
+        "Four sessions a week, done in order, each in three tiers. Tier 1 is a heavy barbell "
         "main lift (squat, overhead press, bench press or deadlift): five sets of three, and "
         "the last set is as many good reps as you can. It goes up 2.5 kg after a session in "
         "which every set reaches three. After a session where a set falls short, the weight "
@@ -102,7 +106,7 @@ TIERED = CuratedProtocol(
         "effort logged it holds. It goes down 5 kg after a session where a set falls short "
         "of ten. Tier 3 is a lat pulldown or dumbbell row for three sets of fifteen, the last "
         "as many reps as you can. It is prescribed as light and never changes on its own: "
-        "add weight yourself once every set passes fifteen. It suits someone past their "
+        "add weight yourself once every set reaches fifteen. It suits someone past their "
         "first months of lifting who wants heavy, low-rep work alongside more volume. It "
         "needs a cable station, and it does not include conditioning or planned deload "
         "weeks."
