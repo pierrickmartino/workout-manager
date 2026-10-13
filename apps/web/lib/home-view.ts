@@ -10,7 +10,11 @@ import { formatRecordAchievement } from "./record-achievement.ts";
 import type { WeightUnit } from "./weight-unit";
 import { formatWholeWeight } from "./weight-format.ts";
 import { bestEffortData, type BestEffortResult } from "./best-effort-read.ts";
-import { CURATED_PICKER_HREF, newProtocolChoices } from "./curated-protocol-view.ts";
+import {
+  GENERATE_PROTOCOL_CHOICE,
+  newProtocolChoices,
+  type ProtocolChoice,
+} from "./curated-protocol-view.ts";
 
 // The Session Hero's headline stats — duration · modules · sets — for a Current
 // Protocol's Next Session. Deliberately no target-calorie and no single volume /
@@ -229,37 +233,20 @@ export function latestPrLine(
   };
 }
 
-// One way to get a new Protocol, offered on Home's empty state (issue #690, ADR-0130). `kind`
-// lets the launchpad give each its icon without matching on copy.
-export interface HomeProtocolChoice {
-  kind: "generate" | "curated";
-  label: string;
-  href: string;
-}
-
-// The launchpad's protocol CTA wherever generation is the only way offered: the TRAIN tab, and
-// Home's empty state until a Curated Protocol is released.
-export const GENERATE_PROTOCOL_CHOICE: HomeProtocolChoice = {
-  kind: "generate",
-  label: "Generate a protocol",
-  href: "/protocols/new",
-};
-
-// The ways Home's empty state offers to get a Protocol. With a Current Protocol there are none:
-// the hero takes the slot and Home is unchanged. Without one, "Choose a Curated Protocol" sits
-// beside "Generate for me" as an equal choice — the new-Protocol entry point's own two links, so
-// it leads into the same picker and adopt flow. Curated Protocols are offered only once one is
-// released, and a failed list read leaves the generate link on its own, as Home was before.
+// The ways Home's empty state offers to get a Protocol (issue #690, ADR-0130). With a Current
+// Protocol there are none: the hero takes the slot and Home is unchanged. Without one, "Choose a
+// Curated Protocol" sits beside "Generate for me" as an equal choice — the new-Protocol entry
+// point's own two links, so it leads into the same picker and adopt flow. Curated Protocols are
+// offered only once one is released, and a failed list read leaves the generate link on its own,
+// as Home was before.
 export function homeProtocolChoices(
   currentProtocol: ProtocolProgress | null,
   curatedProtocols: BestEffortResult<readonly unknown[]> | null,
-): HomeProtocolChoice[] {
+): ProtocolChoice[] {
   if (currentProtocol) return [];
   const hasCuratedProtocols = (bestEffortData(curatedProtocols)?.length ?? 0) > 0;
   if (!hasCuratedProtocols) return [GENERATE_PROTOCOL_CHOICE];
-  return newProtocolChoices("generate", { hasCuratedProtocols }).map(({ label, href }) => ({
-    kind: href === CURATED_PICKER_HREF ? "curated" : "generate",
-    label,
-    href,
-  }));
+  return newProtocolChoices("generate", { hasCuratedProtocols }).map(
+    ({ surface, label, href }) => ({ surface, label, href }),
+  );
 }

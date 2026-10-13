@@ -8,6 +8,8 @@ import {
   curatedProtocolRow,
   curatedSetAsideNotice,
   findCuratedProtocol,
+  GENERATE_PROTOCOL_CHOICE,
+  launchpadHeading,
   newProtocolChoices,
   readAdoptForm,
   type CuratedProtocolSummary,
@@ -56,8 +58,13 @@ test("the new-Protocol entry point offers generation and Curated Protocols as pe
 
   // Assert
   assert.deepEqual(choices, [
-    { label: "Generate for me", href: "/protocols/new", current: true },
-    { label: "Choose a Curated Protocol", href: "/protocols/new/curated", current: false },
+    { surface: "generate", label: "Generate for me", href: "/protocols/new", current: true },
+    {
+      surface: "curated",
+      label: "Choose a Curated Protocol",
+      href: "/protocols/new/curated",
+      current: false,
+    },
   ]);
 });
 
@@ -323,4 +330,23 @@ test("the set-aside notice names nothing for a missing, unknown or malformed id"
   assert.equal(curatedSetAsideNotice("8", entries), null);
   assert.equal(curatedSetAsideNotice("7abc", entries), null);
   assert.equal(curatedSetAsideNotice(["7", "7"], entries), null);
+});
+
+test("the launchpad heading stops calling the card AI-only once a Curated Protocol is offered", () => {
+  // Arrange — generation alone, then beside a Curated Protocol (issue #690).
+  const peers = newProtocolChoices("generate", { hasCuratedProtocols: true });
+
+  // Act
+  const alone = launchpadHeading([GENERATE_PROTOCOL_CHOICE]);
+  const beside = launchpadHeading(peers);
+
+  // Assert — a human-written plan is an equal choice, not filed under generation.
+  assert.deepEqual(alone, {
+    title: "Generate training",
+    overline: "AI PROTOCOLS · STANDALONE SESSIONS",
+  });
+  assert.deepEqual(beside, {
+    title: "Start training",
+    overline: "AI OR CURATED PROTOCOLS · STANDALONE SESSIONS",
+  });
 });

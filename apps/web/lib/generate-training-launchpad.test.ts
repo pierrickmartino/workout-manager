@@ -140,8 +140,8 @@ test("Home's empty state offers a Curated Protocol as an equal choice beside gen
   // (issue #690, ADR-0130).
   const { GenerateTrainingLaunchpad } = loadTsx(MODULE);
   const protocolChoices = [
-    { kind: "generate", label: "Generate for me", href: "/protocols/new" },
-    { kind: "curated", label: "Choose a Curated Protocol", href: "/protocols/new/curated" },
+    { surface: "generate", label: "Generate for me", href: "/protocols/new" },
+    { surface: "curated", label: "Choose a Curated Protocol", href: "/protocols/new/curated" },
   ];
 
   // Act
@@ -166,4 +166,5 @@ test("Home's empty state offers a Curated Protocol as an equal choice beside gen
   assert.equal(generate.className, curated.className);
   assert.ok(generate.querySelector("svg") && curated.querySelector("svg"));
   assert.doesNotMatch(document.body.textContent!, /library/i);
+  assert.equal(document.querySelector("h2")!.textContent, "Start training");
 });

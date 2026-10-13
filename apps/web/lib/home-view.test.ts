@@ -503,8 +503,8 @@ test("Home's empty state offers generation and a Curated Protocol as equal choic
 
   // Assert — the same two destinations the new-Protocol entry point offers, never "Library".
   assert.deepEqual(choices, [
-    { kind: "generate", label: "Generate for me", href: "/protocols/new" },
-    { kind: "curated", label: "Choose a Curated Protocol", href: "/protocols/new/curated" },
+    { surface: "generate", label: "Generate for me", href: "/protocols/new" },
+    { surface: "curated", label: "Choose a Curated Protocol", href: "/protocols/new/curated" },
   ]);
 });
 
@@ -518,7 +518,7 @@ test("Home's empty state keeps its one generate link while nothing is released",
   // Assert — Home as it was before Curated Protocols, so the picker is never reached empty.
   for (const choices of offered) {
     assert.deepEqual(choices, [
-      { kind: "generate", label: "Generate a protocol", href: "/protocols/new" },
+      { surface: "generate", label: "Generate a protocol", href: "/protocols/new" },
     ]);
   }
 });
