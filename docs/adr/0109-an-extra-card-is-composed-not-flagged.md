@@ -126,3 +126,13 @@ The component is 89 lines where it was 93, with a 124-line test beside it where 
 of the composition audit's structural findings; #6 (React 19's `use()` at the app's one legacy
 context call site) is a two-line change and all three contexts added since were written against
 the current API anyway.
+
+## Amendment — Curated Protocols on Home's empty state (issue #690, ADR-0130)
+
+The primary protocol CTA is now a list, `protocolChoices`, rather than one inline link: Home's
+empty state passes "Generate for me" beside "Choose a Curated Protocol" once one is released, and
+every other caller keeps the single "Generate a protocol" link by default. This is data, not a
+flag, so it doesn't conflict with the rule above. The launchpad doesn't choose between renderings; it renders
+the choices it is given, each as an equal primary CTA, and they still differ from `LAUNCH_LINK`.
+The heading follows the choices (`launchpadHeading`): a human-written Curated Protocol is not
+filed under "AI protocols". The test file holds the three compositions.

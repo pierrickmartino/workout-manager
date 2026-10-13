@@ -67,13 +67,27 @@ export interface AdoptCuratedProtocolRequest {
 
 export type NewProtocolSurface = "generate" | "curated";
 
-export interface NewProtocolChoice {
+// One way to get a new Protocol, as a launch link: which surface it opens, its label and route.
+export interface ProtocolChoice {
+  surface: NewProtocolSurface;
   label: string;
   href: string;
+}
+
+// A choice at the new-Protocol entry point, which also marks the surface the user is on.
+export interface NewProtocolChoice extends ProtocolChoice {
   current: boolean;
 }
 
 export const CURATED_PICKER_HREF = "/protocols/new/curated";
+
+// Generation alone, wherever it is the only way offered: the TRAIN launchpad, and Home's empty
+// state until a Curated Protocol is released. "Generate for me" is the wording beside a peer.
+export const GENERATE_PROTOCOL_CHOICE: ProtocolChoice = {
+  surface: "generate",
+  label: "Generate a protocol",
+  href: "/protocols/new",
+};
 
 // The two peer ways to get a new Protocol. Curated Protocols are offered only once at least
 // one is released, so the entry point never leads to an empty picker.
@@ -82,19 +96,35 @@ export function newProtocolChoices(
   { hasCuratedProtocols }: { hasCuratedProtocols: boolean },
 ): NewProtocolChoice[] {
   const generate: NewProtocolChoice = {
+    surface: "generate",
     label: "Generate for me",
-    href: "/protocols/new",
+    href: GENERATE_PROTOCOL_CHOICE.href,
     current: surface === "generate",
   };
   if (!hasCuratedProtocols) return [generate];
   return [
     generate,
     {
+      surface: "curated",
       label: "Choose a Curated Protocol",
       href: CURATED_PICKER_HREF,
       current: surface === "curated",
     },
   ];
+}
+
+export interface LaunchpadHeading {
+  title: string;
+  overline: string;
+}
+
+// The launchpad's heading names what its protocol choices are. A Curated Protocol is written by a
+// person, not generated, so once one is offered the heading stops calling the card AI-only — an
+// equal choice is not filed under generation (issue #690, ADR-0130).
+export function launchpadHeading(choices: readonly ProtocolChoice[]): LaunchpadHeading {
+  return choices.some((choice) => choice.surface === "curated")
+    ? { title: "Start training", overline: "AI OR CURATED PROTOCOLS · STANDALONE SESSIONS" }
+    : { title: "Generate training", overline: "AI PROTOCOLS · STANDALONE SESSIONS" };
 }
 
 export interface CuratedProtocolRow {

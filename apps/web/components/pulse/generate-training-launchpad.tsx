@@ -1,9 +1,20 @@
 import Link from "next/link";
-import { ArrowRight, PencilLine, PencilRuler, Zap } from "@/components/pulse/icons";
+import {
+  ArrowRight,
+  ClipboardCheck,
+  PencilLine,
+  PencilRuler,
+  Zap,
+} from "@/components/pulse/icons";
 
 import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { appendFrom } from "@/lib/back-target";
+import {
+  GENERATE_PROTOCOL_CHOICE,
+  launchpadHeading,
+  type ProtocolChoice,
+} from "@/lib/curated-protocol-view";
 import { NAV_FORWARD } from "@/lib/nav-direction";
 
 interface GenerateTrainingLaunchpadProps {
@@ -14,19 +25,28 @@ interface GenerateTrainingLaunchpadProps {
   // onto the "Generate a workout" link as `?from=` so that screen's back control
   // returns here rather than defaulting to the Dashboard. Omitted → Dashboard fallback.
   from?: string;
-  // Extra entry points, rendered after the two generation links in the same stack.
+  // The ways to get a new Protocol, each a primary CTA of equal weight. Home's empty state
+  // passes "Generate for me" beside "Choose a Curated Protocol" once one is released
+  // (`homeProtocolChoices`, ADR-0130). Omitted → the one "Generate a protocol" link.
+  protocolChoices?: readonly ProtocolChoice[];
+  // Extra entry points, rendered after the protocol and workout links in the same stack.
   // The TRAIN launchpad composes `BuildWorkoutLink` and `LogPastWorkoutLink` here; the
-  // Home empty state composes nothing and stays AI-only, since Home's quick-action row
-  // already carries Build and Log (ADR-0071). This used to be a `showBuild` /
+  // Home empty state composes nothing, since Home's quick-action row already carries
+  // Build and Log (ADR-0071). This used to be a `showBuild` /
   // `showLogPastWorkout` pair — two flags describing four states, of which two were ever
   // rendered (composition audit #5, ADR-0109).
   children?: React.ReactNode;
 }
 
-// Every link in the stack below the primary protocol CTA: a full-width secondary button.
+// Every link in the stack below the primary protocol CTAs: a full-width secondary button.
 // Named once because the two generation links and both composable cards ask for it, and a
 // card that disagreed with its neighbours would read as a different kind of thing.
 const LAUNCH_LINK = buttonVariants({ variant: "secondary", className: "w-full" });
+
+const PROTOCOL_CHOICE_ICON = {
+  generate: Zap,
+  curated: ClipboardCheck,
+} as const satisfies Record<ProtocolChoice["surface"], unknown>;
 
 // The two ways to start new training: a full multi-week Protocol, or a standalone
 // workout. Shared by the Home empty state and the TRAIN launchpad so the protocol
@@ -35,28 +55,36 @@ const LAUNCH_LINK = buttonVariants({ variant: "secondary", className: "w-full" }
 export function GenerateTrainingLaunchpad({
   eyebrow,
   from,
+  protocolChoices = [GENERATE_PROTOCOL_CHOICE],
   children,
 }: GenerateTrainingLaunchpadProps): React.JSX.Element {
+  const heading = launchpadHeading(protocolChoices);
   return (
     <Card className="flex flex-col gap-5 p-5">
       <span className="label-mono text-[11px] text-cyan">{eyebrow}</span>
       <div className="flex flex-col gap-1.5">
         <h2 className="text-balance font-display text-2xl font-bold text-text-primary">
-          Generate training
+          {heading.title}
         </h2>
         <p className="label-mono text-[11px] text-text-secondary">
-          AI PROTOCOLS &middot; STANDALONE SESSIONS
+          {heading.overline}
         </p>
       </div>
       <div className="flex flex-col gap-2.5">
-        <Link
-          href="/protocols/new"
-          {...NAV_FORWARD}
-          className={buttonVariants({ className: "w-full" })}
-        >
-          <Zap className="h-4 w-4" />
-          Generate a protocol
-        </Link>
+        {protocolChoices.map((choice) => {
+          const Icon = PROTOCOL_CHOICE_ICON[choice.surface];
+          return (
+            <Link
+              key={choice.href}
+              href={choice.href}
+              {...NAV_FORWARD}
+              className={buttonVariants({ className: "w-full" })}
+            >
+              <Icon className="h-4 w-4" />
+              {choice.label}
+            </Link>
+          );
+        })}
         <Link href={appendFrom("/sessions/new", from)} {...NAV_FORWARD} className={LAUNCH_LINK}>
           Generate a workout
           <ArrowRight className="h-4 w-4" />

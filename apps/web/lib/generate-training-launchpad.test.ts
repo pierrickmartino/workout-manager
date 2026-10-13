@@ -134,3 +134,37 @@ test("the launchpad declares no flag that selects between compositions", () => {
   // Assert
   assert.deepEqual(booleans, []);
 });
+
+test("Home's empty state offers a Curated Protocol as an equal choice beside generation", () => {
+  // Arrange — the choices Home's view-model yields once a Curated Protocol is released
+  // (issue #690, ADR-0130).
+  const { GenerateTrainingLaunchpad } = loadTsx(MODULE);
+  const protocolChoices = [
+    { surface: "generate", label: "Generate for me", href: "/protocols/new" },
+    { surface: "curated", label: "Choose a Curated Protocol", href: "/protocols/new/curated" },
+  ];
+
+  // Act
+  const document = render(
+    React.createElement(GenerateTrainingLaunchpad, {
+      eyebrow: "GET STARTED // NO ACTIVE PROTOCOL",
+      from: "/dashboard",
+      protocolChoices,
+    }),
+  );
+
+  // Assert — both lead into the new-Protocol entry point's own pages, ahead of the workout link.
+  assert.deepEqual(links(document), [
+    { href: "/protocols/new", label: "Generate for me" },
+    { href: "/protocols/new/curated", label: "Choose a Curated Protocol" },
+    { href: "/sessions/new?from=%2Fdashboard", label: "Generate a workout" },
+  ]);
+
+  // Equal means equal: the two protocol choices share one style, each with its own icon, and
+  // neither is labelled "Library".
+  const [generate, curated] = [...document.querySelectorAll("a")];
+  assert.equal(generate.className, curated.className);
+  assert.ok(generate.querySelector("svg") && curated.querySelector("svg"));
+  assert.doesNotMatch(document.body.textContent!, /library/i);
+  assert.equal(document.querySelector("h2")!.textContent, "Start training");
+});

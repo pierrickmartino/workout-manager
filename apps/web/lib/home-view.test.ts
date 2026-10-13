@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  homeProtocolChoices,
   latestPrLine,
   operatorStatus,
   trainingRoute,
@@ -487,4 +488,48 @@ test("latestPrLine renders an absolute PR estimate in the reader's pounds", () =
   // Assert — 142 kg ≈ 313 lb; the "est. 1RM" wording is preserved.
   assert.equal(line?.estimate, "313 lb est. 1RM");
   assert.equal(line?.text, "Deadlift — 313 lb est. 1RM");
+});
+
+// Home's empty state (issue #690, ADR-0130): with no unfinished Protocol, a Curated Protocol is
+// offered beside generation as an equal choice, leading into the new-Protocol entry point's own
+// picker. Only the Curated Protocols' presence matters, so a one-row list stands for "released".
+const RELEASED_CURATED = { success: true, data: [{ identifier: "starter-strength" }] };
+
+test("Home's empty state offers generation and a Curated Protocol as equal choices", () => {
+  // Arrange — no Current Protocol, and at least one Curated Protocol is released.
+
+  // Act
+  const choices = homeProtocolChoices(null, RELEASED_CURATED);
+
+  // Assert — the same two destinations the new-Protocol entry point offers, never "Library".
+  assert.deepEqual(choices, [
+    { surface: "generate", label: "Generate for me", href: "/protocols/new" },
+    { surface: "curated", label: "Choose a Curated Protocol", href: "/protocols/new/curated" },
+  ]);
+});
+
+test("Home's empty state keeps its one generate link while nothing is released", () => {
+  // Arrange — an empty list, an unsuccessful envelope and a rejected read all mean "none to offer".
+  const unread = [{ success: true, data: [] }, { success: false, data: null }, null];
+
+  // Act
+  const offered = unread.map((curated) => homeProtocolChoices(null, curated));
+
+  // Assert — Home as it was before Curated Protocols, so the picker is never reached empty.
+  for (const choices of offered) {
+    assert.deepEqual(choices, [
+      { surface: "generate", label: "Generate a protocol", href: "/protocols/new" },
+    ]);
+  }
+});
+
+test("Home with a Current Protocol offers no new-Protocol choice", () => {
+  // Arrange — the hero holds the slot; Curated Protocols being released changes nothing.
+  const current = makeProtocol({ weeks: 4, sessionsPerWeek: 3, nextPosition: 2 });
+
+  // Act
+  const choices = homeProtocolChoices(current, RELEASED_CURATED);
+
+  // Assert
+  assert.deepEqual(choices, []);
 });

@@ -6,7 +6,8 @@ import { fetchProfile, isProfileComplete } from "@/lib/profile";
 import { READINESS_BADGE, fetchHome } from "@/lib/home";
 import { fetchAnalytics } from "@/lib/analytics";
 import { RANGE_LABELS } from "@/lib/analytics-range-view";
-import { latestPrLine, operatorStatus } from "@/lib/home-view";
+import { fetchCuratedProtocols } from "@/lib/curated-protocols";
+import { homeProtocolChoices, latestPrLine, operatorStatus } from "@/lib/home-view";
 import { HOME_VOLUME_RANGE, homeReview } from "@/lib/home-review";
 import { quickActions } from "@/lib/quick-actions";
 import { resolveAppearance } from "@/lib/appearance";
@@ -96,6 +97,13 @@ export default async function DashboardPage() {
   const latestPr = latestPrLine(homeEnvelope.data.latest_pr, appearance.weight_unit);
   const actions = quickActions(homeEnvelope.data);
   const review = homeReview(analyticsEnvelope, appearance.weight_unit);
+  // The empty state offers a Curated Protocol beside generation (issue #690, ADR-0130). The list
+  // is read only when there is no Current Protocol, so Home with one costs no extra read; it is
+  // best-effort, and a failed read leaves the generate link on its own.
+  const protocolChoices = homeProtocolChoices(
+    currentProtocol,
+    currentProtocol ? null : await settleBestEffort(fetchCuratedProtocols()),
+  );
 
   return (
     // `data-shell="wide"` is the opt-in the shell's content column answers to with `:has()`
@@ -118,8 +126,8 @@ export default async function DashboardPage() {
       <HomeColumns
         main={
           <>
-            {/* Hero: the Current Protocol's Next Session, or the generate CTA when the
-                user has no Current Protocol (no Protocol, or every one is complete). */}
+            {/* Hero: the Current Protocol's Next Session, or the new-Protocol choices when
+                the user has no Current Protocol (no Protocol, or every one is complete). */}
             {currentProtocol ? (
               <>
                 <SessionHero protocol={currentProtocol} />
@@ -142,6 +150,7 @@ export default async function DashboardPage() {
               <GenerateTrainingLaunchpad
                 eyebrow="GET STARTED // NO ACTIVE PROTOCOL"
                 from="/dashboard"
+                protocolChoices={protocolChoices}
               />
             )}
 

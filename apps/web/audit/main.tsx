@@ -60,6 +60,7 @@ import { submitDeleteSession } from "@/app/sessions/[id]/actions";
 import { DELETE_DISABLED_HINT } from "@/lib/session-delete";
 import { ArrowRight } from "@/components/pulse/icons";
 import { BuildWorkoutLink, GenerateTrainingLaunchpad, LogPastWorkoutLink } from "@/components/pulse/generate-training-launchpad";
+import { homeProtocolChoices } from "@/lib/home-view";
 import { FitnessLevelStandings } from "@/components/pulse/fitness-level-standings";
 import { toFitnessLevelRows } from "@/lib/fitness-level-standing";
 import { ProtocolsIndex } from "@/components/ProtocolsIndex";
@@ -254,7 +255,8 @@ function SheetSurface() {
 }
 
 // Both of the launchpad's compositions, in one capture (ADR-0109): the TRAIN tab's four cards
-// above the Home empty state's two. Neither was in any journey — the `home` journey mounts the
+// above the Home empty state, both before and after a Curated Protocol is released (issue #690,
+// ADR-0130). Neither was in any journey — the `home` journey mounts the
 // *protocol-present* path, so the empty state's launchpad never rendered either — and this is a
 // stack of full-width buttons whose labels are authored sentences, the shape a doubled root font
 // is most likely to push past a 320px viewport. It does not: the labels wrap (142px chips at 200%
@@ -267,6 +269,11 @@ function LaunchpadSurface() {
       <LogPastWorkoutLink />
     </GenerateTrainingLaunchpad>
     <GenerateTrainingLaunchpad eyebrow="GET STARTED // NO ACTIVE PROTOCOL" from="/dashboard" />
+    <GenerateTrainingLaunchpad
+      eyebrow="GET STARTED // NO ACTIVE PROTOCOL"
+      from="/dashboard"
+      protocolChoices={homeProtocolChoices(null, { success: true, data: [{}] })}
+    />
   </div>;
 }
 
