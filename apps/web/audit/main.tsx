@@ -374,6 +374,7 @@ const auditCuratedProtocol: CuratedProtocolSummary = {
   max_weeks: 12,
   required_equipment: ["barbell", "rack", "bench", "dumbbell"],
   main_lift_input: "starting_weight",
+  lifts_needing_a_logged_set: [],
   missing_equipment: ["barbell", "rack", "bench", "dumbbell"],
   // The squat is prefilled from records (#686), so the longest weight hint is on screen.
   main_lifts: [
@@ -445,7 +446,7 @@ const auditWaveCuratedProtocol: CuratedProtocolSummary = {
     working_set_prefill:
       index === 0
         ? { kg: 102.5, reps: 12, source: "records" }
-        : { kg: lift.default_starting_weight_kg, reps: 5, source: "default" },
+        : { kg: lift.default_starting_weight_kg + 40, reps: 5, source: "records" },
   })),
 };
 

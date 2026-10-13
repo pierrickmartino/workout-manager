@@ -803,6 +803,28 @@ def test_greyskull_deload_uses_the_fraction_not_the_fixed_decrease():
     assert double.recommended_load == "95 kg"
 
 
+@pytest.mark.parametrize(
+    "current, expected",
+    [
+        ("42.5 kg", "37.5 kg"),  # 38.25 kg is not loadable: rounded down a 2.5 kg step
+        ("62.5 kg", "55 kg"),    # 56.25 kg → 55 kg
+        ("25 kg", "22.5 kg"),    # an exact multiple stays where the fraction lands
+        ("2.5 kg", "2.25 kg"),   # under one step, rounding would reach 0 kg: kept as is
+    ],
+)
+def test_greyskull_reset_rounds_down_to_a_loadable_weight(current, expected):
+    # Arrange — a miss on an absolute Load whose 10% reset falls between plate steps
+    prescription = _Prescription(reps="5+", recommended_load=current)
+    sets = [_LoggedSet(reps=3, perceived_difficulty=10)]
+
+    # Act
+    result = next_prescription(prescription, sets, GREYSKULL)
+
+    # Assert — the reset never asks for a weight a barbell can't be loaded with
+    assert result.kind is ProgressionKind.LOAD_STEP
+    assert result.recommended_load == expected
+
+
 def test_greyskull_deloads_the_added_bodyweight_load_by_the_reset_fraction():
     # Arrange — a weighted bodyweight movement missed below the floor
     prescription = _Prescription(reps="5", recommended_load="bodyweight + 20 kg")

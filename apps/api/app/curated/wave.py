@@ -26,6 +26,7 @@ from app.curated.model import (
     WavePrescription,
     WaveWeek,
 )
+from app.domain.loadable import EMPTY_BAR_KG
 from app.domain.progression import ProgressionScheme
 
 # What each cycle adds to every weight of a lift, whether or not its reps were hit.
@@ -39,10 +40,9 @@ _ACCESSORY_REST_SECONDS = 90
 # a true max and the first cycles leave room.
 _REFERENCE_SHARE = 0.9
 _WAVE_SETS = 3
-# Every waved lift is a barbell lift, so no weight is written under the empty bar.
-EMPTY_BAR_KG = 20.0
 WAVE_CYCLE = Wave(
     reference_share=_REFERENCE_SHARE,
+    # Every waved lift is a barbell lift, so no weight is written under the empty bar.
     min_kg=EMPTY_BAR_KG,
     weeks=(
         WaveWeek(share=0.85, sets=_WAVE_SETS, reps="5+"),

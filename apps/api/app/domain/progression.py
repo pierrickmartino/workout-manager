@@ -27,12 +27,13 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Protocol
 
 from app.domain.effort import logged_effort_rpe
 from app.domain.load import LoadKind, ParsedLoad, parse_load
+from app.domain.loadable import floor_to_loadable
 from app.domain.quantity import repetitions_of
 
 # A fixed-increment step keeps the rule simple and auditable (vs. percentage math
@@ -43,7 +44,8 @@ DECREASE_KG = 5.0
 
 # The Greyskull-style Linear deload (ADR-0064): a miss resets the Load *down* by a
 # fixed fraction of its current value (−10%), not the cautious fixed ``DECREASE_KG``.
-# The fraction is the trait that distinguishes it from Double Progression's back-off.
+# The fraction is the trait that distinguishes it from Double Progression's back-off. An
+# absolute reset is rounded down to a loadable weight (ADR-0131): 42.5 kg resets to 37.5 kg.
 RESET_FRACTION = 0.9
 
 # The logged Effort, read as an RPE number (ADR-0066), at or below which the effort is
@@ -481,9 +483,10 @@ def _greyskull(
     value, suffix = parsed
 
     # Missed reps take precedence: backing off is the cautious direction, decided before
-    # any step-up. The reset is a fraction of the current Load, not a fixed decrease.
+    # any step-up. The reset is a fraction of the current Load, not a fixed decrease,
+    # rounded down to a weight a bar can be loaded with (ADR-0131).
     if _missed_reps(logged_sets, floor):
-        stepped = _format_load(value * RESET_FRACTION, suffix)
+        stepped = _format_load(_reset_kg(value), suffix)
         return NextPrescription(ProgressionKind.LOAD_STEP, reps, stepped)
 
     if _met_floor(logged_sets, floor):
@@ -491,6 +494,15 @@ def _greyskull(
         return NextPrescription(ProgressionKind.LOAD_STEP, reps, stepped)
 
     return NextPrescription(ProgressionKind.HOLD, reps, current)
+
+
+def _reset_kg(value: float) -> float:
+    """The Greyskull reset of an absolute ``value``: ``RESET_FRACTION`` of it, rounded down to
+    a loadable weight, unless that would round a very light Load to nothing (ADR-0131)."""
+
+    reset = value * RESET_FRACTION
+    loadable = floor_to_loadable(reset)
+    return loadable if loadable > 0 else reset
 
 
 def _greyskull_added(
@@ -737,6 +749,30 @@ def next_prescription(
     """
 
     return _REGISTRY[scheme].step(prescription, logged_sets, exposure_count)
+
+
+def floored_at(
+    result: NextPrescription, current_load: str | None, floor_kg: float
+) -> NextPrescription:
+    """``result`` with an absolute step down held at ``floor_kg`` (ADR-0131).
+
+    The read-time overlay passes the empty bar for a barbell Prescription, which can't be
+    loaded under its own weight. The floor only ever stops a step down: a Load already under
+    it (a light bar) holds where it is rather than being pushed up to it, and every other
+    step, kind and Load passes through unchanged."""
+
+    if result.kind is not ProgressionKind.LOAD_STEP or result.recommended_load is None:
+        return result
+    current = _parse_load(current_load) if current_load is not None else None
+    stepped = _parse_load(result.recommended_load)
+    if current is None or stepped is None or stepped[0] >= floor_kg:
+        return result
+    held = min(current[0], floor_kg)
+    if stepped[0] >= held:
+        return result
+    if held == current[0]:
+        return NextPrescription(ProgressionKind.HOLD, result.reps, current_load)
+    return replace(result, recommended_load=_format_load(held, stepped[1]))
 
 
 def next_load(prescription: _Prescription, logged_sets: list[_LoggedSet]) -> str | None:

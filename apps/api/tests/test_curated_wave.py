@@ -61,8 +61,20 @@ def _body(**overrides) -> dict:
     return {"starting_weights_kg": {}, "working_sets": WORKING_SETS, "weeks": 8, **overrides}
 
 
-def _adopted(**overrides) -> tuple[_Harness, dict]:
+def _logged_harness() -> _Harness:
+    """The wave program released, for a user who has logged each main lift once: the coach
+    requires a set the user actually did before the weights are worked out (issue #694)."""
+
     h = build_harness(RELEASED)
+    h.log_sets(
+        USER,
+        *((name, _absolute(60), 5) for name in sorted(MAIN_LIFTS)),
+    )
+    return h
+
+
+def _adopted(**overrides) -> tuple[_Harness, dict]:
+    h = _logged_harness()
     response = h.adopt(RELEASED.identifier, **_body(**overrides))
     assert response.status_code == 201, response.json()
     return h, h.adopted(response)
@@ -126,7 +138,7 @@ def test_a_cycle_cut_short_by_the_chosen_length_keeps_its_increment():
 
 def test_preview_returns_exactly_what_adopt_persists():
     # Arrange
-    h = build_harness(RELEASED)
+    h = _logged_harness()
     fields = ("exercise_name", "sets", "reps", "recommended_load", "scheme", "rest_seconds")
 
     def plan(sessions):
@@ -155,7 +167,7 @@ def _rejected(h: _Harness, response, code: str, main_lift: str | None = None) ->
 
 def test_working_sets_are_validated_at_the_boundary_for_preview_and_adopt():
     # Arrange
-    h = build_harness(RELEASED)
+    h = _logged_harness()
     without_press = {k: v for k, v in WORKING_SETS.items() if k != "press"}
     cases = [
         (without_press, "missing_working_set", "press"),
@@ -179,7 +191,7 @@ def test_working_sets_are_validated_at_the_boundary_for_preview_and_adopt():
 
 def test_the_wave_program_refuses_starting_weights():
     # Arrange
-    h = build_harness(RELEASED)
+    h = _logged_harness()
 
     # Act
     response = h.adopt(RELEASED.identifier, **_body(starting_weights_kg={"squat": 60}))
@@ -264,9 +276,78 @@ def test_a_lift_with_records_is_prefilled_with_the_users_own_best_set():
     # Act
     lifts = {lift["key"]: lift for lift in h.list().json()["data"][0]["main_lifts"]}
 
-    # Assert
+    # Assert — a lift with no logged set is offered nothing to start from: no default
     assert lifts["squat"]["working_set_prefill"] == {"kg": 100, "reps": 5, "source": "records"}
-    assert lifts["deadlift"]["working_set_prefill"] == {"kg": 40, "reps": 5, "source": "default"}
+    assert lifts["deadlift"]["working_set_prefill"] is None
+
+
+# --- A logged set first (issue #694) ----------------------------------------------------
+# The coach's correction: the wave's weights are worked out from a set the user actually did,
+# so a main lift with no qualifying logged set can't be adopted or previewed.
+
+
+def test_the_list_row_names_the_main_lifts_still_needing_a_logged_set():
+    # Arrange — only the squat has been logged
+    h = build_harness(RELEASED)
+    h.log_sets(USER, ("Barbell Back Squat", _absolute(100), 5))
+
+    # Act
+    row = h.list().json()["data"][0]
+
+    # Assert
+    assert row["lifts_needing_a_logged_set"] == ["bench", "deadlift", "press"]
+
+
+def test_once_every_main_lift_is_logged_none_is_named():
+    # Act
+    row = _logged_harness().list().json()["data"][0]
+
+    # Assert
+    assert row["lifts_needing_a_logged_set"] == []
+
+
+def test_a_starting_weight_curated_protocol_needs_no_logged_set():
+    # Arrange — the beginner linear progression, for a user with no history
+    h = build_harness()
+
+    # Act
+    row = h.list().json()["data"][0]
+
+    # Assert
+    assert row["lifts_needing_a_logged_set"] == []
+
+
+def test_preview_and_adopt_refuse_a_main_lift_with_no_logged_set():
+    # Arrange — everything but the press logged; the posted working sets are otherwise valid
+    h = build_harness(RELEASED)
+    h.log_sets(
+        USER,
+        *((name, _absolute(60), 5) for name in sorted(MAIN_LIFTS - {"Barbell Overhead Press"})),
+    )
+
+    # Act
+    previewed = h.preview(RELEASED.identifier, **_body())
+    adopted = h.adopt(RELEASED.identifier, **_body())
+
+    # Assert
+    _rejected(h, previewed, "no_logged_working_set", "press")
+    _rejected(h, adopted, "no_logged_working_set", "press")
+
+
+def test_an_out_of_window_set_does_not_count_as_a_logged_working_set():
+    # Arrange — a 15-rep squat carries no trustworthy Estimated 1RM, so it can't seed a wave
+    h = build_harness(RELEASED)
+    h.log_sets(
+        USER,
+        ("Barbell Back Squat", _absolute(60), 15),
+        *((name, _absolute(60), 5) for name in sorted(MAIN_LIFTS - {"Barbell Back Squat"})),
+    )
+
+    # Act
+    response = h.adopt(RELEASED.identifier, **_body())
+
+    # Assert
+    _rejected(h, response, "no_logged_working_set", "squat")
 
 
 def test_a_starting_weight_curated_protocol_offers_no_working_set_prefill():

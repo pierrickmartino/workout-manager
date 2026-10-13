@@ -13,7 +13,10 @@ Current Protocol, or set aside for a user with a Sensitive Constraint (ADR-0130,
 same validation and the same ``enumerate_plan``, and returns the plan without persisting
 anything, so what was previewed is what adopt writes. An unreleased Curated Protocol is a
 ``404``, exactly like an unknown one. Rejected choices are a ``422`` naming every problem, and
-persist nothing. Every response uses the standard envelope."""
+persist nothing. A wave Curated Protocol is also refused, for adopt and preview alike, while a main
+lift has no qualifying logged set: the coach's review requires a set the user actually did before
+its weights are worked out (issue #694), and the list row names those lifts. Every response uses
+the standard envelope."""
 
 from __future__ import annotations
 
@@ -37,6 +40,7 @@ from app.curated.plan import (
 from app.curated.prefill import (
     StartingWeightPrefill,
     WorkingSetPrefill,
+    lifts_needing_a_logged_set,
     starting_weight_prefills,
     working_set_prefills,
 )
@@ -141,6 +145,9 @@ def _serialize_curated(
             }
             for lift in curated.main_lifts
         ],
+        # The main lifts this user must log a working set of before a wave Curated Protocol can
+        # be adopted (issue #694); always empty for any other Curated Protocol.
+        "lifts_needing_a_logged_set": list(lifts_needing_a_logged_set(curated, history)),
         # Whether the "not tailored to your constraints" caveat applies to this user (ADR-0058):
         # true exactly when they hold a Sensitive Constraint, so adopting will set it aside.
         "sensitive_constraint_caveat": caveat,
@@ -207,10 +214,30 @@ def _choice_error_response(errors: list[ChoiceError]) -> JSONResponse:
     return JSONResponse(status_code=HTTP_UNPROCESSABLE_ENTITY, content=body)
 
 
+def _unlogged_lift_errors(
+    curated: CuratedProtocol, history: list[LoggedSessionView]
+) -> list[ChoiceError]:
+    """One error per main lift a wave Curated Protocol can't be worked out from yet."""
+
+    names = {lift.key: lift.exercise for lift in curated.main_lifts}
+    return [
+        ChoiceError(
+            code="no_logged_working_set",
+            message=(
+                f"Log a working set of {names[key]} first: this plan's weights are worked "
+                "out from a set you actually did."
+            ),
+            main_lift=key,
+        )
+        for key in lifts_needing_a_logged_set(curated, history)
+    ]
+
+
 def _checked_choices(
     identifier: str,
     payload: AdoptCuratedProtocolRequest,
     registry: CuratedRegistry,
+    history: list[LoggedSessionView],
 ) -> tuple[CuratedProtocol, AdoptionChoices] | JSONResponse:
     """The released Curated Protocol and the user's validated choices, or the ``422`` naming
     every problem. Adopt and preview both pass through here, so they reject alike."""
@@ -222,7 +249,7 @@ def _checked_choices(
         )
 
     choices = payload.choices()
-    errors = validate_choices(curated, choices)
+    errors = [*validate_choices(curated, choices), *_unlogged_lift_errors(curated, history)]
     if errors:
         return _choice_error_response(errors)
     return curated, choices
@@ -252,14 +279,18 @@ def _serialize_planned_session(session: PlannedSession) -> dict:
 def preview_curated_protocol(
     identifier: str,
     payload: AdoptCuratedProtocolRequest,
-    _clerk_user_id: str = Depends(get_current_user),
+    clerk_user_id: str = Depends(get_current_user),
     registry: CuratedRegistry = Depends(get_curated_registry),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
 ) -> object:
-    """The fully enumerated plan adopting with these choices would write. Persists nothing,
-    reads no repository and never calls the LLM: it is the pure ``enumerate_plan`` adopt
-    persists, so the Loads shown are the Loads adopted."""
+    """The fully enumerated plan adopting with these choices would write. Persists nothing
+    and never calls the LLM: it reads only the user's history, to refuse what adopt refuses,
+    and is the pure ``enumerate_plan`` adopt persists, so the Loads shown are the Loads
+    adopted."""
 
-    checked = _checked_choices(identifier, payload, registry)
+    checked = _checked_choices(
+        identifier, payload, registry, logged.list_for_user(clerk_user_id)
+    )
     if isinstance(checked, JSONResponse):
         return checked
     curated, choices = checked
@@ -286,11 +317,14 @@ def adopt_curated_protocol(
     exercises: ExerciseRepository = Depends(get_exercise_repository),
     protocols: ProtocolRepository = Depends(get_protocol_repository),
     profiles: ProfileRepository = Depends(get_profile_repository),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
 ) -> object:
     """Adopt a released Curated Protocol as the user's own Protocol: Current, or set aside
     for a user with a Sensitive Constraint (ADR-0130, ADR-0058), which the response says."""
 
-    checked = _checked_choices(identifier, payload, registry)
+    checked = _checked_choices(
+        identifier, payload, registry, logged.list_for_user(clerk_user_id)
+    )
     if isinstance(checked, JSONResponse):
         return checked
     curated, choices = checked
