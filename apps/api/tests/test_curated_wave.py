@@ -14,7 +14,6 @@ from __future__ import annotations
 from dataclasses import replace
 
 from app.curated.integrity import integrity_errors
-from app.curated.registry import CURATED_PROTOCOLS, get_curated_registry
 from app.curated.wave import WAVE
 from tests.test_curated_protocols_endpoint import (
     SIGN_OFF,
@@ -231,20 +230,6 @@ def test_the_description_discloses_the_one_time_weights_and_the_blind_increment(
     assert "worked out from it once, when you adopt" in description
     assert "whether or not you hit your reps" in description
     assert "use Calibrate to re-pitch" in description
-
-
-def test_it_ships_unreleased_and_the_real_list_does_not_show_it():
-    # Arrange
-    shipped = next(p for p in CURATED_PROTOCOLS if p.identifier == RELEASED.identifier)
-    h = build_harness()
-    h.client.app.dependency_overrides.pop(get_curated_registry)
-
-    # Act
-    identifiers = [row["identifier"] for row in h.list().json()["data"]]
-
-    # Assert
-    assert (shipped.released, shipped.coach_sign_off) == (False, None)
-    assert RELEASED.identifier not in identifiers
 
 
 def test_it_passes_the_integrity_gate():

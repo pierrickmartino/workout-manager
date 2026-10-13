@@ -1,6 +1,6 @@
 """The Curated Protocol data format (ADR-0130).
 
-A **Curated Protocol** is a human-authored, coach-reviewed plan shipped as versioned data in the
+A **Curated Protocol** is a human-authored, reviewed plan shipped as versioned data in the
 repo, never a runtime-editable row. These frozen dataclasses *are* the format: a content file
 (``beginner_linear.py``) builds one ``CuratedProtocol`` value, the content-integrity check
 (``integrity.py``) gates it, and adoption (``adoption/curated.py``) enumerates it into a
@@ -115,10 +115,10 @@ class PatternSession:
 
 @dataclass(frozen=True)
 class CoachSignOff:
-    """The recorded review by a qualified coach a released Curated Protocol needs (ADR-0130)."""
+    """The recorded review a released Curated Protocol needs: who signed it off, and when
+    (ADR-0130). No proof of qualification is recorded (issue #694)."""
 
     reviewer: str
-    credential: str
     signed_on: date
 
 

@@ -23,9 +23,7 @@ from app.curated.registry import CURATED_PROTOCOLS
 from app.curated.wave import WAVE
 from app.domain.progression import ProgressionScheme
 
-SIGN_OFF = CoachSignOff(
-    reviewer="Test Coach", credential="Test credential", signed_on=date(2026, 10, 1)
-)
+SIGN_OFF = CoachSignOff(reviewer="Test Coach", signed_on=date(2026, 10, 1))
 
 
 def _codes(curated) -> set[str]:
@@ -246,6 +244,28 @@ def test_an_empty_session_fails():
 def test_a_released_curated_protocol_without_a_coach_sign_off_fails():
     # Arrange
     curated = replace(BEGINNER_LINEAR, released=True, coach_sign_off=None)
+
+    # Act / Assert
+    assert "missing_sign_off" in _codes(curated)
+
+
+@pytest.mark.parametrize("curated", CURATED_PROTOCOLS, ids=lambda p: p.identifier)
+def test_every_shipped_curated_protocol_is_released_with_a_named_sign_off(curated):
+    # Assert — the review for issue #694 approved all four programs
+    assert curated.released is True
+    assert curated.coach_sign_off == CoachSignOff(
+        reviewer="Pierrick Martino", signed_on=date(2026, 10, 13)
+    )
+
+
+@pytest.mark.parametrize("reviewer", ["", "   "])
+def test_a_sign_off_without_a_reviewer_name_fails(reviewer):
+    # Arrange
+    curated = replace(
+        BEGINNER_LINEAR,
+        released=True,
+        coach_sign_off=CoachSignOff(reviewer=reviewer, signed_on=date(2026, 10, 1)),
+    )
 
     # Act / Assert
     assert "missing_sign_off" in _codes(curated)

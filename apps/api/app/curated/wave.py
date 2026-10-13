@@ -12,12 +12,14 @@ steps them (ADR-0064). The increment is therefore blind to whether the user hit 
 the description says so and points to Calibrate (ADR-0111). Accessories use Double Progression
 at a qualitative Load, as in the other Curated Protocols, and do not wave.
 
-Ships **unreleased** (no coach sign-off yet): it is neither listed nor adoptable until a coach
-has reviewed it and the sign-off is recorded here (issue #682, ticket 12)."""
+Released with the sign-off from its review (issue #694), recorded below."""
 
 from __future__ import annotations
 
+from datetime import date
+
 from app.curated.model import (
+    CoachSignOff,
     CuratedProtocol,
     MainLift,
     PatternPrescription,
@@ -160,6 +162,8 @@ WAVE = CuratedProtocol(
         ),
     ),
     wave=WAVE_CYCLE,
+    coach_sign_off=CoachSignOff(reviewer="Pierrick Martino", signed_on=date(2026, 10, 13)),
+    released=True,
 )
 
 

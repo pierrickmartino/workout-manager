@@ -4,12 +4,14 @@ Three full-body barbell Sessions a week. The four main lifts run on Greyskull-st
 weight goes up after every Session in which every set reaches its rep floor, and drops back
 after a miss. Accessories use qualitative Loads under Double Progression.
 
-Ships **unreleased** (no coach sign-off yet): it is neither listed nor adoptable until a coach
-has reviewed it and the sign-off is recorded here (issue #682, ticket 12)."""
+Released with the sign-off from its review (issue #694), recorded below."""
 
 from __future__ import annotations
 
+from datetime import date
+
 from app.curated.model import (
+    CoachSignOff,
     CuratedProtocol,
     MainLift,
     PatternPrescription,
@@ -97,6 +99,8 @@ BEGINNER_LINEAR = CuratedProtocol(
             ),
         ),
     ),
+    coach_sign_off=CoachSignOff(reviewer="Pierrick Martino", signed_on=date(2026, 10, 13)),
+    released=True,
 )
 
 
