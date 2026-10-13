@@ -249,9 +249,25 @@ def test_a_released_curated_protocol_without_a_coach_sign_off_fails():
     assert "missing_sign_off" in _codes(curated)
 
 
-@pytest.mark.parametrize("curated", CURATED_PROTOCOLS, ids=lambda p: p.identifier)
-def test_every_shipped_curated_protocol_is_released_with_a_named_sign_off(curated):
-    # Assert — the review for issue #694 approved all four programs
+# The four programs the review for issue #694 approved; later content ships unreleased until its
+# own sign-off is recorded.
+REVIEWED_IN_694 = (
+    "beginner-linear-progression",
+    "push-pull-legs",
+    "tiered-linear-progression",
+    "four-week-strength-waves",
+)
+REVIEWED = [p for p in CURATED_PROTOCOLS if p.identifier in REVIEWED_IN_694]
+
+
+def test_every_program_reviewed_in_694_is_still_shipped():
+    # Assert — a renamed identifier must not silently drop out of the sign-off check below.
+    assert [p.identifier for p in REVIEWED] == list(REVIEWED_IN_694)
+
+
+@pytest.mark.parametrize("curated", REVIEWED, ids=lambda p: p.identifier)
+def test_every_curated_protocol_reviewed_in_694_is_released_with_a_named_sign_off(curated):
+    # Assert
     assert curated.released is True
     assert curated.coach_sign_off == CoachSignOff(
         reviewer="Pierrick Martino", signed_on=date(2026, 10, 13)
@@ -351,3 +367,49 @@ def test_a_cycle_increment_outside_a_wave_fails():
 
     # Act / Assert
     assert "invalid_cycle_increment" in _codes(curated)
+
+
+@pytest.mark.parametrize("training_type", ["running", "Cardio", ""])
+def test_a_session_overriding_the_training_type_outside_the_closed_set_fails(training_type):
+    # Arrange
+    first, *rest = BEGINNER_LINEAR.weekly_pattern
+    curated = replace(
+        BEGINNER_LINEAR,
+        weekly_pattern=(replace(first, training_type=training_type), *rest),
+    )
+
+    # Act / Assert
+    assert "unknown_training_type" in _codes(curated)
+
+
+def test_a_session_overriding_the_training_type_inside_the_closed_set_passes():
+    # Arrange
+    first, *rest = BEGINNER_LINEAR.weekly_pattern
+    curated = replace(
+        BEGINNER_LINEAR,
+        weekly_pattern=(replace(first, training_type="cardio"), *rest),
+    )
+
+    # Act / Assert
+    assert integrity_errors(curated) == []
+
+
+def test_a_curated_protocol_training_type_outside_the_closed_set_fails():
+    # Arrange
+    curated = replace(BEGINNER_LINEAR, training_type="powerlifting")
+
+    # Act / Assert
+    assert "unknown_training_type" in _codes(curated)
+
+
+@pytest.mark.parametrize("duration_minutes", [0, -10])
+def test_a_session_overriding_the_duration_with_a_non_positive_value_fails(duration_minutes):
+    # Arrange
+    first, *rest = BEGINNER_LINEAR.weekly_pattern
+    curated = replace(
+        BEGINNER_LINEAR,
+        weekly_pattern=(replace(first, duration_minutes=duration_minutes), *rest),
+    )
+
+    # Act / Assert
+    assert "invalid_duration" in _codes(curated)

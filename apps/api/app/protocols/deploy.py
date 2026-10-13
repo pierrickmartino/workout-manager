@@ -46,6 +46,7 @@ from app.repositories.profile_repository import ProfileRepository
 from app.repositories.protocol_repository import (
     DeploySessionSpec,
     ProtocolRepository,
+    ProtocolSessionView,
 )
 from app.repositories.session_repository import PrescriptionDraft
 
@@ -56,10 +57,28 @@ class _DeployPayload:
     ``payload`` (Module A stays payload-generic): the Session's title — sourced from
     the progress view for an edited existing Session, ``None`` for a fresh slot — and
     the validated draft Prescriptions. A typed carrier so the service reads
-    ``payload.title`` / ``payload.prescriptions`` rather than a positional tuple."""
+    ``payload.title`` / ``payload.prescriptions`` rather than a positional tuple. An
+    existing Session's Training Type and duration ride along the same way, so a Session
+    typed apart from its Protocol (ADR-0130 amendment) keeps its type through a deploy."""
 
     title: str | None
     prescriptions: list[DraftPrescription]
+    training_type: str | None = None
+    duration_minutes: int | None = None
+
+
+def _payload(
+    existing: ProtocolSessionView | None, prescriptions: list[DraftPrescription]
+) -> _DeployPayload:
+    """The payload for one desired Session: an edited existing Session keeps its title,
+    Training Type and duration; a fresh slot carries none, so it takes the Protocol's."""
+
+    return _DeployPayload(
+        title=existing.title if existing else None,
+        prescriptions=list(prescriptions),
+        training_type=existing.training_type if existing else None,
+        duration_minutes=existing.duration_minutes if existing else None,
+    )
 
 
 @dataclass(frozen=True)
@@ -85,7 +104,7 @@ def plan_deploy(
 ) -> DeployPlan | list[DeployError]:
     """Validate the desired tail and fold it into an enumerated ``DeployPlan``.
 
-    Reads the performed prefix, known-Session set, and per-Session titles off
+    Reads the performed prefix, known-Session set, and per-Session titles and types off
     ``progress`` — the projection already computed them, so nothing is re-derived.
     Returns the typed ``DeployError`` list when the draft is invalid (persist nothing),
     or a ``DeployPlan`` whose tail is re-enumerated after the frozen prefix. Pure: no
@@ -105,9 +124,7 @@ def plan_deploy(
     if errors:
         return errors
 
-    titles = {
-        session.session_id: session.title for session in progress.protocol.sessions
-    }
+    existing = {session.session_id: session for session in progress.protocol.sessions}
     prefix = [
         EnumeratedSession(
             session_id=session.session_id,
@@ -123,10 +140,7 @@ def plan_deploy(
             session_id=session.session_id,
             week=session.week,
             day=session.day,
-            payload=_DeployPayload(
-                title=titles.get(session.session_id),
-                prescriptions=list(session.prescriptions),
-            ),
+            payload=_payload(existing.get(session.session_id), session.prescriptions),
         )
         for session in draft.sessions
     ]
@@ -182,6 +196,8 @@ def _persist_spec(session: EnumeratedSession) -> DeploySessionSpec:
         week=session.week,
         day=session.day,
         title=payload.title,
+        training_type=payload.training_type,
+        duration_minutes=payload.duration_minutes,
         prescriptions=[
             PrescriptionDraft(
                 exercise_id=prescription.exercise_id,

@@ -79,6 +79,8 @@ def adopt_curated(
             week=planned.week,
             day=planned.day,
             title=planned.title,
+            training_type=planned.training_type,
+            duration_minutes=planned.duration_minutes,
             prescriptions=[
                 p.to_draft(ids[p.exercise]) for p in planned.prescriptions
             ],

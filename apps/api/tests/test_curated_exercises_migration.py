@@ -4,7 +4,8 @@ Runs 0046 end to end against a real SQLite database: every entry of its batch la
 ``curated`` Exercise with its details, a re-run never duplicates one, an entry someone created
 first is kept untouched, and the downgrade removes only the still-curated seed rows. 0049 seeds
 the push/pull/legs batch the same way, and only that batch (issue #691); 0050 seeds the tiered
-program's batch (issue #692)."""
+program's batch (issue #692). ``Running`` is in the manifest but owned by 0019, which seeds it
+before any batch runs, so the batch checks leave it out and one head check covers it."""
 
 from __future__ import annotations
 
@@ -32,6 +33,7 @@ BEFORE_PPL_SEED = "0048_curated_lineage"
 AT_PPL_SEED = "0049_seed_push_pull_legs_exercises"
 AT_TIERED_SEED = "0050_seed_tiered_exercises"
 BEFORE_TIERED_BATCHES = (*CURATED_EXERCISES_0046, *CURATED_EXERCISES_0049)
+BATCHES = (*BEFORE_TIERED_BATCHES, *CURATED_EXERCISES_0050)
 
 
 @pytest.fixture()
@@ -49,7 +51,7 @@ def _config() -> Config:
     return Config(str(API_ROOT / "alembic.ini"))
 
 
-def _curated_rows(url: str) -> dict:
+def _catalog_rows(url: str) -> dict:
     engine = create_engine(url)
     try:
         with engine.connect() as conn:
@@ -61,8 +63,14 @@ def _curated_rows(url: str) -> dict:
             ).all()
     finally:
         engine.dispose()
-    manifest = {normalize_name(item.name) for item in CURATED_EXERCISES}
-    return {row.normalized_name: row for row in rows if row.normalized_name in manifest}
+    return {row.normalized_name: row for row in rows}
+
+
+def _curated_rows(url: str) -> dict:
+    """The rows of the entries the batch migrations seed."""
+
+    batches = {normalize_name(item.name) for item in BATCHES}
+    return {key: row for key, row in _catalog_rows(url).items() if key in batches}
 
 
 def test_upgrade_seeds_every_manifest_entry_as_a_curated_exercise(sqlite_url):
@@ -184,7 +192,7 @@ def test_the_tiered_seed_adds_its_batch_as_curated_exercises(sqlite_url):
 
     # Assert
     rows = _curated_rows(sqlite_url)
-    assert set(rows) == {normalize_name(item.name) for item in CURATED_EXERCISES}
+    assert set(rows) == {normalize_name(item.name) for item in BATCHES}
     for item in CURATED_EXERCISES_0050:
         row = rows[normalize_name(item.name)]
         assert row.name == item.name
@@ -205,3 +213,13 @@ def test_the_tiered_downgrade_removes_only_its_batch(sqlite_url):
     assert set(_curated_rows(sqlite_url)) == {
         normalize_name(item.name) for item in BEFORE_TIERED_BATCHES
     }
+
+
+def test_at_head_every_manifest_entry_is_a_curated_exercise(sqlite_url):
+    # Act
+    command.upgrade(_config(), "head")
+
+    # Assert — including Running, which 0019 seeds rather than a batch
+    rows = _catalog_rows(sqlite_url)
+    for item in CURATED_EXERCISES:
+        assert rows[normalize_name(item.name)].provenance == "curated"

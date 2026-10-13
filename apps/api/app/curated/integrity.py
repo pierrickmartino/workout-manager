@@ -11,6 +11,8 @@ user. ``integrity_errors`` checks one Curated Protocol and returns every problem
 - each Prescription takes its Load from exactly one place: a declared main lift on that lift's
   own Exercise, or authored Load text;
 - the length bounds are valid (1 ≤ min ≤ max, within the Protocol shape bounds);
+- the Training Type, and any a Session overrides it with, is in the closed set, and a Session's
+  overriding duration is positive;
 - main lifts are declared, and each is trained somewhere in the weekly pattern;
 - a wave Curated Protocol waves every main lift, each with a positive per-cycle increment, and
   only a wave Curated Protocol waves anything or declares an increment (issue #693);
@@ -59,6 +61,10 @@ BRAND_MARKS: tuple[str, ...] = (
     "smolov",
     "sheiko",
 )
+
+# The closed Training Type set (GLOSSARY 'Training Type'): a Curated Protocol, and any Session
+# typed apart from it, is typed by one of these, never an invented kind.
+TRAINING_TYPES: frozenset[str] = frozenset({"strength", "cardio", "hiit", "yoga", "mobility"})
 
 
 @dataclass(frozen=True)
@@ -112,6 +118,32 @@ def _shape_errors(curated: CuratedProtocol) -> list[IntegrityError]:
                 "A released Curated Protocol needs a recorded sign-off naming its reviewer.",
             )
         )
+    return errors
+
+
+def _session_kind_errors(curated: CuratedProtocol) -> list[IntegrityError]:
+    errors = [
+        IntegrityError(
+            "unknown_training_type",
+            f"{where}: '{training_type}' is not a Training Type.",
+        )
+        for where, training_type in (
+            ("The Curated Protocol", curated.training_type),
+            *(
+                (f"Day {day}", session.training_type)
+                for day, session in enumerate(curated.weekly_pattern, start=1)
+                if session.training_type is not None
+            ),
+        )
+        if training_type not in TRAINING_TYPES
+    ]
+    errors.extend(
+        IntegrityError(
+            "invalid_duration", f"Day {day}: a duration must be a positive number of minutes."
+        )
+        for day, session in enumerate(curated.weekly_pattern, start=1)
+        if session.duration_minutes is not None and session.duration_minutes <= 0
+    )
     return errors
 
 
@@ -278,6 +310,7 @@ def integrity_errors(curated: CuratedProtocol) -> list[IntegrityError]:
     return [
         *_shape_errors(curated),
         *_brand_errors(curated),
+        *_session_kind_errors(curated),
         *_main_lift_errors(curated),
         *_wave_errors(curated),
         *_prescription_errors(curated),
@@ -285,4 +318,4 @@ def integrity_errors(curated: CuratedProtocol) -> list[IntegrityError]:
     ]
 
 
-__all__ = ["BRAND_MARKS", "IntegrityError", "integrity_errors"]
+__all__ = ["BRAND_MARKS", "TRAINING_TYPES", "IntegrityError", "integrity_errors"]

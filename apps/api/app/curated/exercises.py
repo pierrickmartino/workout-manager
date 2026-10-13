@@ -183,7 +183,22 @@ CURATED_EXERCISES_0050: tuple[CuratedExercise, ...] = (
     ),
 )
 
+# Already seeded by ``0019_seed_common_movements`` (``app.db.seed_movements``), which every later
+# migration runs after, so no batch migration adds it: listed only so the integrity gate and the
+# test catalog see it. Mirrors that row's muscles and guidance; the strength and running program
+# names it.
+CURATED_EXERCISES_0019: tuple[CuratedExercise, ...] = (
+    CuratedExercise(
+        "Running",
+        "A run, outdoors or on a treadmill.",
+        ("quadriceps", "hamstrings", "glutes", "calves"),
+        (),
+        "Run at a steady, sustainable pace.",
+    ),
+)
+
 CURATED_EXERCISES: tuple[CuratedExercise, ...] = (
+    *CURATED_EXERCISES_0019,
     *CURATED_EXERCISES_0046,
     *CURATED_EXERCISES_0049,
     *CURATED_EXERCISES_0050,
@@ -193,6 +208,7 @@ CURATED_EXERCISES: tuple[CuratedExercise, ...] = (
 __all__ = [
     "CuratedExercise",
     "CURATED_EXERCISES",
+    "CURATED_EXERCISES_0019",
     "CURATED_EXERCISES_0046",
     "CURATED_EXERCISES_0049",
     "CURATED_EXERCISES_0050",

@@ -61,6 +61,10 @@ class ProtocolSessionDraft:
     day: int
     prescriptions: list[PrescriptionDraft] = field(default_factory=list)
     title: str | None = None
+    # A Session typed or timed apart from its Protocol (a hybrid Curated Protocol's run day,
+    # ADR-0130 amendment); ``None`` falls back to the Protocol's value.
+    training_type: str | None = None
+    duration_minutes: int | None = None
 
 
 @dataclass(frozen=True)
@@ -75,6 +79,10 @@ class DeploySessionSpec:
     day: int
     prescriptions: list[PrescriptionDraft] = field(default_factory=list)
     title: str | None = None
+    # Carried through for an edited existing Session like ``title``; ``None`` (a fresh slot)
+    # falls back to the Protocol's value.
+    training_type: str | None = None
+    duration_minutes: int | None = None
 
 
 @dataclass(frozen=True)
@@ -146,6 +154,10 @@ class ProtocolSessionView:
     day: int
     title: str | None
     prescriptions: list[PrescriptionView]
+    # The Session's own Training Type and duration as stored; a Session may differ from its
+    # Protocol (ADR-0130 amendment). ``None`` only on a view built without a row.
+    training_type: str | None = None
+    duration_minutes: int | None = None
 
 
 @dataclass(frozen=True)
@@ -297,6 +309,8 @@ class SqlProtocolRepository:
             day=workout.day,
             title=workout.title,
             prescriptions=views,
+            training_type=workout.training_type,
+            duration_minutes=workout.duration_minutes,
         )
 
     def _view(self, protocol: Protocol) -> ProtocolView:
@@ -345,8 +359,8 @@ class SqlProtocolRepository:
         for position, session_draft in enumerate(draft.sessions):
             workout = WorkoutSession(
                 clerk_user_id=clerk_user_id,
-                training_type=draft.training_type,
-                duration_minutes=draft.duration_minutes,
+                training_type=session_draft.training_type or draft.training_type,
+                duration_minutes=session_draft.duration_minutes or draft.duration_minutes,
                 # Author stamped with the adopting/deploying user (GLOSSARY: Author, #395):
                 # a Protocol-member Session attributes to whoever created it here.
                 author_clerk_user_id=clerk_user_id,
@@ -483,8 +497,8 @@ class SqlProtocolRepository:
         for spec in tail:
             workout = WorkoutSession(
                 clerk_user_id=clerk_user_id,
-                training_type=protocol.training_type,
-                duration_minutes=protocol.duration_minutes,
+                training_type=spec.training_type or protocol.training_type,
+                duration_minutes=spec.duration_minutes or protocol.duration_minutes,
                 # Author stamped with the adopting/deploying user (GLOSSARY: Author, #395):
                 # a Protocol-member Session attributes to whoever created it here.
                 author_clerk_user_id=clerk_user_id,
@@ -568,6 +582,8 @@ class InMemoryProtocolRepository:
             day=workout.day,
             title=workout.title,
             prescriptions=views,
+            training_type=workout.training_type,
+            duration_minutes=workout.duration_minutes,
         )
 
     def _view(self, protocol: Protocol) -> ProtocolView:
@@ -615,8 +631,8 @@ class InMemoryProtocolRepository:
             workout = WorkoutSession(
                 id=self._next_session_id,
                 clerk_user_id=clerk_user_id,
-                training_type=draft.training_type,
-                duration_minutes=draft.duration_minutes,
+                training_type=session_draft.training_type or draft.training_type,
+                duration_minutes=session_draft.duration_minutes or draft.duration_minutes,
                 # Author stamped with the adopting/deploying user (GLOSSARY: Author, #395):
                 # a Protocol-member Session attributes to whoever created it here.
                 author_clerk_user_id=clerk_user_id,
@@ -717,8 +733,8 @@ class InMemoryProtocolRepository:
             workout = WorkoutSession(
                 id=self._next_session_id,
                 clerk_user_id=clerk_user_id,
-                training_type=protocol.training_type,
-                duration_minutes=protocol.duration_minutes,
+                training_type=spec.training_type or protocol.training_type,
+                duration_minutes=spec.duration_minutes or protocol.duration_minutes,
                 # Author stamped with the adopting/deploying user (GLOSSARY: Author, #395):
                 # a Protocol-member Session attributes to whoever created it here.
                 author_clerk_user_id=clerk_user_id,

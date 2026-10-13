@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from app.curated.beginner_linear import BEGINNER_LINEAR
 from app.curated.model import CuratedProtocol
 from app.curated.push_pull_legs import PUSH_PULL_LEGS
+from app.curated.strength_running import STRENGTH_RUNNING
 from app.curated.tiered import TIERED
 from app.curated.wave import WAVE
 
@@ -19,6 +20,7 @@ CURATED_PROTOCOLS: tuple[CuratedProtocol, ...] = (
     PUSH_PULL_LEGS,
     TIERED,
     WAVE,
+    STRENGTH_RUNNING,
 )
 
 
