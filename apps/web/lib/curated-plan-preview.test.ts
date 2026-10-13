@@ -108,6 +108,7 @@ const DEFAULTS: AdoptFormDefaults = {
       initialKg: 20,
       source: "default",
       hint: "Starting weight in kg",
+      reps: null,
     },
     {
       key: "deadlift",
@@ -116,6 +117,7 @@ const DEFAULTS: AdoptFormDefaults = {
       initialKg: 40,
       source: "default",
       hint: "Starting weight in kg",
+      reps: null,
     },
   ],
 };
@@ -232,4 +234,60 @@ test("the page previews the untouched form’s defaults before the user edits an
 
   // Assert
   assert.deepEqual(request, { weeks: 4, starting_weights_kg: { squat: 20, deadlift: 40 } });
+});
+
+// --- Wave Curated Protocol: a working set per main lift (issue #693) ---------------------
+
+const REPS_HINT = "Reps done at that weight, 1 to 12";
+const WAVE_DEFAULTS: AdoptFormDefaults = {
+  weeks: 4,
+  weekOptions: [4, 5, 6, 7, 8],
+  lifts: [
+    {
+      key: "squat",
+      name: "weight_squat",
+      label: "Barbell Back Squat",
+      initialKg: 82.5,
+      source: "records",
+      hint: "Recent working set: weight in kg",
+      reps: { name: "reps_squat", label: "Reps", initial: 5, hint: REPS_HINT },
+    },
+  ],
+};
+
+test("a wave form previews its untouched working sets before the user edits anything", () => {
+  // Act
+  const request = defaultPreviewRequest(WAVE_DEFAULTS);
+
+  // Assert
+  assert.deepEqual(request, { weeks: 4, working_sets: { squat: { kg: 82.5, reps: 5 } } });
+});
+
+test("a wave form's snapshot holds each working set's weight and reps", () => {
+  // Act
+  const untouched = defaultFormSnapshot(WAVE_DEFAULTS);
+  const read = adoptFormSnapshot(
+    WAVE_DEFAULTS,
+    formOf({ weeks: "4", weight_squat: "82.5", reps_squat: "5" }),
+  );
+
+  // Assert
+  assert.deepEqual(untouched, { weeks: 4, weight_squat: 82.5, reps_squat: 5 });
+  assert.deepEqual(read, untouched);
+});
+
+test("editing a working set's reps after previewing makes the preview stale", () => {
+  // Arrange
+  const preview = {
+    snapshot: defaultFormSnapshot(WAVE_DEFAULTS),
+    plan: curatedPlanView(PREVIEW),
+  };
+  const edited = formOf({ weeks: "4", weight_squat: "82.5", reps_squat: "3" });
+
+  // Act
+  const controls = previewControls(preview, adoptFormSnapshot(WAVE_DEFAULTS, edited));
+
+  // Assert
+  assert.equal(controls.status, "stale");
+  assert.equal(controls.canAdopt, false);
 });

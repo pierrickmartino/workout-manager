@@ -82,12 +82,14 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // `curated-adopt` join them with #684: the new-Protocol peer choice over the Curated Protocol
 // picker, and the adopt form's length and four starting-weight fields; #685 adds the previewed
 // plan under that form. `based-on` joins them with #688: the "Based on <name>" line under an
-// adopted Curated Protocol's title, whose name is authored content.
+// adopted Curated Protocol's title, whose name is authored content. `curated-wave-adopt` joins
+// them with #693: the wave program's adopt form puts each lift's working-set weight and reps
+// side by side in a row.
 const NOVEL_JOURNEYS = [
   "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc", "launchpad",
   "levels", "sheet", "protocols", "protocols-live", "set-aside", "passport", "passport-open",
   "passport-empty", "stamp", "stamp-locked", "stamp-record", "curated", "curated-adopt",
-  "based-on",
+  "based-on", "curated-wave-adopt",
 ];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and

@@ -10,6 +10,7 @@
 import type {
   AdoptCuratedProtocolRequest,
   AdoptFormDefaults,
+  AdoptLiftField,
 } from "./curated-protocol-view.ts";
 import { formatLoad, type Load } from "./load.ts";
 import type { Quantity } from "./quantity.ts";
@@ -110,8 +111,14 @@ function inputNumber(raw: FormDataEntryValue | null): number {
   return text === "" ? Number.NaN : Number(text);
 }
 
+// Every input of a lift: its weight and, for a working set, its reps (issue #693).
+function liftInputs(lift: AdoptLiftField): [name: string, initial: number][] {
+  const weight: [string, number] = [lift.name, lift.initialKg];
+  return lift.reps === null ? [weight] : [weight, [lift.reps.name, lift.reps.initial]];
+}
+
 function snapshotFields(defaults: AdoptFormDefaults): string[] {
-  return ["weeks", ...defaults.lifts.map((lift) => lift.name)];
+  return ["weeks", ...defaults.lifts.flatMap((lift) => liftInputs(lift).map(([name]) => name))];
 }
 
 export function adoptFormSnapshot(
@@ -127,12 +134,19 @@ export function adoptFormSnapshot(
 export function defaultFormSnapshot(defaults: AdoptFormDefaults): AdoptFormSnapshot {
   return {
     weeks: defaults.weeks,
-    ...Object.fromEntries(defaults.lifts.map((lift) => [lift.name, lift.initialKg])),
+    ...Object.fromEntries(defaults.lifts.flatMap(liftInputs)),
   };
 }
 
-// The preview request for the untouched form: the shortest length and the prefilled weights.
+// The preview request for the untouched form: the shortest length and the prefilled inputs,
+// a starting weight per lift or, for a wave Curated Protocol, a working set.
 export function defaultPreviewRequest(defaults: AdoptFormDefaults): AdoptCuratedProtocolRequest {
+  const workingSets = defaults.lifts.flatMap((lift) =>
+    lift.reps === null ? [] : [[lift.key, { kg: lift.initialKg, reps: lift.reps.initial }]],
+  );
+  if (workingSets.length > 0) {
+    return { weeks: defaults.weeks, working_sets: Object.fromEntries(workingSets) };
+  }
   return {
     weeks: defaults.weeks,
     starting_weights_kg: Object.fromEntries(

@@ -373,6 +373,7 @@ const auditCuratedProtocol: CuratedProtocolSummary = {
   min_weeks: 4,
   max_weeks: 12,
   required_equipment: ["barbell", "rack", "bench", "dumbbell"],
+  main_lift_input: "starting_weight",
   missing_equipment: ["barbell", "rack", "bench", "dumbbell"],
   // The squat is prefilled from records (#686), so the longest weight hint is on screen.
   main_lifts: [
@@ -429,6 +430,13 @@ const auditCuratedPreview = {
   }),
 };
 
+// The same Curated Protocol asking for a working set per main lift, as the wave program does
+// (#693): each lift's weight and reps share a row, under the lift's name.
+const auditWaveCuratedProtocol: CuratedProtocolSummary = {
+  ...auditCuratedProtocol,
+  main_lift_input: "working_set",
+};
+
 function Content() {
   switch (journey) {
     case "charts": return <ChartAccessibilityFixture />;
@@ -440,6 +448,7 @@ function Content() {
     // The new-Protocol peer choice over the Curated Protocol picker (#684).
     case "curated": return <><NewProtocolChoices choices={newProtocolChoices("curated", { hasCuratedProtocols: true })} /><CuratedProtocolPicker rows={count === 0 ? [] : [curatedProtocolRow(auditCuratedProtocol)]} /></>;
     case "curated-adopt": return <CuratedAdoptForm identifier={auditCuratedProtocol.identifier} defaults={adoptFormDefaults(auditCuratedProtocol)} initialPreview={auditCuratedPreview} caveat={curatedCaveat(auditCuratedProtocol)} />;
+    case "curated-wave-adopt": return <CuratedAdoptForm identifier={auditWaveCuratedProtocol.identifier} defaults={adoptFormDefaults(auditWaveCuratedProtocol)} initialPreview={null} caveat={null} />;
     // With the note a Curated Protocol adopted set aside lands on (#687), naming the set-aside row.
     case "protocols": {
       const notice = count === 0 ? null : curatedSetAsideNotice("2", protocolIndexEntries);

@@ -8,7 +8,13 @@ import {
   type AdoptCuratedProtocolState,
   type PreviewCuratedProtocolState,
 } from "@/app/protocols/actions";
-import type { AdoptFormDefaults, CuratedCaveat } from "@/lib/curated-protocol-view";
+import {
+  MAX_WORKING_SET_REPS,
+  MIN_WORKING_SET_REPS,
+  type AdoptFormDefaults,
+  type AdoptLiftField,
+  type CuratedCaveat,
+} from "@/lib/curated-protocol-view";
 import {
   adoptFormSnapshot,
   defaultFormSnapshot,
@@ -16,7 +22,8 @@ import {
   type CuratedPreview,
 } from "@/lib/curated-plan-preview";
 import { CuratedPlanPreview } from "@/components/CuratedPlanPreview";
-import { Field } from "@/components/pulse/field";
+import { Field, FieldGroup } from "@/components/pulse/field";
+import { FIELD_WIDTH, FieldRow } from "@/components/pulse/field-row";
 import { Alert } from "@/components/pulse/alert";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -35,7 +42,8 @@ interface CuratedAdoptFormProps {
 const ADOPT_NOTICE_ID = "curated-adopt-notice";
 
 // The adopt form for one Curated Protocol (issues #684, #685): a length within the Curated
-// Protocol's range and a starting weight per main lift, prefilled from the user's Estimated 1RM
+// Protocol's range and a starting weight per main lift (a recent working set, weight and reps,
+// for a wave Curated Protocol, issue #693), prefilled from the user's Estimated 1RM
 // where they have one and with conservative defaults otherwise (issue #686), and the fully
 // enumerated plan those inputs would write. Editing an input makes the shown plan stale and
 // holds Adopt back until the user previews again, so what is adopted is what was seen. The API
@@ -107,17 +115,7 @@ export function CuratedAdoptForm({
         </Field>
 
         {defaults.lifts.map((lift) => (
-          <Field key={lift.key} label={lift.label} hint={lift.hint}>
-            <Input
-              name={lift.name}
-              type="number"
-              step="any"
-              min={0}
-              required
-              spellCheck={false}
-              defaultValue={lift.initialKg}
-            />
-          </Field>
+          <LiftInput key={lift.key} lift={lift} />
         ))}
 
         <div className="flex flex-col gap-3">
@@ -146,5 +144,39 @@ export function CuratedAdoptForm({
 
       {previewState.preview ? <CuratedPlanPreview plan={previewState.preview.plan} /> : null}
     </div>
+  );
+}
+
+// One main lift's input: a starting weight, or a working set's weight and reps grouped under
+// the lift's name, so each control's own label stays short and the group names the lift.
+function LiftInput({ lift }: { lift: AdoptLiftField }): React.JSX.Element {
+  const weight = { name: lift.name, defaultValue: lift.initialKg };
+  if (lift.reps === null) {
+    return (
+      <Field label={lift.label} hint={lift.hint}>
+        <Input {...weight} type="number" step="any" min={0} required spellCheck={false} />
+      </Field>
+    );
+  }
+  return (
+    <FieldGroup label={lift.label}>
+      <FieldRow>
+        <Field label="Weight" hint={lift.hint} className={FIELD_WIDTH}>
+          <Input {...weight} type="number" step="any" min={0} required spellCheck={false} />
+        </Field>
+        <Field label={lift.reps.label} hint={lift.reps.hint} className={FIELD_WIDTH}>
+          <Input
+            name={lift.reps.name}
+            defaultValue={lift.reps.initial}
+            type="number"
+            step={1}
+            min={MIN_WORKING_SET_REPS}
+            max={MAX_WORKING_SET_REPS}
+            required
+            spellCheck={false}
+          />
+        </Field>
+      </FieldRow>
+    </FieldGroup>
   );
 }

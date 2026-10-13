@@ -13,8 +13,14 @@ import pytest
 
 from app.curated.beginner_linear import BEGINNER_LINEAR
 from app.curated.integrity import integrity_errors
-from app.curated.model import CoachSignOff, PatternPrescription, PatternSession
+from app.curated.model import (
+    CoachSignOff,
+    PatternPrescription,
+    PatternSession,
+    WavePrescription,
+)
 from app.curated.registry import CURATED_PROTOCOLS
+from app.curated.wave import WAVE
 from app.domain.progression import ProgressionScheme
 
 SIGN_OFF = CoachSignOff(
@@ -275,3 +281,53 @@ def test_a_description_carrying_a_third_party_brand_mark_fails():
 def test_curated_protocol_identifiers_are_unique():
     identifiers = [curated.identifier for curated in CURATED_PROTOCOLS]
     assert len(identifiers) == len(set(identifiers))
+
+
+# --- Wave content (issue #693) -----------------------------------------------------------
+
+
+def test_a_waved_main_lift_in_a_curated_protocol_without_a_wave_fails():
+    # Arrange — the beginner program declares no wave to take the dose from
+    curated = _with_extra_prescription(
+        BEGINNER_LINEAR, WavePrescription(exercise="Barbell Back Squat", main_lift="squat")
+    )
+
+    # Act / Assert
+    assert "wave_missing" in _codes(curated)
+
+
+def test_a_wave_main_lift_that_is_not_waved_fails():
+    # Arrange — a plain Prescription would skip the waves and deloads
+    curated = _with_extra_prescription(
+        WAVE,
+        PatternPrescription(
+            exercise="Barbell Back Squat",
+            sets=3,
+            reps="5",
+            scheme=ProgressionScheme.STATIC,
+            main_lift="squat",
+        ),
+    )
+
+    # Act / Assert
+    assert "main_lift_not_waved" in _codes(curated)
+
+
+def test_a_wave_main_lift_without_a_cycle_increment_fails():
+    # Arrange
+    squat, *rest = WAVE.main_lifts
+    curated = replace(WAVE, main_lifts=(replace(squat, cycle_increment_kg=None), *rest))
+
+    # Act / Assert
+    assert "invalid_cycle_increment" in _codes(curated)
+
+
+def test_a_cycle_increment_outside_a_wave_fails():
+    # Arrange
+    squat, *rest = BEGINNER_LINEAR.main_lifts
+    curated = replace(
+        BEGINNER_LINEAR, main_lifts=(replace(squat, cycle_increment_kg=5.0), *rest)
+    )
+
+    # Act / Assert
+    assert "invalid_cycle_increment" in _codes(curated)

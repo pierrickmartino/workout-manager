@@ -15,11 +15,11 @@ suggestion only — the user edits it, and adopt validates whatever is posted. P
 
 from __future__ import annotations
 
-import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Literal
 
+from app.curated.loading import LOADABLE_INCREMENT_KG, floor_to_loadable
 from app.curated.model import CuratedProtocol
 from app.curated.plan import MAX_STARTING_WEIGHT_KG
 from app.domain.exercise import normalize_name
@@ -33,10 +33,6 @@ from app.domain.personal_records import (
 # The share of an Estimated 1RM offered as a first working weight: inside the usual 70–75%
 # band, at its conservative end, so the first sessions of a linear progression leave room.
 WORKING_WEIGHT_FRACTION = 0.7
-# The smallest step a barbell can be loaded by: a pair of 1.25 kg plates.
-LOADABLE_INCREMENT_KG = 2.5
-# Absorbs float error so an exact multiple (0.7 × 125 = 87.5) never floors one step short.
-_ROUNDING_TOLERANCE = 1e-9
 
 PrefillSource = Literal["records", "default"]
 
@@ -68,10 +64,9 @@ def working_weight_kg(estimated_1rm: float) -> float:
     """The working-weight fraction of ``estimated_1rm``, rounded down to a loadable
     increment and capped at the adopt ceiling. ``0`` when not even one increment fits."""
 
-    steps = math.floor(
-        estimated_1rm * WORKING_WEIGHT_FRACTION / LOADABLE_INCREMENT_KG + _ROUNDING_TOLERANCE
+    return min(
+        floor_to_loadable(estimated_1rm * WORKING_WEIGHT_FRACTION), MAX_STARTING_WEIGHT_KG
     )
-    return min(steps * LOADABLE_INCREMENT_KG, MAX_STARTING_WEIGHT_KG)
 
 
 def starting_weight_prefills(

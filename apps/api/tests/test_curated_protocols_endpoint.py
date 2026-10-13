@@ -205,6 +205,7 @@ def test_a_list_row_describes_the_curated_protocol_and_its_main_lifts():
         "min_weeks": 4,
         "max_weeks": 12,
         "required_equipment": ["barbell", "rack", "bench", "dumbbell"],
+        "main_lift_input": "starting_weight",
         "main_lifts": [
             {
                 "key": "squat",
