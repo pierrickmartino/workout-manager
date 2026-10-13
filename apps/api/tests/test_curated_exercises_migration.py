@@ -3,7 +3,8 @@
 Runs 0046 end to end against a real SQLite database: every entry of its batch lands as a
 ``curated`` Exercise with its details, a re-run never duplicates one, an entry someone created
 first is kept untouched, and the downgrade removes only the still-curated seed rows. 0049 seeds
-the push/pull/legs batch the same way, and only that batch (issue #691)."""
+the push/pull/legs batch the same way, and only that batch (issue #691); 0050 seeds the tiered
+program's batch (issue #692)."""
 
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ from app.curated.exercises import (
     CURATED_EXERCISES,
     CURATED_EXERCISES_0046,
     CURATED_EXERCISES_0049,
+    CURATED_EXERCISES_0050,
 )
 from app.domain.exercise import normalize_name
 
@@ -28,6 +30,8 @@ BEFORE_SEED = "0045_protocol_made_current_at"
 AT_SEED = "0046_seed_curated_exercises"
 BEFORE_PPL_SEED = "0048_curated_lineage"
 AT_PPL_SEED = "0049_seed_push_pull_legs_exercises"
+AT_TIERED_SEED = "0050_seed_tiered_exercises"
+BEFORE_TIERED_BATCHES = (*CURATED_EXERCISES_0046, *CURATED_EXERCISES_0049)
 
 
 @pytest.fixture()
@@ -145,7 +149,9 @@ def test_the_push_pull_legs_seed_adds_its_batch_as_curated_exercises(sqlite_url)
     # Assert
     rows = _curated_rows(sqlite_url)
     assert before == {normalize_name(item.name) for item in CURATED_EXERCISES_0046}
-    assert set(rows) == {normalize_name(item.name) for item in CURATED_EXERCISES}
+    assert set(rows) == {
+        normalize_name(item.name) for item in BEFORE_TIERED_BATCHES
+    }
     for item in CURATED_EXERCISES_0049:
         row = rows[normalize_name(item.name)]
         assert row.name == item.name
@@ -165,4 +171,37 @@ def test_the_push_pull_legs_downgrade_removes_only_its_batch(sqlite_url):
     # Assert
     assert set(_curated_rows(sqlite_url)) == {
         normalize_name(item.name) for item in CURATED_EXERCISES_0046
+    }
+
+
+def test_the_tiered_seed_adds_its_batch_as_curated_exercises(sqlite_url):
+    # Arrange
+    config = _config()
+    command.upgrade(config, AT_PPL_SEED)
+
+    # Act
+    command.upgrade(config, AT_TIERED_SEED)
+
+    # Assert
+    rows = _curated_rows(sqlite_url)
+    assert set(rows) == {normalize_name(item.name) for item in CURATED_EXERCISES}
+    for item in CURATED_EXERCISES_0050:
+        row = rows[normalize_name(item.name)]
+        assert row.name == item.name
+        assert row.provenance == "curated"
+        assert json.loads(row.required_equipment) == list(item.required_equipment)
+        assert json.loads(row.instructions) == [item.guidance]
+
+
+def test_the_tiered_downgrade_removes_only_its_batch(sqlite_url):
+    # Arrange
+    config = _config()
+    command.upgrade(config, AT_TIERED_SEED)
+
+    # Act
+    command.downgrade(config, AT_PPL_SEED)
+
+    # Assert
+    assert set(_curated_rows(sqlite_url)) == {
+        normalize_name(item.name) for item in BEFORE_TIERED_BATCHES
     }

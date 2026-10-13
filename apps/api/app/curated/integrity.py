@@ -12,7 +12,7 @@ user. ``integrity_errors`` checks one Curated Protocol and returns every problem
   own Exercise, or authored Load text;
 - the length bounds are valid (1 ≤ min ≤ max, within the Protocol shape bounds);
 - main lifts are declared, and each is trained somewhere in the weekly pattern;
-- the name carries no third-party brand mark;
+- neither the name nor the description carries a third-party brand mark;
 - a released Curated Protocol has a recorded coach sign-off.
 
 Pure: no I/O. Exercises are checked against the manifest the migration seeds, not a database.
@@ -38,7 +38,7 @@ from app.protocols.deploy_validation import (
 
 # Third-party training-plan names (someone's mark) a Curated Protocol must not borrow. Lowercase;
 # matched as whole words. The Greyskull *scheme* keeps its descriptive internal name, but a
-# Curated Protocol's name never says it.
+# Curated Protocol's name and description never say it.
 BRAND_MARKS: tuple[str, ...] = (
     "starting strength",
     "stronglifts",
@@ -80,11 +80,11 @@ def _pattern_prescriptions(curated: CuratedProtocol) -> list[tuple[int, PatternP
 
 
 def _brand_errors(curated: CuratedProtocol) -> list[IntegrityError]:
-    name = curated.name.lower()
     return [
-        IntegrityError("brand_mark", f"The name '{curated.name}' uses the mark '{mark}'.")
+        IntegrityError("brand_mark", f"The {field} uses the mark '{mark}'.")
+        for field, text in (("name", curated.name), ("description", curated.description))
         for mark in BRAND_MARKS
-        if re.search(rf"(?<![\w/]){re.escape(mark)}(?![\w/])", name)
+        if re.search(rf"(?<![\w/]){re.escape(mark)}(?![\w/])", text.lower())
     ]
 
 
