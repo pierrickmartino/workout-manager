@@ -37,9 +37,10 @@ def test_every_shipped_curated_protocol_passes(curated):
     assert integrity_errors(curated) == []
 
 
-def test_the_real_content_also_passes_once_released_with_a_sign_off():
+@pytest.mark.parametrize("curated", CURATED_PROTOCOLS, ids=lambda p: p.identifier)
+def test_the_real_content_also_passes_once_released_with_a_sign_off(curated):
     # Arrange
-    released = replace(BEGINNER_LINEAR, released=True, coach_sign_off=SIGN_OFF)
+    released = replace(curated, released=True, coach_sign_off=SIGN_OFF)
 
     # Act / Assert
     assert integrity_errors(released) == []

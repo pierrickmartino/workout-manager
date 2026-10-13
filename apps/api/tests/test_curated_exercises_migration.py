@@ -1,8 +1,9 @@
 """Migration test for the curated Catalog Exercises Curated Protocols name (ADR-0130).
 
-Runs 0046 end to end against a real SQLite database: every manifest entry lands as a
+Runs 0046 end to end against a real SQLite database: every entry of its batch lands as a
 ``curated`` Exercise with its details, a re-run never duplicates one, an entry someone created
-first is kept untouched, and the downgrade removes only the still-curated seed rows."""
+first is kept untouched, and the downgrade removes only the still-curated seed rows. 0049 seeds
+the push/pull/legs batch the same way, and only that batch (issue #691)."""
 
 from __future__ import annotations
 
@@ -15,12 +16,18 @@ from alembic.config import Config
 from sqlalchemy import create_engine, text
 
 from app.config import get_settings
-from app.curated.exercises import CURATED_EXERCISES
+from app.curated.exercises import (
+    CURATED_EXERCISES,
+    CURATED_EXERCISES_0046,
+    CURATED_EXERCISES_0049,
+)
 from app.domain.exercise import normalize_name
 
 API_ROOT = Path(__file__).resolve().parents[1]
 BEFORE_SEED = "0045_protocol_made_current_at"
 AT_SEED = "0046_seed_curated_exercises"
+BEFORE_PPL_SEED = "0048_curated_lineage"
+AT_PPL_SEED = "0049_seed_push_pull_legs_exercises"
 
 
 @pytest.fixture()
@@ -60,7 +67,8 @@ def test_upgrade_seeds_every_manifest_entry_as_a_curated_exercise(sqlite_url):
 
     # Assert
     rows = _curated_rows(sqlite_url)
-    for item in CURATED_EXERCISES:
+    assert set(rows) == {normalize_name(item.name) for item in CURATED_EXERCISES_0046}
+    for item in CURATED_EXERCISES_0046:
         row = rows[normalize_name(item.name)]
         assert row.name == item.name
         assert row.provenance == "curated"
@@ -80,7 +88,7 @@ def test_rerunning_the_seed_is_idempotent(sqlite_url):
     command.upgrade(config, AT_SEED)
 
     # Assert
-    assert len(_curated_rows(sqlite_url)) == len(CURATED_EXERCISES)
+    assert len(_curated_rows(sqlite_url)) == len(CURATED_EXERCISES_0046)
 
 
 def test_an_existing_entry_is_kept_untouched(sqlite_url):
@@ -123,3 +131,38 @@ def test_downgrade_removes_the_seeded_rows(sqlite_url):
 
     # Assert
     assert _curated_rows(sqlite_url) == {}
+
+
+def test_the_push_pull_legs_seed_adds_its_batch_as_curated_exercises(sqlite_url):
+    # Arrange
+    config = _config()
+    command.upgrade(config, BEFORE_PPL_SEED)
+    before = set(_curated_rows(sqlite_url))
+
+    # Act
+    command.upgrade(config, AT_PPL_SEED)
+
+    # Assert
+    rows = _curated_rows(sqlite_url)
+    assert before == {normalize_name(item.name) for item in CURATED_EXERCISES_0046}
+    assert set(rows) == {normalize_name(item.name) for item in CURATED_EXERCISES}
+    for item in CURATED_EXERCISES_0049:
+        row = rows[normalize_name(item.name)]
+        assert row.name == item.name
+        assert row.provenance == "curated"
+        assert json.loads(row.required_equipment) == list(item.required_equipment)
+        assert json.loads(row.instructions) == [item.guidance]
+
+
+def test_the_push_pull_legs_downgrade_removes_only_its_batch(sqlite_url):
+    # Arrange
+    config = _config()
+    command.upgrade(config, AT_PPL_SEED)
+
+    # Act
+    command.downgrade(config, BEFORE_PPL_SEED)
+
+    # Assert
+    assert set(_curated_rows(sqlite_url)) == {
+        normalize_name(item.name) for item in CURATED_EXERCISES_0046
+    }

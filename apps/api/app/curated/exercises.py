@@ -1,12 +1,13 @@
 """The seeded ``curated`` Catalog Exercises every Curated Protocol names (ADR-0130).
 
 Adopting a Curated Protocol only *resolves* Exercises and never creates a Catalog row, so every
-Exercise a Curated Protocol names must already exist. This tuple is the seed manifest: migration
-``0046_seed_curated_exercises`` inserts each entry as a ``curated`` Exercise, and the
-content-integrity check fails the build if a Curated Protocol names anything outside it.
+Exercise a Curated Protocol names must already exist. ``CURATED_EXERCISES`` is the seed manifest:
+the content-integrity check fails the build if a Curated Protocol names anything outside it.
 
-Adding an Exercise here is not enough on an existing database, where 0046 has already run: a
-later Curated Protocol that names a new movement ships its own migration seeding the delta.
+The manifest is a sequence of batches, each seeded by exactly one migration as ``curated``
+Exercises. A batch is frozen once its migration has shipped, because an existing database never
+re-runs it: a Curated Protocol that names a new movement adds a new batch and a migration that
+seeds it.
 
 Muscle strings come from the Muscle Group vocabulary (``domain/muscle_groups.py``) and equipment
 strings from the canonical Equipment tokens (``domain/equipment.py``), so a seeded movement rolls
@@ -29,7 +30,8 @@ class CuratedExercise:
     guidance: str
 
 
-CURATED_EXERCISES: tuple[CuratedExercise, ...] = (
+# Seeded by ``0046_seed_curated_exercises``: the beginner linear progression's movements.
+CURATED_EXERCISES_0046: tuple[CuratedExercise, ...] = (
     CuratedExercise(
         "Barbell Back Squat",
         "A squat with the barbell across the upper back.",
@@ -82,4 +84,78 @@ CURATED_EXERCISES: tuple[CuratedExercise, ...] = (
 )
 
 
-__all__ = ["CuratedExercise", "CURATED_EXERCISES"]
+# Seeded by ``0049_seed_push_pull_legs_exercises``: the push/pull/legs movements not in 0046.
+CURATED_EXERCISES_0049: tuple[CuratedExercise, ...] = (
+    CuratedExercise(
+        "Barbell Row",
+        "A bent-over row of the barbell to the lower ribs.",
+        ("upper back", "lats", "biceps"),
+        ("barbell",),
+        "Hinge until your torso is close to horizontal, keep your back flat and pull the bar "
+        "to your lower ribs.",
+    ),
+    CuratedExercise(
+        "Incline Dumbbell Press",
+        "A press of two dumbbells from the upper chest on a bench set to a low incline.",
+        ("chest", "shoulders", "triceps"),
+        ("dumbbell", "bench"),
+        "Lower the dumbbells to the sides of your upper chest, then press them back up.",
+    ),
+    CuratedExercise(
+        "Cable Triceps Pushdown",
+        "A push of a cable handle down from chest height until the arms are straight.",
+        ("triceps",),
+        ("cable",),
+        "Keep your elbows pinned to your sides and move only your forearms.",
+    ),
+    CuratedExercise(
+        "Lat Pulldown",
+        "A seated pull of a cable bar down to the upper chest.",
+        ("lats", "upper back", "biceps"),
+        ("cable",),
+        "Keep your chest up, pull the bar to your upper chest, then let it rise under control.",
+    ),
+    CuratedExercise(
+        "Face Pull",
+        "A pull of a cable rope toward the face with the elbows high.",
+        ("rear delts", "upper back"),
+        ("cable",),
+        "Pull the rope toward your forehead and pull its ends apart as it arrives.",
+    ),
+    CuratedExercise(
+        "Dumbbell Romanian Deadlift",
+        "A hip hinge holding a dumbbell in each hand, knees slightly bent.",
+        ("hamstrings", "glutes", "lower back"),
+        ("dumbbell",),
+        "Push your hips back and slide the dumbbells down your legs until your hamstrings "
+        "stretch, keeping your back flat, then stand up.",
+    ),
+    CuratedExercise(
+        "Dumbbell Split Squat",
+        "A split-stance squat holding a dumbbell in each hand.",
+        ("quadriceps", "glutes"),
+        ("dumbbell",),
+        "Lower your back knee toward the floor and stand back up; do every rep on one leg, "
+        "then switch.",
+    ),
+    CuratedExercise(
+        "Dumbbell Calf Raise",
+        "A standing rise onto the balls of the feet holding dumbbells.",
+        ("calves",),
+        ("dumbbell",),
+        "Rise as high as you can, pause, and lower your heels slowly.",
+    ),
+)
+
+CURATED_EXERCISES: tuple[CuratedExercise, ...] = (
+    *CURATED_EXERCISES_0046,
+    *CURATED_EXERCISES_0049,
+)
+
+
+__all__ = [
+    "CuratedExercise",
+    "CURATED_EXERCISES",
+    "CURATED_EXERCISES_0046",
+    "CURATED_EXERCISES_0049",
+]
