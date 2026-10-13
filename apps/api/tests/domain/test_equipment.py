@@ -12,6 +12,7 @@ from app.domain.equipment import (
     Equipment,
     canonical_equipment,
     classify_equipment,
+    missing_equipment,
     normalize_stored_equipment,
 )
 
@@ -102,3 +103,31 @@ class TestNormalizeStoredEquipment:
     def test_blanks_dropped_and_first_seen_order_preserved(self) -> None:
         normalized = normalize_stored_equipment(["  ", "Dumbbells", "", "cable"])
         assert normalized.values == ["dumbbell", "cable"]
+
+
+class TestMissingEquipment:
+    def test_required_kit_the_user_lacks_is_missing_in_required_order(self) -> None:
+        # Act
+        missing = missing_equipment(("barbell", "rack", "bench"), ["Bench"])
+        # Assert
+        assert missing == ("barbell", "rack")
+
+    def test_kit_matches_through_its_canonical_equipment(self) -> None:
+        # Act — free-text plurals and product-ish names still read as the required kit
+        missing = missing_equipment(("barbell", "rack"), ["Barbells", "Power Rack"])
+        # Assert
+        assert missing == ()
+
+    def test_no_available_equipment_lacks_everything_required(self) -> None:
+        assert missing_equipment(("barbell", "dumbbell"), []) == ("barbell", "dumbbell")
+
+    def test_bodyweight_is_never_missing(self) -> None:
+        assert missing_equipment(("bodyweight",), []) == ()
+
+    def test_unmapped_required_kit_matches_only_the_same_string(self) -> None:
+        # Act — two different novel kits both fall to Other, which is no match
+        missing = missing_equipment(
+            ("Sled", "Yoke"), ["sled", "Atletica R8 Combat"]
+        )
+        # Assert
+        assert missing == ("Yoke",)

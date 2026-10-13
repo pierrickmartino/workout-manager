@@ -275,11 +275,39 @@ def normalize_stored_equipment(values: Iterable[str]) -> NormalizedEquipment:
     return NormalizedEquipment(values=stored, unmapped=unmapped)
 
 
+def _match_key(equipment: str) -> Equipment | str:
+    """What two equipment strings must share to name the same Equipment: their canonical
+    Equipment, or, for a string no alias claims, its normalized text — two novel strings that
+    both fall to ``OTHER`` do not thereby name the same thing."""
+
+    bucket = classify_equipment(equipment)
+    return _normalize(equipment) if bucket is Equipment.OTHER else bucket
+
+
+def missing_equipment(
+    required: Iterable[str], available: Iterable[str]
+) -> tuple[str, ...]:
+    """The ``required`` equipment ``available`` doesn't cover, in required order (ADR-0130).
+
+    Both sides are free text read through the canonical vocabulary, so "Barbells" covers a
+    required ``barbell``. Bodyweight needs no equipment, so it is never missing. Pure: the caller
+    decides which list is the user's Available Equipment (ADR-0038)."""
+
+    covered = {_match_key(value) for value in available if value.strip()}
+    return tuple(
+        item
+        for item in required
+        if classify_equipment(item) is not Equipment.BODYWEIGHT
+        and _match_key(item) not in covered
+    )
+
+
 __all__ = [
     "Equipment",
     "EQUIPMENT_ORDER",
     "NormalizedEquipment",
     "classify_equipment",
     "canonical_equipment",
+    "missing_equipment",
     "normalize_stored_equipment",
 ]

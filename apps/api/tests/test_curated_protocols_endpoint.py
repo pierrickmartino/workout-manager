@@ -232,6 +232,8 @@ def test_a_list_row_describes_the_curated_protocol_and_its_main_lifts():
             },
         ],
         "sensitive_constraint_caveat": False,
+        # A user with no equipment set lacks it all, as a generation reads them (ADR-0038).
+        "missing_equipment": ["barbell", "rack", "bench", "dumbbell"],
     }
 
 
