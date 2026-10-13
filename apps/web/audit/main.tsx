@@ -373,6 +373,7 @@ const auditCuratedProtocol: CuratedProtocolSummary = {
   min_weeks: 4,
   max_weeks: 12,
   required_equipment: ["barbell", "rack", "bench", "dumbbell"],
+  main_lift_input: "starting_weight",
   missing_equipment: ["barbell", "rack", "bench", "dumbbell"],
   // The squat is prefilled from records (#686), so the longest weight hint is on screen.
   main_lifts: [
@@ -381,24 +382,28 @@ const auditCuratedProtocol: CuratedProtocolSummary = {
       exercise_name: "Barbell Back Squat",
       default_starting_weight_kg: 20,
       starting_weight_prefill: { kg: 82.5, source: "records" },
+      working_set_prefill: null,
     },
     {
       key: "bench",
       exercise_name: "Barbell Bench Press",
       default_starting_weight_kg: 20,
       starting_weight_prefill: { kg: 20, source: "default" },
+      working_set_prefill: null,
     },
     {
       key: "press",
       exercise_name: "Barbell Overhead Press",
       default_starting_weight_kg: 20,
       starting_weight_prefill: { kg: 20, source: "default" },
+      working_set_prefill: null,
     },
     {
       key: "deadlift",
       exercise_name: "Barbell Deadlift",
       default_starting_weight_kg: 40,
       starting_weight_prefill: { kg: 40, source: "default" },
+      working_set_prefill: null,
     },
   ],
   sensitive_constraint_caveat: true,
@@ -429,6 +434,21 @@ const auditCuratedPreview = {
   }),
 };
 
+// The same Curated Protocol asking for a working set per main lift, as the wave Curated Protocol
+// does (#693): each lift's weight and reps share a row, under the lift's name. The squat's
+// working set comes from records, so the longest weight hint is on screen.
+const auditWaveCuratedProtocol: CuratedProtocolSummary = {
+  ...auditCuratedProtocol,
+  main_lift_input: "working_set",
+  main_lifts: auditCuratedProtocol.main_lifts.map((lift, index) => ({
+    ...lift,
+    working_set_prefill:
+      index === 0
+        ? { kg: 102.5, reps: 12, source: "records" }
+        : { kg: lift.default_starting_weight_kg, reps: 5, source: "default" },
+  })),
+};
+
 function Content() {
   switch (journey) {
     case "charts": return <ChartAccessibilityFixture />;
@@ -440,6 +460,7 @@ function Content() {
     // The new-Protocol peer choice over the Curated Protocol picker (#684).
     case "curated": return <><NewProtocolChoices choices={newProtocolChoices("curated", { hasCuratedProtocols: true })} /><CuratedProtocolPicker rows={count === 0 ? [] : [curatedProtocolRow(auditCuratedProtocol)]} /></>;
     case "curated-adopt": return <CuratedAdoptForm identifier={auditCuratedProtocol.identifier} defaults={adoptFormDefaults(auditCuratedProtocol)} initialPreview={auditCuratedPreview} caveat={curatedCaveat(auditCuratedProtocol)} />;
+    case "curated-wave-adopt": return <CuratedAdoptForm identifier={auditWaveCuratedProtocol.identifier} defaults={adoptFormDefaults(auditWaveCuratedProtocol)} initialPreview={null} caveat={null} />;
     // With the note a Curated Protocol adopted set aside lands on (#687), naming the set-aside row.
     case "protocols": {
       const notice = count === 0 ? null : curatedSetAsideNotice("2", protocolIndexEntries);

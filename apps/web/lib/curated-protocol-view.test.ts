@@ -26,18 +26,21 @@ const BEGINNER: CuratedProtocolSummary = {
   min_weeks: 4,
   max_weeks: 12,
   required_equipment: ["barbell", "rack"],
+  main_lift_input: "starting_weight",
   main_lifts: [
     {
       key: "squat",
       exercise_name: "Barbell Back Squat",
       default_starting_weight_kg: 20,
       starting_weight_prefill: { kg: 20, source: "default" },
+      working_set_prefill: null,
     },
     {
       key: "deadlift",
       exercise_name: "Barbell Deadlift",
       default_starting_weight_kg: 40,
       starting_weight_prefill: { kg: 40, source: "default" },
+      working_set_prefill: null,
     },
   ],
   sensitive_constraint_caveat: false,
@@ -159,6 +162,7 @@ test("the adopt form starts at the shortest length with the default starting wei
         initialKg: 20,
         source: "default",
         hint: "Starting weight in kg",
+        reps: null,
       },
       {
         key: "deadlift",
@@ -167,6 +171,7 @@ test("the adopt form starts at the shortest length with the default starting wei
         initialKg: 40,
         source: "default",
         hint: "Starting weight in kg",
+        reps: null,
       },
     ],
   });
@@ -182,6 +187,7 @@ test("a lift prefilled from the user’s records starts there and says so", () =
         exercise_name: "Barbell Back Squat",
         default_starting_weight_kg: 20,
         starting_weight_prefill: { kg: 82.5, source: "records" },
+        working_set_prefill: null,
       },
     ],
   };
@@ -197,6 +203,7 @@ test("a lift prefilled from the user’s records starts there and says so", () =
     initialKg: 82.5,
     source: "records",
     hint: "Starting weight in kg · prefilled from your records, edit it freely",
+    reps: null,
   });
 });
 
@@ -350,3 +357,109 @@ test("the launchpad heading stops calling the card AI-only once a Curated Protoc
     overline: "AI OR CURATED PROTOCOLS · STANDALONE SESSIONS",
   });
 });
+
+// --- Wave Curated Protocol: a working set per main lift (issue #693) ---------------------
+
+const WAVE: CuratedProtocolSummary = {
+  ...BEGINNER,
+  identifier: "four-week-strength-waves",
+  name: "Four-week strength waves",
+  main_lift_input: "working_set",
+  main_lifts: [
+    {
+      key: "squat",
+      exercise_name: "Barbell Back Squat",
+      default_starting_weight_kg: 20,
+      // The working set is the user's own best squat; the starting-weight prefill is ignored.
+      starting_weight_prefill: { kg: 82.5, source: "records" },
+      working_set_prefill: { kg: 110, reps: 3, source: "records" },
+    },
+    {
+      key: "press",
+      exercise_name: "Barbell Overhead Press",
+      default_starting_weight_kg: 20,
+      starting_weight_prefill: { kg: 20, source: "default" },
+      working_set_prefill: { kg: 20, reps: 5, source: "default" },
+    },
+  ],
+};
+
+test("a wave Curated Protocol asks for a working set per main lift, prefilled with the user’s own", () => {
+  // Act
+  const { lifts } = adoptFormDefaults(WAVE);
+
+  // Assert
+  assert.deepEqual(lifts, [
+    {
+      key: "squat",
+      name: "weight_squat",
+      label: "Barbell Back Squat",
+      initialKg: 110,
+      source: "records",
+      hint: "Recent working set: weight in kg · prefilled from your records, edit it freely",
+      reps: { name: "reps_squat", label: "Reps", initial: 3, hint: "Reps done at that weight, 1 to 12" },
+    },
+    {
+      key: "press",
+      name: "weight_press",
+      label: "Barbell Overhead Press",
+      initialKg: 20,
+      source: "default",
+      hint: "Recent working set: weight in kg",
+      reps: { name: "reps_press", label: "Reps", initial: 5, hint: "Reps done at that weight, 1 to 12" },
+    },
+  ]);
+});
+
+test("a filled wave adopt form reads into working sets, not starting weights", () => {
+  // Arrange
+  const form = formOf({
+    weeks: "8",
+    weight_squat: "100",
+    reps_squat: "5",
+    weight_press: "50",
+    reps_press: "8",
+  });
+
+  // Act
+  const result = readAdoptForm(WAVE, form);
+
+  // Assert
+  assert.deepEqual(result, {
+    ok: true,
+    request: {
+      weeks: 8,
+      working_sets: { squat: { kg: 100, reps: 5 }, press: { kg: 50, reps: 8 } },
+    },
+  });
+});
+
+test("a working set with a blank or non-positive weight is refused before anything is sent", () => {
+  // Act
+  const zero = readAdoptForm(
+    WAVE,
+    formOf({ weeks: "4", weight_squat: "0", reps_squat: "5", weight_press: "50", reps_press: "8" }),
+  );
+
+  // Assert
+  assert.deepEqual(zero, {
+    ok: false,
+    error: "Enter a working set weight above 0 kg for Barbell Back Squat.",
+  });
+});
+
+for (const reps of ["", "0", "13", "2.5"]) {
+  test(`a working set of ${JSON.stringify(reps)} reps is refused before anything is sent`, () => {
+    // Act
+    const result = readAdoptForm(
+      WAVE,
+      formOf({ weeks: "4", weight_squat: "100", reps_squat: "5", weight_press: "50", reps_press: reps }),
+    );
+
+    // Assert
+    assert.deepEqual(result, {
+      ok: false,
+      error: "Enter the reps of your working set for Barbell Overhead Press, from 1 to 12.",
+    });
+  });
+}

@@ -12,6 +12,8 @@ user. ``integrity_errors`` checks one Curated Protocol and returns every problem
   own Exercise, or authored Load text;
 - the length bounds are valid (1 ≤ min ≤ max, within the Protocol shape bounds);
 - main lifts are declared, and each is trained somewhere in the weekly pattern;
+- a wave Curated Protocol waves every main lift, each with a positive per-cycle increment, and
+  only a wave Curated Protocol waves anything or declares an increment (issue #693);
 - neither the name nor the description carries a third-party brand mark;
 - a released Curated Protocol has a recorded coach sign-off.
 
@@ -24,7 +26,7 @@ import re
 from dataclasses import asdict, dataclass
 
 from app.curated.exercises import CURATED_EXERCISES
-from app.curated.model import CuratedProtocol, PatternPrescription
+from app.curated.model import CuratedProtocol, PatternPrescription, WavePrescription
 from app.curated.plan import PlannedPrescription, planned_prescription
 from app.domain.load import LoadKind, parse_load
 from app.protocols.deploy_validation import (
@@ -71,7 +73,9 @@ def _seeded_names() -> frozenset[str]:
     return frozenset(item.name for item in CURATED_EXERCISES)
 
 
-def _pattern_prescriptions(curated: CuratedProtocol) -> list[tuple[int, PatternPrescription]]:
+def _pattern_prescriptions(
+    curated: CuratedProtocol,
+) -> list[tuple[int, PatternPrescription | WavePrescription]]:
     return [
         (day, prescription)
         for day, session in enumerate(curated.weekly_pattern, start=1)
@@ -141,6 +145,53 @@ def _main_lift_errors(curated: CuratedProtocol) -> list[IntegrityError]:
     return errors
 
 
+def _wave_errors(curated: CuratedProtocol) -> list[IntegrityError]:
+    is_wave = curated.is_wave
+    errors = [
+        IntegrityError(
+            "invalid_cycle_increment",
+            f"Main lift '{lift.key}' needs a positive cycle increment in a wave and none "
+            "outside one.",
+        )
+        for lift in curated.main_lifts
+        if (
+            (lift.cycle_increment_kg is None or lift.cycle_increment_kg <= 0)
+            if is_wave
+            else lift.cycle_increment_kg is not None
+        )
+    ]
+    for day, prescription in _pattern_prescriptions(curated):
+        waved = isinstance(prescription, WavePrescription)
+        if waved and not is_wave:
+            errors.append(
+                IntegrityError(
+                    "wave_missing",
+                    f"Day {day}: {prescription.exercise} is waved, but there is no wave.",
+                )
+            )
+        elif is_wave and prescription.main_lift is not None and not waved:
+            errors.append(
+                IntegrityError(
+                    "main_lift_not_waved",
+                    f"Day {day}: main lift {prescription.exercise} must follow the wave.",
+                )
+            )
+    return errors
+
+
+def _enumerable(
+    curated: CuratedProtocol,
+    prescription: PatternPrescription | WavePrescription,
+    declared: set[str],
+) -> bool:
+    """Whether the spine check can enumerate ``prescription``. A dangling main-lift reference,
+    or a waved lift with no wave, is reported elsewhere and has nothing to enumerate with."""
+
+    if prescription.main_lift is not None and prescription.main_lift not in declared:
+        return False
+    return curated.is_wave or not isinstance(prescription, WavePrescription)
+
+
 def _prescription_errors(curated: CuratedProtocol) -> list[IntegrityError]:
     seeded = _seeded_names()
     errors: list[IntegrityError] = []
@@ -174,41 +225,43 @@ def _prescription_errors(curated: CuratedProtocol) -> list[IntegrityError]:
 
 
 def _spine_errors(curated: CuratedProtocol) -> list[IntegrityError]:
-    """Enumerate each Session as adoption would (main lifts at their default starting weight)
-    and run it through the Deploy gate, the shared prescription-spine check. One Session per
-    gate run, so every error is located to its day."""
+    """Enumerate each Session as adoption would (main lifts at their default starting weight,
+    taken as the reference of a wave) and run it through the Deploy gate, the shared
+    prescription-spine check. A wave Curated Protocol is enumerated over one whole cycle, so
+    every week's dose faces the gate. One Session per gate run, so every error is located."""
 
     declared = {lift.key for lift in curated.main_lifts}
-    weights = {lift.key: lift.default_start_kg for lift in curated.main_lifts}
+    bases_kg = {lift.key: lift.default_start_kg for lift in curated.main_lifts}
+    weeks = 1 if curated.wave is None else curated.wave.cycle_weeks
     errors: list[IntegrityError] = []
-    for day, session in enumerate(curated.weekly_pattern, start=1):
-        draft = DeployDraft(
-            weeks=MIN_WEEKS,
-            sessions_per_week=1,
-            sessions=[
-                DraftSession(
-                    session_id=None,
-                    week=1,
-                    day=day,
-                    prescriptions=[
-                        _draft(planned_prescription(t, weights))
-                        for t in session.prescriptions
-                        # A dangling main-lift reference is reported elsewhere; it has
-                        # no starting weight to enumerate with.
-                        if t.main_lift is None or t.main_lift in declared
-                    ],
-                )
-            ],
-        )
-        errors.extend(
-            IntegrityError(error.code, f"Day {day}: {error.message}")
-            for error in validate_deploy(
-                draft,
-                performed_session_ids=set(),
-                known_session_ids=set(),
-                exercise_exists=lambda _id: True,
+    for week in range(1, weeks + 1):
+        for day, session in enumerate(curated.weekly_pattern, start=1):
+            where = f"Week {week} Day {day}" if curated.is_wave else f"Day {day}"
+            draft = DeployDraft(
+                weeks=MIN_WEEKS,
+                sessions_per_week=1,
+                sessions=[
+                    DraftSession(
+                        session_id=None,
+                        week=1,
+                        day=day,
+                        prescriptions=[
+                            _draft(planned_prescription(curated, t, bases_kg, week))
+                            for t in session.prescriptions
+                            if _enumerable(curated, t, declared)
+                        ],
+                    )
+                ],
             )
-        )
+            errors.extend(
+                IntegrityError(error.code, f"{where}: {error.message}")
+                for error in validate_deploy(
+                    draft,
+                    performed_session_ids=set(),
+                    known_session_ids=set(),
+                    exercise_exists=lambda _id: True,
+                )
+            )
     return errors
 
 
@@ -224,6 +277,7 @@ def integrity_errors(curated: CuratedProtocol) -> list[IntegrityError]:
         *_shape_errors(curated),
         *_brand_errors(curated),
         *_main_lift_errors(curated),
+        *_wave_errors(curated),
         *_prescription_errors(curated),
         *_spine_errors(curated),
     ]

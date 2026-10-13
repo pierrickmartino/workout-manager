@@ -5,9 +5,10 @@ starting weight prefilled for the requesting user (issue #686): a fraction of th
 1RM, or the conservative default, computed at read time from their Logged Sessions, and whether
 the Sensitive Constraint caveat applies to them (issue #687), and which of its required equipment
 they lack (issue #689): a flag, never a filter and never an auto-substitution. ``POST
-/api/curated-protocols/{identifier}/adopt`` validates the user's length and starting weights,
-recomputes the whole plan server-side, and persists it as the user's Current Protocol, or set
-aside for a user with a Sensitive Constraint (ADR-0130, ADR-0058). ``POST
+/api/curated-protocols/{identifier}/adopt`` validates the user's length and starting weights
+(a working set per main lift for a wave Curated Protocol, issue #693, which the list row's
+``main_lift_input`` says), recomputes the whole plan server-side, and persists it as the user's
+Current Protocol, or set aside for a user with a Sensitive Constraint (ADR-0130, ADR-0058). ``POST
 /api/curated-protocols/{identifier}/preview`` (issue #685) takes the same choices through the
 same validation and the same ``enumerate_plan``, and returns the plan without persisting
 anything, so what was previewed is what adopt writes. An unreleased Curated Protocol is a
@@ -20,7 +21,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.adoption.curated import CuratedExerciseMissing, adopt_curated
 from app.auth.dependencies import get_current_user
@@ -29,10 +30,16 @@ from app.curated.plan import (
     AdoptionChoices,
     ChoiceError,
     PlannedSession,
+    WorkingSet,
     enumerate_plan,
     validate_choices,
 )
-from app.curated.prefill import StartingWeightPrefill, starting_weight_prefills
+from app.curated.prefill import (
+    StartingWeightPrefill,
+    WorkingSetPrefill,
+    starting_weight_prefills,
+    working_set_prefills,
+)
 from app.curated.registry import CuratedRegistry, get_curated_registry
 from app.db.models import Profile
 from app.domain.equipment import missing_equipment
@@ -62,16 +69,41 @@ HTTP_UNPROCESSABLE_ENTITY = 422
 HTTP_INTERNAL_SERVER_ERROR = 500
 
 
+class WorkingSetRequest(BaseModel):
+    """A recent working set for one main lift of a wave Curated Protocol."""
+
+    kg: float
+    reps: int
+
+
 class AdoptCuratedProtocolRequest(BaseModel):
-    """The user's choices, for adopt and preview alike. The bounds belong to the Curated
-    Protocol, so they are checked once it is known (``validate_choices``), not here."""
+    """The user's choices, for adopt and preview alike: a starting weight per main lift, or a
+    working set per main lift for a wave Curated Protocol (issue #693). The bounds belong to the
+    Curated Protocol, so they are checked once it is known (``validate_choices``), not here."""
 
     weeks: int
-    starting_weights_kg: dict[str, float]
+    starting_weights_kg: dict[str, float] = Field(default_factory=dict)
+    working_sets: dict[str, WorkingSetRequest] = Field(default_factory=dict)
+
+    def choices(self) -> AdoptionChoices:
+        return AdoptionChoices(
+            weeks=self.weeks,
+            starting_weights_kg=self.starting_weights_kg,
+            working_sets={
+                key: WorkingSet(kg=entry.kg, reps=entry.reps)
+                for key, entry in self.working_sets.items()
+            },
+        )
 
 
 def _serialize_prefill(prefill: StartingWeightPrefill) -> dict:
     return {"kg": prefill.kg, "source": prefill.source}
+
+
+def _serialize_working_set_prefill(prefill: WorkingSetPrefill | None) -> dict | None:
+    if prefill is None:
+        return None
+    return {"kg": prefill.kg, "reps": prefill.reps, "source": prefill.source}
 
 
 def _serialize_curated(
@@ -82,6 +114,8 @@ def _serialize_curated(
     available_equipment: list[str],
 ) -> dict:
     prefills = starting_weight_prefills(curated, history)
+    # Only a wave Curated Protocol asks for a working set (issue #693).
+    working_sets = working_set_prefills(curated, history) if curated.is_wave else {}
     return {
         "identifier": curated.identifier,
         "version": curated.version,
@@ -92,12 +126,18 @@ def _serialize_curated(
         "min_weeks": curated.min_weeks,
         "max_weeks": curated.max_weeks,
         "required_equipment": list(curated.required_equipment),
+        # What the adopt form asks for per main lift: a starting weight, or for a wave
+        # Curated Protocol a recent working set its weeks are computed from (issue #693).
+        "main_lift_input": "working_set" if curated.is_wave else "starting_weight",
         "main_lifts": [
             {
                 "key": lift.key,
                 "exercise_name": lift.exercise,
                 "default_starting_weight_kg": lift.default_start_kg,
                 "starting_weight_prefill": _serialize_prefill(prefills[lift.key]),
+                "working_set_prefill": _serialize_working_set_prefill(
+                    working_sets.get(lift.key)
+                ),
             }
             for lift in curated.main_lifts
         ],
@@ -181,9 +221,7 @@ def _checked_choices(
             status_code=HTTP_NOT_FOUND, detail="Curated Protocol not found."
         )
 
-    choices = AdoptionChoices(
-        weeks=payload.weeks, starting_weights_kg=payload.starting_weights_kg
-    )
+    choices = payload.choices()
     errors = validate_choices(curated, choices)
     if errors:
         return _choice_error_response(errors)
