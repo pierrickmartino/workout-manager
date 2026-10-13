@@ -21,6 +21,7 @@ import {
   previewControls,
   type CuratedPreview,
 } from "@/lib/curated-plan-preview";
+import { CuratedNotice } from "@/components/CuratedNotice";
 import { CuratedPlanPreview } from "@/components/CuratedPlanPreview";
 import { Field, FieldGroup } from "@/components/pulse/field";
 import { FIELD_WIDTH, FieldRow } from "@/components/pulse/field-row";
@@ -89,14 +90,7 @@ export function CuratedAdoptForm({
 
   return (
     <div className="flex flex-col gap-8">
-      {caveat ? (
-        <Alert tone="info">
-          <span className="flex flex-col gap-1">
-            <strong className="font-semibold text-text-primary">{caveat.title}</strong>
-            <span>{caveat.body}</span>
-          </span>
-        </Alert>
-      ) : null}
+      {caveat ? <CuratedNotice notice={caveat} /> : null}
       <form onSubmit={onPreview} onChange={onChange} className="flex flex-col gap-5">
         {previewState.error ? (
           <Alert announce tone="error">{previewState.error}</Alert>

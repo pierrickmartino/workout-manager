@@ -13,7 +13,6 @@ from dataclasses import replace
 import pytest
 
 from app.curated.integrity import integrity_errors
-from app.curated.registry import CURATED_PROTOCOLS, get_curated_registry
 from app.curated.tiered import TIERED
 from tests.test_curated_protocols_endpoint import SIGN_OFF, _Harness, build_harness
 
@@ -51,27 +50,6 @@ def _prescriptions(protocol: dict) -> list[dict]:
 
 def _tier(protocol: dict, names: set[str]) -> list[dict]:
     return [p for p in _prescriptions(protocol) if p["exercise_name"] in names]
-
-
-def test_it_ships_unreleased_without_a_sign_off():
-    # Act
-    shipped = next(p for p in CURATED_PROTOCOLS if p.identifier == RELEASED.identifier)
-
-    # Assert
-    assert shipped.released is False
-    assert shipped.coach_sign_off is None
-
-
-def test_the_real_list_does_not_show_it():
-    # Arrange — the shipped registry instead of the one that releases it
-    h = build_harness()
-    h.client.app.dependency_overrides.pop(get_curated_registry)
-
-    # Act
-    identifiers = [row["identifier"] for row in h.list().json()["data"]]
-
-    # Assert
-    assert RELEASED.identifier not in identifiers
 
 
 def test_released_it_is_listed_with_both_weighted_tiers_as_main_lifts():

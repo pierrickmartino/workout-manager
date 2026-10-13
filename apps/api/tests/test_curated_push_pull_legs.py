@@ -10,7 +10,6 @@ from __future__ import annotations
 from dataclasses import replace
 
 from app.curated.push_pull_legs import PUSH_PULL_LEGS
-from app.curated.registry import CURATED_PROTOCOLS, get_curated_registry
 from tests.test_curated_protocols_endpoint import SIGN_OFF, _Harness, build_harness
 
 RELEASED = replace(PUSH_PULL_LEGS, released=True, coach_sign_off=SIGN_OFF)
@@ -32,27 +31,6 @@ def _prescriptions(protocol: dict) -> list[dict]:
 
 def _is_main_lift(prescription: dict) -> bool:
     return prescription["exercise_name"] in {lift.exercise for lift in RELEASED.main_lifts}
-
-
-def test_it_ships_unreleased_without_a_sign_off():
-    # Act
-    shipped = next(p for p in CURATED_PROTOCOLS if p.identifier == RELEASED.identifier)
-
-    # Assert
-    assert shipped.released is False
-    assert shipped.coach_sign_off is None
-
-
-def test_the_real_list_does_not_show_it():
-    # Arrange — the shipped registry instead of the one that releases it
-    h = build_harness()
-    h.client.app.dependency_overrides.pop(get_curated_registry)
-
-    # Act
-    identifiers = [row["identifier"] for row in h.list().json()["data"]]
-
-    # Assert
-    assert RELEASED.identifier not in identifiers
 
 
 def test_released_it_is_listed_with_its_main_lifts_and_equipment():

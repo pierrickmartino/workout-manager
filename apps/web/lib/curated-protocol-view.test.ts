@@ -5,6 +5,7 @@ import {
   adoptFormDefaults,
   curatedAdoptedHref,
   curatedCaveat,
+  curatedLoggedSetNotice,
   curatedProtocolRow,
   curatedSetAsideNotice,
   findCuratedProtocol,
@@ -43,6 +44,7 @@ const BEGINNER: CuratedProtocolSummary = {
       working_set_prefill: null,
     },
   ],
+  lifts_needing_a_logged_set: [],
   sensitive_constraint_caveat: false,
   missing_equipment: [],
 };
@@ -378,8 +380,8 @@ const WAVE: CuratedProtocolSummary = {
       key: "press",
       exercise_name: "Barbell Overhead Press",
       default_starting_weight_kg: 20,
-      starting_weight_prefill: { kg: 20, source: "default" },
-      working_set_prefill: { kg: 20, reps: 5, source: "default" },
+      starting_weight_prefill: { kg: 32.5, source: "records" },
+      working_set_prefill: { kg: 50, reps: 8, source: "records" },
     },
   ],
 };
@@ -403,10 +405,10 @@ test("a wave Curated Protocol asks for a working set per main lift, prefilled wi
       key: "press",
       name: "weight_press",
       label: "Barbell Overhead Press",
-      initialKg: 20,
-      source: "default",
-      hint: "Recent working set: weight in kg",
-      reps: { name: "reps_press", label: "Reps", initial: 5, hint: "Reps done at that weight, 1 to 12" },
+      initialKg: 50,
+      source: "records",
+      hint: "Recent working set: weight in kg · prefilled from your records, edit it freely",
+      reps: { name: "reps_press", label: "Reps", initial: 8, hint: "Reps done at that weight, 1 to 12" },
     },
   ]);
 });
@@ -463,3 +465,38 @@ for (const reps of ["", "0", "13", "2.5"]) {
     });
   });
 }
+
+// --- A logged set first (issue #694) ----------------------------------------------------
+
+test("a wave Curated Protocol the user has logged every main lift of needs no notice", () => {
+  // Act / Assert
+  assert.equal(curatedLoggedSetNotice(WAVE), null);
+  assert.equal(curatedLoggedSetNotice(BEGINNER), null);
+});
+
+test("a main lift with no logged set is named in the notice that replaces the adopt form", () => {
+  // Arrange
+  const unlogged = { ...WAVE, lifts_needing_a_logged_set: ["press"] };
+
+  // Act
+  const notice = curatedLoggedSetNotice(unlogged);
+
+  // Assert
+  assert.deepEqual(notice, {
+    title: "Log a working set first",
+    body:
+      "This plan’s weights are worked out from a set you actually did. Log a working set " +
+      "of Barbell Overhead Press, 1 to 12 reps, then come back to adopt it.",
+  });
+});
+
+test("several unlogged main lifts are listed in the plan’s order", () => {
+  // Arrange
+  const unlogged = { ...WAVE, lifts_needing_a_logged_set: ["squat", "press"] };
+
+  // Act
+  const notice = curatedLoggedSetNotice(unlogged);
+
+  // Assert
+  assert.match(notice?.body ?? "", /of Barbell Back Squat and Barbell Overhead Press, 1 to 12/);
+});

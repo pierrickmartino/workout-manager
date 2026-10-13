@@ -37,7 +37,9 @@ Exercise it names exists in the Catalog as a seeded `curated` entry. Adopting a 
 Protocol therefore **only resolves** Exercises and never creates a Catalog row. A misspelled
 name fails the build instead of leaving an `ai_generated` Stub at runtime.
 
-Each program needs a **qualified coach's sign-off** before merge, and the sign-off is recorded.
+Each program needs a **sign-off** before it is released, and the sign-off is recorded: who
+reviewed it and when. (Amended by issue #694: no proof of qualification is recorded. The owner
+decided a named reviewer is enough, so `CoachSignOff` holds a name and a date, no credential.)
 An LLM may help draft one, but the shipped content must be human-authored in substance, or
 `curated` would be a false claim.
 

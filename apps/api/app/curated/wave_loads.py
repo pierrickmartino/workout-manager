@@ -15,8 +15,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.curated.loading import floor_to_loadable
 from app.curated.model import Wave
+from app.domain.loadable import floor_to_loadable
 from app.domain.one_rep_max import estimate_1rm
 
 

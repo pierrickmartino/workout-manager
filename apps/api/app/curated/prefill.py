@@ -13,7 +13,9 @@ Body Weight, is excluded here because a barbell starting weight cannot honestly 
 A wave Curated Protocol asks for a recent **working set** instead (issue #693). Its prefill is the
 user's own best qualifying set, its weight and its reps as logged, never a figure derived from
 it: the wave is computed from what is entered, so the prefill must be a set the user actually
-did. With no such set it is the conservative default weight for ``DEFAULT_WORKING_SET_REPS``.
+did. A lift with no such set has no prefill and no default: the coach's review requires a
+logged set before the wave can be adopted (issue #694), which ``lifts_needing_a_logged_set``
+names.
 
 A read-time projection over Logged Sessions: nothing is stored (ADR-0018). The prefill is a
 suggestion only — the user edits it, and adopt validates whatever is posted. Pure: no I/O."""
@@ -24,11 +26,11 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Literal
 
-from app.curated.loading import LOADABLE_INCREMENT_KG, floor_to_loadable
 from app.curated.model import CuratedProtocol, MainLift
 from app.curated.plan import MAX_STARTING_WEIGHT_KG
 from app.domain.exercise import normalize_name
 from app.domain.load import LoadKind, ParsedLoad
+from app.domain.loadable import LOADABLE_INCREMENT_KG, floor_to_loadable
 from app.domain.personal_records import (
     LoggedSession,
     estimated_1rm_for_set,
@@ -39,9 +41,6 @@ from app.domain.quantity import repetitions_of
 # The share of an Estimated 1RM offered as a first working weight: inside the usual 70–75%
 # band, at its conservative end, so the first sessions of a linear progression leave room.
 WORKING_WEIGHT_FRACTION = 0.7
-
-# The reps a default working set is offered at, beside the lift's conservative default weight.
-DEFAULT_WORKING_SET_REPS = 5
 
 PrefillSource = Literal["records", "default"]
 
@@ -60,7 +59,8 @@ class WorkingSetPrefill:
 
     kg: float
     reps: int
-    source: PrefillSource
+    # Always the user's own set: a wave main lift has no default (issue #694).
+    source: Literal["records"]
 
 
 @dataclass(frozen=True)
@@ -128,30 +128,41 @@ def starting_weight_prefills(
 
 def working_set_prefills(
     curated: CuratedProtocol, history: Iterable[LoggedSession]
-) -> Mapping[str, WorkingSetPrefill]:
+) -> Mapping[str, WorkingSetPrefill | None]:
     """The working set offered for each of ``curated``'s main lifts, keyed by the lift's key:
-    the user's own best qualifying set, or the default weight for the default reps."""
+    the user's own best qualifying set, or ``None`` when they have logged none."""
 
     best = _best_absolute_sets_by_name(history)
     return {
         lift.key: (
             WorkingSetPrefill(kg=best_set.kg, reps=best_set.reps, source="records")
             if (best_set := _best_set_for(lift, best)) is not None
-            else WorkingSetPrefill(
-                kg=lift.default_start_kg, reps=DEFAULT_WORKING_SET_REPS, source="default"
-            )
+            else None
         )
         for lift in curated.main_lifts
     }
 
 
+def lifts_needing_a_logged_set(
+    curated: CuratedProtocol, history: Iterable[LoggedSession]
+) -> tuple[str, ...]:
+    """The keys of ``curated``'s main lifts the user has no qualifying logged set for, in
+    authored order. Only a wave Curated Protocol needs one (issue #694), so any other
+    Curated Protocol needs none."""
+
+    if not curated.is_wave:
+        return ()
+    prefills = working_set_prefills(curated, history)
+    return tuple(key for key, prefill in prefills.items() if prefill is None)
+
+
 __all__ = [
-    "DEFAULT_WORKING_SET_REPS",
     "LOADABLE_INCREMENT_KG",
     "WORKING_WEIGHT_FRACTION",
     "PrefillSource",
     "StartingWeightPrefill",
     "WorkingSetPrefill",
+    "lifts_needing_a_logged_set",
     "starting_weight_prefills",
     "working_set_prefills",
     "working_weight_kg",

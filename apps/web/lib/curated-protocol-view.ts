@@ -25,11 +25,12 @@ export interface StartingWeightPrefill {
 }
 
 // The working set offered for a wave Curated Protocol's main lift (issue #693): the user's own
-// best qualifying set, weight and reps as logged ("records"), or the default weight for 5 reps.
+// best qualifying set, weight and reps as logged. There is no default: a lift the user hasn't
+// logged has no prefill, and the plan can't be adopted until they do (issue #694).
 export interface WorkingSetPrefill {
   kg: number;
   reps: number;
-  source: PrefillSource;
+  source: "records";
 }
 
 export interface CuratedMainLift {
@@ -38,7 +39,8 @@ export interface CuratedMainLift {
   default_starting_weight_kg: number;
   // The starting weight offered to this user, computed at read time from their records.
   starting_weight_prefill: StartingWeightPrefill;
-  // The working set offered instead, for a wave Curated Protocol only; `null` otherwise.
+  // The working set offered instead, for a wave Curated Protocol only; `null` otherwise, and
+  // `null` for a wave main lift the user has no logged set of.
   working_set_prefill: WorkingSetPrefill | null;
 }
 
@@ -59,6 +61,9 @@ export interface CuratedProtocolSummary {
   required_equipment: string[];
   main_lift_input: MainLiftInput;
   main_lifts: CuratedMainLift[];
+  // The keys of the main lifts this user must log a working set of before a wave Curated
+  // Protocol can be adopted (issue #694). Always empty for any other Curated Protocol.
+  lifts_needing_a_logged_set: string[];
   // Whether this user holds a Sensitive Constraint, so the caveat applies and adopting sets the
   // copy aside (issue #687). Decided by the server, which owns the profile.
   sensitive_constraint_caveat: boolean;
@@ -387,10 +392,13 @@ export function findCuratedProtocol(
     : undefined;
 }
 
-export interface CuratedCaveat {
+// A titled notice on the adopt page: the caveat below, or the logged-set notice (issue #694).
+export interface CuratedNotice {
   title: string;
   body: string;
 }
+
+export type CuratedCaveat = CuratedNotice;
 
 // The caveat shown before adopting, or `null` when it doesn't apply to this user (ADR-0058). It
 // never claims the plan was checked against their constraint: it says the opposite, and what
@@ -403,6 +411,30 @@ export function curatedCaveat(curated: CuratedProtocolSummary): CuratedCaveat | 
       "This plan was written for a general audience, not around your injury, rehabilitation, " +
       "postpartum or medical constraint. Adopting it sets it aside rather than making it your " +
       "Current Protocol; Switch to it when you’re ready to start.",
+  };
+}
+
+function namesList(names: readonly string[]): string {
+  return names.length <= 1
+    ? names.join("")
+    : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+// The notice shown in place of the adopt form while a wave Curated Protocol's main lift has no
+// logged set, or `null` when there is none to show (issue #694). The server refuses the adopt
+// too; this only says so before the user fills anything in.
+export function curatedLoggedSetNotice(curated: CuratedProtocolSummary): CuratedNotice | null {
+  const needed = new Set(curated.lifts_needing_a_logged_set);
+  if (needed.size === 0) return null;
+  const names = curated.main_lifts
+    .filter((lift) => needed.has(lift.key))
+    .map((lift) => lift.exercise_name);
+  return {
+    title: "Log a working set first",
+    body:
+      "This plan’s weights are worked out from a set you actually did. Log a working set of " +
+      `${namesList(names)}, ${MIN_WORKING_SET_REPS} to ${MAX_WORKING_SET_REPS} reps, then ` +
+      "come back to adopt it.",
   };
 }
 

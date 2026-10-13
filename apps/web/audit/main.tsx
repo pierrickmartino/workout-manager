@@ -67,10 +67,12 @@ import { ProtocolsIndex } from "@/components/ProtocolsIndex";
 import { NewProtocolChoices } from "@/components/NewProtocolChoices";
 import { CuratedProtocolPicker } from "@/components/CuratedProtocolPicker";
 import { CuratedAdoptForm } from "@/components/CuratedAdoptForm";
+import { CuratedNotice } from "@/components/CuratedNotice";
 import { AdoptedSetAsideNote } from "@/components/AdoptedSetAsideNote";
 import {
   adoptFormDefaults,
   curatedCaveat,
+  curatedLoggedSetNotice,
   curatedProtocolRow,
   curatedSetAsideNotice,
   newProtocolChoices,
@@ -374,6 +376,7 @@ const auditCuratedProtocol: CuratedProtocolSummary = {
   max_weeks: 12,
   required_equipment: ["barbell", "rack", "bench", "dumbbell"],
   main_lift_input: "starting_weight",
+  lifts_needing_a_logged_set: [],
   missing_equipment: ["barbell", "rack", "bench", "dumbbell"],
   // The squat is prefilled from records (#686), so the longest weight hint is on screen.
   main_lifts: [
@@ -445,7 +448,7 @@ const auditWaveCuratedProtocol: CuratedProtocolSummary = {
     working_set_prefill:
       index === 0
         ? { kg: 102.5, reps: 12, source: "records" }
-        : { kg: lift.default_starting_weight_kg, reps: 5, source: "default" },
+        : { kg: lift.default_starting_weight_kg + 40, reps: 5, source: "records" },
   })),
 };
 
@@ -460,6 +463,8 @@ function Content() {
     // The new-Protocol peer choice over the Curated Protocol picker (#684).
     case "curated": return <><NewProtocolChoices choices={newProtocolChoices("curated", { hasCuratedProtocols: true })} /><CuratedProtocolPicker rows={count === 0 ? [] : [curatedProtocolRow(auditCuratedProtocol)]} /></>;
     case "curated-adopt": return <CuratedAdoptForm identifier={auditCuratedProtocol.identifier} defaults={adoptFormDefaults(auditCuratedProtocol)} initialPreview={auditCuratedPreview} caveat={curatedCaveat(auditCuratedProtocol)} />;
+    // The notice that replaces it while lifts have no logged set (#694): every lift named, the longest body.
+    case "curated-wave-unlogged": return <CuratedNotice notice={curatedLoggedSetNotice({ ...auditWaveCuratedProtocol, lifts_needing_a_logged_set: auditWaveCuratedProtocol.main_lifts.map((lift) => lift.key) }) ?? { title: "", body: "" }} />;
     case "curated-wave-adopt": return <CuratedAdoptForm identifier={auditWaveCuratedProtocol.identifier} defaults={adoptFormDefaults(auditWaveCuratedProtocol)} initialPreview={null} caveat={null} />;
     // With the note a Curated Protocol adopted set aside lands on (#687), naming the set-aside row.
     case "protocols": {

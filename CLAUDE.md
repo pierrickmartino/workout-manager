@@ -142,7 +142,7 @@ Full rules in [`.claude/rules/`](./.claude/rules). The load-bearing ones:
   `tests/test_prescription_spine.py` fails if a projection forgets it (ADR-0069).
 - New/changed Curated Protocol → data in `app/curated/` (every Exercise in `exercises.py`, seeded
   by a migration); `tests/test_curated_protocol_integrity.py` gates it; ships `released=False`
-  until a coach sign-off is recorded (ADR-0130).
+  until a sign-off naming its reviewer is recorded (ADR-0130).
 - Frontend logic → put it in `apps/web/lib/` as a view-model with a `*.test.ts`,
   keep components thin.
 - Anything in `apps/web` → the frontend rules in

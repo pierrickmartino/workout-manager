@@ -12,12 +12,14 @@ steps them (ADR-0064). The increment is therefore blind to whether the user hit 
 the description says so and points to Calibrate (ADR-0111). Accessories use Double Progression
 at a qualitative Load, as in the other Curated Protocols, and do not wave.
 
-Ships **unreleased** (no coach sign-off yet): it is neither listed nor adoptable until a coach
-has reviewed it and the sign-off is recorded here (issue #682, ticket 12)."""
+Released with the sign-off from its review (issue #694), recorded below."""
 
 from __future__ import annotations
 
+from datetime import date
+
 from app.curated.model import (
+    CoachSignOff,
     CuratedProtocol,
     MainLift,
     PatternPrescription,
@@ -26,6 +28,7 @@ from app.curated.model import (
     WavePrescription,
     WaveWeek,
 )
+from app.domain.loadable import EMPTY_BAR_KG
 from app.domain.progression import ProgressionScheme
 
 # What each cycle adds to every weight of a lift, whether or not its reps were hit.
@@ -39,10 +42,9 @@ _ACCESSORY_REST_SECONDS = 90
 # a true max and the first cycles leave room.
 _REFERENCE_SHARE = 0.9
 _WAVE_SETS = 3
-# Every waved lift is a barbell lift, so no weight is written under the empty bar.
-EMPTY_BAR_KG = 20.0
 WAVE_CYCLE = Wave(
     reference_share=_REFERENCE_SHARE,
+    # Every waved lift is a barbell lift, so no weight is written under the empty bar.
     min_kg=EMPTY_BAR_KG,
     weeks=(
         WaveWeek(share=0.85, sets=_WAVE_SETS, reps="5+"),
@@ -103,9 +105,10 @@ WAVE = CuratedProtocol(
     description=(
         "Four sessions a week, done in order, each built around one barbell main lift "
         "(squat, bench press, deadlift or overhead press) plus two dumbbell accessories. "
-        "The main lifts run in four-week cycles. Before you start, you enter a recent "
-        "working set for each lift, a weight and the reps you did with it, and every week's "
-        "weights are worked out from it once, when you adopt. The first three weeks get "
+        "The main lifts run in four-week cycles. You need a logged set of each lift first, "
+        "from 1 to 12 reps. Before you start, you enter a recent working set for each lift, "
+        "a weight and the reps you did with it, and every week's weights are worked out from "
+        "it once, when you adopt. The first three weeks get "
         "heavier as the reps drop: three sets of five, then of three, then of one, and the "
         "last set each week is as many good reps as you can. The fourth week is a lighter "
         "deload of three sets of five. Each new cycle adds 5 kg to every squat and deadlift "
@@ -159,6 +162,8 @@ WAVE = CuratedProtocol(
         ),
     ),
     wave=WAVE_CYCLE,
+    coach_sign_off=CoachSignOff(reviewer="Pierrick Martino", signed_on=date(2026, 10, 13)),
+    released=True,
 )
 
 

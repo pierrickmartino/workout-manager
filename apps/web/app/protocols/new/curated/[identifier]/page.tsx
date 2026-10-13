@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { CuratedAdoptForm } from "@/components/CuratedAdoptForm";
+import { CuratedNotice } from "@/components/CuratedNotice";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
 import { fetchCuratedProtocols, previewCuratedProtocol } from "@/lib/curated-protocols";
@@ -13,15 +14,34 @@ import {
 import {
   adoptFormDefaults,
   curatedCaveat,
+  curatedLoggedSetNotice,
   curatedProtocolRow,
   CURATED_PICKER_HREF,
   findCuratedProtocol,
+  type AdoptFormDefaults,
 } from "@/lib/curated-protocol-view";
 
 // Adopt one Curated Protocol (issue #684): its description, then the length and starting
 // weights, with the plan the prefilled inputs would write already previewed (issues #685, #686),
-// under the caveat for a user with a Sensitive Constraint (issue #687).
+// under the caveat for a user with a Sensitive Constraint (issue #687). A wave Curated Protocol
+// whose main lift the user hasn't logged shows what to log instead of the form (issue #694).
 // An unknown or unreleased Curated Protocol is a 404 here, as it is on the API.
+
+// The plan the prefilled inputs would write; `null` when the read fails, which leaves the form
+// to preview on demand.
+async function initialPreviewFor(
+  identifier: string,
+  defaults: AdoptFormDefaults,
+): Promise<CuratedPreview | null> {
+  const previewed = await previewCuratedProtocol(
+    identifier,
+    defaultPreviewRequest(defaults),
+  ).catch(() => null);
+  return previewed?.success && previewed.data
+    ? { snapshot: defaultFormSnapshot(defaults), plan: curatedPlanView(previewed.data) }
+    : null;
+}
+
 export default async function AdoptCuratedProtocolPage({
   params,
 }: {
@@ -32,16 +52,10 @@ export default async function AdoptCuratedProtocolPage({
   const curated = findCuratedProtocol(result, identifier);
   if (!curated) notFound();
   const row = curatedProtocolRow(curated);
+  const loggedSetNotice = curatedLoggedSetNotice(curated);
   const defaults = adoptFormDefaults(curated);
-  // A failed preview read leaves the form to preview on demand.
-  const previewed = await previewCuratedProtocol(
-    curated.identifier,
-    defaultPreviewRequest(defaults),
-  ).catch(() => null);
-  const initialPreview: CuratedPreview | null =
-    previewed?.success && previewed.data
-      ? { snapshot: defaultFormSnapshot(defaults), plan: curatedPlanView(previewed.data) }
-      : null;
+  const initialPreview =
+    loggedSetNotice === null ? await initialPreviewFor(curated.identifier, defaults) : null;
 
   return (
     <section className="flex flex-col gap-6">
@@ -56,12 +70,16 @@ export default async function AdoptCuratedProtocolPage({
           <p className="font-mono text-[12px] text-amber">{row.equipmentFlag}</p>
         ) : null}
       </div>
-      <CuratedAdoptForm
-        identifier={curated.identifier}
-        defaults={defaults}
-        initialPreview={initialPreview}
-        caveat={curatedCaveat(curated)}
-      />
+      {loggedSetNotice !== null ? (
+        <CuratedNotice notice={loggedSetNotice} />
+      ) : (
+        <CuratedAdoptForm
+          identifier={curated.identifier}
+          defaults={defaults}
+          initialPreview={initialPreview}
+          caveat={curatedCaveat(curated)}
+        />
+      )}
       <BackLink href={CURATED_PICKER_HREF}>Back to Curated Protocols</BackLink>
     </section>
   );

@@ -15,7 +15,7 @@ user. ``integrity_errors`` checks one Curated Protocol and returns every problem
 - a wave Curated Protocol waves every main lift, each with a positive per-cycle increment, and
   only a wave Curated Protocol waves anything or declares an increment (issue #693);
 - neither the name nor the description carries a third-party brand mark;
-- a released Curated Protocol has a recorded coach sign-off.
+- a released Curated Protocol has a recorded sign-off naming its reviewer.
 
 Pure: no I/O. Exercises are checked against the manifest the migration seeds, not a database.
 """
@@ -104,10 +104,12 @@ def _shape_errors(curated: CuratedProtocol) -> list[IntegrityError]:
         )
     if not curated.main_lifts:
         errors.append(IntegrityError("no_main_lifts", "No main lifts are declared."))
-    if curated.released and curated.coach_sign_off is None:
+    sign_off = curated.coach_sign_off
+    if curated.released and (sign_off is None or not sign_off.reviewer.strip()):
         errors.append(
             IntegrityError(
-                "missing_sign_off", "A released Curated Protocol needs a recorded coach sign-off."
+                "missing_sign_off",
+                "A released Curated Protocol needs a recorded sign-off naming its reviewer.",
             )
         )
     return errors

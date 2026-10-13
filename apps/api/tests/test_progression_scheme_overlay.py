@@ -29,7 +29,11 @@ from tests.quantities import reps_quantity
 
 
 def _prescription(
-    *, scheme: str | None, load: str = "60 kg", target_effort: dict | None = None
+    *,
+    scheme: str | None,
+    load: str = "60 kg",
+    target_effort: dict | None = None,
+    equipment: list[str] | None = None,
 ) -> PrescriptionView:
     """A minimal external-weight Prescription view carrying the given scheme selection and,
     optionally, a plan-side Target Effort (ADR-0066) — which the progression tier must ignore."""
@@ -48,7 +52,7 @@ def _prescription(
         exercise_name="Back Squat",
         exercise_description=None,
         targeted_muscles=[],
-        required_equipment=[],
+        required_equipment=equipment or [],
         provenance="curated",
         scheme=scheme,
         target_effort=target_effort,
@@ -331,3 +335,76 @@ def test_the_protocol_overlay_holds_session_count_between_the_nth_exposures():
     # Assert — off-cadence, the upcoming load holds its authored value
     upcoming = progress.next_session
     assert upcoming.prescriptions[0].recommended_load == parse_load("60 kg").to_dict()
+
+
+# --- The empty-bar floor (ADR-0131) -----------------------------------------------------
+# A barbell can't be loaded under its own weight, so a step down never takes a barbell
+# Prescription below the 20 kg bar. Movements without a barbell step as before.
+
+
+def _missed_sets(load: str) -> list[LoggedSetView]:
+    """One set well short of the rep floor: a miss under every scheme."""
+
+    return [
+        LoggedSetView(
+            position=0,
+            quantity=reps_quantity(2),
+            load=parse_load(load).to_dict(),
+            perceived_difficulty=10,
+            exercise_id=1,
+            exercise_name="Back Squat",
+        )
+    ]
+
+
+def test_a_barbell_miss_never_steps_below_the_empty_bar():
+    # Arrange — a 20 kg barbell press whose −5 kg back-off would reach 15 kg
+    prescription = _prescription(
+        scheme="double_progression", load="20 kg", equipment=["barbell", "rack"]
+    )
+
+    # Act
+    progressed = progressed_prescription(prescription, _missed_sets("20 kg"))
+
+    # Assert — held at the bar
+    assert progressed.recommended_load == parse_load("20 kg").to_dict()
+
+
+def test_a_barbell_greyskull_reset_stops_at_the_empty_bar():
+    # Arrange — 22.5 kg resets 10% to 20.25 kg, rounded down to 20 kg; 20 kg would reach 17.5 kg
+    near = _prescription(scheme="greyskull", load="22.5 kg", equipment=["barbell"])
+    at_bar = _prescription(scheme="greyskull", load="20 kg", equipment=["barbell"])
+
+    # Act
+    from_near = progressed_prescription(near, _missed_sets("22.5 kg"))
+    from_bar = progressed_prescription(at_bar, _missed_sets("20 kg"))
+
+    # Assert — the bar is the floor, never crossed
+    assert from_near.recommended_load == parse_load("20 kg").to_dict()
+    assert from_bar.recommended_load == parse_load("20 kg").to_dict()
+
+
+def test_a_barbell_load_already_under_the_bar_is_never_raised_by_a_miss():
+    # Arrange — a light bar (an EZ bar reads as barbell) at 12.5 kg, then a miss
+    prescription = _prescription(
+        scheme="double_progression", load="12.5 kg", equipment=["barbell"]
+    )
+
+    # Act
+    progressed = progressed_prescription(prescription, _missed_sets("12.5 kg"))
+
+    # Assert — the floor never pushes a weight up: it holds where it was
+    assert progressed.recommended_load == parse_load("12.5 kg").to_dict()
+
+
+def test_a_movement_without_a_barbell_steps_below_twenty_kg():
+    # Arrange — a dumbbell movement at 20 kg missing its floor
+    prescription = _prescription(
+        scheme="double_progression", load="20 kg", equipment=["dumbbell"]
+    )
+
+    # Act
+    progressed = progressed_prescription(prescription, _missed_sets("20 kg"))
+
+    # Assert — no bar, no floor: the usual −5 kg back-off
+    assert progressed.recommended_load == parse_load("15 kg").to_dict()

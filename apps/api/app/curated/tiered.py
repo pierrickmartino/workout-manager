@@ -14,12 +14,14 @@ No tier shares an Exercise with another: Progression steps every upcoming Prescr
 Exercise from its latest Logged Sets, so a T1 squat at three reps would read as a miss on a T2
 squat at ten. T2 is therefore a variation of a T1 lift, not the lift itself.
 
-Ships **unreleased** (no coach sign-off yet): it is neither listed nor adoptable until a coach
-has reviewed it and the sign-off is recorded here (issue #682, ticket 12)."""
+Released with the sign-off from its review (issue #694), recorded below."""
 
 from __future__ import annotations
 
+from datetime import date
+
 from app.curated.model import (
+    CoachSignOff,
     CuratedProtocol,
     MainLift,
     PatternPrescription,
@@ -133,6 +135,8 @@ TIERED = CuratedProtocol(
         _session("Bench press", BENCH, FRONT_SQUAT, "Lat Pulldown"),
         _session("Deadlift", DEADLIFT, INCLINE_BENCH, "Dumbbell Row"),
     ),
+    coach_sign_off=CoachSignOff(reviewer="Pierrick Martino", signed_on=date(2026, 10, 13)),
+    released=True,
 )
 
 

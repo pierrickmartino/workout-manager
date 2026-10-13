@@ -22,7 +22,7 @@ export default async function CuratedProtocolsPage() {
         choices={newProtocolChoices("curated", { hasCuratedProtocols: curatedProtocols.length > 0 })}
       />
       <p className="font-mono text-[13px] leading-relaxed text-text-muted">
-        Plans written by a person and reviewed by a coach. Adopt one and it becomes your own
+        Plans written and reviewed by a person. Adopt one and it becomes your own
         protocol to log, edit and adjust.
       </p>
       {result.success ? (

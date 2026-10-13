@@ -6,12 +6,14 @@ range, and the weight goes up once every set reaches the top of it at a comforta
 The five barbell main lifts start from the user's own weights; accessories carry qualitative
 Loads the user raises themselves.
 
-Ships **unreleased** (no coach sign-off yet): it is neither listed nor adoptable until a coach
-has reviewed it and the sign-off is recorded here (issue #682, ticket 12)."""
+Released with the sign-off from its review (issue #694), recorded below."""
 
 from __future__ import annotations
 
+from datetime import date
+
 from app.curated.model import (
+    CoachSignOff,
     CuratedProtocol,
     MainLift,
     PatternPrescription,
@@ -107,6 +109,8 @@ PUSH_PULL_LEGS = CuratedProtocol(
             ),
         ),
     ),
+    coach_sign_off=CoachSignOff(reviewer="Pierrick Martino", signed_on=date(2026, 10, 13)),
+    released=True,
 )
 
 

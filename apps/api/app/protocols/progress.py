@@ -29,8 +29,10 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 
 from app.domain.completion import CompletionOutcome
+from app.domain.equipment import Equipment, canonical_equipment
 from app.domain.load import parse_load
-from app.domain.progression import next_prescription, resolve_scheme
+from app.domain.loadable import EMPTY_BAR_KG
+from app.domain.progression import floored_at, next_prescription, resolve_scheme
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
     LoggedSessionView,
@@ -262,15 +264,16 @@ def progressed_prescription(
     """
 
     load = prescription.recommended_load
+    load_text = load["text"] if load else None
     result = next_prescription(
-        _LoadedPrescription(
-            reps=prescription.reps,
-            recommended_load=load["text"] if load else None,
-        ),
+        _LoadedPrescription(reps=prescription.reps, recommended_load=load_text),
         sets,
         resolve_scheme(prescription.scheme),
         exposure_count,
     )
+    # A barbell can't be loaded under its own weight, so no step takes it below the bar.
+    if Equipment.BARBELL in canonical_equipment(prescription.required_equipment):
+        result = floored_at(result, load_text, EMPTY_BAR_KG)
     adjusted_load = (
         parse_load(result.recommended_load).to_dict()
         if result.recommended_load is not None

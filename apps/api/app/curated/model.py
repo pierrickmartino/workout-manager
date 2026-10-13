@@ -1,6 +1,6 @@
 """The Curated Protocol data format (ADR-0130).
 
-A **Curated Protocol** is a human-authored, coach-reviewed plan shipped as versioned data in the
+A **Curated Protocol** is a human-authored, reviewed plan shipped as versioned data in the
 repo, never a runtime-editable row. These frozen dataclasses *are* the format: a content file
 (``beginner_linear.py``) builds one ``CuratedProtocol`` value, the content-integrity check
 (``integrity.py``) gates it, and adoption (``adoption/curated.py``) enumerates it into a
@@ -33,8 +33,8 @@ class MainLift:
 
     ``key`` is the stable identifier the adopt request keys its weights by; ``exercise`` is the
     seeded catalog name every Prescription of this lift uses. ``default_start_kg`` is the
-    conservative starting weight offered to a user with no history (for a wave Curated
-    Protocol, the weight its default working set is offered at)."""
+    conservative starting weight offered to a user with no history; a wave Curated Protocol
+    offers no default working set, so it doesn't read it (issue #694)."""
 
     key: str
     exercise: str
@@ -115,10 +115,10 @@ class PatternSession:
 
 @dataclass(frozen=True)
 class CoachSignOff:
-    """The recorded review by a qualified coach a released Curated Protocol needs (ADR-0130)."""
+    """The recorded review a released Curated Protocol needs: who signed it off, and when
+    (ADR-0130). No proof of qualification is recorded (issue #694)."""
 
     reviewer: str
-    credential: str
     signed_on: date
 
 

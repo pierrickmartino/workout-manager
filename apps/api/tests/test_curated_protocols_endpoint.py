@@ -43,12 +43,14 @@ from tests.conftest import ISSUER, SigningContext, make_signing_context
 from tests.quantities import reps_quantity
 
 USER = "user_curated"
-SIGN_OFF = CoachSignOff(
-    reviewer="Test Coach", credential="Test credential", signed_on=date(2026, 10, 1)
-)
+SIGN_OFF = CoachSignOff(reviewer="Test Coach", signed_on=date(2026, 10, 1))
 RELEASED = replace(BEGINNER_LINEAR, released=True, coach_sign_off=SIGN_OFF)
 UNRELEASED = replace(
-    BEGINNER_LINEAR, identifier="unreleased-curated-protocol", name="Unreleased Curated Protocol"
+    BEGINNER_LINEAR,
+    identifier="unreleased-curated-protocol",
+    name="Unreleased Curated Protocol",
+    released=False,
+    coach_sign_off=None,
 )
 STARTING_WEIGHTS = {"squat": 60, "bench": 40, "press": 30, "deadlift": 80}
 BODYWEIGHT = ParsedLoad(kind=LoadKind.BODYWEIGHT, text="bodyweight").to_dict()
@@ -187,6 +189,23 @@ def test_list_returns_only_released_curated_protocols_in_the_envelope():
     ]
 
 
+def test_the_shipped_registry_lists_all_four_curated_protocols_in_authored_order():
+    # Arrange — the real registry, not one that releases content for the test
+    h = build_harness()
+    h.client.app.dependency_overrides.pop(get_curated_registry)
+
+    # Act
+    identifiers = [row["identifier"] for row in h.list().json()["data"]]
+
+    # Assert
+    assert identifiers == [
+        "beginner-linear-progression",
+        "push-pull-legs",
+        "tiered-linear-progression",
+        "four-week-strength-waves",
+    ]
+
+
 def test_a_list_row_describes_the_curated_protocol_and_its_main_lifts():
     # Arrange
     h = build_harness(RELEASED)
@@ -236,6 +255,7 @@ def test_a_list_row_describes_the_curated_protocol_and_its_main_lifts():
                 "working_set_prefill": None,
             },
         ],
+        "lifts_needing_a_logged_set": [],
         "sensitive_constraint_caveat": False,
         # A user with no equipment set lacks it all, as a generation reads them (ADR-0038).
         "missing_equipment": ["barbell", "rack", "bench", "dumbbell"],
