@@ -5,7 +5,7 @@ user has records (ADR-0010), so the wave program asks for a recent working set p
 instead. From it ``wave_reference_kg`` derives a **reference** weight, once: a share of the
 set's Epley Estimated 1RM, the one yardstick every strength surface reads. ``wave_dose`` then
 gives any week its sets, reps and **absolute** kilograms: the week's share of the reference,
-rounded down to a loadable increment, plus the lift's fixed increment once per completed
+rounded down to a loadable increment and never below the empty bar, plus the lift's fixed increment once per completed
 cycle. The increment is blind: nothing here reads whether the user hit their reps, which the
 Curated Protocol's description discloses (Calibrate re-pitches it, ADR-0111).
 
@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.curated.loading import LOADABLE_INCREMENT_KG, floor_to_loadable
+from app.curated.loading import floor_to_loadable
 from app.curated.model import Wave
 from app.domain.one_rep_max import estimate_1rm
 
@@ -49,12 +49,12 @@ def wave_reference_kg(wave: Wave, working_set: WorkingSet) -> float:
 
 def wave_dose(wave: Wave, reference_kg: float, cycle_increment_kg: float, week: int) -> WaveDose:
     """Week ``week`` (from 1) of a lift with ``reference_kg``: the wave's week within the
-    cycle, at its share of the reference rounded down to a loadable weight (never below one
-    increment), plus ``cycle_increment_kg`` for every cycle already done."""
+    cycle, at its share of the reference rounded down to a loadable weight (never below the
+    wave's ``min_kg``), plus ``cycle_increment_kg`` for every cycle already done."""
 
     cycle, index = divmod(week - 1, wave.cycle_weeks)
     wave_week = wave.weeks[index]
-    base = max(floor_to_loadable(reference_kg * wave_week.share), LOADABLE_INCREMENT_KG)
+    base = max(floor_to_loadable(reference_kg * wave_week.share), wave.min_kg)
     return WaveDose(
         sets=wave_week.sets, reps=wave_week.reps, kg=base + cycle * cycle_increment_kg
     )

@@ -16,7 +16,13 @@ from dataclasses import replace
 from app.curated.integrity import integrity_errors
 from app.curated.registry import CURATED_PROTOCOLS, get_curated_registry
 from app.curated.wave import WAVE
-from tests.test_curated_protocols_endpoint import SIGN_OFF, _Harness, build_harness
+from tests.test_curated_protocols_endpoint import (
+    SIGN_OFF,
+    USER,
+    _absolute,
+    _Harness,
+    build_harness,
+)
 
 RELEASED = replace(WAVE, released=True, coach_sign_off=SIGN_OFF)
 WORKING_SETS = {
@@ -182,7 +188,7 @@ def test_the_wave_program_refuses_starting_weights():
     _rejected(h, response, "starting_weight_not_accepted")
 
 
-def test_a_starting_weight_program_refuses_working_sets():
+def test_a_starting_weight_curated_protocol_refuses_working_sets():
     # Arrange — the default harness releases the beginner linear progression
     h = build_harness()
 
@@ -232,3 +238,43 @@ def test_it_ships_unreleased_and_the_real_list_does_not_show_it():
 def test_it_passes_the_integrity_gate():
     # Act / Assert
     assert integrity_errors(RELEASED) == []
+
+
+def test_no_wave_weight_falls_below_the_empty_bar():
+    # A light working set would put every week under 20 kg: bench 20 kg × 5 is a reference of
+    # 21, so 85% is 17.85 and the deload 12.6. Each is held at the empty bar instead.
+
+    # Act
+    _, protocol = _adopted(working_sets={**WORKING_SETS, "bench": {"kg": 20, "reps": 5}})
+
+    # Assert
+    bench = _weekly(protocol["sessions"], "Barbell Bench Press", lambda p: p["recommended_load"])
+    assert [load["kg"] for load in bench] == [20, 20, 20, 20, 22.5, 22.5, 22.5, 22.5]
+
+
+def test_a_lift_with_records_is_prefilled_with_the_users_own_best_set():
+    # Arrange — the 100 × 5 squat estimates higher than the 110 × 1, so it is the best set
+    h = build_harness(RELEASED)
+    h.log_sets(
+        USER,
+        ("Barbell Back Squat", _absolute(100), 5),
+        ("Barbell Back Squat", _absolute(110), 1),
+    )
+
+    # Act
+    lifts = {lift["key"]: lift for lift in h.list().json()["data"][0]["main_lifts"]}
+
+    # Assert
+    assert lifts["squat"]["working_set_prefill"] == {"kg": 100, "reps": 5, "source": "records"}
+    assert lifts["deadlift"]["working_set_prefill"] == {"kg": 40, "reps": 5, "source": "default"}
+
+
+def test_a_starting_weight_curated_protocol_offers_no_working_set_prefill():
+    # Arrange — the default harness releases the beginner linear progression
+    h = build_harness()
+
+    # Act
+    lifts = h.list().json()["data"][0]["main_lifts"]
+
+    # Assert
+    assert {lift["working_set_prefill"] for lift in lifts} == {None}

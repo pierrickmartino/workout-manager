@@ -4,7 +4,7 @@ Four Sessions run in order, each built around one barbell main lift plus two dum
 accessories. The main lifts run in four-week **cycles**: three working weeks of rising
 intensity (3×5, 3×3, 3×1, the last set of each as many reps as you can), then a deload week of
 3×5. The user enters a recent working set per lift; every week's weight is computed from it
-**once** at adopt time (``waves.py``) and written as an absolute Load, and each new cycle adds a
+**once** at adopt time (``wave_loads.py``) and written as an absolute Load, and each new cycle adds a
 fixed increment: more for the lower-body lifts than the upper-body ones.
 
 The main lifts are on **Static**, so the authored waves and deloads survive: Progression never
@@ -39,8 +39,11 @@ _ACCESSORY_REST_SECONDS = 90
 # a true max and the first cycles leave room.
 _REFERENCE_SHARE = 0.9
 _WAVE_SETS = 3
+# Every waved lift is a barbell lift, so no weight is written under the empty bar.
+EMPTY_BAR_KG = 20.0
 WAVE_CYCLE = Wave(
     reference_share=_REFERENCE_SHARE,
+    min_kg=EMPTY_BAR_KG,
     weeks=(
         WaveWeek(share=0.85, sets=_WAVE_SETS, reps="5+"),
         WaveWeek(share=0.90, sets=_WAVE_SETS, reps="3+"),

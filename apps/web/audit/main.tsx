@@ -382,24 +382,28 @@ const auditCuratedProtocol: CuratedProtocolSummary = {
       exercise_name: "Barbell Back Squat",
       default_starting_weight_kg: 20,
       starting_weight_prefill: { kg: 82.5, source: "records" },
+      working_set_prefill: null,
     },
     {
       key: "bench",
       exercise_name: "Barbell Bench Press",
       default_starting_weight_kg: 20,
       starting_weight_prefill: { kg: 20, source: "default" },
+      working_set_prefill: null,
     },
     {
       key: "press",
       exercise_name: "Barbell Overhead Press",
       default_starting_weight_kg: 20,
       starting_weight_prefill: { kg: 20, source: "default" },
+      working_set_prefill: null,
     },
     {
       key: "deadlift",
       exercise_name: "Barbell Deadlift",
       default_starting_weight_kg: 40,
       starting_weight_prefill: { kg: 40, source: "default" },
+      working_set_prefill: null,
     },
   ],
   sensitive_constraint_caveat: true,
@@ -430,11 +434,19 @@ const auditCuratedPreview = {
   }),
 };
 
-// The same Curated Protocol asking for a working set per main lift, as the wave program does
-// (#693): each lift's weight and reps share a row, under the lift's name.
+// The same Curated Protocol asking for a working set per main lift, as the wave Curated Protocol
+// does (#693): each lift's weight and reps share a row, under the lift's name. The squat's
+// working set comes from records, so the longest weight hint is on screen.
 const auditWaveCuratedProtocol: CuratedProtocolSummary = {
   ...auditCuratedProtocol,
   main_lift_input: "working_set",
+  main_lifts: auditCuratedProtocol.main_lifts.map((lift, index) => ({
+    ...lift,
+    working_set_prefill:
+      index === 0
+        ? { kg: 102.5, reps: 12, source: "records" }
+        : { kg: lift.default_starting_weight_kg, reps: 5, source: "default" },
+  })),
 };
 
 function Content() {

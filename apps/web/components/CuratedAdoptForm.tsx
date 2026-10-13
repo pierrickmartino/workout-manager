@@ -147,9 +147,13 @@ export function CuratedAdoptForm({
   );
 }
 
+interface LiftInputProps {
+  lift: AdoptLiftField;
+}
+
 // One main lift's input: a starting weight, or a working set's weight and reps grouped under
 // the lift's name, so each control's own label stays short and the group names the lift.
-function LiftInput({ lift }: { lift: AdoptLiftField }): React.JSX.Element {
+function LiftInput({ lift }: LiftInputProps): React.JSX.Element {
   const weight = { name: lift.name, defaultValue: lift.initialKg };
   if (lift.reps === null) {
     return (

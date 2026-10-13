@@ -34,7 +34,12 @@ from app.curated.plan import (
     enumerate_plan,
     validate_choices,
 )
-from app.curated.prefill import StartingWeightPrefill, starting_weight_prefills
+from app.curated.prefill import (
+    StartingWeightPrefill,
+    WorkingSetPrefill,
+    starting_weight_prefills,
+    working_set_prefills,
+)
 from app.curated.registry import CuratedRegistry, get_curated_registry
 from app.db.models import Profile
 from app.domain.equipment import missing_equipment
@@ -95,6 +100,12 @@ def _serialize_prefill(prefill: StartingWeightPrefill) -> dict:
     return {"kg": prefill.kg, "source": prefill.source}
 
 
+def _serialize_working_set_prefill(prefill: WorkingSetPrefill | None) -> dict | None:
+    if prefill is None:
+        return None
+    return {"kg": prefill.kg, "reps": prefill.reps, "source": prefill.source}
+
+
 def _serialize_curated(
     curated: CuratedProtocol,
     history: list[LoggedSessionView],
@@ -103,6 +114,8 @@ def _serialize_curated(
     available_equipment: list[str],
 ) -> dict:
     prefills = starting_weight_prefills(curated, history)
+    # Only a wave Curated Protocol asks for a working set (issue #693).
+    working_sets = working_set_prefills(curated, history) if curated.is_wave else {}
     return {
         "identifier": curated.identifier,
         "version": curated.version,
@@ -115,13 +128,16 @@ def _serialize_curated(
         "required_equipment": list(curated.required_equipment),
         # What the adopt form asks for per main lift: a starting weight, or for a wave
         # Curated Protocol a recent working set its weeks are computed from (issue #693).
-        "main_lift_input": "starting_weight" if curated.wave is None else "working_set",
+        "main_lift_input": "working_set" if curated.is_wave else "starting_weight",
         "main_lifts": [
             {
                 "key": lift.key,
                 "exercise_name": lift.exercise,
                 "default_starting_weight_kg": lift.default_start_kg,
                 "starting_weight_prefill": _serialize_prefill(prefills[lift.key]),
+                "working_set_prefill": _serialize_working_set_prefill(
+                    working_sets.get(lift.key)
+                ),
             }
             for lift in curated.main_lifts
         ],

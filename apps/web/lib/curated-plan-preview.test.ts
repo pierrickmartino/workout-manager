@@ -263,7 +263,7 @@ test("a wave form previews its untouched working sets before the user edits anyt
   assert.deepEqual(request, { weeks: 4, working_sets: { squat: { kg: 82.5, reps: 5 } } });
 });
 
-test("a wave form's snapshot holds each working set's weight and reps", () => {
+test("a wave form’s snapshot holds each working set's weight and reps", () => {
   // Act
   const untouched = defaultFormSnapshot(WAVE_DEFAULTS);
   const read = adoptFormSnapshot(
@@ -276,7 +276,7 @@ test("a wave form's snapshot holds each working set's weight and reps", () => {
   assert.deepEqual(read, untouched);
 });
 
-test("editing a working set's reps after previewing makes the preview stale", () => {
+test("editing a working set’s reps after previewing makes the preview stale", () => {
   // Arrange
   const preview = {
     snapshot: defaultFormSnapshot(WAVE_DEFAULTS),

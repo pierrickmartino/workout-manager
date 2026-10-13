@@ -33,12 +33,14 @@ const BEGINNER: CuratedProtocolSummary = {
       exercise_name: "Barbell Back Squat",
       default_starting_weight_kg: 20,
       starting_weight_prefill: { kg: 20, source: "default" },
+      working_set_prefill: null,
     },
     {
       key: "deadlift",
       exercise_name: "Barbell Deadlift",
       default_starting_weight_kg: 40,
       starting_weight_prefill: { kg: 40, source: "default" },
+      working_set_prefill: null,
     },
   ],
   sensitive_constraint_caveat: false,
@@ -185,6 +187,7 @@ test("a lift prefilled from the user’s records starts there and says so", () =
         exercise_name: "Barbell Back Squat",
         default_starting_weight_kg: 20,
         starting_weight_prefill: { kg: 82.5, source: "records" },
+        working_set_prefill: null,
       },
     ],
   };
@@ -367,18 +370,21 @@ const WAVE: CuratedProtocolSummary = {
       key: "squat",
       exercise_name: "Barbell Back Squat",
       default_starting_weight_kg: 20,
+      // The working set is the user's own best squat; the starting-weight prefill is ignored.
       starting_weight_prefill: { kg: 82.5, source: "records" },
+      working_set_prefill: { kg: 110, reps: 3, source: "records" },
     },
     {
       key: "press",
       exercise_name: "Barbell Overhead Press",
       default_starting_weight_kg: 20,
       starting_weight_prefill: { kg: 20, source: "default" },
+      working_set_prefill: { kg: 20, reps: 5, source: "default" },
     },
   ],
 };
 
-test("a wave Curated Protocol asks for a recent working set, weight and reps, per main lift", () => {
+test("a wave Curated Protocol asks for a working set per main lift, prefilled with the user’s own", () => {
   // Act
   const { lifts } = adoptFormDefaults(WAVE);
 
@@ -388,10 +394,10 @@ test("a wave Curated Protocol asks for a recent working set, weight and reps, pe
       key: "squat",
       name: "weight_squat",
       label: "Barbell Back Squat",
-      initialKg: 82.5,
+      initialKg: 110,
       source: "records",
       hint: "Recent working set: weight in kg · prefilled from your records, edit it freely",
-      reps: { name: "reps_squat", label: "Reps", initial: 5, hint: "Reps done at that weight, 1 to 12" },
+      reps: { name: "reps_squat", label: "Reps", initial: 3, hint: "Reps done at that weight, 1 to 12" },
     },
     {
       key: "press",

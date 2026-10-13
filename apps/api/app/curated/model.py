@@ -92,10 +92,13 @@ class Wave:
 
     The reference is ``reference_share`` of the working set's Estimated 1RM, derived once at
     adopt time. ``weeks`` is one cycle, repeated to fill the chosen length; each later cycle
-    adds the lift's ``cycle_increment_kg``."""
+    adds the lift's ``cycle_increment_kg``. A computed weight below ``min_kg`` is held there."""
 
     reference_share: float
     weeks: tuple[WaveWeek, ...]
+    # No week's weight is written below this, before the cycle increment: for a barbell lift,
+    # the empty bar, which no lighter computed weight could be loaded under.
+    min_kg: float
 
     @property
     def cycle_weeks(self) -> int:
@@ -148,6 +151,15 @@ class CuratedProtocol:
     @property
     def sessions_per_week(self) -> int:
         return len(self.weekly_pattern)
+
+    @property
+    def is_wave(self) -> bool:
+        return self.wave is not None
+
+    def main_lift(self, key: str) -> MainLift | None:
+        """The declared main lift with ``key``, or ``None``."""
+
+        return next((lift for lift in self.main_lifts if lift.key == key), None)
 
 
 __all__ = [

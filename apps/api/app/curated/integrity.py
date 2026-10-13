@@ -146,7 +146,7 @@ def _main_lift_errors(curated: CuratedProtocol) -> list[IntegrityError]:
 
 
 def _wave_errors(curated: CuratedProtocol) -> list[IntegrityError]:
-    wave = curated.wave is not None
+    is_wave = curated.is_wave
     errors = [
         IntegrityError(
             "invalid_cycle_increment",
@@ -156,20 +156,20 @@ def _wave_errors(curated: CuratedProtocol) -> list[IntegrityError]:
         for lift in curated.main_lifts
         if (
             (lift.cycle_increment_kg is None or lift.cycle_increment_kg <= 0)
-            if wave
+            if is_wave
             else lift.cycle_increment_kg is not None
         )
     ]
     for day, prescription in _pattern_prescriptions(curated):
         waved = isinstance(prescription, WavePrescription)
-        if waved and not wave:
+        if waved and not is_wave:
             errors.append(
                 IntegrityError(
                     "wave_missing",
                     f"Day {day}: {prescription.exercise} is waved, but there is no wave.",
                 )
             )
-        elif wave and prescription.main_lift is not None and not waved:
+        elif is_wave and prescription.main_lift is not None and not waved:
             errors.append(
                 IntegrityError(
                     "main_lift_not_waved",
@@ -179,13 +179,17 @@ def _wave_errors(curated: CuratedProtocol) -> list[IntegrityError]:
     return errors
 
 
-def _enumerable(curated: CuratedProtocol, prescription, declared: set[str]) -> bool:
+def _enumerable(
+    curated: CuratedProtocol,
+    prescription: PatternPrescription | WavePrescription,
+    declared: set[str],
+) -> bool:
     """Whether the spine check can enumerate ``prescription``. A dangling main-lift reference,
     or a waved lift with no wave, is reported elsewhere and has nothing to enumerate with."""
 
     if prescription.main_lift is not None and prescription.main_lift not in declared:
         return False
-    return curated.wave is not None or not isinstance(prescription, WavePrescription)
+    return curated.is_wave or not isinstance(prescription, WavePrescription)
 
 
 def _prescription_errors(curated: CuratedProtocol) -> list[IntegrityError]:
@@ -232,7 +236,7 @@ def _spine_errors(curated: CuratedProtocol) -> list[IntegrityError]:
     errors: list[IntegrityError] = []
     for week in range(1, weeks + 1):
         for day, session in enumerate(curated.weekly_pattern, start=1):
-            where = f"Day {day}" if curated.wave is None else f"Week {week} Day {day}"
+            where = f"Week {week} Day {day}" if curated.is_wave else f"Day {day}"
             draft = DeployDraft(
                 weeks=MIN_WEEKS,
                 sessions_per_week=1,

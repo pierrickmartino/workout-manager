@@ -6,7 +6,7 @@ more and nothing less. That input is a positive starting weight, or for a wave C
 Protocol a recent **working set** (weight × reps). ``enumerate_plan`` repeats the weekly
 pattern to fill the chosen length, so the Protocol is fully enumerated and self-paced
 (ADR-0001), and writes every main-lift weight as an **absolute** Load: the starting weight, or
-the week's wave computed from the working set (``waves.py``). It never writes a
+the week's wave computed from the working set (``wave_loads.py``). It never writes a
 ``percent_1rm`` Load. Exercises stay names here; adoption resolves them against the Catalog.
 """
 
@@ -21,7 +21,7 @@ from app.curated.model import (
     PatternPrescription,
     WavePrescription,
 )
-from app.curated.waves import WorkingSet, wave_dose, wave_reference_kg
+from app.curated.wave_loads import WorkingSet, wave_dose, wave_reference_kg
 from app.domain.load import load_from_input, parse_load
 from app.domain.one_rep_max import MAX_TRUSTWORTHY_REPS, MIN_TRUSTWORTHY_REPS
 from app.domain.quantity import quantity_from_text
@@ -155,13 +155,15 @@ def _input_errors(curated: CuratedProtocol, choices: AdoptionChoices) -> list[Ch
     keyed by a lift this Curated Protocol doesn't have, then one if the other kind of input
     was sent: a wave Curated Protocol takes working sets only, any other starting weights."""
 
-    wave = curated.wave is not None
-    given: Mapping[str, object] = choices.working_sets if wave else choices.starting_weights_kg
+    is_wave = curated.is_wave
+    given: Mapping[str, object] = (
+        choices.working_sets if is_wave else choices.starting_weights_kg
+    )
     errors: list[ChoiceError] = []
     for lift in curated.main_lifts:
         error = (
             _working_set_error(lift, choices.working_sets.get(lift.key))
-            if wave
+            if is_wave
             else _starting_weight_error(lift, choices.starting_weights_kg.get(lift.key))
         )
         if error is not None:
@@ -175,14 +177,14 @@ def _input_errors(curated: CuratedProtocol, choices: AdoptionChoices) -> list[Ch
         )
         for key in sorted(set(given) - keys)
     )
-    if wave and choices.starting_weights_kg:
+    if is_wave and choices.starting_weights_kg:
         errors.append(
             ChoiceError(
                 code="starting_weight_not_accepted",
                 message="This Curated Protocol takes a recent working set, not a starting weight.",
             )
         )
-    if not wave and choices.working_sets:
+    if not is_wave and choices.working_sets:
         errors.append(
             ChoiceError(
                 code="working_set_not_accepted",
@@ -248,7 +250,9 @@ def planned_prescription(
     if isinstance(prescription, WavePrescription):
         if curated.wave is None:
             raise ValueError(f"{prescription.exercise} is waved but there is no wave.")
-        lift = next(m for m in curated.main_lifts if m.key == prescription.main_lift)
+        lift = curated.main_lift(prescription.main_lift)
+        if lift is None:
+            raise ValueError(f"'{prescription.main_lift}' is not a declared main lift.")
         dose = wave_dose(curated.wave, bases_kg[lift.key], lift.cycle_increment_kg or 0, week)
         return _planned(prescription, dose.sets, dose.reps, _absolute(dose.kg))
     if prescription.main_lift is not None:

@@ -24,12 +24,22 @@ export interface StartingWeightPrefill {
   source: PrefillSource;
 }
 
+// The working set offered for a wave Curated Protocol's main lift (issue #693): the user's own
+// best qualifying set, weight and reps as logged ("records"), or the default weight for 5 reps.
+export interface WorkingSetPrefill {
+  kg: number;
+  reps: number;
+  source: PrefillSource;
+}
+
 export interface CuratedMainLift {
   key: string;
   exercise_name: string;
   default_starting_weight_kg: number;
   // The starting weight offered to this user, computed at read time from their records.
   starting_weight_prefill: StartingWeightPrefill;
+  // The working set offered instead, for a wave Curated Protocol only; `null` otherwise.
+  working_set_prefill: WorkingSetPrefill | null;
 }
 
 // What the adopt form asks for per main lift: a starting weight, or for a wave Curated Protocol a
@@ -213,11 +223,10 @@ function repsFieldName(key: string): string {
   return `reps_${key}`;
 }
 
-// The rep window the server derives a wave from (the Estimated 1RM's trustworthy range).
+// The rep window the server derives a wave from: the Estimated 1RM's trustworthy range
+// (`MIN_TRUSTWORTHY_REPS`…`MAX_TRUSTWORTHY_REPS` in the API), which re-validates it.
 export const MIN_WORKING_SET_REPS = 1;
 export const MAX_WORKING_SET_REPS = 12;
-// A working set's reps start here: with the prefilled weight, a conservative first guess.
-const DEFAULT_WORKING_SET_REPS = 5;
 
 const WEIGHT_HINTS: Record<MainLiftInput, string> = {
   starting_weight: "Starting weight in kg",
@@ -230,13 +239,35 @@ function weightHint(input: MainLiftInput, source: PrefillSource): string {
     : WEIGHT_HINTS[input];
 }
 
-function repsField(input: MainLiftInput, key: string): AdoptRepsField | null {
-  if (input !== "working_set") return null;
+function repsField(key: string, reps: number): AdoptRepsField {
   return {
     name: repsFieldName(key),
     label: "Reps",
-    initial: DEFAULT_WORKING_SET_REPS,
+    initial: reps,
     hint: `Reps done at that weight, ${MIN_WORKING_SET_REPS} to ${MAX_WORKING_SET_REPS}`,
+  };
+}
+
+// One lift's field: a starting weight, or for a wave Curated Protocol the prefilled working set.
+function liftField(input: MainLiftInput, lift: CuratedMainLift): AdoptLiftField {
+  const base = { key: lift.key, name: liftFieldName(lift.key), label: lift.exercise_name };
+  const workingSet = input === "working_set" ? lift.working_set_prefill : null;
+  if (workingSet === null) {
+    const prefill = lift.starting_weight_prefill;
+    return {
+      ...base,
+      initialKg: prefill.kg,
+      source: prefill.source,
+      hint: weightHint("starting_weight", prefill.source),
+      reps: null,
+    };
+  }
+  return {
+    ...base,
+    initialKg: workingSet.kg,
+    source: workingSet.source,
+    hint: weightHint("working_set", workingSet.source),
+    reps: repsField(lift.key, workingSet.reps),
   };
 }
 
@@ -248,15 +279,7 @@ export function adoptFormDefaults(curated: CuratedProtocolSummary): AdoptFormDef
   return {
     weeks: curated.min_weeks,
     weekOptions,
-    lifts: curated.main_lifts.map((lift) => ({
-      key: lift.key,
-      name: liftFieldName(lift.key),
-      label: lift.exercise_name,
-      initialKg: lift.starting_weight_prefill.kg,
-      source: lift.starting_weight_prefill.source,
-      hint: weightHint(curated.main_lift_input, lift.starting_weight_prefill.source),
-      reps: repsField(curated.main_lift_input, lift.key),
-    })),
+    lifts: curated.main_lifts.map((lift) => liftField(curated.main_lift_input, lift)),
   };
 }
 
@@ -326,16 +349,18 @@ function readWorkingSets(
   weeks: number,
   form: FormData,
 ): AdoptFormResult {
-  const workingSets: Record<string, WorkingSet> = {};
-  for (const lift of curated.main_lifts) {
-    const kg = positiveNumber(form.get(liftFieldName(lift.key)));
+  const entries = curated.main_lifts.map((lift) => ({
+    lift,
+    kg: positiveNumber(form.get(liftFieldName(lift.key))),
+    reps: workingSetReps(form.get(repsFieldName(lift.key))),
+  }));
+  for (const { lift, kg, reps } of entries) {
     if (kg === null) {
       return {
         ok: false,
         error: `Enter a working set weight above 0 kg for ${lift.exercise_name}.`,
       };
     }
-    const reps = workingSetReps(form.get(repsFieldName(lift.key)));
     if (reps === null) {
       return {
         ok: false,
@@ -344,8 +369,10 @@ function readWorkingSets(
           `from ${MIN_WORKING_SET_REPS} to ${MAX_WORKING_SET_REPS}.`,
       };
     }
-    workingSets[lift.key] = { kg, reps };
   }
+  const workingSets: Record<string, WorkingSet> = Object.fromEntries(
+    entries.map(({ lift, kg, reps }) => [lift.key, { kg: kg as number, reps: reps as number }]),
+  );
   return { ok: true, request: { weeks, working_sets: workingSets } };
 }
 
