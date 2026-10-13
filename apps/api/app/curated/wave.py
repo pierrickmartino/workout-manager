@@ -103,9 +103,10 @@ WAVE = CuratedProtocol(
     description=(
         "Four sessions a week, done in order, each built around one barbell main lift "
         "(squat, bench press, deadlift or overhead press) plus two dumbbell accessories. "
-        "The main lifts run in four-week cycles. Before you start, you enter a recent "
-        "working set for each lift, a weight and the reps you did with it, and every week's "
-        "weights are worked out from it once, when you adopt. The first three weeks get "
+        "The main lifts run in four-week cycles. You need a logged set of each lift first, "
+        "from 1 to 12 reps. Before you start, you enter a recent working set for each lift, "
+        "a weight and the reps you did with it, and every week's weights are worked out from "
+        "it once, when you adopt. The first three weeks get "
         "heavier as the reps drop: three sets of five, then of three, then of one, and the "
         "last set each week is as many good reps as you can. The fourth week is a lighter "
         "deload of three sets of five. Each new cycle adds 5 kg to every squat and deadlift "

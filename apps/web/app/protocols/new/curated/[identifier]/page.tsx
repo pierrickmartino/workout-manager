@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { CuratedAdoptForm } from "@/components/CuratedAdoptForm";
-import { Alert } from "@/components/pulse/alert";
+import { CuratedNotice } from "@/components/CuratedNotice";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
 import { fetchCuratedProtocols, previewCuratedProtocol } from "@/lib/curated-protocols";
@@ -71,12 +71,7 @@ export default async function AdoptCuratedProtocolPage({
         ) : null}
       </div>
       {loggedSetNotice !== null ? (
-        <Alert tone="info">
-          <span className="flex flex-col gap-1">
-            <strong className="font-semibold text-text-primary">{loggedSetNotice.title}</strong>
-            <span>{loggedSetNotice.body}</span>
-          </span>
-        </Alert>
+        <CuratedNotice notice={loggedSetNotice} />
       ) : (
         <CuratedAdoptForm
           identifier={curated.identifier}

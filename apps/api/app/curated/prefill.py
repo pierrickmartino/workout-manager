@@ -59,7 +59,8 @@ class WorkingSetPrefill:
 
     kg: float
     reps: int
-    source: PrefillSource
+    # Always the user's own set: a wave main lift has no default (issue #694).
+    source: Literal["records"]
 
 
 @dataclass(frozen=True)
@@ -151,10 +152,8 @@ def lifts_needing_a_logged_set(
 
     if not curated.is_wave:
         return ()
-    best = _best_absolute_sets_by_name(history)
-    return tuple(
-        lift.key for lift in curated.main_lifts if _best_set_for(lift, best) is None
-    )
+    prefills = working_set_prefills(curated, history)
+    return tuple(key for key, prefill in prefills.items() if prefill is None)
 
 
 __all__ = [

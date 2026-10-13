@@ -224,7 +224,7 @@ def _unlogged_lift_errors(
         ChoiceError(
             code="no_logged_working_set",
             message=(
-                f"Log a working set of {names[key]} first: this plan's weights are worked "
+                f"Log a working set of {names[key]} first: this plan’s weights are worked "
                 "out from a set you actually did."
             ),
             main_lift=key,

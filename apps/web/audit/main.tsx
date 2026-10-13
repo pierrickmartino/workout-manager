@@ -67,10 +67,12 @@ import { ProtocolsIndex } from "@/components/ProtocolsIndex";
 import { NewProtocolChoices } from "@/components/NewProtocolChoices";
 import { CuratedProtocolPicker } from "@/components/CuratedProtocolPicker";
 import { CuratedAdoptForm } from "@/components/CuratedAdoptForm";
+import { CuratedNotice } from "@/components/CuratedNotice";
 import { AdoptedSetAsideNote } from "@/components/AdoptedSetAsideNote";
 import {
   adoptFormDefaults,
   curatedCaveat,
+  curatedLoggedSetNotice,
   curatedProtocolRow,
   curatedSetAsideNotice,
   newProtocolChoices,
@@ -461,6 +463,8 @@ function Content() {
     // The new-Protocol peer choice over the Curated Protocol picker (#684).
     case "curated": return <><NewProtocolChoices choices={newProtocolChoices("curated", { hasCuratedProtocols: true })} /><CuratedProtocolPicker rows={count === 0 ? [] : [curatedProtocolRow(auditCuratedProtocol)]} /></>;
     case "curated-adopt": return <CuratedAdoptForm identifier={auditCuratedProtocol.identifier} defaults={adoptFormDefaults(auditCuratedProtocol)} initialPreview={auditCuratedPreview} caveat={curatedCaveat(auditCuratedProtocol)} />;
+    // The notice that replaces it while lifts have no logged set (#694): every lift named, the longest body.
+    case "curated-wave-unlogged": return <CuratedNotice notice={curatedLoggedSetNotice({ ...auditWaveCuratedProtocol, lifts_needing_a_logged_set: auditWaveCuratedProtocol.main_lifts.map((lift) => lift.key) }) ?? { title: "", body: "" }} />;
     case "curated-wave-adopt": return <CuratedAdoptForm identifier={auditWaveCuratedProtocol.identifier} defaults={adoptFormDefaults(auditWaveCuratedProtocol)} initialPreview={null} caveat={null} />;
     // With the note a Curated Protocol adopted set aside lands on (#687), naming the set-aside row.
     case "protocols": {

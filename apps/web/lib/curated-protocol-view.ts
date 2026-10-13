@@ -30,7 +30,7 @@ export interface StartingWeightPrefill {
 export interface WorkingSetPrefill {
   kg: number;
   reps: number;
-  source: PrefillSource;
+  source: "records";
 }
 
 export interface CuratedMainLift {
@@ -392,10 +392,13 @@ export function findCuratedProtocol(
     : undefined;
 }
 
-export interface CuratedCaveat {
+// A titled notice on the adopt page: the caveat below, or the logged-set notice (issue #694).
+export interface CuratedNotice {
   title: string;
   body: string;
 }
+
+export type CuratedCaveat = CuratedNotice;
 
 // The caveat shown before adopting, or `null` when it doesn't apply to this user (ADR-0058). It
 // never claims the plan was checked against their constraint: it says the opposite, and what
@@ -420,7 +423,7 @@ function namesList(names: readonly string[]): string {
 // The notice shown in place of the adopt form while a wave Curated Protocol's main lift has no
 // logged set, or `null` when there is none to show (issue #694). The server refuses the adopt
 // too; this only says so before the user fills anything in.
-export function curatedLoggedSetNotice(curated: CuratedProtocolSummary): CuratedCaveat | null {
+export function curatedLoggedSetNotice(curated: CuratedProtocolSummary): CuratedNotice | null {
   const needed = new Set(curated.lifts_needing_a_logged_set);
   if (needed.size === 0) return null;
   const names = curated.main_lifts
