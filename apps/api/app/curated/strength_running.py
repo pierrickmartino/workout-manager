@@ -1,6 +1,6 @@
 """The strength and running Curated Protocol (ADR-0130 amendment).
 
-A concurrent program for an intermediate lifter who can already run 30 minutes easy. Six
+Concurrent training for an intermediate lifter who can already run 30 minutes easy. Six
 Sessions run in order, alternating three lifting Sessions with three runs: Lower, easy run,
 Upper A, intervals, Upper B, long easy run. The order is the only lever against interference in a
 calendar-free plan (ADR-0001): the heavy leg day is followed by the gentlest run and the
@@ -61,7 +61,9 @@ def _accessory(exercise: str) -> PatternPrescription:
     )
 
 
-def _run(amount: str, effort: str, sets: int = 1, rest_seconds: int | None = None):
+def _run(
+    amount: str, effort: str, sets: int = 1, rest_seconds: int | None = None
+) -> PatternPrescription:
     return PatternPrescription(
         exercise="Running",
         sets=sets,

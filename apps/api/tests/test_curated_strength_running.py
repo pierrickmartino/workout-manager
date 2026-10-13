@@ -1,6 +1,6 @@
 """The strength and running Curated Protocol adopted end to end (ADR-0130 amendment).
 
-A concurrent program for an intermediate lifter: three lifting Sessions and three run Sessions
+Concurrent training for an intermediate lifter: three lifting Sessions and three run Sessions
 alternate through the week, so it is the first Curated Protocol whose Sessions are typed and
 timed apart from it. The content ships unreleased, so these tests release it through an injected
 registry (the shipped data is never edited) and drive the real list and adopt endpoints over the
@@ -139,7 +139,8 @@ def test_the_interval_repeats_are_four_hundred_metres_with_ninety_seconds_rest()
     _, protocol = _adopted()
 
     # Assert
-    intervals = _first_week(protocol)[3]["prescriptions"][1]
+    (session,) = (s for s in _first_week(protocol) if s["title"] == "Intervals")
+    _warm_up, intervals, _cool_down = session["prescriptions"]
     assert intervals["prescribed_quantity"]["metres"] == 400
     assert intervals["rest_seconds"] == 90
 

@@ -121,7 +121,7 @@ def _shape_errors(curated: CuratedProtocol) -> list[IntegrityError]:
     return errors
 
 
-def _session_kind_errors(curated: CuratedProtocol) -> list[IntegrityError]:
+def _training_type_and_duration_errors(curated: CuratedProtocol) -> list[IntegrityError]:
     errors = [
         IntegrityError(
             "unknown_training_type",
@@ -310,7 +310,7 @@ def integrity_errors(curated: CuratedProtocol) -> list[IntegrityError]:
     return [
         *_shape_errors(curated),
         *_brand_errors(curated),
-        *_session_kind_errors(curated),
+        *_training_type_and_duration_errors(curated),
         *_main_lift_errors(curated),
         *_wave_errors(curated),
         *_prescription_errors(curated),

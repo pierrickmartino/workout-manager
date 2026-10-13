@@ -1,6 +1,6 @@
 """A Curated Protocol's Session may override the Training Type and duration (ADR-0130 amendment).
 
-A hybrid program mixes lifting Sessions and run Sessions in one weekly pattern, so a
+A hybrid Curated Protocol mixes lifting Sessions and run Sessions in one weekly pattern, so a
 ``PatternSession`` may name its own ``training_type`` and ``duration_minutes``; one that doesn't
 falls back to the Curated Protocol's. The override is what the record is typed by, so it must
 reach every adopted Session and survive a Builder deploy of the un-performed tail. Driven over
@@ -12,7 +12,7 @@ from dataclasses import replace
 
 from tests.test_curated_protocols_endpoint import RELEASED, build_harness
 
-# The beginner program with its first Session retyped as a cardio Session of its own length.
+# The beginner Curated Protocol, its first Session retyped as cardio with its own length.
 OVERRIDDEN = replace(
     RELEASED,
     weekly_pattern=(

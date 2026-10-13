@@ -89,7 +89,7 @@ honest approximations of the methodologies that inspired them:
 
 ## Amendment: a Session typed and timed apart from its Curated Protocol
 
-Added with the strength and running program, a fifth program that ships unreleased until its own
+Added with the strength and running Curated Protocol, a fifth that ships unreleased until its own
 sign-off. A hybrid week mixes lifting Sessions and run Sessions, and History and Analytics slice the
 record by Training Type, so typing a 45-minute run `strength` would corrupt what they project from.
 A `PatternSession` may therefore name its own `training_type` and `duration_minutes`; left unset,

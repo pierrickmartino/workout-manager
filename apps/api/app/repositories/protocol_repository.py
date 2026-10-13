@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, TypeVar
 from typing import Protocol as Interface
 
 from sqlalchemy import null
@@ -23,6 +23,7 @@ from sqlmodel import Session, select
 # Sentinel distinguishing "leave the Protocol name unchanged" (the default) from an
 # explicit ``name=None`` that clears it back to the derived label (F4 Slice 5).
 _KEEP_NAME: Any = object()
+_T = TypeVar("_T")
 
 from app.db.models import (
     Exercise,
@@ -359,8 +360,8 @@ class SqlProtocolRepository:
         for position, session_draft in enumerate(draft.sessions):
             workout = WorkoutSession(
                 clerk_user_id=clerk_user_id,
-                training_type=session_draft.training_type or draft.training_type,
-                duration_minutes=session_draft.duration_minutes or draft.duration_minutes,
+                training_type=_own_or(session_draft.training_type, draft.training_type),
+                duration_minutes=_own_or(session_draft.duration_minutes, draft.duration_minutes),
                 # Author stamped with the adopting/deploying user (GLOSSARY: Author, #395):
                 # a Protocol-member Session attributes to whoever created it here.
                 author_clerk_user_id=clerk_user_id,
@@ -497,8 +498,8 @@ class SqlProtocolRepository:
         for spec in tail:
             workout = WorkoutSession(
                 clerk_user_id=clerk_user_id,
-                training_type=spec.training_type or protocol.training_type,
-                duration_minutes=spec.duration_minutes or protocol.duration_minutes,
+                training_type=_own_or(spec.training_type, protocol.training_type),
+                duration_minutes=_own_or(spec.duration_minutes, protocol.duration_minutes),
                 # Author stamped with the adopting/deploying user (GLOSSARY: Author, #395):
                 # a Protocol-member Session attributes to whoever created it here.
                 author_clerk_user_id=clerk_user_id,
@@ -631,8 +632,8 @@ class InMemoryProtocolRepository:
             workout = WorkoutSession(
                 id=self._next_session_id,
                 clerk_user_id=clerk_user_id,
-                training_type=session_draft.training_type or draft.training_type,
-                duration_minutes=session_draft.duration_minutes or draft.duration_minutes,
+                training_type=_own_or(session_draft.training_type, draft.training_type),
+                duration_minutes=_own_or(session_draft.duration_minutes, draft.duration_minutes),
                 # Author stamped with the adopting/deploying user (GLOSSARY: Author, #395):
                 # a Protocol-member Session attributes to whoever created it here.
                 author_clerk_user_id=clerk_user_id,
@@ -733,8 +734,8 @@ class InMemoryProtocolRepository:
             workout = WorkoutSession(
                 id=self._next_session_id,
                 clerk_user_id=clerk_user_id,
-                training_type=spec.training_type or protocol.training_type,
-                duration_minutes=spec.duration_minutes or protocol.duration_minutes,
+                training_type=_own_or(spec.training_type, protocol.training_type),
+                duration_minutes=_own_or(spec.duration_minutes, protocol.duration_minutes),
                 # Author stamped with the adopting/deploying user (GLOSSARY: Author, #395):
                 # a Protocol-member Session attributes to whoever created it here.
                 author_clerk_user_id=clerk_user_id,
@@ -787,6 +788,12 @@ class InMemoryProtocolRepository:
                     _apply_pitch(row, pitch)
 
         return self._view(protocol)
+
+
+def _own_or(own: _T | None, protocol_value: _T) -> _T:
+    """A Session's own Training Type or duration, else its Protocol's (ADR-0130 amendment)."""
+
+    return protocol_value if own is None else own
 
 
 def _tail_provenance(workouts: Sequence[WorkoutSession]) -> str:

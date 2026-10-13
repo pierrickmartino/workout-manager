@@ -249,7 +249,7 @@ def test_a_released_curated_protocol_without_a_coach_sign_off_fails():
     assert "missing_sign_off" in _codes(curated)
 
 
-# The four programs the review for issue #694 approved; later content ships unreleased until its
+# The four Curated Protocols the review for issue #694 approved; later content ships unreleased until its
 # own sign-off is recorded.
 REVIEWED_IN_694 = (
     "beginner-linear-progression",
@@ -260,7 +260,7 @@ REVIEWED_IN_694 = (
 REVIEWED = [p for p in CURATED_PROTOCOLS if p.identifier in REVIEWED_IN_694]
 
 
-def test_every_program_reviewed_in_694_is_still_shipped():
+def test_every_curated_protocol_reviewed_in_694_is_still_shipped():
     # Assert — a renamed identifier must not silently drop out of the sign-off check below.
     assert [p.identifier for p in REVIEWED] == list(REVIEWED_IN_694)
 

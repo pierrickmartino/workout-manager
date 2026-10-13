@@ -109,7 +109,7 @@ class Wave:
 class PatternSession:
     """One Session of the repeating weekly pattern.
 
-    A hybrid program mixes kinds of Session in one week, so a Session may name its own
+    A hybrid Curated Protocol mixes kinds of Session in one week, so a Session may name its own
     ``training_type`` and ``duration_minutes``; left ``None``, each falls back to the Curated
     Protocol's (ADR-0130 amendment)."""
 
