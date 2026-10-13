@@ -147,9 +147,46 @@ CURATED_EXERCISES_0049: tuple[CuratedExercise, ...] = (
     ),
 )
 
+# Seeded by ``0050_seed_tiered_exercises``: the tiered program's T2 variations.
+CURATED_EXERCISES_0050: tuple[CuratedExercise, ...] = (
+    CuratedExercise(
+        "Barbell Close-Grip Bench Press",
+        "A bench press with the hands about shoulder-width apart on the bar.",
+        ("triceps", "chest", "shoulders"),
+        ("barbell", "bench", "rack"),
+        "Keep your elbows close to your sides, lower the bar to your lower chest, then press "
+        "it back up.",
+    ),
+    CuratedExercise(
+        "Barbell Romanian Deadlift",
+        "A hip hinge with the barbell from standing, knees slightly bent.",
+        ("hamstrings", "glutes", "lower back"),
+        ("barbell",),
+        "Push your hips back and slide the bar down your thighs until your hamstrings "
+        "stretch, keeping your back flat, then stand up.",
+    ),
+    CuratedExercise(
+        "Barbell Front Squat",
+        "A squat with the barbell resting on the front of the shoulders.",
+        ("quadriceps", "glutes", "upper back"),
+        ("barbell", "rack"),
+        "Keep your elbows high and your torso upright, sit down between your heels, then "
+        "stand up.",
+    ),
+    CuratedExercise(
+        "Barbell Incline Bench Press",
+        "A press from the upper chest on a bench set to a low incline.",
+        ("chest", "shoulders", "triceps"),
+        ("barbell", "bench", "rack"),
+        "Lower the bar to your upper chest under control, then press it back over your "
+        "shoulders.",
+    ),
+)
+
 CURATED_EXERCISES: tuple[CuratedExercise, ...] = (
     *CURATED_EXERCISES_0046,
     *CURATED_EXERCISES_0049,
+    *CURATED_EXERCISES_0050,
 )
 
 
@@ -158,4 +195,5 @@ __all__ = [
     "CURATED_EXERCISES",
     "CURATED_EXERCISES_0046",
     "CURATED_EXERCISES_0049",
+    "CURATED_EXERCISES_0050",
 ]
