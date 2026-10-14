@@ -1,7 +1,7 @@
 import { Suspense, type ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, ClipboardCheck, Pencil, Play } from "@/components/pulse/icons";
+import { ArrowRight, ChevronRight, ClipboardCheck, Pencil, Play } from "@/components/pulse/icons";
 
 import { SubstituteButton } from "@/components/SubstituteButton";
 import { DuplicateButton } from "@/components/DuplicateButton";
@@ -18,7 +18,6 @@ import {
   actionSheetItemClass,
 } from "@/components/pulse/action-sheet-item";
 import { resolveAppearance } from "@/lib/appearance";
-import { formatLoad } from "@/lib/load";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { RemoveExerciseButton } from "@/components/RemoveExerciseButton";
 import { HarderVariationOffer } from "@/components/HarderVariationOffer";
@@ -38,6 +37,9 @@ import {
   type HarderVariationOffer as HarderVariationOfferView,
 } from "@/lib/harder-variation-view";
 import { toTempoView, type TempoView } from "@/lib/tempo-view";
+import { prescriptionPlanView } from "@/lib/prescription-plan-view";
+import { schemeNextStep } from "@/lib/scheme-next-step";
+import { PrescriptionSetTable } from "@/components/prescription-set-table";
 import { supersetLayout, type SupersetSlot } from "@/lib/supersets";
 import { removeAffordances } from "@/lib/remove-prescription";
 import { sessionNameView } from "@/lib/session-name";
@@ -350,118 +352,75 @@ function PrescriptionCard({
   canRemove: boolean;
   dissolvesSuperset: boolean;
 }) {
-  // A grouped Prescription rests once per round at the group level, so its own rest is
-  // dormant and the round-rest is shown once, on the group's last member (ADR-0023).
+  // The plan read like the Live Session's set table (ADR-0114): a summary line and one row per
+  // set, rest following the Superset rule (ADR-0023). The NEXT row under it is the applied
+  // scheme's next step — the change, never a value, since stepping reads the record (ADR-0066).
   const isGrouped = superset !== undefined && superset.group !== null;
+  const plan = prescriptionPlanView(prescription, superset, unit);
+  const next = schemeNextStep(schemeModel.current, schemeModel.reps, schemeModel.load);
+  const note = exerciseNoteText(prescription);
+  const setType = prescriptionSetTypeBadge(prescription);
+  const effort = targetEffortLabel(prescription);
+  const hasBadges =
+    isGrouped || prescription.provenance === "ai_generated" || setType !== null || effort !== null;
   return (
-    <Card className="flex flex-col gap-4 p-4">
-      <div className="flex items-start gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm bg-base font-mono text-[13px] font-bold text-cyan">
+    <Card className="flex flex-col gap-3 p-3">
+      <div className="flex items-start gap-2.5">
+        <span className="flex h-7 min-w-7 shrink-0 items-center justify-center rounded-sm bg-base px-1 font-mono text-[11px] font-bold text-cyan">
           {String(index).padStart(2, "0")}
         </span>
-        <div className="flex flex-1 flex-col gap-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              {...NAV_FORWARD}
-              href={appendFrom(
-                `/exercises/${prescription.exercise_id}`,
-                `/sessions/${sessionId}`,
-              )}
-              className="font-display text-[15px] font-semibold text-text-primary transition-colors hover:text-cyan"
-            >
-              {prescription.exercise_name}
-            </Link>
-            {isGrouped ? (
-              <Badge variant="cyan" title="Performed round-major within a superset">
-                SUPERSET {superset.memberLabel}
-              </Badge>
-            ) : null}
-            {prescription.provenance === "ai_generated" ? (
-              <Badge
-                variant="magenta"
-                title="AI-generated, not yet reviewed"
-              >
-                AI-GENERATED
-              </Badge>
-            ) : null}
-            {/* Set Type badge (ADR-0065): a descriptive plan label. Rendered only for a
-                non-default type — an unset (or working) Set Type yields no badge, so a
-                plain movement stays visually quiet. */}
-            {(() => {
-              const badge = prescriptionSetTypeBadge(prescription);
-              return badge ? (
+        <div className="flex min-w-0 grow flex-col gap-1">
+          <Link
+            {...NAV_FORWARD}
+            href={appendFrom(
+              `/exercises/${prescription.exercise_id}`,
+              `/sessions/${sessionId}`,
+            )}
+            className="break-words text-pretty font-display text-[15px] font-semibold leading-tight text-text-primary transition-colors hover:text-cyan"
+          >
+            {prescription.exercise_name}
+          </Link>
+          <p className="font-mono text-[11px] text-text-muted">{plan.summary}</p>
+          {hasBadges ? (
+            <div className="flex flex-wrap gap-1.5">
+              {isGrouped ? (
+                <Badge variant="cyan" title="Performed round-major within a superset">
+                  SUPERSET {superset.memberLabel}
+                </Badge>
+              ) : null}
+              {/* Set Type (ADR-0065) and Target Effort (ADR-0066): descriptive plan labels, shown
+                  only when set, so a plain working movement stays quiet. */}
+              {setType ? (
                 <Badge variant="violet" title="Set Type">
-                  {badge.label}
+                  {setType.label}
                 </Badge>
-              ) : null;
-            })()}
-            {/* Target Effort (ADR-0066, #454): the prescribed Effort, shown only when the
-                movement carries one — an unset target renders nothing. Descriptive plan label;
-                the view projects it in its stored scale (the reader can switch scales). */}
-            {(() => {
-              const label = targetEffortLabel(prescription);
-              return label ? (
+              ) : null}
+              {effort ? (
                 <Badge variant="violet" title="Target Effort">
-                  {label}
+                  {effort}
                 </Badge>
-              ) : null;
-            })()}
-          </div>
-          {prescription.exercise_description ? (
-            <p className="font-sans text-[13px] leading-relaxed text-text-secondary">
-              {prescription.exercise_description}
+              ) : null}
+              {prescription.provenance === "ai_generated" ? (
+                <Badge variant="magenta" title="AI-generated, not yet reviewed">
+                  AI-GENERATED
+                </Badge>
+              ) : null}
+            </div>
+          ) : null}
+          {/* Exercise Note (ADR-0065, #451): the plan-side coaching cue stays in view — it is
+              read before the set, not looked up. React renders the decoded value as inert text. */}
+          {note ? (
+            <p
+              className="font-sans text-[13px] italic leading-relaxed text-text-secondary"
+              title="Exercise Note"
+            >
+              “{note}”
             </p>
           ) : null}
-          {/* Exercise Note (ADR-0065, #451): the plan-side coaching cue, shown only when the
-              movement carries one — an absent note renders nothing. The note view decodes the
-              stored (escaped) value; React renders it as inert text. */}
-          {(() => {
-            const note = exerciseNoteText(prescription);
-            return note ? (
-              <p
-                className="font-sans text-[13px] italic leading-relaxed text-text-secondary"
-                title="Exercise Note"
-              >
-                “{note}”
-              </p>
-            ) : null;
-          })()}
         </div>
       </div>
 
-      <DataList
-        rows={[
-          {
-            // The reps the read-time overlay resolved for this movement — the scheme-stepped
-            // target (Static holds the authored value; the default steps it), never a stored
-            // number (ADR-0064).
-            label: "Sets × reps",
-            value: `${prescription.sets} × ${prescription.reps}`,
-          },
-          ...(prescription.recommended_load
-            ? [{ label: "Load", value: formatLoad(prescription.recommended_load, unit) }]
-            : []),
-          // A solo Prescription shows its own rest; a grouped one shows the group-owned
-          // round-rest once (on the last member), its individual rest being dormant.
-          ...(!isGrouped && prescription.rest_seconds !== null
-            ? [{ label: "Rest", value: `${prescription.rest_seconds}s` }]
-            : []),
-          ...(isGrouped &&
-          superset.isLastMember &&
-          superset.roundRestSeconds !== null
-            ? [{ label: "Round rest", value: `${superset.roundRestSeconds}s` }]
-            : []),
-          ...tempoRows(toTempoView(prescription.tempo)),
-          ...(prescription.targeted_muscles.length > 0
-            ? [
-                {
-                  label: "Muscles",
-                  value: prescription.targeted_muscles.join(", "),
-                },
-              ]
-            : []),
-        ]}
-      />
+      <PrescriptionSetTable name={prescription.exercise_name} view={plan} next={next} />
 
       <HarderVariationOffer
         sessionId={sessionId}
@@ -471,14 +430,18 @@ function PrescriptionCard({
 
       {/* Progression Scheme (ADR-0064, #432): choose how this movement's un-performed tail
           steps, offering only schemes compatible with its Load. Standalone-only — a Protocol
-          member's scheme is chosen on the Builder and committed via Deploy. */}
+          member's scheme is chosen on the Builder and committed via Deploy; there the NEXT row
+          above still says what its scheme does. */}
       {showScheme ? (
         <SchemeControl
           sessionId={sessionId}
           position={prescription.position}
+          name={prescription.exercise_name}
           model={schemeModel}
         />
       ) : null}
+
+      <AboutExercise prescription={prescription} />
 
       <div className="flex flex-wrap items-center gap-3">
         {/* Substitute stays on the primary surface — an in-context, non-destructive edit. */}
@@ -503,6 +466,41 @@ function PrescriptionCard({
         ) : null}
       </div>
     </Card>
+  );
+}
+
+// The reference detail a user looks up rather than reads before every set — the description,
+// Tempo and targeted muscles — folded behind one disclosure so the set table leads the card.
+// Renders nothing when the movement carries none of them.
+function AboutExercise({ prescription }: { prescription: ExercisePrescription }) {
+  const tempo = toTempoView(prescription.tempo);
+  const muscles = prescription.targeted_muscles;
+  if (!prescription.exercise_description && tempo.kind === "none" && muscles.length === 0) {
+    return null;
+  }
+  return (
+    <details className="group">
+      <summary className="label-mono flex min-h-9 cursor-pointer list-none items-center gap-1 text-[9px] text-text-muted">
+        <ChevronRight
+          className="h-3 w-3 transition-transform group-open:rotate-90 motion-reduce:transition-none"
+          aria-hidden
+        />
+        About this exercise
+      </summary>
+      <div className="flex flex-col gap-1.5 pt-1">
+        {prescription.exercise_description ? (
+          <p className="font-sans text-[13px] leading-relaxed text-text-secondary">
+            {prescription.exercise_description}
+          </p>
+        ) : null}
+        <DataList
+          rows={[
+            ...tempoRows(tempo),
+            ...(muscles.length > 0 ? [{ label: "Muscles", value: muscles.join(", ") }] : []),
+          ]}
+        />
+      </div>
+    </details>
   );
 }
 
