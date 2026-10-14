@@ -1,4 +1,5 @@
 import { SectionHeader } from "@/components/pulse/section-header";
+import { Badge } from "@/components/ui/badge";
 import type { CuratedPlanView } from "@/lib/curated-plan-preview";
 
 interface CuratedPlanPreviewProps {
@@ -6,7 +7,8 @@ interface CuratedPlanPreviewProps {
 }
 
 // The fully enumerated plan a Curated Protocol adopt would write (issue #685): every Week/Day
-// Session with each Prescription's dose, the Load to be written and its Progression Scheme.
+// Session with each Prescription's dose, the Load to be written and its Progression Scheme. In a
+// plan that mixes Training Types, each Session also shows its type and duration.
 export function CuratedPlanPreview({ plan }: CuratedPlanPreviewProps): React.JSX.Element {
   return (
     <section className="flex flex-col gap-5">
@@ -20,9 +22,21 @@ export function CuratedPlanPreview({ plan }: CuratedPlanPreviewProps): React.JSX
           <SectionHeader level={3}>{week.heading}</SectionHeader>
           {week.sessions.map((session) => (
             <div key={session.key} className="flex flex-col gap-1.5">
-              <h4 className="min-w-0 break-words font-sans text-sm font-semibold text-text-primary">
-                {session.heading}
-              </h4>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <h4 className="min-w-0 break-words font-sans text-sm font-semibold text-text-primary">
+                  {session.heading}
+                </h4>
+                {session.kind ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant={session.kind.badgeVariant} className="capitalize">
+                      {session.kind.trainingType}
+                    </Badge>
+                    <span className="font-mono text-[12px] text-text-secondary">
+                      {session.kind.duration}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
               <ul className="flex flex-col gap-1.5">
                 {session.lines.map((line) => (
                   <li

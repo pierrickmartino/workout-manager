@@ -85,6 +85,22 @@ def test_adopting_alternates_lifting_and_run_sessions_each_typed_and_timed_on_it
     ] == WEEK * 8
 
 
+def test_the_preview_shows_each_sessions_own_training_type_and_duration():
+    # Arrange
+    h = build_harness(RELEASED)
+
+    # Act
+    response = h.preview(
+        RELEASED.identifier, weeks=8, starting_weights_kg=STARTING_WEIGHTS
+    )
+
+    # Assert
+    sessions = response.json()["data"]["sessions"]
+    assert [
+        (s["title"], s["training_type"], s["duration_minutes"]) for s in sessions
+    ] == WEEK * 8
+
+
 def test_main_lifts_start_from_the_users_weights_on_double_progression():
     # Act
     _, protocol = _adopted()

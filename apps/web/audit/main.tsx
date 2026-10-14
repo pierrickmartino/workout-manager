@@ -413,7 +413,8 @@ const auditCuratedProtocol: CuratedProtocolSummary = {
 };
 
 // The previewed plan under the adopt form (#685): the widest line pairs the longest main-lift
-// name with an absolute Load and the longest scheme label, beside a qualitative accessory.
+// name with an absolute Load and the longest scheme label, beside a qualitative accessory. It
+// mixes Training Types, so each Session heading carries its type badge and duration too.
 const auditPlanLines: CuratedPlanPrescription[] = [
   {
     exercise_name: "Barbell Overhead Press", sets: 3, reps: "5", rest_seconds: 180,
@@ -431,8 +432,14 @@ const auditCuratedPreview = {
   plan: curatedPlanView({
     identifier: auditCuratedProtocol.identifier, version: 1, weeks: 2, sessions_per_week: 2,
     sessions: [1, 2].flatMap((week) => [
-      { week, day: 1, title: "Workout A", prescriptions: auditPlanLines },
-      { week, day: 2, title: "Workout B", prescriptions: auditPlanLines },
+      {
+        week, day: 1, title: "Workout A", training_type: "strength", duration_minutes: 55,
+        prescriptions: auditPlanLines,
+      },
+      {
+        week, day: 2, title: "Long easy run", training_type: "cardio", duration_minutes: 50,
+        prescriptions: auditPlanLines,
+      },
     ]),
   }),
 };

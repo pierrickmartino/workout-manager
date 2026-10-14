@@ -260,6 +260,9 @@ def _serialize_planned_session(session: PlannedSession) -> dict:
         "week": session.week,
         "day": session.day,
         "title": session.title,
+        # A Session may be typed and timed apart from its Curated Protocol (ADR-0130 amendment).
+        "training_type": session.training_type,
+        "duration_minutes": session.duration_minutes,
         "prescriptions": [
             {
                 "exercise_name": p.exercise,
