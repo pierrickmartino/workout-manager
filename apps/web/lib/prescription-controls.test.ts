@@ -130,10 +130,11 @@ test("the Builder declares exactly the controls its Deploy payload carries", () 
   // Arrange
   const payload = toDeployPayload(
     {
-      protocolId: 1, name: null, weeks: 1, sessionsPerWeek: 1, queuedExercise: null,
+      protocolId: 1, protocolTrainingType: "strength", protocolDurationMinutes: 45, name: null, weeks: 1, sessionsPerWeek: 1, queuedExercise: null,
       supersetsSuppressed: false,
       sessions: [{
-        sessionId: 1, week: 1, day: 1, performed: false, prescriptions: [draftPrescription()],
+        sessionId: 1, week: 1, day: 1, performed: false, trainingType: "strength",
+        durationMinutes: 45, prescriptions: [draftPrescription()],
       }],
     },
     "kg",

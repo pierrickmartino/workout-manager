@@ -15,6 +15,10 @@ export interface ProtocolSession {
   week: number;
   day: number;
   title: string | null;
+  // The Session's own Training Type and duration (#707). A Session may be typed apart from
+  // its Protocol (a run day in a strength plan), so the Builder reads and edits these.
+  training_type: string;
+  duration_minutes: number;
   // Whether this Session has an advancing Logged Session (ADR-0013). Performed
   // Sessions are the frozen record the Builder renders read-only (ADR-0020).
   performed: boolean;

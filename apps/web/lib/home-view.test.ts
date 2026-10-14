@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  heroStats,
   homeProtocolChoices,
   latestPrLine,
   operatorStatus,
@@ -58,6 +59,8 @@ function makeProtocol({
         week,
         day,
         title: `Session ${position}`,
+        training_type: "strength",
+        duration_minutes: 45,
         performed: false,
         logged_session_id: null,
         prescriptions: Array.from({ length: modulesPerSession }, (_, i) =>
@@ -532,4 +535,30 @@ test("Home with a Current Protocol offers no new-Protocol choice", () => {
 
   // Assert
   assert.deepEqual(choices, []);
+});
+
+test("heroStats reads the Next Session's own duration and Training Type, not the Protocol's", () => {
+  // Arrange — a 35-minute run day next in a 45-minute strength Protocol (#707)
+  const protocol = makeProtocol({ weeks: 1, sessionsPerWeek: 2, nextPosition: 2 });
+  const run = { ...protocol.next_session!, training_type: "cardio", duration_minutes: 35 };
+  const source = { ...protocol, next_session: run };
+
+  // Act
+  const stats = heroStats(source);
+
+  // Assert
+  assert.equal(stats.durationMinutes, 35);
+  assert.equal(stats.trainingType, "cardio");
+});
+
+test("heroStats falls back to the Protocol's duration and Training Type without a Next Session", () => {
+  // Arrange
+  const protocol = makeProtocol({ weeks: 1, sessionsPerWeek: 2, nextPosition: null });
+
+  // Act
+  const stats = heroStats(protocol);
+
+  // Assert
+  assert.equal(stats.durationMinutes, 45);
+  assert.equal(stats.trainingType, "strength");
 });

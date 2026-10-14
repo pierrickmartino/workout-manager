@@ -28,6 +28,7 @@ import { ExerciseLibrary } from "@/components/ExerciseLibrary";
 import { PrescriptionList } from "@/components/builder/prescription-rows";
 import { SessionCompositionStrip } from "@/components/builder/session-composition-strip";
 import { SessionMatrix } from "@/components/builder/session-matrix";
+import { SessionTypeFields } from "@/components/builder/session-type-fields";
 import { MuscleSplit } from "@/components/pulse/muscle-split";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -250,6 +251,20 @@ export function ProtocolBuilder({
             });
             setSelectedSessionId(null);
           }}
+          onSetTrainingType={(trainingType) =>
+            dispatch({
+              type: "SET_SESSION_TRAINING_TYPE",
+              sessionId: selectedSession.sessionId,
+              trainingType,
+            })
+          }
+          onSetDuration={(durationMinutes) =>
+            dispatch({
+              type: "SET_SESSION_DURATION",
+              sessionId: selectedSession.sessionId,
+              durationMinutes,
+            })
+          }
         />
       ) : null}
 
@@ -409,11 +424,12 @@ function ConfigPanel({
       </div>
 
       {/* Read-only generation provenance — displayed for context, not editable in
-          v1 (ADR-0021). No `mode` control. */}
+          v1 (ADR-0021). No `mode` control. The type and duration are what a new Session
+          starts from; each Session sets its own on its card (#707). */}
       <dl className="grid grid-cols-3 gap-2 border-t border-border pt-3">
         <ReadOnlyField label="Objective" value={objective} />
-        <ReadOnlyField label="Training type" value={trainingType} />
-        <ReadOnlyField label="Duration" value={`${durationMinutes} min`} />
+        <ReadOnlyField label="New session type" value={trainingType} />
+        <ReadOnlyField label="New session length" value={`${durationMinutes} min`} />
       </dl>
     </Card>
   );
@@ -477,6 +493,8 @@ interface SessionEditorProps {
   dispatch: (event: PrescriptionEvent) => void;
   onAdd: (exercise: PickedExercise) => void;
   onRemoveSession: () => void;
+  onSetTrainingType: (trainingType: string) => void;
+  onSetDuration: (durationMinutes: number) => void;
 }
 
 // The Prescription editor for the one Session the matrix has open. Its slot label
@@ -490,6 +508,8 @@ function SessionEditor({
   dispatch,
   onAdd,
   onRemoveSession,
+  onSetTrainingType,
+  onSetDuration,
 }: SessionEditorProps) {
   const locked = session.performed;
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -563,6 +583,14 @@ function SessionEditor({
           </button>
         )}
       </div>
+
+      <SessionTypeFields
+        trainingType={session.trainingType}
+        durationMinutes={session.durationMinutes}
+        locked={locked}
+        onSetTrainingType={onSetTrainingType}
+        onSetDuration={onSetDuration}
+      />
 
       {/* The visible workout composition (ADR-0074, idea 5): a Section-grouped strip above
           the editable exercises. Each Exercise is a labeled tile, Superset pairs are

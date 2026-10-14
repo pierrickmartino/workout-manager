@@ -45,7 +45,7 @@ export function SessionHero({ protocol }: SessionHeroProps): React.JSX.Element {
         <WorkoutSigil
           seedId={next?.session_id ?? protocol.id}
           exerciseCount={stats.modules}
-          trainingType={protocol.training_type}
+          trainingType={stats.trainingType}
           size={60}
           // Claims the morph only for a real Next Session: the Protocol-id fallback is not a
           // Session id and could collide with one (ADR-0120).

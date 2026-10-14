@@ -31,6 +31,7 @@ from app.curated.exercises import CURATED_EXERCISES
 from app.curated.model import CuratedProtocol, PatternPrescription, WavePrescription
 from app.curated.plan import PlannedPrescription, planned_prescription
 from app.domain.load import LoadKind, parse_load
+from app.domain.training_type import TRAINING_TYPES
 from app.protocols.deploy_validation import (
     MAX_WEEKS,
     MIN_WEEKS,
@@ -61,10 +62,6 @@ BRAND_MARKS: tuple[str, ...] = (
     "smolov",
     "sheiko",
 )
-
-# The closed Training Type set (GLOSSARY 'Training Type'): a Curated Protocol, and any Session
-# typed apart from it, is typed by one of these, never an invented kind.
-TRAINING_TYPES: frozenset[str] = frozenset({"strength", "cardio", "hiit", "yoga", "mobility"})
 
 
 @dataclass(frozen=True)

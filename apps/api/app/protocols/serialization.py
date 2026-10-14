@@ -26,6 +26,8 @@ def serialize_session(
     *,
     performed: bool = False,
     logged_session_id: int | None = None,
+    protocol_training_type: str | None = None,
+    protocol_duration_minutes: int | None = None,
 ) -> dict:
     # Session Section (ADR-0074): the read-time composition bucket is a projection over
     # the *ordered* Session, computed once here and zipped onto each Prescription. Never
@@ -37,6 +39,11 @@ def serialize_session(
         "week": session.week,
         "day": session.day,
         "title": session.title,
+        # The Session's own Training Type and duration (#707), which may differ from its
+        # Protocol's, so the Builder shows — and re-deploys — what each Session really is.
+        # A view built without a row has neither, and reads as its Protocol's.
+        "training_type": session.training_type or protocol_training_type,
+        "duration_minutes": session.duration_minutes or protocol_duration_minutes,
         "performed": performed,
         # The record link (Q7, plan≠record): the id of the Logged Session that advanced
         # this Session, so a performed schedule card opens the *record* the user made,
@@ -126,6 +133,8 @@ def serialize_protocol(
                 s,
                 performed=s.session_id in performed_session_ids,
                 logged_session_id=performed_log_ids.get(s.session_id),
+                protocol_training_type=view.training_type,
+                protocol_duration_minutes=view.duration_minutes,
             )
             for s in view.sessions
         ],
@@ -146,6 +155,8 @@ def serialize_protocol_progress(progress: ProtocolProgressView) -> dict:
             progress.next_session,
             performed=progress.next_session.session_id in performed,
             logged_session_id=performed_log_ids.get(progress.next_session.session_id),
+            protocol_training_type=progress.protocol.training_type,
+            protocol_duration_minutes=progress.protocol.duration_minutes,
         )
         if progress.next_session is not None
         else None

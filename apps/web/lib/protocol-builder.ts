@@ -100,11 +100,19 @@ export interface DraftSession {
   week: number;
   day: number;
   performed: boolean;
+  // The Session's Training Type and duration (#707), edited only while un-performed and
+  // always sent on DEPLOY, so what the Builder shows is what is persisted.
+  trainingType: string;
+  durationMinutes: number;
   prescriptions: DraftPrescription[];
 }
 
 export interface BuilderDraft {
   protocolId: number;
+  // The Protocol's own Training Type and duration: what a new slot starts from (#707).
+  // Never recomputed from the Sessions — they are the plan's generation provenance.
+  protocolTrainingType: string;
+  protocolDurationMinutes: number;
   // The user-editable Protocol name, edited in the config panel (ADR-0021). `null`
   // when unnamed — the read side falls back to the derived label. It rides through
   // DEPLOY in the payload, not a separate write.
@@ -267,6 +275,18 @@ export type BuilderEvent =
       sessionId: number;
     }
   | {
+      // Retype an un-performed Session (#707). The duration is left as it is: a per-type
+      // default would be a guess, and the user sees and edits the minutes beside it.
+      type: "SET_SESSION_TRAINING_TYPE";
+      sessionId: number;
+      trainingType: string;
+    }
+  | {
+      type: "SET_SESSION_DURATION";
+      sessionId: number;
+      durationMinutes: number;
+    }
+  | {
       // Reposition an un-performed Session within a Week or across Week boundaries
       // (ADR-0068), tail-only: a performed Session never moves and its (week, day) is
       // never touched. `toIndex` is the target slot among the *destination* Week's
@@ -348,6 +368,8 @@ export function initBuilderDraft(
   const weightUnit = options.weightUnit ?? "kg";
   return {
     protocolId: protocol.id,
+    protocolTrainingType: protocol.training_type,
+    protocolDurationMinutes: protocol.duration_minutes,
     name: protocol.name,
     weeks: protocol.weeks,
     sessionsPerWeek: protocol.sessions_per_week,
@@ -359,6 +381,8 @@ export function initBuilderDraft(
       week: session.week,
       day: session.day,
       performed: session.performed,
+      trainingType: session.training_type ?? protocol.training_type,
+      durationMinutes: session.duration_minutes ?? protocol.duration_minutes,
       prescriptions: session.prescriptions.map((prescription) => {
         const load = prefillLoad(prescription.recommended_load, weightUnit);
         const quantity = quantityToDraftFields(prescription.prescribed_quantity);
@@ -487,8 +511,20 @@ export function builderReducer(
     case "ADD_SESSION":
       return {
         ...state,
-        sessions: [...state.sessions, newSession(state.sessions, event.week)],
+        sessions: [...state.sessions, newSession(state, event.week)],
       };
+
+    case "SET_SESSION_TRAINING_TYPE":
+      return mapUnperformedSession(state, event.sessionId, (session) => ({
+        ...session,
+        trainingType: event.trainingType,
+      }));
+
+    case "SET_SESSION_DURATION":
+      return mapUnperformedSession(state, event.sessionId, (session) => ({
+        ...session,
+        durationMinutes: event.durationMinutes,
+      }));
 
     case "REMOVE_SESSION":
       return {
@@ -559,7 +595,9 @@ function placeQueuedExercise(
 // It starts with no Prescriptions — nothing is fabricated; the user fills it from the
 // Library. Its `day` follows the week's existing Sessions, and it takes a unique
 // negative client id (see `DraftSession`) so edits can target it before it is saved.
-function newSession(sessions: DraftSession[], week: number): DraftSession {
+// It starts typed as the Protocol (#707); the user retypes it on its card.
+function newSession(state: BuilderDraft, week: number): DraftSession {
+  const { sessions } = state;
   const daysInWeek = sessions
     .filter((session) => session.week === week)
     .map((session) => session.day);
@@ -570,6 +608,8 @@ function newSession(sessions: DraftSession[], week: number): DraftSession {
     week,
     day: nextDay,
     performed: false,
+    trainingType: state.protocolTrainingType,
+    durationMinutes: state.protocolDurationMinutes,
     prescriptions: [],
   };
 }
@@ -970,12 +1010,25 @@ function mapSessionPrescriptions(
   sessionId: number,
   change: (prescriptions: DraftPrescription[]) => DraftPrescription[],
 ): BuilderDraft {
+  return mapUnperformedSession(state, sessionId, (session) => ({
+    ...session,
+    prescriptions: change(session.prescriptions),
+  }));
+}
+
+// Apply `change` to the un-performed Session `sessionId`, returning a new draft. A
+// performed Session is settled record (ADR-0020) and an unknown id matches nothing, so
+// either leaves the draft untouched.
+function mapUnperformedSession(
+  state: BuilderDraft,
+  sessionId: number,
+  change: (session: DraftSession) => DraftSession,
+): BuilderDraft {
   return {
     ...state,
-    sessions: state.sessions.map((session) => {
-      if (session.sessionId !== sessionId || session.performed) return session;
-      return { ...session, prescriptions: change(session.prescriptions) };
-    }),
+    sessions: state.sessions.map((session) =>
+      session.sessionId !== sessionId || session.performed ? session : change(session),
+    ),
   };
 }
 
@@ -1105,6 +1158,9 @@ export interface DeploySessionPayload {
   session_id: number | null;
   week: number;
   day: number;
+  // Always sent (#707), so the deploy persists exactly what the Builder showed.
+  training_type: string;
+  duration_minutes: number;
   prescriptions: DeployPrescriptionPayload[];
 }
 
@@ -1136,6 +1192,8 @@ export function toDeployPayload(
         session_id: session.sessionId < 0 ? null : session.sessionId,
         week: session.week,
         day: session.day,
+        training_type: session.trainingType,
+        duration_minutes: session.durationMinutes,
         prescriptions: session.prescriptions.map((prescription) => ({
           exercise_id: prescription.exerciseId,
           sets: prescription.sets,
