@@ -87,3 +87,25 @@ the model left unchanged; the outcomes:
   (the picker and every other Set Type are untouched).
 - **The strip is surfaced on the Hand-Authored "Build a workout" builder** as well as the
   Protocol editor — the create-a-workout surface it was missing from at first.
+
+## Follow-up (Supersets are sectioned as one block)
+
+The first cut sectioned every Prescription on its own name, blind to Supersets, and the strip
+bracketed groups only *inside* each band. A Superset of Pull-up + Push-up + Hollow Body was
+therefore cut in two: the compound pair under Main work, the core hold alone under
+Accessories in a one-member "superset". A Superset is performed as one block (ADR-0023), so
+`sectionize` now treats it as one **unit**:
+
+- **One main-work slot per Superset.** A group takes one slot of the cap of three when any
+  member is compound (a three-member Superset does not exhaust the cap on its own).
+- **One section for every member.** After warm-up/cooldown runs and the work block are
+  assigned, every member takes the group's strongest section — main > accessory > warm-up >
+  cooldown — so the working part of a block wins over a prep drill paired with it, and an
+  all-prep group stays warm-up.
+- **Core movements are named.** Hollow body, plank, Pallof press and similar read as
+  accessory on their own, checked before the compound stems so "Pallof press" is no longer
+  a main-work press. Inside a Superset they ride with their group.
+
+Still a pure read-time projection: no stored field, no migration. The Superset tag is
+already on the Prescription (`superset_group`), and the strip passes the editor's layout
+groups into the frontend twin.

@@ -18,8 +18,13 @@ order of strength:
 - **Cooldown** — the *trailing run* of mobility / stretch / breathing movements (or trailing
   cardio done for time) that closes a session.
 - **Main work** — the first :data:`MAIN_WORK_LIMIT` **compound** movements of the work block.
-- **Accessory** — everything else in the work block: isolation movements, and compound
-  movements past the main-work cap.
+- **Accessory** — everything else in the work block: isolation and core movements, and
+  compound movements past the main-work cap.
+
+A **Superset** (ADR-0023) is performed as one block, so it is sectioned as one unit: it
+takes one main-work slot when any member is compound, and every member then shares the
+group's strongest section (main > accessory > warm-up > cooldown) — a core hold paired
+with pull-ups and push-ups reads as main work alongside them, never split off.
 
 Warm-up is only ever a leading run and cooldown only a trailing run, so the four sections
 land as contiguous bands in session order — which is exactly how the composition strip reads
@@ -74,11 +79,13 @@ class _Sectionable(Protocol):
     Typed structurally so both a ``PrescriptionView`` and a test double satisfy it — the
     same idiom as ``_Classifiable`` in ``movement_pattern``. ``prescribed_quantity`` is the
     stored ``Quantity`` dict (or ``None``); only its ``kind`` is read here.
+    ``superset_group`` is the Superset tag (ADR-0023), ``None`` when solo.
     """
 
     exercise_name: str
     set_type: str | None
     prescribed_quantity: dict | None
+    superset_group: str | None
 
 
 # Compound, multi-joint movements — the main-work candidates. Kept to distinctive stems so
@@ -100,6 +107,15 @@ _ISOLATION_KEYWORDS: tuple[str, ...] = (
     "push-down", "shrug", "pec deck", "calf", "lateral", "rear delt", "reverse fly",
     "reverse flye", "cable cross", "crossover", "concentration", "preacher", "cuban",
     "pull-apart", "pull apart",
+)
+
+# Core / trunk movements — accessory on their own, like isolation, and checked before the
+# compound stems so "Pallof press" never reads as a main-work press. Inside a Superset they
+# ride with their group's section.
+_CORE_KEYWORDS: tuple[str, ...] = (
+    "hollow", "plank", "dead bug", "bird dog", "pallof", "l-sit", "l sit", "ab wheel",
+    "rollout", "crunch", "sit-up", "situp", "sit up", "v-up", "russian twist",
+    "side bend", "dragon flag", "toes to bar", "toes-to-bar",
 )
 
 # Mobility / stretch movements — warm-up when they *open* a session, cooldown when they
@@ -178,13 +194,50 @@ def _is_cooldown_like(item: _Sectionable) -> bool:
     return _contains_any(name, _CARDIO_KEYWORDS) and _is_for_time(item.prescribed_quantity)
 
 
+def _is_main_candidate(item: _Sectionable) -> bool:
+    """Whether a work-block movement is compound (and not isolation/core) — main-work material."""
+
+    name = _normalize(item.exercise_name)
+    if _contains_any(name, _ISOLATION_KEYWORDS) or _contains_any(name, _CORE_KEYWORDS):
+        return False
+    return _contains_any(name, _COMPOUND_KEYWORDS)
+
+
+def _units(items: Sequence[_Sectionable]) -> list[list[int]]:
+    """Split the ordered positions into units: a solo movement, or a contiguous Superset run."""
+
+    units: list[list[int]] = []
+    for index, item in enumerate(items):
+        group = getattr(item, "superset_group", None)
+        previous = units[-1] if units else None
+        if (
+            group is not None
+            and previous is not None
+            and getattr(items[previous[-1]], "superset_group", None) == group
+        ):
+            previous.append(index)
+        else:
+            units.append([index])
+    return units
+
+
+# Which section a split Superset settles on: the working part of the block wins.
+_UNIT_STRENGTH: dict[SessionSection, int] = {
+    SessionSection.MAIN: 3,
+    SessionSection.ACCESSORY: 2,
+    SessionSection.WARM_UP: 1,
+    SessionSection.COOLDOWN: 0,
+}
+
+
 def sectionize(items: Sequence[_Sectionable]) -> list[SessionSection]:
     """Assign each Prescription in a Session, in order, to its Session Section (ADR-0074).
 
     A pure read-time projection over the ordered prescriptions. Warm-up is the leading run
     of prep material (or any explicit ``warm_up`` Set Type); cooldown is the trailing run
     of down-regulation material; the work block between them is main work for its first
-    :data:`MAIN_WORK_LIMIT` compound movements and accessory for the rest. Returns one
+    :data:`MAIN_WORK_LIMIT` compound movements and accessory for the rest. A Superset is
+    one unit: one main-work slot, and one shared section for all its members. Returns one
     section per input, in input order.
     """
 
@@ -212,23 +265,31 @@ def sectionize(items: Sequence[_Sectionable]) -> list[SessionSection]:
         sections[tail] = SessionSection.COOLDOWN
         tail -= 1
 
-    # Work block: the first MAIN_WORK_LIMIT compound movements are main work; isolation is
-    # always accessory, and any remaining/ambiguous movement falls to accessory.
+    # Work block, unit by unit (a solo movement or a whole Superset): the first
+    # MAIN_WORK_LIMIT units holding a compound movement are main work; isolation, core and
+    # any remaining/ambiguous movement fall to accessory.
+    units = _units(items)
     main_count = 0
-    for index, item in enumerate(items):
-        if sections[index] is not None:
+    for unit in units:
+        free = [index for index in unit if sections[index] is None]
+        if not free:
             continue
-        name = _normalize(item.exercise_name)
-        if _contains_any(name, _ISOLATION_KEYWORDS):
-            sections[index] = SessionSection.ACCESSORY
-        elif _contains_any(name, _COMPOUND_KEYWORDS) and main_count < MAIN_WORK_LIMIT:
-            sections[index] = SessionSection.MAIN
+        is_main = main_count < MAIN_WORK_LIMIT and any(
+            _is_main_candidate(items[index]) for index in free
+        )
+        if is_main:
             main_count += 1
-        else:
-            sections[index] = SessionSection.ACCESSORY
+        section = SessionSection.MAIN if is_main else SessionSection.ACCESSORY
+        for index in free:
+            sections[index] = section
 
-    # Every slot is assigned by construction; the cast documents that invariant.
-    return [section or SessionSection.ACCESSORY for section in sections]
+    # A Superset is one block: every member shares the group's strongest section.
+    resolved = [section or SessionSection.ACCESSORY for section in sections]
+    for unit in units:
+        strongest = max((resolved[index] for index in unit), key=_UNIT_STRENGTH.__getitem__)
+        for index in unit:
+            resolved[index] = strongest
+    return resolved
 
 
 __all__ = [

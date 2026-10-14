@@ -29,6 +29,7 @@ class _P:
     targeted_muscles: list[str] = field(default_factory=list)
     set_type: str | None = None
     prescribed_quantity: dict | None = None
+    superset_group: str | None = None
 
 
 def _sections(names_and_kwargs: list[_P]) -> list[SessionSection]:
@@ -194,3 +195,118 @@ def test_section_values_are_stable_wire_tokens():
         SessionSection.ACCESSORY,
         SessionSection.COOLDOWN,
     )
+
+
+def test_a_superset_takes_one_section_for_all_its_members():
+    # Arrange — a Superset is performed as one block (ADR-0023), so an unclaimed member
+    # (Hollow Body) rides with its compound partners instead of splitting off.
+    items = [
+        _P("Pull-up", superset_group="A"),
+        _P("Push-up", superset_group="A"),
+        _P("Hollow Body Hold", superset_group="A"),
+    ]
+
+    # Act
+    result = sectionize(items)
+
+    # Assert
+    assert result == [SessionSection.MAIN] * 3
+
+
+def test_a_superset_counts_as_one_main_work_slot():
+    # Arrange — a three-member Superset uses one slot of the cap, not three.
+    items = [
+        _P("Back Squat"),
+        _P("Pull-up", superset_group="A"),
+        _P("Push-up", superset_group="A"),
+        _P("Hollow Body Hold", superset_group="A"),
+        _P("Romanian Deadlift"),
+        _P("Bench Press"),
+    ]
+
+    # Act
+    result = sectionize(items)
+
+    # Assert — squat, the Superset, and RDL fill the cap; bench is past it.
+    assert result == [SessionSection.MAIN] * 5 + [SessionSection.ACCESSORY]
+
+
+def test_a_superset_with_no_compound_member_is_accessory():
+    # Arrange
+    items = [
+        _P("Back Squat"),
+        _P("Bicep Curl", superset_group="A"),
+        _P("Triceps Pushdown", superset_group="A"),
+    ]
+
+    # Act
+    result = sectionize(items)
+
+    # Assert
+    assert result == [
+        SessionSection.MAIN,
+        SessionSection.ACCESSORY,
+        SessionSection.ACCESSORY,
+    ]
+
+
+def test_a_superset_past_the_main_work_cap_is_accessory_as_a_whole():
+    # Arrange
+    items = [
+        _P("Back Squat"),
+        _P("Bench Press"),
+        _P("Romanian Deadlift"),
+        _P("Pull-up", superset_group="A"),
+        _P("Hollow Body Hold", superset_group="A"),
+    ]
+
+    # Act
+    result = sectionize(items)
+
+    # Assert
+    assert result[3:] == [SessionSection.ACCESSORY, SessionSection.ACCESSORY]
+
+
+def test_a_superset_straddling_the_warm_up_takes_its_working_section():
+    # Arrange — a leading prep drill paired with a working lift: the work wins.
+    items = [
+        _P("Arm Circles", superset_group="A"),
+        _P("Push-up", superset_group="A"),
+        _P("Bench Press"),
+    ]
+
+    # Act
+    result = sectionize(items)
+
+    # Assert
+    assert result == [SessionSection.MAIN] * 3
+
+
+def test_an_all_prep_superset_stays_warm_up():
+    # Arrange
+    items = [
+        _P("Arm Circles", superset_group="A"),
+        _P("Leg Swings", superset_group="A"),
+        _P("Back Squat"),
+    ]
+
+    # Act
+    result = sectionize(items)
+
+    # Assert
+    assert result == [
+        SessionSection.WARM_UP,
+        SessionSection.WARM_UP,
+        SessionSection.MAIN,
+    ]
+
+
+def test_core_movements_with_a_compound_stem_read_as_accessory():
+    # Arrange — "Pallof Press" contains "press" but is anti-rotation core work.
+    items = [_P("Pallof Press"), _P("Hollow Body Hold"), _P("Plank")]
+
+    # Act
+    result = sectionize(items)
+
+    # Assert
+    assert result == [SessionSection.ACCESSORY] * 3
