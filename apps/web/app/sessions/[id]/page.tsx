@@ -56,15 +56,21 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { NAV_FORWARD } from "@/lib/nav-direction";
+import { PrototypeSwitcher } from "@/components/prototype/PrototypeSwitcher";
+import { HEADER_VARIANTS, HeaderVariant } from "./_prototype/header-variants";
 
 // Displays a generated standalone Session and its Exercise Prescriptions. The
 // session is user-owned: the backend returns 404 (→ notFound) for anyone else.
 export default async function SessionPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ variant?: string }>;
 }) {
   const { id } = await params;
+  // PROTOTYPE — header variants (see ./_prototype/header-variants.tsx).
+  const variant = (await searchParams).variant ?? "A";
   const sessionId = Number(id);
   if (!Number.isInteger(sessionId)) notFound();
 
@@ -121,6 +127,20 @@ export default async function SessionPage({
 
   return (
     <section className="flex flex-col gap-7">
+      <Suspense fallback={null}>
+        <PrototypeSwitcher variants={HEADER_VARIANTS} current={variant} />
+      </Suspense>
+      {variant !== "current" ? (
+        <HeaderVariant
+          variant={variant}
+          session={session}
+          nameView={nameView}
+          authorView={authorView}
+          favoriteView={favoriteView}
+          deleteView={deleteView}
+        />
+      ) : (
+      <>
       <PageHeader
         overline="PULSE // SESSION"
         title={
@@ -235,6 +255,8 @@ export default async function SessionPage({
           ) : null}
         </ActionSheet>
       </div>
+      </>
+      )}
 
       <div className="flex flex-col gap-4">
         <SectionHeader meta={`${session.prescriptions.length} EXERCISES`}>
