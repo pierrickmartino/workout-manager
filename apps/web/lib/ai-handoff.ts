@@ -105,7 +105,7 @@ function timeWords(totalSeconds: number): string {
 
 // A measured Session Duration in words, to the minute ("52 minutes", "1 hour 5 minutes"), or
 // null when the record measured none.
-function durationWords(totalSeconds: number | null): string | null {
+function sessionDurationWords(totalSeconds: number | null): string | null {
   if (totalSeconds === null) return null;
   const totalMinutes = Math.round(Math.max(0, totalSeconds) / SECONDS_PER_MINUTE);
   if (totalMinutes < 1) return "under a minute";
@@ -159,7 +159,7 @@ function outcomeWords(
 
 function sessionLine(record: LoggedSession, outcome: string | null): string {
   const type = TRAINING_TYPE_WORDS[record.training_type] ?? record.training_type;
-  const line = `Session: ${joinPresent([type, durationWords(record.duration_seconds)], ", ")}.`;
+  const line = `Session: ${joinPresent([type, sessionDurationWords(record.duration_seconds)], ", ")}.`;
   return outcome === null ? line : `${line} ${outcome}`;
 }
 
@@ -174,39 +174,38 @@ function distanceWords(quantity: Quantity): string {
 
 // A timed set in words: a hold in a hold-based Training Type ("held for 1 minute"), timed work
 // otherwise ("40 seconds of work"). A time the record could not measure reads as logged.
-function durationAmountWords(quantity: Quantity, trainingType: string): string {
+function timedQuantityWords(quantity: Quantity, trainingType: string): string {
   if (quantity.seconds == null) return formatQuantity(quantity);
   const time = timeWords(quantity.seconds);
   return HOLD_TRAINING_TYPES.has(trainingType) ? `held for ${time}` : `${time} of work`;
 }
 
-// A set's amount in words, by its quantity kind: a rep count reads "8 reps"; a distance reads
+// A set's Quantity in words, by its kind: a rep count reads "8 reps"; a distance reads
 // with its time and pace; a duration reads as a hold or as timed work.
-function amountWords(quantity: Quantity | null, trainingType: string): string | null {
+function quantityWords(quantity: Quantity | null, trainingType: string): string | null {
   if (quantity == null) return null;
   if (quantity.kind === "repetitions" && quantity.count != null) {
     return plural(quantity.count, "rep", "reps");
   }
   if (quantity.kind === "distance") return distanceWords(quantity);
-  if (quantity.kind === "duration") return durationAmountWords(quantity, trainingType);
+  if (quantity.kind === "duration") return timedQuantityWords(quantity, trainingType);
   return formatQuantity(quantity);
 }
 
-// An absolute Load's stored text when it carries only a kilogram number ("60", "60 kg") — the
-// backend reads a bare number as kilograms — so a Load missing its `kg` field never reads bare.
-const KG_TEXT = /^\s*(\d*\.?\d+)\s*(?:kg|kgs|k)?\s*$/i;
+// A pure bodyweight Load stored as shorthand ("BW", "body weight"). Only this reads as plain
+// "bodyweight"; a bodyweight Load whose text says more ("BW + light band") keeps that text.
+const BODYWEIGHT_SHORTHAND = /^\s*(?:bw|body\s*weight)\s*$/i;
+
+// The top of the reps-in-reserve scale, which stands for "5 or more" (the backend `RIR_MAX`).
+const RIR_CEILING = 5;
 
 // A Load in plain words, by its type. Weights route through `formatLoad`, so they read in the
-// user's Weight Unit; this only relabels the types whose stored text is shorthand
-// ("BW" → "bodyweight", "70% 1RM" → "70% of 1-rep max").
+// user's Weight Unit; this only relabels shorthand ("BW" → "bodyweight", "70% 1RM" → "70% of
+// 1-rep max").
 function loadWords(load: Load, unit: WeightUnit): string {
-  if (isPureBodyweight(load)) return "bodyweight";
+  if (isPureBodyweight(load) && BODYWEIGHT_SHORTHAND.test(load.text)) return "bodyweight";
   if (load.kind === "percent_1rm" && load.percent != null) {
     return `${load.percent}% of 1-rep max`;
-  }
-  if (load.kind === "absolute" && load.kg == null) {
-    const kg = KG_TEXT.exec(load.text);
-    if (kg !== null) return formatLoad({ ...load, kg: Number(kg[1]) }, unit);
   }
   return formatLoad(load, unit);
 }
@@ -214,8 +213,9 @@ function loadWords(load: Load, unit: WeightUnit): string {
 // Logged Effort in plain words, on the scale it was logged in.
 function effortWords(effort: Effort | null): string | null {
   if (effort === null) return null;
-  if (effort.scale === "rir") return `${plural(effort.value, "rep", "reps")} in reserve`;
-  return formatEffort(effort);
+  if (effort.scale === "rpe") return formatEffort(effort);
+  if (effort.value >= RIR_CEILING) return `${RIR_CEILING} or more reps in reserve`;
+  return `${plural(effort.value, "rep", "reps")} in reserve`;
 }
 
 function setLine(
@@ -226,9 +226,9 @@ function setLine(
 ): string {
   const mark = SET_TYPE_WORDS[resolveSetType(loggedSet.set_type)];
   const label = mark === null ? `Set ${index + 1}` : `Set ${index + 1} (${mark})`;
-  const amount = amountWords(loggedSet.quantity, trainingType);
+  const quantity = quantityWords(loggedSet.quantity, trainingType);
   const load = loggedSet.load == null ? null : loadWords(loggedSet.load, unit);
-  const core = joinPresent([amount, load], " @ ") || "nothing recorded";
+  const core = joinPresent([quantity, load], " @ ") || "nothing recorded";
   const bodyWeight =
     loggedSet.load?.kind === "bodyweight" && loggedSet.body_weight_kg != null
       ? `body weight ${formatBodyWeight(loggedSet.body_weight_kg, unit)}`

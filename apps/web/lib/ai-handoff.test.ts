@@ -346,8 +346,8 @@ test("a yoga pose reads as a hold with its duration, not reps × weight", () => 
   });
 
   assert.match(handoff.text, /^Session: yoga\.$/m);
-  assert.match(handoff.text, /^- Set 1: held for 1 minute 30 seconds$/m);
-  assert.doesNotMatch(handoff.text, /reps|kg/);
+  const performed = handoff.text.split("Performed:\n")[1];
+  assert.equal(performed, "Warrior II\n- Set 1: held for 1 minute 30 seconds");
 });
 
 test("a mobility stretch logged as a clock time reads as a hold in words", () => {
@@ -451,14 +451,13 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-test("an absolute Load stored without its number still reads with a unit, never bare", () => {
-  const load: LoggedSet["load"] = { kind: "absolute", text: "60" };
+test("a bodyweight Load with detail beyond plain bodyweight keeps that detail", () => {
+  const handoff = aiHandoff({
+    record: record({ logged_sets: [set({ load: { kind: "bodyweight", text: "BW + light band" } })] }),
+    unit: "kg",
+  });
 
-  const kg = aiHandoff({ record: record({ logged_sets: [set({ load })] }), unit: "kg" });
-  const lb = aiHandoff({ record: record({ logged_sets: [set({ load })] }), unit: "lb" });
-
-  assert.match(kg.text, /^- Set 1: 8 reps @ 60 kg$/m);
-  assert.match(lb.text, /^- Set 1: 8 reps @ 132\.28 lb$/m);
+  assert.match(handoff.text, /^- Set 1: 8 reps @ BW \+ light band$/m);
 });
 
 test("a %1RM Load stored without its number reads as written", () => {
@@ -501,4 +500,13 @@ test("Effort reads on the scale it was logged in, in plain words", () => {
   assert.match(handoff.text, /^- Set 3: 8 reps @ 100 kg, 0 reps in reserve$/m);
   assert.match(handoff.text, /^- Set 4: 8 reps @ 100 kg, RPE 9$/m);
   assert.doesNotMatch(handoff.text, /RIR/);
+});
+
+test("the top of the reps-in-reserve scale reads as five or more", () => {
+  const handoff = aiHandoff({
+    record: record({ logged_sets: [set({ effort: { scale: "rir", value: 5 } })] }),
+    unit: "kg",
+  });
+
+  assert.match(handoff.text, /^- Set 1: 8 reps @ 100 kg, 5 or more reps in reserve$/m);
 });
