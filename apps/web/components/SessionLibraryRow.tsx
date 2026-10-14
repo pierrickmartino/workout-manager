@@ -1,12 +1,10 @@
 "use client";
 
 import { useActionState, useCallback } from "react";
-import { Star } from "@/components/pulse/icons";
 
 import type { SessionSummary } from "@/lib/session-library";
 import {
   canDeleteSessionRow,
-  favoriteActionLabel,
   sessionSummaryCardModel,
 } from "@/lib/session-card";
 import {
@@ -14,18 +12,11 @@ import {
   submitToggleFavorite,
   type ToggleFavoriteState,
 } from "@/app/sessions/actions";
-import { cn } from "@/lib/utils";
 import { SessionCard } from "@/components/SessionCard";
 import { DeleteSessionControl } from "@/components/DeleteSessionControl";
-import {
-  ActionSheet,
-  useActionSheet,
-} from "@/components/pulse/action-sheet";
-import {
-  ActionSheetItemText,
-  ActionSheetSeparator,
-  actionSheetItemClass,
-} from "@/components/pulse/action-sheet-item";
+import { ActionSheet } from "@/components/pulse/action-sheet";
+import { ActionSheetSeparator } from "@/components/pulse/action-sheet-item";
+import { FavoriteSheetItem } from "@/components/FavoriteSheetItem";
 import { useLongPress } from "@/components/use-long-press";
 
 // One My Sessions library row: the shared `SessionCard` plus the interactions the library adds on
@@ -96,7 +87,7 @@ function SessionRowMenu({
 }): React.JSX.Element {
   return (
     <ActionSheet label={`Actions for ${session.display_name}`} title={session.display_name}>
-      <FavoriteItem
+      <FavoriteSheetItem
         isFavorite={session.is_favorite}
         onToggle={onToggleFavorite}
         pending={favoritePending}
@@ -108,36 +99,5 @@ function SessionRowMenu({
         </>
       ) : null}
     </ActionSheet>
-  );
-}
-
-// Favorite is a one-tap action that leaves the list as it was, so it closes its own sheet: the
-// Glow Edge on the card then shows the result, and a failure surfaces below the card (outside the
-// sheet), so nothing is lost by closing.
-function FavoriteItem({
-  isFavorite,
-  onToggle,
-  pending,
-}: {
-  isFavorite: boolean;
-  onToggle: () => void;
-  pending: boolean;
-}): React.JSX.Element {
-  const sheet = useActionSheet();
-
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        onToggle();
-        sheet?.actions.close();
-      }}
-      disabled={pending}
-      aria-pressed={isFavorite}
-      className={cn(actionSheetItemClass(), isFavorite && "text-cyan")}
-    >
-      <Star className={cn("h-4 w-4 shrink-0", isFavorite && "fill-cyan")} aria-hidden />
-      <ActionSheetItemText label={favoriteActionLabel(isFavorite)} />
-    </button>
   );
 }

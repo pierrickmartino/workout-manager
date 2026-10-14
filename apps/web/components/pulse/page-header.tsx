@@ -10,6 +10,9 @@ interface PageHeaderProps {
   title: React.ReactNode;
   // Optional element rendered on the right (avatar, gear button, badge).
   action?: React.ReactNode;
+  // Optional icon-only control (a ⋯ action sheet trigger) pinned to the top-right corner, on the
+  // overline's line, so it never takes width from the title (ADR-0133).
+  menu?: React.ReactNode;
   className?: string;
 }
 
@@ -19,6 +22,7 @@ export function PageHeader({
   overline,
   title,
   action,
+  menu,
   className,
 }: PageHeaderProps): React.JSX.Element {
   return (
@@ -31,8 +35,18 @@ export function PageHeader({
     <header
       className={cn("flex flex-wrap items-center justify-between gap-4", className)}
     >
-      <div className="flex min-w-0 flex-col gap-1.5">
-        <Overline>{overline}</Overline>
+      {/* With a menu the title column spans the header: the menu rides the overline's line
+          (negative margins keep its 40px tap target from growing that line), so the title runs
+          the full width instead of sharing it with a column the menu would hold all the way down. */}
+      <div className={cn("flex min-w-0 flex-col gap-1.5", menu && "w-full")}>
+        {menu ? (
+          <div className="flex items-center justify-between gap-3">
+            <Overline>{overline}</Overline>
+            <div className="-my-3 -mr-2 shrink-0">{menu}</div>
+          </div>
+        ) : (
+          <Overline>{overline}</Overline>
+        )}
         <h1 className="text-balance font-display text-2xl font-bold leading-tight tracking-tight text-text-primary">
           {title}
         </h1>

@@ -323,3 +323,75 @@ test("favoriting from a My Sessions row's sheet toggles it once and closes the s
     assert.ok(dialog() === null, "the sheet stayed up after a one-tap action finished");
   }, "http://localhost/sessions");
 });
+
+// The Session detail's sheet (ADR-0133): Favorite is its first row, its toggle state held outside
+// the sheet so a failure outlives the row that raised it.
+function loadDetailSheet(submitFavorite: (state: unknown, form: FormData) => Promise<{ error: string | null }>) {
+  return loadTsx("components/SessionActionsSheet.tsx", {
+    "@/app/sessions/[id]/actions": { submitFavorite },
+  });
+}
+
+test("favoriting from the Session detail's sheet toggles it once and closes the sheet", async () => {
+  // Arrange
+  await inDom(async (render) => {
+    const toggles: string[] = [];
+    const { SessionActionsSheet } = loadDetailSheet(async (_state, form) => {
+      toggles.push(`${form.get("session_id")}:${form.get("favorite")}`);
+      return { error: null };
+    });
+    await render(
+      React.createElement(SessionActionsSheet, { sessionId: 7, isFavorite: true },
+        React.createElement("button", { type: "button" }, "Rename")),
+    );
+    await React.act(async () => trigger("Session actions").click());
+    const rows = [...dialog()!.querySelectorAll("button")].map((button) => button.textContent ?? "");
+    assert.ok(rows[1]?.startsWith("Unfavorite session"), "Favorite is not the sheet's first row");
+
+    // Act
+    await React.act(async () => buttonWithText("Unfavorite session").click());
+
+    // Assert
+    assert.deepEqual(toggles, ["7:false"]);
+    assert.ok(dialog() === null, "the sheet stayed up after a one-tap action finished");
+  });
+});
+
+test("a failed favorite closes the sheet but keeps its error on the page", async () => {
+  // Arrange
+  await inDom(async (render) => {
+    const { SessionActionsSheet } = loadDetailSheet(async () => ({
+      error: "Could not update this favorite.",
+    }));
+    await render(
+      React.createElement(SessionActionsSheet, { sessionId: 7, isFavorite: false }, null),
+    );
+    await React.act(async () => trigger("Session actions").click());
+
+    // Act
+    await React.act(async () => buttonWithText("Favorite session").click());
+
+    // Assert
+    assert.ok(dialog() === null, "the sheet stayed up after a one-tap action finished");
+    const alert = document.querySelector('[role="alert"]');
+    assert.equal(alert?.textContent, "Could not update this favorite.");
+  });
+});
+
+test("the Session detail's sheet has no Favorite row where Favorite is not offered", async () => {
+  // Arrange — a Protocol member: the server withholds the marker, the page passes `null`
+  await inDom(async (render) => {
+    const { SessionActionsSheet } = loadDetailSheet(async () => ({ error: null }));
+    await render(
+      React.createElement(SessionActionsSheet, { sessionId: 7, isFavorite: null },
+        React.createElement("button", { type: "button" }, "Generate another")),
+    );
+
+    // Act
+    await React.act(async () => trigger("Session actions").click());
+
+    // Assert
+    assert.equal(dialog()!.textContent?.includes("Favorite"), false);
+    assert.equal(dialog()!.textContent?.includes("Generate another"), true);
+  });
+});

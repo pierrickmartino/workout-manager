@@ -58,6 +58,9 @@ import { RenameSessionControl } from "@/components/RenameSessionControl";
 import { ShareSessionControl } from "@/components/ShareSessionControl";
 import { DuplicateButton } from "@/components/DuplicateButton";
 import { DeleteSessionControl } from "@/components/DeleteSessionControl";
+import { FavoriteSheetItem } from "@/components/FavoriteSheetItem";
+import { SessionActionsSheet } from "@/components/SessionActionsSheet";
+import { SessionDetailHeader } from "@/components/SessionDetailHeader";
 import { submitDeleteSession } from "@/app/sessions/[id]/actions";
 import { DELETE_DISABLED_HINT } from "@/lib/session-delete";
 import { ArrowRight } from "@/components/pulse/icons";
@@ -241,11 +244,12 @@ function ConfirmSurface() {
 
 // The action sheet that replaced the ⋯ More / ⋯ Actions disclosure (ADR-0113). It renders only
 // while open, so — like `confirm` — no other journey ever shows one. The case is the worst of both
-// call sites at once: the Session detail's five actions, Delete disabled so its row carries the
+// call sites at once: the Session detail's six actions (Favorite first, ADR-0133), Delete disabled so its row carries the
 // longest description, under the longest title a sheet carries — a My Sessions row's authored
 // name, which in the default fixture is 120 unbroken characters.
 function SheetSurface() {
   return <ActionSheetPanel title={sessions[1].display_name} onClose={() => {}}>
+    <FavoriteSheetItem isFavorite onToggle={() => {}} pending={false} />
     <RenameSessionControl sessionId={1} displayName={sessions[1].display_name} isUserNamed editValue={sessions[1].display_name} />
     <ShareSessionControl sessionId={1} />
     <DuplicateButton sessionId={1} />
@@ -256,6 +260,24 @@ function SheetSurface() {
     <ActionSheetSeparator />
     <DeleteSessionControl sessionId={1} action={submitDeleteSession} disabledHint={DELETE_DISABLED_HINT} />
   </ActionSheetPanel>;
+}
+
+// The Session detail's header (ADR-0133): the ⋯ rides the overline's line so the title runs the
+// full width, and a favorited Session shows the Glow Edge on its sigil and a FAVORITE chip leading
+// the meta line. The page is a Server Component, so no other journey renders it. The worst case:
+// favorited, with a byline, under a My Sessions row's authored name as the title — 120 unbroken
+// characters in the default fixture.
+function SessionHeaderSurface() {
+  const name = sessions[1].display_name;
+  return <div className="flex flex-col gap-7">
+    <SessionDetailHeader
+      session={{ ...workout, name }}
+      displayName={name}
+      authorView={{ byline: "by Synthetic author", displayName: "Synthetic author", isNamed: true, showByline: true }}
+      isFavorite
+      menu={<SessionActionsSheet sessionId={workout.id} isFavorite>{null}</SessionActionsSheet>}
+    />
+  </div>;
 }
 
 // The AI Hand-off sheet (ADR-0132), a modal like `sheet`, so no other journey mounts it. The
@@ -546,6 +568,7 @@ function Content() {
     case "admin": return <AdminAudit />;
     case "confirm": return <ConfirmSurface />;
     case "sheet": return <SheetSurface />;
+    case "session-header": return <SessionHeaderSurface />;
     case "handoff": return <HandoffSurface />;
     case "launchpad": return <LaunchpadSurface />;
     case "levels": return <FitnessLevelSurface />;

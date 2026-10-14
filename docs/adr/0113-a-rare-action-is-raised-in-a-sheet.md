@@ -114,3 +114,9 @@ real branches (Protocol member, trained, never trained) and both Modes — kept 
   ADR-0082's pairing to cover; adding one later is that ADR's business.
 - **ADR-0071 is unchanged.** Rare and destructive actions are still exactly one tap behind
   disclosure; only the container changed.
+
+## Amendment (ADR-0133): the detail's ⋯ holds Favorite, on the overline's line
+
+On the Session detail, Favorite is now the sheet's first row, and the `⋯` is pinned top right on
+the header's overline line instead of sitting "beside Favorite". The favorited state shows in the
+header, as the Glow Edge on the sigil and a `FAVORITE` chip.

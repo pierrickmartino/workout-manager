@@ -110,3 +110,11 @@ export function canDeleteSessionRow(loggedCount: number): boolean {
 export function favoriteActionLabel(isFavorite: boolean): string {
   return isFavorite ? "Unfavorite session" : "Favorite session";
 }
+
+// The Favorite row's description in an action sheet (ADR-0113: every row says what it does). It
+// names where the marker shows up, since Favorite exists to filter My Sessions.
+export function favoriteActionDescription(isFavorite: boolean): string {
+  return isFavorite
+    ? "Take it out of Favorites in My Sessions"
+    : "Show it under Favorites in My Sessions";
+}
