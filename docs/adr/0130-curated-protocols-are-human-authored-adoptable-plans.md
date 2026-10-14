@@ -97,7 +97,9 @@ each falls back to the Curated Protocol's. The integrity gate requires every Tra
 protocol's and any override, to be in the closed set, and an overriding duration to be positive.
 Adopt writes the Session's own values onto each Session, and a Builder deploy carries an edited
 Session's values through the rewritten tail as it carries its title. A fresh slot takes the
-Protocol's.
+Protocol's: no Builder path sets a Session's Training Type yet, in any Protocol (deferred, issue
+#707). The adopt form's preview shows each Session's type and duration when a plan mixes Training
+Types.
 
 Runs reuse the `Running` movement 0019 already seeds, held flat on **Static**: no Progression Scheme
 steps a distance or duration, so the description says the run targets stay the same every week.
