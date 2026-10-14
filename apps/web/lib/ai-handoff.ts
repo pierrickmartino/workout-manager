@@ -122,37 +122,40 @@ function sessionDurationWords(totalSeconds: number | null): string | null {
   return timeWords(totalMinutes * SECONDS_PER_MINUTE);
 }
 
-// One exercise of the record, with its sets in performed order.
-interface PerformedExercise {
+// One exercise and its items (Logged Sets, or Exercise Prescriptions) in order.
+interface ExerciseGroup<T> {
   exerciseId: number;
   name: string;
-  sets: LoggedSet[];
+  items: T[];
 }
 
-// The exercises a record performed, in first-performed order, each with its sets in order.
-function exercisesInPerformedOrder(sets: readonly LoggedSet[]): PerformedExercise[] {
-  const ordered = [...sets].sort((a, b) => a.position - b.position);
-  const groups = new Map<number, PerformedExercise>();
-  for (const loggedSet of ordered) {
-    const group = groups.get(loggedSet.exercise_id);
-    groups.set(loggedSet.exercise_id, {
-      exerciseId: loggedSet.exercise_id,
-      name: group?.name ?? loggedSet.exercise_name,
-      sets: [...(group?.sets ?? []), loggedSet],
+// One exercise of the record, with its sets in performed order.
+type PerformedExercise = ExerciseGroup<LoggedSet>;
+
+// One exercise of the plan, with its prescriptions in plan order.
+type PrescribedExercise = ExerciseGroup<ExercisePrescription>;
+
+// Items grouped by exercise, in order of each exercise's first position, each group's items in
+// position order. Matching between plan and record is by exercise, so both sides group this way.
+function groupByExercise<T extends { position: number; exercise_id: number; exercise_name: string }>(
+  items: readonly T[],
+): ExerciseGroup<T>[] {
+  const ordered = [...items].sort((a, b) => a.position - b.position);
+  const groups = new Map<number, ExerciseGroup<T>>();
+  for (const item of ordered) {
+    const group = groups.get(item.exercise_id);
+    groups.set(item.exercise_id, {
+      exerciseId: item.exercise_id,
+      name: group?.name ?? item.exercise_name,
+      items: [...(group?.items ?? []), item],
     });
   }
   return [...groups.values()];
 }
 
-// The distinct exercises a plan prescribes, or null when there is no plan.
-function plannedExerciseIds(plan: AiHandoffInput["plan"]): ReadonlySet<number> | null {
-  if (plan == null) return null;
-  return new Set(plan.prescriptions.map((prescription) => prescription.exercise_id));
-}
-
-// The distinct exercises the record performed.
-function performedIds(performed: readonly PerformedExercise[]): ReadonlySet<number> {
-  return new Set(performed.map((exercise) => exercise.exerciseId));
+// The distinct exercises of some grouped items.
+function exerciseIds(groups: readonly ExerciseGroup<unknown>[]): ReadonlySet<number> {
+  return new Set(groups.map((group) => group.exerciseId));
 }
 
 // The Completion Outcome in plain words, or null when the record declares none (an ad-hoc log).
@@ -276,6 +279,9 @@ function setLine(
   return note === null ? `- ${label}: ${details}` : `- ${label}: ${details}. Note: “${note}”`;
 }
 
+// A free-text rep target that is only a count or a range ("8", "8-12"), so it needs "reps".
+const BARE_REP_TARGET = /^\d+(?:\s*[-–]\s*\d+)?$/;
+
 // A prescription's amount in words: its typed Prescribed Quantity when it carries one, else its
 // free-text target, with a bare count or range read as reps ("8-12" → "8-12 reps").
 function prescribedAmountWords(
@@ -288,9 +294,6 @@ function prescribedAmountWords(
   if (reps === "") return null;
   return BARE_REP_TARGET.test(reps) ? `${reps} reps` : reps;
 }
-
-// A free-text rep target that is only a count or a range ("8", "8-12"), so it needs "reps".
-const BARE_REP_TARGET = /^\d+(?:\s*[-–]\s*\d+)?$/;
 
 // One prescription as a line: its sets, then the amount, Load and target Effort it asks for.
 function prescriptionLine(
@@ -313,26 +316,6 @@ function prescriptionLine(
   return details === "" ? `- ${label}` : `- ${label}: ${details}`;
 }
 
-// The plan's exercises in plan order, each with its prescriptions in order.
-function exercisesInPlanOrder(
-  prescriptions: readonly ExercisePrescription[],
-): { exerciseId: number; name: string; prescriptions: ExercisePrescription[] }[] {
-  const ordered = [...prescriptions].sort((a, b) => a.position - b.position);
-  const groups = new Map<
-    number,
-    { exerciseId: number; name: string; prescriptions: ExercisePrescription[] }
-  >();
-  for (const prescribed of ordered) {
-    const group = groups.get(prescribed.exercise_id);
-    groups.set(prescribed.exercise_id, {
-      exerciseId: prescribed.exercise_id,
-      name: group?.name ?? prescribed.exercise_name,
-      prescriptions: [...(group?.prescriptions ?? []), prescribed],
-    });
-  }
-  return [...groups.values()];
-}
-
 // An exercise's heading line, with a plain mark when it has no counterpart in the other block.
 function exerciseHeading(name: string, matched: boolean, unmatchedMark: string): string {
   return matched ? name : `${name} (${unmatchedMark})`;
@@ -341,14 +324,14 @@ function exerciseHeading(name: string, matched: boolean, unmatchedMark: string):
 // The *Prescribed* block: what the plan asked for, kept apart from what was done. Matching is by
 // exercise: a prescribed exercise with no performed sets is marked as not done.
 function prescribedBlock(
-  plan: NonNullable<AiHandoffInput["plan"]>,
-  performedIds: ReadonlySet<number>,
+  prescribed: readonly PrescribedExercise[],
+  performedExerciseIds: ReadonlySet<number>,
   unit: WeightUnit,
   trainingType: string,
 ): string {
-  const lines = exercisesInPlanOrder(plan.prescriptions).flatMap((exercise) => [
-    exerciseHeading(exercise.name, performedIds.has(exercise.exerciseId), "not done"),
-    ...exercise.prescriptions.map((prescribed) => prescriptionLine(prescribed, unit, trainingType)),
+  const lines = prescribed.flatMap((exercise) => [
+    exerciseHeading(exercise.name, performedExerciseIds.has(exercise.exerciseId), "not done"),
+    ...exercise.items.map((prescription) => prescriptionLine(prescription, unit, trainingType)),
   ]);
   return ["Prescribed:", ...lines].join("\n");
 }
@@ -363,7 +346,7 @@ function performedBlock(
 ): string {
   const lines = performed.flatMap((exercise) => [
     exerciseHeading(exercise.name, planned?.has(exercise.exerciseId) ?? true, "not in the plan"),
-    ...exercise.sets.map((loggedSet, index) => setLine(loggedSet, index, unit, trainingType)),
+    ...exercise.items.map((loggedSet, index) => setLine(loggedSet, index, unit, trainingType)),
   ]);
   return ["Performed:", ...lines].join("\n");
 }
@@ -375,8 +358,10 @@ export function aiHandoff({
   plan = null,
   profile = null,
 }: AiHandoffInput): AiHandoff {
-  const performed = exercisesInPerformedOrder(record.logged_sets);
-  const planned = plannedExerciseIds(plan);
+  const performed = groupByExercise(record.logged_sets);
+  // A plan that couldn't be read hands off record-only; one with no prescriptions has no block.
+  const prescribed = plan === null ? null : groupByExercise(plan.prescriptions);
+  const planned = prescribed === null ? null : exerciseIds(prescribed);
   const outcome = outcomeWords(record.completion_outcome, performed, planned);
   const header = joinPresent(
     [
@@ -390,9 +375,9 @@ export function aiHandoff({
     [
       AI_HANDOFF_LEAD_IN,
       header,
-      plan === null
+      prescribed === null || prescribed.length === 0
         ? null
-        : prescribedBlock(plan, performedIds(performed), unit, record.training_type),
+        : prescribedBlock(prescribed, exerciseIds(performed), unit, record.training_type),
       performedBlock(performed, planned, unit, record.training_type),
     ],
     "\n\n",

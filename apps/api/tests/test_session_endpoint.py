@@ -303,14 +303,17 @@ def test_read_serializes_is_protocol_member_false_for_a_standalone_session():
 
 def test_read_serializes_a_null_objective_for_a_standalone_session():
     # A standalone Session has no Protocol, so it carries no plan objective (ADR-0132).
+    # Arrange
     client, ctx = build_client()
     headers = _auth(ctx, "user_objective_alone")
     created = client.post(
         "/api/sessions/generate", headers=headers, json=_generate_body()
     ).json()["data"]
 
+    # Act
     fetched = client.get(f"/api/sessions/{created['id']}", headers=headers).json()["data"]
 
+    # Assert
     assert fetched["objective"] is None
 
 
@@ -318,6 +321,7 @@ def test_read_serializes_the_protocol_objective_for_a_protocol_member_session():
     # A Protocol-member Session carries its Protocol's objective, stored on the Session row,
     # so the AI Hand-off can state the plan's goal (ADR-0132). Seeded directly: ``create``
     # only builds standalone Sessions.
+    # Arrange
     exercises = InMemoryExerciseRepository()
     sessions = InMemorySessionRepository(exercises)
     squat = exercises.find_or_create("Back Squat", provenance=Provenance.AI_GENERATED)
@@ -339,10 +343,12 @@ def test_read_serializes_the_protocol_objective_for_a_protocol_member_session():
     ]
     client, ctx = build_client(sessions=sessions, exercises=exercises)
 
+    # Act
     fetched = client.get(
         "/api/sessions/1", headers=_auth(ctx, "user_objective_member")
     ).json()["data"]
 
+    # Assert
     assert fetched["objective"] == "hypertrophy"
 
 

@@ -23,7 +23,10 @@ clipboard. We never call a third party on their behalf, and nothing is stored.
   outbox (ADR-0060) has no hand-off until it is recorded.
 - **Plan and record never merge.** When the Logged Session was made from a plan, the
   text carries two labelled blocks, *Prescribed* and *Performed*. A plan-less session
-  carries *Performed* only.
+  carries *Performed* only. Matching is by exercise: a prescribed exercise with no performed
+  sets is marked "not done" in *Prescribed*, and a substitute or extra is marked "not in the
+  plan" in *Performed*. A mark names an exercise's absence from the other block; it never
+  carries a value across.
 - **What goes in.** Exercises, sets by their quantity kind, Load by its type in the
   user's Weight Unit, logged Effort, outcome, duration and Set Notes. Also the plan's
   objective when there is a plan, and the user's **Declared** Fitness Level for that
