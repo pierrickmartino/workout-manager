@@ -10,6 +10,7 @@ responses use the standard envelope."""
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 from uuid import UUID
 
@@ -22,10 +23,13 @@ from app.authoring.service import (
     AuthoredSessionInvalid,
     AuthorPlanRequest,
     AuthorSessionRequest,
+    EditPlanRequest,
+    EditTargetNotFound,
     InsertTargetNotFound,
     RemoveTargetNotFound,
     author_and_log_session,
     author_plan,
+    edit_plan,
     insert_prescription,
     remove_prescription,
 )
@@ -39,6 +43,7 @@ from app.domain.quantity import QuantityKind, prescribed_quantity_from_input
 from app.domain.session_naming import session_label
 from app.domain.session_provenance import is_ai_generated
 from app.domain.set_type import SetType, parse_set_type
+from app.domain.training_type import TRAINING_TYPES
 from app.envelope import error_envelope, success_envelope
 from app.generation.generator import (
     GenerationError,
@@ -427,6 +432,83 @@ def author_plan_only(
             exercises=exercises,
             profiles=profiles,
         )
+    except AuthoredSessionInvalid as exc:
+        return _authored_error_response(exc.errors)
+    return success_envelope(_serialize(view))
+
+
+class EditPrescriptionBody(AuthorPrescriptionBody):
+    """One prescription of an edited plan (Edit, ADR-0133): an authored prescription plus
+    the movement's carried Progression Scheme, which the editor round-trips untouched so an
+    edit never silently resets a chosen scheme. Membership is checked against the closed
+    catalog in ``validate_deploy``; a scheme the edited Load no longer fits falls back to
+    the default in the service."""
+
+    scheme: str | None = None
+
+    def to_draft(self) -> PrescriptionDraft:
+        return replace(super().to_draft(), scheme=self.scheme or None)
+
+
+class EditPlanBody(BaseModel):
+    """Validated request to replace a standalone Session's plan in place (Edit, ADR-0133).
+
+    ``prescriptions`` are the whole desired plan, in order. ``duration_minutes`` is
+    optional: omitted keeps the Session's own nominal length. Emptiness, catalog validity
+    and Superset structure are checked in the service, so a rejected edit surfaces a
+    structured ``422`` and persists nothing."""
+
+    training_type: str
+    duration_minutes: int | None = Field(
+        default=None, ge=MIN_DURATION_MINUTES, le=MAX_DURATION_MINUTES
+    )
+    prescriptions: list[EditPrescriptionBody] = Field(default_factory=list)
+
+    @field_validator("training_type")
+    @classmethod
+    def _known_training_type(cls, value: str) -> str:
+        if value not in TRAINING_TYPES:
+            allowed = ", ".join(sorted(TRAINING_TYPES))
+            raise ValueError(f"training_type must be one of: {allowed}")
+        return value
+
+
+@router.put("/sessions/{session_id}/plan")
+def edit_session_plan(
+    session_id: int,
+    payload: EditPlanBody,
+    clerk_user_id: str = Depends(get_current_user),
+    sessions: SessionRepository = Depends(get_session_repository),
+    exercises: ExerciseRepository = Depends(get_exercise_repository),
+    profiles: ProfileRepository = Depends(get_profile_repository),
+) -> object:
+    """Replace the owner's standalone Session's plan in place (Edit, ADR-0133).
+
+    The submit target of the Session's "Edit" screen: reorder, re-dose, re-time, add or
+    drop movements, and change the Training Type, in one save with no AI call. Delegates
+    to ``edit_plan``, which validates the whole plan before any write. A Protocol-member
+    target or a ``validate_deploy`` failure returns a structured ``422`` and persists
+    nothing; a missing or unowned Session ``404``s. On success the envelope carries the
+    updated Session — Provenance, name and Favorite unchanged, Logged Sessions frozen."""
+
+    request = EditPlanRequest(
+        training_type=payload.training_type,
+        duration_minutes=payload.duration_minutes,
+        prescriptions=[prescription.to_draft() for prescription in payload.prescriptions],
+    )
+    try:
+        view = edit_plan(
+            session_id,
+            clerk_user_id,
+            request,
+            sessions=sessions,
+            exercises=exercises,
+            profiles=profiles,
+        )
+    except EditTargetNotFound as exc:
+        raise HTTPException(
+            status_code=HTTP_NOT_FOUND, detail="Session not found"
+        ) from exc
     except AuthoredSessionInvalid as exc:
         return _authored_error_response(exc.errors)
     return success_envelope(_serialize(view))

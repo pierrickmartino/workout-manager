@@ -1,7 +1,7 @@
 import { Suspense, type ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, ClipboardCheck, Play } from "@/components/pulse/icons";
+import { ArrowRight, ClipboardCheck, Pencil, Play } from "@/components/pulse/icons";
 
 import { SubstituteButton } from "@/components/SubstituteButton";
 import { DuplicateButton } from "@/components/DuplicateButton";
@@ -44,6 +44,7 @@ import { sessionAuthorView } from "@/lib/session-author";
 import { BasedOnNote } from "@/components/BasedOnNote";
 import { sessionFavoriteView } from "@/lib/session-favorite";
 import { sessionDeleteView, DELETE_DISABLED_HINT } from "@/lib/session-delete";
+import { sessionEditView } from "@/lib/session-edit";
 import { submitDeleteSession } from "@/app/sessions/[id]/actions";
 import { appendFrom } from "@/lib/back-target";
 import { PageHeader } from "@/components/pulse/page-header";
@@ -100,6 +101,9 @@ export default async function SessionPage({
   // Session may be deleted now (only with no logged training). Shown disabled with a hint when
   // the Session has been performed — the server 409 is the backstop.
   const deleteView = sessionDeleteView(session);
+
+  // The Edit entry (ADR-0133): standalone-only, like Insert and Remove.
+  const editView = sessionEditView(session);
 
   // The per-prescription Superset layout (ADR-0023): a saved Superset (from a
   // Hand-Authored Session or an AI plan) renders as a lettered, round-rest-bearing group
@@ -259,6 +263,19 @@ export default async function SessionPage({
         {session.is_protocol_member ? null : (
           <AddExerciseButton sessionId={session.id} unit={unit} />
         )}
+        {/* Edit (ADR-0133): open this standalone Session's whole plan in the Hand-Authored
+            editor — reorder, sets, reps, rest, load — and save it back in place. Withheld on a
+            Protocol member, whose Sessions are edited through the Builder's Deploy. */}
+        {editView.show ? (
+          <Link
+            {...NAV_FORWARD}
+            href={editView.href}
+            className={buttonVariants({ variant: "secondary", className: "w-full" })}
+          >
+            <Pencil className="h-4 w-4" aria-hidden />
+            Edit exercises
+          </Link>
+        ) : null}
       </div>
 
       {/* The primary verbs: Start and Log. Rare actions (Duplicate, Generate another) moved

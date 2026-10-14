@@ -16,10 +16,12 @@ the repositories; no AI, no HTTP.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 
 from app.domain.fitness_profile import is_sensitive
+from app.domain.load import ParsedLoad
+from app.domain.progression import parse_scheme, scheme_applies_to_optional_load
 from app.domain.session_provenance import SessionProvenance
 from app.logbook.service import LogSessionRequest, log_session
 from app.protocols.deploy_validation import (
@@ -82,6 +84,14 @@ class RemoveTargetNotFound(Exception):
     """
 
 
+class EditTargetNotFound(Exception):
+    """The Session an Edit targets is missing or owned by another user (ADR-0133).
+
+    A non-owner sees the same not-found as a missing Session, so the boundary maps this
+    to a ``404`` rather than a structured ``422``.
+    """
+
+
 @dataclass(frozen=True)
 class AuthorPlanRequest:
     """A request to author a standalone plan with **no performance logged** (Capture,
@@ -96,6 +106,19 @@ class AuthorPlanRequest:
 
     training_type: str
     duration_minutes: int
+    prescriptions: list[PrescriptionDraft] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class EditPlanRequest:
+    """A request to replace a standalone Session's plan in place (Edit, ADR-0133).
+
+    ``prescriptions`` are the whole desired plan, in order — reordered, re-dosed, added or
+    dropped movements alike. ``duration_minutes`` is ``None`` to keep the Session's own
+    nominal length (the Hand-Authored editor collects none)."""
+
+    training_type: str
+    duration_minutes: int | None
     prescriptions: list[PrescriptionDraft] = field(default_factory=list)
 
 
@@ -141,6 +164,7 @@ def _deploy_draft(prescriptions: list[PrescriptionDraft]) -> DeployDraft:
                         recommended_load=prescription.recommended_load,
                         superset_group=prescription.superset_group,
                         round_rest_seconds=prescription.round_rest_seconds,
+                        scheme=prescription.scheme,
                     )
                     for prescription in prescriptions
                 ],
@@ -471,14 +495,113 @@ def remove_prescription(
     return updated
 
 
+def _scheme_fitted_to_load(prescription: PrescriptionDraft) -> PrescriptionDraft:
+    """The prescription with a carried Progression Scheme reset to the default when the
+    edited Load no longer fits it (Edit, ADR-0133).
+
+    The editor carries each movement's scheme through untouched but offers no scheme
+    picker, so a Load change that strands the choice (Greyskull on a qualitative Load)
+    falls back to the default rather than blocking a save the user cannot fix there. An
+    *unknown* scheme is left for ``validate_deploy`` to reject."""
+
+    if prescription.scheme is None:
+        return prescription
+    scheme = parse_scheme(prescription.scheme)
+    if scheme is None:
+        return prescription
+    load = (
+        ParsedLoad.from_dict(prescription.recommended_load)
+        if prescription.recommended_load is not None
+        else None
+    )
+    if scheme_applies_to_optional_load(scheme, load):
+        return prescription
+    return replace(prescription, scheme=None)
+
+
+def edit_plan(
+    session_id: int,
+    clerk_user_id: str,
+    request: EditPlanRequest,
+    *,
+    sessions: SessionRepository,
+    exercises: ExerciseRepository,
+    profiles: ProfileRepository,
+) -> SessionView:
+    """Replace the owner's standalone Session's plan in place (Edit, ADR-0133).
+
+    Guards the whole edit before any write: a missing/unowned Session raises
+    ``EditTargetNotFound``; a Protocol member is refused whole (editing inside a Protocol
+    stays the Builder's tail-gated Deploy, ADR-0020/0021); and the new plan must pass the
+    Builder's ``validate_deploy`` rules (empty session, unknown Exercise, invalid
+    sets/reps, Superset structure, unknown scheme — with the Sensitive-Constraint posture
+    threaded, ADR-0023). Only then is the plan rewritten.
+
+    Touches the plan only — every existing Logged Session is frozen record, its Completion
+    Outcome stored at finish (ADR-0001/0013/0034) — and leaves Session Provenance, name,
+    Author and Favorite untouched (ADR-0041). Returns the updated Session.
+    """
+
+    session = sessions.get(session_id, clerk_user_id)
+    if session is None:
+        raise EditTargetNotFound()
+
+    if session.is_protocol_member:
+        raise AuthoredSessionInvalid(
+            [
+                DeployError(
+                    code="protocol_member",
+                    message=(
+                        "Edit is available on standalone sessions only; edit a session "
+                        "inside a protocol through the builder."
+                    ),
+                )
+            ]
+        )
+
+    prescriptions = [_scheme_fitted_to_load(p) for p in request.prescriptions]
+    profile = profiles.get_or_create(clerk_user_id)
+
+    def exercise_exists(exercise_id: int) -> bool:
+        return exercises.get(exercise_id) is not None
+
+    errors = validate_deploy(
+        _deploy_draft(prescriptions),
+        performed_session_ids=set(),
+        known_session_ids=set(),
+        exercise_exists=exercise_exists,
+        has_sensitive_constraint=is_sensitive(profile),
+    )
+    if errors:
+        raise AuthoredSessionInvalid(errors)
+
+    updated = sessions.replace_plan(
+        session_id,
+        clerk_user_id,
+        training_type=request.training_type,
+        duration_minutes=(
+            request.duration_minutes
+            if request.duration_minutes is not None
+            else session.duration_minutes
+        ),
+        prescriptions=prescriptions,
+    )
+    if updated is None:  # ownership checked above; defensive only
+        raise EditTargetNotFound()
+    return updated
+
+
 __all__ = [
     "AuthoredSessionInvalid",
+    "EditTargetNotFound",
     "InsertTargetNotFound",
     "RemoveTargetNotFound",
     "AuthorPlanRequest",
     "AuthorSessionRequest",
+    "EditPlanRequest",
     "author_and_log_session",
     "author_plan",
+    "edit_plan",
     "insert_prescription",
     "remove_prescription",
 ]

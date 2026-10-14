@@ -6,6 +6,7 @@ import type {
   AuthorSessionInput,
 } from "./hand-authored-session";
 import type { LoggedSession } from "./logs-types";
+import type { EditPlanInput } from "./session-edit";
 import type { SessionSummary } from "./session-library";
 import type {
   ExerciseDetail,
@@ -74,6 +75,18 @@ export async function insertPrescription(
   input: AuthorPrescriptionInput,
 ): Promise<Envelope<WorkoutSession>> {
   return apiSend(`/api/sessions/${sessionId}/prescriptions`, "POST", input);
+}
+
+// Replace the user's own standalone Session's plan in place (Edit, ADR-0133): the whole
+// ordered prescription list plus the Training Type, as mapped by `buildEditPlanRequest`. The
+// backend validates through `validate_deploy` and returns the updated Session — Provenance,
+// name and Favorite unchanged, Logged Sessions frozen. A Protocol-member target or a
+// validation failure comes back as an envelope error (nothing persisted); a non-owner 404s.
+export async function editSessionPlan(
+  sessionId: number,
+  input: EditPlanInput,
+): Promise<Envelope<WorkoutSession>> {
+  return apiSend(`/api/sessions/${sessionId}/plan`, "PUT", input);
 }
 
 // Remove one Exercise Prescription from the user's own standalone Session (Remove,

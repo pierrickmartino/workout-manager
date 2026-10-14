@@ -440,6 +440,26 @@ class SessionRepository(Protocol):
         """
         ...
 
+    def replace_plan(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        *,
+        training_type: str,
+        duration_minutes: int,
+        prescriptions: list[PrescriptionDraft],
+    ) -> SessionView | None:
+        """Replace the owner's Session's plan in place (Edit, ADR-0133).
+
+        The prescriptions are rewritten as the given ordered list, numbered ``0..n-1``,
+        and the Training Type and nominal duration overwritten. Everything else on the
+        Session — id, name, Provenance, Author, Favorite, lineage, regeneration guard — is
+        left exactly as it was (an edit, not a re-origination). Returns the updated
+        Session, or ``None`` if it is missing or owned by another user. The
+        standalone-only and validation guards live in the service.
+        """
+        ...
+
 
 def _regenerated_drafts(
     current: list[ExercisePrescription],
@@ -957,6 +977,38 @@ class SqlSessionRepository:
         self._session.commit()
         return self._view(workout)
 
+    def replace_plan(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        *,
+        training_type: str,
+        duration_minutes: int,
+        prescriptions: list[PrescriptionDraft],
+    ) -> SessionView | None:
+        workout = self._session.get(WorkoutSession, session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return None
+
+        current = self._session.exec(
+            select(ExercisePrescription).where(
+                ExercisePrescription.session_id == session_id
+            )
+        ).all()
+        # The same delete-all/re-add shape Remove and Regeneration use; the delete is
+        # flushed first so the re-numbered rows never collide with the old positions.
+        for prescription in current:
+            self._session.delete(prescription)
+        self._session.flush()
+
+        workout.training_type = training_type
+        workout.duration_minutes = duration_minutes
+        self._session.add(workout)
+        self._add_prescriptions(session_id, prescriptions)
+        self._session.commit()
+        self._session.refresh(workout)
+        return self._view(workout)
+
 
 class InMemorySessionRepository:
     def __init__(
@@ -1335,6 +1387,29 @@ class InMemorySessionRepository:
         survivors = _removed_drafts(current, position)
         self._prescriptions[session_id] = self._materialize(session_id, survivors)
         return self._view(workout)
+
+    def replace_plan(
+        self,
+        session_id: int,
+        clerk_user_id: str,
+        *,
+        training_type: str,
+        duration_minutes: int,
+        prescriptions: list[PrescriptionDraft],
+    ) -> SessionView | None:
+        workout = self._sessions.get(session_id)
+        if workout is None or workout.clerk_user_id != clerk_user_id:
+            return None
+
+        edited = workout.model_copy(
+            update={
+                "training_type": training_type,
+                "duration_minutes": duration_minutes,
+            }
+        )
+        self._sessions[session_id] = edited
+        self._prescriptions[session_id] = self._materialize(session_id, prescriptions)
+        return self._view(edited)
 
 
 __all__ = [

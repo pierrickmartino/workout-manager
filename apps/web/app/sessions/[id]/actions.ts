@@ -9,6 +9,7 @@ import {
   clearScheme,
   createShareLink,
   duplicateSession,
+  editSessionPlan,
   favoriteSession,
   insertPrescription,
   removePrescription,
@@ -25,6 +26,7 @@ import {
   type ShareLinkResult,
 } from "@/lib/share-link";
 import type { AuthorPrescriptionInput } from "@/lib/hand-authored-session";
+import type { EditPlanInput } from "@/lib/session-edit";
 
 export interface SubstituteFormState {
   error: string | null;
@@ -36,6 +38,11 @@ export interface DuplicateFormState {
 
 export interface InsertPrescriptionFormState {
   error: string | null;
+}
+
+export interface EditPlanFormState {
+  error: string | null;
+  redirectTo: string | null;
 }
 
 export interface RemovePrescriptionFormState {
@@ -148,6 +155,24 @@ export async function submitInsertPrescription(
 
   revalidatePath(`/sessions/${sessionId}`);
   return { error: null };
+}
+
+// Save an edited plan over the user's own standalone Session (Edit, ADR-0133). The client
+// has mapped the editor into the payload through the pure `buildEditPlanRequest`, so this is
+// a thin transport-and-revalidate shell. On success the Session page is revalidated and the
+// form returns there; on failure the server's message is returned for the form to surface,
+// and nothing is persisted.
+export async function submitEditPlan(
+  sessionId: number,
+  input: EditPlanInput,
+): Promise<EditPlanFormState> {
+  const result = await editSessionPlan(sessionId, input);
+  if (!result.success || !result.data) {
+    return { error: result.error ?? "Could not save your changes.", redirectTo: null };
+  }
+
+  revalidatePath(`/sessions/${sessionId}`);
+  return { error: null, redirectTo: `/sessions/${sessionId}` };
 }
 
 // Remove one Exercise Prescription from the user's own standalone Session (Remove,
