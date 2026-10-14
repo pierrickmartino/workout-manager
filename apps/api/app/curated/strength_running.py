@@ -13,11 +13,14 @@ flat on **Static**, because no Progression Scheme steps a distance or duration; 
 qualitative Load and its target a typed Quantity. The run Sessions are the first typed and timed
 apart from their Curated Protocol: ``cardio``, with their own durations.
 
-Ships unreleased until a sign-off naming its reviewer is recorded."""
+Released with the sign-off from its review, recorded below."""
 
 from __future__ import annotations
 
+from datetime import date
+
 from app.curated.model import (
+    CoachSignOff,
     CuratedProtocol,
     MainLift,
     PatternPrescription,
@@ -149,6 +152,8 @@ STRENGTH_RUNNING = CuratedProtocol(
         ),
         _run_session("Long easy run", (_run("45 min", _EASY),), duration_minutes=50),
     ),
+    coach_sign_off=CoachSignOff(reviewer="Pierrick Martino", signed_on=date(2026, 10, 14)),
+    released=True,
 )
 
 

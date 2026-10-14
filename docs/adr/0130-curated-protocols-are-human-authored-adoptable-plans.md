@@ -89,8 +89,8 @@ honest approximations of the methodologies that inspired them:
 
 ## Amendment: a Session typed and timed apart from its Curated Protocol
 
-Added with the strength and running Curated Protocol, a fifth that ships unreleased until its own
-sign-off. A hybrid week mixes lifting Sessions and run Sessions, and History and Analytics slice the
+Added with the strength and running Curated Protocol, a fifth, released with its own recorded
+sign-off (Pierrick Martino, 2026-10-14). A hybrid week mixes lifting Sessions and run Sessions, and History and Analytics slice the
 record by Training Type, so typing a 45-minute run `strength` would corrupt what they project from.
 A `PatternSession` may therefore name its own `training_type` and `duration_minutes`; left unset,
 each falls back to the Curated Protocol's. The integrity gate requires every Training Type, the
