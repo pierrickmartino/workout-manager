@@ -32,6 +32,8 @@ const CHIN_UP = {
   scheme: "double_progression",
 };
 
+const STRENGTH_60 = { training_type: "strength", duration_minutes: 60 };
+
 // Two weeks of a two-Session pattern: the smallest plan with more than one of each grouping.
 const PREVIEW: CuratedPreviewResponse = {
   identifier: "beginner-linear-progression",
@@ -39,10 +41,10 @@ const PREVIEW: CuratedPreviewResponse = {
   weeks: 2,
   sessions_per_week: 2,
   sessions: [
-    { week: 1, day: 1, title: "Workout A", prescriptions: [SQUAT, CHIN_UP] },
-    { week: 1, day: 2, title: "Workout B", prescriptions: [SQUAT] },
-    { week: 2, day: 1, title: "Workout A", prescriptions: [SQUAT, CHIN_UP] },
-    { week: 2, day: 2, title: "Workout B", prescriptions: [SQUAT] },
+    { ...STRENGTH_60, week: 1, day: 1, title: "Workout A", prescriptions: [SQUAT, CHIN_UP] },
+    { ...STRENGTH_60, week: 1, day: 2, title: "Workout B", prescriptions: [SQUAT] },
+    { ...STRENGTH_60, week: 2, day: 1, title: "Workout A", prescriptions: [SQUAT, CHIN_UP] },
+    { ...STRENGTH_60, week: 2, day: 2, title: "Workout B", prescriptions: [SQUAT] },
   ],
 };
 
@@ -95,6 +97,67 @@ test("a one-week, one-Session plan reads in the singular", () => {
 
   // Assert
   assert.equal(view.summary, "1 session over 1 week");
+});
+
+test("a plan of one Training Type shows no per-Session type or duration", () => {
+  // Act
+  const sessions = curatedPlanView(PREVIEW).weeks.flatMap((week) => week.sessions);
+
+  // Assert
+  assert.deepEqual(
+    sessions.map((session) => session.typeAndDuration),
+    [null, null, null, null],
+  );
+});
+
+test("a plan mixing Training Types shows each Session's type, its badge and its duration", () => {
+  // Arrange — a lifting day and a run day, as the strength and running Curated Protocol has.
+  const run = {
+    exercise_name: "Running",
+    sets: 1,
+    reps: "30 min",
+    rest_seconds: null,
+    recommended_load: { kind: "qualitative" as const, text: "easy, conversational pace" },
+    prescribed_quantity: { kind: "duration" as const, text: "30 min", seconds: 1800 },
+    scheme: "static",
+  };
+  const mixed: CuratedPreviewResponse = {
+    ...PREVIEW,
+    weeks: 1,
+    sessions: [
+      {
+        week: 1,
+        day: 1,
+        title: "Lower",
+        training_type: "strength",
+        duration_minutes: 55,
+        prescriptions: [SQUAT],
+      },
+      {
+        week: 1,
+        day: 2,
+        title: "Easy run",
+        training_type: "cardio",
+        duration_minutes: 35,
+        prescriptions: [run],
+      },
+    ],
+  };
+
+  // Act
+  const [lower, easyRun] = curatedPlanView(mixed).weeks[0].sessions;
+
+  // Assert
+  assert.deepEqual(lower.typeAndDuration, {
+    trainingType: "strength",
+    badgeVariant: "cyan",
+    duration: "55 min",
+  });
+  assert.deepEqual(easyRun.typeAndDuration, {
+    trainingType: "cardio",
+    badgeVariant: "magenta",
+    duration: "35 min",
+  });
 });
 
 const DEFAULTS: AdoptFormDefaults = {

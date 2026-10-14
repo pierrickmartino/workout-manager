@@ -87,6 +87,24 @@ honest approximations of the methodologies that inspired them:
 - **Free on every tier:** adopting one costs no LLM call, and gating it would undercut the trust
   and cold-start job it exists for.
 
+## Amendment: a Session typed and timed apart from its Curated Protocol
+
+Added with the strength and running Curated Protocol, a fifth that ships unreleased until its own
+sign-off. A hybrid week mixes lifting Sessions and run Sessions, and History and Analytics slice the
+record by Training Type, so typing a 45-minute run `strength` would corrupt what they project from.
+A `PatternSession` may therefore name its own `training_type` and `duration_minutes`; left unset,
+each falls back to the Curated Protocol's. The integrity gate requires every Training Type, the
+protocol's and any override, to be in the closed set, and an overriding duration to be positive.
+Adopt writes the Session's own values onto each Session, and a Builder deploy carries an edited
+Session's values through the rewritten tail as it carries its title. A fresh slot takes the
+Protocol's: no Builder path sets a Session's Training Type or duration yet, in any Protocol (deferred, issue
+#707). The adopt form's preview shows each Session's type and duration when a plan mixes Training
+Types.
+
+Runs reuse the `Running` movement 0019 already seeds, held flat on **Static**: no Progression Scheme
+steps a distance or duration, so the description says the run targets stay the same every week.
+Per-week authored run doses, a generalized Wave, are deferred.
+
 ## Considered options
 
 - **Store them as Generated Protocols in the cache and reuse Adopt unchanged:** rejected. It

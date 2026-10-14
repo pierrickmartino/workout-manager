@@ -107,10 +107,16 @@ class Wave:
 
 @dataclass(frozen=True)
 class PatternSession:
-    """One Session of the repeating weekly pattern."""
+    """One Session of the repeating weekly pattern.
+
+    A hybrid Curated Protocol mixes kinds of Session in one week, so a Session may name its own
+    ``training_type`` and ``duration_minutes``; left ``None``, each falls back to the Curated
+    Protocol's (ADR-0130 amendment)."""
 
     title: str
     prescriptions: tuple[PatternPrescription | WavePrescription, ...]
+    training_type: str | None = None
+    duration_minutes: int | None = None
 
 
 @dataclass(frozen=True)
@@ -155,6 +161,22 @@ class CuratedProtocol:
     @property
     def is_wave(self) -> bool:
         return self.wave is not None
+
+    def session_training_type(self, session: PatternSession) -> str:
+        """The Training Type ``session`` is typed by: its own, else this Curated Protocol's."""
+
+        return (
+            self.training_type if session.training_type is None else session.training_type
+        )
+
+    def session_duration_minutes(self, session: PatternSession) -> int:
+        """The duration ``session`` estimates: its own, else this Curated Protocol's."""
+
+        return (
+            self.duration_minutes
+            if session.duration_minutes is None
+            else session.duration_minutes
+        )
 
     def main_lift(self, key: str) -> MainLift | None:
         """The declared main lift with ``key``, or ``None``."""

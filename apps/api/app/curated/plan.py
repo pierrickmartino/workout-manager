@@ -80,12 +80,14 @@ class PlannedPrescription:
 
 @dataclass(frozen=True)
 class PlannedSession:
-    """One enumerated Week/Day Session."""
+    """One enumerated Week/Day Session, typed and timed by its pattern Session."""
 
     week: int
     day: int
     title: str
     prescriptions: tuple[PlannedPrescription, ...]
+    training_type: str
+    duration_minutes: int
 
 
 def _weeks_errors(curated: CuratedProtocol, weeks: int) -> list[ChoiceError]:
@@ -281,6 +283,8 @@ def enumerate_plan(
                 planned_prescription(curated, t, bases_kg, week)
                 for t in session.prescriptions
             ),
+            training_type=curated.session_training_type(session),
+            duration_minutes=curated.session_duration_minutes(session),
         )
         for week in range(1, choices.weeks + 1)
         for day, session in enumerate(curated.weekly_pattern, start=1)

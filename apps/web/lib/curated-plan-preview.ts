@@ -15,6 +15,10 @@ import type {
 import { formatLoad, type Load } from "./load.ts";
 import type { Quantity } from "./quantity.ts";
 import { schemeLabel } from "./scheme-view.ts";
+import {
+  trainingTypeBadgeVariant,
+  type TrainingTypeBadgeVariant,
+} from "./training-type-badge.ts";
 
 export interface CuratedPlanPrescription {
   exercise_name: string;
@@ -31,6 +35,9 @@ export interface CuratedPlanSession {
   week: number;
   day: number;
   title: string;
+  // A Session may be typed and timed apart from its Curated Protocol (ADR-0130 amendment).
+  training_type: string;
+  duration_minutes: number;
   prescriptions: CuratedPlanPrescription[];
 }
 
@@ -51,9 +58,18 @@ export interface CuratedPlanLine {
   scheme: string;
 }
 
+// A Session's Training Type and duration, shown only in a plan that mixes Training Types.
+export interface CuratedPlanSessionTypeAndDuration {
+  trainingType: string;
+  badgeVariant: TrainingTypeBadgeVariant;
+  duration: string;
+}
+
 export interface CuratedPlanSessionView {
   key: string;
   heading: string;
+  // `null` in a plan of one Training Type: the same badge on every Session would be noise.
+  typeAndDuration: CuratedPlanSessionTypeAndDuration | null;
   lines: CuratedPlanLine[];
 }
 
@@ -72,11 +88,20 @@ function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
-function sessionView(session: CuratedPlanSession): CuratedPlanSessionView {
+function typeAndDuration(session: CuratedPlanSession): CuratedPlanSessionTypeAndDuration {
+  return {
+    trainingType: session.training_type,
+    badgeVariant: trainingTypeBadgeVariant(session.training_type),
+    duration: `${session.duration_minutes} min`,
+  };
+}
+
+function sessionView(session: CuratedPlanSession, isMixed: boolean): CuratedPlanSessionView {
   const key = `${session.week}-${session.day}`;
   return {
     key,
     heading: `Day ${session.day} · ${session.title}`,
+    typeAndDuration: isMixed ? typeAndDuration(session) : null,
     lines: session.prescriptions.map((prescription, index) => ({
       key: `${key}-${index}`,
       exercise: prescription.exercise_name,
@@ -90,10 +115,13 @@ function sessionView(session: CuratedPlanSession): CuratedPlanSessionView {
 
 // The preview grouped by week, in Week/Day order, as the adopt form shows it.
 export function curatedPlanView(preview: CuratedPreviewResponse): CuratedPlanView {
+  const isMixed = new Set(preview.sessions.map((session) => session.training_type)).size > 1;
   const weeks = Array.from({ length: preview.weeks }, (_, index) => index + 1).map((week) => ({
     week,
     heading: `Week ${week}`,
-    sessions: preview.sessions.filter((session) => session.week === week).map(sessionView),
+    sessions: preview.sessions
+      .filter((session) => session.week === week)
+      .map((session) => sessionView(session, isMixed)),
   }));
   return {
     summary: `${plural(preview.sessions.length, "session")} over ${plural(preview.weeks, "week")}`,
