@@ -75,6 +75,11 @@ function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
 }
 
+// Join the parts that are present, skipping the absent ones.
+function joinPresent(parts: ReadonlyArray<string | null>, separator: string): string {
+  return parts.filter((part) => part !== null).join(separator);
+}
+
 // A measured Session Duration in words ("52 minutes", "1 hour 5 minutes"), or null when the
 // record measured none.
 function durationWords(totalSeconds: number | null): string | null {
@@ -83,22 +88,30 @@ function durationWords(totalSeconds: number | null): string | null {
   if (totalMinutes < 1) return "under a minute";
   const hours = Math.floor(totalMinutes / MINUTES_PER_HOUR);
   const minutes = totalMinutes % MINUTES_PER_HOUR;
-  const parts = [
-    hours > 0 ? plural(hours, "hour", "hours") : null,
-    minutes > 0 ? plural(minutes, "minute", "minutes") : null,
-  ];
-  return parts.filter((part) => part !== null).join(" ");
+  return joinPresent(
+    [
+      hours > 0 ? plural(hours, "hour", "hours") : null,
+      minutes > 0 ? plural(minutes, "minute", "minutes") : null,
+    ],
+    " ",
+  );
+}
+
+// One exercise of the record, with its sets in performed order.
+interface PerformedExercise {
+  exerciseId: number;
+  name: string;
+  sets: LoggedSet[];
 }
 
 // The exercises a record performed, in first-performed order, each with its sets in order.
-function exercisesInPerformedOrder(
-  sets: readonly LoggedSet[],
-): ReadonlyArray<{ name: string; sets: LoggedSet[] }> {
+function exercisesInPerformedOrder(sets: readonly LoggedSet[]): PerformedExercise[] {
   const ordered = [...sets].sort((a, b) => a.position - b.position);
-  const groups = new Map<number, { name: string; sets: LoggedSet[] }>();
+  const groups = new Map<number, PerformedExercise>();
   for (const loggedSet of ordered) {
     const group = groups.get(loggedSet.exercise_id);
     groups.set(loggedSet.exercise_id, {
+      exerciseId: loggedSet.exercise_id,
       name: group?.name ?? loggedSet.exercise_name,
       sets: [...(group?.sets ?? []), loggedSet],
     });
@@ -106,25 +119,32 @@ function exercisesInPerformedOrder(
   return [...groups.values()];
 }
 
-// The Completion Outcome in plain words, or null when the record declares none (an ad-hoc log).
-function outcomeWords(
-  record: LoggedSession,
-  plannedExerciseCount: number | null,
-): string | null {
-  if (record.completion_outcome === "completed") return "Finished the whole session.";
-  if (record.completion_outcome !== "incomplete") return null;
-  const done = exercisesInPerformedOrder(record.logged_sets).length;
-  if (plannedExerciseCount === null) {
-    return `Ended early: ${plural(done, "exercise", "exercises")} done.`;
-  }
-  return `Ended early: ${Math.min(done, plannedExerciseCount)} of ${plural(plannedExerciseCount, "exercise", "exercises")} done.`;
+// The distinct exercises a plan prescribes, or null when there is no plan.
+function plannedExerciseIds(plan: AiHandoffInput["plan"]): ReadonlySet<number> | null {
+  if (plan == null) return null;
+  return new Set(plan.prescriptions.map((prescription) => prescription.exercise_id));
 }
 
-function sessionLine(record: LoggedSession, plannedExerciseCount: number | null): string {
+// The Completion Outcome in plain words, or null when the record declares none (an ad-hoc log).
+// With a plan, only prescribed exercises count as done (matching is by exercise), so a substitute
+// or an extra never inflates "N of M".
+function outcomeWords(
+  outcome: LoggedSession["completion_outcome"],
+  performed: readonly PerformedExercise[],
+  planned: ReadonlySet<number> | null,
+): string | null {
+  if (outcome === "completed") return "Finished the whole session.";
+  if (outcome !== "incomplete") return null;
+  if (planned === null) {
+    return `Ended early: ${plural(performed.length, "exercise", "exercises")} done.`;
+  }
+  const done = performed.filter((exercise) => planned.has(exercise.exerciseId)).length;
+  return `Ended early: ${done} of ${plural(planned.size, "exercise", "exercises")} done.`;
+}
+
+function sessionLine(record: LoggedSession, outcome: string | null): string {
   const type = TRAINING_TYPE_WORDS[record.training_type] ?? record.training_type;
-  const duration = durationWords(record.duration_seconds);
-  const line = `Session: ${[type, duration].filter((part) => part !== null).join(", ")}.`;
-  const outcome = outcomeWords(record, plannedExerciseCount);
+  const line = `Session: ${joinPresent([type, durationWords(record.duration_seconds)], ", ")}.`;
   return outcome === null ? line : `${line} ${outcome}`;
 }
 
@@ -152,39 +172,32 @@ function setLine(loggedSet: LoggedSet, index: number, unit: WeightUnit): string 
   const label = mark === null ? `Set ${index + 1}` : `Set ${index + 1} (${mark})`;
   const amount = amountWords(loggedSet.quantity);
   const load = loggedSet.load == null ? null : formatLoad(loggedSet.load, unit);
-  const core = [amount, load].filter((part) => part !== null).join(" @ ") || "nothing recorded";
+  const core = joinPresent([amount, load], " @ ") || "nothing recorded";
   const bodyWeight =
     loggedSet.load?.kind === "bodyweight" && loggedSet.body_weight_kg != null
       ? `body weight ${formatBodyWeight(loggedSet.body_weight_kg, unit)}`
       : null;
-  const details = [core, bodyWeight, effortWords(loggedSetEffort(loggedSet))]
-    .filter((part) => part !== null)
-    .join(", ");
+  const details = joinPresent([core, bodyWeight, effortWords(loggedSetEffort(loggedSet))], ", ");
   const note = setNoteText(loggedSet);
   return note === null ? `- ${label}: ${details}` : `- ${label}: ${details}. Note: “${note}”`;
 }
 
-function performedBlock(sets: readonly LoggedSet[], unit: WeightUnit): string {
-  const lines = exercisesInPerformedOrder(sets).flatMap((exercise) => [
+function performedBlock(performed: readonly PerformedExercise[], unit: WeightUnit): string {
+  const lines = performed.flatMap((exercise) => [
     exercise.name,
     ...exercise.sets.map((loggedSet, index) => setLine(loggedSet, index, unit)),
   ]);
   return ["Performed:", ...lines].join("\n");
 }
 
-// How many distinct exercises a plan prescribes, or null when there is no plan to count.
-function plannedExercises(plan: AiHandoffInput["plan"]): number | null {
-  if (plan == null) return null;
-  return new Set(plan.prescriptions.map((prescription) => prescription.exercise_id)).size;
-}
-
 // Build the AI Hand-off for one Logged Session. Reads its inputs and returns new values only.
 export function aiHandoff({ record, unit, plan = null }: AiHandoffInput): AiHandoff {
-  const plannedExerciseCount = plannedExercises(plan);
+  const performed = exercisesInPerformedOrder(record.logged_sets);
+  const outcome = outcomeWords(record.completion_outcome, performed, plannedExerciseIds(plan));
   const text = [
     AI_HANDOFF_LEAD_IN,
-    sessionLine(record, plannedExerciseCount),
-    performedBlock(record.logged_sets, unit),
+    sessionLine(record, outcome),
+    performedBlock(performed, unit),
   ].join("\n\n");
   return { text, showSensitiveCaveat: false };
 }

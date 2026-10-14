@@ -149,7 +149,7 @@ export default async function LogDetailPage({ params }: LogDetailPageProps) {
           Get a second opinion
         </h2>
         <p className="font-mono text-[12px] leading-relaxed text-text-muted">
-          Ask an AI assistant to critique this workout. You&apos;ll see the full text before
+          Ask an AI assistant to critique this session. You’ll see the full text before
           anything leaves the app.
         </p>
         <AiHandoffControl handoff={handoff} />

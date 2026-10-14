@@ -253,3 +253,58 @@ test("building the hand-off does not mutate the record", () => {
   // Assert
   assert.deepEqual({ session, sourcePlan }, before);
 });
+
+test("an ended-early count only credits exercises the plan prescribed", () => {
+  // Arrange — the plan prescribes 1..5; 1 and 2 were done, plus an off-plan substitute (9)
+  const session = record({
+    session_id: 42,
+    completion_outcome: "incomplete",
+    logged_sets: [
+      set({ position: 1, exercise_id: 1 }),
+      set({ position: 2, exercise_id: 2, exercise_name: "Squat" }),
+      set({ position: 3, exercise_id: 9, exercise_name: "Goblet Squat" }),
+    ],
+  });
+
+  // Act
+  const handoff = aiHandoff({ record: session, unit: "kg", plan: plan([1, 2, 3, 4, 5]) });
+
+  // Assert
+  assert.match(handoff.text, /Ended early: 2 of 5 exercises done\./);
+});
+
+test("every non-working set type is marked in plain words", () => {
+  const handoff = aiHandoff({
+    record: record({
+      logged_sets: [
+        set({ position: 1, set_type: "drop" }),
+        set({ position: 2, set_type: "failure" }),
+        set({ position: 3, set_type: "amrap" }),
+        set({ position: 4, set_type: "working" }),
+      ],
+    }),
+    unit: "kg",
+  });
+
+  assert.match(handoff.text, /^- Set 1 \(drop set\): /m);
+  assert.match(handoff.text, /^- Set 2 \(to failure\): /m);
+  assert.match(handoff.text, /^- Set 3 \(as many reps as possible\): /m);
+  assert.match(handoff.text, /^- Set 4: /m);
+});
+
+test("short and whole-hour durations read in words", () => {
+  const short = aiHandoff({ record: record({ duration_seconds: 20 }), unit: "kg" });
+  const hour = aiHandoff({ record: record({ duration_seconds: 2 * 3600 }), unit: "kg" });
+
+  assert.match(short.text, /^Session: strength training, under a minute\.$/m);
+  assert.match(hour.text, /^Session: strength training, 2 hours\.$/m);
+});
+
+test("a set with neither amount nor Load says nothing was recorded", () => {
+  const handoff = aiHandoff({
+    record: record({ logged_sets: [set({ quantity: null, load: null })] }),
+    unit: "kg",
+  });
+
+  assert.match(handoff.text, /^- Set 1: nothing recorded$/m);
+});

@@ -15,10 +15,17 @@ export interface HandoffDevice {
 // the preview stays open.
 export type HandoffResult = "shared" | "copied" | "cancelled" | "copy-failed";
 
+// One of the sheet’s two actions: Send or Copy.
+export type HandoffAction = (text: string, device: HandoffDevice) => Promise<HandoffResult>;
+
 // The error name a dismissed share sheet rejects with.
 const SHARE_DISMISSED = "AbortError";
 
-function canShare(device: HandoffDevice, text: string): boolean {
+// Whether the device has a share sheet that will take this text.
+function canShare(
+  device: HandoffDevice,
+  text: string,
+): device is HandoffDevice & Required<Pick<HandoffDevice, "share">> {
   if (typeof device.share !== "function") return false;
   return device.canShare ? device.canShare({ text }) : true;
 }
@@ -39,7 +46,7 @@ export async function copyHandoff(text: string, device: HandoffDevice): Promise<
 // share sheet is a no-op; a share that fails for any other reason falls back to copying, so the
 // action still lands somewhere.
 export async function sendHandoff(text: string, device: HandoffDevice): Promise<HandoffResult> {
-  if (!canShare(device, text) || !device.share) return copyHandoff(text, device);
+  if (!canShare(device, text)) return copyHandoff(text, device);
   try {
     await device.share({ text });
     return "shared";

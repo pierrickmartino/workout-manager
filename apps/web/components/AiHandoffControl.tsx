@@ -10,6 +10,7 @@ import {
   copyHandoff,
   handoffResultMessage,
   sendHandoff,
+  type HandoffAction,
   type HandoffResult,
 } from "@/lib/ai-handoff-send";
 
@@ -54,7 +55,8 @@ export function AiHandoffSheet({ handoff, onClose }: AiHandoffSheetProps): React
   const [result, setResult] = useState<HandoffResult | null>(null);
   const message = handoffResultMessage(result);
 
-  async function run(action: typeof sendHandoff): Promise<void> {
+  // Run Send or Copy against this device and show what it did.
+  async function handOff(action: HandoffAction): Promise<void> {
     setBusy(true);
     setResult(null);
     try {
@@ -83,7 +85,7 @@ export function AiHandoffSheet({ handoff, onClose }: AiHandoffSheetProps): React
           <Button
             type="button"
             disabled={busy}
-            onClick={() => run(sendHandoff)}
+            onClick={() => handOff(sendHandoff)}
             className="min-w-0 flex-1"
           >
             <Share2 className="h-4 w-4" aria-hidden />
@@ -93,7 +95,7 @@ export function AiHandoffSheet({ handoff, onClose }: AiHandoffSheetProps): React
             type="button"
             variant="secondary"
             disabled={busy}
-            onClick={() => run(copyHandoff)}
+            onClick={() => handOff(copyHandoff)}
             className="min-w-0 flex-1"
           >
             <Copy className="h-4 w-4" aria-hidden />
