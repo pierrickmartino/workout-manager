@@ -138,7 +138,7 @@ Protocol for review before saving.
 **Grill:** goes through the LLM port with its own `parse_*` boundary. What happens to
 unknown exercise names (catalog Stubs, ADR-0041)?
 
-### 3.3 "Send to an AI" from the finish screen (in TASKS §8)
+### [Done - 14.10.2026] - 3.3 "Send to an AI" from the finish screen (in TASKS §8)
 One-tap export of a Logged Session in a prompt-ready format for ChatGPT or Claude.
 *Evidence:* Hevy 3.1.14 (September 2026) sends workouts to ChatGPT and Claude from the
 finish screen.
