@@ -150,7 +150,7 @@ Source: [next-feature](docs/research/next-feature.md).
 - ⬜ **Shareable milestone cards** (PR, Streak, Level image).
 - 🟡 **iOS storage resilience:** see §3.
 - 🚫 **Nutrition integration:** parked as long-term.
-- ⬜ **"Send to an AI" hand-off** for one Logged Session (Hevy parity; 10-05 Q3, needs a decision).
+- ⬜ **"Send to an AI" hand-off** for one Logged Session (Hevy parity; 10-05 Q3). Decided in [ADR-0132](docs/adr/0132-an-ai-hand-off-is-an-on-device-previewed-text-projection.md): build the `lib/` text projection and the preview sheet on the Logged Session detail page.
 - ⬜ **Positioning and freemium narrative** (carried in every report since 07-21).
 
 ## 9. Gript competitive audit (3 Oct)

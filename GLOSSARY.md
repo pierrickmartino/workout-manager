@@ -295,7 +295,7 @@ The **human who first created** a Session's plan — surfaced on the Session as 
 _Avoid_: Owner (that is the current holder), Creator (loosely), Operator (collides with Operator Level), Provenance (that is the AI-vs-human axis)
 
 **Share**:
-The act of a user publishing a **Share Link** to one of their own **standalone Sessions** so another user can take a copy. The **first act in the domain that crosses the user-ownership boundary**, and it does so **by copy, never by reference** (ADR-0057): the sharer hands out a Share Link and the recipient's **Redeem** deep-copies the plan into their own library — the sharer's Session and the recipient's copy are thereafter **independent**, honouring "mutating a plan never affects other users". Offered on standalone Sessions only. Distinct from **Adopt** (copies an immutable *Generated* artifact) and **Duplicate** (copies the user's *own* Session, for themselves).
+The act of a user publishing a **Share Link** to one of their own **standalone Sessions** so another user can take a copy. The **first act in the domain that crosses the user-ownership boundary**, and it does so **by copy, never by reference** (ADR-0057): the sharer hands out a Share Link and the recipient's **Redeem** deep-copies the plan into their own library — the sharer's Session and the recipient's copy are thereafter **independent**, honouring "mutating a plan never affects other users". Offered on standalone Sessions only. Distinct from **Adopt** (copies an immutable *Generated* artifact) and **Duplicate** (copies the user's *own* Session, for themselves). Not an **AI Hand-off**, which sends one Logged Session as text to an outside assistant, not to another user.
 _Avoid_: Send, Publish (that is making a Skin the Active Skin), Invite, Collaborate, Gift
 
 **Share Link**:
@@ -307,8 +307,12 @@ The recipient's act of turning a **Share Link** into a **new standalone Session 
 _Avoid_: Accept, Import, Claim, Adopt (that is the Generated-artifact copy), Duplicate (that is the own-Session copy)
 
 **Export**:
-The act of a user taking a **portable copy of their own data** off the platform — their owned **Protocols** and standalone **Sessions** (plans), their **Logged Sessions** and **Logged Sets** (records), body metrics, and the **Catalog** Exercises those reference — as a faithful **JSON** file and an analysis-friendly **CSV** (one row per **Logged Set**). A read-only, user-scoped act: it never includes the shared **Generated** cache or another user's data, and values are emitted in **canonical kilograms** regardless of the user's **Weight Unit**. Distinct from **Share**, which hands one plan to another user by copy — Export is whole-account portability, for the user themselves.
-_Avoid_: Download (bare), backup, dump, Share (that is the cross-user plan copy)
+The act of a user taking a **portable copy of their own data** off the platform — their owned **Protocols** and standalone **Sessions** (plans), their **Logged Sessions** and **Logged Sets** (records), body metrics, and the **Catalog** Exercises those reference — as a faithful **JSON** file and an analysis-friendly **CSV** (one row per **Logged Set**). A read-only, user-scoped act: it never includes the shared **Generated** cache or another user's data, and values are emitted in **canonical kilograms** regardless of the user's **Weight Unit**. Distinct from **Share**, which hands one plan to another user by copy — Export is whole-account portability, for the user themselves — and from an **AI Hand-off**, which is one Logged Session as text for an outside assistant.
+_Avoid_: Download (bare), backup, dump, Share (that is the cross-user plan copy), AI Hand-off (that is one Logged Session for an assistant)
+
+**AI Hand-off**:
+A user-initiated, read-only **plain-text summary of one Logged Session** that the user previews and then sends from their own device — through the share sheet or clipboard — to a third-party AI assistant of their choice, to ask for a critique. It shows the plan and the record as two separate blocks when the session had a plan, never automatically includes a **Sensitive Constraint**, and is never stored (ADR-0132). Distinct from **Export** (whole-account portability) and **Share** (a plan copied to another user).
+_Avoid_: Export, Share, Send to an AI (that is the button label, not the term), AI export, AI share
 
 ## Readiness
 
