@@ -110,7 +110,7 @@ missing lately.
 **Grill:** how is this kept within the 3-state readiness signal and away from a recovery
 score (ADR-0001)? What does it do to the coarse cache key (ADR-0003)?
 
-### 2.7 A library of established programs
+### [Done - 14.10.2026] - 2.7 A library of established programs
 Offer well-known public programs (beginner linear progression, 5/3/1-style, GZCLP-style,
 PPL) as adoptable Protocols beside AI generation.
 *Evidence:* Boostcamp's main draw is choosing from established training methodologies.
