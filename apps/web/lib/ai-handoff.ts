@@ -13,7 +13,7 @@
 // slices) Sensitive Constraints, the Effective Fitness Level and our Progression decision.
 
 import { loggedSetEffort, formatEffort, type Effort } from "./effort.ts";
-import { formatBodyWeight, formatLoad } from "./load.ts";
+import { formatBodyWeight, formatLoad, isPureBodyweight, type Load } from "./load.ts";
 import { formatPace, formatQuantity, type Quantity } from "./quantity.ts";
 import { setNoteText } from "./note-view.ts";
 import { resolveSetType, type SetType } from "./set-type-view.ts";
@@ -22,7 +22,7 @@ import type { WorkoutSession } from "./sessions-types.ts";
 import type { WeightUnit } from "./weight-unit.ts";
 
 const SECONDS_PER_MINUTE = 60;
-const MINUTES_PER_HOUR = 60;
+const SECONDS_PER_HOUR = 60 * SECONDS_PER_MINUTE;
 
 // The editable opening instruction: pasted on its own, it asks the assistant for a useful
 // critique; the user can delete or rewrite it in the assistant before sending.
@@ -62,6 +62,10 @@ const TRAINING_TYPE_WORDS: Record<string, string> = {
   mobility: "mobility work",
 };
 
+// The Training Types whose timed sets are holds (a pose, a stretch), so a duration reads
+// "held for …" rather than as timed work.
+const HOLD_TRAINING_TYPES: ReadonlySet<string> = new Set(["yoga", "mobility"]);
+
 // Set Types in plain words; a working set carries no mark.
 const SET_TYPE_WORDS: Record<SetType, string | null> = {
   warm_up: "warm-up",
@@ -80,21 +84,32 @@ function joinPresent(parts: ReadonlyArray<string | null>, separator: string): st
   return parts.filter((part) => part !== null).join(separator);
 }
 
-// A measured Session Duration in words ("52 minutes", "1 hour 5 minutes"), or null when the
-// record measured none.
+// A span of time in words to the second ("25 minutes", "1 minute 30 seconds"), never a bare
+// clock an outside reader could misread as hours:minutes.
+function timeWords(totalSeconds: number): string {
+  const rounded = Math.round(Math.max(0, totalSeconds));
+  const hours = Math.floor(rounded / SECONDS_PER_HOUR);
+  const minutes = Math.floor((rounded % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
+  const seconds = rounded % SECONDS_PER_MINUTE;
+  return (
+    joinPresent(
+      [
+        hours > 0 ? plural(hours, "hour", "hours") : null,
+        minutes > 0 ? plural(minutes, "minute", "minutes") : null,
+        seconds > 0 ? plural(seconds, "second", "seconds") : null,
+      ],
+      " ",
+    ) || "0 seconds"
+  );
+}
+
+// A measured Session Duration in words, to the minute ("52 minutes", "1 hour 5 minutes"), or
+// null when the record measured none.
 function durationWords(totalSeconds: number | null): string | null {
   if (totalSeconds === null) return null;
   const totalMinutes = Math.round(Math.max(0, totalSeconds) / SECONDS_PER_MINUTE);
   if (totalMinutes < 1) return "under a minute";
-  const hours = Math.floor(totalMinutes / MINUTES_PER_HOUR);
-  const minutes = totalMinutes % MINUTES_PER_HOUR;
-  return joinPresent(
-    [
-      hours > 0 ? plural(hours, "hour", "hours") : null,
-      minutes > 0 ? plural(minutes, "minute", "minutes") : null,
-    ],
-    " ",
-  );
+  return timeWords(totalMinutes * SECONDS_PER_MINUTE);
 }
 
 // One exercise of the record, with its sets in performed order.
@@ -148,16 +163,52 @@ function sessionLine(record: LoggedSession, outcome: string | null): string {
   return outcome === null ? line : `${line} ${outcome}`;
 }
 
-// A set's amount in words: a rep count reads "8 reps"; a distance or a hold reads as logged,
-// with pace for a timed distance.
-function amountWords(quantity: Quantity | null): string | null {
+// A distance in words: as logged, then its time and pace when a time was logged with it
+// ("5 km in 25 minutes, pace 5:00 per km").
+function distanceWords(quantity: Quantity): string {
+  const distance = formatQuantity(quantity);
+  const pace = formatPace(quantity);
+  if (pace === null || quantity.duration_s == null) return distance;
+  return `${distance} in ${timeWords(quantity.duration_s)}, pace ${pace.replace(" /", " per ")}`;
+}
+
+// A timed set in words: a hold in a hold-based Training Type ("held for 1 minute"), timed work
+// otherwise ("40 seconds of work"). A time the record could not measure reads as logged.
+function durationAmountWords(quantity: Quantity, trainingType: string): string {
+  if (quantity.seconds == null) return formatQuantity(quantity);
+  const time = timeWords(quantity.seconds);
+  return HOLD_TRAINING_TYPES.has(trainingType) ? `held for ${time}` : `${time} of work`;
+}
+
+// A set's amount in words, by its quantity kind: a rep count reads "8 reps"; a distance reads
+// with its time and pace; a duration reads as a hold or as timed work.
+function amountWords(quantity: Quantity | null, trainingType: string): string | null {
   if (quantity == null) return null;
   if (quantity.kind === "repetitions" && quantity.count != null) {
     return plural(quantity.count, "rep", "reps");
   }
-  const pace = formatPace(quantity);
-  const amount = formatQuantity(quantity);
-  return pace === null ? amount : `${amount} at ${pace}`;
+  if (quantity.kind === "distance") return distanceWords(quantity);
+  if (quantity.kind === "duration") return durationAmountWords(quantity, trainingType);
+  return formatQuantity(quantity);
+}
+
+// An absolute Load's stored text when it carries only a kilogram number ("60", "60 kg") — the
+// backend reads a bare number as kilograms — so a Load missing its `kg` field never reads bare.
+const KG_TEXT = /^\s*(\d*\.?\d+)\s*(?:kg|kgs|k)?\s*$/i;
+
+// A Load in plain words, by its type. Weights route through `formatLoad`, so they read in the
+// user's Weight Unit; this only relabels the types whose stored text is shorthand
+// ("BW" → "bodyweight", "70% 1RM" → "70% of 1-rep max").
+function loadWords(load: Load, unit: WeightUnit): string {
+  if (isPureBodyweight(load)) return "bodyweight";
+  if (load.kind === "percent_1rm" && load.percent != null) {
+    return `${load.percent}% of 1-rep max`;
+  }
+  if (load.kind === "absolute" && load.kg == null) {
+    const kg = KG_TEXT.exec(load.text);
+    if (kg !== null) return formatLoad({ ...load, kg: Number(kg[1]) }, unit);
+  }
+  return formatLoad(load, unit);
 }
 
 // Logged Effort in plain words, on the scale it was logged in.
@@ -167,11 +218,16 @@ function effortWords(effort: Effort | null): string | null {
   return formatEffort(effort);
 }
 
-function setLine(loggedSet: LoggedSet, index: number, unit: WeightUnit): string {
+function setLine(
+  loggedSet: LoggedSet,
+  index: number,
+  unit: WeightUnit,
+  trainingType: string,
+): string {
   const mark = SET_TYPE_WORDS[resolveSetType(loggedSet.set_type)];
   const label = mark === null ? `Set ${index + 1}` : `Set ${index + 1} (${mark})`;
-  const amount = amountWords(loggedSet.quantity);
-  const load = loggedSet.load == null ? null : formatLoad(loggedSet.load, unit);
+  const amount = amountWords(loggedSet.quantity, trainingType);
+  const load = loggedSet.load == null ? null : loadWords(loggedSet.load, unit);
   const core = joinPresent([amount, load], " @ ") || "nothing recorded";
   const bodyWeight =
     loggedSet.load?.kind === "bodyweight" && loggedSet.body_weight_kg != null
@@ -182,10 +238,14 @@ function setLine(loggedSet: LoggedSet, index: number, unit: WeightUnit): string 
   return note === null ? `- ${label}: ${details}` : `- ${label}: ${details}. Note: “${note}”`;
 }
 
-function performedBlock(performed: readonly PerformedExercise[], unit: WeightUnit): string {
+function performedBlock(
+  performed: readonly PerformedExercise[],
+  unit: WeightUnit,
+  trainingType: string,
+): string {
   const lines = performed.flatMap((exercise) => [
     exercise.name,
-    ...exercise.sets.map((loggedSet, index) => setLine(loggedSet, index, unit)),
+    ...exercise.sets.map((loggedSet, index) => setLine(loggedSet, index, unit, trainingType)),
   ]);
   return ["Performed:", ...lines].join("\n");
 }
@@ -197,7 +257,7 @@ export function aiHandoff({ record, unit, plan = null }: AiHandoffInput): AiHand
   const text = [
     AI_HANDOFF_LEAD_IN,
     sessionLine(record, outcome),
-    performedBlock(performed, unit),
+    performedBlock(performed, unit, record.training_type),
   ].join("\n\n");
   return { text, showSensitiveCaveat: false };
 }

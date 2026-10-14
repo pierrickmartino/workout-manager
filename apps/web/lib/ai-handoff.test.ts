@@ -308,3 +308,197 @@ test("a set with neither amount nor Load says nothing was recorded", () => {
 
   assert.match(handoff.text, /^- Set 1: nothing recorded$/m);
 });
+
+// --- Every Training Type reads by its quantity kind (#713) ---
+
+test("a cardio run reads as distance, time and pace", () => {
+  const handoff = aiHandoff({
+    record: record({
+      training_type: "cardio",
+      logged_sets: [
+        set({
+          exercise_name: "Running",
+          quantity: { kind: "distance", text: "5 km", metres: 5000, duration_s: 25 * 60 },
+          load: null,
+        }),
+      ],
+    }),
+    unit: "kg",
+  });
+
+  assert.match(handoff.text, /^Session: cardio\.$/m);
+  assert.match(handoff.text, /^- Set 1: 5 km in 25 minutes, pace 5:00 per km$/m);
+});
+
+test("a yoga pose reads as a hold with its duration, not reps × weight", () => {
+  const handoff = aiHandoff({
+    record: record({
+      training_type: "yoga",
+      logged_sets: [
+        set({
+          exercise_name: "Warrior II",
+          quantity: { kind: "duration", text: "90", seconds: 90 },
+          load: null,
+        }),
+      ],
+    }),
+    unit: "kg",
+  });
+
+  assert.match(handoff.text, /^Session: yoga\.$/m);
+  assert.match(handoff.text, /^- Set 1: held for 1 minute 30 seconds$/m);
+  assert.doesNotMatch(handoff.text, /reps|kg/);
+});
+
+test("a mobility stretch logged as a clock time reads as a hold in words", () => {
+  const handoff = aiHandoff({
+    record: record({
+      training_type: "mobility",
+      logged_sets: [
+        set({
+          exercise_name: "Couch Stretch",
+          quantity: { kind: "duration", text: "2:00", seconds: 120 },
+          load: null,
+        }),
+      ],
+    }),
+    unit: "lb",
+  });
+
+  assert.match(handoff.text, /^Session: mobility work\.$/m);
+  assert.match(handoff.text, /^- Set 1: held for 2 minutes$/m);
+});
+
+test("a HIIT interval reads as timed work, not a hold", () => {
+  const handoff = aiHandoff({
+    record: record({
+      training_type: "hiit",
+      logged_sets: [
+        set({
+          exercise_name: "Burpees",
+          quantity: { kind: "duration", text: "0:40", seconds: 40 },
+          load: null,
+        }),
+      ],
+    }),
+    unit: "kg",
+  });
+
+  assert.match(handoff.text, /^Session: HIIT\.$/m);
+  assert.match(handoff.text, /^- Set 1: 40 seconds of work$/m);
+});
+
+test("a distance logged without a time reads as the distance alone, in its own unit", () => {
+  const handoff = aiHandoff({
+    record: record({
+      training_type: "cardio",
+      logged_sets: [
+        set({ quantity: { kind: "distance", text: "3.1 mi", metres: 4988.97 }, load: null }),
+      ],
+    }),
+    unit: "kg",
+  });
+
+  assert.match(handoff.text, /^- Set 1: 3\.1 mi$/m);
+  assert.doesNotMatch(handoff.text, /pace/);
+});
+
+test("a run logged in miles reads its pace per mile", () => {
+  const handoff = aiHandoff({
+    record: record({
+      training_type: "cardio",
+      logged_sets: [
+        set({
+          quantity: { kind: "distance", text: "2 mi", metres: 3218.688, duration_s: 17 * 60 },
+          load: null,
+        }),
+      ],
+    }),
+    unit: "lb",
+  });
+
+  assert.match(handoff.text, /^- Set 1: 2 mi in 17 minutes, pace 8:30 per mi$/m);
+});
+
+// --- Every Load type reads in plain words, in kg and in lb (#713) ---
+
+const LOAD_CASES: ReadonlyArray<{ name: string; load: LoggedSet["load"]; kg: string; lb: string }> = [
+  { name: "absolute", load: { kind: "absolute", text: "100 kg", kg: 100 },
+    kg: "100 kg", lb: "220.46 lb" },
+  { name: "bodyweight", load: { kind: "bodyweight", text: "BW" },
+    kg: "bodyweight", lb: "bodyweight" },
+  { name: "bodyweight plus extra", load: { kind: "bodyweight", text: "bodyweight + 10 kg", added_kg: 10 },
+    kg: "bodyweight + 10 kg", lb: "bodyweight + 22.05 lb" },
+  { name: "%1RM", load: { kind: "percent_1rm", text: "70% 1RM", percent: 70 },
+    kg: "70% of 1-rep max", lb: "70% of 1-rep max" },
+  { name: "range", load: { kind: "range", text: "60-70 kg", low_kg: 60, high_kg: 70 },
+    kg: "60-70 kg", lb: "132.28-154.32 lb" },
+  { name: "qualitative", load: { kind: "qualitative", text: "heavy band" },
+    kg: "heavy band", lb: "heavy band" },
+];
+
+for (const { name, load, kg, lb } of LOAD_CASES) {
+  for (const [unit, expected] of [["kg", kg], ["lb", lb]] as const) {
+    test(`a ${name} Load reads "${expected}" for a ${unit} user`, () => {
+      const handoff = aiHandoff({ record: record({ logged_sets: [set({ load })] }), unit });
+
+      assert.match(handoff.text, new RegExp(`^- Set 1: 8 reps @ ${escapeRegExp(expected)}$`, "m"));
+    });
+  }
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+test("an absolute Load stored without its number still reads with a unit, never bare", () => {
+  const load: LoggedSet["load"] = { kind: "absolute", text: "60" };
+
+  const kg = aiHandoff({ record: record({ logged_sets: [set({ load })] }), unit: "kg" });
+  const lb = aiHandoff({ record: record({ logged_sets: [set({ load })] }), unit: "lb" });
+
+  assert.match(kg.text, /^- Set 1: 8 reps @ 60 kg$/m);
+  assert.match(lb.text, /^- Set 1: 8 reps @ 132\.28 lb$/m);
+});
+
+test("a %1RM Load stored without its number reads as written", () => {
+  const handoff = aiHandoff({
+    record: record({ logged_sets: [set({ load: { kind: "percent_1rm", text: "about 70% 1RM" } })] }),
+    unit: "kg",
+  });
+
+  assert.match(handoff.text, /^- Set 1: 8 reps @ about 70% 1RM$/m);
+});
+
+test("a pure bodyweight set carries the body weight it needs, in the user’s unit", () => {
+  const handoff = aiHandoff({
+    record: record({
+      logged_sets: [set({ load: { kind: "bodyweight", text: "bodyweight" }, body_weight_kg: 80 })],
+    }),
+    unit: "lb",
+  });
+
+  assert.match(handoff.text, /^- Set 1: 8 reps @ bodyweight, body weight 176\.37 lb$/m);
+});
+
+// --- Logged Effort on both scales (#713) ---
+
+test("Effort reads on the scale it was logged in, in plain words", () => {
+  const handoff = aiHandoff({
+    record: record({
+      logged_sets: [
+        set({ position: 1, effort: { scale: "rpe", value: 7.5 } }),
+        set({ position: 2, effort: { scale: "rir", value: 1 } }),
+        set({ position: 3, effort: { scale: "rir", value: 0 } }),
+        set({ position: 4, perceived_difficulty: 9 }),
+      ],
+    }),
+    unit: "kg",
+  });
+
+  assert.match(handoff.text, /^- Set 1: 8 reps @ 100 kg, RPE 7\.5$/m);
+  assert.match(handoff.text, /^- Set 2: 8 reps @ 100 kg, 1 rep in reserve$/m);
+  assert.match(handoff.text, /^- Set 3: 8 reps @ 100 kg, 0 reps in reserve$/m);
+  assert.match(handoff.text, /^- Set 4: 8 reps @ 100 kg, RPE 9$/m);
+  assert.doesNotMatch(handoff.text, /RIR/);
+});
