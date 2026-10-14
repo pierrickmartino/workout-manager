@@ -3,13 +3,17 @@ import { notFound } from "next/navigation";
 import { Copy, PenLine, Repeat } from "@/components/pulse/icons";
 
 import { fetchLog } from "@/lib/logs";
+import { fetchSession } from "@/lib/sessions";
 import { loggedSessionDetail } from "@/lib/logged-session-detail";
+import { aiHandoff } from "@/lib/ai-handoff";
+import { bestEffortData, settleBestEffort } from "@/lib/best-effort-read";
 import { resolveAppearance } from "@/lib/appearance";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LoggedSetTable } from "@/components/LoggedSetTable";
+import { AiHandoffControl } from "@/components/AiHandoffControl";
 import { NAV_FORWARD } from "@/lib/nav-direction";
 
 interface LogDetailPageProps {
@@ -38,6 +42,13 @@ export default async function LogDetailPage({ params }: LogDetailPageProps) {
 
   const record = envelope.data;
   const detail = loggedSessionDetail(record);
+  // The source plan is a best-effort read for the AI Hand-off (ADR-0132): it only lets an
+  // ended-early record say "N of M exercises", so a failed read hands off without the count.
+  const plan =
+    record.session_id === null
+      ? null
+      : bestEffortData(await settleBestEffort(fetchSession(record.session_id)));
+  const handoff = aiHandoff({ record, unit: appearance.weight_unit, plan });
 
   return (
     <section className="flex flex-col gap-6">
@@ -129,6 +140,19 @@ export default async function LogDetailPage({ params }: LogDetailPageProps) {
             </Link>
           </>
         )}
+      </Card>
+
+      {/* The AI Hand-off (ADR-0132): the record as plain text for an outside assistant's
+          critique, previewed in full before the user sends or copies it themselves. */}
+      <Card className="flex flex-col gap-3 p-5">
+        <h2 className="text-balance font-display text-sm font-semibold text-text-primary">
+          Get a second opinion
+        </h2>
+        <p className="font-mono text-[12px] leading-relaxed text-text-muted">
+          Ask an AI assistant to critique this workout. You&apos;ll see the full text before
+          anything leaves the app.
+        </p>
+        <AiHandoffControl handoff={handoff} />
       </Card>
 
       <BackLink href="/history">Back to history</BackLink>

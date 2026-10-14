@@ -51,6 +51,8 @@ import { AdminExerciseBrowser } from "@/components/AdminExerciseBrowser";
 import { LocalInstant } from "@/components/pulse/local-instant";
 import { ConfirmDialog } from "@/components/pulse/confirm-dialog";
 import { ActionSheetPanel } from "@/components/pulse/action-sheet";
+import { AiHandoffSheet } from "@/components/AiHandoffControl";
+import { aiHandoff } from "@/lib/ai-handoff";
 import { ActionSheetItemText, ActionSheetSeparator, actionSheetItemClass } from "@/components/pulse/action-sheet-item";
 import { RenameSessionControl } from "@/components/RenameSessionControl";
 import { ShareSessionControl } from "@/components/ShareSessionControl";
@@ -254,6 +256,30 @@ function SheetSurface() {
     <ActionSheetSeparator />
     <DeleteSessionControl sessionId={1} action={submitDeleteSession} disabledHint={DELETE_DISABLED_HINT} />
   </ActionSheetPanel>;
+}
+
+// The AI Hand-off sheet (ADR-0132), a modal like `sheet`, so no other journey mounts it. The
+// record is the worst case for wrapping: an ended-early session whose exercise name and Set Note
+// are long, beside every mark a set line can carry (warm-up, a bodyweight Load with the body
+// weight it needs, an Effort).
+function HandoffSurface() {
+  const record = history(1)[0];
+  const handoff = aiHandoff({
+    unit: "kg",
+    record: {
+      ...record,
+      completion_outcome: "incomplete",
+      duration_seconds: 3725,
+      logged_sets: [
+        { ...record.logged_sets[0], exercise_name: "W".repeat(120), set_type: "warm_up" },
+        { ...record.logged_sets[0], position: 2, body_weight_kg: 81.5,
+          load: { kind: "bodyweight", text: "bodyweight + 12.5 kg", added_kg: 12.5 },
+          effort: { scale: "rir", value: 1 },
+          note: "Left knee twinged on the way down, so I shortened the range for the last few reps." },
+      ],
+    },
+  });
+  return <AiHandoffSheet handoff={handoff} onClose={() => {}} />;
 }
 
 // Both of the launchpad's compositions, in one capture (ADR-0109): the TRAIN tab's four cards
@@ -518,6 +544,7 @@ function Content() {
     case "admin": return <AdminAudit />;
     case "confirm": return <ConfirmSurface />;
     case "sheet": return <SheetSurface />;
+    case "handoff": return <HandoffSurface />;
     case "launchpad": return <LaunchpadSurface />;
     case "levels": return <FitnessLevelSurface />;
     // The note a freshly adopted Protocol shows once generating it set the previous one aside

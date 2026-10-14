@@ -85,12 +85,14 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // adopted Curated Protocol's title, whose name is authored content. `curated-wave-adopt` joins
 // them with #693: the wave program's adopt form puts each lift's working-set weight and reps
 // side by side in a row. `curated-wave-unlogged` joins them with #694: the notice naming every
-// main lift still to log, which replaces that form.
+// main lift still to log, which replaces that form. `handoff` joins them with ADR-0132: the AI
+// Hand-off sheet is a modal, so like `sheet` it exists only while open, and its preview is a
+// block of preformatted text that must wrap rather than scroll sideways.
 const NOVEL_JOURNEYS = [
   "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc", "launchpad",
   "levels", "sheet", "protocols", "protocols-live", "set-aside", "passport", "passport-open",
   "passport-empty", "stamp", "stamp-locked", "stamp-record", "curated", "curated-adopt",
-  "based-on", "curated-wave-adopt", "curated-wave-unlogged",
+  "based-on", "curated-wave-adopt", "curated-wave-unlogged", "handoff",
 ];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and
