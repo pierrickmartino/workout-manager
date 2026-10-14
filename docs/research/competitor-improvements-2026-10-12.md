@@ -144,6 +144,9 @@ One-tap export of a Logged Session in a prompt-ready format for ChatGPT or Claud
 finish screen.
 **Grill:** clipboard text, a share sheet, or a deep link? What leaves the device for a
 Sensitive Constraint user?
+**Decided:** [ADR-0132](../adr/0132-an-ai-hand-off-is-an-on-device-previewed-text-projection.md)
+(share sheet with clipboard fallback, no deep links, mandatory caveat for Sensitive
+Constraints).
 
 ### 3.4 Conversational coach (in TASKS §8)
 A chat surface in front of regenerate, substitute and Calibration.
