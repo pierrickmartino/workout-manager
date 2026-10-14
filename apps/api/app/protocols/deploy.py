@@ -28,6 +28,7 @@ from app.protocols.deploy_validation import (
     DeployDraft,
     DeployError,
     DraftPrescription,
+    DraftSession,
     validate_deploy,
 )
 from app.protocols.progress import (
@@ -67,17 +68,18 @@ class _DeployPayload:
     duration_minutes: int | None = None
 
 
-def _payload(
-    existing: ProtocolSessionView | None, prescriptions: list[DraftPrescription]
-) -> _DeployPayload:
-    """The payload for one desired Session: an edited existing Session keeps its title,
-    Training Type and duration; a fresh slot carries none, so it takes the Protocol's."""
+def _payload(existing: ProtocolSessionView | None, session: DraftSession) -> _DeployPayload:
+    """The payload for one desired Session: an edited existing Session keeps its title. A
+    Training Type or duration the Builder sent wins (#707); one it omitted is the existing
+    Session's own, or ``None`` on a fresh slot, so it takes the Protocol's."""
 
+    kept_type = existing.training_type if existing else None
+    kept_minutes = existing.duration_minutes if existing else None
     return _DeployPayload(
         title=existing.title if existing else None,
-        prescriptions=list(prescriptions),
-        training_type=existing.training_type if existing else None,
-        duration_minutes=existing.duration_minutes if existing else None,
+        prescriptions=list(session.prescriptions),
+        training_type=session.training_type or kept_type,
+        duration_minutes=session.duration_minutes or kept_minutes,
     )
 
 
@@ -140,7 +142,7 @@ def plan_deploy(
             session_id=session.session_id,
             week=session.week,
             day=session.day,
-            payload=_payload(existing.get(session.session_id), session.prescriptions),
+            payload=_payload(existing.get(session.session_id), session),
         )
         for session in draft.sessions
     ]

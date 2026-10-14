@@ -33,6 +33,8 @@ function nextSession(sessionId: number): ProtocolSession {
     day: 1,
     position: 1,
     title: "Push A",
+    training_type: "strength",
+    duration_minutes: 45,
     performed: false,
     logged_session_id: null,
     prescriptions: [],

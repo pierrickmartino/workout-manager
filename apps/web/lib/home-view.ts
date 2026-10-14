@@ -21,8 +21,11 @@ import {
 // tonnage number: with free-text and percentage-based loads a single volume
 // figure would silently mislead (ADR-0008), so the hero shows honest counts.
 export interface HeroStats {
-  // The Protocol's prescribed per-session duration, in minutes.
+  // The Next Session's own prescribed duration, in minutes (#707): a Session may be typed
+  // apart from its Protocol, so a run day reads its own length, not the plan's.
   durationMinutes: number;
+  // The Next Session's own Training Type, which its Workout Signature is coloured by.
+  trainingType: string;
   // How many Exercise Prescriptions (modules) the Next Session contains.
   modules: number;
   // The total prescribed sets across those Prescriptions.
@@ -151,15 +154,16 @@ export function trainingRoute(protocol: ProtocolProgress): TrainingRoute | null 
 }
 
 // Derive the hero stats from a Current Protocol. `modules` counts the Next
-// Session's Prescriptions; `sets` sums their prescribed sets; duration is the
-// Protocol's own `duration_minutes`. A Current Protocol from `/api/home` always
+// Session's Prescriptions; `sets` sums their prescribed sets; duration and Training
+// Type are the Next Session's own (#707). A Current Protocol from `/api/home` always
 // carries a Next Session, but the type admits `null`, so an absent one yields
-// zeroed counts rather than throwing.
+// zeroed counts and the Protocol's duration and type rather than throwing.
 export function heroStats(protocol: ProtocolProgress): HeroStats {
   const next: ProtocolSession | null = protocol.next_session;
   const prescriptions = next?.prescriptions ?? [];
   return {
-    durationMinutes: protocol.duration_minutes,
+    durationMinutes: next?.duration_minutes ?? protocol.duration_minutes,
+    trainingType: next?.training_type ?? protocol.training_type,
     modules: prescriptions.length,
     sets: prescriptions.reduce((total, p) => total + p.sets, 0),
   };

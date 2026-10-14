@@ -77,12 +77,18 @@ class DraftPrescription:
 @dataclass(frozen=True)
 class DraftSession:
     """One Session in the desired tail. ``session_id`` names an existing Session it
-    edits (``None`` for a not-yet-persisted new Session — a later slice)."""
+    edits (``None`` for a not-yet-persisted new Session — a later slice).
+
+    ``training_type`` / ``duration_minutes`` are the Builder's chosen values (#707), already
+    validated at the request boundary. ``None`` means "not sent": an existing Session keeps
+    its own and a fresh slot takes the Protocol's."""
 
     session_id: int | None
     week: int
     day: int
     prescriptions: list[DraftPrescription] = field(default_factory=list)
+    training_type: str | None = None
+    duration_minutes: int | None = None
 
 
 @dataclass(frozen=True)

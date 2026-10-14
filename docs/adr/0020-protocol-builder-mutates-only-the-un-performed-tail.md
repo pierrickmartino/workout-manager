@@ -72,3 +72,25 @@ incoherence of "re-slicing" weeks that have already been trained.
 - ADR-0001's "fixed / generated up front / no reshuffling" is relaxed for the
   un-performed tail only; the frozen performed prefix is what preserves the
   plan-vs-record split it was protecting.
+
+## Amendment: the Builder sets a Session's Training Type and duration (#707)
+
+A Session may be typed apart from its Protocol (ADR-0130 amendment), but no Builder path could set
+either value, so every slot a user added took the Protocol's: a run added to a strength plan was
+logged as `strength`, 55 min. A Logged Session takes its Training Type from its Session, so that
+mistyping reached History and Analytics.
+
+A deploy's `DraftSession` therefore carries an optional `training_type` (the closed set) and
+`duration_minutes` (the generation bounds), both validated at the request boundary. A value
+that's sent wins. An omitted value means an existing Session keeps its own and a fresh slot takes
+the Protocol's, so the Hand-Authored path and older clients deploy unchanged. The Builder always
+sends what it shows. A new slot starts from the Protocol's values, and each un-performed Session's
+card edits both. Changing the type leaves the duration alone, and the type is never checked
+against the Session's Prescriptions. Training Type is a declared label, and inferring it from the
+movements would be a guess. A performed Session shows both read-only, like the rest of the frozen
+prefix.
+
+The Protocol's own `training_type` and `duration_minutes` are not recomputed from its Sessions.
+They stay the generation and cache provenance (ADR-0003) and the default a new slot starts from.
+Calibration still bands a mixed Protocol's Sessions by the Protocol's Training Type, and that is
+left for a follow-up.

@@ -30,6 +30,7 @@ from app.domain.note import parse_note
 from app.domain.progression import ProgressionScheme, parse_scheme
 from app.domain.quantity import QuantityKind, prescribed_quantity_from_input
 from app.domain.set_type import SetType, parse_set_type
+from app.domain.training_type import TRAINING_TYPES
 from app.envelope import error_envelope, success_envelope
 from app.generation.orchestrator import GenerationOrchestrator
 from app.generation.protocol_generator import ProtocolGenerationRequest
@@ -456,12 +457,28 @@ class DeploySessionBody(BaseModel):
     """One Session in the desired un-performed tail. ``session_id`` names the existing
     Session it edits, or is ``None`` for a newly-added empty slot (ADR-0020). ``week``
     is the slot's client-intended week — the grouping the server re-enumerates into
-    positional labels; ``day`` orders Sessions within a week."""
+    positional labels; ``day`` orders Sessions within a week.
+
+    ``training_type`` / ``duration_minutes`` are the Builder's per-Session values (#707):
+    a closed Training Type and the generation duration bounds, rejected here when bad.
+    Omitted means an existing Session keeps its own and a fresh slot takes the Protocol's."""
 
     session_id: int | None = None
     week: int
     day: int
     prescriptions: list[DeployPrescriptionBody] = Field(default_factory=list)
+    training_type: str | None = None
+    duration_minutes: int | None = Field(
+        default=None, ge=MIN_DURATION_MINUTES, le=MAX_DURATION_MINUTES
+    )
+
+    @field_validator("training_type")
+    @classmethod
+    def _known_training_type(cls, value: str | None) -> str | None:
+        if value is None or value in TRAINING_TYPES:
+            return value
+        allowed = ", ".join(sorted(TRAINING_TYPES))
+        raise ValueError(f"training_type must be one of: {allowed}")
 
 
 class DeployProtocolBody(BaseModel):
@@ -550,6 +567,8 @@ def deploy_protocol(
                     )
                     for prescription in session.prescriptions
                 ],
+                training_type=session.training_type,
+                duration_minutes=session.duration_minutes,
             )
             for session in payload.sessions
         ],
