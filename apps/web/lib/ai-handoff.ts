@@ -9,8 +9,9 @@
 // (`formatLoad`, `formatQuantity`, `formatPace`, `formatEffort`) — this module relabels, it never
 // re-derives a unit or a Load type.
 //
-// What never goes in: the exact date, body weight unless a bodyweight Load needs it, and (later
-// slices) Sensitive Constraints, the Effective Fitness Level and our Progression decision.
+// What never goes in: the exact date, body weight unless a bodyweight Load needs it, Sensitive
+// Constraints (the sheet shows a caveat instead), the Effective Fitness Level and our
+// Progression decision.
 
 import { loggedSetEffort, formatEffort, type Effort } from "./effort.ts";
 import { formatBodyWeight, formatLoad, isPureBodyweight, type Load } from "./load.ts";
@@ -20,6 +21,7 @@ import { resolveSetType, type SetType } from "./set-type-view.ts";
 import type { LoggedSession, LoggedSet } from "./logs-types.ts";
 import type { WorkoutSession } from "./sessions-types.ts";
 import type { WeightUnit } from "./weight-unit.ts";
+import type { Profile } from "./profile-types.ts";
 
 const SECONDS_PER_MINUTE = 60;
 const SECONDS_PER_HOUR = 60 * SECONDS_PER_MINUTE;
@@ -34,6 +36,11 @@ export const AI_HANDOFF_LEAD_IN =
 export const AI_HANDOFF_DISCLOSURE =
   "This text leaves Workout Manager. The AI app you send it to handles it under its own terms.";
 
+// The Sensitive-Constraint caveat (ADR-0132, following ADR-0058): shown on the sheet, never put in
+// the text, to a user with any Sensitive Constraint. It informs; it never blocks the hand-off.
+export const AI_HANDOFF_SENSITIVE_CAVEAT =
+  "This text doesn’t include your health constraints, so the AI you send it to doesn’t know about them. Your clinician’s advice comes first.";
+
 export interface AiHandoffInput {
   // The saved record the text is built from — never Live Session state.
   record: LoggedSession;
@@ -43,13 +50,16 @@ export interface AiHandoffInput {
   // slice reads only how many exercises it prescribes — the "M" of "Ended early: N of M
   // exercises done".
   plan?: Pick<WorkoutSession, "prescriptions"> | null;
+  // The reader's Fitness Profile; null or absent when it could not be read.
+  // Only the Declared Fitness Levels and the sensitivity flag are read from it: Sensitive
+  // Constraint text never is, and the Effective Fitness Level is not part of a Profile at all.
+  profile?: Pick<Profile, "fitness_levels" | "is_sensitive"> | null;
 }
 
 export interface AiHandoff {
   // The full plain text that leaves the app, exactly as previewed.
   text: string;
-  // Whether the sheet shows the Sensitive-Constraint caveat. Always false until the profile is
-  // read (issue #714).
+  // Whether the sheet shows `AI_HANDOFF_SENSITIVE_CAVEAT`.
   showSensitiveCaveat: boolean;
 }
 
@@ -157,10 +167,25 @@ function outcomeWords(
   return `Ended early: ${done} of ${plural(planned.size, "exercise", "exercises")} done.`;
 }
 
+function trainingTypeWords(trainingType: string): string {
+  return TRAINING_TYPE_WORDS[trainingType] ?? trainingType;
+}
+
 function sessionLine(record: LoggedSession, outcome: string | null): string {
-  const type = TRAINING_TYPE_WORDS[record.training_type] ?? record.training_type;
+  const type = trainingTypeWords(record.training_type);
   const line = `Session: ${joinPresent([type, sessionDurationWords(record.duration_seconds)], ", ")}.`;
   return outcome === null ? line : `${line} ${outcome}`;
+}
+
+// The context line: the user's Declared Fitness Level for the record's Training Type, or null
+// when the profile could not be read or declares none for that type.
+function contextLine(
+  profile: AiHandoffInput["profile"],
+  trainingType: string,
+): string | null {
+  const level = profile?.fitness_levels[trainingType];
+  if (level === undefined) return null;
+  return `Context: self-rated ${level}/10 at ${trainingTypeWords(trainingType)}.`;
 }
 
 // A distance in words: as logged, then its time and pace when a time was logged with it
@@ -251,13 +276,19 @@ function performedBlock(
 }
 
 // Build the AI Hand-off for one Logged Session. Reads its inputs and returns new values only.
-export function aiHandoff({ record, unit, plan = null }: AiHandoffInput): AiHandoff {
+export function aiHandoff({
+  record,
+  unit,
+  plan = null,
+  profile = null,
+}: AiHandoffInput): AiHandoff {
   const performed = exercisesInPerformedOrder(record.logged_sets);
   const outcome = outcomeWords(record.completion_outcome, performed, plannedExerciseIds(plan));
   const text = [
     AI_HANDOFF_LEAD_IN,
-    sessionLine(record, outcome),
+    joinPresent([sessionLine(record, outcome), contextLine(profile, record.training_type)], "\n"),
     performedBlock(performed, unit, record.training_type),
   ].join("\n\n");
-  return { text, showSensitiveCaveat: false };
+  // An unread profile cannot rule a Sensitive Constraint out, so the caveat shows (fail safe).
+  return { text, showSensitiveCaveat: profile?.is_sensitive ?? true };
 }

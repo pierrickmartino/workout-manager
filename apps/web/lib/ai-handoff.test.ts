@@ -1,8 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { aiHandoff, AI_HANDOFF_DISCLOSURE } from "./ai-handoff.ts";
+import {
+  aiHandoff,
+  AI_HANDOFF_DISCLOSURE,
+  AI_HANDOFF_SENSITIVE_CAVEAT,
+} from "./ai-handoff.ts";
 import type { LoggedSession, LoggedSet } from "./logs-types.ts";
+import type { Profile } from "./profile-types.ts";
 import type { ExercisePrescription } from "./sessions-types.ts";
 
 // The AI Hand-off (ADR-0132) turns one Logged Session into the plain text a user previews and
@@ -72,7 +77,7 @@ test("a plan-less strength session hands off as a lead-in, a session line and a 
   });
 
   // Act
-  const handoff = aiHandoff({ record: session, unit: "kg" });
+  const handoff = aiHandoff({ record: session, unit: "kg", profile: profile() });
 
   // Assert
   assert.equal(
@@ -509,4 +514,112 @@ test("the top of the reps-in-reserve scale reads as five or more", () => {
   });
 
   assert.match(handoff.text, /^- Set 1: 8 reps @ 100 kg, 5 or more reps in reserve$/m);
+});
+
+// --- Profile context and the Sensitive-Constraint caveat (#714) ---
+
+// A read profile: the Declared Fitness Levels and the derived sensitivity flag, plus the
+// constraint text itself, which must never reach the hand-off.
+type HandoffProfileFixture = Pick<Profile, "fitness_levels" | "is_sensitive" | "sensitive_constraints">;
+
+function profile(overrides: Partial<HandoffProfileFixture> = {}): HandoffProfileFixture {
+  return {
+    fitness_levels: {},
+    is_sensitive: false,
+    sensitive_constraints: [],
+    ...overrides,
+  };
+}
+
+test("a declared level for the record’s Training Type adds a self-rated context line", () => {
+  // Arrange
+  const session = record({ training_type: "strength", duration_seconds: 52 * 60 });
+
+  // Act
+  const handoff = aiHandoff({
+    record: session,
+    unit: "kg",
+    profile: profile({ fitness_levels: { strength: 6, yoga: 2 } }),
+  });
+
+  // Assert
+  assert.equal(
+    handoff.text.split("\n\nPerformed:")[0],
+    [
+      "Please critique this workout. Tell me what went well, what I should change next time, and anything that looks risky.",
+      "",
+      "Session: strength training, 52 minutes.",
+      "Context: self-rated 6/10 at strength training.",
+    ].join("\n"),
+  );
+});
+
+test("no context line when the profile declares no level for the record’s Training Type", () => {
+  // Arrange
+  const session = record({ training_type: "yoga" });
+
+  // Act
+  const handoff = aiHandoff({
+    record: session,
+    unit: "kg",
+    profile: profile({ fitness_levels: { strength: 6 } }),
+  });
+
+  // Assert
+  assert.doesNotMatch(handoff.text, /self-rated/);
+  assert.doesNotMatch(handoff.text, /Context:/);
+});
+
+test("a user with a Sensitive Constraint gets the caveat, and their constraints never go in", () => {
+  // Arrange
+  const session = record({ training_type: "strength", logged_sets: [set({})] });
+  const sensitive = profile({
+    fitness_levels: { strength: 4 },
+    is_sensitive: true,
+    sensitive_constraints: ["postpartum", "torn left ACL, rehab week 6"],
+  });
+
+  // Act
+  const handoff = aiHandoff({ record: session, unit: "kg", profile: sensitive });
+
+  // Assert
+  assert.equal(handoff.showSensitiveCaveat, true);
+  assert.doesNotMatch(handoff.text, /postpartum|ACL|rehab|constraint/i);
+  // The action is still offered in full: the caveat informs, it never blocks.
+  assert.match(handoff.text, /^Context: self-rated 4\/10 at strength training\.$/m);
+  assert.match(handoff.text, /^- Set 1: 8 reps @ 100 kg$/m);
+});
+
+test("a user without a Sensitive Constraint gets no caveat", () => {
+  // Arrange
+  const unconstrained = profile({ fitness_levels: { strength: 6 } });
+
+  // Act
+  const handoff = aiHandoff({ record: record({}), unit: "kg", profile: unconstrained });
+
+  // Assert
+  assert.equal(handoff.showSensitiveCaveat, false);
+});
+
+test("the caveat says constraints are left out, the AI doesn’t know them, and the clinician comes first", () => {
+  // Arrange / Act: the copy is a constant the sheet renders as is.
+  const caveat = AI_HANDOFF_SENSITIVE_CAVEAT;
+
+  // Assert
+  assert.match(caveat, /doesn’t include your health constraints/);
+  assert.match(caveat, /doesn’t know about them/);
+  assert.match(caveat, /clinician’s advice comes first/);
+});
+
+test("an unread profile still hands off, without the level line, and shows the caveat anyway", () => {
+  // Arrange
+  const session = record({ training_type: "strength", logged_sets: [set({})] });
+
+  // Act
+  const handoff = aiHandoff({ record: session, unit: "kg", profile: null });
+
+  // Assert
+  assert.equal(handoff.showSensitiveCaveat, true);
+  assert.doesNotMatch(handoff.text, /self-rated/);
+  assert.match(handoff.text, /^- Set 1: 8 reps @ 100 kg$/m);
 });

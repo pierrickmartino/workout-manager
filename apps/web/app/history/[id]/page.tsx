@@ -4,6 +4,7 @@ import { Copy, PenLine, Repeat } from "@/components/pulse/icons";
 
 import { fetchLog } from "@/lib/logs";
 import { fetchSession } from "@/lib/sessions";
+import { fetchProfile } from "@/lib/profile";
 import { loggedSessionDetail } from "@/lib/logged-session-detail";
 import { aiHandoff } from "@/lib/ai-handoff";
 import { bestEffortData, settleBestEffort } from "@/lib/best-effort-read";
@@ -34,9 +35,13 @@ export default async function LogDetailPage({ params }: LogDetailPageProps) {
   const logId = Number(id);
   if (!Number.isInteger(logId)) notFound();
 
-  const [envelope, appearance] = await Promise.all([
+  // The profile is a best-effort read for the AI Hand-off (ADR-0132): it carries the Declared
+  // Fitness Level line and the Sensitive-Constraint flag. A failed read hands off without the
+  // level, and the view-model then shows the caveat anyway.
+  const [envelope, appearance, profileResult] = await Promise.all([
     fetchLog(logId),
     resolveAppearance(),
+    settleBestEffort(fetchProfile()),
   ]);
   if (!envelope.success || !envelope.data) notFound();
 
@@ -48,7 +53,12 @@ export default async function LogDetailPage({ params }: LogDetailPageProps) {
     record.session_id === null
       ? null
       : bestEffortData(await settleBestEffort(fetchSession(record.session_id)));
-  const handoff = aiHandoff({ record, unit: appearance.weight_unit, plan });
+  const handoff = aiHandoff({
+    record,
+    unit: appearance.weight_unit,
+    plan,
+    profile: bestEffortData(profileResult),
+  });
 
   return (
     <section className="flex flex-col gap-6">
