@@ -10,7 +10,8 @@
 //   B  Star pip     — a small cyan star rides the ⋯ trigger when favorited; badges stay beside
 //                     the title.
 //   C  Glow Edge    — the sigil wears the cyan Glow Edge My Sessions uses for a favorited row,
-//                     plus a FAVORITE chip in the meta row.
+//                     plus a FAVORITE chip in the meta row. The ⋯ sits on the overline's line so
+//                     the title gets the full width.
 
 import Link from "next/link";
 import { ArrowRight } from "@/components/pulse/icons";
@@ -123,16 +124,18 @@ function VariantC(props: HeaderVariantProps) {
   const favorited = favoriteView.show && favoriteView.isFavorite;
   return (
     <>
-      <header className="flex items-start gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+      {/* The ⋯ rides the overline's line (negative margins keep it from growing that row), so
+          the title below runs the full width instead of sharing it with a ⋯ column. */}
+      <header className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between gap-3">
           <Overline>PULSE // SESSION</Overline>
-          <h1 className="text-balance font-display text-2xl font-bold leading-tight tracking-tight text-text-primary">
-            <Title {...props} glow={favorited} />
-          </h1>
+          <div className="-my-3 -mr-2 shrink-0">
+            <Menu {...props} />
+          </div>
         </div>
-        <div className="-mt-2 -mr-2 shrink-0">
-          <Menu {...props} />
-        </div>
+        <h1 className="text-balance font-display text-2xl font-bold leading-tight tracking-tight text-text-primary">
+          <Title {...props} glow={favorited} />
+        </h1>
       </header>
       <div className="-mt-4 flex flex-wrap items-center gap-2">
         {favorited ? (
