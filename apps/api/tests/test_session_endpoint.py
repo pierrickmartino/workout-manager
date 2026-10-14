@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.auth.dependencies import get_jwks
 from app.config import Settings, get_settings
+from app.db.models import ExercisePrescription, WorkoutSession
 from app.domain.exercise import Provenance
 from app.domain.load import parse_load
 from app.domain.quantity import quantity_from_text
@@ -298,6 +299,51 @@ def test_read_serializes_is_protocol_member_false_for_a_standalone_session():
     fetched = client.get(f"/api/sessions/{created['id']}", headers=headers).json()["data"]
 
     assert fetched["is_protocol_member"] is False
+
+
+def test_read_serializes_a_null_objective_for_a_standalone_session():
+    # A standalone Session has no Protocol, so it carries no plan objective (ADR-0132).
+    client, ctx = build_client()
+    headers = _auth(ctx, "user_objective_alone")
+    created = client.post(
+        "/api/sessions/generate", headers=headers, json=_generate_body()
+    ).json()["data"]
+
+    fetched = client.get(f"/api/sessions/{created['id']}", headers=headers).json()["data"]
+
+    assert fetched["objective"] is None
+
+
+def test_read_serializes_the_protocol_objective_for_a_protocol_member_session():
+    # A Protocol-member Session carries its Protocol's objective, stored on the Session row,
+    # so the AI Hand-off can state the plan's goal (ADR-0132). Seeded directly: ``create``
+    # only builds standalone Sessions.
+    exercises = InMemoryExerciseRepository()
+    sessions = InMemorySessionRepository(exercises)
+    squat = exercises.find_or_create("Back Squat", provenance=Provenance.AI_GENERATED)
+    sessions._sessions[1] = WorkoutSession(
+        id=1,
+        clerk_user_id="user_objective_member",
+        training_type="strength",
+        duration_minutes=60,
+        protocol_id=7,
+        objective="hypertrophy",
+        week=1,
+        day=1,
+        position=0,
+    )
+    sessions._prescriptions[1] = [
+        ExercisePrescription(
+            id=1, session_id=1, exercise_id=squat.id, position=0, sets=5, reps="5"
+        )
+    ]
+    client, ctx = build_client(sessions=sessions, exercises=exercises)
+
+    fetched = client.get(
+        "/api/sessions/1", headers=_auth(ctx, "user_objective_member")
+    ).json()["data"]
+
+    assert fetched["objective"] == "hypertrophy"
 
 
 def test_another_user_cannot_fetch_someone_elses_session():

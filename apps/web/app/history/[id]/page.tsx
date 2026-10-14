@@ -47,8 +47,9 @@ export default async function LogDetailPage({ params }: LogDetailPageProps) {
 
   const record = envelope.data;
   const detail = loggedSessionDetail(record);
-  // The source plan is a best-effort read for the AI Hand-off (ADR-0132): it only lets an
-  // ended-early record say "N of M exercises", so a failed read hands off without the count.
+  // The source plan is a best-effort read for the AI Hand-off (ADR-0132): it carries the
+  // Prescribed block, the plan goal and the "N of M exercises" of an ended-early record. A
+  // failed read hands off record-only, with the Performed block alone.
   const plan =
     record.session_id === null
       ? null

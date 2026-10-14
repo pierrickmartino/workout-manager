@@ -104,6 +104,10 @@ export interface WorkoutSession {
   // Sessions. Optional because the live hydration read omits it (mirror of `provenance`);
   // the plain Session read always carries it, so the detail page reads it there.
   is_protocol_member?: boolean;
+  // The plan's objective (ADR-0132): the Protocol's objective on a Protocol member, `null` on a
+  // standalone Session. The AI Hand-off states it as the plan's goal. The plain Session read
+  // carries it; the live hydration read omits it, so it is optional here.
+  objective?: string | null;
   // The user-given Session Name (issue #394): the raw stored value, `null`/absent when the
   // Session is unnamed (so the rename editor opens empty). The plain Session read carries it;
   // the live hydration read omits it, so it is optional here (mirror of `provenance`).

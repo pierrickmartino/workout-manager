@@ -126,6 +126,8 @@ def serialize_session(view: SessionView, *, logged_count: int | None = None) -> 
         and view.author_clerk_user_id == view.clerk_user_id,
         "is_protocol_member": view.is_protocol_member,
         "is_favorite": None if view.is_protocol_member else view.is_favorite,
+        # The plan's objective (ADR-0132): the Protocol's, on a Protocol member; null standalone.
+        "objective": view.objective,
         # Session Section (ADR-0074) is a projection over the *ordered* Session, so it is
         # computed once here and threaded into each Prescription's dict — never stored,
         # re-derived per read as the plan is edited.
