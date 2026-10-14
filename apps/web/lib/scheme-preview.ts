@@ -18,11 +18,11 @@ import type { ProgressionScheme } from "./scheme-view.ts";
 // The step constants — mirrors of the backend `progression` module. Kept here (not imported)
 // because the client has no access to the Python domain; the backend unit tests and these
 // view-model tests together pin the two in lock-step.
-const INCREASE_KG = 2.5;
-const DECREASE_KG = 5;
-const LOW_EFFORT_MAX = 7;
-const RESET_PERCENT = 10; // RESET_FRACTION 0.9 → a 10% deload.
-const SESSION_COUNT_N = 3;
+export const INCREASE_KG = 2.5;
+export const DECREASE_KG = 5;
+export const LOW_EFFORT_MAX = 7;
+export const RESET_PERCENT = 10; // RESET_FRACTION 0.9 → a 10% deload.
+export const SESSION_COUNT_N = 3;
 
 // Read-time typography, matching the backend: an en dash for a rep range ("8–12"), an em dash
 // for the trailing aside.
@@ -30,10 +30,10 @@ const EN_DASH = "–";
 const EM_DASH = "—";
 
 // Which axis a scheme would move on this Load — the one fact the sentence branches on.
-type Axis = "weight" | "reps" | "none";
+export type Axis = "weight" | "reps" | "none";
 
 // A parsed rep target: its floor and ceiling (equal for a single number).
-interface RepTarget {
+export interface RepTarget {
   floor: number;
   ceiling: number;
 }
@@ -44,7 +44,7 @@ const AMRAP_FLOOR = /^\s*(\d+)\s*\+\s*$/;
 
 // Parse the prescribed reps into a `(floor, ceiling)` target — a range or a single number.
 // Free-text targets like "AMRAP" and AMRAP-with-floor ("5+") return null (see `greyskullFloor`).
-function parseRepTarget(reps: string): RepTarget | null {
+export function parseRepTarget(reps: string): RepTarget | null {
   const range = RANGE_REPS.exec(reps);
   if (range !== null) {
     return { floor: Number(range[1]), ceiling: Number(range[2]) };
@@ -59,7 +59,7 @@ function parseRepTarget(reps: string): RepTarget | null {
 
 // The rep floor Greyskull checks: the range/single lower bound, or the number before an AMRAP
 // `+` ("5+" → 5). A floorless target (bare "AMRAP") has none.
-function greyskullFloor(reps: string): number | null {
+export function greyskullFloor(reps: string): number | null {
   const target = parseRepTarget(reps);
   if (target !== null) return target.floor;
   const amrap = AMRAP_FLOOR.exec(reps);
@@ -69,7 +69,7 @@ function greyskullFloor(reps: string): number | null {
 // Classify a typed Load into the axis a scheme would step (ADR-0026), mirroring the engine's own
 // branch: an absolute or weighted-bodyweight Load moves kilograms; a pure-bodyweight Load moves
 // its rep target; everything else — %1RM, range, qualitative, or absent — has no clean value.
-function axisOf(load: Load | null | undefined): Axis {
+export function axisOf(load: Load | null | undefined): Axis {
   if (load == null) return "none";
   if (load.kind === "absolute") return "weight";
   if (load.kind === "bodyweight") return isPureBodyweight(load) ? "reps" : "weight";
@@ -79,7 +79,7 @@ function axisOf(load: Load | null | undefined): Axis {
 // Append the kilogram unit to a step amount. JS number-to-string already drops a trailing
 // ".0" (5 → "5", 2.5 → "2.5"), so this only adds the unit — the twin of the backend
 // `_format_kg`, which strips the ".0" explicitly off a Python float.
-function formatKg(value: number): string {
+export function formatKg(value: number): string {
   return `${value} kg`;
 }
 
@@ -88,7 +88,7 @@ function rpePhrase(): string {
 }
 
 // Render a small ordinal (3 → "3rd") for the Session-Count cadence.
-function ordinal(n: number): string {
+export function ordinal(n: number): string {
   const suffix =
     n % 100 >= 10 && n % 100 <= 20
       ? "th"
