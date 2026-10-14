@@ -56,15 +56,21 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { NAV_FORWARD } from "@/lib/nav-direction";
+// PROTOTYPE — throwaway: `?variant=` swaps the exercise card layout (prototype-exercise-cards.tsx).
+import { PrototypeSwitcher } from "@/components/PrototypeSwitcher";
+import { PROTOTYPE_VARIANTS, PrototypeExerciseCard } from "./prototype-exercise-cards";
 
 // Displays a generated standalone Session and its Exercise Prescriptions. The
 // session is user-owned: the backend returns 404 (→ notFound) for anyone else.
 export default async function SessionPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ variant?: string }>;
 }) {
   const { id } = await params;
+  const variant = (await searchParams).variant ?? "A";
   const sessionId = Number(id);
   if (!Number.isInteger(sessionId)) notFound();
 
@@ -212,8 +218,10 @@ export default async function SessionPage({
             unit={unit}
             supersetSlots={supersetSlots}
             removeAffordanceList={removeAffordanceList}
+            variant={variant}
           />
         </Suspense>
+        <PrototypeSwitcher variants={PROTOTYPE_VARIANTS} current={variant} />
         {/* Insert (ADR-0051, issue #360): hand-author one new movement onto the end of a
             standalone Session. Withheld on a Protocol-member Session — adding inside a Protocol
             stays the Builder's tail-gated Deploy path (standalone-only, ADR-0051), mirroring how
@@ -273,11 +281,13 @@ async function PrescriptionList({
   unit,
   supersetSlots,
   removeAffordanceList,
+  variant,
 }: {
   session: WorkoutSession;
   unit: WeightUnit;
   supersetSlots: readonly (SupersetSlot | undefined)[];
   removeAffordanceList: ReturnType<typeof removeAffordances>;
+  variant: string;
 }) {
   const envelope = await fetchHarderVariations(session.id).catch(() => null);
   const offers = harderVariationOffersFor(
@@ -289,6 +299,22 @@ async function PrescriptionList({
     <ol className="flex list-none flex-col gap-3 p-0">
       {session.prescriptions.map((prescription, index) => (
         <li key={prescription.position}>
+          {variant !== "A" ? (
+            <PrototypeExerciseCard
+              variant={variant}
+              prescription={prescription}
+              superset={supersetSlots[index]}
+              sessionId={session.id}
+              unit={unit}
+              index={index + 1}
+              harderVariation={offers[index]}
+              schemeModel={schemeControlModel(prescription)}
+              showScheme={!(session.is_protocol_member ?? false)}
+              showRemove={removeAffordanceList[index].showRemove}
+              canRemove={removeAffordanceList[index].canRemove}
+              dissolvesSuperset={removeAffordanceList[index].dissolvesSuperset}
+            />
+          ) : (
           <PrescriptionCard
             prescription={prescription}
             superset={supersetSlots[index]}
@@ -302,6 +328,7 @@ async function PrescriptionList({
             canRemove={removeAffordanceList[index].canRemove}
             dissolvesSuperset={removeAffordanceList[index].dissolvesSuperset}
           />
+          )}
         </li>
       ))}
     </ol>

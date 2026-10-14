@@ -1,4 +1,5 @@
 import { ChartAccessibilityFixture } from "./chart-fixture";
+import { PrototypeCards } from "./prototype-cards";
 import { createRoot } from "react-dom/client";
 import { useState } from "react";
 import "./styles.css";
@@ -511,6 +512,7 @@ const auditWaveCuratedProtocol: CuratedProtocolSummary = {
 
 function Content() {
   switch (journey) {
+    case "prototype-cards": return <PrototypeCards variant={params.get("variant") ?? "B"} />;
     case "charts": return <ChartAccessibilityFixture />;
     case "motion": return <><GenerationProgress /><Skeleton className="h-12" /><SyncStatusBanner /></>;
     case "adhoc": return <AdhocLogForm today="2026-09-26" unit="kg" />;
