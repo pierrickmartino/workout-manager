@@ -2,15 +2,17 @@
 
 Concurrent training for an intermediate lifter: three lifting Sessions and three run Sessions
 alternate through the week, so it is the first Curated Protocol whose Sessions are typed and
-timed apart from it. The content ships unreleased, so these tests release it through an injected
-registry (the shipped data is never edited) and drive the real list and adopt endpoints over the
+timed apart from it. The tests release it through an injected registry with a test sign-off (the
+shipped data is never edited) and drive the real list and adopt endpoints over the
 ``test_curated_protocols_endpoint`` harness."""
 
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import date
 
 from app.curated.integrity import integrity_errors
+from app.curated.model import CoachSignOff
 from app.curated.registry import CURATED_PROTOCOLS, get_curated_registry
 from app.curated.strength_running import STRENGTH_RUNNING
 from tests.test_curated_protocols_endpoint import SIGN_OFF, _Harness, build_harness
@@ -168,13 +170,16 @@ def test_the_description_says_run_volume_does_not_progress_and_the_base_it_assum
     assert "run 30 minutes" in description
 
 
-def test_it_ships_unreleased_and_is_not_listed():
+def test_it_ships_released_with_its_recorded_sign_off_and_is_listed():
     # Assert
     assert STRENGTH_RUNNING in CURATED_PROTOCOLS
-    assert STRENGTH_RUNNING.released is False
-    assert STRENGTH_RUNNING not in get_curated_registry().released()
+    assert STRENGTH_RUNNING.released is True
+    assert STRENGTH_RUNNING.coach_sign_off == CoachSignOff(
+        reviewer="Pierrick Martino", signed_on=date(2026, 10, 14)
+    )
+    assert STRENGTH_RUNNING in get_curated_registry().released()
 
 
-def test_it_passes_the_integrity_gate_once_released():
+def test_it_passes_the_integrity_gate_as_shipped():
     # Act / Assert
-    assert integrity_errors(RELEASED) == []
+    assert integrity_errors(STRENGTH_RUNNING) == []

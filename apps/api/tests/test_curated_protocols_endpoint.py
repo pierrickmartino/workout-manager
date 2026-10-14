@@ -189,7 +189,7 @@ def test_list_returns_only_released_curated_protocols_in_the_envelope():
     ]
 
 
-def test_the_shipped_registry_lists_all_four_curated_protocols_in_authored_order():
+def test_the_shipped_registry_lists_all_five_curated_protocols_in_authored_order():
     # Arrange — the real registry, not one that releases content for the test
     h = build_harness()
     h.client.app.dependency_overrides.pop(get_curated_registry)
@@ -203,6 +203,7 @@ def test_the_shipped_registry_lists_all_four_curated_protocols_in_authored_order
         "push-pull-legs",
         "tiered-linear-progression",
         "four-week-strength-waves",
+        "strength-running",
     ]
 
 
