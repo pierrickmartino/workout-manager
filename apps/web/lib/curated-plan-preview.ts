@@ -59,7 +59,7 @@ export interface CuratedPlanLine {
 }
 
 // A Session's Training Type and duration, shown only in a plan that mixes Training Types.
-export interface CuratedPlanSessionKind {
+export interface CuratedPlanSessionTypeAndDuration {
   trainingType: string;
   badgeVariant: TrainingTypeBadgeVariant;
   duration: string;
@@ -69,7 +69,7 @@ export interface CuratedPlanSessionView {
   key: string;
   heading: string;
   // `null` in a plan of one Training Type: the same badge on every Session would be noise.
-  kind: CuratedPlanSessionKind | null;
+  typeAndDuration: CuratedPlanSessionTypeAndDuration | null;
   lines: CuratedPlanLine[];
 }
 
@@ -88,7 +88,7 @@ function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
-function sessionKind(session: CuratedPlanSession): CuratedPlanSessionKind {
+function typeAndDuration(session: CuratedPlanSession): CuratedPlanSessionTypeAndDuration {
   return {
     trainingType: session.training_type,
     badgeVariant: trainingTypeBadgeVariant(session.training_type),
@@ -101,7 +101,7 @@ function sessionView(session: CuratedPlanSession, isMixed: boolean): CuratedPlan
   return {
     key,
     heading: `Day ${session.day} · ${session.title}`,
-    kind: isMixed ? sessionKind(session) : null,
+    typeAndDuration: isMixed ? typeAndDuration(session) : null,
     lines: session.prescriptions.map((prescription, index) => ({
       key: `${key}-${index}`,
       exercise: prescription.exercise_name,

@@ -105,7 +105,7 @@ test("a plan of one Training Type shows no per-Session type or duration", () => 
 
   // Assert
   assert.deepEqual(
-    sessions.map((session) => session.kind),
+    sessions.map((session) => session.typeAndDuration),
     [null, null, null, null],
   );
 });
@@ -148,12 +148,12 @@ test("a plan mixing Training Types shows each Session's type, its badge and its 
   const [lower, easyRun] = curatedPlanView(mixed).weeks[0].sessions;
 
   // Assert
-  assert.deepEqual(lower.kind, {
+  assert.deepEqual(lower.typeAndDuration, {
     trainingType: "strength",
     badgeVariant: "cyan",
     duration: "55 min",
   });
-  assert.deepEqual(easyRun.kind, {
+  assert.deepEqual(easyRun.typeAndDuration, {
     trainingType: "cardio",
     badgeVariant: "magenta",
     duration: "35 min",
