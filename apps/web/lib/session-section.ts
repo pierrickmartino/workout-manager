@@ -10,7 +10,9 @@
 // tests, like `scheme-preview` / `prescription-summary` — no React, no I/O. Signals: the
 // warm-up Set Type, name keywords for mobility / cardio / compound / isolation movements,
 // and position. It is a heuristic, honest about it: an unclaimed movement falls to
-// `accessory`, the neutral supporting-work bucket, never forced into main work.
+// `accessory`, the neutral supporting-work bucket, never forced into main work. A Superset
+// (ADR-0023) is one block: it takes one main-work slot when any member is compound, and all
+// its members share the group's strongest section (main > accessory > warm-up > cooldown).
 
 export type SessionSectionKey = "warm_up" | "main" | "accessory" | "cooldown";
 
@@ -28,12 +30,13 @@ export const SECTION_ORDER: readonly SessionSectionKey[] = [
 export const MAIN_WORK_LIMIT = 3;
 
 // The Prescription fields the classifier reads. A DraftPrescription satisfies this
-// structurally (exerciseName / setType / quantityKind), so the Builder passes its draft
-// rows straight in.
+// structurally (exerciseName / setType / quantityKind / supersetGroup), so the Builder passes
+// its draft rows straight in. `supersetGroup` is the Superset tag, `null`/absent when solo.
 export interface Sectionable {
   exerciseName: string;
   setType: string | null;
   quantityKind?: string | null;
+  supersetGroup?: string | null;
 }
 
 // Compound, multi-joint movements — the main-work candidates. Checked after isolation so
@@ -53,6 +56,15 @@ const ISOLATION_KEYWORDS = [
   "push-down", "shrug", "pec deck", "calf", "lateral", "rear delt", "reverse fly",
   "reverse flye", "cable cross", "crossover", "concentration", "preacher", "cuban",
   "pull-apart", "pull apart",
+];
+
+// Core / trunk — accessory on their own, like isolation, and checked before the compound
+// stems so "Pallof press" never reads as a main-work press. Inside a Superset they ride with
+// their group's section.
+const CORE_KEYWORDS = [
+  "hollow", "plank", "dead bug", "bird dog", "pallof", "l-sit", "l sit", "ab wheel",
+  "rollout", "crunch", "sit-up", "situp", "sit up", "v-up", "russian twist",
+  "side bend", "dragon flag", "toes to bar", "toes-to-bar",
 ];
 
 // Mobility / stretch — warm-up when leading a session, cooldown when trailing (position
@@ -120,10 +132,47 @@ function isCooldownLike(item: Sectionable): boolean {
   return containsAny(name, CARDIO_KEYWORDS) && isForTime(item.quantityKind);
 }
 
+// A compound (not isolation / core) work-block movement — main-work material.
+function isMainCandidate(item: Sectionable): boolean {
+  const name = normalize(item.exerciseName);
+  if (containsAny(name, ISOLATION_KEYWORDS) || containsAny(name, CORE_KEYWORDS)) {
+    return false;
+  }
+  return containsAny(name, COMPOUND_KEYWORDS);
+}
+
+// Split the ordered positions into units: a solo movement, or a contiguous Superset run.
+function units(items: readonly Sectionable[]): number[][] {
+  const result: number[][] = [];
+  items.forEach((item, index) => {
+    const group = item.supersetGroup ?? null;
+    const previous = result[result.length - 1];
+    if (
+      group !== null &&
+      previous !== undefined &&
+      (items[previous[previous.length - 1]].supersetGroup ?? null) === group
+    ) {
+      previous.push(index);
+    } else {
+      result.push([index]);
+    }
+  });
+  return result;
+}
+
+// Which section a split Superset settles on: the working part of the block wins.
+const UNIT_STRENGTH: Record<SessionSectionKey, number> = {
+  main: 3,
+  accessory: 2,
+  warm_up: 1,
+  cooldown: 0,
+};
+
 // Assign each Prescription in a Session, in order, to its Session Section (ADR-0074).
 // Warm-up is the leading run of prep material (or an explicit warm-up Set Type); cooldown
 // is the trailing run of down-regulation material; the work block between them is main work
-// for its first MAIN_WORK_LIMIT compound movements and accessory for the rest. Returns one
+// for its first MAIN_WORK_LIMIT compound movements and accessory for the rest. A Superset is
+// one unit: one main-work slot, and one shared section for all its members. Returns one
 // section per input, in input order.
 export function sectionize(items: readonly Sectionable[]): SessionSectionKey[] {
   const count = items.length;
@@ -148,23 +197,31 @@ export function sectionize(items: readonly Sectionable[]): SessionSectionKey[] {
     tail -= 1;
   }
 
-  // Work block: the first MAIN_WORK_LIMIT compound movements are main work; isolation is
-  // always accessory; anything else falls to accessory.
+  // Work block, unit by unit (a solo movement or a whole Superset): the first
+  // MAIN_WORK_LIMIT units holding a compound movement are main work; isolation, core and
+  // anything else fall to accessory.
+  const allUnits = units(items);
   let mainCount = 0;
-  for (let index = 0; index < count; index += 1) {
-    if (sections[index] !== null) continue;
-    const name = normalize(items[index].exerciseName);
-    if (containsAny(name, ISOLATION_KEYWORDS)) {
-      sections[index] = "accessory";
-    } else if (containsAny(name, COMPOUND_KEYWORDS) && mainCount < MAIN_WORK_LIMIT) {
-      sections[index] = "main";
-      mainCount += 1;
-    } else {
-      sections[index] = "accessory";
-    }
+  for (const unit of allUnits) {
+    const free = unit.filter((index) => sections[index] === null);
+    if (free.length === 0) continue;
+    const isMain =
+      mainCount < MAIN_WORK_LIMIT && free.some((index) => isMainCandidate(items[index]));
+    if (isMain) mainCount += 1;
+    for (const index of free) sections[index] = isMain ? "main" : "accessory";
   }
 
-  return sections.map((section) => section ?? "accessory");
+  // A Superset is one block: every member shares the group's strongest section.
+  const resolved = sections.map((section) => section ?? "accessory");
+  for (const unit of allUnits) {
+    const strongest = unit
+      .map((index) => resolved[index])
+      .reduce((best, section) =>
+        UNIT_STRENGTH[section] > UNIT_STRENGTH[best] ? section : best,
+      );
+    for (const index of unit) resolved[index] = strongest;
+  }
+  return resolved;
 }
 
 // One contiguous band of one Section, carrying the original positions of the Prescriptions

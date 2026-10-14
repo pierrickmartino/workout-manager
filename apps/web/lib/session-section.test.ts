@@ -168,3 +168,132 @@ test("sectionBands groups contiguous sections and preserves positions", () => {
     [[0], [1], [2], [3]],
   );
 });
+
+test("a Superset takes one section for all its members", () => {
+  // Arrange — a Superset is one block (ADR-0023): the unclaimed core hold rides with its
+  // compound partners instead of splitting off to accessory.
+  const items = [
+    ex("Pull-up", { supersetGroup: "A" }),
+    ex("Push-up", { supersetGroup: "A" }),
+    ex("Hollow Body Hold", { supersetGroup: "A" }),
+  ];
+
+  // Act
+  const result = sectionize(items);
+
+  // Assert
+  assert.deepEqual(result, ["main", "main", "main"]);
+});
+
+test("a Superset counts as one main-work slot", () => {
+  // Arrange
+  const items = [
+    ex("Back Squat"),
+    ex("Pull-up", { supersetGroup: "A" }),
+    ex("Push-up", { supersetGroup: "A" }),
+    ex("Hollow Body Hold", { supersetGroup: "A" }),
+    ex("Romanian Deadlift"),
+    ex("Bench Press"),
+  ];
+
+  // Act
+  const result = sectionize(items);
+
+  // Assert — squat, the Superset, and RDL fill the cap; bench is past it.
+  assert.deepEqual(result, ["main", "main", "main", "main", "main", "accessory"]);
+});
+
+test("a Superset with no compound member is accessory", () => {
+  // Arrange
+  const items = [
+    ex("Back Squat"),
+    ex("Bicep Curl", { supersetGroup: "A" }),
+    ex("Triceps Pushdown", { supersetGroup: "A" }),
+  ];
+
+  // Act
+  const result = sectionize(items);
+
+  // Assert
+  assert.deepEqual(result, ["main", "accessory", "accessory"]);
+});
+
+test("a Superset past the main-work cap is accessory as a whole", () => {
+  // Arrange
+  const items = [
+    ex("Back Squat"),
+    ex("Bench Press"),
+    ex("Romanian Deadlift"),
+    ex("Pull-up", { supersetGroup: "A" }),
+    ex("Hollow Body Hold", { supersetGroup: "A" }),
+  ];
+
+  // Act
+  const result = sectionize(items);
+
+  // Assert
+  assert.deepEqual(result.slice(3), ["accessory", "accessory"]);
+});
+
+test("a Superset straddling the warm-up takes its working section", () => {
+  // Arrange — a leading prep drill paired with a working lift: the work wins.
+  const items = [
+    ex("Arm Circles", { supersetGroup: "A" }),
+    ex("Push-up", { supersetGroup: "A" }),
+    ex("Bench Press"),
+  ];
+
+  // Act
+  const result = sectionize(items);
+
+  // Assert
+  assert.deepEqual(result, ["main", "main", "main"]);
+});
+
+test("an all-prep Superset stays warm-up", () => {
+  // Arrange
+  const items = [
+    ex("Arm Circles", { supersetGroup: "A" }),
+    ex("Leg Swings", { supersetGroup: "A" }),
+    ex("Back Squat"),
+  ];
+
+  // Act
+  const result = sectionize(items);
+
+  // Assert
+  assert.deepEqual(result, ["warm_up", "warm_up", "main"]);
+});
+
+test("core movements with a compound stem read as accessory", () => {
+  // Arrange — "Pallof Press" contains "press" but is anti-rotation core work.
+  const items = [ex("Pallof Press"), ex("Hollow Body Hold"), ex("Plank")];
+
+  // Act
+  const result = sectionize(items);
+
+  // Assert
+  assert.deepEqual(result, ["accessory", "accessory", "accessory"]);
+});
+
+test("sectionBands keeps a Superset whole inside one band", () => {
+  // Arrange
+  const items = [
+    ex("Pull-up", { supersetGroup: "A" }),
+    ex("Push-up", { supersetGroup: "A" }),
+    ex("Hollow Body Hold", { supersetGroup: "A" }),
+    ex("Bicep Curl"),
+  ];
+
+  // Act
+  const bands = sectionBands(items);
+
+  // Assert
+  assert.deepEqual(
+    bands.map((band) => [band.section, band.positions]),
+    [
+      ["main", [0, 1, 2]],
+      ["accessory", [3]],
+    ],
+  );
+});

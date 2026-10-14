@@ -148,7 +148,14 @@ export function SessionCompositionStrip({
   );
 
   if (exercises.length === 0) return null;
-  const bands = sectionBands(exercises);
+  // Section with each exercise's Superset tag from `layout`, so a group lands whole in one
+  // band — the same groups the editor brackets, whichever draft shape the caller passed.
+  const bands = sectionBands(
+    exercises.map((exercise, position) => ({
+      ...exercise,
+      supersetGroup: layout[position]?.group ?? null,
+    })),
+  );
 
   function onDragEnd(event: DragEndEvent) {
     const { active, over } = event;
