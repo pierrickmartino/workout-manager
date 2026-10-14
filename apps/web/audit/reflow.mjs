@@ -87,12 +87,15 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // side by side in a row. `curated-wave-unlogged` joins them with #694: the notice naming every
 // main lift still to log, which replaces that form. `handoff` joins them with ADR-0132: the AI
 // Hand-off sheet is a modal, so like `sheet` it exists only while open, and its preview is a
-// block of preformatted text that must wrap rather than scroll sideways.
+// block of preformatted text that must wrap rather than scroll sideways. `session-header` joins
+// them with ADR-0133: the Session detail's header, a Server Component's markup no journey
+// rendered, now holds the ⋯ on the overline's line and a meta line of badges and byline under an
+// authored title.
 const NOVEL_JOURNEYS = [
   "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc", "launchpad",
   "levels", "sheet", "protocols", "protocols-live", "set-aside", "passport", "passport-open",
   "passport-empty", "stamp", "stamp-locked", "stamp-record", "curated", "curated-adopt",
-  "based-on", "curated-wave-adopt", "curated-wave-unlogged", "handoff",
+  "based-on", "curated-wave-adopt", "curated-wave-unlogged", "handoff", "session-header",
 ];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and

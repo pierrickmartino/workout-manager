@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   canDeleteSessionRow,
+  favoriteActionDescription,
   favoriteActionLabel,
   recentSessionCardModel,
   sessionSummaryCardModel,
@@ -132,4 +133,9 @@ test("row Delete is offered only for a never-performed plan (Logged Count 0)", (
 test("the Favorite action label reflects the current marker", () => {
   assert.equal(favoriteActionLabel(false), "Favorite session");
   assert.equal(favoriteActionLabel(true), "Unfavorite session");
+});
+
+test("the Favorite action description says where the marker shows, for each state", () => {
+  assert.equal(favoriteActionDescription(false), "Show it under Favorites in My Sessions");
+  assert.equal(favoriteActionDescription(true), "Take it out of Favorites in My Sessions");
 });

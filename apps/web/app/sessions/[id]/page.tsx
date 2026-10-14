@@ -6,7 +6,8 @@ import { ArrowRight, ClipboardCheck, Pencil, Play } from "@/components/pulse/ico
 import { SubstituteButton } from "@/components/SubstituteButton";
 import { DuplicateButton } from "@/components/DuplicateButton";
 import { RenameSessionControl } from "@/components/RenameSessionControl";
-import { FavoriteSessionControl } from "@/components/FavoriteSessionControl";
+import { SessionActionsSheet } from "@/components/SessionActionsSheet";
+import { SessionDetailHeader } from "@/components/SessionDetailHeader";
 import { ShareSessionControl } from "@/components/ShareSessionControl";
 import { DeleteSessionControl } from "@/components/DeleteSessionControl";
 import { AddExerciseButton } from "@/components/AddExerciseButton";
@@ -47,10 +48,8 @@ import { sessionDeleteView, DELETE_DISABLED_HINT } from "@/lib/session-delete";
 import { sessionEditView } from "@/lib/session-edit";
 import { submitDeleteSession } from "@/app/sessions/[id]/actions";
 import { appendFrom } from "@/lib/back-target";
-import { PageHeader } from "@/components/pulse/page-header";
 import { Skeleton } from "@/components/pulse/skeleton";
 import { SkeletonReveal } from "@/components/pulse/skeleton-reveal";
-import { WorkoutSigil } from "@/components/pulse/workout-sigil";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { DataList } from "@/components/pulse/data-list";
 import { Card } from "@/components/ui/card";
@@ -90,10 +89,10 @@ export default async function SessionPage({
   // from the per-movement AI-GENERATED Provenance badges (who made it vs. how it was made).
   const authorView = sessionAuthorView(session);
 
-  // The Favorite toggle state (GLOSSARY: Favorite, issue #396): whether this standalone Session is
-  // favorited, and whether to show the toggle at all. Withheld on a Protocol member (the server
+  // The Favorite state (GLOSSARY: Favorite, issue #396): whether this standalone Session is
+  // favorited, and whether to offer the toggle at all. Withheld on a Protocol member (the server
   // sends `null`), where `show` is false — Favorite is a standalone-only concept, like the Session
-  // Name — so the control is hidden alongside Rename below.
+  // Name — so the sheet has no Favorite row there, alongside the withheld Rename.
   const favoriteView = sessionFavoriteView(session);
 
   // The Delete control state (GLOSSARY: Delete, ADR-0063): whether to show Delete at all
@@ -125,120 +124,79 @@ export default async function SessionPage({
 
   return (
     <section className="flex flex-col gap-7">
-      <PageHeader
-        overline="PULSE // SESSION"
-        title={
-          <span className="flex items-center gap-3">
-            {/* The Workout Signature mark (GLOSSARY: Workout Signature): the Session's recognizable
-                sigil, keyed on its id so it matches the mark shown for this Session on Home, My
-                Sessions, and Train. Fill hue by Training Type, beside the type badge on the right. */}
-            <WorkoutSigil
-              seedId={session.id}
-              exerciseCount={session.prescriptions.length}
-              trainingType={session.training_type}
-              size={48}
-              morphSessionId={session.id}
-            />
-            <span className="min-w-0">{nameView.displayName}</span>
-          </span>
-        }
-        action={
-          <div className="flex items-center gap-2">
-            <Badge variant="magenta" className="capitalize">
-              {session.training_type}
-            </Badge>
-            <Badge variant="cyan">{session.duration_minutes} MIN</Badge>
-          </div>
+      <SessionDetailHeader
+        session={session}
+        displayName={nameView.displayName}
+        authorView={authorView}
+        isFavorite={favoriteView.isFavorite}
+        menu={
+          // The ⋯ action sheet, pinned top right on the overline's line (ADR-0133). Favorite is its
+          // first row; the rare and destructive actions (Rename, Share, Duplicate, Generate
+          // another, Delete) follow, one tap behind it, so the primary Start / Log verbs dominate
+          // the page (docs/redesign-ia.md, ADR-0071, ADR-0113). Each control is standalone-only
+          // unless noted; on a Protocol member the sheet holds only "Generate another".
+          <SessionActionsSheet
+            sessionId={session.id}
+            // Favorite (issue #396): a stored, per-user, per-copy preference used to filter My
+            // Sessions. No row on a Protocol member (`favoriteView.show` is false, the server
+            // withholds the marker).
+            isFavorite={favoriteView.show ? favoriteView.isFavorite : null}
+          >
+            {/* Rename (issue #394): name, rename, or clear the Session Name on a standalone Session. */}
+            {session.is_protocol_member ? null : (
+              <RenameSessionControl
+                sessionId={session.id}
+                displayName={nameView.displayName}
+                isUserNamed={nameView.isUserNamed}
+                editValue={nameView.editValue}
+              />
+            )}
+            {/* Share (ADR-0057, issue #398): publish a revocable Share Link another user can Redeem
+                into their own independent copy. Standalone-only. */}
+            {session.is_protocol_member ? null : (
+              <ShareSessionControl sessionId={session.id} />
+            )}
+            {/* Duplicate is withheld on a Protocol member (ADR-0043 consequence): lifting one
+                workout out of a plan the user is working through has no value. It stays on
+                standalone Sessions, where forking a separate editable copy is the actual intent. */}
+            {session.is_protocol_member ? null : (
+              <DuplicateButton sessionId={session.id} />
+            )}
+            {/* Generate another standalone Session — a periodic action, not a per-session verb. */}
+            <Link
+              {...NAV_FORWARD}
+              href={appendFrom("/sessions/new", `/sessions/${session.id}`)}
+              className={actionSheetItemClass()}
+            >
+              <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+              <ActionSheetItemText
+                label="Generate another"
+                description="Ask for a new standalone session"
+              />
+            </Link>
+            {/* Delete (GLOSSARY: Delete, ADR-0063): permanently remove this standalone Session,
+                offered only when it has no logged training. Shown disabled, with the reason as its
+                description, when the Session has been performed (deleteView.canDelete false);
+                hidden entirely on a Protocol member or a read that omits the Logged Count
+                (deleteView.show false). Last in the sheet, below a rule — the one destructive
+                action, and a two-step confirm deeper than the rest. */}
+            {deleteView.show ? (
+              <>
+                <ActionSheetSeparator />
+                <DeleteSessionControl
+                  sessionId={session.id}
+                  action={submitDeleteSession}
+                  disabledHint={deleteView.canDelete ? null : DELETE_DISABLED_HINT}
+                />
+              </>
+            ) : null}
+          </SessionActionsSheet>
         }
       />
-
-      {/* Author (issue #395): credit the human who first created this plan, "by <name>". Quiet
-          secondary text so it reads as attribution, kept visually distinct from the magenta
-          AI-GENERATED Provenance badges on each movement (who made it vs. how it was made). A
-          generic-label fallback (unnamed author) is shown muted/italic to read as a placeholder.
-          Suppressed when the Author is the viewer (`showByline`): the byline is provenance, not a
-          "by <you>" on every one of your own plans. */}
-      {authorView.showByline ? (
-        <p
-          className={`-mt-4 font-sans text-[13px] ${
-            authorView.isNamed ? "text-text-secondary" : "text-text-muted italic"
-          }`}
-        >
-          {authorView.byline}
-        </p>
-      ) : null}
 
       {/* Curated lineage (ADR-0130, #688): "Based on <name>" for a plan adopted from a Curated
           Protocol, kept through Duplicate and Redeem; nothing otherwise. */}
       <BasedOnNote lineage={session.curated_lineage} />
-
-      {/* Header controls. Favorite — a frequent, cheap toggle — stays visible; the rare and
-          destructive actions (Rename, Share, Duplicate, Generate another, Delete) sit one tap
-          behind a ⋯ icon beside it, in an action sheet, so the primary Start / Log verbs
-          dominate the page (docs/redesign-ia.md, ADR-0071, ADR-0113). Each control is
-          standalone-only unless noted; on a Protocol member the sheet holds only "Generate
-          another". */}
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Favorite (issue #396): mark/unmark this standalone Session as a Favorite — a stored,
-            per-user, per-copy preference used to filter My Sessions. Hidden here on a Protocol
-            member (`favoriteView.show` is false, the server withholds the marker). */}
-        {favoriteView.show ? (
-          <FavoriteSessionControl
-            sessionId={session.id}
-            isFavorite={favoriteView.isFavorite}
-          />
-        ) : null}
-        <ActionSheet label="Session actions" title="Session actions">
-          {/* Rename (issue #394): name, rename, or clear the Session Name on a standalone Session. */}
-          {session.is_protocol_member ? null : (
-            <RenameSessionControl
-              sessionId={session.id}
-              displayName={nameView.displayName}
-              isUserNamed={nameView.isUserNamed}
-              editValue={nameView.editValue}
-            />
-          )}
-          {/* Share (ADR-0057, issue #398): publish a revocable Share Link another user can Redeem
-              into their own independent copy. Standalone-only. */}
-          {session.is_protocol_member ? null : (
-            <ShareSessionControl sessionId={session.id} />
-          )}
-          {/* Duplicate is withheld on a Protocol member (ADR-0043 consequence): lifting one
-              workout out of a plan the user is working through has no value. It stays on
-              standalone Sessions, where forking a separate editable copy is the actual intent. */}
-          {session.is_protocol_member ? null : (
-            <DuplicateButton sessionId={session.id} />
-          )}
-          {/* Generate another standalone Session — a periodic action, not a per-session verb. */}
-          <Link
-            {...NAV_FORWARD}
-            href={appendFrom("/sessions/new", `/sessions/${session.id}`)}
-            className={actionSheetItemClass()}
-          >
-            <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
-            <ActionSheetItemText
-              label="Generate another"
-              description="Ask for a new standalone session"
-            />
-          </Link>
-          {/* Delete (GLOSSARY: Delete, ADR-0063): permanently remove this standalone Session, offered
-              only when it has no logged training. Shown disabled, with the reason as its
-              description, when the Session has been performed (deleteView.canDelete false); hidden
-              entirely on a Protocol member or a read that omits the Logged Count (deleteView.show
-              false). Last in the sheet, below a rule — the one destructive action, and a two-step
-              confirm deeper than the rest. */}
-          {deleteView.show ? (
-            <>
-              <ActionSheetSeparator />
-              <DeleteSessionControl
-                sessionId={session.id}
-                action={submitDeleteSession}
-                disabledHint={deleteView.canDelete ? null : DELETE_DISABLED_HINT}
-              />
-            </>
-          ) : null}
-        </ActionSheet>
-      </div>
 
       <div className="flex flex-col gap-4">
         <SectionHeader meta={`${session.prescriptions.length} EXERCISES`}>
