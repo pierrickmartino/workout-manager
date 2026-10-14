@@ -261,11 +261,13 @@ function SheetSurface() {
 // The AI Hand-off sheet (ADR-0132), a modal like `sheet`, so no other journey mounts it. The
 // record is the worst case for wrapping: an ended-early session whose exercise name and Set Note
 // are long, beside every mark a set line can carry (warm-up, a bodyweight Load with the body
-// weight it needs, an Effort).
+// weight it needs, an Effort), for a user with a Sensitive Constraint, so the caveat and the
+// level line render too.
 function HandoffSurface() {
   const record = history(1)[0];
   const handoff = aiHandoff({
     unit: "kg",
+    profile: { fitness_levels: { [record.training_type]: 6 }, is_sensitive: true },
     record: {
       ...record,
       completion_outcome: "incomplete",

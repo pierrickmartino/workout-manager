@@ -4,8 +4,13 @@ import { useState } from "react";
 import { Copy, Share2 } from "@/components/pulse/icons";
 
 import { ActionSheetPanel } from "@/components/pulse/action-sheet";
+import { Alert } from "@/components/pulse/alert";
 import { Button } from "@/components/ui/button";
-import { AI_HANDOFF_DISCLOSURE, type AiHandoff } from "@/lib/ai-handoff";
+import {
+  AI_HANDOFF_DISCLOSURE,
+  AI_HANDOFF_SENSITIVE_CAVEAT,
+  type AiHandoff,
+} from "@/lib/ai-handoff";
 import {
   copyHandoff,
   handoffResultMessage,
@@ -20,7 +25,8 @@ interface AiHandoffControlProps {
 }
 
 // The "Send to an AI" control on a Logged Session's detail page (ADR-0132). It opens a bottom
-// sheet with the full, read-only, selectable text, the permanent disclosure line, and Send / Copy.
+// sheet with the full, read-only, selectable text, the permanent disclosure line, the
+// Sensitive-Constraint caveat when it applies, and Send / Copy.
 // Thin by design: the text comes from `lib/ai-handoff.ts` and what a tap does from
 // `lib/ai-handoff-send.ts`. Nothing is stored, logged or sent by the app itself.
 export function AiHandoffControl({ handoff }: AiHandoffControlProps): React.JSX.Element {
@@ -72,6 +78,11 @@ export function AiHandoffSheet({ handoff, onClose }: AiHandoffSheetProps): React
         <p className="font-sans text-[13px] leading-relaxed text-text-secondary">
           {AI_HANDOFF_DISCLOSURE}
         </p>
+        {/* The Sensitive-Constraint caveat (ADR-0132, ADR-0058's precedent): mandatory and
+            undismissable, shown with the sheet rather than announced, and never in the text. */}
+        {handoff.showSensitiveCaveat ? (
+          <Alert tone="error">{AI_HANDOFF_SENSITIVE_CAVEAT}</Alert>
+        ) : null}
         <pre
           aria-label="Text to send"
           className="select-text whitespace-pre-wrap break-words rounded-sm border border-border bg-base/40 p-3 font-mono text-[12px] leading-relaxed text-text-primary"
