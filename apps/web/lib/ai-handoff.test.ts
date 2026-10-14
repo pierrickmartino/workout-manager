@@ -7,6 +7,7 @@ import {
   AI_HANDOFF_SENSITIVE_CAVEAT,
 } from "./ai-handoff.ts";
 import type { LoggedSession, LoggedSet } from "./logs-types.ts";
+import type { Profile } from "./profile-types.ts";
 import type { ExercisePrescription } from "./sessions-types.ts";
 
 // The AI Hand-off (ADR-0132) turns one Logged Session into the plain text a user previews and
@@ -519,6 +520,8 @@ test("the top of the reps-in-reserve scale reads as five or more", () => {
 
 // A read profile: the Declared Fitness Levels and the derived sensitivity flag, plus the
 // constraint text itself, which must never reach the hand-off.
+type HandoffProfileFixture = Pick<Profile, "fitness_levels" | "is_sensitive" | "sensitive_constraints">;
+
 function profile(overrides: Partial<HandoffProfileFixture> = {}): HandoffProfileFixture {
   return {
     fitness_levels: {},
@@ -526,12 +529,6 @@ function profile(overrides: Partial<HandoffProfileFixture> = {}): HandoffProfile
     sensitive_constraints: [],
     ...overrides,
   };
-}
-
-interface HandoffProfileFixture {
-  fitness_levels: Record<string, number>;
-  is_sensitive: boolean;
-  sensitive_constraints: string[];
 }
 
 test("a declared level for the record’s Training Type adds a self-rated context line", () => {
@@ -594,15 +591,24 @@ test("a user with a Sensitive Constraint gets the caveat, and their constraints 
 });
 
 test("a user without a Sensitive Constraint gets no caveat", () => {
-  const handoff = aiHandoff({ record: record({}), unit: "kg", profile: profile() });
+  // Arrange
+  const unconstrained = profile({ fitness_levels: { strength: 6 } });
 
+  // Act
+  const handoff = aiHandoff({ record: record({}), unit: "kg", profile: unconstrained });
+
+  // Assert
   assert.equal(handoff.showSensitiveCaveat, false);
 });
 
 test("the caveat says constraints are left out, the AI doesn’t know them, and the clinician comes first", () => {
-  assert.match(AI_HANDOFF_SENSITIVE_CAVEAT, /doesn’t include your health constraints/);
-  assert.match(AI_HANDOFF_SENSITIVE_CAVEAT, /doesn’t know about them/);
-  assert.match(AI_HANDOFF_SENSITIVE_CAVEAT, /clinician’s advice comes first/);
+  // Arrange / Act: the copy is a constant the sheet renders as is.
+  const caveat = AI_HANDOFF_SENSITIVE_CAVEAT;
+
+  // Assert
+  assert.match(caveat, /doesn’t include your health constraints/);
+  assert.match(caveat, /doesn’t know about them/);
+  assert.match(caveat, /clinician’s advice comes first/);
 });
 
 test("an unread profile still hands off, without the level line, and shows the caveat anyway", () => {

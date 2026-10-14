@@ -38,7 +38,8 @@ clipboard. We never call a third party on their behalf, and nothing is stored.
 - **Sensitive Constraints never go in automatically, and the caveat is mandatory.** For a
   user with any Sensitive Constraint, the sheet always says the text does not include
   their health constraints, the outside AI doesn't know about them, and their clinician's
-  advice comes first.
+  advice comes first. When the profile can't be read, the caveat shows anyway: an unread
+  profile can't rule a Sensitive Constraint out, so the hand-off fails safe.
 - **A read-time projection.** The text is built in the web app from data the detail page
   already holds (ADR-0018 style). There is no endpoint, no stored copy and no usage log.
 
