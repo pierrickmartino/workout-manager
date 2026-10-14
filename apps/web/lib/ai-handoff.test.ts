@@ -6,26 +6,14 @@ import {
   AI_HANDOFF_DISCLOSURE,
   AI_HANDOFF_SENSITIVE_CAVEAT,
 } from "./ai-handoff.ts";
-import type { LoggedSession, LoggedSet } from "./logs-types.ts";
+import { record, set } from "./ai-handoff.fixtures.ts";
+import type { LoggedSet } from "./logs-types.ts";
 import type { Profile } from "./profile-types.ts";
 import type { ExercisePrescription } from "./sessions-types.ts";
 
 // The AI Hand-off (ADR-0132) turns one Logged Session into the plain text a user previews and
 // sends to an outside assistant. These fixtures assert on the produced text only: what appears,
 // what doesn't, in what order and with what wording.
-
-function set(overrides: Partial<LoggedSet>): LoggedSet {
-  return {
-    position: 1,
-    quantity: { kind: "repetitions", text: "8", count: 8 },
-    load: { kind: "absolute", text: "100 kg", kg: 100 },
-    perceived_difficulty: null,
-    exercise_id: 1,
-    exercise_name: "Bench Press",
-    body_weight_kg: null,
-    ...overrides,
-  };
-}
 
 // A plan prescribing the given exercises, one Exercise Prescription per id.
 function plan(exerciseIds: number[]): { prescriptions: ExercisePrescription[] } {
@@ -44,20 +32,6 @@ function plan(exerciseIds: number[]): { prescriptions: ExercisePrescription[] } 
       required_equipment: [],
       provenance: "generated",
     })),
-  };
-}
-
-function record(overrides: Partial<LoggedSession>): LoggedSession {
-  return {
-    id: 7,
-    clerk_user_id: "u1",
-    session_id: null,
-    training_type: "strength",
-    performed_on: "2026-06-20",
-    completion_outcome: null,
-    duration_seconds: null,
-    logged_sets: [],
-    ...overrides,
   };
 }
 

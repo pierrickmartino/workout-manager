@@ -112,6 +112,9 @@ class SessionView:
     # no value there (Q2); Duplicate stays on standalone Sessions and the endpoint is
     # unchanged. A read-time fact off the linkage, never a stored flag.
     is_protocol_member: bool = False
+    # The plan's objective (ADR-0132): the Protocol's objective, stored on a Protocol-member
+    # Session row; ``None`` for a standalone Session. The AI Hand-off states it as context.
+    objective: str | None = None
     # The viewing owner's Favorite marker on this Session (GLOSSARY: Favorite, issue #396) —
     # a **stored, per-user, per-copy** preference resolved through the ``FavoriteRepository``
     # seam for the owner of this read (every ``_view`` is built for the owner). ``False`` for
@@ -532,6 +535,7 @@ class SqlSessionRepository:
             has_been_regenerated=workout.has_been_regenerated,
             provenance=workout.provenance,
             is_protocol_member=workout.protocol_id is not None,
+            objective=workout.objective,
             name=workout.name,
             created_at=workout.created_at,
             author_clerk_user_id=workout.author_clerk_user_id,
@@ -990,6 +994,7 @@ class InMemorySessionRepository:
             has_been_regenerated=workout.has_been_regenerated,
             provenance=workout.provenance,
             is_protocol_member=workout.protocol_id is not None,
+            objective=workout.objective,
             name=workout.name,
             created_at=workout.created_at,
             author_clerk_user_id=workout.author_clerk_user_id,

@@ -19,7 +19,7 @@ import { formatPace, formatQuantity, type Quantity } from "./quantity.ts";
 import { setNoteText } from "./note-view.ts";
 import { resolveSetType, type SetType } from "./set-type-view.ts";
 import type { LoggedSession, LoggedSet } from "./logs-types.ts";
-import type { WorkoutSession } from "./sessions-types.ts";
+import type { ExercisePrescription, WorkoutSession } from "./sessions-types.ts";
 import type { WeightUnit } from "./weight-unit.ts";
 import type { Profile } from "./profile-types.ts";
 
@@ -46,10 +46,10 @@ export interface AiHandoffInput {
   record: LoggedSession;
   // The reader's Weight Unit, so every Load reads in kg or lb.
   unit: WeightUnit;
-  // The source plan, for a plan-backed record whose plan could be read; absent otherwise. This
-  // slice reads only how many exercises it prescribes — the "M" of "Ended early: N of M
-  // exercises done".
-  plan?: Pick<WorkoutSession, "prescriptions"> | null;
+  // The source plan, for a plan-backed record whose plan could be read; absent otherwise, and
+  // the text is then record-only. Its prescriptions become the *Prescribed* block (and the "M"
+  // of "Ended early: N of M exercises done"); its objective, the plan-goal line.
+  plan?: Pick<WorkoutSession, "prescriptions" | "objective"> | null;
   // The reader's Fitness Profile; null or absent when it could not be read.
   // Only the Declared Fitness Levels and the sensitivity flag are read from it: Sensitive
   // Constraint text never is, and the Effective Fitness Level is not part of a Profile at all.
@@ -122,32 +122,40 @@ function sessionDurationWords(totalSeconds: number | null): string | null {
   return timeWords(totalMinutes * SECONDS_PER_MINUTE);
 }
 
-// One exercise of the record, with its sets in performed order.
-interface PerformedExercise {
+// One exercise and its items (Logged Sets, or Exercise Prescriptions) in order.
+interface ExerciseGroup<T> {
   exerciseId: number;
   name: string;
-  sets: LoggedSet[];
+  items: T[];
 }
 
-// The exercises a record performed, in first-performed order, each with its sets in order.
-function exercisesInPerformedOrder(sets: readonly LoggedSet[]): PerformedExercise[] {
-  const ordered = [...sets].sort((a, b) => a.position - b.position);
-  const groups = new Map<number, PerformedExercise>();
-  for (const loggedSet of ordered) {
-    const group = groups.get(loggedSet.exercise_id);
-    groups.set(loggedSet.exercise_id, {
-      exerciseId: loggedSet.exercise_id,
-      name: group?.name ?? loggedSet.exercise_name,
-      sets: [...(group?.sets ?? []), loggedSet],
+// One exercise of the record, with its sets in performed order.
+type PerformedExercise = ExerciseGroup<LoggedSet>;
+
+// One exercise of the plan, with its prescriptions in plan order.
+type PrescribedExercise = ExerciseGroup<ExercisePrescription>;
+
+// Items grouped by exercise, in order of each exercise's first position, each group's items in
+// position order. Matching between plan and record is by exercise, so both sides group this way.
+function groupByExercise<T extends { position: number; exercise_id: number; exercise_name: string }>(
+  items: readonly T[],
+): ExerciseGroup<T>[] {
+  const ordered = [...items].sort((a, b) => a.position - b.position);
+  const groups = new Map<number, ExerciseGroup<T>>();
+  for (const item of ordered) {
+    const group = groups.get(item.exercise_id);
+    groups.set(item.exercise_id, {
+      exerciseId: item.exercise_id,
+      name: group?.name ?? item.exercise_name,
+      items: [...(group?.items ?? []), item],
     });
   }
   return [...groups.values()];
 }
 
-// The distinct exercises a plan prescribes, or null when there is no plan.
-function plannedExerciseIds(plan: AiHandoffInput["plan"]): ReadonlySet<number> | null {
-  if (plan == null) return null;
-  return new Set(plan.prescriptions.map((prescription) => prescription.exercise_id));
+// The distinct exercises of some grouped items.
+function exerciseIds(groups: readonly ExerciseGroup<unknown>[]): ReadonlySet<number> {
+  return new Set(groups.map((group) => group.exerciseId));
 }
 
 // The Completion Outcome in plain words, or null when the record declares none (an ad-hoc log).
@@ -186,6 +194,14 @@ function contextLine(
   const level = profile?.fitness_levels[trainingType];
   if (level === undefined) return null;
   return `Context: self-rated ${level}/10 at ${trainingTypeWords(trainingType)}.`;
+}
+
+// The plan-goal line: the source plan's objective, or null when there is no plan or it states
+// none. A trailing full stop in the stored text is dropped so the line ends with exactly one.
+function objectiveLine(plan: AiHandoffInput["plan"]): string | null {
+  const objective = plan?.objective?.trim().replace(/\.+$/, "");
+  if (!objective) return null;
+  return `Plan goal: ${objective}.`;
 }
 
 // A distance in words: as logged, then its time and pace when a time was logged with it
@@ -263,14 +279,74 @@ function setLine(
   return note === null ? `- ${label}: ${details}` : `- ${label}: ${details}. Note: “${note}”`;
 }
 
+// A free-text rep target that is only a count or a range ("8", "8-12"), so it needs "reps".
+const BARE_REP_TARGET = /^\d+(?:\s*[-–]\s*\d+)?$/;
+
+// A prescription's amount in words: its typed Prescribed Quantity when it carries one, else its
+// free-text target, with a bare count or range read as reps ("8-12" → "8-12 reps").
+function prescribedAmountWords(
+  prescribed: ExercisePrescription,
+  trainingType: string,
+): string | null {
+  const typed = quantityWords(prescribed.prescribed_quantity ?? null, trainingType);
+  if (typed !== null) return typed;
+  const reps = prescribed.reps.trim();
+  if (reps === "") return null;
+  return BARE_REP_TARGET.test(reps) ? `${reps} reps` : reps;
+}
+
+// One prescription as a line: its sets, then the amount, Load and target Effort it asks for.
+function prescriptionLine(
+  prescribed: ExercisePrescription,
+  unit: WeightUnit,
+  trainingType: string,
+): string {
+  const mark = SET_TYPE_WORDS[resolveSetType(prescribed.set_type)];
+  const sets = plural(prescribed.sets, "set", "sets");
+  const label = mark === null ? sets : `${sets} (${mark})`;
+  const amount = prescribedAmountWords(prescribed, trainingType);
+  const load = prescribed.recommended_load == null
+    ? null
+    : loadWords(prescribed.recommended_load, unit);
+  const target = effortWords(prescribed.target_effort ?? null);
+  const details = joinPresent(
+    [joinPresent([amount, load], " @ ") || null, target === null ? null : `target ${target}`],
+    ", ",
+  );
+  return details === "" ? `- ${label}` : `- ${label}: ${details}`;
+}
+
+// An exercise's heading line, with a plain mark when it has no counterpart in the other block.
+function exerciseHeading(name: string, matched: boolean, unmatchedMark: string): string {
+  return matched ? name : `${name} (${unmatchedMark})`;
+}
+
+// The *Prescribed* block: what the plan asked for, kept apart from what was done. Matching is by
+// exercise: a prescribed exercise with no performed sets is marked as not done.
+function prescribedBlock(
+  prescribed: readonly PrescribedExercise[],
+  performedExerciseIds: ReadonlySet<number>,
+  unit: WeightUnit,
+  trainingType: string,
+): string {
+  const lines = prescribed.flatMap((exercise) => [
+    exerciseHeading(exercise.name, performedExerciseIds.has(exercise.exerciseId), "not done"),
+    ...exercise.items.map((prescription) => prescriptionLine(prescription, unit, trainingType)),
+  ]);
+  return ["Prescribed:", ...lines].join("\n");
+}
+
+// The *Performed* block: what was done. With a plan, an exercise it didn't prescribe (a
+// substitute or an extra) is marked as not in the plan; without one, nothing is marked.
 function performedBlock(
   performed: readonly PerformedExercise[],
+  planned: ReadonlySet<number> | null,
   unit: WeightUnit,
   trainingType: string,
 ): string {
   const lines = performed.flatMap((exercise) => [
-    exercise.name,
-    ...exercise.sets.map((loggedSet, index) => setLine(loggedSet, index, unit, trainingType)),
+    exerciseHeading(exercise.name, planned?.has(exercise.exerciseId) ?? true, "not in the plan"),
+    ...exercise.items.map((loggedSet, index) => setLine(loggedSet, index, unit, trainingType)),
   ]);
   return ["Performed:", ...lines].join("\n");
 }
@@ -282,13 +358,30 @@ export function aiHandoff({
   plan = null,
   profile = null,
 }: AiHandoffInput): AiHandoff {
-  const performed = exercisesInPerformedOrder(record.logged_sets);
-  const outcome = outcomeWords(record.completion_outcome, performed, plannedExerciseIds(plan));
-  const text = [
-    AI_HANDOFF_LEAD_IN,
-    joinPresent([sessionLine(record, outcome), contextLine(profile, record.training_type)], "\n"),
-    performedBlock(performed, unit, record.training_type),
-  ].join("\n\n");
+  const performed = groupByExercise(record.logged_sets);
+  // A plan that couldn't be read hands off record-only; one with no prescriptions has no block.
+  const prescribed = plan === null ? null : groupByExercise(plan.prescriptions);
+  const planned = prescribed === null ? null : exerciseIds(prescribed);
+  const outcome = outcomeWords(record.completion_outcome, performed, planned);
+  const header = joinPresent(
+    [
+      sessionLine(record, outcome),
+      objectiveLine(plan),
+      contextLine(profile, record.training_type),
+    ],
+    "\n",
+  );
+  const text = joinPresent(
+    [
+      AI_HANDOFF_LEAD_IN,
+      header,
+      prescribed === null || prescribed.length === 0
+        ? null
+        : prescribedBlock(prescribed, exerciseIds(performed), unit, record.training_type),
+      performedBlock(performed, planned, unit, record.training_type),
+    ],
+    "\n\n",
+  );
   // An unread profile cannot rule a Sensitive Constraint out, so the caveat shows (fail safe).
   return { text, showSensitiveCaveat: profile?.is_sensitive ?? true };
 }
