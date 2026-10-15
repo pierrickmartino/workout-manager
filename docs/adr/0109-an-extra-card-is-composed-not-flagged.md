@@ -136,3 +136,45 @@ flag, so it doesn't conflict with the rule above. The launchpad doesn't choose b
 the choices it is given, each as an equal primary CTA, and they still differ from `LAUNCH_LINK`.
 The heading follows the choices (`launchpadHeading`): a human-written Curated Protocol is not
 filed under "AI protocols". The test file holds the three compositions.
+
+## Amendment: Build and Log sit side by side on TRAIN
+
+The TRAIN launchpad now lays its two composed links out the way Home's quick-action row lays
+out the same two intents (ADR-0071): one row, two equal columns. The row is `LaunchLinkPair`, a
+layout-only wrapper exported beside the links, and TRAIN composes it explicitly:
+
+```tsx
+<GenerateTrainingLaunchpad eyebrow="TRAIN // START SOMETHING NEW" from="/train">
+  <LaunchLinkPair>
+    <BuildWorkoutLink />
+    <LogPastWorkoutLink />
+  </LaunchLinkPair>
+</GenerateTrainingLaunchpad>
+```
+
+This supersedes two claims above.
+
+- **"Not inside a wrapper".** The wrapper's job was ruled out because a nested stack would add a
+  second gap. `LaunchLinkPair` is `grid grid-cols-2 gap-2.5`, so it is one row of the stack and
+  uses the stack's own gap between its columns. The test now holds that shape: two links and one
+  grid row, with two links inside that row. It also still holds the rule that every secondary
+  link carries the same class string. Composition is unchanged: the caller still writes the
+  links it offers, and no flag selects between renderings.
+- **"The names mirror the labels".** At half width the labels follow Home and become "Build" and
+  "Log". A 320px viewport leaves each chip 110px, which "Log a past workout" cannot fit on one
+  line. This removes the on-screen "workout" that the GLOSSARY divergence note above describes.
+  The divergence now survives only in the export names `BuildWorkoutLink` and
+  `LogPastWorkoutLink`. Those are private identifiers, so retiring them earns no terminology-guard
+  entry (CLAUDE.md). They are kept so this change stays a layout change.
+
+Measured on the `launchpad` journey, read from the DOM:
+
+| Viewport | Each chip | `document.scrollWidth` |
+| --- | --- | --- |
+| 320px | 110×44 | 320 |
+| 320px at 200% text | 66×88 | 320 |
+| 1440px | 182×44 | 1440 |
+
+At 200% text the two short labels need 86px of height, so they no longer spill out of `h-11` the
+way the sentence labels did. The pre-existing spill on the other buttons, recorded above, is
+unchanged.

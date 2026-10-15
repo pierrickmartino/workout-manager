@@ -5,6 +5,7 @@ import { LayoutGrid, LibraryBig, ListChecks } from "@/components/pulse/icons";
 import {
   BuildWorkoutLink,
   GenerateTrainingLaunchpad,
+  LaunchLinkPair,
   LogPastWorkoutLink,
 } from "@/components/pulse/generate-training-launchpad";
 import { PageHeader } from "@/components/pulse/page-header";
@@ -41,10 +42,13 @@ export default function TrainPage(): React.JSX.Element {
         by hand to run later, or log a past workout you did yourself, no AI.
       </p>
       {/* The two no-AI entry points are composed here rather than selected by flags: this page
-          offers both, and Home's empty state offers neither (ADR-0109). */}
+          offers both, and Home's empty state offers neither (ADR-0109). They sit side by side,
+          as Build and Log do in Home's quick-action row (ADR-0071). */}
       <GenerateTrainingLaunchpad eyebrow="TRAIN // START SOMETHING NEW" from="/train">
-        <BuildWorkoutLink />
-        <LogPastWorkoutLink />
+        <LaunchLinkPair>
+          <BuildWorkoutLink />
+          <LogPastWorkoutLink />
+        </LaunchLinkPair>
       </GenerateTrainingLaunchpad>
 
       {/* Pick up where you left off: the user's up-to-five most-recently-performed standalone

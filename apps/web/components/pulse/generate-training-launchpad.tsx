@@ -30,16 +30,16 @@ interface GenerateTrainingLaunchpadProps {
   // (`homeProtocolChoices`, ADR-0130). Omitted → the one "Generate a protocol" link.
   protocolChoices?: readonly ProtocolChoice[];
   // Extra entry points, rendered after the protocol and workout links in the same stack.
-  // The TRAIN launchpad composes `BuildWorkoutLink` and `LogPastWorkoutLink` here; the
-  // Home empty state composes nothing, since Home's quick-action row already carries
-  // Build and Log (ADR-0071). This used to be a `showBuild` /
+  // The TRAIN launchpad composes `BuildWorkoutLink` and `LogPastWorkoutLink` here, side by
+  // side in a `LaunchLinkPair`; the Home empty state composes nothing, since Home's
+  // quick-action row already carries Build and Log (ADR-0071). This used to be a `showBuild` /
   // `showLogPastWorkout` pair — two flags describing four states, of which two were ever
   // rendered (composition audit #5, ADR-0109).
   children?: React.ReactNode;
 }
 
 // Every link in the stack below the primary protocol CTAs: a full-width secondary button.
-// Named once because the two generation links and both composable cards ask for it, and a
+// Named once because the generation link and both composable cards ask for it, and a
 // card that disagreed with its neighbours would read as a different kind of thing.
 const LAUNCH_LINK = buttonVariants({ variant: "secondary", className: "w-full" });
 
@@ -95,25 +95,34 @@ export function GenerateTrainingLaunchpad({
   );
 }
 
-// The no-AI "Build a workout" card — author a reusable Hand-Authored Session to run later,
-// no performance logged (intent I4, ADR-0071). A sibling of the generation links rather than
-// a prop on them, so the caller that offers it says so by rendering it.
+// One row of the stack holding two composed cards side by side — the two-column grid Home's
+// quick-action row draws for the same Build and Log intents (ADR-0071), with the stack's own
+// gap so the row spaces like its neighbours. Layout only: the caller still says which cards
+// it offers by rendering them (ADR-0109).
+export function LaunchLinkPair({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return <div className="grid grid-cols-2 gap-2.5">{children}</div>;
+}
+
+// The no-AI "Build" card — author a reusable Hand-Authored Session to run later, no
+// performance logged (intent I4, ADR-0071). A sibling of the generation links rather than a
+// prop on them, so the caller that offers it says so by rendering it. Labelled as on Home's
+// quick-action row, since it sits half-width beside "Log" there and here.
 export function BuildWorkoutLink(): React.JSX.Element {
   return (
     <Link href="/sessions/build" {...NAV_FORWARD} className={LAUNCH_LINK}>
       <PencilRuler className="h-4 w-4" />
-      Build a workout
+      Build
     </Link>
   );
 }
 
-// The no-AI "Log a past workout" card — a Hand-Authored Session recording a workout already
-// performed (ADR-0040).
+// The no-AI "Log" card — a Hand-Authored Session recording a workout already performed
+// (ADR-0040).
 export function LogPastWorkoutLink(): React.JSX.Element {
   return (
     <Link href="/sessions/log" {...NAV_FORWARD} className={LAUNCH_LINK}>
       <PencilLine className="h-4 w-4" />
-      Log a past workout
+      Log
     </Link>
   );
 }

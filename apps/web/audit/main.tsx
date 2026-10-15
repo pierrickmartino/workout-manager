@@ -64,7 +64,7 @@ import { SessionDetailHeader } from "@/components/SessionDetailHeader";
 import { submitDeleteSession } from "@/app/sessions/[id]/actions";
 import { DELETE_DISABLED_HINT } from "@/lib/session-delete";
 import { ArrowRight } from "@/components/pulse/icons";
-import { BuildWorkoutLink, GenerateTrainingLaunchpad, LogPastWorkoutLink } from "@/components/pulse/generate-training-launchpad";
+import { BuildWorkoutLink, GenerateTrainingLaunchpad, LaunchLinkPair, LogPastWorkoutLink } from "@/components/pulse/generate-training-launchpad";
 import { homeProtocolChoices } from "@/lib/home-view";
 import { FitnessLevelStandings } from "@/components/pulse/fitness-level-standings";
 import { toFitnessLevelRows } from "@/lib/fitness-level-standing";
@@ -306,7 +306,8 @@ function HandoffSurface() {
   return <AiHandoffSheet handoff={handoff} onClose={() => {}} />;
 }
 
-// Both of the launchpad's compositions, in one capture (ADR-0109): the TRAIN tab's four cards
+// Both of the launchpad's compositions, in one capture (ADR-0109): the TRAIN tab's four cards —
+// Build and Log side by side in a `LaunchLinkPair`, as on Home's quick-action row —
 // above the Home empty state, both before and after a Curated Protocol is released (issue #690,
 // ADR-0130). Neither was in any journey — the `home` journey mounts the
 // *protocol-present* path, so the empty state's launchpad never rendered either — and this is a
@@ -317,8 +318,10 @@ function HandoffSurface() {
 function LaunchpadSurface() {
   return <div className="flex flex-col gap-6">
     <GenerateTrainingLaunchpad eyebrow="TRAIN // START SOMETHING NEW" from="/train">
-      <BuildWorkoutLink />
-      <LogPastWorkoutLink />
+      <LaunchLinkPair>
+        <BuildWorkoutLink />
+        <LogPastWorkoutLink />
+      </LaunchLinkPair>
     </GenerateTrainingLaunchpad>
     <GenerateTrainingLaunchpad eyebrow="GET STARTED // NO ACTIVE PROTOCOL" from="/dashboard" />
     <GenerateTrainingLaunchpad
