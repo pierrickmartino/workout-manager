@@ -61,6 +61,7 @@ from app.repositories.exercise_repository import (
     SqlExerciseRepository,
 )
 from app.repositories.generation_call_repository import (
+    GenerationCallRepository,
     SqlGenerationCallRepository,
 )
 from app.repositories.generation_feedback_repository import (
@@ -279,5 +280,5 @@ def get_substitute_generator(
 
 def get_generation_call_repository(
     session: Session = Depends(get_session),
-) -> SqlGenerationCallRepository:
+) -> GenerationCallRepository:
     return SqlGenerationCallRepository(session)

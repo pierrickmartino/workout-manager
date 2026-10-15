@@ -44,13 +44,11 @@ class GenerationCallRecorder(Protocol):
 
 
 class NoOpGenerationCallRecorder:
-    """Records nothing — the default when no monitoring backend is configured.
+    """Records nothing — for tests that don't care about the AI audit log.
 
-    Kept for tests that don't care about the log (the factory selects the Postgres
-    recorder in deployments, ADR-0135), so generation runs exactly as it did before
-    monitoring. It never
-    raises, upholding the best-effort guarantee even on the default path, and returns no
-    trace-id handle — lineage is simply absent on the unconfigured path (#274)."""
+    The factory selects the Postgres recorder in deployments (ADR-0135); with this one,
+    generation runs exactly as it did before monitoring. It never raises, upholding the
+    best-effort guarantee, and returns no trace-id handle, so lineage is simply absent."""
 
     def record(self, call: GenerationCall) -> str | None:
         return None

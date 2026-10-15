@@ -5,19 +5,20 @@ from __future__ import annotations
 from collections.abc import Iterator
 from functools import lru_cache
 
+from sqlalchemy import Engine
 from sqlmodel import Session, create_engine
 
 from app.config import get_settings
 
 
 @lru_cache
-def engine_for(database_url: str):
+def engine_for(database_url: str) -> Engine:
     """One pooled engine per database URL, shared by every caller in the process."""
 
     return create_engine(database_url, pool_pre_ping=True)
 
 
-def get_engine():
+def get_engine() -> Engine:
     return engine_for(get_settings().database_url)
 
 

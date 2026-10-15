@@ -14,6 +14,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Protocol
 
 from sqlalchemy import delete
 from sqlmodel import Session, select
@@ -54,6 +55,24 @@ def _summary(row: GenerationCallRecord) -> GenerationCallSummary:
         latency_ms=row.latency_ms,
         outcome=row.outcome,
     )
+
+
+class GenerationCallRepository(Protocol):
+    def add(self, call: GenerationCall) -> None:
+        """Store one recorded call, stamped with the repository's clock."""
+        ...
+
+    def purge_expired(self) -> None:
+        """Delete every row older than the retention cutoff."""
+        ...
+
+    def delete_for_user(self, clerk_user_id: str) -> None:
+        """Erase every row attributed to ``clerk_user_id``."""
+        ...
+
+    def list_recent(self, *, limit: int) -> list[GenerationCallSummary]:
+        """The newest ``limit`` calls inside the retention window, newest first."""
+        ...
 
 
 class SqlGenerationCallRepository:
@@ -117,4 +136,8 @@ class SqlGenerationCallRepository:
         return [_summary(row) for row in self._session.exec(statement).all()]
 
 
-__all__ = ["GenerationCallSummary", "SqlGenerationCallRepository"]
+__all__ = [
+    "GenerationCallRepository",
+    "GenerationCallSummary",
+    "SqlGenerationCallRepository",
+]

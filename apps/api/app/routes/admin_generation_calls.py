@@ -14,8 +14,8 @@ from app.auth.dependencies import require_admin
 from app.envelope import success_envelope
 from app.repositories.deps import get_generation_call_repository
 from app.repositories.generation_call_repository import (
+    GenerationCallRepository,
     GenerationCallSummary,
-    SqlGenerationCallRepository,
 )
 
 router = APIRouter(prefix="/api", tags=["admin"])
@@ -45,7 +45,7 @@ def _serialize(call: GenerationCallSummary) -> dict:
 @router.get("/admin/generation-calls")
 def list_generation_calls(
     _operator: str = Depends(require_admin),
-    calls: SqlGenerationCallRepository = Depends(get_generation_call_repository),
+    calls: GenerationCallRepository = Depends(get_generation_call_repository),
 ) -> dict:
     """The newest recorded Generation Calls, operator-only (ADR-0135)."""
 

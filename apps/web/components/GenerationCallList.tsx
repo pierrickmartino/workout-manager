@@ -49,7 +49,12 @@ export function GenerationCallList({
   );
 }
 
-function Fact({ label, value }: { label: string; value: string }): React.JSX.Element {
+interface FactProps {
+  label: string;
+  value: string;
+}
+
+function Fact({ label, value }: FactProps): React.JSX.Element {
   return (
     <div className="flex min-w-0 gap-1.5">
       <dt className="text-text-muted">{label}</dt>
