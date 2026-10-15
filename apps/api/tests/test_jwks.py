@@ -7,7 +7,7 @@ import base64
 import jwt
 import pytest
 
-from app.auth.jwks import AuthError, verify_clerk_jwt
+from app.auth.jwks import CLOCK_SKEW_LEEWAY_SECONDS, AuthError, verify_clerk_jwt
 from tests.conftest import make_signing_context
 
 # Far beyond the JSON decoder's recursion limit on any interpreter.
@@ -36,14 +36,27 @@ def test_rejects_token_whose_kid_is_not_in_the_jwks():
         verify_clerk_jwt(token, jwks=ctx.jwks, issuer=ctx.issuer)
 
 
-def test_rejects_expired_token():
+def test_rejects_token_expired_beyond_the_clock_skew_leeway():
     # Arrange
     ctx = make_signing_context()
-    token = ctx.mint(expires_in=-10)
+    token = ctx.mint(expires_in=-(CLOCK_SKEW_LEEWAY_SECONDS + 10))
 
     # Act / Assert
-    with pytest.raises(AuthError):
+    with pytest.raises(AuthError, match="expired"):
         verify_clerk_jwt(token, jwks=ctx.jwks, issuer=ctx.issuer)
+
+
+def test_accepts_token_expired_within_the_clock_skew_leeway():
+    # Arrange: a 60s Clerk token read from a cookie the browser hasn't refreshed
+    # yet, or checked by an API host whose clock runs a few seconds ahead.
+    ctx = make_signing_context()
+    token = ctx.mint(sub="user_abc", expires_in=-5)
+
+    # Act
+    claims = verify_clerk_jwt(token, jwks=ctx.jwks, issuer=ctx.issuer)
+
+    # Assert
+    assert claims["sub"] == "user_abc"
 
 
 def test_rejects_token_from_a_different_issuer():
