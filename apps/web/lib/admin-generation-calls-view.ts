@@ -25,6 +25,8 @@ export interface GenerationCallRow {
 // through `LocalInstant`, which owns parsing and the reader's clock (ADR-0096).
 export interface GenerationCallRowView {
   id: number;
+  // The call's detail page (issue #731), where its prompts and output are read.
+  href: string;
   createdAt: string;
   kindLabel: string;
   userLabel: string;
@@ -60,6 +62,10 @@ export const UNKNOWN_TOKENS_LABEL = "unknown";
 
 const MS_PER_SECOND = 1000;
 
+function generationCallHref(id: number): string {
+  return `/admin/ai-audit-log/${id}`;
+}
+
 function labelFrom(labels: Record<string, string>, value: string): string {
   return Object.hasOwn(labels, value) ? labels[value] : value;
 }
@@ -81,6 +87,7 @@ export function toGenerationCallRowView(
 ): GenerationCallRowView {
   return {
     id: row.id,
+    href: generationCallHref(row.id),
     createdAt: row.created_at,
     kindLabel: labelFrom(KIND_LABELS, row.generator_kind),
     userLabel: row.clerk_user_id ?? SYSTEM_USER_LABEL,

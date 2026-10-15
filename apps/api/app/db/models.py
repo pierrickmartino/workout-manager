@@ -689,7 +689,9 @@ class GenerationCallRecord(SQLModel, table=True):
     recorder on every cache miss that reaches a provider, success or failure, and read
     only behind the admin gate. ``clerk_user_id`` is null for an unattributed (system)
     call such as catalog enrichment; the token counts are null when the provider did not
-    report them, never zero; ``output_text`` is null on a failed call. The prompts hold
+    report them, never zero; ``output_text`` is null on a failed call, which carries its
+    capped ``error_message`` instead. ``schema_name`` and ``max_tokens`` are null only on rows
+    recorded before they were captured (issue #731). The prompts hold
     readable health data, so rows live for the 3-day retention window only, enforced on
     write (purge) and on read (cutoff). ``created_at`` is indexed for both."""
 
@@ -708,3 +710,6 @@ class GenerationCallRecord(SQLModel, table=True):
     system_prompt: str = Field(sa_column=Column(Text, nullable=False))
     user_prompt: str = Field(sa_column=Column(Text, nullable=False))
     output_text: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    error_message: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    schema_name: str | None = Field(default=None)
+    max_tokens: int | None = Field(default=None)

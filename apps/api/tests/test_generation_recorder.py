@@ -29,6 +29,9 @@ def _call() -> GenerationCall:
         system_prompt="sys",
         user_prompt="usr",
         output_text='{"ok": true}',
+        schema_name="GeneratedSession",
+        max_tokens=8000,
+        error_message=None,
     )
 
 

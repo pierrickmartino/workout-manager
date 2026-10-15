@@ -45,6 +45,9 @@ that visibility is not worth it for a single operator (#729).
   prompt, user prompt and output, as ADR-0039 intended. Reading them is behind `require_admin`
   (ADR-0046) on the API and the admin resolver on the web, where a non-admin gets a 404. The
   list endpoint returns metadata only; the prompts and output are for the per-call detail view.
+  That view also shows the requested schema name and the token budget, so a cut-off output is
+  obvious, and a failed call's `GenerationError` text, capped at 2 KB because a provider error
+  can echo a whole response body (#731).
 - **Tokens only, no cost.** A call stores input/output tokens (null when the provider did not
   report them, never zero) and the model. The app carries no pricing table: ADR-0039's
   "pricing lives where the price lives" no longer has a home, and a stale price table is

@@ -4,16 +4,21 @@
 first, inside the 3-day retention window. Rows carry metadata only (no prompt or output
 text), so the list payload stays small. Behind ``require_admin`` (ADR-0046): it fails
 closed, because the log holds prompts built from other users' health data. Responses use
-the standard envelope."""
+the standard envelope.
+
+``GET /api/admin/generation-calls/{call_id}`` reads one call in full (issue #731): both
+prompts, the output or the failure's message, the requested schema and the token budget. An
+unknown id and one past the retention window are the same ``404``."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.auth.dependencies import require_admin
 from app.envelope import success_envelope
 from app.repositories.deps import get_generation_call_repository
 from app.repositories.generation_call_repository import (
+    GenerationCallDetail,
     GenerationCallRepository,
     GenerationCallSummary,
 )
@@ -23,6 +28,8 @@ router = APIRouter(prefix="/api", tags=["admin"])
 # The first page of the log: enough recent calls to match a report, small enough to stay
 # fast. Filtering and paging arrive with the next slice of the audit log.
 ADMIN_GENERATION_CALL_LIMIT = 50
+
+HTTP_NOT_FOUND = 404
 
 
 def _serialize(call: GenerationCallSummary) -> dict:
@@ -42,6 +49,20 @@ def _serialize(call: GenerationCallSummary) -> dict:
     }
 
 
+def _serialize_detail(call: GenerationCallDetail) -> dict:
+    return {
+        **_serialize(call.summary),
+        "system_prompt": call.system_prompt,
+        "user_prompt": call.user_prompt,
+        # ``null`` on a failed call, which carries ``error_message`` instead.
+        "output_text": call.output_text,
+        "error_message": call.error_message,
+        # ``null`` only on a row recorded before these were captured.
+        "schema_name": call.schema_name,
+        "max_tokens": call.max_tokens,
+    }
+
+
 @router.get("/admin/generation-calls")
 def list_generation_calls(
     _operator: str = Depends(require_admin),
@@ -51,3 +72,19 @@ def list_generation_calls(
 
     recent = calls.list_recent(limit=ADMIN_GENERATION_CALL_LIMIT)
     return success_envelope([_serialize(call) for call in recent])
+
+
+@router.get("/admin/generation-calls/{call_id}")
+def get_generation_call(
+    call_id: int,
+    _operator: str = Depends(require_admin),
+    calls: GenerationCallRepository = Depends(get_generation_call_repository),
+) -> dict:
+    """One recorded Generation Call in full, operator-only (issue #731, ADR-0135)."""
+
+    detail = calls.get_recent(call_id)
+    if detail is None:
+        raise HTTPException(
+            status_code=HTTP_NOT_FOUND, detail="Generation call not found"
+        )
+    return success_envelope(_serialize_detail(detail))
