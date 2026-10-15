@@ -22,6 +22,14 @@ class AuthError(Exception):
 # and with a fixed message: their text is parser detail, not client-facing.
 _RAW_DECODE_ERRORS = (ValueError, RecursionError)
 
+# Tolerance on ``exp``/``nbf``/``iat``. Clerk session tokens live ~60s and the web
+# server forwards the one in the browser's cookie, which a backgrounded tab may not
+# have refreshed; the Next.js middleware already accepts it with Clerk's own skew
+# allowance, and the API host's clock may run ahead. With no leeway those requests
+# failed with "Signature has expired" though the user was signed in. The signature
+# and issuer are still verified in full.
+CLOCK_SKEW_LEEWAY_SECONDS = 30
+
 
 def verify_clerk_jwt(token: str, *, jwks: dict, issuer: str) -> dict[str, Any]:
     try:
@@ -37,6 +45,7 @@ def verify_clerk_jwt(token: str, *, jwks: dict, issuer: str) -> dict[str, Any]:
             key=signing_key,
             algorithms=["RS256"],
             issuer=issuer,
+            leeway=CLOCK_SKEW_LEEWAY_SECONDS,
         )
     except jwt.PyJWTError as exc:
         raise AuthError(str(exc)) from exc
