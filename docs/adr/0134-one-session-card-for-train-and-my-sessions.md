@@ -23,7 +23,12 @@ carry them, and the Train panel got them by reading History plus one Session det
   its own, then the exercise preview. Last comes a bottom row: "N exercises" on the left; "Trained
   N×" and the ⋯ on the right. There is no divider above the bottom row.
 - **The whole card opens the Session.** The title link's `::after` covers the card. Start and the
-  ⋯ sit above it, so no link nests in another and each control keeps its own name.
+  ⋯ sit above it, so no link nests in another and each control keeps its own name. They are
+  `relative` with **no z-index**: they come after the title, so they already paint over the
+  overlay. A `z-10` there made a stacking context that trapped the ⋯ sheet, which renders beside
+  its trigger: the tab bar covered the sheet and the next card's Start showed through its
+  backdrop. A test in `action-sheet.test.ts` now fails if any ancestor of the sheet sets a
+  z-index.
 - **One row component.** `SessionLibraryRow` is now `SessionCardRow` and renders on both
   surfaces: the ⋯ sheet with Favorite and, on a never-performed plan, Delete; press-and-hold to
   favorite; the Glow Edge. A Recent Session has always been performed, so Delete never shows on

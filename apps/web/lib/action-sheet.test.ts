@@ -325,6 +325,44 @@ test("favoriting from a My Sessions row's sheet toggles it once and closes the s
   }, "http://localhost/sessions");
 });
 
+test("a Session card row's sheet is never trapped in a stacking context inside the card", async () => {
+  // The sheet renders where its trigger is, so a `z-*` on any ancestor between it and the page
+  // makes a stacking context its `z-50` cannot climb out of: the tab bar (`z-40`) then covered
+  // the sheet and the next card's Start painted over its backdrop (ADR-0134).
+  await inDom(async (render) => {
+    // Arrange
+    const { SessionCardRow } = loadTsx("components/SessionCardRow.tsx", {
+      "@/app/sessions/actions": {
+        submitToggleFavorite: async () => ({ error: null }),
+        submitDeleteSessionRow: async () => ({ error: null }),
+      },
+      "next/link": {
+        __esModule: true,
+        default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) =>
+          React.createElement("a", { href, ...rest }, children),
+      },
+    });
+    const session = {
+      id: 12, name: "Benchmark", display_name: "Benchmark", training_type: "strength",
+      created_at: "2026-10-04", author: { display_name: null }, authored_by_me: true,
+      is_favorite: false, exercise_count: 3, logged_count: 0,
+      last_performed_on: null, preview_exercises: ["Bench Press"],
+    };
+    await render(React.createElement(SessionCardRow, { session }));
+    const opener = document.querySelector<HTMLButtonElement>("button[aria-haspopup='dialog']")!;
+
+    // Act
+    await React.act(async () => opener.click());
+
+    // Assert
+    const trapping: string[] = [];
+    for (let node = dialog()!.parentElement?.parentElement; node && node !== document.body; node = node.parentElement) {
+      if (/(^|\s)-?z-/.test(node.className)) trapping.push(node.className);
+    }
+    assert.deepEqual(trapping, [], "an ancestor of the sheet sets a z-index");
+  }, "http://localhost/sessions");
+});
+
 // The Session detail's sheet (ADR-0133): Favorite is its first row, its toggle state held outside
 // the sheet so a failure outlives the row that raised it.
 function loadDetailSheet(submitFavorite: (state: unknown, form: FormData) => Promise<{ error: string | null }>) {
