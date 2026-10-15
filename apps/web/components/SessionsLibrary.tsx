@@ -23,6 +23,9 @@ import { SessionLibraryRow } from "@/components/SessionLibraryRow";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+// PROTOTYPE (branch `prototype/session-card-unify`).
+import { SessionCardList } from "@/components/prototype/session-card-variants";
+import { protoCardModel } from "@/components/prototype/session-card-model";
 
 // The interactive My Sessions library (GLOSSARY: My Sessions, issue #397): search over the
 // user's own standalone Sessions plus a single-select chip row (All / Favorites / one Training
@@ -32,8 +35,10 @@ import { Input } from "@/components/ui/input";
 // wires the controls to it. Favoriting a row is the one write: a server action that revalidates.
 export function SessionsLibrary({
   sessions,
+  extras = {},
 }: {
   sessions: SessionSummary[];
+  extras?: Record<number, { lastPerformedOn: string | null; exerciseNames: string[] }>;
 }): React.JSX.Element {
   // Seed once from the URL, then own the state locally — a filter change re-filters the
   // already-fetched library in-browser and is mirrored back into the URL below, never
@@ -53,7 +58,11 @@ export function SessionsLibrary({
   // `replaceState` (not a router push) keeps the Server Component and its one-shot library
   // fetch from re-running on a keystroke or chip tap.
   useEffect(() => {
-    replaceFilterQuery(sessionFiltersToQuery(filters));
+    // PROTOTYPE: keep `?variant=` alive across the filter mirror.
+    const query = sessionFiltersToQuery(filters);
+    const variant = new URLSearchParams(window.location.search).get("variant");
+    if (variant) query.set("variant", variant);
+    replaceFilterQuery(query);
   }, [filters]);
   const filtered = useMemo(
     () => filterSessions(sessions, filters),
@@ -175,13 +184,25 @@ export function SessionsLibrary({
           </button>
         </Card>
       ) : (
-        <ol className="flex list-none flex-col gap-4 p-0">
-          {filtered.map((session) => (
-            <li key={session.id}>
-              <SessionLibraryRow session={session} />
-            </li>
-          ))}
-        </ol>
+        <SessionCardList
+          level={2}
+          models={filtered.map((session) =>
+            protoCardModel(
+              session,
+              extras[session.id]?.lastPerformedOn ?? null,
+              extras[session.id]?.exerciseNames ?? [],
+            ),
+          )}
+          baseline={
+            <ol className="flex list-none flex-col gap-4 p-0">
+              {filtered.map((session) => (
+                <li key={session.id}>
+                  <SessionLibraryRow session={session} />
+                </li>
+              ))}
+            </ol>
+          }
+        />
       )}
 
       <BackLink href="/train">Back to train</BackLink>

@@ -7,6 +7,12 @@ import {
   type RecentSessionRow,
 } from "@/lib/recent-sessions";
 import { RecentSessions } from "@/components/RecentSessions";
+// PROTOTYPE (branch `prototype/session-card-unify`): unified Session card variants.
+import { SessionCardList } from "@/components/prototype/session-card-variants";
+import {
+  protoCardModel,
+  type ProtoCardModel,
+} from "@/components/prototype/session-card-model";
 
 // The fetching half of the Train page's "Recent Sessions" panel, split out of `app/train/page.tsx`
 // so the page itself no longer awaits anything (perf audit A4). Everything above this panel —
@@ -31,14 +37,17 @@ import { RecentSessions } from "@/components/RecentSessions";
 // a Suspense boundary that propagation would now reach the nearest error boundary, so the panel
 // honours what it always said it did: a rejected read is settled to `null`
 // (`lib/best-effort-read.ts`) and the launchpad above still covers "start something new".
-async function loadRecentSessions(): Promise<RecentSessionRow[]> {
+async function loadRecentSessions(): Promise<{
+  rows: RecentSessionRow[];
+  models: ProtoCardModel[];
+}> {
   const [historyResult, sessionsResult] = await Promise.all([
     settleBestEffort(fetchHistory()),
     settleBestEffort(fetchSessions()),
   ]);
   const history = bestEffortData(historyResult);
   const sessions = bestEffortData(sessionsResult);
-  if (!history || !sessions) return [];
+  if (!history || !sessions) return { rows: [], models: [] };
 
   // Select the up-to-five distinct standalone plans performed most recently, then read each
   // plan's detail in parallel for its first exercises. `Promise.all` keeps `details` positional
@@ -50,9 +59,32 @@ async function loadRecentSessions(): Promise<RecentSessionRow[]> {
     ),
   );
 
-  return toRecentSessionRows(selections, details.map(bestEffortData));
+  const detailData = details.map(bestEffortData);
+  const models = selections.flatMap((selection, index) => {
+    const detail = detailData[index];
+    if (!detail) return [];
+    return [
+      protoCardModel(
+        selection.session,
+        selection.lastPerformedOn,
+        detail.prescriptions.map((p) => p.exercise_name),
+      ),
+    ];
+  });
+  return { rows: toRecentSessionRows(selections, detailData), models };
 }
 
-export async function RecentSessionsPanel(): Promise<React.JSX.Element> {
-  return <RecentSessions rows={await loadRecentSessions()} />;
+export async function RecentSessionsPanel(): Promise<React.JSX.Element | null> {
+  const { rows, models } = await loadRecentSessions();
+  if (rows.length === 0) return null;
+  return (
+    <SessionCardList
+      models={models}
+      level={3}
+      baseline={<RecentSessions rows={rows} />}
+      heading={
+        <h2 className="label-mono text-[11px] text-text-muted">TRAIN // PICK UP AGAIN</h2>
+      }
+    />
+  );
 }
