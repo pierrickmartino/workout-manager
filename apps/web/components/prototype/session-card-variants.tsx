@@ -197,18 +197,16 @@ function VariantA({ model, level, isFavorite, menu }: CardProps): React.JSX.Elem
             </div>
           </div>
         </div>
-        <div className="relative z-10 flex shrink-0 items-center gap-1">
-          <Link
-            {...NAV_FORWARD}
-            href={model.startHref}
-            aria-label={`Start ${model.displayName}`}
-            className={buttonVariants({ variant: "secondary" })}
-          >
-            <Play className="h-4 w-4" aria-hidden />
-            Start
-          </Link>
-          {menu}
-        </div>
+        {/* Start alone beside the title (⋯ moved to the bottom row) so the name keeps its width. */}
+        <Link
+          {...NAV_FORWARD}
+          href={model.startHref}
+          aria-label={`Start ${model.displayName}`}
+          className={buttonVariants({ variant: "secondary", className: "relative z-10 shrink-0" })}
+        >
+          <Play className="h-4 w-4" aria-hidden />
+          Start
+        </Link>
       </div>
 
       {/* "Last trained" on a row of its own, never wrapping under the badge. */}
@@ -220,16 +218,20 @@ function VariantA({ model, level, isFavorite, menu }: CardProps): React.JSX.Elem
         </p>
       ) : null}
 
-      <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
+      {/* Bottom row, no divider above it: exercise count · Trained N× · ⋯ */}
+      <div className="flex items-center justify-between gap-2">
         <span className="label-mono inline-flex items-center gap-1.5 text-[11px] text-text-secondary">
           <Dumbbell className="h-3.5 w-3.5 text-text-muted" aria-hidden />
           {exercisesText(model.exerciseCount)}
         </span>
-        {trained ? (
-          <Badge variant="muted" className="uppercase">
-            {trained}
-          </Badge>
-        ) : null}
+        <div className="relative z-10 -my-1 -mr-2 flex items-center gap-1">
+          {trained ? (
+            <Badge variant="muted" className="uppercase">
+              {trained}
+            </Badge>
+          ) : null}
+          {menu}
+        </div>
       </div>
     </Card>
   );
