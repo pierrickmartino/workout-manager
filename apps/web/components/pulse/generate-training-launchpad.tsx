@@ -31,9 +31,8 @@ interface GenerateTrainingLaunchpadProps {
   protocolChoices?: readonly ProtocolChoice[];
   // Extra entry points, rendered after the protocol and workout links in the same stack.
   // The TRAIN launchpad composes `BuildWorkoutLink` and `LogPastWorkoutLink` here, side by
-  // side in a `LaunchLinkPair`; the
-  // Home empty state composes nothing, since Home's quick-action row already carries
-  // Build and Log (ADR-0071). This used to be a `showBuild` /
+  // side in a `LaunchLinkPair`; the Home empty state composes nothing, since Home's
+  // quick-action row already carries Build and Log (ADR-0071). This used to be a `showBuild` /
   // `showLogPastWorkout` pair — two flags describing four states, of which two were ever
   // rendered (composition audit #5, ADR-0109).
   children?: React.ReactNode;
