@@ -291,7 +291,7 @@ test("favoriting from a My Sessions row's sheet toggles it once and closes the s
   // Arrange
   await inDom(async (render) => {
     const toggles: string[] = [];
-    const { SessionLibraryRow } = loadTsx("components/SessionLibraryRow.tsx", {
+    const { SessionCardRow } = loadTsx("components/SessionCardRow.tsx", {
       "@/app/sessions/actions": {
         submitToggleFavorite: async (_state: unknown, form: FormData) => {
           toggles.push(`${form.get("session_id")}:${form.get("favorite")}`);
@@ -309,8 +309,9 @@ test("favoriting from a My Sessions row's sheet toggles it once and closes the s
       id: 12, name: "Short Basic Upper", display_name: "Short Basic Upper", training_type: "strength",
       created_at: "2026-10-04T10:00:00", author: { display_name: null }, authored_by_me: true,
       is_favorite: false, exercise_count: 3, logged_count: 1,
+      last_performed_on: "2026-10-04", preview_exercises: ["Bench Press"],
     };
-    await render(React.createElement(SessionLibraryRow, { session }));
+    await render(React.createElement(SessionCardRow, { session }));
     const opener = [...document.querySelectorAll<HTMLButtonElement>("button[aria-haspopup='dialog']")];
     assert.equal(opener.length, 1, "the row should carry exactly one sheet trigger");
     await React.act(async () => opener[0].click());

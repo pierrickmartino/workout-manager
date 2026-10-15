@@ -214,3 +214,19 @@ def test_list_rows_carry_logged_count():
     by_id = {row["id"]: row["logged_count"] for row in rows}
     assert by_id[performed["id"]] == 1
     assert sum(count == 0 for count in by_id.values()) == 1
+
+
+def test_list_rows_carry_the_session_card_facts():
+    # The shared Session card's facts ride on the list (GLOSSARY: My Sessions, Recent Sessions): the newest
+    # performed date (null when never performed) and the plan's first exercise names.
+    client, ctx, _, logged = build_client()
+    headers = _auth(ctx, "user_a")
+    performed = _create_session(client, headers)
+    never = _create_session(client, headers)
+    _log_against(logged, "user_a", performed["id"])
+
+    rows = {row["id"]: row for row in client.get("/api/sessions", headers=headers).json()["data"]}
+
+    assert rows[performed["id"]]["last_performed_on"] == "2026-01-01"
+    assert rows[never["id"]]["last_performed_on"] is None
+    assert rows[performed["id"]]["preview_exercises"] == ["Back Squat"]

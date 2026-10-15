@@ -3,31 +3,18 @@ import assert from "node:assert/strict";
 
 import {
   canDeleteSessionRow,
+  exerciseCountLabel,
   favoriteActionDescription,
   favoriteActionLabel,
-  recentSessionCardModel,
-  sessionSummaryCardModel,
+  lastTrainedLabel,
+  sessionCardModel,
 } from "./session-card.ts";
-import type { RecentSessionRow } from "./recent-sessions.ts";
 import type { SessionSummary } from "./session-library.ts";
 
-// `session-card` normalizes a Train "Recent Sessions" row and a My Sessions library row into the
-// one `SessionCardModel` the shared card renders, so both surfaces reuse a single card format
-// (GLOSSARY: Recent Sessions, My Sessions). Pure and server-free, so the mapping and the menu-gating
-// rules are unit-tested here.
-
-function makeRecentRow(overrides: Partial<RecentSessionRow> = {}): RecentSessionRow {
-  return {
-    id: 7,
-    displayName: "Upper Push",
-    trainingType: "strength",
-    lastPerformedOn: "2026-09-14",
-    previewExercises: ["Bench Press", "Overhead Press", "Dip"],
-    exerciseCount: 5,
-    startHref: "/sessions/7/live",
-    ...overrides,
-  };
-}
+// `session-card` maps one My Sessions list row into the `SessionCardModel` the shared card renders.
+// Train's "Pick up again" panel and the My Sessions library feed the same row shape, so both
+// surfaces render one card (GLOSSARY: Recent Sessions, My Sessions, ADR-0134). Pure and
+// server-free, so the mapping and the menu-gating rules are unit-tested here.
 
 function makeSummary(overrides: Partial<SessionSummary> = {}): SessionSummary {
   return {
@@ -41,32 +28,14 @@ function makeSummary(overrides: Partial<SessionSummary> = {}): SessionSummary {
     is_favorite: false,
     exercise_count: 3,
     logged_count: 4,
+    last_performed_on: "2026-10-12",
+    preview_exercises: ["Bike", "Row"],
     ...overrides,
   };
 }
 
-test("maps a Train recent-session row into the card model with its fixed cyan badge", () => {
-  const model = recentSessionCardModel(makeRecentRow());
-
-  assert.equal(model.id, 7);
-  assert.equal(model.displayName, "Upper Push");
-  assert.equal(model.badgeVariant, "cyan");
-  assert.equal(model.startHref, "/sessions/7/live");
-  assert.equal(model.startLabel, "Start Upper Push");
-  assert.equal(model.lastPerformedOn, "2026-09-14");
-  assert.deepEqual(model.previewExercises, ["Bench Press", "Overhead Press", "Dip"]);
-});
-
-test("a Train card carries no author, Logged Count or detail link (no fact row / not a link)", () => {
-  const model = recentSessionCardModel(makeRecentRow());
-
-  assert.equal(model.detailHref, null);
-  assert.equal(model.authorName, null);
-  assert.equal(model.loggedCount, null);
-});
-
-test("maps a My Sessions row into the card model with a per-type badge and a detail link", () => {
-  const model = sessionSummaryCardModel(makeSummary());
+test("maps a list row into the card model with a per-type badge and its links", () => {
+  const model = sessionCardModel(makeSummary());
 
   assert.equal(model.id, 12);
   assert.equal(model.displayName, "Zone 2 Ride");
@@ -75,21 +44,33 @@ test("maps a My Sessions row into the card model with a per-type badge and a det
   assert.equal(model.detailHref, "/sessions/12");
   assert.equal(model.startHref, "/sessions/12/live");
   assert.equal(model.startLabel, "Start Zone 2 Ride");
-  assert.equal(model.authorName, "Dana");
+  assert.equal(model.exerciseCount, 3);
   assert.equal(model.loggedCount, 4);
 });
 
-test("a My Sessions card carries no performed date or exercise preview (not on the list payload)", () => {
-  const model = sessionSummaryCardModel(makeSummary());
+test("carries the last-trained label and the plan's exercise preview", () => {
+  const model = sessionCardModel(makeSummary());
 
-  assert.equal(model.lastPerformedOn, null);
-  assert.deepEqual(model.previewExercises, []);
+  assert.equal(model.lastTrainedLabel, "Last trained Oct 12, 2026");
+  assert.deepEqual(model.previewExercises, ["Bike", "Row"]);
 });
 
-test("an unnamed My Sessions row titles by its formatted creation date", () => {
-  const model = sessionSummaryCardModel(
-    makeSummary({ name: null, created_at: "2026-09-05" }),
+test("a never-performed plan reads as not trained yet", () => {
+  assert.equal(lastTrainedLabel(null), "Not trained yet");
+  assert.equal(
+    sessionCardModel(makeSummary({ last_performed_on: null, logged_count: 0 })).lastTrainedLabel,
+    "Not trained yet",
   );
+});
+
+test("the exercise count is singular for one and plural otherwise", () => {
+  assert.equal(exerciseCountLabel(1), "1 exercise");
+  assert.equal(exerciseCountLabel(0), "0 exercises");
+  assert.equal(exerciseCountLabel(6), "6 exercises");
+});
+
+test("an unnamed row titles by its formatted creation date", () => {
+  const model = sessionCardModel(makeSummary({ name: null, created_at: "2026-09-05" }));
 
   assert.equal(model.displayName, "Sep 5, 2026");
   assert.equal(model.startLabel, "Start Sep 5, 2026");
@@ -98,18 +79,17 @@ test("an unnamed My Sessions row titles by its formatted creation date", () => {
 test("a blank or missing Author credit falls back to the generic label, never blank", () => {
   // An adopted row (not self-authored) whose original Author has no name still shows a byline.
   assert.equal(
-    sessionSummaryCardModel(makeSummary({ author: { display_name: "   " } })).authorName,
+    sessionCardModel(makeSummary({ author: { display_name: "   " } })).authorName,
     "Anonymous",
   );
   assert.equal(
-    sessionSummaryCardModel(makeSummary({ author: { display_name: null } })).authorName,
+    sessionCardModel(makeSummary({ author: { display_name: null } })).authorName,
     "Anonymous",
   );
 });
 
 test("a self-authored row carries no author byline (pure repetition of the viewer)", () => {
-  // A plan the viewer created themselves credits them on every row — hide it (the whole point).
-  const model = sessionSummaryCardModel(
+  const model = sessionCardModel(
     makeSummary({ authored_by_me: true, author: { display_name: "Pierrick" } }),
   );
 
@@ -117,7 +97,7 @@ test("a self-authored row carries no author byline (pure repetition of the viewe
 });
 
 test("an adopted row keeps its Author byline (provenance from another user)", () => {
-  const model = sessionSummaryCardModel(
+  const model = sessionCardModel(
     makeSummary({ authored_by_me: false, author: { display_name: "Alex Rivera" } }),
   );
 

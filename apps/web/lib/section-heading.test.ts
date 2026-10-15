@@ -64,19 +64,32 @@ test("becoming a heading leaves the divider's rendered appearance untouched", ()
   assert.ok(row.querySelector(".bg-border"), "the rule that fills the remaining width");
 });
 
+// A Session card row as `GET /api/sessions` sends it — the one shape both the card and the Train
+// panel take (ADR-0134).
+const upperPush = {
+  id: 7, training_type: "strength", name: "Upper Push", display_name: "Upper Push",
+  created_at: "2026-09-01", author: { display_name: null }, authored_by_me: true,
+  is_favorite: false, exercise_count: 5, logged_count: 2, last_performed_on: "2026-09-14",
+  preview_exercises: ["Bench Press"],
+};
+
+// The row holds the Favorite toggle, a Server Action this offline render stands in for.
+const sessionActions = {
+  "@/app/sessions/actions": {
+    submitToggleFavorite: async () => ({ error: null }),
+    submitDeleteSessionRow: async () => ({ error: null }),
+  },
+};
+
 test("a session card's title is the same rank as the history row it mirrors", () => {
   // Arrange — the card is the list item of My Sessions and of Train's "pick up again"
   // panel; neither list sits under a divider, so an <h3> there skipped a level straight
-  // from the page's <h1>. `HistoryBrowser` already titles the same role with an <h2>.
+  // from the page's <h1>. `HistoryBrowser` already titles the same list-item role with an <h2>.
   const { SessionCard } = importComponent("components/SessionCard.tsx");
-  const { recentSessionCardModel } = importComponent("lib/session-card.ts");
-  const model = recentSessionCardModel({
-    id: 7, displayName: "Upper Push", trainingType: "strength", lastPerformedOn: "2026-09-14",
-    previewExercises: ["Bench Press"], exerciseCount: 5, startHref: "/sessions/7/live",
-  });
+  const { sessionCardModel } = importComponent("lib/session-card.ts");
 
   // Act
-  const document = render(React.createElement(SessionCard, { model }));
+  const document = render(React.createElement(SessionCard, { model: sessionCardModel(upperPush) }));
 
   // Assert
   assert.equal(document.querySelector("h2")!.textContent, "Upper Push");
@@ -87,14 +100,10 @@ test("a group label that introduces content is a heading, and its cards sit unde
   // Arrange — Train labels its groups with a `TRAIN // …` eyebrow rather than the ▸ rule.
   // It is still a section label, so leaving it a <span> while the cards under it became
   // <h2> would put the items in the outline and not the group that holds them.
-  const { RecentSessions } = importComponent("components/RecentSessions.tsx");
-  const rows = [{
-    id: 7, displayName: "Upper Push", trainingType: "strength", lastPerformedOn: "2026-09-14",
-    previewExercises: ["Bench Press"], exerciseCount: 5, startHref: "/sessions/7/live",
-  }];
+  const { RecentSessions } = importComponent("components/RecentSessions.tsx", sessionActions);
 
   // Act
-  const document = render(React.createElement(RecentSessions, { rows }));
+  const document = render(React.createElement(RecentSessions, { sessions: [upperPush] }));
 
   // Assert
   assert.equal(document.querySelector("h2")!.textContent!.trim(), "TRAIN // PICK UP AGAIN");

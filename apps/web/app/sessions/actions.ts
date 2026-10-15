@@ -24,11 +24,12 @@ export interface ToggleFavoriteState {
   error: string | null;
 }
 
-// Toggle a Session's Favorite marker from a My Sessions row (GLOSSARY: Favorite, #396). The
-// star button submits the *target* state in `favorite` ("true" to mark, else unmark) alongside
-// the `session_id`; this action calls the matching endpoint and, on success, revalidates
-// `/sessions` so the library re-renders with the new marker (the client-side search/chip filter
-// state is preserved, exactly like the row Delete action). A 404/409 or transport failure comes
+// Toggle a Session's Favorite marker from a Session card row — on My Sessions or Train's "Pick up
+// again" panel (GLOSSARY: Favorite, #396, ADR-0134). The row submits the *target* state in
+// `favorite` ("true" to mark, else unmark) alongside the `session_id`; this action calls the
+// matching endpoint and, on success, revalidates both surfaces that render the card so each
+// re-renders with the new Glow Edge (the library's client-side search/chip filter state is
+// preserved, exactly like the row Delete action). A 404/409 or transport failure comes
 // back as the row control's error; nothing is toggled. The JWT never leaves the server.
 export async function submitToggleFavorite(
   _prevState: ToggleFavoriteState,
@@ -49,6 +50,7 @@ export async function submitToggleFavorite(
   }
 
   revalidatePath("/sessions");
+  revalidatePath("/train");
   return { error: null };
 }
 
