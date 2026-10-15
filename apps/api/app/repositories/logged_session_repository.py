@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Protocol
 
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -229,6 +230,15 @@ class LoggedSessionRepository(Protocol):
         per-Session count. Plan-less records (``session_id`` is ``None``) carry no Session
         and are excluded; a Session the user has never performed is simply absent from the
         map (the caller reads it as zero)."""
+        ...
+
+    def last_performed_by_session(self, clerk_user_id: str) -> dict[int, date]:
+        """The owner's newest ``performed_on`` per Session, in one read (GLOSSARY: My Sessions, Recent Sessions).
+
+        The "Last trained" fact the shared Session card shows on My Sessions and Train — a
+        read-time projection over the record, never a stored column (ADR-0018). Plan-less
+        records carry no Session and are excluded; a Session never performed is absent from
+        the map (the card reads it as "not trained yet")."""
         ...
 
 
@@ -468,6 +478,17 @@ class SqlLoggedSessionRepository:
             counts[session_id] = counts.get(session_id, 0) + 1
         return counts
 
+    def last_performed_by_session(self, clerk_user_id: str) -> dict[int, date]:
+        rows = self._session.exec(
+            select(LoggedSession.session_id, func.max(LoggedSession.performed_on))
+            .where(
+                LoggedSession.clerk_user_id == clerk_user_id,
+                LoggedSession.session_id.is_not(None),
+            )
+            .group_by(LoggedSession.session_id)
+        ).all()
+        return {session_id: performed_on for session_id, performed_on in rows}
+
 
 class InMemoryLoggedSessionRepository:
     def __init__(
@@ -642,6 +663,16 @@ class InMemoryLoggedSessionRepository:
                 continue
             counts[logged.session_id] = counts.get(logged.session_id, 0) + 1
         return counts
+
+    def last_performed_by_session(self, clerk_user_id: str) -> dict[int, date]:
+        last: dict[int, date] = {}
+        for logged in self._logged.values():
+            if logged.clerk_user_id != clerk_user_id or logged.session_id is None:
+                continue
+            current = last.get(logged.session_id)
+            if current is None or logged.performed_on > current:
+                last[logged.session_id] = logged.performed_on
+        return last
 
 
 __all__ = [

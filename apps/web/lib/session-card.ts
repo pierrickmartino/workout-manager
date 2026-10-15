@@ -1,16 +1,12 @@
-// View-model for the shared Session card (GLOSSARY: Recent Sessions, My Sessions). Pure and
-// browser-safe (no server-only imports), like `recent-sessions` and `session-library`, so it is
+// View-model for the shared Session card (GLOSSARY: Recent Sessions, My Sessions, ADR-0134). Pure
+// and browser-safe (no server-only imports), like `recent-sessions` and `session-library`, so it is
 // unit-testable without a browser and both the Train panel and the My Sessions list feed it.
 //
-// The Train page renders each of the user's most-recently-performed plans in one card format; My
-// Sessions reuses that exact format for its library rows. Rather than two card components that can
-// drift, both call-sites map their own row shape into this one `SessionCardModel` and render the
-// single presentational `SessionCard`. The two sources carry different fields — Train has a
-// "Last trained" date and an exercise preview but no author/menu; the library has an author, a
-// Logged Count and a ⋯ actions menu but no performed date — so every source-specific field on the
-// model is nullable and the card renders each line only when present.
+// Train's "Pick up again" panel and the My Sessions library render one card. Both hold the same row
+// shape — a `GET /api/sessions` summary, which carries the plan's last performed date and its first
+// exercise names — so there is one mapper and every line of the card renders on both surfaces.
 
-import type { RecentSessionRow } from "./recent-sessions.ts";
+import { formatLongDate } from "./date-format.ts";
 import { sessionRowTitle, type SessionSummary } from "./session-library.ts";
 import { GENERIC_AUTHOR_LABEL } from "./session-author.ts";
 import {
@@ -18,66 +14,51 @@ import {
   type TrainingTypeBadgeVariant,
 } from "./training-type-badge.ts";
 
-// The normalized props the presentational `SessionCard` renders. The always-present fields drive
-// the sigil, title, type badge and Start; the nullable ones are the source-specific lines.
+// The normalized props the presentational `SessionCard` renders.
 export interface SessionCardModel {
   // The plan's stable id — the Workout Signature seed, so a plan wears the same mark everywhere.
   id: number;
   displayName: string;
   trainingType: string;
-  // The type badge's colour. Train keeps its fixed `cyan`; the library colours per Training Type
-  // (the map it already used), so neither surface's badge changes when they adopt one card.
+  // The type badge's colour, per Training Type.
   badgeVariant: TrainingTypeBadgeVariant;
   exerciseCount: number;
   startHref: string;
   // The Start control's accessible label — names the row so screen-reader users tell the repeated
   // Start controls apart.
   startLabel: string;
-  // When set, the sigil/title/badge block links to the plan's detail page (the library); Train
-  // leaves it null so its title is not a link.
-  detailHref: string | null;
-  // The most-recent performed date (Train only). Honest record data (History shows it too), never
-  // the forbidden calendar "today" (ADR-0001).
-  lastPerformedOn: string | null;
-  // The plan's first movements, ≤ 3 (Train only) — a preview of what Start runs.
+  // Where a tap anywhere on the card goes: the plan's detail page.
+  detailHref: string;
+  // "Last trained <date>" or "Not trained yet". A performed date is honest record data (History
+  // shows it too), never the forbidden calendar "today" (ADR-0001).
+  lastTrainedLabel: string;
+  // The plan's first movements, ≤ 3 — a preview of what Start runs, drawn from the plan.
   previewExercises: string[];
-  // The Author credit (library only), already resolved to the never-blank label.
+  // The Author credit, already resolved to the never-blank label; `null` on a self-authored plan.
   authorName: string | null;
-  // The read-time Logged Count (library only): drives the "Trained N×" badge and gates row Delete.
-  // `null` means the surface carries no Logged Count (Train), so no fact row renders.
-  loggedCount: number | null;
+  // The read-time Logged Count: drives the "Trained N×" badge and gates row Delete.
+  loggedCount: number;
 }
 
-// Map a Train "Recent Sessions" row onto the shared card model. Train keeps its fixed cyan badge,
-// its performed date and exercise preview, and has no author, Logged Count or actions menu.
-export function recentSessionCardModel(row: RecentSessionRow): SessionCardModel {
-  return {
-    id: row.id,
-    displayName: row.displayName,
-    trainingType: row.trainingType,
-    badgeVariant: "cyan",
-    exerciseCount: row.exerciseCount,
-    startHref: row.startHref,
-    startLabel: `Start ${row.displayName}`,
-    detailHref: null,
-    lastPerformedOn: row.lastPerformedOn,
-    previewExercises: row.previewExercises,
-    authorName: null,
-    loggedCount: null,
-  };
+// The card's "last trained" line from the plan's newest performed date (`YYYY-MM-DD`), or the
+// never-performed copy when there is none.
+export function lastTrainedLabel(lastPerformedOn: string | null): string {
+  return lastPerformedOn === null
+    ? "Not trained yet"
+    : `Last trained ${formatLongDate(lastPerformedOn)}`;
 }
 
-// Map a My Sessions library row onto the shared card model. The library colours the badge per
-// Training Type, links the title to the detail page, credits the Author and carries the Logged
-// Count; it has no performed date or exercise preview (those aren't on the list payload — Q3).
-export function sessionSummaryCardModel(
-  summary: SessionSummary,
-): SessionCardModel {
+// The card's "N exercises" fact.
+export function exerciseCountLabel(count: number): string {
+  return `${count} ${count === 1 ? "exercise" : "exercises"}`;
+}
+
+// Map a list row onto the card model.
+export function sessionCardModel(summary: SessionSummary): SessionCardModel {
   const title = sessionRowTitle(summary);
   // The Author byline (GLOSSARY: Author) is provenance, not self-repetition: shown only when the
-  // plan was authored by someone else (an adopted/shared copy). A self-authored row drops it
-  // (`null` → the card renders no byline). Otherwise the never-blank credit — the same fallback
-  // the row used before (a null/blank raw name → the generic label), so a shown byline is never "".
+  // plan was authored by someone else (an adopted/shared copy). A self-authored row drops it.
+  // Otherwise the never-blank credit (a null/blank raw name → the generic label).
   const authorName = summary.authored_by_me
     ? null
     : summary.author.display_name?.trim() || GENERIC_AUTHOR_LABEL;
@@ -90,8 +71,8 @@ export function sessionSummaryCardModel(
     startHref: `/sessions/${summary.id}/live`,
     startLabel: `Start ${title}`,
     detailHref: `/sessions/${summary.id}`,
-    lastPerformedOn: null,
-    previewExercises: [],
+    lastTrainedLabel: lastTrainedLabel(summary.last_performed_on),
+    previewExercises: summary.preview_exercises,
     authorName,
     loggedCount: summary.logged_count,
   };

@@ -634,7 +634,10 @@ MAX_LIST_LIMIT = 100
 
 
 def _serialize_summary(
-    summary: SessionSummaryView, logged_count: int, clerk_user_id: str
+    summary: SessionSummaryView,
+    logged_count: int,
+    last_performed_on: date | None,
+    clerk_user_id: str,
 ) -> dict:
     """One My Sessions row (issue #397): the same name/fallback and Author shapes the
     detail read uses, kept thin (the prescriptions themselves are not joined — only their
@@ -669,6 +672,13 @@ def _serialize_summary(
         "logged_count": logged_count,
         # The plan-side Exercise Prescription count — the row's "N exercises" fact (#397).
         "exercise_count": summary.prescription_count,
+        # The shared Session card's facts (GLOSSARY: My Sessions, Recent Sessions): the newest performed date
+        # (``null`` when never performed — read off the record, never stored) and the plan's
+        # first Exercise names in prescription order.
+        "last_performed_on": (
+            last_performed_on.isoformat() if last_performed_on is not None else None
+        ),
+        "preview_exercises": list(summary.preview_exercise_names),
     }
 
 
@@ -706,9 +716,16 @@ def list_sessions(
     # fans out into a per-Session count query. A Session the user has never performed is
     # absent from the map and reads as zero.
     counts = logged.count_by_session(clerk_user_id)
+    # Likewise one read for every row's "Last trained" date (GLOSSARY: My Sessions, Recent Sessions).
+    last_performed = logged.last_performed_by_session(clerk_user_id)
     return success_envelope(
         [
-            _serialize_summary(summary, counts.get(summary.id, 0), clerk_user_id)
+            _serialize_summary(
+                summary,
+                counts.get(summary.id, 0),
+                last_performed.get(summary.id),
+                clerk_user_id,
+            )
             for summary in page.items
         ],
         meta={"total": page.total, "limit": limit, "offset": offset},

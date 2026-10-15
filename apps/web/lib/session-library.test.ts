@@ -35,6 +35,8 @@ function makeSummary(overrides: Partial<SessionSummary>): SessionSummary {
     is_favorite: false,
     exercise_count: 5,
     logged_count: 0,
+    last_performed_on: null,
+    preview_exercises: [],
     ...overrides,
   };
 }

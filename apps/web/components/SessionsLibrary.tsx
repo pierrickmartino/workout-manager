@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import { replaceFilterQuery } from "@/lib/filter-url";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
-import { SessionLibraryRow } from "@/components/SessionLibraryRow";
+import { SessionCardRow } from "@/components/SessionCardRow";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -178,7 +178,7 @@ export function SessionsLibrary({
         <ol className="flex list-none flex-col gap-4 p-0">
           {filtered.map((session) => (
             <li key={session.id}>
-              <SessionLibraryRow session={session} />
+              <SessionCardRow session={session} />
             </li>
           ))}
         </ol>

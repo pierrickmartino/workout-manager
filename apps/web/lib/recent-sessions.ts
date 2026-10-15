@@ -11,11 +11,10 @@
 
 import type { LoggedSession } from "./logs-types";
 import type { SessionSummary } from "./session-library";
-import type { ExercisePrescription } from "./sessions-types";
 
-// The panel shows at most five plans (Q3) and previews at most three exercises per plan (Q7).
+// The panel shows at most five plans (Q3). Each renders as the shared Session card, whose exercise
+// preview and "Last trained" date ride on the list row itself (ADR-0134).
 export const MAX_RECENT_SESSIONS = 5;
-export const MAX_PREVIEW_EXERCISES = 3;
 
 // One selected plan to surface, paired with the date of its most recent performance. The
 // selection is keyed off the record (which plans were performed, and when) but resolves to the
@@ -23,20 +22,6 @@ export const MAX_PREVIEW_EXERCISES = 3;
 export interface RecentSessionSelection {
   session: SessionSummary;
   lastPerformedOn: string;
-}
-
-// A fully-assembled Recent Sessions row for rendering — plan identity from the SessionSummary,
-// performance recency from the record, and the plan's first exercises from its detail read.
-export interface RecentSessionRow {
-  id: number;
-  displayName: string;
-  trainingType: string;
-  lastPerformedOn: string;
-  previewExercises: string[];
-  // The plan's full Exercise Prescription count — the Workout Signature's node count. Distinct
-  // from `previewExercises.length` (capped at three); this is the whole plan's size.
-  exerciseCount: number;
-  startHref: string;
 }
 
 // Select the up-to-`limit` distinct standalone plans the user performed most recently.
@@ -76,63 +61,4 @@ export function selectRecentSessions(
   }
 
   return selected;
-}
-
-// The first few exercise names of a plan, in prescription order (Q7/Q10). The names come from the
-// *plan's* Exercise Prescriptions — what Start will actually run — never from the last record,
-// which can diverge from the plan. No dedupe: position is the plan's authored order.
-export function previewExerciseNames(
-  prescriptions: readonly Pick<ExercisePrescription, "exercise_name">[],
-  max: number = MAX_PREVIEW_EXERCISES,
-): string[] {
-  return prescriptions.slice(0, max).map((prescription) => prescription.exercise_name);
-}
-
-// Where Start goes: straight into the plan's Live Session (Q2). The concurrency guard for an
-// already-running Live Session lives in `LiveSessionScreen` (ADR-0012), so deep-linking here is
-// safe — a different unfinished Live Session lands on that resume/end block screen.
-export function startLiveHref(sessionId: number): string {
-  return `/sessions/${sessionId}/live`;
-}
-
-// Assemble a render-ready row from a selection and the plan's detail read. `displayName` and
-// `trainingType` come from the standalone library row (the never-blank label the server
-// resolved); `previewExercises` from the plan detail's prescriptions.
-export function buildRecentSessionRow(
-  selection: RecentSessionSelection,
-  prescriptions: readonly Pick<ExercisePrescription, "exercise_name">[],
-): RecentSessionRow {
-  return {
-    id: selection.session.id,
-    displayName: selection.session.display_name,
-    trainingType: selection.session.training_type,
-    lastPerformedOn: selection.lastPerformedOn,
-    previewExercises: previewExerciseNames(prescriptions),
-    exerciseCount: prescriptions.length,
-    startHref: startLiveHref(selection.session.id),
-  };
-}
-
-// Just the prescriptions a plan's detail read carries — all this module needs of it, so the
-// whole `SessionDetail` type (and its server-only neighbours) stays out.
-export interface RecentSessionDetail {
-  prescriptions: readonly Pick<ExercisePrescription, "exercise_name">[];
-}
-
-// Pair each selection with its plan-detail read and drop the ones that came back empty.
-//
-// This is the panel's **degradation rule**, and it lives here rather than in the fetching
-// component so it is pinned by a test: a plan whose detail could not be read has no honest
-// preview and no verified prescription count, so its row is dropped — the panel shows the four
-// plans it could read, never a fifth with a blank body or a fabricated count. `details` is
-// positional against `selections`, which is how the caller's `Promise.all` returns it.
-export function toRecentSessionRows(
-  selections: readonly RecentSessionSelection[],
-  details: readonly (RecentSessionDetail | null)[],
-): RecentSessionRow[] {
-  return selections.flatMap((selection, index) => {
-    const detail = details[index];
-    if (!detail) return [];
-    return [buildRecentSessionRow(selection, detail.prescriptions)];
-  });
 }

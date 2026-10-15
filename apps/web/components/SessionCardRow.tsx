@@ -3,10 +3,7 @@
 import { useActionState, useCallback } from "react";
 
 import type { SessionSummary } from "@/lib/session-library";
-import {
-  canDeleteSessionRow,
-  sessionSummaryCardModel,
-} from "@/lib/session-card";
+import { canDeleteSessionRow, sessionCardModel } from "@/lib/session-card";
 import {
   submitDeleteSessionRow,
   submitToggleFavorite,
@@ -19,16 +16,19 @@ import { ActionSheetSeparator } from "@/components/pulse/action-sheet-item";
 import { FavoriteSheetItem } from "@/components/FavoriteSheetItem";
 import { useLongPress } from "@/components/use-long-press";
 
-// One My Sessions library row: the shared `SessionCard` plus the interactions the library adds on
-// top of Train's read-only card (GLOSSARY: My Sessions, Favorite, Delete). Favoriting has no star on
-// the card face any more (Q6) — the Glow Edge carries the state — so the write lives in two places
-// that share one action: the ⋯ action sheet (the accessible, cross-platform home) and a
+// One Session card row, on My Sessions and on Train's "Pick up again" panel alike (ADR-0134): the
+// shared `SessionCard` plus its interactions (GLOSSARY: My Sessions, Favorite, Delete). Favoriting
+// has no star on the card face (Q6) — the Glow Edge carries the state — so the write lives in two
+// places that share one action: the ⋯ action sheet (the accessible, cross-platform home) and a
 // press-and-hold shortcut on the card. Both dispatch the same `submitToggleFavorite`; a 404/409
 // (e.g. a Protocol member) or transport failure surfaces inline below the card, and nothing toggles.
-export function SessionLibraryRow({
+export function SessionCardRow({
   session,
+  level = 2,
 }: {
   session: SessionSummary;
+  // The card title's outline rank (ADR-0094): 3 under Train's group heading, else 2.
+  level?: 2 | 3;
 }): React.JSX.Element {
   const [favoriteState, toggleFavoriteAction, favoritePending] = useActionState<
     ToggleFavoriteState,
@@ -52,7 +52,8 @@ export function SessionLibraryRow({
   return (
     <div {...longPress}>
       <SessionCard
-        model={sessionSummaryCardModel(session)}
+        model={sessionCardModel(session)}
+        level={level}
         isFavorite={session.is_favorite}
         claimsSigilMorph
         actions={
@@ -73,8 +74,8 @@ export function SessionLibraryRow({
 }
 
 // The row's ⋯ action sheet (ADR-0113): Favorite/Unfavorite always, Delete only for a
-// never-performed plan (GLOSSARY: Delete, ADR-0063). Its trigger sits beside Start, so a closed row
-// spends no line on it; the sheet is titled with the plan's name, and the trigger names it too,
+// never-performed plan (GLOSSARY: Delete, ADR-0063). Its trigger ends the card's bottom row, so a
+// closed row spends no line on it; the sheet is titled with the plan's name, and the trigger names it too,
 // since every row on the screen carries one.
 function SessionRowMenu({
   session,

@@ -57,6 +57,12 @@ export interface SessionSummary {
   // spotted at a glance) and offers Delete only when it is 0 (a performed Session is never
   // deleted). Always present on a list row — the server computes it for every row.
   logged_count: number;
+  // The plan's newest performed date (`YYYY-MM-DD`), or `null` when never performed — a
+  // read-time projection over the record, the shared Session card's "Last trained" line.
+  last_performed_on: string | null;
+  // The plan's first (≤ 3) Exercise names in prescription order — the card's preview of what
+  // Start runs, drawn from the plan, never the last record.
+  preview_exercises: string[];
 }
 
 // The single-select chip filter (GLOSSARY: My Sessions): `all` (no narrowing), `favorites`

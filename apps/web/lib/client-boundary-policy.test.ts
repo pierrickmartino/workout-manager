@@ -145,7 +145,7 @@ test("no module the server runs calls a client module's function", () => {
   const routes = sweptWebSources().filter((entry) => entry.startsWith("app/"));
   const sources = [...serverReachableModules(routes)];
   assert.ok(sources.includes("app/sessions/[id]/page.tsx"), "the walk never reached a page");
-  assert.ok(sources.includes("components/SessionCard.tsx"), "the walk never left app/");
+  assert.ok(sources.includes("components/RecentSessions.tsx"), "the walk never left app/");
 
   // Act
   const calls = sources.flatMap((entry) =>
