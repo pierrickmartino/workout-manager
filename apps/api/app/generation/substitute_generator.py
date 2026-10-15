@@ -86,10 +86,17 @@ class LlmSubstituteGenerator:
     ``GenerationError`` and never enters the catalog (ADR-0006)."""
 
     def __init__(
-        self, llm: StructuredLLM, *, kind: GeneratorKind = GeneratorKind.SUBSTITUTE
+        self,
+        llm: StructuredLLM,
+        *,
+        kind: GeneratorKind = GeneratorKind.SUBSTITUTE,
+        clerk_user_id: str | None = None,
     ) -> None:
         self._llm = llm
         self._kind = kind
+        # The user the call is made on behalf of, attributed in the AI audit log
+        # (ADR-0135); ``None`` records it as a system call.
+        self._clerk_user_id = clerk_user_id
 
     def generate(self, request: SubstituteRequest) -> GeneratedSubstitute:
         return generate_structured(
@@ -99,7 +106,10 @@ class LlmSubstituteGenerator:
             schema=GeneratedSubstitute,
             max_tokens=MAX_TOKENS,
             subject="substitute generation",
-            context=GenerationCallContext(generator_kind=self._kind),
+            context=GenerationCallContext(
+                generator_kind=self._kind,
+                clerk_user_id=self._clerk_user_id,
+            ),
         )
 
 

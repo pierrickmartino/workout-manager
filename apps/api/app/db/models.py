@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Boolean, Column, LargeBinary, UniqueConstraint, false
+from sqlalchemy import Boolean, Column, LargeBinary, Text, UniqueConstraint, false
 from sqlalchemy.types import JSON
 from sqlmodel import Field, SQLModel
 
@@ -680,3 +680,31 @@ class GenerationFeedback(SQLModel, table=True):
     verdict: str
     reason: str | None = Field(default=None)
     created_at: datetime = Field(default_factory=_utcnow)
+
+
+class GenerationCallRecord(SQLModel, table=True):
+    """One recorded metered ``Generation Call``: the admin AI audit log (ADR-0135).
+
+    Operator telemetry, not a domain record: written best-effort by the Postgres
+    recorder on every cache miss that reaches a provider, success or failure, and read
+    only behind the admin gate. ``clerk_user_id`` is null for an unattributed (system)
+    call such as catalog enrichment; the token counts are null when the provider did not
+    report them, never zero; ``output_text`` is null on a failed call. The prompts hold
+    readable health data, so rows live for the 3-day retention window only, enforced on
+    write (purge) and on read (cutoff). ``created_at`` is indexed for both."""
+
+    __tablename__ = "generation_call"
+
+    id: int | None = Field(default=None, primary_key=True)
+    created_at: datetime = Field(default_factory=_utcnow, index=True)
+    generator_kind: str
+    clerk_user_id: str | None = Field(default=None, index=True)
+    provider: str
+    model: str
+    input_tokens: int | None = Field(default=None)
+    output_tokens: int | None = Field(default=None)
+    latency_ms: float
+    outcome: str
+    system_prompt: str = Field(sa_column=Column(Text, nullable=False))
+    user_prompt: str = Field(sa_column=Column(Text, nullable=False))
+    output_text: str | None = Field(default=None, sa_column=Column(Text, nullable=True))

@@ -3,6 +3,7 @@ import type { SessionSummary } from "@/lib/session-library";
 import type { ExerciseSearchResult } from "@/lib/exercises-types";
 import type { ExerciseDetail, ExercisePrescription, WorkoutSession } from "@/lib/sessions-types";
 import type { AdminExerciseRow } from "@/lib/admin-exercises-view";
+import type { GenerationCallRow } from "@/lib/admin-generation-calls-view";
 import type { ProgressStory } from "@/lib/progress-story-view";
 import type { Profile } from "@/lib/profile-types";
 import type { ProtocolProgress } from "@/lib/protocols-types";
@@ -221,6 +222,36 @@ export const adminExerciseRows: AdminExerciseRow[] = Array.from({ length: 60 }, 
 // than imported — what is under measurement is the instant's own text, which is the longest
 // thing in that row and the part this change made longer.
 export const auditEntry = { actor: "operator@example.com", createdAt: "2026-09-30T14:03:22.123456" };
+
+// The admin AI audit log's rows (issue #730), at their widest: a full-length Clerk user id (one
+// unbroken token), an OpenRouter model slug, and the longest kind label; then a failed system
+// call with unknown tokens, the row whose badge and "unknown" labels differ.
+export const generationCallRows: GenerationCallRow[] = [
+  {
+    id: 2,
+    created_at: "2026-10-15T12:04:51.512345",
+    generator_kind: "exercise-enrichment",
+    clerk_user_id: "user_2qT8xKdLmNpRsVwYzAbCdEfGhIj",
+    provider: "openrouter",
+    model: "anthropic/claude-opus-4-8-preview-20261001",
+    input_tokens: 128450,
+    output_tokens: 16384,
+    latency_ms: 48210.7,
+    outcome: "success",
+  },
+  {
+    id: 1,
+    created_at: "2026-10-15T12:00:03.000001",
+    generator_kind: "protocol",
+    clerk_user_id: null,
+    provider: "anthropic",
+    model: "claude-opus-4-8",
+    input_tokens: null,
+    output_tokens: null,
+    latency_ms: 812.4,
+    outcome: "error",
+  },
+];
 
 // The Progress Story at its widest (ADR-0127): bodyweight plus a fractional added load and
 // two-digit counts, so the headline and each side-by-side row hold the longest figures a

@@ -4,9 +4,9 @@ The factory is the single place a concrete SDK client is constructed and the
 single dispatch on ``AI_PROVIDER``. It fails fast when the *selected* provider's
 key is missing, tolerates absent keys for *other* providers, and surfaces a
 clear error for an unknown or not-yet-wired provider. It also wraps the chosen
-provider in the ``RecordingStructuredLLM`` decorator with the no-op recorder, so
-every metered call is captured in one place while an unconfigured deployment
-records nothing. These tests pin that dispatch, the wrapping, and the fail-fast
+provider in the ``RecordingStructuredLLM`` decorator with the Postgres recorder
+whenever Langfuse is not configured, so every metered call is captured in one
+place: the admin AI audit log (ADR-0135). These tests pin that dispatch, the wrapping, and the fail-fast
 contract without a network call."""
 
 from __future__ import annotations
@@ -20,19 +20,19 @@ from app.generation.llm.providers.google_provider import GoogleStructuredLLM
 from app.generation.llm.providers.openai_provider import OpenAIStructuredLLM
 from app.generation.llm.providers.openrouter_provider import OpenRouterStructuredLLM
 from app.generation.monitoring.langfuse_recorder import LangfuseGenerationCallRecorder
-from app.generation.monitoring.recorder import NoOpGenerationCallRecorder
+from app.generation.monitoring.postgres_recorder import PostgresGenerationCallRecorder
 from app.generation.monitoring.recording_llm import RecordingStructuredLLM
 
 
 def _assert_wraps(client, provider_type, *, provider_name, model):
-    """The factory returns a recording decorator wrapping the provider, no-op recorder."""
+    """The factory returns a recording decorator wrapping the provider, Postgres recorder."""
 
     assert isinstance(client, RecordingStructuredLLM)
     assert isinstance(client._provider, provider_type)
     assert client._provider._model == model
     assert client._provider_name == provider_name
     assert client._model == model
-    assert isinstance(client._recorder, NoOpGenerationCallRecorder)
+    assert isinstance(client._recorder, PostgresGenerationCallRecorder)
 
 
 def test_anthropic_provider_builds_a_recording_structured_llm():
@@ -148,18 +148,18 @@ def test_unknown_provider_fails_fast():
         build_llm_client(settings)
 
 
-def test_recorder_is_noop_when_langfuse_is_not_configured():
-    # Arrange — the offline default: no Langfuse configured
+def test_recorder_is_postgres_when_langfuse_is_not_configured():
+    # Arrange — no Langfuse configured
     settings = Settings()
 
-    # Act — the SDK-client builder must not even be consulted on the no-op path
+    # Act — the SDK-client builder must not even be consulted on this path
     recorder = build_recorder(
         settings,
         langfuse_client_builder=_unused_client_builder,
     )
 
-    # Assert — records nothing, contacts no network
-    assert isinstance(recorder, NoOpGenerationCallRecorder)
+    # Assert — calls go to the app's own database (ADR-0135)
+    assert isinstance(recorder, PostgresGenerationCallRecorder)
 
 
 def test_recorder_is_langfuse_when_configured():
