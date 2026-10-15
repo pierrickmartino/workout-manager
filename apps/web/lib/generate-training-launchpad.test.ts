@@ -53,17 +53,23 @@ test("the launchpad on its own offers only the two generation routes", () => {
   ]);
 });
 
-test("a composed card follows the generation routes in the same stack", () => {
-  // Arrange — the TRAIN launchpad's shape, which is what the two booleans used to select.
-  const { GenerateTrainingLaunchpad, BuildWorkoutLink, LogPastWorkoutLink } = loadTsx(MODULE);
+test("the TRAIN cards sit side by side after the generation routes, as on Home", () => {
+  // Arrange — the TRAIN launchpad's shape: the two no-AI cards composed as a pair, laid out
+  // like Home's quick-action row (ADR-0071) rather than stacked full-width.
+  const { GenerateTrainingLaunchpad, LaunchLinkPair, BuildWorkoutLink, LogPastWorkoutLink } =
+    loadTsx(MODULE);
 
   // Act
   const document = render(
     React.createElement(
       GenerateTrainingLaunchpad,
       { eyebrow: "TRAIN // START SOMETHING NEW", from: "/train" },
-      React.createElement(BuildWorkoutLink),
-      React.createElement(LogPastWorkoutLink),
+      React.createElement(
+        LaunchLinkPair,
+        null,
+        React.createElement(BuildWorkoutLink),
+        React.createElement(LogPastWorkoutLink),
+      ),
     ),
   );
 
@@ -72,35 +78,41 @@ test("a composed card follows the generation routes in the same stack", () => {
   assert.deepEqual(links(document), [
     { href: "/protocols/new", label: "Generate a protocol" },
     { href: "/sessions/new?from=%2Ftrain", label: "Generate a workout" },
-    { href: "/sessions/build", label: "Build a workout" },
-    { href: "/sessions/log", label: "Log a past workout" },
+    { href: "/sessions/build", label: "Build" },
+    { href: "/sessions/log", label: "Log" },
   ]);
 
-  // And the composed cards are siblings of the generation links, not a nested box: the stack
-  // is what spaces all four evenly, so a wrapper would show as a double gap.
+  // The pair is one row of the stack — two equal columns spaced like the stack itself, the
+  // grid Home's quick-action row draws — so the stack still spaces every row evenly.
   const stack = document.querySelector("a")!.parentElement!;
-  assert.equal(stack.children.length, 4);
   assert.deepEqual(
     [...stack.children].map((child) => child.tagName),
-    ["A", "A", "A", "A"],
+    ["A", "A", "DIV"],
   );
+  const pair = stack.children[2];
+  assert.match(pair.className, /\bgrid\b/);
+  assert.match(pair.className, /\bgrid-cols-2\b/);
+  assert.match(pair.className, /\bgap-2\.5\b/);
+  assert.deepEqual([...pair.children].map((child) => child.tagName), ["A", "A"]);
 
   // A composed card is styled identically to the generation link above it — that is what
   // `LAUNCH_LINK` is for, and a card that drifted from its neighbours would read as a
   // different kind of thing. The primary protocol CTA is deliberately the one that differs.
-  const [protocol, ...secondary] = [...stack.children].map((child) => child.className);
+  const [protocol, ...secondary] = [...document.querySelectorAll("a")].map((a) => a.className);
   assert.equal(new Set(secondary).size, 1, `three identical chips, saw ${secondary.join(" | ")}`);
   assert.match(secondary[0], /\bw-full\b/);
   assert.match(secondary[0], /\bbg-surface\b/);
   assert.notEqual(protocol, secondary[0]);
 
   // Each card carries its icon, which is the other half of looking like its neighbours.
-  for (const child of stack.children) assert.ok(child.querySelector("svg"), child.textContent!);
+  for (const anchor of document.querySelectorAll("a"))
+    assert.ok(anchor.querySelector("svg"), anchor.textContent!);
 });
 
-test("each composable card names one destination and says what it does", () => {
+test("each composable card names one destination with Home's short label", () => {
   // Arrange — the two cards are no-AI entry points: author a reusable plan to run later
-  // (intent I4), or record a workout already done (ADR-0040).
+  // (intent I4), or record a workout already done (ADR-0040). Half-width, they carry the
+  // same one-word labels as Home's quick-action row, so neither wraps at 320px.
   const { BuildWorkoutLink, LogPastWorkoutLink } = loadTsx(MODULE);
 
   // Act
@@ -108,8 +120,8 @@ test("each composable card names one destination and says what it does", () => {
   const log = links(render(React.createElement(LogPastWorkoutLink)));
 
   // Assert
-  assert.deepEqual(build, [{ href: "/sessions/build", label: "Build a workout" }]);
-  assert.deepEqual(log, [{ href: "/sessions/log", label: "Log a past workout" }]);
+  assert.deepEqual(build, [{ href: "/sessions/build", label: "Build" }]);
+  assert.deepEqual(log, [{ href: "/sessions/log", label: "Log" }]);
 });
 
 test("the launchpad declares no flag that selects between compositions", () => {
