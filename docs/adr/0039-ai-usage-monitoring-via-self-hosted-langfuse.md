@@ -1,8 +1,12 @@
 ---
-status: accepted
+status: superseded
 ---
 
 # 0039 — Operational AI-usage monitoring via self-hosted Langfuse behind a recorder port
+
+> **Superseded by [ADR-0135](./0135-the-ai-audit-log-is-an-in-house-postgres-table.md).**
+> Langfuse was never deployed; Generation Calls are recorded in the app's own Postgres instead,
+> behind the same recorder port, with 3-day retention.
 
 The operator needs visibility into AI usage — prompts, tokens, cost, latency, outcome, and
 eventually feedback — across every generation. This is **operational observability of the

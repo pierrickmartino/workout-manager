@@ -8,7 +8,7 @@ import { SkeletonPage } from "@/components/pulse/skeleton-reveal";
 //
 // Both the overline and the title are static, so the real header paints. The `exercises` child
 // segment overrides this with its own, and `exercises/[id]` with its own again, because neither
-// is a two-card stack.
+// is a stack of cards.
 export default function AdminLoading(): React.JSX.Element {
   return (
     <SkeletonPage gap={6} header={<PageHeader overline="PULSE // ADMIN" title="Admin" />}>
@@ -21,6 +21,12 @@ export default function AdminLoading(): React.JSX.Element {
       {/* CATALOG — the nav rows into the admin exercise area */}
       <div className="flex flex-col gap-4">
         <Skeleton className="h-3 w-20" />
+        <Skeleton className="h-14 w-full rounded-lg" />
+      </div>
+
+      {/* AI — the nav row into the AI audit log */}
+      <div className="flex flex-col gap-4">
+        <Skeleton className="h-3 w-12" />
         <Skeleton className="h-14 w-full rounded-lg" />
       </div>
     </SkeletonPage>

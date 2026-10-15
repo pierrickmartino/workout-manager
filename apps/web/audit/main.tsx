@@ -48,6 +48,8 @@ import { SpecsPanel } from "@/components/exercise/specs-panel";
 import { ProgressStoryCard } from "@/components/pulse/progress-story";
 import { toProgressStoryView } from "@/lib/progress-story-view";
 import { AdminExerciseBrowser } from "@/components/AdminExerciseBrowser";
+import { GenerationCallList } from "@/components/GenerationCallList";
+import { toGenerationCallRowView } from "@/lib/admin-generation-calls-view";
 import { LocalInstant } from "@/components/pulse/local-instant";
 import { ConfirmDialog } from "@/components/pulse/confirm-dialog";
 import { ActionSheetPanel } from "@/components/pulse/action-sheet";
@@ -97,7 +99,7 @@ import type { Achievement } from "@/lib/profile-progress-types";
 import { SetAsideNote } from "@/components/SetAsideNote";
 import { BasedOnNote } from "@/components/BasedOnNote";
 import { protocolsIndex, type LiveSessionContext } from "@/lib/protocols-index";
-import { adminExerciseRows, auditEntry, exerciseDetail, exerciseNames, exercises, history, historyIndex, liveWorkout, personalRecords, prescriptions, profile, progressStory, protocolIndexEntries, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
+import { adminExerciseRows, auditEntry, exerciseDetail, generationCallRows, exerciseNames, exercises, history, historyIndex, liveWorkout, personalRecords, prescriptions, profile, progressStory, protocolIndexEntries, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
 
 const params = new URLSearchParams(location.search);
 if (params.get("fonts") === "fontsource") {
@@ -220,6 +222,12 @@ function AdminAudit() {
           <span className="text-[11px] text-text-muted">{auditEntry.actor} &middot; <LocalInstant iso={auditEntry.createdAt} /></span>
         </li>
       </ul>
+    </div>
+    {/* The AI audit log's call cards (issue #730): a Server Component page, so the list is
+        mounted here from the same view-model the page maps through. */}
+    <div className="flex flex-col gap-4">
+      <SectionHeader>AI audit log</SectionHeader>
+      <GenerationCallList calls={generationCallRows.map(toGenerationCallRowView)} />
     </div>
   </div>;
 }

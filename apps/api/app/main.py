@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from app.envelope import error_envelope
 from app.routes.active_skin import router as active_skin_router
+from app.routes.admin_generation_calls import router as admin_generation_calls_router
 from app.routes.analytics import router as analytics_router
 from app.routes.appearance import router as appearance_router
 from app.routes.curated_protocols import router as curated_protocols_router
@@ -77,6 +78,7 @@ def create_app() -> FastAPI:
     app.include_router(progress_router)
     app.include_router(records_router)
     app.include_router(analytics_router)
+    app.include_router(admin_generation_calls_router)
     return app
 
 

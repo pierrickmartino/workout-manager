@@ -4,9 +4,9 @@ A recorder is where a ``Generation Call`` goes to be durably captured. The port 
 one-method seam so the observability vendor (self-hosted Langfuse, a later slice) stays
 quarantined behind it and never leaks into generators (ADR-0039).
 
-The default is a **no-op**: an unconfigured deployment — and the entire offline test
-suite — records nothing and stays fully offline, so generation behaves exactly as it did
-before monitoring existed."""
+The **no-op** records nothing. Deployments record into Postgres instead (the
+``PostgresGenerationCallRecorder``, ADR-0135); the no-op stays for tests that don't care
+about the log, so they run fully offline."""
 
 from __future__ import annotations
 
@@ -46,8 +46,9 @@ class GenerationCallRecorder(Protocol):
 class NoOpGenerationCallRecorder:
     """Records nothing — the default when no monitoring backend is configured.
 
-    Selected by the factory for any deployment without Langfuse and used by the whole
-    offline suite, so generation runs exactly as it did before monitoring. It never
+    Kept for tests that don't care about the log (the factory selects the Postgres
+    recorder in deployments, ADR-0135), so generation runs exactly as it did before
+    monitoring. It never
     raises, upholding the best-effort guarantee even on the default path, and returns no
     trace-id handle — lineage is simply absent on the unconfigured path (#274)."""
 

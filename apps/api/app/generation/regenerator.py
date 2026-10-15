@@ -111,10 +111,17 @@ class LlmSessionRegenerator:
     ``regenerate``)."""
 
     def __init__(
-        self, llm: StructuredLLM, *, kind: GeneratorKind = GeneratorKind.REGENERATION
+        self,
+        llm: StructuredLLM,
+        *,
+        kind: GeneratorKind = GeneratorKind.REGENERATION,
+        clerk_user_id: str | None = None,
     ) -> None:
         self._llm = llm
         self._kind = kind
+        # The user the call is made on behalf of, attributed in the AI audit log
+        # (ADR-0135); ``None`` records it as a system call.
+        self._clerk_user_id = clerk_user_id
 
     def regenerate(self, request: RegenerationRequest) -> GeneratedSession:
         capture = TraceCapture()
@@ -125,7 +132,11 @@ class LlmSessionRegenerator:
             schema=GeneratedSession,
             max_tokens=MAX_TOKENS,
             subject="generation",
-            context=GenerationCallContext(generator_kind=self._kind, capture=capture),
+            context=GenerationCallContext(
+                generator_kind=self._kind,
+                capture=capture,
+                clerk_user_id=self._clerk_user_id,
+            ),
         )
         # Regeneration produces flat replacement Prescriptions in v1 — it is not
         # Superset-aware (GLOSSARY.md §Regeneration, ADR-0023). The prompt never asks

@@ -61,7 +61,7 @@ def run_generation_job(
     request = ProtocolGenerationRequest(**request_data)
     cache = GenerationCache(RedisCacheStore(redis.Redis.from_url(settings.redis_url)))
     llm = build_llm_client(settings)
-    generator = LlmProtocolGenerator(llm)
+    generator = LlmProtocolGenerator(llm, clerk_user_id=clerk_user_id)
     try:
         with Session(get_engine()) as session:
             view = run_generation(

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { Dumbbell } from "@/components/pulse/icons";
+import { Activity, Dumbbell } from "@/components/pulse/icons";
 
 import { resolveIsAdmin } from "@/lib/admin";
 import { resolveActiveSkin } from "@/lib/active-skin";
@@ -18,6 +18,7 @@ import { NAV_FORWARD } from "@/lib/nav-direction";
 // ordinary user) and links into the admin exercise area. The catalog-enrichment tools — the
 // completeness readout and the whole-catalog backfill — now live inside that exercise area
 // (issue #508) beside the per-Exercise enrich-now, so all enrichment controls sit in one place.
+// It also links to the AI audit log (issue #730, ADR-0135), the recent Generation Calls.
 // The admin gate is resolved server-side; a non-admin gets a 404 rather than a
 // revealed-but-denied page, and the backend independently gates every underlying action
 // (ADR-0046).
@@ -48,6 +49,20 @@ export default async function AdminPage() {
             href="/admin/exercises"
             direction={NAV_FORWARD}
             value="BROWSE"
+            accent="cyan"
+          />
+        </Card>
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <SectionHeader>AI</SectionHeader>
+        <Card className="p-0">
+          <NavRow
+            icon={Activity}
+            label="AI audit log"
+            href="/admin/ai-audit-log"
+            direction={NAV_FORWARD}
+            value="3 DAYS"
             accent="cyan"
           />
         </Card>

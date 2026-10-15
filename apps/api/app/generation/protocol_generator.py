@@ -173,10 +173,17 @@ class LlmProtocolGenerator:
     check, so an under-built Protocol raises ``GenerationError`` for any provider."""
 
     def __init__(
-        self, llm: StructuredLLM, *, kind: GeneratorKind = GeneratorKind.PROTOCOL
+        self,
+        llm: StructuredLLM,
+        *,
+        kind: GeneratorKind = GeneratorKind.PROTOCOL,
+        clerk_user_id: str | None = None,
     ) -> None:
         self._llm = llm
         self._kind = kind
+        # The user the call is made on behalf of, attributed in the AI audit log
+        # (ADR-0135); ``None`` records it as a system call.
+        self._clerk_user_id = clerk_user_id
 
     def generate(self, request: ProtocolGenerationRequest) -> GeneratedProtocol:
         capture = TraceCapture()
@@ -189,7 +196,11 @@ class LlmProtocolGenerator:
             schema=GeneratedProtocol,
             max_tokens=MAX_TOKENS,
             subject="protocol generation",
-            context=GenerationCallContext(generator_kind=self._kind, capture=capture),
+            context=GenerationCallContext(
+                generator_kind=self._kind,
+                capture=capture,
+                clerk_user_id=self._clerk_user_id,
+            ),
         )
         protocol = degrade_protocol_to_flat(
             protocol, has_sensitive_constraint=request.has_sensitive_constraint

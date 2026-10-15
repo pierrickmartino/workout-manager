@@ -130,10 +130,17 @@ class LlmSessionGenerator:
     which provider produced it."""
 
     def __init__(
-        self, llm: StructuredLLM, *, kind: GeneratorKind = GeneratorKind.SESSION
+        self,
+        llm: StructuredLLM,
+        *,
+        kind: GeneratorKind = GeneratorKind.SESSION,
+        clerk_user_id: str | None = None,
     ) -> None:
         self._llm = llm
         self._kind = kind
+        # The user the call is made on behalf of, attributed in the AI audit log
+        # (ADR-0135); ``None`` records it as a system call.
+        self._clerk_user_id = clerk_user_id
 
     def generate(self, request: GenerationRequest) -> GeneratedSession:
         capture = TraceCapture()
@@ -146,7 +153,11 @@ class LlmSessionGenerator:
             schema=GeneratedSession,
             max_tokens=MAX_TOKENS,
             subject="generation",
-            context=GenerationCallContext(generator_kind=self._kind, capture=capture),
+            context=GenerationCallContext(
+                generator_kind=self._kind,
+                capture=capture,
+                clerk_user_id=self._clerk_user_id,
+            ),
         )
         generated = degrade_session_to_flat(
             generated, has_sensitive_constraint=request.has_sensitive_constraint

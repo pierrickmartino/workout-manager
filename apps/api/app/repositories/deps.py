@@ -11,6 +11,7 @@ from rq import Queue
 from sqlmodel import Session
 
 from app.active_skin.cache import ActiveSkinCache
+from app.auth.dependencies import get_current_user
 from app.config import Settings, get_settings
 from app.db.session import get_session
 from app.generation.backfill_queue import BackfillQueue, RqBackfillQueue
@@ -19,6 +20,7 @@ from app.generation.enrichment_queue import EnrichmentQueue, RqEnrichmentQueue
 from app.generation.generator import LlmSessionGenerator, SessionGenerator
 from app.generation.job_queue import JobQueue, RqJobQueue
 from app.generation.llm import build_llm_client
+from app.generation.llm.port import StructuredLLM
 from app.generation.orchestrator import GenerationOrchestrator
 from app.generation.protocol_generator import (
     LlmProtocolGenerator,
@@ -57,6 +59,9 @@ from app.repositories.exercise_relationship_repository import (
 from app.repositories.exercise_repository import (
     ExerciseRepository,
     SqlExerciseRepository,
+)
+from app.repositories.generation_call_repository import (
+    SqlGenerationCallRepository,
 )
 from app.repositories.generation_feedback_repository import (
     GenerationFeedbackRepository,
@@ -182,16 +187,29 @@ def get_metric_entry_repository(
     return SqlMetricEntryRepository(session)
 
 
+def get_llm_client(settings: Settings = Depends(get_settings)) -> StructuredLLM:
+    """The configured provider behind the recording decorator (ADR-0006, ADR-0135).
+
+    One provider for every in-request generator, so tests swap the transport (a fake
+    provider behind the real recorder) without replacing the generators themselves."""
+
+    return build_llm_client(settings)
+
+
+# The in-request generators attribute their Generation Calls to the caller, so the AI
+# audit log shows whose request made each call (ADR-0135).
 def get_session_generator(
-    settings: Settings = Depends(get_settings),
+    llm: StructuredLLM = Depends(get_llm_client),
+    clerk_user_id: str = Depends(get_current_user),
 ) -> SessionGenerator:
-    return LlmSessionGenerator(build_llm_client(settings))
+    return LlmSessionGenerator(llm, clerk_user_id=clerk_user_id)
 
 
 def get_protocol_generator(
-    settings: Settings = Depends(get_settings),
+    llm: StructuredLLM = Depends(get_llm_client),
+    clerk_user_id: str = Depends(get_current_user),
 ) -> ProtocolGenerator:
-    return LlmProtocolGenerator(build_llm_client(settings))
+    return LlmProtocolGenerator(llm, clerk_user_id=clerk_user_id)
 
 
 def get_generation_cache(
@@ -246,12 +264,20 @@ def get_generation_feedback_repository(
 
 
 def get_session_regenerator(
-    settings: Settings = Depends(get_settings),
+    llm: StructuredLLM = Depends(get_llm_client),
+    clerk_user_id: str = Depends(get_current_user),
 ) -> SessionRegenerator:
-    return LlmSessionRegenerator(build_llm_client(settings))
+    return LlmSessionRegenerator(llm, clerk_user_id=clerk_user_id)
 
 
 def get_substitute_generator(
-    settings: Settings = Depends(get_settings),
+    llm: StructuredLLM = Depends(get_llm_client),
+    clerk_user_id: str = Depends(get_current_user),
 ) -> SubstituteGenerator:
-    return LlmSubstituteGenerator(build_llm_client(settings))
+    return LlmSubstituteGenerator(llm, clerk_user_id=clerk_user_id)
+
+
+def get_generation_call_repository(
+    session: Session = Depends(get_session),
+) -> SqlGenerationCallRepository:
+    return SqlGenerationCallRepository(session)
