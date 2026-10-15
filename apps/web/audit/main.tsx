@@ -101,7 +101,7 @@ import type { Achievement } from "@/lib/profile-progress-types";
 import { SetAsideNote } from "@/components/SetAsideNote";
 import { BasedOnNote } from "@/components/BasedOnNote";
 import { protocolsIndex, type LiveSessionContext } from "@/lib/protocols-index";
-import { adminExerciseRows, auditEntry, exerciseDetail, generationCallDetail, generationCallRows, exerciseNames, exercises, history, historyIndex, liveWorkout, personalRecords, prescriptions, profile, progressStory, protocolIndexEntries, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
+import { adminExerciseRows, auditEntry, exerciseDetail, generationCallDetails, generationCallRows, exerciseNames, exercises, history, historyIndex, liveWorkout, personalRecords, prescriptions, profile, progressStory, protocolIndexEntries, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
 
 const params = new URLSearchParams(location.search);
 if (params.get("fonts") === "fontsource") {
@@ -231,8 +231,10 @@ function AdminAudit() {
       <SectionHeader>AI audit log</SectionHeader>
       <GenerationCallList calls={generationCallRows.map(toGenerationCallRowView)} />
     </div>
-    {/* One call's detail (issue #731): also a Server Component page, mounted the same way. */}
-    <GenerationCallDetailPanel detail={toGenerationCallDetailView(generationCallDetail)} />
+    {/* A call's detail (issue #731): also a Server Component page, mounted the same way. */}
+    {generationCallDetails.map(detail => (
+      <GenerationCallDetailPanel key={detail.id} detail={toGenerationCallDetailView(detail)} />
+    ))}
   </div>;
 }
 

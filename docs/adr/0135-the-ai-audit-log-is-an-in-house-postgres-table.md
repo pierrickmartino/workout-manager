@@ -46,7 +46,7 @@ that visibility is not worth it for a single operator (#729).
   (ADR-0046) on the API and the admin resolver on the web, where a non-admin gets a 404. The
   list endpoint returns metadata only; the prompts and output are for the per-call detail view.
   That view also shows the requested schema name and the token budget, so a cut-off output is
-  obvious, and a failed call's `GenerationError` text, capped at 2 KB because a provider error
+  obvious, and a failed call's `GenerationError` text, capped at 2,048 characters (about 2 KB) because a provider error
   can echo a whole response body (#731).
 - **Tokens only, no cost.** A call stores input/output tokens (null when the provider did not
   report them, never zero) and the model. The app carries no pricing table: ADR-0039's

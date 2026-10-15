@@ -1,8 +1,6 @@
-import { Badge } from "@/components/ui/badge";
 import { Alert } from "@/components/pulse/alert";
-import { LocalInstant } from "@/components/pulse/local-instant";
 import { SectionHeader } from "@/components/pulse/section-header";
-import { Fact } from "@/components/GenerationCallList";
+import { CallFact, GenerationCallHeadline } from "@/components/GenerationCallParts";
 import type { GenerationCallDetailView } from "@/lib/admin-generation-call-detail-view";
 
 interface GenerationCallDetailPanelProps {
@@ -21,20 +19,14 @@ export function GenerationCallDetailPanel({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2 font-mono text-[13px]">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-text-primary">{call.kindLabel}</span>
-          <Badge variant={call.isError ? "magenta" : "muted"}>{call.outcomeLabel}</Badge>
-        </div>
-        <span className="text-[11px] text-text-muted">
-          <LocalInstant iso={call.createdAt} />
-        </span>
+        <GenerationCallHeadline call={call} />
         <dl className="flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
-          <Fact label="User" value={call.userLabel} />
-          <Fact label="Model" value={call.servedBy} />
-          <Fact label="Schema" value={detail.schemaLabel} />
-          <Fact label="Tokens in" value={call.inputTokensLabel} />
-          <Fact label="Tokens out / max" value={detail.tokenBudgetLabel} />
-          <Fact label="Latency" value={call.latencyLabel} />
+          <CallFact label="User" value={call.userLabel} />
+          <CallFact label="Model" value={call.servedBy} />
+          <CallFact label="Schema" value={detail.schemaLabel} />
+          <CallFact label="Tokens in" value={call.inputTokensLabel} />
+          <CallFact label="Tokens out / max" value={detail.tokenBudgetLabel} />
+          <CallFact label="Latency" value={call.latencyLabel} />
         </dl>
         {detail.hitTokenBudget ? (
           <Alert tone="error">

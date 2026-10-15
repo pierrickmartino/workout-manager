@@ -41,6 +41,9 @@ export interface GenerationCallDetailView {
   errorMessage: string | null;
 }
 
+// What a schema name recorded before schemas were captured shows.
+export const UNKNOWN_SCHEMA_LABEL = "unknown";
+
 // What a failed call recorded without a message (one stored before messages were) shows.
 export const NO_ERROR_MESSAGE_LABEL = "No error message was recorded.";
 
@@ -71,7 +74,7 @@ export function toGenerationCallDetailView(
   const call = toGenerationCallRowView(detail);
   return {
     call,
-    schemaLabel: detail.schema_name ?? UNKNOWN_TOKENS_LABEL,
+    schemaLabel: detail.schema_name ?? UNKNOWN_SCHEMA_LABEL,
     tokenBudgetLabel: `${countLabel(detail.output_tokens)} / ${countLabel(detail.max_tokens)}`,
     hitTokenBudget: reachedBudget(detail.output_tokens, detail.max_tokens),
     systemPrompt: detail.system_prompt,

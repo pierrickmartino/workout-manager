@@ -254,21 +254,30 @@ export const generationCallRows: GenerationCallRow[] = [
   },
 ];
 
-// One AI audit log call in full (issue #731), at its widest: the widest list row, an unbroken
-// prompt token and a long minified JSON output, which wrap rather than scroll at 320px; the
-// output used its whole token budget, so the cut-off warning shows; and a failure's error
-// section above the prompts.
-export const generationCallDetail: GenerationCallDetail = {
-  ...generationCallRows[0],
-  outcome: "error",
-  output_tokens: 16384,
-  system_prompt: "You are a strength coach. Respond strictly in the required JSON schema.\n".repeat(6),
-  user_prompt: `Constraints: ${"knee-rehab-postpartum-lower-back-".repeat(8)}end`,
-  output_text: JSON.stringify({ prescriptions: Array.from({ length: 12 }, (_, i) => ({ exercise_name: `Exercise ${i}`, sets: 5, reps: "5" })) }),
-  error_message: "Provider returned 529 overloaded_error: the model is temporarily overloaded, please retry",
-  schema_name: "GeneratedProtocolWithAVeryLongSchemaName",
-  max_tokens: 16384,
-};
+// AI audit log calls in full (issue #731), at their widest. A success whose long minified JSON
+// output used its whole token budget, so the cut-off warning shows, under an unbroken prompt
+// token; and a realistic failure: no output, an error section above the prompts.
+export const generationCallDetails: GenerationCallDetail[] = [
+  {
+    ...generationCallRows[0],
+    output_tokens: 16384,
+    system_prompt: "You are a strength coach. Respond strictly in the required JSON schema.\n".repeat(6),
+    user_prompt: `Constraints: ${"knee-rehab-postpartum-lower-back-".repeat(8)}end`,
+    output_text: JSON.stringify({ prescriptions: Array.from({ length: 12 }, (_, i) => ({ exercise_name: `Exercise ${i}`, sets: 5, reps: "5" })) }),
+    error_message: null,
+    schema_name: "GeneratedProtocolWithAVeryLongSchemaName",
+    max_tokens: 16384,
+  },
+  {
+    ...generationCallRows[1],
+    system_prompt: "You are a strength coach. Respond strictly in the required JSON schema.",
+    user_prompt: "Build a 4-week push protocol.",
+    output_text: null,
+    error_message: "Provider returned 529 overloaded_error: the model is temporarily overloaded, please retry",
+    schema_name: "GeneratedProtocol",
+    max_tokens: 16384,
+  },
+];
 
 // The Progress Story at its widest (ADR-0127): bodyweight plus a fractional added load and
 // two-digit counts, so the headline and each side-by-side row hold the longest figures a
