@@ -27,8 +27,11 @@ interface SessionCardProps {
 }
 
 // The whole card is one tap target into the Session's detail: the title link's ::after
-// stretches over the positioned card, and Start and the ⋯ sit above it (`relative z-10`), so
-// no link nests in another and each control keeps its own name (ADR-0134).
+// stretches over the positioned card, and Start and the ⋯ sit above it, so no link nests in
+// another and each control keeps its own name (ADR-0134). They are `relative` with **no
+// z-index**: positioned boxes paint in document order and both come after the title, so they
+// already win. A `z-*` would make a stacking context, and the ⋯ sheet — rendered beside its
+// trigger — could not lift its `z-50` out of it past the tab bar or the next card.
 const STRETCHED_LINK =
   "rounded-sm after:absolute after:inset-0 after:rounded-md after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-cyan/60";
 
@@ -93,7 +96,7 @@ export function SessionCard({
           {...NAV_FORWARD}
           href={model.startHref}
           aria-label={model.startLabel}
-          className={buttonVariants({ variant: "secondary", className: "relative z-10 shrink-0" })}
+          className={buttonVariants({ variant: "secondary", className: "relative shrink-0" })}
         >
           <Play className="h-4 w-4" aria-hidden />
           Start
@@ -119,7 +122,7 @@ export function SessionCard({
         {/* The Logged Count signal (GLOSSARY: Logged Count): "Trained N×" when performed. Delete is
             withheld then and lives in the action sheet only for a never-performed plan. The ⋯
             closes the row; negative margins keep its 40px target from growing the row. */}
-        <div className="relative z-10 -my-2 -mr-2 flex items-center gap-1">
+        <div className="relative -my-2 -mr-2 flex items-center gap-1">
           {loggedBadge ? (
             <Badge
               variant="muted"
