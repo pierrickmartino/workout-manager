@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { prescriptionPlanView } from "./prescription-plan-view.ts";
-import type { ExercisePrescription } from "./sessions-types.ts";
+import { prescriptionPlanView, type PlannedPrescription } from "./prescription-plan-view.ts";
+import type { Quantity } from "./quantity.ts";
 import type { SupersetSlot } from "./supersets.ts";
 
 // `prescription-plan-view` is the Session detail card's plan, read like the Live Session's set
@@ -15,7 +15,7 @@ const BASE = {
   reps: "8-12",
   rest_seconds: 90,
   recommended_load: { kind: "absolute", text: "60kg", kg: 60 },
-} as Pick<ExercisePrescription, "sets" | "reps" | "rest_seconds" | "recommended_load">;
+} as PlannedPrescription;
 
 const SOLO = undefined;
 const member = (isLastMember: boolean): SupersetSlot =>
@@ -53,4 +53,20 @@ test("a Superset member's own rest is dormant; the last member carries the round
 
 test("a free-text target is shown as written", () => {
   assert.equal(prescriptionPlanView({ ...BASE, reps: "45s" }, SOLO, "kg").reps, "45s");
+});
+
+test("the amount column is named for the Prescribed Quantity's kind", () => {
+  const amountLabel = (prescribed_quantity: Quantity | null | undefined) =>
+    prescriptionPlanView({ ...BASE, prescribed_quantity }, SOLO, "kg").amountLabel;
+  assert.equal(amountLabel({ kind: "repetitions", text: "8", count: 8 }), "Reps");
+  assert.equal(amountLabel({ kind: "distance", text: "5 km", metres: 5000 }), "Distance");
+  assert.equal(amountLabel({ kind: "duration", text: "0:45", seconds: 45 }), "Duration");
+});
+
+test("a prescription with no typed amount keeps the Reps column", () => {
+  assert.equal(prescriptionPlanView(BASE, SOLO, "kg").amountLabel, "Reps");
+  assert.equal(
+    prescriptionPlanView({ ...BASE, prescribed_quantity: null }, SOLO, "kg").amountLabel,
+    "Reps",
+  );
 });
