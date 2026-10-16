@@ -42,8 +42,6 @@ def generate_session(
         prescriptions=resolve_prescriptions(
             generated.prescriptions, exercises=exercises
         ),
-        # Stamp the standalone Session with its generation call's lineage (ADR-0039, #274).
-        trace_id=generated.trace_id,
     )
     return sessions.create(clerk_user_id, draft)
 

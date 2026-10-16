@@ -805,10 +805,10 @@ def duplicate_session(
 ) -> dict:
     """Deep-copy the owner's Session into a new standalone Session (Duplicate, ADR-0043).
 
-    The copy carries the source's prescriptions, Supersets, Session Provenance, and
-    ``trace_id`` lineage, but no records and no Protocol position — so it stands alone
-    with a fresh regeneration budget, ready to tweak and log. ``404`` for anyone who
-    does not own the source, so a non-owner can never copy another user's plan."""
+    The copy carries the source's prescriptions, Supersets and Session Provenance, but
+    no records and no Protocol position — so it stands alone with a fresh regeneration
+    budget, ready to tweak and log. ``404`` for anyone who does not own the source, so a
+    non-owner can never copy another user's plan."""
 
     view = sessions.duplicate(session_id, clerk_user_id)
     if view is None:

@@ -5,7 +5,7 @@ standalone Session into a new one owned by the *redeemer*. This exercises the pu
 Session-level rule for that copy — no repository, no ORM — so the two deltas from
 Duplicate are pinned down in one place: the new Owner is the redeemer, and the Author
 is *preserved* as the original creator (immutable origin), never re-attributed. Session
-Name, Session Provenance and the ``trace_id`` lineage carry forward unchanged.
+Name and Session Provenance carry forward unchanged.
 """
 
 from __future__ import annotations
@@ -25,7 +25,6 @@ def _source(**overrides) -> SharedSessionSource:
         provenance="ai_generated",
         name="Leg Day",
         author_clerk_user_id="original_author",
-        trace_id="trace-orig",
     )
     base.update(overrides)
     return SharedSessionSource(**base)
@@ -61,22 +60,16 @@ def test_an_unnamed_source_stays_unnamed():
     assert copy.name is None
 
 
-def test_provenance_and_trace_id_carry_forward_unchanged():
-    # An ai_generated source keeps its Provenance and lineage (ADR-0043 semantics), so
-    # Generation Feedback and Regeneration remain available on the recipient's copy.
-    copy = redeem_copy(
-        _source(provenance="ai_generated", trace_id="trace-orig"), "redeemer_user"
-    )
+def test_provenance_carries_forward_unchanged():
+    # An ai_generated source keeps its Provenance (ADR-0043 semantics), so Generation
+    # Feedback and Regeneration remain available on the recipient's copy.
+    copy = redeem_copy(_source(provenance="ai_generated"), "redeemer_user")
     assert copy.provenance == "ai_generated"
-    assert copy.trace_id == "trace-orig"
 
 
 def test_user_authored_provenance_is_preserved():
-    copy = redeem_copy(
-        _source(provenance="user_authored", trace_id=None), "redeemer_user"
-    )
+    copy = redeem_copy(_source(provenance="user_authored"), "redeemer_user")
     assert copy.provenance == "user_authored"
-    assert copy.trace_id is None
 
 
 def test_training_parameters_carry_forward():

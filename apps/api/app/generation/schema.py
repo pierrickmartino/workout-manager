@@ -10,17 +10,9 @@ turns "did the AI return well-formed data?" into a guarantee."""
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
-from pydantic.json_schema import SkipJsonSchema
 
 from app.domain.load import parse_load
 from app.domain.quantity import quantity_from_input, quantity_from_text
-
-# Operator lineage stamped on an artifact *after* validation (#274): the generation
-# call's trace id. ``SkipJsonSchema`` keeps it out of the JSON schema the model is
-# constrained to — the model is never asked to produce it — while leaving it a normal
-# serialized field, so it survives the cache's ``model_dump_json`` round-trip and is
-# restored on a cache hit. Absent (``None``) when no recorder is configured.
-TraceId = SkipJsonSchema[str | None]
 
 
 class GeneratedQuantity(BaseModel):
@@ -123,15 +115,9 @@ class GeneratedSession(BaseModel):
 
     ``prescriptions`` is required and non-empty: ``{}`` or ``{"prescriptions": []}``
     is malformed upstream output that would otherwise persist an empty Session, so
-    it is rejected at the boundary as a schema violation.
-
-    ``trace_id`` is operator lineage, not model output (#274): the generation call's
-    trace id, stamped onto the artifact *after* validation so feedback on the resulting
-    Session can trace back to the exact call. It is ``SkipJsonSchema`` — never part of the
-    schema the model is constrained to — and absent when no recorder is configured."""
+    it is rejected at the boundary as a schema violation."""
 
     prescriptions: list[GeneratedExercisePrescription] = Field(min_length=1)
-    trace_id: TraceId = None
 
 
 class GeneratedSubstitute(BaseModel):
@@ -230,12 +216,6 @@ class GeneratedProtocol(BaseModel):
 
     Immutable and fully enumerated — there is no repeated weekly template; one
     ``GeneratedProtocolSession`` exists for every (week, day) the request asked
-    for. Adoption deep-copies it into a user-owned, mutable Protocol.
-
-    ``trace_id`` is operator lineage stamped after validation (#274): the generation
-    call's trace id, carried through the cache round-trip and onto the adopted Protocol so
-    feedback can trace back to the originating call. ``SkipJsonSchema`` (never asked of the
-    model); absent when no recorder is configured."""
+    for. Adoption deep-copies it into a user-owned, mutable Protocol."""
 
     sessions: list[GeneratedProtocolSession] = Field(min_length=1)
-    trace_id: TraceId = None

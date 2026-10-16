@@ -1,7 +1,7 @@
 """Curated lineage: an adopted copy remembers which Curated Protocol, and version, it came
 from (issue #688, ADR-0130, ADR-0043).
 
-The lineage is an immutable plan property, like Session Provenance and ``trace_id``: Adopt
+The lineage is an immutable plan property, like Session Provenance: Adopt
 writes it on the Protocol and every member Session, nothing else changes it, and Duplicate and
 Redeem carry it forward unchanged. Reads expose it as ``curated_lineage`` so the web can show
 "Based on <name>". Driven over HTTP against the same SQLite harness as the Curated Protocol

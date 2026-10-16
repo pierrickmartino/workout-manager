@@ -14,10 +14,9 @@ Two properties are load-bearing:
   the call is stored, in its own guard, so a failed purge never loses the record; the read
   cutoff still hides whatever it left behind.
 
-``record`` returns ``None``: a 3-day log offers no lasting lineage handle. ``flush`` is a
-no-op because every record commits before it returns. ``delete_user_traces`` is *not*
-best-effort: an erasure failure raises, so un-erased health data is never mistaken for
-erased."""
+``flush`` is a no-op because every record commits before it returns.
+``delete_user_traces`` is *not* best-effort: an erasure failure raises, so un-erased health
+data is never mistaken for erased."""
 
 from __future__ import annotations
 
@@ -51,7 +50,6 @@ class PostgresGenerationCallRecorder:
                 self._purge_expired(repository)
         except Exception:  # best-effort: a recording failure never propagates
             logger.exception("failed to record generation call")
-        return None
 
     def flush(self) -> None:
         return None

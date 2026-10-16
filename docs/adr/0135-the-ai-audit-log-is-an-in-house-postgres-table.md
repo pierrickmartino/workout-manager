@@ -53,8 +53,9 @@ that visibility is not worth it for a single operator (#729).
   "pricing lives where the price lives" no longer has a home, and a stale price table is
   worse than none.
 - **Lineage is dropped.** `trace_id` lineage existed so feedback could later be pushed to a
-  Langfuse trace. A 3-day log cannot back lasting lineage, so `record` returns no handle and
-  the `trace_id` columns stay null until a follow-up removes `TraceCapture` and drops them.
+  Langfuse trace. A 3-day log cannot back lasting lineage, so `record` returns no handle.
+  Issue #734 removed `TraceCapture` and the stamping, and migration 0053 dropped the
+  `trace_id` columns.
 
 This is still operator telemetry, not a domain record: it earns no `GLOSSARY.md` term, and
 the "read-time projection, never a stored ledger" invariant (ADR-0018/0019) does not apply,

@@ -131,11 +131,7 @@ class RecordingStructuredLLM:
         """Assemble the ``GenerationCall`` and hand it to the recorder best-effort.
 
         A recorder failure is swallowed-and-logged: monitoring must never change the value
-        ``complete`` returns nor turn a good generation into an error. When the caller passed
-        a ``TraceCapture`` on the context, the recorder's returned trace-id handle is written
-        into it (the lineage stored on the Generated artifact, #274); a recorder that fails
-        or reports no handle leaves the capture ``None`` — lineage simply absent, never an
-        error."""
+        ``complete`` returns nor turn a good generation into an error."""
 
         call = GenerationCall(
             generator_kind=context.generator_kind,
@@ -153,13 +149,10 @@ class RecordingStructuredLLM:
             max_tokens=max_tokens,
             error_message=error_message,
         )
-        trace_id: str | None = None
         try:
-            trace_id = self._recorder.record(call)
+            self._recorder.record(call)
         except Exception:  # best-effort — a recorder failure never propagates
             logger.exception("failed to record generation call")
-        if context.capture is not None:
-            context.capture.set(trace_id)
 
 
 __all__ = ["RecordingStructuredLLM"]
