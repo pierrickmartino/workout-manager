@@ -26,7 +26,7 @@ export function PrescriptionSetTable({ name, view, next }: PrescriptionSetTableP
       {/* Every row names its cells in full for a screen reader, so the captions are visual only. */}
       <div className={cn(ROW, "label-mono text-[9px] text-text-muted")} aria-hidden>
         <span className={TAG_CELL}>SET</span>
-        <span className={cn(VALUE_CELL, "py-0")}>REPS</span>
+        <span className={cn(VALUE_CELL, "py-0")}>{view.amountLabel}</span>
         <span className={cn(VALUE_CELL, "py-0")}>LOAD</span>
       </div>
       <ol aria-label={`Planned sets for ${name}`} className="flex list-none flex-col gap-1 p-0">
