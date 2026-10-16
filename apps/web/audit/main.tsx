@@ -49,6 +49,8 @@ import { ProgressStoryCard } from "@/components/pulse/progress-story";
 import { toProgressStoryView } from "@/lib/progress-story-view";
 import { AdminExerciseBrowser } from "@/components/AdminExerciseBrowser";
 import { GenerationCallList } from "@/components/GenerationCallList";
+import { GenerationCallFilters } from "@/components/GenerationCallFilters";
+import { GenerationCallPager } from "@/components/GenerationCallPager";
 import { toGenerationCallRowView } from "@/lib/admin-generation-calls-view";
 import { GenerationCallDetailPanel } from "@/components/GenerationCallDetailPanel";
 import { toGenerationCallDetailView } from "@/lib/admin-generation-call-detail-view";
@@ -101,7 +103,7 @@ import type { Achievement } from "@/lib/profile-progress-types";
 import { SetAsideNote } from "@/components/SetAsideNote";
 import { BasedOnNote } from "@/components/BasedOnNote";
 import { protocolsIndex, type LiveSessionContext } from "@/lib/protocols-index";
-import { adminExerciseRows, auditEntry, exerciseDetail, generationCallDetails, generationCallRows, exerciseNames, exercises, history, historyIndex, liveWorkout, personalRecords, prescriptions, profile, progressStory, protocolIndexEntries, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
+import { adminExerciseRows, auditEntry, exerciseDetail, generationCallDetails, generationCallFilters, generationCallPager, generationCallRows, exerciseNames, exercises, history, historyIndex, liveWorkout, personalRecords, prescriptions, profile, progressStory, protocolIndexEntries, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
 
 const params = new URLSearchParams(location.search);
 if (params.get("fonts") === "fontsource") {
@@ -226,10 +228,14 @@ function AdminAudit() {
       </ul>
     </div>
     {/* The AI audit log's call cards (issue #730): a Server Component page, so the list is
-        mounted here from the same view-model the page maps through. */}
+        mounted here from the same view-model the page maps through. Its filters and pager
+        (issue #732) are mounted with every filter set, the longest user id and a middle page,
+        so the widest state of each control is the one measured. */}
     <div className="flex flex-col gap-4">
       <SectionHeader>AI audit log</SectionHeader>
-      <GenerationCallList calls={generationCallRows.map(toGenerationCallRowView)} />
+      <GenerationCallFilters filters={generationCallFilters} isFiltered />
+      <GenerationCallList calls={generationCallRows.map(toGenerationCallRowView)} isFiltered />
+      <GenerationCallPager pager={generationCallPager} />
     </div>
     {/* A call's detail (issue #731): also a Server Component page, mounted the same way. */}
     {generationCallDetails.map(detail => (

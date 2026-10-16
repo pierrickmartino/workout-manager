@@ -24,7 +24,12 @@ from app.generation.exercise_enrichment_generator import (
 )
 from app.generation.llm.port import GenerationError
 from app.generation.llm.usage import CompletionResult, TokenUsage
-from app.generation.monitoring.call import ERROR_MESSAGE_CAP
+from app.generation.monitoring.call import (
+    ERROR_MESSAGE_CAP,
+    GenerationCall,
+    GenerationOutcome,
+    GeneratorKind,
+)
 from app.generation.monitoring.postgres_recorder import PostgresGenerationCallRecorder
 from app.generation.monitoring.recording_llm import RecordingStructuredLLM
 from app.main import create_app
@@ -122,7 +127,38 @@ class _Harness:
                 yield SqlGenerationCallRepository(session, now=self.clock)
 
         app.dependency_overrides[get_generation_call_repository] = _repository
+        self.engine = engine
         self.client = TestClient(app)
+
+    def seed(
+        self,
+        *,
+        kind: GeneratorKind = GeneratorKind.SESSION,
+        outcome: GenerationOutcome = GenerationOutcome.SUCCESS,
+        user: str | None = "user_seed",
+    ) -> None:
+        """Record one call directly through the repository, at the harness clock."""
+
+        failed = outcome is GenerationOutcome.ERROR
+        with Session(self.engine) as session:
+            SqlGenerationCallRepository(session, now=self.clock).add(
+                GenerationCall(
+                    generator_kind=kind,
+                    clerk_user_id=user,
+                    provider="anthropic",
+                    model="claude-seeded",
+                    input_tokens=None if failed else 10,
+                    output_tokens=None if failed else 5,
+                    latency_ms=12.0,
+                    outcome=outcome,
+                    system_prompt="system",
+                    user_prompt="user",
+                    output_text=None if failed else "{}",
+                    schema_name="Seeded",
+                    max_tokens=100,
+                    error_message="boom" if failed else None,
+                )
+            )
 
     def generate_session(self, sub: str = "user_gen"):
         return self.client.post(
@@ -131,8 +167,13 @@ class _Harness:
             json={"training_type": "strength", "duration_minutes": 45, "equipment": []},
         )
 
-    def admin_list(self):
-        return self.admin_get("/api/admin/generation-calls")
+    def admin_list(self, **params):
+        token = self.ctx.mint(sub="user_admin", extra_claims={"role": "admin"})
+        return self.client.get(
+            "/api/admin/generation-calls",
+            params=params,
+            headers={"Authorization": f"Bearer {token}"},
+        )
 
     def admin_detail(self, call_id: int):
         return self.admin_get(f"/api/admin/generation-calls/{call_id}")
@@ -266,6 +307,137 @@ def test_the_list_rejects_a_verified_non_admin(engine):
     )
 
     assert response.status_code == 403
+
+
+# --- Filters and pagination (issue #732) -----------------------------------------------
+
+
+def test_the_list_filters_by_generator_kind(engine):
+    # Arrange
+    harness = _Harness(engine)
+    harness.seed(kind=GeneratorKind.SESSION)
+    harness.seed(kind=GeneratorKind.PROTOCOL)
+
+    # Act
+    rows = harness.admin_list(generator_kind="protocol").json()["data"]
+
+    # Assert
+    assert [row["generator_kind"] for row in rows] == ["protocol"]
+
+
+def test_the_list_filters_by_outcome(engine):
+    harness = _Harness(engine)
+    harness.seed(outcome=GenerationOutcome.SUCCESS)
+    harness.seed(outcome=GenerationOutcome.ERROR)
+
+    rows = harness.admin_list(outcome="error").json()["data"]
+
+    assert [row["outcome"] for row in rows] == ["error"]
+
+
+def test_the_list_filters_by_user_id(engine):
+    harness = _Harness(engine)
+    harness.seed(user="user_alice")
+    harness.seed(user="user_bob")
+    harness.seed(user=None)
+
+    rows = harness.admin_list(clerk_user_id="user_bob").json()["data"]
+
+    assert [row["clerk_user_id"] for row in rows] == ["user_bob"]
+
+
+def test_the_filters_combine(engine):
+    # Arrange — only one call is a failed protocol generation for Alice
+    harness = _Harness(engine)
+    harness.seed(kind=GeneratorKind.PROTOCOL, outcome=GenerationOutcome.ERROR, user="user_alice")
+    harness.seed(kind=GeneratorKind.PROTOCOL, outcome=GenerationOutcome.SUCCESS, user="user_alice")
+    harness.seed(kind=GeneratorKind.SESSION, outcome=GenerationOutcome.ERROR, user="user_alice")
+    harness.seed(kind=GeneratorKind.PROTOCOL, outcome=GenerationOutcome.ERROR, user="user_bob")
+
+    # Act
+    rows = harness.admin_list(
+        generator_kind="protocol", outcome="error", clerk_user_id="user_alice"
+    ).json()["data"]
+
+    # Assert
+    assert [
+        (row["generator_kind"], row["outcome"], row["clerk_user_id"]) for row in rows
+    ] == [("protocol", "error", "user_alice")]
+
+
+def test_the_list_pages_newest_first_with_meta(engine):
+    # Arrange — five calls a minute apart, user_0 oldest
+    harness = _Harness(engine)
+    for minute in range(5):
+        harness.clock.now = T0 + timedelta(minutes=minute)
+        harness.seed(user=f"user_{minute}")
+
+    # Act — walk the pages two at a time
+    pages = [harness.admin_list(limit=2, offset=offset).json() for offset in (0, 2, 4)]
+
+    # Assert — each page is a newest-first window; total counts every match
+    assert [[row["clerk_user_id"] for row in page["data"]] for page in pages] == [
+        ["user_4", "user_3"],
+        ["user_2", "user_1"],
+        ["user_0"],
+    ]
+    assert [page["meta"] for page in pages] == [
+        {"total": 5, "limit": 2, "offset": 0},
+        {"total": 5, "limit": 2, "offset": 2},
+        {"total": 5, "limit": 2, "offset": 4},
+    ]
+
+
+def test_the_total_counts_only_the_filtered_matches(engine):
+    harness = _Harness(engine)
+    harness.seed(outcome=GenerationOutcome.ERROR)
+    harness.seed(outcome=GenerationOutcome.ERROR)
+    harness.seed(outcome=GenerationOutcome.SUCCESS)
+
+    body = harness.admin_list(outcome="error", limit=1).json()
+
+    assert len(body["data"]) == 1
+    assert body["meta"] == {"total": 2, "limit": 1, "offset": 0}
+
+
+def test_expired_calls_are_excluded_whatever_the_filters(engine):
+    # Arrange — a matching call at T0, another a day later, then read 3 days past T0
+    harness = _Harness(engine)
+    harness.seed(kind=GeneratorKind.PROTOCOL, outcome=GenerationOutcome.ERROR, user="user_alice")
+    harness.clock.now = T0 + timedelta(days=1)
+    harness.seed(kind=GeneratorKind.PROTOCOL, outcome=GenerationOutcome.ERROR, user="user_alice")
+    harness.clock.now = T0 + timedelta(days=3, seconds=1)
+
+    # Act
+    body = harness.admin_list(
+        generator_kind="protocol", outcome="error", clerk_user_id="user_alice"
+    ).json()
+
+    # Assert — only the call still inside the window, and the total agrees
+    assert len(body["data"]) == 1
+    assert body["data"][0]["created_at"].startswith("2026-10-02T12:00:00")
+    assert body["meta"]["total"] == 1
+
+
+@pytest.mark.parametrize(
+    "params", [{"limit": 0}, {"limit": 1000}, {"offset": -1}]
+)
+def test_an_out_of_range_page_is_rejected(engine, params):
+    harness = _Harness(engine)
+
+    assert harness.admin_list(**params).status_code == 422
+
+
+@pytest.mark.parametrize(
+    "params", [{"generator_kind": "workout"}, {"outcome": "timeout"}]
+)
+def test_an_unknown_kind_or_outcome_is_rejected(engine, params):
+    harness = _Harness(engine)
+
+    response = harness.admin_list(**params)
+
+    assert response.status_code == 422
+    assert response.json()["success"] is False
 
 
 # --- The call detail view (issue #731) -------------------------------------------------

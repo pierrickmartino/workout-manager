@@ -5,6 +5,11 @@ import type { ExerciseDetail, ExercisePrescription, WorkoutSession } from "@/lib
 import type { AdminExerciseRow } from "@/lib/admin-exercises-view";
 import type { GenerationCallRow } from "@/lib/admin-generation-calls-view";
 import type { GenerationCallDetail } from "@/lib/admin-generation-call-detail-view";
+import {
+  toAuditLogPager,
+  type AuditLogFilters,
+  type AuditLogPager,
+} from "@/lib/admin-generation-calls-query";
 import type { ProgressStory } from "@/lib/progress-story-view";
 import type { Profile } from "@/lib/profile-types";
 import type { ProtocolProgress } from "@/lib/protocols-types";
@@ -253,6 +258,20 @@ export const generationCallRows: GenerationCallRow[] = [
     outcome: "error",
   },
 ];
+
+// The AI audit log's filters (issue #732) with every one set: the longest kind label, and the
+// full-length Clerk user id from the rows above, one unbroken token in the text field.
+export const generationCallFilters: AuditLogFilters = {
+  generatorKind: "exercise-enrichment",
+  outcome: "error",
+  userId: "user_2qT8xKdLmNpRsVwYzAbCdEfGhIj",
+};
+
+// Its pager on a middle page of a long log, so both links and the widest range label render.
+export const generationCallPager: AuditLogPager = toAuditLogPager(
+  { filters: generationCallFilters, page: 20 },
+  { total: 12_345, limit: 50, offset: 950 },
+)!;
 
 // AI audit log calls in full (issue #731), at their widest. A success whose long minified JSON
 // output used its whole token budget, so the cut-off warning shows, under an unbroken prompt
