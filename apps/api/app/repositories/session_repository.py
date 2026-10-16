@@ -253,7 +253,8 @@ class SessionRepository(Protocol):
         ADR-0043).
 
         Carries the source's training parameters, Session Provenance, the Session ``name``
-        and Protocol ``title`` verbatim, plus every Exercise Prescription with its sets/reps/rest/tempo/Load, Superset grouping and Progression Scheme selection
+        and Protocol ``title`` verbatim, plus every Exercise Prescription with its
+        sets/reps/rest/tempo/Load, Superset grouping and Progression Scheme selection
         (a plan property, carried like the rest — ADR-0064) — but **no Logged Sessions**
         and **no Protocol position** (``protocol_id``/week/day/position are dropped), so
         the copy stands alone. The copy is a distinct Session with a **fresh regeneration
@@ -295,8 +296,7 @@ class SessionRepository(Protocol):
         and writes an independent copy owned by ``redeemer_clerk_user_id``, applying the pure
         redeem-copy rule (``app.domain.share_redeem``): the new **Owner** is the redeemer, the
         **Author** is preserved as the original creator, and the **Session Name** and **Session
-        Provenance** carry forward unchanged. Every Exercise
-        Prescription (sets/reps/rest/tempo/Load/Superset/Pin/Progression Scheme) is copied
+        Provenance** carry forward unchanged. Every Exercise Prescription (sets/reps/rest/tempo/Load/Superset/Pin/Progression Scheme) is copied
         faithfully from the source's **redeem-time** state — the scheme is a plan property that
         travels with the copy, not a per-owner marker like Favorite (ADR-0064). The copy carries
         **no Logged Sessions**, **no Protocol position**, a **fresh regeneration budget**, and
@@ -349,9 +349,8 @@ class SessionRepository(Protocol):
         ``keep_positions`` (in their original order) and appending ``replacements``
         after them, then re-number positions and mark the Session regenerated.
 
-        Returns the updated Session, or ``None`` if it is
-        missing or owned by another user — regeneration only ever mutates the owner's
-        own copy.
+        Returns the updated Session, or ``None`` if it is missing or owned by another user —
+        regeneration only ever mutates the owner's own copy.
         """
         ...
 
@@ -798,8 +797,8 @@ class SqlSessionRepository:
         ).all()
 
         # The redeem-copy rule (pure): new Owner = redeemer; Author, Name and Provenance
-        # carried forward. Protocol linkage and the regeneration guard are
-        # deliberately dropped so the copy stands alone with a fresh budget; Logged Sessions
+        # carried forward. Protocol linkage and the regeneration guard are deliberately
+        # dropped so the copy stands alone with a fresh budget; Logged Sessions
         # and the Favorite marker are per-owner and simply never copied.
         attrs = redeem_copy(
             SharedSessionSource(
@@ -1232,8 +1231,8 @@ class InMemorySessionRepository:
             self._prescriptions.get(source_session_id, []), key=lambda p: p.position
         )
         # The redeem-copy rule (pure): new Owner = redeemer; Author, Name and Provenance
-        # carried forward; Protocol linkage and the regeneration guard dropped
-        # so the copy stands alone; records and the Favorite marker are per-owner, never copied.
+        # carried forward; Protocol linkage and the regeneration guard dropped so the copy
+        # stands alone; records and the Favorite marker are per-owner, never copied.
         attrs = redeem_copy(
             SharedSessionSource(
                 training_type=source.training_type,

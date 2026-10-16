@@ -14,9 +14,9 @@ Two properties are load-bearing:
   the call is stored, in its own guard, so a failed purge never loses the record; the read
   cutoff still hides whatever it left behind.
 
-``flush`` is a no-op because every record commits before it returns. ``delete_user_traces`` is *not*
-best-effort: an erasure failure raises, so un-erased health data is never mistaken for
-erased."""
+``flush`` is a no-op because every record commits before it returns.
+``delete_user_traces`` is *not* best-effort: an erasure failure raises, so un-erased health
+data is never mistaken for erased."""
 
 from __future__ import annotations
 
