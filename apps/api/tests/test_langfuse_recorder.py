@@ -118,6 +118,9 @@ def _call(**overrides) -> GenerationCall:
         system_prompt="you are a coach",
         user_prompt="build me a push protocol",
         output_text='{"weeks": 4}',
+        schema_name="GeneratedSession",
+        max_tokens=8000,
+        error_message=None,
     )
     base.update(overrides)
     return GenerationCall(**base)

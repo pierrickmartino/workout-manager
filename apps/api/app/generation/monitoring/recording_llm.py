@@ -23,6 +23,7 @@ from app.generation.monitoring.call import (
     GenerationCall,
     GenerationCallContext,
     GenerationOutcome,
+    capped_error_message,
 )
 from app.generation.monitoring.recorder import GenerationCallRecorder
 
@@ -63,7 +64,7 @@ class RecordingStructuredLLM:
             result = self._provider.complete(
                 system=system, user=user, schema=schema, max_tokens=max_tokens
             )
-        except GenerationError:
+        except GenerationError as error:
             # Record the failure (best-effort) then re-raise the original error
             # unchanged — the caller's parse_* boundary and error contract are intact.
             self._record(
@@ -74,7 +75,10 @@ class RecordingStructuredLLM:
                 outcome=GenerationOutcome.ERROR,
                 system=system,
                 user=user,
+                schema=schema,
+                max_tokens=max_tokens,
                 output_text=None,
+                error_message=capped_error_message(error),
             )
             raise
 
@@ -86,7 +90,10 @@ class RecordingStructuredLLM:
             outcome=GenerationOutcome.SUCCESS,
             system=system,
             user=user,
+            schema=schema,
+            max_tokens=max_tokens,
             output_text=result.text,
+            error_message=None,
         )
         return result.text
 
@@ -116,7 +123,10 @@ class RecordingStructuredLLM:
         outcome: GenerationOutcome,
         system: str,
         user: str,
+        schema: type[BaseModel],
+        max_tokens: int,
         output_text: str | None,
+        error_message: str | None,
     ) -> None:
         """Assemble the ``GenerationCall`` and hand it to the recorder best-effort.
 
@@ -139,6 +149,9 @@ class RecordingStructuredLLM:
             system_prompt=system,
             user_prompt=user,
             output_text=output_text,
+            schema_name=schema.__name__,
+            max_tokens=max_tokens,
+            error_message=error_message,
         )
         trace_id: str | None = None
         try:

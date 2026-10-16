@@ -4,6 +4,7 @@ import type { ExerciseSearchResult } from "@/lib/exercises-types";
 import type { ExerciseDetail, ExercisePrescription, WorkoutSession } from "@/lib/sessions-types";
 import type { AdminExerciseRow } from "@/lib/admin-exercises-view";
 import type { GenerationCallRow } from "@/lib/admin-generation-calls-view";
+import type { GenerationCallDetail } from "@/lib/admin-generation-call-detail-view";
 import type { ProgressStory } from "@/lib/progress-story-view";
 import type { Profile } from "@/lib/profile-types";
 import type { ProtocolProgress } from "@/lib/protocols-types";
@@ -250,6 +251,31 @@ export const generationCallRows: GenerationCallRow[] = [
     output_tokens: null,
     latency_ms: 812.4,
     outcome: "error",
+  },
+];
+
+// AI audit log calls in full (issue #731), at their widest. A success whose long minified JSON
+// output used its whole token budget, so the cut-off warning shows, under an unbroken prompt
+// token; and a realistic failure: no output, an error section above the prompts.
+export const generationCallDetails: GenerationCallDetail[] = [
+  {
+    ...generationCallRows[0],
+    output_tokens: 16384,
+    system_prompt: "You are a strength coach. Respond strictly in the required JSON schema.\n".repeat(6),
+    user_prompt: `Constraints: ${"knee-rehab-postpartum-lower-back-".repeat(8)}end`,
+    output_text: JSON.stringify({ prescriptions: Array.from({ length: 12 }, (_, i) => ({ exercise_name: `Exercise ${i}`, sets: 5, reps: "5" })) }),
+    error_message: null,
+    schema_name: "GeneratedProtocolWithAVeryLongSchemaName",
+    max_tokens: 16384,
+  },
+  {
+    ...generationCallRows[1],
+    system_prompt: "You are a strength coach. Respond strictly in the required JSON schema.",
+    user_prompt: "Build a 4-week push protocol.",
+    output_text: null,
+    error_message: "Provider returned 529 overloaded_error: the model is temporarily overloaded, please retry",
+    schema_name: "GeneratedProtocol",
+    max_tokens: 16384,
   },
 ];
 

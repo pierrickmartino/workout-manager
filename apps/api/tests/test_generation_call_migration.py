@@ -1,8 +1,10 @@
-"""Migration test for the admin AI audit log table (ADR-0135, issue #730).
+"""Migration tests for the admin AI audit log table (ADR-0135, issues #730 and #731).
 
-Exercises 0051 end to end against a real SQLite database: upgrade over the migration and
-assert the ``generation_call`` table arrives able to hold a recorded call — a system call
-with unknown tokens and no output included — and that downgrading drops it again."""
+Exercises 0051 and 0052 end to end against a real SQLite database: upgrade over the
+migration and assert the ``generation_call`` table arrives able to hold a recorded call — a
+system call with unknown tokens and no output included — and that 0052 adds the detail
+columns (error message, schema name, token budget) as nullable, so rows recorded before it
+survive; downgrading reverses each."""
 
 from __future__ import annotations
 
@@ -18,6 +20,7 @@ from app.config import get_settings
 API_ROOT = Path(__file__).resolve().parents[1]
 BEFORE = "0050_seed_tiered_exercises"
 AFTER = "0051_generation_call"
+DETAIL = "0052_generation_call_detail"
 TABLE = "generation_call"
 
 
@@ -79,3 +82,48 @@ def test_downgrade_drops_the_table(sqlite_url):
         assert TABLE not in inspect(engine).get_table_names()
     finally:
         engine.dispose()
+
+
+def test_detail_upgrade_keeps_an_earlier_row_and_adds_nullable_detail_columns(sqlite_url):
+    # Arrange — a row recorded before the detail columns existed
+    config = _config()
+    command.upgrade(config, AFTER)
+    engine = create_engine(sqlite_url)
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    f"INSERT INTO {TABLE} (created_at, generator_kind, provider, model, "
+                    "latency_ms, outcome, system_prompt, user_prompt) VALUES ("
+                    "'2026-10-15 12:00:00', 'session', 'anthropic', 'm', 1.0, 'error', "
+                    "'s', 'u')"
+                )
+            )
+
+        # Act
+        command.upgrade(config, DETAIL)
+
+        # Assert — the old row reads back with the detail columns empty
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    f"SELECT outcome, error_message, schema_name, max_tokens FROM {TABLE}"
+                )
+            ).one()
+    finally:
+        engine.dispose()
+    assert tuple(row) == ("error", None, None, None)
+
+
+def test_detail_downgrade_drops_the_detail_columns(sqlite_url):
+    config = _config()
+    command.upgrade(config, DETAIL)
+
+    command.downgrade(config, AFTER)
+
+    engine = create_engine(sqlite_url)
+    try:
+        columns = {column["name"] for column in inspect(engine).get_columns(TABLE)}
+    finally:
+        engine.dispose()
+    assert not {"error_message", "schema_name", "max_tokens"} & columns

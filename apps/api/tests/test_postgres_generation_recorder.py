@@ -84,6 +84,9 @@ def _call(clerk_user_id: str | None) -> GenerationCall:
         system_prompt="s",
         user_prompt="u",
         output_text="{}",
+        schema_name="GeneratedSession",
+        max_tokens=8000,
+        error_message=None,
     )
 
 

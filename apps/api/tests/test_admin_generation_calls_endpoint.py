@@ -24,6 +24,7 @@ from app.generation.exercise_enrichment_generator import (
 )
 from app.generation.llm.port import GenerationError
 from app.generation.llm.usage import CompletionResult, TokenUsage
+from app.generation.monitoring.call import ERROR_MESSAGE_CAP
 from app.generation.monitoring.postgres_recorder import PostgresGenerationCallRecorder
 from app.generation.monitoring.recording_llm import RecordingStructuredLLM
 from app.main import create_app
@@ -69,8 +70,11 @@ class _FakeProvider:
     ) -> None:
         self._text = text
         self._error = error
+        self.seen: dict = {}
 
     def complete(self, **kwargs) -> CompletionResult:
+        # What the model was actually sent: the detail view must show exactly this.
+        self.seen = kwargs
         if self._error is not None:
             raise self._error
         return CompletionResult(
@@ -128,11 +132,18 @@ class _Harness:
         )
 
     def admin_list(self):
+        return self.admin_get("/api/admin/generation-calls")
+
+    def admin_detail(self, call_id: int):
+        return self.admin_get(f"/api/admin/generation-calls/{call_id}")
+
+    def admin_get(self, path: str):
         token = self.ctx.mint(sub="user_admin", extra_claims={"role": "admin"})
-        return self.client.get(
-            "/api/admin/generation-calls",
-            headers={"Authorization": f"Bearer {token}"},
-        )
+        return self.client.get(path, headers={"Authorization": f"Bearer {token}"})
+
+    def only_call_id(self) -> int:
+        [call] = self.admin_list().json()["data"]
+        return call["id"]
 
 
 def test_a_generation_appears_in_the_admin_list_with_its_metadata(engine):
@@ -255,3 +266,103 @@ def test_the_list_rejects_a_verified_non_admin(engine):
     )
 
     assert response.status_code == 403
+
+
+# --- The call detail view (issue #731) -------------------------------------------------
+
+
+def test_the_detail_shows_both_prompts_the_output_the_schema_and_the_budget(engine):
+    # Arrange — a real Session generation
+    harness = _Harness(engine)
+    harness.generate_session(sub="user_alice")
+    sent = harness.provider.seen
+
+    # Act
+    response = harness.admin_detail(harness.only_call_id())
+
+    # Assert — exactly what the model was sent and what it answered
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    call = body["data"]
+    assert call["system_prompt"] == sent["system"]
+    assert call["user_prompt"] == sent["user"]
+    assert call["output_text"] == _SESSION_JSON
+    assert call["schema_name"] == "GeneratedSession"
+    assert call["max_tokens"] == sent["max_tokens"]
+    assert call["error_message"] is None
+    assert call["clerk_user_id"] == "user_alice"
+    assert call["output_tokens"] == 54
+    assert call["outcome"] == "success"
+
+
+def test_a_failed_calls_detail_has_no_output_and_its_error_message(engine):
+    # Arrange
+    harness = _Harness(engine, provider=_FakeProvider(error=GenerationError("rate limited")))
+    harness.generate_session()
+
+    # Act
+    call = harness.admin_detail(harness.only_call_id()).json()["data"]
+
+    # Assert — the failure explains itself; the prompts the model was sent are still there
+    assert call["outcome"] == "error"
+    assert call["output_text"] is None
+    assert call["error_message"] == "rate limited"
+    assert call["user_prompt"] == harness.provider.seen["user"]
+    assert call["schema_name"] == "GeneratedSession"
+
+
+def test_a_long_error_message_is_cut_at_the_cap(engine):
+    # Arrange — a provider error echoing a huge body
+    huge = "x" * ERROR_MESSAGE_CAP + "TAIL"
+    harness = _Harness(engine, provider=_FakeProvider(error=GenerationError(huge)))
+    harness.generate_session()
+
+    # Act
+    call = harness.admin_detail(harness.only_call_id()).json()["data"]
+
+    # Assert
+    assert call["error_message"] == "x" * ERROR_MESSAGE_CAP
+
+
+def test_the_detail_of_an_unknown_call_is_not_found(engine):
+    harness = _Harness(engine)
+
+    response = harness.admin_detail(999)
+
+    assert response.status_code == 404
+    assert response.json()["success"] is False
+
+
+def test_the_detail_of_a_call_past_the_three_day_window_is_not_found(engine):
+    # Arrange — a call at T0, then the clock moves past the window (no purge has run)
+    harness = _Harness(engine)
+    harness.generate_session()
+    call_id = harness.only_call_id()
+    harness.clock.now = T0 + timedelta(days=3, seconds=1)
+
+    # Act
+    response = harness.admin_detail(call_id)
+
+    # Assert — expired reads exactly like unknown
+    assert response.status_code == 404
+
+
+def test_the_detail_rejects_a_verified_non_admin(engine):
+    harness = _Harness(engine)
+    harness.generate_session()
+    call_id = harness.only_call_id()
+    token = harness.ctx.mint(sub="user_normal")
+
+    response = harness.client.get(
+        f"/api/admin/generation-calls/{call_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_the_detail_rejects_an_unauthenticated_caller(engine):
+    harness = _Harness(engine)
+
+    assert harness.client.get("/api/admin/generation-calls/1").status_code == 401

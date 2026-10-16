@@ -80,3 +80,9 @@ test("an unknown generator kind falls back to its raw value", () => {
 
   assert.equal(view.kindLabel, "future-kind");
 });
+
+test("each row links to its call's detail page", () => {
+  const view = toGenerationCallRowView(row({ id: 42 }));
+
+  assert.equal(view.href, "/admin/ai-audit-log/42");
+});
