@@ -14,7 +14,7 @@ import {
   type FilterOption,
 } from "@/lib/admin-generation-calls-query";
 
-interface GenerationCallFiltersProps {
+interface GenerationCallFilterFormProps {
   filters: AuditLogFilters;
   // Whether any filter is set, so "Clear" shows only when there is something to clear.
   isFiltered: boolean;
@@ -26,10 +26,10 @@ interface GenerationCallFiltersProps {
 // router, and an admin filter is not worth a soft navigation. The server parses the URL; this
 // only renders it. `"use client"` only because the form primitives claim their `Field` ids
 // through a client hook; the page keys it on the filters, so the fields reseed on navigation.
-export function GenerationCallFilters({
+export function GenerationCallFilterForm({
   filters,
   isFiltered,
-}: GenerationCallFiltersProps): React.JSX.Element {
+}: GenerationCallFilterFormProps): React.JSX.Element {
   return (
     <form action="/admin/ai-audit-log" method="get" className="flex flex-col gap-3">
       <FieldRow>
@@ -43,7 +43,7 @@ export function GenerationCallFilters({
             <FilterOptions options={OUTCOME_OPTIONS} />
           </Select>
         </Field>
-        <Field label="User id" className="min-w-0 grow basis-48">
+        <Field label="User id" className={WIDE_FIELD_WIDTH}>
           <Input
             name="user"
             type="text"

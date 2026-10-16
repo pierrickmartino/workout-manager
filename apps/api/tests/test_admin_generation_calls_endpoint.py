@@ -167,20 +167,17 @@ class _Harness:
             json={"training_type": "strength", "duration_minutes": 45, "equipment": []},
         )
 
-    def admin_list(self, **params):
-        token = self.ctx.mint(sub="user_admin", extra_claims={"role": "admin"})
-        return self.client.get(
-            "/api/admin/generation-calls",
-            params=params,
-            headers={"Authorization": f"Bearer {token}"},
-        )
+    def admin_list(self, **params: object):
+        return self.admin_get("/api/admin/generation-calls", params=params)
 
     def admin_detail(self, call_id: int):
         return self.admin_get(f"/api/admin/generation-calls/{call_id}")
 
-    def admin_get(self, path: str):
+    def admin_get(self, path: str, *, params: dict | None = None):
         token = self.ctx.mint(sub="user_admin", extra_claims={"role": "admin"})
-        return self.client.get(path, headers={"Authorization": f"Bearer {token}"})
+        return self.client.get(
+            path, params=params, headers={"Authorization": f"Bearer {token}"}
+        )
 
     def only_call_id(self) -> int:
         [call] = self.admin_list().json()["data"]

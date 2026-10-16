@@ -9,9 +9,10 @@ import {
   toGenerationCallRowView,
   type AuditLogSearchParams,
 } from "@/lib/admin-generation-calls";
-import { GenerationCallFilters } from "@/components/GenerationCallFilters";
+import { GenerationCallFilterForm } from "@/components/GenerationCallFilterForm";
 import { GenerationCallList } from "@/components/GenerationCallList";
 import { GenerationCallPager } from "@/components/GenerationCallPager";
+import { TimelinePageTransition } from "@/components/analytics/timeline-page-transition";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
 import { Alert } from "@/components/pulse/alert";
@@ -45,7 +46,7 @@ export default async function AdminAiAuditLogPage({
       </p>
 
       {/* Keyed on the URL’s filters, so the uncontrolled fields reseed after a navigation. */}
-      <GenerationCallFilters
+      <GenerationCallFilterForm
         key={JSON.stringify(state.filters)}
         filters={state.filters}
         isFiltered={isFiltered}
@@ -53,10 +54,13 @@ export default async function AdminAiAuditLogPage({
 
       {result.success && result.data ? (
         <>
-          <GenerationCallList
-            calls={result.data.map(toGenerationCallRowView)}
-            isFiltered={isFiltered}
-          />
+          {/* A same-path pager turns a page (ADR-0122): only the calls move. */}
+          <TimelinePageTransition offset={state.page}>
+            <GenerationCallList
+              calls={result.data.map(toGenerationCallRowView)}
+              isFiltered={isFiltered}
+            />
+          </TimelinePageTransition>
           {pager ? <GenerationCallPager pager={pager} /> : null}
         </>
       ) : (

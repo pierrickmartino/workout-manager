@@ -49,7 +49,7 @@ import { ProgressStoryCard } from "@/components/pulse/progress-story";
 import { toProgressStoryView } from "@/lib/progress-story-view";
 import { AdminExerciseBrowser } from "@/components/AdminExerciseBrowser";
 import { GenerationCallList } from "@/components/GenerationCallList";
-import { GenerationCallFilters } from "@/components/GenerationCallFilters";
+import { GenerationCallFilterForm } from "@/components/GenerationCallFilterForm";
 import { GenerationCallPager } from "@/components/GenerationCallPager";
 import { toGenerationCallRowView } from "@/lib/admin-generation-calls-view";
 import { GenerationCallDetailPanel } from "@/components/GenerationCallDetailPanel";
@@ -233,7 +233,7 @@ function AdminAudit() {
         so the widest state of each control is the one measured. */}
     <div className="flex flex-col gap-4">
       <SectionHeader>AI audit log</SectionHeader>
-      <GenerationCallFilters filters={generationCallFilters} isFiltered />
+      <GenerationCallFilterForm filters={generationCallFilters} isFiltered />
       <GenerationCallList calls={generationCallRows.map(toGenerationCallRowView)} isFiltered />
       <GenerationCallPager pager={generationCallPager} />
     </div>
