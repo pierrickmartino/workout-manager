@@ -22,7 +22,10 @@ from app.generation.monitoring.call import (
 )
 from app.generation.monitoring.postgres_recorder import PostgresGenerationCallRecorder
 from app.generation.monitoring.recording_llm import RecordingStructuredLLM
-from app.repositories.generation_call_repository import SqlGenerationCallRepository
+from app.repositories.generation_call_repository import (
+    GenerationCallFilters,
+    SqlGenerationCallRepository,
+)
 
 
 class _Schema(BaseModel):
@@ -92,7 +95,9 @@ def _call(clerk_user_id: str | None) -> GenerationCall:
 
 def _recorded_users(engine) -> list[str | None]:
     with Session(engine) as session:
-        rows = SqlGenerationCallRepository(session).list_recent(limit=100)
+        rows = SqlGenerationCallRepository(session).list_recent(
+            filters=GenerationCallFilters(), limit=100, offset=0
+        ).items
     return sorted(row.clerk_user_id or "" for row in rows)
 
 

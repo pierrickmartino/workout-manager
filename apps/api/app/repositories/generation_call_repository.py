@@ -2,7 +2,8 @@
 
 The persistence seam behind the Postgres recorder and the admin list endpoint. ``add``
 stores one call; ``purge_expired`` deletes rows past the 3-day retention window;
-``delete_for_user`` erases one user's rows; ``list_recent`` reads the newest calls first;
+``delete_for_user`` erases one user's rows; ``list_recent`` reads one filtered page of the
+newest calls first (issue #732);
 ``get_recent`` reads one call in full.
 Every read applies the retention cutoff, so an expired row is never served even when a
 purge failed. ``now`` is injectable so retention is tested deterministically.
@@ -19,11 +20,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
-from sqlalchemy import delete
+from sqlalchemy import delete, func
 from sqlmodel import Session, select
 
 from app.db.models import GenerationCallRecord, _utcnow
-from app.generation.monitoring.call import GenerationCall
+from app.generation.monitoring.call import (
+    GenerationCall,
+    GenerationOutcome,
+    GeneratorKind,
+)
 from app.generation.monitoring.retention import retention_cutoff
 
 Clock = Callable[[], datetime]
@@ -61,6 +66,28 @@ class GenerationCallDetail:
     max_tokens: int | None
 
 
+@dataclass(frozen=True)
+class GenerationCallFilters:
+    """What the admin list narrows to; each ``None`` field leaves that axis open.
+
+    Set fields combine (AND), so "failed protocol generations for this user" is all three."""
+
+    generator_kind: GeneratorKind | None = None
+    outcome: GenerationOutcome | None = None
+    clerk_user_id: str | None = None
+
+
+@dataclass(frozen=True)
+class GenerationCallPage:
+    """One newest-first page of the admin list plus the full match count.
+
+    ``total`` counts every call matching the filters inside the retention window, across
+    all pages, so the route can report pagination ``meta``."""
+
+    items: list[GenerationCallSummary]
+    total: int
+
+
 def _summary(row: GenerationCallRecord) -> GenerationCallSummary:
     return GenerationCallSummary(
         id=row.id,
@@ -88,6 +115,21 @@ def _detail(row: GenerationCallRecord) -> GenerationCallDetail:
     )
 
 
+def _matching(filters: GenerationCallFilters) -> list:
+    """The WHERE clauses for the set filters; an open axis adds none."""
+
+    clauses = []
+    if filters.generator_kind is not None:
+        clauses.append(
+            GenerationCallRecord.generator_kind == filters.generator_kind.value
+        )
+    if filters.outcome is not None:
+        clauses.append(GenerationCallRecord.outcome == filters.outcome.value)
+    if filters.clerk_user_id is not None:
+        clauses.append(GenerationCallRecord.clerk_user_id == filters.clerk_user_id)
+    return clauses
+
+
 class GenerationCallRepository(Protocol):
     def add(self, call: GenerationCall) -> None:
         """Store one recorded call, stamped with the repository's clock."""
@@ -101,8 +143,10 @@ class GenerationCallRepository(Protocol):
         """Erase every row attributed to ``clerk_user_id``."""
         ...
 
-    def list_recent(self, *, limit: int) -> list[GenerationCallSummary]:
-        """The newest ``limit`` calls inside the retention window, newest first."""
+    def list_recent(
+        self, *, filters: GenerationCallFilters, limit: int, offset: int
+    ) -> GenerationCallPage:
+        """One page of the matching calls inside the retention window, newest first."""
         ...
 
     def get_recent(self, call_id: int) -> GenerationCallDetail | None:
@@ -158,20 +202,30 @@ class SqlGenerationCallRepository:
         )
         self._session.commit()
 
-    def list_recent(self, *, limit: int) -> list[GenerationCallSummary]:
-        """The newest ``limit`` calls inside the retention window, newest first."""
+    def list_recent(
+        self, *, filters: GenerationCallFilters, limit: int, offset: int
+    ) -> GenerationCallPage:
+        """One page of the matching calls inside the retention window, newest first."""
 
-        cutoff = retention_cutoff(self._now())
+        where = (
+            GenerationCallRecord.created_at >= retention_cutoff(self._now()),
+            *_matching(filters),
+        )
+        total = self._session.exec(
+            select(func.count()).select_from(GenerationCallRecord).where(*where)
+        ).one()
         statement = (
             select(GenerationCallRecord)
-            .where(GenerationCallRecord.created_at >= cutoff)
+            .where(*where)
             # The id tiebreaks calls sharing a timestamp, so the order is total and stable.
             .order_by(
                 GenerationCallRecord.created_at.desc(), GenerationCallRecord.id.desc()
             )
+            .offset(offset)
             .limit(limit)
         )
-        return [_summary(row) for row in self._session.exec(statement).all()]
+        rows = self._session.exec(statement).all()
+        return GenerationCallPage(items=[_summary(row) for row in rows], total=total)
 
     def get_recent(self, call_id: int) -> GenerationCallDetail | None:
         """One call in full, or ``None`` when unknown or past the retention window."""
@@ -186,6 +240,8 @@ class SqlGenerationCallRepository:
 
 __all__ = [
     "GenerationCallDetail",
+    "GenerationCallFilters",
+    "GenerationCallPage",
     "GenerationCallRepository",
     "GenerationCallSummary",
     "SqlGenerationCallRepository",

@@ -6,6 +6,8 @@ import { NAV_FORWARD } from "@/lib/nav-direction";
 
 interface GenerationCallListProps {
   calls: readonly GenerationCallRowView[];
+  // Whether the operator narrowed the log, so an empty page says "no match", not "no calls".
+  isFiltered: boolean;
 }
 
 // The admin AI audit log's rows (issue #730, ADR-0135): one card per Generation Call, newest
@@ -14,11 +16,14 @@ interface GenerationCallListProps {
 // links to the call's detail page (issue #731).
 export function GenerationCallList({
   calls,
+  isFiltered,
 }: GenerationCallListProps): React.JSX.Element {
   if (calls.length === 0) {
     return (
       <p className="font-mono text-[13px] text-text-muted">
-        No AI calls in the last 3 days.
+        {isFiltered
+          ? "No AI calls in the last 3 days match these filters."
+          : "No AI calls in the last 3 days."}
       </p>
     );
   }

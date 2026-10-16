@@ -39,8 +39,8 @@ export interface GenerationCallRowView {
 }
 
 // The generator kinds the backend's `GeneratorKind` emits. An unknown kind falls back to its
-// raw value, so a future generator still renders.
-const KIND_LABELS: Record<string, string> = {
+// raw value, so a future generator still renders. The list filter offers exactly these.
+export const KIND_LABELS: Record<string, string> = {
   session: "Session",
   protocol: "Protocol",
   regeneration: "Regeneration",
@@ -49,7 +49,7 @@ const KIND_LABELS: Record<string, string> = {
   "exercise-enrichment": "Exercise enrichment",
 };
 
-const OUTCOME_LABELS: Record<string, string> = {
+export const OUTCOME_LABELS: Record<string, string> = {
   success: "Success",
   error: "Error",
 };

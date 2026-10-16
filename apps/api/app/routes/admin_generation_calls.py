@@ -1,7 +1,10 @@
 """The admin AI audit log: recorded Generation Calls for the operator (ADR-0135).
 
 ``GET /api/admin/generation-calls`` lists the most recent metered provider calls, newest
-first, inside the 3-day retention window. Rows carry metadata only (no prompt or output
+first, inside the 3-day retention window. Optional ``generator_kind``, ``outcome`` and
+``clerk_user_id`` filters combine (AND), and the list is paged through ``limit``/``offset``
+with envelope ``meta`` (issue #732). An unknown kind or outcome is a ``422``, not an empty
+page, so a typo never reads as "nothing happened". Rows carry metadata only (no prompt or output
 text), so the list payload stays small. Behind ``require_admin`` (ADR-0046): it fails
 closed, because the log holds prompts built from other users' health data. Responses use
 the standard envelope.
@@ -12,22 +15,24 @@ unknown id and one past the retention window are the same ``404``."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth.dependencies import require_admin
 from app.envelope import success_envelope
+from app.generation.monitoring.call import GenerationOutcome, GeneratorKind
 from app.repositories.deps import get_generation_call_repository
 from app.repositories.generation_call_repository import (
     GenerationCallDetail,
+    GenerationCallFilters,
     GenerationCallRepository,
     GenerationCallSummary,
 )
 
 router = APIRouter(prefix="/api", tags=["admin"])
 
-# The first page of the log: enough recent calls to match a report, small enough to stay
-# fast. Filtering and paging arrive with the next slice of the audit log.
-ADMIN_GENERATION_CALL_LIMIT = 50
+# A page of the log: enough recent calls to match a report, small enough to stay fast.
+ADMIN_GENERATION_CALL_DEFAULT_LIMIT = 50
+ADMIN_GENERATION_CALL_MAX_LIMIT = 200
 
 HTTP_NOT_FOUND = 404
 
@@ -65,13 +70,28 @@ def _serialize_detail(call: GenerationCallDetail) -> dict:
 
 @router.get("/admin/generation-calls")
 def list_generation_calls(
+    generator_kind: GeneratorKind | None = Query(default=None),
+    outcome: GenerationOutcome | None = Query(default=None),
+    clerk_user_id: str | None = Query(default=None, min_length=1),
+    limit: int = Query(
+        default=ADMIN_GENERATION_CALL_DEFAULT_LIMIT,
+        ge=1,
+        le=ADMIN_GENERATION_CALL_MAX_LIMIT,
+    ),
+    offset: int = Query(default=0, ge=0),
     _operator: str = Depends(require_admin),
     calls: GenerationCallRepository = Depends(get_generation_call_repository),
 ) -> dict:
-    """The newest recorded Generation Calls, operator-only (ADR-0135)."""
+    """One filtered page of the newest recorded Generation Calls, operator-only (ADR-0135)."""
 
-    recent = calls.list_recent(limit=ADMIN_GENERATION_CALL_LIMIT)
-    return success_envelope([_serialize(call) for call in recent])
+    filters = GenerationCallFilters(
+        generator_kind=generator_kind, outcome=outcome, clerk_user_id=clerk_user_id
+    )
+    page = calls.list_recent(filters=filters, limit=limit, offset=offset)
+    return success_envelope(
+        [_serialize(call) for call in page.items],
+        meta={"total": page.total, "limit": limit, "offset": offset},
+    )
 
 
 @router.get("/admin/generation-calls/{call_id}")
