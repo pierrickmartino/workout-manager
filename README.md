@@ -22,7 +22,7 @@ Training types currently include strength, cardio, HIIT, yoga and mobility. The 
 | API | FastAPI, Python, SQLModel, Alembic |
 | Data | PostgreSQL; Redis for generation cache and RQ jobs |
 | Background jobs | RQ worker for asynchronous generation |
-| Optional monitoring | Self-hosted Langfuse for AI usage |
+| AI audit log | Every Generation Call recorded in Postgres for 3 days, readable by admins |
 
 The web app calls the API from the Next.js server with a Clerk session token. The API verifies the token against Clerk's JWKS. Database changes are applied with Alembic when the API container starts.
 
@@ -38,16 +38,15 @@ You need Docker with Compose, a [Clerk application](https://dashboard.clerk.com)
 
 2. In `.env`, set `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`. Set `CLERK_ISSUER` to the `iss` value of your Clerk session token and `CLERK_JWKS_URL` to that issuer's `/.well-known/jwks.json` URL.
 3. Select `AI_PROVIDER` (`anthropic`, `openai`, `google` or `openrouter`) and set its corresponding API key. `AI_MODEL` is optional.
-4. For the core stack, set `LANGFUSE_HOST=` in `.env` to disable monitoring. Leave the nonempty Langfuse bootstrap placeholders from the template in place for Compose variable validation, even though the Langfuse services will not start.
-5. Start the five app services from the repository root:
+4. Start the stack from the repository root:
 
    ```bash
-   docker compose up --build db redis api worker web
+   docker compose up --build
    ```
 
 Open the app at <http://localhost:3000>. The API health endpoint is <http://localhost:8000/health> and interactive API docs are at <http://localhost:8000/docs>. New users complete onboarding after signing in. The default host ports are 3000 (web), 8000 (API), 5432 (Postgres) and 6379 (Redis); override them with `WEB_PORT`, `API_PORT`, `DB_PORT` and `REDIS_PORT` in `.env` if needed.
 
-> The selected AI provider key is needed for generation. The app also has a full optional Langfuse stack in `docker-compose.yml`. To run monitoring, replace all Langfuse placeholder credentials with generated secrets, restore `LANGFUSE_HOST=http://langfuse-web:3000`, and follow [the Langfuse setup guide](./docs/deployment/langfuse.md). A bare `docker compose up --build` starts that monitoring stack as well.
+> The selected AI provider key is needed for generation. Every Generation Call is recorded in the app's own Postgres for 3 days and shown to admins in the AI audit log ([ADR-0135](./docs/adr/0135-the-ai-audit-log-is-an-in-house-postgres-table.md)); it needs no extra service or configuration.
 
 ## Develop and test
 
@@ -87,6 +86,6 @@ For a separate web development server, copy `apps/web/.env.local.example` to `ap
 - `apps/api/app/routes/`: HTTP endpoints; `domain/`: training rules and calculations; `repositories/`: persistence; `generation/`: AI providers, cache and jobs.
 - `apps/api/app/alembic/`: database migrations.
 - `docs/adr/`: architectural decisions; [GLOSSARY.md](./GLOSSARY.md): product terminology; [CLAUDE.md](./CLAUDE.md): developer map.
-- `docs/deployment/`: [Railway](./docs/deployment/railway.md), [Langfuse](./docs/deployment/langfuse.md) and [enrichment backfill](./docs/deployment/enrichment-backfill.md) guides.
+- `docs/deployment/`: [Railway](./docs/deployment/railway.md) and [enrichment backfill](./docs/deployment/enrichment-backfill.md) guides.
 
 The project is licensed under [MIT](./LICENSE).

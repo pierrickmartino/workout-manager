@@ -6,7 +6,7 @@ and model, token counts (null when unreported), latency, outcome, and the full p
 output. ``created_at`` is indexed for the newest-first read and the retention purge;
 ``clerk_user_id`` is indexed for per-user erasure.
 
-No backfill: nothing was recorded before (Langfuse was never deployed), so the log starts
+No backfill: nothing was recorded before (no earlier recorder was ever deployed), so the log starts
 empty. Rows live for the 3-day retention window only. The downgrade drops the table.
 
 Revision ID: 0051_generation_call

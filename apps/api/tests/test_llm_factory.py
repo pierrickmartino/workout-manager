@@ -4,9 +4,8 @@ The factory is the single place a concrete SDK client is constructed and the
 single dispatch on ``AI_PROVIDER``. It fails fast when the *selected* provider's
 key is missing, tolerates absent keys for *other* providers, and surfaces a
 clear error for an unknown or not-yet-wired provider. It also wraps the chosen
-provider in the ``RecordingStructuredLLM`` decorator with the Postgres recorder
-whenever Langfuse is not configured, so every metered call is captured in one
-place: the admin AI audit log (ADR-0135). These tests pin that dispatch, the wrapping, and the fail-fast
+provider in the ``RecordingStructuredLLM`` decorator with the Postgres recorder,
+so every metered call is captured in one place: the admin AI audit log (ADR-0135). These tests pin that dispatch, the wrapping, and the fail-fast
 contract without a network call."""
 
 from __future__ import annotations
@@ -19,7 +18,6 @@ from app.generation.llm.providers.anthropic_provider import AnthropicStructuredL
 from app.generation.llm.providers.google_provider import GoogleStructuredLLM
 from app.generation.llm.providers.openai_provider import OpenAIStructuredLLM
 from app.generation.llm.providers.openrouter_provider import OpenRouterStructuredLLM
-from app.generation.monitoring.langfuse_recorder import LangfuseGenerationCallRecorder
 from app.generation.monitoring.postgres_recorder import PostgresGenerationCallRecorder
 from app.generation.monitoring.recording_llm import RecordingStructuredLLM
 
@@ -148,40 +146,13 @@ def test_unknown_provider_fails_fast():
         build_llm_client(settings)
 
 
-def test_recorder_is_postgres_when_langfuse_is_not_configured():
-    # Arrange — no Langfuse configured
+def test_recorder_is_always_postgres():
+    # Arrange
     settings = Settings()
 
-    # Act — the SDK-client builder must not even be consulted on this path
-    recorder = build_recorder(
-        settings,
-        langfuse_client_builder=_unused_client_builder,
-    )
+    # Act
+    recorder = build_recorder(settings)
 
     # Assert — calls go to the app's own database (ADR-0135)
     assert isinstance(recorder, PostgresGenerationCallRecorder)
 
-
-def test_recorder_is_langfuse_when_configured():
-    # Arrange — Langfuse fully configured; inject a fake SDK client so no network/SDK
-    settings = Settings(
-        langfuse_host="https://langfuse.internal",
-        langfuse_public_key="pk-1",
-        langfuse_secret_key="sk-1",
-    )
-    seen: list[Settings] = []
-
-    def _fake_builder(s: Settings) -> object:
-        seen.append(s)
-        return object()  # stands in for the low-level Langfuse client
-
-    # Act
-    recorder = build_recorder(settings, langfuse_client_builder=_fake_builder)
-
-    # Assert — the Langfuse-backed recorder, built from the configured settings
-    assert isinstance(recorder, LangfuseGenerationCallRecorder)
-    assert seen == [settings]
-
-
-def _unused_client_builder(settings: Settings) -> object:
-    raise AssertionError("langfuse client must not be built when unconfigured")

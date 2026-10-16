@@ -46,7 +46,7 @@ class _FakeProvider:
 
 
 class _HandleRecorder:
-    """A recorder that hands back a fixed trace-id handle (like Langfuse would)."""
+    """A recorder that hands back a fixed trace-id handle (like a real backend would)."""
 
     def __init__(self, trace_id: str | None) -> None:
         self._trace_id = trace_id

@@ -21,9 +21,9 @@ that visibility is not worth it for a single operator (#729).
   `GenerationCallRecorder` port. The `RecordingStructuredLLM` decorator, the
   `StructuredLLM.complete(...) -> str` contract and every generator's `parse_*` boundary are
   unchanged (ADR-0006). Persistence goes through `SqlGenerationCallRepository` into a new
-  `generation_call` table. The factory selects this recorder whenever Langfuse is not
-  configured. The no-op stays for tests that don't care about the log. Langfuse itself is
-  removed in a later slice of #729.
+  `generation_call` table. The factory always selects this recorder; Langfuse, its
+  configuration and its compose stack are removed (#733). The no-op stays for tests that
+  don't care about the log.
 - **Its own session, its own commit.** The recorder opens a short-lived session per call,
   independent of the caller's. A generation whose transaction rolls back still leaves its
   failed call recorded, and those are the failures most worth debugging.

@@ -186,7 +186,7 @@ The project already has async generation and operational usage monitoring. Exten
 
 Build an evaluation set around schema validity, constraint handling, equipment compatibility, valid quantities, and reproducibility of downstream parsing. Separate these from subjective usefulness ratings. A new provider or prompt should be evaluated against the same cases before broader rollout.
 
-Connect user feedback to generation lineage carefully. [ADR-0039](../adr/0039-ai-usage-monitoring-via-self-hosted-langfuse.md) already records trace lineage and defers feedback-to-score mapping. Cached artifacts may have many adopters, so one person's feedback should not become an unexplained universal score.
+Connect user feedback to generation lineage carefully. [ADR-0135](../adr/0135-the-ai-audit-log-is-an-in-house-postgres-table.md) dropped trace lineage, because a 3-day audit log cannot back it, so this needs a lasting link of its own. Cached artifacts may have many adopters, so one person's feedback should not become an unexplained universal score.
 
 ## 9. Complete user control over data
 
