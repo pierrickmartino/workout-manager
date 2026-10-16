@@ -38,8 +38,7 @@ Sources: [research 2026-10-05](docs/research/2026-10-05.md) → *Next actions*,
 Source: [audit 2026-10-05](docs/research/audit/2026-10-05.md).
 
 - ❔ **Run the installed-PWA Live and Finish recovery matrix** (rank 4) on iOS Safari and Android Chrome: offline logging, reload or update during a Live Session, lost finish acknowledgement, account switch, and a "Safari tab idle 8 days" row.
-- 🟡 **Make AI spend and failures visible to the operator** (rank 5, tracked in [#270](https://github.com/pierrickmartino/workout-manager/issues/270), the only open issue). The recorder, Langfuse compose, lineage and erasure sub-issues (#271–#276) are closed. Still to do: reconcile against production and verify retention and erasure in operation.
-  - ⬜ Update #270's acceptance criteria: pin the Langfuse server to `3.x` (compose still uses floating `:3`), note that SDK v2 loses support after v4, and restrict OTel spans to LLM calls.
+- 🟡 **Make AI spend and failures visible to the operator** (rank 5, tracked in [#270](https://github.com/pierrickmartino/workout-manager/issues/270), the only open issue). Calls are now recorded in the app's own Postgres and read in the admin AI audit log ([#729](https://github.com/pierrickmartino/workout-manager/issues/729), ADR-0135). Still to do: verify retention and erasure in operation.
 - ⬜ **Open question:** can users predict what a Calibration re-pitch will change? Observe a few users before adding a preview.
 
 ## 3. PWA and platform

@@ -1,8 +1,8 @@
 """The ``GenerationCallRecorder`` port and its no-op default (#270/#271).
 
 A recorder is where a ``Generation Call`` goes to be durably captured. The port is a
-one-method seam so the observability vendor (self-hosted Langfuse, a later slice) stays
-quarantined behind it and never leaks into generators (ADR-0039).
+narrow seam so the storage backend (the Postgres audit log, ADR-0135) stays quarantined
+behind it and never leaks into generators (ADR-0039).
 
 The **no-op** records nothing. Deployments record into Postgres instead (the
 ``PostgresGenerationCallRecorder``, ADR-0135); the no-op stays for tests that don't care
@@ -57,8 +57,8 @@ class NoOpGenerationCallRecorder:
         return None
 
     def delete_user_traces(self, clerk_user_id: str) -> None:
-        # Nothing was captured on the unconfigured path, so there is nothing to
-        # erase; a no-op that never raises upholds the port's erasure contract.
+        # Nothing was captured, so there is nothing to erase; a no-op that never
+        # raises upholds the port's erasure contract.
         return None
 
 

@@ -13,18 +13,13 @@ implemented. ``openrouter`` reuses the OpenAI SDK pointed at OpenRouter's base
 URL (no new dependency).
 
 The factory also wires operational AI-usage monitoring (#270/#273): it wraps the chosen
-provider in the ``RecordingStructuredLLM`` decorator and selects a ``GenerationCallRecorder``
-the same way it selects a provider — the **Langfuse-backed recorder** when Langfuse is
-configured (host + both keys present), the **Postgres recorder** otherwise, which stores each
-call in the app's own database for the admin AI audit log (ADR-0135). The Postgres recorder
-opens its engine lazily, on the first record, so building a client touches no database. The
-Langfuse SDK is imported lazily (only when configured), so it is never needed to run the
-offline suite. Both the API DI layer and the RQ worker go through here, so recording is wired
+provider in the ``RecordingStructuredLLM`` decorator and records through the **Postgres recorder**,
+which stores each call in the app's own database for the admin AI audit log (ADR-0135). The
+Postgres recorder opens its engine lazily, on the first record, so building a client touches
+no database. Both the API DI layer and the RQ worker go through here, so recording is wired
 in one place."""
 
 from __future__ import annotations
-
-from collections.abc import Callable
 
 import anthropic
 import openai
@@ -41,10 +36,6 @@ from app.generation.llm.providers.openrouter_provider import (
     build_openrouter_client,
 )
 from app.generation.llm.usage import CompletionProvider
-from app.generation.monitoring.langfuse_recorder import (
-    LangfuseClient,
-    LangfuseGenerationCallRecorder,
-)
 from app.generation.monitoring.postgres_recorder import PostgresGenerationCallRecorder
 from app.generation.monitoring.recorder import GenerationCallRecorder
 from app.generation.monitoring.recording_llm import RecordingStructuredLLM
@@ -77,45 +68,16 @@ def _require_key(settings: Settings, provider: str) -> str:
     return key
 
 
-# How the Langfuse SDK client is constructed — injectable so recorder *selection* is
-# unit-tested with a fake client while production builds the real one.
-LangfuseClientBuilder = Callable[[Settings], LangfuseClient]
+def build_recorder(settings: Settings) -> GenerationCallRecorder:
+    """Build the AI-usage recorder: the Postgres-backed admin AI audit log (ADR-0135).
 
+    It records into the configured database, opening a session only when a call is
+    recorded, so building it touches no database."""
 
-def _default_langfuse_client(settings: Settings) -> LangfuseClient:
-    """Construct the real low-level Langfuse SDK client (the only place it is imported).
-
-    Imported lazily so the SDK is a hard dependency only for a *configured* deployment; an
-    unconfigured deployment and the offline suite never import it."""
-
-    from langfuse import Langfuse
-
-    return Langfuse(
-        host=settings.langfuse_host,
-        public_key=settings.langfuse_public_key,
-        secret_key=settings.langfuse_secret_key,
+    database_url = settings.database_url
+    return PostgresGenerationCallRecorder(
+        session_factory=lambda: Session(engine_for(database_url))
     )
-
-
-def build_recorder(
-    settings: Settings,
-    *,
-    langfuse_client_builder: LangfuseClientBuilder = _default_langfuse_client,
-) -> GenerationCallRecorder:
-    """Select the AI-usage recorder: Langfuse when configured, else Postgres (ADR-0135).
-
-    Mirrors how ``build_llm_client`` selects a provider. The Langfuse SDK client is built
-    through ``langfuse_client_builder`` — injectable so the selection is unit-tested with a
-    fake client and the offline suite never touches the SDK. When Langfuse is unconfigured
-    the builder is not consulted at all; the Postgres recorder records into the configured
-    database, opening a session only when a call is recorded."""
-
-    if not settings.langfuse_configured():
-        database_url = settings.database_url
-        return PostgresGenerationCallRecorder(
-            session_factory=lambda: Session(engine_for(database_url))
-        )
-    return LangfuseGenerationCallRecorder(langfuse_client_builder(settings))
 
 
 def _build_provider(settings: Settings, provider: str, key: str) -> CompletionProvider:

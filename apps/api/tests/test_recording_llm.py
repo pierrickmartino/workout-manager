@@ -236,7 +236,7 @@ def test_recorder_failure_is_swallowed_and_result_unaffected():
     provider = _FakeProvider(
         result=CompletionResult(text="value", usage=TokenUsage.empty(), model="m")
     )
-    recorder = _FakeRecorder(error=RuntimeError("langfuse is down"))
+    recorder = _FakeRecorder(error=RuntimeError("recorder backend is down"))
     llm = _decorator(provider, recorder)
 
     # Act — best-effort: no exception escapes, the text is returned intact
@@ -298,7 +298,7 @@ def test_capture_stays_none_when_recorder_raises():
     provider = _FakeProvider(
         result=CompletionResult(text="ok", usage=TokenUsage.empty(), model="m")
     )
-    recorder = _FakeRecorder(trace_id="never", error=RuntimeError("langfuse is down"))
+    recorder = _FakeRecorder(trace_id="never", error=RuntimeError("recorder backend is down"))
     llm = _decorator(provider, recorder)
     capture = TraceCapture()
 
@@ -349,7 +349,7 @@ def test_flush_failure_is_swallowed():
     provider = _FakeProvider(
         result=CompletionResult(text="{}", usage=TokenUsage.empty(), model="m")
     )
-    recorder = _FakeRecorder(flush_error=RuntimeError("langfuse is down"))
+    recorder = _FakeRecorder(flush_error=RuntimeError("recorder backend is down"))
     llm = _decorator(provider, recorder)
 
     # Act / Assert — no exception escapes
@@ -362,7 +362,7 @@ def test_recorder_failure_on_error_path_still_reraises_generation_error():
     # original GenerationError, not the recorder's error
     original = GenerationError("boom")
     provider = _FakeProvider(error=original)
-    recorder = _FakeRecorder(error=RuntimeError("langfuse is down"))
+    recorder = _FakeRecorder(error=RuntimeError("recorder backend is down"))
     llm = _decorator(provider, recorder)
 
     # Act / Assert
