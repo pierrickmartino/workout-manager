@@ -12,7 +12,7 @@ The two deltas from Duplicate are encoded here:
   Redeem; and
 * the **Author** is *preserved* as the original creator (immutable origin), never
   re-attributed to the redeemer — the same non-re-attribution as Session Provenance and
-  the ``trace_id`` lineage and the curated lineage (ADR-0130), which also carry forward
+  the curated lineage (ADR-0130), which also carry forward
   unchanged, along with the Session Name (verbatim).
 
 What the copy drops is *not* represented here at all, because it is dropped by
@@ -33,7 +33,7 @@ class SharedSessionSource:
     """The source Session's attributes a Redeem copy reads from (redeem-time snapshot).
 
     Only the fields that flow into the copy's Session row: the training parameters, the
-    immutable-origin axes (Session Provenance, ``trace_id`` lineage, Author), and the
+    immutable-origin axes (Session Provenance, curated lineage, Author), and the
     user-given Session Name. Prescriptions are copied separately by the repository; the
     Protocol position and records are dropped by construction and so are absent here.
     """
@@ -43,7 +43,6 @@ class SharedSessionSource:
     provenance: str
     name: str | None
     author_clerk_user_id: str | None
-    trace_id: str | None = None
     curated_lineage: CuratedLineage | None = None
 
 
@@ -57,7 +56,6 @@ class RedeemedSessionCopy:
     provenance: str
     name: str | None
     author_clerk_user_id: str | None
-    trace_id: str | None
     curated_lineage: CuratedLineage | None
 
 
@@ -67,7 +65,7 @@ def redeem_copy(
     """Compute the redeemed copy's Session attributes from ``source`` (ADR-0057).
 
     New **Owner** is ``redeemer_clerk_user_id``; the **Author**, **Session Name**,
-    **Session Provenance**, ``trace_id`` **lineage** and **curated lineage** are carried
+    **Session Provenance** and **curated lineage** are carried
     forward unchanged.
     Pure — returns a fresh immutable value and never touches the source.
     """
@@ -79,7 +77,6 @@ def redeem_copy(
         provenance=source.provenance,
         name=source.name,
         author_clerk_user_id=source.author_clerk_user_id,
-        trace_id=source.trace_id,
         curated_lineage=source.curated_lineage,
     )
 

@@ -181,7 +181,7 @@ def redeem_link(
 
     Deep-copies the linked Session at **redeem time** into an independent copy owned by the
     redeemer: prescriptions/Supersets/per-set values copied faithfully, **Author preserved**,
-    **Session Name carried**, **Provenance + trace_id carried**, **no Logged Sessions**, **no
+    **Session Name carried**, **Provenance carried**, **no Logged Sessions**, **no
     Protocol position**, **Favorite not carried**. Each Redeem yields a fresh copy; redeeming
     one's own link is allowed. A revoked or unknown link fails cleanly (``404`` through the
     envelope). Bodyless POST.

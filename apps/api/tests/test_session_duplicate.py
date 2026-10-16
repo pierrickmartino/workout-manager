@@ -1,6 +1,6 @@
 """Duplicate: deep-copying a user-owned Session into a new standalone Session
 (ADR-0043). The copy keeps the source's prescriptions, Supersets, Session
-Provenance, trace_id lineage, and name verbatim, but carries no records and no
+Provenance and name verbatim, but carries no records and no
 Protocol position, so it stands alone with a fresh regeneration budget. The
 source is read, never mutated; a non-owner can never copy another user's plan.
 
@@ -232,21 +232,6 @@ def test_duplicate_inherits_user_authored_provenance(repos):
     # Act / Assert — a duplicate of a hand-written plan stays user_authored
     copy = session_repo.duplicate(source.id, "user_hand")
     assert copy.provenance == "user_authored"
-
-
-def test_duplicate_carries_the_trace_id_lineage_forward(repos):
-    # Arrange — an ai_generated source with its originating call's lineage
-    session_repo, exercises = repos
-    source = session_repo.create(
-        "user_trace",
-        replace(_draft_with_two_prescriptions(exercises), trace_id="trace-orig"),
-    )
-
-    # Act
-    copy = session_repo.duplicate(source.id, "user_trace")
-
-    # Assert — the copy traces to the same call (operator-only accessor, ADR-0043/#274)
-    assert session_repo.trace_id(copy.id, "user_trace") == "trace-orig"
 
 
 def test_duplicate_preserves_the_source_author(repos):

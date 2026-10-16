@@ -18,12 +18,6 @@ from app.generation.monitoring.call import GenerationCall
 class GenerationCallRecorder(Protocol):
     """Durably records a metered ``Generation Call`` (the operator's usage log).
 
-    ``record`` returns an optional **trace-id handle** — the backend's durable id for the
-    call. It is the lineage stored on the Generated artifact and carried along the
-    adopt/regeneration chain (#274), so a later fast-follow can push Generation Feedback
-    back to the exact call. A backend with no notion of a trace id (the no-op) returns
-    ``None`` and lineage is simply absent, never an error.
-
     ``flush()`` forces any batched events out. It exists because generation is async on a
     cache miss (ADR-0005): the short-lived RQ job may exit before a backend's background
     batch flushes, so the worker flushes at the end of each job or those events are lost.
@@ -36,7 +30,7 @@ class GenerationCallRecorder(Protocol):
     to the caller, never be swallowed, so un-erased health data is never mistaken for erased.
     """
 
-    def record(self, call: GenerationCall) -> str | None: ...
+    def record(self, call: GenerationCall) -> None: ...
 
     def flush(self) -> None: ...
 
@@ -48,9 +42,9 @@ class NoOpGenerationCallRecorder:
 
     The factory selects the Postgres recorder in deployments (ADR-0135); with this one,
     generation runs exactly as it did before monitoring. It never raises, upholding the
-    best-effort guarantee, and returns no trace-id handle, so lineage is simply absent."""
+    best-effort guarantee."""
 
-    def record(self, call: GenerationCall) -> str | None:
+    def record(self, call: GenerationCall) -> None:
         return None
 
     def flush(self) -> None:

@@ -13,11 +13,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from app.generation.llm.port import GenerationError, StructuredLLM
-from app.generation.monitoring.call import (
-    GenerationCallContext,
-    GeneratorKind,
-    TraceCapture,
-)
+from app.generation.monitoring.call import GenerationCallContext, GeneratorKind
 from app.generation.schema import GeneratedSession
 from app.generation.structured import generate_structured, parse_or_raise
 from app.generation.superset_degrade import degrade_session_to_flat
@@ -143,7 +139,6 @@ class LlmSessionGenerator:
         self._clerk_user_id = clerk_user_id
 
     def generate(self, request: GenerationRequest) -> GeneratedSession:
-        capture = TraceCapture()
         generated = generate_structured(
             llm=self._llm,
             system=_system_prompt(
@@ -155,16 +150,12 @@ class LlmSessionGenerator:
             subject="generation",
             context=GenerationCallContext(
                 generator_kind=self._kind,
-                capture=capture,
                 clerk_user_id=self._clerk_user_id,
             ),
         )
-        generated = degrade_session_to_flat(
+        return degrade_session_to_flat(
             generated, has_sensitive_constraint=request.has_sensitive_constraint
         )
-        # Stamp the originating call's trace id onto the artifact (#274) — a new object,
-        # never a mutation, consistent with the immutability of Generated content.
-        return generated.model_copy(update={"trace_id": capture.trace_id})
 
 
 __all__ = [

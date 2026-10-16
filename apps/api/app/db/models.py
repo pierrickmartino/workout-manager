@@ -282,11 +282,6 @@ class Protocol(SQLModel, table=True):
     # to a derived ``objective · training_type`` label until the user sets one in the
     # Builder's config panel.
     name: str | None = Field(default=None)
-    # Operational AI-usage lineage (ADR-0039, #274): the trace id of the Generation
-    # Call that produced the Generated Protocol this copy was Adopted from, deep-copied
-    # here at adoption so operator feedback can trace back to the exact call. Nullable —
-    # absent when no monitoring backend was configured. Never mutated after creation.
-    trace_id: str | None = Field(default=None)
     # Curated lineage (ADR-0130, #688): the identifier, version and as-adopted name of the
     # Curated Protocol this copy was Adopted from, written together at adoption and never
     # mutated after — a content fix to the Curated Protocol never re-syncs an existing copy.
@@ -367,7 +362,7 @@ class WorkoutSession(SQLModel, table=True):
     # *who*). **Immutable origin**: stamped once with the creating user at every creation
     # path and carried verbatim across Duplicate (and, later, Redeem), so even a heavily
     # edited copy still credits its original creator — the same non-re-attribution as
-    # Provenance and ``trace_id`` lineage. Nullable in the schema so the 0031 migration can
+    # Provenance and curated lineage. Nullable in the schema so the 0031 migration can
     # backfill pre-existing rows to their owner (after which no Session is authorless); a
     # missing display name resolves to a generic label at render time (the web
     # ``sessionAuthorView`` mapper), never blank.
@@ -378,18 +373,10 @@ class WorkoutSession(SQLModel, table=True):
     # blocks any further regeneration of this Session.
     has_been_regenerated: bool = Field(default=False)
 
-    # Operational AI-usage lineage (ADR-0039, #274): the trace id of the Generation
-    # Call this Session traces to — seeded at creation (the standalone generation call,
-    # or the originating Protocol generation on Adopt) and re-stamped on Regeneration to
-    # the regeneration's own call, so post-regeneration feedback maps to the regeneration
-    # rather than the superseded call. Nullable (absent with no backend); written only at
-    # creation and on Regeneration, never otherwise mutated.
-    trace_id: str | None = Field(default=None)
-
     # Curated lineage (ADR-0130, #688): the Curated Protocol (identifier, version, as-adopted
     # name) this plan was Adopted from — stamped from the Protocol at adoption (and on every
     # Session a Deploy writes into it) and carried verbatim across Duplicate and Redeem, like
-    # Provenance and ``trace_id``. Never otherwise mutated. All null for any plan not adopted
+    # Provenance and Author. Never otherwise mutated. All null for any plan not adopted
     # from a Curated Protocol. See ``app.domain.curated_lineage``.
     curated_identifier: str | None = Field(default=None)
     curated_version: int | None = Field(default=None)

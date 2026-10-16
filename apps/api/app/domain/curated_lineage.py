@@ -1,8 +1,7 @@
 """Curated lineage — which Curated Protocol, and which version, a plan was adopted from
 (ADR-0130, issue #688).
 
-An immutable plan property, the twin of Session Provenance and ``trace_id`` lineage
-(ADR-0043): Adopt writes it on the Protocol and each of its Sessions, nothing else ever
+An immutable plan property, the twin of Session Provenance (ADR-0043): Adopt writes it on the Protocol and each of its Sessions, nothing else ever
 changes it, and Duplicate and Redeem carry it forward unchanged. The ``name`` is the Curated
 Protocol's name *as adopted*, kept so a read can say "Based on <name>" without consulting
 the registry: adopting copies the plan once and nothing re-syncs it, so a later version's

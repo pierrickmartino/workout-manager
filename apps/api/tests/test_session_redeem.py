@@ -1,6 +1,6 @@
 """Redeem: the cross-user deep-copy of a shared Session into a new one the redeemer owns
-(ADR-0057). The copy keeps the source's prescriptions, Supersets, Session Provenance,
-trace_id lineage and Session Name verbatim, **preserves the Author** as the original
+(ADR-0057). The copy keeps the source's prescriptions, Supersets, Session Provenance
+and Session Name verbatim, **preserves the Author** as the original
 creator, transfers **ownership** to the redeemer, and carries no records and no Protocol
 position — so it stands alone with a fresh regeneration budget. The source is read, never
 mutated; the two copies are thereafter independent.
@@ -155,16 +155,13 @@ def test_redeem_carries_the_session_name_verbatim(repos):
     assert copy.name == "Sharer's Leg Day"
 
 
-def test_redeem_carries_provenance_and_trace_id(repos):
+def test_redeem_carries_provenance(repos):
     session_repo, exercises = repos
-    source = session_repo.create(
-        "sharer", replace(_draft(exercises), trace_id="trace-orig")
-    )
+    source = session_repo.create("sharer", _draft(exercises))
 
     copy = session_repo.redeem(source.id, "recipient")
 
     assert copy.provenance == "ai_generated"
-    assert session_repo.trace_id(copy.id, "recipient") == "trace-orig"
 
 
 def test_redeem_of_user_authored_stays_user_authored(repos):
