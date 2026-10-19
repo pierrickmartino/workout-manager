@@ -17,7 +17,7 @@ import { resolveAppearance } from "@/lib/appearance";
 // search. Lives under the TRAIN section (the tab already lights up for /exercises). The
 // grouped taxonomy, the facet options, the user's usage map, their Default Equipment, and
 // their Weight Unit are read server-side in parallel; the client handles facet toggles,
-// search, section collapse, and the Details drawer from there. A row opens a read-only
+// search, the pattern jump strip, and the Details drawer from there. A row opens a read-only
 // detail drawer — browsing never edits a plan.
 export default async function ExercisesPage({
   searchParams,

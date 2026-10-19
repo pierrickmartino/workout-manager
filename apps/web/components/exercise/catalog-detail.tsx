@@ -25,7 +25,7 @@ import { appendFrom } from "@/lib/back-target";
 import { toStatTiles } from "@/lib/exercise-stats-view";
 import type { WeightUnit } from "@/lib/weight-unit";
 import type { ExerciseSearchResult } from "@/lib/exercises-types";
-import { MovementGlyph } from "./movement-glyph";
+import { MovementPlate } from "./movement-glyph";
 import { EquipmentSymbol } from "./equipment-symbol";
 import { NAV_FORWARD } from "@/lib/nav-direction";
 
@@ -57,9 +57,7 @@ export function CatalogDetail({ exercise, unit }: CatalogDetailProps): React.JSX
     <div className="flex flex-col gap-6">
       {/* Field-guide header — painted instantly from what the row already knows. */}
       <div className="flex items-start gap-4">
-        <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border border-border bg-elevated text-text-primary">
-          <MovementGlyph pattern={pattern} className="h-11 w-11" />
-        </span>
+        <MovementPlate pattern={pattern} className="h-16 w-16" />
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <h2 className="text-balance font-display text-xl font-semibold leading-tight text-text-primary">
             {exercise.name}
