@@ -29,6 +29,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { PatternSection } from "@/components/exercise/pattern-section";
 import { CatalogDetail } from "@/components/exercise/catalog-detail";
+// PROTOTYPE — catalog redesign variants (?variant=current|A|B|C); drop before merging to main.
+import { VariantA, VariantB, VariantC, VARIANT_NAMES } from "@/components/exercise/catalog-prototype/variants.prototype";
+import { PrototypeSwitcher } from "@/components/prototype-switcher.prototype";
 
 interface ExerciseCatalogTaxonomyProps {
   initialFilters: CatalogFilters;
@@ -38,6 +41,7 @@ interface ExerciseCatalogTaxonomyProps {
   usage: ExerciseUsage[];
   referenceIso: string;
   unit: WeightUnit;
+  variant?: string;
 }
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -57,7 +61,9 @@ export function ExerciseCatalogTaxonomy({
   usage,
   referenceIso,
   unit,
+  variant: initialVariant = "current",
 }: ExerciseCatalogTaxonomyProps): React.JSX.Element {
+  const [variant, setVariant] = useState(initialVariant in VARIANT_NAMES ? initialVariant : "current");
   // Seeded once from the server, then owned here — deliberately, unlike the admin editors,
   // which track their `exercise` prop (`overlayEditorEdits`). This screen writes the URL with
   // `history.replaceState` precisely so the Server Component does *not* re-run, so these two
@@ -95,7 +101,10 @@ export function ExerciseCatalogTaxonomy({
     }
     const request = latestRequest.current.begin(filtersKey);
     const handle = setTimeout(() => {
-      replaceFilterQuery(catalogFiltersToParams(filters));
+      const params = catalogFiltersToParams(filters);
+      const keepVariant = new URLSearchParams(window.location.search).get("variant");
+      if (keepVariant) params.set("variant", keepVariant);
+      replaceFilterQuery(params);
       if (!online) return;
       startTransition(async () => {
         await request.run(
@@ -277,19 +286,34 @@ export function ExerciseCatalogTaxonomy({
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-3">
-        {taxonomy.groups.map((group) => (
-          <PatternSection
-            key={group.pattern}
-            pattern={group.pattern}
-            count={group.count}
-            exercises={group.exercises}
-            usageMap={usageMap}
-            referenceIso={referenceIso}
-            onOpen={openDetail}
-          />
-        ))}
-      </div>
+      {variant === "A" ? (
+        <VariantA groups={taxonomy.groups} usageMap={usageMap} referenceIso={referenceIso} onOpen={openDetail} />
+      ) : variant === "B" ? (
+        <VariantB groups={taxonomy.groups} usageMap={usageMap} referenceIso={referenceIso} onOpen={openDetail} />
+      ) : variant === "C" ? (
+        <VariantC groups={taxonomy.groups} usageMap={usageMap} referenceIso={referenceIso} onOpen={openDetail} />
+      ) : (
+        <div className="flex flex-col gap-3">
+          {taxonomy.groups.map((group) => (
+            <PatternSection
+              key={group.pattern}
+              pattern={group.pattern}
+              count={group.count}
+              exercises={group.exercises}
+              usageMap={usageMap}
+              referenceIso={referenceIso}
+              onOpen={openDetail}
+            />
+          ))}
+        </div>
+      )}
+
+      <PrototypeSwitcher
+        variants={Object.keys(VARIANT_NAMES)}
+        names={VARIANT_NAMES}
+        current={variant}
+        onChange={setVariant}
+      />
 
       {selected ? (
         <DetailDrawer entered={drawerEntered} onClose={closeDetail} label={selected.name}>

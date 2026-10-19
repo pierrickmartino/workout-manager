@@ -307,3 +307,38 @@ export const progressStory: ProgressStory = {
   previous: { logged_session_id: 999, performed_on: "2026-09-19", value: 22 },
   body_weight: { previous_kg: 102.5, latest_kg: 98.5 },
 };
+
+// PROTOTYPE — catalog redesign (?journey=catalog-prototype&variant=A|B|C): a realistic
+// multi-pattern catalog with the long names that truncate today. Drop with the prototype.
+const protoRows: Array<[string, string, string[], string[], number]> = [
+  ["squat", "Barbell Back Squat", ["quadriceps", "glutes", "adductors"], ["barbell", "rack"], 6],
+  ["squat", "Dumbbell Bulgarian Split Squat with Front-Foot Elevation", ["quadriceps", "glutes"], ["dumbbell", "bench"], 7],
+  ["squat", "Goblet Squat", ["quadriceps", "glutes", "core"], ["kettlebell"], 3],
+  ["hinge", "Romanian Deadlift", ["hamstrings", "glutes", "lower back"], ["barbell"], 6],
+  ["hinge", "Single-Leg Kettlebell Romanian Deadlift to Knee Drive", ["hamstrings", "glutes", "core", "calves"], ["kettlebell"], 7],
+  ["hinge", "Hip Thrust", ["glutes", "hamstrings"], ["barbell", "bench"], 4],
+  ["push", "Seated Dumbbell Overhead Press", ["shoulders", "triceps"], ["dumbbell", "bench"], 5],
+  ["push", "Incline Barbell Bench Press with Paused Bottom", ["chest", "shoulders", "triceps"], ["barbell", "bench", "rack"], 7],
+  ["push", "Push-Up", ["chest", "triceps", "core"], ["bodyweight"], 2],
+  ["pull", "Pull-Up", ["lats", "biceps", "upper back"], ["pull-up bar"], 7],
+  ["pull", "Chest-Supported Single-Arm Dumbbell Row", ["lats", "upper back", "biceps"], ["dumbbell", "bench"], 4],
+  ["pull", "Cable Face Pull", ["rear delts", "upper back"], ["cable"], 3],
+  ["carry", "Farmer’s Carry", ["forearms", "traps", "core"], ["dumbbell"], 4],
+  ["carry", "Suitcase Carry", ["obliques", "forearms"], ["kettlebell"], 4],
+  ["locomotion", "Rowing Machine Intervals", ["back", "legs", "cardio"], ["cardio machine"], 5],
+  ["locomotion", "Easy Run", ["legs", "cardio"], ["bodyweight"], 3],
+  ["core", "Forearm Plank", ["core", "shoulders"], ["bodyweight"], 2],
+  ["core", "Hanging Knee Raise", ["abs", "hip flexors", "forearms"], ["pull-up bar"], 5],
+  ["general", "Burpee", ["full body", "cardio"], ["bodyweight"], 5],
+];
+const protoExercises: ExerciseSearchResult[] = protoRows.map(([pattern, name, muscles, equipment, difficulty], i) => ({
+  id: 1000 + i, name, targeted_muscles: muscles, required_equipment: equipment, difficulty,
+  provenance: "curated", movement_pattern: pattern, equipment,
+}));
+export const prototypeTaxonomy = {
+  total: protoExercises.length,
+  groups: [...new Set(protoRows.map(([pattern]) => pattern))].map((pattern) => {
+    const rows = protoExercises.filter((exercise) => exercise.movement_pattern === pattern);
+    return { pattern, count: rows.length, exercises: rows };
+  }),
+};

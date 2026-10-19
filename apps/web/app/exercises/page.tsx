@@ -24,7 +24,10 @@ export default async function ExercisesPage({
 }: {
   searchParams: Promise<RawSearchParams>;
 }) {
-  const filters = parseCatalogFilters(await searchParams);
+  const rawParams = await searchParams;
+  const filters = parseCatalogFilters(rawParams);
+  // PROTOTYPE — catalog redesign variant (?variant=); drop before merging to main.
+  const variant = typeof rawParams.variant === "string" ? rawParams.variant : undefined;
 
   const [
     taxonomyEnvelope,
@@ -73,6 +76,7 @@ export default async function ExercisesPage({
           usage={usage}
           referenceIso={referenceIso}
           unit={appearance.weight_unit}
+          variant={variant}
         />
       ) : (
         <Alert tone="error">

@@ -103,7 +103,7 @@ import type { Achievement } from "@/lib/profile-progress-types";
 import { SetAsideNote } from "@/components/SetAsideNote";
 import { BasedOnNote } from "@/components/BasedOnNote";
 import { protocolsIndex, type LiveSessionContext } from "@/lib/protocols-index";
-import { adminExerciseRows, auditEntry, exerciseDetail, generationCallDetails, generationCallFilters, generationCallPager, generationCallRows, exerciseNames, exercises, history, historyIndex, liveWorkout, personalRecords, prescriptions, profile, progressStory, protocolIndexEntries, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
+import { adminExerciseRows, auditEntry, exerciseDetail, generationCallDetails, generationCallFilters, generationCallPager, generationCallRows, exerciseNames, exercises, history, historyIndex, liveWorkout, personalRecords, prescriptions, profile, progressStory, protocolIndexEntries, protocolProgress, sessions, taxonomy, volumePoints, workout, prototypeTaxonomy } from "./fixtures";
 
 const params = new URLSearchParams(location.search);
 if (params.get("fonts") === "fontsource") {
@@ -557,6 +557,7 @@ function Content() {
     // The server renders the first window; a count beyond it exercises "Show more" (ADR-0128).
     case "history": return <HistoryBrowser index={historyIndex(count)} firstWindow={history(count).slice(0, HISTORY_WINDOW).map(toHistoryCard)} unit="kg" />;
     case "catalog": return <ExerciseCatalogTaxonomy initialFilters={{ query: "", muscleGroups: [], equipment: [], difficulty: [] }} initialTaxonomy={count === 0 ? { groups: [], total: 0 } : count > 50 ? { total: count, groups: [{ pattern: "squat", count, exercises: Array.from({ length: count }, (_, i) => ({ ...exercises[i % 50], id: i + 1 })) }] } : taxonomy} equipmentOptions={["barbell", "dumbbell"]} myEquipment={["barbell"]} usage={[]} referenceIso="2026-09-26" unit="kg" />;
+    case "catalog-prototype": return <ExerciseCatalogTaxonomy initialFilters={{ query: "", muscleGroups: [], equipment: [], difficulty: [] }} initialTaxonomy={prototypeTaxonomy} equipmentOptions={["barbell", "dumbbell", "kettlebell"]} myEquipment={["barbell"]} usage={[{ exercise_id: 1000, last_performed_on: "2026-09-20" }, { exercise_id: 1009, last_performed_on: "2026-08-01" }]} referenceIso="2026-09-26" unit="kg" variant={params.get("variant") ?? undefined} />;
     case "creation": return <PlanHandAuthoredSessionForm draftId="audit-only" unit="kg" seed={{ trainingType: "strength", exercises: exercises.slice(0, 3).map((exercise, index) => ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "repetitions", unit: "km", sets: "3", reps: "12", loadKind: CREATION_LOAD_KINDS[index], loadValue: "" })) }} />;
     // The Log form (`/sessions/log`). The matrix only ever mounted the plan-only form
     // (Capture), which has no "SETS PERFORMED" half, so the performed-set grid was never
