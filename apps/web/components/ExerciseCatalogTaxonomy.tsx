@@ -28,6 +28,7 @@ import { OfflineNotice } from "@/components/pulse/offline-notice";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { PatternSection } from "@/components/exercise/pattern-section";
+import { PatternJumpStrip } from "@/components/exercise/pattern-jump-strip";
 import { CatalogDetail } from "@/components/exercise/catalog-detail";
 
 interface ExerciseCatalogTaxonomyProps {
@@ -44,8 +45,8 @@ const SEARCH_DEBOUNCE_MS = 300;
 const DRAWER_ANIM_MS = 300;
 
 // Browse the Catalog as a field-guide Movement Pattern taxonomy (ADR-0072): the whole
-// filtered Catalog, grouped server-side into collapsible pattern sections, each entry
-// carrying its line illustration, plain-language muscle summary, and equipment symbol.
+// filtered Catalog, grouped server-side into pattern sections behind an illustrated jump
+// strip, each entry carrying its full name and a plain facts line (muscles, kit, level).
 // Opening an entry reveals its how-to, alternatives, and past performance in a bottom
 // drawer while the search and selected filters stay intact behind it. Read-only — a row
 // never edits a plan.
@@ -130,6 +131,10 @@ export function ExerciseCatalogTaxonomy({
     updateFilters({ query: "", muscleGroups: [], equipment: [], difficulty: [] });
 
   const active = hasActiveFilters(filters);
+  const patterns = useMemo(
+    () => taxonomy.groups.map((group) => group.pattern),
+    [taxonomy],
+  );
 
   // The Details drawer: which exercise is open, and its enter/exit animation state.
   const [selected, setSelected] = useState<ExerciseSearchResult | null>(null);
@@ -277,7 +282,9 @@ export function ExerciseCatalogTaxonomy({
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-3">
+      <PatternJumpStrip patterns={patterns} />
+
+      <div className="flex flex-col gap-6">
         {taxonomy.groups.map((group) => (
           <PatternSection
             key={group.pattern}

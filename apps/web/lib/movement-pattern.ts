@@ -62,3 +62,24 @@ const KNOWN_PATTERNS = new Set<string>(PATTERN_ORDER);
 export function parseMovementPattern(value: string): MovementPattern {
   return KNOWN_PATTERNS.has(value) ? (value as MovementPattern) : "general";
 }
+
+// Each family's accent (ADR-0072): `ink` for the implement and arrow in its illustration,
+// `plate` the declared `-dim` fill behind it, `rule` the bar that marks its rows in the
+// index. All three are graphics — no text is ever set in an accent here. Neighbours in
+// PATTERN_ORDER never share an accent, so adjacent sections read apart; General stays neutral.
+export interface PatternAccent {
+  ink: string;
+  plate: string;
+  rule: string;
+}
+
+export const PATTERN_ACCENT: Record<MovementPattern, PatternAccent> = {
+  squat: { ink: "text-cyan", plate: "bg-cyan-dim", rule: "bg-cyan" },
+  hinge: { ink: "text-violet", plate: "bg-violet-dim", rule: "bg-violet" },
+  push: { ink: "text-magenta", plate: "bg-magenta-dim", rule: "bg-magenta" },
+  pull: { ink: "text-amber", plate: "bg-amber-dim", rule: "bg-amber" },
+  carry: { ink: "text-green", plate: "bg-green-dim", rule: "bg-green" },
+  locomotion: { ink: "text-cyan", plate: "bg-cyan-dim", rule: "bg-cyan" },
+  core: { ink: "text-violet", plate: "bg-violet-dim", rule: "bg-violet" },
+  general: { ink: "text-text-muted", plate: "bg-elevated", rule: "bg-border-lite" },
+};

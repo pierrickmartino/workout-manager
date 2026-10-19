@@ -60,3 +60,13 @@ also gains a `movement_pattern` field so a row and its section agree on the fami
   backfill.
 - Movement Pattern is a **discovery/presentation** projection only: it feeds no generation
   input, no cache key, and no progression, so it never reaches a plan the AI conditions on.
+
+## Amendment — the browse becomes an index
+
+The collapsible sections are replaced by an always-open index under a sticky, illustrated
+jump strip of the families present. Names wrap instead of truncating (ADR-0085) and each row
+carries one plain facts line (muscles, kit, level) built by `lib/catalog-entry-view.ts`. The
+single line illustration per family becomes a bold two-ink pictogram — figure in the host's
+ink, implement and motion cue in the family's accent (`PATTERN_ACCENT`) — because the 2px
+glyphs did not read at row size. Still one drawing per family, never one per movement.
+

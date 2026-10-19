@@ -5,6 +5,7 @@ import {
   PATTERN_ORDER,
   PATTERN_LABEL,
   PATTERN_BLURB,
+  PATTERN_ACCENT,
   parseMovementPattern,
   type MovementPattern,
 } from "./movement-pattern.ts";
@@ -45,4 +46,18 @@ test("defaults an unknown or legacy token to general", () => {
 
   // Assert — never a broken section
   assert.equal(pattern, "general");
+});
+
+test("neighbouring patterns never share an accent, so adjacent sections read apart", () => {
+  for (let i = 1; i < PATTERN_ORDER.length; i += 1) {
+    const previous = PATTERN_ACCENT[PATTERN_ORDER[i - 1]];
+    const current = PATTERN_ACCENT[PATTERN_ORDER[i]];
+    assert.notEqual(current.ink, previous.ink, `${PATTERN_ORDER[i]} repeats its neighbour`);
+  }
+});
+
+test("every pattern's plate is a declared fill, never a hand-mixed alpha (ADR-0086)", () => {
+  for (const pattern of PATTERN_ORDER) {
+    assert.doesNotMatch(PATTERN_ACCENT[pattern].plate, /\//, `${pattern} mixes its own tint`);
+  }
 });
