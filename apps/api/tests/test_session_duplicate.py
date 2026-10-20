@@ -440,3 +440,70 @@ def test_duplicate_lifts_a_protocol_member_out_as_a_named_standalone():
         assert copy.objective is None
         assert copy.title == "Push Day"
         assert [p.exercise_name for p in view.prescriptions] == ["Back Squat"]
+
+
+# --- Redeem copies a Session by the same rule (ADR-0057) ---------------------------
+# A Protocol member lifted out by Duplicate keeps its ``title``; a Redeem of that
+# standalone copy keeps it too, because the two copies share one rule. ``title`` is not
+# on the Session view, so the copy's raw row is read back on each adapter.
+
+
+@pytest.fixture(params=["in_memory", "sql"])
+def titled_standalone(request):
+    """A standalone Session titled "Push Day" with one Prescription, on either adapter.
+
+    Yields ``(repo, source_id, row_of)``: ``row_of(id)`` reads that Session's raw row."""
+
+    source = WorkoutSession(
+        clerk_user_id="user_sharer",
+        training_type="strength",
+        duration_minutes=60,
+        provenance="ai_generated",
+        title="Push Day",
+        name="Push",
+        author_clerk_user_id="user_author",
+    )
+    if request.param == "in_memory":
+        exercises = InMemoryExerciseRepository()
+        repo = InMemorySessionRepository(exercises)
+        squat = exercises.find_or_create("Back Squat", provenance=Provenance.AI_GENERATED)
+        source.id = 1
+        repo._sessions[source.id] = source
+        repo._prescriptions[source.id] = [
+            ExercisePrescription(
+                id=1, session_id=1, exercise_id=squat.id, position=0, sets=5, reps="5"
+            )
+        ]
+        repo._next_id = 2
+        yield repo, source.id, repo._sessions.get
+        return
+    engine = make_fk_engine()
+    SQLModel.metadata.create_all(engine)
+    with Session(engine) as sql:
+        exercises = SqlExerciseRepository(sql)
+        squat = exercises.find_or_create("Back Squat", provenance=Provenance.AI_GENERATED)
+        sql.add(source)
+        sql.commit()
+        sql.refresh(source)
+        sql.add(
+            ExercisePrescription(
+                session_id=source.id, exercise_id=squat.id, position=0, sets=5, reps="5"
+            )
+        )
+        sql.commit()
+        yield SqlSessionRepository(sql), source.id, lambda id_: sql.get(WorkoutSession, id_)
+
+
+def test_redeem_carries_the_title_like_duplicate(titled_standalone):
+    # Arrange
+    repo, source_id, row_of = titled_standalone
+
+    # Act
+    duplicated = repo.duplicate(source_id, "user_sharer")
+    redeemed = repo.redeem(source_id, "user_redeemer")
+
+    # Assert — both copies keep the title; only the owner differs
+    assert row_of(duplicated.id).title == "Push Day"
+    assert row_of(redeemed.id).title == "Push Day"
+    assert row_of(redeemed.id).clerk_user_id == "user_redeemer"
+    assert row_of(redeemed.id).author_clerk_user_id == "user_author"
