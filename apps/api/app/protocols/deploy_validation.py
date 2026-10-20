@@ -24,6 +24,7 @@ from app.domain.progression import (
     scheme_applies_to_optional_load,
 )
 from app.domain.superset import SupersetMember, validate_supersets
+from app.repositories.prescription_mapping import PrescriptionDraft
 
 # The shape bounds mirror the generate endpoint's constants (a single source of
 # truth lives here; ``routes/protocols.py`` imports these). ADR-0001 already allows
@@ -34,44 +35,6 @@ MAX_SESSIONS_PER_WEEK = 14
 MIN_WEEKS = 1
 MAX_WEEKS = 52
 MIN_SETS = 1
-
-
-@dataclass(frozen=True)
-class DraftPrescription:
-    """One Exercise Prescription in the desired tail, referencing a catalog id."""
-
-    exercise_id: int
-    sets: int
-    reps: str
-    rest_seconds: int | None = None
-    tempo: str | None = None
-    recommended_load: dict | None = None
-    # Typed Prescribed Quantity (ADR-0050, #464): the plan's typed amount dict, or ``None``
-    # when the client sent no typed Quantity (an older client falls back to inferring it from
-    # the free-text ``reps`` target at the write boundary). Carried through Deploy re-numbered
-    # untouched so a duration/distance the Builder authored is persisted as such, not coerced
-    # to reps; it has no compatibility rule, so it needs no validation here.
-    prescribed_quantity: dict | None = None
-    # Superset grouping (ADR-0023): both ``None`` for a flat, solo Prescription.
-    superset_group: str | None = None
-    round_rest_seconds: int | None = None
-    # Progression Scheme selection (ADR-0064): a chosen scheme value, or ``None`` for the
-    # inherited default (Double Progression). Validated for Load-kind compatibility below.
-    scheme: str | None = None
-    # Set Type annotation (ADR-0065, #449): a chosen ``SetType`` value, or ``None`` for
-    # "unset" (reads as working). A descriptive label carried through Deploy re-numbered
-    # untouched; it has no compatibility rule (independent of Load and Progression), so it
-    # needs no validation here beyond the membership check at the request boundary.
-    set_type: str | None = None
-    # Target Effort (ADR-0066, #454): the *prescribed* Effort dict, or ``None`` for "no target".
-    # Already validated against its scale's band at the request boundary; a descriptive plan label
-    # (never a Progression input) carried through Deploy re-numbered untouched, so it needs no
-    # validation here.
-    target_effort: dict | None = None
-    # Exercise Note (ADR-0065, #451): the plan-side coaching cue, or ``None`` for "no note".
-    # Already length-capped and HTML-escaped at the request boundary; carried through Deploy
-    # re-numbered untouched, so it needs no validation here.
-    note: str | None = None
 
 
 @dataclass(frozen=True)
@@ -86,7 +49,7 @@ class DraftSession:
     session_id: int | None
     week: int
     day: int
-    prescriptions: list[DraftPrescription] = field(default_factory=list)
+    prescriptions: list[PrescriptionDraft] = field(default_factory=list)
     training_type: str | None = None
     duration_minutes: int | None = None
 
@@ -254,7 +217,7 @@ def _superset_errors(
 
 
 def _prescription_errors(
-    prescription: DraftPrescription,
+    prescription: PrescriptionDraft,
     session_id: int | None,
     position: int,
     exercise_exists: Callable[[int], bool],
@@ -299,7 +262,7 @@ def _prescription_errors(
 
 
 def _scheme_errors(
-    prescription: DraftPrescription,
+    prescription: PrescriptionDraft,
     session_id: int | None,
     position: int,
 ) -> list[DeployError]:
@@ -353,7 +316,6 @@ __all__ = [
     "MIN_WEEKS",
     "MAX_WEEKS",
     "MIN_SETS",
-    "DraftPrescription",
     "DraftSession",
     "DeployDraft",
     "DeployError",

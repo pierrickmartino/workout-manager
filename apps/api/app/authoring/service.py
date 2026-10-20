@@ -27,7 +27,6 @@ from app.logbook.service import LogSessionRequest, log_session
 from app.protocols.deploy_validation import (
     DeployDraft,
     DeployError,
-    DraftPrescription,
     DraftSession,
     validate_deploy,
 )
@@ -154,20 +153,7 @@ def _deploy_draft(prescriptions: list[PrescriptionDraft]) -> DeployDraft:
                 session_id=None,
                 week=1,
                 day=1,
-                prescriptions=[
-                    DraftPrescription(
-                        exercise_id=prescription.exercise_id,
-                        sets=prescription.sets,
-                        reps=prescription.reps,
-                        rest_seconds=prescription.rest_seconds,
-                        tempo=prescription.tempo,
-                        recommended_load=prescription.recommended_load,
-                        superset_group=prescription.superset_group,
-                        round_rest_seconds=prescription.round_rest_seconds,
-                        scheme=prescription.scheme,
-                    )
-                    for prescription in prescriptions
-                ],
+                prescriptions=list(prescriptions),
             )
         ],
     )

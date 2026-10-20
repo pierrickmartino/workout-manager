@@ -141,6 +141,23 @@ def test_edit_carries_a_compatible_scheme():
     assert response.json()["data"]["prescriptions"][0]["scheme"] == "static"
 
 
+def test_edit_reads_a_blank_scheme_as_the_default():
+    # Arrange — the editor sends "" for a movement left on the inherited default
+    client, ctx = build_client()
+    headers = _auth(ctx, "blank_scheme")
+    session = _session_with_two(client, headers)
+    squat_id = session["prescriptions"][0]["exercise_id"]
+
+    # Act
+    response = _edit(
+        client, headers, session["id"], [_prescription_body(squat_id, scheme="")]
+    )
+
+    # Assert — stored as no choice (null), never as an empty-string scheme
+    assert response.status_code == 200, response.json()
+    assert response.json()["data"]["prescriptions"][0]["scheme"] is None
+
+
 def test_edit_resets_a_scheme_the_edited_load_no_longer_fits():
     # Arrange — Greyskull steps a weight axis; a qualitative Load has none. The editor
     # offers no scheme picker, so the stale choice falls back to the default rather than

@@ -19,6 +19,7 @@ from app.protocols.balance_preview import BalancePreview
 from app.protocols.index import ProtocolIndexRow
 from app.protocols.progress import ProtocolProgressView
 from app.repositories.protocol_repository import ProtocolSessionView, ProtocolView
+from app.session_serialization import serialize_prescription
 
 
 def serialize_session(
@@ -50,49 +51,10 @@ def serialize_session(
         # not the plan. Null on an un-performed Session (and on the next_session, which is
         # un-performed by definition).
         "logged_session_id": logged_session_id,
+        # Each Prescription renders through the one API projection, so a Protocol member
+        # and a standalone Session can never disagree on a Prescription's fields (ADR-0069).
         "prescriptions": [
-            {
-                "position": p.position,
-                "sets": p.sets,
-                "reps": p.reps,
-                "rest_seconds": p.rest_seconds,
-                "tempo": p.tempo,
-                "recommended_load": p.recommended_load,
-                # Session Section (ADR-0074): warm-up / main / accessory / cooldown, or the
-                # projection's value in Session order. A discovery/authoring signal only.
-                "section": section.value,
-                # Typed Prescribed Quantity (ADR-0050): the plan's "how much" axis (a rep
-                # count, a distance, or a duration), or null for a prescription with no typed
-                # amount. Surfaced on the Protocol/Builder read so the editor's Quantity kind
-                # selector reflects the stored kind and a tail edit round-trips it (#464)
-                # instead of coercing a duration/distance back to reps.
-                "prescribed_quantity": p.prescribed_quantity,
-                # Superset overlay (ADR-0023): both null on a flat, solo Prescription.
-                "superset_group": p.superset_group,
-                "round_rest_seconds": p.round_rest_seconds,
-                # Progression Scheme selection (ADR-0064): the chosen scheme value, or
-                # null for the default (Double Progression, which the overlaid numbers
-                # above already reflect). Surfaced so the client can show the selection.
-                "scheme": p.scheme,
-                # Set Type annotation (ADR-0065, #449): the chosen ``SetType`` value, or
-                # null for "unset" (reads as working). Descriptive only; surfaced so the
-                # client can render the badge on a Protocol member's Prescription.
-                "set_type": p.set_type,
-                # Target Effort (ADR-0066, #454): the prescribed Effort dict, or null for "no
-                # target". Descriptive only; surfaced so the client can render/edit the target on a
-                # Protocol member's Prescription with an RPE⇄RIR projection.
-                "target_effort": p.target_effort,
-                # Exercise Note (ADR-0065, #451): the plan-side coaching cue, or null for "no
-                # note". Already HTML-escaped at the write boundary; surfaced so the client can
-                # render the cue on a Protocol member's Prescription (nothing when absent).
-                "note": p.note,
-                "exercise_id": p.exercise_id,
-                "exercise_name": p.exercise_name,
-                "exercise_description": p.exercise_description,
-                "targeted_muscles": p.targeted_muscles,
-                "required_equipment": p.required_equipment,
-                "provenance": p.provenance,
-            }
+            serialize_prescription(p, section=section.value)
             for p, section in zip(session.prescriptions, sections)
         ],
     }

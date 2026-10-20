@@ -25,7 +25,7 @@ Pure: no I/O. Exercises are checked against the manifest the migration seeds, no
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 
 from app.curated.exercises import CURATED_EXERCISES
 from app.curated.model import CuratedProtocol, PatternPrescription, WavePrescription
@@ -36,10 +36,10 @@ from app.protocols.deploy_validation import (
     MAX_WEEKS,
     MIN_WEEKS,
     DeployDraft,
-    DraftPrescription,
     DraftSession,
     validate_deploy,
 )
+from app.repositories.prescription_mapping import PrescriptionDraft
 
 # Third-party training-plan names (someone's mark) a Curated Protocol must not borrow. Lowercase;
 # matched as whole words. The Greyskull *scheme* keeps its descriptive internal name, but a
@@ -296,9 +296,9 @@ def _spine_errors(curated: CuratedProtocol) -> list[IntegrityError]:
     return errors
 
 
-def _draft(planned: PlannedPrescription) -> DraftPrescription:
+def _draft(planned: PlannedPrescription) -> PrescriptionDraft:
     # The catalog id is irrelevant here: Exercise names are checked against the seed manifest.
-    return DraftPrescription(**asdict(planned.to_draft(exercise_id=0)))
+    return planned.to_draft(exercise_id=0)
 
 
 def integrity_errors(curated: CuratedProtocol) -> list[IntegrityError]:

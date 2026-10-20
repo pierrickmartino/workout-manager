@@ -10,7 +10,8 @@ tests are the completeness guard the ADR promises instead of code generation:
 - the spine is a subset of the ORM columns, so a manifest field always has a
   home to persist into;
 - both JSON **projections** carry every spine field (their intentional extras and
-  omissions are about the catalog join, never the spine);
+  omissions are about the catalog join, never the spine), and so does every read that
+  renders a Prescription through the API one — the Session read and the Protocol read;
 - a **round trip** through create/read, Duplicate, Redeem, Regeneration, and a
   Protocol create + Deploy preserves every spine value — the check that would
   have caught the Superset-flatten regression (ADR-0023) at any of those sites.
@@ -24,6 +25,7 @@ from sqlmodel import Session, SQLModel
 from app.db.models import ExercisePrescription
 from app.domain.exercise import Provenance
 from app.export.serializer import _prescription as export_prescription
+from app.protocols.serialization import serialize_session as serialize_protocol_session
 from app.repositories.exercise_repository import (
     InMemoryExerciseRepository,
     SqlExerciseRepository,
@@ -40,6 +42,7 @@ from app.repositories.protocol_repository import (
     InMemoryProtocolRepository,
     ProtocolDraft,
     ProtocolSessionDraft,
+    ProtocolSessionView,
     SqlProtocolRepository,
 )
 from app.repositories.session_repository import (
@@ -113,10 +116,21 @@ def _full_view() -> PrescriptionView:
     )
 
 
+def _protocol_read_prescription(view: PrescriptionView) -> dict:
+    """The Prescription dict the Protocol/Builder read renders for ``view``."""
+
+    session = ProtocolSessionView(
+        session_id=1, position=0, week=1, day=1, title="Day 1", prescriptions=[view]
+    )
+    return serialize_protocol_session(session)["prescriptions"][0]
+
+
 @pytest.mark.parametrize(
-    "project", [serialize_prescription, export_prescription], ids=["api", "export"]
+    "project",
+    [serialize_prescription, _protocol_read_prescription, export_prescription],
+    ids=["api", "protocol_read", "export"],
 )
-def test_both_json_projections_carry_every_spine_field(project):
+def test_every_json_projection_carries_every_spine_field(project):
     payload = project(_full_view())
     for name in prescription_spine_fields():
         assert name in payload, name

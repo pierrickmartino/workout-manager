@@ -27,7 +27,6 @@ from app.domain.fitness_profile import is_sensitive
 from app.protocols.deploy_validation import (
     DeployDraft,
     DeployError,
-    DraftPrescription,
     DraftSession,
     validate_deploy,
 )
@@ -63,7 +62,7 @@ class _DeployPayload:
     typed apart from its Protocol (ADR-0130 amendment) keeps its type through a deploy."""
 
     title: str | None
-    prescriptions: list[DraftPrescription]
+    prescriptions: list[PrescriptionDraft]
     training_type: str | None = None
     duration_minutes: int | None = None
 
@@ -189,8 +188,9 @@ class DeployResult:
 
 
 def _persist_spec(session: EnumeratedSession) -> DeploySessionSpec:
-    """Map one enumerated Session to the repository's persist shape — the single
-    place the pure plan crosses into repository types, at the write boundary."""
+    """Map one enumerated Session to the repository's persist shape, at the write
+    boundary. Its Prescriptions already are spine drafts (ADR-0069), so they pass
+    through as they are and no field can be dropped on the way to the row."""
 
     payload: _DeployPayload = session.payload
     return DeploySessionSpec(
@@ -200,24 +200,7 @@ def _persist_spec(session: EnumeratedSession) -> DeploySessionSpec:
         title=payload.title,
         training_type=payload.training_type,
         duration_minutes=payload.duration_minutes,
-        prescriptions=[
-            PrescriptionDraft(
-                exercise_id=prescription.exercise_id,
-                sets=prescription.sets,
-                reps=prescription.reps,
-                rest_seconds=prescription.rest_seconds,
-                tempo=prescription.tempo,
-                recommended_load=prescription.recommended_load,
-                prescribed_quantity=prescription.prescribed_quantity,
-                superset_group=prescription.superset_group,
-                round_rest_seconds=prescription.round_rest_seconds,
-                scheme=prescription.scheme,
-                set_type=prescription.set_type,
-                target_effort=prescription.target_effort,
-                note=prescription.note,
-            )
-            for prescription in payload.prescriptions
-        ],
+        prescriptions=list(payload.prescriptions),
     )
 
 
