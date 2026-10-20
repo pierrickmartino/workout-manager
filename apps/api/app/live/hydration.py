@@ -4,15 +4,15 @@
 Session to the user's performance record and returns two reference numbers per
 set the Pulse mock shows:
 
-* the **load to lift today** — every Prescription overlaid with the deterministic
-  ADR-0004 ``next_prescription`` adjustment, which steps the recommended load or, for
+* the **load to lift today** — every Prescription overlaid with the read-time
+  Progression step (``ProgressionOverlay``), which steps the recommended load or, for
   a pure-bodyweight movement, the rep target (Home already surfaces the same
   progression for a Protocol's Next Session); and
 * the **previous performance to beat** — the Logged Sets from each Exercise's
   *most recent* performance across the user's whole history, aligned to the
   current sets by ordinal, and blank when the Exercise has never been logged.
 
-It reuses the progression module's "latest sets by exercise" logic and follows the
+Both read off one ``ProgressionOverlay`` over a single history read, and it follows the
 pure-orchestration pattern of the other read models: it returns fresh view objects
 and never mutates the stored Session. ``None`` for a missing or unowned Session, so
 the route can answer ``404`` for non-owners."""
@@ -22,11 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from app.domain.quantity import repetitions_of
-from app.protocols.progress import (
-    exposure_counts_by_exercise,
-    latest_sets_by_exercise,
-    progressed_prescription,
-)
+from app.progression.overlay import ProgressionOverlay
 from app.repositories.logged_session_repository import (
     LoggedSessionRepository,
     LoggedSetView,
@@ -84,23 +80,18 @@ def hydrate_session(
     if session is None:
         return None
 
-    history = logged.list_for_user(clerk_user_id)
-    latest_sets = latest_sets_by_exercise(history)
-    exposure_counts = exposure_counts_by_exercise(history)
-
-    prescriptions = [
-        progressed_prescription(
-            prescription,
-            latest_sets.get(prescription.exercise_id, []),
-            exposure_counts.get(prescription.exercise_id, 0),
-        )
-        for prescription in session.prescriptions
-    ]
-    progressed = replace(session, prescriptions=prescriptions)
-
+    overlay = ProgressionOverlay.from_history(logged.list_for_user(clerk_user_id))
+    progressed = replace(
+        session,
+        prescriptions=[
+            overlay.progress(prescription).prescription
+            for prescription in session.prescriptions
+        ],
+    )
     previous_performance = {
         exercise_id: [_previous_set_view(s) for s in sets]
-        for exercise_id, sets in latest_sets.items()
+        for exercise_id in {p.exercise_id for p in session.prescriptions}
+        if (sets := overlay.previous_sets(exercise_id))
     }
     return HydratedSessionView(
         session=progressed, previous_performance=previous_performance
