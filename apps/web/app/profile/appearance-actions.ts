@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import {
   saveAppearanceMode,
+  saveAvatar,
   saveKeepScreenAwake,
   saveWeightUnit,
 } from "@/lib/appearance";
@@ -18,6 +19,8 @@ import type { WeightUnit } from "@/lib/weight-unit";
 export interface AppearanceActionResult {
   error: string | null;
 }
+
+const AVATAR_SAVE_ERROR = "Your Avatar wasn’t saved, so your previous one is still in place. Try again.";
 
 export async function updateAppearanceMode(
   mode: Mode,
@@ -69,5 +72,20 @@ export async function updateWeightUnit(
   }
 
   revalidatePath("/profile");
+  return { error: null };
+}
+
+// The thin server action behind the Avatar picker (ADR-0136). It persists the chosen Avatar
+// via PUT /api/appearance, which judges it against the Operator Level at save time, then
+// revalidates the root layout: the header renders the Avatar from the layout's Interface
+// Preference read, so the new one shows on the very next render. A refusal or transport
+// failure is reported in one plain sentence rather than the backend's validation message.
+export async function updateAvatar(avatarId: string): Promise<AppearanceActionResult> {
+  const result = await saveAvatar(avatarId);
+  if (!result.success) {
+    return { error: AVATAR_SAVE_ERROR };
+  }
+
+  revalidatePath("/", "layout");
   return { error: null };
 }

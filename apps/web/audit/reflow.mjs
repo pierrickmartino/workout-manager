@@ -90,12 +90,13 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // block of preformatted text that must wrap rather than scroll sideways. `session-header` joins
 // them with ADR-0133: the Session detail's header, a Server Component's markup no journey
 // rendered, now holds the ⋯ on the overline's line and a meta line of badges and byline under an
-// authored title.
+// authored title. `avatar` joins them with #748: the Avatar picker's grid of radio options, each
+// a 64px figure over its character name, two to a row at 320px.
 const NOVEL_JOURNEYS = [
   "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc", "launchpad",
   "levels", "sheet", "protocols", "protocols-live", "set-aside", "passport", "passport-open",
   "passport-empty", "stamp", "stamp-locked", "stamp-record", "curated", "curated-adopt",
-  "based-on", "curated-wave-adopt", "curated-wave-unlogged", "handoff", "session-header",
+  "based-on", "curated-wave-adopt", "curated-wave-unlogged", "handoff", "session-header", "avatar",
 ];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and

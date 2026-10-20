@@ -95,6 +95,7 @@ import {
   type CuratedPlanPrescription,
 } from "@/lib/curated-plan-preview";
 import { TrainingPassport } from "@/components/pulse/training-passport";
+import { AvatarPicker } from "@/components/AvatarPicker";
 import { toPassport, toStampDetail } from "@/lib/passport-view";
 import { StampDetailBody } from "@/components/pulse/stamp-detail";
 import { PageHeader } from "@/components/pulse/page-header";
@@ -374,6 +375,19 @@ function FitnessLevelSurface() {
   ])} />;
 }
 
+// The Avatar picker (ADR-0136) over the shipped catalog, with the Dwarf Lifter chosen: its name
+// is the widest of the three, and the grid's two columns at 320px are what 200% text crowds.
+function AvatarSurface() {
+  return <AvatarPicker currentAvatarId="dwarf-lifter" catalog={{
+    operator_level: 1,
+    avatars: [
+      { id: "novice", name: "Novice", unlock_level: 1, unlocked: true, current_level: 1 },
+      { id: "dwarf-lifter", name: "Dwarf Lifter", unlock_level: 1, unlocked: true, current_level: 1 },
+      { id: "elf-ranger", name: "Elf Ranger", unlock_level: 1, unlocked: true, current_level: 1 },
+    ],
+  }} />;
+}
+
 // The Training Passport (ADR-0126) over the real catalog: four Stamps earned across two years,
 // the 4-Week Streak as the next milestone (its "best run" copy is the longest progress label),
 // and three Achievements under "More to earn". The disclosure renders its list only while open,
@@ -597,6 +611,7 @@ function Content() {
     case "handoff": return <HandoffSurface />;
     case "launchpad": return <LaunchpadSurface />;
     case "levels": return <FitnessLevelSurface />;
+    case "avatar": return <AvatarSurface />;
     // The note a freshly adopted Protocol shows once generating it set the previous one aside
     // (ADR-0125). It renders only on that landing, so no other journey shows it; the label is
     // the worst an authored name can be, 120 unbroken characters.

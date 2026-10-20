@@ -11,6 +11,7 @@ from app.routes.active_skin import router as active_skin_router
 from app.routes.admin_generation_calls import router as admin_generation_calls_router
 from app.routes.analytics import router as analytics_router
 from app.routes.appearance import router as appearance_router
+from app.routes.avatars import router as avatars_router
 from app.routes.curated_protocols import router as curated_protocols_router
 from app.routes.exercise_images import router as exercise_images_router
 from app.routes.exercises import router as exercises_router
@@ -65,6 +66,7 @@ def create_app() -> FastAPI:
     app.include_router(profile_progress_router)
     app.include_router(profile_heatmap_router)
     app.include_router(appearance_router)
+    app.include_router(avatars_router)
     app.include_router(active_skin_router)
     app.include_router(sessions_router)
     app.include_router(shares_router)
