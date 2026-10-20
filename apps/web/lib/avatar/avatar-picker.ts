@@ -12,6 +12,8 @@ export interface AvatarCatalogEntry {
   name: string;
   unlock_level: number;
   unlocked: boolean;
+  // Progress toward `unlock_level`: the user's Operator Level, held there once reached.
+  current_level: number;
 }
 
 // The wire shape of GET /api/avatars's `data`: the user's Operator Level, computed from

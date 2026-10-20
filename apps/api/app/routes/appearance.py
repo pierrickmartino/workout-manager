@@ -1,7 +1,7 @@
 """Appearance routes: read and upsert the authenticated user's Interface Preference.
 
 The store behind ``/api/appearance`` now holds the whole **Interface Preference**
-(Mode + Keep Screen Awake) — the physical ``/api/appearance`` path stays as an
+(Mode + Keep Screen Awake + Weight Unit + Avatar) — the physical ``/api/appearance`` path stays as an
 incidental legacy detail even though the concept generalised past *appearance*
 (ADR-0055). ``GET`` get-or-defaults (Dark + Keep-Screen-Awake on when the user has
 no stored preference yet); ``PUT`` upserts the chosen values. Data access goes
@@ -14,8 +14,8 @@ choice, or an id since retired from the catalog, reads as the Novice. It compute
 no XP, so the per-page layout read stays cheap.
 
 PUT accepts each facet independently: an omitted field keeps the user's current
-value, so the Mode picker, the Keep-Screen-Awake toggle, and the Weight-Unit toggle
-each save only their own facet without disturbing the others. The route reads the
+value, so the Mode picker, the Keep-Screen-Awake toggle, the Weight-Unit toggle and
+the Avatar picker each save only their own facet without disturbing the others. The route reads the
 current preference, applies the provided facets, and upserts the whole value.
 
 Choosing an Avatar is the one save judged against the record: an unknown id is a 422
@@ -125,8 +125,8 @@ def upsert_appearance(
     logged: LoggedSessionRepository = Depends(get_logged_session_repository),
 ) -> dict:
     # Apply only the facets the caller sent onto the current (get-or-default)
-    # preference, then upsert the whole value — so Mode, Keep Screen Awake, and
-    # Weight Unit are independently settable and no save disturbs the other facets.
+    # preference, then upsert the whole value — so Mode, Keep Screen Awake, Weight
+    # Unit and Avatar are independently settable and no save disturbs the others.
     current = repo.get_preference(clerk_user_id)
     # Only choosing a *different* Avatar is judged against the Operator Level, so the
     # history is read for that save alone, and an Avatar already chosen is kept when

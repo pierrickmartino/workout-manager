@@ -381,9 +381,9 @@ function AvatarSurface() {
   return <AvatarPicker currentAvatarId="dwarf-lifter" catalog={{
     operator_level: 1,
     avatars: [
-      { id: "novice", name: "Novice", unlock_level: 1, unlocked: true },
-      { id: "dwarf-lifter", name: "Dwarf Lifter", unlock_level: 1, unlocked: true },
-      { id: "elf-ranger", name: "Elf Ranger", unlock_level: 1, unlocked: true },
+      { id: "novice", name: "Novice", unlock_level: 1, unlocked: true, current_level: 1 },
+      { id: "dwarf-lifter", name: "Dwarf Lifter", unlock_level: 1, unlocked: true, current_level: 1 },
+      { id: "elf-ranger", name: "Elf Ranger", unlock_level: 1, unlocked: true, current_level: 1 },
     ],
   }} />;
 }

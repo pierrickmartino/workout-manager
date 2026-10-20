@@ -72,19 +72,28 @@ def is_unlocked(avatar: Avatar, operator_level: int) -> bool:
 
 @dataclass(frozen=True)
 class AvatarStanding:
-    """One catalog Avatar read against a user's Operator Level: may they choose it now."""
+    """One catalog Avatar read against a user's Operator Level.
+
+    ``unlocked`` is whether they may choose it now. ``current_level`` is their progress
+    toward it: their Operator Level, held at the unlock level once reached, so a locked
+    Avatar reads as ``current_level`` of ``unlock_level`` (e.g. "LVL 5 / 8")."""
 
     avatar: Avatar
     unlocked: bool
+    current_level: int
 
 
 def avatar_standings(operator_level: int) -> tuple[AvatarStanding, ...]:
-    """The whole catalog, in order, each entry's lock state at ``operator_level``.
+    """The whole catalog, in order, each entry's lock state and progress at ``operator_level``.
 
     Computed each time it is read; no unlock is ever stored (ADR-0018, ADR-0136)."""
 
     return tuple(
-        AvatarStanding(avatar=avatar, unlocked=is_unlocked(avatar, operator_level))
+        AvatarStanding(
+            avatar=avatar,
+            unlocked=is_unlocked(avatar, operator_level),
+            current_level=min(operator_level, avatar.unlock_level),
+        )
         for avatar in AVATAR_CATALOG
     )
 

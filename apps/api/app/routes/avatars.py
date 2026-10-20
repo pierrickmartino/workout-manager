@@ -1,8 +1,8 @@
 """Avatar routes: the catalog the Avatar picker renders from (ADR-0136).
 
 ``GET /api/avatars`` returns the standard envelope with the user's current Operator
-Level and the curated Avatar catalog in display order, each entry with its unlock level
-and whether the user may choose it now. The level is computed read-time from the user's
+Level and the curated Avatar catalog in display order, each entry with its unlock level,
+whether the user may choose it now, and their progress toward it. The level is computed read-time from the user's
 Logged Sessions through the shared gamification projection, so lock state can never
 drift from the log and no unlock is ever stored (ADR-0018/0019). Choosing an Avatar goes
 through ``PUT /api/appearance``, which repeats the same check at save time."""
@@ -27,6 +27,7 @@ def _serialize_standing(standing: AvatarStanding) -> dict:
         "name": standing.avatar.name,
         "unlock_level": standing.avatar.unlock_level,
         "unlocked": standing.unlocked,
+        "current_level": standing.current_level,
     }
 
 

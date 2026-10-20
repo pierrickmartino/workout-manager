@@ -216,31 +216,41 @@ def test_get_avatars_reports_the_operator_level_and_each_lock_state(
     # Act
     response = world.client.get("/api/avatars", headers=world.auth("user_picker"))
 
-    # Assert — the catalog in order, in the standard envelope
+    # Assert — the catalog in order, in the standard envelope, each entry's progress
+    # the user's level held at its unlock level
     assert response.status_code == 200
     body = response.json()
     assert body["success"] is True
     assert body["data"] == {
         "operator_level": 1,
         "avatars": [
-            {"id": "novice", "name": "Novice", "unlock_level": 1, "unlocked": True},
+            {
+                "id": "novice",
+                "name": "Novice",
+                "unlock_level": 1,
+                "unlocked": True,
+                "current_level": 1,
+            },
             {
                 "id": "dwarf-lifter",
                 "name": "Dwarf Lifter",
                 "unlock_level": 1,
                 "unlocked": True,
+                "current_level": 1,
             },
             {
                 "id": "elf-ranger",
                 "name": "Elf Ranger",
                 "unlock_level": 1,
                 "unlocked": True,
+                "current_level": 1,
             },
             {
                 "id": "barbarian",
                 "name": "Barbarian",
                 "unlock_level": 2,
                 "unlocked": False,
+                "current_level": 1,
             },
         ],
     }
@@ -263,6 +273,7 @@ def test_get_avatars_unlocks_an_avatar_once_the_level_reaches_it(
         "name": "Barbarian",
         "unlock_level": 2,
         "unlocked": True,
+        "current_level": 2,
     }
 
 

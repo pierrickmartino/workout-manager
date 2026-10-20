@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 
 import { updateAvatar } from "@/app/profile/appearance-actions";
 import { buildAvatarOptions, type AvatarCatalog } from "@/lib/avatar/avatar-picker";
@@ -11,44 +11,35 @@ import { cn } from "@/lib/utils";
 interface AvatarPickerProps {
   // The catalog with lock state, read server-side from GET /api/avatars.
   catalog: AvatarCatalog;
-  // The user's current Avatar, read server-side; the initial selection.
+  // The user's stored Avatar, read server-side; a successful save revalidates it.
   currentAvatarId: string;
 }
 
 // The Avatar picker (ADR-0136): a grid of native radios, one per catalog Avatar, so arrow
 // keys, Space and Tab behave as any radio group does. The options come from the pure
-// `buildAvatarOptions` view-model. Selection is optimistic and saves through a thin server
-// action (updateAvatar → PUT /api/appearance), which revalidates the layout so the header
-// shows the new Avatar on the next render; a failed save reverts to the Avatar actually
-// stored and says why. The radios stay enabled while a save runs, since disabling one would
-// drop the keyboard focus it holds; only the latest choice's outcome is applied.
+// `buildAvatarOptions` view-model. Selection is optimistic over the stored Avatar prop and
+// saves through a thin server action (updateAvatar → PUT /api/appearance), which revalidates
+// the layout so the header and this prop show the new Avatar on the next render. A failed
+// save leaves the prop as it was, so the selection falls back to the Avatar actually stored,
+// and the picker says why. The radios stay enabled while a save runs, since disabling one
+// would drop the keyboard focus it holds.
 export function AvatarPicker({
   catalog,
   currentAvatarId,
 }: AvatarPickerProps): React.JSX.Element {
-  const [selected, setSelected] = useState(currentAvatarId);
+  const [selected, setSelected] = useOptimistic(currentAvatarId);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
-  // The Avatar the backend last confirmed, and the choice whose outcome still counts.
-  const stored = useRef(currentAvatarId);
-  const latest = useRef(currentAvatarId);
 
   const options = buildAvatarOptions(catalog, selected);
 
   function choose(avatarId: string): void {
     if (avatarId === selected) return;
-    setSelected(avatarId);
     setError(null);
-    latest.current = avatarId;
     startTransition(async () => {
+      setSelected(avatarId);
       const result = await updateAvatar(avatarId);
-      if (latest.current !== avatarId) return;
-      if (result.error) {
-        setSelected(stored.current);
-        setError(result.error);
-        return;
-      }
-      stored.current = avatarId;
+      if (result.error) setError(result.error);
     });
   }
 
