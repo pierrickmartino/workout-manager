@@ -7,6 +7,7 @@ import { fetchTrainingHeatmap } from "@/lib/heatmap";
 import { toHeatmapGrid } from "@/lib/heatmap-view";
 import { resolveAppearance } from "@/lib/appearance";
 import { fetchAvatars } from "@/lib/avatars";
+import { bestEffortData, settleBestEffort } from "@/lib/best-effort-read";
 import { profileAvatar } from "@/lib/avatar/profile-avatar";
 import { resolveIsAdmin } from "@/lib/admin";
 import { toPassport } from "@/lib/passport-view";
@@ -49,8 +50,8 @@ export default async function ProfilePage() {
       fetchTrainingHeatmap(),
       resolveAppearance(),
       resolveIsAdmin(),
-      // Optional: it only names the Avatar, so a transport failure must not blank Profile.
-      fetchAvatars().catch(() => null),
+      // Best-effort: it only names the Avatar, so a failure must not blank Profile.
+      settleBestEffort(fetchAvatars()),
     ]);
   const {
     mode,
@@ -58,10 +59,7 @@ export default async function ProfilePage() {
     weight_unit: weightUnit,
   } = appearancePref;
   // The Avatar's character name comes from the catalog read; without it the art still shows.
-  const avatar = profileAvatar(
-    appearancePref.avatar,
-    avatarsEnvelope?.success && avatarsEnvelope.data ? avatarsEnvelope.data : null,
-  );
+  const avatar = profileAvatar(appearancePref.avatar, bestEffortData(avatarsEnvelope));
 
   if (!envelope.success || !envelope.data) {
     return (

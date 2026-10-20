@@ -36,7 +36,7 @@ test("Profile falls back to the Novice for a missing or unknown Avatar, as the h
   assert.deepEqual([unknown.art.id, unknown.name], ["novice", "Novice"]);
 });
 
-test("an Avatar the web has art for but the catalog no longer serves falls back to the Novice", () => {
+test("an Avatar the catalog does not name is still drawn as the header draws it, unnamed", () => {
   // Arrange — a catalog that has retired the Elf Ranger
   const catalog: AvatarCatalog = {
     ...CATALOG,
@@ -46,8 +46,8 @@ test("an Avatar the web has art for but the catalog no longer serves falls back 
   // Act
   const avatar = profileAvatar("elf-ranger", catalog);
 
-  // Assert — art and name never disagree
-  assert.deepEqual([avatar.art.id, avatar.name], ["novice", "Novice"]);
+  // Assert — the art matches the header's; no name is invented for it
+  assert.deepEqual([avatar.art.id, avatar.name], ["elf-ranger", null]);
 });
 
 test("without the catalog Profile still draws the Avatar, with no name to show", () => {

@@ -1,19 +1,19 @@
 import Link from "next/link";
 import * as React from "react";
 
-import type { ProfileAvatar as ProfileAvatarModel } from "@/lib/avatar/profile-avatar";
+import type { ProfileAvatarView } from "@/lib/avatar/profile-avatar";
 import { NAV_FORWARD } from "@/lib/nav-direction";
 import { Avatar } from "@/components/pulse/avatar";
 import { Card } from "@/components/ui/card";
 
 interface ProfileAvatarProps {
-  avatar: ProfileAvatarModel;
+  avatar: ProfileAvatarView;
 }
 
 // The top of the Profile view (ADR-0136): the user's Avatar drawn larger than the header's
 // 32px, with the character name as visible text, so their identity sits where their progress
 // lives. The whole card links forward to the Avatar picker. The art stays decorative; the
-// link's text names it. A missing name (the catalog read failed) leaves just the art and the
+// link's text names it. A missing name (the catalog could not be read) leaves just the art and the
 // link. No hooks, so it is safe in Server Components.
 export function ProfileAvatar({ avatar }: ProfileAvatarProps): React.JSX.Element {
   return (
