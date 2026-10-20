@@ -101,6 +101,9 @@ import { StampDetailBody } from "@/components/pulse/stamp-detail";
 import { PageHeader } from "@/components/pulse/page-header";
 import { Avatar } from "@/components/pulse/avatar";
 import { DEFAULT_AVATAR_ID, headerAvatar } from "@/lib/avatar/avatar-art";
+import type { AvatarCatalog } from "@/lib/avatar/avatar-picker";
+import { profileAvatar } from "@/lib/avatar/profile-avatar";
+import { ProfileAvatar } from "@/components/pulse/profile-avatar";
 import { BackLink } from "@/components/pulse/back-link";
 import type { Achievement } from "@/lib/profile-progress-types";
 import { SetAsideNote } from "@/components/SetAsideNote";
@@ -367,25 +370,35 @@ function LaunchpadSurface() {
 // but not its key, so an over-long type is reachable from response data and unreachable from
 // the form. It is here because it is the only thing on this surface that can stress the row's
 // `min-w-0 break-words` pairing (ADR-0085) — the curated five are all one short word.
+//
+// The Profile view's top section (#749) mounts above it: the user's Avatar drawn large with its
+// character name, the Dwarf Lifter's being the widest, so the figure and the name share a row
+// at 320px and 200% text, and the card must hold 26rem inside the wide frame.
 function FitnessLevelSurface() {
-  return <FitnessLevelStandings rows={toFitnessLevelRows([
-    { training_type: "strength", declared: 6, effective: 10 },
-    { training_type: "yoga", declared: 2, effective: 2 },
-    { training_type: "handstand and tumbling conditioning", declared: 4, effective: 5 },
-  ])} />;
+  return <div className="flex flex-col gap-6">
+    <ProfileAvatar avatar={profileAvatar("dwarf-lifter", AUDIT_AVATAR_CATALOG)} />
+    <FitnessLevelStandings rows={toFitnessLevelRows([
+      { training_type: "strength", declared: 6, effective: 10 },
+      { training_type: "yoga", declared: 2, effective: 2 },
+      { training_type: "handstand and tumbling conditioning", declared: 4, effective: 5 },
+    ])} />
+  </div>;
 }
+
+// The shipped Avatar catalog as GET /api/avatars serves it to a brand-new user.
+const AUDIT_AVATAR_CATALOG: AvatarCatalog = {
+  operator_level: 1,
+  avatars: [
+    { id: "novice", name: "Novice", unlock_level: 1, unlocked: true, current_level: 1 },
+    { id: "dwarf-lifter", name: "Dwarf Lifter", unlock_level: 1, unlocked: true, current_level: 1 },
+    { id: "elf-ranger", name: "Elf Ranger", unlock_level: 1, unlocked: true, current_level: 1 },
+  ],
+};
 
 // The Avatar picker (ADR-0136) over the shipped catalog, with the Dwarf Lifter chosen: its name
 // is the widest of the three, and the grid's two columns at 320px are what 200% text crowds.
 function AvatarSurface() {
-  return <AvatarPicker currentAvatarId="dwarf-lifter" catalog={{
-    operator_level: 1,
-    avatars: [
-      { id: "novice", name: "Novice", unlock_level: 1, unlocked: true, current_level: 1 },
-      { id: "dwarf-lifter", name: "Dwarf Lifter", unlock_level: 1, unlocked: true, current_level: 1 },
-      { id: "elf-ranger", name: "Elf Ranger", unlock_level: 1, unlocked: true, current_level: 1 },
-    ],
-  }} />;
+  return <AvatarPicker currentAvatarId="dwarf-lifter" catalog={AUDIT_AVATAR_CATALOG} />;
 }
 
 // The Training Passport (ADR-0126) over the real catalog: four Stamps earned across two years,
