@@ -9,8 +9,10 @@ import {
 } from "@/lib/avatar/avatar-art";
 
 // A user's Avatar (ADR-0136): the hand-made figure from `lib/avatar/avatar-art`, framed in a
-// circular medallion ringed in the Avatar's accent. Every colour is an opaque Skin token the
-// Contrast Floor already measures (ADR-0081), so the figure renders in every Skin and Mode.
+// circular medallion ringed in the Avatar's accent. Every colour is an opaque Skin token, and
+// every edge the art draws is a pairing the Contrast Floor measures (ADR-0081): a text rung or
+// an accent against the `elevated` medallion, and the `hollow` page colour only ever inside a
+// text-rung shape. So the figure stays legible in every Skin and Mode.
 // Decorative (`aria-hidden`): whatever wraps it names its purpose. No hooks, so it is safe in
 // Server Components.
 
@@ -21,16 +23,11 @@ interface AvatarProps {
   className?: string;
 }
 
-const ACCENT_FILL: Readonly<Record<AvatarAccent, string>> = {
-  cyan: "fill-cyan",
-  amber: "fill-amber",
-  green: "fill-green",
-};
-
-const ACCENT_RING: Readonly<Record<AvatarAccent, string>> = {
-  cyan: "border-cyan",
-  amber: "border-amber",
-  green: "border-green",
+// Each accent's figure fill and medallion ring, spelled out so Tailwind sees every class.
+const ACCENT_CLASSES: Readonly<Record<AvatarAccent, { fill: string; ring: string }>> = {
+  cyan: { fill: "fill-cyan", ring: "border-cyan" },
+  amber: { fill: "fill-amber", ring: "border-amber" },
+  green: { fill: "fill-green", ring: "border-green" },
 };
 
 const TONE_FILL: Readonly<Record<Exclude<AvatarTone, "accent">, string>> = {
@@ -41,7 +38,7 @@ const TONE_FILL: Readonly<Record<Exclude<AvatarTone, "accent">, string>> = {
 };
 
 function toneClass(tone: AvatarTone, accent: AvatarAccent): string {
-  return tone === "accent" ? ACCENT_FILL[accent] : TONE_FILL[tone];
+  return tone === "accent" ? ACCENT_CLASSES[accent].fill : TONE_FILL[tone];
 }
 
 export function Avatar({ art, size = 32, className }: AvatarProps): React.JSX.Element {
@@ -51,7 +48,7 @@ export function Avatar({ art, size = 32, className }: AvatarProps): React.JSX.El
       style={{ width: size, height: size }}
       className={cn(
         "flex shrink-0 overflow-hidden rounded-full border-2 bg-elevated",
-        ACCENT_RING[art.accent],
+        ACCENT_CLASSES[art.accent].ring,
         className,
       )}
     >

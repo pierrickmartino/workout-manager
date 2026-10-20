@@ -20,6 +20,11 @@ _MANIFEST_PATH = (
 
 
 def test_manifest_lists_exactly_the_catalog_ids_in_order() -> None:
+    # Arrange
+    catalog_ids = [avatar.id for avatar in AVATAR_CATALOG]
+
+    # Act
     manifest = json.loads(_MANIFEST_PATH.read_text(encoding="utf-8"))
 
-    assert manifest["avatars"] == [avatar.id for avatar in AVATAR_CATALOG]
+    # Assert
+    assert manifest["avatars"] == catalog_ids
