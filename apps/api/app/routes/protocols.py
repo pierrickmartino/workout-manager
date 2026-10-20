@@ -46,7 +46,6 @@ from app.protocols.deploy_validation import (
     MIN_WEEKS,
     DeployDraft,
     DeployError,
-    DraftPrescription,
     DraftSession,
 )
 from app.protocols.index import protocol_index
@@ -70,6 +69,7 @@ from app.repositories.generation_feedback_repository import (
     GenerationFeedbackRepository,
 )
 from app.repositories.logged_session_repository import LoggedSessionRepository
+from app.repositories.prescription_mapping import PrescriptionDraft
 from app.repositories.profile_repository import ProfileRepository
 from app.repositories.protocol_repository import ProtocolRepository
 
@@ -550,7 +550,7 @@ def deploy_protocol(
                 week=session.week,
                 day=session.day,
                 prescriptions=[
-                    DraftPrescription(
+                    PrescriptionDraft(
                         exercise_id=prescription.exercise_id,
                         sets=prescription.sets,
                         reps=prescription.reps,
@@ -706,7 +706,7 @@ def simulate_protocol(
                 week=session.week,
                 day=0,
                 prescriptions=[
-                    DraftPrescription(
+                    PrescriptionDraft(
                         exercise_id=prescription.exercise_id,
                         sets=prescription.sets,
                         reps="",

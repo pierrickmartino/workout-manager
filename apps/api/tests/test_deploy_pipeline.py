@@ -24,7 +24,6 @@ from app.protocols.deploy import (
 )
 from app.protocols.deploy_validation import (
     DeployDraft,
-    DraftPrescription,
     DraftSession,
 )
 from app.protocols.progress import ProtocolProgressView
@@ -32,6 +31,7 @@ from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.logged_session_repository import (
     InMemoryLoggedSessionRepository,
 )
+from app.repositories.prescription_mapping import PrescriptionDraft
 from app.repositories.profile_repository import InMemoryProfileRepository
 from app.repositories.protocol_repository import (
     InMemoryProtocolRepository,
@@ -95,7 +95,7 @@ def _draft_session(*, session_id: int | None, week: int, day: int) -> DraftSessi
         session_id=session_id,
         week=week,
         day=day,
-        prescriptions=[DraftPrescription(exercise_id=7, sets=5, reps="5")],
+        prescriptions=[PrescriptionDraft(exercise_id=7, sets=5, reps="5")],
     )
 
 
@@ -258,7 +258,7 @@ def _echo_draft(view: ProtocolView) -> DeployDraft:
                 week=session.week,
                 day=session.day,
                 prescriptions=[
-                    DraftPrescription(
+                    PrescriptionDraft(
                         exercise_id=p.exercise_id, sets=p.sets, reps=p.reps
                     )
                     for p in session.prescriptions
@@ -358,7 +358,7 @@ def test_deploy_protocol_tail_deploys_a_valid_edit_and_returns_the_progressed_vi
                 week=1,
                 day=1,
                 prescriptions=[
-                    DraftPrescription(exercise_id=exercise_id, sets=8, reps="5")
+                    PrescriptionDraft(exercise_id=exercise_id, sets=8, reps="5")
                 ],
             )
         ],

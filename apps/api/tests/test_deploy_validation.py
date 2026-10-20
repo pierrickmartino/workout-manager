@@ -15,16 +15,16 @@ from __future__ import annotations
 
 from app.protocols.deploy_validation import (
     DeployDraft,
-    DraftPrescription,
     DraftSession,
     validate_deploy,
 )
+from app.repositories.prescription_mapping import PrescriptionDraft
 
 
-def _prescription(**overrides) -> DraftPrescription:
+def _prescription(**overrides) -> PrescriptionDraft:
     base = dict(exercise_id=100, sets=3, reps="5")
     base.update(overrides)
-    return DraftPrescription(**base)
+    return PrescriptionDraft(**base)
 
 
 def _session(**overrides) -> DraftSession:

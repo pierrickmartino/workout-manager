@@ -21,9 +21,9 @@ from app.domain.muscle_groups import MuscleGroup
 from app.protocols.balance_preview import build_balance_preview
 from app.protocols.deploy_validation import (
     DeployDraft,
-    DraftPrescription,
     DraftSession,
 )
+from app.repositories.prescription_mapping import PrescriptionDraft
 
 
 def _muscles_from(catalog: dict[int, list[str]]):
@@ -36,8 +36,8 @@ def _muscles_from(catalog: dict[int, list[str]]):
     return resolve
 
 
-def _prescription(exercise_id: int, sets: int) -> DraftPrescription:
-    return DraftPrescription(exercise_id=exercise_id, sets=sets, reps="8-12")
+def _prescription(exercise_id: int, sets: int) -> PrescriptionDraft:
+    return PrescriptionDraft(exercise_id=exercise_id, sets=sets, reps="8-12")
 
 
 def test_per_week_counts_sum_sessions_and_sets_within_each_week():
