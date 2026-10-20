@@ -51,3 +51,26 @@ its ORM column) and deciding its authorship partition; the guard test fails if a
 projection or the partition forgets it. `GLOSSARY.md` is unchanged — the "field
 spine / manifest" is implementation, not domain vocabulary, and the Exercise
 Prescription term's meaning is unaffected.
+
+## Amendment: Deploy and the Protocol read join the spine
+
+Three copies of the spine had grown back since this decision. Each one now routes through
+the spine or one of the boundaries above.
+
+- **Deploy carries `PrescriptionDraft`.** The Deploy pipeline had its own
+  `DraftPrescription`, identical field for field and converted back by a hand-written
+  mapping. Validation, re-enumeration and persistence now all take `PrescriptionDraft`.
+  `deploy_validation` stays pure: it imports the spine dataclass, but does no I/O.
+- **The Protocol read renders through `serialize_prescription`.** Its inline dict had the
+  same keys as the API projection, outside the guard's reach. It isn't a third projection:
+  a Protocol member and a standalone Session render a Prescription identically, and the
+  guard now checks the Protocol read as well.
+- **The wire DTO is one module.** `routes/prescription_body.py` holds the two Prescription
+  request bodies: `AuthorPrescriptionBody` for creating and inserting a standalone
+  Session's Prescription (no scheme, chosen in place per ADR-0064), and
+  `EditPrescriptionBody`, which adds the carried scheme, for Edit and for Deploy. Deploy's
+  copy of the validators is gone. The bodies still stay out of the spine, as decided above:
+  they parse raw input and hand back a `PrescriptionDraft`.
+
+The record side is not part of this. `LogSetBody` validates a Logged Set, whose fields
+overlap a Prescription's only in part and may diverge, so it keeps its own validators.

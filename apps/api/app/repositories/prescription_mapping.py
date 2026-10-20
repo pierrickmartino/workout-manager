@@ -24,7 +24,7 @@ persistence site routes through:
 
 Deliberately **not** centralised here (ADR-0069): the LLM output schema
 (``generation/schema.py`` — a trust boundary, ADR-0006) and the wire DTO
-(``routes/sessions.py``, which validates and parses raw input) keep their own
+(``routes/prescription_body.py``, which validates and parses raw input) keep their own
 explicit field lists, and the two JSON projections
 (``session_serialization.serialize_prescription`` and ``export/serializer``) stay
 explicit dicts. Each differs from the spine on purpose — a rename across the
