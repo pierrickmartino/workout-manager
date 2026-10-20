@@ -99,12 +99,13 @@ class InterfacePreference:
         mode: Mode | None = None,
         keep_screen_awake: bool | None = None,
         weight_unit: WeightUnit | None = None,
+        avatar: str | None = None,
     ) -> "InterfacePreference":
         """Return a copy with only the supplied facets replaced (``None`` leaves as-is).
 
         Lets a caller change one facet of the whole preference — the Mode picker, the
-        Keep-Screen-Awake toggle, or the Weight-Unit toggle each saving only their
-        own — without disturbing the others. Returns a new value; never mutates in
+        Keep-Screen-Awake toggle, the Weight-Unit toggle or the Avatar picker each
+        saving only their own — without disturbing the others. Returns a new value; never mutates in
         place."""
 
         return InterfacePreference(
@@ -115,7 +116,7 @@ class InterfacePreference:
                 else keep_screen_awake
             ),
             weight_unit=self.weight_unit if weight_unit is None else weight_unit,
-            avatar=self.avatar,
+            avatar=self.avatar if avatar is None else avatar,
         )
 
 

@@ -55,6 +55,12 @@ export async function saveWeightUnit(
   return apiSend("/api/appearance", "PUT", { weight_unit: weightUnit });
 }
 
+// The backend refuses an unknown Avatar (422) or one above the user's Operator Level (403);
+// either comes back as an error envelope and nothing is written (ADR-0136).
+export async function saveAvatar(avatarId: string): Promise<Envelope<Appearance>> {
+  return apiSend("/api/appearance", "PUT", { avatar: avatarId });
+}
+
 // The shipped Interface Preference for a signed-out visitor or a briefly
 // unreachable backend: today's all-dark look with Keep Screen Awake on, weights in
 // kilograms and the Novice Avatar.

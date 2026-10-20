@@ -18,23 +18,37 @@ value, so the Mode picker, the Keep-Screen-Awake toggle, and the Weight-Unit tog
 each save only their own facet without disturbing the others. The route reads the
 current preference, applies the provided facets, and upserts the whole value.
 
+Choosing an Avatar is the one save judged against the record: an unknown id is a 422
+at the boundary, and an Avatar whose unlock level is above the user's Operator Level —
+computed at save time from their Logged Sessions — is a 403 with nothing written. Only
+that save reads the history; an Avatar already chosen is kept when the level later
+drops (ADR-0136).
+
 Kept a separate store from the Fitness Profile (ADR-0047) so an Interface
 Preference never enters generation or the cache key."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, field_validator
 
 from app.auth.dependencies import get_current_user
 from app.domain.appearance import InterfacePreference, Mode, WeightUnit
+from app.domain.avatars import find_avatar, is_avatar_id, is_unlocked
 from app.envelope import success_envelope
+from app.logbook.operator_level import current_operator_level
 from app.repositories.appearance_preference_repository import (
     AppearancePreferenceRepository,
 )
-from app.repositories.deps import get_appearance_preference_repository
+from app.repositories.deps import (
+    get_appearance_preference_repository,
+    get_logged_session_repository,
+)
+from app.repositories.logged_session_repository import LoggedSessionRepository
 
 router = APIRouter(prefix="/api", tags=["appearance"])
+
+HTTP_FORBIDDEN = 403
 
 
 class AppearanceUpdateRequest(BaseModel):
@@ -44,11 +58,41 @@ class AppearanceUpdateRequest(BaseModel):
     leaves the user's current value untouched. ``mode`` is typed as the closed
     ``Mode`` enum, ``keep_screen_awake`` as a bool, and ``weight_unit`` as the closed
     ``WeightUnit`` enum, so anything ill-typed fails at the boundary with a 422 and
-    is never persisted — the store only ever holds a valid, deliberate choice."""
+    is never persisted — the store only ever holds a valid, deliberate choice.
+    ``avatar`` must be a catalog id: writing is strict where reading is tolerant
+    (ADR-0136)."""
 
     mode: Mode | None = None
     keep_screen_awake: bool | None = None
     weight_unit: WeightUnit | None = None
+    avatar: str | None = None
+
+    @field_validator("avatar")
+    @classmethod
+    def _known_avatar(cls, value: str | None) -> str | None:
+        if value is not None and not is_avatar_id(value):
+            raise ValueError("unknown Avatar")
+        return value
+
+
+def _ensure_unlocked(
+    avatar_id: str, clerk_user_id: str, logged: LoggedSessionRepository
+) -> None:
+    """Refuse ``avatar_id`` unless the user's Operator Level has reached it.
+
+    The level is computed now from the user's Logged Sessions through the shared
+    gamification projection, never read from a stored unlock (ADR-0018, ADR-0136)."""
+
+    avatar = find_avatar(avatar_id)
+    level = current_operator_level(clerk_user_id, logged)
+    if avatar is not None and not is_unlocked(avatar, level):
+        raise HTTPException(
+            status_code=HTTP_FORBIDDEN,
+            detail=(
+                f"{avatar.name} unlocks at LVL {avatar.unlock_level}. "
+                f"You’re at LVL {level}: keep logging to reach it."
+            ),
+        )
 
 
 def _serialize(preference: InterfacePreference) -> dict:
@@ -78,15 +122,22 @@ def upsert_appearance(
     repo: AppearancePreferenceRepository = Depends(
         get_appearance_preference_repository
     ),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
 ) -> dict:
     # Apply only the facets the caller sent onto the current (get-or-default)
     # preference, then upsert the whole value — so Mode, Keep Screen Awake, and
     # Weight Unit are independently settable and no save disturbs the other facets.
     current = repo.get_preference(clerk_user_id)
+    # Only choosing a *different* Avatar is judged against the Operator Level, so the
+    # history is read for that save alone, and an Avatar already chosen is kept when
+    # the level later drops (ADR-0136).
+    if payload.avatar is not None and payload.avatar != current.avatar:
+        _ensure_unlocked(payload.avatar, clerk_user_id, logged)
     updated = current.with_overrides(
         mode=payload.mode,
         keep_screen_awake=payload.keep_screen_awake,
         weight_unit=payload.weight_unit,
+        avatar=payload.avatar,
     )
     stored = repo.set_preference(clerk_user_id, updated)
     return success_envelope(_serialize(stored))

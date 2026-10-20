@@ -40,13 +40,17 @@ AVATAR_CATALOG: tuple[Avatar, ...] = (
 # The Avatar a user has until they choose one.
 DEFAULT_AVATAR_ID = "novice"
 
-_CATALOG_IDS: frozenset[str] = frozenset(avatar.id for avatar in AVATAR_CATALOG)
+
+def find_avatar(avatar_id: str) -> Avatar | None:
+    """The catalog entry ``avatar_id`` names, or ``None`` if the catalog holds none."""
+
+    return next((avatar for avatar in AVATAR_CATALOG if avatar.id == avatar_id), None)
 
 
 def is_avatar_id(value: str) -> bool:
     """Whether ``value`` names an Avatar in the catalog."""
 
-    return value in _CATALOG_IDS
+    return find_avatar(value) is not None
 
 
 def resolve_avatar_id(stored: str | None) -> str:
@@ -57,11 +61,43 @@ def resolve_avatar_id(stored: str | None) -> str:
     return stored
 
 
+def is_unlocked(avatar: Avatar, operator_level: int) -> bool:
+    """Whether a user at ``operator_level`` may choose ``avatar`` now.
+
+    Judged only when an Avatar is chosen: one already chosen is kept even after the
+    level drops below it (ADR-0136)."""
+
+    return operator_level >= avatar.unlock_level
+
+
+@dataclass(frozen=True)
+class AvatarStanding:
+    """One catalog Avatar read against a user's Operator Level: may they choose it now."""
+
+    avatar: Avatar
+    unlocked: bool
+
+
+def avatar_standings(operator_level: int) -> tuple[AvatarStanding, ...]:
+    """The whole catalog, in order, each entry's lock state at ``operator_level``.
+
+    Computed each time it is read; no unlock is ever stored (ADR-0018, ADR-0136)."""
+
+    return tuple(
+        AvatarStanding(avatar=avatar, unlocked=is_unlocked(avatar, operator_level))
+        for avatar in AVATAR_CATALOG
+    )
+
+
 __all__ = [
     "FREE_UNLOCK_LEVEL",
     "Avatar",
     "AVATAR_CATALOG",
     "DEFAULT_AVATAR_ID",
+    "find_avatar",
     "is_avatar_id",
     "resolve_avatar_id",
+    "is_unlocked",
+    "AvatarStanding",
+    "avatar_standings",
 ]

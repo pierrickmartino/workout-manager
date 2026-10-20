@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck, User } from "@/components/pulse/icons";
+import { PersonStanding, ShieldCheck, User } from "@/components/pulse/icons";
 
 import { fetchProfile } from "@/lib/profile";
 import { fetchProfileProgress } from "@/lib/profile-progress";
@@ -177,6 +177,15 @@ export default async function ProfilePage() {
             href="/profile/edit"
             direction={NAV_FORWARD}
             accent="cyan"
+          />
+          {/* The Avatar is identity, not appearance (ADR-0136), so its picker sits with the
+              account rows rather than among the Interface Preferences above. */}
+          <NavRow
+            icon={PersonStanding}
+            label="Choose your Avatar"
+            href="/profile/avatar"
+            direction={NAV_FORWARD}
+            accent="magenta"
           />
           {/* Admin-only: the dedicated /admin home for power features — publishing the
               Active Skin and running catalog enrichment (ADR-0071). Rendered only for an

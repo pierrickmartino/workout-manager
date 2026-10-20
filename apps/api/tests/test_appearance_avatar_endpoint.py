@@ -20,7 +20,13 @@ from app.repositories.appearance_preference_repository import (
     InMemoryAppearancePreferenceRepository,
     SqlAppearancePreferenceRepository,
 )
-from app.repositories.deps import get_appearance_preference_repository
+from app.repositories.deps import (
+    get_appearance_preference_repository,
+    get_logged_session_repository,
+)
+from app.repositories.exercise_repository import InMemoryExerciseRepository
+from app.repositories.logged_session_repository import InMemoryLoggedSessionRepository
+from app.repositories.session_repository import InMemorySessionRepository
 from tests.conftest import ISSUER, make_fk_engine, make_signing_context
 
 
@@ -30,6 +36,12 @@ def build_client(repo):
     app.dependency_overrides[get_jwks] = lambda: ctx.jwks
     app.dependency_overrides[get_settings] = lambda: Settings(clerk_issuer=ISSUER)
     app.dependency_overrides[get_appearance_preference_repository] = lambda: repo
+    # Choosing an Avatar reads the Logged-Session history for the Operator Level.
+    exercises = InMemoryExerciseRepository()
+    logged = InMemoryLoggedSessionRepository(
+        InMemorySessionRepository(exercises), exercises
+    )
+    app.dependency_overrides[get_logged_session_repository] = lambda: logged
     return TestClient(app), ctx
 
 
@@ -93,3 +105,76 @@ def test_get_returns_the_novice_for_an_unknown_or_null_stored_id(sql_session, st
         "weight_unit": "lb",
         "avatar": "novice",
     }
+
+
+# ── PUT /api/appearance with an Avatar (#748) ────────────────────────────────
+
+
+def test_put_saves_a_chosen_avatar_and_leaves_the_other_facets_untouched():
+    # Arrange — a user who already chose Light, Keep Screen Awake off and pounds
+    repo = InMemoryAppearancePreferenceRepository()
+    client, ctx = build_client(repo)
+    headers = {"Authorization": f"Bearer {ctx.mint(sub='user_pick')}"}
+    client.put(
+        "/api/appearance",
+        headers=headers,
+        json={"mode": "light", "keep_screen_awake": False, "weight_unit": "lb"},
+    )
+
+    # Act
+    response = client.put(
+        "/api/appearance", headers=headers, json={"avatar": "elf-ranger"}
+    )
+    fetched = client.get("/api/appearance", headers=headers)
+
+    # Assert — the Avatar is saved; Mode, Keep Screen Awake and Weight Unit stand
+    expected = {
+        "mode": "light",
+        "keep_screen_awake": False,
+        "weight_unit": "lb",
+        "avatar": "elf-ranger",
+    }
+    assert response.status_code == 200
+    assert response.json()["data"] == expected
+    assert fetched.json()["data"] == expected
+
+
+def test_put_without_an_avatar_keeps_the_current_one():
+    # Arrange — a user who already chose the Dwarf Lifter
+    client, ctx = build_client(InMemoryAppearancePreferenceRepository())
+    headers = {"Authorization": f"Bearer {ctx.mint(sub='user_keep')}"}
+    client.put("/api/appearance", headers=headers, json={"avatar": "dwarf-lifter"})
+
+    # Act — another control saves only its own facet
+    response = client.put("/api/appearance", headers=headers, json={"mode": "light"})
+
+    # Assert
+    assert response.status_code == 200
+    assert response.json()["data"]["avatar"] == "dwarf-lifter"
+    assert response.json()["data"]["mode"] == "light"
+
+
+def test_put_with_an_unknown_avatar_is_a_422_and_writes_nothing():
+    # Arrange — a user who already chose the Elf Ranger and Light
+    repo = InMemoryAppearancePreferenceRepository()
+    client, ctx = build_client(repo)
+    headers = {"Authorization": f"Bearer {ctx.mint(sub='user_unknown')}"}
+    client.put(
+        "/api/appearance",
+        headers=headers,
+        json={"avatar": "elf-ranger", "mode": "light"},
+    )
+
+    # Act — an id the catalog never held, sent beside a valid facet
+    response = client.put(
+        "/api/appearance",
+        headers=headers,
+        json={"avatar": "retired-hero", "mode": "dark"},
+    )
+    fetched = client.get("/api/appearance", headers=headers)
+
+    # Assert — refused at the boundary in the standard envelope; neither facet moved
+    assert response.status_code == 422
+    assert response.json()["success"] is False
+    assert fetched.json()["data"]["avatar"] == "elf-ranger"
+    assert fetched.json()["data"]["mode"] == "light"

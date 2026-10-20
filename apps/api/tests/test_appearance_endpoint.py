@@ -16,7 +16,13 @@ from app.main import create_app
 from app.repositories.appearance_preference_repository import (
     InMemoryAppearancePreferenceRepository,
 )
-from app.repositories.deps import get_appearance_preference_repository
+from app.repositories.deps import (
+    get_appearance_preference_repository,
+    get_logged_session_repository,
+)
+from app.repositories.exercise_repository import InMemoryExerciseRepository
+from app.repositories.logged_session_repository import InMemoryLoggedSessionRepository
+from app.repositories.session_repository import InMemorySessionRepository
 from tests.conftest import ISSUER, make_signing_context
 
 
@@ -27,6 +33,12 @@ def build_client(repo=None, ctx=None):
     app.dependency_overrides[get_jwks] = lambda: ctx.jwks
     app.dependency_overrides[get_settings] = lambda: Settings(clerk_issuer=ISSUER)
     app.dependency_overrides[get_appearance_preference_repository] = lambda: repo
+    # Choosing an Avatar reads the Logged-Session history for the Operator Level.
+    exercises = InMemoryExerciseRepository()
+    logged = InMemoryLoggedSessionRepository(
+        InMemorySessionRepository(exercises), exercises
+    )
+    app.dependency_overrides[get_logged_session_repository] = lambda: logged
     return TestClient(app), ctx, repo
 
 
