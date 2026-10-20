@@ -126,7 +126,7 @@ _Avoid_: Photo, thumbnail, media, AI-generated image
 
 **Workout Signature**:
 A Session's recognizable generated **cover mark** — a small geometric "sigil" (a base polygon plus a constellation of nodes) that identifies the Session at a glance wherever it appears (Home hero, My Sessions, Train, Session detail). Purely presentational and **deterministic in the Session id alone** (the one identifier present on every surface), with the node count from the Exercise count, so the same Session renders the same mark everywhere and two Sessions — including two same-named "Calisthenics" — read as two distinct marks. Its fill is the Skin-aware **Training Type** accent and is **always shown beside the Training Type label** (colour is never the sole carrier). Never AI-fabricated and never an anatomical picture (contrast **Exercise Image**); it is drawn from local SVG, so it needs no storage, no generation, and no network.
-_Avoid_: Cover image, avatar, logo, thumbnail, identicon, AI-generated image
+_Avoid_: Cover image, avatar (that is the user's **Avatar**), logo, thumbnail, identicon, AI-generated image
 
 **Variation**:
 A catalog Exercise that is the *same* movement pattern as another, scaled in difficulty or execution (knee push-up is a Variation of push-up). Modeled as a typed relationship between Exercises.
@@ -396,6 +396,10 @@ _Avoid_: Points (bare), score, balance, reward currency
 The account-wide progression tier a user's total XP maps into — a single unbounded number ("LVL 12") that climbs as lifetime logged work accumulates. Distinct from Fitness Level — Declared or Effective — in every dimension: an Operator Level is **one number for the whole account** and measures *investment* (how much you have logged), whereas a Fitness Level is a **per-training-type 1–10 score** measuring *ability*. The UI may shorten it to "LVL"; it is never a Fitness Level, a rank, or a skill.
 _Avoid_: Level (bare), Fitness Level (Declared or Effective), rank, XP level
 
+**Avatar**:
+The fantasy workout character a user chooses to represent themselves, shown in the header and on Profile. Drawn from a **curated, fixed** catalog (never user- or AI-authored), each character loosely themed on a Training Type as flavour only. The choice is a stored **Interface Preference**, so it never reaches generation or its cache key; no choice means the default **Novice**. Whether an Avatar can be chosen is a **read-time projection** of the **Operator Level** — never a stored unlock — and is checked only when the user selects it, so an Avatar already chosen stays if the level later falls (ADR-0136). Identifies the *user*; contrast **Workout Signature**, which identifies a *Session*.
+_Avoid_: Profile picture, photo, character (bare), skin (that is the app-wide **Skin**), badge, reward
+
 **Streak**:
 The number of consecutive weeks in which the user logged at least one Session — a consistency signal shown on Profile. Deliberately **weekly, not daily**: the plan model is self-paced and calendar-free (ADR-0001), so there is no "today" to miss, and a daily streak would pressure training through the rest days the domain's safety posture (Sensitive Constraints, Readiness caution) treats as legitimate. Derived **read-time** from Logged Sessions' dates — the same distinct-date basis as Analytics' active days, bucketed by week — so it recomputes from the record and is never a stored counter. Any Logged Session keeps it alive regardless of Completion Outcome (work performed, not plan adherence).
 _Avoid_: Daily streak, don't-break-the-chain, active days (that is the distinct-date count, not the consecutive-week run)
@@ -436,7 +440,7 @@ A named **visual identity** — the coordinated **colour, typography, and shape*
 _Avoid_: Theme (bare), palette / colour scheme (a Skin is more than its colours; palette names only the colour group)
 
 **Mode**:
-A user's chosen surface polarity — **Light**, **Dark**, or **System** — applied on top of whichever Skin is active. Held per user and the **only** appearance choice an ordinary user makes; System defers to the device's own light/dark preference rather than a fixed polarity. Distinct from Skin, the palette family a Mode is expressed within.
+A user's chosen surface polarity — **Light**, **Dark**, or **System** — applied on top of whichever Skin is active. Held per user and the **only** appearance choice an ordinary user makes (an **Avatar** is identity, not appearance); System defers to the device's own light/dark preference rather than a fixed polarity. Distinct from Skin, the palette family a Mode is expressed within.
 _Avoid_: Theme, dark mode (as the concept name), colour scheme
 
 **Active Skin**:
@@ -456,7 +460,7 @@ The accessibility invariant on **all text-bearing tokens** of a Skin: Text Ramp 
 _Avoid_: contrast ratio (bare), a11y pass
 
 **Interface Preference**:
-A user's own per-account UI choice — read-time state that steers how the app **behaves or presents** for them, never what the AI generates — kept deliberately **separate from the Fitness Profile**. The Fitness Profile is what the AI conditions a generation on; an Interface Preference steers nothing about the plan and must never leak into generation or its cache key. Server-synced so the choice follows the user across devices (ADR-0047, ADR-0055). Its members are the user's **Mode** (the appearance facet — an **Appearance Preference**) and whether to **Keep Screen Awake** during a Live Session.
+A user's own per-account UI choice — read-time state that steers how the app **behaves or presents** for them, never what the AI generates — kept deliberately **separate from the Fitness Profile**. The Fitness Profile is what the AI conditions a generation on; an Interface Preference steers nothing about the plan and must never leak into generation or its cache key. Server-synced so the choice follows the user across devices (ADR-0047, ADR-0055). Its members are the user's **Mode** (the appearance facet — an **Appearance Preference**), whether to **Keep Screen Awake** during a Live Session, their **Weight Unit**, and their chosen **Avatar**.
 _Avoid_: Settings, profile (that is the generation-input Fitness Profile)
 
 **Appearance Preference**:
