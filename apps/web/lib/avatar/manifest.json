@@ -1,0 +1,5 @@
+{
+  "schema": "workout-manager/avatar-manifest@1",
+  "contract": "avatars lists the artwork ids in lib/avatar/avatar-art.ts, which must equal the catalog ids in apps/api/app/domain/avatars.py, in order",
+  "avatars": ["novice", "dwarf-lifter", "elf-ranger"]
+}

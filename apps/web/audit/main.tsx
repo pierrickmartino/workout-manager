@@ -98,6 +98,8 @@ import { TrainingPassport } from "@/components/pulse/training-passport";
 import { toPassport, toStampDetail } from "@/lib/passport-view";
 import { StampDetailBody } from "@/components/pulse/stamp-detail";
 import { PageHeader } from "@/components/pulse/page-header";
+import { Avatar } from "@/components/pulse/avatar";
+import { DEFAULT_AVATAR_ID, headerAvatar } from "@/lib/avatar/avatar-art";
 import { BackLink } from "@/components/pulse/back-link";
 import type { Achievement } from "@/lib/profile-progress-types";
 import { SetAsideNote } from "@/components/SetAsideNote";
@@ -614,14 +616,14 @@ function Content() {
 }
 
 // Shell spacing copied from RootLayout, both widths (ADR-0088); Clerk chrome is replaced with
-// an inert account label. `?admin=1` mounts the sidebar's admin entry, which the real shell
+// the signed-in header's Avatar link, drawn as the default Novice (ADR-0136). `?admin=1` mounts the sidebar's admin entry, which the real shell
 // renders from a server-resolved role claim this harness has no way to hold.
 const isAdmin = params.get("admin") === "1";
 createRoot(document.getElementById("root")!).render(<NavigationGuardProvider>
   <div className="lg:flex">
     <Sidebar isAdmin={isAdmin} />
     <div className="flex min-w-0 flex-1 flex-col">
-      <header className="sticky top-0 z-30 border-b border-border bg-base/90 pt-[env(safe-area-inset-top)] backdrop-blur"><div className="mx-auto flex h-14 max-w-shell items-center justify-between px-6 lg:max-w-shell-wide"><span className="label-mono text-[13px] font-bold tracking-[0.2em]">PULSE //</span><span className="label-mono text-[10px] text-text-muted">Synthetic account</span></div></header>
+      <header className="sticky top-0 z-30 border-b border-border bg-base/90 pt-[env(safe-area-inset-top)] backdrop-blur"><div className="mx-auto flex h-14 max-w-shell items-center justify-between px-6 lg:max-w-shell-wide"><span className="label-mono text-[13px] font-bold tracking-[0.2em]">PULSE //</span><a href="#" className="-mr-1.5 flex size-11 items-center justify-center rounded-full"><Avatar art={headerAvatar(DEFAULT_AVATAR_ID)} /><span className="sr-only">Account</span></a></div></header>
       <main id="main-content" className="mx-auto min-h-[calc(100vh-3.5rem)] w-full max-w-shell px-6 pt-6 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:max-w-shell-wide lg:pb-16" data-journey={journey}>
         {/* The content column. No journey here opts in with `data-shell="wide"`, which is the
             point: `audit/wide.mjs` gates on an unconverted page staying 26rem inside the wide

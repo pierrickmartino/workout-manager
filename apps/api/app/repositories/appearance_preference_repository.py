@@ -1,4 +1,5 @@
-"""Repository layer for the Interface Preference (per-user Mode + Keep Screen Awake).
+"""Repository layer for the Interface Preference (per-user Mode + Keep Screen Awake +
+Weight Unit + Avatar).
 
 Mirrors ``ProfileRepository`` exactly: routes depend on the
 ``AppearancePreferenceRepository`` interface, never on the ORM directly (the
@@ -12,7 +13,10 @@ one value (ADR-0055) rather than a method pair per facet. The physical
 generalised past *appearance* (ADR-0055). Kept a distinct seam from the Profile
 repository (ADR-0047) so the Interface Preference and the Fitness Profile never
 share a store, and a UI preference can never leak into generation or the cache
-key."""
+key.
+
+The Avatar facet reads tolerantly: a null or unknown stored id (one retired from
+the catalog) maps to the default Novice rather than failing the read (ADR-0136)."""
 
 from __future__ import annotations
 
@@ -27,6 +31,7 @@ from app.domain.appearance import (
     Mode,
     WeightUnit,
 )
+from app.domain.avatars import resolve_avatar_id
 
 
 class AppearancePreferenceRepository(Protocol):
@@ -68,6 +73,7 @@ class SqlAppearancePreferenceRepository:
             mode=Mode(row.mode),
             keep_screen_awake=row.keep_screen_awake,
             weight_unit=WeightUnit(row.weight_unit),
+            avatar=resolve_avatar_id(row.avatar),
         )
 
     def get_preference(self, clerk_user_id: str) -> InterfacePreference:
@@ -87,6 +93,7 @@ class SqlAppearancePreferenceRepository:
         row.mode = preference.mode.value
         row.keep_screen_awake = preference.keep_screen_awake
         row.weight_unit = preference.weight_unit.value
+        row.avatar = preference.avatar
         self._session.add(row)
         self._session.commit()
         self._session.refresh(row)

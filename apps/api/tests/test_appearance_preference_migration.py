@@ -25,6 +25,8 @@ BEFORE_KEEP_AWAKE = "0028_pin_rep_target"
 AFTER_KEEP_AWAKE = "0029_keep_screen_awake"
 BEFORE_WEIGHT_UNIT = "0033_share_link"
 AFTER_WEIGHT_UNIT = "0034_weight_unit"
+BEFORE_AVATAR = "0053_drop_trace_id"
+AFTER_AVATAR = "0054_avatar"
 
 
 @pytest.fixture()
@@ -224,3 +226,59 @@ def test_downgrade_drops_the_weight_unit_column(sqlite_url):
     assert "weight_unit" not in columns
     assert "mode" in columns
     assert "keep_screen_awake" in columns
+
+
+def test_avatar_column_arrives_nullable_and_leaves_existing_rows_null(sqlite_url):
+    # Arrange — schema at 0053, before the Avatar facet, with an existing user's
+    # Interface Preference row already stored
+    config = _alembic_config()
+    command.upgrade(config, BEFORE_AVATAR)
+    assert "avatar" not in _column_names(sqlite_url, "appearance_preference")
+    engine = create_engine(sqlite_url)
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO appearance_preference "
+                    "(clerk_user_id, mode, keep_screen_awake, weight_unit) "
+                    "VALUES ('user_existing', 'light', 0, 'lb')"
+                )
+            )
+    finally:
+        engine.dispose()
+
+    # Act — add the Avatar facet (ADR-0136)
+    command.upgrade(config, AFTER_AVATAR)
+
+    # Assert — the returning user's row carries no Avatar (read as the Novice) and
+    # keeps every other facet
+    engine = create_engine(sqlite_url)
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT mode, keep_screen_awake, weight_unit, avatar "
+                    "FROM appearance_preference WHERE clerk_user_id = 'user_existing'"
+                )
+            ).one()
+    finally:
+        engine.dispose()
+    assert row.mode == "light"
+    assert bool(row.keep_screen_awake) is False
+    assert row.weight_unit == "lb"
+    assert row.avatar is None
+
+
+def test_downgrade_drops_the_avatar_column(sqlite_url):
+    # Arrange — fully migrated with the new column present
+    config = _alembic_config()
+    command.upgrade(config, AFTER_AVATAR)
+    assert "avatar" in _column_names(sqlite_url, "appearance_preference")
+
+    # Act — reverse just this migration
+    command.downgrade(config, BEFORE_AVATAR)
+
+    # Assert — the column is gone and the columns it sat beside remain
+    columns = _column_names(sqlite_url, "appearance_preference")
+    assert "avatar" not in columns
+    assert {"mode", "keep_screen_awake", "weight_unit"} <= columns

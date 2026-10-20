@@ -17,6 +17,7 @@ import { NavigationGuardProvider } from "@/components/NavigationGuardProvider";
 import { RouteTransition } from "@/components/RouteTransition";
 import { OutboxSyncRegistrar } from "@/components/OutboxSyncRegistrar";
 import { SyncStatusBanner } from "@/components/SyncStatusBanner";
+import { Avatar } from "@/components/pulse/avatar";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -27,7 +28,8 @@ import {
 } from "@/lib/shell-a11y";
 import { resolveActiveSkin } from "@/lib/active-skin";
 import { resolveIsAdmin } from "@/lib/admin";
-import { resolveUserMode } from "@/lib/appearance";
+import { resolveAppearance, resolveUserMode } from "@/lib/appearance";
+import { headerAvatar } from "@/lib/avatar/avatar-art";
 import { resolveTheme } from "@/lib/theme";
 import { themeColorFor } from "@/lib/theme-color";
 import { persistentTransitionStyle } from "@/lib/persistent-transition";
@@ -162,13 +164,14 @@ export default async function RootLayout({
   // `isAdmin` joins them because the desktop sidebar carries an admin entry (ADR-0088's
   // amendment to ADR-0071). It is resolved here, server-side, so the Clerk role claim is
   // never read in the browser; `resolveIsAdmin` is React-`cache`d, so a page that also
-  // needs it in the same request pays nothing extra.
-  const [activeSkin, mode, isAdmin] = await Promise.all([
+  // needs it in the same request pays nothing extra. The header Avatar comes from the same
+  // Interface Preference read as the Mode (ADR-0136), so it adds no round-trip.
+  const [activeSkin, appearance, isAdmin] = await Promise.all([
     resolveActiveSkin(),
-    resolveUserMode(),
+    resolveAppearance(),
     resolveIsAdmin(),
   ]);
-  const themeAttributes = resolveTheme(activeSkin, mode);
+  const themeAttributes = resolveTheme(activeSkin, appearance.mode);
 
   return (
     // `dynamic` is required by the strict-dynamic CSP: it lets Clerk read the
@@ -241,12 +244,16 @@ export default async function RootLayout({
                   <Show when="signed-in">
                     {/* Account actions live on Profile so every sign-out passes through the
                         account-scoped local-state teardown (ADR-0059/0080). Clerk's default
-                        UserButton sign-out bypasses that teardown, so it is not mounted here. */}
+                        UserButton sign-out bypasses that teardown, so it is not mounted here.
+                        The user's Avatar stands in for the old "Account" button and keeps its
+                        name for assistive tech; the artwork itself is aria-hidden (ADR-0136).
+                        The 44px link around the 32px medallion keeps the tap target. */}
                     <Link
                       href="/profile"
-                      className={buttonVariants({ variant: "secondary", size: "sm" })}
+                      className="-mr-1.5 flex size-11 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-base"
                     >
-                      Account
+                      <Avatar art={headerAvatar(appearance.avatar)} />
+                      <span className="sr-only">Account</span>
                     </Link>
                   </Show>
                 </nav>

@@ -2,6 +2,7 @@ import { cache } from "react";
 
 import { apiGet, apiSend, type Envelope } from "./api";
 
+import { DEFAULT_AVATAR_ID } from "./avatar/avatar-art";
 import { DEFAULT_MODE, type Mode } from "./theme";
 import { DEFAULT_WEIGHT_UNIT, type WeightUnit } from "./weight-unit";
 
@@ -20,11 +21,13 @@ export const DEFAULT_KEEP_SCREEN_AWAKE = true;
 
 // The wire shape of GET/PUT /api/appearance's `data`: the stored Mode, whether to
 // Keep Screen Awake during a Live Session (defaults on, ADR-0055), and the Weight
-// Unit a Load is entered and displayed in (defaults kg, GLOSSARY "Weight Unit").
+// Unit a Load is entered and displayed in (defaults kg, GLOSSARY "Weight Unit"), and the
+// chosen Avatar's catalog id (the backend reads an unknown id as the Novice, ADR-0136).
 export interface Appearance {
   mode: Mode;
   keep_screen_awake: boolean;
   weight_unit: WeightUnit;
+  avatar: string;
 }
 
 export async function fetchAppearance(): Promise<Envelope<Appearance>> {
@@ -53,12 +56,13 @@ export async function saveWeightUnit(
 }
 
 // The shipped Interface Preference for a signed-out visitor or a briefly
-// unreachable backend: today's all-dark look with Keep Screen Awake on and weights
-// in kilograms.
+// unreachable backend: today's all-dark look with Keep Screen Awake on, weights in
+// kilograms and the Novice Avatar.
 const DEFAULT_APPEARANCE: Appearance = {
   mode: DEFAULT_MODE,
   keep_screen_awake: DEFAULT_KEEP_SCREEN_AWAKE,
   weight_unit: DEFAULT_WEIGHT_UNIT,
+  avatar: DEFAULT_AVATAR_ID,
 };
 
 // Resolve the user's whole Interface Preference (Mode + Keep Screen Awake) for a
