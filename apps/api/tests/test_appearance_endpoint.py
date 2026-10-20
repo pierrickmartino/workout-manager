@@ -150,11 +150,13 @@ def test_appearance_is_scoped_per_user():
         "mode": "light",
         "keep_screen_awake": False,
         "weight_unit": "kg",
+        "avatar": "novice",
     }
     assert bob_data == {
         "mode": "dark",
         "keep_screen_awake": True,
         "weight_unit": "kg",
+        "avatar": "novice",
     }
 
 
@@ -175,11 +177,13 @@ def test_put_keep_screen_awake_off_round_trips_through_get():
         "mode": "dark",
         "keep_screen_awake": False,
         "weight_unit": "kg",
+        "avatar": "novice",
     }
     assert fetched.json()["data"] == {
         "mode": "dark",
         "keep_screen_awake": False,
         "weight_unit": "kg",
+        "avatar": "novice",
     }
 
 
@@ -198,6 +202,7 @@ def test_mode_and_keep_screen_awake_are_independently_settable():
         "mode": "light",
         "keep_screen_awake": False,
         "weight_unit": "kg",
+        "avatar": "novice",
     }
 
 
@@ -219,6 +224,7 @@ def test_put_rejects_an_ill_typed_keep_screen_awake_and_does_not_persist_it():
         "mode": "dark",
         "keep_screen_awake": True,
         "weight_unit": "kg",
+        "avatar": "novice",
     }
 
 
@@ -251,6 +257,7 @@ def test_put_weight_unit_lb_round_trips_through_get():
         "mode": "dark",
         "keep_screen_awake": True,
         "weight_unit": "lb",
+        "avatar": "novice",
     }
     assert fetched.json()["data"]["weight_unit"] == "lb"
 
@@ -274,6 +281,7 @@ def test_weight_unit_is_settable_without_disturbing_mode_or_keep_screen_awake():
         "mode": "light",
         "keep_screen_awake": False,
         "weight_unit": "lb",
+        "avatar": "novice",
     }
 
 
@@ -292,6 +300,7 @@ def test_mode_change_does_not_disturb_a_chosen_weight_unit():
         "mode": "light",
         "keep_screen_awake": True,
         "weight_unit": "lb",
+        "avatar": "novice",
     }
 
 

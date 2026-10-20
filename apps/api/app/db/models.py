@@ -70,7 +70,7 @@ class Profile(SQLModel, table=True):
 
 
 class AppearancePreference(SQLModel, table=True):
-    """One user's Interface Preference: Mode + Keep Screen Awake + Weight Unit, keyed by user.
+    """One user's Interface Preference: Mode + Keep Screen Awake + Weight Unit + Avatar, keyed by user.
 
     A deliberately *separate* store from ``Profile`` (ADR-0047) so an Interface
     Preference never enters generation or the cache key — one row per user. The
@@ -80,8 +80,10 @@ class AppearancePreference(SQLModel, table=True):
     (``light`` | ``dark`` | ``system``); ``keep_screen_awake`` is the behavioural
     facet; ``weight_unit`` is the raw value of ``app.domain.appearance.WeightUnit``
     (``kg`` | ``lb``), steering only how a Load is entered and displayed, never what
-    is stored. Absence of a row means the shipped defaults (Dark + Keep-Screen-Awake
-    on + kilograms), so this table only ever holds a *deliberate* choice and existing
+    is stored; ``avatar`` is the chosen Avatar's catalog id from
+    ``app.domain.avatars`` (ADR-0136), null until the user chooses one. Absence of a
+    row, or a null or unknown ``avatar``, means the shipped defaults (Dark +
+    Keep-Screen-Awake on + kilograms + the Novice), so this table only ever holds a *deliberate* choice and existing
     users are never disturbed on deploy."""
 
     __tablename__ = "appearance_preference"
@@ -91,6 +93,7 @@ class AppearancePreference(SQLModel, table=True):
     mode: str = Field(default=DEFAULT_MODE.value)
     keep_screen_awake: bool = Field(default=DEFAULT_KEEP_SCREEN_AWAKE)
     weight_unit: str = Field(default=DEFAULT_WEIGHT_UNIT.value)
+    avatar: str | None = Field(default=None)
 
 
 class AppSetting(SQLModel, table=True):

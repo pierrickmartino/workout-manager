@@ -7,6 +7,8 @@ each save only their own facet without disturbing the others (ADR-0055)."""
 
 from __future__ import annotations
 
+import pytest
+
 from app.domain.appearance import (
     DEFAULT_INTERFACE_PREFERENCE,
     DEFAULT_KEEP_SCREEN_AWAKE,
@@ -77,3 +79,21 @@ def test_with_overrides_leaves_the_value_unchanged_when_nothing_supplied():
 
     # Act / Assert — no facets supplied yields an equal value
     assert original.with_overrides() == original
+
+
+def test_a_preference_never_holds_an_avatar_outside_the_catalog():
+    # Act / Assert — a store resolves unknown ids to the Novice before building the
+    # value, so an unknown id reaching it is a bug, never a stored state (ADR-0136)
+    with pytest.raises(ValueError):
+        InterfacePreference(avatar="retired-hero")
+
+
+def test_with_overrides_keeps_the_chosen_avatar():
+    # Arrange
+    preference = InterfacePreference(avatar="elf-ranger")
+
+    # Act
+    updated = preference.with_overrides(mode=Mode.LIGHT)
+
+    # Assert — saving another facet never resets the Avatar
+    assert updated.avatar == "elf-ranger"

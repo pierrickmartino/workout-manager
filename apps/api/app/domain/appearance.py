@@ -1,5 +1,5 @@
 """Appearance domain: the per-user Interface Preference (Mode + Keep Screen Awake
-+ Weight Unit).
++ Weight Unit + Avatar).
 
 The user's per-account UI choices are an **Interface Preference** (ADR-0055):
 read-time state that steers how the app *presents or behaves* for them and is
@@ -16,14 +16,17 @@ rather than stored as a concrete polarity. **Keep Screen Awake** is the
 behavioural facet (GLOSSARY "Keep Screen Awake"). **Weight Unit** (GLOSSARY
 "Weight Unit") steers only how a Load's kilogram value is entered and displayed —
 storage stays canonical kilograms — so it too never reaches generation or the
-cache key. Absence of a stored preference defaults to Dark + Keep-Screen-Awake on
-+ kilograms, so existing users are never disturbed on deploy (ADR-0047,
-ADR-0055)."""
+cache key. The chosen **Avatar** (GLOSSARY "Avatar", ADR-0136) is identity rather
+than appearance; its catalog lives in ``app.domain.avatars``. Absence of a stored preference defaults to Dark + Keep-Screen-Awake on
++ kilograms + the Novice, so existing users are never disturbed on deploy (ADR-0047,
+ADR-0055, ADR-0136)."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+
+from app.domain.avatars import DEFAULT_AVATAR_ID, is_avatar_id
 
 
 class Mode(str, Enum):
@@ -71,18 +74,24 @@ DEFAULT_WEIGHT_UNIT: WeightUnit = WeightUnit.KG
 
 @dataclass(frozen=True)
 class InterfacePreference:
-    """A user's whole Interface Preference: Mode, Keep-Screen-Awake, and Weight Unit.
+    """A user's whole Interface Preference: Mode, Keep-Screen-Awake, Weight Unit, Avatar.
 
     Read and written as one immutable value so the repository upserts the whole
     preference rather than proliferating a method pair per member (ADR-0055).
-    Defaults to the shipped Dark + Keep-Screen-Awake-on + kilograms, so a
+    Defaults to the shipped Dark + Keep-Screen-Awake-on + kilograms + Novice, so a
     get-or-default read for a user with no stored row yields
-    ``InterfacePreference()`` — never an error. Frozen: change a facet with
-    ``dataclasses.replace``, never in place."""
+    ``InterfacePreference()`` — never an error. ``avatar`` is always a catalog id: a
+    store resolves an unknown stored id before building this value (ADR-0136).
+    Frozen: change a facet with ``dataclasses.replace``, never in place."""
 
     mode: Mode = DEFAULT_MODE
     keep_screen_awake: bool = DEFAULT_KEEP_SCREEN_AWAKE
     weight_unit: WeightUnit = DEFAULT_WEIGHT_UNIT
+    avatar: str = DEFAULT_AVATAR_ID
+
+    def __post_init__(self) -> None:
+        if not is_avatar_id(self.avatar):
+            raise ValueError(f"unknown Avatar id: {self.avatar!r}")
 
     def with_overrides(
         self,
@@ -106,6 +115,7 @@ class InterfacePreference:
                 else keep_screen_awake
             ),
             weight_unit=self.weight_unit if weight_unit is None else weight_unit,
+            avatar=self.avatar,
         )
 
 

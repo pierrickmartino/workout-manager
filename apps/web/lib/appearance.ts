@@ -2,6 +2,7 @@ import { cache } from "react";
 
 import { apiGet, apiSend, type Envelope } from "./api";
 
+import { DEFAULT_AVATAR_ID } from "./avatar/avatar-art";
 import { DEFAULT_MODE, type Mode } from "./theme";
 import { DEFAULT_WEIGHT_UNIT, type WeightUnit } from "./weight-unit";
 
@@ -11,7 +12,7 @@ import { DEFAULT_WEIGHT_UNIT, type WeightUnit } from "./weight-unit";
 export const DEFAULT_KEEP_SCREEN_AWAKE = true;
 
 // Server-side data access for the per-user Interface Preference (Mode + Keep
-// Screen Awake). The transport seam (lib/api.ts) attaches the Clerk JWT — it never
+// Screen Awake + Weight Unit + Avatar). The transport seam (lib/api.ts) attaches the Clerk JWT — it never
 // reaches the browser; the FastAPI backend verifies it via JWKS and scopes the
 // read/write to the owning user. The Interface Preference is stored apart from the
 // Fitness Profile (ADR-0047), hence its own data-access module. The physical
@@ -20,11 +21,13 @@ export const DEFAULT_KEEP_SCREEN_AWAKE = true;
 
 // The wire shape of GET/PUT /api/appearance's `data`: the stored Mode, whether to
 // Keep Screen Awake during a Live Session (defaults on, ADR-0055), and the Weight
-// Unit a Load is entered and displayed in (defaults kg, GLOSSARY "Weight Unit").
+// Unit a Load is entered and displayed in (defaults kg, GLOSSARY "Weight Unit"), and the
+// chosen Avatar's catalog id (the backend reads an unknown id as the Novice, ADR-0136).
 export interface Appearance {
   mode: Mode;
   keep_screen_awake: boolean;
   weight_unit: WeightUnit;
+  avatar: string;
 }
 
 export async function fetchAppearance(): Promise<Envelope<Appearance>> {
@@ -53,16 +56,16 @@ export async function saveWeightUnit(
 }
 
 // The shipped Interface Preference for a signed-out visitor or a briefly
-// unreachable backend: today's all-dark look with Keep Screen Awake on and weights
-// in kilograms.
+// unreachable backend: today's all-dark look with Keep Screen Awake on, weights in
+// kilograms and the Novice Avatar.
 const DEFAULT_APPEARANCE: Appearance = {
   mode: DEFAULT_MODE,
   keep_screen_awake: DEFAULT_KEEP_SCREEN_AWAKE,
   weight_unit: DEFAULT_WEIGHT_UNIT,
+  avatar: DEFAULT_AVATAR_ID,
 };
 
-// Resolve the user's whole Interface Preference (Mode + Keep Screen Awake) for a
-// server render. This runs on every request, including for signed-out visitors and
+// Resolve the user's whole Interface Preference for a server render. This runs on every request, including for signed-out visitors and
 // if the backend is briefly unreachable, so it can never throw: any failure falls
 // back to the shipped defaults, preserving today's look rather than crashing the
 // shell.

@@ -9,6 +9,10 @@ through the repository interface, validation happens at the boundary with Pydant
 (an unknown Mode or ill-typed value is a 422), and the response is wrapped in the
 standard envelope.
 
+``GET`` also returns the chosen **Avatar** (ADR-0136), always a catalog id: no
+choice, or an id since retired from the catalog, reads as the Novice. It computes
+no XP, so the per-page layout read stays cheap.
+
 PUT accepts each facet independently: an omitted field keeps the user's current
 value, so the Mode picker, the Keep-Screen-Awake toggle, and the Weight-Unit toggle
 each save only their own facet without disturbing the others. The route reads the
@@ -52,6 +56,7 @@ def _serialize(preference: InterfacePreference) -> dict:
         "mode": preference.mode.value,
         "keep_screen_awake": preference.keep_screen_awake,
         "weight_unit": preference.weight_unit.value,
+        "avatar": preference.avatar,
     }
 
 
