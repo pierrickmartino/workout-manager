@@ -18,7 +18,6 @@ from functools import cache
 
 from app.db.models import Profile
 from app.domain.exercise import Provenance
-from app.domain.progression import next_prescription
 from app.domain.substitution import (
     RelationKind,
     SubstituteCandidate,
@@ -31,15 +30,13 @@ from app.generation.substitute_generator import (
     SubstituteGenerator,
     SubstituteRequest,
 )
+from app.progression.overlay import ProgressionOverlay
 from app.repositories.exercise_relationship_repository import (
     ExerciseRelationshipRepository,
     RelatedExercise,
 )
 from app.repositories.exercise_repository import ExerciseRepository
-from app.repositories.logged_session_repository import (
-    LoggedSessionRepository,
-    LoggedSetView,
-)
+from app.repositories.logged_session_repository import LoggedSessionRepository
 from app.repositories.profile_repository import ProfileRepository
 from app.repositories.session_repository import (
     PrescriptionView,
@@ -68,14 +65,6 @@ class HarderVariationSuggestion:
 
     exercise_id: int
     name: str
-
-
-@dataclass(frozen=True)
-class _RepLoad:
-    """The minimal shape ``next_prescription`` reads: rep target and free-text load."""
-
-    reps: str
-    recommended_load: str | None
 
 
 def _candidate(related: RelatedExercise) -> SubstituteCandidate:
@@ -217,48 +206,20 @@ def _auto_resolve(
     return resolution.candidate.exercise_id
 
 
-def _latest_sets_by_exercise(
-    logged: LoggedSessionRepository, clerk_user_id: str, exercise_ids: set[int]
-) -> dict[int, list[LoggedSetView]]:
-    """Each Exercise's Logged Sets from its most recent performance, read in one pass.
-
-    ``list_for_user`` arrives newest-first, so the first Logged Session that touched
-    an Exercise carries the sets that drive its next Progression step. An Exercise
-    never performed is absent from the result."""
-
-    latest: dict[int, list[LoggedSetView]] = {}
-    for session in logged.list_for_user(clerk_user_id):
-        for exercise_id in exercise_ids - latest.keys():
-            sets = [s for s in session.logged_sets if s.exercise_id == exercise_id]
-            if sets:
-                latest = {**latest, exercise_id: sets}
-        if latest.keys() >= exercise_ids:
-            break
-    return latest
-
-
 def _suggestion_for(
     prescription: PrescriptionView,
-    latest_sets: list[LoggedSetView],
+    overlay: ProgressionOverlay,
     context: Callable[[], SubstitutionContext],
     *,
     relationships: ExerciseRelationshipRepository,
     exercises: ExerciseRepository,
 ) -> HarderVariationSuggestion | None:
-    """The harder-Variation offer for one Prescription, given its latest Logged Sets.
+    """The harder-Variation offer for one Prescription, as its Progression Scheme decides.
 
-    ``context`` is called only when the Progression step reaches the ceiling, so a
+    ``context`` is called only when the Progression step raises the offer, so a
     Session with no offer never reads the Profile."""
 
-    load = prescription.recommended_load
-    step = next_prescription(
-        _RepLoad(
-            reps=prescription.reps,
-            recommended_load=load["text"] if load else None,
-        ),
-        latest_sets,
-    )
-    if not step.suggest_harder_variation:
+    if not overlay.progress(prescription).suggests_harder_variation:
         return None
 
     current = exercises.get(prescription.exercise_id)
@@ -296,9 +257,9 @@ def harder_variation_suggestion(
 ) -> HarderVariationSuggestion | None:
     """The harder-Variation offer for a Prescription at its rep ceiling, or ``None``.
 
-    Read-only: it computes the deterministic Progression step from the user's latest
-    Logged Sets and, only when that raises ``suggest_harder_variation`` (a pure
-    bodyweight movement out of rep headroom, ADR-0026), resolves the next harder
+    Read-only: it computes the Prescription's Progression step through its stored
+    scheme (ADR-0064) and, only when that raises the offer (a pure bodyweight
+    movement out of rep headroom, ADR-0026; never a Static one), resolves the next harder
     Variation from the catalog — filtered to what the user can safely take (ADR-0003).
     Returns ``None`` before the ceiling, or when nothing harder is compatible: the
     prescription simply holds. Never mutates the Session — the swap stays a separate,
@@ -315,12 +276,9 @@ def harder_variation_suggestion(
     if prescription is None:
         raise PrescriptionNotFound(position)
 
-    latest = _latest_sets_by_exercise(
-        logged, clerk_user_id, {prescription.exercise_id}
-    )
     return _suggestion_for(
         prescription,
-        latest.get(prescription.exercise_id, []),
+        ProgressionOverlay.from_history(logged.list_for_user(clerk_user_id)),
         _lazy_context(profiles, clerk_user_id, view.training_type),
         relationships=relationships,
         exercises=exercises,
@@ -358,18 +316,14 @@ def harder_variation_suggestions(
     if view is None:
         raise SessionNotFound(session_id)
 
-    latest = _latest_sets_by_exercise(
-        logged,
-        clerk_user_id,
-        {prescription.exercise_id for prescription in view.prescriptions},
-    )
+    overlay = ProgressionOverlay.from_history(logged.list_for_user(clerk_user_id))
     context = _lazy_context(profiles, clerk_user_id, view.training_type)
     return tuple(
         PositionedSuggestion(
             position=prescription.position,
             suggestion=_suggestion_for(
                 prescription,
-                latest.get(prescription.exercise_id, []),
+                overlay,
                 context,
                 relationships=relationships,
                 exercises=exercises,

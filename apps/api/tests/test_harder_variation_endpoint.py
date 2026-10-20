@@ -83,10 +83,22 @@ def _auth(ctx, sub):
     return {"Authorization": f"Bearer {ctx.mint(sub=sub)}"}
 
 
-def _seed_bodyweight_ceiling(exercises, sessions, logged, user):
+def _seed_bodyweight_ceiling(
+    exercises,
+    sessions,
+    logged,
+    user,
+    *,
+    scheme=None,
+    perceived_difficulty=6,
+    performances=1,
+):
     """A pull-up at its 5-rep ceiling, hit easily at low effort — the strong signal
     that earns the harder-Variation offer. Returns the created Session and the
-    pull-up Exercise so a test can link (or withhold) a harder Variation."""
+    pull-up Exercise so a test can link (or withhold) a harder Variation.
+
+    ``scheme``, ``perceived_difficulty`` and ``performances`` let a test move the
+    Prescription off the default scheme and shape the record that scheme reads."""
 
     pullup = exercises.find_or_create(
         "Pull-Up", provenance=Provenance.CURATED, difficulty=5
@@ -102,28 +114,38 @@ def _seed_bodyweight_ceiling(exercises, sessions, logged, user):
                     sets=3,
                     reps="5",
                     recommended_load=parse_load("bodyweight").to_dict(),
+                    scheme=scheme,
                 )
             ],
         ),
     )
-    logged.create(
-        user,
-        LoggedSessionDraft(
-            session_id=created.id,
-            performed_on=date(2026, 7, 20),
-            completion_outcome="completed",
-            logged_sets=[
-                LoggedSetDraft(
-                    exercise_id=pullup.id,
-                    quantity=reps_quantity(5),
-                    load=parse_load("bodyweight").to_dict(),
-                    perceived_difficulty=6,
-                )
-                for _ in range(3)
-            ],
-        ),
-    )
+    for day in range(performances):
+        logged.create(
+            user,
+            LoggedSessionDraft(
+                session_id=created.id,
+                performed_on=date(2026, 7, 20 + day),
+                completion_outcome="completed",
+                logged_sets=[
+                    LoggedSetDraft(
+                        exercise_id=pullup.id,
+                        quantity=reps_quantity(5),
+                        load=parse_load("bodyweight").to_dict(),
+                        perceived_difficulty=perceived_difficulty,
+                    )
+                    for _ in range(3)
+                ],
+            ),
+        )
     return created, pullup
+
+
+def _link_archer(exercises, relationships, pullup):
+    archer = exercises.find_or_create(
+        "Archer Pull-Up", provenance=Provenance.CURATED, difficulty=7
+    )
+    relationships.add(pullup.id, archer.id, RelationKind.VARIATION)
+    return archer
 
 
 def test_harder_variation_requires_authentication():
@@ -180,6 +202,67 @@ def test_no_offer_when_the_catalog_has_no_harder_variation():
     # Assert — the offer holds at the ceiling: nothing to advance to
     assert offer.status_code == 200
     assert offer.json()["data"]["suggested_variation"] is None
+
+
+# --- The offer follows the Prescription's Progression Scheme (ADR-0064) ----------
+
+
+def test_no_offer_for_a_static_prescription_at_the_ceiling():
+    # Arrange — the strong ceiling signal Double Progression offers on, but the user
+    # has set the movement Static: nothing in the record moves it, the offer included
+    client, ctx, exercises, relationships, sessions, logged = _build()
+    user = "user_static"
+    created, pullup = _seed_bodyweight_ceiling(
+        exercises, sessions, logged, user, scheme="static"
+    )
+    _link_archer(exercises, relationships, pullup)
+
+    # Act
+    single = client.get(
+        f"/api/sessions/{created.id}/prescriptions/0/harder-variation",
+        headers=_auth(ctx, user),
+    )
+    batch = client.get(
+        f"/api/sessions/{created.id}/harder-variations", headers=_auth(ctx, user)
+    )
+
+    # Assert
+    assert single.status_code == 200
+    assert single.json()["data"]["suggested_variation"] is None
+    assert batch.json()["data"]["offers"] == [
+        {"position": 0, "suggested_variation": None}
+    ]
+
+
+def test_session_count_offers_once_its_exposures_ramp_to_the_ceiling():
+    # Arrange — three hard (RPE 9) performances: Double Progression's effort gate
+    # would hold, but Session-Count steps on the exposure tally alone, and its step
+    # at the rep ceiling is the offer
+    client, ctx, exercises, relationships, sessions, logged = _build()
+    user = "user_session_count"
+    created, pullup = _seed_bodyweight_ceiling(
+        exercises,
+        sessions,
+        logged,
+        user,
+        scheme="session_count",
+        perceived_difficulty=9,
+        performances=3,
+    )
+    archer = _link_archer(exercises, relationships, pullup)
+
+    # Act
+    offer = client.get(
+        f"/api/sessions/{created.id}/prescriptions/0/harder-variation",
+        headers=_auth(ctx, user),
+    )
+
+    # Assert
+    assert offer.status_code == 200
+    assert offer.json()["data"]["suggested_variation"] == {
+        "exercise_id": archer.id,
+        "name": "Archer Pull-Up",
+    }
 
 
 # --- The batch read (audit V-5): every Prescription's offer in one request -------
