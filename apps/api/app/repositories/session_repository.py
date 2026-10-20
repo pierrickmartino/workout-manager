@@ -25,11 +25,9 @@ from app.db.models import (
 )
 from app.domain.curated_lineage import (
     CuratedLineage,
-    lineage_columns,
     lineage_of,
 )
 from app.domain.session_library import matches_session_search
-from app.domain.share_redeem import SharedSessionSource, redeem_copy
 from app.domain.superset import MIN_SUPERSET_MEMBERS
 from app.repositories.exercise_repository import ExerciseRepository
 from app.repositories.favorite_repository import (
@@ -49,6 +47,7 @@ from app.repositories.profile_repository import (
     ProfileRepository,
     SqlProfileRepository,
 )
+from app.repositories.session_rows import standalone_copy
 
 
 @dataclass(frozen=True)
@@ -293,10 +292,10 @@ class SessionRepository(Protocol):
         (Redeem, ADR-0057) — the cross-user cousin of :meth:`duplicate`.
 
         Reads ``source_session_id`` **without** owner-scoping (the redeemer is not the Owner)
-        and writes an independent copy owned by ``redeemer_clerk_user_id``, applying the pure
-        redeem-copy rule (``app.domain.share_redeem``): the new **Owner** is the redeemer, the
-        **Author** is preserved as the original creator, and the **Session Name** and **Session
-        Provenance** carry forward unchanged. Every Exercise Prescription (sets/reps/rest/tempo/Load/Superset/Pin/Progression Scheme) is copied
+        and writes an independent copy owned by ``redeemer_clerk_user_id``, applying the copy
+        rule it shares with Duplicate (``session_rows.standalone_copy``): the new **Owner** is
+        the redeemer, the **Author** is preserved as the original creator, and the **Session
+        Name**, **Session Provenance** and ``title`` carry forward unchanged. Every Exercise Prescription (sets/reps/rest/tempo/Load/Superset/Pin/Progression Scheme) is copied
         faithfully from the source's **redeem-time** state — the scheme is a plan property that
         travels with the copy, not a per-owner marker like Favorite (ADR-0064). The copy carries
         **no Logged Sessions**, **no Protocol position**, a **fresh regeneration budget**, and
@@ -752,20 +751,7 @@ class SqlSessionRepository:
             .order_by(ExercisePrescription.position)
         ).all()
 
-        # A standalone copy: Provenance, lineage, name and Author carried verbatim; Protocol
-        # linkage and the regeneration guard deliberately not copied (ADR-0043). Author is
-        # preserved from the source, NOT re-attributed to the duplicating user (GLOSSARY:
-        # Author immutable origin, #395) — the same non-re-attribution as Provenance/lineage.
-        copy = WorkoutSession(
-            clerk_user_id=clerk_user_id,
-            training_type=source.training_type,
-            duration_minutes=source.duration_minutes,
-            provenance=source.provenance,
-            title=source.title,
-            name=source.name,
-            author_clerk_user_id=source.author_clerk_user_id,
-            **lineage_columns(lineage_of(source)),
-        )
+        copy = standalone_copy(source, clerk_user_id)
         self._session.add(copy)
         self._session.commit()
         self._session.refresh(copy)
@@ -796,30 +782,8 @@ class SqlSessionRepository:
             .order_by(ExercisePrescription.position)
         ).all()
 
-        # The redeem-copy rule (pure): new Owner = redeemer; Author, Name and Provenance
-        # carried forward. Protocol linkage and the regeneration guard are deliberately
-        # dropped so the copy stands alone with a fresh budget; Logged Sessions
-        # and the Favorite marker are per-owner and simply never copied.
-        attrs = redeem_copy(
-            SharedSessionSource(
-                training_type=source.training_type,
-                duration_minutes=source.duration_minutes,
-                provenance=source.provenance,
-                name=source.name,
-                author_clerk_user_id=source.author_clerk_user_id,
-                curated_lineage=lineage_of(source),
-            ),
-            redeemer_clerk_user_id,
-        )
-        copy = WorkoutSession(
-            clerk_user_id=attrs.clerk_user_id,
-            training_type=attrs.training_type,
-            duration_minutes=attrs.duration_minutes,
-            provenance=attrs.provenance,
-            name=attrs.name,
-            author_clerk_user_id=attrs.author_clerk_user_id,
-            **lineage_columns(attrs.curated_lineage),
-        )
+        # New Owner = redeemer; everything else follows the shared copy rule (ADR-0057).
+        copy = standalone_copy(source, redeemer_clerk_user_id)
         self._session.add(copy)
         self._session.commit()
         self._session.refresh(copy)
@@ -1190,21 +1154,9 @@ class InMemorySessionRepository:
         prescriptions = sorted(
             self._prescriptions.get(session_id, []), key=lambda p: p.position
         )
-        # A standalone copy: Provenance, lineage, name and Author carried verbatim; Protocol
-        # linkage and the regeneration guard deliberately not copied (ADR-0043). Author is
-        # preserved from the source, NOT re-attributed to the duplicating user (GLOSSARY:
-        # Author immutable origin, #395).
-        copy = WorkoutSession(
-            id=self._next_id,
-            clerk_user_id=clerk_user_id,
-            training_type=source.training_type,
-            duration_minutes=source.duration_minutes,
-            provenance=source.provenance,
-            title=source.title,
-            name=source.name,
-            author_clerk_user_id=source.author_clerk_user_id,
-            **lineage_columns(lineage_of(source)),
-        )
+        copy = standalone_copy(source, clerk_user_id)
+        # The in-memory store assigns the ids the SQL adapter leaves to the database.
+        copy.id = self._next_id
         self._next_id += 1
         self._sessions[copy.id] = copy
         self._prescriptions[copy.id] = self._materialize(
@@ -1230,30 +1182,10 @@ class InMemorySessionRepository:
         prescriptions = sorted(
             self._prescriptions.get(source_session_id, []), key=lambda p: p.position
         )
-        # The redeem-copy rule (pure): new Owner = redeemer; Author, Name and Provenance
-        # carried forward; Protocol linkage and the regeneration guard dropped so the copy
-        # stands alone; records and the Favorite marker are per-owner, never copied.
-        attrs = redeem_copy(
-            SharedSessionSource(
-                training_type=source.training_type,
-                duration_minutes=source.duration_minutes,
-                provenance=source.provenance,
-                name=source.name,
-                author_clerk_user_id=source.author_clerk_user_id,
-                curated_lineage=lineage_of(source),
-            ),
-            redeemer_clerk_user_id,
-        )
-        copy = WorkoutSession(
-            id=self._next_id,
-            clerk_user_id=attrs.clerk_user_id,
-            training_type=attrs.training_type,
-            duration_minutes=attrs.duration_minutes,
-            provenance=attrs.provenance,
-            name=attrs.name,
-            author_clerk_user_id=attrs.author_clerk_user_id,
-            **lineage_columns(attrs.curated_lineage),
-        )
+        # New Owner = redeemer; everything else follows the shared copy rule (ADR-0057).
+        copy = standalone_copy(source, redeemer_clerk_user_id)
+        # The in-memory store assigns the ids the SQL adapter leaves to the database.
+        copy.id = self._next_id
         self._next_id += 1
         self._sessions[copy.id] = copy
         self._prescriptions[copy.id] = self._materialize(

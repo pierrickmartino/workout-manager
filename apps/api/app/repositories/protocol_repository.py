@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, TypeVar
+from typing import Any
 from typing import Protocol as Interface
 
 from sqlalchemy import null
@@ -23,7 +23,6 @@ from sqlmodel import Session, select
 # Sentinel distinguishing "leave the Protocol name unchanged" (the default) from an
 # explicit ``name=None`` that clears it back to the derived label (F4 Slice 5).
 _KEEP_NAME: Any = object()
-_T = TypeVar("_T")
 
 from app.db.models import (
     Exercise,
@@ -45,6 +44,7 @@ from app.repositories.prescription_mapping import (
     row_from_draft,
     view_from_row,
 )
+from app.repositories.session_rows import member_session_row
 
 
 class ProtocolStarted(Exception):
@@ -345,21 +345,8 @@ class SqlProtocolRepository:
         self._session.refresh(protocol)
 
         for position, session_draft in enumerate(draft.sessions):
-            workout = WorkoutSession(
-                clerk_user_id=clerk_user_id,
-                training_type=_own_or(session_draft.training_type, draft.training_type),
-                duration_minutes=_own_or(session_draft.duration_minutes, draft.duration_minutes),
-                # Author stamped with the adopting/deploying user (GLOSSARY: Author, #395):
-                # a Protocol-member Session attributes to whoever created it here.
-                author_clerk_user_id=clerk_user_id,
-                protocol_id=protocol.id,
-                objective=draft.objective,
-                week=session_draft.week,
-                day=session_draft.day,
-                position=position,
-                title=session_draft.title,
-                provenance=draft.provenance,
-                **lineage_columns(draft.curated_lineage),
+            workout = member_session_row(
+                protocol, session_draft, position=position, provenance=draft.provenance
             )
             self._session.add(workout)
             self._session.commit()
@@ -474,23 +461,8 @@ class SqlProtocolRepository:
         self._session.flush()
 
         for spec in tail:
-            workout = WorkoutSession(
-                clerk_user_id=clerk_user_id,
-                training_type=_own_or(spec.training_type, protocol.training_type),
-                duration_minutes=_own_or(spec.duration_minutes, protocol.duration_minutes),
-                # Author stamped with the adopting/deploying user (GLOSSARY: Author, #395):
-                # a Protocol-member Session attributes to whoever created it here.
-                author_clerk_user_id=clerk_user_id,
-                protocol_id=protocol.id,
-                objective=protocol.objective,
-                week=spec.week,
-                day=spec.day,
-                position=spec.position,
-                title=spec.title,
-                provenance=provenance,
-                # The Protocol's curated lineage reaches every Session it holds: editing the
-                # plan doesn't change where it came from (ADR-0130).
-                **lineage_columns(lineage_of(protocol)),
+            workout = member_session_row(
+                protocol, spec, position=spec.position, provenance=provenance
             )
             self._session.add(workout)
             self._session.flush()  # assign the new Session id without committing
@@ -606,23 +578,11 @@ class InMemoryProtocolRepository:
         self._sessions[protocol.id] = []
 
         for position, session_draft in enumerate(draft.sessions):
-            workout = WorkoutSession(
-                id=self._next_session_id,
-                clerk_user_id=clerk_user_id,
-                training_type=_own_or(session_draft.training_type, draft.training_type),
-                duration_minutes=_own_or(session_draft.duration_minutes, draft.duration_minutes),
-                # Author stamped with the adopting/deploying user (GLOSSARY: Author, #395):
-                # a Protocol-member Session attributes to whoever created it here.
-                author_clerk_user_id=clerk_user_id,
-                protocol_id=protocol.id,
-                objective=draft.objective,
-                week=session_draft.week,
-                day=session_draft.day,
-                position=position,
-                title=session_draft.title,
-                provenance=draft.provenance,
-                **lineage_columns(draft.curated_lineage),
+            workout = member_session_row(
+                protocol, session_draft, position=position, provenance=draft.provenance
             )
+            # The in-memory store assigns the ids the SQL adapter leaves to the database.
+            workout.id = self._next_session_id
             self._next_session_id += 1
             self._sessions[protocol.id].append(workout)
             rows: list[ExercisePrescription] = []
@@ -699,25 +659,11 @@ class InMemoryProtocolRepository:
                 self._prescriptions.pop(workout.id, None)
 
         for spec in tail:
-            workout = WorkoutSession(
-                id=self._next_session_id,
-                clerk_user_id=clerk_user_id,
-                training_type=_own_or(spec.training_type, protocol.training_type),
-                duration_minutes=_own_or(spec.duration_minutes, protocol.duration_minutes),
-                # Author stamped with the adopting/deploying user (GLOSSARY: Author, #395):
-                # a Protocol-member Session attributes to whoever created it here.
-                author_clerk_user_id=clerk_user_id,
-                protocol_id=protocol.id,
-                objective=protocol.objective,
-                week=spec.week,
-                day=spec.day,
-                position=spec.position,
-                title=spec.title,
-                provenance=provenance,
-                # The Protocol's curated lineage reaches every Session it holds: editing the
-                # plan doesn't change where it came from (ADR-0130).
-                **lineage_columns(lineage_of(protocol)),
+            workout = member_session_row(
+                protocol, spec, position=spec.position, provenance=provenance
             )
+            # The in-memory store assigns the ids the SQL adapter leaves to the database.
+            workout.id = self._next_session_id
             self._next_session_id += 1
             kept.append(workout)
             rows: list[ExercisePrescription] = []
@@ -756,12 +702,6 @@ class InMemoryProtocolRepository:
                     _apply_pitch(row, pitch)
 
         return self._view(protocol)
-
-
-def _own_or(own: _T | None, protocol_value: _T) -> _T:
-    """A Session's own Training Type or duration, else its Protocol's (ADR-0130 amendment)."""
-
-    return protocol_value if own is None else own
 
 
 def _tail_provenance(workouts: Sequence[WorkoutSession]) -> str:
