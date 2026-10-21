@@ -1,6 +1,4 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Trophy } from "@/components/pulse/icons";
 
 import { fetchProfile, isProfileComplete } from "@/lib/profile";
 import { READINESS_BADGE, fetchHome } from "@/lib/home";
@@ -12,7 +10,6 @@ import { HOME_VOLUME_RANGE, homeReview } from "@/lib/home-review";
 import { quickActions } from "@/lib/quick-actions";
 import { resolveAppearance } from "@/lib/appearance";
 import { settleBestEffort } from "@/lib/best-effort-read";
-import { appendFrom } from "@/lib/back-target";
 import { Alert } from "@/components/pulse/alert";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -21,7 +18,6 @@ import { CalibrationControl } from "@/components/pulse/calibration-control";
 import { ResumeSessionBanner } from "@/components/pulse/resume-session-banner";
 import { TrainingRouteCard } from "@/components/pulse/training-route";
 import { LevelBadge } from "@/components/pulse/level-badge";
-import { Bento, BentoTile } from "@/components/pulse/bento";
 import { QuickActions } from "@/components/pulse/quick-actions";
 import { HomeColumns } from "@/components/pulse/home-columns";
 import { GenerateTrainingLaunchpad } from "@/components/pulse/generate-training-launchpad";
@@ -29,8 +25,13 @@ import { VolumeChartWide } from "@/components/pulse/volume-chart-wide";
 import { RecentRecords } from "@/components/pulse/recent-records";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
-import { NAV_FORWARD } from "@/lib/nav-direction";
+// PROTOTYPE — throwaway (Latest PR + Streak redesign), see the variants file.
+import { PrototypeSwitcher } from "@/components/pulse/prototype-switcher";
+import {
+  PR_STREAK_VARIANTS,
+  PrStreakPrototype,
+  resolvePrStreakVariant,
+} from "./prototype-pr-streak-variants";
 
 // The dashboard renders the full Fitness Profile that round-tripped through
 // Postgres on the FastAPI backend. New users (incomplete profile) are sent to
@@ -46,7 +47,12 @@ import { NAV_FORWARD } from "@/lib/nav-direction";
 // hidden rather than branched on, which is the cost ADR-0088 names for refusing UA detection.
 // Nothing below `lg:` moves, and nothing added is an action — read-time projections only, so
 // ADR-0071's click budget is untouched.
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const prototypeParams = await searchParams;
   const [profileEnvelope, homeEnvelope, appearance, analyticsEnvelope] =
     await Promise.all([
       fetchProfile(),
@@ -100,6 +106,18 @@ export default async function DashboardPage() {
   // The empty state offers a Curated Protocol beside generation (issue #690, ADR-0130). The list
   // is read only when there is no Current Protocol, so Home with one costs no extra read; it is
   // best-effort, and a failed read leaves the generate link on its own.
+  // PROTOTYPE knobs: `?variant=`, `?pr=none`, `?streak=N`.
+  const prototypeVariant = resolvePrStreakVariant(prototypeParams.variant);
+  const streakOverride = Number(prototypeParams.streak);
+  const prototypeData = {
+    latestPr: prototypeParams.pr === "none" ? null : latestPr,
+    prDate: prototypeParams.pr === "none" ? null : (homeEnvelope.data.latest_pr?.date ?? null),
+    streak:
+      typeof prototypeParams.streak === "string" && Number.isInteger(streakOverride)
+        ? streakOverride
+        : status.streak,
+    hasRecentRecords: review.records !== null,
+  };
   const protocolChoices = homeProtocolChoices(
     currentProtocol,
     currentProtocol ? null : await settleBestEffort(fetchCuratedProtocols()),
@@ -119,6 +137,8 @@ export default async function DashboardPage() {
       {/* Resume affordance: shown only when an unfinished Live Session is held in
           the client-side slot (ADR-0012). Renders nothing otherwise. */}
       <ResumeSessionBanner />
+
+      <PrStreakPrototype variant={prototypeVariant} slot="top" {...prototypeData} />
 
       {/* Below `lg:` a plain stacked column in this exact source order; at `lg:` the launch
           surface plus review column on the left, Operator status in a rail on the right. The
@@ -210,42 +230,14 @@ export default async function DashboardPage() {
                 (issue #166). */}
             <SectionHeader>OPERATOR STATUS</SectionHeader>
             <LevelBadge xp={status.xp} level={status.level} />
-            {/* Latest PR: the user's most recent Personal Record, linking to the
-                Exercise. Rendered only when a PR exists — hidden, never "0 kg", for new
-                accounts and bodyweight-only trainees (issue #167, ADR-0010). It stands down
-                at `lg:` only when the Recent Records feed is there to supersede it: that
-                feed opens with this same record, and showing both would be the duplication
-                ADR-0071 removed from Home, not extra information. */}
-            {latestPr ? (
-              <Link
-                {...NAV_FORWARD}
-                href={appendFrom(`/exercises/${latestPr.exerciseId}`, "/dashboard")}
-                className={cn(
-                  "flex items-center gap-3 rounded-md border border-border bg-surface px-4 py-3 transition-colors hover:border-cyan/40",
-                  review.records && "lg:hidden",
-                )}
-              >
-                <Trophy className="h-4 w-4 shrink-0 text-cyan" />
-                <div className="flex flex-col">
-                  <span className="label-mono text-[10px] text-text-muted">
-                    LATEST PR
-                  </span>
-                  <span className="font-sans text-sm font-medium text-text-primary">
-                    {latestPr.text}
-                  </span>
-                </div>
-              </Link>
-            ) : null}
-            <Bento>
-              <BentoTile
-                label="STREAK"
-                value={status.streak}
-                caption={status.streak === 1 ? "WEEK" : "WEEKS"}
-                span="full"
-              />
-            </Bento>
+            <PrStreakPrototype variant={prototypeVariant} slot="rail" {...prototypeData} />
           </>
         }
+      />
+      <PrototypeSwitcher
+        variants={PR_STREAK_VARIANTS}
+        current={prototypeVariant}
+        stateLine={`streak ${prototypeData.streak} · PR ${prototypeData.latestPr ? "yes" : "none"}`}
       />
     </section>
   );
