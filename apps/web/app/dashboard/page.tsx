@@ -10,6 +10,7 @@ import { HOME_VOLUME_RANGE, homeReview } from "@/lib/home-review";
 import { quickActions } from "@/lib/quick-actions";
 import { resolveAppearance } from "@/lib/appearance";
 import { settleBestEffort } from "@/lib/best-effort-read";
+import { appendFrom } from "@/lib/back-target";
 import { Alert } from "@/components/pulse/alert";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
@@ -23,15 +24,9 @@ import { HomeColumns } from "@/components/pulse/home-columns";
 import { GenerateTrainingLaunchpad } from "@/components/pulse/generate-training-launchpad";
 import { VolumeChartWide } from "@/components/pulse/volume-chart-wide";
 import { RecentRecords } from "@/components/pulse/recent-records";
+import { OperatorScoreboard } from "@/components/pulse/operator-scoreboard";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-// PROTOTYPE — throwaway (Latest PR + Streak redesign), see the variants file.
-import { PrototypeSwitcher } from "@/components/pulse/prototype-switcher";
-import {
-  PR_STREAK_VARIANTS,
-  PrStreakPrototype,
-  resolvePrStreakVariant,
-} from "./prototype-pr-streak-variants";
 
 // The dashboard renders the full Fitness Profile that round-tripped through
 // Postgres on the FastAPI backend. New users (incomplete profile) are sent to
@@ -47,12 +42,7 @@ import {
 // hidden rather than branched on, which is the cost ADR-0088 names for refusing UA detection.
 // Nothing below `lg:` moves, and nothing added is an action — read-time projections only, so
 // ADR-0071's click budget is untouched.
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const prototypeParams = await searchParams;
+export default async function DashboardPage() {
   const [profileEnvelope, homeEnvelope, appearance, analyticsEnvelope] =
     await Promise.all([
       fetchProfile(),
@@ -106,18 +96,6 @@ export default async function DashboardPage({
   // The empty state offers a Curated Protocol beside generation (issue #690, ADR-0130). The list
   // is read only when there is no Current Protocol, so Home with one costs no extra read; it is
   // best-effort, and a failed read leaves the generate link on its own.
-  // PROTOTYPE knobs: `?variant=`, `?pr=none`, `?streak=N`.
-  const prototypeVariant = resolvePrStreakVariant(prototypeParams.variant);
-  const streakOverride = Number(prototypeParams.streak);
-  const prototypeData = {
-    latestPr: prototypeParams.pr === "none" ? null : latestPr,
-    prDate: prototypeParams.pr === "none" ? null : (homeEnvelope.data.latest_pr?.date ?? null),
-    streak:
-      typeof prototypeParams.streak === "string" && Number.isInteger(streakOverride)
-        ? streakOverride
-        : status.streak,
-    hasRecentRecords: review.records !== null,
-  };
   const protocolChoices = homeProtocolChoices(
     currentProtocol,
     currentProtocol ? null : await settleBestEffort(fetchCuratedProtocols()),
@@ -137,8 +115,6 @@ export default async function DashboardPage({
       {/* Resume affordance: shown only when an unfinished Live Session is held in
           the client-side slot (ADR-0012). Renders nothing otherwise. */}
       <ResumeSessionBanner />
-
-      <PrStreakPrototype variant={prototypeVariant} slot="top" {...prototypeData} />
 
       {/* Below `lg:` a plain stacked column in this exact source order; at `lg:` the launch
           surface plus review column on the left, Operator status in a rail on the right. The
@@ -230,14 +206,24 @@ export default async function DashboardPage({
                 (issue #166). */}
             <SectionHeader>OPERATOR STATUS</SectionHeader>
             <LevelBadge xp={status.xp} level={status.level} />
-            <PrStreakPrototype variant={prototypeVariant} slot="rail" {...prototypeData} />
+            {/* The Streak and Latest PR scoreboard: one split card, the weekly Streak beside
+                the user's most recent Personal Record, which links to its Exercise. With no PR
+                yet the right half says where one will appear — never "0 kg" (issue #167,
+                ADR-0010). It shows at every width: paired with the Streak it reads as this
+                rail's own figure, not a copy of the Recent Records feed beside it. */}
+            <OperatorScoreboard
+              streak={status.streak}
+              streakCaption={status.streakCaption}
+              streakPips={status.streakPips}
+              latestPr={latestPr}
+              latestPrHref={
+                latestPr
+                  ? appendFrom(`/exercises/${latestPr.exerciseId}`, "/dashboard")
+                  : null
+              }
+            />
           </>
         }
-      />
-      <PrototypeSwitcher
-        variants={PR_STREAK_VARIANTS}
-        current={prototypeVariant}
-        stateLine={`streak ${prototypeData.streak} · PR ${prototypeData.latestPr ? "yes" : "none"}`}
       />
     </section>
   );

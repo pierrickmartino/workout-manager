@@ -9,6 +9,7 @@ import type { OperatorLevel } from "./profile-progress-types";
 import { formatRecordAchievement } from "./record-achievement.ts";
 import type { WeightUnit } from "./weight-unit";
 import { formatWholeWeight } from "./weight-format.ts";
+import { formatShortDate } from "./date-format.ts";
 import { bestEffortData, type BestEffortResult } from "./best-effort-read.ts";
 import {
   GENERATE_PROTOCOL_CHOICE,
@@ -181,13 +182,20 @@ export interface OperatorStatus {
   level: OperatorLevel;
   // The weekly consecutive-week Streak count (ADR-0019).
   streak: number;
-  // The rendered, explicitly-weekly Streak label, e.g. "3 WK STREAK". Weekly by
-  // construction — never a daily / don't-break-the-chain framing (ADR-0019).
-  streakLabel: string;
+  // The caption under the count, e.g. "3" over "WEEKS IN A ROW". Weekly by construction —
+  // never a daily / don't-break-the-chain framing (ADR-0019).
+  streakCaption: string;
+  // A fixed row of `STREAK_PIPS` marks, one filled per consecutive week, saturating once the
+  // Streak outruns the row (the number carries the real count). An unfilled pip is neutral —
+  // a week not yet reached, never a "missed" one.
+  streakPips: readonly boolean[];
 }
 
+// How many pips the scoreboard's Streak row draws.
+export const STREAK_PIPS = 8;
+
 // Derive the OPERATOR STATUS view-model from the Home read's gamification block.
-// A pure pass-through of the honest figures plus the weekly Streak label; the
+// A pure pass-through of the honest figures plus the weekly Streak caption and pips; the
 // Level/XP go untouched to the shared LevelBadge so Home and Profile render the
 // exact same number.
 export function operatorStatus(gamification: Gamification): OperatorStatus {
@@ -195,7 +203,8 @@ export function operatorStatus(gamification: Gamification): OperatorStatus {
     xp: gamification.xp,
     level: gamification.level,
     streak: gamification.streak,
-    streakLabel: `${gamification.streak} WK STREAK`,
+    streakCaption: gamification.streak === 1 ? "WEEK IN A ROW" : "WEEKS IN A ROW",
+    streakPips: Array.from({ length: STREAK_PIPS }, (_, i) => i < gamification.streak),
   };
 }
 
@@ -204,7 +213,8 @@ export function operatorStatus(gamification: Gamification): OperatorStatus {
 // `exerciseId` links to it; `estimate` is the honest headline — an absolute record's
 // whole-kg Estimated 1RM ("142 kg est. 1RM"), or a bodyweight record's set
 // ("bodyweight × 12"), matching the Recent Records feed so a PR reads the same
-// everywhere (ADR-0026) — and `text` is the composed line. The label is "Latest PR"
+// everywhere (ADR-0026) — and `headline` / `headlineCaption` split it for the operator
+// scoreboard's big figure. The label is "Latest PR"
 // (never "Top PR", which collides with Top Set, nor the banned "Personal Best") and
 // lives in the component; the estimate is deliberately never "0 kg".
 export interface LatestPrLine {
@@ -213,27 +223,45 @@ export interface LatestPrLine {
   // The honest headline: "142 kg est. 1RM" for an absolute record, "bodyweight × 12"
   // for a bodyweight one.
   estimate: string;
-  // The composed line, e.g. "Deadlift — 142 kg est. 1RM" or "Pull-up — bodyweight × 12".
-  text: string;
+  // The scoreboard's big figure: "142 kg" for an absolute record, the whole set for a
+  // bodyweight one.
+  headline: string;
+  // The caption under it: "EST. 1RM" for an absolute record, null for a bodyweight set,
+  // which is not an estimate.
+  headlineCaption: string | null;
+  // The day the record was set, e.g. "JUL 10" — a calendar date, never "N days ago".
+  dateLabel: string;
 }
 
 // Derive the Latest-PR line from the Home read's `latest_pr`. Returns null when the
-// user has no Personal Record (a brand-new account), so Home hides the line rather than
-// fabricating a "0 kg" — Level and Streak still render. A bodyweight record renders as
+// user has no Personal Record (a brand-new account), so the scoreboard's PR half shows its
+// empty state rather than fabricating a "0 kg" — Level and Streak still render. A bodyweight record renders as
 // the set that achieved it (ADR-0026); an absolute one keeps its "kg est. 1RM" wording.
 export function latestPrLine(
   latestPr: LatestPr | null,
   unit: WeightUnit,
 ): LatestPrLine | null {
   if (!latestPr) return null;
-  const estimate = latestPr.is_bodyweight
-    ? formatRecordAchievement(latestPr, unit)
-    : `${formatWholeWeight(latestPr.estimated_1rm, unit)} est. 1RM`;
+  const dateLabel = formatShortDate(latestPr.date).toUpperCase();
+  if (latestPr.is_bodyweight) {
+    const set = formatRecordAchievement(latestPr, unit);
+    return {
+      exercise: latestPr.exercise,
+      exerciseId: latestPr.exercise_id,
+      estimate: set,
+      headline: set,
+      headlineCaption: null,
+      dateLabel,
+    };
+  }
+  const weight = formatWholeWeight(latestPr.estimated_1rm, unit);
   return {
     exercise: latestPr.exercise,
     exerciseId: latestPr.exercise_id,
-    estimate,
-    text: `${latestPr.exercise} — ${estimate}`,
+    estimate: `${weight} est. 1RM`,
+    headline: weight,
+    headlineCaption: "EST. 1RM",
+    dateLabel,
   };
 }
 

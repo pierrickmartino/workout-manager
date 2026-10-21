@@ -6,6 +6,7 @@ import {
   homeProtocolChoices,
   latestPrLine,
   operatorStatus,
+  STREAK_PIPS,
   trainingRoute,
 } from "./home-view.ts";
 import type { TrainingRoute } from "./home-view.ts";
@@ -390,12 +391,41 @@ test("operator status passes XP and Level straight through for the LevelBadge", 
   assert.equal(status.streak, 3);
 });
 
-test("operator status labels the streak explicitly weekly", () => {
+test("operator status captions the streak explicitly weekly", () => {
   // Arrange & Act
   const status = operatorStatus(makeGamification(3));
 
-  // Assert: an explicitly-weekly label — no daily / don't-break-the-chain framing.
-  assert.equal(status.streakLabel, "3 WK STREAK");
+  // Assert: an explicitly-weekly caption — no daily / don't-break-the-chain framing.
+  assert.equal(status.streakCaption, "WEEKS IN A ROW");
+});
+
+test("operator status captions a one-week streak in the singular", () => {
+  // Arrange & Act
+  const status = operatorStatus(makeGamification(1));
+
+  // Assert
+  assert.equal(status.streakCaption, "WEEK IN A ROW");
+});
+
+test("operator status fills one streak pip per consecutive week", () => {
+  // Arrange & Act
+  const status = operatorStatus(makeGamification(3));
+
+  // Assert: a fixed row of pips, the first three filled, the rest neutral.
+  assert.equal(status.streakPips.length, STREAK_PIPS);
+  assert.deepEqual(
+    status.streakPips,
+    Array.from({ length: STREAK_PIPS }, (_, i) => i < 3),
+  );
+});
+
+test("operator status fills every pip once the streak outruns the row", () => {
+  // Arrange & Act
+  const status = operatorStatus(makeGamification(STREAK_PIPS + 5));
+
+  // Assert: the row saturates; the number beside it carries the real count.
+  assert.ok(status.streakPips.every(Boolean));
+  assert.equal(status.streak, STREAK_PIPS + 5);
 });
 
 test("operator status renders a zero-week streak for a brand-new user", () => {
@@ -418,7 +448,8 @@ test("operator status renders a zero-week streak for a brand-new user", () => {
   assert.equal(status.xp, 0);
   assert.equal(status.level.level, 1);
   assert.equal(status.streak, 0);
-  assert.equal(status.streakLabel, "0 WK STREAK");
+  assert.equal(status.streakCaption, "WEEKS IN A ROW");
+  assert.ok(status.streakPips.every((filled) => !filled));
 });
 
 test("latest PR line names the Exercise and its Estimated 1RM, rounded to whole kg", () => {
@@ -436,13 +467,15 @@ test("latest PR line names the Exercise and its Estimated 1RM, rounded to whole 
   // Act
   const line = latestPrLine(latestPr, "kg");
 
-  // Assert: the Exercise, its whole-kg estimate, the linkable id, and the composed
-  // "Deadlift — 142 kg est. 1RM" the OPERATOR STATUS line renders.
+  // Assert: the Exercise, its whole-kg estimate, the linkable id, the scoreboard's
+  // headline figure with its EST. 1RM caption, and the date it was set.
   assert.ok(line);
   assert.equal(line.exercise, "Deadlift");
   assert.equal(line.exerciseId, 7);
   assert.equal(line.estimate, "142 kg est. 1RM");
-  assert.equal(line.text, "Deadlift — 142 kg est. 1RM");
+  assert.equal(line.headline, "142 kg");
+  assert.equal(line.headlineCaption, "EST. 1RM");
+  assert.equal(line.dateLabel, "JUL 10");
 });
 
 test("latest PR line renders a bodyweight record as the set, never a kg headline", () => {
@@ -463,8 +496,9 @@ test("latest PR line renders a bodyweight record as the set, never a kg headline
   // Assert: the set that achieved it, with no fabricated kilogram figure (ADR-0026).
   assert.ok(line);
   assert.equal(line.estimate, "bodyweight × 12");
-  assert.equal(line.text, "Pull-up — bodyweight × 12");
-  assert.ok(!line.text.includes("kg"));
+  assert.equal(line.headline, "bodyweight × 12");
+  assert.equal(line.headlineCaption, null);
+  assert.ok(!line.headline.includes("kg"));
 });
 
 test("latest PR line is hidden (null) when the user has no Personal Record", () => {
@@ -490,7 +524,7 @@ test("latestPrLine renders an absolute PR estimate in the reader's pounds", () =
 
   // Assert — 142 kg ≈ 313 lb; the "est. 1RM" wording is preserved.
   assert.equal(line?.estimate, "313 lb est. 1RM");
-  assert.equal(line?.text, "Deadlift — 313 lb est. 1RM");
+  assert.equal(line?.headline, "313 lb");
 });
 
 // Home's empty state (issue #690, ADR-0130): with no unfinished Protocol, a Curated Protocol is

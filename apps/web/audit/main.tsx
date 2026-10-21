@@ -23,12 +23,12 @@ import { NavigationGuardProvider } from "@/components/NavigationGuardProvider";
 import { TabBar } from "@/components/pulse/tab-bar";
 import { Sidebar } from "@/components/pulse/sidebar";
 import { HomeColumns } from "@/components/pulse/home-columns";
+import { OperatorScoreboard } from "@/components/pulse/operator-scoreboard";
 import { SessionHero } from "@/components/pulse/session-hero";
 import { CalibrationControl } from "@/components/pulse/calibration-control";
 import { TrainingRouteCard } from "@/components/pulse/training-route";
 import { QuickActions } from "@/components/pulse/quick-actions";
 import { LevelBadge } from "@/components/pulse/level-badge";
-import { Bento, BentoTile } from "@/components/pulse/bento";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { RecentRecords } from "@/components/pulse/recent-records";
 import { homeReview } from "@/lib/home-review";
@@ -71,7 +71,7 @@ import { submitDeleteSession } from "@/app/sessions/[id]/actions";
 import { DELETE_DISABLED_HINT } from "@/lib/session-delete";
 import { ArrowRight } from "@/components/pulse/icons";
 import { BuildWorkoutLink, GenerateTrainingLaunchpad, LaunchLinkPair, LogPastWorkoutLink } from "@/components/pulse/generate-training-launchpad";
-import { homeProtocolChoices } from "@/lib/home-view";
+import { homeProtocolChoices, latestPrLine, operatorStatus } from "@/lib/home-view";
 import { FitnessLevelStandings } from "@/components/pulse/fitness-level-standings";
 import { toFitnessLevelRows } from "@/lib/fitness-level-standing";
 import { ProtocolsIndex } from "@/components/ProtocolsIndex";
@@ -157,6 +157,18 @@ function ContrastSamples() {
 // exercises the wide content column rather than only the wide frame.
 const operatorLevel = { level: 7, xp_into_level: 200, xp_span_of_level: 800, xp_to_next: 600 };
 
+const homeStatus = operatorStatus({ xp: 4200, level: operatorLevel, streak: 3 });
+const homeScoreboard = {
+  streak: homeStatus.streak,
+  streakCaption: homeStatus.streakCaption,
+  streakPips: homeStatus.streakPips,
+  latestPr: latestPrLine({
+    exercise_id: 1, exercise: "W".repeat(120), estimated_1rm: 142, date: "2026-09-28",
+    reps: 3, is_bodyweight: false, added_kg: null,
+  }, "kg"),
+  latestPrHref: "/exercises/1",
+};
+
 function Home() {
   const review = homeReview(
     { success: true, data: {
@@ -209,9 +221,9 @@ function Home() {
         rail={<>
           <SectionHeader>OPERATOR STATUS</SectionHeader>
           <LevelBadge xp={4200} level={operatorLevel} />
-          <Bento>
-            <BentoTile label="STREAK" value={3} caption="WEEKS" span="full" />
-          </Bento>
+          {/* The Streak and Latest PR scoreboard, its PR half at its worst: an authored
+              Exercise name of 120 unbroken characters inside half of a 320px rail. */}
+          <OperatorScoreboard {...homeScoreboard} />
         </>}
       />
     </div>
