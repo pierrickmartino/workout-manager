@@ -20,6 +20,14 @@ from dataclasses import dataclass
 # An Avatar with this unlock level is available from the start.
 FREE_UNLOCK_LEVEL = 1
 
+# Tunable Operator Levels that unlock the earned Avatars. Only the level gates an Avatar,
+# never a Training Type or an Achievement, so every user can reach the whole roster.
+MONK_UNLOCK_LEVEL = 3
+BARBARIAN_UNLOCK_LEVEL = 5
+VALKYRIE_UNLOCK_LEVEL = 8
+PALADIN_UNLOCK_LEVEL = 12
+TITAN_UNLOCK_LEVEL = 20
+
 
 @dataclass(frozen=True)
 class Avatar:
@@ -30,11 +38,16 @@ class Avatar:
     unlock_level: int = FREE_UNLOCK_LEVEL
 
 
-# The catalog, in display order. Only the free Avatars ship so far (#747).
+# The catalog, in display order: the free Avatars, then the earned ones by unlock level.
 AVATAR_CATALOG: tuple[Avatar, ...] = (
     Avatar(id="novice", name="Novice"),
     Avatar(id="dwarf-lifter", name="Dwarf Lifter"),
     Avatar(id="elf-ranger", name="Elf Ranger"),
+    Avatar(id="monk", name="Monk", unlock_level=MONK_UNLOCK_LEVEL),
+    Avatar(id="barbarian", name="Barbarian", unlock_level=BARBARIAN_UNLOCK_LEVEL),
+    Avatar(id="valkyrie", name="Valkyrie", unlock_level=VALKYRIE_UNLOCK_LEVEL),
+    Avatar(id="paladin", name="Paladin", unlock_level=PALADIN_UNLOCK_LEVEL),
+    Avatar(id="titan", name="Titan", unlock_level=TITAN_UNLOCK_LEVEL),
 )
 
 # The Avatar a user has until they choose one.
@@ -100,6 +113,11 @@ def avatar_standings(operator_level: int) -> tuple[AvatarStanding, ...]:
 
 __all__ = [
     "FREE_UNLOCK_LEVEL",
+    "MONK_UNLOCK_LEVEL",
+    "BARBARIAN_UNLOCK_LEVEL",
+    "VALKYRIE_UNLOCK_LEVEL",
+    "PALADIN_UNLOCK_LEVEL",
+    "TITAN_UNLOCK_LEVEL",
     "Avatar",
     "AVATAR_CATALOG",
     "DEFAULT_AVATAR_ID",
