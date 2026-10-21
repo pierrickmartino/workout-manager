@@ -71,3 +71,74 @@ test("no option is selected when the current Avatar is not in the catalog", () =
   // Assert
   assert.equal(options.some((option) => option.selected), false);
 });
+
+// A user at Operator Level 5: the Barbarian just unlocked, the Valkyrie and Titan still ahead.
+const EARNED: AvatarCatalog = {
+  operator_level: 5,
+  avatars: [
+    { id: "novice", name: "Novice", unlock_level: 1, unlocked: true, current_level: 1 },
+    { id: "barbarian", name: "Barbarian", unlock_level: 5, unlocked: true, current_level: 5 },
+    { id: "valkyrie", name: "Valkyrie", unlock_level: 8, unlocked: false, current_level: 5 },
+    { id: "titan", name: "Titan", unlock_level: 20, unlocked: false, current_level: 5 },
+  ],
+};
+
+test("an Avatar the user’s Operator Level hasn’t reached is locked", () => {
+  // Act
+  const options = buildAvatarOptions(EARNED, "novice");
+
+  // Assert
+  assert.deepEqual(
+    options.map((option) => [option.id, option.locked]),
+    [
+      ["novice", false],
+      ["barbarian", false],
+      ["valkyrie", true],
+      ["titan", true],
+    ],
+  );
+});
+
+test("a locked Avatar shows the user’s progress toward its unlock level", () => {
+  // Act
+  const options = buildAvatarOptions(EARNED, "novice");
+
+  // Assert — an unlocked Avatar has no progress to show
+  assert.deepEqual(
+    options.map((option) => option.progress),
+    [null, null, "LVL 5 / 8", "LVL 5 / 20"],
+  );
+});
+
+test("a locked Avatar is announced with its name, its status and the level it needs", () => {
+  // Act
+  const options = buildAvatarOptions(EARNED, "novice");
+
+  // Assert
+  assert.deepEqual(
+    options.map((option) => option.label),
+    ["Novice", "Barbarian", "Valkyrie, locked, reach LVL 8", "Titan, locked, reach LVL 20"],
+  );
+});
+
+test("an Avatar the user kept after their level dropped stays selected while locked", () => {
+  // Act
+  const valkyrie = buildAvatarOptions(EARNED, "valkyrie").find(
+    (option) => option.id === "valkyrie",
+  );
+
+  // Assert
+  assert.equal(valkyrie?.selected, true);
+  assert.equal(valkyrie?.locked, true);
+});
+
+test("each option is drawn as selected, open or a locked silhouette", () => {
+  // Act — the user kept the Valkyrie after their level dropped
+  const options = buildAvatarOptions(EARNED, "valkyrie");
+
+  // Assert — their own Avatar is drawn as theirs, never as a silhouette
+  assert.deepEqual(
+    options.map((option) => option.appearance),
+    ["open", "open", "selected", "locked"],
+  );
+});

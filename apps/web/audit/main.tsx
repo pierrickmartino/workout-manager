@@ -392,11 +392,17 @@ const AUDIT_AVATAR_CATALOG: AvatarCatalog = {
     { id: "novice", name: "Novice", unlock_level: 1, unlocked: true, current_level: 1 },
     { id: "dwarf-lifter", name: "Dwarf Lifter", unlock_level: 1, unlocked: true, current_level: 1 },
     { id: "elf-ranger", name: "Elf Ranger", unlock_level: 1, unlocked: true, current_level: 1 },
+    { id: "monk", name: "Monk", unlock_level: 3, unlocked: false, current_level: 1 },
+    { id: "barbarian", name: "Barbarian", unlock_level: 5, unlocked: false, current_level: 1 },
+    { id: "valkyrie", name: "Valkyrie", unlock_level: 8, unlocked: false, current_level: 1 },
+    { id: "paladin", name: "Paladin", unlock_level: 12, unlocked: false, current_level: 1 },
+    { id: "titan", name: "Titan", unlock_level: 20, unlocked: false, current_level: 1 },
   ],
 };
 
 // The Avatar picker (ADR-0136) over the shipped catalog, with the Dwarf Lifter chosen: its name
-// is the widest of the three, and the grid's two columns at 320px are what 200% text crowds.
+// is the widest of the free three, and the grid's two columns at 320px are what 200% text
+// crowds. The earned five render locked, as dimmed silhouettes with their "LVL 1 / N" progress.
 function AvatarSurface() {
   return <AvatarPicker currentAvatarId="dwarf-lifter" catalog={AUDIT_AVATAR_CATALOG} />;
 }

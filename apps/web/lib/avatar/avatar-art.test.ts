@@ -49,7 +49,16 @@ test("the committed manifest lists exactly the artwork ids, in order", () => {
 
   // Assert — the API-side contract test holds the same manifest to the backend catalog
   assert.deepEqual(manifestIds(), artIds);
-  assert.deepEqual(artIds, ["novice", "dwarf-lifter", "elf-ranger"]);
+  assert.deepEqual(artIds, [
+    "novice",
+    "dwarf-lifter",
+    "elf-ranger",
+    "monk",
+    "barbarian",
+    "valkyrie",
+    "paladin",
+    "titan",
+  ]);
 });
 
 test("every Avatar is drawn from shapes in its own artwork", () => {

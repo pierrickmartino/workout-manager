@@ -23,6 +23,10 @@ export interface AvatarCatalog {
   avatars: AvatarCatalogEntry[];
 }
 
+// How an option's card is drawn. The user's own Avatar is always `selected`, even one kept
+// after their level dropped below it; any other locked Avatar is a dimmed silhouette.
+export type AvatarOptionAppearance = "selected" | "open" | "locked";
+
 // One radio option in the picker.
 export interface AvatarOption {
   readonly id: string;
@@ -30,21 +34,35 @@ export interface AvatarOption {
   readonly name: string;
   readonly art: AvatarArt;
   readonly selected: boolean;
+  // Whether the user's Operator Level hasn't reached this Avatar yet, so it can't be chosen.
+  // An Avatar kept after the level dropped is both selected and locked (ADR-0136).
+  readonly locked: boolean;
+  // A locked Avatar's progress toward its unlock level ("LVL 5 / 8"); null once unlocked.
+  readonly progress: string | null;
+  readonly appearance: AvatarOptionAppearance;
   // What a screen reader announces for the option; the artwork itself is decorative.
   readonly label: string;
 }
 
 // Map the catalog to the picker's options, in catalog order, marking exactly the user's
-// current Avatar as selected. Pure: same input, same output.
+// current Avatar as selected. Lock state is the backend's; this only words it. Pure: same
+// input, same output.
 export function buildAvatarOptions(
   catalog: AvatarCatalog,
   currentAvatarId: string,
 ): AvatarOption[] {
-  return catalog.avatars.map((entry) => ({
-    id: entry.id,
-    name: entry.name,
-    art: headerAvatar(entry.id),
-    selected: entry.id === currentAvatarId,
-    label: entry.name,
-  }));
+  return catalog.avatars.map((entry) => {
+    const locked = !entry.unlocked;
+    const selected = entry.id === currentAvatarId;
+    return {
+      id: entry.id,
+      name: entry.name,
+      art: headerAvatar(entry.id),
+      selected,
+      locked,
+      appearance: selected ? "selected" : locked ? "locked" : "open",
+      progress: locked ? `LVL ${entry.current_level} / ${entry.unlock_level}` : null,
+      label: locked ? `${entry.name}, locked, reach LVL ${entry.unlock_level}` : entry.name,
+    };
+  });
 }
