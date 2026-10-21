@@ -1,6 +1,4 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Trophy } from "@/components/pulse/icons";
 
 import { fetchProfile, isProfileComplete } from "@/lib/profile";
 import { READINESS_BADGE, fetchHome } from "@/lib/home";
@@ -21,16 +19,14 @@ import { CalibrationControl } from "@/components/pulse/calibration-control";
 import { ResumeSessionBanner } from "@/components/pulse/resume-session-banner";
 import { TrainingRouteCard } from "@/components/pulse/training-route";
 import { LevelBadge } from "@/components/pulse/level-badge";
-import { Bento, BentoTile } from "@/components/pulse/bento";
 import { QuickActions } from "@/components/pulse/quick-actions";
 import { HomeColumns } from "@/components/pulse/home-columns";
 import { GenerateTrainingLaunchpad } from "@/components/pulse/generate-training-launchpad";
 import { VolumeChartWide } from "@/components/pulse/volume-chart-wide";
 import { RecentRecords } from "@/components/pulse/recent-records";
+import { OperatorScoreboard } from "@/components/pulse/operator-scoreboard";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
-import { NAV_FORWARD } from "@/lib/nav-direction";
 
 // The dashboard renders the full Fitness Profile that round-tripped through
 // Postgres on the FastAPI backend. New users (incomplete profile) are sent to
@@ -210,40 +206,22 @@ export default async function DashboardPage() {
                 (issue #166). */}
             <SectionHeader>OPERATOR STATUS</SectionHeader>
             <LevelBadge xp={status.xp} level={status.level} />
-            {/* Latest PR: the user's most recent Personal Record, linking to the
-                Exercise. Rendered only when a PR exists — hidden, never "0 kg", for new
-                accounts and bodyweight-only trainees (issue #167, ADR-0010). It stands down
-                at `lg:` only when the Recent Records feed is there to supersede it: that
-                feed opens with this same record, and showing both would be the duplication
-                ADR-0071 removed from Home, not extra information. */}
-            {latestPr ? (
-              <Link
-                {...NAV_FORWARD}
-                href={appendFrom(`/exercises/${latestPr.exerciseId}`, "/dashboard")}
-                className={cn(
-                  "flex items-center gap-3 rounded-md border border-border bg-surface px-4 py-3 transition-colors hover:border-cyan/40",
-                  review.records && "lg:hidden",
-                )}
-              >
-                <Trophy className="h-4 w-4 shrink-0 text-cyan" />
-                <div className="flex flex-col">
-                  <span className="label-mono text-[10px] text-text-muted">
-                    LATEST PR
-                  </span>
-                  <span className="font-sans text-sm font-medium text-text-primary">
-                    {latestPr.text}
-                  </span>
-                </div>
-              </Link>
-            ) : null}
-            <Bento>
-              <BentoTile
-                label="STREAK"
-                value={status.streak}
-                caption={status.streak === 1 ? "WEEK" : "WEEKS"}
-                span="full"
-              />
-            </Bento>
+            {/* The Streak and Latest PR scoreboard: one split card, the weekly Streak beside
+                the user's most recent Personal Record, which links to its Exercise. With no PR
+                yet the right half says where one will appear — never "0 kg" (issue #167,
+                ADR-0010). It shows at every width: paired with the Streak it reads as this
+                rail's own figure, not a copy of the Recent Records feed beside it. */}
+            <OperatorScoreboard
+              streak={status.streak}
+              streakCaption={status.streakCaption}
+              streakPips={status.streakPips}
+              latestPr={latestPr}
+              latestPrHref={
+                latestPr
+                  ? appendFrom(`/exercises/${latestPr.exerciseId}`, "/dashboard")
+                  : null
+              }
+            />
           </>
         }
       />
