@@ -6,6 +6,9 @@ import { fetchProfileProgress } from "@/lib/profile-progress";
 import { fetchTrainingHeatmap } from "@/lib/heatmap";
 import { toHeatmapGrid } from "@/lib/heatmap-view";
 import { resolveAppearance } from "@/lib/appearance";
+import { fetchAvatars } from "@/lib/avatars";
+import { bestEffortData, settleBestEffort } from "@/lib/best-effort-read";
+import { profileAvatar } from "@/lib/avatar/profile-avatar";
 import { resolveIsAdmin } from "@/lib/admin";
 import { toPassport } from "@/lib/passport-view";
 import { toFitnessLevelRows } from "@/lib/fitness-level-standing";
@@ -17,6 +20,7 @@ import { SectionHeader } from "@/components/pulse/section-header";
 import { NavRow } from "@/components/pulse/nav-row";
 import { SignOutRow } from "@/components/pulse/sign-out-row";
 import { LevelBadge } from "@/components/pulse/level-badge";
+import { ProfileAvatar } from "@/components/pulse/profile-avatar";
 import { PassportHighlights } from "@/components/pulse/training-passport";
 import { TrainingHeatmap } from "@/components/pulse/training-heatmap";
 import { FitnessProfileSummary } from "@/components/pulse/fitness-profile-summary";
@@ -39,19 +43,23 @@ export default async function ProfilePage() {
   // Resolve everything the page needs in parallel. `resolveActiveSkin` /
   // `resolveIsAdmin` share this request's cache with the root layout, so the extra
   // reads are effectively free; the admin nav row to /admin is rendered only for an admin.
-  const [envelope, profileEnvelope, heatmapEnvelope, appearancePref, isAdmin] =
+  const [envelope, profileEnvelope, heatmapEnvelope, appearancePref, isAdmin, avatarsEnvelope] =
     await Promise.all([
       fetchProfileProgress(),
       fetchProfile(),
       fetchTrainingHeatmap(),
       resolveAppearance(),
       resolveIsAdmin(),
+      // Best-effort: it only names the Avatar, so a failure must not blank Profile.
+      settleBestEffort(fetchAvatars()),
     ]);
   const {
     mode,
     keep_screen_awake: keepScreenAwake,
     weight_unit: weightUnit,
   } = appearancePref;
+  // The Avatar's character name comes from the catalog read; without it the art still shows.
+  const avatar = profileAvatar(appearancePref.avatar, bestEffortData(avatarsEnvelope));
 
   if (!envelope.success || !envelope.data) {
     return (
@@ -90,6 +98,8 @@ export default async function ProfilePage() {
   return (
     <section className="flex flex-col gap-6">
       <PageHeader overline="PULSE // OPERATOR" title="Profile" />
+
+      <ProfileAvatar avatar={avatar} />
 
       <LevelBadge xp={xp} level={level} />
 

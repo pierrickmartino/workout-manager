@@ -59,7 +59,8 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // measured. See `LaunchpadSurface` in `main.tsx` for what the case holds.
 // `levels` joins them with ADR-0112: the Profile *view* page is swept by nothing — the `profile`
 // journey mounts the edit form — so its new Fitness Level section would otherwise be a surface
-// no journey renders, which is unverified however green its guards are (ADR-0088).
+// no journey renders, which is unverified however green its guards are (ADR-0088). Since #749 it
+// also mounts the Profile view's top section, the large Avatar beside its character name.
 // `sheet` joins them with ADR-0113: the action sheet that replaced the ⋯ More disclosure is a
 // modal, so — like `confirm` — it exists only while open and no journey would otherwise mount it.
 // Its title is an authored name, the one string in it that can be 120 unbroken characters.

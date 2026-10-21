@@ -72,7 +72,8 @@ const ALL_JOURNEYS = [
   "launchpad",
   // The Profile view's Fitness Level section (ADR-0112). The Profile view page is in no journey
   // at all — `profile` is the edit form — so this is the first thing on it either harness has
-  // rendered. It stays unconverted, so its card must hold 26rem inside the wide frame.
+  // rendered. It stays unconverted, so its card must hold 26rem inside the wide frame. Since #749
+  // it also mounts the Profile view's top section, the large Avatar beside its character name.
   "levels",
   // The Protocols index (#637): a new page, so no journey had rendered it. It stays unconverted,
   // so its grouped list must hold 26rem inside the wide frame. `protocols-live` is the same page
