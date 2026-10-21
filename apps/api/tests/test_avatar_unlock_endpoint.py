@@ -43,7 +43,9 @@ from app.repositories.session_repository import (
 from tests.conftest import ISSUER, make_signing_context
 from tests.quantities import reps_quantity
 
-LOCKED = find_avatar("monk")
+_MONK = find_avatar("monk")
+assert _MONK is not None
+LOCKED = _MONK
 SESSIONS_TO_LEVEL_3 = 15
 
 
@@ -118,6 +120,12 @@ class World:
         return response.json()["data"]["avatar"]
 
 
+def avatars_by_id(response) -> dict[str, dict]:
+    """The ``GET /api/avatars`` entries in ``response``, keyed by Avatar id."""
+
+    return {entry["id"]: entry for entry in response.json()["data"]["avatars"]}
+
+
 @pytest.fixture()
 def world() -> World:
     return World()
@@ -126,7 +134,7 @@ def world() -> World:
 # ── PUT /api/appearance: the save-time level check ──────────────────────────
 
 
-def test_put_refuses_an_avatar_above_the_users_operator_level(world):
+def test_put_refuses_an_avatar_above_the_users_operator_level(world) -> None:
     # Arrange — fourteen sessions: 1540 XP, still Level 2
     world.choose("user_low", "dwarf-lifter")
     world.perform("user_low", SESSIONS_TO_LEVEL_3 - 1)
@@ -141,7 +149,7 @@ def test_put_refuses_an_avatar_above_the_users_operator_level(world):
     assert world.current_avatar("user_low") == "dwarf-lifter"
 
 
-def test_put_saves_the_avatar_once_logged_history_reaches_its_level(world):
+def test_put_saves_the_avatar_once_logged_history_reaches_its_level(world) -> None:
     # Arrange — fifteen sessions: 1650 XP, Level 3
     world.perform("user_climb", SESSIONS_TO_LEVEL_3)
 
@@ -153,7 +161,7 @@ def test_put_saves_the_avatar_once_logged_history_reaches_its_level(world):
     assert world.current_avatar("user_climb") == LOCKED.id
 
 
-def test_a_chosen_avatar_is_kept_after_the_level_drops_below_it(world):
+def test_a_chosen_avatar_is_kept_after_the_level_drops_below_it(world) -> None:
     # Arrange — reach Level 3, choose the locked Avatar, then delete a session
     session_ids = world.perform("user_drop", SESSIONS_TO_LEVEL_3)
     world.choose("user_drop", LOCKED.id)
@@ -170,7 +178,7 @@ def test_a_chosen_avatar_is_kept_after_the_level_drops_below_it(world):
     assert resaved.json()["data"]["avatar"] == LOCKED.id
 
 
-def test_put_reads_logged_sessions_only_when_choosing_an_avatar(world):
+def test_put_reads_logged_sessions_only_when_choosing_an_avatar(world) -> None:
     # Act — a save that leaves the Avatar out
     world.client.put(
         "/api/appearance", headers=world.auth("user_cheap"), json={"mode": "light"}
@@ -183,7 +191,7 @@ def test_put_reads_logged_sessions_only_when_choosing_an_avatar(world):
     assert world.logged.history_reads == 1
 
 
-def test_put_requires_authentication(world):
+def test_put_requires_authentication(world) -> None:
     response = world.client.put("/api/appearance", json={"avatar": "novice"})
 
     assert response.status_code == 401
@@ -193,7 +201,7 @@ def test_put_requires_authentication(world):
 # ── GET /api/avatars: the picker's catalog ───────────────────────────────────
 
 
-def test_get_avatars_reports_the_operator_level_and_each_lock_state(world):
+def test_get_avatars_reports_the_operator_level_and_each_lock_state(world) -> None:
     # Arrange — fourteen sessions: Level 2
     world.perform("user_picker", SESSIONS_TO_LEVEL_3 - 1)
 
@@ -210,7 +218,7 @@ def test_get_avatars_reports_the_operator_level_and_each_lock_state(world):
     ]
 
 
-def test_get_avatars_reports_progress_toward_a_locked_avatar(world):
+def test_get_avatars_reports_progress_toward_a_locked_avatar(world) -> None:
     # Arrange — fourteen sessions: Level 2
     world.perform("user_progress", SESSIONS_TO_LEVEL_3 - 1)
 
@@ -218,7 +226,7 @@ def test_get_avatars_reports_progress_toward_a_locked_avatar(world):
     response = world.client.get("/api/avatars", headers=world.auth("user_progress"))
 
     # Assert — a free Avatar is open, the Monk is locked at "LVL 2 / 3"
-    by_id = {entry["id"]: entry for entry in response.json()["data"]["avatars"]}
+    by_id = avatars_by_id(response)
     assert by_id["elf-ranger"] == {
         "id": "elf-ranger",
         "name": "Elf Ranger",
@@ -235,7 +243,7 @@ def test_get_avatars_reports_progress_toward_a_locked_avatar(world):
     }
 
 
-def test_get_avatars_unlocks_an_avatar_once_the_level_reaches_it(world):
+def test_get_avatars_unlocks_an_avatar_once_the_level_reaches_it(world) -> None:
     # Arrange — fifteen sessions: Level 3
     world.perform("user_lvl3", SESSIONS_TO_LEVEL_3)
 
@@ -243,15 +251,14 @@ def test_get_avatars_unlocks_an_avatar_once_the_level_reaches_it(world):
     response = world.client.get("/api/avatars", headers=world.auth("user_lvl3"))
 
     # Assert
-    data = response.json()["data"]
-    by_id = {entry["id"]: entry for entry in data["avatars"]}
-    assert data["operator_level"] == 3
+    by_id = avatars_by_id(response)
+    assert response.json()["data"]["operator_level"] == 3
     assert by_id["monk"]["unlocked"] is True
     assert by_id["monk"]["current_level"] == MONK_UNLOCK_LEVEL
     assert by_id["barbarian"]["unlocked"] is False
 
 
-def test_a_kept_avatar_reads_as_locked_again_once_the_level_drops(world):
+def test_a_kept_avatar_reads_as_locked_again_once_the_level_drops(world) -> None:
     # Arrange — reach Level 3, choose the Monk, then delete a session (Level 2)
     session_ids = world.perform("user_relock", SESSIONS_TO_LEVEL_3)
     world.choose("user_relock", LOCKED.id)
@@ -262,12 +269,11 @@ def test_a_kept_avatar_reads_as_locked_again_once_the_level_drops(world):
     response = world.client.get("/api/avatars", headers=world.auth("user_relock"))
 
     # Assert — the Avatar stays chosen, while the picker shows it locked for a fresh pick
-    by_id = {entry["id"]: entry for entry in response.json()["data"]["avatars"]}
     assert chosen == LOCKED.id
-    assert by_id[LOCKED.id]["unlocked"] is False
+    assert avatars_by_id(response)[LOCKED.id]["unlocked"] is False
 
 
-def test_get_avatars_requires_authentication(world):
+def test_get_avatars_requires_authentication(world) -> None:
     response = world.client.get("/api/avatars")
 
     assert response.status_code == 401

@@ -3,7 +3,11 @@
 import { useOptimistic, useState, useTransition } from "react";
 
 import { updateAvatar } from "@/app/profile/appearance-actions";
-import { buildAvatarOptions, type AvatarCatalog } from "@/lib/avatar/avatar-picker";
+import {
+  buildAvatarOptions,
+  type AvatarCatalog,
+  type AvatarOptionAppearance,
+} from "@/lib/avatar/avatar-picker";
 import { Alert } from "@/components/pulse/alert";
 import { Avatar } from "@/components/pulse/avatar";
 import { Lock } from "@/components/pulse/icons";
@@ -16,6 +20,28 @@ interface AvatarPickerProps {
   currentAvatarId: string;
 }
 
+// Card, name and progress classes per option appearance, spelled out so Tailwind sees every
+// class. Text on the selected card is cyan, the one rung declared on `cyan-dim` (ADR-0086).
+const APPEARANCE_CLASSES: Readonly<
+  Record<AvatarOptionAppearance, { card: string; name: string; progress: string }>
+> = {
+  selected: {
+    card: "cursor-pointer border-cyan bg-cyan-dim",
+    name: "text-cyan",
+    progress: "text-cyan",
+  },
+  open: {
+    card: "cursor-pointer border-border bg-elevated/40 hover:bg-elevated/70",
+    name: "text-text-primary",
+    progress: "text-text-muted",
+  },
+  locked: {
+    card: "cursor-not-allowed border-dashed border-border bg-base",
+    name: "text-text-secondary",
+    progress: "text-text-muted",
+  },
+};
+
 // The Avatar picker (ADR-0136): a grid of native radios, one per catalog Avatar, so arrow
 // keys, Space and Tab behave as any radio group does. The options come from the pure
 // `buildAvatarOptions` view-model. Selection is optimistic over the stored Avatar prop and
@@ -25,7 +51,9 @@ interface AvatarPickerProps {
 // and the picker says why. The radios stay enabled while a save runs, since disabling one
 // would drop the keyboard focus it holds. A locked Avatar is the one disabled radio: a dimmed
 // silhouette with the level it needs and the user's progress toward it, announced as locked.
-// The API refuses it too; the picker never offers what the save would turn down.
+// The API refuses it too; the picker never offers what the save would turn down. An Avatar the
+// user kept after their level dropped stays drawn as theirs, with a checked radio that keeps
+// the group's focus, and its progress beneath.
 export function AvatarPicker({
   catalog,
   currentAvatarId,
@@ -36,8 +64,8 @@ export function AvatarPicker({
 
   const options = buildAvatarOptions(catalog, selected);
 
-  function choose(avatarId: string, locked: boolean): void {
-    if (locked || avatarId === selected) return;
+  function choose(avatarId: string): void {
+    if (avatarId === selected) return;
     setError(null);
     startTransition(async () => {
       setSelected(avatarId);
@@ -57,11 +85,7 @@ export function AvatarPicker({
               className={cn(
                 "flex min-w-0 flex-col items-center gap-2 rounded-sm border px-3 py-4 text-center transition-colors",
                 "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-cyan",
-                option.locked
-                  ? "cursor-not-allowed border-dashed border-border bg-base"
-                  : option.selected
-                    ? "cursor-pointer border-cyan bg-cyan-dim"
-                    : "cursor-pointer border-border bg-elevated/40 hover:bg-elevated/70",
+                APPEARANCE_CLASSES[option.appearance].card,
               )}
             >
               <input
@@ -69,26 +93,31 @@ export function AvatarPicker({
                 name="avatar"
                 value={option.id}
                 checked={option.selected}
-                disabled={option.locked}
-                onChange={() => choose(option.id, option.locked)}
+                disabled={option.appearance === "locked"}
+                onChange={() => choose(option.id)}
                 aria-label={option.label}
                 className="sr-only"
               />
-              <Avatar art={option.art} size={64} silhouette={option.locked} />
+              <Avatar
+                art={option.art}
+                size={64}
+                silhouette={option.appearance === "locked"}
+              />
               <span
                 className={cn(
                   "font-sans text-[15px] font-medium break-words",
-                  option.locked
-                    ? "text-text-secondary"
-                    : option.selected
-                      ? "text-cyan"
-                      : "text-text-primary",
+                  APPEARANCE_CLASSES[option.appearance].name,
                 )}
               >
                 {option.name}
               </span>
               {option.progress ? (
-                <span className="flex items-center gap-1 font-mono text-[12px] text-text-muted tabular-nums">
+                <span
+                  className={cn(
+                    "flex items-center gap-1 font-mono text-[12px] tabular-nums",
+                    APPEARANCE_CLASSES[option.appearance].progress,
+                  )}
+                >
                   <Lock aria-hidden className="size-3" />
                   {option.progress}
                 </span>

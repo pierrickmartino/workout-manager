@@ -11,12 +11,19 @@ import dataclasses
 from app.domain.avatars import (
     AVATAR_CATALOG,
     Avatar,
+    AvatarStanding,
     avatar_standings,
     find_avatar,
 )
 
 
-def test_the_catalog_lists_the_free_then_the_earned_avatars_in_order():
+def standing_of(avatar_id: str, operator_level: int) -> AvatarStanding:
+    """The standing ``avatar_standings`` reports for ``avatar_id`` at ``operator_level``."""
+
+    return next(s for s in avatar_standings(operator_level) if s.avatar.id == avatar_id)
+
+
+def test_the_catalog_lists_the_free_then_the_earned_avatars_in_order() -> None:
     # Act
     roster = [(avatar.name, avatar.unlock_level) for avatar in AVATAR_CATALOG]
 
@@ -33,7 +40,7 @@ def test_the_catalog_lists_the_free_then_the_earned_avatars_in_order():
     ]
 
 
-def test_an_avatar_holds_only_an_id_a_name_and_an_unlock_level():
+def test_an_avatar_holds_only_an_id_a_name_and_an_unlock_level() -> None:
     # Act — nothing else, such as a Training Type or an Achievement, can gate it
     fields = [field.name for field in dataclasses.fields(Avatar)]
 
@@ -41,7 +48,7 @@ def test_an_avatar_holds_only_an_id_a_name_and_an_unlock_level():
     assert fields == ["id", "name", "unlock_level"]
 
 
-def test_standings_lock_every_avatar_above_the_operator_level():
+def test_standings_lock_every_avatar_above_the_operator_level() -> None:
     # Act
     standings = avatar_standings(5)
 
@@ -58,23 +65,23 @@ def test_standings_lock_every_avatar_above_the_operator_level():
     }
 
 
-def test_progress_toward_a_locked_avatar_is_the_operator_level():
+def test_progress_toward_a_locked_avatar_is_the_operator_level() -> None:
     # Act
-    valkyrie = next(s for s in avatar_standings(5) if s.avatar.id == "valkyrie")
+    valkyrie = standing_of("valkyrie", 5)
 
     # Assert — reads as "LVL 5 / 8"
     assert (valkyrie.current_level, valkyrie.avatar.unlock_level) == (5, 8)
 
 
-def test_progress_holds_at_the_unlock_level_once_reached():
+def test_progress_holds_at_the_unlock_level_once_reached() -> None:
     # Act
-    monk = next(s for s in avatar_standings(9) if s.avatar.id == "monk")
+    monk = standing_of("monk", 9)
 
     # Assert
     assert (monk.unlocked, monk.current_level) == (True, 3)
 
 
-def test_every_earned_avatar_is_found_by_its_id():
+def test_every_earned_avatar_is_found_by_its_id() -> None:
     # Act & Assert
     for avatar_id in ("monk", "barbarian", "valkyrie", "paladin", "titan"):
         assert find_avatar(avatar_id) is not None

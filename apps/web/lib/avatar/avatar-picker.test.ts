@@ -131,3 +131,14 @@ test("an Avatar the user kept after their level dropped stays selected while loc
   assert.equal(valkyrie?.selected, true);
   assert.equal(valkyrie?.locked, true);
 });
+
+test("each option is drawn as selected, open or a locked silhouette", () => {
+  // Act — the user kept the Valkyrie after their level dropped
+  const options = buildAvatarOptions(EARNED, "valkyrie");
+
+  // Assert — their own Avatar is drawn as theirs, never as a silhouette
+  assert.deepEqual(
+    options.map((option) => option.appearance),
+    ["open", "open", "selected", "locked"],
+  );
+});
