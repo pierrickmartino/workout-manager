@@ -13,7 +13,7 @@ these stay on the prototype branch until a new ADR decides otherwise.
 | -------------- | ------------- | ------------- | -------------- |
 | `novice`       | Novice ✅      | Cadet ✅ (`cadet.webp`) | Initiate ✅ (`initiate.webp`) |
 | `dwarf-lifter` | Dwarf Lifter ✅ | Rig Hauler ✅ (`rig-hauler.webp`) | Forgehand ✅ (`forgehand.webp`) |
-| `elf-ranger`   | Elf Ranger ✅  | Pathfinder    | Huntress ✅ (`huntress.webp`) |
+| `elf-ranger`   | Elf Ranger ✅  | Pathfinder ✅ (`pathfinder.webp`) | Huntress ✅ (`huntress.webp`) |
 | `monk`         | Monk ✅        | Zero-G Adept  | Sage ✅ (`sage.webp`) |
 | `barbarian`    | Barbarian ✅   | Void Raider   | Lion-Bearer ✅ (`lion-bearer.webp`) |
 | `valkyrie`     | Valkyrie ✅    | Drop Trooper  | Amazon ✅ (`amazon.webp`) |
