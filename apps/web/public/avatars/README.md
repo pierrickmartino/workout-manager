@@ -17,7 +17,7 @@ these stay on the prototype branch until a new ADR decides otherwise.
 | `monk`         | Monk ✅        | Zero-G Adept  | Sage           |
 | `barbarian`    | Barbarian ✅   | Void Raider   | Lion-Bearer    |
 | `valkyrie`     | Valkyrie ✅    | Drop Trooper  | Amazon         |
-| `paladin`      | Paladin       | Sentinel      | Hoplite        |
+| `paladin`      | Paladin ✅     | Sentinel      | Hoplite        |
 | `titan`        | Titan         | Colossus      | Atlas          |
 
 ## Format
