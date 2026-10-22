@@ -11,7 +11,7 @@ these stay on the prototype branch until a new ADR decides otherwise.
 
 | Catalog id     | `realm/` (A)  | `orbit/` (B)  | `olympus/` (C) |
 | -------------- | ------------- | ------------- | -------------- |
-| `novice`       | Novice ✅      | Cadet         | Initiate ✅ (`initiate.webp`) |
+| `novice`       | Novice ✅      | Cadet ✅ (`cadet.webp`) | Initiate ✅ (`initiate.webp`) |
 | `dwarf-lifter` | Dwarf Lifter ✅ | Rig Hauler    | Forgehand ✅ (`forgehand.webp`) |
 | `elf-ranger`   | Elf Ranger ✅  | Pathfinder    | Huntress ✅ (`huntress.webp`) |
 | `monk`         | Monk ✅        | Zero-G Adept  | Sage ✅ (`sage.webp`) |
