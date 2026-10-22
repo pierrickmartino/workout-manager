@@ -12,7 +12,7 @@ these stay on the prototype branch until a new ADR decides otherwise.
 | Catalog id     | `realm/` (A)  | `orbit/` (B)  | `olympus/` (C) |
 | -------------- | ------------- | ------------- | -------------- |
 | `novice`       | Novice ✅      | Cadet         | Initiate ✅ (`initiate.webp`) |
-| `dwarf-lifter` | Dwarf Lifter ✅ | Rig Hauler    | Forgehand      |
+| `dwarf-lifter` | Dwarf Lifter ✅ | Rig Hauler    | Forgehand ✅ (`forgehand.webp`) |
 | `elf-ranger`   | Elf Ranger ✅  | Pathfinder    | Huntress       |
 | `monk`         | Monk ✅        | Zero-G Adept  | Sage           |
 | `barbarian`    | Barbarian ✅   | Void Raider   | Lion-Bearer    |
