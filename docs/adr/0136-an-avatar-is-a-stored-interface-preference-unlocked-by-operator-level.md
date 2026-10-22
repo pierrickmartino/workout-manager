@@ -4,6 +4,11 @@ status: accepted
 
 # 0136 — An Avatar is a stored Interface Preference unlocked by Operator Level
 
+**Amended by [ADR-0137](./0137-avatars-are-ai-generated-portraits-in-an-admin-published-avatar-universe.md):**
+Avatars are now AI-generated portraits, drawn in the Avatar Universe the admin publishes. The
+"Artwork is local SVG" bullet and the "never AI-authored" art rule below no longer hold; the
+stored choice, the curated catalog and the unlock rules still stand.
+
 The header showed a plain "Account" button to every signed-in user. Users want an identity
 of their own there: a fantasy workout character they choose, with more characters opening up
 as they log work (#745).

@@ -1,60 +1,46 @@
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
-import {
-  AVATAR_VIEWBOX,
-  type AvatarAccent,
-  type AvatarArt,
-  type AvatarTone,
-} from "@/lib/avatar/avatar-art";
+import type { AvatarAccent, AvatarArt } from "@/lib/avatar/avatar-art";
 
-// A user's Avatar (ADR-0136): the hand-made figure from `lib/avatar/avatar-art`, framed in a
-// circular medallion ringed in the Avatar's accent. Every colour is an opaque Skin token, and
-// every edge the art draws is a pairing the Contrast Floor measures (ADR-0081): a text rung or
-// an accent against the `elevated` medallion, and the `hollow` page colour only ever inside a
-// text-rung shape. So the figure stays legible in every Skin and Mode.
-// A `silhouette` paints every shape in the muted rung inside a neutral ring: the figure an
-// Avatar the user hasn't unlocked yet shows, dimmed by tone rather than opacity so it still
-// clears the Contrast Floor (ADR-0083).
-// Decorative (`aria-hidden`): whatever wraps it names its purpose. No hooks, so it is safe in
-// Server Components.
+// A user's Avatar (ADR-0136, ADR-0137): the character's portrait in the published Avatar
+// Universe, cropped to a circle and framed in a ring of the Avatar's accent. The ring is an
+// opaque Skin token, so the frame follows the Skin and Mode; the portrait itself is a fixed
+// image. A `silhouette` greys and darkens the portrait inside a neutral ring: the look of an
+// Avatar the user hasn't unlocked yet.
+// Decorative (`aria-hidden`, empty `alt`): whatever wraps it names its purpose. No hooks, so it
+// is safe in Server Components.
 
 interface AvatarProps {
   art: AvatarArt;
   // Rendered medallion size in px (square).
   size?: number;
-  // Draw the figure as a one-tone silhouette, for an Avatar the user hasn't unlocked.
+  // Draw the portrait greyed out, for an Avatar the user hasn't unlocked.
   silhouette?: boolean;
+  // Whether the browser should fetch the portrait now: the header's is on every page's first
+  // paint, so it loads eagerly; a picker's grid lazily.
+  loading?: "eager" | "lazy";
   className?: string;
 }
 
-// Each accent's figure fill and medallion ring, spelled out so Tailwind sees every class.
-const ACCENT_CLASSES: Readonly<Record<AvatarAccent, { fill: string; ring: string }>> = {
-  cyan: { fill: "fill-cyan", ring: "border-cyan" },
-  blue: { fill: "fill-blue", ring: "border-blue" },
-  violet: { fill: "fill-violet", ring: "border-violet" },
-  magenta: { fill: "fill-magenta", ring: "border-magenta" },
-  amber: { fill: "fill-amber", ring: "border-amber" },
-  green: { fill: "fill-green", ring: "border-green" },
+// Each accent's medallion ring, spelled out so Tailwind sees every class.
+const ACCENT_RING: Readonly<Record<AvatarAccent, string>> = {
+  cyan: "border-cyan",
+  blue: "border-blue",
+  violet: "border-violet",
+  magenta: "border-magenta",
+  amber: "border-amber",
+  green: "border-green",
 };
 
-const TONE_FILL: Readonly<Record<Exclude<AvatarTone, "accent">, string>> = {
-  primary: "fill-text-primary",
-  secondary: "fill-text-secondary",
-  muted: "fill-text-muted",
-  hollow: "fill-base",
-};
-
-function toneClass(tone: AvatarTone, accent: AvatarAccent): string {
-  return tone === "accent" ? ACCENT_CLASSES[accent].fill : TONE_FILL[tone];
-}
-
-const SILHOUETTE_FILL = "fill-text-muted";
+// A locked portrait: no colour and most of its light, so it reads as out of reach in any Skin.
+const SILHOUETTE_FILTER = "grayscale(1) brightness(0.35)";
 
 export function Avatar({
   art,
   size = 32,
   silhouette = false,
+  loading = "lazy",
   className,
 }: AvatarProps): React.JSX.Element {
   return (
@@ -63,23 +49,20 @@ export function Avatar({
       style={{ width: size, height: size }}
       className={cn(
         "flex shrink-0 overflow-hidden rounded-full border-2 bg-elevated",
-        silhouette ? "border-border" : ACCENT_CLASSES[art.accent].ring,
+        silhouette ? "border-border" : ACCENT_RING[art.accent],
         className,
       )}
     >
-      <svg
-        viewBox={`0 0 ${AVATAR_VIEWBOX} ${AVATAR_VIEWBOX}`}
-        focusable="false"
-        className="h-full w-full"
-      >
-        {art.shapes.map((shape, index) => (
-          <path
-            key={index}
-            d={shape.d}
-            className={silhouette ? SILHOUETTE_FILL : toneClass(shape.tone, art.accent)}
-          />
-        ))}
-      </svg>
+      <img
+        src={art.src}
+        alt=""
+        width={size}
+        height={size}
+        loading={loading}
+        decoding="async"
+        className="h-full w-full object-cover"
+        style={silhouette ? { filter: SILHOUETTE_FILTER } : undefined}
+      />
     </span>
   );
 }

@@ -1,14 +1,20 @@
-"""Avatar catalog: the curated, fixed roster of fantasy workout characters (ADR-0136).
+"""Avatar catalog: the curated, fixed roster of workout characters (ADR-0136, ADR-0137).
 
 An **Avatar** (GLOSSARY "Avatar") is the character a user chooses to represent
 themselves in the header and on Profile. The choice is a stored **Interface
 Preference**, so it never reaches the Fitness Profile, generation or its cache key.
-The catalog lives here, in pure domain code: never user- or AI-authored, each entry
-an id, a display name and the Operator Level that unlocks it. Each character is
-loosely themed on a Training Type as flavour only; the theme has no behaviour.
+The catalog lives here, in pure domain code: never user-authored, each entry an id and
+the Operator Level that unlocks it. Each character is loosely themed on a Training Type
+as flavour only; the theme has no behaviour.
 
-The web app owns the artwork for each id (``apps/web/lib/avatar/manifest.json``);
-``tests/test_avatar_art_contract.py`` fails when the two id lists drift apart.
+Every Avatar is drawn in each **Avatar Universe** (GLOSSARY "Avatar Universe"): the same
+eight ids and unlock levels, cast as a different character with its own name in each
+universe. The admin publishes which universe the whole app shows (ADR-0137); a user's
+stored choice is the id, so switching universe never changes what anyone chose.
+
+The web app owns the portrait for each id in each universe
+(``apps/web/lib/avatar/manifest.json``); ``tests/test_avatar_art_contract.py`` fails
+when the two lists drift apart.
 
 Reading is tolerant: an absent or unknown stored id resolves to the default Novice,
 so retiring an Avatar from the catalog never breaks a user's read."""
@@ -16,6 +22,8 @@ so retiring an Avatar from the catalog never breaks a user's read."""
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import MappingProxyType
+from typing import Mapping
 
 # An Avatar with this unlock level is available from the start.
 FREE_UNLOCK_LEVEL = 1
@@ -31,27 +39,90 @@ TITAN_UNLOCK_LEVEL = 20
 
 @dataclass(frozen=True)
 class Avatar:
-    """One curated catalog entry: a stable id, its display name and its unlock level."""
+    """One curated catalog entry: a stable id and its unlock level.
+
+    Its name depends on the Avatar Universe it is shown in: see ``avatar_name``."""
 
     id: str
-    name: str
     unlock_level: int = FREE_UNLOCK_LEVEL
 
 
 # The catalog, in display order: the free Avatars, then the earned ones by unlock level.
 AVATAR_CATALOG: tuple[Avatar, ...] = (
-    Avatar(id="novice", name="Novice"),
-    Avatar(id="dwarf-lifter", name="Dwarf Lifter"),
-    Avatar(id="elf-ranger", name="Elf Ranger"),
-    Avatar(id="monk", name="Monk", unlock_level=MONK_UNLOCK_LEVEL),
-    Avatar(id="barbarian", name="Barbarian", unlock_level=BARBARIAN_UNLOCK_LEVEL),
-    Avatar(id="valkyrie", name="Valkyrie", unlock_level=VALKYRIE_UNLOCK_LEVEL),
-    Avatar(id="paladin", name="Paladin", unlock_level=PALADIN_UNLOCK_LEVEL),
-    Avatar(id="titan", name="Titan", unlock_level=TITAN_UNLOCK_LEVEL),
+    Avatar(id="novice"),
+    Avatar(id="dwarf-lifter"),
+    Avatar(id="elf-ranger"),
+    Avatar(id="monk", unlock_level=MONK_UNLOCK_LEVEL),
+    Avatar(id="barbarian", unlock_level=BARBARIAN_UNLOCK_LEVEL),
+    Avatar(id="valkyrie", unlock_level=VALKYRIE_UNLOCK_LEVEL),
+    Avatar(id="paladin", unlock_level=PALADIN_UNLOCK_LEVEL),
+    Avatar(id="titan", unlock_level=TITAN_UNLOCK_LEVEL),
 )
 
 # The Avatar a user has until they choose one.
 DEFAULT_AVATAR_ID = "novice"
+
+# The Avatar Universes, in the order the admin picker lists them (ADR-0137): The Realm
+# (fantasy), Orbit (a deep-space station crew) and Olympus (the ancient games and myth).
+AVATAR_UNIVERSES: tuple[str, ...] = ("realm", "orbit", "olympus")
+
+# The universe the app shows until an admin publishes another: the original fantasy cast.
+DEFAULT_AVATAR_UNIVERSE = "realm"
+
+# Each Avatar's character name in each universe. Every universe names every catalog id;
+# tests/test_avatar_catalog.py fails when one is missing.
+AVATAR_NAMES: Mapping[str, Mapping[str, str]] = MappingProxyType({
+    "realm": {
+        "novice": "Novice",
+        "dwarf-lifter": "Dwarf Lifter",
+        "elf-ranger": "Elf Ranger",
+        "monk": "Monk",
+        "barbarian": "Barbarian",
+        "valkyrie": "Valkyrie",
+        "paladin": "Paladin",
+        "titan": "Titan",
+    },
+    "orbit": {
+        "novice": "Cadet",
+        "dwarf-lifter": "Rig Hauler",
+        "elf-ranger": "Pathfinder",
+        "monk": "Zero-G Adept",
+        "barbarian": "Void Raider",
+        "valkyrie": "Drop Trooper",
+        "paladin": "Sentinel",
+        "titan": "Colossus",
+    },
+    "olympus": {
+        "novice": "Initiate",
+        "dwarf-lifter": "Forgehand",
+        "elf-ranger": "Huntress",
+        "monk": "Sage",
+        "barbarian": "Lion-Bearer",
+        "valkyrie": "Amazon",
+        "paladin": "Hoplite",
+        "titan": "Atlas",
+    },
+})
+
+
+def is_avatar_universe(value: str) -> bool:
+    """Whether ``value`` names an Avatar Universe."""
+
+    return value in AVATAR_UNIVERSES
+
+
+def resolve_avatar_universe(stored: str | None) -> str:
+    """Read a stored universe tolerantly: absent or unknown becomes The Realm."""
+
+    if stored is None or not is_avatar_universe(stored):
+        return DEFAULT_AVATAR_UNIVERSE
+    return stored
+
+
+def avatar_name(avatar: Avatar, universe: str) -> str:
+    """The character name ``avatar`` goes by in ``universe`` (unknown reads as The Realm)."""
+
+    return AVATAR_NAMES[resolve_avatar_universe(universe)][avatar.id]
 
 
 def find_avatar(avatar_id: str) -> Avatar | None:
@@ -121,6 +192,12 @@ __all__ = [
     "Avatar",
     "AVATAR_CATALOG",
     "DEFAULT_AVATAR_ID",
+    "AVATAR_UNIVERSES",
+    "DEFAULT_AVATAR_UNIVERSE",
+    "AVATAR_NAMES",
+    "is_avatar_universe",
+    "resolve_avatar_universe",
+    "avatar_name",
     "find_avatar",
     "is_avatar_id",
     "resolve_avatar_id",

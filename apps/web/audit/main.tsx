@@ -100,10 +100,11 @@ import { toPassport, toStampDetail } from "@/lib/passport-view";
 import { StampDetailBody } from "@/components/pulse/stamp-detail";
 import { PageHeader } from "@/components/pulse/page-header";
 import { Avatar } from "@/components/pulse/avatar";
-import { DEFAULT_AVATAR_ID, headerAvatar } from "@/lib/avatar/avatar-art";
+import { DEFAULT_AVATAR_ID, DEFAULT_AVATAR_UNIVERSE, avatarArt } from "@/lib/avatar/avatar-art";
 import type { AvatarCatalog } from "@/lib/avatar/avatar-picker";
 import { profileAvatar } from "@/lib/avatar/profile-avatar";
 import { ProfileAvatar } from "@/components/pulse/profile-avatar";
+import { AvatarUniversePublisher } from "@/components/AvatarUniversePublisher";
 import { BackLink } from "@/components/pulse/back-link";
 import type { Achievement } from "@/lib/profile-progress-types";
 import { SetAsideNote } from "@/components/SetAsideNote";
@@ -235,6 +236,12 @@ function Home() {
 // imported — what is measured is `LocalInstant`'s own text, which is the longest thing in it.
 function AdminAudit() {
   return <div className="flex flex-col gap-8">
+    {/* The Avatar Universe switch (ADR-0137): three universes, each previewed by its eight
+        28px portraits in a wrapping row, so 320px and 200% text measure the widest cast. */}
+    <div className="flex flex-col gap-4">
+      <SectionHeader>Avatar Universe</SectionHeader>
+      <AvatarUniversePublisher activeUniverse="realm" />
+    </div>
     <AdminExerciseBrowser rows={adminExerciseRows} />
     <div className="flex flex-col gap-4">
       <SectionHeader meta="1 change">Audit trail</SectionHeader>
@@ -388,7 +395,7 @@ function LaunchpadSurface() {
 // at 320px and 200% text, and the card must hold 26rem inside the wide frame.
 function FitnessLevelSurface() {
   return <div className="flex flex-col gap-6">
-    <ProfileAvatar avatar={profileAvatar("dwarf-lifter", AUDIT_AVATAR_CATALOG)} />
+    <ProfileAvatar avatar={profileAvatar("dwarf-lifter", AUDIT_AVATAR_CATALOG, DEFAULT_AVATAR_UNIVERSE)} />
     <FitnessLevelStandings rows={toFitnessLevelRows([
       { training_type: "strength", declared: 6, effective: 10 },
       { training_type: "yoga", declared: 2, effective: 2 },
@@ -400,6 +407,7 @@ function FitnessLevelSurface() {
 // The shipped Avatar catalog as GET /api/avatars serves it to a brand-new user.
 const AUDIT_AVATAR_CATALOG: AvatarCatalog = {
   operator_level: 1,
+  universe: "realm",
   avatars: [
     { id: "novice", name: "Novice", unlock_level: 1, unlocked: true, current_level: 1 },
     { id: "dwarf-lifter", name: "Dwarf Lifter", unlock_level: 1, unlocked: true, current_level: 1 },
@@ -669,7 +677,7 @@ createRoot(document.getElementById("root")!).render(<NavigationGuardProvider>
   <div className="lg:flex">
     <Sidebar isAdmin={isAdmin} />
     <div className="flex min-w-0 flex-1 flex-col">
-      <header className="sticky top-0 z-30 border-b border-border bg-base/90 pt-[env(safe-area-inset-top)] backdrop-blur"><div className="mx-auto flex h-14 max-w-shell items-center justify-between px-6 lg:max-w-shell-wide"><span className="label-mono text-[13px] font-bold tracking-[0.2em]">PULSE //</span><a href="#" className="-mr-1.5 flex size-11 items-center justify-center rounded-full"><Avatar art={headerAvatar(DEFAULT_AVATAR_ID)} /><span className="sr-only">Account</span></a></div></header>
+      <header className="sticky top-0 z-30 border-b border-border bg-base/90 pt-[env(safe-area-inset-top)] backdrop-blur"><div className="mx-auto flex h-14 max-w-shell items-center justify-between px-6 lg:max-w-shell-wide"><span className="label-mono text-[13px] font-bold tracking-[0.2em]">PULSE //</span><a href="#" className="-mr-1.5 flex size-11 items-center justify-center rounded-full"><Avatar art={avatarArt(DEFAULT_AVATAR_ID, DEFAULT_AVATAR_UNIVERSE)} loading="eager" /><span className="sr-only">Account</span></a></div></header>
       <main id="main-content" className="mx-auto min-h-[calc(100vh-3.5rem)] w-full max-w-shell px-6 pt-6 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:max-w-shell-wide lg:pb-16" data-journey={journey}>
         {/* The content column. No journey here opts in with `data-shell="wide"`, which is the
             point: `audit/wide.mjs` gates on an unconverted page staying 26rem inside the wide

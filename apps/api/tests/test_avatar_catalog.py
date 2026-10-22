@@ -1,4 +1,5 @@
-"""Behavior of the curated Avatar catalog and its unlock rule (issue #750, ADR-0136).
+"""Behavior of the curated Avatar catalog, its unlock rule (issue #750, ADR-0136) and the
+character names each Avatar Universe gives it (ADR-0137).
 
 Three Avatars are free; the rest of the roster is earned by Operator Level alone. The
 lock state is a pure function of the level, read each time, so these tests ask the
@@ -10,10 +11,15 @@ import dataclasses
 
 from app.domain.avatars import (
     AVATAR_CATALOG,
+    AVATAR_NAMES,
+    AVATAR_UNIVERSES,
+    DEFAULT_AVATAR_UNIVERSE,
     Avatar,
     AvatarStanding,
+    avatar_name,
     avatar_standings,
     find_avatar,
+    resolve_avatar_universe,
 )
 
 
@@ -25,7 +31,9 @@ def standing_of(avatar_id: str, operator_level: int) -> AvatarStanding:
 
 def test_the_catalog_lists_the_free_then_the_earned_avatars_in_order() -> None:
     # Act
-    roster = [(avatar.name, avatar.unlock_level) for avatar in AVATAR_CATALOG]
+    roster = [
+        (avatar_name(avatar, "realm"), avatar.unlock_level) for avatar in AVATAR_CATALOG
+    ]
 
     # Assert
     assert roster == [
@@ -40,12 +48,48 @@ def test_the_catalog_lists_the_free_then_the_earned_avatars_in_order() -> None:
     ]
 
 
-def test_an_avatar_holds_only_an_id_a_name_and_an_unlock_level() -> None:
-    # Act — nothing else, such as a Training Type or an Achievement, can gate it
+def test_an_avatar_holds_only_an_id_and_an_unlock_level() -> None:
+    # Act — nothing else, such as a Training Type or an Achievement, can gate it; its
+    # name belongs to the universe it is shown in
     fields = [field.name for field in dataclasses.fields(Avatar)]
 
     # Assert
-    assert fields == ["id", "name", "unlock_level"]
+    assert fields == ["id", "unlock_level"]
+
+
+def test_there_are_three_universes_and_the_realm_is_the_default() -> None:
+    # Assert
+    assert AVATAR_UNIVERSES == ("realm", "orbit", "olympus")
+    assert DEFAULT_AVATAR_UNIVERSE == "realm"
+
+
+def test_every_universe_names_every_catalog_avatar_and_nothing_else() -> None:
+    # Arrange
+    catalog_ids = {avatar.id for avatar in AVATAR_CATALOG}
+
+    # Assert — a universe missing a name, or naming a retired id, fails here
+    assert set(AVATAR_NAMES) == set(AVATAR_UNIVERSES)
+    for universe in AVATAR_UNIVERSES:
+        assert set(AVATAR_NAMES[universe]) == catalog_ids
+
+
+def test_each_universe_casts_the_same_avatar_as_a_different_character() -> None:
+    # Arrange
+    titan = find_avatar("titan")
+    assert titan is not None
+
+    # Act
+    names = [avatar_name(titan, universe) for universe in AVATAR_UNIVERSES]
+
+    # Assert
+    assert names == ["Titan", "Colossus", "Atlas"]
+
+
+def test_an_absent_or_unknown_universe_reads_as_the_realm() -> None:
+    # Assert — reading is tolerant, like a stored Avatar id
+    assert resolve_avatar_universe(None) == "realm"
+    assert resolve_avatar_universe("atlantis") == "realm"
+    assert resolve_avatar_universe("orbit") == "orbit"
 
 
 def test_standings_lock_every_avatar_above_the_operator_level() -> None:

@@ -1,10 +1,12 @@
-// The Avatar picker's view-model (ADR-0136): maps the GET /api/avatars catalog and the
-// user's current Avatar into the radio options the picker page renders, so the page stays
-// thin. The backend owns the catalog and its unlock rule; this module only shapes it.
+// The Avatar picker's view-model (ADR-0136, ADR-0137): maps the GET /api/avatars catalog and
+// the user's current Avatar into the radio options the picker page renders, so the page stays
+// thin. The backend owns the catalog, its unlock rule and each character's name in the
+// published Avatar Universe; this module only shapes it, drawing each portrait from the same
+// universe the names came from.
 //
 // No I/O and no server-only imports, so the client picker uses it and it is unit-tested alone.
 
-import { headerAvatar, type AvatarArt } from "./avatar-art.ts";
+import { avatarArt, type AvatarArt } from "./avatar-art.ts";
 
 // One catalog entry as GET /api/avatars serves it.
 export interface AvatarCatalogEntry {
@@ -17,9 +19,11 @@ export interface AvatarCatalogEntry {
 }
 
 // The wire shape of GET /api/avatars's `data`: the user's Operator Level, computed from
-// their Logged Sessions, and the whole catalog in display order.
+// their Logged Sessions, the published Avatar Universe the names belong to, and the whole
+// catalog in display order.
 export interface AvatarCatalog {
   operator_level: number;
+  universe: string;
   avatars: AvatarCatalogEntry[];
 }
 
@@ -57,7 +61,7 @@ export function buildAvatarOptions(
     return {
       id: entry.id,
       name: entry.name,
-      art: headerAvatar(entry.id),
+      art: avatarArt(entry.id, catalog.universe),
       selected,
       locked,
       appearance: selected ? "selected" : locked ? "locked" : "open",

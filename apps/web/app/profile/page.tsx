@@ -7,6 +7,7 @@ import { fetchTrainingHeatmap } from "@/lib/heatmap";
 import { toHeatmapGrid } from "@/lib/heatmap-view";
 import { resolveAppearance } from "@/lib/appearance";
 import { fetchAvatars } from "@/lib/avatars";
+import { resolveAvatarUniverse } from "@/lib/avatar-universe";
 import { bestEffortData, settleBestEffort } from "@/lib/best-effort-read";
 import { profileAvatar } from "@/lib/avatar/profile-avatar";
 import { resolveIsAdmin } from "@/lib/admin";
@@ -43,23 +44,36 @@ export default async function ProfilePage() {
   // Resolve everything the page needs in parallel. `resolveActiveSkin` /
   // `resolveIsAdmin` share this request's cache with the root layout, so the extra
   // reads are effectively free; the admin nav row to /admin is rendered only for an admin.
-  const [envelope, profileEnvelope, heatmapEnvelope, appearancePref, isAdmin, avatarsEnvelope] =
-    await Promise.all([
-      fetchProfileProgress(),
-      fetchProfile(),
-      fetchTrainingHeatmap(),
-      resolveAppearance(),
-      resolveIsAdmin(),
-      // Best-effort: it only names the Avatar, so a failure must not blank Profile.
-      settleBestEffort(fetchAvatars()),
-    ]);
+  const [
+    envelope,
+    profileEnvelope,
+    heatmapEnvelope,
+    appearancePref,
+    isAdmin,
+    avatarsEnvelope,
+    avatarUniverse,
+  ] = await Promise.all([
+    fetchProfileProgress(),
+    fetchProfile(),
+    fetchTrainingHeatmap(),
+    resolveAppearance(),
+    resolveIsAdmin(),
+    // Best-effort: it only names the Avatar, so a failure must not blank Profile.
+    settleBestEffort(fetchAvatars()),
+    // Shared with the root layout's read through React `cache`, so it costs nothing extra.
+    resolveAvatarUniverse(),
+  ]);
   const {
     mode,
     keep_screen_awake: keepScreenAwake,
     weight_unit: weightUnit,
   } = appearancePref;
   // The Avatar's character name comes from the catalog read; without it the art still shows.
-  const avatar = profileAvatar(appearancePref.avatar, bestEffortData(avatarsEnvelope));
+  const avatar = profileAvatar(
+    appearancePref.avatar,
+    bestEffortData(avatarsEnvelope),
+    avatarUniverse,
+  );
 
   if (!envelope.success || !envelope.data) {
     return (

@@ -12,6 +12,7 @@ from sqlmodel import Session
 
 from app.active_skin.cache import ActiveSkinCache
 from app.auth.dependencies import get_current_user
+from app.avatar_universe.cache import AvatarUniverseCache
 from app.config import Settings, get_settings
 from app.db.session import get_session
 from app.generation.backfill_queue import BackfillQueue, RqBackfillQueue
@@ -42,6 +43,10 @@ from app.repositories.active_skin_repository import (
 from app.repositories.appearance_preference_repository import (
     AppearancePreferenceRepository,
     SqlAppearancePreferenceRepository,
+)
+from app.repositories.avatar_universe_repository import (
+    AvatarUniverseRepository,
+    SqlAvatarUniverseRepository,
 )
 from app.repositories.exercise_audit_repository import (
     ExerciseAuditRepository,
@@ -122,6 +127,22 @@ _active_skin_cache = ActiveSkinCache()
 
 def get_active_skin_cache() -> ActiveSkinCache:
     return _active_skin_cache
+
+
+def get_avatar_universe_repository(
+    session: Session = Depends(get_session),
+) -> AvatarUniverseRepository:
+    return SqlAvatarUniverseRepository(session)
+
+
+# The Avatar Universe read-through cache is a process-wide singleton for the same reason
+# as the Active Skin's: the GET and PUT paths must share it for a publish's invalidate to
+# reach later reads in this worker (ADR-0137). Tests override it with a fresh cache.
+_avatar_universe_cache = AvatarUniverseCache()
+
+
+def get_avatar_universe_cache() -> AvatarUniverseCache:
+    return _avatar_universe_cache
 
 
 def get_exercise_repository(

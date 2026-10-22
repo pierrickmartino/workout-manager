@@ -9,6 +9,7 @@ import { buildAvatarOptions, type AvatarCatalog } from "./avatar-picker.ts";
 
 const CATALOG: AvatarCatalog = {
   operator_level: 1,
+  universe: "realm",
   avatars: [
     { id: "novice", name: "Novice", unlock_level: 1, unlocked: true, current_level: 1 },
     { id: "dwarf-lifter", name: "Dwarf Lifter", unlock_level: 1, unlocked: true, current_level: 1 },
@@ -75,6 +76,7 @@ test("no option is selected when the current Avatar is not in the catalog", () =
 // A user at Operator Level 5: the Barbarian just unlocked, the Valkyrie and Titan still ahead.
 const EARNED: AvatarCatalog = {
   operator_level: 5,
+  universe: "realm",
   avatars: [
     { id: "novice", name: "Novice", unlock_level: 1, unlocked: true, current_level: 1 },
     { id: "barbarian", name: "Barbarian", unlock_level: 5, unlocked: true, current_level: 5 },
@@ -132,13 +134,37 @@ test("an Avatar the user kept after their level dropped stays selected while loc
   assert.equal(valkyrie?.locked, true);
 });
 
-test("each option is drawn as selected, open or a locked silhouette", () => {
+test("each option is drawn as selected, open or a greyed locked portrait", () => {
   // Act — the user kept the Valkyrie after their level dropped
   const options = buildAvatarOptions(EARNED, "valkyrie");
 
-  // Assert — their own Avatar is drawn as theirs, never as a silhouette
+  // Assert — their own Avatar is drawn as theirs, never greyed out
   assert.deepEqual(
     options.map((option) => option.appearance),
     ["open", "open", "selected", "locked"],
+  );
+});
+
+test("each option is drawn from the universe the catalog was named in", () => {
+  // Arrange — the admin has published Olympus, so the catalog names its cast
+  const olympus: AvatarCatalog = {
+    ...CATALOG,
+    universe: "olympus",
+    avatars: [
+      { id: "novice", name: "Initiate", unlock_level: 1, unlocked: true, current_level: 1 },
+      { id: "dwarf-lifter", name: "Forgehand", unlock_level: 1, unlocked: true, current_level: 1 },
+    ],
+  };
+
+  // Act
+  const options = buildAvatarOptions(olympus, "novice");
+
+  // Assert — names and portraits come from the same universe
+  assert.deepEqual(
+    options.map((option) => [option.name, option.art.src]),
+    [
+      ["Initiate", "/avatars/olympus/novice.webp"],
+      ["Forgehand", "/avatars/olympus/dwarf-lifter.webp"],
+    ],
   );
 });

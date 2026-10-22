@@ -1,10 +1,12 @@
-// Profile's Avatar (ADR-0136): the user's stored Avatar, drawn larger than the header's and
-// named. The art comes from `avatar-art`; the character name comes from the GET /api/avatars
-// catalog, since the backend owns the catalog and this app keeps no second copy of its names.
+// Profile's Avatar (ADR-0136, ADR-0137): the user's stored Avatar, drawn larger than the
+// header's and named. The character name comes from the GET /api/avatars catalog, since the
+// backend owns the catalog and this app keeps no second copy of its names; the portrait is
+// drawn from the universe that catalog was named in, or the universe the header uses when the
+// catalog could not be read.
 //
 // No I/O and no server-only imports, so Server Components use it and it is unit-tested alone.
 
-import { headerAvatar, type AvatarArt } from "./avatar-art.ts";
+import { avatarArt, type AvatarArt } from "./avatar-art.ts";
 import type { AvatarCatalog } from "./avatar-picker.ts";
 
 export interface ProfileAvatarView {
@@ -14,13 +16,14 @@ export interface ProfileAvatarView {
   readonly name: string | null;
 }
 
-// The Avatar Profile shows for the stored id: the header's figure, with the Novice fallback
-// exactly as the header resolves it, named by the catalog entry for that figure.
+// The Avatar Profile shows for the stored id: the header's portrait, with the Novice fallback
+// exactly as the header resolves it, named by the catalog entry for that portrait.
 export function profileAvatar(
   avatarId: string | undefined,
   catalog: AvatarCatalog | null,
+  fallbackUniverse: string,
 ): ProfileAvatarView {
-  const art = headerAvatar(avatarId);
+  const art = avatarArt(avatarId, catalog?.universe ?? fallbackUniverse);
   const entry = catalog?.avatars.find((avatar) => avatar.id === art.id);
   return { art, name: entry?.name ?? null };
 }

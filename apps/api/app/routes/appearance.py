@@ -22,26 +22,33 @@ Choosing an Avatar is the one save judged against the record: an unknown id is a
 at the boundary, and an Avatar whose unlock level is above the user's Operator Level —
 computed at save time from their Logged Sessions — is a 403 with nothing written. Only
 that save reads the history; an Avatar already chosen is kept when the level later
-drops (ADR-0136).
+drops (ADR-0136). The refusal names the character as the published Avatar Universe
+casts it (ADR-0137), read only when a refusal is raised.
 
 Kept a separate store from the Fitness Profile (ADR-0047) so an Interface
 Preference never enters generation or the cache key."""
 
 from __future__ import annotations
 
+from typing import Callable
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 
 from app.auth.dependencies import get_current_user
+from app.avatar_universe.cache import AvatarUniverseCache
 from app.domain.appearance import InterfacePreference, Mode, WeightUnit
-from app.domain.avatars import find_avatar, is_avatar_id, is_unlocked
+from app.domain.avatars import avatar_name, find_avatar, is_avatar_id, is_unlocked
 from app.envelope import success_envelope
 from app.logbook.operator_level import current_operator_level
 from app.repositories.appearance_preference_repository import (
     AppearancePreferenceRepository,
 )
+from app.repositories.avatar_universe_repository import AvatarUniverseRepository
 from app.repositories.deps import (
     get_appearance_preference_repository,
+    get_avatar_universe_cache,
+    get_avatar_universe_repository,
     get_logged_session_repository,
 )
 from app.repositories.logged_session_repository import LoggedSessionRepository
@@ -76,12 +83,16 @@ class AppearanceUpdateRequest(BaseModel):
 
 
 def _ensure_unlocked(
-    avatar_id: str, clerk_user_id: str, logged: LoggedSessionRepository
+    avatar_id: str,
+    clerk_user_id: str,
+    logged: LoggedSessionRepository,
+    read_universe: Callable[[], str],
 ) -> None:
     """Refuse ``avatar_id`` unless the user's Operator Level has reached it.
 
     The level is computed now from the user's Logged Sessions through the shared
-    gamification projection, never read from a stored unlock (ADR-0018, ADR-0136)."""
+    gamification projection, never read from a stored unlock (ADR-0018, ADR-0136).
+    ``read_universe`` is called only to name the character in a refusal."""
 
     avatar = find_avatar(avatar_id)
     level = current_operator_level(clerk_user_id, logged)
@@ -89,7 +100,7 @@ def _ensure_unlocked(
         raise HTTPException(
             status_code=HTTP_FORBIDDEN,
             detail=(
-                f"{avatar.name} unlocks at LVL {avatar.unlock_level}. "
+                f"{avatar_name(avatar, read_universe())} unlocks at LVL {avatar.unlock_level}. "
                 f"You’re at LVL {level}: keep logging to reach it."
             ),
         )
@@ -123,6 +134,8 @@ def upsert_appearance(
         get_appearance_preference_repository
     ),
     logged: LoggedSessionRepository = Depends(get_logged_session_repository),
+    universes: AvatarUniverseRepository = Depends(get_avatar_universe_repository),
+    universe_cache: AvatarUniverseCache = Depends(get_avatar_universe_cache),
 ) -> dict:
     # Apply only the facets the caller sent onto the current (get-or-default)
     # preference, then upsert the whole value — so Mode, Keep Screen Awake, Weight
@@ -132,7 +145,12 @@ def upsert_appearance(
     # history is read for that save alone, and an Avatar already chosen is kept when
     # the level later drops (ADR-0136).
     if payload.avatar is not None and payload.avatar != current.avatar:
-        _ensure_unlocked(payload.avatar, clerk_user_id, logged)
+        _ensure_unlocked(
+            payload.avatar,
+            clerk_user_id,
+            logged,
+            lambda: universe_cache.get(universes.get_avatar_universe),
+        )
     updated = current.with_overrides(
         mode=payload.mode,
         keep_screen_awake=payload.keep_screen_awake,
