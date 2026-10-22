@@ -15,7 +15,7 @@ these stay on the prototype branch until a new ADR decides otherwise.
 | `dwarf-lifter` | Dwarf Lifter ✅ | Rig Hauler ✅ (`rig-hauler.webp`) | Forgehand ✅ (`forgehand.webp`) |
 | `elf-ranger`   | Elf Ranger ✅  | Pathfinder ✅ (`pathfinder.webp`) | Huntress ✅ (`huntress.webp`) |
 | `monk`         | Monk ✅        | Zero-G Adept ✅ (`zero-g-adept.webp`) | Sage ✅ (`sage.webp`) |
-| `barbarian`    | Barbarian ✅   | Void Raider   | Lion-Bearer ✅ (`lion-bearer.webp`) |
+| `barbarian`    | Barbarian ✅   | Void Raider ✅ (`void-raider.webp`) | Lion-Bearer ✅ (`lion-bearer.webp`) |
 | `valkyrie`     | Valkyrie ✅    | Drop Trooper  | Amazon ✅ (`amazon.webp`) |
 | `paladin`      | Paladin ✅     | Sentinel      | Hoplite ✅ (`hoplite.webp`) |
 | `titan`        | Titan ✅       | Colossus      | Atlas ✅ (`atlas.webp`) |
