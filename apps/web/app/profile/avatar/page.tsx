@@ -10,11 +10,13 @@ import type { AvatarCatalog } from "@/lib/avatar/avatar-picker";
 import {
   PrototypeAvatarUniverse,
   UNIVERSES,
+  type PortraitArt,
   type UniverseKey,
 } from "./prototype-avatar-universes";
 
 // PROTOTYPE — throwaway: realistic Avatars in three universes, switchable via `?variant=`
-// (current | A | B | C). Not for main.
+// (current | A | B | C), shown as generated portraits, or as the drawn rig with `?art=svg`.
+// Not for main.
 const PROTOTYPE_VARIANTS = [
   { key: "current", name: "Shipped flat art" },
   ...Object.entries(UNIVERSES).map(([key, universe]) => ({ key, name: universe.name })),
@@ -42,9 +44,9 @@ const PROTOTYPE_STUB_CATALOG: AvatarCatalog = {
 export default async function AvatarPickerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ variant?: string }>;
+  searchParams: Promise<{ variant?: string; art?: string }>;
 }) {
-  const [envelope, appearance, { variant: rawVariant }] = await Promise.all([
+  const [envelope, appearance, { variant: rawVariant, art: rawArt }] = await Promise.all([
     fetchAvatars(),
     resolveAppearance(),
     searchParams,
@@ -52,6 +54,7 @@ export default async function AvatarPickerPage({
   const variant = PROTOTYPE_VARIANTS.some((entry) => entry.key === rawVariant)
     ? (rawVariant as string)
     : "A";
+  const art: PortraitArt = rawArt === "svg" ? "svg" : "image";
   const catalog = envelope.success && envelope.data ? envelope.data : null;
 
   return (
@@ -69,6 +72,7 @@ export default async function AvatarPickerPage({
         <PrototypeAvatarUniverse
           key={variant}
           universe={variant as UniverseKey}
+          art={art}
           catalog={catalog ?? PROTOTYPE_STUB_CATALOG}
           currentAvatarId={appearance.avatar}
         />
@@ -77,7 +81,7 @@ export default async function AvatarPickerPage({
       <PrototypeSwitcher
         variants={PROTOTYPE_VARIANTS}
         current={variant}
-        stateLine={`LVL ${(catalog ?? PROTOTYPE_STUB_CATALOG).operator_level}${catalog ? "" : " · stub catalog"}`}
+        stateLine={`LVL ${(catalog ?? PROTOTYPE_STUB_CATALOG).operator_level} · ${art === "svg" ? "drawn" : "images"}${catalog ? "" : " · stub catalog"}`}
       />
     </section>
   );

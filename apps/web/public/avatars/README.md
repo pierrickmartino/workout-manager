@@ -7,18 +7,24 @@ these stay on the prototype branch until a new ADR decides otherwise.
 ## Layout
 
 `<universe>/<catalog id>.webp`, where the catalog id is the one in
-`apps/api/app/domain/avatars.py` (and `lib/avatar/manifest.json`):
+`apps/api/app/domain/avatars.py` (and `lib/avatar/manifest.json`). Every universe uses the
+same eight file names, so the picker finds a portrait from the universe and the id alone;
+the table gives the character each file shows:
 
-| Catalog id     | `realm/` (A)  | `orbit/` (B)  | `olympus/` (C) |
-| -------------- | ------------- | ------------- | -------------- |
-| `novice`       | Novice ✅      | Cadet ✅ (`cadet.webp`) | Initiate ✅ (`initiate.webp`) |
-| `dwarf-lifter` | Dwarf Lifter ✅ | Rig Hauler ✅ (`rig-hauler.webp`) | Forgehand ✅ (`forgehand.webp`) |
-| `elf-ranger`   | Elf Ranger ✅  | Pathfinder ✅ (`pathfinder.webp`) | Huntress ✅ (`huntress.webp`) |
-| `monk`         | Monk ✅        | Zero-G Adept ✅ (`zero-g-adept.webp`) | Sage ✅ (`sage.webp`) |
-| `barbarian`    | Barbarian ✅   | Void Raider ✅ (`void-raider.webp`) | Lion-Bearer ✅ (`lion-bearer.webp`) |
-| `valkyrie`     | Valkyrie ✅    | Drop Trooper ✅ (`drop-trooper.webp`) | Amazon ✅ (`amazon.webp`) |
-| `paladin`      | Paladin ✅     | Sentinel ✅ (`sentinel.webp`) | Hoplite ✅ (`hoplite.webp`) |
-| `titan`        | Titan ✅       | Colossus ✅ (`colossus.webp`) | Atlas ✅ (`atlas.webp`) |
+| Catalog id (file) | `realm/` (A) | `orbit/` (B) | `olympus/` (C) |
+| ----------------- | ------------ | ------------ | -------------- |
+| `novice`          | Novice       | Cadet        | Initiate       |
+| `dwarf-lifter`    | Dwarf Lifter | Rig Hauler   | Forgehand      |
+| `elf-ranger`      | Elf Ranger   | Pathfinder   | Huntress       |
+| `monk`            | Monk         | Zero-G Adept | Sage           |
+| `barbarian`       | Barbarian    | Void Raider  | Lion-Bearer    |
+| `valkyrie`        | Valkyrie     | Drop Trooper | Amazon         |
+| `paladin`         | Paladin      | Sentinel     | Hoplite        |
+| `titan`           | Titan        | Colossus     | Atlas          |
+
+All 24 are in place. The picker renders them in
+`app/profile/avatar/prototype-avatar-universes.tsx`; `?art=svg` swaps back to the drawn
+portraits for comparison.
 
 ## Format
 
