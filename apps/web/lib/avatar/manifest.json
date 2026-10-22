@@ -1,6 +1,6 @@
 {
-  "schema": "workout-manager/avatar-manifest@1",
-  "contract": "avatars lists the artwork ids in lib/avatar/avatar-art.ts, which must equal the catalog ids in apps/api/app/domain/avatars.py, in order",
+  "schema": "workout-manager/avatar-manifest@2",
+  "contract": "avatars lists the catalog ids and universes lists the Avatar Universes in lib/avatar/avatar-art.ts, which must equal AVATAR_CATALOG and AVATAR_UNIVERSES in apps/api/app/domain/avatars.py, in order; every universe has a portrait public/avatars/<universe>/<id>.webp for every id",
   "avatars": [
     "novice",
     "dwarf-lifter",
@@ -10,5 +10,10 @@
     "valkyrie",
     "paladin",
     "titan"
+  ],
+  "universes": [
+    "realm",
+    "orbit",
+    "olympus"
   ]
 }

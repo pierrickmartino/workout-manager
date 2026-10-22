@@ -29,7 +29,8 @@ import {
 import { resolveActiveSkin } from "@/lib/active-skin";
 import { resolveIsAdmin } from "@/lib/admin";
 import { resolveAppearance, resolveUserMode } from "@/lib/appearance";
-import { headerAvatar } from "@/lib/avatar/avatar-art";
+import { avatarArt } from "@/lib/avatar/avatar-art";
+import { resolveAvatarUniverse } from "@/lib/avatar-universe";
 import { resolveTheme } from "@/lib/theme";
 import { themeColorFor } from "@/lib/theme-color";
 import { persistentTransitionStyle } from "@/lib/persistent-transition";
@@ -164,12 +165,15 @@ export default async function RootLayout({
   // `isAdmin` joins them because the desktop sidebar carries an admin entry (ADR-0088's
   // amendment to ADR-0071). It is resolved here, server-side, so the Clerk role claim is
   // never read in the browser; `resolveIsAdmin` is React-`cache`d, so a page that also
-  // needs it in the same request pays nothing extra. The header Avatar comes from the same
-  // Interface Preference read as the Mode (ADR-0136), so it adds no round-trip.
-  const [activeSkin, appearance, isAdmin] = await Promise.all([
+  // needs it in the same request pays nothing extra. The header Avatar's id comes from the
+  // same Interface Preference read as the Mode (ADR-0136); the app-wide Avatar Universe it is
+  // drawn in is read beside it, served from the backend's short-TTL cache like the Active Skin
+  // (ADR-0137).
+  const [activeSkin, appearance, isAdmin, avatarUniverse] = await Promise.all([
     resolveActiveSkin(),
     resolveAppearance(),
     resolveIsAdmin(),
+    resolveAvatarUniverse(),
   ]);
   const themeAttributes = resolveTheme(activeSkin, appearance.mode);
 
@@ -252,7 +256,10 @@ export default async function RootLayout({
                       href="/profile"
                       className="-mr-1.5 flex size-11 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-base"
                     >
-                      <Avatar art={headerAvatar(appearance.avatar)} />
+                      <Avatar
+                        art={avatarArt(appearance.avatar, avatarUniverse)}
+                        loading="eager"
+                      />
                       <span className="sr-only">Account</span>
                     </Link>
                   </Show>

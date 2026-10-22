@@ -4,7 +4,9 @@ import { Activity, Dumbbell } from "@/components/pulse/icons";
 
 import { resolveIsAdmin } from "@/lib/admin";
 import { resolveActiveSkin } from "@/lib/active-skin";
+import { resolveAvatarUniverse } from "@/lib/avatar-universe";
 import { AppearanceSkinPublisher } from "@/components/AppearanceSkinPublisher";
+import { AvatarUniversePublisher } from "@/components/AvatarUniversePublisher";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { NavRow } from "@/components/pulse/nav-row";
@@ -15,7 +17,8 @@ import { NAV_FORWARD } from "@/lib/nav-direction";
 // The admin home (docs/redesign-ia.md, ADR-0071): a dedicated surface for the account's power
 // features, reached by an admin-only nav row on Profile rather than a fifth tab. It publishes
 // the Active Skin (relocated out of Profile → Appearance, where it was buried for every
-// ordinary user) and links into the admin exercise area. The catalog-enrichment tools — the
+// ordinary user) and the Avatar Universe every user's Avatar is drawn in (ADR-0137), and links
+// into the admin exercise area. The catalog-enrichment tools — the
 // completeness readout and the whole-catalog backfill — now live inside that exercise area
 // (issue #508) beside the per-Exercise enrich-now, so all enrichment controls sit in one place.
 // It also links to the AI audit log (issue #730, ADR-0135), the recent Generation Calls.
@@ -23,9 +26,10 @@ import { NAV_FORWARD } from "@/lib/nav-direction";
 // revealed-but-denied page, and the backend independently gates every underlying action
 // (ADR-0046).
 export default async function AdminPage() {
-  const [isAdmin, activeSkin] = await Promise.all([
+  const [isAdmin, activeSkin, avatarUniverse] = await Promise.all([
     resolveIsAdmin(),
     resolveActiveSkin(),
+    resolveAvatarUniverse(),
   ]);
   if (!isAdmin) notFound();
 
@@ -37,6 +41,13 @@ export default async function AdminPage() {
         <SectionHeader>ACTIVE SKIN</SectionHeader>
         <Card className="p-4">
           <AppearanceSkinPublisher activeSkin={activeSkin} />
+        </Card>
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <SectionHeader>AVATAR UNIVERSE</SectionHeader>
+        <Card className="p-4">
+          <AvatarUniversePublisher activeUniverse={avatarUniverse} />
         </Card>
       </div>
 

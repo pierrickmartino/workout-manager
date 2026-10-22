@@ -19,6 +19,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.auth.dependencies import get_jwks
+from app.avatar_universe.cache import AvatarUniverseCache
 from app.config import Settings, get_settings
 from app.domain.avatars import AVATAR_CATALOG, MONK_UNLOCK_LEVEL, find_avatar
 from app.domain.exercise import Provenance
@@ -26,8 +27,13 @@ from app.main import create_app
 from app.repositories.appearance_preference_repository import (
     InMemoryAppearancePreferenceRepository,
 )
+from app.repositories.avatar_universe_repository import (
+    InMemoryAvatarUniverseRepository,
+)
 from app.repositories.deps import (
     get_appearance_preference_repository,
+    get_avatar_universe_cache,
+    get_avatar_universe_repository,
     get_logged_session_repository,
 )
 from app.repositories.exercise_repository import InMemoryExerciseRepository
@@ -78,6 +84,13 @@ class World:
             lambda: self.appearance
         )
         app.dependency_overrides[get_logged_session_repository] = lambda: self.logged
+        # The app-wide Avatar Universe: The Realm unless a test publishes another.
+        self.universes = InMemoryAvatarUniverseRepository()
+        universe_cache = AvatarUniverseCache()
+        app.dependency_overrides[get_avatar_universe_repository] = (
+            lambda: self.universes
+        )
+        app.dependency_overrides[get_avatar_universe_cache] = lambda: universe_cache
         self.client = TestClient(app)
 
     def auth(self, user: str) -> dict:
@@ -278,3 +291,54 @@ def test_get_avatars_requires_authentication(world) -> None:
 
     assert response.status_code == 401
     assert response.json()["success"] is False
+
+
+# --- The Avatar Universe names each character (ADR-0137) ---------------------
+
+
+def test_get_avatars_names_each_avatar_in_the_published_universe():
+    # Arrange — the admin has published Orbit before this world's first read
+    world = World()
+    world.universes.set_avatar_universe("orbit")
+
+    # Act
+    body = world.client.get("/api/avatars", headers=world.auth("user_a")).json()
+
+    # Assert — same ids and unlock levels, cast as the Orbit crew
+    assert body["data"]["universe"] == "orbit"
+    assert [(a["id"], a["name"]) for a in body["data"]["avatars"]][:4] == [
+        ("novice", "Cadet"),
+        ("dwarf-lifter", "Rig Hauler"),
+        ("elf-ranger", "Pathfinder"),
+        ("monk", "Zero-G Adept"),
+    ]
+
+
+def test_get_avatars_defaults_to_the_realm():
+    # Arrange — no universe published yet
+    world = World()
+
+    # Act
+    body = world.client.get("/api/avatars", headers=world.auth("user_a")).json()
+
+    # Assert — the original fantasy cast
+    assert body["data"]["universe"] == "realm"
+    assert body["data"]["avatars"][0]["name"] == "Novice"
+
+
+def test_a_locked_refusal_names_the_character_in_the_published_universe():
+    # Arrange — Olympus is published and a new user has not reached the Monk's level
+    world = World()
+    world.universes.set_avatar_universe("olympus")
+
+    # Act
+    response = world.client.put(
+        "/api/appearance", headers=world.auth("user_a"), json={"avatar": "monk"}
+    )
+
+    # Assert — the Monk slot is the Sage in Olympus, and nothing was written
+    assert response.status_code == 403
+    assert response.json()["error"].startswith(
+        f"Sage unlocks at LVL {MONK_UNLOCK_LEVEL}."
+    )
+    assert world.appearance.get_preference("user_a").avatar == "novice"

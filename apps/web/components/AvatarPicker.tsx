@@ -49,8 +49,8 @@ const APPEARANCE_CLASSES: Readonly<
 // the layout so the header and this prop show the new Avatar on the next render. A failed
 // save leaves the prop as it was, so the selection falls back to the Avatar actually stored,
 // and the picker says why. The radios stay enabled while a save runs, since disabling one
-// would drop the keyboard focus it holds. A locked Avatar is the one disabled radio: a dimmed
-// silhouette with the level it needs and the user's progress toward it, announced as locked.
+// would drop the keyboard focus it holds. A locked Avatar is the one disabled radio: a greyed
+// portrait with the level it needs and the user's progress toward it, announced as locked.
 // The API refuses it too; the picker never offers what the save would turn down. An Avatar the
 // user kept after their level dropped stays drawn as theirs, with a checked radio that keeps
 // the group's focus, and its progress beneath.
