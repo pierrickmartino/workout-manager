@@ -17,7 +17,7 @@ these stay on the prototype branch until a new ADR decides otherwise.
 | `monk`         | Monk ✅        | Zero-G Adept  | Sage ✅ (`sage.webp`) |
 | `barbarian`    | Barbarian ✅   | Void Raider   | Lion-Bearer ✅ (`lion-bearer.webp`) |
 | `valkyrie`     | Valkyrie ✅    | Drop Trooper  | Amazon ✅ (`amazon.webp`) |
-| `paladin`      | Paladin ✅     | Sentinel      | Hoplite        |
+| `paladin`      | Paladin ✅     | Sentinel      | Hoplite ✅ (`hoplite.webp`) |
 | `titan`        | Titan ✅       | Colossus      | Atlas          |
 
 ## Format
