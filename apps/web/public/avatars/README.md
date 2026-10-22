@@ -16,7 +16,7 @@ these stay on the prototype branch until a new ADR decides otherwise.
 | `elf-ranger`   | Elf Ranger ✅  | Pathfinder    | Huntress       |
 | `monk`         | Monk ✅        | Zero-G Adept  | Sage           |
 | `barbarian`    | Barbarian ✅   | Void Raider   | Lion-Bearer    |
-| `valkyrie`     | Valkyrie      | Drop Trooper  | Amazon         |
+| `valkyrie`     | Valkyrie ✅    | Drop Trooper  | Amazon         |
 | `paladin`      | Paladin       | Sentinel      | Hoplite        |
 | `titan`        | Titan         | Colossus      | Atlas          |
 
