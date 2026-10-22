@@ -15,7 +15,7 @@ these stay on the prototype branch until a new ADR decides otherwise.
 | `dwarf-lifter` | Dwarf Lifter ✅ | Rig Hauler    | Forgehand      |
 | `elf-ranger`   | Elf Ranger ✅  | Pathfinder    | Huntress       |
 | `monk`         | Monk ✅        | Zero-G Adept  | Sage           |
-| `barbarian`    | Barbarian     | Void Raider   | Lion-Bearer    |
+| `barbarian`    | Barbarian ✅   | Void Raider   | Lion-Bearer    |
 | `valkyrie`     | Valkyrie      | Drop Trooper  | Amazon         |
 | `paladin`      | Paladin       | Sentinel      | Hoplite        |
 | `titan`        | Titan         | Colossus      | Atlas          |
