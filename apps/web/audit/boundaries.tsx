@@ -6,7 +6,14 @@ import * as auditSync from "@/lib/finish-outbox-sync";
 const router = { push: (url: string) => { window.location.href = url; }, refresh: () => {} };
 export const useRouter = () => router;
 export const usePathname = () => "/train";
-export const useSearchParams = () => new URLSearchParams();
+// Empty unless a journey seeds it: the harness's own query (`journey`, `skin`…) is not the
+// page's, so a journey that needs a filtered URL — History's Month view with a day selected —
+// names exactly the params the real route would carry.
+let auditSearchParams = new URLSearchParams();
+export function seedSearchParams(params: Record<string, string>): void {
+  auditSearchParams = new URLSearchParams(params);
+}
+export const useSearchParams = () => auditSearchParams;
 export const unstable_rethrow = () => {};
 export const useAuth = () => ({ userId: "audit-synthetic-account", isLoaded: true });
 

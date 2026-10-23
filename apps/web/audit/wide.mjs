@@ -48,6 +48,10 @@ const ALL_JOURNEYS = [
   // rather than just the wide frame — and the only one whose `columnOverNarrow` gate is
   // expected to be inapplicable rather than merely satisfied.
   "home",
+  // History's Month view with a day selected (#761), the second page converted to the wide
+  // column: the grid sticks beside the list. Like `home` it opts in, so its `columnOverNarrow`
+  // gate is inapplicable; the `history` journey is the List, which stays unconverted at 26rem.
+  "history-month",
   // The themed confirmation (ADR-0098), which no other journey mounts because a dialog exists
   // only while it is open. Its `max-w-sm` box must not stretch with the wide frame.
   "confirm",

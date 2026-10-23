@@ -92,12 +92,15 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // them with ADR-0133: the Session detail's header, a Server Component's markup no journey
 // rendered, now holds the ⋯ on the overline's line and a meta line of badges and byline under an
 // authored title. `avatar` joins them with #748: the Avatar picker's grid of radio options, each
-// a 64px figure over its character name, two to a row at 320px.
+// a 64px figure over its character name, two to a row at 320px. `history-month` joins them with
+// #761: History's Month view, a day selected, opts the page into the wide column (ADR-0088), so
+// this sweep is what proves its seven-column grid still sits above the list at 320px and 200% text.
 const NOVEL_JOURNEYS = [
   "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc", "launchpad",
   "levels", "sheet", "protocols", "protocols-live", "set-aside", "passport", "passport-open",
   "passport-empty", "stamp", "stamp-locked", "stamp-record", "curated", "curated-adopt",
   "based-on", "curated-wave-adopt", "curated-wave-unlogged", "handoff", "session-header", "avatar",
+  "history-month",
 ];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and
