@@ -38,8 +38,10 @@ export interface HistoryFacets {
 }
 
 // Everything History's URL carries: the facets, the view, and — in Month view only — the
-// month on screen (`YYYY-MM`) and the selected day in it (`YYYY-MM-DD`). A null month in Month
-// view means "the newest matching month"; a null day means "the whole month".
+// month on screen (`YYYY-MM`) and the selected day in it (`YYYY-MM-DD`). Only the facets decide
+// which Logged Sessions match; the view, month and day decide which of the matches are on
+// screen. A null month in Month view means "the newest matching month"; a null day means "the
+// whole month".
 export interface HistoryFilters extends HistoryFacets {
   view: HistoryView;
   month: string | null;
@@ -92,7 +94,9 @@ export function filterHistory<T extends Filterable>(
 }
 
 // Whether any facet is active — drives the "3 of 24" filtered count vs the plain "24" (Q9).
-// The view and month are not facets: Month view with no exercise or type is unfiltered.
+// It reads the facets alone: `HistoryFilters` also carries the view, month and day, but those
+// place the screen rather than narrow the matches, so Month view with no exercise or type is
+// unfiltered.
 export function hasActiveFilters(filters: HistoryFacets): boolean {
   return filters.exercise !== null || filters.trainingTypes.length > 0;
 }
