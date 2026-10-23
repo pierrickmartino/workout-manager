@@ -1,7 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { accentTint, trainingTypeAccentVar } from "./training-type-accent.ts";
+import {
+  accentTint,
+  trainingTypeAccentVar,
+  trainingTypeFillClass,
+} from "./training-type-accent.ts";
 
 // `training-type-accent` maps a Training Type to the Skin-aware accent token the Workout
 // Signature sigil fills with (GLOSSARY: Workout Signature, Training Type). Pure and curated —
@@ -36,4 +40,16 @@ test("accentTint clamps alpha into [0, 1]", () => {
     accentTint("--color-violet", -0.2),
     "color-mix(in srgb, var(--color-violet) 0%, transparent)",
   );
+});
+
+test("trainingTypeFillClass fills a Month view mark with the type's sigil accent", () => {
+  assert.equal(trainingTypeFillClass("strength"), "bg-cyan");
+  assert.equal(trainingTypeFillClass("cardio"), "bg-magenta");
+  assert.equal(trainingTypeFillClass("hiit"), "bg-violet");
+  assert.equal(trainingTypeFillClass("yoga"), "bg-blue");
+  assert.equal(trainingTypeFillClass("mobility"), "bg-text-muted");
+});
+
+test("trainingTypeFillClass falls back to the neutral muted fill for an uncurated type", () => {
+  assert.equal(trainingTypeFillClass("crossfit"), "bg-text-muted");
 });

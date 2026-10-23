@@ -413,17 +413,101 @@ test("Each day counts only the Logged Sessions matching the exercise and type fi
   assert.equal(cell(view, "2026-10-16").count, 0);
 });
 
-test("Each day is named by its full date and how many sessions it holds", () => {
+test("Each day is named by its full date, how many sessions it holds and their Training Types", () => {
   // Arrange
-  const index = [row(3, "2026-10-15"), row(2, "2026-10-14"), row(1, "2026-10-14")];
+  const index = [
+    row(4, "2026-10-15"),
+    row(3, "2026-10-14", { training_type: "yoga" }),
+    row(2, "2026-10-14"),
+    row(1, "2026-10-14"),
+  ];
 
   // Act
   const view = projectHistoryMonth(index, monthView({ month: "2026-10" }));
 
-  // Assert
-  assert.equal(cell(view, "2026-10-14").label, "14 October 2026, 2 sessions");
-  assert.equal(cell(view, "2026-10-15").label, "15 October 2026, 1 session");
+  // Assert: the marks are decorative, so the name carries what they show
+  assert.equal(cell(view, "2026-10-14").label, "14 October 2026, 3 sessions: 2 strength, 1 yoga");
+  assert.equal(cell(view, "2026-10-15").label, "15 October 2026, 1 session: strength");
   assert.equal(cell(view, "2026-10-01").label, "1 October 2026, no sessions");
+});
+
+// --- Training Type marks (B, the Month view redesign): one mark per Logged Session ---------
+
+test("Each day carries one Training Type mark per matching Logged Session, grouped by type", () => {
+  // Arrange: interleaved types on one day, newest first
+  const index = [
+    row(4, "2026-10-14", { training_type: "cardio" }),
+    row(3, "2026-10-14"),
+    row(2, "2026-10-14", { training_type: "cardio" }),
+    row(1, "2026-10-14", { training_type: "yoga" }),
+  ];
+
+  // Act
+  const view = projectHistoryMonth(index, monthView({ month: "2026-10" }));
+
+  // Assert: the most frequent type first, ties by name, so marks never shuffle between reads
+  const day = cell(view, "2026-10-14");
+  assert.deepEqual(day.marks, ["cardio", "cardio", "strength"]);
+  assert.equal(day.moreMarks, 1);
+});
+
+test("A day with no matching Logged Session carries no marks", () => {
+  // Arrange
+  const index = [row(2, "2026-10-14", { training_type: "yoga" }), row(1, "2026-10-14")];
+
+  // Act
+  const view = projectHistoryMonth(index, monthView({ month: "2026-10", trainingTypes: ["yoga"] }));
+
+  // Assert: the filtered-out strength session leaves no mark
+  assert.deepEqual(cell(view, "2026-10-14").marks, ["yoga"]);
+  assert.equal(cell(view, "2026-10-14").moreMarks, 0);
+  assert.deepEqual(cell(view, "2026-10-15").marks, []);
+});
+
+test("The month tallies its matching Logged Sessions by Training Type, most frequent first", () => {
+  // Arrange: September's session must not count toward October
+  const index = [
+    row(5, "2026-10-20", { training_type: "yoga" }),
+    row(4, "2026-10-14", { training_type: "cardio" }),
+    row(3, "2026-10-14"),
+    row(2, "2026-10-02"),
+    row(1, "2026-09-30", { training_type: "hiit" }),
+  ];
+
+  // Act
+  const view = projectHistoryMonth(index, monthView({ month: "2026-10" }));
+
+  // Assert: ties fall back to the type's name
+  assert.deepEqual(view.typeTally, [
+    { trainingType: "strength", count: 2 },
+    { trainingType: "cardio", count: 1 },
+    { trainingType: "yoga", count: 1 },
+  ]);
+});
+
+test("The month's tally covers the whole month even with a day selected", () => {
+  // Arrange
+  const index = [row(2, "2026-10-20", { training_type: "yoga" }), row(1, "2026-10-14")];
+
+  // Act
+  const view = projectHistoryMonth(index, monthView({ month: "2026-10", day: "2026-10-14" }));
+
+  // Assert
+  assert.deepEqual(view.typeTally, [
+    { trainingType: "strength", count: 1 },
+    { trainingType: "yoga", count: 1 },
+  ]);
+});
+
+test("A month with no matching Logged Session has an empty tally", () => {
+  // Arrange
+  const index = [row(1, "2026-10-14")];
+
+  // Act
+  const view = projectHistoryMonth(index, monthView({ month: "2026-10", trainingTypes: ["yoga"] }));
+
+  // Assert
+  assert.deepEqual(view.typeTally, []);
 });
 
 test("Each day carries its day of the month, without a leading zero", () => {

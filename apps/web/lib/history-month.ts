@@ -42,7 +42,19 @@ export interface HistoryMonthProjection {
   // The month's days as Monday-first weeks of seven cells, the Streak and Training Heatmap's
   // week (ADR-0054); a cell outside the month is null. Empty when there is no month.
   weeks: (HistoryMonthDay | null)[][];
+  // The month's matching Logged Sessions counted by Training Type, most frequent first, ties
+  // by name: the legend that names the marks. The whole month, even with a day selected.
+  typeTally: HistoryMonthTypeCount[];
 }
+
+export interface HistoryMonthTypeCount {
+  trainingType: string;
+  count: number;
+}
+
+// How many Training Type marks a day cell shows before it says "+n": three fit a cell at
+// 320px (ADR-0085); the rest are counted, never dropped.
+export const MAX_DAY_MARKS = 3;
 
 // One in-month day of the grid.
 export interface HistoryMonthDay {
@@ -53,7 +65,12 @@ export interface HistoryMonthDay {
   // How many Logged Sessions matching the exercise / type filters were performed that day. A
   // day with any carries a neutral presence dot; a day with none looks like any other.
   count: number;
-  // The accessible name: the full date and the count, "14 October 2026, 2 sessions".
+  // One Training Type per matching Logged Session, grouped like `typeTally`, at most
+  // `MAX_DAY_MARKS` of them; `moreMarks` counts the rest. A day with none carries none.
+  marks: string[];
+  moreMarks: number;
+  // The accessible name: the full date, the count and the types the marks show, "14 October
+  // 2026, 3 sessions: 2 strength, 1 yoga".
   label: string;
   // Whether this is the selected day (the button's `aria-pressed`).
   selected: boolean;
@@ -104,6 +121,7 @@ export function projectHistoryMonth(
       previous: { month: null, label: PREVIOUS_LABEL },
       next: { month: null, label: NEXT_LABEL },
       weeks: [],
+      typeTally: [],
     };
   }
   const monthMatches = matches.filter((row) => monthOf(row.performed_on) === month);
@@ -127,7 +145,28 @@ export function projectHistoryMonth(
     previous: monthStep(PREVIOUS_LABEL, month > bounds.first ? shiftMonth(month, -1) : null),
     next: monthStep(NEXT_LABEL, month < bounds.newest ? shiftMonth(month, 1) : null),
     weeks: monthWeeks(month, monthMatches, day),
+    typeTally: tallyTypes(monthMatches),
   };
+}
+
+// Rows counted by Training Type, most frequent first, ties by name, so the order never
+// depends on the order the rows arrive in.
+function tallyTypes(rows: readonly HistoryIndexRow[]): HistoryMonthTypeCount[] {
+  const counts = new Map<string, number>();
+  for (const { training_type } of rows) {
+    counts.set(training_type, (counts.get(training_type) ?? 0) + 1);
+  }
+  return [...counts]
+    .map(([trainingType, count]) => ({ trainingType, count }))
+    .sort((a, b) => b.count - a.count || a.trainingType.localeCompare(b.trainingType));
+}
+
+function dayLabel(date: string, tally: readonly HistoryMonthTypeCount[], count: number): string {
+  const types = tally.map(({ trainingType, count: n }) =>
+    tally.length === 1 && n === 1 ? trainingType : `${n} ${trainingType}`,
+  );
+  const named = `${formatFullDate(date)}, ${sessionCount(count)}`;
+  return types.length === 0 ? named : `${named}: ${types.join(", ")}`;
 }
 
 // Copy names what matched, never what didn't happen: no "missed", no "Calendar".
@@ -153,21 +192,27 @@ function monthWeeks(
   monthMatches: readonly HistoryIndexRow[],
   selectedDay: string | null,
 ): (HistoryMonthDay | null)[][] {
-  const counts = new Map<string, number>();
-  for (const { performed_on } of monthMatches) {
-    counts.set(performed_on, (counts.get(performed_on) ?? 0) + 1);
+  const byDay = new Map<string, HistoryIndexRow[]>();
+  for (const match of monthMatches) {
+    byDay.set(match.performed_on, [...(byDay.get(match.performed_on) ?? []), match]);
   }
   const lead: null[] = Array.from({ length: mondayColumnOfFirst(month) }, () => null);
   const days = Array.from({ length: daysInMonth(month) }, (_, i) => {
     const dayNumber = i + 1;
     const date = dayOfMonth(month, dayNumber);
-    const count = counts.get(date) ?? 0;
+    const tally = tallyTypes(byDay.get(date) ?? []);
+    const allMarks = tally.flatMap(({ trainingType, count: n }) =>
+      Array.from({ length: n }, () => trainingType),
+    );
+    const count = allMarks.length;
     const selected = date === selectedDay;
     return {
       date,
       dayNumber,
       count,
-      label: `${formatFullDate(date)}, ${sessionCount(count)}`,
+      marks: allMarks.slice(0, MAX_DAY_MARKS),
+      moreMarks: Math.max(0, count - MAX_DAY_MARKS),
+      label: dayLabel(date, tally, count),
       selected,
       toggleTo: selected ? null : date,
     };
