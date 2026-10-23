@@ -43,6 +43,13 @@ plan is what ADR-0001 forbids.
 - One pure seam, `projectHistoryMonth` in `lib/history-month.ts`, returns everything Month view
   renders (the month, its matches newest first, the heading and the count or empty copy). The
   day grid and month navigation grow from it.
+- **Month view opts History into the wide column; the List does not** (ADR-0088). On a phone
+  the seven-column grid sits above the cards. From `lg:` it is a sticky column at the narrow
+  shell's width beside them (`HistoryColumns`, flex, no bracket tracks), so a reader changes
+  day or month without scrolling back up. It adds no action, only the same grid in a place
+  that stays on screen. The List keeps its 26rem column at every width, so switching views at
+  a desk widens the page — the honest cost of not converting a layout nobody redesigned.
+  `history-month` is a journey in both `audit/reflow.mjs` and `audit/wide.mjs`.
 
 ## Considered options
 

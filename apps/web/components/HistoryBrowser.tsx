@@ -39,6 +39,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DeleteLogControl } from "@/components/DeleteLogControl";
+import { HistoryColumns } from "@/components/HistoryColumns";
 import { HistoryMonthView } from "@/components/HistoryMonthView";
 import { OutcomeToggle } from "@/components/OutcomeToggle";
 import { LoggedSetTable } from "@/components/LoggedSetTable";
@@ -162,8 +163,70 @@ export function HistoryBrowser({
     apply({ ...pinVisibleMonth(index, filters), day });
   }
 
+  // The cards, or the empty state when nothing matches: the same in both views. Month view
+  // sets them beside its grid from `lg:` (ADR-0138); the List renders them as it always has.
+  const list =
+    matches.length === 0 ? (
+      <Card className="flex flex-col items-start gap-3 p-6">
+        <p className="font-sans text-sm text-text-secondary">
+          {month !== null ? month.summary : "No sessions match these filters."}
+        </p>
+        {active ? (
+          <button
+            type="button"
+            onClick={clear}
+            className="label-mono text-[11px] text-cyan hover:underline"
+          >
+            Clear filters
+          </button>
+        ) : null}
+      </Card>
+    ) : (
+      <ol className="flex list-none flex-col gap-4 p-0">
+        {view.entries.map(({ card, deletable, uncompletable }) => {
+          // The server (the one contiguity gate, ADR-0034) decides whether each record
+          // may be deleted / un-completed; the verdict rides on the index row, which is
+          // re-read on every revalidation, so the control is disabled before the user
+          // clicks into a `409` (user story 27). The server stays authoritative.
+          const deleteDisabled = !deletable;
+          const uncompleteDisabled = !uncompletable;
+          return (
+            // Off-screen cards skip layout and paint but stay in the DOM and the
+            // accessibility tree (ADR-0097).
+            <li key={card.id} className="history-row-defer">
+              <LoggedSessionCard
+                entry={card}
+                unit={unit}
+                deleteDisabled={deleteDisabled}
+                deleteReason={deleteDisabled ? DELETE_TAIL_FIRST_REASON : null}
+                uncompleteDisabled={uncompleteDisabled}
+                uncompleteReason={
+                  uncompleteDisabled ? UNCOMPLETE_TAIL_FIRST_REASON : null
+                }
+                onCorrected={(corrected) =>
+                  dispatch({ type: "corrected", card: corrected })
+                }
+              />
+            </li>
+          );
+        })}
+        <HistoryWindowStatus
+          pendingCount={view.pendingCount}
+          failedCount={view.failedCount}
+          hiddenCount={view.hiddenCount}
+          onRetry={() => dispatch({ type: "retry" })}
+          onShowMore={() => dispatch({ type: "show-more" })}
+        />
+      </ol>
+    );
+
   return (
-    <section className="flex flex-col gap-6">
+    // Month view opts History into the wide content column (ADR-0088). The List does not, so
+    // its layout is unchanged at every width.
+    <section
+      className="flex flex-col gap-6"
+      data-shell={month !== null ? "wide" : undefined}
+    >
       <PageHeader
         overline="PULSE // STATS"
         title="Training history"
@@ -257,65 +320,18 @@ export function HistoryBrowser({
       </Card>
 
       {month !== null ? (
-        <HistoryMonthView
-          projection={month}
-          onNavigate={goToMonth}
-          onSelectDay={selectDay}
+        <HistoryColumns
+          grid={
+            <HistoryMonthView
+              projection={month}
+              onNavigate={goToMonth}
+              onSelectDay={selectDay}
+            />
+          }
+          list={list}
         />
-      ) : null}
-
-      {matches.length === 0 ? (
-        <Card className="flex flex-col items-start gap-3 p-6">
-          <p className="font-sans text-sm text-text-secondary">
-            {month !== null ? month.summary : "No sessions match these filters."}
-          </p>
-          {active ? (
-            <button
-              type="button"
-              onClick={clear}
-              className="label-mono text-[11px] text-cyan hover:underline"
-            >
-              Clear filters
-            </button>
-          ) : null}
-        </Card>
       ) : (
-        <ol className="flex list-none flex-col gap-4 p-0">
-          {view.entries.map(({ card, deletable, uncompletable }) => {
-            // The server (the one contiguity gate, ADR-0034) decides whether each record
-            // may be deleted / un-completed; the verdict rides on the index row, which is
-            // re-read on every revalidation, so the control is disabled before the user
-            // clicks into a `409` (user story 27). The server stays authoritative.
-            const deleteDisabled = !deletable;
-            const uncompleteDisabled = !uncompletable;
-            return (
-              // Off-screen cards skip layout and paint but stay in the DOM and the
-              // accessibility tree (ADR-0097).
-              <li key={card.id} className="history-row-defer">
-                <LoggedSessionCard
-                  entry={card}
-                  unit={unit}
-                  deleteDisabled={deleteDisabled}
-                  deleteReason={deleteDisabled ? DELETE_TAIL_FIRST_REASON : null}
-                  uncompleteDisabled={uncompleteDisabled}
-                  uncompleteReason={
-                    uncompleteDisabled ? UNCOMPLETE_TAIL_FIRST_REASON : null
-                  }
-                  onCorrected={(corrected) =>
-                    dispatch({ type: "corrected", card: corrected })
-                  }
-                />
-              </li>
-            );
-          })}
-          <HistoryWindowStatus
-            pendingCount={view.pendingCount}
-            failedCount={view.failedCount}
-            hiddenCount={view.hiddenCount}
-            onRetry={() => dispatch({ type: "retry" })}
-            onShowMore={() => dispatch({ type: "show-more" })}
-          />
-        </ol>
+        list
       )}
     </section>
   );
