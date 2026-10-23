@@ -69,6 +69,32 @@ test("Month view opens on the newest matching Logged Session's month, not the ne
   assert.deepEqual(view.visible.map((r) => r.id), [2]);
 });
 
+test("Month view opens on the newest matching month whatever order the index arrives in", () => {
+  // Arrange: oldest first, so the newest match is not the first row
+  const index = [
+    row(1, "2026-02-05"),
+    row(2, "2026-03-20"),
+    row(3, "2026-04-02", { training_type: "yoga" }),
+  ];
+
+  // Act
+  const view = projectHistoryMonth(index, monthView({ trainingTypes: ["strength"] }));
+
+  // Assert
+  assert.equal(view.month, "2026-03");
+});
+
+test("Month view falls back to the newest record's month whatever order the index arrives in", () => {
+  // Arrange: oldest first, and nothing matches
+  const index = [row(1, "2026-03-20"), row(2, "2026-04-02")];
+
+  // Act
+  const view = projectHistoryMonth(index, monthView({ trainingTypes: ["yoga"] }));
+
+  // Assert
+  assert.equal(view.month, "2026-04");
+});
+
 test("Month view shows the month the URL names, not the newest one", () => {
   // Arrange
   const index = [row(3, "2026-04-02"), row(2, "2026-03-20"), row(1, "2026-02-05")];

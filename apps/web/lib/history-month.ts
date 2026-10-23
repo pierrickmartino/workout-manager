@@ -237,11 +237,17 @@ export function visibleHistory(
 // The month Month view opens on when the URL names none: the newest matching Logged Session's,
 // so the view never lands on an empty month after a break. When nothing matches, the newest
 // record's month, so the screen still names a month to say "No matching sessions in". Null
-// only for an empty record, which History answers with its first-run prompt instead.
+// only for an empty record, which History answers with its first-run prompt instead. Taken as
+// the max, like `recordBounds`, so it never depends on the order the rows arrive in.
 function openingMonth(
   matches: readonly HistoryIndexRow[],
   index: readonly HistoryIndexRow[],
 ): string | null {
-  const newest = matches[0] ?? index[0];
-  return newest === undefined ? null : monthOf(newest.performed_on);
+  return newestMonth(matches) ?? newestMonth(index);
+}
+
+// The latest `YYYY-MM` among the rows, or null when there are none.
+function newestMonth(rows: readonly HistoryIndexRow[]): string | null {
+  if (rows.length === 0) return null;
+  return rows.map((row) => monthOf(row.performed_on)).reduce((a, b) => (b > a ? b : a));
 }
