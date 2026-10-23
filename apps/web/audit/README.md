@@ -190,11 +190,14 @@ npm run audit:serve
 npm run audit:wide
 ```
 
-Same journeys, same `fixtures.ts` names, at 1440×900 — including `home`, the only
-journey that opts in with `data-shell="wide"` and so the only one exercising the
-wide content *column* rather than only the wide frame. It renders through the same
-`HomeColumns` the real page uses, so the sweep measures Home's layout rather than a
-copy that would drift. Three gates, all of which
+Same journeys, same `fixtures.ts` names, at 1440×900 — including `home` and
+`history-month` (History's Month view with a day selected, #761), the journeys that
+opt in with `data-shell="wide"` and so exercise the wide content *column* rather
+than only the wide frame. They render through the same `HomeColumns` and
+`HistoryBrowser` the real pages use, so the sweep measures their layout rather than
+a copy that would drift. A journey that needs the page's URL state seeds it with
+`seedSearchParams` (`boundaries.tsx`); the harness's own query is not the page's.
+Three gates, all of which
 must be zero: the document may not overflow the viewport; `<main>`'s **border**
 box may not exceed `--spacing-shell-wide`; and an **unconverted** page's content
 column — the `[data-shell-column]` wrapper — may not exceed `--spacing-shell`.

@@ -1,4 +1,5 @@
 import { ChartAccessibilityFixture } from "./chart-fixture";
+import { seedSearchParams } from "./boundaries";
 import { createRoot } from "react-dom/client";
 import { useState } from "react";
 import "./styles.css";
@@ -122,6 +123,11 @@ const mode = params.get("mode") ?? "dark";
 document.documentElement.dataset.skin = skin;
 if (mode !== "system") document.documentElement.dataset.mode = mode;
 const count = Math.min(10000, Math.max(0, Number(params.get("count") ?? 2)));
+// The page URL `HistoryBrowser` seeds its filters from, as the real `/history?view=month…` link
+// would carry it. Every synthetic record is performed on 2026-09-01 (`fixtures.ts`).
+if (journey === "history-month") {
+  seedSearchParams({ view: "month", month: "2026-09", day: "2026-09-01" });
+}
 
 function Analytics() {
   const [open, setOpen] = useState(false);
@@ -611,6 +617,10 @@ function Content() {
     case "protocols-live": return <ProtocolsIndex index={protocolsIndex(protocolIndexEntries, auditLiveSession)} />;
     // The server renders the first window; a count beyond it exercises "Show more" (ADR-0128).
     case "history": return <HistoryBrowser index={historyIndex(count)} firstWindow={history(count).slice(0, HISTORY_WINDOW).map(toHistoryCard)} unit="kg" />;
+    // History's Month view with a day selected (ADR-0138), the shape that opts History into the
+    // wide column (ADR-0088): the grid beside the list from `lg:`, above it on a phone. The day
+    // holds every synthetic record, so the "Show all of September 2026" control is on screen too.
+    case "history-month": return <HistoryBrowser index={historyIndex(count)} firstWindow={history(count).slice(0, HISTORY_WINDOW).map(toHistoryCard)} unit="kg" />;
     case "catalog": return <ExerciseCatalogTaxonomy initialFilters={{ query: "", muscleGroups: [], equipment: [], difficulty: [] }} initialTaxonomy={count === 0 ? { groups: [], total: 0 } : count > 50 ? { total: count, groups: [{ pattern: "squat", count, exercises: Array.from({ length: count }, (_, i) => ({ ...exercises[i % 50], id: i + 1 })) }] } : taxonomy} equipmentOptions={["barbell", "dumbbell"]} myEquipment={["barbell"]} usage={[]} referenceIso="2026-09-26" unit="kg" />;
     case "creation": return <PlanHandAuthoredSessionForm draftId="audit-only" unit="kg" seed={{ trainingType: "strength", exercises: exercises.slice(0, 3).map((exercise, index) => ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "repetitions", unit: "km", sets: "3", reps: "12", loadKind: CREATION_LOAD_KINDS[index], loadValue: "" })) }} />;
     // The Log form (`/sessions/log`). The matrix only ever mounted the plan-only form
