@@ -10,7 +10,7 @@ export const usePathname = () => "/train";
 // page's, so a journey that needs a filtered URL — History's Month view with a day selected —
 // names exactly the params the real route would carry.
 let auditSearchParams = new URLSearchParams();
-export function seedSearchParams(params: Record<string, string> | URLSearchParams): void {
+export function seedSearchParams(params: Record<string, string>): void {
   auditSearchParams = new URLSearchParams(params);
 }
 export const useSearchParams = () => auditSearchParams;

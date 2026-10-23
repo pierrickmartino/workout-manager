@@ -111,7 +111,7 @@ import type { Achievement } from "@/lib/profile-progress-types";
 import { SetAsideNote } from "@/components/SetAsideNote";
 import { BasedOnNote } from "@/components/BasedOnNote";
 import { protocolsIndex, type LiveSessionContext } from "@/lib/protocols-index";
-import { adminExerciseRows, auditEntry, exerciseDetail, generationCallDetails, generationCallFilters, generationCallPager, generationCallRows, exerciseNames, exercises, history, historyIndex, spreadHistory, spreadHistoryIndex, liveWorkout, personalRecords, prescriptions, profile, progressStory, protocolIndexEntries, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
+import { adminExerciseRows, auditEntry, exerciseDetail, generationCallDetails, generationCallFilters, generationCallPager, generationCallRows, exerciseNames, exercises, history, historyIndex, liveWorkout, personalRecords, prescriptions, profile, progressStory, protocolIndexEntries, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
 
 const params = new URLSearchParams(location.search);
 if (params.get("fonts") === "fontsource") {
@@ -125,12 +125,9 @@ if (mode !== "system") document.documentElement.dataset.mode = mode;
 const count = Math.min(10000, Math.max(0, Number(params.get("count") ?? 2)));
 // The page URL `HistoryBrowser` seeds its filters from, as the real `/history?view=month…` link
 // would carry it. Every synthetic record is performed on 2026-09-01 (`fixtures.ts`).
-// PROTOTYPE — the filter variants: History's own params (`variant`, `exercise`, `view`…) pass
-// straight through, so a filtered link opens already filtered.
-if (journey === "history-filters-prototype") {
-  const seeded = new URLSearchParams(params);
-  seeded.delete("journey");
-  seedSearchParams(seeded);
+// The facet rail with two facets active (ADR-0139): on a phone, the collapsed rail's tokens.
+if (journey === "history-filtered") {
+  seedSearchParams({ type: "strength", exercise: exerciseNames[0] });
 }
 if (journey === "history-month") {
   seedSearchParams({ view: "month", month: "2026-09", day: "2026-09-01" });
@@ -627,9 +624,8 @@ function Content() {
     // History's Month view with a day selected (ADR-0138), the shape that opts History into the
     // wide column (ADR-0088): the grid beside the list from `lg:`, above it on a phone. The day
     // holds every synthetic record, so the "Show all of September 2026" control is on screen too.
+    case "history-filtered": return <HistoryBrowser index={historyIndex(count)} firstWindow={history(count).slice(0, HISTORY_WINDOW).map(toHistoryCard)} unit="kg" />;
     case "history-month": return <HistoryBrowser index={historyIndex(count)} firstWindow={history(count).slice(0, HISTORY_WINDOW).map(toHistoryCard)} unit="kg" />;
-    // PROTOTYPE — throwaway: the filter variants over a year of spread records.
-    case "history-filters-prototype": return <HistoryBrowser index={spreadHistoryIndex()} firstWindow={spreadHistory().slice(0, HISTORY_WINDOW).map(toHistoryCard)} unit="kg" />;
     case "catalog": return <ExerciseCatalogTaxonomy initialFilters={{ query: "", muscleGroups: [], equipment: [], difficulty: [] }} initialTaxonomy={count === 0 ? { groups: [], total: 0 } : count > 50 ? { total: count, groups: [{ pattern: "squat", count, exercises: Array.from({ length: count }, (_, i) => ({ ...exercises[i % 50], id: i + 1 })) }] } : taxonomy} equipmentOptions={["barbell", "dumbbell"]} myEquipment={["barbell"]} usage={[]} referenceIso="2026-09-26" unit="kg" />;
     case "creation": return <PlanHandAuthoredSessionForm draftId="audit-only" unit="kg" seed={{ trainingType: "strength", exercises: exercises.slice(0, 3).map((exercise, index) => ({ exerciseId: exercise.id, exerciseName: exercise.name, kind: "repetitions", unit: "km", sets: "3", reps: "12", loadKind: CREATION_LOAD_KINDS[index], loadValue: "" })) }} />;
     // The Log form (`/sessions/log`). The matrix only ever mounted the plan-only form
