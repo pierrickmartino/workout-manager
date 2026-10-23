@@ -6,6 +6,23 @@ const MONTHS = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+// Format a `yyyy-mm` calendar month as "March 2026", for History's Month view (ADR-0138).
+// Parsed by regex, never `new Date`, so it is timezone-safe; a string that isn't a plain
+// calendar month is returned as-is.
+export function formatMonthYear(isoMonth: string): string {
+  const match = /^(\d{4})-(\d{2})$/.exec(isoMonth);
+  const name = match === null ? undefined : MONTH_NAMES[Number(match[2]) - 1];
+  if (match === null || name === undefined) {
+    return isoMonth;
+  }
+  return `${name} ${match[1]}`;
+}
+
 // Format an ISO `yyyy-mm-dd` date as a short "Mon D" label. Parsed from the string parts
 // so it is timezone-safe — never shifted a day by a Date constructor's local offset — and
 // deterministic across environments.

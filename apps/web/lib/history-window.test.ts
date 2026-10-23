@@ -126,14 +126,28 @@ test("filtersFromSearchParams reads a Next searchParams bag, single or repeated"
   });
 
   // Assert
-  assert.deepEqual(filters, { exercise: "Deadlift", trainingTypes: ["strength", "hiit"] });
+  assert.deepEqual(filters, {
+    exercise: "Deadlift",
+    trainingTypes: ["strength", "hiit"],
+    view: "list",
+    month: null,
+  });
 });
 
 test("filtersFromSearchParams drops an unknown training type, as the client parse does", () => {
   assert.deepEqual(filtersFromSearchParams({ type: "marketing" }), {
     exercise: null,
     trainingTypes: [],
+    view: "list",
+    month: null,
   });
+});
+
+test("filtersFromSearchParams reads Month view and its month, as the client parse does", () => {
+  const filters = filtersFromSearchParams({ view: "month", month: "2026-03" });
+
+  assert.equal(filters.view, "month");
+  assert.equal(filters.month, "2026-03");
 });
 
 // --- isValidHistoryWindowIds / historyWindowIdsQuery ------------------------------

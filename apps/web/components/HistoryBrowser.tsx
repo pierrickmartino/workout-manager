@@ -15,7 +15,9 @@ import {
   historyFiltersToQuery,
   parseHistoryFilters,
   type HistoryFilters,
+  type HistoryView,
 } from "@/lib/history-filter";
+import { projectHistoryMonth } from "@/lib/history-month";
 import {
   INITIAL_HISTORY_WINDOW_STATE,
   historyWindowReducer,
@@ -36,6 +38,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DeleteLogControl } from "@/components/DeleteLogControl";
+import { HistoryMonthView } from "@/components/HistoryMonthView";
 import { OutcomeToggle } from "@/components/OutcomeToggle";
 import { LoggedSetTable } from "@/components/LoggedSetTable";
 import { NAV_FORWARD } from "@/lib/nav-direction";
@@ -51,6 +54,9 @@ import { NAV_FORWARD } from "@/lib/nav-direction";
 // window view-model decides which visible matches still need fetching — after "Show more", or
 // after a filter change reveals matches the client does not hold yet. All matching and window
 // logic lives in `history-filter` / `history-window`; this component only wires them up.
+//
+// Month view (ADR-0138) narrows the same record to one month, read off `performed_on`; its
+// projection lives in `history-month`, and its matches feed the same window loader.
 export function HistoryBrowser({
   index,
   firstWindow,
@@ -79,7 +85,12 @@ export function HistoryBrowser({
     () => resolveHistoryCards(windowState.fetched, firstWindow),
     [windowState.fetched, firstWindow],
   );
-  const view = planHistoryWindow(filtered, cards, windowState);
+  const month = useMemo(
+    () => (filters.view === "month" ? projectHistoryMonth(index, filters) : null),
+    [index, filters],
+  );
+  const matches = month?.visible ?? filtered;
+  const view = planHistoryWindow(matches, cards, windowState);
   const active = hasActiveFilters(filters);
 
   // Fetch the visible matches the client does not hold yet. Keyed on the ids themselves, so
@@ -120,8 +131,16 @@ export function HistoryBrowser({
     apply({ ...filters, trainingTypes });
   }
 
+  // Clearing the facets keeps the view and the month on screen.
   function clear(): void {
-    apply({ exercise: null, trainingTypes: [] });
+    apply({ ...filters, exercise: null, trainingTypes: [] });
+  }
+
+  // Either way the month is dropped: Month view opens on the newest matching month, and the
+  // List has none (ADR-0138). The exercise / type facets carry over.
+  function setView(next: HistoryView): void {
+    if (next === filters.view) return;
+    apply({ ...filters, view: next, month: null });
   }
 
   return (
@@ -151,6 +170,8 @@ export function HistoryBrowser({
       />
 
       <Card className="flex flex-col gap-4 p-4">
+        <HistoryViewToggle view={filters.view} onChange={setView} />
+
         <div className="flex flex-col gap-2">
           <label
             htmlFor="history-exercise"
@@ -216,18 +237,22 @@ export function HistoryBrowser({
         ) : null}
       </Card>
 
-      {filtered.length === 0 ? (
+      {month !== null ? <HistoryMonthView projection={month} /> : null}
+
+      {matches.length === 0 ? (
         <Card className="flex flex-col items-start gap-3 p-6">
           <p className="font-sans text-sm text-text-secondary">
-            No sessions match these filters.
+            {month !== null ? month.summary : "No sessions match these filters."}
           </p>
-          <button
-            type="button"
-            onClick={clear}
-            className="label-mono text-[11px] text-cyan hover:underline"
-          >
-            Clear filters
-          </button>
+          {active ? (
+            <button
+              type="button"
+              onClick={clear}
+              className="label-mono text-[11px] text-cyan hover:underline"
+            >
+              Clear filters
+            </button>
+          ) : null}
         </Card>
       ) : (
         <ol className="flex list-none flex-col gap-4 p-0">
@@ -268,6 +293,47 @@ export function HistoryBrowser({
         </ol>
       )}
     </section>
+  );
+}
+
+// The List / Month view switch (ADR-0138): two pressed-state buttons, like the Training Type
+// chips beside it. List is the default; the choice is part of the URL.
+const VIEW_OPTIONS: readonly { value: HistoryView; label: string }[] = [
+  { value: "list", label: "List" },
+  { value: "month", label: "Month view" },
+];
+
+function HistoryViewToggle({
+  view,
+  onChange,
+}: {
+  view: HistoryView;
+  onChange: (view: HistoryView) => void;
+}): React.JSX.Element {
+  return (
+    <div
+      role="group"
+      aria-label="History layout"
+      className="grid grid-cols-2 gap-1 self-start rounded-full border border-border p-1"
+    >
+      {VIEW_OPTIONS.map((option) => {
+        const on = option.value === view;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onChange(option.value)}
+            className={cn(
+              "label-mono rounded-full px-3 py-1.5 text-center text-[10px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan/60 motion-reduce:transition-none",
+              on ? "bg-cyan-dim text-cyan" : "text-text-secondary hover:text-cyan",
+            )}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

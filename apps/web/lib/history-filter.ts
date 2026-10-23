@@ -15,15 +15,33 @@ import { TRAINING_TYPES } from "./sessions-types.ts";
 // `type` for each selected Training Type.
 const EXERCISE_PARAM = "exercise";
 const TYPE_PARAM = "type";
+// The Month view's address (ADR-0138): `view=month`, plus an optional `month=YYYY-MM`.
+const VIEW_PARAM = "view";
+const MONTH_PARAM = "month";
 
 const KNOWN_TYPES: ReadonlySet<string> = new Set(TRAINING_TYPES);
 
-// The active History filters. `exercise` is one exact catalog movement name (Q2/Q6) or null
-// for "no exercise constraint". `trainingTypes` is the selected subset of the curated
-// Training Type set (Q6); empty means "no type constraint" (all types).
-export interface HistoryFilters {
+// A plain calendar month, `YYYY-MM` with a real month number. Never a `Date`: a month is a
+// calendar value, not an instant (ADR-0096).
+const ISO_MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+// The two ways History lays out the record: the newest-first List, or Month view (one month
+// of it). List is the default, so a URL without `view` is the screen as it always was.
+export type HistoryView = "list" | "month";
+
+// The facets that narrow which Logged Sessions match. `exercise` is one exact catalog movement
+// name (Q2/Q6) or null for "no exercise constraint". `trainingTypes` is the selected subset of
+// the curated Training Type set (Q6); empty means "no type constraint" (all types).
+export interface HistoryFacets {
   exercise: string | null;
   trainingTypes: string[];
+}
+
+// Everything History's URL carries: the facets, the view, and — in Month view only — the
+// month on screen (`YYYY-MM`). A null month in Month view means "the newest matching month".
+export interface HistoryFilters extends HistoryFacets {
+  view: HistoryView;
+  month: string | null;
 }
 
 // The distinct exercises the user has actually logged, alphabetical — the options for the
@@ -54,7 +72,7 @@ function performedExercise(record: Filterable, exercise: string): boolean {
 // facet imposes no constraint; a set exercise AND a non-empty training-type set both apply.
 export function filterHistory<T extends Filterable>(
   records: readonly T[],
-  filters: HistoryFilters,
+  filters: HistoryFacets,
 ): T[] {
   const { exercise, trainingTypes } = filters;
   return records.filter((record) => {
@@ -72,7 +90,8 @@ export function filterHistory<T extends Filterable>(
 }
 
 // Whether any facet is active — drives the "3 of 24" filtered count vs the plain "24" (Q9).
-export function hasActiveFilters(filters: HistoryFilters): boolean {
+// The view and month are not facets: Month view with no exercise or type is unfiltered.
+export function hasActiveFilters(filters: HistoryFacets): boolean {
   return filters.exercise !== null || filters.trainingTypes.length > 0;
 }
 
@@ -92,11 +111,18 @@ export function parseHistoryFilters(params: URLSearchParams): HistoryFilters {
     }
   }
 
-  return { exercise, trainingTypes };
+  // Only `view=month` selects Month view; anything else is the default List. A month is read
+  // only in Month view, and only when it is a real `YYYY-MM` (ADR-0138).
+  const view: HistoryView = params.get(VIEW_PARAM) === "month" ? "month" : "list";
+  const rawMonth = params.get(MONTH_PARAM) ?? "";
+  const month = view === "month" && ISO_MONTH.test(rawMonth) ? rawMonth : null;
+
+  return { exercise, trainingTypes, view, month };
 }
 
 // Serialize filter state back into a query string for router navigation (Q8) — the inverse of
-// `parseHistoryFilters`. Unset facets contribute nothing, so a cleared filter yields "".
+// `parseHistoryFilters`. Unset facets contribute nothing, so a cleared filter yields "". The
+// List view is the default and writes no `view`, and a month is written only in Month view.
 export function historyFiltersToQuery(
   filters: HistoryFilters,
 ): URLSearchParams {
@@ -106,6 +132,12 @@ export function historyFiltersToQuery(
   }
   for (const type of filters.trainingTypes) {
     params.append(TYPE_PARAM, type);
+  }
+  if (filters.view === "month") {
+    params.set(VIEW_PARAM, "month");
+    if (filters.month !== null) {
+      params.set(MONTH_PARAM, filters.month);
+    }
   }
   return params;
 }
