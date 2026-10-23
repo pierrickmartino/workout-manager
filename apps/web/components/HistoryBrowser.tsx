@@ -37,6 +37,24 @@ import { HistoryColumns } from "@/components/HistoryColumns";
 import { HistoryMonthView } from "@/components/HistoryMonthView";
 import { HistoryViewToggle } from "@/components/HistoryViewToggle";
 import { NAV_FORWARD } from "@/lib/nav-direction";
+// PROTOTYPE — throwaway Month view variants (`?variant=`); see components/prototype/.
+import {
+  PrototypeSwitcher,
+  usePrototypeVariant,
+  withPrototypeVariant,
+} from "@/components/prototype/PrototypeSwitcher";
+import {
+  VariantMonthRibbon,
+  VariantTypeTiles,
+  VariantWeekAgenda,
+} from "@/components/prototype/HistoryMonthVariants";
+
+const MONTH_VARIANTS = [
+  { key: "A", name: "Current" },
+  { key: "B", name: "Type tiles" },
+  { key: "C", name: "Month ribbon" },
+  { key: "D", name: "Week agenda" },
+] as const;
 
 // The interactive History screen: search by exercise + filter by Training Type over the
 // record (ADR-0031). Filtering is entirely client-side over the History index (Q4) — the
@@ -112,8 +130,10 @@ export function HistoryBrowser({
     dispatch({ type: "filters-changed" });
     // Update the shareable URL without a navigation, so the Server Component and its index
     // read are never re-run by a filter change (Q4/Q8).
-    replaceFilterQuery(historyFiltersToQuery(next));
+    replaceFilterQuery(withPrototypeVariant(historyFiltersToQuery(next)));
   }
+
+  const [variant, setVariant] = usePrototypeVariant(MONTH_VARIANTS);
 
   // A facet change keeps Month view on the month on screen, even when it empties it: the month
   // is pinned before the facets move, so it is never re-resolved under the reader (ADR-0138).
@@ -273,17 +293,28 @@ export function HistoryBrowser({
       {month !== null ? (
         <HistoryColumns
           grid={
-            <HistoryMonthView
-              projection={month}
-              onNavigate={goToMonth}
-              onSelectDay={selectDay}
-            />
+            variant === "B" ? (
+              <VariantTypeTiles projection={month} matches={filtered} onNavigate={goToMonth} onSelectDay={selectDay} />
+            ) : variant === "C" ? (
+              <VariantMonthRibbon projection={month} matches={filtered} onNavigate={goToMonth} onSelectDay={selectDay} />
+            ) : variant === "D" ? (
+              <VariantWeekAgenda projection={month} matches={filtered} onNavigate={goToMonth} onSelectDay={selectDay} />
+            ) : (
+              <HistoryMonthView
+                projection={month}
+                onNavigate={goToMonth}
+                onSelectDay={selectDay}
+              />
+            )
           }
           list={list}
         />
       ) : (
         list
       )}
+      {month !== null ? (
+        <PrototypeSwitcher variants={MONTH_VARIANTS} current={variant} onChange={setVariant} />
+      ) : null}
     </section>
   );
 }
