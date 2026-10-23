@@ -1,8 +1,9 @@
-// Calendar arithmetic on plain `YYYY-MM` months, for History's Month view (ADR-0138). A month
-// is a calendar value, not an instant, so this is arithmetic on its parts — never a `Date`,
-// which a time zone could shift (ADR-0096).
+// Arithmetic on plain `YYYY-MM` months, for History's Month view (ADR-0138). A month is a
+// calendar value, not an instant, so this is arithmetic on its parts — never a `Date`, which a
+// time zone could shift (ADR-0096).
 
-const DAYS_PER_WEEK = 7;
+export const DAYS_PER_WEEK = 7;
+const MONTHS_PER_YEAR = 12;
 
 function parts(month: string): [year: number, monthNumber: number] {
   const [year, monthNumber] = month.split("-").map(Number);
@@ -40,4 +41,13 @@ export function mondayColumnOfFirst(month: string): number {
 // The `YYYY-MM-DD` of day `day` of `month`.
 export function dayOfMonth(month: string, day: number): string {
   return `${month}-${String(day).padStart(2, "0")}`;
+}
+
+// The `YYYY-MM` `delta` months from `month`, counting across year ends.
+export function shiftMonth(month: string, delta: number): string {
+  const [year, monthNumber] = parts(month);
+  const total = year * MONTHS_PER_YEAR + (monthNumber - 1) + delta;
+  const nextYear = Math.floor(total / MONTHS_PER_YEAR);
+  const nextMonth = (total % MONTHS_PER_YEAR) + 1;
+  return `${String(nextYear).padStart(4, "0")}-${String(nextMonth).padStart(2, "0")}`;
 }

@@ -10,7 +10,7 @@
 
 import type { HistoryIndexRow } from "./logs-types";
 import { TRAINING_TYPES } from "./sessions-types.ts";
-import { daysInMonth } from "./calendar-month.ts";
+import { daysInMonth } from "./month-arithmetic.ts";
 
 // The URL param names the filter state lives under (Q8): a single `exercise`, and a repeated
 // `type` for each selected Training Type.

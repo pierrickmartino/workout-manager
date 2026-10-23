@@ -6,7 +6,13 @@
 // facets and then through one month (AND). It knows no "today" and has no notion of a missed
 // day: a month either holds matching Logged Sessions or it does not.
 
-import { dayOfMonth, daysInMonth, mondayColumnOfFirst } from "./calendar-month.ts";
+import {
+  DAYS_PER_WEEK,
+  dayOfMonth,
+  daysInMonth,
+  mondayColumnOfFirst,
+  shiftMonth,
+} from "./month-arithmetic.ts";
 import { formatDayMonthYear, formatFullDate, formatMonthYear } from "./date-format.ts";
 import { filterHistory, type HistoryFilters } from "./history-filter.ts";
 import type { HistoryIndexRow } from "./logs-types";
@@ -122,8 +128,6 @@ export function projectHistoryMonth(
   };
 }
 
-const DAYS_PER_WEEK = 7;
-
 // Copy names what matched, never what didn't happen: no "missed", no "Calendar".
 function countLine(
   visible: readonly HistoryIndexRow[],
@@ -198,16 +202,6 @@ function monthStep(direction: string, month: string | null): HistoryMonthStep {
     month,
     label: month === null ? direction : `${direction}, ${formatMonthYear(month)}`,
   };
-}
-
-// The `YYYY-MM` `delta` months from `month`, by arithmetic on the parts — never a `Date`, so
-// no time zone can move it (ADR-0096).
-function shiftMonth(month: string, delta: number): string {
-  const [year, monthNumber] = month.split("-").map(Number);
-  const total = year * 12 + (monthNumber - 1) + delta;
-  const nextYear = Math.floor(total / 12);
-  const nextMonth = (total % 12) + 1;
-  return `${String(nextYear).padStart(4, "0")}-${String(nextMonth).padStart(2, "0")}`;
 }
 
 // The first and newest months the whole record holds. Taken as the min / max rather than read
