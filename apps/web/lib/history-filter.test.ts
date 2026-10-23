@@ -229,7 +229,6 @@ test("historyFiltersToQuery round-trips through parseHistoryFilters", () => {
   const filters = {
     exercise: "Bench Press",
     trainingTypes: ["strength", "yoga"],
-    view: "list" as const,
     month: null,
     day: null,
   };
@@ -246,7 +245,6 @@ test("historyFiltersToQuery omits an unset exercise and empty types", () => {
   const query = historyFiltersToQuery({
     exercise: null,
     trainingTypes: [],
-    view: "list",
     month: null,
     day: null,
   });
@@ -271,21 +269,19 @@ test("hasActiveFilters is false only when neither facet is set", () => {
   );
 });
 
-// --- view / month: the Month view's address (ADR-0100, ADR-0138) -------------
+// --- month: the month on screen (ADR-0100, ADR-0138, ADR-0140) --------------
 
-test("parseHistoryFilters opens the List view with no month when view is absent", () => {
+test("parseHistoryFilters reads no month when the URL names none", () => {
   const filters = parseHistoryFilters(new URLSearchParams("type=yoga"));
 
-  assert.equal(filters.view, "list");
   assert.equal(filters.month, null);
 });
 
-test("a Month view state round-trips through the URL alongside the facets", () => {
+test("a month round-trips through the URL alongside the facets", () => {
   // Arrange
   const filters = {
     exercise: "Back Squat",
     trainingTypes: ["strength"],
-    view: "month" as const,
     month: "2026-03",
     day: null,
   };
@@ -295,67 +291,45 @@ test("a Month view state round-trips through the URL alongside the facets", () =
   const reparsed = parseHistoryFilters(new URLSearchParams(query.toString()));
 
   // Assert
-  assert.equal(query.get("view"), "month");
   assert.equal(query.get("month"), "2026-03");
   assert.deepEqual(reparsed, filters);
 });
 
-test("parseHistoryFilters drops a malformed month but keeps the Month view", () => {
+test("parseHistoryFilters drops a malformed month", () => {
   for (const month of ["2026-13", "2026-00", "2026-3", "26-03", "2026-03-01", "march", ""]) {
     // Act
-    const filters = parseHistoryFilters(
-      new URLSearchParams({ view: "month", month }),
-    );
+    const filters = parseHistoryFilters(new URLSearchParams({ month }));
 
     // Assert
-    assert.equal(filters.view, "month", month);
     assert.equal(filters.month, null, month);
   }
 });
 
-test("parseHistoryFilters ignores a month without view=month", () => {
-  const filters = parseHistoryFilters(new URLSearchParams("month=2026-03"));
+test("parseHistoryFilters ignores a retired view param from an old link", () => {
+  for (const view of ["list", "month", "calendar"]) {
+    // Act
+    const filters = parseHistoryFilters(
+      new URLSearchParams({ view, month: "2026-03" }),
+    );
 
-  assert.equal(filters.view, "list");
-  assert.equal(filters.month, null);
+    // Assert: the month is read either way, and nothing records the view
+    assert.deepEqual(
+      filters,
+      { exercise: null, trainingTypes: [], month: "2026-03", day: null },
+      view,
+    );
+  }
 });
 
-test("parseHistoryFilters reads an unknown view as the List view", () => {
-  const filters = parseHistoryFilters(
-    new URLSearchParams("view=calendar&month=2026-03"),
-  );
-
-  assert.equal(filters.view, "list");
-  assert.equal(filters.month, null);
-});
-
-test("historyFiltersToQuery writes nothing for the List view and drops a stale month", () => {
-  // Arrange: a List state that still carries a month
-  const filters = {
-    exercise: null,
-    trainingTypes: ["yoga"],
-    view: "list" as const,
-    month: "2026-03",
-    day: null,
-  };
-
-  // Act
-  const query = historyFiltersToQuery(filters);
-
-  // Assert: the facets survive, the view and month do not
-  assert.equal(query.toString(), "type=yoga");
-});
-
-test("historyFiltersToQuery writes a Month view with no month as the view alone", () => {
+test("historyFiltersToQuery never writes a view param", () => {
   const query = historyFiltersToQuery({
     exercise: null,
-    trainingTypes: [],
-    view: "month",
-    month: null,
+    trainingTypes: ["yoga"],
+    month: "2026-03",
     day: null,
   });
 
-  assert.equal(query.toString(), "view=month");
+  assert.equal(query.toString(), "type=yoga&month=2026-03");
 });
 
 // --- day: one day of the Month view (ADR-0138) --------------------------------
@@ -365,7 +339,6 @@ test("a selected day round-trips through the URL with its month", () => {
   const filters = {
     exercise: null,
     trainingTypes: ["yoga"],
-    view: "month" as const,
     month: "2026-03",
     day: "2026-03-14",
   };
@@ -381,7 +354,7 @@ test("a selected day round-trips through the URL with its month", () => {
 
 test("parseHistoryFilters reads no day when the URL names none", () => {
   const filters = parseHistoryFilters(
-    new URLSearchParams("view=month&month=2026-03"),
+    new URLSearchParams("month=2026-03"),
   );
 
   assert.equal(filters.day, null);
@@ -402,7 +375,7 @@ test("parseHistoryFilters drops a malformed day but keeps the month", () => {
   for (const [month, day] of cases) {
     // Act
     const filters = parseHistoryFilters(
-      new URLSearchParams({ view: "month", month, day }),
+      new URLSearchParams({ month, day }),
     );
 
     // Assert
@@ -413,7 +386,7 @@ test("parseHistoryFilters drops a malformed day but keeps the month", () => {
 
 test("parseHistoryFilters keeps the 29th of February in a leap year", () => {
   const filters = parseHistoryFilters(
-    new URLSearchParams("view=month&month=2028-02&day=2028-02-29"),
+    new URLSearchParams("month=2028-02&day=2028-02-29"),
   );
 
   assert.equal(filters.day, "2028-02-29");
@@ -421,7 +394,7 @@ test("parseHistoryFilters keeps the 29th of February in a leap year", () => {
 
 test("parseHistoryFilters drops a day outside its month", () => {
   const filters = parseHistoryFilters(
-    new URLSearchParams("view=month&month=2026-03&day=2026-04-14"),
+    new URLSearchParams("month=2026-03&day=2026-04-14"),
   );
 
   assert.equal(filters.month, "2026-03");
@@ -430,27 +403,17 @@ test("parseHistoryFilters drops a day outside its month", () => {
 
 test("parseHistoryFilters drops a day when the URL names no month", () => {
   const filters = parseHistoryFilters(
-    new URLSearchParams("view=month&day=2026-03-14"),
+    new URLSearchParams("day=2026-03-14"),
   );
 
   assert.equal(filters.day, null);
 });
 
-test("parseHistoryFilters ignores a day without view=month", () => {
-  const filters = parseHistoryFilters(
-    new URLSearchParams("month=2026-03&day=2026-03-14"),
-  );
-
-  assert.equal(filters.view, "list");
-  assert.equal(filters.day, null);
-});
-
-test("historyFiltersToQuery drops a stale day from the List view", () => {
+test("historyFiltersToQuery drops a day without its month", () => {
   const query = historyFiltersToQuery({
     exercise: null,
     trainingTypes: [],
-    view: "list",
-    month: "2026-03",
+    month: null,
     day: "2026-03-14",
   });
 

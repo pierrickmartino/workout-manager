@@ -50,8 +50,8 @@ const ALL_JOURNEYS = [
   "home",
   // History's Month view with a day selected (#761), the second page converted to the wide
   // column: the grid sticks beside the list. Like `home` it opts in, so its `columnOverNarrow`
-  // gate is inapplicable. Since ADR-0139 the List (`history`) opts in too, its facet rail
-  // beside the results; `history-filtered` is that rail with two facets picked.
+  // gate is inapplicable. Since ADR-0140 `history` is Month view too, on its newest month,
+  // the facet rail beside it; `history-filtered` is that rail with two facets picked.
   "history-month", "history-filtered",
   // The themed confirmation (ADR-0098), which no other journey mounts because a dialog exists
   // only while it is open. Its `max-w-sm` box must not stretch with the wide frame.

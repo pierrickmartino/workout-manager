@@ -13,7 +13,6 @@ import {
   parseHistoryFilters,
   type HistoryFacets,
   type HistoryFilters,
-  type HistoryView,
 } from "@/lib/history-filter";
 import { pinVisibleMonth, projectHistoryMonth } from "@/lib/history-month";
 import {
@@ -45,8 +44,9 @@ import { NAV_FORWARD } from "@/lib/nav-direction";
 // after a filter change reveals matches the client does not hold yet. All matching and window
 // logic lives in `history-filter` / `history-window`; this component only wires them up.
 //
-// Month view (ADR-0138) narrows the same record to one month, read off `performed_on`; its
-// projection lives in `history-month`, and its matches feed the same window loader.
+// The screen is Month view alone (ADR-0138, ADR-0140): the facets narrow the record, then one
+// month of it, read off `performed_on`, is on screen. The projection lives in `history-month`,
+// and its matches feed the window loader.
 export function HistoryBrowser({
   index,
   firstWindow,
@@ -74,11 +74,8 @@ export function HistoryBrowser({
     () => resolveHistoryCards(windowState.fetched, firstWindow),
     [windowState.fetched, firstWindow],
   );
-  const month = useMemo(
-    () => (filters.view === "month" ? projectHistoryMonth(index, filters) : null),
-    [index, filters],
-  );
-  const matches = month?.visible ?? filtered;
+  const month = useMemo(() => projectHistoryMonth(index, filters), [index, filters]);
+  const matches = month.visible;
   const windowPlan = planHistoryWindow(matches, cards, windowState);
   const active = hasActiveFilters(filters);
 
@@ -109,7 +106,7 @@ export function HistoryBrowser({
     replaceFilterQuery(historyFiltersToQuery(next));
   }
 
-  // A facet change keeps Month view on the month on screen, even when it empties it: the month
+  // A facet change keeps the month on screen, even when it empties it: the month
   // is pinned before the facets move, so it is never re-resolved under the reader (ADR-0138).
   function applyFacets(facets: Partial<HistoryFacets>): void {
     apply({ ...pinVisibleMonth(index, filters), ...facets });
@@ -126,16 +123,9 @@ export function HistoryBrowser({
     applyFacets({ trainingTypes });
   }
 
-  // Clearing the facets keeps the view and the month on screen.
+  // Clearing the facets keeps the month on screen.
   function clear(): void {
     applyFacets({ exercise: null, trainingTypes: [] });
-  }
-
-  // The List has no month and no day. Month view opens on the newest matching month and pins it
-  // into the URL straight away (ADR-0138). The exercise / type facets carry over either way.
-  function setView(next: HistoryView): void {
-    if (next === filters.view) return;
-    apply(pinVisibleMonth(index, { ...filters, view: next, month: null, day: null }));
   }
 
   // The month arrows: the projection only offers months inside the record's bounds. A new
@@ -150,13 +140,13 @@ export function HistoryBrowser({
     apply({ ...pinVisibleMonth(index, filters), day });
   }
 
-  // The cards, or the empty state when nothing matches: the same in both views. Month view
-  // sets them beside its grid from `lg:` (ADR-0138); the List renders them as it always has.
+  // The cards, or the month's empty state when nothing matches, set beside the grid from `lg:`
+  // (ADR-0138).
   const list = (
     <HistoryCardList
       windowPlan={windowPlan}
       isEmpty={matches.length === 0}
-      emptyMessage={month !== null ? month.summary : "No sessions match these filters."}
+      emptyMessage={month.summary}
       onClear={active ? clear : undefined}
       unit={unit}
       onCorrected={(corrected) => dispatch({ type: "corrected", card: corrected })}
@@ -167,7 +157,7 @@ export function HistoryBrowser({
 
   return (
     // History opts into the wide content column (ADR-0088): from `lg:` the facet rail sits
-    // beside the results in both views (ADR-0139). Below `lg:` nothing is wider.
+    // beside the results (ADR-0139). Below `lg:` nothing is wider.
     <section className="flex flex-col gap-6" data-shell="wide">
       <PageHeader
         overline="PULSE // STATS"
@@ -199,22 +189,17 @@ export function HistoryBrowser({
         onExercise={setExercise}
         onToggleType={toggleType}
         onClear={clear}
-        onView={setView}
       >
-        {month !== null ? (
-          <HistoryColumns
-            grid={
-              <HistoryMonthView
-                projection={month}
-                onNavigate={goToMonth}
-                onSelectDay={selectDay}
-              />
-            }
-            list={list}
-          />
-        ) : (
-          list
-        )}
+        <HistoryColumns
+          grid={
+            <HistoryMonthView
+              projection={month}
+              onNavigate={goToMonth}
+              onSelectDay={selectDay}
+            />
+          }
+          list={list}
+        />
       </HistoryFacetRail>
     </section>
   );

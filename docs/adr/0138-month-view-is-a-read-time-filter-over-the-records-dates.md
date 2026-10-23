@@ -7,7 +7,8 @@ status: accepted
 History lists every Logged Session newest first, filterable by exercise and Training Type
 (ADR-0031, ADR-0128). A user who remembers *roughly when* they trained ("sometime in March")
 could only scroll and read dates. History gains a **List / Month view** switch; List stays the
-default and unchanged.
+default and unchanged. *(Superseded in part by ADR-0140: the switch and the
+List are retired, and History is Month view alone.)*
 
 **Month view is a descriptive, read-time filter over the record's `performed_on` dates, and
 nothing more.** ADR-0001 made the plan calendar-free: no "today", no dated schedule. Like the

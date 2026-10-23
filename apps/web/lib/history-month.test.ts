@@ -34,7 +34,6 @@ function monthView(overrides: Partial<HistoryFilters> = {}): HistoryFilters {
   return {
     exercise: null,
     trainingTypes: [],
-    view: "month",
     month: null,
     day: null,
     ...overrides,
@@ -167,7 +166,7 @@ test("Month view with no match in its month says so, without calling the days mi
   assert.equal(view.summary, "No matching sessions in March 2026");
 });
 
-test("visibleHistory is the month's matches in Month view and every match in the List", () => {
+test("visibleHistory is the month's facet matches, never the whole record", () => {
   // Arrange
   const index = [
     row(3, "2026-04-02"),
@@ -177,12 +176,12 @@ test("visibleHistory is the month's matches in Month view and every match in the
   const facets = { exercise: null, trainingTypes: ["strength"] };
 
   // Act
-  const list = visibleHistory(index, { ...facets, view: "list", month: null, day: null });
-  const month = visibleHistory(index, { ...facets, view: "month", month: "2026-03", day: null });
+  const opening = visibleHistory(index, { ...facets, month: null, day: null });
+  const march = visibleHistory(index, { ...facets, month: "2026-03", day: null });
 
-  // Assert
-  assert.deepEqual(list.map((r) => r.id), [3, 1]);
-  assert.deepEqual(month.map((r) => r.id), [1]);
+  // Assert: with no month, the newest matching month alone
+  assert.deepEqual(opening.map((r) => r.id), [3]);
+  assert.deepEqual(march.map((r) => r.id), [1]);
 });
 
 test("Month view of an empty record names no month", () => {
@@ -298,18 +297,6 @@ test("Pinning replaces an out-of-range URL month with the month actually on scre
 
   // Assert
   assert.equal(pinned.month, "2026-04");
-});
-
-test("Pinning leaves the List untouched: it has no month", () => {
-  // Arrange
-  const index = [row(1, "2026-04-02")];
-  const list = monthView({ view: "list" });
-
-  // Act
-  const pinned = pinVisibleMonth(index, list);
-
-  // Assert
-  assert.deepEqual(pinned, list);
 });
 
 // --- the day grid (#760): Monday weeks, presence counts, day selection ---------

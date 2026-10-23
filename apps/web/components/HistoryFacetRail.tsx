@@ -3,14 +3,13 @@
 import { useDeferredValue, useId, useState } from "react";
 
 import type { HistoryIndexRow } from "@/lib/logs-types";
-import type { HistoryFilters, HistoryView } from "@/lib/history-filter";
+import type { HistoryFilters } from "@/lib/history-filter";
 import { projectHistoryFacets } from "@/lib/history-facets";
 import { trainingTypeFillClass } from "@/lib/training-type-accent";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { ChevronDown, X } from "@/components/pulse/icons";
-import { HistoryViewToggle } from "@/components/HistoryViewToggle";
 
 // History's filters as a facet rail (ADR-0139): every Training Type and every logged exercise,
 // each with how many Logged Sessions picking it would show, read off the History index at render
@@ -28,7 +27,6 @@ export function HistoryFacetRail({
   onExercise,
   onToggleType,
   onClear,
-  onView,
   children,
 }: {
   index: HistoryIndexRow[];
@@ -36,8 +34,7 @@ export function HistoryFacetRail({
   onExercise: (exercise: string | null) => void;
   onToggleType: (type: string) => void;
   onClear: () => void;
-  onView: (view: HistoryView) => void;
-  // The results — the List, or Month view's grid and list — placed beside the rail.
+  // The results — Month view's grid and list — placed beside the rail.
   children: React.ReactNode;
 }): React.JSX.Element {
   const railId = useId();
@@ -55,8 +52,6 @@ export function HistoryFacetRail({
     // Flex, not bracket tracks (ADR-0088): a stacked column below `lg:`, rail beside results above.
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
       <div className="flex min-w-0 flex-col gap-4 lg:w-64 lg:shrink-0">
-        <HistoryViewToggle view={filters.view} onChange={onView} />
-
         <button
           type="button"
           aria-expanded={open}

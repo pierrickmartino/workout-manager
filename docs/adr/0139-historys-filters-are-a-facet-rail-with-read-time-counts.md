@@ -49,7 +49,7 @@ So the filter also shows what the record holds.
 - **Below `lg:` the rail folds behind a "Filters · n" disclosure**, with the List / Month
   switch kept above it. When the rail is closed, the active facets stay on screen as removable
   tokens. There is one rail in the DOM, and CSS alone moves it, so no id or heading is
-  rendered twice.
+  rendered twice. *(ADR-0140 retires the List / Month switch.)*
 - The rail adds no action. Every row calls the setters the screen already had.
 - `history-filtered` (two facets picked) joins `audit/reflow.mjs` and `audit/wide.mjs`; the
   `history` journey is now a wide-column page.

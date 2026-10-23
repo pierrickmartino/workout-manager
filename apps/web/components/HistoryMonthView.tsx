@@ -12,8 +12,8 @@ import { SectionHeader } from "@/components/pulse/section-header";
 // History's Month view (ADR-0138): the month on screen, the previous / next month arrows, a
 // Monday-first grid of its days, each marking its matching Logged Sessions by Training Type, the
 // legend naming those types, and how many of the month's Logged Sessions match. A thin renderer of
-// `projectHistoryMonth`; the cards below it are the same History cards as the List, fed through
-// the same window loader. The heading is a polite live region, so a reader hears where the
+// `projectHistoryMonth`; the cards beside it are History's cards, fed through the window
+// loader. The heading is a polite live region, so a reader hears where the
 // arrows took the view.
 export function HistoryMonthView({
   projection,

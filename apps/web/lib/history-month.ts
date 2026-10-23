@@ -227,13 +227,11 @@ function monthWeeks(
 
 // The filters with Month view's month fixed to the one on screen. A URL without a month opens
 // on the newest *matching* month, so without this a filter change would re-resolve and jump
-// the view; pinned, a change that empties the month keeps it and shows its empty state. The
-// List has no month, so it is returned as is.
+// the view; pinned, a change that empties the month keeps it and shows its empty state.
 export function pinVisibleMonth(
   index: readonly HistoryIndexRow[],
   filters: HistoryFilters,
 ): HistoryFilters {
-  if (filters.view !== "month") return filters;
   const { month, day } = projectHistoryMonth(index, filters);
   return { ...filters, month, day };
 }
@@ -265,16 +263,14 @@ function recordBounds(index: readonly HistoryIndexRow[]): HistoryMonthBounds | n
   };
 }
 
-// The Logged Sessions History shows for these filters, newest first: every facet match in the
-// List, the month's matches in Month view. The page picks its first window from this and the
+// The Logged Sessions History shows for these filters, newest first: the month's matches, or
+// the selected day's. The page picks its first window from this and the
 // browser feeds it to the window loader, so both agree on what is on screen (ADR-0128).
 export function visibleHistory(
   index: readonly HistoryIndexRow[],
   filters: HistoryFilters,
 ): HistoryIndexRow[] {
-  return filters.view === "month"
-    ? projectHistoryMonth(index, filters).visible
-    : filterHistory(index, filters);
+  return projectHistoryMonth(index, filters).visible;
 }
 
 // The month Month view opens on when the URL names none: the newest matching Logged Session's,
