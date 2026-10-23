@@ -60,3 +60,30 @@ plan is what ADR-0001 forbids.
   an empty month.
 - **Naming it "Calendar".** Rejected: GLOSSARY already lists "calendar" under _Avoid_, because the
   domain has no calendar binding.
+
+## Amendment — day cells mark each Logged Session by Training Type
+
+The first grid gave a day with matching Logged Sessions one neutral dot, so a month told the
+reader *that* they trained but not *what*. Four designs were prototyped on the real route
+(the current grid; Type tiles; a ribbon of every month on record; a week agenda). They were
+judged on a synthetic year of records, and **Type tiles** was chosen. The prototype is kept in
+this branch's history as commit `c7506b3` and is not on main.
+
+- **A day with matching Logged Sessions is a raised tile carrying one mark per session**, in
+  its Training Type's colour. These are the Workout Signature's accents, through
+  `trainingTypeFillClass` in `lib/training-type-accent.ts`, so the two can never disagree.
+  Marks are grouped most frequent type first. A cell shows at most three (`MAX_DAY_MARKS`) and
+  counts the rest as "+n", so it still fits a 320px column (ADR-0085).
+- **Colour is never the only carrier.** Each day's accessible name names the types ("14
+  October 2026, 3 sessions: 2 strength, 1 yoga"). A legend under the grid names every type in
+  the month with its count (`typeTally`), for the whole month even when a day is selected. The
+  legend is read-only: the Training Type chips above remain the filter.
+- **The guardrails above still hold.** A mark is one equal-sized sign per Logged Session, not a
+  shade graded by volume, load or effort, so there is still no intensity shading. A day with
+  nothing logged stays a plain number, never styled as missed. Nothing marks a "today".
+- Both new fields come from `projectHistoryMonth`, in the same projection as the rest of the
+  view.
+
+Rejected alternatives: the **month ribbon** gave a good year overview, but it replaced the
+arrows and made day selection a second step. The **week agenda** duplicated the cards beside
+it on wide screens and grew long on a phone.

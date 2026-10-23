@@ -307,38 +307,3 @@ export const progressStory: ProgressStory = {
   previous: { logged_session_id: 999, performed_on: "2026-09-19", value: 22 },
   body_weight: { previous_kg: 102.5, latest_kg: 98.5 },
 };
-// PROTOTYPE — throwaway. A year of History spread across real dates (Nov 2025 → Oct 2026), so
-// the Month view variants (`components/prototype/`) can be judged on a realistic record: about
-// three sessions a week, mixed Training Types, a few double days and a three-week break.
-const SPREAD_TYPES = ["strength", "strength", "cardio", "hiit", "yoga", "mobility", "strength"] as const;
-const SPREAD_EXERCISES = ["Back squat", "Romanian deadlift", "Bench press", "Pull-up", "Rowing", "Sun salutation", "Hip airplane"];
-export function spreadHistory(): LoggedSession[] {
-  const records: LoggedSession[] = [];
-  let seed = 7;
-  const next = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
-  for (let t = Date.UTC(2026, 9, 20); t >= Date.UTC(2025, 10, 3); t -= 86_400_000) {
-    const date = new Date(t).toISOString().slice(0, 10);
-    if (date >= "2026-07-06" && date <= "2026-07-26") continue;
-    const roll = next();
-    const sessions = roll < 0.4 ? 1 : roll < 0.45 ? 2 : 0;
-    for (let s = 0; s < sessions; s += 1) {
-      const id = records.length + 1;
-      const type = SPREAD_TYPES[Math.floor(next() * SPREAD_TYPES.length)];
-      const picks = [0, 1, 2].map(() => SPREAD_EXERCISES[Math.floor(next() * SPREAD_EXERCISES.length)]);
-      records.push({
-        id, clerk_user_id: "audit-synthetic-account", session_id: null, training_type: type,
-        performed_on: date, completion_outcome: null, duration_seconds: null,
-        logged_sets: [...new Set(picks)].map((name, i) => ({ position: i + 1, exercise_id: i + 1, exercise_name: name,
-          quantity: { kind: "repetitions", count: 8, text: "8" }, load: null, perceived_difficulty: 7, body_weight_kg: null })),
-      });
-    }
-  }
-  return records;
-}
-export function spreadHistoryIndex(): HistoryIndexRow[] {
-  return spreadHistory().map((record) => ({
-    id: record.id, performed_on: record.performed_on, training_type: record.training_type,
-    exercise_names: [...new Set(record.logged_sets.map((set) => set.exercise_name))],
-    deletable: true, uncompletable: true,
-  }));
-}

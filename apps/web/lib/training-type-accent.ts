@@ -39,3 +39,20 @@ export function accentTint(accentVar: TrainingTypeAccentVar, alpha: number): str
   const pct = Math.round(Math.max(0, Math.min(1, alpha)) * 100);
   return `color-mix(in srgb, var(${accentVar}) ${pct}%, transparent)`;
 }
+
+// The same accent as a background utility, for History's Month view, whose day cells mark each
+// Logged Session in its Training Type's colour (ADR-0138). Keyed by the accent variable, so the
+// mark can never drift from the sigil. Literal class names, so Tailwind sees each one. A mark
+// carries no text, and the cell's accessible name and the month's legend name every type, so
+// colour is never the only carrier of the Training Type.
+const ACCENT_FILLS: Record<TrainingTypeAccentVar, string> = {
+  "--color-cyan": "bg-cyan",
+  "--color-magenta": "bg-magenta",
+  "--color-violet": "bg-violet",
+  "--color-blue": "bg-blue",
+  "--color-text-muted": "bg-text-muted",
+};
+
+export function trainingTypeFillClass(trainingType: string): string {
+  return ACCENT_FILLS[trainingTypeAccentVar(trainingType)];
+}
