@@ -14,10 +14,11 @@ import {
   hasActiveFilters,
   historyFiltersToQuery,
   parseHistoryFilters,
+  type HistoryFacets,
   type HistoryFilters,
   type HistoryView,
 } from "@/lib/history-filter";
-import { projectHistoryMonth } from "@/lib/history-month";
+import { pinVisibleMonth, projectHistoryMonth } from "@/lib/history-month";
 import {
   INITIAL_HISTORY_WINDOW_STATE,
   historyWindowReducer,
@@ -120,27 +121,38 @@ export function HistoryBrowser({
     replaceFilterQuery(historyFiltersToQuery(next));
   }
 
+  // A facet change keeps Month view on the month on screen, even when it empties it: the month
+  // is pinned before the facets move, so it is never re-resolved under the reader (ADR-0138).
+  function applyFacets(facets: Partial<HistoryFacets>): void {
+    apply({ ...pinVisibleMonth(index, filters), ...facets });
+  }
+
   function setExercise(value: string): void {
-    apply({ ...filters, exercise: value.length > 0 ? value : null });
+    applyFacets({ exercise: value.length > 0 ? value : null });
   }
 
   function toggleType(type: string): void {
     const trainingTypes = filters.trainingTypes.includes(type)
       ? filters.trainingTypes.filter((t) => t !== type)
       : [...filters.trainingTypes, type];
-    apply({ ...filters, trainingTypes });
+    applyFacets({ trainingTypes });
   }
 
   // Clearing the facets keeps the view and the month on screen.
   function clear(): void {
-    apply({ ...filters, exercise: null, trainingTypes: [] });
+    applyFacets({ exercise: null, trainingTypes: [] });
   }
 
-  // Either way the month is dropped: Month view opens on the newest matching month, and the
-  // List has none (ADR-0138). The exercise / type facets carry over.
+  // The List has no month. Month view opens on the newest matching month and pins it into the
+  // URL straight away (ADR-0138). The exercise / type facets carry over either way.
   function setView(next: HistoryView): void {
     if (next === filters.view) return;
-    apply({ ...filters, view: next, month: null });
+    apply(pinVisibleMonth(index, { ...filters, view: next, month: null }));
+  }
+
+  // The month arrows: the projection only offers months inside the record's bounds.
+  function goToMonth(next: string): void {
+    apply({ ...filters, month: next });
   }
 
   return (
@@ -237,7 +249,9 @@ export function HistoryBrowser({
         ) : null}
       </Card>
 
-      {month !== null ? <HistoryMonthView projection={month} /> : null}
+      {month !== null ? (
+        <HistoryMonthView projection={month} onNavigate={goToMonth} />
+      ) : null}
 
       {matches.length === 0 ? (
         <Card className="flex flex-col items-start gap-3 p-6">

@@ -20,7 +20,29 @@ export interface HistoryMonthView {
   // The count line, "7 in March 2026", or the empty state, "No matching sessions in March
   // 2026"; empty when there is no month.
   summary: string;
+  // The reachable range, first record's month → newest record's month, measured over the whole
+  // index so a filter never shrinks it; null only when the record is empty.
+  bounds: HistoryMonthBounds | null;
+  // The previous / next month arrows: where each goes, or null at a bound (the arrow is
+  // disabled), and its accessible name, which names the month it goes to.
+  previous: HistoryMonthStep;
+  next: HistoryMonthStep;
 }
+
+// The months Month view can navigate between, both `YYYY-MM`, `first <= newest`.
+export interface HistoryMonthBounds {
+  first: string;
+  newest: string;
+}
+
+// One month arrow: its target `YYYY-MM`, or null when it leads past the record.
+export interface HistoryMonthStep {
+  month: string | null;
+  label: string;
+}
+
+const PREVIOUS_LABEL = "Previous month";
+const NEXT_LABEL = "Next month";
 
 // The `YYYY-MM` a `YYYY-MM-DD` calendar date falls in. A string slice, never a `Date`: a
 // performed date is a calendar value, not an instant (ADR-0096).
@@ -33,9 +55,20 @@ export function projectHistoryMonth(
   filters: HistoryFilters,
 ): HistoryMonthView {
   const matches = filterHistory(index, filters);
-  const month = filters.month ?? openingMonth(matches, index);
-  if (month === null) {
-    return { month, visible: [], heading: "", summary: "" };
+  const bounds = recordBounds(index);
+  // A URL month outside the record is ignored, like a malformed one: the view is never
+  // rendered out of range, so it falls back to the opening month.
+  const month = withinBounds(filters.month, bounds) ?? openingMonth(matches, index);
+  if (month === null || bounds === null) {
+    return {
+      month: null,
+      visible: [],
+      heading: "",
+      summary: "",
+      bounds: null,
+      previous: { month: null, label: PREVIOUS_LABEL },
+      next: { month: null, label: NEXT_LABEL },
+    };
   }
   const visible = matches.filter((row) => monthOf(row.performed_on) === month);
   const heading = formatMonthYear(month);
@@ -48,6 +81,58 @@ export function projectHistoryMonth(
       visible.length > 0
         ? `${visible.length} in ${heading}`
         : `No matching sessions in ${heading}`,
+    bounds,
+    previous: monthStep(PREVIOUS_LABEL, month > bounds.first ? shiftMonth(month, -1) : null),
+    next: monthStep(NEXT_LABEL, month < bounds.newest ? shiftMonth(month, 1) : null),
+  };
+}
+
+// The filters with Month view's month fixed to the one on screen. A URL without a month opens
+// on the newest *matching* month, so without this a filter change would re-resolve and jump
+// the view; pinned, a change that empties the month keeps it and shows its empty state. The
+// List has no month, so it is returned as is.
+export function pinVisibleMonth(
+  index: readonly HistoryIndexRow[],
+  filters: HistoryFilters,
+): HistoryFilters {
+  if (filters.view !== "month") return filters;
+  return { ...filters, month: projectHistoryMonth(index, filters).month };
+}
+
+function withinBounds(
+  month: string | null,
+  bounds: HistoryMonthBounds | null,
+): string | null {
+  if (month === null || bounds === null) return null;
+  return month >= bounds.first && month <= bounds.newest ? month : null;
+}
+
+function monthStep(direction: string, month: string | null): HistoryMonthStep {
+  return {
+    month,
+    label: month === null ? direction : `${direction}, ${formatMonthYear(month)}`,
+  };
+}
+
+// The `YYYY-MM` `delta` months from `month`, by arithmetic on the parts — never a `Date`, so
+// no time zone can move it (ADR-0096).
+function shiftMonth(month: string, delta: number): string {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const total = year * 12 + (monthNumber - 1) + delta;
+  const nextYear = Math.floor(total / 12);
+  const nextMonth = (total % 12) + 1;
+  return `${String(nextYear).padStart(4, "0")}-${String(nextMonth).padStart(2, "0")}`;
+}
+
+// The first and newest months the whole record holds. Taken as the min / max rather than read
+// off the index's ends, so the bounds never depend on the order the rows arrive in. `YYYY-MM`
+// strings compare in calendar order.
+function recordBounds(index: readonly HistoryIndexRow[]): HistoryMonthBounds | null {
+  if (index.length === 0) return null;
+  const months = index.map((row) => monthOf(row.performed_on));
+  return {
+    first: months.reduce((a, b) => (b < a ? b : a)),
+    newest: months.reduce((a, b) => (b > a ? b : a)),
   };
 }
 

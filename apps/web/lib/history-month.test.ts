@@ -1,7 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { projectHistoryMonth, visibleHistory } from "./history-month.ts";
+import {
+  pinVisibleMonth,
+  projectHistoryMonth,
+  visibleHistory,
+} from "./history-month.ts";
 import type { HistoryFilters } from "./history-filter.ts";
 import type { HistoryIndexRow } from "./logs-types.ts";
 
@@ -159,4 +163,124 @@ test("Month view of an empty record names no month", () => {
 
   assert.equal(view.month, null);
   assert.deepEqual(view.visible, []);
+});
+
+test("Month view's navigation bounds run from the first record's month to the newest, over the whole index", () => {
+  // Arrange: the yoga filter matches only the middle month, but the record spans four
+  const index = [
+    row(3, "2026-04-02"),
+    row(2, "2026-03-20", { training_type: "yoga" }),
+    row(1, "2026-01-05"),
+  ];
+
+  // Act
+  const view = projectHistoryMonth(index, monthView({ trainingTypes: ["yoga"] }));
+
+  // Assert: a filter never shrinks the reachable range
+  assert.deepEqual(view.bounds, { first: "2026-01", newest: "2026-04" });
+});
+
+test("Month view's arrows step one month either way, across a year end, named by the month they go to", () => {
+  // Arrange: the record runs from November 2025 to March 2026
+  const index = [row(2, "2026-03-02"), row(1, "2025-11-20")];
+
+  // Act
+  const view = projectHistoryMonth(index, monthView({ month: "2026-01" }));
+
+  // Assert
+  assert.deepEqual(view.previous, {
+    month: "2025-12",
+    label: "Previous month, December 2025",
+  });
+  assert.deepEqual(view.next, {
+    month: "2026-02",
+    label: "Next month, February 2026",
+  });
+});
+
+test("Month view's arrows lead nowhere at the first and newest record months", () => {
+  // Arrange
+  const index = [row(2, "2026-03-02"), row(1, "2026-02-20")];
+
+  // Act
+  const atNewest = projectHistoryMonth(index, monthView({ month: "2026-03" }));
+  const atFirst = projectHistoryMonth(index, monthView({ month: "2026-02" }));
+
+  // Assert: the arrow at each end is disabled, and still names its direction
+  assert.deepEqual(atNewest.next, { month: null, label: "Next month" });
+  assert.equal(atNewest.previous.month, "2026-02");
+  assert.deepEqual(atFirst.previous, { month: null, label: "Previous month" });
+  assert.equal(atFirst.next.month, "2026-03");
+});
+
+test("Month view ignores a URL month outside the record and opens on the newest matching month", () => {
+  // Arrange: the record runs from February to April 2026
+  const index = [row(3, "2026-04-02"), row(2, "2026-03-20"), row(1, "2026-02-05")];
+
+  // Act
+  const tooOld = projectHistoryMonth(index, monthView({ month: "2025-12" }));
+  const tooNew = projectHistoryMonth(index, monthView({ month: "2026-09" }));
+
+  // Assert: never rendered out of range
+  assert.equal(tooOld.month, "2026-04");
+  assert.equal(tooNew.month, "2026-04");
+  assert.deepEqual(tooNew.visible.map((r) => r.id), [3]);
+});
+
+test("Month view shows an empty month inside the record rather than skipping it", () => {
+  // Arrange: nothing logged in March, between February and April
+  const index = [row(2, "2026-04-02"), row(1, "2026-02-05")];
+
+  // Act: step back from April
+  const april = projectHistoryMonth(index, monthView({ month: "2026-04" }));
+  const march = projectHistoryMonth(index, monthView({ month: april.previous.month }));
+
+  // Assert
+  assert.equal(april.previous.month, "2026-03");
+  assert.equal(march.month, "2026-03");
+  assert.equal(march.summary, "No matching sessions in March 2026");
+  assert.equal(march.previous.month, "2026-02");
+});
+
+test("A filter change that empties the visible month keeps Month view on that month", () => {
+  // Arrange: Month view opened with no month in the URL lands on April; yoga is only in March
+  const index = [
+    row(3, "2026-04-02"),
+    row(2, "2026-03-20", { training_type: "yoga" }),
+    row(1, "2026-02-05"),
+  ];
+  const opened = monthView();
+
+  // Act: pin the month on screen, then narrow to yoga
+  const pinned = pinVisibleMonth(index, opened);
+  const view = projectHistoryMonth(index, { ...pinned, trainingTypes: ["yoga"] });
+
+  // Assert: the screen does not jump to March
+  assert.equal(pinned.month, "2026-04");
+  assert.equal(view.month, "2026-04");
+  assert.deepEqual(view.visible, []);
+  assert.equal(view.summary, "No matching sessions in April 2026");
+});
+
+test("Pinning replaces an out-of-range URL month with the month actually on screen", () => {
+  // Arrange
+  const index = [row(2, "2026-04-02"), row(1, "2026-03-20")];
+
+  // Act
+  const pinned = pinVisibleMonth(index, monthView({ month: "2030-01" }));
+
+  // Assert
+  assert.equal(pinned.month, "2026-04");
+});
+
+test("Pinning leaves the List untouched: it has no month", () => {
+  // Arrange
+  const index = [row(1, "2026-04-02")];
+  const list = monthView({ view: "list" });
+
+  // Act
+  const pinned = pinVisibleMonth(index, list);
+
+  // Assert
+  assert.deepEqual(pinned, list);
 });
