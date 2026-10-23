@@ -49,7 +49,8 @@ plan is what ADR-0001 forbids.
   day or month without scrolling back up. It adds no action, only the same grid in a place
   that stays on screen. The List keeps its 26rem column at every width, so switching views at
   a desk widens the page — the honest cost of not converting a layout nobody redesigned.
-  `history-month` is a journey in both `audit/reflow.mjs` and `audit/wide.mjs`.
+  `history-month` is a journey in both `audit/reflow.mjs` and `audit/wide.mjs`. *(Superseded
+  in part by ADR-0139: the List now opts in too, its facet rail beside the results.)*
 
 ## Considered options
 
