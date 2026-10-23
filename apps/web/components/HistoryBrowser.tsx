@@ -6,7 +6,6 @@ import { useSearchParams } from "next/navigation";
 
 import type { HistoryIndexRow } from "@/lib/logs-types";
 import type { WeightUnit } from "@/lib/weight-unit";
-import { TRAINING_TYPES } from "@/lib/sessions-types";
 import {
   deriveExerciseOptions,
   filterHistory,
@@ -26,17 +25,36 @@ import {
   type HistoryCard,
 } from "@/lib/history-window";
 import { fetchHistoryCards } from "@/app/history/history-cards-action";
-import { cn } from "@/lib/utils";
 import { replaceFilterQuery } from "@/lib/filter-url";
 import { PageHeader } from "@/components/pulse/page-header";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { HistoryCardList } from "@/components/HistoryCardList";
 import { HistoryColumns } from "@/components/HistoryColumns";
 import { HistoryMonthView } from "@/components/HistoryMonthView";
-import { HistoryViewToggle } from "@/components/HistoryViewToggle";
 import { NAV_FORWARD } from "@/lib/nav-direction";
+// PROTOTYPE — throwaway filter variants (`?variant=`); see components/prototype/.
+import {
+  PrototypeSwitcher,
+  usePrototypeVariant,
+  withPrototypeVariant,
+} from "@/components/prototype/PrototypeSwitcher";
+import {
+  FILTER_VARIANTS,
+  VariantCurrent,
+  VariantFacetRail,
+  VariantOmnibox,
+  VariantSentence,
+  VariantToolbar,
+  type FilterVariantProps,
+} from "@/components/prototype/HistoryFilterVariants";
+
+const VARIANT_COMPONENTS: Record<string, (props: FilterVariantProps) => React.JSX.Element> = {
+  A: VariantCurrent,
+  B: VariantToolbar,
+  C: VariantOmnibox,
+  D: VariantSentence,
+  E: VariantFacetRail,
+};
 
 // The interactive History screen: search by exercise + filter by Training Type over the
 // record (ADR-0031). Filtering is entirely client-side over the History index (Q4) — the
@@ -112,7 +130,7 @@ export function HistoryBrowser({
     dispatch({ type: "filters-changed" });
     // Update the shareable URL without a navigation, so the Server Component and its index
     // read are never re-run by a filter change (Q4/Q8).
-    replaceFilterQuery(historyFiltersToQuery(next));
+    replaceFilterQuery(withPrototypeVariant(historyFiltersToQuery(next)));
   }
 
   // A facet change keeps Month view on the month on screen, even when it empties it: the month
@@ -120,6 +138,9 @@ export function HistoryBrowser({
   function applyFacets(facets: Partial<HistoryFacets>): void {
     apply({ ...pinVisibleMonth(index, filters), ...facets });
   }
+
+  const [variant, setVariant] = usePrototypeVariant(FILTER_VARIANTS);
+  const FilterVariant = VARIANT_COMPONENTS[variant] ?? VariantCurrent;
 
   function setExercise(value: string): void {
     applyFacets({ exercise: value.length > 0 ? value : null });
@@ -176,7 +197,7 @@ export function HistoryBrowser({
     // its layout is unchanged at every width.
     <section
       className="flex flex-col gap-6"
-      data-shell={month !== null ? "wide" : undefined}
+      data-shell={month !== null || variant === "E" ? "wide" : undefined}
     >
       <PageHeader
         overline="PULSE // STATS"
@@ -202,88 +223,34 @@ export function HistoryBrowser({
         }
       />
 
-      <Card className="flex flex-col gap-4 p-4">
-        <HistoryViewToggle view={filters.view} onChange={setView} />
-
-        <div className="flex flex-col gap-2">
-          <label
-            htmlFor="history-exercise"
-            className="label-mono text-[10px] text-text-muted"
-          >
-            EXERCISE
-          </label>
-          {/* Exact pick from the movements the user has actually logged (Q2/Q5): a native
-              datalist keeps it zero-dependency and type-ahead, matching the movement name
-              on the record's Logged Sets. */}
-          <Input
-            id="history-exercise"
-            type="search"
-            list="history-exercise-options"
-            placeholder="Any exercise…"
-            value={filters.exercise ?? ""}
-            onChange={(event) => setExercise(event.target.value)}
+      <FilterVariant
+        index={index}
+        filters={filters}
+        exerciseOptions={exerciseOptions}
+        matchCount={filtered.length}
+        active={active}
+        onExercise={(value) => setExercise(value ?? "")}
+        onToggleType={toggleType}
+        onSetTypes={(trainingTypes) => applyFacets({ trainingTypes })}
+        onClear={clear}
+        onView={setView}
+      >
+        {month !== null ? (
+          <HistoryColumns
+            grid={
+              <HistoryMonthView
+                projection={month}
+                onNavigate={goToMonth}
+                onSelectDay={selectDay}
+              />
+            }
+            list={list}
           />
-          <datalist id="history-exercise-options">
-            {exerciseOptions.map((name) => (
-              <option key={name} value={name} />
-            ))}
-          </datalist>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <span className="label-mono text-[10px] text-text-muted">
-            TRAINING TYPE
-          </span>
-          {/* Multi-select (Q6): any selected type keeps the session (OR within the facet),
-              intersected with the exercise facet (Q7). */}
-          <div className="flex flex-wrap gap-2">
-            {TRAINING_TYPES.map((type) => {
-              const on = filters.trainingTypes.includes(type);
-              return (
-                <button
-                  key={type}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => toggleType(type)}
-                  className={cn(
-                    "label-mono rounded-sm border px-3 py-1.5 text-[10px] capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan/60 motion-reduce:transition-none",
-                    on
-                      ? "border-cyan/40 bg-cyan-dim text-cyan"
-                      : "border-border text-text-secondary hover:border-cyan hover:text-cyan",
-                  )}
-                >
-                  {type}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {active ? (
-          <button
-            type="button"
-            onClick={clear}
-            className="label-mono self-start text-[11px] text-text-muted hover:text-cyan hover:underline"
-          >
-            Clear filters
-          </button>
-        ) : null}
-      </Card>
-
-      {month !== null ? (
-        <HistoryColumns
-          grid={
-            <HistoryMonthView
-              projection={month}
-              onNavigate={goToMonth}
-              onSelectDay={selectDay}
-            />
-          }
-          list={list}
-        />
-      ) : (
-        list
-      )}
+        ) : (
+          list
+        )}
+      </FilterVariant>
+      <PrototypeSwitcher variants={FILTER_VARIANTS} current={variant} onChange={setVariant} />
     </section>
   );
 }
