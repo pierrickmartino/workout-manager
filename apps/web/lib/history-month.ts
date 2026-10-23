@@ -6,20 +6,26 @@
 // facets and then through one month (AND). It knows no "today" and has no notion of a missed
 // day: a month either holds matching Logged Sessions or it does not.
 
-import { formatMonthYear } from "./date-format.ts";
+import { dayOfMonth, daysInMonth, mondayColumnOfFirst } from "./calendar-month.ts";
+import { formatDayMonthYear, formatFullDate, formatMonthYear } from "./date-format.ts";
 import { filterHistory, type HistoryFilters } from "./history-filter.ts";
 import type { HistoryIndexRow } from "./logs-types";
 
 export interface HistoryMonthView {
   // The month on screen, `YYYY-MM`; null only when the record is empty.
   month: string | null;
-  // The matching Logged Sessions performed in that month, newest first.
+  // The selected day, `YYYY-MM-DD`, always inside `month`; null for the whole month.
+  day: string | null;
+  // The matching Logged Sessions performed in that month — or on the selected day — newest
+  // first.
   visible: HistoryIndexRow[];
   // The month's name, "March 2026"; empty when there is no month.
   heading: string;
-  // The count line, "7 in March 2026", or the empty state, "No matching sessions in March
-  // 2026"; empty when there is no month.
+  // The count line, "7 in March 2026" or "2 on 14 Mar 2026", or the empty state, "No matching
+  // sessions in March 2026" / "… on 14 Mar 2026"; empty when there is no month.
   summary: string;
+  // The control that clears the selected day, "Show all of March 2026"; null with no day.
+  showAll: string | null;
   // The reachable range, first record's month → newest record's month, measured over the whole
   // index so a filter never shrinks it; null only when the record is empty.
   bounds: HistoryMonthBounds | null;
@@ -27,6 +33,25 @@ export interface HistoryMonthView {
   // disabled), and its accessible name, which names the month it goes to.
   previous: HistoryMonthStep;
   next: HistoryMonthStep;
+  // The month's days as Monday-first weeks of seven cells, the Streak and Training Heatmap's
+  // week (ADR-0054); a cell outside the month is null. Empty when there is no month.
+  weeks: (HistoryMonthDay | null)[][];
+}
+
+// One in-month day of the grid.
+export interface HistoryMonthDay {
+  // The day, `YYYY-MM-DD`.
+  date: string;
+  // How many Logged Sessions matching the exercise / type filters were performed that day. A
+  // day with any carries a neutral presence dot; a day with none looks like any other.
+  count: number;
+  // The accessible name: the full date and the count, "14 October 2026, 2 sessions".
+  label: string;
+  // Whether this is the selected day (the button's `aria-pressed`).
+  selected: boolean;
+  // The day a tap leaves selected: this day, or null when it is already selected (a re-tap
+  // clears it).
+  toggleTo: string | null;
 }
 
 // The months Month view can navigate between, both `YYYY-MM`, `first <= newest`.
@@ -62,29 +87,89 @@ export function projectHistoryMonth(
   if (month === null || bounds === null) {
     return {
       month: null,
+      day: null,
       visible: [],
       heading: "",
       summary: "",
+      showAll: null,
       bounds: null,
       previous: { month: null, label: PREVIOUS_LABEL },
       next: { month: null, label: NEXT_LABEL },
+      weeks: [],
     };
   }
-  const visible = matches.filter((row) => monthOf(row.performed_on) === month);
+  const monthMatches = matches.filter((row) => monthOf(row.performed_on) === month);
+  // A day is only ever selected inside the month on screen; one left behind by a fallback
+  // month is dropped.
+  const day = filters.day !== null && monthOf(filters.day) === month ? filters.day : null;
+  const visible =
+    day === null ? monthMatches : monthMatches.filter((row) => row.performed_on === day);
   const heading = formatMonthYear(month);
   return {
     month,
+    day,
     visible,
     heading,
-    // Copy names what matched, never what didn't happen: no "missed", no "Calendar".
     summary:
-      visible.length > 0
-        ? `${visible.length} in ${heading}`
-        : `No matching sessions in ${heading}`,
+      day === null
+        ? countLine(visible, "in", heading)
+        : countLine(visible, "on", formatDayMonthYear(day)),
+    showAll: day === null ? null : `Show all of ${heading}`,
     bounds,
     previous: monthStep(PREVIOUS_LABEL, month > bounds.first ? shiftMonth(month, -1) : null),
     next: monthStep(NEXT_LABEL, month < bounds.newest ? shiftMonth(month, 1) : null),
+    weeks: monthWeeks(month, monthMatches, day),
   };
+}
+
+const DAYS_PER_WEEK = 7;
+
+// Copy names what matched, never what didn't happen: no "missed", no "Calendar".
+function countLine(
+  visible: readonly HistoryIndexRow[],
+  preposition: "in" | "on",
+  when: string,
+): string {
+  return visible.length > 0
+    ? `${visible.length} ${preposition} ${when}`
+    : `No matching sessions ${preposition} ${when}`;
+}
+
+function sessionCount(count: number): string {
+  if (count === 0) return "no sessions";
+  return count === 1 ? "1 session" : `${count} sessions`;
+}
+
+// The month's days laid out in Monday-first weeks, padded with null before the 1st and after
+// the last day so every week holds seven cells.
+function monthWeeks(
+  month: string,
+  monthMatches: readonly HistoryIndexRow[],
+  selectedDay: string | null,
+): (HistoryMonthDay | null)[][] {
+  const counts = new Map<string, number>();
+  for (const { performed_on } of monthMatches) {
+    counts.set(performed_on, (counts.get(performed_on) ?? 0) + 1);
+  }
+  const lead: null[] = Array.from({ length: mondayColumnOfFirst(month) }, () => null);
+  const days = Array.from({ length: daysInMonth(month) }, (_, i) => {
+    const date = dayOfMonth(month, i + 1);
+    const count = counts.get(date) ?? 0;
+    const selected = date === selectedDay;
+    return {
+      date,
+      count,
+      label: `${formatFullDate(date)}, ${sessionCount(count)}`,
+      selected,
+      toggleTo: selected ? null : date,
+    };
+  });
+  const cells: (HistoryMonthDay | null)[] = [...lead, ...days];
+  const trail = (DAYS_PER_WEEK - (cells.length % DAYS_PER_WEEK)) % DAYS_PER_WEEK;
+  const padded = [...cells, ...Array.from({ length: trail }, () => null)];
+  return Array.from({ length: padded.length / DAYS_PER_WEEK }, (_, w) =>
+    padded.slice(w * DAYS_PER_WEEK, (w + 1) * DAYS_PER_WEEK),
+  );
 }
 
 // The filters with Month view's month fixed to the one on screen. A URL without a month opens
@@ -96,7 +181,8 @@ export function pinVisibleMonth(
   filters: HistoryFilters,
 ): HistoryFilters {
   if (filters.view !== "month") return filters;
-  return { ...filters, month: projectHistoryMonth(index, filters).month };
+  const { month, day } = projectHistoryMonth(index, filters);
+  return { ...filters, month, day };
 }
 
 function withinBounds(

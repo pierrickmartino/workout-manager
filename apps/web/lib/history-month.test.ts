@@ -36,6 +36,7 @@ function monthView(overrides: Partial<HistoryFilters> = {}): HistoryFilters {
     trainingTypes: [],
     view: "month",
     month: null,
+    day: null,
     ...overrides,
   };
 }
@@ -150,8 +151,8 @@ test("visibleHistory is the month's matches in Month view and every match in the
   const facets = { exercise: null, trainingTypes: ["strength"] };
 
   // Act
-  const list = visibleHistory(index, { ...facets, view: "list", month: null });
-  const month = visibleHistory(index, { ...facets, view: "month", month: "2026-03" });
+  const list = visibleHistory(index, { ...facets, view: "list", month: null, day: null });
+  const month = visibleHistory(index, { ...facets, view: "month", month: "2026-03", day: null });
 
   // Assert
   assert.deepEqual(list.map((r) => r.id), [3, 1]);
@@ -283,4 +284,232 @@ test("Pinning leaves the List untouched: it has no month", () => {
 
   // Assert
   assert.deepEqual(pinned, list);
+});
+
+// --- the day grid (#760): Monday weeks, presence counts, day selection ---------
+
+// The grid as day numbers, padding cells as null, one array per Monday-first week.
+function layout(view: ReturnType<typeof projectHistoryMonth>): (number | null)[][] {
+  return view.weeks.map((week) =>
+    week.map((cell) => (cell === null ? null : Number(cell.date.slice(8)))),
+  );
+}
+
+test("The grid starts its weeks on Monday for a month whose 1st is a Sunday", () => {
+  // Arrange: 1 February 2026 is a Sunday; 28 days
+  const index = [row(1, "2026-02-10")];
+
+  // Act
+  const view = projectHistoryMonth(index, monthView({ month: "2026-02" }));
+
+  // Assert
+  assert.deepEqual(layout(view), [
+    [null, null, null, null, null, null, 1],
+    [2, 3, 4, 5, 6, 7, 8],
+    [9, 10, 11, 12, 13, 14, 15],
+    [16, 17, 18, 19, 20, 21, 22],
+    [23, 24, 25, 26, 27, 28, null],
+  ]);
+});
+
+test("A non-leap February that starts on a Monday fills exactly four weeks", () => {
+  // Arrange: 1 February 2027 is a Monday
+  const index = [row(1, "2027-02-10")];
+
+  // Act
+  const view = projectHistoryMonth(index, monthView({ month: "2027-02" }));
+
+  // Assert
+  assert.deepEqual(layout(view), [
+    [1, 2, 3, 4, 5, 6, 7],
+    [8, 9, 10, 11, 12, 13, 14],
+    [15, 16, 17, 18, 19, 20, 21],
+    [22, 23, 24, 25, 26, 27, 28],
+  ]);
+});
+
+test("A leap February carries its 29th day", () => {
+  // Arrange: 1 February 2028 is a Tuesday
+  const index = [row(1, "2028-02-10")];
+
+  // Act
+  const view = projectHistoryMonth(index, monthView({ month: "2028-02" }));
+
+  // Assert
+  assert.deepEqual(layout(view), [
+    [null, 1, 2, 3, 4, 5, 6],
+    [7, 8, 9, 10, 11, 12, 13],
+    [14, 15, 16, 17, 18, 19, 20],
+    [21, 22, 23, 24, 25, 26, 27],
+    [28, 29, null, null, null, null, null],
+  ]);
+});
+
+test("A 31-day month starting on a Saturday spans six weeks", () => {
+  // Arrange: 1 August 2026 is a Saturday
+  const index = [row(1, "2026-08-10")];
+
+  // Act
+  const view = projectHistoryMonth(index, monthView({ month: "2026-08" }));
+
+  // Assert
+  const weeks = layout(view);
+  assert.equal(weeks.length, 6);
+  assert.deepEqual(weeks[0], [null, null, null, null, null, 1, 2]);
+  assert.deepEqual(weeks[5], [31, null, null, null, null, null, null]);
+});
+
+// The in-month day cell for a `YYYY-MM-DD` date.
+function cell(view: ReturnType<typeof projectHistoryMonth>, date: string) {
+  const found = view.weeks.flat().find((c) => c?.date === date);
+  assert.ok(found, date);
+  return found;
+}
+
+test("Each day counts only the Logged Sessions matching the exercise and type filters", () => {
+  // Arrange: two strength sessions and one yoga session on 14 October, one yoga on the 15th
+  const index = [
+    row(4, "2026-10-15", { training_type: "yoga" }),
+    row(3, "2026-10-14", { training_type: "yoga" }),
+    row(2, "2026-10-14"),
+    row(1, "2026-10-14"),
+  ];
+
+  // Act
+  const view = projectHistoryMonth(
+    index,
+    monthView({ month: "2026-10", trainingTypes: ["strength"] }),
+  );
+
+  // Assert: the yoga sessions leave no trace, so the 15th is neutral
+  assert.equal(cell(view, "2026-10-14").count, 2);
+  assert.equal(cell(view, "2026-10-15").count, 0);
+  assert.equal(cell(view, "2026-10-16").count, 0);
+});
+
+test("Each day is named by its full date and how many sessions it holds", () => {
+  // Arrange
+  const index = [row(3, "2026-10-15"), row(2, "2026-10-14"), row(1, "2026-10-14")];
+
+  // Act
+  const view = projectHistoryMonth(index, monthView({ month: "2026-10" }));
+
+  // Assert
+  assert.equal(cell(view, "2026-10-14").label, "14 October 2026, 2 sessions");
+  assert.equal(cell(view, "2026-10-15").label, "15 October 2026, 1 session");
+  assert.equal(cell(view, "2026-10-01").label, "1 October 2026, no sessions");
+});
+
+test("Selecting a day narrows the list to every matching Logged Session that day, newest first", () => {
+  // Arrange: two sessions on 14 March, one on the 20th, and a yoga one on the 14th
+  const index = [
+    row(4, "2026-03-20"),
+    row(3, "2026-03-14", { training_type: "yoga" }),
+    row(2, "2026-03-14"),
+    row(1, "2026-03-14"),
+  ];
+
+  // Act
+  const view = projectHistoryMonth(
+    index,
+    monthView({ month: "2026-03", day: "2026-03-14", trainingTypes: ["strength"] }),
+  );
+
+  // Assert
+  assert.equal(view.day, "2026-03-14");
+  assert.deepEqual(view.visible.map((r) => r.id), [2, 1]);
+  assert.equal(view.summary, "2 on 14 Mar 2026");
+  assert.equal(cell(view, "2026-03-14").selected, true);
+  assert.equal(cell(view, "2026-03-20").selected, false);
+});
+
+test("A selected day with no matching Logged Session shows the day's empty state", () => {
+  // Arrange
+  const index = [row(1, "2026-03-20")];
+
+  // Act
+  const view = projectHistoryMonth(
+    index,
+    monthView({ month: "2026-03", day: "2026-03-14" }),
+  );
+
+  // Assert
+  assert.deepEqual(view.visible, []);
+  assert.equal(view.summary, "No matching sessions on 14 Mar 2026");
+});
+
+test("Tapping a day selects it, and tapping the selected day again clears it", () => {
+  // Arrange
+  const index = [row(2, "2026-03-20"), row(1, "2026-03-14")];
+
+  // Act
+  const none = projectHistoryMonth(index, monthView({ month: "2026-03" }));
+  const selected = projectHistoryMonth(
+    index,
+    monthView({ month: "2026-03", day: "2026-03-14" }),
+  );
+
+  // Assert: `toggleTo` is the day a tap leaves selected
+  assert.equal(cell(none, "2026-03-14").toggleTo, "2026-03-14");
+  assert.equal(cell(selected, "2026-03-14").toggleTo, null);
+  assert.equal(cell(selected, "2026-03-20").toggleTo, "2026-03-20");
+});
+
+test("A selected day offers to show all of its month again", () => {
+  // Arrange
+  const index = [row(1, "2026-03-14")];
+
+  // Act
+  const none = projectHistoryMonth(index, monthView({ month: "2026-03" }));
+  const selected = projectHistoryMonth(
+    index,
+    monthView({ month: "2026-03", day: "2026-03-14" }),
+  );
+
+  // Assert
+  assert.equal(none.showAll, null);
+  assert.equal(selected.showAll, "Show all of March 2026");
+});
+
+test("A day outside the month on screen is not selected", () => {
+  // Arrange: the URL month is out of the record, so the view falls back to April
+  const index = [row(2, "2026-04-02"), row(1, "2026-03-20")];
+
+  // Act
+  const view = projectHistoryMonth(
+    index,
+    monthView({ month: "2030-01", day: "2030-01-05" }),
+  );
+  const pinned = pinVisibleMonth(index, monthView({ month: "2030-01", day: "2030-01-05" }));
+
+  // Assert
+  assert.equal(view.month, "2026-04");
+  assert.equal(view.day, null);
+  assert.deepEqual(view.visible.map((r) => r.id), [2]);
+  assert.equal(pinned.day, null);
+});
+
+test("A filter change keeps the selected day", () => {
+  // Arrange
+  const index = [row(2, "2026-03-14", { training_type: "yoga" }), row(1, "2026-03-14")];
+  const filters = monthView({ month: "2026-03", day: "2026-03-14" });
+
+  // Act
+  const pinned = pinVisibleMonth(index, filters);
+  const view = projectHistoryMonth(index, { ...pinned, trainingTypes: ["yoga"] });
+
+  // Assert
+  assert.equal(pinned.day, "2026-03-14");
+  assert.deepEqual(view.visible.map((r) => r.id), [2]);
+});
+
+test("visibleHistory gives the selected day's matches, as the page's first window needs", () => {
+  // Arrange
+  const index = [row(3, "2026-03-20"), row(2, "2026-03-14"), row(1, "2026-03-02")];
+
+  // Act
+  const visible = visibleHistory(index, monthView({ month: "2026-03", day: "2026-03-14" }));
+
+  // Assert
+  assert.deepEqual(visible.map((r) => r.id), [2]);
 });

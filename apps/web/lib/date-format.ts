@@ -23,6 +23,35 @@ export function formatMonthYear(isoMonth: string): string {
   return `${name} ${match[1]}`;
 }
 
+// The parts of a plain `yyyy-mm-dd` calendar day, or null when the string isn't one. Parsed by
+// regex, never `new Date`, so no time zone can shift the day (ADR-0096).
+function calendarDayParts(
+  iso: string,
+): { year: string; monthIndex: number; day: number } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (match === null) return null;
+  const monthIndex = Number(match[2]) - 1;
+  if (MONTHS[monthIndex] === undefined) return null;
+  return { year: match[1], monthIndex, day: Number(match[3]) };
+}
+
+// Format a `yyyy-mm-dd` calendar day as "14 Mar 2026", for Month view's count line
+// (ADR-0138); a string that isn't a plain calendar day is returned as-is.
+export function formatDayMonthYear(iso: string): string {
+  const parts = calendarDayParts(iso);
+  if (parts === null) return iso;
+  return `${parts.day} ${MONTHS[parts.monthIndex]} ${parts.year}`;
+}
+
+// Format a `yyyy-mm-dd` calendar day in full as "14 October 2026", for Month view's day
+// buttons' accessible names (ADR-0138); a string that isn't a plain calendar day is returned
+// as-is.
+export function formatFullDate(iso: string): string {
+  const parts = calendarDayParts(iso);
+  if (parts === null) return iso;
+  return `${parts.day} ${MONTH_NAMES[parts.monthIndex]} ${parts.year}`;
+}
+
 // Format an ISO `yyyy-mm-dd` date as a short "Mon D" label. Parsed from the string parts
 // so it is timezone-safe — never shifted a day by a Date constructor's local offset — and
 // deterministic across environments.

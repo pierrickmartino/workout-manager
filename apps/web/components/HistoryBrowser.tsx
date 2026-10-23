@@ -143,16 +143,23 @@ export function HistoryBrowser({
     applyFacets({ exercise: null, trainingTypes: [] });
   }
 
-  // The List has no month. Month view opens on the newest matching month and pins it into the
-  // URL straight away (ADR-0138). The exercise / type facets carry over either way.
+  // The List has no month and no day. Month view opens on the newest matching month and pins it
+  // into the URL straight away (ADR-0138). The exercise / type facets carry over either way.
   function setView(next: HistoryView): void {
     if (next === filters.view) return;
-    apply(pinVisibleMonth(index, { ...filters, view: next, month: null }));
+    apply(pinVisibleMonth(index, { ...filters, view: next, month: null, day: null }));
   }
 
-  // The month arrows: the projection only offers months inside the record's bounds.
+  // The month arrows: the projection only offers months inside the record's bounds. A new
+  // month always clears the day, so a selection never points at a month off screen.
   function goToMonth(next: string): void {
-    apply({ ...filters, month: next });
+    apply({ ...filters, month: next, day: null });
+  }
+
+  // A day tap, or "Show all of <Month>" (null). The day lives inside the month on screen, so
+  // the month is pinned with it.
+  function selectDay(day: string | null): void {
+    apply({ ...pinVisibleMonth(index, filters), day });
   }
 
   return (
@@ -250,7 +257,11 @@ export function HistoryBrowser({
       </Card>
 
       {month !== null ? (
-        <HistoryMonthView projection={month} onNavigate={goToMonth} />
+        <HistoryMonthView
+          projection={month}
+          onNavigate={goToMonth}
+          onSelectDay={selectDay}
+        />
       ) : null}
 
       {matches.length === 0 ? (

@@ -10,20 +10,25 @@
 
 import type { HistoryIndexRow } from "./logs-types";
 import { TRAINING_TYPES } from "./sessions-types.ts";
+import { daysInMonth } from "./calendar-month.ts";
 
 // The URL param names the filter state lives under (Q8): a single `exercise`, and a repeated
 // `type` for each selected Training Type.
 const EXERCISE_PARAM = "exercise";
 const TYPE_PARAM = "type";
-// The Month view's address (ADR-0138): `view=month`, plus an optional `month=YYYY-MM`.
+// The Month view's address (ADR-0138): `view=month`, plus an optional `month=YYYY-MM` and,
+// inside it, an optional `day=YYYY-MM-DD`.
 const VIEW_PARAM = "view";
 const MONTH_PARAM = "month";
+const DAY_PARAM = "day";
 
 const KNOWN_TYPES: ReadonlySet<string> = new Set(TRAINING_TYPES);
 
 // A plain calendar month, `YYYY-MM` with a real month number. Never a `Date`: a month is a
 // calendar value, not an instant (ADR-0096).
 const ISO_MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
+// A plain calendar day, `YYYY-MM-DD`; whether the day exists in its month is checked apart.
+const ISO_DAY = /^(\d{4}-(?:0[1-9]|1[0-2]))-(\d{2})$/;
 
 // The two ways History lays out the record: the newest-first List, or Month view (one month
 // of it). List is the default, so a URL without `view` is the screen as it always was.
@@ -38,10 +43,12 @@ export interface HistoryFacets {
 }
 
 // Everything History's URL carries: the facets, the view, and — in Month view only — the
-// month on screen (`YYYY-MM`). A null month in Month view means "the newest matching month".
+// month on screen (`YYYY-MM`) and the selected day in it (`YYYY-MM-DD`). A null month in Month
+// view means "the newest matching month"; a null day means "the whole month".
 export interface HistoryFilters extends HistoryFacets {
   view: HistoryView;
   month: string | null;
+  day: string | null;
 }
 
 // The distinct exercises the user has actually logged, alphabetical — the options for the
@@ -116,13 +123,24 @@ export function parseHistoryFilters(params: URLSearchParams): HistoryFilters {
   const view: HistoryView = params.get(VIEW_PARAM) === "month" ? "month" : "list";
   const rawMonth = params.get(MONTH_PARAM) ?? "";
   const month = view === "month" && ISO_MONTH.test(rawMonth) ? rawMonth : null;
+  const day = month === null ? null : dayInMonth(params.get(DAY_PARAM) ?? "", month);
 
-  return { exercise, trainingTypes, view, month };
+  return { exercise, trainingTypes, view, month, day };
+}
+
+// The day, when it is a real calendar day of `month`; otherwise null. A day is only ever read
+// inside the month it names, so a malformed or out-of-month day is dropped, not trusted.
+function dayInMonth(rawDay: string, month: string): string | null {
+  const match = ISO_DAY.exec(rawDay);
+  if (match === null || match[1] !== month) return null;
+  const day = Number(match[2]);
+  return day >= 1 && day <= daysInMonth(month) ? rawDay : null;
 }
 
 // Serialize filter state back into a query string for router navigation (Q8) — the inverse of
 // `parseHistoryFilters`. Unset facets contribute nothing, so a cleared filter yields "". The
-// List view is the default and writes no `view`, and a month is written only in Month view.
+// List view is the default and writes no `view`; a month is written only in Month view, and a
+// day only with its month.
 export function historyFiltersToQuery(
   filters: HistoryFilters,
 ): URLSearchParams {
@@ -137,6 +155,9 @@ export function historyFiltersToQuery(
     params.set(VIEW_PARAM, "month");
     if (filters.month !== null) {
       params.set(MONTH_PARAM, filters.month);
+      if (filters.day !== null) {
+        params.set(DAY_PARAM, filters.day);
+      }
     }
   }
   return params;
