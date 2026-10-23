@@ -1,7 +1,7 @@
 import type {
   HistoryMonthDay,
+  HistoryMonthProjection,
   HistoryMonthStep,
-  HistoryMonthView as HistoryMonthProjection,
 } from "@/lib/history-month";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, ChevronRight } from "@/components/pulse/icons";
@@ -111,7 +111,7 @@ function DayButton({
           : "border-transparent text-text-secondary hover:border-cyan hover:text-cyan",
       )}
     >
-      <span aria-hidden>{Number(day.date.slice(8))}</span>
+      <span aria-hidden>{day.dayNumber}</span>
       <span
         aria-hidden
         className={cn("h-1 w-1 rounded-full", day.count > 0 ? "bg-text-muted" : "bg-transparent")}

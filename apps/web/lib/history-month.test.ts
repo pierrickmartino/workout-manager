@@ -426,6 +426,18 @@ test("Each day is named by its full date and how many sessions it holds", () => 
   assert.equal(cell(view, "2026-10-01").label, "1 October 2026, no sessions");
 });
 
+test("Each day carries its day of the month, without a leading zero", () => {
+  // Arrange
+  const index = [row(1, "2026-10-14")];
+
+  // Act
+  const view = projectHistoryMonth(index, monthView({ month: "2026-10" }));
+
+  // Assert
+  assert.equal(cell(view, "2026-10-01").dayNumber, 1);
+  assert.equal(cell(view, "2026-10-31").dayNumber, 31);
+});
+
 test("Selecting a day narrows the list to every matching Logged Session that day, newest first", () => {
   // Arrange: two sessions on 14 March, one on the 20th, and a yoga one on the 14th
   const index = [

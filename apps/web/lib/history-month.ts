@@ -17,7 +17,7 @@ import { formatDayMonthYear, formatFullDate, formatMonthYear } from "./date-form
 import { filterHistory, type HistoryFilters } from "./history-filter.ts";
 import type { HistoryIndexRow } from "./logs-types";
 
-export interface HistoryMonthView {
+export interface HistoryMonthProjection {
   // The month on screen, `YYYY-MM`; null only when the record is empty.
   month: string | null;
   // The selected day, `YYYY-MM-DD`, always inside `month`; null for the whole month.
@@ -48,6 +48,8 @@ export interface HistoryMonthView {
 export interface HistoryMonthDay {
   // The day, `YYYY-MM-DD`.
   date: string;
+  // Its day of the month, 1–31, the number the cell shows.
+  dayNumber: number;
   // How many Logged Sessions matching the exercise / type filters were performed that day. A
   // day with any carries a neutral presence dot; a day with none looks like any other.
   count: number;
@@ -84,7 +86,7 @@ function monthOf(performedOn: string): string {
 export function projectHistoryMonth(
   index: readonly HistoryIndexRow[],
   filters: HistoryFilters,
-): HistoryMonthView {
+): HistoryMonthProjection {
   const matches = filterHistory(index, filters);
   const bounds = recordBounds(index);
   // A URL month outside the record is ignored, like a malformed one: the view is never
@@ -157,11 +159,13 @@ function monthWeeks(
   }
   const lead: null[] = Array.from({ length: mondayColumnOfFirst(month) }, () => null);
   const days = Array.from({ length: daysInMonth(month) }, (_, i) => {
-    const date = dayOfMonth(month, i + 1);
+    const dayNumber = i + 1;
+    const date = dayOfMonth(month, dayNumber);
     const count = counts.get(date) ?? 0;
     const selected = date === selectedDay;
     return {
       date,
+      dayNumber,
       count,
       label: `${formatFullDate(date)}, ${sessionCount(count)}`,
       selected,
