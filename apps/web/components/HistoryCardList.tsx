@@ -14,8 +14,8 @@ import { OutcomeToggle } from "@/components/OutcomeToggle";
 import { LoggedSetTable } from "@/components/LoggedSetTable";
 import { NAV_FORWARD } from "@/lib/nav-direction";
 
-// History's cards, or its empty state when nothing matches: the same in the List and in Month
-// view (ADR-0138). A thin renderer of the window plan `planHistoryWindow` computes (ADR-0128);
+// History's cards, or the month's empty state when nothing matches, beside Month view's grid
+// (ADR-0138, ADR-0140). A thin renderer of the window plan `planHistoryWindow` computes (ADR-0128);
 // what to fetch and when stays with `HistoryBrowser`.
 export function HistoryCardList({
   windowPlan,

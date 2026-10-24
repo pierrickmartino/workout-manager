@@ -4,15 +4,12 @@ import Link from "next/link";
 import {
   fetchHistoryByIds,
   fetchHistoryIndex,
-  fetchRecentHistory,
 } from "@/lib/logs";
 import { appendFrom } from "@/lib/back-target";
 import { resolveAppearance } from "@/lib/appearance";
 import { bestEffortData, settleBestEffort } from "@/lib/best-effort-read";
-import { hasActiveFilters } from "@/lib/history-filter";
 import { visibleHistory } from "@/lib/history-month";
 import {
-  HISTORY_WINDOW,
   filtersFromSearchParams,
   toHistoryCard,
   windowIds,
@@ -37,14 +34,11 @@ export default async function HistoryPage({
   searchParams: Promise<RawSearchParams>;
 }) {
   const filters = filtersFromSearchParams(await searchParams);
-  // Unfiltered in the List, the first window is simply the newest records, so it is read
-  // alongside the index instead of after it. A failed window read is not fatal: the client
-  // fetches it. Month view's first window depends on the index (ADR-0138), so it waits for it.
-  const newestFirst = filters.view === "list" && !hasActiveFilters(filters);
-  const [envelope, appearance, recent] = await Promise.all([
+  // The first window is the month on screen, which depends on the index (ADR-0138), so it is
+  // read after it.
+  const [envelope, appearance] = await Promise.all([
     fetchHistoryIndex(),
     resolveAppearance(),
-    newestFirst ? settleBestEffort(fetchRecentHistory(HISTORY_WINDOW)) : null,
   ]);
 
   if (!envelope.success || !envelope.data) {
@@ -106,10 +100,7 @@ export default async function HistoryPage({
 
   // `HistoryBrowser` reads the URL via `useSearchParams`, so it lives under a Suspense
   // boundary per the App Router contract.
-  const firstWindow =
-    recent === null
-      ? await loadWindow(windowIds(visibleHistory(index, filters)))
-      : (bestEffortData(recent) ?? []).map(toHistoryCard);
+  const firstWindow = await loadWindow(windowIds(visibleHistory(index, filters)));
 
   return (
     <Suspense fallback={null}>

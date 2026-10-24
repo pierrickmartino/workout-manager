@@ -55,13 +55,6 @@ export async function fetchHistoryIndex(): Promise<Envelope<HistoryIndexRow[]>> 
   return apiGet("/api/logs/index");
 }
 
-// The newest `limit` Logged Sessions in full (at most one window, ADR-0128). No verdicts.
-export async function fetchRecentHistory(
-  limit: number,
-): Promise<Envelope<LoggedSession[]>> {
-  return apiGet(`/api/logs?limit=${limit}`);
-}
-
 // One batch of the owner's Logged Sessions by id (at most one window, ADR-0128), newest
 // first. An id that is missing or someone else's is simply absent. No verdicts.
 export async function fetchHistoryByIds(

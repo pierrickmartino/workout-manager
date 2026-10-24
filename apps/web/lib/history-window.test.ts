@@ -129,7 +129,6 @@ test("filtersFromSearchParams reads a Next searchParams bag, single or repeated"
   assert.deepEqual(filters, {
     exercise: "Deadlift",
     trainingTypes: ["strength", "hiit"],
-    view: "list",
     month: null,
     day: null,
   });
@@ -139,22 +138,20 @@ test("filtersFromSearchParams drops an unknown training type, as the client pars
   assert.deepEqual(filtersFromSearchParams({ type: "marketing" }), {
     exercise: null,
     trainingTypes: [],
-    view: "list",
     month: null,
     day: null,
   });
 });
 
-test("filtersFromSearchParams reads Month view and its month, as the client parse does", () => {
-  const filters = filtersFromSearchParams({ view: "month", month: "2026-03" });
+test("filtersFromSearchParams reads the month, as the client parse does", () => {
+  const filters = filtersFromSearchParams({ month: "2026-03" });
 
-  assert.equal(filters.view, "month");
   assert.equal(filters.month, "2026-03");
 });
 
 test("filtersFromSearchParams reads the selected day, and drops one outside its month", () => {
-  const inside = filtersFromSearchParams({ view: "month", month: "2026-03", day: "2026-03-14" });
-  const outside = filtersFromSearchParams({ view: "month", month: "2026-03", day: "2026-04-14" });
+  const inside = filtersFromSearchParams({ month: "2026-03", day: "2026-03-14" });
+  const outside = filtersFromSearchParams({ month: "2026-03", day: "2026-04-14" });
 
   assert.equal(inside.day, "2026-03-14");
   assert.equal(outside.day, null);

@@ -123,14 +123,14 @@ const mode = params.get("mode") ?? "dark";
 document.documentElement.dataset.skin = skin;
 if (mode !== "system") document.documentElement.dataset.mode = mode;
 const count = Math.min(10000, Math.max(0, Number(params.get("count") ?? 2)));
-// The page URL `HistoryBrowser` seeds its filters from, as the real `/history?view=month…` link
+// The page URL `HistoryBrowser` seeds its filters from, as the real `/history?month=…` link
 // would carry it. Every synthetic record is performed on 2026-09-01 (`fixtures.ts`).
 // The facet rail with two facets active (ADR-0139): on a phone, the collapsed rail's tokens.
 if (journey === "history-filtered") {
   seedSearchParams({ type: "strength", exercise: exerciseNames[0] });
 }
 if (journey === "history-month") {
-  seedSearchParams({ view: "month", month: "2026-09", day: "2026-09-01" });
+  seedSearchParams({ month: "2026-09", day: "2026-09-01" });
 }
 
 function Analytics() {
