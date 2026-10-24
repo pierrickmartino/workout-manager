@@ -27,6 +27,7 @@ const session = {
   created_at: "2026-09-01", author: { display_name: null }, authored_by_me: true,
   is_favorite: false, exercise_count: 5, logged_count: 2, last_performed_on: "2026-09-14",
   preview_exercises: ["Bench Press"],
+  exercise_names: ["Bench Press"],
 };
 
 // `RecentSessions` reaches a Server Action through its Client row; every render here holds it

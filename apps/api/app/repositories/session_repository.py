@@ -154,10 +154,28 @@ class SessionSummaryView:
     # (GLOSSARY: My Sessions, Recent Sessions). Drawn from the *plan*, never the last record; filled for the
     # returned page only, so listing never joins the whole library's prescriptions.
     preview_exercise_names: tuple[str, ...] = ()
+    # Every distinct Exercise name the plan prescribes, alphabetical — the My Sessions
+    # Exercise facet's haystack (ADR-0141). The *plan*, never the record; filled for the
+    # returned page by the same joined query as the preview.
+    exercise_names: tuple[str, ...] = ()
 
 
 # How many leading Exercise names a list row previews (GLOSSARY: My Sessions, Recent Sessions).
 PREVIEW_EXERCISE_LIMIT = 3
+
+
+def _with_exercise_names(
+    summary: SessionSummaryView, plan_names: tuple[str, ...]
+) -> SessionSummaryView:
+    """A copy of ``summary`` carrying the plan's Exercise names, given in prescription
+    order: the first ``PREVIEW_EXERCISE_LIMIT`` as the card preview, and the distinct set,
+    alphabetical, as the Exercise facet's haystack (ADR-0141)."""
+
+    return replace(
+        summary,
+        preview_exercise_names=plan_names[:PREVIEW_EXERCISE_LIMIT],
+        exercise_names=tuple(sorted(set(plan_names))),
+    )
 
 
 @dataclass(frozen=True)
@@ -695,21 +713,21 @@ class SqlSessionRepository:
             limit=limit,
             offset=offset,
         )
-        previews = self._preview_exercise_names([summary.id for summary in page.items])
+        names = self._plan_exercise_names([summary.id for summary in page.items])
         return replace(
             page,
             items=[
-                replace(summary, preview_exercise_names=previews.get(summary.id, ()))
+                _with_exercise_names(summary, names.get(summary.id, ()))
                 for summary in page.items
             ],
         )
 
-    def _preview_exercise_names(
+    def _plan_exercise_names(
         self, session_ids: list[int]
     ) -> dict[int, tuple[str, ...]]:
-        """The first ``PREVIEW_EXERCISE_LIMIT`` Exercise names per Session, in prescription
-        order, in one joined query over the returned page (GLOSSARY: My Sessions, Recent Sessions). A Session
-        with no prescriptions is absent and reads as an empty preview."""
+        """Every Exercise name per Session, in prescription order, in one joined query over
+        the returned page (GLOSSARY: My Sessions, Recent Sessions). A Session with no
+        prescriptions is absent and reads as an empty plan."""
 
         if not session_ids:
             return {}
@@ -722,10 +740,7 @@ class SqlSessionRepository:
         names: dict[int, list[str]] = {}
         for session_id, name in rows:
             names.setdefault(session_id, []).append(name)
-        return {
-            session_id: tuple(found[:PREVIEW_EXERCISE_LIMIT])
-            for session_id, found in names.items()
-        }
+        return {session_id: tuple(found) for session_id, found in names.items()}
 
     def list_standalone_full(self, clerk_user_id: str) -> list[SessionView]:
         # Owner-scoped and standalone-only (``protocol_id IS NULL``) in SQL, newest-first;
@@ -1087,7 +1102,7 @@ class InMemorySessionRepository:
         Favorite marker resolve through the same seams ``_view`` uses, no prescriptions
         joined; ``prescription_count`` is the length of the stored prescription list."""
 
-        return SessionSummaryView(
+        summary = SessionSummaryView(
             id=workout.id,
             training_type=workout.training_type,
             name=workout.name,
@@ -1100,11 +1115,14 @@ class InMemorySessionRepository:
                 workout.clerk_user_id, workout.id
             ),
             prescription_count=len(self._prescriptions.get(workout.id, [])),
-            preview_exercise_names=tuple(
+        )
+        return _with_exercise_names(
+            summary,
+            tuple(
                 self._exercises.get(prescription.exercise_id).name
                 for prescription in sorted(
                     self._prescriptions.get(workout.id, []), key=lambda p: p.position
-                )[:PREVIEW_EXERCISE_LIMIT]
+                )
             ),
         )
 

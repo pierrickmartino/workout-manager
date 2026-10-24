@@ -51,6 +51,7 @@ So the filter also shows what the record holds.
   tokens. There is one rail in the DOM, and CSS alone moves it, so no id or heading is
   rendered twice. *(ADR-0140 retires the List / Month switch.)*
 - The rail adds no action. Every row calls the setters the screen already had.
+  *(ADR-0141 shares the rail's pieces with My Sessions.)*
 - `history-filtered` (two facets picked) joins `audit/reflow.mjs` and `audit/wide.mjs`; the
   `history` journey is now a wide-column page.
 

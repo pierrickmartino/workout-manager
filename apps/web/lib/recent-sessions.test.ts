@@ -40,6 +40,7 @@ function summary(overrides: Partial<SessionSummary>): SessionSummary {
     logged_count: 1,
     last_performed_on: null,
     preview_exercises: [],
+    exercise_names: [],
     ...overrides,
   };
 }

@@ -230,3 +230,5 @@ def test_list_rows_carry_the_session_card_facts():
     assert rows[performed["id"]]["last_performed_on"] == "2026-01-01"
     assert rows[never["id"]]["last_performed_on"] is None
     assert rows[performed["id"]]["preview_exercises"] == ["Back Squat"]
+    # The whole plan's distinct exercise names — the My Sessions Exercise facet's haystack.
+    assert rows[performed["id"]]["exercise_names"] == ["Back Squat"]

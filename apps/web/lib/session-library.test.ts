@@ -2,12 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  ALL_SESSIONS_CHIP,
-  availableTypeChips,
+  availableTrainingTypes,
+  EMPTY_SESSION_FILTERS,
   filterSessions,
   formatSessionDate,
   hasActiveSessionFilters,
-  isSameChip,
   matchesSessionSearch,
   parseSessionFilters,
   sessionFallbackLabel,
@@ -17,8 +16,8 @@ import {
   type SessionSummary,
 } from "./session-library.ts";
 
-// `session-library` is the My Sessions view-model (issue #397): the search + chip filter the
-// client narrows the already-fetched library with, plus the row's title/date derivation. Its
+// `session-library` is the My Sessions view-model (issue #397, ADR-0141): the facets the client
+// narrows the already-fetched library with — search, Favorites, Training Types and one Exercise — plus the row's title/date derivation. Its
 // fallback-label matching mirrors the server's `session_label`, so client-side search has
 // parity with the `GET /api/sessions` filter. Pure and server-free, so it is unit-tested here
 // and the page/component stay thin.
@@ -37,6 +36,7 @@ function makeSummary(overrides: Partial<SessionSummary>): SessionSummary {
     logged_count: 0,
     last_performed_on: null,
     preview_exercises: [],
+    exercise_names: [],
     ...overrides,
   };
 }
@@ -90,124 +90,96 @@ test("a non-matching query excludes the session", () => {
   assert.equal(matchesSessionSearch(summary, "yoga"), false);
 });
 
-test("isSameChip compares kind and training type", () => {
-  assert.equal(isSameChip(ALL_SESSIONS_CHIP, { kind: "all" }), true);
-  assert.equal(isSameChip({ kind: "favorites" }, { kind: "all" }), false);
-  assert.equal(
-    isSameChip({ kind: "type", trainingType: "yoga" }, { kind: "type", trainingType: "yoga" }),
-    true,
-  );
-  assert.equal(
-    isSameChip(
-      { kind: "type", trainingType: "yoga" },
-      { kind: "type", trainingType: "strength" },
-    ),
-    false,
-  );
-});
+function filters(overrides: Partial<SessionLibraryFilters>): SessionLibraryFilters {
+  return { ...EMPTY_SESSION_FILTERS, ...overrides };
+}
 
-test("availableTypeChips lists only present types, in curated order", () => {
-  // A library of yoga + strength shows those two chips only (no dead cardio/hiit/mobility),
+test("availableTrainingTypes lists only present types, in curated order", () => {
+  // A library of yoga + strength offers those two types only (no dead cardio/hiit/mobility),
   // ordered by the curated TRAINING_TYPES order (strength before yoga), never insertion order.
   const summaries = [
     makeSummary({ id: 1, training_type: "yoga" }),
     makeSummary({ id: 2, training_type: "strength" }),
     makeSummary({ id: 3, training_type: "yoga" }),
   ];
-  assert.deepEqual(availableTypeChips(summaries), ["strength", "yoga"]);
+  assert.deepEqual(availableTrainingTypes(summaries), ["strength", "yoga"]);
 });
 
-test("availableTypeChips appends an uncurated type after the curated ones", () => {
+test("availableTrainingTypes appends an uncurated type after the curated ones", () => {
   const summaries = [
     makeSummary({ id: 1, training_type: "crossfit" }),
     makeSummary({ id: 2, training_type: "strength" }),
   ];
-  assert.deepEqual(availableTypeChips(summaries), ["strength", "crossfit"]);
+  assert.deepEqual(availableTrainingTypes(summaries), ["strength", "crossfit"]);
 });
 
-test("filterSessions narrows to Favorites under the favorites chip", () => {
+test("filterSessions narrows to Favorites when the favorite facet is on", () => {
   const loved = makeSummary({ id: 1, name: "Loved", is_favorite: true });
   const plain = makeSummary({ id: 2, name: "Plain", is_favorite: false });
 
-  const result = filterSessions([loved, plain], {
-    query: "",
-    chip: { kind: "favorites" },
-  });
+  const result = filterSessions([loved, plain], filters({ favorite: true }));
 
-  assert.deepEqual(
-    result.map((s) => s.id),
-    [1],
-  );
+  assert.deepEqual(result.map((s) => s.id), [1]);
 });
 
-test("filterSessions narrows to one Training Type under a type chip", () => {
+test("filterSessions ORs the selected Training Types", () => {
   const strength = makeSummary({ id: 1, training_type: "strength" });
   const yoga = makeSummary({ id: 2, training_type: "yoga" });
+  const cardio = makeSummary({ id: 3, training_type: "cardio" });
 
-  const result = filterSessions([strength, yoga], {
-    query: "",
-    chip: { kind: "type", trainingType: "yoga" },
-  });
-
-  assert.deepEqual(
-    result.map((s) => s.id),
-    [2],
+  const result = filterSessions(
+    [strength, yoga, cardio],
+    filters({ trainingTypes: ["yoga", "cardio"] }),
   );
+
+  assert.deepEqual(result.map((s) => s.id), [2, 3]);
 });
 
-test("filterSessions combines the search AND the chip", () => {
-  // Only a favorited Session that also matches the search survives the combined filter.
-  const legLoved = makeSummary({ id: 1, name: "Leg Day", is_favorite: true });
-  const legPlain = makeSummary({ id: 2, name: "Leg Mobility", is_favorite: false });
-  const pushLoved = makeSummary({ id: 3, name: "Push Day", is_favorite: true });
-
-  const result = filterSessions([legLoved, legPlain, pushLoved], {
-    query: "leg",
-    chip: { kind: "favorites" },
+test("filterSessions matches an Exercise anywhere in the plan, not only the preview", () => {
+  const long = makeSummary({
+    id: 1,
+    preview_exercises: ["Back Squat", "Leg Press", "Lunge"],
+    exercise_names: ["Back Squat", "Calf Raise", "Leg Press", "Lunge"],
   });
+  const other = makeSummary({ id: 2, exercise_names: ["Bench Press"] });
 
-  assert.deepEqual(
-    result.map((s) => s.id),
-    [1],
-  );
+  const result = filterSessions([long, other], filters({ exercise: "Calf Raise" }));
+
+  assert.deepEqual(result.map((s) => s.id), [1]);
 });
 
-test("filterSessions returns the full list under the All chip, in input order", () => {
+test("filterSessions combines every facet with AND", () => {
+  // Only a favorited strength Session that names "leg" and prescribes the squat survives.
+  const match = makeSummary({ id: 1, name: "Leg Day", is_favorite: true, exercise_names: ["Back Squat"] });
+  const notFavorite = makeSummary({ id: 2, name: "Leg Day", exercise_names: ["Back Squat"] });
+  const wrongType = makeSummary({ id: 3, name: "Leg Flow", training_type: "yoga", is_favorite: true, exercise_names: ["Back Squat"] });
+  const wrongName = makeSummary({ id: 4, name: "Push Day", is_favorite: true, exercise_names: ["Back Squat"] });
+  const wrongExercise = makeSummary({ id: 5, name: "Leg Day", is_favorite: true, exercise_names: ["Leg Press"] });
+
+  const result = filterSessions(
+    [match, notFavorite, wrongType, wrongName, wrongExercise],
+    { query: "leg", favorite: true, trainingTypes: ["strength"], exercise: "Back Squat" },
+  );
+
+  assert.deepEqual(result.map((s) => s.id), [1]);
+});
+
+test("filterSessions returns the full list when no facet is set, in input order", () => {
   const a = makeSummary({ id: 1, name: "A" });
   const b = makeSummary({ id: 2, name: "B" });
 
-  const result = filterSessions([a, b], { query: "  ", chip: ALL_SESSIONS_CHIP });
+  const result = filterSessions([a, b], filters({ query: "  " }));
 
-  assert.deepEqual(
-    result.map((s) => s.id),
-    [1, 2],
-  );
+  assert.deepEqual(result.map((s) => s.id), [1, 2]);
 });
 
-test("hasActiveSessionFilters reflects a non-blank query or a non-All chip", () => {
-  assert.equal(
-    hasActiveSessionFilters({ query: "", chip: ALL_SESSIONS_CHIP }),
-    false,
-  );
-  assert.equal(
-    hasActiveSessionFilters({ query: "  ", chip: ALL_SESSIONS_CHIP }),
-    false,
-  );
-  assert.equal(
-    hasActiveSessionFilters({ query: "leg", chip: ALL_SESSIONS_CHIP }),
-    true,
-  );
-  assert.equal(
-    hasActiveSessionFilters({ query: "", chip: { kind: "favorites" } }),
-    true,
-  );
-  assert.equal(
-    hasActiveSessionFilters({
-      query: "",
-      chip: { kind: "type", trainingType: "yoga" },
-    }),
-    true,
-  );
+test("hasActiveSessionFilters is true for any set facet and ignores a blank query", () => {
+  assert.equal(hasActiveSessionFilters(EMPTY_SESSION_FILTERS), false);
+  assert.equal(hasActiveSessionFilters(filters({ query: "  " })), false);
+  assert.equal(hasActiveSessionFilters(filters({ query: "leg" })), true);
+  assert.equal(hasActiveSessionFilters(filters({ favorite: true })), true);
+  assert.equal(hasActiveSessionFilters(filters({ trainingTypes: ["yoga"] })), true);
+  assert.equal(hasActiveSessionFilters(filters({ exercise: "Back Squat" })), true);
 });
 
 test("formatSessionDate reshapes the calendar date without timezone drift", () => {
@@ -232,82 +204,81 @@ test("sessionRowTitle falls back to the formatted date for an unnamed session", 
 });
 
 // --- parseSessionFilters / sessionFiltersToQuery: URL <-> filter state --------
-// The My Sessions filters round-trip through the URL (via `history.replaceState`, like
-// History) so a refreshed or shared link restores the narrowed view. The single-select
-// chip is encoded 1:1 — absent = All, `chip=favorites`, or `chip=type:<trainingType>`.
+// The My Sessions facets round-trip through the URL (via `replaceFilterQuery`, like History)
+// so a refreshed or shared link restores the narrowed view: `query`, `favorite=1`, a repeated
+// `type` and one `exercise` (ADR-0141). A pre-rail `chip=` link is still read.
 
-test("parseSessionFilters reads the query and a favorites chip", () => {
-  const filters = parseSessionFilters(
-    new URLSearchParams("query=press&chip=favorites"),
+test("parseSessionFilters reads every facet", () => {
+  const parsed = parseSessionFilters(
+    new URLSearchParams("query=press&favorite=1&type=strength&type=hiit&exercise=Back+Squat"),
   );
 
-  assert.equal(filters.query, "press");
-  assert.deepEqual(filters.chip, { kind: "favorites" });
+  assert.deepEqual(parsed, {
+    query: "press",
+    favorite: true,
+    trainingTypes: ["strength", "hiit"],
+    exercise: "Back Squat",
+  });
 });
 
-test("parseSessionFilters reads a type chip", () => {
-  const filters = parseSessionFilters(new URLSearchParams("chip=type:strength"));
+test("parseSessionFilters keeps a type outside the curated set and drops repeats", () => {
+  // The type facet is derived from the library itself (`availableTrainingTypes`), which keeps
+  // types outside the curated five, so a shared link to `pilates` must survive.
+  const parsed = parseSessionFilters(new URLSearchParams("type=pilates&type=pilates&type=+"));
 
-  assert.deepEqual(filters.chip, { kind: "type", trainingType: "strength" });
+  assert.deepEqual(parsed.trainingTypes, ["pilates"]);
 });
 
-test("parseSessionFilters keeps a type outside the curated set (no fixed-list validation)", () => {
-  // Unlike History's training-type facet, the My Sessions type chips are derived from the
-  // library itself (`availableTypeChips`), which keeps types outside the curated five. So a
-  // shared link to `type:pilates` must survive — dropping it would erase a legitimate view.
-  const filters = parseSessionFilters(new URLSearchParams("chip=type:pilates"));
-
-  assert.deepEqual(filters.chip, { kind: "type", trainingType: "pilates" });
+test("parseSessionFilters defaults every facet off when the params are empty", () => {
+  assert.deepEqual(parseSessionFilters(new URLSearchParams("")), EMPTY_SESSION_FILTERS);
 });
 
-test("parseSessionFilters defaults to All with a blank query when the params are empty", () => {
-  const filters = parseSessionFilters(new URLSearchParams(""));
+test("parseSessionFilters ignores an unrecognised favorite value and a blank exercise", () => {
+  const parsed = parseSessionFilters(new URLSearchParams("favorite=yes&exercise=++"));
 
-  assert.equal(filters.query, "");
-  assert.deepEqual(filters.chip, ALL_SESSIONS_CHIP);
+  assert.equal(parsed.favorite, false);
+  assert.equal(parsed.exercise, null);
 });
 
-test("parseSessionFilters falls back to All for an unrecognised or empty-typed chip", () => {
-  // The query string is untrusted input: a bogus chip keyword or a `type:` with no value
-  // collapses to All rather than a broken filter.
+test("parseSessionFilters still reads a pre-rail chip link", () => {
   assert.deepEqual(
-    parseSessionFilters(new URLSearchParams("chip=bogus")).chip,
-    ALL_SESSIONS_CHIP,
+    parseSessionFilters(new URLSearchParams("query=leg&chip=favorites")),
+    filters({ query: "leg", favorite: true }),
   );
   assert.deepEqual(
-    parseSessionFilters(new URLSearchParams("chip=type:")).chip,
-    ALL_SESSIONS_CHIP,
+    parseSessionFilters(new URLSearchParams("chip=type:pilates")),
+    filters({ trainingTypes: ["pilates"] }),
   );
 });
 
-test("sessionFiltersToQuery round-trips a favorites filter through parseSessionFilters", () => {
-  const filters: SessionLibraryFilters = {
+test("parseSessionFilters drops a bogus chip, and the new params win over it", () => {
+  assert.deepEqual(parseSessionFilters(new URLSearchParams("chip=bogus")), EMPTY_SESSION_FILTERS);
+  assert.deepEqual(parseSessionFilters(new URLSearchParams("chip=type:")), EMPTY_SESSION_FILTERS);
+  assert.deepEqual(
+    parseSessionFilters(new URLSearchParams("chip=favorites&type=yoga")),
+    filters({ trainingTypes: ["yoga"] }),
+  );
+});
+
+test("sessionFiltersToQuery round-trips every facet through parseSessionFilters", () => {
+  const all: SessionLibraryFilters = {
     query: "leg day",
-    chip: { kind: "favorites" },
+    favorite: true,
+    trainingTypes: ["cardio", "crossfit"],
+    exercise: "Back Squat",
   };
 
   const reparsed = parseSessionFilters(
-    new URLSearchParams(sessionFiltersToQuery(filters).toString()),
+    new URLSearchParams(sessionFiltersToQuery(all).toString()),
   );
 
-  assert.deepEqual(reparsed, filters);
+  assert.deepEqual(reparsed, all);
 });
 
-test("sessionFiltersToQuery round-trips a type filter through parseSessionFilters", () => {
-  const filters: SessionLibraryFilters = {
-    query: "",
-    chip: { kind: "type", trainingType: "cardio" },
-  };
-
-  const reparsed = parseSessionFilters(
-    new URLSearchParams(sessionFiltersToQuery(filters).toString()),
+test("sessionFiltersToQuery writes nothing for unset facets and never a chip", () => {
+  assert.equal(sessionFiltersToQuery(filters({ query: "  " })).toString(), "");
+  assert.equal(
+    sessionFiltersToQuery(filters({ favorite: true })).toString(),
+    "favorite=1",
   );
-
-  assert.deepEqual(reparsed, filters);
-});
-
-test("sessionFiltersToQuery omits a blank query and the All chip", () => {
-  const query = sessionFiltersToQuery({ query: "  ", chip: ALL_SESSIONS_CHIP });
-
-  assert.equal(query.toString(), "");
 });

@@ -509,6 +509,9 @@ def _serialize_summary(
             last_performed_on.isoformat() if last_performed_on is not None else None
         ),
         "preview_exercises": list(summary.preview_exercise_names),
+        # Every distinct Exercise the plan prescribes, alphabetical — what the My Sessions
+        # Exercise facet matches and counts over (ADR-0141). The plan, never the record.
+        "exercise_names": list(summary.exercise_names),
     }
 
 

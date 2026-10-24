@@ -129,6 +129,11 @@ const count = Math.min(10000, Math.max(0, Number(params.get("count") ?? 2)));
 if (journey === "history-filtered") {
   seedSearchParams({ type: "strength", exercise: exerciseNames[0] });
 }
+// My Sessions' facet rail with one facet of each kind active (ADR-0141): the collapsed
+// rail's tokens on a phone, the rail beside the cards on a desktop.
+if (journey === "sessions-filtered") {
+  seedSearchParams({ query: "strength", favorite: "1", type: "strength", exercise: "Romanian Deadlift" });
+}
 if (journey === "history-month") {
   seedSearchParams({ month: "2026-09", day: "2026-09-01" });
 }
@@ -605,6 +610,7 @@ function Content() {
     case "correction": return <CorrectLogForm logId={1} fields={correctionFieldsFromRecord(history(1)[0], "kg")} today="2026-09-26" unit="kg" />;
     case "profile": return <ProfileForm profile={profile} submitLabel="Save profile" />;
     case "sessions": return <SessionsLibrary sessions={count === 0 ? [] : sessions} />;
+    case "sessions-filtered": return <SessionsLibrary sessions={sessions} />;
     // The new-Protocol peer choice over the Curated Protocol picker (#684).
     case "curated": return <><NewProtocolChoices choices={newProtocolChoices("curated", { hasCuratedProtocols: true })} /><CuratedProtocolPicker rows={count === 0 ? [] : [curatedProtocolRow(auditCuratedProtocol)]} /></>;
     case "curated-adopt": return <CuratedAdoptForm identifier={auditCuratedProtocol.identifier} defaults={adoptFormDefaults(auditCuratedProtocol)} initialPreview={auditCuratedPreview} caveat={curatedCaveat(auditCuratedProtocol)} />;

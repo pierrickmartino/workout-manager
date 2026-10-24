@@ -12,7 +12,7 @@ import { NAV_FORWARD } from "@/lib/nav-direction";
 
 // My Sessions — the user's personal library of their own standalone Sessions (GLOSSARY: My
 // Sessions, issue #397), reached from Train. The Server Component fetches the whole library
-// once; the interactive search + favorites filter run entirely client-side over it in
+// once; the interactive facet rail (ADR-0141) runs entirely client-side over it in
 // `SessionsLibrary` (like History, ADR-0031). It lists *plans*, never records, and only the
 // user's own standalone Sessions — the backend excludes Protocol-member and other users' ones.
 export default async function SessionsLibraryPage(): Promise<React.JSX.Element> {
