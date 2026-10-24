@@ -1,35 +1,32 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Star } from "@/components/pulse/icons";
 
 import {
-  ALL_SESSIONS_CHIP,
-  availableTypeChips,
+  EMPTY_SESSION_FILTERS,
   filterSessions,
   hasActiveSessionFilters,
-  isSameChip,
   parseSessionFilters,
   sessionFiltersToQuery,
-  type SessionChipFilter,
+  type SessionLibraryFilters,
   type SessionSummary,
 } from "@/lib/session-library";
-import { cn } from "@/lib/utils";
 import { replaceFilterQuery } from "@/lib/filter-url";
 import { PageHeader } from "@/components/pulse/page-header";
 import { BackLink } from "@/components/pulse/back-link";
 import { SessionCardRow } from "@/components/SessionCardRow";
+import { SessionsFacetRail } from "@/components/SessionsFacetRail";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 
-// The interactive My Sessions library (GLOSSARY: My Sessions, issue #397): search over the
-// user's own standalone Sessions plus a single-select chip row (All / Favorites / one Training
-// Type). Filtering is entirely client-side over the already-fetched library (like History) —
-// the filter state lives in React and every keystroke or chip re-filters in-browser, never
-// re-fetching. All matching lives in the `session-library` view-model; this component only
-// wires the controls to it. Favoriting a row is the one write: a server action that revalidates.
+// The interactive My Sessions library (GLOSSARY: My Sessions, issue #397): the user's own
+// standalone Sessions, narrowed from a facet rail (ADR-0141) — a Name search, Favorites, any
+// Training Types and one prescribed Exercise, combined with AND. Filtering is entirely
+// client-side over the already-fetched library (like History) — the filter state lives in React
+// and every keystroke or tap re-filters in-browser, never re-fetching. All matching and counting
+// lives in `session-library` / `sessions-facets`; this component only wires the controls to it.
+// Favoriting a row is the one write: a server action that revalidates.
 export function SessionsLibrary({
   sessions,
 }: {
@@ -39,39 +36,55 @@ export function SessionsLibrary({
   // already-fetched library in-browser and is mirrored back into the URL below, never
   // re-running the Server Component (the History pattern).
   const initialParams = useSearchParams();
-  const [query, setQuery] = useState(
-    () => parseSessionFilters(new URLSearchParams(initialParams.toString())).query,
+  const [filters, setFilters] = useState<SessionLibraryFilters>(() =>
+    parseSessionFilters(new URLSearchParams(initialParams.toString())),
   );
-  const [chip, setChip] = useState<SessionChipFilter>(
-    () => parseSessionFilters(new URLSearchParams(initialParams.toString())).chip,
-  );
-
-  const filters = useMemo(() => ({ query, chip }), [query, chip]);
+  // The controls read `filters`; the list, the counts and the badge read the deferred copy, so
+  // a keystroke stays urgent and the re-filter follows it (ADR-0097).
+  const deferred = useDeferredValue(filters);
 
   // Mirror the active filters into the shareable URL without a navigation, so a refresh or
   // shared link restores the narrowed view and Back from an opened Session returns to it.
   // `replaceState` (not a router push) keeps the Server Component and its one-shot library
-  // fetch from re-running on a keystroke or chip tap.
+  // fetch from re-running on a keystroke or tap.
   useEffect(() => {
     replaceFilterQuery(sessionFiltersToQuery(filters));
   }, [filters]);
   const filtered = useMemo(
-    () => filterSessions(sessions, filters),
-    [sessions, filters],
+    () => filterSessions(sessions, deferred),
+    [sessions, deferred],
   );
-  const active = hasActiveSessionFilters(filters);
-  // Only Training Types actually present earn a chip — no dead "Yoga" chip in a strength-only
-  // library. Derived from the whole library, not the filtered view, so a chip never vanishes
-  // just because the current filter excluded every row of its type.
-  const typeChips = useMemo(() => availableTypeChips(sessions), [sessions]);
+  const active = hasActiveSessionFilters(deferred);
+
+  function setQuery(query: string): void {
+    setFilters((current) => ({ ...current, query }));
+  }
+
+  function toggleFavorite(): void {
+    setFilters((current) => ({ ...current, favorite: !current.favorite }));
+  }
+
+  function toggleType(type: string): void {
+    setFilters((current) => ({
+      ...current,
+      trainingTypes: current.trainingTypes.includes(type)
+        ? current.trainingTypes.filter((t) => t !== type)
+        : [...current.trainingTypes, type],
+    }));
+  }
+
+  function setExercise(exercise: string | null): void {
+    setFilters((current) => ({ ...current, exercise }));
+  }
 
   function clear(): void {
-    setQuery("");
-    setChip(ALL_SESSIONS_CHIP);
+    setFilters(EMPTY_SESSION_FILTERS);
   }
 
   return (
-    <section className="flex flex-col gap-6">
+    // My Sessions opts into the wide content column (ADR-0088): from `lg:` the facet rail sits
+    // beside the results (ADR-0141). Below `lg:` nothing is wider.
+    <section className="flex flex-col gap-6" data-shell="wide">
       <PageHeader
         overline="PULSE // TRAIN"
         title="My sessions"
@@ -87,139 +100,41 @@ export function SessionsLibrary({
         }
       />
 
-      <Card className="flex flex-col gap-4 p-4">
-        <div className="flex flex-col gap-2">
-          <label
-            htmlFor="sessions-search"
-            className="label-mono text-[10px] text-text-muted"
-          >
-            SEARCH
-          </label>
-          {/* Case-insensitive substring over Session Name, the derived fallback label, and
-              Training Type — the same rule the server filters by (parity via
-              `session-library`). */}
-          <Input
-            id="sessions-search"
-            type="search"
-            placeholder="Search by name or type…"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </div>
-
-        {/* The single-select chip row (GLOSSARY: My Sessions): All / Favorites / one Training
-            Type. It replaces the former standalone favorites toggle and combines (AND) with
-            the search. Tapping the active chip returns to All. */}
-        <div
-          role="group"
-          aria-label="Filter sessions"
-          className="flex flex-wrap items-center gap-2"
-        >
-          <FilterChip
-            label="All"
-            active={isSameChip(chip, ALL_SESSIONS_CHIP)}
-            onSelect={() => setChip(ALL_SESSIONS_CHIP)}
-          />
-          <FilterChip
-            label="Favorites"
-            icon={<Star className="h-3 w-3" aria-hidden />}
-            active={isSameChip(chip, { kind: "favorites" })}
-            onSelect={() =>
-              setChip((current) =>
-                isSameChip(current, { kind: "favorites" })
-                  ? ALL_SESSIONS_CHIP
-                  : { kind: "favorites" },
-              )
-            }
-          />
-          {typeChips.map((trainingType) => {
-            const typeChip: SessionChipFilter = { kind: "type", trainingType };
-            return (
-              <FilterChip
-                key={trainingType}
-                label={trainingType}
-                capitalize
-                active={isSameChip(chip, typeChip)}
-                onSelect={() =>
-                  setChip((current) =>
-                    isSameChip(current, typeChip) ? ALL_SESSIONS_CHIP : typeChip,
-                  )
-                }
-              />
-            );
-          })}
-
-          {active ? (
+      <SessionsFacetRail
+        sessions={sessions}
+        filters={filters}
+        counted={deferred}
+        onQuery={setQuery}
+        onToggleFavorite={toggleFavorite}
+        onToggleType={toggleType}
+        onExercise={setExercise}
+        onClear={clear}
+      >
+        {filtered.length === 0 ? (
+          <Card className="flex flex-col items-start gap-3 p-6">
+            <p className="font-sans text-sm text-text-secondary">
+              No sessions match these filters.
+            </p>
             <button
               type="button"
               onClick={clear}
-              className="label-mono text-[11px] text-text-muted hover:text-cyan hover:underline"
+              className="label-mono text-[11px] text-cyan hover:underline"
             >
               Clear filters
             </button>
-          ) : null}
-        </div>
-      </Card>
-
-      {filtered.length === 0 ? (
-        <Card className="flex flex-col items-start gap-3 p-6">
-          <p className="font-sans text-sm text-text-secondary">
-            No sessions match these filters.
-          </p>
-          <button
-            type="button"
-            onClick={clear}
-            className="label-mono text-[11px] text-cyan hover:underline"
-          >
-            Clear filters
-          </button>
-        </Card>
-      ) : (
-        <ol className="flex list-none flex-col gap-4 p-0">
-          {filtered.map((session) => (
-            <li key={session.id}>
-              <SessionCardRow session={session} />
-            </li>
-          ))}
-        </ol>
-      )}
+          </Card>
+        ) : (
+          <ol className="flex list-none flex-col gap-4 p-0">
+            {filtered.map((session) => (
+              <li key={session.id}>
+                <SessionCardRow session={session} />
+              </li>
+            ))}
+          </ol>
+        )}
+      </SessionsFacetRail>
 
       <BackLink href="/train">Back to train</BackLink>
     </section>
-  );
-}
-
-// One chip in the filter row — a single-select pill styled like the former favorites toggle.
-// `active` drives the selected (cyan) styling and `aria-pressed`; `capitalize` renders a
-// lower-cased Training Type with a leading capital without mutating the value.
-function FilterChip({
-  label,
-  active,
-  onSelect,
-  icon,
-  capitalize = false,
-}: {
-  label: string;
-  active: boolean;
-  onSelect: () => void;
-  icon?: React.ReactNode;
-  capitalize?: boolean;
-}): React.JSX.Element {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onSelect}
-      className={cn(
-        "label-mono inline-flex items-center gap-1.5 rounded-sm border px-3 py-1.5 text-[10px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan/60 motion-reduce:transition-none",
-        capitalize && "capitalize",
-        active
-          ? "border-cyan/40 bg-cyan-dim text-cyan"
-          : "border-border text-text-secondary hover:border-cyan hover:text-cyan",
-      )}
-    >
-      {icon}
-      {label}
-    </button>
   );
 }

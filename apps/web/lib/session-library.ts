@@ -3,9 +3,9 @@
 // can use it.
 //
 // It works purely over the already-fetched library (client-side filtering, like
-// `history-filter`). Two filter dimensions combine (AND): a free-text `query` and a
-// single-select `chip` (All / Favorites / one Training Type). Search matches the Session
-// Name, the derived fallback label (`training_type · date`), and the Training Type
+// `history-filter`). Four facets combine (AND), picked from a facet rail (ADR-0141): a free-text
+// `query`, the owner's Favorites, any number of Training Types (OR within the facet) and one
+// Exercise the plan prescribes. Search matches the Session Name, the derived fallback label (`training_type · date`), and the Training Type
 // case-insensitively; the fallback-label derivation mirrors the server's `session_label`
 // (apps/api/app/domain/session_naming.py) so client-side search has parity with the
 // `GET /api/sessions` filter. The row's display title and date-format live here too, so the
@@ -17,7 +17,7 @@ import { formatLongDate } from "./date-format.ts";
 // Mirrors the server's `_LABEL_SEPARATOR` so the two derived labels are byte-identical.
 const LABEL_SEPARATOR = " · ";
 
-// The curated Training Type order the type chips render in — mirroring `TRAINING_TYPES` in
+// The curated Training Type order the type facet renders in — mirroring `TRAINING_TYPES` in
 // `sessions-types.ts` (the fixed five). Kept local rather than value-imported so this pure,
 // browser-safe view-model stays free of runtime sibling imports (the repo's convention for
 // unit-tested view-models). Drift is graceful: a type outside this list is still shown, just
@@ -63,43 +63,37 @@ export interface SessionSummary {
   // The plan's first (≤ 3) Exercise names in prescription order — the card's preview of what
   // Start runs, drawn from the plan, never the last record.
   preview_exercises: string[];
+  // Every distinct Exercise name the plan prescribes, alphabetical — what the Exercise facet
+  // matches and counts over (ADR-0141). The plan, never the record.
+  exercise_names: string[];
 }
 
-// The single-select chip filter (GLOSSARY: My Sessions): `all` (no narrowing), `favorites`
-// (the owner's Favorites), or one `type` (a Training Type). Folds the former standalone
-// favorites toggle into one row alongside the per-type chips.
-export type SessionChipFilter =
-  | { kind: "all" }
-  | { kind: "favorites" }
-  | { kind: "type"; trainingType: string };
-
-// The active My Sessions filters: a free-text `query` (blank means "no search constraint")
-// and the single-select `chip`. The two combine (AND).
+// The active My Sessions facets (ADR-0141), combined with AND. `query` is free text (blank
+// means "no search constraint"); `favorite` narrows to the owner's Favorites; `trainingTypes`
+// is the selected subset of the library's types, OR'd together (empty means all types);
+// `exercise` is one exact Exercise name the plan prescribes, or null.
 export interface SessionLibraryFilters {
   query: string;
-  chip: SessionChipFilter;
+  favorite: boolean;
+  trainingTypes: string[];
+  exercise: string | null;
 }
 
-// The default (unfiltered) chip — the "All" scope.
-export const ALL_SESSIONS_CHIP: SessionChipFilter = { kind: "all" };
+// Every facet off — the whole library.
+export const EMPTY_SESSION_FILTERS: SessionLibraryFilters = {
+  query: "",
+  favorite: false,
+  trainingTypes: [],
+  exercise: null,
+};
 
-// Whether two chip selections are the same filter — so the chip row can mark the active one
-// and toggling the active type chip back to All is a plain equality check.
-export function isSameChip(a: SessionChipFilter, b: SessionChipFilter): boolean {
-  if (a.kind !== b.kind) {
-    return false;
-  }
-  if (a.kind === "type" && b.kind === "type") {
-    return a.trainingType === b.trainingType;
-  }
-  return true;
-}
-
-// The Training Types that get a chip: only those actually present in the library (no dead
-// "Yoga" chip in a strength-only library), ordered by the curated `TRAINING_TYPES` order.
-// A stored type outside the curated set still earns a chip — appended in first-seen order —
+// The Training Types the type facet offers: only those actually present in the library (no dead
+// "Yoga" row in a strength-only library), ordered by the curated `TRAINING_TYPES` order.
+// A stored type outside the curated set still earns a row — appended in first-seen order —
 // so a row is never unreachable by its own type.
-export function availableTypeChips(summaries: SessionSummary[]): string[] {
+export function availableTrainingTypes(
+  summaries: readonly Pick<SessionSummary, "training_type">[],
+): string[] {
   const present = new Set(summaries.map((summary) => summary.training_type));
   const chips = CURATED_TYPE_ORDER.filter((type) => present.has(type));
   const seen = new Set(chips);
@@ -127,7 +121,7 @@ export function sessionFallbackLabel(
 // Type, the always-derivable fallback label (so a named Session is still found by its date),
 // and the raw Session Name when set — the same three haystacks as the server predicate.
 export function matchesSessionSearch(
-  summary: SessionSummary,
+  summary: Pick<SessionSummary, "training_type" | "created_at" | "name">,
   query: string,
 ): boolean {
   const needle = query.trim().toLowerCase();
@@ -147,82 +141,101 @@ export function matchesSessionSearch(
   return haystacks.some((haystack) => haystack.toLowerCase().includes(needle));
 }
 
-// Whether a Session survives the chip selection: `all` keeps everything, `favorites` keeps the
-// owner's Favorites, `type` keeps that one Training Type.
-function matchesChip(summary: SessionSummary, chip: SessionChipFilter): boolean {
-  switch (chip.kind) {
-    case "all":
-      return true;
-    case "favorites":
-      return summary.is_favorite;
-    case "type":
-      return summary.training_type === chip.trainingType;
-  }
-}
+// The fields a filter reads off a library row.
+export type SessionFilterable = Pick<
+  SessionSummary,
+  "training_type" | "created_at" | "name" | "is_favorite" | "exercise_names"
+>;
 
-// Apply the agreed filter, returning a new array (immutability) in the input order. The chip
-// and the search combine (AND): a Session survives only when it matches the active chip *and*
-// the search.
-export function filterSessions(
-  summaries: SessionSummary[],
+// Apply the agreed filter, returning a new array (immutability) in the input order. An unset
+// facet imposes no constraint; every set facet must hold (AND).
+export function filterSessions<T extends SessionFilterable>(
+  summaries: readonly T[],
   filters: SessionLibraryFilters,
-): SessionSummary[] {
+): T[] {
+  const { favorite, trainingTypes, exercise, query } = filters;
   return summaries.filter(
     (summary) =>
-      matchesChip(summary, filters.chip) &&
-      matchesSessionSearch(summary, filters.query),
+      (!favorite || summary.is_favorite) &&
+      (trainingTypes.length === 0 || trainingTypes.includes(summary.training_type)) &&
+      (exercise === null || summary.exercise_names.includes(exercise)) &&
+      matchesSessionSearch(summary, query),
   );
 }
 
-// Whether any filter is active — drives the filtered-count badge and the "clear" affordance.
-// A non-blank query or any chip other than "All" counts as active.
+// Whether any facet is active — drives the filtered-count badge and the "clear" affordance.
+// A whitespace-only query narrows nothing, so it does not count.
 export function hasActiveSessionFilters(
   filters: SessionLibraryFilters,
 ): boolean {
-  return filters.query.trim().length > 0 || filters.chip.kind !== "all";
+  return (
+    filters.query.trim().length > 0 ||
+    filters.favorite ||
+    filters.trainingTypes.length > 0 ||
+    filters.exercise !== null
+  );
 }
 
-// The URL param names the filter state round-trips under, mirrored into the URL with
-// `history.replaceState` (like History's `history-filter`) so a refreshed or shared link
-// restores the same narrowed view. Free text lives under `query` (matching the catalog's
-// param); the single-select chip is encoded 1:1 in one `chip` param — absent = All,
-// `favorites`, or `type:<trainingType>`.
+// The URL param names the facets round-trip under, mirrored into the URL with
+// `replaceFilterQuery` (ADR-0100) so a refreshed or shared link restores the same narrowed
+// view. Free text lives under `query` (matching the catalog's param); the other three use
+// History's shape (ADR-0141): `favorite=1`, a repeated `type`, and one `exercise`.
 const SESSION_QUERY_PARAM = "query";
-const SESSION_CHIP_PARAM = "chip";
-const FAVORITES_CHIP_VALUE = "favorites";
-const TYPE_CHIP_PREFIX = "type:";
+const FAVORITE_PARAM = "favorite";
+const FAVORITE_ON = "1";
+const TYPE_PARAM = "type";
+const EXERCISE_PARAM = "exercise";
+// The pre-rail single-select chip (`chip=favorites` / `chip=type:<t>`), read only so an old
+// bookmark still opens its view; never written.
+const LEGACY_CHIP_PARAM = "chip";
+const LEGACY_FAVORITES_CHIP = "favorites";
+const LEGACY_TYPE_CHIP_PREFIX = "type:";
 
-// Parse one `chip` param value into a `SessionChipFilter`. The query string is untrusted
-// input: an unrecognised keyword, or a `type:` prefix with no value, collapses to All rather
-// than a broken filter. Deliberately NO validation of the type against a fixed set — the type
-// chips are derived from the library itself (`availableTypeChips` keeps types outside the
-// curated five), so a shared link to such a type must survive.
-function parseChipParam(raw: string | null): SessionChipFilter {
-  if (raw === FAVORITES_CHIP_VALUE) {
-    return { kind: "favorites" };
+// The facets a pre-rail `chip` value names. The query string is untrusted input: an
+// unrecognised keyword, or a `type:` prefix with no value, names nothing.
+function legacyChipFacets(
+  raw: string | null,
+): Pick<SessionLibraryFilters, "favorite" | "trainingTypes"> {
+  if (raw === LEGACY_FAVORITES_CHIP) {
+    return { favorite: true, trainingTypes: [] };
   }
-  if (raw !== null && raw.startsWith(TYPE_CHIP_PREFIX)) {
-    const trainingType = raw.slice(TYPE_CHIP_PREFIX.length).trim();
-    if (trainingType.length > 0) {
-      return { kind: "type", trainingType };
-    }
-  }
-  return ALL_SESSIONS_CHIP;
+  const trainingType = raw?.startsWith(LEGACY_TYPE_CHIP_PREFIX)
+    ? raw.slice(LEGACY_TYPE_CHIP_PREFIX.length).trim()
+    : "";
+  return { favorite: false, trainingTypes: trainingType.length > 0 ? [trainingType] : [] };
 }
 
-// Read the filter state out of the URL — the inverse of `sessionFiltersToQuery`. A blank/absent
-// query collapses to "" and an absent/unknown chip to All, so a bare URL is the unfiltered view.
+// The selected types, trimmed and de-duplicated, blanks dropped. Deliberately NO validation
+// against a fixed set — the type facet is derived from the library itself
+// (`availableTrainingTypes` keeps types outside the curated five), so a shared link to such a
+// type must survive.
+function parseTrainingTypes(values: readonly string[]): string[] {
+  const types = values.map((value) => value.trim()).filter((value) => value.length > 0);
+  return [...new Set(types)];
+}
+
+// Read the filter state out of the URL — the inverse of `sessionFiltersToQuery`. A blank or
+// absent value turns its facet off, so a bare URL is the unfiltered view. The legacy `chip` is
+// read only when neither `favorite` nor `type` is present.
 export function parseSessionFilters(
   params: URLSearchParams,
 ): SessionLibraryFilters {
   const query = params.get(SESSION_QUERY_PARAM)?.trim() ?? "";
-  const chip = parseChipParam(params.get(SESSION_CHIP_PARAM));
-  return { query, chip };
+  const rawExercise = params.get(EXERCISE_PARAM)?.trim() ?? "";
+  const exercise = rawExercise.length > 0 ? rawExercise : null;
+  if (!params.has(FAVORITE_PARAM) && !params.has(TYPE_PARAM)) {
+    return { query, exercise, ...legacyChipFacets(params.get(LEGACY_CHIP_PARAM)) };
+  }
+  return {
+    query,
+    favorite: params.get(FAVORITE_PARAM) === FAVORITE_ON,
+    trainingTypes: parseTrainingTypes(params.getAll(TYPE_PARAM)),
+    exercise,
+  };
 }
 
-// Serialize filter state back into a query string for `history.replaceState` — the inverse of
-// `parseSessionFilters`. A blank query and the All chip contribute nothing, so a cleared filter
-// yields "".
+// Serialize filter state back into a query string for `replaceFilterQuery` — the inverse of
+// `parseSessionFilters`. Unset facets contribute nothing, so a cleared filter yields "".
 export function sessionFiltersToQuery(
   filters: SessionLibraryFilters,
 ): URLSearchParams {
@@ -231,11 +244,14 @@ export function sessionFiltersToQuery(
   if (query.length > 0) {
     params.set(SESSION_QUERY_PARAM, query);
   }
-  const { chip } = filters;
-  if (chip.kind === "favorites") {
-    params.set(SESSION_CHIP_PARAM, FAVORITES_CHIP_VALUE);
-  } else if (chip.kind === "type") {
-    params.set(SESSION_CHIP_PARAM, `${TYPE_CHIP_PREFIX}${chip.trainingType}`);
+  if (filters.favorite) {
+    params.set(FAVORITE_PARAM, FAVORITE_ON);
+  }
+  for (const type of filters.trainingTypes) {
+    params.append(TYPE_PARAM, type);
+  }
+  if (filters.exercise !== null) {
+    params.set(EXERCISE_PARAM, filters.exercise);
   }
   return params;
 }

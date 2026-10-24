@@ -309,7 +309,7 @@ test("favoriting from a My Sessions row's sheet toggles it once and closes the s
       id: 12, name: "Short Basic Upper", display_name: "Short Basic Upper", training_type: "strength",
       created_at: "2026-10-04T10:00:00", author: { display_name: null }, authored_by_me: true,
       is_favorite: false, exercise_count: 3, logged_count: 1,
-      last_performed_on: "2026-10-04", preview_exercises: ["Bench Press"],
+      last_performed_on: "2026-10-04", preview_exercises: ["Bench Press"], exercise_names: ["Bench Press"],
     };
     await render(React.createElement(SessionCardRow, { session }));
     const opener = [...document.querySelectorAll<HTMLButtonElement>("button[aria-haspopup='dialog']")];
@@ -346,7 +346,7 @@ test("a Session card row's sheet is never trapped in a stacking context inside t
       id: 12, name: "Benchmark", display_name: "Benchmark", training_type: "strength",
       created_at: "2026-10-04", author: { display_name: null }, authored_by_me: true,
       is_favorite: false, exercise_count: 3, logged_count: 0,
-      last_performed_on: null, preview_exercises: ["Bench Press"],
+      last_performed_on: null, preview_exercises: ["Bench Press"], exercise_names: ["Bench Press"],
     };
     await render(React.createElement(SessionCardRow, { session }));
     const opener = document.querySelector<HTMLButtonElement>("button[aria-haspopup='dialog']")!;

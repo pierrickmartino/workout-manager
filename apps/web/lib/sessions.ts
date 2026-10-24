@@ -49,7 +49,7 @@ export async function fetchSession(
 }
 
 // The generous first-page size the My Sessions library fetches (issue #397): the whole
-// personal library in one read so search + favorites filtering run entirely in-browser (like
+// personal library in one read so the facet filtering runs entirely in-browser (like
 // History), bounded by the server's own list cap. A library larger than this would need
 // pagination UI — out of scope for v1's personal library.
 const LIBRARY_PAGE_LIMIT = 100;
@@ -58,7 +58,7 @@ const LIBRARY_PAGE_LIMIT = 100;
 // issue #397). The backend is owner-scoped and standalone-only — a Protocol-member Session and
 // every other user's Session are excluded — and returns the thin per-row projection
 // (name/fallback, Training Type, Author, favorite state). The page fetches the whole first
-// page and does the search + favorites filtering client-side via `session-library`.
+// page and does the facet filtering client-side via `session-library` (ADR-0141).
 export async function fetchSessions(): Promise<Envelope<SessionSummary[]>> {
   return apiGet(`/api/sessions?limit=${LIBRARY_PAGE_LIMIT}`);
 }

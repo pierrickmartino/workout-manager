@@ -36,6 +36,7 @@ export const sessions: SessionSummary[] = names.map((name, i) => ({
   is_favorite: i === 0, exercise_count: 100, logged_count: 1000,
   last_performed_on: "2026-09-12",
   preview_exercises: ["Barbell Bulgarian Split Squat", "Romanian Deadlift", "Seated Calf Raise"],
+  exercise_names: ["Barbell Bulgarian Split Squat", "Romanian Deadlift", "Seated Calf Raise"],
 }));
 // The Protocols index (#637): one row per group, the first two carrying the authored-name
 // variants (a named row also shows its derived label beneath), the third unnamed. The un-started

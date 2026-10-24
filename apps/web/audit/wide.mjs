@@ -53,6 +53,9 @@ const ALL_JOURNEYS = [
   // gate is inapplicable. Since ADR-0140 `history` is Month view too, on its newest month,
   // the facet rail beside it; `history-filtered` is that rail with two facets picked.
   "history-month", "history-filtered",
+  // My Sessions, the third page converted (ADR-0141): its facet rail beside the Session cards,
+  // so `sessions` opts in too; `sessions-filtered` is that rail with a facet of each kind picked.
+  "sessions-filtered",
   // The themed confirmation (ADR-0098), which no other journey mounts because a dialog exists
   // only while it is open. Its `max-w-sm` box must not stretch with the wide frame.
   "confirm",

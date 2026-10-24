@@ -30,6 +30,7 @@ function makeSummary(overrides: Partial<SessionSummary> = {}): SessionSummary {
     logged_count: 4,
     last_performed_on: "2026-10-12",
     preview_exercises: ["Bike", "Row"],
+    exercise_names: ["Bike", "Row"],
     ...overrides,
   };
 }

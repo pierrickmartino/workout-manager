@@ -140,3 +140,31 @@ def test_list_summary_previews_the_first_three_exercises_in_plan_order(repos):
         "Leg Press",
     )
     assert summaries[empty].preview_exercise_names == ()
+
+
+def test_list_summary_carries_every_distinct_exercise_name_sorted(repos):
+    # Arrange — a plan longer than the preview, repeating one movement
+    sessions, exercises, _ = repos
+    plan = _create(
+        sessions,
+        exercises,
+        "user_a",
+        ["Leg Press", "Back Squat", "Calf Raise", "Romanian Deadlift", "Back Squat"],
+    )
+    empty = sessions.create(
+        "user_a",
+        SessionDraft(training_type="yoga", duration_minutes=30, prescriptions=[]),
+    ).id
+
+    # Act
+    page = sessions.list_standalone("user_a", limit=50, offset=0)
+    summaries = {summary.id: summary for summary in page.items}
+
+    # Assert — the whole plan (not the preview), de-duplicated and alphabetical
+    assert summaries[plan].exercise_names == (
+        "Back Squat",
+        "Calf Raise",
+        "Leg Press",
+        "Romanian Deadlift",
+    )
+    assert summaries[empty].exercise_names == ()
