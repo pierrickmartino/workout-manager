@@ -234,7 +234,7 @@ export const auditEntry = { actor: "operator@example.com", createdAt: "2026-09-3
 
 // The admin AI audit log's rows (issue #730), at their widest: a full-length Clerk user id (one
 // unbroken token), an OpenRouter model slug, and the longest kind label; then a failed system
-// call with unknown tokens, the row whose badge and "unknown" labels differ.
+// call with unreported tokens, the row whose badge and "unreported" labels differ.
 export const generationCallRows: GenerationCallRow[] = [
   {
     id: 2,

@@ -4,13 +4,12 @@
 // from them, and builds the page links. No server or React imports, so `node --test` runs it.
 
 import type { PaginationMeta } from "./api.ts";
+import { ADMIN_AUDIT_LOG_PATH as AUDIT_LOG_PATH } from "./admin-paths.ts";
 import { KIND_LABELS, OUTCOME_LABELS } from "./admin-generation-calls-view.ts";
 
 // The calls one page holds. The endpoint's own default, so the first page reads the same
 // whether or not the window is spelled out.
 export const GENERATION_CALL_PAGE_SIZE = 50;
-
-const AUDIT_LOG_PATH = "/admin/ai-audit-log";
 
 // Each `null` leaves that axis open; set filters combine on the backend (AND).
 export interface AuditLogFilters {

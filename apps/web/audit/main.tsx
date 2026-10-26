@@ -257,14 +257,15 @@ function Home() {
 
 // The admin home as a dashboard (ADR-0142), mounted through the *same* `AdminDashboardColumns`
 // and `DashboardTileGroups` the real page uses, with tiles from the same view-model over the
-// synthetic catalog rows. Its root carries `data-shell="wide"` like the page's, and `wide.mjs`
+// synthetic catalog figures. Its root carries `data-shell="wide"` like the page's, and `wide.mjs`
 // fails the journey if it ever stops opting in. Five-digit counts are the widest tile values a
 // bounded catalog plausibly reaches. Below `lg:` the tile row is hidden, so `reflow.mjs`
 // measures that the phone page is still the two publishers over the two nav rows.
 function AdminHome() {
   const dashboard = adminDashboardView({
     completeness: { success: true, data: { stub: 12345, listable: 23456, enriched: 34567, total: 70368 }, error: null },
-    catalog: { success: true, data: adminExerciseRows, error: null },
+    // The retired total rides on `meta.total` of a one-row page; five digits is the widest tile.
+    retired: { success: true, data: adminExerciseRows.slice(0, 1), error: null, meta: { total: 12345 } },
     // The widest AI figures (#769): a five-digit call count, a one-decimal rate, compact token
     // sums with an "unreported" footnote, and a latency in seconds.
     generationCalls: {

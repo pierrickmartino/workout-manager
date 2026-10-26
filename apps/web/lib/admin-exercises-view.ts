@@ -8,6 +8,8 @@
 // orders it; this layer re-filters and re-sorts client-side so search and the three facets
 // respond instantly without a round-trip.
 
+import { ADMIN_CATALOG_PATH } from "./admin-paths.ts";
+
 // One admin browser row exactly as the backend endpoint returns it (the wire shape).
 export interface AdminExerciseRow {
   id: number;
@@ -89,17 +91,21 @@ export function completenessLabel(value: string): string {
   return COMPLETENESS_LABELS[value] ?? value;
 }
 
+// What an admin figure with no value shows — the usage cell's absent count, an empty dashboard
+// tile (ADR-0142): a dash, never a 0 that reads as measured.
+export const NO_VALUE = "—";
+
 // The usage cell: zero is the glossary's "unreferenced" (the precondition for a hard delete,
 // ADR-0076); an absent count is unknown and reads "—", never zero.
 export function usageLabel(referenceCount: number | null | undefined): string {
-  if (referenceCount == null) return "—";
+  if (referenceCount == null) return NO_VALUE;
   if (referenceCount === 0) return "Unreferenced";
   return `${referenceCount} reference${referenceCount === 1 ? "" : "s"}`;
 }
 
 // The editor href a row links toward (the editor lands in a later issue).
 export function adminExerciseHref(id: number): string {
-  return `/admin/exercises/${id}`;
+  return `${ADMIN_CATALOG_PATH}/${id}`;
 }
 
 // Project one wire row onto its display view-model. Pure: it derives labels and the href

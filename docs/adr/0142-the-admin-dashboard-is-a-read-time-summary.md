@@ -17,7 +17,9 @@ This ADR records the rules every dashboard number follows, so the next tile is b
 A tile is a read-time projection over data that already exists, the same rule as XP, Streak
 and Personal Records (ADR-0018/0019). There is no metrics table, no counter column, no cache
 and no write hook. The catalog tiles come from two reads the admin area already serves: the
-Catalog Completeness breakdown (Total, % Enriched, Stubs) and the admin catalog rows (Retired).
+Catalog Completeness breakdown (Total, % Enriched, Stubs) and the admin catalog endpoint
+filtered to `retired=true` at `limit=1`, whose `meta.total` is the exact Retired count. The home
+never reads the catalog rows themselves.
 % Enriched is the completeness readout's own share (`summarizeCompletenessBreakdown`), never a
 second calculation that could disagree with it. The AI tiles (#769) follow the same rule over
 the Generation Call log's 3-day window (ADR-0135). A number that would need a stored ledger to
@@ -78,9 +80,11 @@ The dashboard is a list of tile groups: catalog and AI. Each group has its own
 `ready`, `empty` or `failed` state, computed only from that group's own reads, in the pure
 view-model `lib/admin-dashboard-view.ts`. The page reads every input in parallel after the
 admin gate. Each read has its own `.catch`, because `apiGet` rejects on a transport failure
-instead of returning an envelope. A rejection, a refused envelope and a successful envelope
-with no payload all fail the group. A failed group shows an inline `Alert` with the backend's
-reason, and the other group, the publishers and the nav rows render as usual. A metric that
+instead of returning an envelope; the catch logs the error server-side and turns it into a
+failed read whose reason says the API could not be reached. A rejection, a refused envelope and
+a successful envelope with no payload (or a Retired page with no `meta.total`) all fail the
+group. A failed group shows an inline `Alert` with the backend's reason, or with what was
+missing when the backend gave none, and the other group, the publishers and the nav rows render as usual. A metric that
 cannot load must never block publishing. A failed AI summary also drops the Generator Kind
 list, since it reads the same summary; the AI group's `Alert` already says why.
 
@@ -107,5 +111,6 @@ real layout. `wide.mjs` also fails if a converted page (`home`, `admin-home`) lo
 
 - Adding a tile group means one more builder in `adminDashboardView` and one more input read
   in `lib/admin-dashboard.ts`. Existing groups do not change.
-- The Retired count costs the admin catalog read (one bounded page of rows). If the catalog
-  outgrows that page, the count belongs in a backend summary, still computed at read time.
+- The Retired count is exact at any catalog size: it is the retired-filtered page's
+  `meta.total`, one count query plus a one-row page (and that row's reference count). It is no
+  longer bounded by the 500-row page the catalog list reads.

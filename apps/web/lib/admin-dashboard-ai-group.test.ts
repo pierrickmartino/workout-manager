@@ -1,13 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { adminDashboardView } from "./admin-dashboard-view.ts";
+import { adminDashboardView, rejectedRead } from "./admin-dashboard-view.ts";
 import { parseAuditLogState } from "./admin-generation-calls-query.ts";
 
 const BREAKDOWN = { stub: 4, listable: 6, enriched: 10, total: 20 };
 const CATALOG_READS = {
   completeness: { success: true, data: BREAKDOWN, error: null },
-  catalog: { success: true, data: [], error: null },
+  retired: { success: true, data: [], error: null, meta: { total: 0, limit: 1, offset: 0 } },
 };
 
 const KINDS = {
@@ -183,20 +183,20 @@ test("a refused summary fails only the AI group, with the backend's reason", () 
   assert.equal(view.generatorKinds, null);
 });
 
-test("a rejected summary read (transport failure) fails the AI group too", () => {
+test("a rejected summary read (transport failure) fails the AI group with a real reason", () => {
   // Arrange / Act
-  const group = aiGroup(viewWith(null));
+  const group = aiGroup(viewWith(rejectedRead()));
 
   // Assert
   assert.equal(
     group.state === "failed" ? group.message : "",
-    "Could not load the AI summary: unknown error",
+    "Could not load the AI summary: the API could not be reached",
   );
 });
 
 test("a failed catalog read leaves the AI group ready", () => {
   // Arrange / Act
-  const view = adminDashboardView({ ...CATALOG_READS, catalog: null, generationCalls: READY });
+  const view = adminDashboardView({ ...CATALOG_READS, retired: rejectedRead(), generationCalls: READY });
 
   // Assert
   assert.equal(view.groups.find((g) => g.key === "catalog")?.state, "failed");

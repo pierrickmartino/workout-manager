@@ -47,16 +47,16 @@ test("an unattributed call reads as system", () => {
   assert.equal(view.kindLabel, "Exercise enrichment");
 });
 
-test("unreported token counts read as unknown, never zero", () => {
+test("unreported token counts read as unreported, never zero", () => {
   const view = toGenerationCallRowView(
     row({ input_tokens: null, output_tokens: null }),
   );
 
-  assert.equal(view.inputTokensLabel, "unknown");
-  assert.equal(view.outputTokensLabel, "unknown");
+  assert.equal(view.inputTokensLabel, "unreported");
+  assert.equal(view.outputTokensLabel, "unreported");
 });
 
-test("a zero token count is shown as zero, not unknown", () => {
+test("a zero token count is shown as zero, not unreported", () => {
   const view = toGenerationCallRowView(row({ output_tokens: 0 }));
 
   assert.equal(view.outputTokensLabel, "0");
@@ -99,6 +99,12 @@ test("the table's tokens cell reads unreported, never zero, when usage was not r
   );
 
   assert.equal(view.tokensCell, "unreported");
+});
+
+test("the table's tokens cell names the one side the provider did not report", () => {
+  const view = toGenerationCallRowView(row({ input_tokens: 1200, output_tokens: null }));
+
+  assert.equal(view.tokensCell, "1200 / unreported");
 });
 
 test("each row links to its call's detail page", () => {

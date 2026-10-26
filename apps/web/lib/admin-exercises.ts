@@ -26,6 +26,13 @@ export async function fetchAdminExercises(): Promise<Envelope<AdminExerciseRow[]
   return apiGet("/api/admin/exercises?limit=500");
 }
 
+// The exact number of retired Exercises, for the admin dashboard's Retired tile (ADR-0142): the
+// retired-filtered page at one row, read for its `meta.total`, so the count never depends on
+// how many rows one page can hold.
+export async function fetchRetiredExercisePage(): Promise<Envelope<AdminExerciseRow[]>> {
+  return apiGet("/api/admin/exercises?retired=true&limit=1");
+}
+
 // Read one Exercise's full detail to seed the editor (issue #502). Reuses the shared
 // `GET /api/exercises/{id}` (readable by any signed-in user); the editor page still gates
 // on `resolveIsAdmin`, and the write below is admin-only server-side. A retired Exercise

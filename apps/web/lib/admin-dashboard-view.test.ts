@@ -1,16 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { adminDashboardView } from "./admin-dashboard-view.ts";
+import { adminDashboardView, rejectedRead } from "./admin-dashboard-view.ts";
 import { parseAdminFilters } from "./admin-exercises-view.ts";
 
 const BREAKDOWN = { stub: 4, listable: 6, enriched: 10, total: 20 };
 
-function row(id: number, retired: boolean) {
-  return { id, name: `Exercise ${id}`, provenance: "curated", completeness: "enriched", retired };
+// The retired read is one row of the retired-filtered catalog page; its `meta.total` is the
+// exact count, however many rows the page itself carries.
+function retiredPage(total: number) {
+  return { success: true, data: [], error: null, meta: { total, limit: 1, offset: 0 } };
 }
-
-const ROWS = [row(1, false), row(2, true), row(3, true), row(4, false)];
 
 function catalogGroup(view: ReturnType<typeof adminDashboardView>) {
   const group = view.groups.find((g) => g.key === "catalog");
@@ -19,11 +19,11 @@ function catalogGroup(view: ReturnType<typeof adminDashboardView>) {
 }
 
 test("a ready catalog group shows total, % enriched, stub and retired tiles in order", () => {
-  // Arrange / Act — both reads succeed over a 20-movement catalog, 2 of 4 rows retired
+  // Arrange / Act — both reads succeed over a 20-movement catalog, 2 of them retired
   const view = adminDashboardView({
     completeness: { success: true, data: BREAKDOWN, error: null },
-    catalog: { success: true, data: ROWS, error: null },
-    generationCalls: null,
+    retired: retiredPage(2),
+    generationCalls: rejectedRead(),
   });
 
   // Assert
@@ -42,9 +42,9 @@ test("a ready catalog group shows total, % enriched, stub and retired tiles in o
 
 const READY_INPUTS = {
   completeness: { success: true, data: BREAKDOWN, error: null },
-  catalog: { success: true, data: ROWS, error: null },
+  retired: retiredPage(2),
   // The AI group's own reads; a failure there never reaches the catalog group.
-  generationCalls: null,
+  generationCalls: rejectedRead(),
 };
 
 test("each catalog tile links into the catalog, filtered where its number is a filter", () => {
@@ -85,8 +85,8 @@ test("an empty catalog shows — on every tile with honest empty copy, never 0%"
   const group = catalogGroup(
     adminDashboardView({
       completeness: { success: true, data: { stub: 0, listable: 0, enriched: 0, total: 0 }, error: null },
-      catalog: { success: true, data: [], error: null },
-      generationCalls: null,
+      retired: retiredPage(0),
+      generationCalls: rejectedRead(),
     }),
   );
 
@@ -124,15 +124,44 @@ test("a refused completeness read fails the catalog group with the backend's rea
   assert.ok(!("tiles" in group));
 });
 
-test("a rejected catalog read (transport failure) fails the catalog group too", () => {
-  // Arrange / Act — the data module caught the rejection as null
-  const group = catalogGroup(adminDashboardView({ ...READY_INPUTS, catalog: null }));
+test("a rejected retired read (transport failure) fails the catalog group with a real reason", () => {
+  // Arrange / Act — the data module turned the rejection into a failed read
+  const group = catalogGroup(
+    adminDashboardView({ ...READY_INPUTS, retired: rejectedRead() }),
+  );
 
-  // Assert — a missing reason still yields an honest message
+  // Assert — the reason names what happened, never "unknown error"
   assert.equal(group.state, "failed");
   assert.equal(
     group.state === "failed" ? group.message : "",
-    "Could not load the catalog summary: unknown error",
+    "Could not load the catalog summary: the API could not be reached",
+  );
+});
+
+test("the Retired tile reads the exact retired total, not the rows the page carried", () => {
+  // Arrange / Act — 742 retired Exercises, far past any one page of rows
+  const group = catalogGroup(adminDashboardView({ ...READY_INPUTS, retired: retiredPage(742) }));
+
+  // Assert
+  assert.equal(
+    group.state === "ready" ? group.tiles.find((t) => t.key === "retired")?.value : "",
+    "742",
+  );
+});
+
+test("a retired page without a total fails the catalog group rather than guessing", () => {
+  // Arrange / Act
+  const group = catalogGroup(
+    adminDashboardView({
+      ...READY_INPUTS,
+      retired: { success: true, data: [], error: null },
+    }),
+  );
+
+  // Assert
+  assert.equal(
+    group.state === "failed" ? group.message : "",
+    "Could not load the catalog summary: the response carried no data",
   );
 });
 
@@ -145,6 +174,9 @@ test("a successful envelope with no payload counts as a failed read", () => {
     }),
   );
 
-  // Assert
-  assert.equal(group.state, "failed");
+  // Assert — no backend reason, so the message says what was missing
+  assert.equal(
+    group.state === "failed" ? group.message : "",
+    "Could not load the catalog summary: the response carried no data",
+  );
 });

@@ -5,6 +5,8 @@
 // One row is one metered Generation Call: a cache miss that reached the provider, success or
 // failure. The list shows metadata only; prompts and output stay off the list payload.
 
+import { ADMIN_AUDIT_LOG_PATH } from "./admin-paths.ts";
+
 // One recorded call exactly as `GET /api/admin/generation-calls` returns it (the wire shape).
 // `clerk_user_id` is null for a system call; the token counts are null when the provider did
 // not report usage.
@@ -35,15 +37,26 @@ export interface GenerationCallRowView {
   isError: boolean;
   inputTokensLabel: string;
   outputTokensLabel: string;
-  // The wide table's single tokens column (issue #771): "in / out", or "unreported" when the
-  // provider reported no usage, so a missing count is never read as zero.
+    // The wide table's single tokens column (issue #771): "in / out", or one "unreported" when the
+  // provider reported no usage at all, so a missing count is never read as zero.
   tokensCell: string;
   latencyLabel: string;
 }
 
+// The backend's closed `GeneratorKind` and `GenerationOutcome` enums, as their wire values.
+export type GeneratorKind =
+  | "session"
+  | "protocol"
+  | "regeneration"
+  | "substitute"
+  | "muscle-emphasis"
+  | "exercise-enrichment";
+
+export type GenerationOutcome = "success" | "error";
+
 // The generator kinds the backend's `GeneratorKind` emits. An unknown kind falls back to its
 // raw value, so a future generator still renders. The list filter offers exactly these.
-export const KIND_LABELS: Record<string, string> = {
+export const KIND_LABELS: Readonly<Record<GeneratorKind, string>> = {
   session: "Session",
   protocol: "Protocol",
   regeneration: "Regeneration",
@@ -52,39 +65,47 @@ export const KIND_LABELS: Record<string, string> = {
   "exercise-enrichment": "Exercise enrichment",
 };
 
-export const OUTCOME_LABELS: Record<string, string> = {
+export const OUTCOME_LABELS: Readonly<Record<GenerationOutcome, string>> = {
   success: "Success",
   error: "Error",
 };
 
+// The Generation Call log's retention window (ADR-0135), mirrored from the backend's
+// `GENERATION_CALL_RETENTION` for copy on pages that read no summary carrying `window_days`.
+export const GENERATION_CALL_WINDOW_DAYS = 3;
+
+// The window as running copy: "AI calls of the last 3 days".
+export const GENERATION_CALL_WINDOW = `the last ${GENERATION_CALL_WINDOW_DAYS} days`;
+
 // What a call made on no user's behalf (catalog enrichment) shows in the user column.
 export const SYSTEM_USER_LABEL = "system";
 
-// What a token count the provider did not report shows, so it is never read as zero.
-export const UNKNOWN_TOKENS_LABEL = "unknown";
-
-// What the wide table's tokens column shows for a call whose usage the provider did not report.
+// What a token count the provider did not report shows — on the list, the detail and the wide
+// table alike — so it is never read as zero.
 export const UNREPORTED_TOKENS_LABEL = "unreported";
 
 const MS_PER_SECOND = 1000;
 
 function generationCallHref(id: number): string {
-  return `/admin/ai-audit-log/${id}`;
+  return `${ADMIN_AUDIT_LOG_PATH}/${id}`;
 }
 
-function labelFrom(labels: Record<string, string>, value: string): string {
+function labelFrom(labels: Readonly<Record<string, string>>, value: string): string {
   return Object.hasOwn(labels, value) ? labels[value] : value;
 }
 
-function tokensLabel(tokens: number | null): string {
-  return tokens === null ? UNKNOWN_TOKENS_LABEL : String(tokens);
+// A Generator Kind's label, or its raw value for a kind this build does not know yet.
+export function generatorKindLabel(kind: string): string {
+  return labelFrom(KIND_LABELS, kind);
+}
+
+export function tokensLabel(tokens: number | null): string {
+  return tokens === null ? UNREPORTED_TOKENS_LABEL : String(tokens);
 }
 
 function tokensCell(input: number | null, output: number | null): string {
   if (input === null && output === null) return UNREPORTED_TOKENS_LABEL;
-  const side = (tokens: number | null): string =>
-    tokens === null ? UNREPORTED_TOKENS_LABEL : String(tokens);
-  return `${side(input)} / ${side(output)}`;
+  return `${tokensLabel(input)} / ${tokensLabel(output)}`;
 }
 
 // Whole milliseconds under a second; seconds to one decimal from there, where a generation's
@@ -104,7 +125,7 @@ export function toGenerationCallRowView(
     id: row.id,
     href: generationCallHref(row.id),
     createdAt: row.created_at,
-    kindLabel: labelFrom(KIND_LABELS, row.generator_kind),
+    kindLabel: generatorKindLabel(row.generator_kind),
     userLabel: row.clerk_user_id ?? SYSTEM_USER_LABEL,
     servedBy: `${row.provider} · ${row.model}`,
     outcomeLabel: labelFrom(OUTCOME_LABELS, row.outcome),
