@@ -305,7 +305,8 @@ function AdminAudit() {
       <SectionHeader>Avatar Universe</SectionHeader>
       <AvatarUniversePublisher activeUniverse="realm" />
     </div>
-    <AdminExerciseBrowser rows={adminExerciseRows} />
+    {/* The catalog browser moved to its own `admin-catalog` journey (#772): it now opts into
+        the wide column, and mounted here it would widen every other admin surface with it. */}
     <div className="flex flex-col gap-4">
       <SectionHeader meta="1 change">Audit trail</SectionHeader>
       <ul className="flex flex-col gap-2">
@@ -733,6 +734,9 @@ function Content() {
     // The admin home dashboard (ADR-0142): the catalog tiles over Publishing and Operations.
     case "admin-home": return <AdminHome />;
     case "ai-audit-log": return <AiAuditLogSurface />;
+    // The admin exercise catalog (#772): the browser opts the page into the wide column, so at
+    // 1440px it is the table and at 320px the card list — the same component the page mounts.
+    case "admin-catalog": return <AdminExerciseBrowser rows={adminExerciseRows} />;
     case "confirm": return <ConfirmSurface />;
     case "sheet": return <SheetSurface />;
     case "session-header": return <SessionHeaderSurface />;

@@ -71,7 +71,8 @@ const ALL_JOURNEYS = [
   // The Exercise detail lens and the admin catalog (ADR-0095/0096/0097). Neither was ever in a
   // journey, so neither had been rendered at any width by this harness. Both stay unconverted —
   // no `data-shell="wide"` — so they also widen the evidence that the frame leaves an
-  // unconverted page at 26rem.
+  // unconverted page at 26rem. (Since #772 the catalog is `admin-catalog`, below; `admin` keeps
+  // the other admin surfaces, still unconverted.)
   "exercise", "admin",
   // The ad-hoc log (ADR-0106). It was a renderable case that no journey swept, so its form was
   // unverified at every width while three sibling log forms were gated — and it is one of the
@@ -99,14 +100,17 @@ const ALL_JOURNEYS = [
   // The admin home as a dashboard (ADR-0142): catalog tiles over Publishing and Operations. It
   // opts in, and is in `MUST_OPT_IN` below, so it fails if it ever stops doing so.
   "admin-home",
+  // The admin exercise catalog (#772), converted to the wide column: its rows become a table at
+  // this width. It left the `admin` journey, which stays unconverted.
+  "admin-catalog",
 ];
 // Journeys whose page is converted to the wide column. For these the opt-in itself is gated: a
 // converted page that lost `data-shell="wide"` would otherwise pass every check here by
 // silently shrinking back to 26rem.
-const MUST_OPT_IN = new Set(["home", "admin-home", "ai-audit-log"]);
-// Journeys whose wide layout is a table (#771): at this viewport one must actually be laid out,
-// not merely present in markup behind a `hidden lg:block` that failed to resolve.
-const MUST_SHOW_TABLE = new Set(["ai-audit-log"]);
+const MUST_OPT_IN = new Set(["home", "admin-home", "ai-audit-log", "admin-catalog"]);
+// Journeys whose wide layout is a table (#771, #772): at this viewport one must actually be laid
+// out, not merely present in markup behind a `hidden lg:block` (or a mount gate) that failed.
+const MUST_SHOW_TABLE = new Set(["ai-audit-log", "admin-catalog"]);
 // A comma-separated subset, for iterating on one screen without paying for the full sweep.
 // The gated run is the unfiltered one.
 const JOURNEYS = process.env.UI_WIDE_JOURNEYS
@@ -195,7 +199,8 @@ function measure(tokens) {
     // opt-in, so the gate has to read the declaration rather than assume one answer.
     optedIn: Boolean(column?.querySelector("[data-shell=wide]")),
     // Whether a table is laid out in the column at this viewport (computed, not class strings).
-    tableVisible: [...(column?.querySelectorAll("table") ?? [])]
+    // An ARIA table counts too: the admin catalog's rows are `div`s so each can defer (#772).
+    tableVisible: [...(column?.querySelectorAll('table, [role="table"]') ?? [])]
       .some(table => table.getBoundingClientRect().width > 0),
     // Whether the sidebar is the navigation in play — it must be, at this viewport, for the
     // measurement to mean what the ADR says it means. Computed display, not a class string:

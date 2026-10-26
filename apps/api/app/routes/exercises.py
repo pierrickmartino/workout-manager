@@ -448,14 +448,15 @@ def read_completeness_breakdown(
     )
 
 
-def _admin_row(exercise: Exercise) -> dict:
+def _admin_row(exercise: Exercise, *, reference_count: int) -> dict:
     """One row of the admin catalog browser (issue #501, ADR-0076).
 
     Unlike the user-facing ``_search_result``, this ops row surfaces the two axes the
     public catalog deliberately hides: the computed Catalog Completeness tier (ADR-0041)
     and the ``retired`` tombstone (ADR-0076, for the later editor). ``id`` and ``name`` are
     enough for a row to link toward the editor; the tier is the read-time projection, never
-    a stored column."""
+    a stored column. ``reference_count`` (issue #772) feeds the admin table's usage column —
+    the same live count the hard-delete guard reads, computed per page, never stored."""
 
     return {
         "id": exercise.id,
@@ -463,6 +464,7 @@ def _admin_row(exercise: Exercise) -> dict:
         "provenance": exercise.provenance,
         "completeness": catalog_completeness(exercise).value,
         "retired": exercise.retired,
+        "reference_count": reference_count,
     }
 
 
@@ -523,8 +525,12 @@ def admin_browse_exercises(
         retired=retired,
     )
     page = exercises.admin_browse(filters=filters, limit=limit, offset=offset)
+    counts = exercises.reference_counts([exercise.id for exercise in page.items])
     return success_envelope(
-        [_admin_row(exercise) for exercise in page.items],
+        [
+            _admin_row(exercise, reference_count=counts.get(exercise.id, 0))
+            for exercise in page.items
+        ],
         meta={"total": page.total, "limit": limit, "offset": offset},
     )
 

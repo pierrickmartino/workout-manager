@@ -7,6 +7,7 @@ import { ChevronRight, Search } from "@/components/pulse/icons";
 
 import {
   EMPTY_ADMIN_FILTERS,
+  PROVENANCE_BADGE,
   adminFiltersToQuery,
   hasActiveAdminFilters,
   parseAdminFilters,
@@ -22,6 +23,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { NAV_FORWARD } from "@/lib/nav-direction";
+import { useWideViewport } from "@/lib/use-wide-viewport";
+import { AdminExerciseTableLazy } from "@/components/AdminExerciseTableLazy";
 
 // The closed Provenance and Completeness vocabularies as the facet dropdowns offer them
 // (GLOSSARY: Provenance; ADR-0041). Kept here as UI options; the pure view-model owns the
@@ -43,12 +46,6 @@ const STATUS_OPTIONS: { value: AdminExerciseFilters["status"]; label: string }[]
   { value: "active", label: "Active" },
   { value: "retired", label: "Retired" },
 ];
-
-const PROVENANCE_BADGE: Record<string, "cyan" | "violet" | "muted"> = {
-  curated: "cyan",
-  ai_generated: "violet",
-  user_entered: "muted",
-};
 
 // The admin catalog browser (issue #501, ADR-0075/0076): the operator-only ops view of the
 // whole shared Catalog. It hides nothing — every Provenance and Completeness tier (Stubs
@@ -104,6 +101,10 @@ export function AdminExerciseBrowser({
   // Read off the deferred filters, not the live ones, so the summary row always describes the
   // list underneath it rather than the one being computed.
   const filtered = hasActiveAdminFilters(deferredFilters);
+  // At the shell's wide width the same views render as a table (#772). A mount gate, not
+  // `hidden lg:block`: both layouts in the DOM would be 1,000 rows for 500 movements, and the
+  // table's module would ship to a phone that never shows it (ADR-0088).
+  const isWide = useWideViewport();
 
   function update<K extends keyof AdminExerciseFilters>(
     key: K,
@@ -113,7 +114,11 @@ export function AdminExerciseBrowser({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    // `data-shell="wide"` opts the catalog page into the wide content column (#772, ADR-0088).
+    // It sits here, on the browser's own root, rather than on the page's `<section>` so the
+    // audit journeys — which mount this component, since the page is a Server Component — verify
+    // the real opt-in instead of a copy of it. The shell widens on any descendant carrying it.
+    <div className="flex flex-col gap-4" data-shell="wide">
       <div className="flex flex-col gap-3">
         <div className="relative">
           <Search
@@ -187,6 +192,8 @@ export function AdminExerciseBrowser({
             No movements match these filters.
           </p>
         </Card>
+      ) : isWide ? (
+        <AdminExerciseTableLazy views={views} />
       ) : (
         <Card className="divide-y divide-border-lite overflow-hidden p-0">
           {views.map((view) => (

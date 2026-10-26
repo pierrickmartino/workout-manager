@@ -215,13 +215,15 @@ export const exerciseDetail: ExerciseDetail = {
 // The admin catalog browser's rows (ADR-0097). Deliberately over the 50-item threshold the
 // audit cares about and over the >426px column where the facet grid goes three-up, with the
 // long authored names in the first two slots so the row's truncation and the badge cluster are
-// measured against the same names every other journey uses.
+// measured against the same names every other journey uses. The usage column (#772) spans its
+// three shapes — unreferenced, one reference, and a four-digit count, its widest label.
 export const adminExerciseRows: AdminExerciseRow[] = Array.from({ length: 60 }, (_, i) => ({
   id: i + 1,
   name: i < 2 ? exerciseNames[i] : `Synthetic squat ${i + 1}`,
   provenance: ["curated", "ai_generated", "user_entered"][i % 3],
   completeness: ["stub", "listable", "enriched"][i % 3],
   retired: i % 7 === 0,
+  reference_count: [0, 1, 1284][i % 3],
 }));
 
 // One admin audit-trail entry, in the row shape `app/admin/exercises/[id]/page.tsx` renders it

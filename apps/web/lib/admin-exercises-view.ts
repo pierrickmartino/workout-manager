@@ -15,6 +15,10 @@ export interface AdminExerciseRow {
   provenance: string;
   completeness: string;
   retired: boolean;
+  // How many Exercise Prescriptions, Logged Sets and Relationships point at it (#772): the
+  // live count the hard-delete guard reads. Optional so a row without it renders "—" rather
+  // than a misleading "Unreferenced".
+  reference_count?: number | null;
 }
 
 // The active/retired facet: `all` spans both (the default ops view hides nothing).
@@ -50,6 +54,7 @@ export interface AdminExerciseRowView {
   completenessLabel: string;
   retired: boolean;
   statusLabel: string;
+  usageLabel: string;
 }
 
 // Provenance is a closed set (GLOSSARY: Provenance); the ops labels read as the rest of the
@@ -68,12 +73,28 @@ const COMPLETENESS_LABELS: Record<string, string> = {
   enriched: "Enriched",
 };
 
+// The badge tone each Provenance renders in, shared by the card list and the wide table (#772)
+// so the two layouts of one row cannot drift. An unknown token falls back to `muted`.
+export const PROVENANCE_BADGE: Readonly<Record<string, "cyan" | "violet" | "muted">> = {
+  curated: "cyan",
+  ai_generated: "violet",
+  user_entered: "muted",
+};
+
 export function provenanceLabel(value: string): string {
   return PROVENANCE_LABELS[value] ?? value;
 }
 
 export function completenessLabel(value: string): string {
   return COMPLETENESS_LABELS[value] ?? value;
+}
+
+// The usage cell: zero is the glossary's "unreferenced" (the precondition for a hard delete,
+// ADR-0076); an absent count is unknown and reads "—", never zero.
+export function usageLabel(referenceCount: number | null | undefined): string {
+  if (referenceCount == null) return "—";
+  if (referenceCount === 0) return "Unreferenced";
+  return `${referenceCount} reference${referenceCount === 1 ? "" : "s"}`;
 }
 
 // The editor href a row links toward (the editor lands in a later issue).
@@ -96,6 +117,7 @@ export function toAdminExerciseRowView(
     completenessLabel: completenessLabel(row.completeness),
     retired: row.retired,
     statusLabel: row.retired ? "Retired" : "Active",
+    usageLabel: usageLabel(row.reference_count),
   };
 }
 
