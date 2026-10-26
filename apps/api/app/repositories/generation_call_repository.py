@@ -16,7 +16,7 @@ ORM never leaves the repository."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from statistics import median
@@ -103,8 +103,8 @@ class GenerationCallWindowSummary:
     call, successes and errors alike, and ``None`` when the window holds no call."""
 
     total_calls: int
-    by_outcome: dict[str, int]
-    by_generator_kind: dict[str, int]
+    by_outcome: dict[GenerationOutcome, int]
+    by_generator_kind: dict[GeneratorKind, int]
     input_tokens: int
     output_tokens: int
     unreported_usage_calls: int
@@ -112,7 +112,22 @@ class GenerationCallWindowSummary:
     window_days: int
 
 
-def _window_summary(rows: list) -> GenerationCallWindowSummary:
+class _SummarizedRow(Protocol):
+    """One row of the five summarized columns ``summarize_recent`` reads — never a prompt."""
+
+    @property
+    def generator_kind(self) -> str: ...
+    @property
+    def outcome(self) -> str: ...
+    @property
+    def input_tokens(self) -> int | None: ...
+    @property
+    def output_tokens(self) -> int | None: ...
+    @property
+    def latency_ms(self) -> float: ...
+
+
+def _window_summary(rows: Sequence[_SummarizedRow]) -> GenerationCallWindowSummary:
     """Aggregate rows of the five summarized columns (kind, outcome, tokens, latency)."""
 
     reported = [
@@ -124,11 +139,11 @@ def _window_summary(rows: list) -> GenerationCallWindowSummary:
     return GenerationCallWindowSummary(
         total_calls=len(rows),
         by_outcome={
-            outcome.value: sum(1 for row in rows if row.outcome == outcome.value)
+            outcome: sum(1 for row in rows if row.outcome == outcome.value)
             for outcome in GenerationOutcome
         },
         by_generator_kind={
-            kind.value: sum(1 for row in rows if row.generator_kind == kind.value)
+            kind: sum(1 for row in rows if row.generator_kind == kind.value)
             for kind in GeneratorKind
         },
         input_tokens=sum(row.input_tokens for row in reported),
@@ -306,7 +321,7 @@ class SqlGenerationCallRepository:
             GenerationCallRecord.output_tokens,
             GenerationCallRecord.latency_ms,
         ).where(GenerationCallRecord.created_at >= retention_cutoff(self._now()))
-        return _window_summary(list(self._session.exec(statement).all()))
+        return _window_summary(self._session.exec(statement).all())
 
 
 __all__ = [

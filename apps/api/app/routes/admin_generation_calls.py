@@ -102,8 +102,11 @@ def list_generation_calls(
 def _serialize_window(summary: GenerationCallWindowSummary) -> dict:
     return {
         "total_calls": summary.total_calls,
-        "by_outcome": summary.by_outcome,
-        "by_generator_kind": summary.by_generator_kind,
+        # Keyed by the enums' wire values, every member present, in enum order.
+        "by_outcome": {outcome.value: n for outcome, n in summary.by_outcome.items()},
+        "by_generator_kind": {
+            kind.value: n for kind, n in summary.by_generator_kind.items()
+        },
         # Sums over calls that reported usage; ``unreported_usage_calls`` counts the rest.
         "input_tokens": summary.input_tokens,
         "output_tokens": summary.output_tokens,
