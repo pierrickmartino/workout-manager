@@ -173,3 +173,19 @@ def test_browse_paginates_with_full_total():
     body = response.json()
     assert [row["name"] for row in body["data"]] == ["Jefferson Curl"]
     assert body["meta"] == {"total": 3, "limit": 1, "offset": 1}
+
+
+def test_browse_rows_carry_each_exercises_reference_count():
+    # Arrange — one referenced and one unreferenced movement (the table's usage column, #772)
+    client, ctx, exercises = build_client()
+    squat = exercises.find_or_create("Back Squat", provenance=Provenance.CURATED)
+    exercises.find_or_create("Jefferson Curl", provenance=Provenance.USER_ENTERED)
+    exercises.register_reference(squat.id, count=3)
+
+    # Act
+    response = client.get("/api/admin/exercises", headers=_operator(ctx))
+
+    # Assert
+    by_name = {row["name"]: row for row in response.json()["data"]}
+    assert by_name["Back Squat"]["reference_count"] == 3
+    assert by_name["Jefferson Curl"]["reference_count"] == 0
