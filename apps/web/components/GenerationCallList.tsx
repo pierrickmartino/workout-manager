@@ -1,7 +1,10 @@
 import Link from "next/link";
 
 import { CallFact, GenerationCallHeadline } from "@/components/GenerationCallParts";
-import type { GenerationCallRowView } from "@/lib/admin-generation-calls-view";
+import {
+  GENERATION_CALL_WINDOW,
+  type GenerationCallRowView,
+} from "@/lib/admin-generation-calls-view";
 import { NAV_FORWARD } from "@/lib/nav-direction";
 
 interface GenerationCallListProps {
@@ -22,8 +25,8 @@ export function GenerationCallList({
     return (
       <p className="font-mono text-[13px] text-text-muted">
         {isFiltered
-          ? "No AI calls in the last 3 days match these filters."
-          : "No AI calls in the last 3 days."}
+          ? `No AI calls in ${GENERATION_CALL_WINDOW} match these filters.`
+          : `No AI calls in ${GENERATION_CALL_WINDOW}.`}
       </p>
     );
   }

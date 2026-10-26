@@ -30,11 +30,11 @@ const COLUMNS = [
 
 const ROW_GRID = "lg:grid lg:grid-cols-12 lg:items-center lg:gap-4 px-4";
 
-export function AdminExerciseTable({
-  views,
-}: {
+interface AdminExerciseTableProps {
   views: readonly AdminExerciseRowView[];
-}): React.JSX.Element {
+}
+
+export function AdminExerciseTable({ views }: AdminExerciseTableProps): React.JSX.Element {
   return (
     <Card className="overflow-hidden p-0">
       <div role="table" aria-label="Exercise catalog">
@@ -61,11 +61,11 @@ export function AdminExerciseTable({
   );
 }
 
-function AdminExerciseTableRow({
-  view,
-}: {
+interface AdminExerciseTableRowProps {
   view: AdminExerciseRowView;
-}): React.JSX.Element {
+}
+
+function AdminExerciseTableRow({ view }: AdminExerciseTableRowProps): React.JSX.Element {
   return (
     // `relative` so the name's link can stretch over the whole row: one link per row, named by
     // the Exercise, rather than five tab stops all going to the same editor.

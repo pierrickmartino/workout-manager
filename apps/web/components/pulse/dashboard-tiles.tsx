@@ -11,7 +11,11 @@ import type { DashboardGroupView, DashboardTileView } from "@/lib/admin-dashboar
 // One tile is one link, and its accessible name is its label then its value (then the
 // footnote), the order they are drawn in. It navigates deeper into the admin area, so it is
 // tagged forward (ADR-0121).
-function DashboardTile({ tile }: { tile: DashboardTileView }): React.JSX.Element {
+interface DashboardTileProps {
+  tile: DashboardTileView;
+}
+
+function DashboardTile({ tile }: DashboardTileProps): React.JSX.Element {
   return (
     <li className="min-w-0">
       <Link
@@ -31,7 +35,11 @@ function DashboardTile({ tile }: { tile: DashboardTileView }): React.JSX.Element
 
 // One group: its heading, then its tiles (ready or empty) or its inline error (failed). A
 // failed group never takes another group, or anything else on the page, down with it.
-function DashboardTileGroup({ group }: { group: DashboardGroupView }): React.JSX.Element {
+interface DashboardTileGroupProps {
+  group: DashboardGroupView;
+}
+
+function DashboardTileGroup({ group }: DashboardTileGroupProps): React.JSX.Element {
   return (
     <section className="flex min-w-0 flex-1 flex-col gap-4">
       <SectionHeader>{group.title}</SectionHeader>
@@ -53,11 +61,11 @@ function DashboardTileGroup({ group }: { group: DashboardGroupView }): React.JSX
   );
 }
 
-export function DashboardTileGroups({
-  groups,
-}: {
-  groups: DashboardGroupView[];
-}): React.JSX.Element {
+interface DashboardTileGroupsProps {
+  groups: readonly DashboardGroupView[];
+}
+
+export function DashboardTileGroups({ groups }: DashboardTileGroupsProps): React.JSX.Element {
   return (
     <>
       {groups.map((group) => (

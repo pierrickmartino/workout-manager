@@ -10,15 +10,18 @@
 //   - source order is Publishing then Operations, which is the order the narrow admin home has
 //     always had. The wide layout keeps that order left-to-right instead of reordering with
 //     CSS, so the focus and reading order match what is drawn.
+interface AdminDashboardColumnsProps {
+  // The tile groups, one child per group, in the full-width row shown only at `lg:`.
+  tiles: React.ReactNode;
+  publishing: React.ReactNode;
+  operations: React.ReactNode;
+}
+
 export function AdminDashboardColumns({
   tiles,
   publishing,
   operations,
-}: {
-  tiles: React.ReactNode;
-  publishing: React.ReactNode;
-  operations: React.ReactNode;
-}): React.JSX.Element {
+}: AdminDashboardColumnsProps): React.JSX.Element {
   return (
     <div className="flex flex-col gap-6">
       {/* One tile group per child; with a second group (#769) they share the row equally. */}

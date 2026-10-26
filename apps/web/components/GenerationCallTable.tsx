@@ -2,7 +2,10 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { LocalInstant } from "@/components/pulse/local-instant";
-import type { GenerationCallRowView } from "@/lib/admin-generation-calls-view";
+import {
+  GENERATION_CALL_WINDOW,
+  type GenerationCallRowView,
+} from "@/lib/admin-generation-calls-view";
 import { NAV_FORWARD } from "@/lib/nav-direction";
 import { cn } from "@/lib/utils";
 
@@ -20,7 +23,7 @@ interface GenerationCallTableProps {
 export function GenerationCallTable({ calls }: GenerationCallTableProps): React.JSX.Element {
   return (
     <table className="w-full table-fixed border-collapse font-mono text-[13px]">
-      <caption className="sr-only">AI calls of the last 3 days, newest first</caption>
+      <caption className="sr-only">AI calls of {GENERATION_CALL_WINDOW}, newest first</caption>
       <colgroup>
         <col className="w-2/12" />
         <col className="w-2/12" />
@@ -75,13 +78,12 @@ export function GenerationCallTable({ calls }: GenerationCallTableProps): React.
   );
 }
 
-function HeaderCell({
-  align = "left",
-  children,
-}: {
+interface HeaderCellProps {
   align?: "left" | "right";
   children: React.ReactNode;
-}): React.JSX.Element {
+}
+
+function HeaderCell({ align = "left", children }: HeaderCellProps): React.JSX.Element {
   return (
     <th
       scope="col"

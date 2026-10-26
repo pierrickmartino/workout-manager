@@ -6,6 +6,8 @@ import { resolveIsAdmin } from "@/lib/admin";
 import { resolveActiveSkin } from "@/lib/active-skin";
 import { resolveAvatarUniverse } from "@/lib/avatar-universe";
 import { fetchAdminDashboard } from "@/lib/admin-dashboard";
+import { ADMIN_AUDIT_LOG_PATH, ADMIN_CATALOG_PATH } from "@/lib/admin-paths";
+import { GENERATION_CALL_WINDOW_DAYS } from "@/lib/admin-generation-calls-view";
 import { AppearanceSkinPublisher } from "@/components/AppearanceSkinPublisher";
 import { AvatarUniversePublisher } from "@/components/AvatarUniversePublisher";
 import { AdminDashboardColumns } from "@/components/pulse/admin-dashboard-columns";
@@ -33,8 +35,9 @@ import { NAV_FORWARD } from "@/lib/nav-direction";
 // At `lg:` it is a dashboard (ADR-0142): it opts into the wide shell (ADR-0088), and a row of
 // read-time summary tiles — each a link into the list behind its number — sits over the
 // Publishing and Operations columns: catalog health and AI usage over the Generation Call
-// log's 3-day window, with the calls-by-Generator-Kind list under the AI nav row (#769). The tiles are read only after the admin gate, and each
-// group fails on its own, so a metric that cannot load never blocks a publisher.
+// log's 3-day window, with the calls-by-Generator-Kind list under the AI nav row (#769). The
+// tiles are read only after the admin gate, and each group fails on its own, so a metric that
+// cannot load never blocks a publisher.
 export default async function AdminPage() {
   const [isAdmin, activeSkin, avatarUniverse] = await Promise.all([
     resolveIsAdmin(),
@@ -76,7 +79,7 @@ export default async function AdminPage() {
                 <NavRow
                   icon={Dumbbell}
                   label="Exercise catalog"
-                  href="/admin/exercises"
+                  href={ADMIN_CATALOG_PATH}
                   direction={NAV_FORWARD}
                   value="BROWSE"
                   accent="cyan"
@@ -90,9 +93,9 @@ export default async function AdminPage() {
                 <NavRow
                   icon={Activity}
                   label="AI audit log"
-                  href="/admin/ai-audit-log"
+                  href={ADMIN_AUDIT_LOG_PATH}
                   direction={NAV_FORWARD}
-                  value="3 DAYS"
+                  value={`${GENERATION_CALL_WINDOW_DAYS} DAYS`}
                   accent="cyan"
                 />
               </Card>

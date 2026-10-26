@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { resolveIsAdmin } from "@/lib/admin";
 import {
   fetchGenerationCalls,
+  GENERATION_CALL_WINDOW,
   hasAuditLogFilters,
   parseAuditLogState,
   toAuditLogPager,
@@ -43,7 +44,7 @@ export default async function AdminAiAuditLogPage({
     <section className="flex flex-col gap-6" data-shell="wide">
       <PageHeader overline="PULSE // ADMIN" title="AI audit log" />
       <p className="font-mono text-[13px] leading-relaxed text-text-muted">
-        Every request that reached the AI provider in the last 3 days, newest first, whether
+        Every request that reached the AI provider in {GENERATION_CALL_WINDOW}, newest first, whether
         it succeeded or failed. Cached results are not listed.
       </p>
 

@@ -10,11 +10,14 @@ import type { GeneratorKindCountView } from "@/lib/admin-dashboard-view";
 // `lib/admin-dashboard-view.ts`. Server-safe — no hooks, no client JS. Like the tile row it is
 // `hidden lg:flex`, so the phone admin home is unchanged; and it renders nothing when the
 // summary failed, because the AI tile group's inline error already says so.
+interface GeneratorKindBreakdownProps {
+  // `null` when the summary could not be read: the AI group's inline error already says so.
+  kinds: readonly GeneratorKindCountView[] | null;
+}
+
 export function GeneratorKindBreakdown({
   kinds,
-}: {
-  kinds: GeneratorKindCountView[] | null;
-}): React.JSX.Element | null {
+}: GeneratorKindBreakdownProps): React.JSX.Element | null {
   if (kinds === null) return null;
   return (
     <section className="hidden lg:flex lg:flex-col lg:gap-4">
