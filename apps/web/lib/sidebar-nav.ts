@@ -9,7 +9,8 @@
 // otherwise light at once. Two "you are here" markers is worse than none. Inside `/admin` the
 // admin entry nests the admin areas (#770) and the most specific one carries the marker.
 
-import { TABS, isActive, type TabLabel, type TabRoute } from "./tab-nav.ts";
+import { ADMIN_AUDIT_LOG_PATH, ADMIN_CATALOG_PATH, ADMIN_HOME_PATH } from "./admin-paths.ts";
+import { TABS, isActive, isWithinPath, type TabLabel, type TabRoute } from "./tab-nav.ts";
 
 // The admin entry, shown only to admins and only in the sidebar. ADR-0071 kept admin off the
 // bottom tab bar because a persistent tab for a role most users never have wastes one of four
@@ -17,8 +18,8 @@ import { TABS, isActive, type TabLabel, type TabRoute } from "./tab-nav.ts";
 // Below `lg:` admin is still reached by the conditional nav row on Profile.
 const ADMIN_ROUTE: TabRoute = {
   label: "PROFILE",
-  href: "/admin",
-  match: ["/admin"],
+  href: ADMIN_HOME_PATH,
+  match: [ADMIN_HOME_PATH],
 };
 
 export const ADMIN_ENTRY_LABEL = "ADMIN";
@@ -28,9 +29,9 @@ export type SidebarEntryLabel = TabLabel | typeof ADMIN_ENTRY_LABEL;
 // The admin areas nested under the admin entry while an admin is inside `/admin` (#770), so
 // moving between them never bounces through the admin home. Order is display order.
 const ADMIN_AREAS = [
-  { label: "Overview", href: "/admin" },
-  { label: "Exercise catalog", href: "/admin/exercises" },
-  { label: "AI audit log", href: "/admin/ai-audit-log" },
+  { label: "Overview", href: ADMIN_HOME_PATH },
+  { label: "Exercise catalog", href: ADMIN_CATALOG_PATH },
+  { label: "AI audit log", href: ADMIN_AUDIT_LOG_PATH },
 ] as const;
 
 export type AdminAreaLabel = (typeof ADMIN_AREAS)[number]["label"];
@@ -85,9 +86,7 @@ export function sidebarEntries(
 // its own subtree — the longest matching href — so an Exercise editor lights Exercise catalog
 // and a Generation Call detail lights AI audit log, while `/admin` itself lights Overview.
 function adminAreaEntries(pathname: string): readonly SidebarSubEntry[] {
-  const owner = ADMIN_AREAS.filter((area) =>
-    isActive(pathname, { label: "PROFILE", href: area.href, match: [area.href] }),
-  ).reduce<(typeof ADMIN_AREAS)[number] | null>(
+  const owner = ADMIN_AREAS.filter((area) => isWithinPath(pathname, area.href)).reduce<(typeof ADMIN_AREAS)[number] | null>(
     (best, area) => (best === null || area.href.length > best.href.length ? area : best),
     null,
   );

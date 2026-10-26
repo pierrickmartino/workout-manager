@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
-import { TABS, TAB_LESS_ROUTES, isActive, activeTab } from "./tab-nav.ts";
+import { TABS, TAB_LESS_ROUTES, isActive, activeTab, isWithinPath } from "./tab-nav.ts";
 
 // The TabBar is mounted globally for every signed-in route (app/layout.tsx), so a route
 // with no owning tab renders a dead nav bar — nothing lit, no "you are here" (finding #10).
@@ -52,6 +52,13 @@ test("no route is claimed by more than one tab", () => {
       assert.doesNotThrow(() => activeTab(prefix), `${prefix} has a tab collision`);
     }
   }
+});
+
+test("a pathname is within a path when it is that path or sits beneath it, on a slash boundary", () => {
+  assert.equal(isWithinPath("/admin/exercises", "/admin/exercises"), true);
+  assert.equal(isWithinPath("/admin/exercises/42", "/admin/exercises"), true);
+  assert.equal(isWithinPath("/admin/exercises-archive", "/admin/exercises"), false);
+  assert.equal(isWithinPath("/admin", "/admin/exercises"), false);
 });
 
 test("a path sharing only a string prefix is not matched", () => {
