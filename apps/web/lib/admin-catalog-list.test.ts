@@ -35,14 +35,31 @@ const ROWS: AdminExerciseRow[] = [
 // Mount the real browser with the catalog view-model wrapped in a counting proxy, so a test
 // can see how often the sort actually runs. `next/link` is replaced because the component
 // renders one per row and the Next runtime is not here.
-async function mountBrowser(): Promise<{
+//
+// `wide` stands in for the `lg:` mount gate (#772): the harness has no `matchMedia`, so the
+// gate reads narrow unless a test says otherwise, and the table's `next/dynamic` wrapper is
+// replaced by the real table module because the Next runtime is not here either.
+async function mountBrowser({ wide = false }: { wide?: boolean } = {}): Promise<{
   sortCalls: () => number;
   root: { unmount: () => void };
 }> {
   let sorts = 0;
+  const nextLink = {
+    __esModule: true,
+    default: ({ children, href, className }: {
+      children: React.ReactNode;
+      href: string;
+      className?: string;
+    }) => React.createElement("a", { href, className }, children),
+  };
+  const table = loadTsx("components/AdminExerciseTable.tsx", { "next/link": nextLink });
   const { AdminExerciseBrowser } = loadTsx<{ AdminExerciseBrowser: BrowserComponent }>(
     "components/AdminExerciseBrowser.tsx",
     {
+      "@/lib/use-wide-viewport": { useWideViewport: () => wide },
+      "@/components/AdminExerciseTableLazy": {
+        AdminExerciseTableLazy: table.AdminExerciseTable,
+      },
       "@/lib/admin-exercises-view": {
         ...viewModel,
         sortAdminExercises: (rows: readonly AdminExerciseRow[]) => {
@@ -62,14 +79,7 @@ async function mountBrowser(): Promise<{
           throw new Error("the filter mirror is a replaceState, never a navigation");
         },
       },
-      "next/link": {
-        __esModule: true,
-        default: ({ children, href, className }: {
-          children: React.ReactNode;
-          href: string;
-          className?: string;
-        }) => React.createElement("a", { href, className }, children),
-      },
+      "next/link": nextLink,
     },
   );
   const { createRoot } = await import("react-dom/client");
@@ -262,6 +272,86 @@ test("clearing the filters leaves a bare URL behind", async () => {
     // Assert — no `?q=` left dangling, so the cleared catalog shares as the whole catalog.
     assert.equal(window.location.search, "");
     assert.equal(window.location.pathname, "/admin/exercises");
+
+    await React.act(async () => root.unmount());
+  } finally {
+    restore();
+  }
+});
+
+// #772: at the shell's wide width the same browser lays the catalog out as a table. The
+// filters above it and the deferral on every row are the same contract as the card list's.
+
+function tableRows(): Element[] {
+  return [...document.querySelectorAll('[role="table"] [role="row"]')].filter(
+    (element) => element.querySelector('a[href^="/admin/exercises/"]') !== null,
+  );
+}
+
+test("at the wide width the catalog is a table whose every row links to its editor", async () => {
+  // Arrange / Act
+  const { restore } = mountDom({ url: CATALOG_URL });
+  try {
+    const { root } = await mountBrowser({ wide: true });
+
+    // Assert — the comparable columns, one row per movement, each a way into the editor
+    const headers = [...document.querySelectorAll('[role="columnheader"]')].map(
+      (header) => header.textContent,
+    );
+    assert.deepEqual(headers, ["Name", "Completeness", "Provenance", "Status", "Usage"]);
+    assert.deepEqual(rowNames(), ["Back Squat", "Barbell Row", "Front Squat", "Overhead Press"]);
+    assert.equal(tableRows().length, ROWS.length);
+    const first = tableRows()[0];
+    assert.equal(first.querySelector("a")!.getAttribute("href"), "/admin/exercises/1");
+    assert.deepEqual(
+      [...first.querySelectorAll('[role="cell"]')].map((cell) => cell.textContent),
+      ["Back Squat", "Enriched", "Curated", "Active", "—"],
+    );
+
+    await React.act(async () => root.unmount());
+  } finally {
+    restore();
+  }
+});
+
+test("every table row defers its own layout and paint", async () => {
+  // Arrange
+  const { restore } = mountDom({ url: CATALOG_URL });
+  try {
+    const { root } = await mountBrowser({ wide: true });
+
+    // Act
+    const rows = tableRows();
+
+    // Assert — the same 500-row cost contract as the card list (ADR-0097)
+    assert.equal(rows.length, ROWS.length);
+    for (const element of rows) {
+      assert.ok(
+        element.className.split(/\s+/).includes("list-row-defer"),
+        `table row is missing list-row-defer: ${element.className}`,
+      );
+    }
+
+    await React.act(async () => root.unmount());
+  } finally {
+    restore();
+  }
+});
+
+test("the table follows the URL-seeded and typed filters, sorted once", async () => {
+  // Arrange — opened from a shared link into the narrowed catalog
+  const { restore } = mountDom({ url: `${CATALOG_URL}?provenance=curated` });
+  try {
+    const { sortCalls, root } = await mountBrowser({ wide: true });
+    assert.deepEqual(rowNames(), ["Back Squat", "Barbell Row", "Front Squat"]);
+
+    // Act
+    await React.act(async () => setFieldValue(searchField(), "squat"));
+
+    // Assert
+    assert.deepEqual(rowNames(), ["Back Squat", "Front Squat"]);
+    assert.equal(document.body.textContent?.includes("2 of 4"), true);
+    assert.equal(sortCalls(), 1);
 
     await React.act(async () => root.unmount());
   } finally {

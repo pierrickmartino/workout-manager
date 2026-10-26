@@ -1007,6 +1007,19 @@ def test_sql_reference_count_sums_prescriptions_logged_sets_and_relationships():
         # The unrelated row is referenced only by the two relationship rows.
         assert repo.reference_count(other.id) == 2
 
+        # The batch read (the admin catalog's usage column, #772) agrees row by row, and an
+        # unreferenced id is present at zero rather than missing.
+        unused = repo.find_or_create("Box Squat", provenance=Provenance.CURATED)
+        assert repo.reference_counts([target.id, other.id, unused.id]) == {
+            target.id: 4,
+            other.id: 2,
+            unused.id: 0,
+        }
+
+
+def test_reference_counts_of_no_ids_is_empty(repo):
+    assert repo.reference_counts([]) == {}
+
 
 def test_sql_hard_delete_removes_only_the_target_row():
     engine = make_fk_engine()

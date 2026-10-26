@@ -56,6 +56,9 @@ const ALL_JOURNEYS = [
   // My Sessions, the third page converted (ADR-0141): its facet rail beside the Session cards,
   // so `sessions` opts in too; `sessions-filtered` is that rail with a facet of each kind picked.
   "sessions-filtered",
+  // The AI audit log (#771), converted to the wide column: its calls are a table from `lg:`.
+  // It is in `MUST_OPT_IN` below, so a page that silently drops its opt-in fails the run.
+  "ai-audit-log",
   // The themed confirmation (ADR-0098), which no other journey mounts because a dialog exists
   // only while it is open. Its `max-w-sm` box must not stretch with the wide frame.
   "confirm",
@@ -68,7 +71,8 @@ const ALL_JOURNEYS = [
   // The Exercise detail lens and the admin catalog (ADR-0095/0096/0097). Neither was ever in a
   // journey, so neither had been rendered at any width by this harness. Both stay unconverted —
   // no `data-shell="wide"` — so they also widen the evidence that the frame leaves an
-  // unconverted page at 26rem.
+  // unconverted page at 26rem. (Since #772 the catalog is `admin-catalog`, below; `admin` keeps
+  // the other admin surfaces, still unconverted.)
   "exercise", "admin",
   // The ad-hoc log (ADR-0106). It was a renderable case that no journey swept, so its form was
   // unverified at every width while three sibling log forms were gated — and it is one of the
@@ -96,11 +100,17 @@ const ALL_JOURNEYS = [
   // The admin home as a dashboard (ADR-0142): catalog tiles over Publishing and Operations. It
   // opts in, and is in `MUST_OPT_IN` below, so it fails if it ever stops doing so.
   "admin-home",
+  // The admin exercise catalog (#772), converted to the wide column: its rows become a table at
+  // this width. It left the `admin` journey, which stays unconverted.
+  "admin-catalog",
 ];
 // Journeys whose page is converted to the wide column. For these the opt-in itself is gated: a
 // converted page that lost `data-shell="wide"` would otherwise pass every check here by
 // silently shrinking back to 26rem.
-const MUST_OPT_IN = new Set(["home", "admin-home"]);
+const MUST_OPT_IN = new Set(["home", "admin-home", "ai-audit-log", "admin-catalog"]);
+// Journeys whose wide layout is a table (#771, #772): at this viewport one must actually be laid
+// out, not merely present in markup behind a `hidden lg:block` (or a mount gate) that failed.
+const MUST_SHOW_TABLE = new Set(["ai-audit-log", "admin-catalog"]);
 // A comma-separated subset, for iterating on one screen without paying for the full sweep.
 // The gated run is the unfiltered one.
 const JOURNEYS = process.env.UI_WIDE_JOURNEYS
@@ -188,6 +198,10 @@ function measure(tokens) {
     // an unconverted one is not, and that asymmetry is the whole point of the per-route
     // opt-in, so the gate has to read the declaration rather than assume one answer.
     optedIn: Boolean(column?.querySelector("[data-shell=wide]")),
+    // Whether a table is laid out in the column at this viewport (computed, not class strings).
+    // An ARIA table counts too: the admin catalog's rows are `div`s so each can defer (#772).
+    tableVisible: [...(column?.querySelectorAll('table, [role="table"]') ?? [])]
+      .some(table => table.getBoundingClientRect().width > 0),
     // Whether the sidebar is the navigation in play — it must be, at this viewport, for the
     // measurement to mean what the ADR says it means. Computed display, not a class string:
     // `lg:flex` present in markup proves nothing about what the breakpoint resolved to.
@@ -232,6 +246,7 @@ async function capture(page, meta) {
       && measured.columnWidth > measured.shell.narrow + slack,
     // …and a converted page must actually have opted in.
     missingOptIn: MUST_OPT_IN.has(meta.journey) && !measured.optedIn,
+    missingTable: MUST_SHOW_TABLE.has(meta.journey) && !measured.tableVisible,
     elementOverflow: measured.overflow.length,
   };
 }
@@ -281,6 +296,7 @@ const summary = {
   frameOverCap: count(result => result.frameOverCap),
   columnOverNarrow: count(result => result.columnOverNarrow),
   missingOptIn: count(result => result.missingOptIn),
+  missingTable: count(result => result.missingTable),
   byJourney: Object.fromEntries(
     JOURNEYS.map(journey => {
       const mine = results.filter(result => result.journey === journey);
@@ -293,6 +309,7 @@ const summary = {
         frameOverCap: mine.filter(cell => cell.frameOverCap).length,
         columnOverNarrow: mine.filter(cell => cell.columnOverNarrow).length,
         missingOptIn: mine.filter(cell => cell.missingOptIn).length,
+        missingTable: mine.filter(cell => cell.missingTable).length,
         // Reported, never gated — the lesson `reflow.mjs` records about fixed containers.
         maxElementOverflow: Math.max(0, ...mine.map(cell => cell.elementOverflow)),
       }];
@@ -308,7 +325,7 @@ await writeFile(resolve(OUTPUT, "wide-results.json.gz"), gzipSync(JSON.stringify
 console.log(
   `${summary.documentOverflow} of ${results.length} cases overflow a ${VIEWPORT.width}px viewport; `
   + `${summary.frameOverCap} exceed the wide shell cap; ${summary.columnOverNarrow} stretch an unconverted column; `
-  + `${summary.missingOptIn} converted pages lost their opt-in`,
+  + `${summary.missingOptIn} converted pages lost their opt-in; ${summary.missingTable} miss their table`,
 );
 for (const [journey, entry] of Object.entries(summary.byJourney)) {
   console.log(
@@ -325,6 +342,7 @@ if (failures.length) {
 }
 
 if (summary.documentOverflow > 0 || summary.frameOverCap > 0
-  || summary.columnOverNarrow > 0 || summary.missingOptIn > 0 || failures.length > 0) {
+  || summary.columnOverNarrow > 0 || summary.missingOptIn > 0
+  || summary.missingTable > 0 || failures.length > 0) {
   process.exit(1);
 }

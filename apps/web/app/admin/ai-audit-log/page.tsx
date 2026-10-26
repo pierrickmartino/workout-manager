@@ -10,7 +10,7 @@ import {
   type AuditLogSearchParams,
 } from "@/lib/admin-generation-calls";
 import { GenerationCallFilterForm } from "@/components/GenerationCallFilterForm";
-import { GenerationCallList } from "@/components/GenerationCallList";
+import { GenerationCallResults } from "@/components/GenerationCallResults";
 import { GenerationCallPager } from "@/components/GenerationCallPager";
 import { TimelinePageTransition } from "@/components/analytics/timeline-page-transition";
 import { PageHeader } from "@/components/pulse/page-header";
@@ -38,7 +38,9 @@ export default async function AdminAiAuditLogPage({
   const pager = result.meta ? toAuditLogPager(state, result.meta) : null;
 
   return (
-    <section className="flex flex-col gap-6">
+    // Opts into the wide content column (ADR-0088): from `lg:` the calls are a table (issue
+    // #771). Below `lg:` the page is the card list it always was.
+    <section className="flex flex-col gap-6" data-shell="wide">
       <PageHeader overline="PULSE // ADMIN" title="AI audit log" />
       <p className="font-mono text-[13px] leading-relaxed text-text-muted">
         Every request that reached the AI provider in the last 3 days, newest first, whether
@@ -56,7 +58,7 @@ export default async function AdminAiAuditLogPage({
         <>
           {/* A same-path pager turns a page (ADR-0122): only the calls move. */}
           <TimelinePageTransition offset={state.page}>
-            <GenerationCallList
+            <GenerationCallResults
               calls={result.data.map(toGenerationCallRowView)}
               isFiltered={isFiltered}
             />

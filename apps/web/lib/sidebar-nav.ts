@@ -6,7 +6,8 @@
 //
 // There is exactly one piece of logic in the sidebar, and it is the reason this file exists:
 // `/admin` is owned by the PROFILE tab (tab-nav.ts), so on an admin route *two* entries would
-// otherwise light at once. Two "you are here" markers is worse than none.
+// otherwise light at once. Two "you are here" markers is worse than none. Inside `/admin` the
+// admin entry nests the admin areas (#770) and the most specific one carries the marker.
 
 import { TABS, isActive, type TabLabel, type TabRoute } from "./tab-nav.ts";
 
@@ -24,10 +25,28 @@ export const ADMIN_ENTRY_LABEL = "ADMIN";
 
 export type SidebarEntryLabel = TabLabel | typeof ADMIN_ENTRY_LABEL;
 
+// The admin areas nested under the admin entry while an admin is inside `/admin` (#770), so
+// moving between them never bounces through the admin home. Order is display order.
+const ADMIN_AREAS = [
+  { label: "Overview", href: "/admin" },
+  { label: "Exercise catalog", href: "/admin/exercises" },
+  { label: "AI audit log", href: "/admin/ai-audit-log" },
+] as const;
+
+export type AdminAreaLabel = (typeof ADMIN_AREAS)[number]["label"];
+
+export interface SidebarSubEntry {
+  readonly label: AdminAreaLabel;
+  readonly href: string;
+  readonly active: boolean;
+}
+
 export interface SidebarEntry {
   readonly label: SidebarEntryLabel;
   readonly href: string;
   readonly active: boolean;
+  // Present only on the admin entry, and only inside the admin area.
+  readonly children?: readonly SidebarSubEntry[];
 }
 
 // The sidebar's entries for a pathname: every tab in registry order, then the admin entry
@@ -50,7 +69,31 @@ export function sidebarEntries(
   return isAdmin
     ? [
         ...tabs,
-        { label: ADMIN_ENTRY_LABEL, href: ADMIN_ROUTE.href, active: onAdminRoute },
+        {
+          label: ADMIN_ENTRY_LABEL,
+          href: ADMIN_ROUTE.href,
+          // Inside the admin area a nested entry carries the one "you are here" marker, so
+          // the admin entry itself stays unlit there — it is the group, not the page.
+          active: false,
+          ...(onAdminRoute ? { children: adminAreaEntries(pathname) } : {}),
+        },
       ]
     : tabs;
+}
+
+// The nested admin entries for a pathname inside `/admin`. The most specific area wins for
+// its own subtree — the longest matching href — so an Exercise editor lights Exercise catalog
+// and a Generation Call detail lights AI audit log, while `/admin` itself lights Overview.
+function adminAreaEntries(pathname: string): readonly SidebarSubEntry[] {
+  const owner = ADMIN_AREAS.filter((area) =>
+    isActive(pathname, { label: "PROFILE", href: area.href, match: [area.href] }),
+  ).reduce<(typeof ADMIN_AREAS)[number] | null>(
+    (best, area) => (best === null || area.href.length > best.href.length ? area : best),
+    null,
+  );
+  return ADMIN_AREAS.map((area) => ({
+    label: area.label,
+    href: area.href,
+    active: area === owner,
+  }));
 }

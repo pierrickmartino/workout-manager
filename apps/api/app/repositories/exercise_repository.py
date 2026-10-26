@@ -389,6 +389,15 @@ class ExerciseRepository(Protocol):
         """
         ...
 
+    def reference_counts(self, exercise_ids: Sequence[int]) -> dict[int, int]:
+        """``reference_count`` for many Exercises at once — the admin catalog's usage column.
+
+        Same sum, same both-directions rule, keyed by id with every requested id present (an
+        unreferenced or unknown id maps to ``0``). One grouped read per reference table rather
+        than three queries per row, so the 500-row catalog page stays a handful of queries
+        (issue #772). A read-time projection, never a stored counter (ADR-0018)."""
+        ...
+
     def hard_delete(self, exercise_id: int) -> None:
         """Permanently remove one Catalog Exercise — the irreversible act (ADR-0076).
 
@@ -931,6 +940,26 @@ class SqlExerciseRepository:
         )
         return prescriptions + logged_sets + relationships
 
+    def reference_counts(self, exercise_ids: Sequence[int]) -> dict[int, int]:
+        ids = list(exercise_ids)
+        if not ids:
+            return {}
+        # Each (table, column) pair is one grouped count over the requested ids; a relationship
+        # counts at both its ends, exactly as ``reference_count`` does.
+        columns = (
+            ExercisePrescription.exercise_id,
+            LoggedSet.exercise_id,
+            ExerciseRelationship.from_exercise_id,
+            ExerciseRelationship.to_exercise_id,
+        )
+        totals = dict.fromkeys(ids, 0)
+        for column in columns:
+            rows = self._session.exec(
+                select(column, func.count()).where(column.in_(ids)).group_by(column)
+            ).all()
+            totals = {**totals, **{key: totals[key] + count for key, count in rows}}
+        return totals
+
     def _count(self, statement: SelectOfScalar[int]) -> int:
         """Run a ``select(func.count())…`` statement and return the single scalar count."""
 
@@ -1247,6 +1276,9 @@ class InMemoryExerciseRepository:
 
     def reference_count(self, exercise_id: int) -> int:
         return self._references.get(exercise_id, 0)
+
+    def reference_counts(self, exercise_ids: Sequence[int]) -> dict[int, int]:
+        return {exercise_id: self.reference_count(exercise_id) for exercise_id in exercise_ids}
 
     def hard_delete(self, exercise_id: int) -> None:
         existing = self._by_id.pop(exercise_id, None)
