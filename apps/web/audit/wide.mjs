@@ -56,6 +56,9 @@ const ALL_JOURNEYS = [
   // My Sessions, the third page converted (ADR-0141): its facet rail beside the Session cards,
   // so `sessions` opts in too; `sessions-filtered` is that rail with a facet of each kind picked.
   "sessions-filtered",
+  // The AI audit log (#771), converted to the wide column: its calls are a table from `lg:`.
+  // It is in `MUST_OPT_IN` below, so a page that silently drops its opt-in fails the run.
+  "ai-audit-log",
   // The themed confirmation (ADR-0098), which no other journey mounts because a dialog exists
   // only while it is open. Its `max-w-sm` box must not stretch with the wide frame.
   "confirm",
@@ -94,6 +97,13 @@ const ALL_JOURNEYS = [
   // authored content.
   "based-on",
 ];
+// Journeys that must render in the wide content column. `columnOverNarrow` only proves an
+// unconverted page stays narrow; a converted page that lost its `data-shell="wide"` would pass
+// it by shrinking back to 26rem. This list gates the other direction.
+const MUST_OPT_IN = new Set(["ai-audit-log"]);
+// Journeys whose wide layout is a table (#771): at this viewport one must actually be laid out,
+// not merely present in markup behind a `hidden lg:block` that failed to resolve.
+const MUST_SHOW_TABLE = new Set(["ai-audit-log"]);
 // A comma-separated subset, for iterating on one screen without paying for the full sweep.
 // The gated run is the unfiltered one.
 const JOURNEYS = process.env.UI_WIDE_JOURNEYS
@@ -181,6 +191,9 @@ function measure(tokens) {
     // an unconverted one is not, and that asymmetry is the whole point of the per-route
     // opt-in, so the gate has to read the declaration rather than assume one answer.
     optedIn: Boolean(column?.querySelector("[data-shell=wide]")),
+    // Whether a table is laid out in the column at this viewport (computed, not class strings).
+    tableVisible: [...(column?.querySelectorAll("table") ?? [])]
+      .some(table => table.getBoundingClientRect().width > 0),
     // Whether the sidebar is the navigation in play — it must be, at this viewport, for the
     // measurement to mean what the ADR says it means. Computed display, not a class string:
     // `lg:flex` present in markup proves nothing about what the breakpoint resolved to.
@@ -223,6 +236,9 @@ async function capture(page, meta) {
     // …and a page that has *not* opted in must still render its content in the narrow one.
     columnOverNarrow: !measured.optedIn
       && measured.columnWidth > measured.shell.narrow + slack,
+    // …and a page converted to wide must have actually opted in.
+    missingOptIn: MUST_OPT_IN.has(meta.journey) && !measured.optedIn,
+    missingTable: MUST_SHOW_TABLE.has(meta.journey) && !measured.tableVisible,
     elementOverflow: measured.overflow.length,
   };
 }
@@ -271,6 +287,8 @@ const summary = {
   documentOverflow: count(result => result.documentOverflow),
   frameOverCap: count(result => result.frameOverCap),
   columnOverNarrow: count(result => result.columnOverNarrow),
+  missingOptIn: count(result => result.missingOptIn),
+  missingTable: count(result => result.missingTable),
   byJourney: Object.fromEntries(
     JOURNEYS.map(journey => {
       const mine = results.filter(result => result.journey === journey);
@@ -282,6 +300,8 @@ const summary = {
         overflowing: mine.filter(cell => cell.documentOverflow).length,
         frameOverCap: mine.filter(cell => cell.frameOverCap).length,
         columnOverNarrow: mine.filter(cell => cell.columnOverNarrow).length,
+        missingOptIn: mine.filter(cell => cell.missingOptIn).length,
+        missingTable: mine.filter(cell => cell.missingTable).length,
         // Reported, never gated — the lesson `reflow.mjs` records about fixed containers.
         maxElementOverflow: Math.max(0, ...mine.map(cell => cell.elementOverflow)),
       }];
@@ -296,7 +316,8 @@ await writeFile(resolve(OUTPUT, "wide-results.json.gz"), gzipSync(JSON.stringify
 
 console.log(
   `${summary.documentOverflow} of ${results.length} cases overflow a ${VIEWPORT.width}px viewport; `
-  + `${summary.frameOverCap} exceed the wide shell cap; ${summary.columnOverNarrow} stretch an unconverted column`,
+  + `${summary.frameOverCap} exceed the wide shell cap; ${summary.columnOverNarrow} stretch an unconverted column; `
+  + `${summary.missingOptIn} converted pages miss their opt-in; ${summary.missingTable} miss their table`,
 );
 for (const [journey, entry] of Object.entries(summary.byJourney)) {
   console.log(
@@ -313,6 +334,7 @@ if (failures.length) {
 }
 
 if (summary.documentOverflow > 0 || summary.frameOverCap > 0
-  || summary.columnOverNarrow > 0 || failures.length > 0) {
+  || summary.columnOverNarrow > 0 || summary.missingOptIn > 0
+  || summary.missingTable > 0 || failures.length > 0) {
   process.exit(1);
 }
