@@ -93,7 +93,14 @@ const ALL_JOURNEYS = [
   // The "Based on <name>" line under an adopted Curated Protocol's title (#688), whose name is
   // authored content.
   "based-on",
+  // The admin home as a dashboard (ADR-0142): catalog tiles over Publishing and Operations. It
+  // opts in, and is in `MUST_OPT_IN` below, so it fails if it ever stops doing so.
+  "admin-home",
 ];
+// Journeys whose page is converted to the wide column. For these the opt-in itself is gated: a
+// converted page that lost `data-shell="wide"` would otherwise pass every check here by
+// silently shrinking back to 26rem.
+const MUST_OPT_IN = new Set(["home", "admin-home"]);
 // A comma-separated subset, for iterating on one screen without paying for the full sweep.
 // The gated run is the unfiltered one.
 const JOURNEYS = process.env.UI_WIDE_JOURNEYS
@@ -223,6 +230,8 @@ async function capture(page, meta) {
     // …and a page that has *not* opted in must still render its content in the narrow one.
     columnOverNarrow: !measured.optedIn
       && measured.columnWidth > measured.shell.narrow + slack,
+    // …and a converted page must actually have opted in.
+    missingOptIn: MUST_OPT_IN.has(meta.journey) && !measured.optedIn,
     elementOverflow: measured.overflow.length,
   };
 }
@@ -271,6 +280,7 @@ const summary = {
   documentOverflow: count(result => result.documentOverflow),
   frameOverCap: count(result => result.frameOverCap),
   columnOverNarrow: count(result => result.columnOverNarrow),
+  missingOptIn: count(result => result.missingOptIn),
   byJourney: Object.fromEntries(
     JOURNEYS.map(journey => {
       const mine = results.filter(result => result.journey === journey);
@@ -282,6 +292,7 @@ const summary = {
         overflowing: mine.filter(cell => cell.documentOverflow).length,
         frameOverCap: mine.filter(cell => cell.frameOverCap).length,
         columnOverNarrow: mine.filter(cell => cell.columnOverNarrow).length,
+        missingOptIn: mine.filter(cell => cell.missingOptIn).length,
         // Reported, never gated — the lesson `reflow.mjs` records about fixed containers.
         maxElementOverflow: Math.max(0, ...mine.map(cell => cell.elementOverflow)),
       }];
@@ -296,7 +307,8 @@ await writeFile(resolve(OUTPUT, "wide-results.json.gz"), gzipSync(JSON.stringify
 
 console.log(
   `${summary.documentOverflow} of ${results.length} cases overflow a ${VIEWPORT.width}px viewport; `
-  + `${summary.frameOverCap} exceed the wide shell cap; ${summary.columnOverNarrow} stretch an unconverted column`,
+  + `${summary.frameOverCap} exceed the wide shell cap; ${summary.columnOverNarrow} stretch an unconverted column; `
+  + `${summary.missingOptIn} converted pages lost their opt-in`,
 );
 for (const [journey, entry] of Object.entries(summary.byJourney)) {
   console.log(
@@ -313,6 +325,6 @@ if (failures.length) {
 }
 
 if (summary.documentOverflow > 0 || summary.frameOverCap > 0
-  || summary.columnOverNarrow > 0 || failures.length > 0) {
+  || summary.columnOverNarrow > 0 || summary.missingOptIn > 0 || failures.length > 0) {
   process.exit(1);
 }

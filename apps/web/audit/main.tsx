@@ -24,6 +24,13 @@ import { NavigationGuardProvider } from "@/components/NavigationGuardProvider";
 import { TabBar } from "@/components/pulse/tab-bar";
 import { Sidebar } from "@/components/pulse/sidebar";
 import { HomeColumns } from "@/components/pulse/home-columns";
+import { AdminDashboardColumns } from "@/components/pulse/admin-dashboard-columns";
+import { DashboardTileGroups } from "@/components/pulse/dashboard-tiles";
+import { NavRow } from "@/components/pulse/nav-row";
+import { AppearanceSkinPublisher } from "@/components/AppearanceSkinPublisher";
+import { adminDashboardView } from "@/lib/admin-dashboard-view";
+import { NAV_FORWARD } from "@/lib/nav-direction";
+import { Activity, Dumbbell } from "@/components/pulse/icons";
 import { OperatorScoreboard } from "@/components/pulse/operator-scoreboard";
 import { SessionHero } from "@/components/pulse/session-hero";
 import { CalibrationControl } from "@/components/pulse/calibration-control";
@@ -240,6 +247,46 @@ function Home() {
           {/* The Streak and Latest PR scoreboard, its PR half at its worst: an authored
               Exercise name of 120 unbroken characters inside half of a 320px rail. */}
           <OperatorScoreboard {...homeScoreboard} />
+        </>}
+      />
+    </div>
+  );
+}
+
+// The admin home as a dashboard (ADR-0142), mounted through the *same* `AdminDashboardColumns`
+// and `DashboardTileGroups` the real page uses, with tiles from the same view-model over the
+// synthetic catalog rows. Its root carries `data-shell="wide"` like the page's, and `wide.mjs`
+// fails the journey if it ever stops opting in. Five-digit counts are the widest tile values a
+// bounded catalog plausibly reaches. Below `lg:` the tile row is hidden, so `reflow.mjs`
+// measures that the phone page is still the two publishers over the two nav rows.
+function AdminHome() {
+  const dashboard = adminDashboardView({
+    completeness: { success: true, data: { stub: 12345, listable: 23456, enriched: 34567, total: 70368 }, error: null },
+    catalog: { success: true, data: adminExerciseRows, error: null },
+  });
+  return (
+    <div data-shell="wide" className="flex flex-col gap-6">
+      <AdminDashboardColumns
+        tiles={<DashboardTileGroups groups={dashboard.groups} />}
+        publishing={<>
+          <div className="flex flex-col gap-4">
+            <SectionHeader>ACTIVE SKIN</SectionHeader>
+            <Card className="p-4"><AppearanceSkinPublisher activeSkin="pulse" /></Card>
+          </div>
+          <div className="flex flex-col gap-4">
+            <SectionHeader>AVATAR UNIVERSE</SectionHeader>
+            <Card className="p-4"><AvatarUniversePublisher activeUniverse="realm" /></Card>
+          </div>
+        </>}
+        operations={<>
+          <div className="flex flex-col gap-4">
+            <SectionHeader>CATALOG</SectionHeader>
+            <Card className="p-0"><NavRow icon={Dumbbell} label="Exercise catalog" href="/admin/exercises" direction={NAV_FORWARD} value="BROWSE" accent="cyan" /></Card>
+          </div>
+          <div className="flex flex-col gap-4">
+            <SectionHeader>AI</SectionHeader>
+            <Card className="p-0"><NavRow icon={Activity} label="AI audit log" href="/admin/ai-audit-log" direction={NAV_FORWARD} value="3 DAYS" accent="cyan" /></Card>
+          </div>
         </>}
       />
     </div>
@@ -665,6 +712,8 @@ function Content() {
     // the admin editor renders it — the reader's-clock instant (ADR-0096) is the longest text
     // in that row. Neither admin screen was in any journey before.
     case "admin": return <AdminAudit />;
+    // The admin home dashboard (ADR-0142): the catalog tiles over Publishing and Operations.
+    case "admin-home": return <AdminHome />;
     case "confirm": return <ConfirmSurface />;
     case "sheet": return <SheetSurface />;
     case "session-header": return <SessionHeaderSurface />;
