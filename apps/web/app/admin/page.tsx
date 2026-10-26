@@ -10,6 +10,7 @@ import { AppearanceSkinPublisher } from "@/components/AppearanceSkinPublisher";
 import { AvatarUniversePublisher } from "@/components/AvatarUniversePublisher";
 import { AdminDashboardColumns } from "@/components/pulse/admin-dashboard-columns";
 import { DashboardTileGroups } from "@/components/pulse/dashboard-tiles";
+import { GeneratorKindBreakdown } from "@/components/pulse/generator-kind-breakdown";
 import { PageHeader } from "@/components/pulse/page-header";
 import { SectionHeader } from "@/components/pulse/section-header";
 import { NavRow } from "@/components/pulse/nav-row";
@@ -31,7 +32,8 @@ import { NAV_FORWARD } from "@/lib/nav-direction";
 //
 // At `lg:` it is a dashboard (ADR-0142): it opts into the wide shell (ADR-0088), and a row of
 // read-time summary tiles — each a link into the list behind its number — sits over the
-// Publishing and Operations columns. The tiles are read only after the admin gate, and each
+// Publishing and Operations columns: catalog health and AI usage over the Generation Call
+// log's 3-day window, with the calls-by-Generator-Kind list under the AI nav row (#769). The tiles are read only after the admin gate, and each
 // group fails on its own, so a metric that cannot load never blocks a publisher.
 export default async function AdminPage() {
   const [isAdmin, activeSkin, avatarUniverse] = await Promise.all([
@@ -95,6 +97,8 @@ export default async function AdminPage() {
                 />
               </Card>
             </div>
+
+            <GeneratorKindBreakdown kinds={dashboard.generatorKinds} />
           </>
         }
       />
