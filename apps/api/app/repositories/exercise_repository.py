@@ -14,10 +14,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final, Protocol
 
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
-from sqlmodel.sql.expression import SelectOfScalar
 
 from app.db.models import (
     Exercise,
@@ -382,8 +381,8 @@ class ExerciseRepository(Protocol):
         """Count everything that points at ``exercise_id`` — the hard-delete guard's input.
 
         Sums the Exercise Prescriptions, Logged Sets, and Exercise Relationships (in **both**
-        directions — a link references the Exercise whether it is the ``from`` or the ``to``)
-        that reference it (issue #507, ADR-0076). A non-zero count means the Exercise is
+        directions — a link references the Exercise whether it is the ``from`` or the ``to``;
+        a self-link is one row and counts once) that reference it (issue #507, ADR-0076). A non-zero count means the Exercise is
         settled shared state a live plan or Logged Set depends on and must never be destroyed;
         the delete route feeds this to ``can_hard_delete``. An unknown id counts ``0``.
         """
@@ -640,6 +639,22 @@ def _admin_page(
     return ExerciseSearchPage(
         items=filtered[offset : offset + limit], total=len(filtered)
     )
+
+
+# What references an Exercise — the one definition behind ``reference_count`` and
+# ``reference_counts`` (ADR-0076: no Prescription, Logged Set or Relationship points at it). Each
+# entry is a column holding an Exercise id plus an optional extra condition. A Relationship
+# references the Exercise at either end, so both ends count; its ``to`` end skips a self-link,
+# which is one row touching the Exercise once and is already counted at its ``from`` end.
+_REFERENCES = (
+    (ExercisePrescription.exercise_id, None),
+    (LoggedSet.exercise_id, None),
+    (ExerciseRelationship.from_exercise_id, None),
+    (
+        ExerciseRelationship.to_exercise_id,
+        ExerciseRelationship.to_exercise_id != ExerciseRelationship.from_exercise_id,
+    ),
+)
 
 
 class SqlExerciseRepository:
@@ -916,54 +931,23 @@ class SqlExerciseRepository:
         return self._persist_fresh(existing, _clone_exercise(existing, retired=False))
 
     def reference_count(self, exercise_id: int) -> int:
-        prescriptions = self._count(
-            select(func.count())
-            .select_from(ExercisePrescription)
-            .where(ExercisePrescription.exercise_id == exercise_id)
-        )
-        logged_sets = self._count(
-            select(func.count())
-            .select_from(LoggedSet)
-            .where(LoggedSet.exercise_id == exercise_id)
-        )
-        # A relationship references the Exercise whether it is the ``from`` or the ``to`` end,
-        # so both directions count toward the guard (ADR-0076: "no Relationship points at it").
-        relationships = self._count(
-            select(func.count())
-            .select_from(ExerciseRelationship)
-            .where(
-                or_(
-                    ExerciseRelationship.from_exercise_id == exercise_id,
-                    ExerciseRelationship.to_exercise_id == exercise_id,
-                )
-            )
-        )
-        return prescriptions + logged_sets + relationships
+        return self.reference_counts([exercise_id]).get(exercise_id, 0)
 
     def reference_counts(self, exercise_ids: Sequence[int]) -> dict[int, int]:
         ids = list(exercise_ids)
         if not ids:
             return {}
-        # Each (table, column) pair is one grouped count over the requested ids; a relationship
-        # counts at both its ends, exactly as ``reference_count`` does.
-        columns = (
-            ExercisePrescription.exercise_id,
-            LoggedSet.exercise_id,
-            ExerciseRelationship.from_exercise_id,
-            ExerciseRelationship.to_exercise_id,
-        )
+        # One grouped count per reference in ``_REFERENCES`` over the requested ids, so the
+        # 500-row catalog page stays a handful of queries (#772) and ``reference_count`` is
+        # this same sum for one id.
         totals = dict.fromkeys(ids, 0)
-        for column in columns:
-            rows = self._session.exec(
-                select(column, func.count()).where(column.in_(ids)).group_by(column)
-            ).all()
+        for column, only_when in _REFERENCES:
+            statement = select(column, func.count()).where(column.in_(ids))
+            if only_when is not None:
+                statement = statement.where(only_when)
+            rows = self._session.exec(statement.group_by(column)).all()
             totals = {**totals, **{key: totals[key] + count for key, count in rows}}
         return totals
-
-    def _count(self, statement: SelectOfScalar[int]) -> int:
-        """Run a ``select(func.count())…`` statement and return the single scalar count."""
-
-        return self._session.exec(statement).one()
 
     def hard_delete(self, exercise_id: int) -> None:
         existing = self._session.get(Exercise, exercise_id)
