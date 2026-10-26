@@ -75,10 +75,30 @@ test("a sub-second latency reads in whole milliseconds", () => {
   assert.equal(view.latencyLabel, "413 ms");
 });
 
+test("a latency that rounds up to a full second reads in seconds, never as 1000 ms", () => {
+  const view = toGenerationCallRowView(row({ latency_ms: 999.6 }));
+
+  assert.equal(view.latencyLabel, "1.0 s");
+});
+
 test("an unknown generator kind falls back to its raw value", () => {
   const view = toGenerationCallRowView(row({ generator_kind: "future-kind" }));
 
   assert.equal(view.kindLabel, "future-kind");
+});
+
+test("the table's tokens cell reads input over output when usage was reported", () => {
+  const view = toGenerationCallRowView(row({ input_tokens: 1200, output_tokens: 340 }));
+
+  assert.equal(view.tokensCell, "1200 / 340");
+});
+
+test("the table's tokens cell reads unreported, never zero, when usage was not reported", () => {
+  const view = toGenerationCallRowView(
+    row({ input_tokens: null, output_tokens: null }),
+  );
+
+  assert.equal(view.tokensCell, "unreported");
 });
 
 test("each row links to its call's detail page", () => {
