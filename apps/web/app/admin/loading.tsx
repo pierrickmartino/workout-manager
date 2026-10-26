@@ -18,15 +18,19 @@ export default function AdminLoading(): React.JSX.Element {
       <div data-shell="wide">
         <AdminDashboardColumns
           tiles={
-            // The catalog tile group — its heading and four tiles (shown only at `lg:`).
-            <div className="flex min-w-0 flex-1 flex-col gap-4">
-              <Skeleton className="h-3 w-32" />
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                {["total", "enriched", "stub", "retired"].map((key) => (
-                  <Skeleton key={key} className="h-20 w-full rounded-md" />
-                ))}
-              </div>
-            </div>
+            // The catalog and AI tile groups — a heading and four tiles each (shown only at `lg:`).
+            <>
+              {["catalog", "ai"].map((group) => (
+                <div key={group} className="flex min-w-0 flex-1 flex-col gap-4">
+                  <Skeleton className="h-3 w-32" />
+                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    {["one", "two", "three", "four"].map((key) => (
+                      <Skeleton key={key} className="h-20 w-full rounded-md" />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </>
           }
           publishing={
             <>
@@ -53,6 +57,11 @@ export default function AdminLoading(): React.JSX.Element {
               <div className="flex flex-col gap-4">
                 <Skeleton className="h-3 w-12" />
                 <Skeleton className="h-14 w-full rounded-lg" />
+              </div>
+              {/* CALLS BY GENERATOR KIND — six rows, shown only at `lg:` like the real list */}
+              <div className="hidden lg:flex lg:flex-col lg:gap-4">
+                <Skeleton className="h-3 w-44" />
+                <Skeleton className="h-72 w-full rounded-lg" />
               </div>
             </>
           }

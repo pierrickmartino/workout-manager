@@ -4,7 +4,8 @@ The persistence seam behind the Postgres recorder and the admin list endpoint. `
 stores one call; ``purge_expired`` deletes rows past the 3-day retention window;
 ``delete_for_user`` erases one user's rows; ``list_recent`` reads one filtered page of the
 newest calls first (issue #732);
-``get_recent`` reads one call in full.
+``get_recent`` reads one call in full; ``summarize_recent`` aggregates the window for the
+admin dashboard (issue #769, ADR-0142) — at read time, never from stored counters.
 Every read applies the retention cutoff, so an expired row is never served even when a
 purge failed. ``now`` is injectable so retention is tested deterministically.
 
@@ -18,6 +19,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from statistics import median
 from typing import Protocol
 
 from sqlalchemy import delete, func
@@ -29,7 +31,10 @@ from app.generation.monitoring.call import (
     GenerationOutcome,
     GeneratorKind,
 )
-from app.generation.monitoring.retention import retention_cutoff
+from app.generation.monitoring.retention import (
+    GENERATION_CALL_RETENTION,
+    retention_cutoff,
+)
 
 Clock = Callable[[], datetime]
 
@@ -86,6 +91,52 @@ class GenerationCallPage:
 
     items: list[GenerationCallSummary]
     total: int
+
+
+@dataclass(frozen=True)
+class GenerationCallWindowSummary:
+    """Counts and sums over every call inside the retention window (ADR-0142).
+
+    ``by_outcome`` and ``by_generator_kind`` carry every enum value (zero when none), in enum
+    order. The token sums cover only calls that reported usage; ``unreported_usage_calls``
+    counts the rest, so a sum is known to be a floor. ``median_latency_ms`` is over every
+    call, successes and errors alike, and ``None`` when the window holds no call."""
+
+    total_calls: int
+    by_outcome: dict[str, int]
+    by_generator_kind: dict[str, int]
+    input_tokens: int
+    output_tokens: int
+    unreported_usage_calls: int
+    median_latency_ms: float | None
+    window_days: int
+
+
+def _window_summary(rows: list) -> GenerationCallWindowSummary:
+    """Aggregate rows of the five summarized columns (kind, outcome, tokens, latency)."""
+
+    reported = [
+        row
+        for row in rows
+        if row.input_tokens is not None and row.output_tokens is not None
+    ]
+    latencies = [row.latency_ms for row in rows]
+    return GenerationCallWindowSummary(
+        total_calls=len(rows),
+        by_outcome={
+            outcome.value: sum(1 for row in rows if row.outcome == outcome.value)
+            for outcome in GenerationOutcome
+        },
+        by_generator_kind={
+            kind.value: sum(1 for row in rows if row.generator_kind == kind.value)
+            for kind in GeneratorKind
+        },
+        input_tokens=sum(row.input_tokens for row in reported),
+        output_tokens=sum(row.output_tokens for row in reported),
+        unreported_usage_calls=len(rows) - len(reported),
+        median_latency_ms=median(latencies) if latencies else None,
+        window_days=GENERATION_CALL_RETENTION.days,
+    )
 
 
 def _summary(row: GenerationCallRecord) -> GenerationCallSummary:
@@ -151,6 +202,10 @@ class GenerationCallRepository(Protocol):
 
     def get_recent(self, call_id: int) -> GenerationCallDetail | None:
         """One call in full, or ``None`` when unknown or past the retention window."""
+        ...
+
+    def summarize_recent(self) -> GenerationCallWindowSummary:
+        """Counts and sums over every call inside the retention window."""
         ...
 
 
@@ -237,6 +292,22 @@ class SqlGenerationCallRepository:
         row = self._session.exec(statement).first()
         return None if row is None else _detail(row)
 
+    def summarize_recent(self) -> GenerationCallWindowSummary:
+        """Counts and sums over every call inside the retention window, at read time.
+
+        Only the five aggregated columns are read (never a prompt or output); the window
+        holds at most three days of calls, so the median is taken in Python, which keeps it
+        portable across SQLite and Postgres."""
+
+        statement = select(
+            GenerationCallRecord.generator_kind,
+            GenerationCallRecord.outcome,
+            GenerationCallRecord.input_tokens,
+            GenerationCallRecord.output_tokens,
+            GenerationCallRecord.latency_ms,
+        ).where(GenerationCallRecord.created_at >= retention_cutoff(self._now()))
+        return _window_summary(list(self._session.exec(statement).all()))
+
 
 __all__ = [
     "GenerationCallDetail",
@@ -244,5 +315,6 @@ __all__ = [
     "GenerationCallPage",
     "GenerationCallRepository",
     "GenerationCallSummary",
+    "GenerationCallWindowSummary",
     "SqlGenerationCallRepository",
 ]

@@ -25,6 +25,7 @@ import { TabBar } from "@/components/pulse/tab-bar";
 import { Sidebar } from "@/components/pulse/sidebar";
 import { HomeColumns } from "@/components/pulse/home-columns";
 import { AdminDashboardColumns } from "@/components/pulse/admin-dashboard-columns";
+import { GeneratorKindBreakdown } from "@/components/pulse/generator-kind-breakdown";
 import { DashboardTileGroups } from "@/components/pulse/dashboard-tiles";
 import { NavRow } from "@/components/pulse/nav-row";
 import { AppearanceSkinPublisher } from "@/components/AppearanceSkinPublisher";
@@ -264,6 +265,22 @@ function AdminHome() {
   const dashboard = adminDashboardView({
     completeness: { success: true, data: { stub: 12345, listable: 23456, enriched: 34567, total: 70368 }, error: null },
     catalog: { success: true, data: adminExerciseRows, error: null },
+    // The widest AI figures (#769): a five-digit call count, a one-decimal rate, compact token
+    // sums with an "unreported" footnote, and a latency in seconds.
+    generationCalls: {
+      success: true,
+      data: {
+        total_calls: 12345,
+        by_outcome: { success: 11111, error: 1234 },
+        by_generator_kind: { session: 5000, protocol: 3000, regeneration: 2000, substitute: 1000, "muscle-emphasis": 1000, "exercise-enrichment": 345 },
+        input_tokens: 987_654_321,
+        output_tokens: 123_456_789,
+        unreported_usage_calls: 1234,
+        median_latency_ms: 12345,
+        window_days: 3,
+      },
+      error: null,
+    },
   });
   return (
     <div data-shell="wide" className="flex flex-col gap-6">
@@ -288,6 +305,7 @@ function AdminHome() {
             <SectionHeader>AI</SectionHeader>
             <Card className="p-0"><NavRow icon={Activity} label="AI audit log" href="/admin/ai-audit-log" direction={NAV_FORWARD} value="3 DAYS" accent="cyan" /></Card>
           </div>
+          <GeneratorKindBreakdown kinds={dashboard.generatorKinds} />
         </>}
       />
     </div>

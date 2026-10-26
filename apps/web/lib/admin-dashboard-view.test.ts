@@ -23,6 +23,7 @@ test("a ready catalog group shows total, % enriched, stub and retired tiles in o
   const view = adminDashboardView({
     completeness: { success: true, data: BREAKDOWN, error: null },
     catalog: { success: true, data: ROWS, error: null },
+    generationCalls: null,
   });
 
   // Assert
@@ -42,6 +43,8 @@ test("a ready catalog group shows total, % enriched, stub and retired tiles in o
 const READY_INPUTS = {
   completeness: { success: true, data: BREAKDOWN, error: null },
   catalog: { success: true, data: ROWS, error: null },
+  // The AI group's own reads; a failure there never reaches the catalog group.
+  generationCalls: null,
 };
 
 test("each catalog tile links into the catalog, filtered where its number is a filter", () => {
@@ -83,6 +86,7 @@ test("an empty catalog shows — on every tile with honest empty copy, never 0%"
     adminDashboardView({
       completeness: { success: true, data: { stub: 0, listable: 0, enriched: 0, total: 0 }, error: null },
       catalog: { success: true, data: [], error: null },
+      generationCalls: null,
     }),
   );
 
