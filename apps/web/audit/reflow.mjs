@@ -99,12 +99,14 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // picked type and exercise as removable tokens that must wrap an unbroken name at 320px.
 // `sessions-filtered` joins them with ADR-0141: My Sessions' rail folded the same way, its
 // search, Favorites, type and exercise tokens wrapping at 320px and 200% text.
+// `admin-catalog` joins them with #772: the catalog browser left the `admin` journey when it
+// opted the page into the wide column, so this is where its 320px card list is still swept.
 const NOVEL_JOURNEYS = [
   "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc", "launchpad",
   "levels", "sheet", "protocols", "protocols-live", "set-aside", "passport", "passport-open",
   "passport-empty", "stamp", "stamp-locked", "stamp-record", "curated", "curated-adopt",
   "based-on", "curated-wave-adopt", "curated-wave-unlogged", "handoff", "session-header", "avatar",
-  "history-month", "history-filtered", "sessions-filtered",
+  "history-month", "history-filtered", "sessions-filtered", "admin-catalog",
 ];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and

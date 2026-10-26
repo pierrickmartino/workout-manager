@@ -68,7 +68,8 @@ const ALL_JOURNEYS = [
   // The Exercise detail lens and the admin catalog (ADR-0095/0096/0097). Neither was ever in a
   // journey, so neither had been rendered at any width by this harness. Both stay unconverted —
   // no `data-shell="wide"` — so they also widen the evidence that the frame leaves an
-  // unconverted page at 26rem.
+  // unconverted page at 26rem. (Since #772 the catalog is `admin-catalog`, below; `admin` keeps
+  // the other admin surfaces, still unconverted.)
   "exercise", "admin",
   // The ad-hoc log (ADR-0106). It was a renderable case that no journey swept, so its form was
   // unverified at every width while three sibling log forms were gated — and it is one of the
@@ -93,7 +94,14 @@ const ALL_JOURNEYS = [
   // The "Based on <name>" line under an adopted Curated Protocol's title (#688), whose name is
   // authored content.
   "based-on",
+  // The admin exercise catalog (#772), converted to the wide column: its rows become a table at
+  // this width. It left the `admin` journey, which stays unconverted.
+  "admin-catalog",
 ];
+// Journeys whose page is converted to the wide column (ADR-0088). For these the opt-in is the
+// claim under test, so a missing `data-shell="wide"` fails the case rather than silently
+// passing `columnOverNarrow` as an unconverted page would.
+const MUST_OPT_IN = new Set(["admin-catalog"]);
 // A comma-separated subset, for iterating on one screen without paying for the full sweep.
 // The gated run is the unfiltered one.
 const JOURNEYS = process.env.UI_WIDE_JOURNEYS
@@ -223,6 +231,8 @@ async function capture(page, meta) {
     // …and a page that has *not* opted in must still render its content in the narrow one.
     columnOverNarrow: !measured.optedIn
       && measured.columnWidth > measured.shell.narrow + slack,
+    // …and a converted page must actually have opted in.
+    optInMissing: MUST_OPT_IN.has(meta.journey) && !measured.optedIn,
     elementOverflow: measured.overflow.length,
   };
 }
@@ -271,6 +281,7 @@ const summary = {
   documentOverflow: count(result => result.documentOverflow),
   frameOverCap: count(result => result.frameOverCap),
   columnOverNarrow: count(result => result.columnOverNarrow),
+  optInMissing: count(result => result.optInMissing),
   byJourney: Object.fromEntries(
     JOURNEYS.map(journey => {
       const mine = results.filter(result => result.journey === journey);
@@ -282,6 +293,7 @@ const summary = {
         overflowing: mine.filter(cell => cell.documentOverflow).length,
         frameOverCap: mine.filter(cell => cell.frameOverCap).length,
         columnOverNarrow: mine.filter(cell => cell.columnOverNarrow).length,
+        optInMissing: mine.filter(cell => cell.optInMissing).length,
         // Reported, never gated — the lesson `reflow.mjs` records about fixed containers.
         maxElementOverflow: Math.max(0, ...mine.map(cell => cell.elementOverflow)),
       }];
@@ -313,6 +325,6 @@ if (failures.length) {
 }
 
 if (summary.documentOverflow > 0 || summary.frameOverCap > 0
-  || summary.columnOverNarrow > 0 || failures.length > 0) {
+  || summary.columnOverNarrow > 0 || summary.optInMissing > 0 || failures.length > 0) {
   process.exit(1);
 }
