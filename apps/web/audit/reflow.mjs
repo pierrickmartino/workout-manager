@@ -101,12 +101,14 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // search, Favorites, type and exercise tokens wrapping at 320px and 200% text. `admin-home` joins
 // them with ADR-0142: the admin home opts into the wide column as a dashboard, so this sweep is
 // what proves its phone page is still the two publishers over the two nav rows at 320px and 200%.
+// `ai-audit-log` joins them with #771: the AI audit log opts into the wide column, its calls a
+// table from `lg:`; below it the card list must still wrap the longest user id and model slug.
 const NOVEL_JOURNEYS = [
   "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc", "launchpad",
   "levels", "sheet", "protocols", "protocols-live", "set-aside", "passport", "passport-open",
   "passport-empty", "stamp", "stamp-locked", "stamp-record", "curated", "curated-adopt",
   "based-on", "curated-wave-adopt", "curated-wave-unlogged", "handoff", "session-header", "avatar",
-  "history-month", "history-filtered", "sessions-filtered", "admin-home",
+  "history-month", "history-filtered", "sessions-filtered", "admin-home", "ai-audit-log",
 ];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and
@@ -216,10 +218,16 @@ async function capture(page, meta) {
   };
 }
 
+// A comma-separated subset, for iterating on one screen without paying for the full sweep —
+// the same switch `wide.mjs` has (`UI_WIDE_JOURNEYS`). The gated run is the unfiltered one.
+const ONLY = process.env.UI_REFLOW_JOURNEYS
+  ? new Set(process.env.UI_REFLOW_JOURNEYS.split(",").map(name => name.trim()).filter(Boolean))
+  : null;
+
 const cases = [
   ...MATRIX_JOURNEYS.map(journey => ({ journey, novel: false })),
   ...NOVEL_JOURNEYS.map(journey => ({ journey, novel: true })),
-].flatMap(({ journey, novel }) =>
+].filter(({ journey }) => ONLY === null || ONLY.has(journey)).flatMap(({ journey, novel }) =>
   SKINS.flatMap(skin =>
     MODES.flatMap(mode =>
       FIXTURES.flatMap(fixture =>

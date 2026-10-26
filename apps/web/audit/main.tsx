@@ -57,6 +57,7 @@ import { ProgressStoryCard } from "@/components/pulse/progress-story";
 import { toProgressStoryView } from "@/lib/progress-story-view";
 import { AdminExerciseBrowser } from "@/components/AdminExerciseBrowser";
 import { GenerationCallList } from "@/components/GenerationCallList";
+import { GenerationCallResults } from "@/components/GenerationCallResults";
 import { GenerationCallFilterForm } from "@/components/GenerationCallFilterForm";
 import { GenerationCallPager } from "@/components/GenerationCallPager";
 import { toGenerationCallRowView } from "@/lib/admin-generation-calls-view";
@@ -329,6 +330,23 @@ function AdminAudit() {
       <GenerationCallDetailPanel key={detail.id} detail={toGenerationCallDetailView(detail)} />
     ))}
   </div>;
+}
+
+// The AI audit log page converted to the wide column (issue #771, ADR-0088). The page is a
+// Server Component, so its section is rebuilt here around the *same* `GenerationCallResults`
+// switch it renders: the card list below `lg:`, the table from `lg:`. Every filter is set and
+// the pager sits on a middle page, so the widest state of each control is measured; the rows
+// carry the longest user id, the longest model slug and an unreported-usage call.
+function AiAuditLogSurface() {
+  return (
+    <section data-shell="wide" className="flex flex-col gap-6">
+      <PageHeader overline="PULSE // ADMIN" title="AI audit log" />
+      <GenerationCallFilterForm filters={generationCallFilters} isFiltered />
+      <GenerationCallResults calls={generationCallRows.map(toGenerationCallRowView)} isFiltered />
+      <GenerationCallPager pager={generationCallPager} />
+      <BackLink href="/admin">Back to admin</BackLink>
+    </section>
+  );
 }
 
 // The themed confirmation that replaced `window.confirm` at the destructive actions (ADR-0098).
@@ -714,6 +732,7 @@ function Content() {
     case "admin": return <AdminAudit />;
     // The admin home dashboard (ADR-0142): the catalog tiles over Publishing and Operations.
     case "admin-home": return <AdminHome />;
+    case "ai-audit-log": return <AiAuditLogSurface />;
     case "confirm": return <ConfirmSurface />;
     case "sheet": return <SheetSurface />;
     case "session-header": return <SessionHeaderSurface />;
