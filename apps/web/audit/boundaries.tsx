@@ -5,7 +5,10 @@ import * as auditSync from "@/lib/finish-outbox-sync";
 
 const router = { push: (url: string) => { window.location.href = url; }, refresh: () => {} };
 export const useRouter = () => router;
-export const usePathname = () => "/train";
+// `?pathname=` lets a check render the shell as if on another route — the sidebar's nested
+// admin entries (#770) exist only inside `/admin`. Defaults to `/train`.
+const auditPathname = new URLSearchParams(window.location.search).get("pathname") ?? "/train";
+export const usePathname = () => auditPathname;
 // Empty unless a journey seeds it: the harness's own query (`journey`, `skin`…) is not the
 // page's, so a journey that needs a filtered URL — History's Month view with a day selected —
 // names exactly the params the real route would carry.

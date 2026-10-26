@@ -35,6 +35,9 @@ export interface GenerationCallRowView {
   isError: boolean;
   inputTokensLabel: string;
   outputTokensLabel: string;
+  // The wide table's single tokens column (issue #771): "in / out", or "unreported" when the
+  // provider reported no usage, so a missing count is never read as zero.
+  tokensCell: string;
   latencyLabel: string;
 }
 
@@ -60,6 +63,9 @@ export const SYSTEM_USER_LABEL = "system";
 // What a token count the provider did not report shows, so it is never read as zero.
 export const UNKNOWN_TOKENS_LABEL = "unknown";
 
+// What the wide table's tokens column shows for a call whose usage the provider did not report.
+export const UNREPORTED_TOKENS_LABEL = "unreported";
+
 const MS_PER_SECOND = 1000;
 
 function generationCallHref(id: number): string {
@@ -74,10 +80,19 @@ function tokensLabel(tokens: number | null): string {
   return tokens === null ? UNKNOWN_TOKENS_LABEL : String(tokens);
 }
 
+function tokensCell(input: number | null, output: number | null): string {
+  if (input === null && output === null) return UNREPORTED_TOKENS_LABEL;
+  const side = (tokens: number | null): string =>
+    tokens === null ? UNREPORTED_TOKENS_LABEL : String(tokens);
+  return `${side(input)} / ${side(output)}`;
+}
+
 // Whole milliseconds under a second; seconds to one decimal from there, where a generation's
 // latency usually sits.
 export function latencyLabel(latencyMs: number): string {
-  if (latencyMs < MS_PER_SECOND) return `${Math.round(latencyMs)} ms`;
+  // Compared after rounding, so 999.6 ms reads "1.0 s" rather than "1000 ms".
+  const wholeMs = Math.round(latencyMs);
+  if (wholeMs < MS_PER_SECOND) return `${wholeMs} ms`;
   return `${(latencyMs / MS_PER_SECOND).toFixed(1)} s`;
 }
 
@@ -96,6 +111,7 @@ export function toGenerationCallRowView(
     isError: row.outcome === "error",
     inputTokensLabel: tokensLabel(row.input_tokens),
     outputTokensLabel: tokensLabel(row.output_tokens),
+    tokensCell: tokensCell(row.input_tokens, row.output_tokens),
     latencyLabel: latencyLabel(row.latency_ms),
   };
 }
