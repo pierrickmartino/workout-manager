@@ -96,11 +96,14 @@ const ALL_JOURNEYS = [
   // The "Based on <name>" line under an adopted Curated Protocol's title (#688), whose name is
   // authored content.
   "based-on",
+  // The admin home as a dashboard (ADR-0142): catalog tiles over Publishing and Operations. It
+  // opts in, and is in `MUST_OPT_IN` below, so it fails if it ever stops doing so.
+  "admin-home",
 ];
-// Journeys that must render in the wide content column. `columnOverNarrow` only proves an
-// unconverted page stays narrow; a converted page that lost its `data-shell="wide"` would pass
-// it by shrinking back to 26rem. This list gates the other direction.
-const MUST_OPT_IN = new Set(["ai-audit-log"]);
+// Journeys whose page is converted to the wide column. For these the opt-in itself is gated: a
+// converted page that lost `data-shell="wide"` would otherwise pass every check here by
+// silently shrinking back to 26rem.
+const MUST_OPT_IN = new Set(["home", "admin-home", "ai-audit-log"]);
 // Journeys whose wide layout is a table (#771): at this viewport one must actually be laid out,
 // not merely present in markup behind a `hidden lg:block` that failed to resolve.
 const MUST_SHOW_TABLE = new Set(["ai-audit-log"]);
@@ -236,7 +239,7 @@ async function capture(page, meta) {
     // …and a page that has *not* opted in must still render its content in the narrow one.
     columnOverNarrow: !measured.optedIn
       && measured.columnWidth > measured.shell.narrow + slack,
-    // …and a page converted to wide must have actually opted in.
+    // …and a converted page must actually have opted in.
     missingOptIn: MUST_OPT_IN.has(meta.journey) && !measured.optedIn,
     missingTable: MUST_SHOW_TABLE.has(meta.journey) && !measured.tableVisible,
     elementOverflow: measured.overflow.length,
@@ -317,7 +320,7 @@ await writeFile(resolve(OUTPUT, "wide-results.json.gz"), gzipSync(JSON.stringify
 console.log(
   `${summary.documentOverflow} of ${results.length} cases overflow a ${VIEWPORT.width}px viewport; `
   + `${summary.frameOverCap} exceed the wide shell cap; ${summary.columnOverNarrow} stretch an unconverted column; `
-  + `${summary.missingOptIn} converted pages miss their opt-in; ${summary.missingTable} miss their table`,
+  + `${summary.missingOptIn} converted pages lost their opt-in; ${summary.missingTable} miss their table`,
 );
 for (const [journey, entry] of Object.entries(summary.byJourney)) {
   console.log(
