@@ -111,6 +111,18 @@ const MUST_OPT_IN = new Set(["home", "admin-home", "ai-audit-log", "admin-catalo
 // Journeys whose wide layout is a table (#771, #772): at this viewport one must actually be laid
 // out, not merely present in markup behind a `hidden lg:block` (or a mount gate) that failed.
 const MUST_SHOW_TABLE = new Set(["ai-audit-log", "admin-catalog"]);
+// The nested admin sidebar entries (#770), which exist only for an admin inside `/admin`. Each
+// admin journey is also rendered as an admin on a route of its area (`?admin=1&pathname=`, see
+// `audit/boundaries.tsx`), and gated on what the sidebar then draws: all three admin areas
+// nested and laid out inside the sidebar, and exactly one `aria-current="page"` in it — the
+// area that owns the route, never the admin entry beside it. The paths are deep on purpose, so
+// the most-specific-area rule is what is under test, not an exact match.
+const ADMIN_SIDEBAR = {
+  "admin-home": { pathname: "/admin", current: "Overview" },
+  "admin-catalog": { pathname: "/admin/exercises/42", current: "Exercise catalog" },
+  "ai-audit-log": { pathname: "/admin/ai-audit-log/7", current: "AI audit log" },
+};
+const ADMIN_AREA_COUNT = 3;
 // A comma-separated subset, for iterating on one screen without paying for the full sweep.
 // The gated run is the unfiltered one.
 const JOURNEYS = process.env.UI_WIDE_JOURNEYS
@@ -209,6 +221,24 @@ function measure(tokens) {
       const nav = document.querySelector("[data-shell-nav='sidebar']");
       return Boolean(nav) && getComputedStyle(nav).display !== "none";
     })(),
+    // What the sidebar draws inside the admin area (#770): the nested entries laid out within
+    // the sidebar's own box (a long label must wrap, not spill into the page), and the labels of
+    // every "you are here" marker it carries.
+    sidebar: (() => {
+      const nav = document.querySelector("[data-shell-nav='sidebar']");
+      if (!nav) return null;
+      const bounds = nav.getBoundingClientRect();
+      const nested = [...nav.querySelectorAll("ul a")].filter(link => link.getBoundingClientRect().width > 0);
+      return {
+        nested: nested.length,
+        nestedOutside: nested.filter(link => {
+          const rect = link.getBoundingClientRect();
+          return rect.left < bounds.left - 1 || rect.right > bounds.right + 1;
+        }).length,
+        current: [...nav.querySelectorAll('[aria-current="page"]')]
+          .map(link => (link.textContent ?? "").trim()),
+      };
+    })(),
     overflow,
   };
 }
@@ -219,6 +249,7 @@ async function capture(page, meta) {
     skin: meta.skin,
     mode: meta.mode,
     fixture: meta.fixture,
+    ...(meta.adminPathname ? { admin: "1", pathname: meta.adminPathname } : {}),
   });
   await page.goto(`${BASE}/?${query}`, { timeout: 20000 });
   // `data-journey` carries the query value, so a mount that threw never passes this.
@@ -247,6 +278,14 @@ async function capture(page, meta) {
     // …and a converted page must actually have opted in.
     missingOptIn: MUST_OPT_IN.has(meta.journey) && !measured.optedIn,
     missingTable: MUST_SHOW_TABLE.has(meta.journey) && !measured.tableVisible,
+    // …and inside the admin area, the sidebar nests every area and marks only the owning one.
+    adminSidebarMismatch: Boolean(meta.adminPathname) && (
+      measured.sidebar === null
+      || measured.sidebar.nested !== ADMIN_AREA_COUNT
+      || measured.sidebar.nestedOutside > 0
+      || measured.sidebar.current.length !== 1
+      || measured.sidebar.current[0] !== ADMIN_SIDEBAR[meta.journey].current
+    ),
     elementOverflow: measured.overflow.length,
   };
 }
@@ -258,12 +297,22 @@ const cases = JOURNEYS.flatMap(journey =>
     ),
   ),
 );
+// The admin journeys again, as an admin on a route of their own area, across every skin and
+// mode (the nested entries carry the skin's active styling) on the default fixture: the
+// sidebar does not read the page's authored content, so the fixture axis adds nothing here.
+const adminSidebarCases = JOURNEYS.filter(journey => Object.hasOwn(ADMIN_SIDEBAR, journey)).flatMap(journey =>
+  SKINS.flatMap(skin =>
+    MODES.map(mode => ({
+      journey, skin, mode, fixture: FIXTURES[0], adminPathname: ADMIN_SIDEBAR[journey].pathname,
+    })),
+  ),
+);
 
 const browser = await chromium.launch({ executablePath: executablePath() });
 const page = await browser.newPage({ viewport: VIEWPORT });
 const results = [];
 const failures = [];
-for (const meta of cases) {
+for (const meta of [...cases, ...adminSidebarCases]) {
   try {
     results.push(await capture(page, meta));
   } catch (error) {
@@ -297,6 +346,8 @@ const summary = {
   columnOverNarrow: count(result => result.columnOverNarrow),
   missingOptIn: count(result => result.missingOptIn),
   missingTable: count(result => result.missingTable),
+  adminSidebarCases: count(result => Boolean(result.adminPathname)),
+  adminSidebarMismatch: count(result => result.adminSidebarMismatch),
   byJourney: Object.fromEntries(
     JOURNEYS.map(journey => {
       const mine = results.filter(result => result.journey === journey);
@@ -310,6 +361,7 @@ const summary = {
         columnOverNarrow: mine.filter(cell => cell.columnOverNarrow).length,
         missingOptIn: mine.filter(cell => cell.missingOptIn).length,
         missingTable: mine.filter(cell => cell.missingTable).length,
+        adminSidebarMismatch: mine.filter(cell => cell.adminSidebarMismatch).length,
         // Reported, never gated — the lesson `reflow.mjs` records about fixed containers.
         maxElementOverflow: Math.max(0, ...mine.map(cell => cell.elementOverflow)),
       }];
@@ -325,7 +377,8 @@ await writeFile(resolve(OUTPUT, "wide-results.json.gz"), gzipSync(JSON.stringify
 console.log(
   `${summary.documentOverflow} of ${results.length} cases overflow a ${VIEWPORT.width}px viewport; `
   + `${summary.frameOverCap} exceed the wide shell cap; ${summary.columnOverNarrow} stretch an unconverted column; `
-  + `${summary.missingOptIn} converted pages lost their opt-in; ${summary.missingTable} miss their table`,
+  + `${summary.missingOptIn} converted pages lost their opt-in; ${summary.missingTable} miss their table; `
+  + `${summary.adminSidebarMismatch} of ${summary.adminSidebarCases} admin-area cases mis-draw the nested sidebar`,
 );
 for (const [journey, entry] of Object.entries(summary.byJourney)) {
   console.log(
@@ -343,6 +396,6 @@ if (failures.length) {
 
 if (summary.documentOverflow > 0 || summary.frameOverCap > 0
   || summary.columnOverNarrow > 0 || summary.missingOptIn > 0
-  || summary.missingTable > 0 || failures.length > 0) {
+  || summary.missingTable > 0 || summary.adminSidebarMismatch > 0 || failures.length > 0) {
   process.exit(1);
 }
