@@ -11,7 +11,11 @@ the standard envelope.
 
 ``GET /api/admin/generation-calls/{call_id}`` reads one call in full (issue #731): both
 prompts, the output or the failure's message, the requested schema and the token budget. An
-unknown id and one past the retention window are the same ``404``."""
+unknown id and one past the retention window are the same ``404``.
+
+``GET /api/admin/generation-calls/summary`` aggregates the window for the admin dashboard
+(issue #769, ADR-0142): counts and sums only, no prompts, outputs, error text or per-user
+data. It is declared before ``/{call_id}`` so ``summary`` is never read as a call id."""
 
 from __future__ import annotations
 
@@ -26,6 +30,7 @@ from app.repositories.generation_call_repository import (
     GenerationCallFilters,
     GenerationCallRepository,
     GenerationCallSummary,
+    GenerationCallWindowSummary,
 )
 
 router = APIRouter(prefix="/api", tags=["admin"])
@@ -92,6 +97,35 @@ def list_generation_calls(
         [_serialize(call) for call in page.items],
         meta={"total": page.total, "limit": limit, "offset": offset},
     )
+
+
+def _serialize_window(summary: GenerationCallWindowSummary) -> dict:
+    return {
+        "total_calls": summary.total_calls,
+        # Keyed by the enums' wire values, every member present, in enum order.
+        "by_outcome": {outcome.value: n for outcome, n in summary.by_outcome.items()},
+        "by_generator_kind": {
+            kind.value: n for kind, n in summary.by_generator_kind.items()
+        },
+        # Sums over calls that reported usage; ``unreported_usage_calls`` counts the rest.
+        "input_tokens": summary.input_tokens,
+        "output_tokens": summary.output_tokens,
+        "unreported_usage_calls": summary.unreported_usage_calls,
+        # Over successes and errors alike; ``null`` when the window holds no call.
+        "median_latency_ms": summary.median_latency_ms,
+        "window_days": summary.window_days,
+    }
+
+
+# Declared before ``/{call_id}``: FastAPI matches in order, and ``summary`` is no integer.
+@router.get("/admin/generation-calls/summary")
+def summarize_generation_calls(
+    _operator: str = Depends(require_admin),
+    calls: GenerationCallRepository = Depends(get_generation_call_repository),
+) -> dict:
+    """Read-time totals over the retention window, operator-only (issue #769, ADR-0142)."""
+
+    return success_envelope(_serialize_window(calls.summarize_recent()))
 
 
 @router.get("/admin/generation-calls/{call_id}")

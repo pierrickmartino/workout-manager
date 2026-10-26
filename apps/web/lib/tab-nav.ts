@@ -55,12 +55,15 @@ export const TAB_LESS_ROUTES: string[] = [
   "/sign-up",
 ];
 
-// A tab is active when the pathname exactly equals one of its match prefixes or is a
-// descendant of it (slash-boundary, so `/logs` never matches `/logspace`).
+// Whether a pathname is `path` itself or a descendant of it (slash-boundary, so `/logs` never
+// matches `/logspace`). The one route-prefix rule, shared by the tabs and the sidebar.
+export function isWithinPath(pathname: string, path: string): boolean {
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
+
+// A tab is active when the pathname is within one of its match prefixes.
 export function isActive(pathname: string, tab: TabRoute): boolean {
-  return tab.match.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
+  return tab.match.some((prefix) => isWithinPath(pathname, prefix));
 }
 
 // The tab that owns a pathname, or `null` when the route is deliberately tab-less. Throws

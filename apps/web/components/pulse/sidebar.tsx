@@ -30,6 +30,15 @@ const ICONS: Record<SidebarEntryLabel, LucideIcon> = {
   [ADMIN_ENTRY_LABEL]: Shield,
 };
 
+function entryClass(isActive: boolean): string {
+  return cn(
+    "flex items-center rounded-md border px-3 py-2 transition-colors",
+    isActive
+      ? "border-cyan/40 bg-cyan-dim text-cyan"
+      : "border-transparent text-text-muted hover:border-border hover:text-text-primary",
+  );
+}
+
 interface SidebarProps {
   // Resolved server-side from the Clerk `role` claim (`resolveIsAdmin`, ADR-0046) and passed
   // in, so admin status is never inferred in the browser. An affordance gate only — the
@@ -57,20 +66,33 @@ export function Sidebar({ isAdmin }: SidebarProps): React.JSX.Element {
       {entries.map((entry) => {
         const Icon = ICONS[entry.label];
         return (
-          <Link
-            key={entry.label}
-            href={entry.href}
-            aria-current={entry.active ? "page" : undefined}
-            className={cn(
-              "flex items-center gap-3 rounded-md border px-3 py-2 transition-colors",
-              entry.active
-                ? "border-cyan/40 bg-cyan-dim text-cyan"
-                : "border-transparent text-text-muted hover:border-border hover:text-text-primary",
-            )}
-          >
-            <Icon className="h-[18px] w-[18px] shrink-0" />
-            <span className="label-mono text-[11px] font-semibold">{entry.label}</span>
-          </Link>
+          <div key={entry.label} className="flex flex-col gap-1">
+            <Link
+              href={entry.href}
+              aria-current={entry.active ? "page" : undefined}
+              className={cn(entryClass(entry.active), "gap-3")}
+            >
+              <Icon className="h-[18px] w-[18px] shrink-0" />
+              <span className="label-mono text-[11px] font-semibold">{entry.label}</span>
+            </Link>
+            {entry.children ? (
+              // The admin areas, nested while an admin is inside `/admin` (#770); which one
+              // lights is decided in `@/lib/sidebar-nav`.
+              <ul className="ml-[18px] flex flex-col gap-1 border-l border-border pl-3">
+                {entry.children.map((child) => (
+                  <li key={child.href}>
+                    <Link
+                      href={child.href}
+                      aria-current={child.active ? "page" : undefined}
+                      className={entryClass(child.active)}
+                    >
+                      <span className="text-sm">{child.label}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
         );
       })}
     </nav>

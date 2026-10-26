@@ -45,6 +45,35 @@ test("a retired row reads as Retired", () => {
   assert.equal(view.statusLabel, "Retired");
 });
 
+test("the usage cell counts what references the movement", () => {
+  // Arrange / Act — none, one, many (the table's usage column, #772)
+  const unused = toAdminExerciseRowView(row({ reference_count: 0 }));
+  const once = toAdminExerciseRowView(row({ reference_count: 1 }));
+  const many = toAdminExerciseRowView(row({ reference_count: 12 }));
+
+  // Assert — zero reads as the glossary's "unreferenced", never a bare 0
+  assert.equal(unused.usageLabel, "Unreferenced");
+  assert.equal(once.usageLabel, "1 reference");
+  assert.equal(many.usageLabel, "12 references");
+});
+
+test("a row without a reported count shows a dash, never a misleading Unreferenced", () => {
+  const view = toAdminExerciseRowView(row());
+  assert.equal(view.usageLabel, "—");
+});
+
+test("the table’s tier, Provenance and Retired cells read from the same row view", () => {
+  // Arrange / Act
+  const view = toAdminExerciseRowView(
+    row({ provenance: "ai_generated", completeness: "listable", retired: true }),
+  );
+
+  // Assert
+  assert.equal(view.completenessLabel, "Listable");
+  assert.equal(view.provenanceLabel, "AI-generated");
+  assert.equal(view.statusLabel, "Retired");
+});
+
 test("an unknown provenance or tier token falls back to itself", () => {
   const view = toAdminExerciseRowView(
     row({ provenance: "future_tier", completeness: "mystery" }),

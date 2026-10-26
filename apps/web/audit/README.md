@@ -217,7 +217,10 @@ The run aborts a case if the sidebar is not the rendered navigation at that
 viewport, or if the `[data-shell-column]` contract element is missing — either
 means the sweep is no longer measuring the shell it claims to. `?admin=1` mounts
 the sidebar's admin entry, which the real shell resolves from a server-side role
-claim this harness cannot hold. Element overflow is recorded without gating, as
+claim this harness cannot hold. The admin journeys (`admin-home`, `admin-catalog`,
+`ai-audit-log`) also run as an admin on a route of their area (`?admin=1&pathname=`),
+gated on the nested admin entries (#770): all three drawn inside the sidebar and
+exactly one `aria-current`, on the area that owns the route. Element overflow is recorded without gating, as
 in the narrow sweep. Output defaults to `docs/development/ui-wide-evidence/`.
 Chromium only, with the same fallback to the container's installed browser.
 

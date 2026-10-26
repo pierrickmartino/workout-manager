@@ -56,6 +56,9 @@ const ALL_JOURNEYS = [
   // My Sessions, the third page converted (ADR-0141): its facet rail beside the Session cards,
   // so `sessions` opts in too; `sessions-filtered` is that rail with a facet of each kind picked.
   "sessions-filtered",
+  // The AI audit log (#771), converted to the wide column: its calls are a table from `lg:`.
+  // It is in `MUST_OPT_IN` below, so a page that silently drops its opt-in fails the run.
+  "ai-audit-log",
   // The themed confirmation (ADR-0098), which no other journey mounts because a dialog exists
   // only while it is open. Its `max-w-sm` box must not stretch with the wide frame.
   "confirm",
@@ -68,7 +71,8 @@ const ALL_JOURNEYS = [
   // The Exercise detail lens and the admin catalog (ADR-0095/0096/0097). Neither was ever in a
   // journey, so neither had been rendered at any width by this harness. Both stay unconverted —
   // no `data-shell="wide"` — so they also widen the evidence that the frame leaves an
-  // unconverted page at 26rem.
+  // unconverted page at 26rem. (Since #772 the catalog is `admin-catalog`, below; `admin` keeps
+  // the other admin surfaces, still unconverted.)
   "exercise", "admin",
   // The ad-hoc log (ADR-0106). It was a renderable case that no journey swept, so its form was
   // unverified at every width while three sibling log forms were gated — and it is one of the
@@ -93,7 +97,32 @@ const ALL_JOURNEYS = [
   // The "Based on <name>" line under an adopted Curated Protocol's title (#688), whose name is
   // authored content.
   "based-on",
+  // The admin home as a dashboard (ADR-0142): catalog tiles over Publishing and Operations. It
+  // opts in, and is in `MUST_OPT_IN` below, so it fails if it ever stops doing so.
+  "admin-home",
+  // The admin exercise catalog (#772), converted to the wide column: its rows become a table at
+  // this width. It left the `admin` journey, which stays unconverted.
+  "admin-catalog",
 ];
+// Journeys whose page is converted to the wide column. For these the opt-in itself is gated: a
+// converted page that lost `data-shell="wide"` would otherwise pass every check here by
+// silently shrinking back to 26rem.
+const MUST_OPT_IN = new Set(["home", "admin-home", "ai-audit-log", "admin-catalog"]);
+// Journeys whose wide layout is a table (#771, #772): at this viewport one must actually be laid
+// out, not merely present in markup behind a `hidden lg:block` (or a mount gate) that failed.
+const MUST_SHOW_TABLE = new Set(["ai-audit-log", "admin-catalog"]);
+// The nested admin sidebar entries (#770), which exist only for an admin inside `/admin`. Each
+// admin journey is also rendered as an admin on a route of its area (`?admin=1&pathname=`, see
+// `audit/boundaries.tsx`), and gated on what the sidebar then draws: all three admin areas
+// nested and laid out inside the sidebar, and exactly one `aria-current="page"` in it — the
+// area that owns the route, never the admin entry beside it. The paths are deep on purpose, so
+// the most-specific-area rule is what is under test, not an exact match.
+const ADMIN_SIDEBAR = {
+  "admin-home": { pathname: "/admin", current: "Overview" },
+  "admin-catalog": { pathname: "/admin/exercises/42", current: "Exercise catalog" },
+  "ai-audit-log": { pathname: "/admin/ai-audit-log/7", current: "AI audit log" },
+};
+const ADMIN_AREA_COUNT = 3;
 // A comma-separated subset, for iterating on one screen without paying for the full sweep.
 // The gated run is the unfiltered one.
 const JOURNEYS = process.env.UI_WIDE_JOURNEYS
@@ -181,12 +210,34 @@ function measure(tokens) {
     // an unconverted one is not, and that asymmetry is the whole point of the per-route
     // opt-in, so the gate has to read the declaration rather than assume one answer.
     optedIn: Boolean(column?.querySelector("[data-shell=wide]")),
+    // Whether a table is laid out in the column at this viewport (computed, not class strings).
+    // An ARIA table counts too: the admin catalog's rows are `div`s so each can defer (#772).
+    tableVisible: [...(column?.querySelectorAll('table, [role="table"]') ?? [])]
+      .some(table => table.getBoundingClientRect().width > 0),
     // Whether the sidebar is the navigation in play — it must be, at this viewport, for the
     // measurement to mean what the ADR says it means. Computed display, not a class string:
     // `lg:flex` present in markup proves nothing about what the breakpoint resolved to.
     sidebarVisible: (() => {
       const nav = document.querySelector("[data-shell-nav='sidebar']");
       return Boolean(nav) && getComputedStyle(nav).display !== "none";
+    })(),
+    // What the sidebar draws inside the admin area (#770): the nested entries laid out within
+    // the sidebar's own box (a long label must wrap, not spill into the page), and the labels of
+    // every "you are here" marker it carries.
+    sidebar: (() => {
+      const nav = document.querySelector("[data-shell-nav='sidebar']");
+      if (!nav) return null;
+      const bounds = nav.getBoundingClientRect();
+      const nested = [...nav.querySelectorAll("ul a")].filter(link => link.getBoundingClientRect().width > 0);
+      return {
+        nested: nested.length,
+        nestedOutside: nested.filter(link => {
+          const rect = link.getBoundingClientRect();
+          return rect.left < bounds.left - 1 || rect.right > bounds.right + 1;
+        }).length,
+        current: [...nav.querySelectorAll('[aria-current="page"]')]
+          .map(link => (link.textContent ?? "").trim()),
+      };
     })(),
     overflow,
   };
@@ -198,6 +249,7 @@ async function capture(page, meta) {
     skin: meta.skin,
     mode: meta.mode,
     fixture: meta.fixture,
+    ...(meta.adminPathname ? { admin: "1", pathname: meta.adminPathname } : {}),
   });
   await page.goto(`${BASE}/?${query}`, { timeout: 20000 });
   // `data-journey` carries the query value, so a mount that threw never passes this.
@@ -223,6 +275,17 @@ async function capture(page, meta) {
     // …and a page that has *not* opted in must still render its content in the narrow one.
     columnOverNarrow: !measured.optedIn
       && measured.columnWidth > measured.shell.narrow + slack,
+    // …and a converted page must actually have opted in.
+    missingOptIn: MUST_OPT_IN.has(meta.journey) && !measured.optedIn,
+    missingTable: MUST_SHOW_TABLE.has(meta.journey) && !measured.tableVisible,
+    // …and inside the admin area, the sidebar nests every area and marks only the owning one.
+    adminSidebarMismatch: Boolean(meta.adminPathname) && (
+      measured.sidebar === null
+      || measured.sidebar.nested !== ADMIN_AREA_COUNT
+      || measured.sidebar.nestedOutside > 0
+      || measured.sidebar.current.length !== 1
+      || measured.sidebar.current[0] !== ADMIN_SIDEBAR[meta.journey].current
+    ),
     elementOverflow: measured.overflow.length,
   };
 }
@@ -234,12 +297,22 @@ const cases = JOURNEYS.flatMap(journey =>
     ),
   ),
 );
+// The admin journeys again, as an admin on a route of their own area, across every skin and
+// mode (the nested entries carry the skin's active styling) on the default fixture: the
+// sidebar does not read the page's authored content, so the fixture axis adds nothing here.
+const adminSidebarCases = JOURNEYS.filter(journey => Object.hasOwn(ADMIN_SIDEBAR, journey)).flatMap(journey =>
+  SKINS.flatMap(skin =>
+    MODES.map(mode => ({
+      journey, skin, mode, fixture: FIXTURES[0], adminPathname: ADMIN_SIDEBAR[journey].pathname,
+    })),
+  ),
+);
 
 const browser = await chromium.launch({ executablePath: executablePath() });
 const page = await browser.newPage({ viewport: VIEWPORT });
 const results = [];
 const failures = [];
-for (const meta of cases) {
+for (const meta of [...cases, ...adminSidebarCases]) {
   try {
     results.push(await capture(page, meta));
   } catch (error) {
@@ -271,6 +344,10 @@ const summary = {
   documentOverflow: count(result => result.documentOverflow),
   frameOverCap: count(result => result.frameOverCap),
   columnOverNarrow: count(result => result.columnOverNarrow),
+  missingOptIn: count(result => result.missingOptIn),
+  missingTable: count(result => result.missingTable),
+  adminSidebarCases: count(result => Boolean(result.adminPathname)),
+  adminSidebarMismatch: count(result => result.adminSidebarMismatch),
   byJourney: Object.fromEntries(
     JOURNEYS.map(journey => {
       const mine = results.filter(result => result.journey === journey);
@@ -282,6 +359,9 @@ const summary = {
         overflowing: mine.filter(cell => cell.documentOverflow).length,
         frameOverCap: mine.filter(cell => cell.frameOverCap).length,
         columnOverNarrow: mine.filter(cell => cell.columnOverNarrow).length,
+        missingOptIn: mine.filter(cell => cell.missingOptIn).length,
+        missingTable: mine.filter(cell => cell.missingTable).length,
+        adminSidebarMismatch: mine.filter(cell => cell.adminSidebarMismatch).length,
         // Reported, never gated — the lesson `reflow.mjs` records about fixed containers.
         maxElementOverflow: Math.max(0, ...mine.map(cell => cell.elementOverflow)),
       }];
@@ -296,7 +376,9 @@ await writeFile(resolve(OUTPUT, "wide-results.json.gz"), gzipSync(JSON.stringify
 
 console.log(
   `${summary.documentOverflow} of ${results.length} cases overflow a ${VIEWPORT.width}px viewport; `
-  + `${summary.frameOverCap} exceed the wide shell cap; ${summary.columnOverNarrow} stretch an unconverted column`,
+  + `${summary.frameOverCap} exceed the wide shell cap; ${summary.columnOverNarrow} stretch an unconverted column; `
+  + `${summary.missingOptIn} converted pages lost their opt-in; ${summary.missingTable} miss their table; `
+  + `${summary.adminSidebarMismatch} of ${summary.adminSidebarCases} admin-area cases mis-draw the nested sidebar`,
 );
 for (const [journey, entry] of Object.entries(summary.byJourney)) {
   console.log(
@@ -313,6 +395,7 @@ if (failures.length) {
 }
 
 if (summary.documentOverflow > 0 || summary.frameOverCap > 0
-  || summary.columnOverNarrow > 0 || failures.length > 0) {
+  || summary.columnOverNarrow > 0 || summary.missingOptIn > 0
+  || summary.missingTable > 0 || summary.adminSidebarMismatch > 0 || failures.length > 0) {
   process.exit(1);
 }

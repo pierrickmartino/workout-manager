@@ -47,16 +47,16 @@ test("an unattributed call reads as system", () => {
   assert.equal(view.kindLabel, "Exercise enrichment");
 });
 
-test("unreported token counts read as unknown, never zero", () => {
+test("unreported token counts read as unreported, never zero", () => {
   const view = toGenerationCallRowView(
     row({ input_tokens: null, output_tokens: null }),
   );
 
-  assert.equal(view.inputTokensLabel, "unknown");
-  assert.equal(view.outputTokensLabel, "unknown");
+  assert.equal(view.inputTokensLabel, "unreported");
+  assert.equal(view.outputTokensLabel, "unreported");
 });
 
-test("a zero token count is shown as zero, not unknown", () => {
+test("a zero token count is shown as zero, not unreported", () => {
   const view = toGenerationCallRowView(row({ output_tokens: 0 }));
 
   assert.equal(view.outputTokensLabel, "0");
@@ -75,10 +75,36 @@ test("a sub-second latency reads in whole milliseconds", () => {
   assert.equal(view.latencyLabel, "413 ms");
 });
 
+test("a latency that rounds up to a full second reads in seconds, never as 1000 ms", () => {
+  const view = toGenerationCallRowView(row({ latency_ms: 999.6 }));
+
+  assert.equal(view.latencyLabel, "1.0 s");
+});
+
 test("an unknown generator kind falls back to its raw value", () => {
   const view = toGenerationCallRowView(row({ generator_kind: "future-kind" }));
 
   assert.equal(view.kindLabel, "future-kind");
+});
+
+test("the table's tokens cell reads input over output when usage was reported", () => {
+  const view = toGenerationCallRowView(row({ input_tokens: 1200, output_tokens: 340 }));
+
+  assert.equal(view.tokensCell, "1200 / 340");
+});
+
+test("the table's tokens cell reads unreported, never zero, when usage was not reported", () => {
+  const view = toGenerationCallRowView(
+    row({ input_tokens: null, output_tokens: null }),
+  );
+
+  assert.equal(view.tokensCell, "unreported");
+});
+
+test("the table's tokens cell names the one side the provider did not report", () => {
+  const view = toGenerationCallRowView(row({ input_tokens: 1200, output_tokens: null }));
+
+  assert.equal(view.tokensCell, "1200 / unreported");
 });
 
 test("each row links to its call's detail page", () => {

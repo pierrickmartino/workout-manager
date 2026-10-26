@@ -102,12 +102,12 @@ test("output that reached the token budget is flagged as likely cut off", () => 
   assert.equal(view.hitTokenBudget, true);
 });
 
-test("an unknown token count or budget reads as unknown and is never flagged", () => {
+test("an unreported token count reads as unreported, an unrecorded budget as unknown, never flagged", () => {
   const view = toGenerationCallDetailView(
     detail({ output_tokens: null, max_tokens: null, schema_name: null }),
   );
 
-  assert.equal(view.tokenBudgetLabel, "unknown / unknown");
+  assert.equal(view.tokenBudgetLabel, "unreported / unknown");
   assert.equal(view.hitTokenBudget, false);
   assert.equal(view.schemaLabel, "unknown");
 });

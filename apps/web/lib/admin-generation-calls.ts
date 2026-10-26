@@ -3,6 +3,7 @@ import "server-only";
 import { apiGet, type Envelope } from "./api";
 import type { GenerationCallRow } from "./admin-generation-calls-view";
 import type { GenerationCallDetail } from "./admin-generation-call-detail-view";
+import type { GenerationCallWindowSummary } from "./admin-dashboard-view";
 import {
   generationCallsApiQuery,
   type AuditLogState,
@@ -22,6 +23,14 @@ export async function fetchGenerationCalls(
   state: AuditLogState,
 ): Promise<Envelope<GenerationCallRow[]>> {
   return apiGet(`/api/admin/generation-calls?${generationCallsApiQuery(state)}`);
+}
+
+// Read-time totals over the 3-day window for the admin dashboard's AI tiles (issue #769,
+// ADR-0142): counts and sums only — no prompt, output, error text or per-user figure.
+export async function fetchGenerationCallSummary(): Promise<
+  Envelope<GenerationCallWindowSummary>
+> {
+  return apiGet("/api/admin/generation-calls/summary");
 }
 
 // One call in full (issue #731): both prompts, the output or the failure, the schema and the

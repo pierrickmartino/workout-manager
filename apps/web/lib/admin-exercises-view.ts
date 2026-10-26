@@ -8,6 +8,8 @@
 // orders it; this layer re-filters and re-sorts client-side so search and the three facets
 // respond instantly without a round-trip.
 
+import { ADMIN_CATALOG_PATH } from "./admin-paths.ts";
+
 // One admin browser row exactly as the backend endpoint returns it (the wire shape).
 export interface AdminExerciseRow {
   id: number;
@@ -15,6 +17,10 @@ export interface AdminExerciseRow {
   provenance: string;
   completeness: string;
   retired: boolean;
+  // How many Exercise Prescriptions, Logged Sets and Relationships point at it (#772): the
+  // live count the hard-delete guard reads. Optional so a row without it renders "—" rather
+  // than a misleading "Unreferenced".
+  reference_count?: number | null;
 }
 
 // The active/retired facet: `all` spans both (the default ops view hides nothing).
@@ -50,6 +56,7 @@ export interface AdminExerciseRowView {
   completenessLabel: string;
   retired: boolean;
   statusLabel: string;
+  usageLabel: string;
 }
 
 // Provenance is a closed set (GLOSSARY: Provenance); the ops labels read as the rest of the
@@ -68,6 +75,14 @@ const COMPLETENESS_LABELS: Record<string, string> = {
   enriched: "Enriched",
 };
 
+// The badge tone each Provenance renders in, shared by the card list and the wide table (#772)
+// so the two layouts of one row cannot drift. An unknown token falls back to `muted`.
+export const PROVENANCE_BADGE: Readonly<Record<string, "cyan" | "violet" | "muted">> = {
+  curated: "cyan",
+  ai_generated: "violet",
+  user_entered: "muted",
+};
+
 export function provenanceLabel(value: string): string {
   return PROVENANCE_LABELS[value] ?? value;
 }
@@ -76,9 +91,21 @@ export function completenessLabel(value: string): string {
   return COMPLETENESS_LABELS[value] ?? value;
 }
 
+// What an admin figure with no value shows — the usage cell's absent count, an empty dashboard
+// tile (ADR-0142): a dash, never a 0 that reads as measured.
+export const NO_VALUE = "—";
+
+// The usage cell: zero is the glossary's "unreferenced" (the precondition for a hard delete,
+// ADR-0076); an absent count is unknown and reads "—", never zero.
+export function usageLabel(referenceCount: number | null | undefined): string {
+  if (referenceCount == null) return NO_VALUE;
+  if (referenceCount === 0) return "Unreferenced";
+  return `${referenceCount} reference${referenceCount === 1 ? "" : "s"}`;
+}
+
 // The editor href a row links toward (the editor lands in a later issue).
 export function adminExerciseHref(id: number): string {
-  return `/admin/exercises/${id}`;
+  return `${ADMIN_CATALOG_PATH}/${id}`;
 }
 
 // Project one wire row onto its display view-model. Pure: it derives labels and the href
@@ -96,6 +123,7 @@ export function toAdminExerciseRowView(
     completenessLabel: completenessLabel(row.completeness),
     retired: row.retired,
     statusLabel: row.retired ? "Retired" : "Active",
+    usageLabel: usageLabel(row.reference_count),
   };
 }
 

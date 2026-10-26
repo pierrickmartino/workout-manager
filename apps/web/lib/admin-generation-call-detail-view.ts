@@ -7,7 +7,7 @@
 // cut-off output is obvious.
 
 import {
-  UNKNOWN_TOKENS_LABEL,
+  tokensLabel,
   toGenerationCallRowView,
   type GenerationCallRow,
   type GenerationCallRowView,
@@ -44,6 +44,10 @@ export interface GenerationCallDetailView {
 // What a schema name recorded before schemas were captured shows.
 export const UNKNOWN_SCHEMA_LABEL = "unknown";
 
+// What a token budget recorded before budgets were captured shows. A budget is a request
+// setting, not reported usage, so it is "unknown" rather than "unreported".
+export const UNKNOWN_BUDGET_LABEL = "unknown";
+
 // What a failed call recorded without a message (one stored before messages were) shows.
 export const NO_ERROR_MESSAGE_LABEL = "No error message was recorded.";
 
@@ -59,10 +63,6 @@ function prettyOutput(text: string | null): string | null {
   }
 }
 
-function countLabel(count: number | null): string {
-  return count === null ? UNKNOWN_TOKENS_LABEL : String(count);
-}
-
 function reachedBudget(output: number | null, budget: number | null): boolean {
   return output !== null && budget !== null && output >= budget;
 }
@@ -75,7 +75,7 @@ export function toGenerationCallDetailView(
   return {
     call,
     schemaLabel: detail.schema_name ?? UNKNOWN_SCHEMA_LABEL,
-    tokenBudgetLabel: `${countLabel(detail.output_tokens)} / ${countLabel(detail.max_tokens)}`,
+    tokenBudgetLabel: `${tokensLabel(detail.output_tokens)} / ${detail.max_tokens ?? UNKNOWN_BUDGET_LABEL}`,
     hitTokenBudget: reachedBudget(detail.output_tokens, detail.max_tokens),
     systemPrompt: detail.system_prompt,
     userPrompt: detail.user_prompt,

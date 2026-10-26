@@ -24,6 +24,14 @@ import { NavigationGuardProvider } from "@/components/NavigationGuardProvider";
 import { TabBar } from "@/components/pulse/tab-bar";
 import { Sidebar } from "@/components/pulse/sidebar";
 import { HomeColumns } from "@/components/pulse/home-columns";
+import { AdminDashboardColumns } from "@/components/pulse/admin-dashboard-columns";
+import { GeneratorKindBreakdown } from "@/components/pulse/generator-kind-breakdown";
+import { DashboardTileGroups } from "@/components/pulse/dashboard-tiles";
+import { NavRow } from "@/components/pulse/nav-row";
+import { AppearanceSkinPublisher } from "@/components/AppearanceSkinPublisher";
+import { adminDashboardView } from "@/lib/admin-dashboard-view";
+import { NAV_FORWARD } from "@/lib/nav-direction";
+import { Activity, Dumbbell } from "@/components/pulse/icons";
 import { OperatorScoreboard } from "@/components/pulse/operator-scoreboard";
 import { SessionHero } from "@/components/pulse/session-hero";
 import { CalibrationControl } from "@/components/pulse/calibration-control";
@@ -50,6 +58,7 @@ import { ProgressStoryCard } from "@/components/pulse/progress-story";
 import { toProgressStoryView } from "@/lib/progress-story-view";
 import { AdminExerciseBrowser } from "@/components/AdminExerciseBrowser";
 import { GenerationCallList } from "@/components/GenerationCallList";
+import { GenerationCallResults } from "@/components/GenerationCallResults";
 import { GenerationCallFilterForm } from "@/components/GenerationCallFilterForm";
 import { GenerationCallPager } from "@/components/GenerationCallPager";
 import { toGenerationCallRowView } from "@/lib/admin-generation-calls-view";
@@ -246,6 +255,64 @@ function Home() {
   );
 }
 
+// The admin home as a dashboard (ADR-0142), mounted through the *same* `AdminDashboardColumns`
+// and `DashboardTileGroups` the real page uses, with tiles from the same view-model over the
+// synthetic catalog figures. Its root carries `data-shell="wide"` like the page's, and `wide.mjs`
+// fails the journey if it ever stops opting in. Five-digit counts are the widest tile values a
+// bounded catalog plausibly reaches. Below `lg:` the tile row is hidden, so `reflow.mjs`
+// measures that the phone page is still the two publishers over the two nav rows.
+function AdminHome() {
+  const dashboard = adminDashboardView({
+    completeness: { success: true, data: { stub: 12345, listable: 23456, enriched: 34567, total: 70368 }, error: null },
+    // The retired total rides on `meta.total` of a one-row page; five digits is the widest tile.
+    retired: { success: true, data: adminExerciseRows.slice(0, 1), error: null, meta: { total: 12345 } },
+    // The widest AI figures (#769): a five-digit call count, a one-decimal rate, compact token
+    // sums with an "unreported" footnote, and a latency in seconds.
+    generationCalls: {
+      success: true,
+      data: {
+        total_calls: 12345,
+        by_outcome: { success: 11111, error: 1234 },
+        by_generator_kind: { session: 5000, protocol: 3000, regeneration: 2000, substitute: 1000, "muscle-emphasis": 1000, "exercise-enrichment": 345 },
+        input_tokens: 987_654_321,
+        output_tokens: 123_456_789,
+        unreported_usage_calls: 1234,
+        median_latency_ms: 12345,
+        window_days: 3,
+      },
+      error: null,
+    },
+  });
+  return (
+    <div data-shell="wide" className="flex flex-col gap-6">
+      <AdminDashboardColumns
+        tiles={<DashboardTileGroups groups={dashboard.groups} />}
+        publishing={<>
+          <div className="flex flex-col gap-4">
+            <SectionHeader>ACTIVE SKIN</SectionHeader>
+            <Card className="p-4"><AppearanceSkinPublisher activeSkin="pulse" /></Card>
+          </div>
+          <div className="flex flex-col gap-4">
+            <SectionHeader>AVATAR UNIVERSE</SectionHeader>
+            <Card className="p-4"><AvatarUniversePublisher activeUniverse="realm" /></Card>
+          </div>
+        </>}
+        operations={<>
+          <div className="flex flex-col gap-4">
+            <SectionHeader>CATALOG</SectionHeader>
+            <Card className="p-0"><NavRow icon={Dumbbell} label="Exercise catalog" href="/admin/exercises" direction={NAV_FORWARD} value="BROWSE" accent="cyan" /></Card>
+          </div>
+          <div className="flex flex-col gap-4">
+            <SectionHeader>AI</SectionHeader>
+            <Card className="p-0"><NavRow icon={Activity} label="AI audit log" href="/admin/ai-audit-log" direction={NAV_FORWARD} value="3 DAYS" accent="cyan" /></Card>
+          </div>
+          <GeneratorKindBreakdown kinds={dashboard.generatorKinds} />
+        </>}
+      />
+    </div>
+  );
+}
+
 // The two admin surfaces this change touched, in one journey. The audit trail's row markup
 // lives in a Server Component page, so the row is replicated here from its classes rather than
 // imported — what is measured is `LocalInstant`'s own text, which is the longest thing in it.
@@ -257,7 +324,8 @@ function AdminAudit() {
       <SectionHeader>Avatar Universe</SectionHeader>
       <AvatarUniversePublisher activeUniverse="realm" />
     </div>
-    <AdminExerciseBrowser rows={adminExerciseRows} />
+    {/* The catalog browser moved to its own `admin-catalog` journey (#772): it now opts into
+        the wide column, and mounted here it would widen every other admin surface with it. */}
     <div className="flex flex-col gap-4">
       <SectionHeader meta="1 change">Audit trail</SectionHeader>
       <ul className="flex flex-col gap-2">
@@ -282,6 +350,23 @@ function AdminAudit() {
       <GenerationCallDetailPanel key={detail.id} detail={toGenerationCallDetailView(detail)} />
     ))}
   </div>;
+}
+
+// The AI audit log page converted to the wide column (issue #771, ADR-0088). The page is a
+// Server Component, so its section is rebuilt here around the *same* `GenerationCallResults`
+// switch it renders: the card list below `lg:`, the table from `lg:`. Every filter is set and
+// the pager sits on a middle page, so the widest state of each control is measured; the rows
+// carry the longest user id, the longest model slug and an unreported-usage call.
+function AiAuditLogSurface() {
+  return (
+    <section data-shell="wide" className="flex flex-col gap-6">
+      <PageHeader overline="PULSE // ADMIN" title="AI audit log" />
+      <GenerationCallFilterForm filters={generationCallFilters} isFiltered />
+      <GenerationCallResults calls={generationCallRows.map(toGenerationCallRowView)} isFiltered />
+      <GenerationCallPager pager={generationCallPager} />
+      <BackLink href="/admin">Back to admin</BackLink>
+    </section>
+  );
 }
 
 // The themed confirmation that replaced `window.confirm` at the destructive actions (ADR-0098).
@@ -665,6 +750,12 @@ function Content() {
     // the admin editor renders it — the reader's-clock instant (ADR-0096) is the longest text
     // in that row. Neither admin screen was in any journey before.
     case "admin": return <AdminAudit />;
+    // The admin home dashboard (ADR-0142): the catalog tiles over Publishing and Operations.
+    case "admin-home": return <AdminHome />;
+    case "ai-audit-log": return <AiAuditLogSurface />;
+    // The admin exercise catalog (#772): the browser opts the page into the wide column, so at
+    // 1440px it is the table and at 320px the card list — the same component the page mounts.
+    case "admin-catalog": return <AdminExerciseBrowser rows={adminExerciseRows} />;
     case "confirm": return <ConfirmSurface />;
     case "sheet": return <SheetSurface />;
     case "session-header": return <SessionHeaderSurface />;
