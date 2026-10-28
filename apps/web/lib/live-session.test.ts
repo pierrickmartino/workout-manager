@@ -96,6 +96,26 @@ test("initLiveSession pre-fills reps and load from the prescription", () => {
   assert.equal(firstPushup.loadValue, "");
 });
 
+test("initLiveSession gives each set its prescription's Set Type, unset reading as working", () => {
+  // Arrange — a hand-authored warm-up line, then a line with no Set Type (issue #777)
+  const session: WorkoutSession = {
+    ...SESSION,
+    prescriptions: [
+      { ...SESSION.prescriptions[0], set_type: "warm_up" },
+      { ...SESSION.prescriptions[1], set_type: null },
+    ],
+  };
+
+  // Act
+  const state = initLiveSession(session, "kg");
+
+  // Assert — every warm-up set holds warm_up; the unset line's sets read as working
+  assert.deepEqual(
+    state.sets.map((s) => s.setType),
+    ["warm_up", "warm_up", "warm_up", "working", "working"],
+  );
+});
+
 test("initLiveSession threads previous performance onto set rows by ordinal", () => {
   // Arrange — the squat has a previous performance to beat; the push-up never
   // logged one (issue #90 — F2·S5).

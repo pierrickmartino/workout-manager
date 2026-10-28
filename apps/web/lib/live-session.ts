@@ -4,6 +4,7 @@
 // server-only imports, so both the Server route and the Client screen can use it.
 
 import { formatLoad, loadToFields, type Load, type LoadKind } from "./load.ts";
+import { resolveSetType, type SetType } from "./set-type-view.ts";
 import type { WeightUnit } from "./weight-unit";
 import type {
   ExercisePrescription,
@@ -63,6 +64,10 @@ export interface LiveSet {
   loadValue: string;
   rpe: number | null;
   status: SetStatus;
+  // The Set Type (ADR-0065) of the Exercise Prescription this set expands from, resolved
+  // so an unset one reads as `working`. Carried to the Logged Set at finish, so a warm-up
+  // performed live leaves Volume and strength records like a logged one (issue #777).
+  setType: SetType;
 }
 
 export interface LiveSessionState {
@@ -315,6 +320,7 @@ function buildLiveSet(
     loadValue: load.value,
     rpe: null,
     status: "pending",
+    setType: resolveSetType(prescription.set_type),
   };
 }
 

@@ -89,6 +89,7 @@ test("maps every completed set to a Logged Set, preserving reps/load/RPE", () =>
     perceived_difficulty: 7,
     effort_scale: "rpe",
     effort_value: 7,
+    set_type: "working",
   });
   assert.deepEqual(payload.logged_sets[1], {
     exercise_id: 100,
@@ -99,7 +100,34 @@ test("maps every completed set to a Logged Set, preserving reps/load/RPE", () =>
     perceived_difficulty: 9,
     effort_scale: "rpe",
     effort_value: 9,
+    set_type: "working",
   });
+});
+
+test("each Logged Set carries the Set Type of its live set", () => {
+  // Arrange — the squat line is a hand-authored warm-up; the push-up line is unset
+  // (issue #777): a warm-up performed live must not be recorded as a working set
+  const session: WorkoutSession = {
+    ...SESSION,
+    prescriptions: [
+      { ...SESSION.prescriptions[0], set_type: "warm_up" },
+      SESSION.prescriptions[1],
+    ],
+  };
+  let state = liveSessionReducer(initLiveSession(session, "kg"), { type: "START" });
+  state = complete(state, 0, 5, "40", null);
+  state = complete(state, 3, 10, "", null);
+  state = liveSessionReducer(state, { type: "FINISH" });
+
+  // Act
+  const payload = mapFinishToLog(state, "2026-07-06", "kg");
+
+  // Assert — the warm-up stays a warm-up; the unset line is logged as working
+  assert.ok(payload);
+  assert.deepEqual(
+    payload.logged_sets.map((set) => set.set_type),
+    ["warm_up", "working"],
+  );
 });
 
 test("produces N Logged Sets per exercise from N completed sets", () => {
