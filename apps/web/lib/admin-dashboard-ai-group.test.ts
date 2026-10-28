@@ -17,6 +17,7 @@ const KINDS = {
   substitute: 0,
   "muscle-emphasis": 0,
   "exercise-enrichment": 0,
+  "warm-up": 0,
 };
 
 const SUMMARY = {
@@ -217,6 +218,7 @@ test("the Generator Kind breakdown lists every kind in the backend's order, each
       ["Substitute", "0", "/admin/ai-audit-log?kind=substitute"],
       ["Muscle emphasis", "0", "/admin/ai-audit-log?kind=muscle-emphasis"],
       ["Exercise enrichment", "0", "/admin/ai-audit-log?kind=exercise-enrichment"],
+      ["Warm-up", "0", "/admin/ai-audit-log?kind=warm-up"],
     ],
   );
 });
@@ -233,5 +235,5 @@ test("each Generator Kind link round-trips through the audit log's filter parser
       userId: null,
     });
   }
-  assert.equal(generatorKinds?.length, 6);
+  assert.equal(generatorKinds?.length, 7);
 });

@@ -273,7 +273,7 @@ function AdminHome() {
       data: {
         total_calls: 12345,
         by_outcome: { success: 11111, error: 1234 },
-        by_generator_kind: { session: 5000, protocol: 3000, regeneration: 2000, substitute: 1000, "muscle-emphasis": 1000, "exercise-enrichment": 345 },
+        by_generator_kind: { session: 5000, protocol: 3000, regeneration: 2000, substitute: 1000, "muscle-emphasis": 1000, "exercise-enrichment": 345, "warm-up": 0 },
         input_tokens: 987_654_321,
         output_tokens: 123_456_789,
         unreported_usage_calls: 1234,

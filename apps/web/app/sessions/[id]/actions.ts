@@ -16,8 +16,10 @@ import {
   renameSession,
   revokeShareLink,
   substitutePrescription,
+  suggestWarmUp,
   unfavoriteSession,
 } from "@/lib/sessions";
+import { toWarmUpResult, type WarmUpResult } from "@/lib/warm-up-suggestion";
 import { requestSessionDelete } from "@/app/sessions/delete-request";
 import { toDuplicateResult } from "@/lib/duplicate-session";
 import {
@@ -280,6 +282,19 @@ export async function submitSubstitute(
 
   revalidatePath(`/sessions/${sessionId}`);
   return { error: null };
+}
+
+// Ask for a Warm-up Suggestion preview for this Session (ADR-0143, #778). Nothing is changed,
+// so nothing is revalidated: the result is handed back for the preview to render, or the
+// server's message (with a fallback) for its error state and retry.
+export async function requestWarmUpSuggestion(
+  sessionId: number,
+  regenerate: boolean,
+): Promise<WarmUpResult> {
+  if (!Number.isInteger(sessionId)) {
+    return { ok: false, message: "Could not determine which session to warm up for." };
+  }
+  return toWarmUpResult(await suggestWarmUp(sessionId, regenerate));
 }
 
 // Select a Progression Scheme on this prescription in place (ADR-0064, #432): a no-AI plan
