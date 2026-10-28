@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowRight, ChevronRight, ClipboardCheck, Pencil, Play } from "@/components/pulse/icons";
 
 import { SubstituteButton } from "@/components/SubstituteButton";
+import { RestoreOriginalButton } from "@/components/RestoreOriginalButton";
 import { WarmUpSuggestion } from "@/components/WarmUpSuggestion";
 import { DuplicateButton } from "@/components/DuplicateButton";
 import { RenameSessionControl } from "@/components/RenameSessionControl";
@@ -50,6 +51,7 @@ import { sessionFavoriteView } from "@/lib/session-favorite";
 import { sessionDeleteView, DELETE_DISABLED_HINT } from "@/lib/session-delete";
 import { sessionEditView } from "@/lib/session-edit";
 import { substituteView } from "@/lib/substitute-view";
+import { restoreOriginalView } from "@/lib/restore-original-view";
 import { submitDeleteSession } from "@/app/sessions/[id]/actions";
 import { appendFrom } from "@/lib/back-target";
 import { Skeleton } from "@/components/pulse/skeleton";
@@ -372,6 +374,7 @@ function PrescriptionCard({
   const note = exerciseNoteText(prescription);
   const setType = prescriptionSetTypeBadge(prescription);
   const effort = targetEffortLabel(prescription);
+  const restore = restoreOriginalView(prescription, { canSubstitute: showSubstitute });
   const hasBadges =
     isGrouped || prescription.provenance === "ai_generated" || setType !== null || effort !== null;
   return (
@@ -460,6 +463,15 @@ function PrescriptionCard({
         {/* Substitute stays on the primary surface — an in-context, non-destructive edit. */}
         {showSubstitute ? (
           <SubstituteButton sessionId={sessionId} position={prescription.position} />
+        ) : null}
+        {/* Restore original (ADR-0143, #788): once substituted, put back the Prescribed
+            Original's Exercise, Load and scheme — offered only where Substitute is. */}
+        {restore.show ? (
+          <RestoreOriginalButton
+            sessionId={sessionId}
+            position={prescription.position}
+            view={restore}
+          />
         ) : null}
         {/* Remove (ADR-0052): withdraw this movement from a standalone Session — Insert's
             symmetric partner. Destructive, so demoted one tap behind a per-row action sheet

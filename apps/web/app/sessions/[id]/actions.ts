@@ -15,6 +15,7 @@ import {
   insertPrescription,
   removePrescription,
   renameSession,
+  restorePrescription,
   revokeShareLink,
   substitutePrescription,
   suggestWarmUp,
@@ -285,6 +286,27 @@ export async function submitSubstitute(
   const result = await substitutePrescription(sessionId, position);
   if (!result.success || !result.data) {
     return { error: result.error ?? "Could not substitute this exercise." };
+  }
+
+  revalidatePath(`/sessions/${sessionId}`);
+  return { error: null };
+}
+
+// Put a substituted Exercise back to its Prescribed Original (Restore, ADR-0143, #788). On
+// success the Session page is revalidated so the original movement renders in place.
+export async function submitRestore(
+  _prevState: SubstituteFormState,
+  form: FormData,
+): Promise<SubstituteFormState> {
+  const sessionId = Number(form.get("session_id"));
+  const position = Number(form.get("position"));
+  if (!Number.isInteger(sessionId) || !Number.isInteger(position)) {
+    return { error: "Could not determine which exercise to restore." };
+  }
+
+  const result = await restorePrescription(sessionId, position);
+  if (!result.success || !result.data) {
+    return { error: result.error ?? "Could not restore the original exercise." };
   }
 
   revalidatePath(`/sessions/${sessionId}`);
