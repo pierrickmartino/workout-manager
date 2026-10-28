@@ -29,12 +29,16 @@ class SubstituteRequest:
 
     Carries the original movement's name, the user's goal (training type) and the
     equipment/constraints the substitute must respect, so the AI fallback honors
-    the same filters lookup-first resolution applied."""
+    the same filters lookup-first resolution applied. The original's Primary and
+    Secondary Muscles tell the model which muscles the substitute must keep
+    training (ADR-0143); its output is then checked at Muscle Group level."""
 
     original_name: str
     training_type: str | None = None
     available_equipment: tuple[str, ...] = ()
     constraints: tuple[str, ...] = ()
+    original_primary_muscles: tuple[str, ...] = ()
+    original_secondary_muscles: tuple[str, ...] = ()
 
 
 class SubstituteGenerator(Protocol):
@@ -50,7 +54,10 @@ def _system_prompt() -> str:
         "prescribed exercise and no suitable catalog substitute exists, so invent "
         "one movement that achieves a similar training effect. Respect the user's "
         "available equipment and constraints absolutely — never prescribe a movement "
-        "that needs equipment they lack or that their constraints rule out. Provide "
+        "that needs equipment they lack or that their constraints rule out. The "
+        "substitute must train the same muscle groups as the original: its primary "
+        "muscles must cover every muscle group of the original's primary muscles. "
+        "Provide "
         "the exercise name, a short description, execution instructions as an ordered "
         "list of discrete steps (one action per step, in performance order), a 1–10 "
         "difficulty, required equipment, and any precautions. For muscles, list the "
@@ -61,6 +68,10 @@ def _system_prompt() -> str:
     )
 
 
+def _muscle_list(muscles: tuple[str, ...]) -> str:
+    return ", ".join(muscles) if muscles else "not recorded"
+
+
 def _user_prompt(request: SubstituteRequest) -> str:
     equipment = (
         ", ".join(request.available_equipment)
@@ -69,8 +80,12 @@ def _user_prompt(request: SubstituteRequest) -> str:
     )
     constraints = ", ".join(request.constraints) if request.constraints else "none"
     goal = request.training_type or "general fitness"
+    primary = _muscle_list(request.original_primary_muscles)
+    secondary = _muscle_list(request.original_secondary_muscles)
     return (
         f"Exercise to replace: {request.original_name}\n"
+        f"Primary muscles of the original: {primary}\n"
+        f"Secondary muscles of the original: {secondary}\n"
         f"Training goal: {goal}\n"
         f"Available equipment: {equipment}\n"
         f"Constraints to respect: {constraints}\n"

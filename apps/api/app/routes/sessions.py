@@ -105,6 +105,7 @@ from app.sessions.service import SessionNotFound as SessionServiceNotFound
 from app.substitution.service import (
     HarderVariationSuggestion,
     PrescriptionNotFound,
+    SubstituteMuscleMismatch,
     SubstituteNotAvailable,
     harder_variation_suggestion,
     harder_variation_suggestions,
@@ -942,6 +943,14 @@ def substitute(
         raise HTTPException(
             status_code=HTTP_CONFLICT,
             detail="That substitute is not available for this prescription.",
+        ) from exc
+    except SubstituteMuscleMismatch as exc:
+        raise HTTPException(
+            status_code=HTTP_BAD_GATEWAY,
+            detail=(
+                "No substitute training the same muscle groups could be found. "
+                "The exercise was left as it was."
+            ),
         ) from exc
     except GenerationError as exc:
         raise HTTPException(
