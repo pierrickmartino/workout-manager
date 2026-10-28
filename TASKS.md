@@ -191,8 +191,37 @@ Sources: `docs/development/*` ([chart-accessibility-validation](docs/development
 - ❔ **WebKit / real iPhone runs** for reflow, resilience and charts (Chromium only so far).
 - ⬜ **View Transitions in the running app:** all eight steps (ADR-0118 to ADR-0124) were checked with real components in Chromium, but none through the Next router in the running app, and no CI journey drives a navigation yet.
 
-## 12. Vercel React best-practices audit (10 Oct)
+## 12. Vercel React best-practices audits (10 Oct, 28 Oct)
 
-Source: the react-best-practices audit of 10 Oct (since removed). Each fix is measured against the build output before and after.
+Sources: the react-best-practices audit of 10 Oct (since removed) and its follow-up,
+[react-best-practices 2026-10-28](docs/research/audit/vercel/react-best-practices-2026-10-28.md).
+Each fix is measured before and after: bundle items from the build output, latency items
+in a throttled signed-in run.
 
-- ⬜ V-3 **Shrink the atlas client data** (36.4 KB gz on `/analytics`): round `reference-data.ts` coordinates to 1 decimal place, and send only the resolved figure's paths (split by gender, or render the base silhouette on the server).
+- ⬜ V-3 **Shrink the atlas client data** (still 36.3 KB gz on `/analytics`; 8,417 of 9,083 coordinates have 3+ decimals). First round to 1 decimal place in `scripts/generate-reference-atlas.mts` (XS). Then send only the resolved figure's paths: split by gender, or render the base silhouette on the server. `static-atlas-figure.tsx` is the one client import of `REFERENCE_PATHS`.
+- ⬜ V-10 **Add loading boundaries to the dynamic routes that have none** (ADR-0123 `SkeletonPage`). First `/sessions/[id]`, `/sessions`, `/protocols` and `/exercises`. Then the `/history/[id]`, `/edit` and `/capture` routes, which now inherit the History list skeleton. Then the authoring routes. Add one navigation to an `audit/` journey (overlaps the §11 View Transitions item).
+- ⬜ V-11 **Stop client reads queueing behind server actions.** First memoize catalog details by Exercise id and key `CatalogDetail` by id (XS). Then move `fetchCatalogPage`, `fetchCatalogTaxonomyForFilters`, `fetchCatalogEntryDetail` and `fetchHistoryCards` to `GET` Route Handlers that call `apiGet` on the server, and note the read transport in ADR-0022.
+- ⬜ V-12 **Stream Home's Curated Protocol choices** behind `<Suspense>`, so a new user's empty Home paints after one round trip, not two.
+- ⬜ V-13 **Stream the AI Hand-off on History detail** behind `<Suspense>`, so the record doesn't wait on the plan read.
+- ⬜ V-14 **Parallelize the Capture page reads** (`fetchLog`, `fetchProfile`, `resolveAppearance` in one `Promise.all`, then `notFound` and the redirect).
+- ⬜ V-15 **Stream the Exercise image proxy** (`upstream.body` instead of `arrayBuffer()`).
+
+## 13. Vercel view transitions audit (28 Oct)
+
+Source: [view-transitions 2026-10-28](docs/research/audit/vercel/view-transitions-2026-10-28.md).
+Running-app verification stays the §11 View Transitions item (VT-4); the missing loading
+boundaries are §12 V-10. Each link choice goes into the ADR-0121 navigation map.
+
+- ⬜ VT-5 **Type Home's quick actions:** `NAV_FORWARD` on Start, Build and Log, carried by the `QuickAction` view-model (`lib/quick-actions.ts`); `/sessions` stays untyped (crosses to Train).
+- ⬜ VT-6 **Spread `NAV_BACK` on the Protocol builder's Cancel** (`ProtocolBuilder.tsx:285`), the edit page's only way up; the guard then carries it through a confirmed Discard.
+- ⬜ VT-7 **Decide whether `/protocols/new` and `/protocols/new/curated` are siblings or parent and child.** Today the link in is lateral and the `BackLink` out slides back. The recommendation is siblings (ADR-0130): give the Curated page the same way up.
+- ⬜ VT-8 **Turn the History month like a page:** a month-keyed `TimelinePageTransition`, `goToMonth` in a Transition through a new `nav-direction` helper, the policy extended to hand-written `addTransitionType` strings, and an ADR-0122 amendment.
+- ⬜ VT-9 **Decide on list identity for History cards** now that History shows one month (the 10 Oct deferral's trigger). Adopt per-card keyed boundaries for facet changes, or record why not in ADR-0138. Design it together with VT-8.
+
+## 14. Vercel composition patterns audit (28 Oct)
+
+Source: [composition-patterns 2026-10-28](docs/research/audit/vercel/composition-patterns-2026-10-28.md).
+
+- ⬜ C-5 **Compose the hand-authored Log form's performed sets from `SetEntry`** (`hand-authored/performed-sets-editor.tsx`, the fifth Logged Set editor ADR-0106 missed). It has drifted: RPE-only freehand effort, no Set Note, its own placeholders and accessible names. Route its payload through `buildLoggedSets` (ADR-0115), add a guard that fails on a sixth copy, and note it in ADR-0106.
+- ⬜ C-6 **Split `LiveSessionScreen`** (836 lines, over the 800 limit) into explicit per-phase screens, plus a `LiveSessionBar` with rest and elapsed variants. Keep the ADR-0091 tick and memo constraints (`live-session-tick.test.ts` green).
+- ⬜ C-7 **Replace `PrescriptionCard`'s four flags with slots** (`app/sessions/[id]/page.tsx`): `PrescriptionList` passes the `SchemeControl` and the Remove sheet as `scheme` and `children` (ADR-0109).
