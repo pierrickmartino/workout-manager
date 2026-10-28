@@ -1,7 +1,6 @@
 "use client";
 
-import { useAuth } from "@clerk/nextjs";
-import { useEffect, useReducer, useState, useTransition } from "react";
+import { useReducer, useTransition } from "react";
 import { AlertTriangle, Check, Dumbbell, Loader2, Repeat2 } from "@/components/pulse/icons";
 
 import {
@@ -19,11 +18,12 @@ import {
   outcomeSummary,
   previewRows,
   selectedPositions,
+  type EquipmentSubstitutionState,
 } from "@/lib/equipment-substitution";
-import { readLiveSessionSlot } from "@/lib/live-session-storage";
-import { resumableLiveSlot } from "@/lib/live-session";
+import { liveSessionStandingOf } from "@/lib/live-session";
 import { substituteEquipmentSummary } from "@/lib/substitute-equipment";
 import { useConnectivity } from "@/lib/use-connectivity";
+import { useResumableLiveSlot } from "@/lib/use-resumable-live-slot";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SubstituteEquipmentChips } from "@/components/SubstituteEquipmentChips";
@@ -35,41 +35,31 @@ interface EquipmentSubstitutionSheetProps {
   showSubstitute: boolean;
   // The Profile's canonical Default Equipment, pre-filling the picker.
   defaultEquipment: readonly string[];
+  // The step the sheet opens on: closed on the Session page. The `substitution` audit journey
+  // seeds a later step, which otherwise only a preview or apply round trip reaches.
+  initialState?: EquipmentSubstitutionState;
 }
 
 const PANEL_CLASS = "flex min-w-0 flex-col gap-3 rounded-sm border border-border-lite bg-base p-3";
 const NOTE_CLASS = "font-mono text-[12px] text-text-muted";
 const ERROR_CLASS = "font-mono text-[12px] text-magenta";
 
-// The Session id of the account's resumable Live Session in client storage, once auth resolves.
-function useLiveSessionId(): number | null {
-  const { userId, isLoaded } = useAuth();
-  const [liveSessionId, setLiveSessionId] = useState<number | null>(null);
-  useEffect(() => {
-    if (!isLoaded) return;
-    setLiveSessionId(resumableLiveSlot(readLiveSessionSlot(), userId ?? null)?.sessionId ?? null);
-  }, [isLoaded, userId]);
-  return liveSessionId;
-}
-
-// "Missing equipment?" on the Session page (ADR-0143, #791): pick the kit at hand, preview what
+// "Missing equipment?" on the Session page (ADR-0143, #791): pick the equipment at hand, preview what
 // it blocks, untick rows to keep, confirm, and read the outcome. Every rule lives in
 // `lib/equipment-substitution.ts`; this only renders the step it is in.
 export function EquipmentSubstitutionSheet({
   sessionId,
   showSubstitute,
   defaultEquipment,
+  initialState = initialEquipmentSubstitutionState,
 }: EquipmentSubstitutionSheetProps) {
-  const [state, dispatch] = useReducer(
-    equipmentSubstitutionReducer,
-    initialEquipmentSubstitutionState,
-  );
+  const [state, dispatch] = useReducer(equipmentSubstitutionReducer, initialState);
   const [, startTransition] = useTransition();
   const online = useConnectivity();
   const button = equipmentSubstitutionButtonView({
     sessionId,
     showSubstitute,
-    liveSessionId: useLiveSessionId(),
+    liveSession: liveSessionStandingOf(useResumableLiveSlot()),
     online,
   });
 
@@ -111,7 +101,7 @@ export function EquipmentSubstitutionSheet({
     return (
       <div className={PANEL_CLASS}>
         <SubstituteEquipmentChips
-          label="Equipment you have today"
+          label="Equipment you have"
           selected={state.equipment}
           onBodyweightOnly={() => dispatch({ type: "bodyweightOnlyChosen" })}
           onToggle={(item) => dispatch({ type: "equipmentToggled", item })}
@@ -178,10 +168,10 @@ export function EquipmentSubstitutionSheet({
                   aria-hidden
                 />
                 <span className="flex min-w-0 flex-col">
-                  <span className="break-words font-sans text-[14px] text-text-primary">
+                  <span className="font-sans text-[14px] text-text-primary wrap-anywhere">
                     {row.exerciseName}
                   </span>
-                  <span className="font-mono text-[12px] text-text-secondary">
+                  <span className="font-mono text-[12px] text-text-secondary wrap-anywhere">
                     {row.selected ? `→ ${row.replacement}` : "Kept as prescribed"}
                   </span>
                 </span>
@@ -196,8 +186,15 @@ export function EquipmentSubstitutionSheet({
             disabled={!canConfirmEquipmentSubstitution(state) || button.disabled}
             onClick={confirm}
           >
-            <Repeat2 className="h-3.5 w-3.5" aria-hidden />
-            {applying ? "Substituting…" : "Substitute selected"}
+            {/* One short word with the spinner standing in for the icon while applying: a
+                mono uppercase "SUBSTITUTE" is wider than this panel at 320px and 200% text
+                (the `substitution` reflow journey). */}
+            {applying ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden />
+            ) : (
+              <Repeat2 className="h-3.5 w-3.5" aria-hidden />
+            )}
+            Apply
           </Button>
           <Button
             type="button"
@@ -235,12 +232,12 @@ export function EquipmentSubstitutionSheet({
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-cyan" aria-hidden />
             )}
             <span className="flex min-w-0 flex-col">
-              <span className="break-words font-sans text-[14px] text-text-primary">
+              <span className="font-sans text-[14px] text-text-primary wrap-anywhere">
                 {row.exerciseName}
               </span>
               <span
                 className={cn(
-                  "font-mono text-[12px]",
+                  "font-mono text-[12px] wrap-anywhere",
                   row.flagged ? "text-magenta" : "text-text-secondary",
                 )}
               >

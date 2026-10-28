@@ -210,7 +210,7 @@ export default async function SessionPage({
         <SectionHeader meta={`${session.prescriptions.length} EXERCISES`}>
           PROTOCOL
         </SectionHeader>
-        {/* Warm-up Suggestion (ADR-0143): preview AI warm-up drills for this Session's muscles.
+        {/* Warm-up Suggestion (ADR-0144): preview AI warm-up drills for this Session's muscles.
             Hidden once the Session has been performed; the preview never changes the plan. */}
         <WarmUpSuggestion session={session} unit={unit} />
         {/* The cards wait on the harder-Variation offer read; everything above and below them needs
@@ -308,7 +308,7 @@ async function PrescriptionList({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Equipment Substitution (ADR-0143, #791): substitute every exercise the kit at hand
+      {/* Equipment Substitution (ADR-0143, #791): substitute every exercise the equipment at hand
           blocks, in this Session only. Offered where Substitute is; locked by a Live Session. */}
       <EquipmentSubstitutionSheet
         sessionId={session.id}

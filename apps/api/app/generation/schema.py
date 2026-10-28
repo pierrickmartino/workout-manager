@@ -233,7 +233,7 @@ class GeneratedProtocol(BaseModel):
 
 
 class GeneratedWarmUpDrill(BaseModel):
-    """One drill of a Warm-up Suggestion (ADR-0143): the catalog shape a new drill enters the
+    """One drill of a Warm-up Suggestion (ADR-0144): the catalog shape a new drill enters the
     catalog with, plus its one-set prescription.
 
     The prescription is closed at the boundary: the amount is ``repetitions`` or a

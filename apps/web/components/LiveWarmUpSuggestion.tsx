@@ -21,7 +21,7 @@ interface LiveWarmUpSuggestionProps {
   unit: WeightUnit;
 }
 
-// The Warm-up Suggestion at the start of a Live Session (ADR-0143, #783). Once the drills are
+// The Warm-up Suggestion at the start of a Live Session (ADR-0144, #783). Once the drills are
 // saved, the performance is reloaded through the live load path: the slot is released (nothing
 // is completed, so nothing is lost) and the page re-reads the updated Session, so the drills are
 // never merged on the client (ADR-0012). The suggestion lives only in component state; the slot

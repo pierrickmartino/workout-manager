@@ -1,4 +1,4 @@
-"""Unit tests for locating a Session's leading Warm-up Section (ADR-0143, ADR-0074, #782).
+"""Unit tests for locating a Session's leading Warm-up Section (ADR-0144, ADR-0074, #782).
 
 ``leading_warm_up_length`` is what Replace warm-up swaps: the leading run the Session
 Section projection places in the Warm-up — whether hand-authored, curated, generated or

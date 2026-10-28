@@ -34,7 +34,7 @@ export function RestoreOriginalButton({ sessionId, position, view }: RestoreOrig
         <RotateCcw className="h-3.5 w-3.5" />
         {pending ? "Restoring…" : view.label}
       </Button>
-      <span className="font-mono text-[12px] text-text-muted">{view.description}</span>
+      <span className="min-w-0 font-mono text-[12px] text-text-muted wrap-anywhere">{view.description}</span>
       {state.error ? (
         <span role="alert" className="font-mono text-[12px] text-magenta">
           {state.error}

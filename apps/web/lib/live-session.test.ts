@@ -413,7 +413,7 @@ test("a zero-rep completed set still counts as attempted (stays Completed)", () 
   assert.equal(completionOutcome(state), "completed");
 });
 
-// Warm-up sets never gate the Completion Outcome (ADR-0143, #779): the squat line is a
+// Warm-up sets never gate the Completion Outcome (ADR-0144, #779): the squat line is a
 // warm-up (sets 0–2), the push-up line is working (sets 3–4).
 const WARM_UP_SESSION: WorkoutSession = {
   ...SESSION,

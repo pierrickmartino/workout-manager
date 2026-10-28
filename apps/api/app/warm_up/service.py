@@ -1,4 +1,4 @@
-"""The Warm-up Suggestion flow: preview AI warm-up drills for one Session (ADR-0143).
+"""The Warm-up Suggestion flow: preview AI warm-up drills for one Session (ADR-0144).
 
 ``suggest_warm_up`` reads the owner's Session and Profile, derives the generator input
 through the pure ``derive_warm_up_input``, offers the catalog drills that fit the equipment,
@@ -110,7 +110,7 @@ def suggest_warm_up(
     cache: WarmUpCache,
     regenerate: bool = False,
 ) -> WarmUpSuggestion:
-    """Preview a Warm-up Suggestion for the owner's Session (ADR-0143).
+    """Preview a Warm-up Suggestion for the owner's Session (ADR-0144).
 
     The generated suggestion is served through the coarse-keyed ``WarmUpCache`` (ADR-0003):
     ``regenerate`` skips the cache read, and a Sensitive Constraint bypasses it entirely.

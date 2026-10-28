@@ -1,4 +1,4 @@
-"""The Warm-up Suggestion generator (ADR-0143, ADR-0006).
+"""The Warm-up Suggestion generator (ADR-0144, ADR-0006).
 
 ``WarmUpGenerator`` is the port the warm-up service depends on. The concrete
 ``LlmWarmUpGenerator`` makes one synchronous call through the provider-agnostic

@@ -1,6 +1,6 @@
 # 0013 — Completion Outcome gates Protocol advancement
 
-**Status:** proposed, amended by [ADR-0143](./0143-a-warm-up-suggestion-prepends-warm-up-prescriptions-to-one-un-performed-session.md): a warm-up set no longer counts toward the Completion Outcome.
+**Status:** proposed, amended by [ADR-0144](./0144-a-warm-up-suggestion-prepends-warm-up-prescriptions-to-one-un-performed-session.md): a warm-up set no longer counts toward the Completion Outcome.
 
 ADR-0001 made "next" the first un-performed Session, and the code (`app/protocols/progress.py`) counts a Session performed the moment **any** Logged Session references it. F2 needs a partial workout *not* to advance the plan. So a Logged Session now carries a **Completion Outcome** — **Completed** (every prescribed set was attempted, regardless of reps or load achieved) or **Incomplete** (some prescribed set was left un-attempted). Protocol advancement keys off a *Completed* log, not any log: an Incomplete performance leaves that Session as the Next Session, to be retried by running the whole Session again. This **amends ADR-0001's advancement rule**.
 

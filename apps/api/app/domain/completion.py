@@ -4,7 +4,7 @@ A Logged Session carries a **Completion Outcome** — ``Completed`` when every
 prescribed set of the Session was attempted (regardless of reps or load achieved,
 so a zero-rep set ground to failure still counts as attempted) or ``Incomplete``
 when some prescribed set was left un-attempted (GLOSSARY.md). A **warm-up** set never
-counts toward the verdict (ADR-0143), so skipping one never makes a Session Incomplete;
+counts toward the verdict (ADR-0144), so skipping one never makes a Session Incomplete;
 the client applies that rule when it declares the outcome. It is the first domain
 verdict the *client* asserts rather than the server deriving (ADR-0013), because a
 server can only see logged sets and would punish honest under-logging.

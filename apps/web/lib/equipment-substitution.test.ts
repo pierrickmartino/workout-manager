@@ -67,7 +67,7 @@ test("the action is offered and enabled where Substitute is, online, with no Liv
   const view = equipmentSubstitutionButtonView({
     sessionId: 7,
     showSubstitute: true,
-    liveSessionId: null,
+    liveSession: "none",
     online: true,
   });
 
@@ -78,18 +78,29 @@ test("the action is withheld where Substitute is withheld (a performed Protocol 
   const view = equipmentSubstitutionButtonView({
     sessionId: 7,
     showSubstitute: false,
-    liveSessionId: null,
+    liveSession: "none",
     online: true,
   });
 
   assert.equal(view.visible, false);
 });
 
+test("before the Live Session slot is read, the action renders disabled with no note", () => {
+  const view = equipmentSubstitutionButtonView({
+    sessionId: 7,
+    showSubstitute: true,
+    liveSession: "unread",
+    online: true,
+  });
+
+  assert.deepEqual(view, { visible: true, disabled: true, note: null });
+});
+
 test("a Live Session for this Session disables the action with a finish-or-discard note", () => {
   const view = equipmentSubstitutionButtonView({
     sessionId: 7,
     showSubstitute: true,
-    liveSessionId: 7,
+    liveSession: 7,
     online: true,
   });
 
@@ -101,7 +112,7 @@ test("a Live Session for another Session does not lock this one", () => {
   const view = equipmentSubstitutionButtonView({
     sessionId: 7,
     showSubstitute: true,
-    liveSessionId: 8,
+    liveSession: 8,
     online: true,
   });
 
@@ -112,7 +123,7 @@ test("offline disables the action with a reconnect note", () => {
   const view = equipmentSubstitutionButtonView({
     sessionId: 7,
     showSubstitute: true,
-    liveSessionId: null,
+    liveSession: "none",
     online: false,
   });
 
@@ -135,7 +146,7 @@ test("Bodyweight only clears the selection in one tap", () => {
   assert.deepEqual(state.step === "picking" && state.equipment, []);
 });
 
-test("toggling a piece of kit adds or removes it", () => {
+test("toggling a piece of equipment adds or removes it", () => {
   const removed = equipmentSubstitutionReducer(opened(), {
     type: "equipmentToggled",
     item: "barbell",

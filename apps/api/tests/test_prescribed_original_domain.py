@@ -1,8 +1,8 @@
 """Substitution re-expresses the Load and keeps the Prescribed Original (ADR-0143).
 
 Pure rules, no I/O: a kg figure is meaningless across equipment, so a swap to a
-movement on different kit re-expresses the Load — bodyweight for a bodyweight
-movement, qualitative otherwise — while a swap on the same kit keeps it. The first
+movement on different equipment re-expresses the Load — bodyweight for a bodyweight
+movement, qualitative otherwise — while a swap on the same equipment keeps it. The first
 Substitution snapshots the Exercise, Load and Progression Scheme; Restore puts all
 three back exactly."""
 
@@ -50,7 +50,7 @@ def test_a_target_on_other_equipment_gets_a_qualitative_load(load):
 
 @pytest.mark.parametrize("load", EVERY_LOAD_KIND, ids=lambda load: load["kind"])
 def test_a_target_on_the_same_equipment_keeps_the_load(load):
-    # A Variation on the same kit: spelling and order of the strings do not matter.
+    # A Variation on the same equipment: spelling and order of the strings do not matter.
     assert (
         re_express_load(
             load,
@@ -77,7 +77,7 @@ def test_a_prescription_without_a_load_has_nothing_to_re_express():
     )
 
 
-def _state(**overrides) -> PrescriptionState:
+def _prescription_state(**overrides) -> PrescriptionState:
     values = {
         "exercise_id": 1,
         "exercise_name": "Back Squat",
@@ -91,7 +91,7 @@ def _state(**overrides) -> PrescriptionState:
 
 def test_the_first_substitution_snapshots_the_exercise_load_and_scheme():
     changes = substitution_changes(
-        _state(), target_exercise_id=2, target_equipment=["dumbbell"]
+        _prescription_state(), target_exercise_id=2, target_equipment=["dumbbell"]
     )
 
     assert changes["exercise_id"] == 2
@@ -111,13 +111,13 @@ def test_a_later_substitution_keeps_the_very_first_snapshot():
         "recommended_load": ABSOLUTE,
         "scheme": "greyskull",
     }
-    current = _state(
+    current = _prescription_state(
         exercise_id=2,
         exercise_name="Goblet Squat",
         required_equipment=("dumbbell",),
         recommended_load=CHALLENGING_LOAD,
         scheme=None,
-        prescribed_original=first,
+        prescribed_original=PrescribedOriginal.from_dict(first),
     )
 
     changes = substitution_changes(current, target_exercise_id=3, target_equipment=[])
@@ -129,7 +129,7 @@ def test_a_later_substitution_keeps_the_very_first_snapshot():
 def test_a_scheme_that_no_longer_fits_the_new_load_falls_back_to_the_default():
     # Greyskull steps a weight axis; a qualitative Load has none.
     changes = substitution_changes(
-        _state(scheme="greyskull"), target_exercise_id=2, target_equipment=["dumbbell"]
+        _prescription_state(scheme="greyskull"), target_exercise_id=2, target_equipment=["dumbbell"]
     )
 
     assert changes["scheme"] is None
@@ -137,7 +137,7 @@ def test_a_scheme_that_no_longer_fits_the_new_load_falls_back_to_the_default():
 
 def test_a_scheme_that_still_fits_the_new_load_is_kept():
     changes = substitution_changes(
-        _state(scheme="static"), target_exercise_id=2, target_equipment=["dumbbell"]
+        _prescription_state(scheme="static"), target_exercise_id=2, target_equipment=["dumbbell"]
     )
 
     assert changes["scheme"] == "static"
@@ -151,7 +151,7 @@ def test_restore_puts_back_the_exercise_load_and_scheme_and_clears_the_snapshot(
         scheme="greyskull",
     )
 
-    assert restore_changes(original.to_dict()) == {
+    assert restore_changes(original) == {
         "exercise_id": 1,
         "recommended_load": ABSOLUTE,
         "scheme": "greyskull",

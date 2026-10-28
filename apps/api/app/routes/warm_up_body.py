@@ -1,4 +1,4 @@
-"""The request bodies of the Warm-up Suggestion routes (ADR-0143).
+"""The request bodies of the Warm-up Suggestion routes (ADR-0144).
 
 - ``WarmUpSuggestionBody`` — the optional preview request: ``regenerate`` skips the cache read.
 - ``ApplyWarmUpBody`` — the drills to add, each in the shape the preview returned it. A drill

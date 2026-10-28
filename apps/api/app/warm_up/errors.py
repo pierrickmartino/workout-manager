@@ -1,4 +1,4 @@
-"""Why a Warm-up Suggestion step refuses (ADR-0143): shared by the preview and the add step,
+"""Why a Warm-up Suggestion step refuses (ADR-0144): shared by the preview and the add step,
 mapped to HTTP status codes by the route."""
 
 from __future__ import annotations

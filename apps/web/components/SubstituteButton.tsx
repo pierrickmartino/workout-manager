@@ -24,10 +24,13 @@ interface SubstituteButtonProps {
   // The Profile's canonical Default Equipment, pre-filling the picker (ADR-0143). Read once
   // per page and fixed for its life, so it seeds the picker state.
   defaultEquipment?: readonly string[];
+  // Whether the picker starts open: closed on the Session page; the `substitution` audit
+  // journey opens it, since only a click reaches it otherwise.
+  initialOpen?: boolean;
 }
 
 // A per-prescription control to substitute the prescribed Exercise. "Substitute" first opens
-// the Available Equipment picker — the kit the user has for this one swap, pre-filled with their
+// the Available Equipment picker — the equipment the user has for this one Substitution, pre-filled with their
 // Default Equipment, plus one-tap Bodyweight only (ADR-0143). The saved Profile is never
 // changed. The picker posts to the substitution server action, and the revalidated Session page
 // re-renders the swapped-in movement. Substitution is unlimited, so there is no spent state.
@@ -35,12 +38,13 @@ export function SubstituteButton({
   sessionId,
   position,
   defaultEquipment = [],
+  initialOpen = false,
 }: SubstituteButtonProps) {
   const [state, action, pending] = useActionState<SubstituteFormState, FormData>(
     submitSubstitute,
     { error: null },
   );
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
   const [selected, setSelected] = useState(() =>
     prefillSubstituteEquipment(defaultEquipment),
   );
@@ -80,7 +84,7 @@ export function SubstituteButton({
         <input key={item} type="hidden" name={EQUIPMENT_FIELD} value={item} />
       ))}
       <SubstituteEquipmentChips
-        label="Equipment you have for this swap"
+        label="Equipment you have for this substitution"
         selected={selected}
         onBodyweightOnly={() => setSelected([])}
         onToggle={(item) => setSelected((current) => toggleSubstituteEquipment(current, item))}

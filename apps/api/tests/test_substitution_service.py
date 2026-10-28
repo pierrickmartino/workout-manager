@@ -121,6 +121,7 @@ def test_resolves_a_catalog_substitute_and_swaps_it_in_without_calling_ai():
         sessions=sessions,
         profiles=profiles,
         generator=generator,
+        logged=InMemoryLoggedSessionRepository(sessions, exercises),
     )
 
     # Assert — the catalog Variation is swapped in; sets/reps preserved; no AI
@@ -146,6 +147,7 @@ def test_falls_back_to_ai_when_no_catalog_link_fits_and_stores_it_as_ai_generate
         sessions=sessions,
         profiles=profiles,
         generator=generator,
+        logged=InMemoryLoggedSessionRepository(sessions, exercises),
     )
 
     # Assert — the AI-invented movement is swapped in and entered the catalog as
@@ -189,6 +191,7 @@ def test_substitution_is_unlimited_and_never_consumes_the_regeneration_guard():
             sessions=sessions,
             profiles=profiles,
             generator=FakeSubstituteGenerator(),
+            logged=InMemoryLoggedSessionRepository(sessions, exercises),
         )
 
     # Act — substitute twice in a row
@@ -224,6 +227,7 @@ def test_a_catalog_link_the_user_cannot_equip_falls_back_to_ai():
         sessions=sessions,
         profiles=profiles,
         generator=generator,
+        logged=InMemoryLoggedSessionRepository(sessions, exercises),
     )
 
     # Assert — the unequippable link is skipped and AI fallback runs, carrying
@@ -254,6 +258,7 @@ def test_a_link_contraindicated_by_a_user_constraint_falls_back_to_ai():
         sessions=sessions,
         profiles=profiles,
         generator=generator,
+        logged=InMemoryLoggedSessionRepository(sessions, exercises),
     )
 
     # Assert — the contraindicated link is ruled out, AI fallback serves instead
@@ -275,6 +280,7 @@ def test_substituting_in_an_unowned_session_is_not_found():
             sessions=sessions,
             profiles=profiles,
             generator=FakeSubstituteGenerator(),
+            logged=InMemoryLoggedSessionRepository(sessions, exercises),
         )
 
 
@@ -292,6 +298,7 @@ def test_substituting_an_absent_position_is_a_prescription_not_found():
             sessions=sessions,
             profiles=profiles,
             generator=FakeSubstituteGenerator(),
+            logged=InMemoryLoggedSessionRepository(sessions, exercises),
         )
 
 
@@ -497,6 +504,7 @@ def test_accepting_a_suggestion_advances_via_substitution():
         sessions=sessions,
         profiles=profiles,
         generator=generator,
+        logged=InMemoryLoggedSessionRepository(sessions, exercises),
     )
 
     # Assert — the movement advances to the chosen Variation, sets/reps preserved,
@@ -619,4 +627,5 @@ def test_advancing_to_an_unlinked_target_is_rejected():
             sessions=sessions,
             profiles=profiles,
             generator=FakeSubstituteGenerator(),
+            logged=InMemoryLoggedSessionRepository(sessions, exercises),
         )

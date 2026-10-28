@@ -25,6 +25,7 @@ from app.db.models import Profile
 from app.domain.exercise import Provenance
 from app.domain.fitness_profile import resolve_equipment
 from app.domain.prescribed_original import (
+    PrescribedOriginal,
     PrescriptionState,
     restore_changes,
     substitution_changes,
@@ -117,7 +118,7 @@ class HarderVariationSuggestion:
     name: str
 
 
-def _candidate(related: RelatedExercise) -> SubstituteCandidate:
+def substitute_candidate(related: RelatedExercise) -> SubstituteCandidate:
     """A catalog relationship, expressed as a candidate the rule can filter.
 
     The target Exercise's ``precautions`` become the candidate's
@@ -133,24 +134,28 @@ def _candidate(related: RelatedExercise) -> SubstituteCandidate:
     )
 
 
-def _context(
-    profile: Profile,
+def substitution_context(
+    profile: Profile | None,
     goal: str | None,
     available_equipment: Sequence[str] | None = None,
 ) -> SubstitutionContext:
-    """The user-side choices for one Substitution. ``available_equipment`` is the kit
+    """The user-side choices for one Substitution. ``available_equipment`` is the equipment
     stated for this action; ``None`` inherits the Default Equipment and an empty list is
-    bodyweight only (ADR-0038, ADR-0143). Constraints always come from the Profile."""
+    bodyweight only (ADR-0038, ADR-0143). Constraints always come from the Profile; a user
+    with no stored Profile has no Default Equipment and no constraints."""
 
     equipment = resolve_equipment(
         None if available_equipment is None else list(available_equipment),
-        profile.default_equipment,
+        profile.default_equipment if profile is not None else [],
+    )
+    constraints = (
+        list(profile.preferences) + list(profile.sensitive_constraints)
+        if profile is not None
+        else []
     )
     return SubstitutionContext(
         available_equipment=frozenset(equipment),
-        constraints=frozenset(
-            list(profile.preferences) + list(profile.sensitive_constraints)
-        ),
+        constraints=frozenset(constraints),
         goal=goal,
     )
 
@@ -190,7 +195,7 @@ def substitute_exercise(
     sessions: SessionRepository,
     profiles: ProfileRepository,
     generator: SubstituteGenerator,
-    logged: LoggedSessionRepository | None = None,
+    logged: LoggedSessionRepository,
 ) -> SessionView:
     """Substitute the Exercise at ``position`` in the owner's Session.
 
@@ -201,13 +206,13 @@ def substitute_exercise(
     Exercise. Without it, resolution is automatic: a compatible catalog link is
     swapped in lookup-first, falling back to AI generation only when none fits.
 
-    ``available_equipment`` is the kit the user has for this one action (ADR-0143):
+    ``available_equipment`` is the equipment the user has for this one action (ADR-0143):
     omitted, the Default Equipment applies; an empty list means bodyweight only. It
     filters catalog candidates and reaches the AI fallback; the Profile is never written.
 
     Raises ``SessionNotFound`` if the user does not own the Session,
-    ``SessionPerformed`` if it is a performed Protocol Session (checked only when
-    ``logged`` is given — the route always passes it),
+    ``SessionPerformed`` if it is a performed Protocol Session (always checked:
+    ``logged`` is required, ADR-0020),
     ``PrescriptionNotFound`` if it has no prescription at ``position``, and
     ``GenerationError`` (from the generator) if the AI fallback output is
     malformed, or ``SubstituteMuscleMismatch`` if it twice misses the original's
@@ -241,7 +246,7 @@ def substitute_with_source(
     sessions: SessionRepository,
     profiles: ProfileRepository,
     generator: SubstituteGenerator,
-    logged: LoggedSessionRepository | None = None,
+    logged: LoggedSessionRepository,
 ) -> SubstitutionOutcome:
     """``substitute_exercise``, also reporting whether the new Exercise came from the
     catalog or the AI fallback — what Equipment Substitution reports per row."""
@@ -249,17 +254,16 @@ def substitute_with_source(
     view = sessions.get(session_id, clerk_user_id)
     if view is None:
         raise SessionNotFound(session_id)
-    if logged is not None:
-        ensure_editable(view, clerk_user_id, logged)
+    ensure_editable(view, clerk_user_id, logged)
 
     prescription = _find_prescription(view, position)
     if prescription is None:
         raise PrescriptionNotFound(position)
 
     profile = profiles.get_or_create(clerk_user_id)
-    context = _context(profile, view.training_type, available_equipment)
+    context = substitution_context(profile, view.training_type, available_equipment)
     candidates = [
-        _candidate(related)
+        substitute_candidate(related)
         for related in relationships.substitutes_for(prescription.exercise_id)
     ]
 
@@ -279,7 +283,7 @@ def substitute_with_source(
 
     target = exercises.get(new_exercise_id)
     changes = substitution_changes(
-        _state(prescription),
+        _prescription_state(prescription),
         target_exercise_id=new_exercise_id,
         target_equipment=list(target.required_equipment) if target is not None else [],
     )
@@ -291,14 +295,16 @@ def substitute_with_source(
     return SubstitutionOutcome(session=result, source=source)
 
 
-def _state(prescription: PrescriptionView) -> PrescriptionState:
+def _prescription_state(prescription: PrescriptionView) -> PrescriptionState:
     return PrescriptionState(
         exercise_id=prescription.exercise_id,
         exercise_name=prescription.exercise_name,
         required_equipment=tuple(prescription.required_equipment),
         recommended_load=prescription.recommended_load,
         scheme=prescription.scheme,
-        prescribed_original=prescription.prescribed_original,
+        prescribed_original=PrescribedOriginal.from_stored(
+            prescription.prescribed_original
+        ),
     )
 
 
@@ -329,14 +335,15 @@ def restore_original(
     prescription = _find_prescription(view, position)
     if prescription is None:
         raise PrescriptionNotFound(position)
-    if prescription.prescribed_original is None:
+    original = PrescribedOriginal.from_stored(prescription.prescribed_original)
+    if original is None:
         raise NoPrescribedOriginal(position)
 
     result = sessions.revise_prescription(
         session_id,
         clerk_user_id,
         position,
-        restore_changes(prescription.prescribed_original),
+        restore_changes(original),
     )
     if result is None:  # ownership/position checked above; defensive only
         raise SessionNotFound(session_id)
@@ -405,7 +412,7 @@ def _suggestion_for(
 
     current = exercises.get(prescription.exercise_id)
     candidates = [
-        _candidate(related)
+        substitute_candidate(related)
         for related in relationships.substitutes_for(prescription.exercise_id)
     ]
     harder = next_harder_variation(
@@ -422,7 +429,7 @@ def _lazy_context(
 ) -> Callable[[], SubstitutionContext]:
     """The user's SubstitutionContext, read from the Profile at most once."""
 
-    return cache(lambda: _context(profiles.get_or_create(clerk_user_id), goal))
+    return cache(lambda: substitution_context(profiles.get_or_create(clerk_user_id), goal))
 
 
 def harder_variation_suggestion(
@@ -587,6 +594,8 @@ def _generate_covering(
 
 
 __all__ = [
+    "substitute_candidate",
+    "substitution_context",
     "SessionNotFound",
     "PrescriptionNotFound",
     "SubstituteNotAvailable",

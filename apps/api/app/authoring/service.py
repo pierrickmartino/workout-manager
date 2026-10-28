@@ -36,6 +36,7 @@ from app.repositories.logged_session_repository import (
     LoggedSessionView,
     LoggedSetDraft,
 )
+from app.repositories.prescription_mapping import carry_prescribed_originals
 from app.repositories.profile_repository import ProfileRepository
 from app.repositories.session_repository import (
     PrescriptionDraft,
@@ -570,7 +571,9 @@ def edit_plan(
             if request.duration_minutes is not None
             else session.duration_minutes
         ),
-        prescriptions=prescriptions,
+        # A row that still carries the same Exercise keeps its Prescribed Original; a row
+        # the user re-planned onto another Exercise drops it (ADR-0143).
+        prescriptions=carry_prescribed_originals(session.prescriptions, prescriptions),
     )
     if updated is None:  # ownership checked above; defensive only
         raise EditTargetNotFound()

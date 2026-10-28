@@ -145,7 +145,7 @@ def test_constraints_still_filter_candidates_with_explicit_equipment():
         client, headers, session, {"available_equipment": ["dumbbell"]}
     )
 
-    # Assert — ruled out, so the AI fallback runs with the constraint and the chosen kit
+    # Assert — ruled out, so the AI fallback runs with the constraint and the chosen equipment
     assert response.status_code == 200
     assert response.json()["data"]["prescriptions"][0]["exercise_name"] == "Wall Sit"
     assert generator.requests[0].available_equipment == ("dumbbell",)
@@ -166,7 +166,7 @@ def test_bodyweight_only_still_resolves_a_catalog_movement_tagged_bodyweight():
     # Act
     response = _substitute(client, headers, session, {"available_equipment": []})
 
-    # Assert — bodyweight needs no kit, so the catalog Variation is served without AI
+    # Assert — bodyweight needs no equipment, so the catalog Variation is served without AI
     assert response.status_code == 200
     assert response.json()["data"]["prescriptions"][0]["exercise_name"] == "Air Squat"
     assert generator.requests == []

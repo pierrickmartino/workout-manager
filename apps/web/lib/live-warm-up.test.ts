@@ -11,7 +11,7 @@ import {
 import { initLiveSession, liveSessionReducer, type LiveSessionState } from "./live-session.ts";
 import type { ExercisePrescription, WorkoutSession } from "./sessions-types.ts";
 
-// The Live Session's Warm-up Suggestion (ADR-0143, #783): when the button shows at the start of
+// The Live Session's Warm-up Suggestion (ADR-0144, #783): when the button shows at the start of
 // a Live Session, when Add is allowed, and whether a saved warm-up reloads the Live Session.
 
 function prescription(

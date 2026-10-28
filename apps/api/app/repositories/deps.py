@@ -249,7 +249,7 @@ def get_generation_cache(
 def get_warm_up_cache(
     settings: Settings = Depends(get_settings),
 ) -> WarmUpCache:
-    # Warm-up Suggestions share the Generation Cache's store (ADR-0003, ADR-0143).
+    # Warm-up Suggestions share the Generation Cache's store (ADR-0003, ADR-0144).
     return WarmUpCache(_generation_cache_store(settings))
 
 

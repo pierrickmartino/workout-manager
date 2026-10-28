@@ -1,12 +1,13 @@
 // The Available Equipment picker before a Substitution (ADR-0143, #789). The user picks the
-// kit they have for this one action: pre-filled with their Default Equipment, with a one-tap
+// equipment they have for this one action: pre-filled with their Default Equipment, with a one-tap
 // "Bodyweight only" (an empty selection, ADR-0038). The saved Fitness Profile is never changed.
 // Pure: no server or React imports, so it is unit-testable with `node --test`.
 
 import { EQUIPMENT_LABEL, EQUIPMENT_ORDER, type Equipment } from "./equipment.ts";
+import { toggleFacetValue } from "./exercise-browse-query.ts";
 
-// "bodyweight" needs no kit (Bodyweight only is the empty selection) and "other" names no real
-// piece of kit, so neither is a pickable option.
+// "bodyweight" needs no equipment (Bodyweight only is the empty selection) and "other" names no real
+// piece of equipment, so neither is a pickable option.
 const NOT_PICKABLE: ReadonlySet<Equipment> = new Set<Equipment>(["bodyweight", "other"]);
 
 export const SUBSTITUTE_EQUIPMENT_OPTIONS: readonly Equipment[] = EQUIPMENT_ORDER.filter(
@@ -38,17 +39,14 @@ export function toggleSubstituteEquipment(
   selected: readonly Equipment[],
   item: Equipment,
 ): Equipment[] {
-  const next = selected.includes(item)
-    ? selected.filter((value) => value !== item)
-    : [...selected, item];
-  return inCanonicalOrder(next);
+  return inCanonicalOrder(toggleFacetValue(selected, item));
 }
 
 export function isBodyweightOnly(selected: readonly Equipment[]): boolean {
   return selected.length === 0;
 }
 
-// The one-line summary of the chosen kit.
+// The one-line summary of the chosen equipment.
 export function substituteEquipmentSummary(selected: readonly Equipment[]): string {
   if (isBodyweightOnly(selected)) return BODYWEIGHT_ONLY_LABEL;
   return selected.map((item) => EQUIPMENT_LABEL[item]).join(", ");

@@ -12,6 +12,7 @@ from app.domain.equipment import (
     Equipment,
     canonical_equipment,
     classify_equipment,
+    is_bodyweight_movement,
     missing_equipment,
     normalize_stored_equipment,
 )
@@ -131,3 +132,14 @@ class TestMissingEquipment:
         )
         # Assert
         assert missing == ("Yoke",)
+
+
+class TestIsBodyweightMovement:
+    def test_no_required_equipment_is_a_bodyweight_movement(self) -> None:
+        assert is_bodyweight_movement([]) is True
+
+    def test_equipment_that_reads_as_bodyweight_is_a_bodyweight_movement(self) -> None:
+        assert is_bodyweight_movement(["Bodyweight"]) is True
+
+    def test_any_loaded_equipment_is_not_a_bodyweight_movement(self) -> None:
+        assert is_bodyweight_movement(["bodyweight", "pull-up bar"]) is False
