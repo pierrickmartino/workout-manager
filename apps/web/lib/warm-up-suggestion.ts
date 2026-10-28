@@ -7,7 +7,9 @@ import type { WeightUnit } from "./weight-unit.ts";
 // The Warm-up Suggestion view-model (ADR-0143, #778). Pure and server-free, so the Session
 // preview's warm-up button, the request lifecycle and the preview rows are unit-tested here and
 // the component stays a thin shell. A suggestion is only a preview until the user taps Add,
-// which saves the drills as the Session's leading Warm-up Section (#780).
+// which saves the drills as the Session's leading Warm-up Section (#780). When the Session already
+// opens with one, Add becomes Replace and asks for confirmation first, since the server swaps
+// exactly that leading run (#782).
 
 // One suggested drill, in the Exercise Prescription shape the add step copies: one set, reps or
 // seconds, a bodyweight or qualitative Load (never kg), 0–15 s rest, the warm-up Set Type.
@@ -52,6 +54,9 @@ interface AddWarmUpEnvelope {
 
 export type AddWarmUpResult = { ok: true } | { ok: false; message: string };
 
+export const WARM_UP_REPLACE_CONFIRMATION =
+  "Replace the warm-up this Session opens with? Only that warm-up changes; the rest of the plan stays as it is.";
+
 const OFFLINE_NOTE = "Offline — reconnect to get a warm-up";
 
 export type WarmUpButtonLabel = "Warm-up" | "Replace warm-up";
@@ -90,12 +95,15 @@ export function warmUpButtonView(session: WorkoutSession, online: boolean): Warm
 
 // The request lifecycle. `regenerate` rides on loading and error so a retry asks for the same
 // thing the failed request did. Adding the previewed drills (#780) keeps the preview on screen
-// while it saves and after a failure, so a retry re-sends exactly the drills the user saw.
+// while it saves and after a failure, so a retry re-sends exactly the drills the user saw. When
+// the add would replace an existing Warm-up Section (#782) it first waits in
+// `confirmingReplace`; a retry after a failed replacement was already confirmed.
 export type WarmUpState =
   | { status: "idle" }
   | { status: "loading"; regenerate: boolean }
   | { status: "ready"; suggestion: WarmUpSuggestion }
   | { status: "error"; message: string; regenerate: boolean }
+  | { status: "confirmingReplace"; suggestion: WarmUpSuggestion }
   | { status: "adding"; suggestion: WarmUpSuggestion }
   | { status: "addError"; suggestion: WarmUpSuggestion; message: string };
 
@@ -105,6 +113,7 @@ export type WarmUpAction =
   | { type: "failed"; message: string }
   | { type: "discarded" }
   | { type: "addRequested" }
+  | { type: "replaceCancelled" }
   | { type: "added" }
   | { type: "addFailed"; message: string };
 
@@ -125,7 +134,14 @@ export function warmUpReducer(state: WarmUpState, action: WarmUpAction): WarmUpS
     case "discarded":
       return initialWarmUpState;
     case "addRequested":
+      if (state.status === "ready" && state.suggestion.has_warm_up_section) {
+        return { status: "confirmingReplace", suggestion: state.suggestion };
+      }
       return "suggestion" in state ? { status: "adding", suggestion: state.suggestion } : state;
+    case "replaceCancelled":
+      return state.status === "confirmingReplace"
+        ? { status: "ready", suggestion: state.suggestion }
+        : state;
     case "added":
       return initialWarmUpState;
     case "addFailed":
@@ -135,13 +151,24 @@ export function warmUpReducer(state: WarmUpState, action: WarmUpAction): WarmUpS
   }
 }
 
-export type WarmUpAddLabel = "Add" | "Adding…" | "Retry add";
+export type WarmUpAddLabel =
+  | "Add"
+  | "Adding…"
+  | "Retry add"
+  | "Replace"
+  | "Replacing…"
+  | "Retry replace";
 
-// The preview's Add button. After a failed add it reads "Retry add" and re-sends the same drills.
+// The confirmation's affirmative action.
+export const WARM_UP_REPLACE_CONFIRM_LABEL = "Replace warm-up";
+
+// The preview's Add button — Replace when the Session already opens with a Warm-up Section.
+// After a failure it offers a retry of the same drills.
 export function warmUpAddLabel(state: WarmUpState): WarmUpAddLabel {
-  if (state.status === "adding") return "Adding…";
-  if (state.status === "addError") return "Retry add";
-  return "Add";
+  const replacing = "suggestion" in state && state.suggestion.has_warm_up_section;
+  if (state.status === "adding") return replacing ? "Replacing…" : "Adding…";
+  if (state.status === "addError") return replacing ? "Retry replace" : "Retry add";
+  return replacing ? "Replace" : "Add";
 }
 
 // Map the endpoint's envelope onto a result the component dispatches.

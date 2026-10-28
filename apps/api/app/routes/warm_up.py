@@ -6,7 +6,8 @@ A Session the caller does not own is ``404``; malformed model output is ``502``.
 
 ``PUT /api/sessions/{id}/warm-up`` adds the previewed drills at the front of the owner's
 un-performed Session — standalone or Protocol member — as one-set warm-up Prescriptions and
-returns the updated Session. Another user's Session is ``404``; a performed one ``409``; a
+returns the updated Session. When the Session already opens with a Warm-up Section, the
+drills replace exactly that leading run (ADR-0074, #782). Another user's Session is ``404``; a performed one ``409``; a
 drill outside the catalog, or one not shaped as a drill, ``422``."""
 
 from __future__ import annotations

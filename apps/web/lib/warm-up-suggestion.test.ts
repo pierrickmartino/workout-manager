@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import {
   WARM_UP_ADD_FALLBACK_ERROR,
   WARM_UP_FALLBACK_ERROR,
+  WARM_UP_REPLACE_CONFIRMATION,
+  WARM_UP_REPLACE_CONFIRM_LABEL,
   initialWarmUpState,
   toAddWarmUpResult,
   toWarmUpResult,
@@ -246,4 +248,58 @@ test("previews each drill with its name, reps or seconds, and Load label", () =>
     { key: "0-11", name: "Glute Bridge", amount: "10 reps", load: "bodyweight" },
     { key: "1-12", name: "Side Plank", amount: "30 s", load: "light band" },
   ]);
+});
+
+// Replace warm-up (#782): when the Session already opens with a Warm-up Section, the new drills
+// swap that run, so Add asks for confirmation before anything is saved.
+const REPLACING: WarmUpSuggestion = { ...SUGGESTION, has_warm_up_section: true };
+
+test("a Session with a Warm-up Section offers Replace instead of Add", () => {
+  assert.equal(warmUpAddLabel({ status: "ready", suggestion: REPLACING }), "Replace");
+});
+
+test("replacing asks for confirmation before anything is saved", () => {
+  const ready = warmUpReducer(initialWarmUpState, { type: "succeeded", suggestion: REPLACING });
+
+  const confirming = warmUpReducer(ready, { type: "addRequested" });
+
+  assert.deepEqual(confirming, { status: "confirmingReplace", suggestion: REPLACING });
+  assert.equal(warmUpAddLabel(confirming), "Replace");
+  assert.equal(WARM_UP_REPLACE_CONFIRM_LABEL, "Replace warm-up");
+  assert.match(WARM_UP_REPLACE_CONFIRMATION, /rest of the plan stays/);
+});
+
+test("confirming the replacement saves the drills", () => {
+  const confirming = { status: "confirmingReplace", suggestion: REPLACING } as const;
+
+  const replacing = warmUpReducer(confirming, { type: "addRequested" });
+
+  assert.deepEqual(replacing, { status: "adding", suggestion: REPLACING });
+  assert.equal(warmUpAddLabel(replacing), "Replacing…");
+});
+
+test("cancelling the confirmation keeps the preview and saves nothing", () => {
+  const confirming = { status: "confirmingReplace", suggestion: REPLACING } as const;
+
+  assert.deepEqual(warmUpReducer(confirming, { type: "replaceCancelled" }), {
+    status: "ready",
+    suggestion: REPLACING,
+  });
+});
+
+test("a failed replacement retries without asking again", () => {
+  const failed = { status: "addError", suggestion: REPLACING, message: "x" } as const;
+
+  assert.equal(warmUpAddLabel(failed), "Retry replace");
+  assert.deepEqual(warmUpReducer(failed, { type: "addRequested" }), {
+    status: "adding",
+    suggestion: REPLACING,
+  });
+});
+
+test("a Session without a Warm-up Section adds without a confirmation", () => {
+  const ready = { status: "ready", suggestion: SUGGESTION } as const;
+
+  assert.equal(warmUpReducer(ready, { type: "addRequested" }).status, "adding");
+  assert.equal(warmUpReducer(ready, { type: "replaceCancelled" }), ready);
 });

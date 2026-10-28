@@ -2,8 +2,11 @@
 
 ``apply_warm_up`` puts the accepted drills at the front of the owner's Session as ordinary
 one-set Exercise Prescriptions with the **warm-up** Set Type, so the read-time Session
-Section projection (ADR-0074) shows them as its leading Warm-up Section. The rest of the
-plan keeps its order and is renumbered contiguously behind them.
+Section projection (ADR-0074) shows them as its leading Warm-up Section. When the Session
+already opens with a Warm-up Section (curated, generated, hand-authored or added earlier),
+the drills *replace* exactly that leading run (#782); nothing after the first Prescription
+outside it is touched. The rest of the plan keeps its order and is renumbered contiguously
+behind the drills.
 
 The edit is the narrow ADR-0143 exception to Deploy: it is allowed on a standalone *and* a
 Protocol-member Session, but only the caller's own Session, only while it is un-performed
@@ -20,6 +23,7 @@ from dataclasses import dataclass
 from app.domain.load import LoadKind, ParsedLoad
 from app.domain.quantity import Quantity, QuantityKind
 from app.domain.set_type import SetType
+from app.domain.warm_up import leading_warm_up_length
 from app.repositories.exercise_repository import ExerciseRepository
 from app.repositories.logged_session_repository import LoggedSessionRepository
 from app.repositories.prescription_mapping import PrescriptionDraft, draft_from_view
@@ -96,7 +100,8 @@ def apply_warm_up(
     logged: LoggedSessionRepository,
     exercises: ExerciseRepository,
 ) -> SessionView:
-    """Prepend ``drills`` to the owner's un-performed Session and return it (ADR-0143).
+    """Put ``drills`` at the front of the owner's un-performed Session, replacing its
+    leading Warm-up Section when it has one, and return it (ADR-0143).
 
     Raises ``SessionNotFound`` for a missing or another user's Session, ``SessionPerformed``
     when any Logged Session references it, and ``UnknownDrillExercise`` for a drill outside
@@ -111,9 +116,12 @@ def apply_warm_up(
         if exercises.get(drill.exercise_id) is None:
             raise UnknownDrillExercise(drill.exercise_id)
 
+    # Replace (#782): the existing leading Warm-up Section, as the Session Section
+    # projection reads it (ADR-0074), gives way to the new drills; nothing after it moves.
+    kept_from = leading_warm_up_length(session.prescriptions)
     prescriptions = [
         *(warm_up_prescription(drill) for drill in drills),
-        *(draft_from_view(item) for item in session.prescriptions),
+        *(draft_from_view(item) for item in session.prescriptions[kept_from:]),
     ]
     updated = sessions.replace_plan(
         session_id,
