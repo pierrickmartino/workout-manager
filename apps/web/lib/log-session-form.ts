@@ -27,9 +27,9 @@ import {
   type Quantity,
   type QuantityKind,
 } from "./quantity.ts";
-import { readPostedSetRows, type LoggedSetRow } from "./logged-set.ts";
+import { readPostedSetRows, SET_TYPE_FIELD, type LoggedSetRow } from "./logged-set.ts";
 import { supersetLayout, type SupersetSlot } from "./supersets.ts";
-import { resolveSetType, type SetType } from "./set-type-view.ts";
+import { planSetType, resolveSetType, type SetType } from "./set-type-view.ts";
 import type { ExercisePrescription } from "./sessions-types";
 
 // Every prescription shows at least one row, even a malformed sets=0, so an exercise is never
@@ -273,6 +273,23 @@ export function skippedSetCount(
   return skipped;
 }
 
+// The hidden fields one row always posts (as `set-<i>-<name>`), never disabled, so the reader
+// can index every row and drop the skipped ones: its Done mark, Exercise id and Quantity kind,
+// plus its prescription's Set Type when that is not working — so a warm-up logged here is
+// stored as one and stays out of Volume and strength records (ADR-0143).
+export function postedRowFields(
+  group: Pick<LogPrescriptionGroup, "setType">,
+  row: Pick<LogSetRow, "done" | "exerciseId" | "kind">,
+): [string, string][] {
+  const setType = planSetType(group.setType);
+  const fields: [string, string][] = [
+    ["done", row.done ? "true" : "false"],
+    ["exercise_id", String(row.exerciseId)],
+    ["kind", row.kind],
+  ];
+  return setType !== null ? [...fields, [SET_TYPE_FIELD, setType]] : fields;
+}
+
 // --- The submitted form → Logged Set rows. Turning a row into a request is the shared
 // `logged-set` module's job (ADR-0115); what is particular to this path is which posted rows
 // count. A row not marked Done was skipped by the user (Model B, Q10) and is dropped, so only
@@ -281,7 +298,11 @@ export function skippedSetCount(
 export function loggedSetRowsFromForm(form: FormData): LoggedSetRow[] {
   return readPostedSetRows(form).flatMap((posted) =>
     posted.done === true && posted.exerciseId !== null
-      ? [{ exerciseId: posted.exerciseId, values: posted.values }]
+      ? [{
+          exerciseId: posted.exerciseId,
+          values: posted.values,
+          ...(posted.setType !== null ? { setType: posted.setType } : {}),
+        }]
       : [],
   );
 }

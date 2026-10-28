@@ -5,6 +5,7 @@ import {
   buildLogForm,
   deriveCompletionOutcome,
   loggedSetRowsFromForm,
+  postedRowFields,
   prescribedByPosition,
   prescribedRowCount,
   seededReps,
@@ -318,4 +319,42 @@ test("loggedSetRowsFromForm keeps only Done rows with an Exercise id", () => {
   assert.equal(rows[0].exerciseId, 1);
   assert.equal(rows[0].values.kind, "distance");
   assert.equal(rows[0].values.distance, "5");
+});
+
+test("a warm-up set logged through the static form is stored as a warm-up (ADR-0143)", () => {
+  // Arrange — a warm-up line and a working line, as the form renders and posts them
+  const groups = buildLogForm([
+    prescription({ position: 0, exercise_id: 1, sets: 1, set_type: "warm_up" }),
+    prescription({ position: 1, exercise_id: 2, sets: 1 }),
+  ], "kg");
+  const form = new FormData();
+  form.set("set_count", "2");
+  groups.forEach((group, index) => {
+    for (const [name, value] of postedRowFields(group, group.rows[0])) {
+      form.set(`set-${index}-${name}`, value);
+    }
+  });
+
+  // Act
+  const rows = loggedSetRowsFromForm(form);
+
+  // Assert — the warm-up carries its Set Type; the working set stays unset
+  assert.equal(rows[0].setType, "warm_up");
+  assert.equal(rows[1].setType, undefined);
+});
+
+test("loggedSetRowsFromForm ignores a forged Set Type", () => {
+  // Arrange
+  const form = new FormData();
+  form.set("set_count", "1");
+  form.set("set-0-done", "true");
+  form.set("set-0-exercise_id", "1");
+  form.set("set-0-reps", "8");
+  form.set("set-0-set_type", "bogus");
+
+  // Act
+  const [row] = loggedSetRowsFromForm(form);
+
+  // Assert — an unknown value reads as unset (working)
+  assert.equal(row.setType, undefined);
 });
