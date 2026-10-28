@@ -8,6 +8,7 @@
 //   * Effort is sent typed (ADR-0066) whenever one is present, and a record's own Effort —
 //     RIR or half-step RPE — is re-sent unchanged unless its cell was edited;
 //   * a non-blank Set Note rides as raw text (the backend escapes it, ADR-0065);
+//   * a row's Set Type rides when the path knows it (the Live Session finish), else is omitted;
 //   * a Load value is converted from the reader's Weight Unit to canonical kg (#417).
 //
 // The row is ADR-0106's `SetEntryValues` — raw strings, typed here at the write seam — plus the
@@ -34,6 +35,7 @@ import {
   type SetEntryField,
   type SetEntryValues,
 } from "./set-entry.ts";
+import type { SetType } from "./set-type-view.ts";
 import type { WeightUnit } from "./weight-unit";
 
 // The upper bound on rows one submission is read for — a real record never comes close. The
@@ -61,12 +63,14 @@ export interface CarriedEffort {
   shownAs: string;
 }
 
-// One row to build: the entry values as typed, the resolved catalog Exercise, and — on a
-// correction only — the record's own Effort.
+// One row to build: the entry values as typed, the resolved catalog Exercise, — on a
+// correction only — the record's own Effort, and — where the path knows it (a Live Session
+// set) — the set's Set Type (ADR-0065). An absent Set Type is omitted, reading as working.
 export interface LoggedSetRow {
   exerciseId: number;
   values: SetEntryValues;
   carriedEffort?: CarriedEffort | null;
+  setType?: SetType;
 }
 
 // The two real differences between paths. Anything else that seems to need an option is a
@@ -225,6 +229,7 @@ function buildLoggedSet(
       ...loadFields(row.values, unit, options.defaultLoadKind ?? DEFAULT_LOAD_KIND),
       ...effortFields(row),
       ...(note !== "" ? { note } : {}),
+      ...(row.setType !== undefined ? { set_type: row.setType } : {}),
     },
   };
 }

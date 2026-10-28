@@ -13,10 +13,12 @@ import type { LogSessionInput } from "./logs-types";
 
 // A completed live set as a Logged Set row (ADR-0115). A live set is a rep count against its
 // prescription (ADR-0114), so its kind is repetitions; the Load was entered in the reader's
-// Weight Unit and the shared builder converts it to canonical kilograms (#417).
+// Weight Unit and the shared builder converts it to canonical kilograms (#417). Its Set Type
+// rides along, so a warm-up performed live is recorded as a warm-up (ADR-0065, #777).
 function liveSetRow(set: LiveSet): LoggedSetRow {
   return {
     exerciseId: set.exerciseId,
+    setType: set.setType,
     values: setEntryValues({
       kind: "repetitions",
       reps: String(set.reps),
