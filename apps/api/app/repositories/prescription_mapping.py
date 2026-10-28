@@ -85,6 +85,12 @@ class PrescriptionDraft:
     # plan property carried through create/Duplicate/Redeem/Share/Substitution like the other
     # prescription fields, so a movement's cue survives a copy of the plan.
     note: str | None = None
+    # Prescribed Original (ADR-0143, #788): the ``PrescribedOriginal`` dict (Exercise, Load,
+    # Progression Scheme) snapshotted by the first Substitution, or ``None`` when the movement
+    # was never substituted. Plan-only state of the user's own copy: kept by in-place rewrites
+    # (Regeneration-keep, Remove, Warm-up), but *not carried* into any copy of the plan
+    # (Duplicate, Redeem) — see ``NOT_CARRIED_FIELDS`` and ``copy_draft_from_row``.
+    prescribed_original: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -133,6 +139,9 @@ class PrescriptionView:
     # write boundary. Surfaced on the read so the session-detail response carries it to the web
     # client. Defaulted so the many call sites that build a view without one read as no note.
     note: str | None = None
+    # Prescribed Original (ADR-0143): the full snapshot, server-side only. The JSON read
+    # exposes just its Exercise name (``session_serialization``), never the original Load.
+    prescribed_original: dict | None = None
 
 
 def prescription_spine_fields() -> tuple[str, ...]:
@@ -149,9 +158,11 @@ def prescription_spine_fields() -> tuple[str, ...]:
 # (``generation/prescriptions.resolve_prescriptions``) fills only the AI-authored
 # fields from the LLM schema, across the trust boundary and with renames
 # (``typed_load`` → ``recommended_load``); the user-authored fields are chosen as
-# plan edits and default to ``None`` on a generated draft. The completeness guard
-# asserts ``AI_AUTHORED_FIELDS | USER_AUTHORED_FIELDS == set(spine)``, so a new
-# field cannot be added without a conscious "does the AI author this?" decision.
+# plan edits and default to ``None`` on a generated draft; the not-carried fields are
+# plan-only state of one copy that no copy of the plan takes (ADR-0143). The
+# completeness guard asserts the three sets partition the spine, so a new field
+# cannot be added without a conscious "who authors this, and does a copy take it?"
+# decision.
 AI_AUTHORED_FIELDS: frozenset[str] = frozenset(
     {
         "exercise_id",
@@ -168,6 +179,7 @@ AI_AUTHORED_FIELDS: frozenset[str] = frozenset(
 USER_AUTHORED_FIELDS: frozenset[str] = frozenset(
     {"scheme", "set_type", "target_effort", "note"}
 )
+NOT_CARRIED_FIELDS: frozenset[str] = frozenset({"prescribed_original"})
 
 
 def row_from_draft(
@@ -189,11 +201,22 @@ def row_from_draft(
 
 def draft_from_row(row: ExercisePrescription) -> PrescriptionDraft:
     """Read one persisted row back into a draft (ADR-0069) — the inverse of
-    :func:`row_from_draft`, used to copy prescriptions (Duplicate, Redeem) and to
-    recompute the surviving/kept set on Regeneration and Remove."""
+    :func:`row_from_draft`, used to recompute the surviving/kept set of an in-place
+    rewrite (Regeneration, Remove). A *copy* of the plan reads through
+    :func:`copy_draft_from_row` instead."""
 
     return PrescriptionDraft(
         **{name: getattr(row, name) for name in prescription_spine_fields()}
+    )
+
+
+def copy_draft_from_row(row: ExercisePrescription) -> PrescriptionDraft:
+    """Read one persisted row into the draft a **copy** of the plan takes (Duplicate,
+    Redeem — and so Share): every carried spine field, with each not-carried field reset
+    to ``None``, so a copy never holds another copy's Prescribed Original (ADR-0143)."""
+
+    return replace(
+        draft_from_row(row), **{name: None for name in NOT_CARRIED_FIELDS}
     )
 
 
@@ -259,8 +282,10 @@ __all__ = [
     "prescription_spine_fields",
     "AI_AUTHORED_FIELDS",
     "USER_AUTHORED_FIELDS",
+    "NOT_CARRIED_FIELDS",
     "row_from_draft",
     "draft_from_row",
+    "copy_draft_from_row",
     "draft_from_view",
     "evolve_prescription_row",
     "view_from_row",

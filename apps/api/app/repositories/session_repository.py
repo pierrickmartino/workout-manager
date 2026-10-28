@@ -9,7 +9,7 @@ another. SQLModel-backed and in-memory implementations honor the same contract."
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from typing import Protocol
@@ -38,6 +38,7 @@ from app.repositories.favorite_repository import (
 from app.repositories.prescription_mapping import (
     PrescriptionDraft,
     PrescriptionView,
+    copy_draft_from_row,
     draft_from_row,
     evolve_prescription_row,
     row_from_draft,
@@ -371,21 +372,22 @@ class SessionRepository(Protocol):
         """
         ...
 
-    def substitute_prescription(
+    def revise_prescription(
         self,
         session_id: int,
         clerk_user_id: str,
         position: int,
-        new_exercise_id: int,
+        changes: Mapping[str, object],
     ) -> SessionView | None:
-        """Swap the Exercise referenced by the prescription at ``position`` for
-        ``new_exercise_id``, leaving the sets/reps/rest/tempo/load and every other
-        prescription untouched.
+        """Rewrite the named spine fields of the prescription at ``position``, leaving
+        every other field and every other prescription untouched (ADR-0069).
 
-        This is the Substitution write: it is unlimited and never sets the
-        regeneration guard (distinct from Regeneration). Returns the updated
-        Session, or ``None`` if the Session is missing/unowned or has no
-        prescription at ``position`` — it only ever mutates the owner's own copy.
+        The Substitution and Restore write (ADR-0143): the caller names the Exercise,
+        re-expressed Load, scheme and Prescribed Original changes; it is unlimited and
+        never sets the regeneration guard (distinct from Regeneration). A key that is not
+        a spine field raises ``TypeError``. Returns the updated Session, or ``None`` if the
+        Session is missing/unowned or has no prescription at ``position`` — it only ever
+        mutates the owner's own copy.
         """
         ...
 
@@ -771,7 +773,7 @@ class SqlSessionRepository:
         self._session.commit()
         self._session.refresh(copy)
 
-        self._add_prescriptions(copy.id, [draft_from_row(p) for p in prescriptions])
+        self._add_prescriptions(copy.id, [copy_draft_from_row(p) for p in prescriptions])
         self._session.commit()
         return self._view(copy)
 
@@ -803,7 +805,7 @@ class SqlSessionRepository:
         self._session.commit()
         self._session.refresh(copy)
 
-        self._add_prescriptions(copy.id, [draft_from_row(p) for p in prescriptions])
+        self._add_prescriptions(copy.id, [copy_draft_from_row(p) for p in prescriptions])
         self._session.commit()
         return self._view(copy)
 
@@ -862,12 +864,12 @@ class SqlSessionRepository:
         self._session.refresh(workout)
         return self._view(workout)
 
-    def substitute_prescription(
+    def revise_prescription(
         self,
         session_id: int,
         clerk_user_id: str,
         position: int,
-        new_exercise_id: int,
+        changes: Mapping[str, object],
     ) -> SessionView | None:
         workout = self._session.get(WorkoutSession, session_id)
         if workout is None or workout.clerk_user_id != clerk_user_id:
@@ -882,7 +884,10 @@ class SqlSessionRepository:
         if prescription is None:
             return None
 
-        prescription.exercise_id = new_exercise_id
+        # ``replace`` validates every key against the spine before anything is written.
+        revised = replace(draft_from_row(prescription), **changes)
+        for name in changes:
+            setattr(prescription, name, getattr(revised, name))
         self._session.add(prescription)
         self._session.commit()
         return self._view(workout)
@@ -1178,7 +1183,7 @@ class InMemorySessionRepository:
         self._next_id += 1
         self._sessions[copy.id] = copy
         self._prescriptions[copy.id] = self._materialize(
-            copy.id, [draft_from_row(p) for p in prescriptions]
+            copy.id, [copy_draft_from_row(p) for p in prescriptions]
         )
         return self._view(copy)
 
@@ -1207,7 +1212,7 @@ class InMemorySessionRepository:
         self._next_id += 1
         self._sessions[copy.id] = copy
         self._prescriptions[copy.id] = self._materialize(
-            copy.id, [draft_from_row(p) for p in prescriptions]
+            copy.id, [copy_draft_from_row(p) for p in prescriptions]
         )
         return self._view(copy)
 
@@ -1249,12 +1254,12 @@ class InMemorySessionRepository:
         workout.has_been_regenerated = True
         return self._view(workout)
 
-    def substitute_prescription(
+    def revise_prescription(
         self,
         session_id: int,
         clerk_user_id: str,
         position: int,
-        new_exercise_id: int,
+        changes: Mapping[str, object],
     ) -> SessionView | None:
         workout = self._sessions.get(session_id)
         if workout is None or workout.clerk_user_id != clerk_user_id:
@@ -1264,12 +1269,12 @@ class InMemorySessionRepository:
         if not any(p.position == position for p in current):
             return None
 
-        # Swap only the targeted prescription's Exercise; every other spine field (and
-        # the regeneration guard) is preserved. ``evolve_prescription_row`` routes through
-        # the one field manifest (ADR-0069), so a newly added field can never be dropped
-        # here the way a hand-listed rebuild once flattened a Superset.
+        # Rewrite only the targeted prescription's named fields; every other spine field
+        # (and the regeneration guard) is preserved. ``evolve_prescription_row`` routes
+        # through the one field manifest (ADR-0069), so a newly added field can never be
+        # dropped here the way a hand-listed rebuild once flattened a Superset.
         self._prescriptions[session_id] = [
-            evolve_prescription_row(p, exercise_id=new_exercise_id)
+            evolve_prescription_row(p, **changes)
             if p.position == position
             else p
             for p in current

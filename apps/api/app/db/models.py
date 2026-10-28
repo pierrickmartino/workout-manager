@@ -466,6 +466,15 @@ class ExercisePrescription(SQLModel, table=True):
     # and a Deploy tail edit re-numbered untouched, is left unset by Capture, and only the user's
     # own copy is ever written. Additive and nullable: every existing row reads NULL.
     note: str | None = Field(default=None)
+    # Prescribed Original (ADR-0143, #788): the ``{exercise_id, exercise_name,
+    # recommended_load, scheme}`` snapshot the first Substitution takes of what the plan
+    # prescribed, so Restore can put it back; NULL when never substituted. Plan-only state of
+    # this copy: later Substitutions keep it, Restore clears it, and no copy of the plan
+    # (Duplicate, Redeem/Share, Adopt, Capture) ever carries it. Reads expose only its Exercise
+    # name, never the original Load. Additive and nullable (0055); no backfill.
+    prescribed_original: dict | None = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
 
 
 class SessionFavorite(SQLModel, table=True):
