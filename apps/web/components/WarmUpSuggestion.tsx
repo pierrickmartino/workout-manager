@@ -120,7 +120,7 @@ export function WarmUpPanel({
         <ul className="flex flex-col gap-2">
           {preview.rows.map((row) => (
             <li key={row.key} className="flex flex-wrap items-baseline justify-between gap-x-3">
-              <span className="min-w-0 font-sans text-[14px] text-text-primary">{row.name}</span>
+              <span className="min-w-0 break-words font-sans text-[14px] text-text-primary">{row.name}</span>
               <span className="font-mono text-[12px] text-text-secondary">
                 {row.amount} · {row.load}
               </span>

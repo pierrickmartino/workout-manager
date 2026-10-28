@@ -66,6 +66,9 @@ import { GenerationCallDetailPanel } from "@/components/GenerationCallDetailPane
 import { toGenerationCallDetailView } from "@/lib/admin-generation-call-detail-view";
 import { LocalInstant } from "@/components/pulse/local-instant";
 import { ConfirmDialog } from "@/components/pulse/confirm-dialog";
+import { WarmUpPanel } from "@/components/WarmUpSuggestion";
+import { LIVE_WARM_UP_ADD_LOCKED_NOTE } from "@/lib/live-warm-up";
+import { WARM_UP_ADD_FALLBACK_ERROR } from "@/lib/warm-up-suggestion";
 import { ActionSheetPanel } from "@/components/pulse/action-sheet";
 import { AiHandoffSheet } from "@/components/AiHandoffControl";
 import { aiHandoff } from "@/lib/ai-handoff";
@@ -120,7 +123,7 @@ import type { Achievement } from "@/lib/profile-progress-types";
 import { SetAsideNote } from "@/components/SetAsideNote";
 import { BasedOnNote } from "@/components/BasedOnNote";
 import { protocolsIndex, type LiveSessionContext } from "@/lib/protocols-index";
-import { adminExerciseRows, auditEntry, exerciseDetail, generationCallDetails, generationCallFilters, generationCallPager, generationCallRows, exerciseNames, exercises, history, historyIndex, liveWorkout, personalRecords, prescriptions, profile, progressStory, protocolIndexEntries, protocolProgress, sessions, taxonomy, volumePoints, workout } from "./fixtures";
+import { adminExerciseRows, auditEntry, exerciseDetail, generationCallDetails, generationCallFilters, generationCallPager, generationCallRows, exerciseNames, exercises, history, historyIndex, liveWorkout, personalRecords, prescriptions, profile, progressStory, protocolIndexEntries, protocolProgress, sessions, taxonomy, volumePoints, warmUpSuggestion, workout } from "./fixtures";
 
 const params = new URLSearchParams(location.search);
 if (params.get("fonts") === "fontsource") {
@@ -384,6 +387,25 @@ function ConfirmSurface() {
     cancelLabel="Keep current"
     onConfirm={() => {}}
     onCancel={() => {}}
+  />;
+}
+
+// The Warm-up Suggestion panel (ADR-0143) past its button, which only an AI round trip reaches,
+// so no other journey renders it. `warm-up` is the preview at its widest: six drills, a Replace
+// that failed (its error under the actions), and the Live Session's lock note — every line the
+// panel can show at once. `warm-up-replace` is the same preview with its Replace confirmation
+// open, the real `ConfirmDialog` in the real panel (#782); the `confirm` journey's copy is longer
+// in every slot, so that journey still bounds this dialog's text.
+function WarmUpSurface({ confirming }: { confirming: boolean }) {
+  return <WarmUpPanel
+    sessionId={1}
+    button={{ visible: true, label: "Replace warm-up", disabled: false, offlineNote: null }}
+    online
+    unit="kg"
+    addLockedNote={confirming ? null : LIVE_WARM_UP_ADD_LOCKED_NOTE}
+    initialState={confirming
+      ? { status: "confirmingReplace", suggestion: warmUpSuggestion }
+      : { status: "addError", suggestion: warmUpSuggestion, message: WARM_UP_ADD_FALLBACK_ERROR }}
   />;
 }
 
@@ -757,6 +779,8 @@ function Content() {
     // 1440px it is the table and at 320px the card list — the same component the page mounts.
     case "admin-catalog": return <AdminExerciseBrowser rows={adminExerciseRows} />;
     case "confirm": return <ConfirmSurface />;
+    case "warm-up": return <WarmUpSurface confirming={false} />;
+    case "warm-up-replace": return <WarmUpSurface confirming />;
     case "sheet": return <SheetSurface />;
     case "session-header": return <SessionHeaderSurface />;
     case "handoff": return <HandoffSurface />;
