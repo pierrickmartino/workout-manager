@@ -26,6 +26,7 @@ from app.routes.profile_progress import router as profile_progress_router
 from app.routes.progress import router as progress_router
 from app.routes.protocols import router as protocols_router
 from app.routes.records import router as records_router
+from app.routes.restore import router as restore_router
 from app.routes.sessions import router as sessions_router
 from app.routes.shares import router as shares_router
 from app.routes.warm_up import router as warm_up_router
@@ -73,6 +74,7 @@ def create_app() -> FastAPI:
     app.include_router(avatar_universe_router)
     app.include_router(sessions_router)
     app.include_router(warm_up_router)
+    app.include_router(restore_router)
     app.include_router(shares_router)
     app.include_router(logs_router)
     app.include_router(protocols_router)

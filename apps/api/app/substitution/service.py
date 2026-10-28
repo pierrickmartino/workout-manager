@@ -8,7 +8,11 @@ Exercise instantly. Only when no catalog link fits does it fall back to AI
 generation — the invented movement enters the shared catalog once, as
 ``ai_generated``, and is linked as an Alternative of the original. The swap mutates
 only the user's own Session copy, preserves the prescription's sets/reps, is
-unlimited, and never touches the once-per-Session regeneration guard."""
+unlimited, and never touches the once-per-Session regeneration guard.
+
+A swap onto different equipment re-expresses the Load, and the first swap keeps the
+Prescribed Original so ``restore_original`` can put it back (ADR-0143,
+``app.domain.prescribed_original``)."""
 
 from __future__ import annotations
 
@@ -19,6 +23,11 @@ from functools import cache
 from app.db.models import Profile
 from app.domain.exercise import Provenance
 from app.domain.fitness_profile import resolve_equipment
+from app.domain.prescribed_original import (
+    PrescriptionState,
+    restore_changes,
+    substitution_changes,
+)
 from app.domain.substitute_muscle_coverage import covers_original_muscle_groups
 from app.domain.substitution import (
     RelationKind,
@@ -59,6 +68,11 @@ class PrescriptionNotFound(Exception):
 class SubstituteNotAvailable(Exception):
     """An explicit substitute target is not a compatible catalog link for the
     prescription — so the safety posture cannot be bypassed by naming any Exercise."""
+
+
+class NoPrescribedOriginal(Exception):
+    """Restore was asked of a prescription that holds no Prescribed Original: it was
+    never substituted, or has already been restored (ADR-0143)."""
 
 
 class SessionPerformed(Exception):
@@ -213,8 +227,66 @@ def substitute_exercise(
             generator=generator,
         )
 
-    result = sessions.substitute_prescription(
-        session_id, clerk_user_id, position, new_exercise_id
+    target = exercises.get(new_exercise_id)
+    changes = substitution_changes(
+        _state(prescription),
+        target_exercise_id=new_exercise_id,
+        target_equipment=list(target.required_equipment) if target is not None else [],
+    )
+    result = sessions.revise_prescription(
+        session_id, clerk_user_id, position, changes
+    )
+    if result is None:  # ownership/position checked above; defensive only
+        raise SessionNotFound(session_id)
+    return result
+
+
+def _state(prescription: PrescriptionView) -> PrescriptionState:
+    return PrescriptionState(
+        exercise_id=prescription.exercise_id,
+        exercise_name=prescription.exercise_name,
+        required_equipment=tuple(prescription.required_equipment),
+        recommended_load=prescription.recommended_load,
+        scheme=prescription.scheme,
+        prescribed_original=prescription.prescribed_original,
+    )
+
+
+def restore_original(
+    session_id: int,
+    clerk_user_id: str,
+    position: int,
+    *,
+    sessions: SessionRepository,
+    logged: LoggedSessionRepository,
+) -> SessionView:
+    """Restore the prescription at ``position`` to its Prescribed Original (ADR-0143).
+
+    Puts the snapshotted Exercise, Load and Progression Scheme back exactly and clears
+    the snapshot. No AI call and no catalog write.
+
+    Raises ``SessionNotFound`` if the user does not own the Session,
+    ``SessionPerformed`` if it is a performed Protocol Session (Restore is offered only
+    where Substitution is), ``PrescriptionNotFound`` if it has no prescription at
+    ``position``, and ``NoPrescribedOriginal`` if that prescription holds no snapshot.
+    Nothing is persisted on any failure."""
+
+    view = sessions.get(session_id, clerk_user_id)
+    if view is None:
+        raise SessionNotFound(session_id)
+    ensure_editable(view, clerk_user_id, logged)
+
+    prescription = _find_prescription(view, position)
+    if prescription is None:
+        raise PrescriptionNotFound(position)
+    if prescription.prescribed_original is None:
+        raise NoPrescribedOriginal(position)
+
+    result = sessions.revise_prescription(
+        session_id,
+        clerk_user_id,
+        position,
+        restore_changes(prescription.prescribed_original),
     )
     if result is None:  # ownership/position checked above; defensive only
         raise SessionNotFound(session_id)
@@ -468,9 +540,13 @@ __all__ = [
     "PrescriptionNotFound",
     "SubstituteNotAvailable",
     "SubstituteMuscleMismatch",
+    "NoPrescribedOriginal",
+    "SessionPerformed",
     "HarderVariationSuggestion",
     "PositionedSuggestion",
     "substitute_exercise",
+    "restore_original",
+    "ensure_editable",
     "harder_variation_suggestion",
     "harder_variation_suggestions",
 ]

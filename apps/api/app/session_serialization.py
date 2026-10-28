@@ -16,9 +16,16 @@ other field a Prescription carries lives here.
 from __future__ import annotations
 
 from app.domain.curated_lineage import lineage_dict
+from app.domain.prescribed_original import PrescribedOriginal
 from app.domain.session_naming import session_label
 from app.domain.session_section import sectionize
 from app.repositories.session_repository import PrescriptionView, SessionView
+
+
+def _prescribed_original_summary(snapshot: dict | None) -> dict | None:
+    if snapshot is None:
+        return None
+    return {"exercise_name": PrescribedOriginal.from_dict(snapshot).exercise_name}
 
 
 def serialize_prescription(view: PrescriptionView, *, section: str | None = None) -> dict:
@@ -70,6 +77,10 @@ def serialize_prescription(view: PrescriptionView, *, section: str | None = None
         # Exercise Note (ADR-0065, #451): the plan-side coaching cue, or null for "no note" —
         # which the web view-model renders as nothing. Already HTML-escaped at the write boundary.
         "note": view.note,
+        # Prescribed Original (ADR-0143): ``{exercise_name}`` of what Restore brings back, or
+        # null when the movement was never substituted. Only the name leaves the server: the
+        # original Load stays on the owner's row, so neither a read nor a Share can leak it.
+        "prescribed_original": _prescribed_original_summary(view.prescribed_original),
         "exercise_id": view.exercise_id,
         "exercise_name": view.exercise_name,
         "exercise_description": view.exercise_description,

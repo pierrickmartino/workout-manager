@@ -262,6 +262,17 @@ export async function substitutePrescription(
   });
 }
 
+// Restore the substituted Exercise prescribed at ``position`` to its Prescribed Original —
+// Exercise, Load and Progression Scheme — on the user's own Session (ADR-0143, #788). No AI
+// call; bodyless POST. Returns the updated Session. A non-owned Session or absent position is
+// 404; no held original, or a performed Protocol Session, is 409.
+export async function restorePrescription(
+  sessionId: number,
+  position: number,
+): Promise<Envelope<WorkoutSession>> {
+  return apiSend(`/api/sessions/${sessionId}/prescriptions/${position}/restore`, "POST");
+}
+
 // Ask for a Warm-up Suggestion for the user's own Session (ADR-0143): 4–6 AI drills for the
 // muscles it works, as a preview. Synchronous; never changes the Session. `regenerate` asks for
 // a fresh suggestion. A non-owned Session is 404, a malformed generation 502.

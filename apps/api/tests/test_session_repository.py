@@ -275,7 +275,7 @@ def test_regenerate_returns_none_for_an_unknown_session(repos):
     )
 
 
-def test_substitute_prescription_swaps_only_the_targeted_exercise(repos):
+def test_revise_prescription_swaps_only_the_targeted_exercise(repos):
     # Arrange — a two-exercise Session; swap the first prescription's Exercise
     session_repo, exercises = repos
     created = session_repo.create(
@@ -286,8 +286,8 @@ def test_substitute_prescription_swaps_only_the_targeted_exercise(repos):
     )
 
     # Act
-    view = session_repo.substitute_prescription(
-        created.id, "user_sub", 0, goblet.id
+    view = session_repo.revise_prescription(
+        created.id, "user_sub", 0, {"exercise_id": goblet.id}
     )
 
     # Assert — only position 0's Exercise changed; sets/reps and the guard kept
@@ -300,29 +300,31 @@ def test_substitute_prescription_swaps_only_the_targeted_exercise(repos):
     assert view.has_been_regenerated is False
 
 
-def test_substitute_prescription_persists_and_reads_back(repos):
+def test_revise_prescription_persists_and_reads_back(repos):
     session_repo, exercises = repos
     created = session_repo.create(
         "user_subp", _draft_with_two_prescriptions(exercises)
     )
     goblet = exercises.find_or_create("Goblet Squat", provenance=Provenance.CURATED)
 
-    session_repo.substitute_prescription(created.id, "user_subp", 0, goblet.id)
+    session_repo.revise_prescription(
+        created.id, "user_subp", 0, {"exercise_id": goblet.id}
+    )
     refetched = session_repo.get(created.id, "user_subp")
 
     assert refetched.prescriptions[0].exercise_name == "Goblet Squat"
     assert refetched.has_been_regenerated is False
 
 
-def test_substitute_prescription_does_not_touch_another_users_session(repos):
+def test_revise_prescription_does_not_touch_another_users_session(repos):
     session_repo, exercises = repos
     created = session_repo.create(
         "user_owner3", _draft_with_two_prescriptions(exercises)
     )
     goblet = exercises.find_or_create("Goblet Squat", provenance=Provenance.CURATED)
 
-    result = session_repo.substitute_prescription(
-        created.id, "user_intruder3", 0, goblet.id
+    result = session_repo.revise_prescription(
+        created.id, "user_intruder3", 0, {"exercise_id": goblet.id}
     )
 
     assert result is None
@@ -330,10 +332,49 @@ def test_substitute_prescription_does_not_touch_another_users_session(repos):
     assert owner_view.prescriptions[0].exercise_name == "Back Squat"
 
 
-def test_substitute_prescription_returns_none_for_an_absent_position(repos):
+def test_revise_prescription_returns_none_for_an_absent_position(repos):
     session_repo, exercises = repos
     created = session_repo.create(
         "user_pos", _draft_with_two_prescriptions(exercises)
     )
 
-    assert session_repo.substitute_prescription(created.id, "user_pos", 99, 1) is None
+    assert (
+        session_repo.revise_prescription(created.id, "user_pos", 99, {"exercise_id": 1})
+        is None
+    )
+
+
+def test_revise_prescription_writes_several_spine_fields_and_reads_them_back(repos):
+    session_repo, exercises = repos
+    created = session_repo.create(
+        "user_rev", _draft_with_two_prescriptions(exercises)
+    )
+    load = {"kind": "qualitative", "text": "pick a challenging weight"}
+    snapshot = {
+        "exercise_id": created.prescriptions[0].exercise_id,
+        "exercise_name": "Back Squat",
+        "recommended_load": None,
+        "scheme": None,
+    }
+
+    session_repo.revise_prescription(
+        created.id,
+        "user_rev",
+        0,
+        {"recommended_load": load, "prescribed_original": snapshot},
+    )
+    refetched = session_repo.get(created.id, "user_rev").prescriptions[0]
+
+    assert refetched.recommended_load == load
+    assert refetched.prescribed_original == snapshot
+    assert refetched.exercise_name == "Back Squat"
+
+
+def test_revise_prescription_rejects_a_field_outside_the_spine(repos):
+    session_repo, exercises = repos
+    created = session_repo.create(
+        "user_typo", _draft_with_two_prescriptions(exercises)
+    )
+
+    with pytest.raises(TypeError):
+        session_repo.revise_prescription(created.id, "user_typo", 0, {"position": 3})

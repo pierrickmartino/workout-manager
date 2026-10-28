@@ -32,6 +32,7 @@ from app.repositories.exercise_repository import (
 )
 from app.repositories.prescription_mapping import (
     AI_AUTHORED_FIELDS,
+    NOT_CARRIED_FIELDS,
     USER_AUTHORED_FIELDS,
     PrescriptionDraft,
     PrescriptionView,
@@ -74,6 +75,12 @@ def _full_draft(exercise_id: int) -> PrescriptionDraft:
         set_type="warm_up",
         target_effort={"scale": "rpe", "value": 8.0},
         note="brace hard",
+        prescribed_original={
+            "exercise_id": exercise_id,
+            "exercise_name": "Front Squat",
+            "recommended_load": {"kind": "absolute", "text": "80kg", "kg": 80.0},
+            "scheme": "greyskull",
+        },
     )
 
 
@@ -84,6 +91,17 @@ def _assert_spine_matches(actual, expected: PrescriptionDraft) -> None:
         assert getattr(actual, name) == getattr(expected, name), name
 
 
+def _assert_copy_matches(actual, expected: PrescriptionDraft) -> None:
+    """A copy of the plan (Duplicate, Redeem) carries every carried spine field and
+    drops every not-carried one (ADR-0143: the Prescribed Original stays behind)."""
+
+    for name in prescription_spine_fields():
+        if name in NOT_CARRIED_FIELDS:
+            assert getattr(actual, name) is None, name
+        else:
+            assert getattr(actual, name) == getattr(expected, name), name
+
+
 # --- Static structure: partition, ORM coverage, projection keys ---------------
 
 
@@ -91,8 +109,10 @@ def test_authorship_partition_covers_every_spine_field_disjointly():
     spine = set(prescription_spine_fields())
     # Every field is classified exactly once — a new field cannot slip in
     # unclassified (the generation subset stays honest, ADR-0069).
-    assert AI_AUTHORED_FIELDS | USER_AUTHORED_FIELDS == spine
+    # ``NOT_CARRIED_FIELDS`` is the plan-only state a copy never takes (ADR-0143).
+    assert AI_AUTHORED_FIELDS | USER_AUTHORED_FIELDS | NOT_CARRIED_FIELDS == spine
     assert AI_AUTHORED_FIELDS.isdisjoint(USER_AUTHORED_FIELDS)
+    assert NOT_CARRIED_FIELDS.isdisjoint(AI_AUTHORED_FIELDS | USER_AUTHORED_FIELDS)
 
 
 def test_every_spine_field_is_a_real_orm_column():
@@ -133,7 +153,28 @@ def _protocol_read_prescription(view: PrescriptionView) -> dict:
 def test_every_json_projection_carries_every_spine_field(project):
     payload = project(_full_view())
     for name in prescription_spine_fields():
+        if name in NOT_CARRIED_FIELDS:
+            continue
         assert name in payload, name
+
+
+@pytest.mark.parametrize(
+    "project",
+    [serialize_prescription, _protocol_read_prescription],
+    ids=["api", "protocol_read"],
+)
+def test_a_read_names_the_original_restore_brings_back_but_never_its_load(project):
+    # Only the Exercise name is exposed: the original Load never leaves the server,
+    # so neither a read nor a Share can leak it (ADR-0143).
+    payload = project(_full_view())
+    assert payload["prescribed_original"] == {"exercise_name": "Front Squat"}
+    assert "80kg" not in repr(payload)
+
+
+def test_the_export_leaves_the_prescribed_original_behind():
+    payload = export_prescription(_full_view())
+    assert "prescribed_original" not in payload
+    assert "80kg" not in repr(payload)
 
 
 # --- Round trip through the persistence sites ---------------------------------
@@ -176,26 +217,28 @@ def test_session_round_trip_preserves_every_spine_field(session_repo):
     created = repo.create(USER, SessionDraft(training_type="strength", duration_minutes=45, prescriptions=[draft]))
     _assert_spine_matches(created.prescriptions[0], draft)
 
-    # Read-back, and both JSON projections, carry every field.
+    # Read-back, and both JSON projections, carry every carried field.
     fetched = repo.get(created.id, USER)
     _assert_spine_matches(fetched.prescriptions[0], draft)
-    for name in prescription_spine_fields():
+    for name in set(prescription_spine_fields()) - NOT_CARRIED_FIELDS:
         assert name in serialize_prescription(fetched.prescriptions[0])
         assert name in export_prescription(fetched.prescriptions[0])
 
-    # Duplicate (own copy) and Regeneration-keep both round the spine through
-    # draft_from_row → row_from_draft.
+    # Duplicate (own copy) copies the carried spine and leaves the Prescribed Original
+    # behind (ADR-0143).
     duplicated = repo.duplicate(created.id, USER)
-    _assert_spine_matches(duplicated.prescriptions[0], draft)
+    _assert_copy_matches(duplicated.prescriptions[0], draft)
 
+    # Regeneration-keep rewrites the Session in place, so it keeps every field.
     regenerated = repo.regenerate(
         created.id, USER, keep_positions=[0], replacements=[]
     )
     _assert_spine_matches(regenerated.prescriptions[0], draft)
 
-    # Redeem (cross-user copy) preserves the plan spine for its new owner.
+    # Redeem (cross-user copy) carries the plan spine to its new owner, and never the
+    # sharer's Prescribed Original.
     redeemed = repo.redeem(created.id, OTHER)
-    _assert_spine_matches(redeemed.prescriptions[0], draft)
+    _assert_copy_matches(redeemed.prescriptions[0], draft)
 
 
 def test_protocol_create_and_deploy_preserve_every_spine_field(protocol_repo):
