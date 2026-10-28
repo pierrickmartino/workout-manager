@@ -58,6 +58,13 @@ class SubstituteNotAvailable(Exception):
     prescription — so the safety posture cannot be bypassed by naming any Exercise."""
 
 
+class SessionPerformed(Exception):
+    """The Session is a Protocol member with a Logged Session behind it: settled
+    history, never rewritten. Only the un-performed tail of a Protocol is edited
+    (ADR-0020); a standalone Session is never refused, since a plan edit there only
+    reaches future performances."""
+
+
 @dataclass(frozen=True)
 class HarderVariationSuggestion:
     """The next harder Variation offered when a pure-bodyweight Prescription has hit
@@ -93,6 +100,22 @@ def _context(profile: Profile, goal: str | None) -> SubstitutionContext:
     )
 
 
+def ensure_editable(
+    view: SessionView, clerk_user_id: str, logged: LoggedSessionRepository
+) -> None:
+    """Raise ``SessionPerformed`` when ``view`` is a performed Protocol Session.
+
+    "Performed" means *any* Logged Session references it, whatever its Completion
+    Outcome — an Incomplete log is still a record of that plan — matching the
+    read-time Logged Count the Session page reads and the Warm-up guard. Shared by
+    every Substitution write (single swap, Restore, Equipment Substitution)."""
+
+    if not view.is_protocol_member:
+        return
+    if logged.count_for_session(clerk_user_id, view.id) > 0:
+        raise SessionPerformed(view.id)
+
+
 def _find_prescription(view: SessionView, position: int) -> PrescriptionView | None:
     for prescription in view.prescriptions:
         if prescription.position == position:
@@ -111,6 +134,7 @@ def substitute_exercise(
     sessions: SessionRepository,
     profiles: ProfileRepository,
     generator: SubstituteGenerator,
+    logged: LoggedSessionRepository | None = None,
 ) -> SessionView:
     """Substitute the Exercise at ``position`` in the owner's Session.
 
@@ -122,6 +146,8 @@ def substitute_exercise(
     swapped in lookup-first, falling back to AI generation only when none fits.
 
     Raises ``SessionNotFound`` if the user does not own the Session,
+    ``SessionPerformed`` if it is a performed Protocol Session (checked only when
+    ``logged`` is given — the route always passes it),
     ``PrescriptionNotFound`` if it has no prescription at ``position``, and
     ``GenerationError`` (from the generator) if the AI fallback output is
     malformed — in every failure case nothing is persisted.
@@ -130,6 +156,8 @@ def substitute_exercise(
     view = sessions.get(session_id, clerk_user_id)
     if view is None:
         raise SessionNotFound(session_id)
+    if logged is not None:
+        ensure_editable(view, clerk_user_id, logged)
 
     prescription = _find_prescription(view, position)
     if prescription is None:

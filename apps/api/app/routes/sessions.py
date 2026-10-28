@@ -111,6 +111,7 @@ from app.substitution.service import (
     substitute_exercise,
 )
 from app.substitution.service import SessionNotFound as SubstituteSessionNotFound
+from app.substitution.service import SessionPerformed as SubstituteSessionPerformed
 
 router = APIRouter(prefix="/api", tags=["sessions"])
 
@@ -920,6 +921,7 @@ def substitute(
     sessions: SessionRepository = Depends(get_session_repository),
     profiles: ProfileRepository = Depends(get_profile_repository),
     generator: SubstituteGenerator = Depends(get_substitute_generator),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
 ) -> dict:
     target_exercise_id = body.target_exercise_id if body is not None else None
     try:
@@ -933,10 +935,16 @@ def substitute(
             sessions=sessions,
             profiles=profiles,
             generator=generator,
+            logged=logged,
         )
     except (SubstituteSessionNotFound, PrescriptionNotFound) as exc:
         raise HTTPException(
             status_code=HTTP_NOT_FOUND, detail="Prescription not found"
+        ) from exc
+    except SubstituteSessionPerformed as exc:
+        raise HTTPException(
+            status_code=HTTP_CONFLICT,
+            detail="A performed Protocol Session can’t be changed.",
         ) from exc
     except SubstituteNotAvailable as exc:
         raise HTTPException(

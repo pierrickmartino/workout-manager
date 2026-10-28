@@ -49,6 +49,7 @@ import { BasedOnNote } from "@/components/BasedOnNote";
 import { sessionFavoriteView } from "@/lib/session-favorite";
 import { sessionDeleteView, DELETE_DISABLED_HINT } from "@/lib/session-delete";
 import { sessionEditView } from "@/lib/session-edit";
+import { substituteView } from "@/lib/substitute-view";
 import { submitDeleteSession } from "@/app/sessions/[id]/actions";
 import { appendFrom } from "@/lib/back-target";
 import { Skeleton } from "@/components/pulse/skeleton";
@@ -290,6 +291,9 @@ async function PrescriptionList({
     session.prescriptions.map((prescription) => prescription.position),
     envelope?.success && envelope.data ? envelope.data.offers : null,
   );
+  // Substitute (and accepting a harder Variation, which is a Substitution) is withheld on a
+  // performed Protocol Session — settled history (#787, ADR-0020); the server 409 backstops it.
+  const { show: showSubstitute } = substituteView(session);
 
   return (
     <ol className="flex list-none flex-col gap-3 p-0">
@@ -304,6 +308,7 @@ async function PrescriptionList({
             harderVariation={offers[index]}
             schemeModel={schemeControlModel(prescription)}
             showScheme={!(session.is_protocol_member ?? false)}
+            showSubstitute={showSubstitute}
             showRemove={removeAffordanceList[index].showRemove}
             canRemove={removeAffordanceList[index].canRemove}
             dissolvesSuperset={removeAffordanceList[index].dissolvesSuperset}
@@ -337,6 +342,7 @@ function PrescriptionCard({
   harderVariation,
   schemeModel,
   showScheme,
+  showSubstitute,
   showRemove,
   canRemove,
   dissolvesSuperset,
@@ -352,6 +358,7 @@ function PrescriptionCard({
   // whose scheme is chosen on the Builder and committed via Deploy (standalone-only in place).
   schemeModel: SchemeControlModel;
   showScheme: boolean;
+  showSubstitute: boolean;
   showRemove: boolean;
   canRemove: boolean;
   dissolvesSuperset: boolean;
@@ -426,11 +433,13 @@ function PrescriptionCard({
 
       <PrescriptionSetTable name={prescription.exercise_name} view={plan} next={next} />
 
-      <HarderVariationOffer
-        sessionId={sessionId}
-        position={prescription.position}
-        offer={harderVariation}
-      />
+      {showSubstitute ? (
+        <HarderVariationOffer
+          sessionId={sessionId}
+          position={prescription.position}
+          offer={harderVariation}
+        />
+      ) : null}
 
       {/* Progression Scheme (ADR-0064, #432): choose how this movement's un-performed tail
           steps, offering only schemes compatible with its Load. Standalone-only — a Protocol
@@ -449,7 +458,9 @@ function PrescriptionCard({
 
       <div className="flex flex-wrap items-center gap-3">
         {/* Substitute stays on the primary surface — an in-context, non-destructive edit. */}
-        <SubstituteButton sessionId={sessionId} position={prescription.position} />
+        {showSubstitute ? (
+          <SubstituteButton sessionId={sessionId} position={prescription.position} />
+        ) : null}
         {/* Remove (ADR-0052): withdraw this movement from a standalone Session — Insert's
             symmetric partner. Destructive, so demoted one tap behind a per-row action sheet
             (docs/redesign-ia.md, ADR-0071, ADR-0113). The sheet is rendered only when Remove is
