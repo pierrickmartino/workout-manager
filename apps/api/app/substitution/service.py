@@ -18,6 +18,7 @@ from functools import cache
 
 from app.db.models import Profile
 from app.domain.exercise import Provenance
+from app.domain.substitute_muscle_coverage import covers_original_muscle_groups
 from app.domain.substitution import (
     RelationKind,
     SubstituteCandidate,
@@ -26,6 +27,7 @@ from app.domain.substitution import (
     next_harder_variation,
     resolve_substitute,
 )
+from app.generation.schema import GeneratedSubstitute
 from app.generation.substitute_generator import (
     SubstituteGenerator,
     SubstituteRequest,
@@ -63,6 +65,15 @@ class SessionPerformed(Exception):
     history, never rewritten. Only the un-performed tail of a Protocol is edited
     (ADR-0020); a standalone Session is never refused, since a plan edit there only
     reaches future performances."""
+
+
+class SubstituteMuscleMismatch(Exception):
+    """The AI fallback twice invented a substitute that does not train the original's
+    Muscle Groups (ADR-0143), so the Substitution fails and nothing is written."""
+
+
+# One try plus one retry for an AI substitute that misses the original's Muscle Groups.
+MUSCLE_CHECK_ATTEMPTS = 2
 
 
 @dataclass(frozen=True)
@@ -150,7 +161,8 @@ def substitute_exercise(
     ``logged`` is given — the route always passes it),
     ``PrescriptionNotFound`` if it has no prescription at ``position``, and
     ``GenerationError`` (from the generator) if the AI fallback output is
-    malformed — in every failure case nothing is persisted.
+    malformed, or ``SubstituteMuscleMismatch`` if it twice misses the original's
+    Muscle Groups (ADR-0143) — in every failure case nothing is persisted.
     """
 
     view = sessions.get(session_id, clerk_user_id)
@@ -371,15 +383,31 @@ def _generate_substitute(
     generator: SubstituteGenerator,
 ) -> int:
     """Invent a substitute, store it once as ``ai_generated``, and link it as an
-    Alternative of the original so future lookups can resolve it."""
+    Alternative of the original so future lookups can resolve it.
 
-    generated = generator.generate(
-        SubstituteRequest(
-            original_name=prescription.exercise_name,
-            training_type=goal,
-            available_equipment=tuple(sorted(context.available_equipment)),
-            constraints=tuple(sorted(context.constraints)),
-        )
+    The output must cover the original's Muscle Groups (ADR-0143): a mismatch is
+    retried once, and a second mismatch raises ``SubstituteMuscleMismatch`` before
+    anything reaches the shared catalog."""
+
+    original = exercises.get(prescription.exercise_id)
+    original_primary = tuple(original.primary_muscles) if original else ()
+    original_targeted = (
+        tuple(original.targeted_muscles)
+        if original
+        else tuple(prescription.targeted_muscles)
+    )
+    request = SubstituteRequest(
+        original_name=prescription.exercise_name,
+        training_type=goal,
+        available_equipment=tuple(sorted(context.available_equipment)),
+        constraints=tuple(sorted(context.constraints)),
+        original_primary_muscles=original_primary,
+        original_secondary_muscles=(
+            tuple(original.secondary_muscles) if original else ()
+        ),
+    )
+    generated = _generate_covering(
+        request, original_targeted=original_targeted, generator=generator
     )
     exercise = exercises.find_or_create(
         generated.exercise_name,
@@ -397,10 +425,31 @@ def _generate_substitute(
     return exercise.id
 
 
+def _generate_covering(
+    request: SubstituteRequest,
+    *,
+    original_targeted: tuple[str, ...],
+    generator: SubstituteGenerator,
+) -> GeneratedSubstitute:
+    """Ask the AI for a substitute until one covers the original's Muscle Groups, at
+    most ``MUSCLE_CHECK_ATTEMPTS`` times; nothing is written while trying."""
+
+    for _ in range(MUSCLE_CHECK_ATTEMPTS):
+        generated = generator.generate(request)
+        if covers_original_muscle_groups(
+            original_primary=request.original_primary_muscles,
+            original_targeted=original_targeted,
+            substitute_primary=generated.primary_muscles,
+        ):
+            return generated
+    raise SubstituteMuscleMismatch(request.original_name)
+
+
 __all__ = [
     "SessionNotFound",
     "PrescriptionNotFound",
     "SubstituteNotAvailable",
+    "SubstituteMuscleMismatch",
     "HarderVariationSuggestion",
     "PositionedSuggestion",
     "substitute_exercise",
