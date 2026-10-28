@@ -6,8 +6,8 @@ import type { WeightUnit } from "./weight-unit.ts";
 
 // The Warm-up Suggestion view-model (ADR-0143, #778). Pure and server-free, so the Session
 // preview's warm-up button, the request lifecycle and the preview rows are unit-tested here and
-// the component stays a thin shell. A suggestion is only a preview: nothing here changes the
-// Session (adding the drills is a separate step).
+// the component stays a thin shell. A suggestion is only a preview until the user taps Add,
+// which saves the drills as the Session's leading Warm-up Section (#780).
 
 // One suggested drill, in the Exercise Prescription shape the add step copies: one set, reps or
 // seconds, a bodyweight or qualitative Load (never kg), 0–15 s rest, the warm-up Set Type.
@@ -41,6 +41,16 @@ export type WarmUpResult =
   | { ok: false; message: string };
 
 export const WARM_UP_FALLBACK_ERROR = "No warm-up could be suggested. Please try again.";
+
+export const WARM_UP_ADD_FALLBACK_ERROR = "The warm-up couldn’t be added. Please try again.";
+
+// The envelope fields the add mapper reads; the page re-reads the updated Session itself.
+interface AddWarmUpEnvelope {
+  success: boolean;
+  error: string | null;
+}
+
+export type AddWarmUpResult = { ok: true } | { ok: false; message: string };
 
 const OFFLINE_NOTE = "Offline — reconnect to get a warm-up";
 
@@ -79,18 +89,24 @@ export function warmUpButtonView(session: WorkoutSession, online: boolean): Warm
 }
 
 // The request lifecycle. `regenerate` rides on loading and error so a retry asks for the same
-// thing the failed request did.
+// thing the failed request did. Adding the previewed drills (#780) keeps the preview on screen
+// while it saves and after a failure, so a retry re-sends exactly the drills the user saw.
 export type WarmUpState =
   | { status: "idle" }
   | { status: "loading"; regenerate: boolean }
   | { status: "ready"; suggestion: WarmUpSuggestion }
-  | { status: "error"; message: string; regenerate: boolean };
+  | { status: "error"; message: string; regenerate: boolean }
+  | { status: "adding"; suggestion: WarmUpSuggestion }
+  | { status: "addError"; suggestion: WarmUpSuggestion; message: string };
 
 export type WarmUpAction =
   | { type: "requested"; regenerate: boolean }
   | { type: "succeeded"; suggestion: WarmUpSuggestion }
   | { type: "failed"; message: string }
-  | { type: "discarded" };
+  | { type: "discarded" }
+  | { type: "addRequested" }
+  | { type: "added" }
+  | { type: "addFailed"; message: string };
 
 export const initialWarmUpState: WarmUpState = { status: "idle" };
 
@@ -108,7 +124,24 @@ export function warmUpReducer(state: WarmUpState, action: WarmUpAction): WarmUpS
       };
     case "discarded":
       return initialWarmUpState;
+    case "addRequested":
+      return "suggestion" in state ? { status: "adding", suggestion: state.suggestion } : state;
+    case "added":
+      return initialWarmUpState;
+    case "addFailed":
+      return state.status === "adding"
+        ? { status: "addError", suggestion: state.suggestion, message: action.message }
+        : state;
   }
+}
+
+export type WarmUpAddLabel = "Add" | "Adding…" | "Retry add";
+
+// The preview's Add button. After a failed add it reads "Retry add" and re-sends the same drills.
+export function warmUpAddLabel(state: WarmUpState): WarmUpAddLabel {
+  if (state.status === "adding") return "Adding…";
+  if (state.status === "addError") return "Retry add";
+  return "Add";
 }
 
 // Map the endpoint's envelope onto a result the component dispatches.
@@ -117,6 +150,12 @@ export function toWarmUpResult(envelope: WarmUpEnvelope): WarmUpResult {
     return { ok: true, suggestion: envelope.data };
   }
   return { ok: false, message: envelope.error ?? WARM_UP_FALLBACK_ERROR };
+}
+
+// Map the add endpoint's envelope (`PUT /api/sessions/{id}/warm-up`) onto a result.
+export function toAddWarmUpResult(envelope: AddWarmUpEnvelope): AddWarmUpResult {
+  if (envelope.success) return { ok: true };
+  return { ok: false, message: envelope.error ?? WARM_UP_ADD_FALLBACK_ERROR };
 }
 
 export interface WarmUpPreviewRow {

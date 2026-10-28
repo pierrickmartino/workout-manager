@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import {
+  addWarmUp,
   chooseScheme,
   clearScheme,
   createShareLink,
@@ -19,7 +20,13 @@ import {
   suggestWarmUp,
   unfavoriteSession,
 } from "@/lib/sessions";
-import { toWarmUpResult, type WarmUpResult } from "@/lib/warm-up-suggestion";
+import {
+  toAddWarmUpResult,
+  toWarmUpResult,
+  type AddWarmUpResult,
+  type WarmUpDrill,
+  type WarmUpResult,
+} from "@/lib/warm-up-suggestion";
 import { requestSessionDelete } from "@/app/sessions/delete-request";
 import { toDuplicateResult } from "@/lib/duplicate-session";
 import {
@@ -295,6 +302,22 @@ export async function requestWarmUpSuggestion(
     return { ok: false, message: "Could not determine which session to warm up for." };
   }
   return toWarmUpResult(await suggestWarmUp(sessionId, regenerate));
+}
+
+// Add the previewed Warm-up Suggestion drills to the front of this Session (ADR-0143, #780).
+// On success the Session page is revalidated so it re-renders with its new Warm-up Section; on
+// failure (performed 409, not the user's 404, bad drill 422) the server's message comes back for
+// the preview's error and retry, and nothing is changed.
+export async function submitWarmUp(
+  sessionId: number,
+  drills: WarmUpDrill[],
+): Promise<AddWarmUpResult> {
+  if (!Number.isInteger(sessionId)) {
+    return { ok: false, message: "Could not determine which session to add the warm-up to." };
+  }
+  const result = toAddWarmUpResult(await addWarmUp(sessionId, drills));
+  if (result.ok) revalidatePath(`/sessions/${sessionId}`);
+  return result;
 }
 
 // Select a Progression Scheme on this prescription in place (ADR-0064, #432): a no-AI plan
