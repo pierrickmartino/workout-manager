@@ -16,6 +16,8 @@ from fastapi.testclient import TestClient
 from app.auth.dependencies import get_jwks
 from app.config import Settings, get_settings
 from app.domain.exercise import Provenance
+from app.generation.cache import InMemoryCacheStore
+from app.generation.warm_up_cache import WarmUpCache
 from app.main import create_app
 from app.repositories.deps import (
     get_exercise_repository,
@@ -23,6 +25,7 @@ from app.repositories.deps import (
     get_logged_session_repository,
     get_profile_repository,
     get_session_repository,
+    get_warm_up_cache,
 )
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.logged_session_repository import (
@@ -57,6 +60,8 @@ class Harness:
         app.dependency_overrides[get_profile_repository] = lambda: self.profiles
         app.dependency_overrides[get_logged_session_repository] = lambda: self.logged
         app.dependency_overrides[get_llm_client] = lambda: self.llm
+        cache_store = InMemoryCacheStore()
+        app.dependency_overrides[get_warm_up_cache] = lambda: WarmUpCache(cache_store)
         self.client = TestClient(app)
 
     def headers(self, sub: str) -> dict:

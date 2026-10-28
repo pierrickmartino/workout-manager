@@ -15,14 +15,17 @@ from fastapi.testclient import TestClient
 from app.auth.dependencies import get_jwks
 from app.config import Settings, get_settings
 from app.domain.exercise import Provenance
+from app.generation.cache import InMemoryCacheStore
 from app.generation.llm.port import GenerationError
 from app.generation.monitoring.call import GeneratorKind
+from app.generation.warm_up_cache import WarmUpCache
 from app.main import create_app
 from app.repositories.deps import (
     get_exercise_repository,
     get_llm_client,
     get_profile_repository,
     get_session_repository,
+    get_warm_up_cache,
 )
 from app.repositories.exercise_repository import InMemoryExerciseRepository
 from app.repositories.prescription_mapping import PrescriptionDraft
@@ -77,6 +80,8 @@ class Harness:
         app.dependency_overrides[get_session_repository] = lambda: self.sessions
         app.dependency_overrides[get_profile_repository] = lambda: self.profiles
         app.dependency_overrides[get_llm_client] = lambda: self.llm
+        self.cache_store = InMemoryCacheStore()
+        app.dependency_overrides[get_warm_up_cache] = lambda: WarmUpCache(self.cache_store)
         self.client = TestClient(app)
 
     def headers(self, sub: str) -> dict:
