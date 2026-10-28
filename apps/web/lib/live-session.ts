@@ -5,6 +5,7 @@
 
 import { formatLoad, loadToFields, type Load, type LoadKind } from "./load.ts";
 import { resolveSetType, type SetType } from "./set-type-view.ts";
+import { completionGatingItems } from "./session-section.ts";
 import type { WeightUnit } from "./weight-unit";
 import type {
   ExercisePrescription,
@@ -523,13 +524,10 @@ function currentSet(state: LiveSessionState): LiveSet | undefined {
   return state.sets[index];
 }
 
-// The sets the Completion Outcome counts (ADR-0143): every prescribed set that is not a
-// warm-up, whoever authored it, so skipping a warm-up never makes a Session Incomplete. A
-// Session made only of warm-up sets has no other work, so its warm-up sets are what it
-// prescribes and all of them count — never a vacuous Completed, never a 0/0 progress.
+// The sets the Completion Outcome counts (ADR-0143): the non-warm-up ones, whoever authored
+// them, or every set when all are warm-ups — never a vacuous Completed, never a 0/0 progress.
 function gatingSets(state: LiveSessionState): readonly LiveSet[] {
-  const nonWarmUp = state.sets.filter((set) => set.setType !== "warm_up");
-  return nonWarmUp.length > 0 ? nonWarmUp : state.sets;
+  return completionGatingItems(state.sets, (set) => set.setType);
 }
 
 // Set-based percent-complete: attempted (completed) sets over the prescribed sets the

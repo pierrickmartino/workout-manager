@@ -29,6 +29,7 @@ import {
 } from "./quantity.ts";
 import { readPostedSetRows, SET_TYPE_FIELD, type LoggedSetRow } from "./logged-set.ts";
 import { supersetLayout, type SupersetSlot } from "./supersets.ts";
+import { completionGatingItems } from "./session-section.ts";
 import { planSetType, resolveSetType, type SetType } from "./set-type-view.ts";
 import type { ExercisePrescription } from "./sessions-types";
 
@@ -223,8 +224,7 @@ export function buildLogForm(
 export function prescribedByPosition(
   groups: readonly LogPrescriptionGroup[],
 ): Map<number, number> {
-  const nonWarmUp = groups.filter((group) => group.setType !== "warm_up");
-  const counted = nonWarmUp.length > 0 ? nonWarmUp : groups;
+  const counted = completionGatingItems(groups, (group) => group.setType);
   return new Map(counted.map((group) => [group.position, group.prescribedSets]));
 }
 

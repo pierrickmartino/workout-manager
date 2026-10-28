@@ -1,6 +1,7 @@
 import { formatLoad, type Load } from "./load.ts";
 import type { Quantity } from "./quantity.ts";
 import { sectionize } from "./session-section.ts";
+import type { SetType } from "./set-type-view.ts";
 import type { WorkoutSession } from "./sessions-types.ts";
 import type { WeightUnit } from "./weight-unit.ts";
 
@@ -21,7 +22,7 @@ export interface WarmUpDrill {
   prescribed_quantity: Quantity;
   recommended_load: Load;
   rest_seconds: number;
-  set_type: string;
+  set_type: SetType;
 }
 
 // The `POST /api/sessions/{id}/warm-up-suggestion` payload.

@@ -1,4 +1,5 @@
 import type { LiveSessionState } from "./live-session.ts";
+import { isWarmUpSet } from "./session-section.ts";
 import type { WorkoutSession } from "./sessions-types.ts";
 import { warmUpButtonView, type WarmUpButtonView } from "./warm-up-suggestion.ts";
 
@@ -7,7 +8,7 @@ import { warmUpButtonView, type WarmUpButtonView } from "./warm-up-suggestion.ts
 // until the first non-warm-up set is completed. Pure and server-free, so the screen stays a shell.
 
 function anyWorkingSetCompleted(state: LiveSessionState): boolean {
-  return state.sets.some((set) => set.setType !== "warm_up" && set.status === "completed");
+  return state.sets.some((set) => !isWarmUpSet(set.setType) && set.status === "completed");
 }
 
 // The Live Session's warm-up button: the Session preview's label and offline rule, hidden once a
