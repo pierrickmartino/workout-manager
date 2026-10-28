@@ -32,6 +32,7 @@ from app.authoring.service import (
     insert_prescription,
     remove_prescription,
 )
+from app.domain.equipment import Equipment
 from app.domain.feedback import parse_verdict
 from app.domain.fitness_profile import is_sensitive, resolve_equipment
 from app.domain.progression import ProgressionScheme, parse_scheme
@@ -904,9 +905,19 @@ class SubstituteBody(BaseModel):
     """The optional accept payload for a Substitution. ``target_exercise_id`` names a
     specific catalog Variation/Alternative to advance to — e.g. accepting the
     harder-Variation offer at the rep ceiling (#202). Omitted, the swap resolves
-    automatically, lookup-first."""
+    automatically, lookup-first.
+
+    ``available_equipment`` is the kit the user has for this one Substitution (ADR-0143):
+    omitted, the Default Equipment applies; an explicit empty list is bodyweight only
+    (ADR-0038). Each value must be a curated Equipment token (ADR-0077), else 422."""
 
     target_exercise_id: int | None = None
+    available_equipment: list[Equipment] | None = None
+
+    def equipment_values(self) -> list[str] | None:
+        if self.available_equipment is None:
+            return None
+        return [item.value for item in self.available_equipment]
 
 
 @router.post("/sessions/{session_id}/prescriptions/{position}/substitute")
@@ -925,12 +936,14 @@ def substitute(
     logged: LoggedSessionRepository = Depends(get_logged_session_repository),
 ) -> dict:
     target_exercise_id = body.target_exercise_id if body is not None else None
+    available_equipment = body.equipment_values() if body is not None else None
     try:
         view = substitute_exercise(
             session_id,
             clerk_user_id,
             position,
             target_exercise_id=target_exercise_id,
+            available_equipment=available_equipment,
             relationships=relationships,
             exercises=exercises,
             sessions=sessions,

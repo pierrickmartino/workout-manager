@@ -12,6 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
+from app.domain.equipment import missing_equipment
+
 
 class RelationKind(str, Enum):
     """The typed relationship between two catalog Exercises (GLOSSARY.md).
@@ -123,10 +125,12 @@ def _is_compatible(
     candidate: SubstituteCandidate, context: SubstitutionContext
 ) -> bool:
     """A candidate fits when the user owns its equipment and none of its
-    contraindications collide with the user's constraints."""
+    contraindications collide with the user's constraints. Equipment is read through
+    the curated vocabulary (ADR-0077), so "Dumbbells" covers ``dumbbell`` and a
+    bodyweight movement fits a bodyweight-only choice (ADR-0143)."""
 
-    equipment_available = (
-        set(candidate.required_equipment) <= context.available_equipment
+    equipment_available = not missing_equipment(
+        candidate.required_equipment, context.available_equipment
     )
     constraint_free = set(candidate.contraindications).isdisjoint(context.constraints)
     return equipment_available and constraint_free
