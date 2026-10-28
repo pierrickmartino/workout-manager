@@ -8,6 +8,7 @@ import type {
 import type { LoggedSession } from "./logs-types";
 import type { EditPlanInput } from "./session-edit";
 import type { SessionSummary } from "./session-library";
+import type { WarmUpSuggestion } from "./warm-up-suggestion";
 import type {
   ExerciseDetail,
   GenerateSessionInput,
@@ -251,6 +252,16 @@ export async function substitutePrescription(
     return apiSend(path, "POST");
   }
   return apiSend(path, "POST", { target_exercise_id: targetExerciseId });
+}
+
+// Ask for a Warm-up Suggestion for the user's own Session (ADR-0143): 4–6 AI drills for the
+// muscles it works, as a preview. Synchronous; never changes the Session. `regenerate` asks for
+// a fresh suggestion. A non-owned Session is 404, a malformed generation 502.
+export async function suggestWarmUp(
+  sessionId: number,
+  regenerate: boolean,
+): Promise<Envelope<WarmUpSuggestion>> {
+  return apiSend(`/api/sessions/${sessionId}/warm-up-suggestion`, "POST", { regenerate });
 }
 
 // Read every Prescription's harder-Variation offer in one request (#202, audit V-5):
