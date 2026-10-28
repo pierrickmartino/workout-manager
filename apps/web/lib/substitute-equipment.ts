@@ -4,6 +4,7 @@
 // Pure: no server or React imports, so it is unit-testable with `node --test`.
 
 import { EQUIPMENT_LABEL, EQUIPMENT_ORDER, type Equipment } from "./equipment.ts";
+import { toggleFacetValue } from "./exercise-browse-query.ts";
 
 // "bodyweight" needs no equipment (Bodyweight only is the empty selection) and "other" names no real
 // piece of equipment, so neither is a pickable option.
@@ -38,10 +39,7 @@ export function toggleSubstituteEquipment(
   selected: readonly Equipment[],
   item: Equipment,
 ): Equipment[] {
-  const next = selected.includes(item)
-    ? selected.filter((value) => value !== item)
-    : [...selected, item];
-  return inCanonicalOrder(next);
+  return inCanonicalOrder(toggleFacetValue(selected, item));
 }
 
 export function isBodyweightOnly(selected: readonly Equipment[]): boolean {

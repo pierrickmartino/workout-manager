@@ -7,6 +7,8 @@
 // Pure: no server or React imports, so it is unit-testable with `node --test`.
 
 import type { Equipment } from "./equipment.ts";
+import { toggleFacetValue } from "./exercise-browse-query.ts";
+import type { LiveSessionStanding } from "./live-session.ts";
 import type { WorkoutSession } from "./sessions-types.ts";
 import {
   prefillSubstituteEquipment,
@@ -78,8 +80,9 @@ export interface EquipmentSubstitutionButtonInput {
   // Whether single Substitute is offered here (`substituteView`): withheld on a performed
   // Protocol Session, so Equipment Substitution is too.
   showSubstitute: boolean;
-  // The Session id of the resumable Live Session in client storage, or null when none.
-  liveSessionId: number | null;
+  // Where the account's Live Session stands: "unread" until client storage is read, then
+  // "none" or the id of the Session in progress.
+  liveSession: LiveSessionStanding;
   online: boolean;
 }
 
@@ -92,11 +95,14 @@ export interface EquipmentSubstitutionButtonView {
 export function equipmentSubstitutionButtonView({
   sessionId,
   showSubstitute,
-  liveSessionId,
+  liveSession,
   online,
 }: EquipmentSubstitutionButtonInput): EquipmentSubstitutionButtonView {
   if (!showSubstitute) return { visible: false, disabled: true, note: null };
-  if (liveSessionId === sessionId) {
+  // Not interactive until the slot is read: the first render cannot tell whether a Live
+  // Session for this Session is open (ADR-0012).
+  if (liveSession === "unread") return { visible: true, disabled: true, note: null };
+  if (liveSession === sessionId) {
     return { visible: true, disabled: true, note: LIVE_SESSION_LOCK_NOTE };
   }
   if (!online) return { visible: true, disabled: true, note: OFFLINE_NOTE };
@@ -144,12 +150,6 @@ function picking(equipment: Equipment[], error: string | null = null): Equipment
   return { step: "picking", equipment, error };
 }
 
-function toggled(deselected: readonly number[], position: number): number[] {
-  return deselected.includes(position)
-    ? deselected.filter((value) => value !== position)
-    : [...deselected, position];
-}
-
 function pickerReducer(
   state: Extract<EquipmentSubstitutionState, { step: "picking" }>,
   action: EquipmentSubstitutionAction,
@@ -172,7 +172,7 @@ function previewReducer(
 ): EquipmentSubstitutionState {
   switch (action.type) {
     case "rowToggled":
-      return { ...state, deselected: toggled(state.deselected, action.position), error: null };
+      return { ...state, deselected: toggleFacetValue(state.deselected, action.position), error: null };
     case "backToPicker":
       return picking(state.equipment);
     case "applyRequested":

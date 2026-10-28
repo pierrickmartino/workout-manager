@@ -1,7 +1,6 @@
 "use client";
 
-import { useAuth } from "@clerk/nextjs";
-import { useEffect, useReducer, useState, useTransition } from "react";
+import { useReducer, useTransition } from "react";
 import { AlertTriangle, Check, Dumbbell, Loader2, Repeat2 } from "@/components/pulse/icons";
 
 import {
@@ -20,10 +19,10 @@ import {
   previewRows,
   selectedPositions,
 } from "@/lib/equipment-substitution";
-import { readLiveSessionSlot } from "@/lib/live-session-storage";
-import { resumableLiveSlot } from "@/lib/live-session";
+import { liveSessionStandingOf } from "@/lib/live-session";
 import { substituteEquipmentSummary } from "@/lib/substitute-equipment";
 import { useConnectivity } from "@/lib/use-connectivity";
+import { useResumableLiveSlot } from "@/lib/use-resumable-live-slot";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SubstituteEquipmentChips } from "@/components/SubstituteEquipmentChips";
@@ -40,17 +39,6 @@ interface EquipmentSubstitutionSheetProps {
 const PANEL_CLASS = "flex min-w-0 flex-col gap-3 rounded-sm border border-border-lite bg-base p-3";
 const NOTE_CLASS = "font-mono text-[12px] text-text-muted";
 const ERROR_CLASS = "font-mono text-[12px] text-magenta";
-
-// The Session id of the account's resumable Live Session in client storage, once auth resolves.
-function useLiveSessionId(): number | null {
-  const { userId, isLoaded } = useAuth();
-  const [liveSessionId, setLiveSessionId] = useState<number | null>(null);
-  useEffect(() => {
-    if (!isLoaded) return;
-    setLiveSessionId(resumableLiveSlot(readLiveSessionSlot(), userId ?? null)?.sessionId ?? null);
-  }, [isLoaded, userId]);
-  return liveSessionId;
-}
 
 // "Missing equipment?" on the Session page (ADR-0143, #791): pick the equipment at hand, preview what
 // it blocks, untick rows to keep, confirm, and read the outcome. Every rule lives in
@@ -69,7 +57,7 @@ export function EquipmentSubstitutionSheet({
   const button = equipmentSubstitutionButtonView({
     sessionId,
     showSubstitute,
-    liveSessionId: useLiveSessionId(),
+    liveSession: liveSessionStandingOf(useResumableLiveSlot()),
     online,
   });
 

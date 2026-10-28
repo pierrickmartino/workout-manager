@@ -183,6 +183,20 @@ export function resumableLiveSlot(
   return ownsLiveSlot(stored, currentAccountId) ? stored : null;
 }
 
+// Where the account's Live Session stands for a guard: the slot not yet read (it lives in
+// client storage, so the server render and the first paint cannot know), none in progress, or
+// the id of the Session in progress. A guard treats "unread" as not yet interactive.
+export type LiveSessionStanding = "unread" | "none" | number;
+
+// The standing of a resumable slot as `useResumableLiveSlot` reports it: `undefined` while
+// unread, `null` when no Live Session is in progress.
+export function liveSessionStandingOf(
+  slot: LiveSessionState | null | undefined,
+): LiveSessionStanding {
+  if (slot === undefined) return "unread";
+  return slot?.sessionId ?? "none";
+}
+
 // Decide what happens when the user arrives at a Session's live route, given the
 // single persisted slot (`stored`, or null when empty), the `requestedSessionId`,
 // the current wall-clock `now`, and the signed-in `currentAccountId` (null when no
