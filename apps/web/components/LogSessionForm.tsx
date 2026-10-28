@@ -9,6 +9,7 @@ import type { WeightUnit } from "@/lib/weight-unit";
 import {
   buildLogForm,
   deriveCompletionOutcome,
+  postedRowFields,
   prescribedByPosition,
   skippedSetCount,
   type LogPrescriptionGroup,
@@ -211,6 +212,7 @@ export function LogSessionForm({
                   <SetRow
                     index={rowOffsets[groupIndex] + rowIndex}
                     row={row}
+                    hiddenFields={postedRowFields(group, row)}
                     hint={group.hint}
                     unit={unit}
                     canRemove={group.rows.length > 1}
@@ -261,11 +263,12 @@ export function LogSessionForm({
 
 // One editable set-row. A Done row submits its indexed inputs; an un-done (skipped) row
 // disables its quantity/load inputs so they never reach the record (Model B, Q10) and dims to
-// read as skipped. The always-submitted `done`/`exercise_id`/`kind` hidden fields let the
-// reader index every row and drop the skipped ones.
+// read as skipped. The always-submitted hidden fields (`postedRowFields`) let the reader
+// index every row and drop the skipped ones.
 function SetRow({
   index,
   row,
+  hiddenFields,
   hint,
   unit,
   canRemove,
@@ -275,6 +278,7 @@ function SetRow({
 }: {
   index: number;
   row: LogSetRow;
+  hiddenFields: [string, string][];
   hint: string;
   unit: WeightUnit;
   canRemove: boolean;
@@ -329,9 +333,9 @@ function SetRow({
 
         {/* Always submitted, never disabled: the reader indexes every row by these and drops
             the ones whose `done` is not "true", keeping the indexed fields aligned. */}
-        <input type="hidden" name={`${prefix}-done`} value={row.done ? "true" : "false"} />
-        <input type="hidden" name={`${prefix}-exercise_id`} value={row.exerciseId} />
-        <input type="hidden" name={`${prefix}-kind`} value={row.kind} />
+        {hiddenFields.map(([name, value]) => (
+          <input key={name} type="hidden" name={`${prefix}-${name}`} value={value} />
+        ))}
 
         {/* The amount matching the row's kind (ADR-0050): a distance value + unit + optional
             companion time, a single hold time, or the numeric reps — seeded with the prescribed

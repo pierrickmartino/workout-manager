@@ -8,6 +8,8 @@
 //   * Effort is sent typed (ADR-0066) whenever one is present, and a record's own Effort —
 //     RIR or half-step RPE — is re-sent unchanged unless its cell was edited;
 //   * a non-blank Set Note rides as raw text (the backend escapes it, ADR-0065);
+//   * a row's Set Type rides when the path knows it (the Live Session finish, the static
+//     log form), else is omitted;
 //   * a Load value is converted from the reader's Weight Unit to canonical kg (#417).
 //
 // The row is ADR-0106's `SetEntryValues` — raw strings, typed here at the write seam — plus the
@@ -34,6 +36,7 @@ import {
   type SetEntryField,
   type SetEntryValues,
 } from "./set-entry.ts";
+import { planSetType, type SetType } from "./set-type-view.ts";
 import type { WeightUnit } from "./weight-unit";
 
 // The upper bound on rows one submission is read for — a real record never comes close. The
@@ -52,6 +55,9 @@ const MAX_RPE = 10;
 // field: nothing renders it, it only rides so the record's Effort survives the full replace.
 export const CARRIED_EFFORT_FIELD = "carried_effort";
 
+// The hidden field a row's Set Type posts under (`set-<i>-set_type`).
+export const SET_TYPE_FIELD = "set_type";
+
 // A record's own Effort, carried through a correction. `shownAs` is the RPE text the form
 // seeded the Effort cell with; while the cell still reads exactly that, the user has not
 // touched it and the typed Effort — which the cell cannot express (RIR, a half-step) — is
@@ -61,12 +67,15 @@ export interface CarriedEffort {
   shownAs: string;
 }
 
-// One row to build: the entry values as typed, the resolved catalog Exercise, and — on a
-// correction only — the record's own Effort.
+// One row to build: the entry values as typed, the resolved catalog Exercise, — on a
+// correction only — the record's own Effort, and — where the path knows it (a Live Session
+// set, a static-log row) — the set's Set Type (ADR-0065). An absent Set Type is omitted,
+// reading as working.
 export interface LoggedSetRow {
   exerciseId: number;
   values: SetEntryValues;
   carriedEffort?: CarriedEffort | null;
+  setType?: SetType;
 }
 
 // The two real differences between paths. Anything else that seems to need an option is a
@@ -225,6 +234,7 @@ function buildLoggedSet(
       ...loadFields(row.values, unit, options.defaultLoadKind ?? DEFAULT_LOAD_KIND),
       ...effortFields(row),
       ...(note !== "" ? { note } : {}),
+      ...(row.setType !== undefined ? { set_type: row.setType } : {}),
     },
   };
 }
@@ -270,6 +280,9 @@ export interface PostedSetRow {
   // The performed mark: true/false when the form posts one, null when it has none.
   done: boolean | null;
   carriedEffort: CarriedEffort | null;
+  // The posted Set Type (ADR-0065): a known non-working member, else null (unset, working).
+  // Client-posted, so an unknown value reads as unset; the backend validates it again.
+  setType: SetType | null;
 }
 
 function readField(form: FormData, name: string): string {
@@ -337,5 +350,6 @@ export function readPostedSetRows(form: FormData): PostedSetRow[] {
     exerciseId: readExerciseId(readField(form, `set-${index}-exercise_id`)),
     done: readDone(readField(form, `set-${index}-done`)),
     carriedEffort: readCarriedEffort(readField(form, `set-${index}-${CARRIED_EFFORT_FIELD}`)),
+    setType: planSetType(readField(form, `set-${index}-${SET_TYPE_FIELD}`)),
   }));
 }

@@ -18,7 +18,9 @@ from app.domain.exercise import Provenance
 from app.domain.load import parse_load
 from app.main import create_app
 from app.repositories.deps import (
+    get_exercise_repository,
     get_logged_session_repository,
+    get_profile_repository,
     get_session_repository,
 )
 from app.repositories.exercise_repository import InMemoryExerciseRepository
@@ -27,6 +29,7 @@ from app.repositories.logged_session_repository import (
     LoggedSessionDraft,
     LoggedSetDraft,
 )
+from app.repositories.profile_repository import InMemoryProfileRepository
 from app.repositories.session_repository import (
     InMemorySessionRepository,
     PrescriptionDraft,
@@ -63,13 +66,16 @@ def build_client(seed=None, ctx=None):
     exercises = InMemoryExerciseRepository()
     sessions = InMemorySessionRepository(exercises)
     logged = InMemoryLoggedSessionRepository(sessions, exercises)
+    profiles = InMemoryProfileRepository()
     if seed is not None:
         seed(exercises, sessions, logged)
     app = create_app()
     app.dependency_overrides[get_jwks] = lambda: ctx.jwks
     app.dependency_overrides[get_settings] = lambda: Settings(clerk_issuer=ISSUER)
+    app.dependency_overrides[get_exercise_repository] = lambda: exercises
     app.dependency_overrides[get_session_repository] = lambda: sessions
     app.dependency_overrides[get_logged_session_repository] = lambda: logged
+    app.dependency_overrides[get_profile_repository] = lambda: profiles
     return TestClient(app), ctx
 
 
@@ -174,3 +180,113 @@ def test_another_user_cannot_hydrate_someone_elses_session():
     # Assert
     assert response.status_code == 404
     assert response.json()["success"] is False
+
+
+# --- Set Type through the Live Session (issue #777, ADR-0065) -----------------
+
+
+def _seed_warm_up_session(sessions, exercises):
+    """A squat Session whose opener is a hand-authored warm-up, then an untagged line."""
+
+    squat = exercises.find_or_create(
+        "Back Squat", provenance=Provenance.CURATED, targeted_muscles=["quads"]
+    )
+    view = sessions.create(
+        "user_owner",
+        SessionDraft(
+            training_type="strength",
+            duration_minutes=45,
+            prescriptions=[
+                PrescriptionDraft(
+                    exercise_id=squat.id,
+                    sets=1,
+                    reps="1",
+                    recommended_load=parse_load("60 kg").to_dict(),
+                    set_type="warm_up",
+                ),
+                PrescriptionDraft(
+                    exercise_id=squat.id,
+                    sets=1,
+                    reps="1",
+                    recommended_load=parse_load("100 kg").to_dict(),
+                ),
+            ],
+        ),
+    )
+    return view, squat
+
+
+def test_live_hydration_carries_each_prescriptions_set_type():
+    # Arrange — a warm-up line followed by an untagged one
+    holder = {}
+
+    def seed(exercises, sessions, logged):
+        view, _ = _seed_warm_up_session(sessions, exercises)
+        holder["session_id"] = view.id
+
+    client, ctx = build_client(seed=seed)
+
+    # Act
+    response = client.get(
+        f"/api/sessions/{holder['session_id']}/live", headers=_auth(ctx, "user_owner")
+    )
+
+    # Assert — the warm-up tag rides the load payload; an unset one is null (working)
+    prescriptions = response.json()["data"]["prescriptions"]
+    assert [p["set_type"] for p in prescriptions] == ["warm_up", None]
+
+
+def _live_finish_set(exercise_id: int, kg: str, set_type: str) -> dict:
+    """One completed live set as the Live Session finish mapper sends it."""
+
+    return {
+        "exercise_id": exercise_id,
+        "quantity_kind": "repetitions",
+        "quantity_value": "1",
+        "load_kind": "absolute",
+        "load_value": kg,
+        "perceived_difficulty": None,
+        "set_type": set_type,
+    }
+
+
+def test_a_live_warm_up_set_is_excluded_from_volume_and_records_after_finish():
+    # Arrange — a Live Session finished with a 60 kg warm-up and a 100 kg working single
+    holder = {}
+
+    def seed(exercises, sessions, logged):
+        view, squat = _seed_warm_up_session(sessions, exercises)
+        holder["session_id"] = view.id
+        holder["squat_id"] = squat.id
+
+    client, ctx = build_client(seed=seed)
+    headers = _auth(ctx, "user_owner")
+    squat_id = holder["squat_id"]
+
+    # Act — the finish payload, then the record-side reads
+    finished = client.post(
+        f"/api/sessions/{holder['session_id']}/logs",
+        headers=headers,
+        json={
+            "performed_on": date.today().isoformat(),
+            "completion_outcome": "completed",
+            "duration_seconds": 600,
+            "idempotency_key": "live-finish-777",
+            "logged_sets": [
+                _live_finish_set(squat_id, "60", "warm_up"),
+                _live_finish_set(squat_id, "100", "working"),
+            ],
+        },
+    )
+    records = client.get(f"/api/exercises/{squat_id}/records", headers=headers)
+    analytics = client.get("/api/analytics", headers=headers)
+
+    # Assert — each Logged Set keeps its live Set Type; the warm-up leaves Volume and
+    # strength records (only the 100 kg working single counts)
+    assert finished.status_code == 200, finished.json()
+    assert [s["set_type"] for s in finished.json()["data"]["logged_sets"]] == [
+        "warm_up",
+        "working",
+    ]
+    assert len(records.json()["data"]["pr_milestones"]) == 1
+    assert analytics.json()["data"]["volume"]["points"][0]["volume_kg"] == 100.0

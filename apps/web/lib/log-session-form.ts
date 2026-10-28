@@ -13,8 +13,8 @@
 //
 // Completion Outcome is **derived**, not declared (Q8, ADR-0013): a set is *attempted* when
 // its Done toggle is checked (Q10, Model B) — even at 0 reps, since a set ground out to
-// failure is still attempted — and a Session is Completed only when every prescribed set was
-// attempted.
+// failure is still attempted — and a Session is Completed only when every prescribed set that
+// is not a warm-up was attempted (ADR-0143).
 
 import type { CompletionOutcome } from "./logs-types";
 import { loadToFields, type LoadKind } from "./load.ts";
@@ -27,8 +27,10 @@ import {
   type Quantity,
   type QuantityKind,
 } from "./quantity.ts";
-import { readPostedSetRows, type LoggedSetRow } from "./logged-set.ts";
+import { readPostedSetRows, SET_TYPE_FIELD, type LoggedSetRow } from "./logged-set.ts";
 import { supersetLayout, type SupersetSlot } from "./supersets.ts";
+import { completionGatingItems } from "./session-section.ts";
+import { planSetType, resolveSetType, type SetType } from "./set-type-view.ts";
 import type { ExercisePrescription } from "./sessions-types";
 
 // Every prescription shows at least one row, even a malformed sets=0, so an exercise is never
@@ -91,6 +93,9 @@ export interface LogPrescriptionGroup {
   // hint and in the "N × … PRESCRIBED" line, straight from the verbatim free text. Kind-
   // agnostic since the plan became kind-aware (ADR-0050) — no longer reps-only.
   hint: string;
+  // The prescription's resolved Set Type (unset reads as working): a warm-up line never
+  // gates the Completion Outcome (ADR-0143).
+  setType: SetType;
   superset: SupersetSlot;
   rows: LogSetRow[];
 }
@@ -205,6 +210,7 @@ export function buildLogForm(
       prescribedSets: count,
       kind: seeded.kind,
       hint: prescription.reps,
+      setType: resolveSetType(prescription.set_type),
       superset: slots[index],
       rows,
     };
@@ -212,11 +218,14 @@ export function buildLogForm(
 }
 
 // The prescribed set count per prescription position — the yardstick Completion Outcome
-// derivation measures attempted sets against.
+// derivation measures attempted sets against. A warm-up line is left out, so skipping it
+// never makes the log Incomplete nor counts as a skip (ADR-0143); a Session made only of
+// warm-up lines has no other work, so then every line counts — the Live Session's rule.
 export function prescribedByPosition(
   groups: readonly LogPrescriptionGroup[],
 ): Map<number, number> {
-  return new Map(groups.map((group) => [group.position, group.prescribedSets]));
+  const counted = completionGatingItems(groups, (group) => group.setType);
+  return new Map(counted.map((group) => [group.position, group.prescribedSets]));
 }
 
 // The count of attempted (Done) sets per prescription position across the live rows.
@@ -264,6 +273,23 @@ export function skippedSetCount(
   return skipped;
 }
 
+// The hidden fields one row always posts (as `set-<i>-<name>`), never disabled, so the reader
+// can index every row and drop the skipped ones: its Done mark, Exercise id and Quantity kind,
+// plus its prescription's Set Type when that is not working — so a warm-up logged here is
+// stored as one and stays out of Volume and strength records (ADR-0143).
+export function postedRowFields(
+  group: Pick<LogPrescriptionGroup, "setType">,
+  row: Pick<LogSetRow, "done" | "exerciseId" | "kind">,
+): [string, string][] {
+  const setType = planSetType(group.setType);
+  const fields: [string, string][] = [
+    ["done", row.done ? "true" : "false"],
+    ["exercise_id", String(row.exerciseId)],
+    ["kind", row.kind],
+  ];
+  return setType !== null ? [...fields, [SET_TYPE_FIELD, setType]] : fields;
+}
+
 // --- The submitted form → Logged Set rows. Turning a row into a request is the shared
 // `logged-set` module's job (ADR-0115); what is particular to this path is which posted rows
 // count. A row not marked Done was skipped by the user (Model B, Q10) and is dropped, so only
@@ -272,7 +298,11 @@ export function skippedSetCount(
 export function loggedSetRowsFromForm(form: FormData): LoggedSetRow[] {
   return readPostedSetRows(form).flatMap((posted) =>
     posted.done === true && posted.exerciseId !== null
-      ? [{ exerciseId: posted.exerciseId, values: posted.values }]
+      ? [{
+          exerciseId: posted.exerciseId,
+          values: posted.values,
+          ...(posted.setType !== null ? { setType: posted.setType } : {}),
+        }]
       : [],
   );
 }

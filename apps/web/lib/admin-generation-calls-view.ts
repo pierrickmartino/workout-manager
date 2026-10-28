@@ -50,7 +50,8 @@ export type GeneratorKind =
   | "regeneration"
   | "substitute"
   | "muscle-emphasis"
-  | "exercise-enrichment";
+  | "exercise-enrichment"
+  | "warm-up";
 
 export type GenerationOutcome = "success" | "error";
 
@@ -63,6 +64,7 @@ export const KIND_LABELS: Readonly<Record<GeneratorKind, string>> = {
   substitute: "Substitute",
   "muscle-emphasis": "Muscle emphasis",
   "exercise-enrichment": "Exercise enrichment",
+  "warm-up": "Warm-up",
 };
 
 export const OUTCOME_LABELS: Readonly<Record<GenerationOutcome, string>> = {

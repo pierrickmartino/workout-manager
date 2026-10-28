@@ -9,6 +9,7 @@ import { clearOutbox } from "./finish-outbox-store.ts";
 import { clearBrowserFormDrafts } from "./form-draft-storage.ts";
 import { clearLastSynced } from "./last-synced-store.ts";
 import type { LiveSessionState, LiveStatus, SetStatus } from "./live-session.ts";
+import { resolveSetType } from "./set-type-view.ts";
 
 // The one key the single slot lives under. Namespaced to the app so it never
 // collides with other `localStorage` users.
@@ -43,7 +44,13 @@ export function loadLiveSession(storage: SlotStorage): LiveSessionState | null {
     // Normalize a slot written before #412 (no finish key) to an explicit null, so the
     // resumed state is well-typed (`string | null`) and its finish mints a key rather
     // than reading an `undefined` (ADR-0060). A keyed slot passes through unchanged.
-    return { ...parsed, idempotencyKey: parsed.idempotencyKey ?? null };
+    // Likewise a slot written before #777 has sets with no Set Type: resolve each to
+    // `working` (an unknown value too) rather than rejecting the slot (ADR-0065).
+    return {
+      ...parsed,
+      idempotencyKey: parsed.idempotencyKey ?? null,
+      sets: parsed.sets.map((set) => ({ ...set, setType: resolveSetType(set.setType) })),
+    };
   } catch {
     // Malformed JSON — fall back to empty rather than propagating the parse error.
     return null;

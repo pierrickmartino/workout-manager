@@ -5,6 +5,7 @@ import {
   buildLogForm,
   deriveCompletionOutcome,
   loggedSetRowsFromForm,
+  postedRowFields,
   prescribedByPosition,
   prescribedRowCount,
   seededReps,
@@ -159,6 +160,37 @@ test("counts a whole skipped exercise's prescribed sets as un-attempted", () => 
   assert.equal(skippedSetCount(prescribed, rows), 3);
 });
 
+test("skipped warm-up sets never make the static log Incomplete (ADR-0143)", () => {
+  // Arrange — a warm-up line left entirely unchecked, a working line all Done
+  const groups = buildLogForm([
+    prescription({ position: 0, exercise_id: 1, sets: 2, set_type: "warm_up" }),
+    prescription({ position: 1, exercise_id: 2, sets: 3 }),
+  ], "kg");
+  const prescribed = prescribedByPosition(groups);
+  const rows = groups.flatMap((group) =>
+    group.rows.map((row) => ({ ...row, done: group.position === 1 })),
+  );
+
+  // Act / Assert — Completed, and no warm-up set is reported as a skip
+  assert.equal(deriveCompletionOutcome(prescribed, rows), "completed");
+  assert.equal(skippedSetCount(prescribed, rows), 0);
+});
+
+test("an all-warm-up Session's static log counts its warm-up sets", () => {
+  // Arrange — the only line is a warm-up, with one set unchecked
+  const groups = buildLogForm([
+    prescription({ sets: 2, set_type: "warm_up" }),
+  ], "kg");
+  const prescribed = prescribedByPosition(groups);
+  const rows = groups.flatMap((group) =>
+    group.rows.map((row, index) => ({ ...row, done: index === 0 })),
+  );
+
+  // Act / Assert — with no other work, the warm-up is the prescribed work
+  assert.equal(deriveCompletionOutcome(prescribed, rows), "incomplete");
+  assert.equal(skippedSetCount(prescribed, rows), 1);
+});
+
 // --- Kind-aware seeding (ADR-0050, issue #343): buildLogForm reads the typed Prescribed
 // Quantity and seeds each row with the matching kind/value/unit, so a reused run lands on a
 // distance field pre-filled with the prescribed distance.
@@ -287,4 +319,42 @@ test("loggedSetRowsFromForm keeps only Done rows with an Exercise id", () => {
   assert.equal(rows[0].exerciseId, 1);
   assert.equal(rows[0].values.kind, "distance");
   assert.equal(rows[0].values.distance, "5");
+});
+
+test("a warm-up set logged through the static form is stored as a warm-up (ADR-0143)", () => {
+  // Arrange — a warm-up line and a working line, as the form renders and posts them
+  const groups = buildLogForm([
+    prescription({ position: 0, exercise_id: 1, sets: 1, set_type: "warm_up" }),
+    prescription({ position: 1, exercise_id: 2, sets: 1 }),
+  ], "kg");
+  const form = new FormData();
+  form.set("set_count", "2");
+  groups.forEach((group, index) => {
+    for (const [name, value] of postedRowFields(group, group.rows[0])) {
+      form.set(`set-${index}-${name}`, value);
+    }
+  });
+
+  // Act
+  const rows = loggedSetRowsFromForm(form);
+
+  // Assert — the warm-up carries its Set Type; the working set stays unset
+  assert.equal(rows[0].setType, "warm_up");
+  assert.equal(rows[1].setType, undefined);
+});
+
+test("loggedSetRowsFromForm ignores a forged Set Type", () => {
+  // Arrange
+  const form = new FormData();
+  form.set("set_count", "1");
+  form.set("set-0-done", "true");
+  form.set("set-0-exercise_id", "1");
+  form.set("set-0-reps", "8");
+  form.set("set-0-set_type", "bogus");
+
+  // Act
+  const [row] = loggedSetRowsFromForm(form);
+
+  // Assert — an unknown value reads as unset (working)
+  assert.equal(row.setType, undefined);
 });

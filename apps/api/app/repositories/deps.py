@@ -35,6 +35,8 @@ from app.generation.substitute_generator import (
     LlmSubstituteGenerator,
     SubstituteGenerator,
 )
+from app.generation.warm_up_cache import WarmUpCache
+from app.generation.warm_up_generator import LlmWarmUpGenerator, WarmUpGenerator
 from app.generation.worker import QUEUE_NAME
 from app.repositories.active_skin_repository import (
     ActiveSkinRepository,
@@ -234,11 +236,21 @@ def get_protocol_generator(
     return LlmProtocolGenerator(llm, clerk_user_id=clerk_user_id)
 
 
+def _generation_cache_store(settings: Settings) -> RedisCacheStore:
+    return RedisCacheStore(redis.Redis.from_url(settings.redis_url))
+
+
 def get_generation_cache(
     settings: Settings = Depends(get_settings),
 ) -> GenerationCache:
-    client = redis.Redis.from_url(settings.redis_url)
-    return GenerationCache(RedisCacheStore(client))
+    return GenerationCache(_generation_cache_store(settings))
+
+
+def get_warm_up_cache(
+    settings: Settings = Depends(get_settings),
+) -> WarmUpCache:
+    # Warm-up Suggestions share the Generation Cache's store (ADR-0003, ADR-0143).
+    return WarmUpCache(_generation_cache_store(settings))
 
 
 def get_job_queue(
@@ -297,6 +309,13 @@ def get_substitute_generator(
     clerk_user_id: str = Depends(get_current_user),
 ) -> SubstituteGenerator:
     return LlmSubstituteGenerator(llm, clerk_user_id=clerk_user_id)
+
+
+def get_warm_up_generator(
+    llm: StructuredLLM = Depends(get_llm_client),
+    clerk_user_id: str = Depends(get_current_user),
+) -> WarmUpGenerator:
+    return LlmWarmUpGenerator(llm, clerk_user_id=clerk_user_id)
 
 
 def get_generation_call_repository(

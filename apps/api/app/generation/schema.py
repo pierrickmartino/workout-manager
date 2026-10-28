@@ -9,10 +9,21 @@ turns "did the AI return well-formed data?" into a guarantee."""
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.domain.load import parse_load
 from app.domain.quantity import quantity_from_input, quantity_from_text
+from app.domain.warm_up import (
+    MAX_DRILL_AMOUNT,
+    MAX_DRILL_REST_SECONDS,
+    MAX_DRILLS,
+    MAX_MINUTES,
+    MIN_DRILLS,
+    MIN_MINUTES,
+    DrillLoadKind,
+    DrillQuantityKind,
+    drill_load_names_itself,
+)
 
 
 class GeneratedQuantity(BaseModel):
@@ -219,3 +230,39 @@ class GeneratedProtocol(BaseModel):
     for. Adoption deep-copies it into a user-owned, mutable Protocol."""
 
     sessions: list[GeneratedProtocolSession] = Field(min_length=1)
+
+
+class GeneratedWarmUpDrill(BaseModel):
+    """One drill of a Warm-up Suggestion (ADR-0143): the catalog shape a new drill enters the
+    catalog with, plus its one-set prescription.
+
+    The prescription is closed at the boundary: the amount is ``repetitions`` or a
+    ``duration`` in seconds, the Load is ``bodyweight`` or ``qualitative`` (e.g. "light
+    band") — never kg — and rest is 0–15 s. Anything else fails validation, so a drill the
+    preview could not show honestly is never served."""
+
+    exercise_name: str = Field(min_length=1)
+    exercise_description: str | None = None
+    instructions: list[str] = Field(default_factory=list)
+    targeted_muscles: list[str] = Field(default_factory=list)
+    required_equipment: list[str] = Field(default_factory=list)
+    quantity_kind: DrillQuantityKind
+    amount: int = Field(ge=1, le=MAX_DRILL_AMOUNT)
+    load_kind: DrillLoadKind
+    load_text: str | None = None
+    rest_seconds: int = Field(ge=0, le=MAX_DRILL_REST_SECONDS)
+
+    @model_validator(mode="after")
+    def _qualitative_load_names_itself(self) -> "GeneratedWarmUpDrill":
+        if not drill_load_names_itself(self.load_kind, self.load_text):
+            raise ValueError("a qualitative load needs its load_text")
+        return self
+
+
+class GeneratedWarmUp(BaseModel):
+    """The AI's Warm-up Suggestion: 4–6 drills and the minutes they take, within 5–8."""
+
+    drills: list[GeneratedWarmUpDrill] = Field(
+        min_length=MIN_DRILLS, max_length=MAX_DRILLS
+    )
+    estimated_minutes: int = Field(ge=MIN_MINUTES, le=MAX_MINUTES)

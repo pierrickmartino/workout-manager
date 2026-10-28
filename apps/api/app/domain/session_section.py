@@ -185,6 +185,16 @@ def _is_warm_up_like(item: _Sectionable) -> bool:
     )
 
 
+def reads_as_warm_up_drill(exercise_name: str) -> bool:
+    """Whether a movement's name reads as warm-up drill material: dynamic prep, activation
+    or mobility work. The catalog-first filter for a Warm-up Suggestion's candidates
+    (ADR-0143) reads the same vocabulary the Warm-up Section does, so a reused catalog drill
+    is one this projection would also section as warm-up."""
+
+    name = _normalize(exercise_name)
+    return _contains_any(name, _WARM_UP_KEYWORDS) or _contains_any(name, _MOBILITY_KEYWORDS)
+
+
 def _is_cooldown_like(item: _Sectionable) -> bool:
     """Whether a movement reads as cooldown material (stretch / breathing / timed cardio)."""
 
@@ -296,5 +306,6 @@ __all__ = [
     "MAIN_WORK_LIMIT",
     "SECTION_ORDER",
     "SessionSection",
+    "reads_as_warm_up_drill",
     "sectionize",
 ]
