@@ -217,3 +217,11 @@ boundaries are §12 V-10. Each link choice goes into the ADR-0121 navigation map
 - ⬜ VT-7 **Decide whether `/protocols/new` and `/protocols/new/curated` are siblings or parent and child.** Today the link in is lateral and the `BackLink` out slides back. The recommendation is siblings (ADR-0130): give the Curated page the same way up.
 - ⬜ VT-8 **Turn the History month like a page:** a month-keyed `TimelinePageTransition`, `goToMonth` in a Transition through a new `nav-direction` helper, the policy extended to hand-written `addTransitionType` strings, and an ADR-0122 amendment.
 - ⬜ VT-9 **Decide on list identity for History cards** now that History shows one month (the 10 Oct deferral's trigger). Adopt per-card keyed boundaries for facet changes, or record why not in ADR-0138. Design it together with VT-8.
+
+## 14. Vercel composition patterns audit (28 Oct)
+
+Source: [composition-patterns 2026-10-28](docs/research/audit/vercel/composition-patterns-2026-10-28.md).
+
+- ⬜ C-5 **Compose the hand-authored Log form's performed sets from `SetEntry`** (`hand-authored/performed-sets-editor.tsx`, the fifth Logged Set editor ADR-0106 missed). It has drifted: RPE-only freehand effort, no Set Note, its own placeholders and accessible names. Route its payload through `buildLoggedSets` (ADR-0115), add a guard that fails on a sixth copy, and note it in ADR-0106.
+- ⬜ C-6 **Split `LiveSessionScreen`** (836 lines, over the 800 limit) into explicit per-phase screens, plus a `LiveSessionBar` with rest and elapsed variants. Keep the ADR-0091 tick and memo constraints (`live-session-tick.test.ts` green).
+- ⬜ C-7 **Replace `PrescriptionCard`'s four flags with slots** (`app/sessions/[id]/page.tsx`): `PrescriptionList` passes the `SchemeControl` and the Remove sheet as `scheme` and `children` (ADR-0109).
