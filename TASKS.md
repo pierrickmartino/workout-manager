@@ -191,8 +191,17 @@ Sources: `docs/development/*` ([chart-accessibility-validation](docs/development
 - ❔ **WebKit / real iPhone runs** for reflow, resilience and charts (Chromium only so far).
 - ⬜ **View Transitions in the running app:** all eight steps (ADR-0118 to ADR-0124) were checked with real components in Chromium, but none through the Next router in the running app, and no CI journey drives a navigation yet.
 
-## 12. Vercel React best-practices audit (10 Oct)
+## 12. Vercel React best-practices audits (10 Oct, 28 Oct)
 
-Source: the react-best-practices audit of 10 Oct (since removed). Each fix is measured against the build output before and after.
+Sources: the react-best-practices audit of 10 Oct (since removed) and its follow-up,
+[react-best-practices 2026-10-28](docs/research/audit/vercel/react-best-practices-2026-10-28.md).
+Each fix is measured before and after: bundle items from the build output, latency items
+in a throttled signed-in run.
 
-- ⬜ V-3 **Shrink the atlas client data** (36.4 KB gz on `/analytics`): round `reference-data.ts` coordinates to 1 decimal place, and send only the resolved figure's paths (split by gender, or render the base silhouette on the server).
+- ⬜ V-3 **Shrink the atlas client data** (still 36.3 KB gz on `/analytics`; 8,417 of 9,083 coordinates have 3+ decimals). First round to 1 decimal place in `scripts/generate-reference-atlas.mts` (XS). Then send only the resolved figure's paths: split by gender, or render the base silhouette on the server. `static-atlas-figure.tsx` is the one client import of `REFERENCE_PATHS`.
+- ⬜ V-10 **Add loading boundaries to the dynamic routes that have none** (ADR-0123 `SkeletonPage`). First `/sessions/[id]`, `/sessions`, `/protocols` and `/exercises`. Then the `/history/[id]`, `/edit` and `/capture` routes, which now inherit the History list skeleton. Then the authoring routes. Add one navigation to an `audit/` journey (overlaps the §11 View Transitions item).
+- ⬜ V-11 **Stop client reads queueing behind server actions.** First memoize catalog details by Exercise id and key `CatalogDetail` by id (XS). Then move `fetchCatalogPage`, `fetchCatalogTaxonomyForFilters`, `fetchCatalogEntryDetail` and `fetchHistoryCards` to `GET` Route Handlers that call `apiGet` on the server, and note the read transport in ADR-0022.
+- ⬜ V-12 **Stream Home's Curated Protocol choices** behind `<Suspense>`, so a new user's empty Home paints after one round trip, not two.
+- ⬜ V-13 **Stream the AI Hand-off on History detail** behind `<Suspense>`, so the record doesn't wait on the plan read.
+- ⬜ V-14 **Parallelize the Capture page reads** (`fetchLog`, `fetchProfile`, `resolveAppearance` in one `Promise.all`, then `notFound` and the redirect).
+- ⬜ V-15 **Stream the Exercise image proxy** (`upstream.body` instead of `arrayBuffer()`).
