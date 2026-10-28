@@ -138,7 +138,7 @@ def _context(
     goal: str | None,
     available_equipment: Sequence[str] | None = None,
 ) -> SubstitutionContext:
-    """The user-side choices for one Substitution. ``available_equipment`` is the kit
+    """The user-side choices for one Substitution. ``available_equipment`` is the equipment
     stated for this action; ``None`` inherits the Default Equipment and an empty list is
     bodyweight only (ADR-0038, ADR-0143). Constraints always come from the Profile."""
 
@@ -201,7 +201,7 @@ def substitute_exercise(
     Exercise. Without it, resolution is automatic: a compatible catalog link is
     swapped in lookup-first, falling back to AI generation only when none fits.
 
-    ``available_equipment`` is the kit the user has for this one action (ADR-0143):
+    ``available_equipment`` is the equipment the user has for this one action (ADR-0143):
     omitted, the Default Equipment applies; an empty list means bodyweight only. It
     filters catalog candidates and reaches the AI fallback; the Profile is never written.
 

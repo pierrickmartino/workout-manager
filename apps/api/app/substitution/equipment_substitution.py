@@ -1,4 +1,4 @@
-"""Equipment Substitution: substitute every Exercise a stated kit blocks (ADR-0143).
+"""Equipment Substitution: substitute every Exercise the stated equipment blocks (ADR-0143).
 
 ``preview_equipment_substitution`` lists the Session's blocked Exercise Prescriptions with
 the catalog substitute each would resolve to, or a marker that it needs generation. It makes

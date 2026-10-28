@@ -29,7 +29,7 @@ function chipClass(selected: boolean): string {
 }
 
 // The Available Equipment chips (ADR-0143): one-tap Bodyweight only, then each pickable piece of
-// kit as a pressed/unpressed toggle. Shared by single Substitute and Equipment Substitution.
+// equipment as a pressed/unpressed toggle. Shared by single Substitute and Equipment Substitution.
 export function SubstituteEquipmentChips({
   label,
   selected,

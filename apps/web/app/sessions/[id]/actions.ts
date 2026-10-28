@@ -329,7 +329,7 @@ export async function submitRestore(
   return { error: null };
 }
 
-// Preview an Equipment Substitution (ADR-0143, #791): which exercises the chosen kit blocks.
+// Preview an Equipment Substitution (ADR-0143, #791): which exercises the chosen equipment blocks.
 // Nothing is changed, so nothing is revalidated.
 export async function requestEquipmentSubstitutionPreview(
   sessionId: number,

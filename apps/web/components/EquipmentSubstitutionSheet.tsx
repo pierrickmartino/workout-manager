@@ -52,7 +52,7 @@ function useLiveSessionId(): number | null {
   return liveSessionId;
 }
 
-// "Missing equipment?" on the Session page (ADR-0143, #791): pick the kit at hand, preview what
+// "Missing equipment?" on the Session page (ADR-0143, #791): pick the equipment at hand, preview what
 // it blocks, untick rows to keep, confirm, and read the outcome. Every rule lives in
 // `lib/equipment-substitution.ts`; this only renders the step it is in.
 export function EquipmentSubstitutionSheet({
@@ -111,7 +111,7 @@ export function EquipmentSubstitutionSheet({
     return (
       <div className={PANEL_CLASS}>
         <SubstituteEquipmentChips
-          label="Equipment you have today"
+          label="Equipment you have"
           selected={state.equipment}
           onBodyweightOnly={() => dispatch({ type: "bodyweightOnlyChosen" })}
           onToggle={(item) => dispatch({ type: "equipmentToggled", item })}

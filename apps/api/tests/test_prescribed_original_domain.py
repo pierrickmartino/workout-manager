@@ -1,8 +1,8 @@
 """Substitution re-expresses the Load and keeps the Prescribed Original (ADR-0143).
 
 Pure rules, no I/O: a kg figure is meaningless across equipment, so a swap to a
-movement on different kit re-expresses the Load — bodyweight for a bodyweight
-movement, qualitative otherwise — while a swap on the same kit keeps it. The first
+movement on different equipment re-expresses the Load — bodyweight for a bodyweight
+movement, qualitative otherwise — while a swap on the same equipment keeps it. The first
 Substitution snapshots the Exercise, Load and Progression Scheme; Restore puts all
 three back exactly."""
 
@@ -50,7 +50,7 @@ def test_a_target_on_other_equipment_gets_a_qualitative_load(load):
 
 @pytest.mark.parametrize("load", EVERY_LOAD_KIND, ids=lambda load: load["kind"])
 def test_a_target_on_the_same_equipment_keeps_the_load(load):
-    # A Variation on the same kit: spelling and order of the strings do not matter.
+    # A Variation on the same equipment: spelling and order of the strings do not matter.
     assert (
         re_express_load(
             load,

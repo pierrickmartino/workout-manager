@@ -1,7 +1,7 @@
 // The "Missing equipment?" sheet on the Session page (ADR-0143, #791, GLOSSARY "Equipment
 // Substitution"). The user picks the Available Equipment they have for this one action
 // (pre-filled with their Default Equipment, one-tap Bodyweight only), previews every Exercise
-// Prescription that kit blocks (its catalog substitute, or "will be generated"), unticks any
+// Prescription that equipment blocks (its catalog substitute, or "will be generated"), unticks any
 // they would rather keep, confirms, and reads an outcome per row: substituted, or flagged and
 // kept as prescribed. Disabled while a Live Session for this Session is open (ADR-0012).
 // Pure: no server or React imports, so it is unit-testable with `node --test`.

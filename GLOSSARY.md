@@ -141,7 +141,7 @@ The act of swapping one Exercise Prescription's Exercise for a Variation or Alte
 _Avoid_: Swap, replace (as the domain term)
 
 **Equipment Substitution**:
-A Substitution run in one batch over every Exercise Prescription of a Session that the user's chosen Available Equipment cannot support, so the Session keeps training the same Muscle Groups with the kit actually at hand. It edits that one un-performed Session in place; it is not a new Session and not a Regeneration (ADR-0143).
+A Substitution run in one batch over every Exercise Prescription of a Session that the user's chosen Available Equipment cannot support, so the Session keeps training the same Muscle Groups with the equipment actually at hand. It edits that one un-performed Session in place; it is not a new Session and not a Regeneration (ADR-0143).
 _Avoid_: Equipment Swap, alternative session, substitute session, regenerate for equipment
 
 **Prescribed Original**:

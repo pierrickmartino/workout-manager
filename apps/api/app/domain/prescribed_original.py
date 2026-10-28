@@ -4,7 +4,7 @@ Pure rules, no I/O. When a Substitution moves an Exercise Prescription onto a mo
 that needs different equipment, its Load is **re-expressed**, never carried: a kg figure
 is meaningless across equipment, and an AI-guessed weight has no record behind it. A
 bodyweight movement gets a bodyweight Load; anything else gets a qualitative "pick a
-challenging weight". A swap on the same kit (a Variation, say) keeps the Load as it was.
+challenging weight". A swap on the same equipment (a Variation, say) keeps the Load as it was.
 
 The first Substitution snapshots the **Prescribed Original** — the Exercise, Load and
 Progression Scheme the plan prescribed — on the user's own copy. Later Substitutions keep
@@ -73,8 +73,8 @@ class PrescriptionState:
 
 
 def _same_equipment(first: Sequence[str], second: Sequence[str]) -> bool:
-    """Whether two equipment lists name the same kit, read through the canonical
-    vocabulary (ADR-0077): each covers the other, and bodyweight counts as no kit."""
+    """Whether two equipment lists name the same equipment, read through the canonical
+    vocabulary (ADR-0077): each covers the other, and bodyweight counts as no equipment."""
 
     return not missing_equipment(first, second) and not missing_equipment(second, first)
 

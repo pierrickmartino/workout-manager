@@ -55,7 +55,7 @@ router = APIRouter(prefix="/api", tags=["sessions"])
 
 
 class PreviewBody(BaseModel):
-    """The kit the user has for this action; omitted inherits the Default Equipment."""
+    """The equipment the user has for this action; omitted inherits the Default Equipment."""
 
     available_equipment: list[Equipment] | None = None
 
@@ -66,7 +66,7 @@ class PreviewBody(BaseModel):
 
 
 class ApplyBody(PreviewBody):
-    """The kit plus the blocked positions the user kept selected (at least one, unique)."""
+    """The equipment plus the blocked positions the user kept selected (at least one, unique)."""
 
     positions: list[int] = Field(min_length=1)
 

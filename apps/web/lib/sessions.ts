@@ -243,7 +243,7 @@ export async function fetchExercise(
 // `Content-Type` — preserved exactly as before. Passing ``targetExerciseId`` names
 // a specific catalog Variation/Alternative to advance to — e.g. accepting the
 // harder-Variation offer at the rep ceiling (#202) — sent as `target_exercise_id`.
-// ``availableEquipment`` is the kit chosen for this one Substitution (ADR-0143), sent as
+// ``availableEquipment`` is the equipment chosen for this one Substitution (ADR-0143), sent as
 // `available_equipment`: omitted inherits the Default Equipment, `[]` is bodyweight only.
 export async function substitutePrescription(
   sessionId: number,

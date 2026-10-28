@@ -1,7 +1,7 @@
 """Equipment Substitution preview and apply (#791, ADR-0143).
 
 From the Session page a user states the Available Equipment they have; the preview lists
-every Exercise Prescription that kit blocks (with its catalog substitute or a
+every Exercise Prescription that equipment blocks (with its catalog substitute or a
 "will be generated" marker) without calling the AI or writing anything, and apply runs the
 existing Substitution once per selected position, independently. Driven through the HTTP
 seam with in-memory repositories and a recording fake substitute generator."""
@@ -53,7 +53,7 @@ class RecordingSubstituteGenerator:
 
 
 class Harness:
-    """A standalone Session: two generated movements that need no kit (positions 0, 1),
+    """A standalone Session: two generated movements that need no equipment (positions 0, 1),
     then a barbell bench press with a bodyweight catalog Alternative (position 2) and a
     barbell row the catalog has nothing for (position 3). Default Equipment: barbell, bench."""
 

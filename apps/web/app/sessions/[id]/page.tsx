@@ -308,7 +308,7 @@ async function PrescriptionList({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Equipment Substitution (ADR-0143, #791): substitute every exercise the kit at hand
+      {/* Equipment Substitution (ADR-0143, #791): substitute every exercise the equipment at hand
           blocks, in this Session only. Offered where Substitute is; locked by a Live Session. */}
       <EquipmentSubstitutionSheet
         sessionId={session.id}

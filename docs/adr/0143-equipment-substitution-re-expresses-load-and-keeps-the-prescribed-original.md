@@ -4,7 +4,7 @@ status: accepted
 
 # 0143 — Equipment Substitution re-expresses Load and keeps the Prescribed Original
 
-A user without the kit their Protocol Session needs wants the same training with what they
+A user without the equipment their Protocol Session needs wants the same training with what they
 have. We extend Substitution rather than generate a new Session. **Equipment Substitution**
 batches a Substitution over every Exercise Prescription the chosen Available Equipment blocks.
 It edits that one Session in place, so the rules on plans and records still hold. Only an
@@ -51,4 +51,4 @@ the Protocol forward (ADR-0013).
   need a new concept, a standalone Session that advances a Protocol, which blurs plan and
   record. Restore covers the "only for this week" need.
 - **Apply the swap to the same movement in every later Session.** Rejected as the default. Being
-  without kit is usually temporary, and single Substitution can repeat the swap where wanted.
+  without equipment is usually temporary, and single Substitution can repeat the swap where wanted.

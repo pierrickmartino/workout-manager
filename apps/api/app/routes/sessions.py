@@ -907,7 +907,7 @@ class SubstituteBody(BaseModel):
     harder-Variation offer at the rep ceiling (#202). Omitted, the swap resolves
     automatically, lookup-first.
 
-    ``available_equipment`` is the kit the user has for this one Substitution (ADR-0143):
+    ``available_equipment`` is the equipment the user has for this one Substitution (ADR-0143):
     omitted, the Default Equipment applies; an explicit empty list is bodyweight only
     (ADR-0038). Each value must be a curated Equipment token (ADR-0077), else 422."""
 

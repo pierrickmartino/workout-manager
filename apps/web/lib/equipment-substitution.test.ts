@@ -135,7 +135,7 @@ test("Bodyweight only clears the selection in one tap", () => {
   assert.deepEqual(state.step === "picking" && state.equipment, []);
 });
 
-test("toggling a piece of kit adds or removes it", () => {
+test("toggling a piece of equipment adds or removes it", () => {
   const removed = equipmentSubstitutionReducer(opened(), {
     type: "equipmentToggled",
     item: "barbell",

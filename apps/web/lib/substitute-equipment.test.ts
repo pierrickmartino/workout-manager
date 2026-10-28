@@ -22,7 +22,7 @@ test("the picker is pre-filled with the Default Equipment, in canonical order", 
 });
 
 test("the pre-fill drops tokens the picker does not offer", () => {
-  // "other" names no real kit and "bodyweight" needs none, so neither is a pickable option
+  // "other" names no real equipment and "bodyweight" needs none, so neither is a pickable option
   const selected = prefillSubstituteEquipment(["other", "bodyweight", "barbell", "laser"]);
 
   assert.deepEqual(selected, ["barbell"]);
