@@ -38,6 +38,7 @@ class Harness:
 
     def __init__(self) -> None:
         self.client, self.ctx, exercises, relationships = build_client()
+        self.exercises, self.relationships = exercises, relationships
         overrides = self.client.app.dependency_overrides
         self.sessions = overrides[get_session_repository]()
         self.logged = overrides[get_logged_session_repository]()
@@ -48,7 +49,7 @@ class Harness:
         )
         self.headers = _auth(self.ctx, OWNER)
 
-        barbell = exercises.find_or_create(
+        self.barbell = barbell = exercises.find_or_create(
             "Barbell Back Squat",
             provenance=Provenance.CURATED,
             required_equipment=["barbell"],
@@ -297,3 +298,40 @@ def test_an_edit_that_changes_the_substituted_exercise_drops_the_prescribed_orig
     assert edited["exercise_name"] == "Air Squat"
     assert edited["prescribed_original"] is None
     assert harness.restore().status_code == 409
+
+
+def test_accepting_a_harder_variation_on_other_equipment_keeps_the_prescribed_original():
+    # The harder-Variation offer is accepted as a Substitution naming its target (#202).
+    harness = Harness()
+    pistol = harness.exercises.find_or_create(
+        "Pistol Squat", provenance=Provenance.CURATED, required_equipment=[], difficulty=4
+    )
+    harness.relationships.add(harness.barbell.id, pistol.id, RelationKind.VARIATION)
+
+    accepted = harness.substitute(pistol.id)
+
+    assert accepted["exercise_name"] == "Pistol Squat"
+    assert accepted["recommended_load"] == BODYWEIGHT
+    assert accepted["prescribed_original"] == {"exercise_name": "Barbell Back Squat"}
+    restored = harness.restore().json()["data"]["prescriptions"][harness.position]
+    assert restored == harness.original
+
+
+def test_accepting_a_harder_variation_on_the_same_equipment_keeps_the_load():
+    harness = Harness()
+    paused = harness.exercises.find_or_create(
+        "Paused Back Squat",
+        provenance=Provenance.CURATED,
+        required_equipment=["barbell"],
+        difficulty=4,
+    )
+    harness.relationships.add(harness.barbell.id, paused.id, RelationKind.VARIATION)
+    harness.client.app.dependency_overrides[get_profile_repository]().update(
+        OWNER, ProfileUpdate(default_equipment=["barbell"])
+    )
+
+    accepted = harness.substitute(paused.id)
+
+    assert accepted["recommended_load"] == harness.original["recommended_load"]
+    assert accepted["scheme"] == "greyskull"
+    assert accepted["prescribed_original"] == {"exercise_name": "Barbell Back Squat"}
