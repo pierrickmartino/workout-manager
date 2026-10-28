@@ -77,7 +77,7 @@ def test_a_prescription_without_a_load_has_nothing_to_re_express():
     )
 
 
-def _state(**overrides) -> PrescriptionState:
+def _prescription_state(**overrides) -> PrescriptionState:
     values = {
         "exercise_id": 1,
         "exercise_name": "Back Squat",
@@ -91,7 +91,7 @@ def _state(**overrides) -> PrescriptionState:
 
 def test_the_first_substitution_snapshots_the_exercise_load_and_scheme():
     changes = substitution_changes(
-        _state(), target_exercise_id=2, target_equipment=["dumbbell"]
+        _prescription_state(), target_exercise_id=2, target_equipment=["dumbbell"]
     )
 
     assert changes["exercise_id"] == 2
@@ -111,7 +111,7 @@ def test_a_later_substitution_keeps_the_very_first_snapshot():
         "recommended_load": ABSOLUTE,
         "scheme": "greyskull",
     }
-    current = _state(
+    current = _prescription_state(
         exercise_id=2,
         exercise_name="Goblet Squat",
         required_equipment=("dumbbell",),
@@ -129,7 +129,7 @@ def test_a_later_substitution_keeps_the_very_first_snapshot():
 def test_a_scheme_that_no_longer_fits_the_new_load_falls_back_to_the_default():
     # Greyskull steps a weight axis; a qualitative Load has none.
     changes = substitution_changes(
-        _state(scheme="greyskull"), target_exercise_id=2, target_equipment=["dumbbell"]
+        _prescription_state(scheme="greyskull"), target_exercise_id=2, target_equipment=["dumbbell"]
     )
 
     assert changes["scheme"] is None
@@ -137,7 +137,7 @@ def test_a_scheme_that_no_longer_fits_the_new_load_falls_back_to_the_default():
 
 def test_a_scheme_that_still_fits_the_new_load_is_kept():
     changes = substitution_changes(
-        _state(scheme="static"), target_exercise_id=2, target_equipment=["dumbbell"]
+        _prescription_state(scheme="static"), target_exercise_id=2, target_equipment=["dumbbell"]
     )
 
     assert changes["scheme"] == "static"

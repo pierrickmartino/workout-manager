@@ -302,6 +302,13 @@ def missing_equipment(
     )
 
 
+def is_bodyweight_movement(required: Iterable[str]) -> bool:
+    """Whether a movement needing ``required`` equipment needs none at all: every item reads as
+    bodyweight (or the list is empty), so even an empty Available Equipment covers it."""
+
+    return not missing_equipment(required, ())
+
+
 __all__ = [
     "Equipment",
     "EQUIPMENT_ORDER",
@@ -309,5 +316,6 @@ __all__ = [
     "classify_equipment",
     "canonical_equipment",
     "missing_equipment",
+    "is_bodyweight_movement",
     "normalize_stored_equipment",
 ]

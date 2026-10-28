@@ -9,7 +9,7 @@ never the Fitness Profile, and both are refused on a performed Protocol Session.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import Enum
 
@@ -32,10 +32,10 @@ from app.substitution.service import (
     SessionNotFound,
     SubstituteMuscleMismatch,
     SubstitutionSource,
-    _candidate,
-    _context,
     ensure_editable,
+    substitute_candidate,
     substitute_with_source,
+    substitution_context,
 )
 
 # The user-facing reason a row is flagged when no substitute could be found for it.
@@ -123,7 +123,7 @@ def _preview_row(
     relationships: ExerciseRelationshipRepository,
 ) -> BlockedPrescription:
     candidates = [
-        _candidate(related)
+        substitute_candidate(related)
         for related in relationships.substitutes_for(prescription.exercise_id)
     ]
     resolution = resolve_substitute(candidates, context)
@@ -161,7 +161,7 @@ def preview_equipment_substitution(
 
     view = _editable_view(session_id, clerk_user_id, sessions, logged)
     # A read-only lookup: the preview writes nothing, not even a first Profile row.
-    context = _context(
+    context = substitution_context(
         profiles.find(clerk_user_id), view.training_type, available_equipment
     )
     return tuple(
@@ -170,9 +170,11 @@ def preview_equipment_substitution(
     )
 
 
-def _substitute_one(position: int, run) -> PositionOutcome:
+def _substitute_one(
+    position: int, substitute_position: Callable[[int], SubstitutionSource]
+) -> PositionOutcome:
     try:
-        source = run(position)
+        source = substitute_position(position)
     except (GenerationError, SubstituteMuscleMismatch):
         return PositionOutcome(
             position=position,
@@ -207,7 +209,7 @@ def apply_equipment_substitution(
     ``SessionPerformed`` with nothing persisted."""
 
     view = _editable_view(session_id, clerk_user_id, sessions, logged)
-    context = _context(
+    context = substitution_context(
         profiles.get_or_create(clerk_user_id), view.training_type, available_equipment
     )
     blocked = {prescription.position for prescription in _blocked(view, context)}
@@ -215,7 +217,7 @@ def apply_equipment_substitution(
     if rejected:
         raise PositionsNotBlocked(rejected)
 
-    def run(position: int) -> SubstitutionSource:
+    def substitute_position(position: int) -> SubstitutionSource:
         return substitute_with_source(
             session_id,
             clerk_user_id,
@@ -229,7 +231,7 @@ def apply_equipment_substitution(
             logged=logged,
         ).source
 
-    outcomes = tuple(_substitute_one(position, run) for position in positions)
+    outcomes = tuple(_substitute_one(position, substitute_position) for position in positions)
     updated = sessions.get(session_id, clerk_user_id)
     if updated is None:  # ownership checked above; defensive only
         raise SessionNotFound(session_id)

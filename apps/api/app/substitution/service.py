@@ -117,7 +117,7 @@ class HarderVariationSuggestion:
     name: str
 
 
-def _candidate(related: RelatedExercise) -> SubstituteCandidate:
+def substitute_candidate(related: RelatedExercise) -> SubstituteCandidate:
     """A catalog relationship, expressed as a candidate the rule can filter.
 
     The target Exercise's ``precautions`` become the candidate's
@@ -133,7 +133,7 @@ def _candidate(related: RelatedExercise) -> SubstituteCandidate:
     )
 
 
-def _context(
+def substitution_context(
     profile: Profile | None,
     goal: str | None,
     available_equipment: Sequence[str] | None = None,
@@ -260,9 +260,9 @@ def substitute_with_source(
         raise PrescriptionNotFound(position)
 
     profile = profiles.get_or_create(clerk_user_id)
-    context = _context(profile, view.training_type, available_equipment)
+    context = substitution_context(profile, view.training_type, available_equipment)
     candidates = [
-        _candidate(related)
+        substitute_candidate(related)
         for related in relationships.substitutes_for(prescription.exercise_id)
     ]
 
@@ -282,7 +282,7 @@ def substitute_with_source(
 
     target = exercises.get(new_exercise_id)
     changes = substitution_changes(
-        _state(prescription),
+        _prescription_state(prescription),
         target_exercise_id=new_exercise_id,
         target_equipment=list(target.required_equipment) if target is not None else [],
     )
@@ -294,7 +294,7 @@ def substitute_with_source(
     return SubstitutionOutcome(session=result, source=source)
 
 
-def _state(prescription: PrescriptionView) -> PrescriptionState:
+def _prescription_state(prescription: PrescriptionView) -> PrescriptionState:
     return PrescriptionState(
         exercise_id=prescription.exercise_id,
         exercise_name=prescription.exercise_name,
@@ -408,7 +408,7 @@ def _suggestion_for(
 
     current = exercises.get(prescription.exercise_id)
     candidates = [
-        _candidate(related)
+        substitute_candidate(related)
         for related in relationships.substitutes_for(prescription.exercise_id)
     ]
     harder = next_harder_variation(
@@ -425,7 +425,7 @@ def _lazy_context(
 ) -> Callable[[], SubstitutionContext]:
     """The user's SubstitutionContext, read from the Profile at most once."""
 
-    return cache(lambda: _context(profiles.get_or_create(clerk_user_id), goal))
+    return cache(lambda: substitution_context(profiles.get_or_create(clerk_user_id), goal))
 
 
 def harder_variation_suggestion(
@@ -590,6 +590,8 @@ def _generate_covering(
 
 
 __all__ = [
+    "substitute_candidate",
+    "substitution_context",
     "SessionNotFound",
     "PrescriptionNotFound",
     "SubstituteNotAvailable",

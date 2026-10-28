@@ -9,11 +9,11 @@ from __future__ import annotations
 from app.domain.equipment_substitution import is_blocked
 
 
-def test_a_movement_needing_kit_the_user_lacks_is_blocked():
+def test_a_movement_needing_equipment_the_user_lacks_is_blocked():
     assert is_blocked(["barbell"], ["dumbbell"]) is True
 
 
-def test_a_movement_whose_kit_is_all_available_is_not_blocked():
+def test_a_movement_whose_equipment_is_all_available_is_not_blocked():
     assert is_blocked(["barbell", "bench"], ["Barbells", "bench", "dumbbell"]) is False
 
 

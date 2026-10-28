@@ -20,7 +20,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from app.domain.equipment import missing_equipment
+from app.domain.equipment import is_bodyweight_movement, missing_equipment
 from app.domain.load import LoadKind, ParsedLoad
 from app.domain.progression import parse_scheme, scheme_applies_to_optional_load
 
@@ -92,7 +92,7 @@ def re_express_load(
 
     if load is None or _same_equipment(original_equipment, target_equipment):
         return load
-    if not missing_equipment(target_equipment, ()):
+    if is_bodyweight_movement(target_equipment):
         return ParsedLoad(kind=LoadKind.BODYWEIGHT, text=_BODYWEIGHT_TEXT).to_dict()
     return ParsedLoad(kind=LoadKind.QUALITATIVE, text=CHALLENGING_WEIGHT_TEXT).to_dict()
 
