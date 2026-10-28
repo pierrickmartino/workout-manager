@@ -27,6 +27,7 @@ import {
   type WarmUpDrill,
   type WarmUpResult,
 } from "@/lib/warm-up-suggestion";
+import { readSubstituteEquipment } from "@/lib/substitute-equipment";
 import { requestSessionDelete } from "@/app/sessions/delete-request";
 import { toDuplicateResult } from "@/lib/duplicate-session";
 import {
@@ -282,7 +283,14 @@ export async function submitSubstitute(
     return { error: "Could not determine which exercise to substitute." };
   }
 
-  const result = await substitutePrescription(sessionId, position);
+  // The Available Equipment the picker stated for this Substitution (ADR-0143); undefined
+  // inherits the Default Equipment server-side.
+  const result = await substitutePrescription(
+    sessionId,
+    position,
+    undefined,
+    readSubstituteEquipment(form),
+  );
   if (!result.success || !result.data) {
     return { error: result.error ?? "Could not substitute this exercise." };
   }

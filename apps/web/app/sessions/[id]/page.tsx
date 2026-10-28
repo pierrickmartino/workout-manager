@@ -19,6 +19,7 @@ import {
   actionSheetItemClass,
 } from "@/components/pulse/action-sheet-item";
 import { resolveAppearance } from "@/lib/appearance";
+import { fetchProfile } from "@/lib/profile";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { RemoveExerciseButton } from "@/components/RemoveExerciseButton";
 import { HarderVariationOffer } from "@/components/HarderVariationOffer";
@@ -285,7 +286,14 @@ async function PrescriptionList({
   supersetSlots: readonly (SupersetSlot | undefined)[];
   removeAffordanceList: ReturnType<typeof removeAffordances>;
 }) {
-  const envelope = await fetchHarderVariations(session.id).catch(() => null);
+  // The Default Equipment pre-fills each Substitute picker (ADR-0143); a failed Profile read
+  // leaves the picker empty (Bodyweight only) rather than blocking the page.
+  const [envelope, profile] = await Promise.all([
+    fetchHarderVariations(session.id).catch(() => null),
+    fetchProfile().catch(() => null),
+  ]);
+  const defaultEquipment =
+    profile?.success && profile.data ? profile.data.default_equipment_canonical : [];
   const offers = harderVariationOffersFor(
     session.prescriptions.map((prescription) => prescription.position),
     envelope?.success && envelope.data ? envelope.data.offers : null,
@@ -307,6 +315,7 @@ async function PrescriptionList({
             showRemove={removeAffordanceList[index].showRemove}
             canRemove={removeAffordanceList[index].canRemove}
             dissolvesSuperset={removeAffordanceList[index].dissolvesSuperset}
+            defaultEquipment={defaultEquipment}
           />
         </li>
       ))}
@@ -340,6 +349,7 @@ function PrescriptionCard({
   showRemove,
   canRemove,
   dissolvesSuperset,
+  defaultEquipment,
 }: {
   prescription: ExercisePrescription;
   superset: SupersetSlot | undefined;
@@ -355,6 +365,7 @@ function PrescriptionCard({
   showRemove: boolean;
   canRemove: boolean;
   dissolvesSuperset: boolean;
+  defaultEquipment: readonly string[];
 }) {
   // The plan read like the Live Session's set table (ADR-0114): a summary line and one row per
   // set, rest following the Superset rule (ADR-0023). The NEXT row under it is the applied
@@ -449,7 +460,11 @@ function PrescriptionCard({
 
       <div className="flex flex-wrap items-center gap-3">
         {/* Substitute stays on the primary surface — an in-context, non-destructive edit. */}
-        <SubstituteButton sessionId={sessionId} position={prescription.position} />
+        <SubstituteButton
+          sessionId={sessionId}
+          position={prescription.position}
+          defaultEquipment={defaultEquipment}
+        />
         {/* Remove (ADR-0052): withdraw this movement from a standalone Session — Insert's
             symmetric partner. Destructive, so demoted one tap behind a per-row action sheet
             (docs/redesign-ia.md, ADR-0071, ADR-0113). The sheet is rendered only when Remove is
