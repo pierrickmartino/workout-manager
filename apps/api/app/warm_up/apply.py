@@ -1,4 +1,4 @@
-"""Adding a Warm-up Suggestion to a Session (ADR-0143, #780).
+"""Adding a Warm-up Suggestion to a Session (ADR-0144, #780).
 
 ``apply_warm_up`` puts the accepted drills at the front of the owner's Session as ordinary
 one-set Exercise Prescriptions with the **warm-up** Set Type, so the read-time Session
@@ -8,7 +8,7 @@ the drills *replace* exactly that leading run (#782); nothing after the first Pr
 outside it is touched. The rest of the plan keeps its order and is renumbered contiguously
 behind the drills.
 
-The edit is the narrow ADR-0143 exception to Deploy: it is allowed on a standalone *and* a
+The edit is the narrow ADR-0144 exception to Deploy: it is allowed on a standalone *and* a
 Protocol-member Session, but only the caller's own Session, only while it is un-performed
 (no Logged Session references it, ADR-0020) and only that one Session. Every guard runs
 before the single write. Session Provenance, name and regeneration guard are untouched (the
@@ -59,7 +59,7 @@ def apply_warm_up(
     exercises: ExerciseRepository,
 ) -> SessionView:
     """Put ``drills`` at the front of the owner's un-performed Session, replacing its
-    leading Warm-up Section when it has one, and return it (ADR-0143).
+    leading Warm-up Section when it has one, and return it (ADR-0144).
 
     Raises ``SessionNotFound`` for a missing or another user's Session, ``SessionPerformed``
     when any Logged Session references it, and ``UnknownDrillExercise`` for a drill outside

@@ -69,6 +69,15 @@ import { ConfirmDialog } from "@/components/pulse/confirm-dialog";
 import { WarmUpPanel } from "@/components/WarmUpSuggestion";
 import { LIVE_WARM_UP_ADD_LOCKED_NOTE } from "@/lib/live-warm-up";
 import { WARM_UP_ADD_FALLBACK_ERROR } from "@/lib/warm-up-suggestion";
+import { EquipmentSubstitutionSheet } from "@/components/EquipmentSubstitutionSheet";
+import { SubstituteButton } from "@/components/SubstituteButton";
+import { RestoreOriginalButton } from "@/components/RestoreOriginalButton";
+import {
+  EQUIPMENT_SUBSTITUTION_APPLY_FALLBACK_ERROR,
+  EQUIPMENT_SUBSTITUTION_PREVIEW_FALLBACK_ERROR,
+} from "@/lib/equipment-substitution";
+import { SUBSTITUTE_EQUIPMENT_OPTIONS } from "@/lib/substitute-equipment";
+import { restoreOriginalView } from "@/lib/restore-original-view";
 import { ActionSheetPanel } from "@/components/pulse/action-sheet";
 import { AiHandoffSheet } from "@/components/AiHandoffControl";
 import { aiHandoff } from "@/lib/ai-handoff";
@@ -123,7 +132,7 @@ import type { Achievement } from "@/lib/profile-progress-types";
 import { SetAsideNote } from "@/components/SetAsideNote";
 import { BasedOnNote } from "@/components/BasedOnNote";
 import { protocolsIndex, type LiveSessionContext } from "@/lib/protocols-index";
-import { adminExerciseRows, auditEntry, exerciseDetail, generationCallDetails, generationCallFilters, generationCallPager, generationCallRows, exerciseNames, exercises, history, historyIndex, liveWorkout, personalRecords, prescriptions, profile, progressStory, protocolIndexEntries, protocolProgress, sessions, taxonomy, volumePoints, warmUpSuggestion, workout } from "./fixtures";
+import { adminExerciseRows, auditEntry, exerciseDetail, generationCallDetails, generationCallFilters, generationCallPager, generationCallRows, exerciseNames, exercises, history, historyIndex, liveWorkout, personalRecords, prescriptions, profile, progressStory, protocolIndexEntries, protocolProgress, sessions, substitutionOutcomes, blockedRows, taxonomy, volumePoints, warmUpSuggestion, workout } from "./fixtures";
 
 const params = new URLSearchParams(location.search);
 if (params.get("fonts") === "fontsource") {
@@ -390,7 +399,7 @@ function ConfirmSurface() {
   />;
 }
 
-// The Warm-up Suggestion panel (ADR-0143) past its button, which only an AI round trip reaches,
+// The Warm-up Suggestion panel (ADR-0144) past its button, which only an AI round trip reaches,
 // so no other journey renders it. `warm-up` is the preview at its widest: six drills, a Replace
 // that failed (its error under the actions), and the Live Session's lock note — every line the
 // panel can show at once. `warm-up-replace` is the same preview with its Replace confirmation
@@ -407,6 +416,28 @@ function WarmUpSurface({ confirming }: { confirming: boolean }) {
       ? { status: "confirmingReplace", suggestion: warmUpSuggestion }
       : { status: "addError", suggestion: warmUpSuggestion, message: WARM_UP_ADD_FALLBACK_ERROR }}
   />;
+}
+
+// Equipment Substitution (ADR-0143) past its button: each step of the Missing equipment? sheet
+// is reached only through a click and a preview or apply round trip, the single Substitute's
+// picker only through a click, and Restore only once a Session holds a substitute, so no other
+// journey renders them. Every step is at its widest: the picker with every chip ticked (the
+// longest "Using:" line) and a failed preview; the preview with a row unticked and a failed
+// apply; the outcome with a flagged row; then the open Substitute picker and Restore naming the
+// longer fixture name.
+function SubstitutionSurface() {
+  const everything = [...SUBSTITUTE_EQUIPMENT_OPTIONS];
+  return <div className="flex flex-col gap-6">
+    <EquipmentSubstitutionSheet sessionId={1} showSubstitute defaultEquipment={everything}
+      initialState={{ step: "picking", equipment: everything, error: EQUIPMENT_SUBSTITUTION_PREVIEW_FALLBACK_ERROR }} />
+    <EquipmentSubstitutionSheet sessionId={1} showSubstitute defaultEquipment={everything}
+      initialState={{ step: "preview", equipment: everything, rows: blockedRows, deselected: [2], error: EQUIPMENT_SUBSTITUTION_APPLY_FALLBACK_ERROR }} />
+    <EquipmentSubstitutionSheet sessionId={1} showSubstitute defaultEquipment={everything}
+      initialState={{ step: "outcome", rows: blockedRows, session: workout, outcomes: substitutionOutcomes }} />
+    <SubstituteButton sessionId={1} position={0} defaultEquipment={everything} initialOpen />
+    <RestoreOriginalButton sessionId={1} position={0}
+      view={restoreOriginalView({ prescribed_original: { exercise_name: exerciseNames[1] } }, { canSubstitute: true })} />
+  </div>;
 }
 
 // The action sheet that replaced the ⋯ More / ⋯ Actions disclosure (ADR-0113). It renders only
@@ -781,6 +812,7 @@ function Content() {
     case "confirm": return <ConfirmSurface />;
     case "warm-up": return <WarmUpSurface confirming={false} />;
     case "warm-up-replace": return <WarmUpSurface confirming />;
+    case "substitution": return <SubstitutionSurface />;
     case "sheet": return <SheetSurface />;
     case "session-header": return <SessionHeaderSurface />;
     case "handoff": return <HandoffSurface />;

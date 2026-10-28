@@ -21,7 +21,12 @@
 
 import { formatLongDate } from "./date-format.ts";
 import { parseApiInstant } from "./instant.ts";
-import { resumableLiveSlot, type LiveSessionState } from "./live-session.ts";
+import {
+  liveSessionStandingOf,
+  resumableLiveSlot,
+  type LiveSessionStanding,
+  type LiveSessionState,
+} from "./live-session.ts";
 
 export type ProtocolStatus = "current" | "set_aside" | "finished";
 
@@ -139,14 +144,11 @@ function progressText(performed: number, total: number): string {
   return `${performed} of ${total} ${total === 1 ? "session" : "sessions"}`;
 }
 
-// Where the Live Session stands for Switch and Delete: unread, none in progress, or the id of the one in
-// progress. It is the same slot Home offers to resume, so a slot another account left behind,
-// or a finished one, blocks nothing.
-type LiveSessionStanding = "unread" | "none" | number;
-
+// Where the Live Session stands for Switch and Delete. It is the same slot Home offers to
+// resume, so a slot another account left behind, or a finished one, blocks nothing.
 function liveSessionStanding(live: LiveSessionContext | null): LiveSessionStanding {
   if (live === null) return "unread";
-  return resumableLiveSlot(live.liveSlot, live.accountId)?.sessionId ?? "none";
+  return liveSessionStandingOf(resumableLiveSlot(live.liveSlot, live.accountId));
 }
 
 // One row action under the Live Session guard: pending while the slot is unread, available when

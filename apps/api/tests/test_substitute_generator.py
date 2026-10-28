@@ -117,6 +117,26 @@ def test_substitute_system_prompt_asks_for_a_primary_secondary_split():
     assert "secondary" in system
 
 
+def test_substitute_prompt_carries_the_originals_primary_and_secondary_muscles():
+    # Arrange — the original's muscle split rides on the request (ADR-0143, #790)
+    llm = FakeStructuredLLM(text=VALID_PAYLOAD)
+    generator = LlmSubstituteGenerator(llm)
+    request = SubstituteRequest(
+        original_name="Lat Pulldown",
+        original_primary_muscles=("latissimus dorsi",),
+        original_secondary_muscles=("biceps", "rear deltoids"),
+    )
+
+    # Act
+    generator.generate(request)
+
+    # Assert — the model sees which muscles the substitute must keep training
+    prompt = llm.calls[0]["user"]
+    assert "Primary muscles of the original: latissimus dorsi" in prompt
+    assert "Secondary muscles of the original: biceps, rear deltoids" in prompt
+    assert "same muscle groups" in llm.calls[0]["system"].lower()
+
+
 def test_substitute_split_defaults_empty_when_the_model_omits_it():
     # Arrange — an older-shaped payload with no primary/secondary split at all
     payload = """

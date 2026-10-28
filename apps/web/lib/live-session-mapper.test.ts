@@ -162,7 +162,7 @@ test("sends 'completed' when every prescribed set was attempted", () => {
 });
 
 test("sends 'completed' when only warm-up sets were skipped, so the Protocol advances", () => {
-  // Arrange — the squat line is a warm-up (ADR-0143); skip it, attempt both working sets
+  // Arrange — the squat line is a warm-up (ADR-0144); skip it, attempt both working sets
   const session: WorkoutSession = {
     ...SESSION,
     prescriptions: [

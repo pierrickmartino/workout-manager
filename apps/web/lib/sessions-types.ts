@@ -75,6 +75,10 @@ export interface ExercisePrescription {
   // decodes it for display. Optional like `set_type`: the plain Session and Protocol reads
   // carry it, other read paths need not.
   note?: string | null;
+  // The Prescribed Original (ADR-0143, #788): what "Restore original" brings back once this
+  // movement has been substituted, or `null`/absent when it never was. Only the Exercise name
+  // is sent — the original Load stays on the server. Read by `restore-original-view`.
+  prescribed_original?: { exercise_name: string } | null;
   exercise_id: number;
   exercise_name: string;
   exercise_description: string | null;

@@ -8,16 +8,29 @@ Exercise instantly. Only when no catalog link fits does it fall back to AI
 generation — the invented movement enters the shared catalog once, as
 ``ai_generated``, and is linked as an Alternative of the original. The swap mutates
 only the user's own Session copy, preserves the prescription's sets/reps, is
-unlimited, and never touches the once-per-Session regeneration guard."""
+unlimited, and never touches the once-per-Session regeneration guard.
+
+A swap onto different equipment re-expresses the Load, and the first swap keeps the
+Prescribed Original so ``restore_original`` can put it back (ADR-0143,
+``app.domain.prescribed_original``)."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from enum import Enum
 from functools import cache
 
 from app.db.models import Profile
 from app.domain.exercise import Provenance
+from app.domain.fitness_profile import resolve_equipment
+from app.domain.prescribed_original import (
+    PrescribedOriginal,
+    PrescriptionState,
+    restore_changes,
+    substitution_changes,
+)
+from app.domain.substitute_muscle_coverage import covers_original_muscle_groups
 from app.domain.substitution import (
     RelationKind,
     SubstituteCandidate,
@@ -26,6 +39,7 @@ from app.domain.substitution import (
     next_harder_variation,
     resolve_substitute,
 )
+from app.generation.schema import GeneratedSubstitute
 from app.generation.substitute_generator import (
     SubstituteGenerator,
     SubstituteRequest,
@@ -58,6 +72,43 @@ class SubstituteNotAvailable(Exception):
     prescription — so the safety posture cannot be bypassed by naming any Exercise."""
 
 
+class NoPrescribedOriginal(Exception):
+    """Restore was asked of a prescription that holds no Prescribed Original: it was
+    never substituted, or has already been restored (ADR-0143)."""
+
+
+class SessionPerformed(Exception):
+    """The Session is a Protocol member with a Logged Session behind it: settled
+    history, never rewritten. Only the un-performed tail of a Protocol is edited
+    (ADR-0020); a standalone Session is never refused, since a plan edit there only
+    reaches future performances."""
+
+
+class SubstituteMuscleMismatch(Exception):
+    """The AI fallback twice invented a substitute that does not train the original's
+    Muscle Groups (ADR-0143), so the Substitution fails and nothing is written."""
+
+
+# One try plus one retry for an AI substitute that misses the original's Muscle Groups.
+MUSCLE_CHECK_ATTEMPTS = 2
+
+
+class SubstitutionSource(str, Enum):
+    """Where a Substitution's new Exercise came from: a catalog Variation/Alternative, or
+    invented by the AI fallback."""
+
+    CATALOG = "catalog"
+    GENERATED = "generated"
+
+
+@dataclass(frozen=True)
+class SubstitutionOutcome:
+    """A persisted Substitution: the updated Session and where its new Exercise came from."""
+
+    session: SessionView
+    source: SubstitutionSource
+
+
 @dataclass(frozen=True)
 class HarderVariationSuggestion:
     """The next harder Variation offered when a pure-bodyweight Prescription has hit
@@ -67,7 +118,7 @@ class HarderVariationSuggestion:
     name: str
 
 
-def _candidate(related: RelatedExercise) -> SubstituteCandidate:
+def substitute_candidate(related: RelatedExercise) -> SubstituteCandidate:
     """A catalog relationship, expressed as a candidate the rule can filter.
 
     The target Exercise's ``precautions`` become the candidate's
@@ -83,14 +134,46 @@ def _candidate(related: RelatedExercise) -> SubstituteCandidate:
     )
 
 
-def _context(profile: Profile, goal: str | None) -> SubstitutionContext:
+def substitution_context(
+    profile: Profile | None,
+    goal: str | None,
+    available_equipment: Sequence[str] | None = None,
+) -> SubstitutionContext:
+    """The user-side choices for one Substitution. ``available_equipment`` is the equipment
+    stated for this action; ``None`` inherits the Default Equipment and an empty list is
+    bodyweight only (ADR-0038, ADR-0143). Constraints always come from the Profile; a user
+    with no stored Profile has no Default Equipment and no constraints."""
+
+    equipment = resolve_equipment(
+        None if available_equipment is None else list(available_equipment),
+        profile.default_equipment if profile is not None else [],
+    )
+    constraints = (
+        list(profile.preferences) + list(profile.sensitive_constraints)
+        if profile is not None
+        else []
+    )
     return SubstitutionContext(
-        available_equipment=frozenset(profile.default_equipment),
-        constraints=frozenset(
-            list(profile.preferences) + list(profile.sensitive_constraints)
-        ),
+        available_equipment=frozenset(equipment),
+        constraints=frozenset(constraints),
         goal=goal,
     )
+
+
+def ensure_editable(
+    view: SessionView, clerk_user_id: str, logged: LoggedSessionRepository
+) -> None:
+    """Raise ``SessionPerformed`` when ``view`` is a performed Protocol Session.
+
+    "Performed" means *any* Logged Session references it, whatever its Completion
+    Outcome — an Incomplete log is still a record of that plan — matching the
+    read-time Logged Count the Session page reads and the Warm-up guard. Shared by
+    every Substitution write (single swap, Restore, Equipment Substitution)."""
+
+    if not view.is_protocol_member:
+        return
+    if logged.count_for_session(clerk_user_id, view.id) > 0:
+        raise SessionPerformed(view.id)
 
 
 def _find_prescription(view: SessionView, position: int) -> PrescriptionView | None:
@@ -106,11 +189,13 @@ def substitute_exercise(
     position: int,
     *,
     target_exercise_id: int | None = None,
+    available_equipment: Sequence[str] | None = None,
     relationships: ExerciseRelationshipRepository,
     exercises: ExerciseRepository,
     sessions: SessionRepository,
     profiles: ProfileRepository,
     generator: SubstituteGenerator,
+    logged: LoggedSessionRepository,
 ) -> SessionView:
     """Substitute the Exercise at ``position`` in the owner's Session.
 
@@ -121,31 +206,72 @@ def substitute_exercise(
     Exercise. Without it, resolution is automatic: a compatible catalog link is
     swapped in lookup-first, falling back to AI generation only when none fits.
 
+    ``available_equipment`` is the equipment the user has for this one action (ADR-0143):
+    omitted, the Default Equipment applies; an empty list means bodyweight only. It
+    filters catalog candidates and reaches the AI fallback; the Profile is never written.
+
     Raises ``SessionNotFound`` if the user does not own the Session,
+    ``SessionPerformed`` if it is a performed Protocol Session (always checked:
+    ``logged`` is required, ADR-0020),
     ``PrescriptionNotFound`` if it has no prescription at ``position``, and
     ``GenerationError`` (from the generator) if the AI fallback output is
-    malformed — in every failure case nothing is persisted.
+    malformed, or ``SubstituteMuscleMismatch`` if it twice misses the original's
+    Muscle Groups (ADR-0143) — in every failure case nothing is persisted.
     """
+
+    return substitute_with_source(
+        session_id,
+        clerk_user_id,
+        position,
+        target_exercise_id=target_exercise_id,
+        available_equipment=available_equipment,
+        relationships=relationships,
+        exercises=exercises,
+        sessions=sessions,
+        profiles=profiles,
+        generator=generator,
+        logged=logged,
+    ).session
+
+
+def substitute_with_source(
+    session_id: int,
+    clerk_user_id: str,
+    position: int,
+    *,
+    target_exercise_id: int | None = None,
+    available_equipment: Sequence[str] | None = None,
+    relationships: ExerciseRelationshipRepository,
+    exercises: ExerciseRepository,
+    sessions: SessionRepository,
+    profiles: ProfileRepository,
+    generator: SubstituteGenerator,
+    logged: LoggedSessionRepository,
+) -> SubstitutionOutcome:
+    """``substitute_exercise``, also reporting whether the new Exercise came from the
+    catalog or the AI fallback — what Equipment Substitution reports per row."""
 
     view = sessions.get(session_id, clerk_user_id)
     if view is None:
         raise SessionNotFound(session_id)
+    ensure_editable(view, clerk_user_id, logged)
 
     prescription = _find_prescription(view, position)
     if prescription is None:
         raise PrescriptionNotFound(position)
 
     profile = profiles.get_or_create(clerk_user_id)
-    context = _context(profile, view.training_type)
+    context = substitution_context(profile, view.training_type, available_equipment)
     candidates = [
-        _candidate(related)
+        substitute_candidate(related)
         for related in relationships.substitutes_for(prescription.exercise_id)
     ]
 
     if target_exercise_id is not None:
         new_exercise_id = _accept_target(target_exercise_id, candidates, context)
+        source = SubstitutionSource.CATALOG
     else:
-        new_exercise_id = _auto_resolve(
+        new_exercise_id, source = _auto_resolve(
             prescription,
             context,
             view.training_type,
@@ -155,8 +281,69 @@ def substitute_exercise(
             generator=generator,
         )
 
-    result = sessions.substitute_prescription(
-        session_id, clerk_user_id, position, new_exercise_id
+    target = exercises.get(new_exercise_id)
+    changes = substitution_changes(
+        _prescription_state(prescription),
+        target_exercise_id=new_exercise_id,
+        target_equipment=list(target.required_equipment) if target is not None else [],
+    )
+    result = sessions.revise_prescription(
+        session_id, clerk_user_id, position, changes
+    )
+    if result is None:  # ownership/position checked above; defensive only
+        raise SessionNotFound(session_id)
+    return SubstitutionOutcome(session=result, source=source)
+
+
+def _prescription_state(prescription: PrescriptionView) -> PrescriptionState:
+    return PrescriptionState(
+        exercise_id=prescription.exercise_id,
+        exercise_name=prescription.exercise_name,
+        required_equipment=tuple(prescription.required_equipment),
+        recommended_load=prescription.recommended_load,
+        scheme=prescription.scheme,
+        prescribed_original=PrescribedOriginal.from_stored(
+            prescription.prescribed_original
+        ),
+    )
+
+
+def restore_original(
+    session_id: int,
+    clerk_user_id: str,
+    position: int,
+    *,
+    sessions: SessionRepository,
+    logged: LoggedSessionRepository,
+) -> SessionView:
+    """Restore the prescription at ``position`` to its Prescribed Original (ADR-0143).
+
+    Puts the snapshotted Exercise, Load and Progression Scheme back exactly and clears
+    the snapshot. No AI call and no catalog write.
+
+    Raises ``SessionNotFound`` if the user does not own the Session,
+    ``SessionPerformed`` if it is a performed Protocol Session (Restore is offered only
+    where Substitution is), ``PrescriptionNotFound`` if it has no prescription at
+    ``position``, and ``NoPrescribedOriginal`` if that prescription holds no snapshot.
+    Nothing is persisted on any failure."""
+
+    view = sessions.get(session_id, clerk_user_id)
+    if view is None:
+        raise SessionNotFound(session_id)
+    ensure_editable(view, clerk_user_id, logged)
+
+    prescription = _find_prescription(view, position)
+    if prescription is None:
+        raise PrescriptionNotFound(position)
+    original = PrescribedOriginal.from_stored(prescription.prescribed_original)
+    if original is None:
+        raise NoPrescribedOriginal(position)
+
+    result = sessions.revise_prescription(
+        session_id,
+        clerk_user_id,
+        position,
+        restore_changes(original),
     )
     if result is None:  # ownership/position checked above; defensive only
         raise SessionNotFound(session_id)
@@ -190,12 +377,12 @@ def _auto_resolve(
     relationships: ExerciseRelationshipRepository,
     exercises: ExerciseRepository,
     generator: SubstituteGenerator,
-) -> int:
+) -> tuple[int, SubstitutionSource]:
     """Resolve a swap lookup-first, inventing an AI substitute only when none fits."""
 
     resolution = resolve_substitute(candidates, context)
     if resolution.needs_ai_fallback:
-        return _generate_substitute(
+        generated_id = _generate_substitute(
             prescription,
             context,
             training_type,
@@ -203,7 +390,8 @@ def _auto_resolve(
             exercises=exercises,
             generator=generator,
         )
-    return resolution.candidate.exercise_id
+        return generated_id, SubstitutionSource.GENERATED
+    return resolution.candidate.exercise_id, SubstitutionSource.CATALOG
 
 
 def _suggestion_for(
@@ -224,7 +412,7 @@ def _suggestion_for(
 
     current = exercises.get(prescription.exercise_id)
     candidates = [
-        _candidate(related)
+        substitute_candidate(related)
         for related in relationships.substitutes_for(prescription.exercise_id)
     ]
     harder = next_harder_variation(
@@ -241,7 +429,7 @@ def _lazy_context(
 ) -> Callable[[], SubstitutionContext]:
     """The user's SubstitutionContext, read from the Profile at most once."""
 
-    return cache(lambda: _context(profiles.get_or_create(clerk_user_id), goal))
+    return cache(lambda: substitution_context(profiles.get_or_create(clerk_user_id), goal))
 
 
 def harder_variation_suggestion(
@@ -343,15 +531,31 @@ def _generate_substitute(
     generator: SubstituteGenerator,
 ) -> int:
     """Invent a substitute, store it once as ``ai_generated``, and link it as an
-    Alternative of the original so future lookups can resolve it."""
+    Alternative of the original so future lookups can resolve it.
 
-    generated = generator.generate(
-        SubstituteRequest(
-            original_name=prescription.exercise_name,
-            training_type=goal,
-            available_equipment=tuple(sorted(context.available_equipment)),
-            constraints=tuple(sorted(context.constraints)),
-        )
+    The output must cover the original's Muscle Groups (ADR-0143): a mismatch is
+    retried once, and a second mismatch raises ``SubstituteMuscleMismatch`` before
+    anything reaches the shared catalog."""
+
+    original = exercises.get(prescription.exercise_id)
+    original_primary = tuple(original.primary_muscles) if original else ()
+    original_targeted = (
+        tuple(original.targeted_muscles)
+        if original
+        else tuple(prescription.targeted_muscles)
+    )
+    request = SubstituteRequest(
+        original_name=prescription.exercise_name,
+        training_type=goal,
+        available_equipment=tuple(sorted(context.available_equipment)),
+        constraints=tuple(sorted(context.constraints)),
+        original_primary_muscles=original_primary,
+        original_secondary_muscles=(
+            tuple(original.secondary_muscles) if original else ()
+        ),
+    )
+    generated = _generate_covering(
+        request, original_targeted=original_targeted, generator=generator
     )
     exercise = exercises.find_or_create(
         generated.exercise_name,
@@ -369,13 +573,43 @@ def _generate_substitute(
     return exercise.id
 
 
+def _generate_covering(
+    request: SubstituteRequest,
+    *,
+    original_targeted: tuple[str, ...],
+    generator: SubstituteGenerator,
+) -> GeneratedSubstitute:
+    """Ask the AI for a substitute until one covers the original's Muscle Groups, at
+    most ``MUSCLE_CHECK_ATTEMPTS`` times; nothing is written while trying."""
+
+    for _ in range(MUSCLE_CHECK_ATTEMPTS):
+        generated = generator.generate(request)
+        if covers_original_muscle_groups(
+            original_primary=request.original_primary_muscles,
+            original_targeted=original_targeted,
+            substitute_primary=generated.primary_muscles,
+        ):
+            return generated
+    raise SubstituteMuscleMismatch(request.original_name)
+
+
 __all__ = [
+    "substitute_candidate",
+    "substitution_context",
     "SessionNotFound",
     "PrescriptionNotFound",
     "SubstituteNotAvailable",
+    "SubstituteMuscleMismatch",
+    "NoPrescribedOriginal",
+    "SessionPerformed",
+    "SubstitutionSource",
+    "SubstitutionOutcome",
     "HarderVariationSuggestion",
     "PositionedSuggestion",
     "substitute_exercise",
+    "substitute_with_source",
+    "restore_original",
+    "ensure_editable",
     "harder_variation_suggestion",
     "harder_variation_suggestions",
 ]

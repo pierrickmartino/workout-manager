@@ -2,7 +2,7 @@
 status: proposed
 ---
 
-# 0143 — A Warm-up Suggestion prepends warm-up prescriptions to one un-performed Session
+# 0144 — A Warm-up Suggestion prepends warm-up prescriptions to one un-performed Session
 
 A user about to train wants the app to propose a short warm-up for the muscles the Session
 works. We add a **Warm-up Suggestion** (`GLOSSARY.md`, §Generation & Reuse): one tap on the

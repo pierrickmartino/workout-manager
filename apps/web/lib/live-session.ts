@@ -25,7 +25,7 @@ export interface PreviousReference {
 export type LiveStatus = "not_started" | "in_progress" | "finished";
 
 // The Completion Outcome (ADR-0013): whether the performance attempted every
-// prescribed set that is not a warm-up (ADR-0143). Completed when all those sets were
+// prescribed set that is not a warm-up (ADR-0144). Completed when all those sets were
 // attempted (a zero-rep completed set still counts as attempted); Incomplete when any
 // was left un-attempted. A skipped warm-up set never makes a Session Incomplete.
 export type CompletionOutcome = "completed" | "incomplete";
@@ -181,6 +181,20 @@ export function resumableLiveSlot(
 ): LiveSessionState | null {
   if (stored === null || stored.status === "finished") return null;
   return ownsLiveSlot(stored, currentAccountId) ? stored : null;
+}
+
+// Where the account's Live Session stands for a guard: the slot not yet read (it lives in
+// client storage, so the server render and the first paint cannot know), none in progress, or
+// the id of the Session in progress. A guard treats "unread" as not yet interactive.
+export type LiveSessionStanding = "unread" | "none" | number;
+
+// The standing of a resumable slot as `useResumableLiveSlot` reports it: `undefined` while
+// unread, `null` when no Live Session is in progress.
+export function liveSessionStandingOf(
+  slot: LiveSessionState | null | undefined,
+): LiveSessionStanding {
+  if (slot === undefined) return "unread";
+  return slot?.sessionId ?? "none";
 }
 
 // Decide what happens when the user arrives at a Session's live route, given the
@@ -524,14 +538,14 @@ function currentSet(state: LiveSessionState): LiveSet | undefined {
   return state.sets[index];
 }
 
-// The sets the Completion Outcome counts (ADR-0143): the non-warm-up ones, whoever authored
+// The sets the Completion Outcome counts (ADR-0144): the non-warm-up ones, whoever authored
 // them, or every set when all are warm-ups — never a vacuous Completed, never a 0/0 progress.
 function gatingSets(state: LiveSessionState): readonly LiveSet[] {
   return completionGatingItems(state.sets, (set) => set.setType);
 }
 
 // Set-based percent-complete: attempted (completed) sets over the prescribed sets the
-// Completion Outcome counts (no warm-ups, ADR-0143), rounded to a whole percent, so it
+// Completion Outcome counts (no warm-ups, ADR-0144), rounded to a whole percent, so it
 // reaches 100% exactly when the outcome is Completed. Zero for an empty Session.
 export function progressPercent(state: LiveSessionState): number {
   const counted = gatingSets(state);
@@ -541,7 +555,7 @@ export function progressPercent(state: LiveSessionState): number {
   return Math.round((attempted / total) * 100);
 }
 
-// The derived Completion Outcome (ADR-0013, amended by ADR-0143): Completed only when
+// The derived Completion Outcome (ADR-0013, amended by ADR-0144): Completed only when
 // every counted set (`gatingSets`) was attempted (a set is "attempted" once it is
 // completed — even at zero reps, ground out to failure); Incomplete when any counted set
 // is still pending (skipped/left un-attempted). This is the client-declared verdict the finish

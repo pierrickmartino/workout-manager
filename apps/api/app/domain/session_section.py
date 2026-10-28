@@ -188,7 +188,7 @@ def _is_warm_up_like(item: _Sectionable) -> bool:
 def reads_as_warm_up_drill(exercise_name: str) -> bool:
     """Whether a movement's name reads as warm-up drill material: dynamic prep, activation
     or mobility work. The catalog-first filter for a Warm-up Suggestion's candidates
-    (ADR-0143) reads the same vocabulary the Warm-up Section does, so a reused catalog drill
+    (ADR-0144) reads the same vocabulary the Warm-up Section does, so a reused catalog drill
     is one this projection would also section as warm-up."""
 
     name = _normalize(exercise_name)

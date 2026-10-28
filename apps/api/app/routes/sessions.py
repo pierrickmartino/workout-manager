@@ -85,6 +85,10 @@ from app.repositories.session_repository import (
 from app.repositories.share_link_repository import ShareLinkRepository
 from app.routes.logs import LogSetBody, serialize_logged_session
 from app.routes.prescription_body import AuthorPrescriptionBody, EditPrescriptionBody
+from app.routes.substitution_body import (
+    AvailableEquipmentBody,
+    performed_session_conflict,
+)
 from app.scheme_selection.service import (
     IncompatibleScheme,
     SchemeNotOnProtocolMember,
@@ -105,12 +109,14 @@ from app.sessions.service import SessionNotFound as SessionServiceNotFound
 from app.substitution.service import (
     HarderVariationSuggestion,
     PrescriptionNotFound,
+    SubstituteMuscleMismatch,
     SubstituteNotAvailable,
     harder_variation_suggestion,
     harder_variation_suggestions,
     substitute_exercise,
 )
 from app.substitution.service import SessionNotFound as SubstituteSessionNotFound
+from app.substitution.service import SessionPerformed as SubstituteSessionPerformed
 
 router = APIRouter(prefix="/api", tags=["sessions"])
 
@@ -898,11 +904,15 @@ def regenerate(
     return success_envelope(_serialize(view))
 
 
-class SubstituteBody(BaseModel):
+class SubstituteBody(AvailableEquipmentBody):
     """The optional accept payload for a Substitution. ``target_exercise_id`` names a
     specific catalog Variation/Alternative to advance to — e.g. accepting the
     harder-Variation offer at the rep ceiling (#202). Omitted, the swap resolves
-    automatically, lookup-first."""
+    automatically, lookup-first.
+
+    ``available_equipment`` is the equipment the user has for this one Substitution (ADR-0143):
+    omitted, the Default Equipment applies; an explicit empty list is bodyweight only
+    (ADR-0038). Each value must be a curated Equipment token (ADR-0077), else 422."""
 
     target_exercise_id: int | None = None
 
@@ -920,28 +930,42 @@ def substitute(
     sessions: SessionRepository = Depends(get_session_repository),
     profiles: ProfileRepository = Depends(get_profile_repository),
     generator: SubstituteGenerator = Depends(get_substitute_generator),
+    logged: LoggedSessionRepository = Depends(get_logged_session_repository),
 ) -> dict:
     target_exercise_id = body.target_exercise_id if body is not None else None
+    available_equipment = body.equipment_values() if body is not None else None
     try:
         view = substitute_exercise(
             session_id,
             clerk_user_id,
             position,
             target_exercise_id=target_exercise_id,
+            available_equipment=available_equipment,
             relationships=relationships,
             exercises=exercises,
             sessions=sessions,
             profiles=profiles,
             generator=generator,
+            logged=logged,
         )
     except (SubstituteSessionNotFound, PrescriptionNotFound) as exc:
         raise HTTPException(
             status_code=HTTP_NOT_FOUND, detail="Prescription not found"
         ) from exc
+    except SubstituteSessionPerformed as exc:
+        raise performed_session_conflict() from exc
     except SubstituteNotAvailable as exc:
         raise HTTPException(
             status_code=HTTP_CONFLICT,
             detail="That substitute is not available for this prescription.",
+        ) from exc
+    except SubstituteMuscleMismatch as exc:
+        raise HTTPException(
+            status_code=HTTP_BAD_GATEWAY,
+            detail=(
+                "No substitute training the same muscle groups could be found. "
+                "The exercise was left as it was."
+            ),
         ) from exc
     except GenerationError as exc:
         raise HTTPException(

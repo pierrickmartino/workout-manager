@@ -1,4 +1,4 @@
-"""Warm-up Suggestion — the pure rules behind the AI warm-up preview (ADR-0143).
+"""Warm-up Suggestion — the pure rules behind the AI warm-up preview (ADR-0144).
 
 A **Warm-up Suggestion** proposes 4–6 general mobility/activation drills for the muscles a
 Session works. Everything the generator needs, and everything the API decides without the
@@ -16,7 +16,7 @@ HTTP, no AI.
   drill's one-set prescription — reps or seconds, bodyweight or a named Load, never kg —
   shared by the preview and the add step.
 
-Readiness is deliberately not an input (ADR-0143)."""
+Readiness is deliberately not an input (ADR-0144)."""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ from app.domain.session_section import (
     sectionize,
 )
 
-#: The drill count and time budget every suggestion is held to (ADR-0143).
+#: The drill count and time budget every suggestion is held to (ADR-0144).
 MIN_DRILLS = 4
 MAX_DRILLS = 6
 MIN_MINUTES = 5
@@ -157,7 +157,7 @@ def derive_warm_up_input(
     profile_constraints: Iterable[str],
 ) -> WarmUpInput:
     """Derive a Warm-up Suggestion's input from one Session's ordered Prescriptions plus the
-    owner's Profile (ADR-0143). See :class:`WarmUpInput` for each field's meaning."""
+    owner's Profile (ADR-0144). See :class:`WarmUpInput` for each field's meaning."""
 
     working = _working(prescriptions)
     unmapped = tuple(

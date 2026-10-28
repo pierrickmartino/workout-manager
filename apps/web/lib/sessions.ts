@@ -9,6 +9,7 @@ import type { LoggedSession } from "./logs-types";
 import type { EditPlanInput } from "./session-edit";
 import type { SessionSummary } from "./session-library";
 import type { WarmUpDrill, WarmUpSuggestion } from "./warm-up-suggestion";
+import type { BlockedRow, PositionOutcome } from "./equipment-substitution";
 import type {
   ExerciseDetail,
   GenerateSessionInput,
@@ -242,19 +243,64 @@ export async function fetchExercise(
 // `Content-Type` — preserved exactly as before. Passing ``targetExerciseId`` names
 // a specific catalog Variation/Alternative to advance to — e.g. accepting the
 // harder-Variation offer at the rep ceiling (#202) — sent as `target_exercise_id`.
+// ``availableEquipment`` is the equipment chosen for this one Substitution (ADR-0143), sent as
+// `available_equipment`: omitted inherits the Default Equipment, `[]` is bodyweight only.
 export async function substitutePrescription(
   sessionId: number,
   position: number,
   targetExerciseId?: number,
+  availableEquipment?: readonly string[],
 ): Promise<Envelope<WorkoutSession>> {
   const path = `/api/sessions/${sessionId}/prescriptions/${position}/substitute`;
-  if (targetExerciseId === undefined) {
+  if (targetExerciseId === undefined && availableEquipment === undefined) {
     return apiSend(path, "POST");
   }
-  return apiSend(path, "POST", { target_exercise_id: targetExerciseId });
+  return apiSend(path, "POST", {
+    ...(targetExerciseId === undefined ? {} : { target_exercise_id: targetExerciseId }),
+    ...(availableEquipment === undefined
+      ? {}
+      : { available_equipment: [...availableEquipment] }),
+  });
 }
 
-// Ask for a Warm-up Suggestion for the user's own Session (ADR-0143): 4–6 AI drills for the
+// Restore the substituted Exercise prescribed at ``position`` to its Prescribed Original —
+// Exercise, Load and Progression Scheme — on the user's own Session (ADR-0143, #788). No AI
+// call; bodyless POST. Returns the updated Session. A non-owned Session or absent position is
+// 404; no held original, or a performed Protocol Session, is 409.
+export async function restorePrescription(
+  sessionId: number,
+  position: number,
+): Promise<Envelope<WorkoutSession>> {
+  return apiSend(`/api/sessions/${sessionId}/prescriptions/${position}/restore`, "POST");
+}
+
+// Equipment Substitution preview (ADR-0143, #791): every prescription the stated Available
+// Equipment blocks, with its catalog substitute or a needs-generation marker. No AI call and no
+// write. `availableEquipment` omitted inherits the Default Equipment; `[]` is bodyweight only.
+export async function previewEquipmentSubstitution(
+  sessionId: number,
+  availableEquipment?: readonly string[],
+): Promise<Envelope<{ rows: BlockedRow[] }>> {
+  const path = `/api/sessions/${sessionId}/equipment-substitution/preview`;
+  if (availableEquipment === undefined) return apiSend(path, "POST");
+  return apiSend(path, "POST", { available_equipment: [...availableEquipment] });
+}
+
+// Equipment Substitution apply (ADR-0143, #791): substitute the selected blocked positions, each
+// independently. Returns the updated Session and a per-position outcome; a position that is not
+// blocked is 422, a performed Protocol Session 409.
+export async function applyEquipmentSubstitution(
+  sessionId: number,
+  availableEquipment: readonly string[],
+  positions: readonly number[],
+): Promise<Envelope<{ session: WorkoutSession; outcomes: PositionOutcome[] }>> {
+  return apiSend(`/api/sessions/${sessionId}/equipment-substitution`, "POST", {
+    available_equipment: [...availableEquipment],
+    positions: [...positions],
+  });
+}
+
+// Ask for a Warm-up Suggestion for the user's own Session (ADR-0144): 4–6 AI drills for the
 // muscles it works, as a preview. Synchronous; never changes the Session. `regenerate` asks for
 // a fresh suggestion. A non-owned Session is 404, a malformed generation 502.
 export async function suggestWarmUp(
@@ -265,7 +311,7 @@ export async function suggestWarmUp(
 }
 
 // Add previewed Warm-up Suggestion drills to the front of the user's own un-performed Session
-// (ADR-0143, #780) — standalone or Protocol member — as one-set warm-up Prescriptions. Returns
+// (ADR-0144, #780) — standalone or Protocol member — as one-set warm-up Prescriptions. Returns
 // the updated Session. Another user's Session is 404, a performed one 409, a bad drill 422.
 export async function addWarmUp(
   sessionId: number,

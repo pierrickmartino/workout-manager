@@ -1,9 +1,9 @@
-"""Adding a Warm-up Suggestion to a Session, end to end (ADR-0143, #780).
+"""Adding a Warm-up Suggestion to a Session, end to end (ADR-0144, #780).
 
 ``PUT /api/sessions/{id}/warm-up`` takes the previewed drills and puts them at the front of
 the owner's un-performed Session as one-set Exercise Prescriptions with the **warm-up** Set
 Type, renumbering the rest contiguously. It works on a standalone Session and — the narrow
-ADR-0143 exception to Deploy — on one Protocol-member Session. A performed Session (any
+ADR-0144 exception to Deploy — on one Protocol-member Session. A performed Session (any
 Logged Session references it) is ``409``; another user's Session is ``404``. Session
 Provenance is unchanged. Real JWKS verification; in-memory repositories."""
 

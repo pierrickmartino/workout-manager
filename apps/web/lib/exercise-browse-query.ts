@@ -50,10 +50,10 @@ export function parseCatalogFilters(raw: RawSearchParams): CatalogFilters {
   };
 }
 
-// Toggle `value` in a multi-select facet list immutably: remove it if present, append it
-// if absent. The one mutation rule behind every facet chip, kept pure so it is trivially
-// testable and never mutates the caller's array.
-export function toggleFacetValue(values: readonly string[], value: string): string[] {
+// Toggle `value` in a multi-select list immutably: remove it if present, append it if
+// absent. The one mutation rule behind every facet chip and the Substitution pickers, kept
+// pure so it is trivially testable and never mutates the caller's array.
+export function toggleFacetValue<T>(values: readonly T[], value: T): T[] {
   return values.includes(value)
     ? values.filter((existing) => existing !== value)
     : [...values, value];

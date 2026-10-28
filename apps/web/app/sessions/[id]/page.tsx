@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { ArrowRight, ChevronRight, ClipboardCheck, Pencil, Play } from "@/components/pulse/icons";
 
 import { SubstituteButton } from "@/components/SubstituteButton";
+import { EquipmentSubstitutionSheet } from "@/components/EquipmentSubstitutionSheet";
+import { RestoreOriginalButton } from "@/components/RestoreOriginalButton";
 import { WarmUpSuggestion } from "@/components/WarmUpSuggestion";
 import { DuplicateButton } from "@/components/DuplicateButton";
 import { RenameSessionControl } from "@/components/RenameSessionControl";
@@ -19,6 +21,7 @@ import {
   actionSheetItemClass,
 } from "@/components/pulse/action-sheet-item";
 import { resolveAppearance } from "@/lib/appearance";
+import { fetchProfile } from "@/lib/profile";
 import type { WeightUnit } from "@/lib/weight-unit";
 import { RemoveExerciseButton } from "@/components/RemoveExerciseButton";
 import { HarderVariationOffer } from "@/components/HarderVariationOffer";
@@ -49,6 +52,8 @@ import { BasedOnNote } from "@/components/BasedOnNote";
 import { sessionFavoriteView } from "@/lib/session-favorite";
 import { sessionDeleteView, DELETE_DISABLED_HINT } from "@/lib/session-delete";
 import { sessionEditView } from "@/lib/session-edit";
+import { substituteView } from "@/lib/substitute-view";
+import { restoreOriginalView } from "@/lib/restore-original-view";
 import { submitDeleteSession } from "@/app/sessions/[id]/actions";
 import { appendFrom } from "@/lib/back-target";
 import { Skeleton } from "@/components/pulse/skeleton";
@@ -205,7 +210,7 @@ export default async function SessionPage({
         <SectionHeader meta={`${session.prescriptions.length} EXERCISES`}>
           PROTOCOL
         </SectionHeader>
-        {/* Warm-up Suggestion (ADR-0143): preview AI warm-up drills for this Session's muscles.
+        {/* Warm-up Suggestion (ADR-0144): preview AI warm-up drills for this Session's muscles.
             Hidden once the Session has been performed; the preview never changes the plan. */}
         <WarmUpSuggestion session={session} unit={unit} />
         {/* The cards wait on the harder-Variation offer read; everything above and below them needs
@@ -285,32 +290,53 @@ async function PrescriptionList({
   supersetSlots: readonly (SupersetSlot | undefined)[];
   removeAffordanceList: ReturnType<typeof removeAffordances>;
 }) {
-  const envelope = await fetchHarderVariations(session.id).catch(() => null);
+  // The Default Equipment pre-fills each Substitute picker (ADR-0143); a failed Profile read
+  // leaves the picker empty (Bodyweight only) rather than blocking the page.
+  const [envelope, profile] = await Promise.all([
+    fetchHarderVariations(session.id).catch(() => null),
+    fetchProfile().catch(() => null),
+  ]);
+  const defaultEquipment =
+    profile?.success && profile.data ? profile.data.default_equipment_canonical : [];
   const offers = harderVariationOffersFor(
     session.prescriptions.map((prescription) => prescription.position),
     envelope?.success && envelope.data ? envelope.data.offers : null,
   );
+  // Substitute (and accepting a harder Variation, which is a Substitution) is withheld on a
+  // performed Protocol Session — settled history (#787, ADR-0020); the server 409 backstops it.
+  const { show: showSubstitute } = substituteView(session);
 
   return (
-    <ol className="flex list-none flex-col gap-3 p-0">
-      {session.prescriptions.map((prescription, index) => (
-        <li key={prescription.position}>
-          <PrescriptionCard
-            prescription={prescription}
-            superset={supersetSlots[index]}
-            sessionId={session.id}
-            unit={unit}
-            index={index + 1}
-            harderVariation={offers[index]}
-            schemeModel={schemeControlModel(prescription)}
-            showScheme={!(session.is_protocol_member ?? false)}
-            showRemove={removeAffordanceList[index].showRemove}
-            canRemove={removeAffordanceList[index].canRemove}
-            dissolvesSuperset={removeAffordanceList[index].dissolvesSuperset}
-          />
-        </li>
-      ))}
-    </ol>
+    <div className="flex flex-col gap-3">
+      {/* Equipment Substitution (ADR-0143, #791): substitute every exercise the equipment at hand
+          blocks, in this Session only. Offered where Substitute is; locked by a Live Session. */}
+      <EquipmentSubstitutionSheet
+        sessionId={session.id}
+        showSubstitute={showSubstitute}
+        defaultEquipment={defaultEquipment}
+      />
+      <ol className="flex list-none flex-col gap-3 p-0">
+        {session.prescriptions.map((prescription, index) => (
+          <li key={prescription.position}>
+            <PrescriptionCard
+              prescription={prescription}
+              superset={supersetSlots[index]}
+              sessionId={session.id}
+              unit={unit}
+              index={index + 1}
+              harderVariation={offers[index]}
+              schemeModel={schemeControlModel(prescription)}
+              showScheme={!(session.is_protocol_member ?? false)}
+              showSubstitute={showSubstitute}
+              showRemove={removeAffordanceList[index].showRemove}
+              canRemove={removeAffordanceList[index].canRemove}
+              dissolvesSuperset={removeAffordanceList[index].dissolvesSuperset}
+              defaultEquipment={defaultEquipment}
+            />
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 
@@ -337,9 +363,11 @@ function PrescriptionCard({
   harderVariation,
   schemeModel,
   showScheme,
+  showSubstitute,
   showRemove,
   canRemove,
   dissolvesSuperset,
+  defaultEquipment,
 }: {
   prescription: ExercisePrescription;
   superset: SupersetSlot | undefined;
@@ -352,9 +380,11 @@ function PrescriptionCard({
   // whose scheme is chosen on the Builder and committed via Deploy (standalone-only in place).
   schemeModel: SchemeControlModel;
   showScheme: boolean;
+  showSubstitute: boolean;
   showRemove: boolean;
   canRemove: boolean;
   dissolvesSuperset: boolean;
+  defaultEquipment: readonly string[];
 }) {
   // The plan read like the Live Session's set table (ADR-0114): a summary line and one row per
   // set, rest following the Superset rule (ADR-0023). The NEXT row under it is the applied
@@ -365,6 +395,7 @@ function PrescriptionCard({
   const note = exerciseNoteText(prescription);
   const setType = prescriptionSetTypeBadge(prescription);
   const effort = targetEffortLabel(prescription);
+  const restore = restoreOriginalView(prescription, { canSubstitute: showSubstitute });
   const hasBadges =
     isGrouped || prescription.provenance === "ai_generated" || setType !== null || effort !== null;
   return (
@@ -426,11 +457,13 @@ function PrescriptionCard({
 
       <PrescriptionSetTable name={prescription.exercise_name} view={plan} next={next} />
 
-      <HarderVariationOffer
-        sessionId={sessionId}
-        position={prescription.position}
-        offer={harderVariation}
-      />
+      {showSubstitute ? (
+        <HarderVariationOffer
+          sessionId={sessionId}
+          position={prescription.position}
+          offer={harderVariation}
+        />
+      ) : null}
 
       {/* Progression Scheme (ADR-0064, #432): choose how this movement's un-performed tail
           steps, offering only schemes compatible with its Load. Standalone-only — a Protocol
@@ -449,7 +482,22 @@ function PrescriptionCard({
 
       <div className="flex flex-wrap items-center gap-3">
         {/* Substitute stays on the primary surface — an in-context, non-destructive edit. */}
-        <SubstituteButton sessionId={sessionId} position={prescription.position} />
+        {showSubstitute ? (
+          <SubstituteButton
+            sessionId={sessionId}
+            position={prescription.position}
+            defaultEquipment={defaultEquipment}
+          />
+        ) : null}
+        {/* Restore original (ADR-0143, #788): once substituted, put back the Prescribed
+            Original's Exercise, Load and scheme — offered only where Substitute is. */}
+        {restore.show ? (
+          <RestoreOriginalButton
+            sessionId={sessionId}
+            position={prescription.position}
+            view={restore}
+          />
+        ) : null}
         {/* Remove (ADR-0052): withdraw this movement from a standalone Session — Insert's
             symmetric partner. Destructive, so demoted one tap behind a per-row action sheet
             (docs/redesign-ia.md, ADR-0071, ADR-0113). The sheet is rendered only when Remove is

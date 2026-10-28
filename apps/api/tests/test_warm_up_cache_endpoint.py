@@ -1,4 +1,4 @@
-"""Warm-up Suggestions are cached, with the Sensitive Constraint bypass (ADR-0003, ADR-0143, #781).
+"""Warm-up Suggestions are cached, with the Sensitive Constraint bypass (ADR-0003, ADR-0144, #781).
 
 A suggestion is stored immutably on a coarse key — the sorted muscle set and the sorted
 equipment set — so an equivalent request is served without a new AI call. **Regenerate**

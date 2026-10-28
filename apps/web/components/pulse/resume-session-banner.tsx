@@ -1,23 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useAuth } from "@clerk/nextjs";
-import { startTransition, useEffect, useState, ViewTransition } from "react";
+import { ViewTransition } from "react";
 import { Play } from "@/components/pulse/icons";
 
-import { readLiveSessionSlot } from "@/lib/live-session-storage";
-import { resumableLiveSlot } from "@/lib/live-session";
+import { useResumableLiveSlot } from "@/lib/use-resumable-live-slot";
 import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { NAV_FORWARD } from "@/lib/nav-direction";
-
-// The unfinished session offered on Home, once its owner is known.
-interface ResumableSlot {
-  sessionId: number;
-  // When the performance was started (epoch ms), for the "Started …" line. Null on an
-  // untimed performance, in which case no start time is shown.
-  startedAt: number | null;
-}
 
 // Format a slot's start instant as a friendly local date/time, or null when the
 // performance was never timed. Locale/zone come from the reader's browser.
@@ -42,21 +32,11 @@ function formatStartedAt(startedAt: number | null): string | null {
 // client-side hard expiry — an abandoned same-account slot is always offered, with its
 // start date/time — distinct from ADR-0014's server-side idle auto-end.
 export function ResumeSessionBanner(): React.JSX.Element | null {
-  const { userId, isLoaded } = useAuth();
-  const [slot, setSlot] = useState<ResumableSlot | null>(null);
+  // Read in a Transition by the hook, so the banner's arrival after hydration — and its
+  // departure on an account change — animate instead of popping (ADR-0124).
+  const slot = useResumableLiveSlot();
 
-  useEffect(() => {
-    if (!isLoaded) return;
-    const stored = resumableLiveSlot(readLiveSessionSlot(), userId ?? null);
-    const resumable = stored
-      ? { sessionId: stored.sessionId, startedAt: stored.startedAt }
-      : null;
-    // In a Transition, so the banner's arrival after hydration — and its departure on an
-    // account change — animate instead of popping (ADR-0124).
-    startTransition(() => setSlot(resumable));
-  }, [isLoaded, userId]);
-
-  if (slot === null) return null;
+  if (slot === null || slot === undefined) return null;
 
   const startedLabel = formatStartedAt(slot.startedAt);
 

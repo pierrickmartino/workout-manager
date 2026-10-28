@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 
 import {
   addWarmUp,
+  applyEquipmentSubstitution,
   chooseScheme,
   clearScheme,
   createShareLink,
@@ -13,8 +14,10 @@ import {
   editSessionPlan,
   favoriteSession,
   insertPrescription,
+  previewEquipmentSubstitution,
   removePrescription,
   renameSession,
+  restorePrescription,
   revokeShareLink,
   substitutePrescription,
   suggestWarmUp,
@@ -27,6 +30,13 @@ import {
   type WarmUpDrill,
   type WarmUpResult,
 } from "@/lib/warm-up-suggestion";
+import { readSubstituteEquipment } from "@/lib/substitute-equipment";
+import {
+  toApplyResult,
+  toPreviewResult,
+  type ApplyResult,
+  type PreviewResult,
+} from "@/lib/equipment-substitution";
 import { requestSessionDelete } from "@/app/sessions/delete-request";
 import { toDuplicateResult } from "@/lib/duplicate-session";
 import {
@@ -282,7 +292,14 @@ export async function submitSubstitute(
     return { error: "Could not determine which exercise to substitute." };
   }
 
-  const result = await substitutePrescription(sessionId, position);
+  // The Available Equipment the picker stated for this Substitution (ADR-0143); undefined
+  // inherits the Default Equipment server-side.
+  const result = await substitutePrescription(
+    sessionId,
+    position,
+    undefined,
+    readSubstituteEquipment(form),
+  );
   if (!result.success || !result.data) {
     return { error: result.error ?? "Could not substitute this exercise." };
   }
@@ -291,7 +308,57 @@ export async function submitSubstitute(
   return { error: null };
 }
 
-// Ask for a Warm-up Suggestion preview for this Session (ADR-0143, #778). Nothing is changed,
+// Put a substituted Exercise back to its Prescribed Original (Restore, ADR-0143, #788). On
+// success the Session page is revalidated so the original movement renders in place.
+export async function submitRestore(
+  _prevState: SubstituteFormState,
+  form: FormData,
+): Promise<SubstituteFormState> {
+  const sessionId = Number(form.get("session_id"));
+  const position = Number(form.get("position"));
+  if (!Number.isInteger(sessionId) || !Number.isInteger(position)) {
+    return { error: "Could not determine which exercise to restore." };
+  }
+
+  const result = await restorePrescription(sessionId, position);
+  if (!result.success || !result.data) {
+    return { error: result.error ?? "Could not restore the original exercise." };
+  }
+
+  revalidatePath(`/sessions/${sessionId}`);
+  return { error: null };
+}
+
+// Preview an Equipment Substitution (ADR-0143, #791): which exercises the chosen equipment blocks.
+// Nothing is changed, so nothing is revalidated.
+export async function requestEquipmentSubstitutionPreview(
+  sessionId: number,
+  availableEquipment: readonly string[],
+): Promise<PreviewResult> {
+  if (!Number.isInteger(sessionId)) {
+    return { ok: false, message: "Could not determine which session to check." };
+  }
+  return toPreviewResult(await previewEquipmentSubstitution(sessionId, availableEquipment));
+}
+
+// Apply an Equipment Substitution to the selected positions (ADR-0143, #791). Rows that worked
+// are persisted even when another is flagged, so the page is revalidated on any success.
+export async function submitEquipmentSubstitution(
+  sessionId: number,
+  availableEquipment: readonly string[],
+  positions: readonly number[],
+): Promise<ApplyResult> {
+  if (!Number.isInteger(sessionId) || !positions.every(Number.isInteger)) {
+    return { ok: false, message: "Could not determine which exercises to substitute." };
+  }
+  const result = toApplyResult(
+    await applyEquipmentSubstitution(sessionId, availableEquipment, positions),
+  );
+  if (result.ok) revalidatePath(`/sessions/${sessionId}`);
+  return result;
+}
+
+// Ask for a Warm-up Suggestion preview for this Session (ADR-0144, #778). Nothing is changed,
 // so nothing is revalidated: the result is handed back for the preview to render, or the
 // server's message (with a fallback) for its error state and retry.
 export async function requestWarmUpSuggestion(
@@ -304,7 +371,7 @@ export async function requestWarmUpSuggestion(
   return toWarmUpResult(await suggestWarmUp(sessionId, regenerate));
 }
 
-// Add the previewed Warm-up Suggestion drills to the front of this Session (ADR-0143, #780).
+// Add the previewed Warm-up Suggestion drills to the front of this Session (ADR-0144, #780).
 // On success the Session page is revalidated so it re-renders with its new Warm-up Section; on
 // failure (performed 409, not the user's 404, bad drill 422) the server's message comes back for
 // the preview's error and retry, and nothing is changed.

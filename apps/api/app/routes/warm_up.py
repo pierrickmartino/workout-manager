@@ -1,4 +1,4 @@
-"""Warm-up Suggestion routes (ADR-0143).
+"""Warm-up Suggestion routes (ADR-0144).
 
 ``POST /api/sessions/{id}/warm-up-suggestion`` previews 4–6 AI warm-up drills for the
 owner's Session, synchronously, under the standard envelope. It never changes the Session.
