@@ -12,12 +12,13 @@ unlimited, and never touches the once-per-Session regeneration guard."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import cache
 
 from app.db.models import Profile
 from app.domain.exercise import Provenance
+from app.domain.fitness_profile import resolve_equipment
 from app.domain.substitution import (
     RelationKind,
     SubstituteCandidate,
@@ -83,9 +84,21 @@ def _candidate(related: RelatedExercise) -> SubstituteCandidate:
     )
 
 
-def _context(profile: Profile, goal: str | None) -> SubstitutionContext:
+def _context(
+    profile: Profile,
+    goal: str | None,
+    available_equipment: Sequence[str] | None = None,
+) -> SubstitutionContext:
+    """The user-side choices for one Substitution. ``available_equipment`` is the kit
+    stated for this action; ``None`` inherits the Default Equipment and an empty list is
+    bodyweight only (ADR-0038, ADR-0143). Constraints always come from the Profile."""
+
+    equipment = resolve_equipment(
+        None if available_equipment is None else list(available_equipment),
+        profile.default_equipment,
+    )
     return SubstitutionContext(
-        available_equipment=frozenset(profile.default_equipment),
+        available_equipment=frozenset(equipment),
         constraints=frozenset(
             list(profile.preferences) + list(profile.sensitive_constraints)
         ),
@@ -106,6 +119,7 @@ def substitute_exercise(
     position: int,
     *,
     target_exercise_id: int | None = None,
+    available_equipment: Sequence[str] | None = None,
     relationships: ExerciseRelationshipRepository,
     exercises: ExerciseRepository,
     sessions: SessionRepository,
@@ -120,6 +134,10 @@ def substitute_exercise(
     is raised so the safety posture (ADR-0003) cannot be bypassed by naming any
     Exercise. Without it, resolution is automatic: a compatible catalog link is
     swapped in lookup-first, falling back to AI generation only when none fits.
+
+    ``available_equipment`` is the kit the user has for this one action (ADR-0143):
+    omitted, the Default Equipment applies; an empty list means bodyweight only. It
+    filters catalog candidates and reaches the AI fallback; the Profile is never written.
 
     Raises ``SessionNotFound`` if the user does not own the Session,
     ``PrescriptionNotFound`` if it has no prescription at ``position``, and
@@ -136,7 +154,7 @@ def substitute_exercise(
         raise PrescriptionNotFound(position)
 
     profile = profiles.get_or_create(clerk_user_id)
-    context = _context(profile, view.training_type)
+    context = _context(profile, view.training_type, available_equipment)
     candidates = [
         _candidate(related)
         for related in relationships.substitutes_for(prescription.exercise_id)
