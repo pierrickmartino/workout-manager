@@ -205,3 +205,15 @@ in a throttled signed-in run.
 - ⬜ V-13 **Stream the AI Hand-off on History detail** behind `<Suspense>`, so the record doesn't wait on the plan read.
 - ⬜ V-14 **Parallelize the Capture page reads** (`fetchLog`, `fetchProfile`, `resolveAppearance` in one `Promise.all`, then `notFound` and the redirect).
 - ⬜ V-15 **Stream the Exercise image proxy** (`upstream.body` instead of `arrayBuffer()`).
+
+## 13. Vercel view transitions audit (28 Oct)
+
+Source: [view-transitions 2026-10-28](docs/research/audit/vercel/view-transitions-2026-10-28.md).
+Running-app verification stays the §11 View Transitions item (VT-4); the missing loading
+boundaries are §12 V-10. Each link choice goes into the ADR-0121 navigation map.
+
+- ⬜ VT-5 **Type Home's quick actions:** `NAV_FORWARD` on Start, Build and Log, carried by the `QuickAction` view-model (`lib/quick-actions.ts`); `/sessions` stays untyped (crosses to Train).
+- ⬜ VT-6 **Spread `NAV_BACK` on the Protocol builder's Cancel** (`ProtocolBuilder.tsx:285`), the edit page's only way up; the guard then carries it through a confirmed Discard.
+- ⬜ VT-7 **Decide whether `/protocols/new` and `/protocols/new/curated` are siblings or parent and child.** Today the link in is lateral and the `BackLink` out slides back. The recommendation is siblings (ADR-0130): give the Curated page the same way up.
+- ⬜ VT-8 **Turn the History month like a page:** a month-keyed `TimelinePageTransition`, `goToMonth` in a Transition through a new `nav-direction` helper, the policy extended to hand-written `addTransitionType` strings, and an ADR-0122 amendment.
+- ⬜ VT-9 **Decide on list identity for History cards** now that History shows one month (the 10 Oct deferral's trigger). Adopt per-card keyed boundaries for facet changes, or record why not in ADR-0138. Design it together with VT-8.
