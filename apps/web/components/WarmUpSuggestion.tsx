@@ -4,11 +4,14 @@ import { useReducer, useTransition } from "react";
 import { Loader2, Plus, RefreshCw, X, Zap } from "@/components/pulse/icons";
 
 import { requestWarmUpSuggestion, submitWarmUp } from "@/app/sessions/[id]/actions";
+import { ConfirmDialog } from "@/components/pulse/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { useConnectivity } from "@/lib/use-connectivity";
 import type { WorkoutSession } from "@/lib/sessions-types";
 import type { WeightUnit } from "@/lib/weight-unit";
 import {
+  WARM_UP_REPLACE_CONFIRMATION,
+  WARM_UP_REPLACE_CONFIRM_LABEL,
   initialWarmUpState,
   warmUpAddLabel,
   warmUpButtonView,
@@ -25,7 +28,8 @@ interface WarmUpSuggestionProps {
 
 // The Session preview's Warm-up Suggestion (ADR-0143, #778). Add (#780) saves the drills as the
 // Session's leading Warm-up Section; the server action revalidates the page, so the plan below
-// re-renders with them.
+// re-renders with them. When the Session already opens with a Warm-up Section, Add reads Replace
+// and the app's own `ConfirmDialog` guards it (#782).
 export function WarmUpSuggestion({ session, unit }: WarmUpSuggestionProps) {
   const online = useConnectivity();
   return (
@@ -88,6 +92,8 @@ export function WarmUpPanel({
 
   const add = (suggestion: WarmUpSuggestionPayload) => {
     dispatch({ type: "addRequested" });
+    // A replacement waits for confirmation first; only a step that reaches `adding` saves.
+    if (warmUpReducer(state, { type: "addRequested" }).status !== "adding") return;
     startTransition(async () => {
       const result = await submitWarmUp(sessionId, suggestion.drills);
       dispatch(result.ok ? { type: "added" } : { type: "addFailed", message: result.message });
@@ -95,7 +101,12 @@ export function WarmUpPanel({
     });
   };
 
-  if (state.status === "ready" || state.status === "adding" || state.status === "addError") {
+  if (
+    state.status === "ready" ||
+    state.status === "confirmingReplace" ||
+    state.status === "adding" ||
+    state.status === "addError"
+  ) {
     const preview = warmUpPreview(state.suggestion, unit);
     const adding = state.status === "adding";
     return (
@@ -151,6 +162,16 @@ export function WarmUpPanel({
           <span role="alert" className="font-mono text-[12px] text-magenta">
             {state.message}
           </span>
+        ) : null}
+        {state.status === "confirmingReplace" ? (
+          <ConfirmDialog
+            title="Replace warm-up?"
+            message={WARM_UP_REPLACE_CONFIRMATION}
+            confirmLabel={WARM_UP_REPLACE_CONFIRM_LABEL}
+            cancelLabel="Keep current"
+            onCancel={() => dispatch({ type: "replaceCancelled" })}
+            onConfirm={() => add(state.suggestion)}
+          />
         ) : null}
       </div>
     );
