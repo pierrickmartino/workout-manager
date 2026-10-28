@@ -14,6 +14,7 @@ import {
   warmUpButtonView,
   warmUpPreview,
   warmUpReducer,
+  type WarmUpButtonView,
   type WarmUpSuggestion as WarmUpSuggestionPayload,
 } from "@/lib/warm-up-suggestion";
 
@@ -22,23 +23,52 @@ interface WarmUpSuggestionProps {
   unit: WeightUnit;
 }
 
-// The Session preview's Warm-up Suggestion (ADR-0143, #778): a button that asks the AI for 4–6
-// drills, a loading state, the preview with Add, Discard and Regenerate, and an error with Retry.
-// Add (#780) saves the drills as the Session's leading Warm-up Section; the server action
-// revalidates the page, so the plan below re-renders with them. Every rule lives in the
-// view-model.
+// The Session preview's Warm-up Suggestion (ADR-0143, #778). Add (#780) saves the drills as the
+// Session's leading Warm-up Section; the server action revalidates the page, so the plan below
+// re-renders with them.
 export function WarmUpSuggestion({ session, unit }: WarmUpSuggestionProps) {
+  const online = useConnectivity();
+  return (
+    <WarmUpPanel
+      sessionId={session.id}
+      button={warmUpButtonView(session, online)}
+      online={online}
+      unit={unit}
+    />
+  );
+}
+
+interface WarmUpPanelProps {
+  sessionId: number;
+  button: WarmUpButtonView;
+  online: boolean;
+  unit: WeightUnit;
+  // Why Add is locked right now (the Live Session, #783), or null when it is allowed.
+  addLockedNote?: string | null;
+  // Runs after the drills are saved (the Live Session reloads itself, #783).
+  onAdded?: () => void;
+}
+
+// The shared Warm-up Suggestion panel: a button that asks the AI for 4–6 drills, a loading
+// state, the preview with Add, Discard and Regenerate, and an error with Retry. The caller
+// decides the button's visibility and label; every rule lives in the view-models.
+export function WarmUpPanel({
+  sessionId,
+  button,
+  online,
+  unit,
+  addLockedNote = null,
+  onAdded,
+}: WarmUpPanelProps) {
   const [state, dispatch] = useReducer(warmUpReducer, initialWarmUpState);
   const [, startTransition] = useTransition();
-  const online = useConnectivity();
-  const button = warmUpButtonView(session, online);
 
   if (!button.visible) return null;
 
   const request = (regenerate: boolean) => {
     dispatch({ type: "requested", regenerate });
     startTransition(async () => {
-      const result = await requestWarmUpSuggestion(session.id, regenerate);
+      const result = await requestWarmUpSuggestion(sessionId, regenerate);
       dispatch(
         result.ok
           ? { type: "succeeded", suggestion: result.suggestion }
@@ -59,8 +89,9 @@ export function WarmUpSuggestion({ session, unit }: WarmUpSuggestionProps) {
   const add = (suggestion: WarmUpSuggestionPayload) => {
     dispatch({ type: "addRequested" });
     startTransition(async () => {
-      const result = await submitWarmUp(session.id, suggestion.drills);
+      const result = await submitWarmUp(sessionId, suggestion.drills);
       dispatch(result.ok ? { type: "added" } : { type: "addFailed", message: result.message });
+      if (result.ok) onAdded?.();
     });
   };
 
@@ -86,7 +117,7 @@ export function WarmUpSuggestion({ session, unit }: WarmUpSuggestionProps) {
           <Button
             type="button"
             size="sm"
-            disabled={!online || adding}
+            disabled={!online || adding || addLockedNote !== null}
             onClick={() => add(state.suggestion)}
           >
             <Plus className="h-3.5 w-3.5" aria-hidden />
@@ -113,6 +144,9 @@ export function WarmUpSuggestion({ session, unit }: WarmUpSuggestionProps) {
             Discard
           </Button>
         </div>
+        {addLockedNote ? (
+          <span className="font-mono text-[12px] text-text-muted">{addLockedNote}</span>
+        ) : null}
         {state.status === "addError" ? (
           <span role="alert" className="font-mono text-[12px] text-magenta">
             {state.message}

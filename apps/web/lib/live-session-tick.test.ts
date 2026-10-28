@@ -166,6 +166,8 @@ async function mountLiveScreen(): Promise<{
         recordLiveSession: async () => ({ error: null }),
       },
       "@/app/actions/outbox": { deliverQueuedFinish: async () => {} },
+      // The warm-up panel reaches the Session's server actions (#783); not under test here.
+      "@/components/LiveWarmUpSuggestion": { LiveWarmUpSuggestion: () => null },
       "@/lib/finish-outbox-sync": {
         drainOutbox: async () => {},
         enqueueFinish: async () => true,
