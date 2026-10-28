@@ -277,6 +277,42 @@ def test_a_drill_with_a_kg_load_long_rest_or_no_amount_is_refused():
     assert len(harness.read(session_id)["prescriptions"]) == 2
 
 
+def test_a_hold_of_a_fraction_of_a_second_is_refused_never_stored_as_zero():
+    # Arrange
+    harness = Harness()
+    session_id = harness.session()
+    invalid = [
+        harness.drill(
+            "Plank", prescribed_quantity={"kind": "duration", "text": "0.5s", "seconds": seconds}
+        )
+        for seconds in (0.5, 30.5)
+    ]
+
+    # Act
+    statuses = [harness.apply(session_id, [drill]).status_code for drill in invalid]
+
+    # Assert
+    assert statuses == [422, 422]
+    assert len(harness.read(session_id)["prescriptions"]) == 2
+
+
+def test_a_whole_second_hold_sent_as_a_float_is_kept():
+    # Arrange — a JSON number like 30.0 is still a whole number of seconds
+    harness = Harness()
+    session_id = harness.session()
+    drill = harness.drill(
+        "Plank", prescribed_quantity={"kind": "duration", "text": "30s", "seconds": 30.0}
+    )
+
+    # Act
+    response = harness.apply(session_id, [drill])
+
+    # Assert
+    assert response.status_code == 200
+    first = response.json()["data"]["prescriptions"][0]
+    assert first["prescribed_quantity"]["seconds"] == 30
+
+
 def test_no_drills_is_refused():
     harness = Harness()
     session_id = harness.session()

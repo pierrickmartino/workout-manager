@@ -120,22 +120,31 @@ def warm_up_suggestion(
 
 
 class DrillQuantityBody(BaseModel):
-    """A drill's Prescribed Quantity as the preview returned it: reps or seconds."""
+    """A drill's Prescribed Quantity as the preview returned it: reps or whole seconds.
+
+    Both amounts are whole numbers of at least 1: a fractional value (``0.5`` s) is refused,
+    never truncated, so a drill can never be stored with a zero amount. A whole value sent
+    as a float (``30.0``) is accepted as that integer."""
 
     kind: Literal["repetitions", "duration"]
     count: int | None = Field(default=None, ge=1, le=MAX_DRILL_AMOUNT)
-    seconds: float | None = Field(default=None, gt=0, le=MAX_DRILL_AMOUNT)
+    seconds: int | None = Field(default=None, ge=1, le=MAX_DRILL_AMOUNT)
 
     @model_validator(mode="after")
     def _carries_its_amount(self) -> "DrillQuantityBody":
-        if self.amount is None:
+        if self._given_amount() is None:
             raise ValueError(f"a {self.kind} quantity needs its amount")
         return self
 
+    def _given_amount(self) -> int | None:
+        return self.count if self.kind == QuantityKind.REPETITIONS.value else self.seconds
+
     @property
-    def amount(self) -> int | None:
-        value = self.count if self.kind == QuantityKind.REPETITIONS.value else self.seconds
-        return None if value is None else int(value)
+    def amount(self) -> int:
+        amount = self._given_amount()
+        if amount is None:  # unreachable once validated; never coerce a missing amount to 0
+            raise ValueError(f"a {self.kind} quantity needs its amount")
+        return amount
 
 
 class DrillLoadBody(BaseModel):
@@ -165,7 +174,7 @@ class ApplyDrillBody(BaseModel):
         return WarmUpDrill(
             exercise_id=self.exercise_id,
             quantity_kind=QuantityKind(self.prescribed_quantity.kind),
-            amount=self.prescribed_quantity.amount or 0,
+            amount=self.prescribed_quantity.amount,
             load_kind=LoadKind(self.recommended_load.kind),
             load_text=self.recommended_load.text,
             rest_seconds=self.rest_seconds,
