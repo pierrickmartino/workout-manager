@@ -42,6 +42,11 @@ from #453. Warm-up sets were already left out of Volume and strength records, so
 uniformly not training work. They are still logged, and they still count for XP, Streak and
 Logged Count as before.
 
+A Session made **only** of warm-up sets is the one exception (#779). It has no other work, so
+exempting its warm-ups would make it vacuously Completed with nothing attempted and show a 0/0
+progress bar. Its warm-up sets are what it prescribes, so all of them count. The Live Session
+and the static log form apply this same rule.
+
 ## Generation is synchronous, catalog-first and cached
 
 The suggestion follows Substitution: one synchronous LLM call through the `StructuredLLM` port
