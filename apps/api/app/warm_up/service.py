@@ -26,7 +26,8 @@ from app.domain.warm_up import (
     leading_warm_up_length,
 )
 from app.generation.llm.port import GenerationError
-from app.generation.schema import GeneratedWarmUpDrill
+from app.generation.schema import GeneratedWarmUp, GeneratedWarmUpDrill
+from app.generation.warm_up_cache import WarmUpCache
 from app.generation.warm_up_generator import WarmUpGenerator, WarmUpRequest
 from app.repositories.exercise_repository import ExerciseRepository
 from app.repositories.profile_repository import ProfileRepository
@@ -124,8 +125,13 @@ def suggest_warm_up(
     profiles: ProfileRepository,
     exercises: ExerciseRepository,
     generator: WarmUpGenerator,
+    cache: WarmUpCache,
+    regenerate: bool = False,
 ) -> WarmUpSuggestion:
     """Preview a Warm-up Suggestion for the owner's Session (ADR-0143).
+
+    The generated suggestion is served through the coarse-keyed ``WarmUpCache`` (ADR-0003):
+    ``regenerate`` skips the cache read, and a Sensitive Constraint bypasses it entirely.
 
     Raises ``SessionNotFound`` if the user does not own the Session and ``GenerationError``
     when the model output is malformed or asks for equipment the user lacks — in which case
@@ -141,16 +147,21 @@ def suggest_warm_up(
         profile_equipment=profile.default_equipment,
         profile_constraints=profile.sensitive_constraints,
     )
-    generated = generator.generate(
-        WarmUpRequest(
-            muscles=derived.muscle_names,
-            unmapped_exercises=derived.unmapped_exercises,
-            equipment=derived.equipment,
-            sensitive_constraints=derived.sensitive_constraints,
-            candidate_drills=candidate_drills(exercises.list_all(), derived.equipment),
-        )
+    request = WarmUpRequest(
+        muscles=derived.muscle_names,
+        unmapped_exercises=derived.unmapped_exercises,
+        equipment=derived.equipment,
+        sensitive_constraints=derived.sensitive_constraints,
+        candidate_drills=candidate_drills(exercises.list_all(), derived.equipment),
     )
-    _check_equipment(generated.drills, derived.equipment, exercises)
+
+    def generate_checked(req: WarmUpRequest) -> GeneratedWarmUp:
+        # Checked before the cache stores it, so a refused suggestion is never cached.
+        generated = generator.generate(req)
+        _check_equipment(generated.drills, req.equipment, exercises)
+        return generated
+
+    generated = cache.suggestion_for(request, generate_checked, regenerate=regenerate)
     return WarmUpSuggestion(
         drills=tuple(_resolve(drill, exercises) for drill in generated.drills),
         estimated_minutes=generated.estimated_minutes,
