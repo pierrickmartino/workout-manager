@@ -37,6 +37,11 @@ class ProfileUpdate:
 
 
 class ProfileRepository(Protocol):
+    def find(self, clerk_user_id: str) -> Profile | None:
+        """The user's stored Profile, or ``None`` when they never saved one. A read-only
+        lookup: unlike ``get_or_create`` it never writes a row."""
+        ...
+
     def get_or_create(self, clerk_user_id: str) -> Profile:
         """Return the profile for ``clerk_user_id``, creating it if absent."""
         ...
@@ -85,13 +90,13 @@ class SqlProfileRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def _find(self, clerk_user_id: str) -> Profile | None:
+    def find(self, clerk_user_id: str) -> Profile | None:
         return self._session.exec(
             select(Profile).where(Profile.clerk_user_id == clerk_user_id)
         ).first()
 
     def get_or_create(self, clerk_user_id: str) -> Profile:
-        existing = self._find(clerk_user_id)
+        existing = self.find(clerk_user_id)
         if existing is not None:
             return existing
 
@@ -102,7 +107,7 @@ class SqlProfileRepository:
         return profile
 
     def update(self, clerk_user_id: str, update: ProfileUpdate) -> Profile:
-        profile = self._find(clerk_user_id)
+        profile = self.find(clerk_user_id)
         if profile is None:
             profile = Profile(clerk_user_id=clerk_user_id)
             self._session.add(profile)
@@ -114,11 +119,11 @@ class SqlProfileRepository:
         return profile
 
     def display_name(self, clerk_user_id: str) -> str | None:
-        profile = self._find(clerk_user_id)
+        profile = self.find(clerk_user_id)
         return profile.display_name if profile is not None else None
 
     def declared_fitness_levels(self, clerk_user_id: str) -> dict[str, int]:
-        profile = self._find(clerk_user_id)
+        profile = self.find(clerk_user_id)
         return dict(profile.fitness_levels) if profile is not None else {}
 
 
@@ -126,6 +131,9 @@ class InMemoryProfileRepository:
     def __init__(self) -> None:
         self._by_user: dict[str, Profile] = {}
         self._next_id = 1
+
+    def find(self, clerk_user_id: str) -> Profile | None:
+        return self._by_user.get(clerk_user_id)
 
     def get_or_create(self, clerk_user_id: str) -> Profile:
         existing = self._by_user.get(clerk_user_id)

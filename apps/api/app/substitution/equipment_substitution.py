@@ -160,8 +160,9 @@ def preview_equipment_substitution(
     bodyweight only (ADR-0038). Raises ``SessionNotFound`` / ``SessionPerformed``."""
 
     view = _editable_view(session_id, clerk_user_id, sessions, logged)
+    # A read-only lookup: the preview writes nothing, not even a first Profile row.
     context = _context(
-        profiles.get_or_create(clerk_user_id), view.training_type, available_equipment
+        profiles.find(clerk_user_id), view.training_type, available_equipment
     )
     return tuple(
         _preview_row(prescription, context, relationships)

@@ -207,6 +207,19 @@ def test_preview_makes_zero_generator_calls_and_writes_nothing():
     ]
 
 
+def test_preview_for_a_user_with_no_profile_creates_none_and_reads_bodyweight_only():
+    harness = Harness()
+    # The owner never saved a Profile: the stored one from setup is gone.
+    harness.profiles._by_user.pop(OWNER)
+
+    response = harness.preview()
+
+    assert response.status_code == 200, response.json()
+    blocked = [row["position"] for row in response.json()["data"]["rows"]]
+    assert blocked == [BENCH_POSITION, ROW_POSITION]
+    assert OWNER not in harness.profiles._by_user
+
+
 def test_preview_rejects_equipment_outside_the_curated_vocabulary():
     harness = Harness()
 

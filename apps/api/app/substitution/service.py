@@ -134,23 +134,27 @@ def _candidate(related: RelatedExercise) -> SubstituteCandidate:
 
 
 def _context(
-    profile: Profile,
+    profile: Profile | None,
     goal: str | None,
     available_equipment: Sequence[str] | None = None,
 ) -> SubstitutionContext:
     """The user-side choices for one Substitution. ``available_equipment`` is the equipment
     stated for this action; ``None`` inherits the Default Equipment and an empty list is
-    bodyweight only (ADR-0038, ADR-0143). Constraints always come from the Profile."""
+    bodyweight only (ADR-0038, ADR-0143). Constraints always come from the Profile; a user
+    with no stored Profile has no Default Equipment and no constraints."""
 
     equipment = resolve_equipment(
         None if available_equipment is None else list(available_equipment),
-        profile.default_equipment,
+        profile.default_equipment if profile is not None else [],
+    )
+    constraints = (
+        list(profile.preferences) + list(profile.sensitive_constraints)
+        if profile is not None
+        else []
     )
     return SubstitutionContext(
         available_equipment=frozenset(equipment),
-        constraints=frozenset(
-            list(profile.preferences) + list(profile.sensitive_constraints)
-        ),
+        constraints=frozenset(constraints),
         goal=goal,
     )
 
