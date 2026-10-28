@@ -22,6 +22,7 @@ from app.repositories.exercise_relationship_repository import (
     InMemoryExerciseRelationshipRepository,
 )
 from app.repositories.exercise_repository import InMemoryExerciseRepository
+from app.repositories.logged_session_repository import InMemoryLoggedSessionRepository
 from app.repositories.profile_repository import InMemoryProfileRepository
 from app.repositories.session_repository import (
     InMemorySessionRepository,
@@ -93,6 +94,7 @@ def _run(session, exercises, relationships, sessions, profiles, generator):
         sessions=sessions,
         profiles=profiles,
         generator=generator,
+        logged=InMemoryLoggedSessionRepository(sessions, exercises),
     )
 
 

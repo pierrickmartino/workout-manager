@@ -190,7 +190,7 @@ def substitute_exercise(
     sessions: SessionRepository,
     profiles: ProfileRepository,
     generator: SubstituteGenerator,
-    logged: LoggedSessionRepository | None = None,
+    logged: LoggedSessionRepository,
 ) -> SessionView:
     """Substitute the Exercise at ``position`` in the owner's Session.
 
@@ -206,8 +206,8 @@ def substitute_exercise(
     filters catalog candidates and reaches the AI fallback; the Profile is never written.
 
     Raises ``SessionNotFound`` if the user does not own the Session,
-    ``SessionPerformed`` if it is a performed Protocol Session (checked only when
-    ``logged`` is given — the route always passes it),
+    ``SessionPerformed`` if it is a performed Protocol Session (always checked:
+    ``logged`` is required, ADR-0020),
     ``PrescriptionNotFound`` if it has no prescription at ``position``, and
     ``GenerationError`` (from the generator) if the AI fallback output is
     malformed, or ``SubstituteMuscleMismatch`` if it twice misses the original's
@@ -241,7 +241,7 @@ def substitute_with_source(
     sessions: SessionRepository,
     profiles: ProfileRepository,
     generator: SubstituteGenerator,
-    logged: LoggedSessionRepository | None = None,
+    logged: LoggedSessionRepository,
 ) -> SubstitutionOutcome:
     """``substitute_exercise``, also reporting whether the new Exercise came from the
     catalog or the AI fallback — what Equipment Substitution reports per row."""
@@ -249,8 +249,7 @@ def substitute_with_source(
     view = sessions.get(session_id, clerk_user_id)
     if view is None:
         raise SessionNotFound(session_id)
-    if logged is not None:
-        ensure_editable(view, clerk_user_id, logged)
+    ensure_editable(view, clerk_user_id, logged)
 
     prescription = _find_prescription(view, position)
     if prescription is None:

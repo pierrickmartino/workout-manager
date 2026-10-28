@@ -225,6 +225,7 @@ def apply_equipment_substitution(
             sessions=sessions,
             profiles=profiles,
             generator=generator,
+            logged=logged,
         ).source
 
     outcomes = tuple(_substitute_one(position, run) for position in positions)
