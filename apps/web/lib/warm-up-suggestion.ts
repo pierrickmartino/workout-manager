@@ -119,6 +119,18 @@ export type WarmUpAction =
 
 export const initialWarmUpState: WarmUpState = { status: "idle" };
 
+// The suggestion the panel shows — from the preview until it is saved or discarded — or null
+// while it shows the button, the loading state or a request error.
+export function shownSuggestion(state: WarmUpState): WarmUpSuggestion | null {
+  return "suggestion" in state ? state.suggestion : null;
+}
+
+// Whether tapping Add first asks to confirm a replacement (#782) rather than saving: only the
+// first tap on a Replace. Once confirmed, or retried after a failure, it saves.
+export function addAwaitsConfirmation(state: WarmUpState): boolean {
+  return state.status === "ready" && state.suggestion.has_warm_up_section;
+}
+
 export function warmUpReducer(state: WarmUpState, action: WarmUpAction): WarmUpState {
   switch (action.type) {
     case "requested":
@@ -133,11 +145,13 @@ export function warmUpReducer(state: WarmUpState, action: WarmUpAction): WarmUpS
       };
     case "discarded":
       return initialWarmUpState;
-    case "addRequested":
-      if (state.status === "ready" && state.suggestion.has_warm_up_section) {
-        return { status: "confirmingReplace", suggestion: state.suggestion };
-      }
-      return "suggestion" in state ? { status: "adding", suggestion: state.suggestion } : state;
+    case "addRequested": {
+      const suggestion = shownSuggestion(state);
+      if (suggestion === null) return state;
+      return addAwaitsConfirmation(state)
+        ? { status: "confirmingReplace", suggestion }
+        : { status: "adding", suggestion };
+    }
     case "replaceCancelled":
       return state.status === "confirmingReplace"
         ? { status: "ready", suggestion: state.suggestion }
@@ -165,7 +179,7 @@ export const WARM_UP_REPLACE_CONFIRM_LABEL = "Replace warm-up";
 // The preview's Add button — Replace when the Session already opens with a Warm-up Section.
 // After a failure it offers a retry of the same drills.
 export function warmUpAddLabel(state: WarmUpState): WarmUpAddLabel {
-  const replacing = "suggestion" in state && state.suggestion.has_warm_up_section;
+  const replacing = shownSuggestion(state)?.has_warm_up_section ?? false;
   if (state.status === "adding") return replacing ? "Replacing…" : "Adding…";
   if (state.status === "addError") return replacing ? "Retry replace" : "Retry add";
   return replacing ? "Replace" : "Add";
