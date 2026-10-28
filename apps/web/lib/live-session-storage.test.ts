@@ -210,6 +210,51 @@ test("loadLiveSession rejects a slot whose idempotency key is not a string", () 
   assert.equal(loadLiveSession(storage), null);
 });
 
+test("loadLiveSession restores a slot saved before Set Type, its sets reading as working", () => {
+  // Arrange — an otherwise well-formed slot whose sets carry no Set Type, as written
+  // before #777. Like the idempotency key, the missing field must NOT purge the slot.
+  const storage = fakeStorage();
+  const legacy = {
+    ...inProgress(),
+    sets: inProgress().sets.map((set) => {
+      const untyped: Record<string, unknown> = { ...set };
+      delete untyped.setType;
+      return untyped;
+    }),
+  };
+  storage.setItem(LIVE_SESSION_SLOT_KEY, JSON.stringify(legacy));
+
+  // Act
+  const loaded = loadLiveSession(storage);
+
+  // Assert — the slot resumes and every set reads as working
+  assert.ok(loaded);
+  assert.equal(loaded.sets.length, legacy.sets.length);
+  assert.ok(loaded.sets.every((set) => set.setType === "working"));
+});
+
+test("a warm-up set's Set Type round-trips through the slot", () => {
+  // Arrange — a performance whose first line is a hand-authored warm-up
+  const storage = fakeStorage();
+  const session: WorkoutSession = {
+    ...SESSION,
+    prescriptions: SESSION.prescriptions.map((p, index) =>
+      index === 0 ? { ...p, set_type: "warm_up" } : p,
+    ),
+  };
+  const state = liveSessionReducer(initLiveSession(session, "kg"), {
+    type: "START",
+    now: 1_000_000,
+    accountId: "user_1",
+  });
+
+  // Act
+  saveLiveSession(storage, state);
+
+  // Assert
+  assert.equal(loadLiveSession(storage)?.sets[0].setType, "warm_up");
+});
+
 test("clearLiveSession empties the slot", () => {
   // Arrange
   const storage = fakeStorage();

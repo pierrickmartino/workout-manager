@@ -60,7 +60,7 @@ but only where counting a warm-up would actively mislead:
 |---|---|
 | **Volume** (kg tonnage) | **Excludes `warm-up`**; working / failure / AMRAP / drop count. Warm-up tonnage is not working volume. |
 | **Estimated 1RM / Personal Record / Top Set** | **Excludes `warm-up`** as a record candidate; the rest stay eligible, still behind the existing absolute-Load + trustworthy-rep gate (which already keeps light sets from setting records). |
-| **Completion Outcome** | **Unaffected** — the plan's prescribed-set *count* is what is checked (ADR-0013/0045), not the record's per-set labels. |
+| **Completion Outcome** | **Excludes `warm-up`** since [ADR-0143](./0143-a-warm-up-suggestion-prepends-warm-up-prescriptions-to-one-un-performed-session.md) (originally *unaffected*): a prescribed warm-up set never gates the verdict, so skipping one never makes a Session Incomplete; a Session made only of warm-up sets counts them all. |
 | **XP** | **Unaffected** — stays type-neutral and rewards every attempted set; a warm-up is still work, and no honesty caveat leaks into the currency (ADR-0018). |
 | **Logged Count** | **Unaffected** — counts performances, never sets. |
 

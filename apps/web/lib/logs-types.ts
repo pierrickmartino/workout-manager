@@ -109,6 +109,10 @@ export interface LogSetInput {
   // note". The backend length-caps and HTML-escapes it at the write boundary; a blank note
   // stores as unset. Rides the finish, the static log form, the ad-hoc log, and Log Correction.
   note?: string | null;
+  // The Set Type (ADR-0065) of the performed set, or omitted for "unset" (reads as working).
+  // The Live Session finish sends its live set's type, so a warm-up performed live leaves
+  // Volume and strength records (issue #777).
+  set_type?: string | null;
 }
 
 // The request the user submits to record a performance of a Session. The

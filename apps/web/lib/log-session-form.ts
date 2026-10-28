@@ -13,8 +13,8 @@
 //
 // Completion Outcome is **derived**, not declared (Q8, ADR-0013): a set is *attempted* when
 // its Done toggle is checked (Q10, Model B) — even at 0 reps, since a set ground out to
-// failure is still attempted — and a Session is Completed only when every prescribed set was
-// attempted.
+// failure is still attempted — and a Session is Completed only when every prescribed set that
+// is not a warm-up was attempted (ADR-0143).
 
 import type { CompletionOutcome } from "./logs-types";
 import { loadToFields, type LoadKind } from "./load.ts";
@@ -29,6 +29,7 @@ import {
 } from "./quantity.ts";
 import { readPostedSetRows, type LoggedSetRow } from "./logged-set.ts";
 import { supersetLayout, type SupersetSlot } from "./supersets.ts";
+import { resolveSetType, type SetType } from "./set-type-view.ts";
 import type { ExercisePrescription } from "./sessions-types";
 
 // Every prescription shows at least one row, even a malformed sets=0, so an exercise is never
@@ -91,6 +92,9 @@ export interface LogPrescriptionGroup {
   // hint and in the "N × … PRESCRIBED" line, straight from the verbatim free text. Kind-
   // agnostic since the plan became kind-aware (ADR-0050) — no longer reps-only.
   hint: string;
+  // The prescription's resolved Set Type (unset reads as working): a warm-up line never
+  // gates the Completion Outcome (ADR-0143).
+  setType: SetType;
   superset: SupersetSlot;
   rows: LogSetRow[];
 }
@@ -205,6 +209,7 @@ export function buildLogForm(
       prescribedSets: count,
       kind: seeded.kind,
       hint: prescription.reps,
+      setType: resolveSetType(prescription.set_type),
       superset: slots[index],
       rows,
     };
@@ -212,11 +217,15 @@ export function buildLogForm(
 }
 
 // The prescribed set count per prescription position — the yardstick Completion Outcome
-// derivation measures attempted sets against.
+// derivation measures attempted sets against. A warm-up line is left out, so skipping it
+// never makes the log Incomplete nor counts as a skip (ADR-0143); a Session made only of
+// warm-up lines has no other work, so then every line counts — the Live Session's rule.
 export function prescribedByPosition(
   groups: readonly LogPrescriptionGroup[],
 ): Map<number, number> {
-  return new Map(groups.map((group) => [group.position, group.prescribedSets]));
+  const nonWarmUp = groups.filter((group) => group.setType !== "warm_up");
+  const counted = nonWarmUp.length > 0 ? nonWarmUp : groups;
+  return new Map(counted.map((group) => [group.position, group.prescribedSets]));
 }
 
 // The count of attempted (Done) sets per prescription position across the live rows.
