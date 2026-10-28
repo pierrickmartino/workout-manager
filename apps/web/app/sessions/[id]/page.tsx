@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowRight, ChevronRight, ClipboardCheck, Pencil, Play } from "@/components/pulse/icons";
 
 import { SubstituteButton } from "@/components/SubstituteButton";
+import { EquipmentSubstitutionSheet } from "@/components/EquipmentSubstitutionSheet";
 import { RestoreOriginalButton } from "@/components/RestoreOriginalButton";
 import { WarmUpSuggestion } from "@/components/WarmUpSuggestion";
 import { DuplicateButton } from "@/components/DuplicateButton";
@@ -306,27 +307,36 @@ async function PrescriptionList({
   const { show: showSubstitute } = substituteView(session);
 
   return (
-    <ol className="flex list-none flex-col gap-3 p-0">
-      {session.prescriptions.map((prescription, index) => (
-        <li key={prescription.position}>
-          <PrescriptionCard
-            prescription={prescription}
-            superset={supersetSlots[index]}
-            sessionId={session.id}
-            unit={unit}
-            index={index + 1}
-            harderVariation={offers[index]}
-            schemeModel={schemeControlModel(prescription)}
-            showScheme={!(session.is_protocol_member ?? false)}
-            showSubstitute={showSubstitute}
-            showRemove={removeAffordanceList[index].showRemove}
-            canRemove={removeAffordanceList[index].canRemove}
-            dissolvesSuperset={removeAffordanceList[index].dissolvesSuperset}
-            defaultEquipment={defaultEquipment}
-          />
-        </li>
-      ))}
-    </ol>
+    <div className="flex flex-col gap-3">
+      {/* Equipment Substitution (ADR-0143, #791): substitute every exercise the kit at hand
+          blocks, in this Session only. Offered where Substitute is; locked by a Live Session. */}
+      <EquipmentSubstitutionSheet
+        sessionId={session.id}
+        showSubstitute={showSubstitute}
+        defaultEquipment={defaultEquipment}
+      />
+      <ol className="flex list-none flex-col gap-3 p-0">
+        {session.prescriptions.map((prescription, index) => (
+          <li key={prescription.position}>
+            <PrescriptionCard
+              prescription={prescription}
+              superset={supersetSlots[index]}
+              sessionId={session.id}
+              unit={unit}
+              index={index + 1}
+              harderVariation={offers[index]}
+              schemeModel={schemeControlModel(prescription)}
+              showScheme={!(session.is_protocol_member ?? false)}
+              showSubstitute={showSubstitute}
+              showRemove={removeAffordanceList[index].showRemove}
+              canRemove={removeAffordanceList[index].canRemove}
+              dissolvesSuperset={removeAffordanceList[index].dissolvesSuperset}
+              defaultEquipment={defaultEquipment}
+            />
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 

@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 
 import {
   addWarmUp,
+  applyEquipmentSubstitution,
   chooseScheme,
   clearScheme,
   createShareLink,
@@ -13,6 +14,7 @@ import {
   editSessionPlan,
   favoriteSession,
   insertPrescription,
+  previewEquipmentSubstitution,
   removePrescription,
   renameSession,
   restorePrescription,
@@ -29,6 +31,12 @@ import {
   type WarmUpResult,
 } from "@/lib/warm-up-suggestion";
 import { readSubstituteEquipment } from "@/lib/substitute-equipment";
+import {
+  toApplyResult,
+  toPreviewResult,
+  type ApplyResult,
+  type PreviewResult,
+} from "@/lib/equipment-substitution";
 import { requestSessionDelete } from "@/app/sessions/delete-request";
 import { toDuplicateResult } from "@/lib/duplicate-session";
 import {
@@ -319,6 +327,35 @@ export async function submitRestore(
 
   revalidatePath(`/sessions/${sessionId}`);
   return { error: null };
+}
+
+// Preview an Equipment Substitution (ADR-0143, #791): which exercises the chosen kit blocks.
+// Nothing is changed, so nothing is revalidated.
+export async function requestEquipmentSubstitutionPreview(
+  sessionId: number,
+  availableEquipment: readonly string[],
+): Promise<PreviewResult> {
+  if (!Number.isInteger(sessionId)) {
+    return { ok: false, message: "Could not determine which session to check." };
+  }
+  return toPreviewResult(await previewEquipmentSubstitution(sessionId, availableEquipment));
+}
+
+// Apply an Equipment Substitution to the selected positions (ADR-0143, #791). Rows that worked
+// are persisted even when another is flagged, so the page is revalidated on any success.
+export async function submitEquipmentSubstitution(
+  sessionId: number,
+  availableEquipment: readonly string[],
+  positions: readonly number[],
+): Promise<ApplyResult> {
+  if (!Number.isInteger(sessionId) || !positions.every(Number.isInteger)) {
+    return { ok: false, message: "Could not determine which exercises to substitute." };
+  }
+  const result = toApplyResult(
+    await applyEquipmentSubstitution(sessionId, availableEquipment, positions),
+  );
+  if (result.ok) revalidatePath(`/sessions/${sessionId}`);
+  return result;
 }
 
 // Ask for a Warm-up Suggestion preview for this Session (ADR-0143, #778). Nothing is changed,
