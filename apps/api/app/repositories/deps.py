@@ -35,6 +35,7 @@ from app.generation.substitute_generator import (
     LlmSubstituteGenerator,
     SubstituteGenerator,
 )
+from app.generation.warm_up_cache import WarmUpCache
 from app.generation.warm_up_generator import LlmWarmUpGenerator, WarmUpGenerator
 from app.generation.worker import QUEUE_NAME
 from app.repositories.active_skin_repository import (
@@ -240,6 +241,14 @@ def get_generation_cache(
 ) -> GenerationCache:
     client = redis.Redis.from_url(settings.redis_url)
     return GenerationCache(RedisCacheStore(client))
+
+
+def get_warm_up_cache(
+    settings: Settings = Depends(get_settings),
+) -> WarmUpCache:
+    # Warm-up Suggestions share the Generation Cache's Redis (ADR-0003, ADR-0143).
+    client = redis.Redis.from_url(settings.redis_url)
+    return WarmUpCache(RedisCacheStore(client))
 
 
 def get_job_queue(

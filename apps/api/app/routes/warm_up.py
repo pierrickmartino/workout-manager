@@ -12,11 +12,13 @@ from pydantic import BaseModel
 from app.auth.dependencies import get_current_user
 from app.envelope import success_envelope
 from app.generation.llm.port import GenerationError
+from app.generation.warm_up_cache import WarmUpCache
 from app.generation.warm_up_generator import WarmUpGenerator
 from app.repositories.deps import (
     get_exercise_repository,
     get_profile_repository,
     get_session_repository,
+    get_warm_up_cache,
     get_warm_up_generator,
 )
 from app.repositories.exercise_repository import ExerciseRepository
@@ -36,8 +38,7 @@ router = APIRouter(prefix="/api", tags=["warm-up"])
 
 
 class WarmUpSuggestionBody(BaseModel):
-    """``regenerate`` asks for a fresh suggestion. Every suggestion is generated fresh until
-    the cache lands (#781), when it will skip the cache read."""
+    """``regenerate`` asks for a fresh suggestion: it skips the cache read (ADR-0003)."""
 
     regenerate: bool = False
 
@@ -72,6 +73,7 @@ def warm_up_suggestion(
     profiles: ProfileRepository = Depends(get_profile_repository),
     exercises: ExerciseRepository = Depends(get_exercise_repository),
     generator: WarmUpGenerator = Depends(get_warm_up_generator),
+    cache: WarmUpCache = Depends(get_warm_up_cache),
 ) -> dict:
     try:
         suggestion = suggest_warm_up(
@@ -81,6 +83,8 @@ def warm_up_suggestion(
             profiles=profiles,
             exercises=exercises,
             generator=generator,
+            cache=cache,
+            regenerate=body.regenerate if body is not None else False,
         )
     except SessionNotFound as exc:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Session not found") from exc
