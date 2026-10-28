@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from enum import Enum
 from functools import cache
 
 from app.db.models import Profile
@@ -89,6 +90,22 @@ class SubstituteMuscleMismatch(Exception):
 
 # One try plus one retry for an AI substitute that misses the original's Muscle Groups.
 MUSCLE_CHECK_ATTEMPTS = 2
+
+
+class SubstitutionSource(str, Enum):
+    """Where a Substitution's new Exercise came from: a catalog Variation/Alternative, or
+    invented by the AI fallback."""
+
+    CATALOG = "catalog"
+    GENERATED = "generated"
+
+
+@dataclass(frozen=True)
+class SubstitutionOutcome:
+    """A persisted Substitution: the updated Session and where its new Exercise came from."""
+
+    session: SessionView
+    source: SubstitutionSource
 
 
 @dataclass(frozen=True)
@@ -197,6 +214,38 @@ def substitute_exercise(
     Muscle Groups (ADR-0143) — in every failure case nothing is persisted.
     """
 
+    return substitute_with_source(
+        session_id,
+        clerk_user_id,
+        position,
+        target_exercise_id=target_exercise_id,
+        available_equipment=available_equipment,
+        relationships=relationships,
+        exercises=exercises,
+        sessions=sessions,
+        profiles=profiles,
+        generator=generator,
+        logged=logged,
+    ).session
+
+
+def substitute_with_source(
+    session_id: int,
+    clerk_user_id: str,
+    position: int,
+    *,
+    target_exercise_id: int | None = None,
+    available_equipment: Sequence[str] | None = None,
+    relationships: ExerciseRelationshipRepository,
+    exercises: ExerciseRepository,
+    sessions: SessionRepository,
+    profiles: ProfileRepository,
+    generator: SubstituteGenerator,
+    logged: LoggedSessionRepository | None = None,
+) -> SubstitutionOutcome:
+    """``substitute_exercise``, also reporting whether the new Exercise came from the
+    catalog or the AI fallback — what Equipment Substitution reports per row."""
+
     view = sessions.get(session_id, clerk_user_id)
     if view is None:
         raise SessionNotFound(session_id)
@@ -216,8 +265,9 @@ def substitute_exercise(
 
     if target_exercise_id is not None:
         new_exercise_id = _accept_target(target_exercise_id, candidates, context)
+        source = SubstitutionSource.CATALOG
     else:
-        new_exercise_id = _auto_resolve(
+        new_exercise_id, source = _auto_resolve(
             prescription,
             context,
             view.training_type,
@@ -238,7 +288,7 @@ def substitute_exercise(
     )
     if result is None:  # ownership/position checked above; defensive only
         raise SessionNotFound(session_id)
-    return result
+    return SubstitutionOutcome(session=result, source=source)
 
 
 def _state(prescription: PrescriptionView) -> PrescriptionState:
@@ -320,12 +370,12 @@ def _auto_resolve(
     relationships: ExerciseRelationshipRepository,
     exercises: ExerciseRepository,
     generator: SubstituteGenerator,
-) -> int:
+) -> tuple[int, SubstitutionSource]:
     """Resolve a swap lookup-first, inventing an AI substitute only when none fits."""
 
     resolution = resolve_substitute(candidates, context)
     if resolution.needs_ai_fallback:
-        return _generate_substitute(
+        generated_id = _generate_substitute(
             prescription,
             context,
             training_type,
@@ -333,7 +383,8 @@ def _auto_resolve(
             exercises=exercises,
             generator=generator,
         )
-    return resolution.candidate.exercise_id
+        return generated_id, SubstitutionSource.GENERATED
+    return resolution.candidate.exercise_id, SubstitutionSource.CATALOG
 
 
 def _suggestion_for(
@@ -542,9 +593,12 @@ __all__ = [
     "SubstituteMuscleMismatch",
     "NoPrescribedOriginal",
     "SessionPerformed",
+    "SubstitutionSource",
+    "SubstitutionOutcome",
     "HarderVariationSuggestion",
     "PositionedSuggestion",
     "substitute_exercise",
+    "substitute_with_source",
     "restore_original",
     "ensure_editable",
     "harder_variation_suggestion",
