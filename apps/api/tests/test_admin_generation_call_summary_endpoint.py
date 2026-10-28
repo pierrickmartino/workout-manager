@@ -181,6 +181,7 @@ def test_an_empty_window_reads_zeros_and_a_null_median(engine):
             "substitute": 0,
             "muscle-emphasis": 0,
             "exercise-enrichment": 0,
+            "warm-up": 0,
         },
         "input_tokens": 0,
         "output_tokens": 0,
@@ -229,6 +230,7 @@ def test_outcomes_and_kinds_are_counted_with_every_key_present(engine):
         ("substitute", 1),
         ("muscle-emphasis", 0),
         ("exercise-enrichment", 0),
+        ("warm-up", 0),
     ]
 
 

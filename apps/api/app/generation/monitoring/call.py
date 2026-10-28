@@ -29,6 +29,7 @@ class GeneratorKind(str, Enum):
     SUBSTITUTE = "substitute"
     MUSCLE_EMPHASIS = "muscle-emphasis"
     EXERCISE_ENRICHMENT = "exercise-enrichment"
+    WARM_UP = "warm-up"
 
 
 class GenerationOutcome(str, Enum):

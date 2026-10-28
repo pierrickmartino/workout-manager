@@ -35,6 +35,7 @@ from app.generation.substitute_generator import (
     LlmSubstituteGenerator,
     SubstituteGenerator,
 )
+from app.generation.warm_up_generator import LlmWarmUpGenerator, WarmUpGenerator
 from app.generation.worker import QUEUE_NAME
 from app.repositories.active_skin_repository import (
     ActiveSkinRepository,
@@ -297,6 +298,13 @@ def get_substitute_generator(
     clerk_user_id: str = Depends(get_current_user),
 ) -> SubstituteGenerator:
     return LlmSubstituteGenerator(llm, clerk_user_id=clerk_user_id)
+
+
+def get_warm_up_generator(
+    llm: StructuredLLM = Depends(get_llm_client),
+    clerk_user_id: str = Depends(get_current_user),
+) -> WarmUpGenerator:
+    return LlmWarmUpGenerator(llm, clerk_user_id=clerk_user_id)
 
 
 def get_generation_call_repository(
