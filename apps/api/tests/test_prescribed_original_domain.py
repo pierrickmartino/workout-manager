@@ -117,7 +117,7 @@ def test_a_later_substitution_keeps_the_very_first_snapshot():
         required_equipment=("dumbbell",),
         recommended_load=CHALLENGING_LOAD,
         scheme=None,
-        prescribed_original=first,
+        prescribed_original=PrescribedOriginal.from_dict(first),
     )
 
     changes = substitution_changes(current, target_exercise_id=3, target_equipment=[])
@@ -151,7 +151,7 @@ def test_restore_puts_back_the_exercise_load_and_scheme_and_clears_the_snapshot(
         scheme="greyskull",
     )
 
-    assert restore_changes(original.to_dict()) == {
+    assert restore_changes(original) == {
         "exercise_id": 1,
         "recommended_load": ABSOLUTE,
         "scheme": "greyskull",

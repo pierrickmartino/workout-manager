@@ -51,6 +51,12 @@ class PrescribedOriginal:
         }
 
     @classmethod
+    def from_stored(cls, data: dict | None) -> PrescribedOriginal | None:
+        """The snapshot a ``prescribed_original`` column holds, or ``None`` when empty."""
+
+        return None if data is None else cls.from_dict(data)
+
+    @classmethod
     def from_dict(cls, data: dict) -> PrescribedOriginal:
         return cls(
             exercise_id=data["exercise_id"],
@@ -69,7 +75,7 @@ class PrescriptionState:
     required_equipment: Sequence[str]
     recommended_load: dict | None
     scheme: str | None
-    prescribed_original: dict | None
+    prescribed_original: PrescribedOriginal | None
 
 
 def _same_equipment(first: Sequence[str], second: Sequence[str]) -> bool:
@@ -134,20 +140,19 @@ def substitution_changes(
         exercise_name=current.exercise_name,
         recommended_load=current.recommended_load,
         scheme=current.scheme,
-    ).to_dict()
+    )
     return {
         "exercise_id": target_exercise_id,
         "recommended_load": load,
         "scheme": fitted_scheme(current.scheme, load),
-        "prescribed_original": snapshot,
+        "prescribed_original": snapshot.to_dict(),
     }
 
 
-def restore_changes(prescribed_original: dict) -> dict[str, object]:
+def restore_changes(original: PrescribedOriginal) -> dict[str, object]:
     """The spine field changes Restore writes: the snapshot's Exercise, Load and scheme
     back exactly, and the snapshot cleared."""
 
-    original = PrescribedOriginal.from_dict(prescribed_original)
     return {
         "exercise_id": original.exercise_id,
         "recommended_load": original.recommended_load,

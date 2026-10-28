@@ -25,6 +25,7 @@ from app.db.models import Profile
 from app.domain.exercise import Provenance
 from app.domain.fitness_profile import resolve_equipment
 from app.domain.prescribed_original import (
+    PrescribedOriginal,
     PrescriptionState,
     restore_changes,
     substitution_changes,
@@ -301,7 +302,9 @@ def _prescription_state(prescription: PrescriptionView) -> PrescriptionState:
         required_equipment=tuple(prescription.required_equipment),
         recommended_load=prescription.recommended_load,
         scheme=prescription.scheme,
-        prescribed_original=prescription.prescribed_original,
+        prescribed_original=PrescribedOriginal.from_stored(
+            prescription.prescribed_original
+        ),
     )
 
 
@@ -332,14 +335,15 @@ def restore_original(
     prescription = _find_prescription(view, position)
     if prescription is None:
         raise PrescriptionNotFound(position)
-    if prescription.prescribed_original is None:
+    original = PrescribedOriginal.from_stored(prescription.prescribed_original)
+    if original is None:
         raise NoPrescribedOriginal(position)
 
     result = sessions.revise_prescription(
         session_id,
         clerk_user_id,
         position,
-        restore_changes(prescription.prescribed_original),
+        restore_changes(original),
     )
     if result is None:  # ownership/position checked above; defensive only
         raise SessionNotFound(session_id)
