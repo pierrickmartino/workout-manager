@@ -15,11 +15,10 @@ token (ADR-0077). The Fitness Profile is never written."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Body, Depends, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Body, Depends, HTTPException, status
+from pydantic import Field
 
 from app.auth.dependencies import get_current_user
-from app.domain.equipment import Equipment
 from app.envelope import success_envelope
 from app.generation.substitute_generator import SubstituteGenerator
 from app.repositories.deps import (
@@ -37,6 +36,10 @@ from app.repositories.exercise_repository import ExerciseRepository
 from app.repositories.logged_session_repository import LoggedSessionRepository
 from app.repositories.profile_repository import ProfileRepository
 from app.repositories.session_repository import SessionRepository
+from app.routes.substitution_body import (
+    AvailableEquipmentBody,
+    performed_session_conflict,
+)
 from app.session_serialization import serialize_session
 from app.substitution.equipment_substitution import (
     BlockedPrescription,
@@ -47,25 +50,10 @@ from app.substitution.equipment_substitution import (
 )
 from app.substitution.service import SessionNotFound, SessionPerformed
 
-HTTP_NOT_FOUND = 404
-HTTP_CONFLICT = 409
-HTTP_UNPROCESSABLE_ENTITY = 422
-
 router = APIRouter(prefix="/api", tags=["sessions"])
 
 
-class PreviewBody(BaseModel):
-    """The equipment the user has for this action; omitted inherits the Default Equipment."""
-
-    available_equipment: list[Equipment] | None = None
-
-    def equipment_values(self) -> list[str] | None:
-        if self.available_equipment is None:
-            return None
-        return [item.value for item in self.available_equipment]
-
-
-class ApplyBody(PreviewBody):
+class ApplyBody(AvailableEquipmentBody):
     """The equipment plus the blocked positions the user kept selected (at least one, unique)."""
 
     positions: list[int] = Field(min_length=1)
@@ -98,20 +86,13 @@ def _serialize_outcome(outcome: PositionOutcome) -> dict:
 
 
 def _not_found() -> HTTPException:
-    return HTTPException(status_code=HTTP_NOT_FOUND, detail="Session not found")
-
-
-def _performed() -> HTTPException:
-    return HTTPException(
-        status_code=HTTP_CONFLICT,
-        detail="A performed Protocol Session can’t be changed.",
-    )
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
 
 
 @router.post("/sessions/{session_id}/equipment-substitution/preview")
 def preview(
     session_id: int,
-    body: PreviewBody | None = Body(default=None),
+    body: AvailableEquipmentBody | None = Body(default=None),
     clerk_user_id: str = Depends(get_current_user),
     relationships: ExerciseRelationshipRepository = Depends(
         get_exercise_relationship_repository
@@ -133,7 +114,7 @@ def preview(
     except SessionNotFound as exc:
         raise _not_found() from exc
     except SessionPerformed as exc:
-        raise _performed() from exc
+        raise performed_session_conflict() from exc
     return success_envelope({"rows": [_serialize_row(row) for row in rows]})
 
 
@@ -153,7 +134,7 @@ def apply(
 ) -> dict:
     if len(set(body.positions)) != len(body.positions):
         raise HTTPException(
-            status_code=HTTP_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="positions: each position may be selected only once",
         )
     try:
@@ -172,11 +153,11 @@ def apply(
     except SessionNotFound as exc:
         raise _not_found() from exc
     except SessionPerformed as exc:
-        raise _performed() from exc
+        raise performed_session_conflict() from exc
     except PositionsNotBlocked as exc:
         listed = ", ".join(str(position) for position in exc.positions)
         raise HTTPException(
-            status_code=HTTP_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"positions: not blocked by this equipment: {listed}",
         ) from exc
     return success_envelope(

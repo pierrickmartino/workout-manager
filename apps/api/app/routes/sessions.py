@@ -32,7 +32,6 @@ from app.authoring.service import (
     insert_prescription,
     remove_prescription,
 )
-from app.domain.equipment import Equipment
 from app.domain.feedback import parse_verdict
 from app.domain.fitness_profile import is_sensitive, resolve_equipment
 from app.domain.progression import ProgressionScheme, parse_scheme
@@ -86,6 +85,10 @@ from app.repositories.session_repository import (
 from app.repositories.share_link_repository import ShareLinkRepository
 from app.routes.logs import LogSetBody, serialize_logged_session
 from app.routes.prescription_body import AuthorPrescriptionBody, EditPrescriptionBody
+from app.routes.substitution_body import (
+    AvailableEquipmentBody,
+    performed_session_conflict,
+)
 from app.scheme_selection.service import (
     IncompatibleScheme,
     SchemeNotOnProtocolMember,
@@ -901,7 +904,7 @@ def regenerate(
     return success_envelope(_serialize(view))
 
 
-class SubstituteBody(BaseModel):
+class SubstituteBody(AvailableEquipmentBody):
     """The optional accept payload for a Substitution. ``target_exercise_id`` names a
     specific catalog Variation/Alternative to advance to — e.g. accepting the
     harder-Variation offer at the rep ceiling (#202). Omitted, the swap resolves
@@ -912,12 +915,6 @@ class SubstituteBody(BaseModel):
     (ADR-0038). Each value must be a curated Equipment token (ADR-0077), else 422."""
 
     target_exercise_id: int | None = None
-    available_equipment: list[Equipment] | None = None
-
-    def equipment_values(self) -> list[str] | None:
-        if self.available_equipment is None:
-            return None
-        return [item.value for item in self.available_equipment]
 
 
 @router.post("/sessions/{session_id}/prescriptions/{position}/substitute")
@@ -956,10 +953,7 @@ def substitute(
             status_code=HTTP_NOT_FOUND, detail="Prescription not found"
         ) from exc
     except SubstituteSessionPerformed as exc:
-        raise HTTPException(
-            status_code=HTTP_CONFLICT,
-            detail="A performed Protocol Session can’t be changed.",
-        ) from exc
+        raise performed_session_conflict() from exc
     except SubstituteNotAvailable as exc:
         raise HTTPException(
             status_code=HTTP_CONFLICT,

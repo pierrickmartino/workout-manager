@@ -9,7 +9,7 @@ is ``409``."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.auth.dependencies import get_current_user
 from app.envelope import success_envelope
@@ -19,6 +19,7 @@ from app.repositories.deps import (
 )
 from app.repositories.logged_session_repository import LoggedSessionRepository
 from app.repositories.session_repository import SessionRepository
+from app.routes.substitution_body import performed_session_conflict
 from app.session_serialization import serialize_session
 from app.substitution.service import (
     NoPrescribedOriginal,
@@ -27,9 +28,6 @@ from app.substitution.service import (
     SessionPerformed,
     restore_original,
 )
-
-HTTP_NOT_FOUND = 404
-HTTP_CONFLICT = 409
 
 router = APIRouter(prefix="/api", tags=["sessions"])
 
@@ -48,16 +46,13 @@ def restore(
         )
     except (SessionNotFound, PrescriptionNotFound) as exc:
         raise HTTPException(
-            status_code=HTTP_NOT_FOUND, detail="Prescription not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Prescription not found"
         ) from exc
     except SessionPerformed as exc:
-        raise HTTPException(
-            status_code=HTTP_CONFLICT,
-            detail="A performed Protocol Session can’t be changed.",
-        ) from exc
+        raise performed_session_conflict() from exc
     except NoPrescribedOriginal as exc:
         raise HTTPException(
-            status_code=HTTP_CONFLICT,
+            status_code=status.HTTP_409_CONFLICT,
             detail="This exercise has no original to restore.",
         ) from exc
     return success_envelope(serialize_session(view))
