@@ -210,7 +210,7 @@ export default async function SessionPage({
         <SectionHeader meta={`${session.prescriptions.length} EXERCISES`}>
           PROTOCOL
         </SectionHeader>
-        {/* Warm-up Suggestion (ADR-0143): preview AI warm-up drills for this Session's muscles.
+        {/* Warm-up Suggestion (ADR-0144): preview AI warm-up drills for this Session's muscles.
             Hidden once the Session has been performed; the preview never changes the plan. */}
         <WarmUpSuggestion session={session} unit={unit} />
         {/* The cards wait on the harder-Variation offer read; everything above and below them needs

@@ -110,7 +110,7 @@ export function isWarmUpSet(setType: string | null | undefined): boolean {
   return setType === "warm_up";
 }
 
-// The prescribed items the Completion Outcome counts (ADR-0143): every one that is not a
+// The prescribed items the Completion Outcome counts (ADR-0144): every one that is not a
 // warm-up, so skipping a warm-up never makes a Session Incomplete. A Session made only of
 // warm-ups has no other work, so then all of them count — never a vacuous Completed. The one
 // rule the Live Session (per set) and the static log form (per prescription) share.

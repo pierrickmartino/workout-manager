@@ -19,7 +19,7 @@ import {
 } from "./warm-up-suggestion.ts";
 import type { ExercisePrescription, WorkoutSession } from "./sessions-types.ts";
 
-// The Warm-up Suggestion view-model (ADR-0143, #778): when the Session preview offers the
+// The Warm-up Suggestion view-model (ADR-0144, #778): when the Session preview offers the
 // warm-up button and what it reads, the request lifecycle (loading → preview → discard /
 // regenerate, or error → retry), and how each drill renders as a preview row.
 

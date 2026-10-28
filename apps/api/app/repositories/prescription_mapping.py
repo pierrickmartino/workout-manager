@@ -226,7 +226,7 @@ def copy_draft_from_row(row: ExercisePrescription) -> PrescriptionDraft:
 def draft_from_view(view: PrescriptionView) -> PrescriptionDraft:
     """Read one joined Prescription back into a draft (ADR-0069), dropping the catalog
     join and the position — used to rewrite a plan around its existing Prescriptions
-    (adding a Warm-up Suggestion, ADR-0143) without re-listing the spine."""
+    (adding a Warm-up Suggestion, ADR-0144) without re-listing the spine."""
 
     return PrescriptionDraft(
         **{name: getattr(view, name) for name in prescription_spine_fields()}

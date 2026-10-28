@@ -1,5 +1,5 @@
 """Warm-up Suggestion cache: reuse a generated warm-up for equivalent muscles and kit
-(ADR-0003, ADR-0143).
+(ADR-0003, ADR-0144).
 
 ``WarmUpCache.suggestion_for`` is a read-through over the shared ``CacheStore``. It owns
 three rules behind that one call:

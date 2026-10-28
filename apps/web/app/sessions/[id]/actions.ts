@@ -358,7 +358,7 @@ export async function submitEquipmentSubstitution(
   return result;
 }
 
-// Ask for a Warm-up Suggestion preview for this Session (ADR-0143, #778). Nothing is changed,
+// Ask for a Warm-up Suggestion preview for this Session (ADR-0144, #778). Nothing is changed,
 // so nothing is revalidated: the result is handed back for the preview to render, or the
 // server's message (with a fallback) for its error state and retry.
 export async function requestWarmUpSuggestion(
@@ -371,7 +371,7 @@ export async function requestWarmUpSuggestion(
   return toWarmUpResult(await suggestWarmUp(sessionId, regenerate));
 }
 
-// Add the previewed Warm-up Suggestion drills to the front of this Session (ADR-0143, #780).
+// Add the previewed Warm-up Suggestion drills to the front of this Session (ADR-0144, #780).
 // On success the Session page is revalidated so it re-renders with its new Warm-up Section; on
 // failure (performed 409, not the user's 404, bad drill 422) the server's message comes back for
 // the preview's error and retry, and nothing is changed.

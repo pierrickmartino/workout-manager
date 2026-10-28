@@ -390,7 +390,7 @@ function ConfirmSurface() {
   />;
 }
 
-// The Warm-up Suggestion panel (ADR-0143) past its button, which only an AI round trip reaches,
+// The Warm-up Suggestion panel (ADR-0144) past its button, which only an AI round trip reaches,
 // so no other journey renders it. `warm-up` is the preview at its widest: six drills, a Replace
 // that failed (its error under the actions), and the Live Session's lock note — every line the
 // panel can show at once. `warm-up-replace` is the same preview with its Replace confirmation

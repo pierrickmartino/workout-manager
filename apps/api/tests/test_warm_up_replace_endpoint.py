@@ -1,4 +1,4 @@
-"""Replacing a Session's existing warm-up, end to end (ADR-0143, ADR-0074, #782).
+"""Replacing a Session's existing warm-up, end to end (ADR-0144, ADR-0074, #782).
 
 When a Session already opens with a Warm-up Section — curated, generated, hand-authored or
 added earlier — ``PUT /api/sessions/{id}/warm-up`` swaps exactly that leading run, as the

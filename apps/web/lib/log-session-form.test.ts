@@ -160,7 +160,7 @@ test("counts a whole skipped exercise's prescribed sets as un-attempted", () => 
   assert.equal(skippedSetCount(prescribed, rows), 3);
 });
 
-test("skipped warm-up sets never make the static log Incomplete (ADR-0143)", () => {
+test("skipped warm-up sets never make the static log Incomplete (ADR-0144)", () => {
   // Arrange — a warm-up line left entirely unchecked, a working line all Done
   const groups = buildLogForm([
     prescription({ position: 0, exercise_id: 1, sets: 2, set_type: "warm_up" }),
@@ -321,7 +321,7 @@ test("loggedSetRowsFromForm keeps only Done rows with an Exercise id", () => {
   assert.equal(rows[0].values.distance, "5");
 });
 
-test("a warm-up set logged through the static form is stored as a warm-up (ADR-0143)", () => {
+test("a warm-up set logged through the static form is stored as a warm-up (ADR-0144)", () => {
   // Arrange — a warm-up line and a working line, as the form renders and posts them
   const groups = buildLogForm([
     prescription({ position: 0, exercise_id: 1, sets: 1, set_type: "warm_up" }),

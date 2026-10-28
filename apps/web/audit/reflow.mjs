@@ -105,7 +105,7 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // table from `lg:`; below it the card list must still wrap the longest user id and model slug.
 // `admin-catalog` joins them with #772: the catalog browser left the `admin` journey when it
 // opted the page into the wide column, so this is where its 320px card list is still swept.
-// `warm-up` and `warm-up-replace` join them with ADR-0143: the Warm-up Suggestion's preview is
+// `warm-up` and `warm-up-replace` join them with ADR-0144: the Warm-up Suggestion's preview is
 // reached only through an AI round trip, and its Replace confirmation only from that preview, so
 // no journey rendered either; the preview leads each row with an Exercise name.
 const NOVEL_JOURNEYS = [

@@ -29,7 +29,7 @@ interface WarmUpSuggestionProps {
   unit: WeightUnit;
 }
 
-// The Session preview's Warm-up Suggestion (ADR-0143, #778). Add (#780) saves the drills as the
+// The Session preview's Warm-up Suggestion (ADR-0144, #778). Add (#780) saves the drills as the
 // Session's leading Warm-up Section; the server action revalidates the page, so the plan below
 // re-renders with them. When the Session already opens with a Warm-up Section, Add reads Replace
 // and the app's own `ConfirmDialog` guards it (#782).

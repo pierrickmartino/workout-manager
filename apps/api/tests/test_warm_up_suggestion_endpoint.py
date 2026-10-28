@@ -1,4 +1,4 @@
-"""The Warm-up Suggestion endpoint end to end (ADR-0143, #778).
+"""The Warm-up Suggestion endpoint end to end (ADR-0144, #778).
 
 ``POST /api/sessions/{id}/warm-up-suggestion`` derives the muscles and equipment from the
 user's own Session and Profile, asks the warm-up generator — the real

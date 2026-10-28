@@ -5,7 +5,7 @@ import type { SetType } from "./set-type-view.ts";
 import type { WorkoutSession } from "./sessions-types.ts";
 import type { WeightUnit } from "./weight-unit.ts";
 
-// The Warm-up Suggestion view-model (ADR-0143, #778). Pure and server-free, so the Session
+// The Warm-up Suggestion view-model (ADR-0144, #778). Pure and server-free, so the Session
 // preview's warm-up button, the request lifecycle and the preview rows are unit-tested here and
 // the component stays a thin shell. A suggestion is only a preview until the user taps Add,
 // which saves the drills as the Session's leading Warm-up Section (#780). When the Session already

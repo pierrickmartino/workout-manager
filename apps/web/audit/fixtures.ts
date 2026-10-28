@@ -87,7 +87,7 @@ export const workout: WorkoutSession = {
   id: 1, clerk_user_id: "audit-synthetic-account", training_type: "strength", duration_minutes: 30,
   has_been_regenerated: false, provenance: "user_authored", name: names[0], prescriptions,
 };
-// A Warm-up Suggestion (ADR-0143) at its widest: six drills — the most a suggestion holds — led
+// A Warm-up Suggestion (ADR-0144) at its widest: six drills — the most a suggestion holds — led
 // by the two fixture names, mixing reps and seconds, bodyweight and a long qualitative Load, and
 // replacing a Warm-up Section the Session already opens with, so Add reads Replace.
 export const warmUpSuggestion: WarmUpSuggestion = {

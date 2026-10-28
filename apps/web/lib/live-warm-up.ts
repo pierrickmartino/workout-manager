@@ -3,7 +3,7 @@ import { isWarmUpSet } from "./session-section.ts";
 import type { WorkoutSession } from "./sessions-types.ts";
 import { warmUpButtonView, type WarmUpButtonView } from "./warm-up-suggestion.ts";
 
-// The Live Session's Warm-up Suggestion (ADR-0143, #783). The same button, preview and Add as the
+// The Live Session's Warm-up Suggestion (ADR-0144, #783). The same button, preview and Add as the
 // Session preview (`warm-up-suggestion.ts`), with the live rules on top: the button shows only
 // until the first non-warm-up set is completed. Pure and server-free, so the screen stays a shell.
 
@@ -34,7 +34,7 @@ function anySetCompleted(state: LiveSessionState): boolean {
 
 // Why the preview's Add is locked, or null while it is allowed. Adding reloads the Live Session
 // from the updated Session, which is safe only while no set — warm-up or not — has been
-// completed (ADR-0143).
+// completed (ADR-0144).
 export function liveWarmUpAddLockedNote(state: LiveSessionState): string | null {
   return anySetCompleted(state) ? LIVE_WARM_UP_ADD_LOCKED_NOTE : null;
 }
