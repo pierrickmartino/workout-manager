@@ -24,8 +24,9 @@ export interface PreviousReference {
 export type LiveStatus = "not_started" | "in_progress" | "finished";
 
 // The Completion Outcome (ADR-0013): whether the performance attempted every
-// prescribed set. Completed when all sets were attempted (a zero-rep completed set
-// still counts as attempted); Incomplete when any set was left un-attempted.
+// prescribed set that is not a warm-up (ADR-0143). Completed when all those sets were
+// attempted (a zero-rep completed set still counts as attempted); Incomplete when any
+// was left un-attempted. A skipped warm-up set never makes a Session Incomplete.
 export type CompletionOutcome = "completed" | "incomplete";
 
 // One prescribed set, expanded from an Exercise Prescription into its own row.
@@ -522,22 +523,33 @@ function currentSet(state: LiveSessionState): LiveSet | undefined {
   return state.sets[index];
 }
 
-// Set-based percent-complete: attempted (completed) sets over total prescribed
-// sets, rounded to a whole percent. Zero for an empty Session.
+// The sets the Completion Outcome counts (ADR-0143): every prescribed set that is not a
+// warm-up, whoever authored it, so skipping a warm-up never makes a Session Incomplete. A
+// Session made only of warm-up sets has no other work, so its warm-up sets are what it
+// prescribes and all of them count — never a vacuous Completed, never a 0/0 progress.
+function gatingSets(state: LiveSessionState): readonly LiveSet[] {
+  const nonWarmUp = state.sets.filter((set) => set.setType !== "warm_up");
+  return nonWarmUp.length > 0 ? nonWarmUp : state.sets;
+}
+
+// Set-based percent-complete: attempted (completed) sets over the prescribed sets the
+// Completion Outcome counts (no warm-ups, ADR-0143), rounded to a whole percent, so it
+// reaches 100% exactly when the outcome is Completed. Zero for an empty Session.
 export function progressPercent(state: LiveSessionState): number {
-  const total = state.sets.length;
+  const counted = gatingSets(state);
+  const total = counted.length;
   if (total === 0) return 0;
-  const attempted = state.sets.filter((set) => set.status === "completed").length;
+  const attempted = counted.filter((set) => set.status === "completed").length;
   return Math.round((attempted / total) * 100);
 }
 
-// The derived Completion Outcome (ADR-0013): Completed only when every prescribed
-// set was attempted (a set is "attempted" once it is completed — even at zero reps,
-// ground out to failure); Incomplete when any prescribed set is still pending
-// (skipped/left un-attempted). This is the client-declared verdict the finish
+// The derived Completion Outcome (ADR-0013, amended by ADR-0143): Completed only when
+// every counted set (`gatingSets`) was attempted (a set is "attempted" once it is
+// completed — even at zero reps, ground out to failure); Incomplete when any counted set
+// is still pending (skipped/left un-attempted). This is the client-declared verdict the finish
 // mapper sends; it reaches 100% progress exactly when the outcome is Completed.
 export function completionOutcome(state: LiveSessionState): CompletionOutcome {
-  const anyUnattempted = state.sets.some((set) => set.status !== "completed");
+  const anyUnattempted = gatingSets(state).some((set) => set.status !== "completed");
   return anyUnattempted ? "incomplete" : "completed";
 }
 

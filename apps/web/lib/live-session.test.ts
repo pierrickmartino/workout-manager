@@ -413,6 +413,85 @@ test("a zero-rep completed set still counts as attempted (stays Completed)", () 
   assert.equal(completionOutcome(state), "completed");
 });
 
+// Warm-up sets never gate the Completion Outcome (ADR-0143, #779): the squat line is a
+// warm-up (sets 0–2), the push-up line is working (sets 3–4).
+const WARM_UP_SESSION: WorkoutSession = {
+  ...SESSION,
+  prescriptions: [
+    { ...SESSION.prescriptions[0], set_type: "warm_up" },
+    { ...SESSION.prescriptions[1], set_type: null },
+  ],
+};
+
+test("completionOutcome is 'completed' when the only un-attempted sets are warm-up sets", () => {
+  // Arrange — every working set attempted, every warm-up set skipped
+  let state = liveSessionReducer(initLiveSession(WARM_UP_SESSION, "kg"), { type: "START" });
+  state = complete(state, 3);
+  state = complete(state, 4);
+
+  // Act / Assert — skipping a warm-up never makes the Session Incomplete
+  assert.equal(completionOutcome(state), "completed");
+});
+
+test("completionOutcome stays 'incomplete' when a working set is un-attempted, warm-ups done", () => {
+  // Arrange — every warm-up set attempted, one working set skipped
+  let state = liveSessionReducer(initLiveSession(WARM_UP_SESSION, "kg"), { type: "START" });
+  for (const index of [0, 1, 2, 3]) state = complete(state, index);
+
+  // Act / Assert
+  assert.equal(completionOutcome(state), "incomplete");
+});
+
+test("progressPercent counts only non-warm-up sets", () => {
+  // Arrange — two working sets; warm-ups attempted or not never move the bar
+  let state = liveSessionReducer(initLiveSession(WARM_UP_SESSION, "kg"), { type: "START" });
+  state = complete(state, 0);
+  assert.equal(progressPercent(state), 0);
+
+  // Act — attempt one of the two working sets
+  state = complete(state, 3);
+
+  // Assert — 1/2 working sets
+  assert.equal(progressPercent(state), 50);
+});
+
+test("progressPercent reaches 100 exactly when the outcome turns Completed, warm-ups skipped", () => {
+  // Arrange — warm-ups skipped; complete the working sets one by one
+  let state = liveSessionReducer(initLiveSession(WARM_UP_SESSION, "kg"), { type: "START" });
+  state = complete(state, 3);
+  assert.notEqual(progressPercent(state), 100);
+  assert.equal(completionOutcome(state), "incomplete");
+
+  // Act
+  state = complete(state, 4);
+
+  // Assert — the bar and the verdict agree
+  assert.equal(progressPercent(state), 100);
+  assert.equal(completionOutcome(state), "completed");
+});
+
+test("an all-warm-up Session counts its warm-up sets: Completed only once every set is attempted", () => {
+  // Arrange — both lines are warm-ups, so there is no working set to gate on; the
+  // warm-up sets themselves are the prescribed work (no 0/0 progress, no vacuous Completed)
+  const allWarmUp: WorkoutSession = {
+    ...SESSION,
+    prescriptions: SESSION.prescriptions.map((p) => ({ ...p, set_type: "warm_up" })),
+  };
+  let state = liveSessionReducer(initLiveSession(allWarmUp, "kg"), { type: "START" });
+  assert.equal(progressPercent(state), 0);
+  assert.equal(completionOutcome(state), "incomplete");
+
+  // Act — attempt four of five, then the last
+  for (const index of [0, 1, 2, 3]) state = complete(state, index);
+  assert.equal(progressPercent(state), 80);
+  assert.equal(completionOutcome(state), "incomplete");
+  state = complete(state, 4);
+
+  // Assert
+  assert.equal(progressPercent(state), 100);
+  assert.equal(completionOutcome(state), "completed");
+});
+
 // Session Duration tracking (issue #88 — F2·S3). The engine stamps a start time on
 // START and moves a last-activity time on each set completion, so the recorded
 // duration (start → last activity) excludes the idle tail after the final set

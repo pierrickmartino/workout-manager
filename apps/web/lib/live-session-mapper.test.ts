@@ -161,6 +161,28 @@ test("sends 'completed' when every prescribed set was attempted", () => {
   assert.equal(payload.completion_outcome, "completed");
 });
 
+test("sends 'completed' when only warm-up sets were skipped, so the Protocol advances", () => {
+  // Arrange — the squat line is a warm-up (ADR-0143); skip it, attempt both working sets
+  const session: WorkoutSession = {
+    ...SESSION,
+    prescriptions: [
+      { ...SESSION.prescriptions[0], set_type: "warm_up" },
+      SESSION.prescriptions[1],
+    ],
+  };
+  let state = liveSessionReducer(initLiveSession(session, "kg"), { type: "START" });
+  state = complete(state, 3, 10, "", null);
+  state = complete(state, 4, 10, "", null);
+  state = liveSessionReducer(state, { type: "FINISH" });
+
+  // Act
+  const payload = mapFinishToLog(state, "2026-07-06", "kg");
+
+  // Assert — a skipped warm-up never declares the performance Incomplete
+  assert.ok(payload);
+  assert.equal(payload.completion_outcome, "completed");
+});
+
 test("sends 'incomplete' when a prescribed set was left un-attempted", () => {
   // Arrange — complete only some sets, leaving the rest un-attempted
   let state = liveSessionReducer(initLiveSession(SESSION, "kg"), { type: "START" });

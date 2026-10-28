@@ -159,6 +159,37 @@ test("counts a whole skipped exercise's prescribed sets as un-attempted", () => 
   assert.equal(skippedSetCount(prescribed, rows), 3);
 });
 
+test("skipped warm-up sets never make the static log Incomplete (ADR-0143)", () => {
+  // Arrange — a warm-up line left entirely unchecked, a working line all Done
+  const groups = buildLogForm([
+    prescription({ position: 0, exercise_id: 1, sets: 2, set_type: "warm_up" }),
+    prescription({ position: 1, exercise_id: 2, sets: 3 }),
+  ], "kg");
+  const prescribed = prescribedByPosition(groups);
+  const rows = groups.flatMap((group) =>
+    group.rows.map((row) => ({ ...row, done: group.position === 1 })),
+  );
+
+  // Act / Assert — Completed, and no warm-up set is reported as a skip
+  assert.equal(deriveCompletionOutcome(prescribed, rows), "completed");
+  assert.equal(skippedSetCount(prescribed, rows), 0);
+});
+
+test("an all-warm-up Session's static log counts its warm-up sets", () => {
+  // Arrange — the only line is a warm-up, with one set unchecked
+  const groups = buildLogForm([
+    prescription({ sets: 2, set_type: "warm_up" }),
+  ], "kg");
+  const prescribed = prescribedByPosition(groups);
+  const rows = groups.flatMap((group) =>
+    group.rows.map((row, index) => ({ ...row, done: index === 0 })),
+  );
+
+  // Act / Assert — with no other work, the warm-up is the prescribed work
+  assert.equal(deriveCompletionOutcome(prescribed, rows), "incomplete");
+  assert.equal(skippedSetCount(prescribed, rows), 1);
+});
+
 // --- Kind-aware seeding (ADR-0050, issue #343): buildLogForm reads the typed Prescribed
 // Quantity and seeds each row with the matching kind/value/unit, so a reused run lands on a
 // distance field pre-filled with the prescribed distance.
