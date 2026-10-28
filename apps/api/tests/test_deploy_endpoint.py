@@ -13,11 +13,15 @@ from __future__ import annotations
 
 from datetime import date
 
+from app.domain.exercise import Provenance
 from app.domain.load import parse_load
+from app.domain.prescribed_original import PrescribedOriginal
+from app.repositories.deps import get_exercise_repository, get_protocol_repository
 from app.repositories.logged_session_repository import (
     LoggedSessionDraft,
     LoggedSetDraft,
 )
+from app.repositories.prescription_mapping import evolve_prescription_row
 from app.repositories.profile_repository import (
     InMemoryProfileRepository,
     ProfileUpdate,
@@ -884,3 +888,61 @@ def test_deploy_rejects_an_unknown_quantity_kind_at_the_boundary():
 
     assert response.status_code == 422
     assert response.json()["success"] is False
+
+
+def _substituted_protocol(h, sub: str) -> dict:
+    """A fresh Protocol whose first Session's first row holds a Prescribed Original, as a
+    Substitution leaves it. The in-memory Protocol store shares no rows with the Session
+    store the Substitution endpoint writes, so the snapshot is placed on the row directly."""
+
+    protocol = _fresh_protocol(h, sub)
+    store = h.client.app.dependency_overrides[get_protocol_repository]()
+    session_id = protocol["sessions"][0]["session_id"]
+    first, *rest = store._prescriptions[session_id]
+    snapshot = PrescribedOriginal(
+        exercise_id=first.exercise_id,
+        exercise_name="Barbell Back Squat",
+        recommended_load=parse_load("60 kg").to_dict(),
+        scheme=None,
+    ).to_dict()
+    store._prescriptions[session_id] = [
+        evolve_prescription_row(first, prescribed_original=snapshot),
+        *rest,
+    ]
+    return h.fetch_protocol(sub, protocol["id"]).json()["data"]
+
+
+def _deploy(h, sub: str, protocol: dict, body: dict):
+    return h.client.post(
+        f"/api/protocols/{protocol['id']}/deploy", headers=h.auth(sub), json=body
+    )
+
+
+def test_deploy_keeps_the_prescribed_original_of_a_row_that_keeps_its_exercise():
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _substituted_protocol(h, "user_keep_original")
+    body = _deploy_body(protocol)
+    body["sessions"][0]["prescriptions"][0]["sets"] = 4
+
+    response = _deploy(h, "user_keep_original", protocol, body)
+
+    assert response.status_code == 200, response.json()
+    deployed = response.json()["data"]["sessions"][0]["prescriptions"][0]
+    assert deployed["sets"] == 4
+    assert deployed["prescribed_original"] == {"exercise_name": "Barbell Back Squat"}
+
+
+def test_deploy_drops_the_prescribed_original_of_a_row_given_another_exercise():
+    h = build_harness(generator=FakeProtocolGenerator(result=_kg_protocol()))
+    protocol = _substituted_protocol(h, "user_drop_original")
+    exercises = h.client.app.dependency_overrides[get_exercise_repository]()
+    lunge = exercises.find_or_create("Walking Lunge", provenance=Provenance.CURATED)
+    body = _deploy_body(protocol)
+    body["sessions"][0]["prescriptions"][0]["exercise_id"] = lunge.id
+
+    response = _deploy(h, "user_drop_original", protocol, body)
+
+    assert response.status_code == 200, response.json()
+    deployed = response.json()["data"]["sessions"][0]["prescriptions"][0]
+    assert deployed["exercise_name"] == "Walking Lunge"
+    assert deployed["prescribed_original"] is None

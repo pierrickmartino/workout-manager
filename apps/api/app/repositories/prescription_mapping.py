@@ -36,6 +36,7 @@ generation partition forgets a spine field.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, fields, replace
 
 from app.db.models import Exercise, ExercisePrescription
@@ -88,8 +89,10 @@ class PrescriptionDraft:
     # Prescribed Original (ADR-0143, #788): the ``PrescribedOriginal`` dict (Exercise, Load,
     # Progression Scheme) snapshotted by the first Substitution, or ``None`` when the movement
     # was never substituted. Plan-only state of the user's own copy: kept by in-place rewrites
-    # (Regeneration-keep, Remove, Warm-up), but *not carried* into any copy of the plan
-    # (Duplicate, Redeem) — see ``NOT_CARRIED_FIELDS`` and ``copy_draft_from_row``.
+    # (Regeneration-keep, Remove, Warm-up), kept by Edit and Deploy only on a row that still
+    # carries the same Exercise (``carry_prescribed_originals``), and *not carried* into any
+    # copy of the plan (Duplicate, Redeem) — see ``NOT_CARRIED_FIELDS`` and
+    # ``copy_draft_from_row``.
     prescribed_original: dict | None = None
 
 
@@ -230,6 +233,31 @@ def draft_from_view(view: PrescriptionView) -> PrescriptionDraft:
     )
 
 
+def carry_prescribed_originals(
+    current: Sequence[PrescriptionView], drafts: Sequence[PrescriptionDraft]
+) -> list[PrescriptionDraft]:
+    """The rewritten plan ``drafts`` with each held Prescribed Original carried over
+    (Edit, Deploy — ADR-0143).
+
+    A rewrite replaces the whole Prescription list, so the snapshot survives only where
+    the row at the same position still carries the same Exercise as before. Where the
+    user put another Exercise in that row they re-planned it, and the snapshot is
+    dropped. A draft never keeps a snapshot of its own: one the client sent is ignored."""
+
+    held = {view.position: view for view in current}
+
+    def snapshot_for(position: int, draft: PrescriptionDraft) -> dict | None:
+        before = held.get(position)
+        if before is None or before.exercise_id != draft.exercise_id:
+            return None
+        return before.prescribed_original
+
+    return [
+        replace(draft, prescribed_original=snapshot_for(position, draft))
+        for position, draft in enumerate(drafts)
+    ]
+
+
 def evolve_prescription_row(
     row: ExercisePrescription, **changes: object
 ) -> ExercisePrescription:
@@ -287,6 +315,7 @@ __all__ = [
     "draft_from_row",
     "copy_draft_from_row",
     "draft_from_view",
+    "carry_prescribed_originals",
     "evolve_prescription_row",
     "view_from_row",
 ]

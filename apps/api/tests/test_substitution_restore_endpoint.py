@@ -231,3 +231,69 @@ def test_a_redeemed_share_of_a_substituted_session_carries_no_snapshot():
     copied = redeemed.json()["data"]["prescriptions"][harness.position]
     assert copied["exercise_name"] == "Goblet Squat"
     assert copied["prescribed_original"] is None
+
+
+def _edit_body(prescriptions: list[dict]) -> dict:
+    """An Edit payload echoing the read plan, one wire body per Prescription."""
+
+    return {
+        "training_type": "strength",
+        "prescriptions": [
+            {
+                "exercise_id": p["exercise_id"],
+                "sets": p["sets"],
+                "reps": p["reps"],
+                "rest_seconds": p["rest_seconds"],
+                "load_kind": (p["recommended_load"] or {}).get("kind", "absolute"),
+                "load_value": (p["recommended_load"] or {}).get("text", ""),
+            }
+            for p in prescriptions
+        ],
+    }
+
+
+def _edit(harness: Harness, body: dict):
+    return harness.client.put(
+        f"/api/sessions/{harness.session['id']}/plan", headers=harness.headers, json=body
+    )
+
+
+def _read_plan(harness: Harness) -> list[dict]:
+    return harness.client.get(
+        f"/api/sessions/{harness.session['id']}", headers=harness.headers
+    ).json()["data"]["prescriptions"]
+
+
+def test_an_edit_that_keeps_the_substitute_keeps_the_prescribed_original():
+    harness = Harness()
+    harness.substitute(harness.goblet.id)
+    body = _edit_body(_read_plan(harness))
+    body["prescriptions"][harness.position]["sets"] = 4
+
+    response = _edit(harness, body)
+
+    assert response.status_code == 200, response.json()
+    edited = response.json()["data"]["prescriptions"][harness.position]
+    assert edited["sets"] == 4
+    assert edited["prescribed_original"] == {"exercise_name": "Barbell Back Squat"}
+    restored = harness.restore()
+    assert restored.status_code == 200, restored.json()
+    assert (
+        restored.json()["data"]["prescriptions"][harness.position]["exercise_name"]
+        == "Barbell Back Squat"
+    )
+
+
+def test_an_edit_that_changes_the_substituted_exercise_drops_the_prescribed_original():
+    harness = Harness()
+    harness.substitute(harness.goblet.id)
+    body = _edit_body(_read_plan(harness))
+    body["prescriptions"][harness.position]["exercise_id"] = harness.air.id
+
+    response = _edit(harness, body)
+
+    assert response.status_code == 200, response.json()
+    edited = response.json()["data"]["prescriptions"][harness.position]
+    assert edited["exercise_name"] == "Air Squat"
+    assert edited["prescribed_original"] is None
+    assert harness.restore().status_code == 409

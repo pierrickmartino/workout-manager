@@ -26,6 +26,11 @@ the Protocol forward (ADR-0013).
   back. It is a plan-only field, marked *not carried* in the prescription spine (ADR-0069), so
   a Share never leaks the sharer's original Load. While the snapshot is held, a scheme that does
   not fit the new Load kind falls back to the default (ADR-0064).
+- **Edit and Deploy keep the Prescribed Original only on an unchanged row.** A hand Edit
+  (ADR-0133) or a Builder Deploy (ADR-0020) rewrites the whole Prescription list. The
+  snapshot survives where the row at the same position, in the same Session, still carries
+  the same Exercise. Where the user put another Exercise in that row, they re-planned it,
+  and the snapshot is dropped, so Restore is no longer offered there.
 - **Same muscles is checked, at Muscle Group level, on AI output only.** Curated catalog
   Alternatives are trusted. An AI-invented substitute receives the original's Primary and
   Secondary Muscles. It is accepted only if its Primary Muscles cover every Muscle Group the

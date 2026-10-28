@@ -42,6 +42,7 @@ from app.protocols.reenumeration import (
 )
 from app.repositories.exercise_repository import ExerciseRepository
 from app.repositories.logged_session_repository import LoggedSessionRepository
+from app.repositories.prescription_mapping import carry_prescribed_originals
 from app.repositories.profile_repository import ProfileRepository
 from app.repositories.protocol_repository import (
     DeploySessionSpec,
@@ -76,7 +77,11 @@ def _payload(existing: ProtocolSessionView | None, session: DraftSession) -> _De
     kept_minutes = existing.duration_minutes if existing else None
     return _DeployPayload(
         title=existing.title if existing else None,
-        prescriptions=list(session.prescriptions),
+        # Matched by the Session the Builder edited, not by its slot, so a re-ordered tail
+        # keeps each held Prescribed Original with its own row (ADR-0143).
+        prescriptions=carry_prescribed_originals(
+            existing.prescriptions if existing else [], session.prescriptions
+        ),
         training_type=session.training_type or kept_type,
         duration_minutes=session.duration_minutes or kept_minutes,
     )
