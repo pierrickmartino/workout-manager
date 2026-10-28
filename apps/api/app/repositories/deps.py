@@ -236,19 +236,21 @@ def get_protocol_generator(
     return LlmProtocolGenerator(llm, clerk_user_id=clerk_user_id)
 
 
+def _generation_cache_store(settings: Settings) -> RedisCacheStore:
+    return RedisCacheStore(redis.Redis.from_url(settings.redis_url))
+
+
 def get_generation_cache(
     settings: Settings = Depends(get_settings),
 ) -> GenerationCache:
-    client = redis.Redis.from_url(settings.redis_url)
-    return GenerationCache(RedisCacheStore(client))
+    return GenerationCache(_generation_cache_store(settings))
 
 
 def get_warm_up_cache(
     settings: Settings = Depends(get_settings),
 ) -> WarmUpCache:
-    # Warm-up Suggestions share the Generation Cache's Redis (ADR-0003, ADR-0143).
-    client = redis.Redis.from_url(settings.redis_url)
-    return WarmUpCache(RedisCacheStore(client))
+    # Warm-up Suggestions share the Generation Cache's store (ADR-0003, ADR-0143).
+    return WarmUpCache(_generation_cache_store(settings))
 
 
 def get_job_queue(

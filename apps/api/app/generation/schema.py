@@ -9,22 +9,21 @@ turns "did the AI return well-formed data?" into a guarantee."""
 
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.domain.load import parse_load
 from app.domain.quantity import quantity_from_input, quantity_from_text
 from app.domain.warm_up import (
+    MAX_DRILL_AMOUNT,
     MAX_DRILL_REST_SECONDS,
     MAX_DRILLS,
     MAX_MINUTES,
     MIN_DRILLS,
     MIN_MINUTES,
+    DrillLoadKind,
+    DrillQuantityKind,
+    drill_load_names_itself,
 )
-
-# A warm-up drill's reps or seconds: generous for a timed hold, absurd beyond it.
-MAX_DRILL_AMOUNT = 120
 
 
 class GeneratedQuantity(BaseModel):
@@ -247,15 +246,15 @@ class GeneratedWarmUpDrill(BaseModel):
     instructions: list[str] = Field(default_factory=list)
     targeted_muscles: list[str] = Field(default_factory=list)
     required_equipment: list[str] = Field(default_factory=list)
-    quantity_kind: Literal["repetitions", "duration"]
+    quantity_kind: DrillQuantityKind
     amount: int = Field(ge=1, le=MAX_DRILL_AMOUNT)
-    load_kind: Literal["bodyweight", "qualitative"]
+    load_kind: DrillLoadKind
     load_text: str | None = None
     rest_seconds: int = Field(ge=0, le=MAX_DRILL_REST_SECONDS)
 
     @model_validator(mode="after")
     def _qualitative_load_names_itself(self) -> "GeneratedWarmUpDrill":
-        if self.load_kind == "qualitative" and not (self.load_text or "").strip():
+        if not drill_load_names_itself(self.load_kind, self.load_text):
             raise ValueError("a qualitative load needs its load_text")
         return self
 
