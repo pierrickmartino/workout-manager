@@ -108,13 +108,16 @@ const MATRIX_JOURNEYS = ["profile", "sessions", "history", "catalog", "creation"
 // `warm-up` and `warm-up-replace` join them with ADR-0144: the Warm-up Suggestion's preview is
 // reached only through an AI round trip, and its Replace confirmation only from that preview, so
 // no journey rendered either; the preview leads each row with an Exercise name.
+// `substitution` joins them with ADR-0143: the Missing equipment? sheet's picker, preview and
+// outcome, the single Substitute's open picker and Restore original are each reached only past a
+// click or a round trip, and every row leads with an Exercise name.
 const NOVEL_JOURNEYS = [
   "correction", "creation-logged", "home", "exercise", "admin", "confirm", "adhoc", "launchpad",
   "levels", "sheet", "protocols", "protocols-live", "set-aside", "passport", "passport-open",
   "passport-empty", "stamp", "stamp-locked", "stamp-record", "curated", "curated-adopt",
   "based-on", "curated-wave-adopt", "curated-wave-unlogged", "handoff", "session-header", "avatar",
   "history-month", "history-filtered", "sessions-filtered", "admin-home", "ai-audit-log",
-  "admin-catalog", "warm-up", "warm-up-replace",
+  "admin-catalog", "warm-up", "warm-up-replace", "substitution",
 ];
 
 // The 200% ratchet is gone (#572, ADR-0087). `logging`, `live`, `correction` and

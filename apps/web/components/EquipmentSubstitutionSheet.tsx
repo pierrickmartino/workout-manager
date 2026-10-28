@@ -18,6 +18,7 @@ import {
   outcomeSummary,
   previewRows,
   selectedPositions,
+  type EquipmentSubstitutionState,
 } from "@/lib/equipment-substitution";
 import { liveSessionStandingOf } from "@/lib/live-session";
 import { substituteEquipmentSummary } from "@/lib/substitute-equipment";
@@ -34,6 +35,9 @@ interface EquipmentSubstitutionSheetProps {
   showSubstitute: boolean;
   // The Profile's canonical Default Equipment, pre-filling the picker.
   defaultEquipment: readonly string[];
+  // The step the sheet opens on: closed on the Session page. The `substitution` audit journey
+  // seeds a later step, which otherwise only a preview or apply round trip reaches.
+  initialState?: EquipmentSubstitutionState;
 }
 
 const PANEL_CLASS = "flex min-w-0 flex-col gap-3 rounded-sm border border-border-lite bg-base p-3";
@@ -47,11 +51,9 @@ export function EquipmentSubstitutionSheet({
   sessionId,
   showSubstitute,
   defaultEquipment,
+  initialState = initialEquipmentSubstitutionState,
 }: EquipmentSubstitutionSheetProps) {
-  const [state, dispatch] = useReducer(
-    equipmentSubstitutionReducer,
-    initialEquipmentSubstitutionState,
-  );
+  const [state, dispatch] = useReducer(equipmentSubstitutionReducer, initialState);
   const [, startTransition] = useTransition();
   const online = useConnectivity();
   const button = equipmentSubstitutionButtonView({
@@ -166,10 +168,10 @@ export function EquipmentSubstitutionSheet({
                   aria-hidden
                 />
                 <span className="flex min-w-0 flex-col">
-                  <span className="break-words font-sans text-[14px] text-text-primary">
+                  <span className="font-sans text-[14px] text-text-primary wrap-anywhere">
                     {row.exerciseName}
                   </span>
-                  <span className="font-mono text-[12px] text-text-secondary">
+                  <span className="font-mono text-[12px] text-text-secondary wrap-anywhere">
                     {row.selected ? `→ ${row.replacement}` : "Kept as prescribed"}
                   </span>
                 </span>
@@ -184,8 +186,15 @@ export function EquipmentSubstitutionSheet({
             disabled={!canConfirmEquipmentSubstitution(state) || button.disabled}
             onClick={confirm}
           >
-            <Repeat2 className="h-3.5 w-3.5" aria-hidden />
-            {applying ? "Substituting…" : "Substitute selected"}
+            {/* One short word with the spinner standing in for the icon while applying: a
+                mono uppercase "SUBSTITUTE" is wider than this panel at 320px and 200% text
+                (the `substitution` reflow journey). */}
+            {applying ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden />
+            ) : (
+              <Repeat2 className="h-3.5 w-3.5" aria-hidden />
+            )}
+            Apply
           </Button>
           <Button
             type="button"
@@ -223,12 +232,12 @@ export function EquipmentSubstitutionSheet({
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-cyan" aria-hidden />
             )}
             <span className="flex min-w-0 flex-col">
-              <span className="break-words font-sans text-[14px] text-text-primary">
+              <span className="font-sans text-[14px] text-text-primary wrap-anywhere">
                 {row.exerciseName}
               </span>
               <span
                 className={cn(
-                  "font-mono text-[12px]",
+                  "font-mono text-[12px] wrap-anywhere",
                   row.flagged ? "text-magenta" : "text-text-secondary",
                 )}
               >

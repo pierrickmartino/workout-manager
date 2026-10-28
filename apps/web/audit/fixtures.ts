@@ -16,6 +16,7 @@ import type { ProtocolProgress } from "@/lib/protocols-types";
 import type { ProtocolIndexEntry } from "@/lib/protocols-index";
 import type { PersonalRecordEntry, VolumePoint } from "@/lib/analytics-types";
 import type { WarmUpSuggestion } from "@/lib/warm-up-suggestion";
+import type { BlockedRow, PositionOutcome } from "@/lib/equipment-substitution";
 
 const originalNames = ["Long workout name with spaces ".repeat(5).slice(0, 120), "W".repeat(120)];
 const originalExerciseNames = ["Long exercise name with spaces ".repeat(4).slice(0, 100), "W".repeat(100)];
@@ -108,6 +109,22 @@ export const warmUpSuggestion: WarmUpSuggestion = {
   estimated_minutes: 8,
   has_warm_up_section: true,
 };
+// Equipment Substitution (ADR-0143) at its widest: the two fixture names blocked, one with a
+// catalog substitute named by the other fixture name, one the AI would generate, plus a short
+// row; and the outcome of applying them, one row flagged with the no-alternative reason.
+export const blockedRows: BlockedRow[] = exercises.slice(0, 3).map((exercise, i) => ({
+  position: i,
+  exercise_id: exercise.id,
+  exercise_name: exercise.name,
+  substitute: i === 1 ? null : { exercise_id: exercises[i + 1].id, name: exercises[i + 1].name },
+  needs_generation: i === 1,
+}));
+export const substitutionOutcomes: PositionOutcome[] = [
+  { position: 0, status: "substituted", source: "catalog", reason: null },
+  { position: 1, status: "failed", source: null, reason: "No alternative found for this equipment." },
+  { position: 2, status: "substituted", source: "generated", reason: null },
+];
+
 // The live journey's Session: the shared prescriptions plus a two-member Superset with mixed
 // Load kinds, so the set table's member legend and round grouping (ADR-0114) are measured at
 // every width and text size, not only its solo card.

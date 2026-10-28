@@ -24,6 +24,9 @@ interface SubstituteButtonProps {
   // The Profile's canonical Default Equipment, pre-filling the picker (ADR-0143). Read once
   // per page and fixed for its life, so it seeds the picker state.
   defaultEquipment?: readonly string[];
+  // Whether the picker starts open: closed on the Session page; the `substitution` audit
+  // journey opens it, since only a click reaches it otherwise.
+  initialOpen?: boolean;
 }
 
 // A per-prescription control to substitute the prescribed Exercise. "Substitute" first opens
@@ -35,12 +38,13 @@ export function SubstituteButton({
   sessionId,
   position,
   defaultEquipment = [],
+  initialOpen = false,
 }: SubstituteButtonProps) {
   const [state, action, pending] = useActionState<SubstituteFormState, FormData>(
     submitSubstitute,
     { error: null },
   );
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
   const [selected, setSelected] = useState(() =>
     prefillSubstituteEquipment(defaultEquipment),
   );
