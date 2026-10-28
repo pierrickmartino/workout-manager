@@ -9,6 +9,7 @@ import type { LoggedSession } from "./logs-types";
 import type { EditPlanInput } from "./session-edit";
 import type { SessionSummary } from "./session-library";
 import type { WarmUpDrill, WarmUpSuggestion } from "./warm-up-suggestion";
+import type { BlockedRow, PositionOutcome } from "./equipment-substitution";
 import type {
   ExerciseDetail,
   GenerateSessionInput,
@@ -271,6 +272,32 @@ export async function restorePrescription(
   position: number,
 ): Promise<Envelope<WorkoutSession>> {
   return apiSend(`/api/sessions/${sessionId}/prescriptions/${position}/restore`, "POST");
+}
+
+// Equipment Substitution preview (ADR-0143, #791): every prescription the stated Available
+// Equipment blocks, with its catalog substitute or a needs-generation marker. No AI call and no
+// write. `availableEquipment` omitted inherits the Default Equipment; `[]` is bodyweight only.
+export async function previewEquipmentSubstitution(
+  sessionId: number,
+  availableEquipment?: readonly string[],
+): Promise<Envelope<{ rows: BlockedRow[] }>> {
+  const path = `/api/sessions/${sessionId}/equipment-substitution/preview`;
+  if (availableEquipment === undefined) return apiSend(path, "POST");
+  return apiSend(path, "POST", { available_equipment: [...availableEquipment] });
+}
+
+// Equipment Substitution apply (ADR-0143, #791): substitute the selected blocked positions, each
+// independently. Returns the updated Session and a per-position outcome; a position that is not
+// blocked is 422, a performed Protocol Session 409.
+export async function applyEquipmentSubstitution(
+  sessionId: number,
+  availableEquipment: readonly string[],
+  positions: readonly number[],
+): Promise<Envelope<{ session: WorkoutSession; outcomes: PositionOutcome[] }>> {
+  return apiSend(`/api/sessions/${sessionId}/equipment-substitution`, "POST", {
+    available_equipment: [...availableEquipment],
+    positions: [...positions],
+  });
 }
 
 // Ask for a Warm-up Suggestion for the user's own Session (ADR-0143): 4–6 AI drills for the

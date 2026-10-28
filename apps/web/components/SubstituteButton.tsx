@@ -8,20 +8,15 @@ import {
   type SubstituteFormState,
 } from "@/app/sessions/[id]/actions";
 import { useConnectivity } from "@/lib/use-connectivity";
-import { EQUIPMENT_LABEL } from "@/lib/equipment";
 import {
-  BODYWEIGHT_ONLY_LABEL,
   EQUIPMENT_FIELD,
   EQUIPMENT_STATED_FIELD,
-  SUBSTITUTE_EQUIPMENT_OPTIONS,
-  isBodyweightOnly,
   prefillSubstituteEquipment,
   substituteEquipmentSummary,
   toggleSubstituteEquipment,
 } from "@/lib/substitute-equipment";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { FieldGroup } from "@/components/pulse/field";
+import { SubstituteEquipmentChips } from "@/components/SubstituteEquipmentChips";
 
 interface SubstituteButtonProps {
   sessionId: number;
@@ -29,18 +24,6 @@ interface SubstituteButtonProps {
   // The Profile's canonical Default Equipment, pre-filling the picker (ADR-0143). Read once
   // per page and fixed for its life, so it seeds the picker state.
   defaultEquipment?: readonly string[];
-}
-
-const CHIP_CLASS =
-  "rounded-sm border px-2 py-1 font-mono text-[12px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan/60 motion-reduce:transition-none";
-
-function chipClass(selected: boolean): string {
-  return cn(
-    CHIP_CLASS,
-    selected
-      ? "border-cyan bg-cyan-dim text-cyan"
-      : "border-border text-text-secondary hover:border-cyan hover:text-cyan",
-  );
 }
 
 // A per-prescription control to substitute the prescribed Exercise. "Substitute" first opens
@@ -96,29 +79,12 @@ export function SubstituteButton({
       {selected.map((item) => (
         <input key={item} type="hidden" name={EQUIPMENT_FIELD} value={item} />
       ))}
-      <FieldGroup label="Equipment you have for this swap">
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            aria-pressed={isBodyweightOnly(selected)}
-            className={chipClass(isBodyweightOnly(selected))}
-            onClick={() => setSelected([])}
-          >
-            {BODYWEIGHT_ONLY_LABEL}
-          </button>
-          {SUBSTITUTE_EQUIPMENT_OPTIONS.map((item) => (
-            <button
-              key={item}
-              type="button"
-              aria-pressed={selected.includes(item)}
-              className={chipClass(selected.includes(item))}
-              onClick={() => setSelected((current) => toggleSubstituteEquipment(current, item))}
-            >
-              {EQUIPMENT_LABEL[item]}
-            </button>
-          ))}
-        </div>
-      </FieldGroup>
+      <SubstituteEquipmentChips
+        label="Equipment you have for this swap"
+        selected={selected}
+        onBodyweightOnly={() => setSelected([])}
+        onToggle={(item) => setSelected((current) => toggleSubstituteEquipment(current, item))}
+      />
       <p className="font-mono text-[12px] text-text-muted">
         Using: {substituteEquipmentSummary(selected)}. Your profile stays as it is.
       </p>

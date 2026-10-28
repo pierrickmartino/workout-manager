@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # 0143 — Equipment Substitution re-expresses Load and keeps the Prescribed Original
